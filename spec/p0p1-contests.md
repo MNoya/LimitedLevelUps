@@ -7,6 +7,16 @@ sign-off) a participant-history view across contests.
 
 This came out of a grilling/domain-modeling session.
 
+## Human-written high-level summary
+
+- Support contests for future sets
+- Support archived contests
+- (To discuss) - Participant history pages where you can see past performance across previous contests
+  - The actual pages are outside the scope of the work of this spec, but we would
+    ideally decide if we want this now because it requires a decision on how we
+    would link participants across contests - the identity approach should be decided now.
+    (See the Participant History implementation section below)
+
 ## Glossary
 
 - **Contest** — one P0P1 event per set, identified by set code. Per-set data:
