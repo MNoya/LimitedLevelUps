@@ -10,18 +10,19 @@ This came out of a grilling/domain-modeling session.
 ## Glossary
 
 - **Contest** — one P0P1 event per set, identified by set code. Per-set data:
-  `{ code, name, previewsOpen, cardPool, ratingsSnapshot }`.
-- **Allowlist** — the set codes that have a P0P1 contest = the set codes present in the
-  `previewsOpen` map. A set with no entry is not a contest.
+  `{ code, name, previewsOpen, votingDeadline, cardPool, ratingsSnapshot }`.
+- **Allowlist** — the set codes that have a P0P1 contest = the keys of `P0P1_CONTESTS`.
+  A set with no entry is not a contest.
 - **Featured contest** — the single contest shown at `/p0p1`. Resolved from dates (see rule below).
 - **Frozen contest** — a finished contest, permanently browsable at a stable URL.
-- **Voting window** — `[previewsOpen → release)`; picks can be submitted/changed.
+- **Voting window** — `[previewsOpen → votingDeadline)`; picks can be submitted/changed.
+  `votingDeadline` defaults to `release` but can be set earlier per contest.
 - **Reveal window** — `[release → release+28d)`; results shown (midway, then final).
 - **Slots** — the shared 8-slot skeleton (5 mono-color commons, 1 multicolor uncommon, 2
   wildcards), **set-independent**. Filters by rarity + color only.
 - Dates: `release` and `name` come from `public_sets` (already driven by `bot/sets.py`).
-  `previewsOpen` is the only genuinely P0P1-specific per-set scalar (it's ~full-spoiler time, not
-  the earlier `PreviewWindow` already in `bot/sets.py`). Reveal end = `release + 28d`.
+  `previewsOpen` and optionally `votingDeadline` are the P0P1-specific per-set scalars.
+  Reveal end = `release + 28d`.
 
 ## Decisions (settled)
 
@@ -48,8 +49,8 @@ This came out of a grilling/domain-modeling session.
    growth as contests accumulate. A missing ratings file (true during voting) is simply absent
    from the glob map and treated as the existing pre-results kill switch — no placeholder fixture
    needed.
-7. **Only static per-set config is a one-line `previewsOpen` map.** `name`/dates derive from
-   `public_sets`.
+7. **Only static per-set config is `P0P1_CONTESTS`.** `name`/dates derive from `public_sets`;
+   each entry carries `previewsOpen` and optionally `votingDeadline` (defaults to `release`).
 8. **Card fixtures standardize on `export default`** (migrate `cards-msh.ts` off its named
    `cardsMshFixture` export) so the glob loader can load them uniformly.
 9. **Generator emits common + uncommon only** — no rare/mythic. No slot filter accepts rarity
@@ -87,8 +88,9 @@ This came out of a grilling/domain-modeling session.
 - `frontend/src/data/p0p1Slots.ts`: keep `SLOTS` and the slot filter helpers. Remove
   `P0P1_SET_CODE` / `P0P1_SET_NAME` / `P0P1_VOTING_DEADLINE` / `P0P1_SCORING_DATE` /
   `P0P1_NEXT_SET_CODE` / `P0P1_NEXT_SET_NAME`. Add:
-  - `P0P1_PREVIEWS_OPEN: Record<string, string>` — the allowlist + `previewsOpen` dates (the setup
-    skill appends one line per set).
+  - `P0P1_CONTESTS: Record<string, { previewsOpen: string; votingDeadline?: string }>` — the
+    allowlist + per-set config (the setup skill appends one entry per set). `votingDeadline`
+    defaults to the set's `release` date from `public_sets` when omitted.
   - `resolveFeaturedContest(sets, now)` implementing the rule in Decision 3, where `sets` comes
     from `public_sets` (release date + name) intersected with the allowlist. Returns
     `{ code, name, previewsOpen, votingDeadline, revealEnd, isVoting/isReveal/isFrozen }`.
@@ -139,7 +141,7 @@ This came out of a grilling/domain-modeling session.
 
 ### New skill: p0p1-contest-setup
 
-Runs the generator, appends the `previewsOpen` allowlist entry, and validates the handoff. Never
+Runs the generator, appends the `P0P1_CONTESTS` entry, and validates the handoff. Never
 commits or pushes (matches `p0p1-phase`'s convention). Must:
 
 - Warn on overlap (Decision 4) and on finalize-ordering (Decision 5).
@@ -181,12 +183,12 @@ then final), independent of setup. Ordering dependency: the next set must alread
 - Archive discovery UI (a browsable index of past contests).
 - transform / modal_dfc generator path (specified, not built until a set needs it).
 - Moving P0P1 config into the database (the TODO that used to sit in `p0p1Slots.ts`) — the glob +
-  tiny `previewsOpen` map supersede the need for this.
+  `P0P1_CONTESTS` map supersede the need for this.
 
 ## Verification (for whoever implements)
 
 - **Multi-set plumbing:** add a second fixture pair (`cards-<code>.ts` +
-  `p0p1-ratings-<code>.json`) and a `previewsOpen` entry with dates that make it the featured
+  `p0p1-ratings-<code>.json`) and a `P0P1_CONTESTS` entry with dates that make it the featured
   contest; `npm run dev`, confirm `/p0p1` renders it, the 8 slots populate from its pool, and
   `/p0p1/msh` still renders MSH frozen.
 - **Featured resolution:** unit-test `resolveFeaturedContest` for voting-only, reveal-only, gap,
