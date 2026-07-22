@@ -77,17 +77,8 @@ This came out of a grilling/domain-modeling session.
 
 ## Open questions — **for the maintainer**, not to be decided unilaterally
 
-- **Privacy reversal for participant history.** The existing `public_p0p1_ballots` view was
-  _deliberately_ built to be non-identifying — see migration
-  `h1v2o3t4e5r6_p0p1_ballots_drop_auth_users`, whose `ballot_id` is a `dense_rank()` over
-  `user_id` that **renumbers whenever a new voter joins** (so it's not a stable identifier by
-  design, only "opaque within a fetch" per its own docstring). Giving each voter a stable random
-  `public_id` intentionally makes every entrant's full ballot history **durably correlatable
-  across all contests** by anyone with the link. That's inherent to a history feature, and using a
-  random id (never the real auth UUID) preserves the "don't leak real identity" intent — but it
-  reverses a choice someone made on purpose. **Needs an explicit yes before building.**
 - **Is participant history in the same PR as the core plumbing, or a fast-follow?** It's designed
-  below and is fairly self-contained, but gated on the answer above.
+  below and is fairly self-contained.
 
 ## Implementation — core (multi-set plumbing + generator + Adventure handling)
 
@@ -105,10 +96,10 @@ This came out of a grilling/domain-modeling session.
   `cards-msh` / `p0p1-ratings-msh` imports with:
 
   ```ts
-  const cardLoaders = import.meta.glob('./fixtures/cards-*.ts', {
-    import: 'default',
+  const cardLoaders = import.meta.glob("./fixtures/cards-*.ts", {
+    import: "default",
   });
-  const ratingLoaders = import.meta.glob('./fixtures/p0p1-ratings-*.json');
+  const ratingLoaders = import.meta.glob("./fixtures/p0p1-ratings-*.json");
   ```
 
   `fetchP0P1Cards(code)` / `fetchP0P1Ratings(code)` index by `code` and `await` the matching
@@ -164,26 +155,26 @@ commits or pushes (matches `p0p1-phase`'s convention). Must:
 then final), independent of setup. Ordering dependency: the next set must already be in
 `bot/sets.py` (via `/add-set`) before its contest can resolve dates.
 
-## Participant history — designed, **pending maintainer sign-off** (see Open Questions)
+## Participant history — **pending maintainer sign-off on identity approach**
 
-- **DB:** `ALTER TABLE p0p1_voters ADD COLUMN public_id` (random, e.g. `gen_random_uuid()`;
-  backfill existing rows). The existing `sync_p0p1_voter()` trigger already keeps name/avatar
-  current, no change needed there. Update `public_p0p1_ballots` to expose `public_id` (replacing
-  or augmenting the unstable `ballot_id`). New alembic migration, guarding the `auth` schema
-  absence the way the existing p0p1 migrations already do.
-- **Routing:** `/p0p1/players/:publicId` → a history page.
-- **Page logic:** query the set codes where this `public_id` has ballots (participation-scoped,
+- **Identity (open question).** The original `public_p0p1_ballots` view deliberately used an
+  unstable `dense_rank()` `ballot_id` to avoid correlating voters across fetches. History needs
+  a stable identifier. Two options:
+  1. **Expose `user_id` directly** — it's the Supabase auth UUID, already on `p0p1_voters`
+     (a regular table, no `auth.users` join, so the Supabase lint that motivated the original
+     migration doesn't apply). Simpler, no schema change.
+  2. **Add a random `public_id`** column to `p0p1_voters` — extra indirection so the auth UUID
+     never appears in URLs or API responses.
+- **Routing:** `/p0p1/players/:id` → a history page (`:id` is whichever identifier above).
+- **Page logic:** query the set codes where this voter has ballots (participation-scoped,
   not a full archive scan), then for each, load that contest's ballots + card fixture + ratings
   fixture and reuse the existing `rankBallots` / `buildStandingsList` to compute that entrant's
   finish per set. **No new score table.** Caveat: finish is recomputed with _current_ scoring
-  logic against frozen fixtures — deterministic today, but a future scoring-formula change would
-  retroactively restate history.
-- **Entry point:** a result-row click in `FinalResults` would target
-  `/p0p1/players/:publicId` (needs `public_id` carried through the ballots data). Bonus cleanup
-  this unlocks (not required for history itself): the main results page's "your row" highlight
-  could stop parsing the Discord id out of the avatar URL (`findUserBallot` in
-  `p0p1Results.ts`) and use `public_id` instead — though wiring the logged-in viewer's own
-  `public_id` to the client needs a small authenticated lookup.
+  logic against frozen fixtures — a future scoring-formula change would retroactively restate
+  history.
+- **Entry point:** a result-row click in `FinalResults` targets the history page. Bonus cleanup
+  this unlocks: the "your row" highlight could stop parsing the Discord id out of the avatar URL
+  (`findUserBallot` in `p0p1Results.ts`) and use the stable identifier instead.
 
 ## Out of scope / follow-ups
 
@@ -207,6 +198,5 @@ then final), independent of setup. Ordering dependency: the next set must alread
 - **Generator filters:** confirm output is common+uncommon only and excludes Special Guests.
 - **Bundle:** `npm run build`, confirm card/ratings fixtures split into separate chunks rather
   than inflating the main bundle.
-- **Participant history (if built):** `alembic upgrade head` + `alembic check`; backfill
-  populates `public_id`; a result-row click loads `/p0p1/players/:publicId` and shows finishes
-  only for sets the player actually entered.
+- **Participant history (if built):** `alembic upgrade head` + `alembic check`; a result-row
+  click loads the history page and shows finishes only for sets the player actually entered.
