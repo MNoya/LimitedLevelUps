@@ -5,10 +5,12 @@ description: Flip the P0P1 results reveal phase (midway/final/none) by regenerat
 
 # p0p1-phase
 
-Flips or refreshes the P0P1 contest's results reveal. The reveal is single-sourced on the
-`phase` field baked into `frontend/src/data/fixtures/p0p1-ratings-<set>.json` — there is no
-separate deploy-gated constant. Deploying a fixture with a new `phase` is what flips the
-site; `phase: null` is the kill switch that hides results entirely.
+Flips or refreshes the P0P1 contest's results reveal. The reveal depends on two things:
+the `phase` field in `frontend/src/data/fixtures/p0p1-ratings-<set>.json` and the clock
+(`P0P1_SCORING_DATE` in `p0p1Slots.ts`). A `"final"` fixture merged before the scoring date
+is suppressed until the date arrives, so the branch can ship ahead of the reveal.
+
+Expected lifecycle: `voting` → `postVoting` → `midway` → `final`.
 
 ## Argument
 
@@ -32,20 +34,20 @@ count, today's date, voting deadline, scoring date.
 
 ### 2. State-machine reference
 
-The frontend derives one of five phases (`voting`, `postVoting`, `midway`, `finalizing`,
-`final`) from the fixture `phase` and the clock:
+The site phase is derived from the fixture `phase` + clock in `deriveP0P1Phase`
+(`useP0P1Ballot.ts`):
 
-| Fixture `phase`            | Clock                              | Resulting site phase                |
-| -------------------------- | ---------------------------------- | ----------------------------------- |
-| any                        | before voting deadline             | `voting`                            |
-| `null`                     | past deadline, before scoring date | `postVoting`                        |
-| `"midway"`                 | past deadline, before scoring date | `midway`                            |
-| `"final"`                  | past deadline, before scoring date | `final` (console.warn: early final) |
-| `null` or stale `"midway"` | past scoring date                  | `finalizing`                        |
-| `"final"`                  | past scoring date                  | `final`                             |
+| Fixture `phase`            | Clock                              | Site phase     |
+| -------------------------- | ---------------------------------- | -------------- |
+| any                        | before voting deadline             | `voting`       |
+| `null`                     | past deadline, before scoring date | `postVoting`   |
+| `"midway"`                 | past deadline, before scoring date | `midway`       |
+| `"final"`                  | past deadline, before scoring date | `postVoting`   |
+| `null` or stale `"midway"` | past scoring date                  | `finalizing`   |
+| `"final"`                  | past scoring date                  | `final`        |
 
-`phase: null` is the kill switch at any point — it always regresses to `postVoting` (pre
-scoring date) or `finalizing` (post scoring date), never reveals ratings-derived content.
+`phase: null` is the kill switch — regresses to `postVoting` or `finalizing` depending on
+the clock.
 
 ### 3. `none` — kill switch
 
