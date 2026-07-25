@@ -86,14 +86,14 @@ def test_format_locked_reminder_view_drops_format_preference():
 
 
 def test_open_slot_button_is_enabled_a_closed_one_disabled():
-    view = PodPollView([_lazy("AFTERNOON", STATUS_EXPIRED), _lazy("EARLY", STATUS_OPEN)])
+    view = PodPollView([_lazy("EARLY", STATUS_EXPIRED), _lazy("LATE", STATUS_OPEN)])
 
     disabled = {
         child.custom_id: child.disabled
         for child in view.children
         if child.custom_id.startswith("pod_poll:")
     }
-    assert disabled == {"pod_poll:AFTERNOON": True, "pod_poll:EARLY": False}
+    assert disabled == {"pod_poll:EARLY": True, "pod_poll:LATE": False}
 
 
 @pytest.mark.parametrize(

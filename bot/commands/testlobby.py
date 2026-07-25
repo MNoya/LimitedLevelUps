@@ -46,7 +46,7 @@ from bot.commands.messages import MSG_LOBBY_FULL_PROMPT
 from bot.tasks.pod_draft_reminder import build_lobby_open_body
 from bot.commands.pod_draft import build_seeding_image_message_from_names, post_manual_seating_table, post_table
 from bot.commands.pod_table import build_table_view
-from bot.commands.test_group import register_test_fallback
+from bot.commands.test_group import refused_on_production, register_test_fallback
 from bot.services.pod_format_select import FormatSelectView
 from bot.services import pod_format_poll
 from bot.services.pod_settings_view import PodSettingsView
@@ -981,6 +981,8 @@ _LIVE_POD_MODES = {
     "podbracket": "bracket", "podswiss": "swiss", "podrandom": "random", "podteam": "team",
 }
 
+_PRODUCTION_BLOCKED_STATES = frozenset(_LIVE_POD_MODES) | {"podlobby", "unlink"}
+
 _LAST_MESSAGE: dict[int, discord.Message] = {}
 _LAST_PROGRESS_MESSAGES: dict[int, list[discord.Message]] = {}
 
@@ -1207,6 +1209,9 @@ async def setup(bot: commands.Bot) -> None:
         (table + round-table PNG) for `count` players (default 8; ranked padded with fillers), no sesh."""
         if state and state not in _VALID_STATES:
             await ctx.send(f"unknown state `{state}`; pick one of: {', '.join(_VALID_STATES)}")
+            return
+
+        if state in _PRODUCTION_BLOCKED_STATES and await refused_on_production(ctx, state):
             return
 
         if state in _LIVE_POD_MODES:

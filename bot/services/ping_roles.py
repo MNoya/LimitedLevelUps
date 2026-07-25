@@ -108,6 +108,7 @@ PING_ROLES: tuple[PingRole, ...] = (
     PingRole(POD_QUEUE_ROLE_NAME, "⚡", "Daily Draft Sign-Ups", color="#FFAC33"),
     PingRole(fi.LATEST_SET_ROLE_NAME, "🆕", "Pods drafting the Latest Set", color="#e8e8e8"),
     PingRole(fi.FLASHBACK_ROLE_NAME, "flashback", "Pods drafting any Past Sets", color="#B0C4DE"),
+    PingRole(fi.CUBE_ROLE_NAME, "cube", "Pods drafting a Cube", color="#B0C4DE"),
 )
 
 
@@ -232,7 +233,7 @@ def build_grant_view(
     accent = role.color if role.color.value else discord.Color.blurple()
     return _PodButtonCard(
         text, accent=accent, show_link_button=arena_name is None,
-        show_format_button=arena_name is not None, show_link_17lands_button=show_link_17lands,
+        show_link_17lands_button=show_link_17lands,
     )
 
 
@@ -577,7 +578,7 @@ async def send_join_confirmation_card(
     has_token = await asyncio.to_thread(_has_seventeenlands_token, user_id)
     card = _PodButtonCard(
         _card_body(lead, arena_name=arena_name, interests=interests, ranking=ranking),
-        accent=accent, show_link_button=arena_name is None, show_format_button=arena_name is not None,
+        accent=accent, show_link_button=arena_name is None,
         show_link_17lands_button=not has_token,
     )
     await interaction.followup.send(view=card, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())

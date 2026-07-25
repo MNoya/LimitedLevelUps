@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from bot.sets import ALL_SETS, active_set_code, is_known_set
+from bot.sets import ALL_SETS, active_set_code, is_known_set, set_name_for
 
 
 @dataclass(frozen=True)
@@ -123,6 +123,22 @@ def label_for(code: str) -> str | None:
 def format_display(code: str) -> str:
     """Always-present format label for footers/cards: the cube label, or the bare set code."""
     return label_for(code) or code.upper()
+
+
+def format_name(code: str) -> str:
+    """The format's own name carrying no kind word: a cube's name, since the @Cube role mention beside it
+    already says Cube, or a set's full name. `format_display` stays the short label for footers."""
+    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    return fmt.pick_label if fmt is not None else set_name_for(code)
+
+
+def format_name_link(code: str) -> str:
+    """`format_name` with a cube's name linked to its CubeCobra page, so a reader can open the card list
+    before signing up. A set has no list to open and stays plain text."""
+    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    if fmt is None:
+        return set_name_for(code)
+    return f"[__**{fmt.pick_label}**__]({fmt.url})"
 
 
 def format_applied_message(code: str) -> str:

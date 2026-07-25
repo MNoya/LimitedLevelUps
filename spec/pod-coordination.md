@@ -10,13 +10,15 @@ The bot posts a Daily Pod Launcher every day in the pod channel. It lists the da
 
 - Every day: Early Pod at 2 PM ET, Late Pod at 8 PM ET.
 
-Times are Eastern. The community is global, so pick whichever slot fits your day. Mods can also schedule extra pods at other times, which show up as their own signup posts.
+Times are Eastern. Each slot shows its start as a timestamp in your own timezone, so you never have to convert. The community is global, so pick whichever slot fits your day. Mods can also schedule extra pods at other times, which show up as their own signup posts.
+
+Each column moves forward on its own. As soon as a pod finishes, its column shows the result above the next day's slot and starts collecting for that one, so there is always a slot you can join. The other column keeps its own day until its pod plays. A fresh launcher posts every morning at 11 AM ET and carries over everyone who already signed up for that day.
 
 ## How to join
 
 Click a slot on the launcher to add yourself to that pod's list. That is all it takes. Clicking is a plan, not a promise: if your day changes you can leave, and if you never show up you just catch the next one.
 
-When a slot reaches 6 people, the pod opens for real. The bot posts a signup card with its own thread, and everyone who clicked the slot is carried over as a Yes.
+When a slot reaches 6 people, the pod opens for real. The bot posts a signup card with its own thread, and everyone who clicked the slot is carried over as a Yes. A slot for a later day waits: it collects signups overnight and opens its pod on the morning of its own day, so nothing starts hours early.
 
 ## Saying if you are coming
 
@@ -65,6 +67,8 @@ On busy nights, once the first table fills, the bot offers a **second table** to
 ## After the draft
 
 Report your results in the thread as you play. Winning games earns pod points on the leaderboard, so a good run in a pod moves you up the standings the same as a strong ladder result. Pod results are always public: you do not need to opt in, and playing pods is enough to appear on the board.
+
+Once the pod finishes, its thread gets a **Play Again** button that signs you up for the same time slot on the next day. The launcher also keeps the result: the finished pod stays listed with its winner, whose name links to that pod's page on the website.
 
 ## Closed decklists
 

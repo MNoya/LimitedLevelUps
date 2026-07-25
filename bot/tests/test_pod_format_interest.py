@@ -1,5 +1,13 @@
+import pytest
+
 from bot.services import pod_format_interest as fi
 from bot.sets import active_set_code
+
+
+FLEX = [fi.LATEST, fi.FLASHBACK]
+LATEST_ONLY = [fi.LATEST]
+FLASHBACK_ONLY = [fi.FLASHBACK]
+NO_PREFERENCE: list[str] = []
 
 
 def test_normalize_orders_dedupes_and_drops_unknown():
@@ -74,3 +82,44 @@ def test_format_at_fire_stays_on_latest_set():
     members = [[fi.FLASHBACK]] * 8
 
     assert fi.format_at_fire(members) == active_set_code()
+
+
+@pytest.mark.parametrize("roster, expected_latest, expected_flashback", [
+    (
+        [("Ava", FLASHBACK_ONLY), ("Bram", FLASHBACK_ONLY), ("Cy", FLASHBACK_ONLY),
+         ("Dee", FLASHBACK_ONLY), ("Elm", FLASHBACK_ONLY), ("Fen", FLASHBACK_ONLY),
+         ("Gus", NO_PREFERENCE), ("Hal", FLEX)],
+        ["Gus"],
+        ["Ava", "Bram", "Cy", "Dee", "Elm", "Fen", "Hal"],
+    ),
+    (
+        [("Ava", LATEST_ONLY), ("Bram", LATEST_ONLY), ("Cy", LATEST_ONLY), ("Dee", LATEST_ONLY),
+         ("Elm", LATEST_ONLY), ("Fen", LATEST_ONLY), ("Gus", FLASHBACK_ONLY), ("Hal", FLASHBACK_ONLY),
+         ("Ivy", FLEX)],
+        ["Ava", "Bram", "Cy", "Dee", "Elm", "Fen"],
+        ["Gus", "Hal", "Ivy"],
+    ),
+    (
+        [("Ava", LATEST_ONLY), ("Bram", LATEST_ONLY), ("Cy", LATEST_ONLY), ("Dee", LATEST_ONLY),
+         ("Elm", LATEST_ONLY), ("Fen", LATEST_ONLY), ("Ivy", FLEX)],
+        ["Ava", "Bram", "Cy", "Dee", "Elm", "Fen", "Ivy"],
+        [],
+    ),
+    (
+        [("Ava", LATEST_ONLY), ("Bram", LATEST_ONLY), ("Cy", FLASHBACK_ONLY), ("Dee", FLEX)],
+        ["Ava", "Bram", "Dee"],
+        ["Cy"],
+    ),
+    (
+        [("Ava", NO_PREFERENCE), ("Bram", LATEST_ONLY)],
+        ["Bram", "Ava"],
+        [],
+    ),
+])
+def test_format_teams_never_diverts_a_flexible_body_onto_a_table_of_riders(
+    roster, expected_latest, expected_flashback,
+):
+    latest_team, flashback_team = fi.format_teams(roster)
+
+    assert latest_team == expected_latest
+    assert flashback_team == expected_flashback

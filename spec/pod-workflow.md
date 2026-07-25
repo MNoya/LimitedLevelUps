@@ -44,7 +44,18 @@ The embed (`build_poll_embed`, "Daily Pod Launcher") carries one **slot toggle b
 
 - Every day, two buckets: Early Pod 14:00 ET, Late Pod 20:00 ET.
 
-Each bucket maps to a ping role resolved by weekend + time-of-day, weekday (`EARLY_POD_ROLE_NAME` / `LATE_POD_ROLE_NAME`) and weekend (`WEEKEND_EARLY_POD_ROLE_NAME` / `WEEKEND_LATE_POD_ROLE_NAME`) variants in `pod_schedule.py`. On post, `post_launcher` creates a lazy `PodSignal` (kind `poll`) per open slot and arms slot-expiry + underfill checks.
+Each bucket maps to a ping role resolved by weekend + time-of-day, weekday (`EARLY_POD_ROLE_NAME` / `LATE_POD_ROLE_NAME`) and weekend (`WEEKEND_EARLY_POD_ROLE_NAME` / `WEEKEND_LATE_POD_ROLE_NAME`) variants in `pod_schedule.py`. On post, `post_launcher` binds a lazy `PodSignal` (kind `poll`) per open slot and arms slot-expiry + underfill checks.
+
+**Rolling columns.** A bucket is one *lane* (`PollBucket.lane`, `LANE_EARLY` / `LANE_LATE`) for life; the weekday and weekend buckets of a time of day are two keys for one lane, so a slot crossing into a weekend keeps its column and picks up the weekend ping role (`bucket_for_lane`). Each lane carries its own day and rolls independently, so a mixed-date board is normal:
+
+- **Flip on completion** — `notify_pod_complete` (`pod_active.py`) fires from the three finalize paths (`finalize_tournament`, `finalize_team_tournament`, `_finalize_mock`) into `roll_lane_after_pod`, which opens the next day's slot for that lane (`roll_slot_forward_sync`, idempotent per lane+day) and re-renders. Completion, not firing, is the trigger: a pod mid-rounds still owns its slot.
+- **Flip on expiry** — a slot whose start passes unfired rolls the same way (`fire_slot_expiry` → the roll hook registered by `init_daily_poll`); a restart sweep (`reconcile_rolled_lanes`) catches a lane whose pod finished or slot passed while the bot was down.
+- **Rolled slots live on the posted message** — the pre-created next-day signal binds to the launcher already on screen, which is why `pod_signals` is unique on (`message_id`, `bucket`, `signal_date`). A board's own day is the *earliest* day its slots cover; `_signal_by_message_bucket` resolves a click to the soonest still-gathering row, so one button per column stays correct.
+- **Adopt at 11:00** — `create_poll_signals` adopts today's already-open rows onto the fresh message instead of double-creating, so the new board carries whatever accumulated overnight; the old message then retires to its `On This Day` history (`close_recent_launchers`).
+- **Hold and show** — signups on a later day accumulate but cannot fire (`slot_can_fire`). The morning post re-checks thresholds and graduates whatever is already full (`_graduate_held_slots`).
+- **Play Again** — five minutes after a pod is finalized, `post_play_again_prompt` posts a one-click prompt in that pod's thread; the button writes a member onto the next day's slot, resolved at click time (`open_slot_for_bucket_sync`), so it stays correct after a restart.
+
+The render (`build_poll_embed`) is one inline field per lane, stacking each played pod above the lane's gathering slot; a played pod's line links its thread and credits its winner (the champion's `Player.slug` seat on the website, or a team draft's winning side with no seat). Launcher copy lives in `bot/services/pod_launcher_copy.py`.
 
 ### 2. Interest → fire (a slot graduates)
 

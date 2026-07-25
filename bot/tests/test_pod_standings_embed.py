@@ -7,7 +7,7 @@ from bot.services.pod_tournament import (
 
 def test_medals_hidden_while_champion_undecided():
     embed = build_champion_embed(
-        _standings(), pending_count=1, champion_locked=False, include_signoff=False,
+        _standings(), pending_count=1, champion_locked=False,
     )
     assert "Arcyl" in embed.description
     for medal in ("🥇", "🥈", "🥉"):
@@ -16,7 +16,7 @@ def test_medals_hidden_while_champion_undecided():
 
 def test_champion_medal_shown_once_locked_even_with_matches_pending():
     embed = build_champion_embed(
-        _standings(), pending_count=1, champion_locked=True, include_signoff=False,
+        _standings(), pending_count=1, champion_locked=True,
     )
     assert "1. 🥇 Arcyl" in embed.description  # 3-0 champion is uncatchable, medal shows now
     assert "🥈" not in embed.description  # runner-up medals wait for all results
@@ -24,7 +24,7 @@ def test_champion_medal_shown_once_locked_even_with_matches_pending():
 
 
 def test_medals_shown_once_standings_final():
-    embed = build_champion_embed(_standings(), pending_count=0, include_signoff=False)
+    embed = build_champion_embed(_standings(), pending_count=0)
     assert "1. 🥇 Arcyl" in embed.description
     assert "2. 🥈 Elfandor" in embed.description
     assert "3. 🥉 Bramblewick" in embed.description
@@ -36,9 +36,7 @@ def test_draft_log_link_points_at_in_site_reviewer_keyed_on_slug():
         _standings(),
         event_name="SOS Early Pod Draft 4",
         displays={key: {"display_name": "Arcyl", "slug": "arcyl"}},
-        event_has_log=True,
-        include_signoff=False,
-    )
+        event_has_log=True, )
 
     assert "/pods/sos-early-pod-draft-4/arcyl" in embed.description
     assert "magicprotools.com" not in embed.description
@@ -50,9 +48,7 @@ def test_draft_log_link_omitted_without_slug():
         _standings(),
         event_name="SOS Early Pod Draft 4",
         displays={key: {"display_name": "Arcyl", "slug": None}},
-        event_has_log=True,
-        include_signoff=False,
-    )
+        event_has_log=True, )
 
     assert "Draft Log" not in embed.description
 
@@ -63,9 +59,7 @@ def test_draft_log_link_omitted_without_event_log():
         _standings(),
         event_name="SOS Early Pod Draft 4",
         displays={key: {"display_name": "Arcyl", "slug": "arcyl"}},
-        event_has_log=False,
-        include_signoff=False,
-    )
+        event_has_log=False, )
 
     assert "Draft Log" not in embed.description
 

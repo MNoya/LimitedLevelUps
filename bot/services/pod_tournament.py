@@ -27,7 +27,7 @@ from bot.slug import slugify
 from bot.database import SessionLocal
 from bot.models import Player as DbPlayer, PodDraftEvent, PodDraftMatch, PodDraftParticipant
 from bot.services import bot_log as bot_log_mod, pod_bracket, pod_swiss
-from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase
+from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase, notify_pod_complete
 from bot.services.pod_deck_color import (
     SAVED_MSG,
     DeckColorSelectView,
@@ -2151,6 +2151,7 @@ async def finalize_tournament(manager: "PodDraftManager") -> None:
     await asyncio.to_thread(_do_write)
 
     await _post_or_update_live_standings(manager)
+    notify_pod_complete(manager.bot, manager.event_id)
 
     if hasattr(manager, "share_draft_log"):
         await manager.share_draft_log()
@@ -2638,14 +2639,11 @@ def build_champion_embed(
     deck_data: dict[str, "ParticipantDeckData"] | None = None,
     event_has_log: bool = False,
     match_states: list[dict] | None = None,
-    include_signoff: bool = True,
 ) -> discord.Embed:
     """Thread-side standings embed. `player_colors` adds a mana-emoji glyph after each player's record.
     `event_has_log` appends an inline Draft Log link per row pointing at the in-site reviewer when the
     event has a captured draft log. `match_states` (final, trophy-marked) drives the tiebreaker table,
-    shown only once the pod is complete and a placement was actually decided on tiebreakers.
-    `include_signoff` controls the trailing thank-you line; the /pod-standings command sets it to False
-    since it posts a bare snapshot."""
+    shown only once the pod is complete and a placement was actually decided on tiebreakers."""
     displays = displays or {}
     player_colors = player_colors or {}
     deck_data = deck_data or {}
@@ -2665,15 +2663,10 @@ def build_champion_embed(
     header = f"**{_standings_header_text(pending_count)}**"
 
     description = f"{header}\n" + "\n".join(lines)
-    signoff_gap = "\n\n"
     if pending_count == 0 and match_states:
         tiebreakers = _build_tiebreaker_block(standings, match_states, displays)
         if tiebreakers:
             description += f"\n{tiebreakers}"
-            signoff_gap = "\n"
-    if include_signoff:
-        chordo_love = emojis.get("chordo_love")
-        description += f"{signoff_gap}{chordo_love} Thank you for playing!"
 
     return discord.Embed(
         title=title,
@@ -2787,7 +2780,6 @@ async def build_standings_embed_for_event(event_id: str) -> discord.Embed | None
         deck_data=deck_data,
         event_has_log=event_has_log,
         match_states=match_states,
-        include_signoff=False,
     )
 
 

@@ -20,6 +20,7 @@ from sqlalchemy import select, update
 from bot.database import SessionLocal
 from bot.models import Player as DbPlayer, PodDraftEvent, PodDraftParticipant
 from bot.services import pod_swiss, pod_team
+from bot.services.pod_active import notify_pod_complete
 from bot.services.pod_drafts import (
     FinalStanding,
     apply_seat_indexes,
@@ -287,6 +288,8 @@ async def finalize_team_tournament(manager: "PodDraftManager") -> None:
             finalize_champion(session, event_id, final_standings)
             session.commit()
     await asyncio.to_thread(_do_write)
+
+    notify_pod_complete(manager.bot, event_id)
 
     teams = manager.team_map or await asyncio.to_thread(load_teams_sync, event_id)
     manager.team_map = teams

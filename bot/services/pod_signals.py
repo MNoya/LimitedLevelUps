@@ -40,22 +40,31 @@ RSVP_STATES = (RSVP_YES, RSVP_MAYBE, RSVP_NO)
 RSVP_EMOJI = {RSVP_YES: "✅", RSVP_MAYBE: "🤷", RSVP_NO: "❌"}
 
 
+LANE_EARLY = "EARLY"
+LANE_LATE = "LATE"
+LANE_ORDER = (LANE_EARLY, LANE_LATE)
+
+
 @dataclass(frozen=True)
 class PollBucket:
+    """One slot of one day. `lane` is the launcher column the slot belongs to for life: the weekday and
+    weekend buckets of a time of day are two keys for one column, so a slot rolling from Friday to
+    Saturday stays in its column and picks up the weekend ping role."""
     key: str
     name: str
     emoji: str
     start: time
     role_name: str
+    lane: str
 
 
 WEEKDAY_BUCKETS: tuple[PollBucket, ...] = (
-    PollBucket("EARLY", "Early Pod", "💫", time(14, 0), EARLY_POD_ROLE_NAME),
-    PollBucket("LATE", "Late Pod", "☄️", time(20, 0), LATE_POD_ROLE_NAME),
+    PollBucket("EARLY", "Early Pod", "💫", time(14, 0), EARLY_POD_ROLE_NAME, LANE_EARLY),
+    PollBucket("LATE", "Late Pod", "☄️", time(20, 0), LATE_POD_ROLE_NAME, LANE_LATE),
 )
 WEEKEND_BUCKETS: tuple[PollBucket, ...] = (
-    PollBucket("AFTERNOON", "Early Pod", "💫", time(14, 0), WEEKEND_EARLY_POD_ROLE_NAME),
-    PollBucket("EVENING", "Late Pod", "☄️", time(20, 0), WEEKEND_LATE_POD_ROLE_NAME),
+    PollBucket("AFTERNOON", "Early Pod", "💫", time(14, 0), WEEKEND_EARLY_POD_ROLE_NAME, LANE_EARLY),
+    PollBucket("EVENING", "Late Pod", "☄️", time(20, 0), WEEKEND_LATE_POD_ROLE_NAME, LANE_LATE),
 )
 ALL_BUCKETS: tuple[PollBucket, ...] = WEEKDAY_BUCKETS + WEEKEND_BUCKETS
 
@@ -68,11 +77,53 @@ def poll_buckets_for(day: date) -> tuple[PollBucket, ...]:
     return WEEKEND_BUCKETS if is_weekend(day) else WEEKDAY_BUCKETS
 
 
+FORMAT_SEP = "|"
+
+
+def named_bucket_key(bucket_key: str, set_code: str) -> str:
+    """One named pod's key: its time slot plus the format it opens on. A slot offering two formats needs
+    two signal identities, and `PodSignal.bucket` already is that identity, so the format rides in the key
+    instead of a new column the message/bucket/date unique constraint would have to grow."""
+    return f"{bucket_key}{FORMAT_SEP}{set_code}"
+
+
+def time_key_of(bucket_key: str) -> str:
+    """The time-slot half of a key. Lanes, ping roles and slot times all belong to the time dimension, so
+    every lookup resolves through here and a named key behaves exactly like its plain slot."""
+    return bucket_key.split(FORMAT_SEP, 1)[0]
+
+
+def format_of(bucket_key: str) -> str | None:
+    """The format half of a named key, or None for a plain slot key."""
+    return bucket_key.partition(FORMAT_SEP)[2] or None
+
+
 def bucket_by_key(key: str) -> PollBucket | None:
+    time_key = time_key_of(key)
     for bucket in ALL_BUCKETS:
-        if bucket.key == key:
+        if bucket.key == time_key:
             return bucket
     return None
+
+
+def lane_of(bucket_key: str) -> str | None:
+    bucket = bucket_by_key(bucket_key)
+    return bucket.lane if bucket else None
+
+
+def bucket_for_lane(day: date, lane: str) -> PollBucket | None:
+    """The bucket a lane resolves to on `day`, so a rolled slot re-reads its weekday or weekend identity
+    from the day it now sits on."""
+    for bucket in poll_buckets_for(day):
+        if bucket.lane == lane:
+            return bucket
+    return None
+
+
+def slot_can_fire(slot_time: datetime, now: datetime) -> bool:
+    """Whether a slot at threshold may graduate into a pod yet. A slot on a later day holds instead: a
+    rolled column collects signups all evening, and the morning post is what lets them fire."""
+    return slot_time.astimezone(SCHEDULE_TZ).date() <= now.astimezone(SCHEDULE_TZ).date()
 
 
 def bucket_role_name(key: str) -> str | None:

@@ -44,7 +44,7 @@ from bot.services.lobby_embed import (
     render_ready_check_progress,
 )
 from bot.services import pod_format
-from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase
+from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase, notify_pod_complete
 from bot.services.pod_pairing_select import pairing_label
 from bot.services.pod_seating_select import seating_mode_label
 from bot.services import pod_format_poll
@@ -1109,6 +1109,7 @@ class PodDraftManager:
         Draftmancer session so it's freed for deckbuilding. Logs are already open to everyone."""
         self.finalized = True
         await asyncio.to_thread(self._mark_mock_finalized)
+        notify_pod_complete(self.bot, self.event_id)
         log.info(f"[DRAFT] mock_finalized event={self.event_id}")
         thread = await self._fetch_thread()
         if thread is not None:

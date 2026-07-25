@@ -362,10 +362,14 @@ class PodChampionshipSeed(Base):
 class PodSignal(Base):
     """Interest-gathering surface for an on-demand pod: a daily-poll slot or a /pod-queue.
 
-    A daily poll is two rows (bucket 'EU'/'NA') sharing one message_id so each slot fires and
-    expires on its own; a queue is one row (bucket 'queue'). Fires once member count reaches the
-    threshold while status is 'open'; event_id then links the pod it created so the sesh-less
-    lobby-open reads the roster back off the signal. DB-backed so a restart re-arms everything.
+    A daily poll is one row per slot sharing the launcher's message_id so each slot fires and expires on
+    its own; a queue is one row (bucket 'queue'). Fires once member count reaches the threshold while
+    status is 'open'; event_id then links the pod it created so the sesh-less lobby-open reads the roster
+    back off the signal. DB-backed so a restart re-arms everything.
+
+    A launcher column that has rolled to the next day carries a second row of the same bucket on the same
+    message, so signal_date is part of the message uniqueness; the next morning's post rebinds those rows
+    to its own message_id.
     """
     __tablename__ = "pod_signals"
 
@@ -402,7 +406,7 @@ class PodSignal(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("message_id", "bucket", name="uq_pod_signal_message_bucket"),
+        UniqueConstraint("message_id", "bucket", "signal_date", name="uq_pod_signal_message_bucket_date"),
         Index("ix_pod_signals_status", "status"),
     )
 

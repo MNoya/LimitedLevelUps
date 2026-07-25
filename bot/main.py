@@ -91,7 +91,13 @@ from bot.commands.pod_rsvp import (
     heal_format_locked_cards,
 )
 from bot.tasks.pod_draft_reminder import init_reminder
-from bot.tasks.pod_daily_poll import PodPollView, ReminderFormatPreferenceButton, init_daily_poll
+from bot.tasks.pod_daily_poll import (
+    PlayAgainView,
+    PodPollView,
+    ReminderFormatPreferenceButton,
+    init_daily_poll,
+    reconcile_rolled_lanes,
+)
 from bot.services.pod_launch import init_launch, rearm_signals
 from bot.tasks.format_schedule_post import init_format_schedule
 from bot.tasks.set_awards_post import init_set_awards_schedule
@@ -239,6 +245,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testformatschedule(bot)
         await setup_testchampionship(bot)
         await rearm_signals(bot)
+        await reconcile_rolled_lanes(bot)
         register_pod_views(bot)
         bot.add_dynamic_items(TeamReportButton)
         bot.add_dynamic_items(TeamRevealReportButton)
@@ -261,6 +268,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_view(LobbyReadyButtonView(show_force_start=True))
         bot.add_view(RolesView())
         bot.add_view(persistent_pod_card_view())
+        bot.add_view(PlayAgainView())
         bot.add_view(PodPollView())
         bot.add_view(PodQueueView())
         bot.add_view(PodRsvpView())

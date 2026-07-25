@@ -33,6 +33,7 @@ INTEREST_EMOJI = {LATEST: "🆕", FLASHBACK: "⏪", CUBE: "🧊"}
 
 LATEST_SET_ROLE_NAME = "Latest Set"
 FLASHBACK_ROLE_NAME = "Flashback"
+CUBE_ROLE_NAME = "Cube"
 
 FLEXIBLE_LABEL = "Any Format"
 FLEXIBLE_EMOJI = "✨"
@@ -181,10 +182,15 @@ T = TypeVar("T")
 
 def format_teams(pairs: Iterable[tuple[T, Iterable[str] | None]]) -> tuple[list[T], list[T]]:
     """Sort (item, interests) pairs into the latest and flashback teams. Dedicated picks anchor their
-    team, flexible players fill via fills_latest, no-preference rides with latest. Order within each
-    team follows the input order."""
+    team, flexible players fill via fills_latest, no-preference riders join the latest team last.
+
+    Riders stay out of the fills_latest decision on purpose. They asked for nothing, so counting them as
+    the latest team's own crowd lets the surplus rule divert a flexible body onto a table nobody
+    requested, away from a table that is one body short. Order within each team follows the input order,
+    riders after the dedicated."""
     latest_team: list[T] = []
     flashback_team: list[T] = []
+    riders: list[T] = []
     flexible: list[T] = []
     for item, raw in pairs:
         codes = normalize(raw)
@@ -192,20 +198,23 @@ def format_teams(pairs: Iterable[tuple[T, Iterable[str] | None]]) -> tuple[list[
             flexible.append(item)
         elif FLASHBACK in codes:
             flashback_team.append(item)
-        else:
+        elif LATEST in codes:
             latest_team.append(item)
+        else:
+            riders.append(item)
     for item in flexible:
         if fills_latest(len(latest_team), len(flashback_team)):
             latest_team.append(item)
         else:
             flashback_team.append(item)
-    return latest_team, flashback_team
+    return latest_team + riders, flashback_team
 
 
 def fills_latest(latest_count: int, flashback_count: int) -> bool:
     """A flexible player joins the larger team, ties to latest. A team already at the fire threshold
     stops pulling so the surplus builds the other table, but only when the other team has dedicated
-    members of its own; surplus never opens a team nobody asked for."""
+    members of its own; surplus never opens a team nobody asked for. Both counts are of dedicated
+    members, so a column holding only no-preference riders never reads as a crowd that asked for it."""
     threshold = settings.pod_signal_fire_threshold
     if latest_count >= threshold and 0 < flashback_count < threshold:
         return False
