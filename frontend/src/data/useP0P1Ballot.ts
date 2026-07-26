@@ -196,10 +196,12 @@ export function useP0P1Ballot(overrideSetCode?: string) {
   );
 
   const { data: allSets } = useSets();
+  const setsLoaded = allSets !== undefined;
   const p0p1Sets = useMemo(() => allSets?.filter((s) => s.code === setCode), [allSets, setCode]);
 
   return {
     featured,
+    setsLoaded,
     cards,
     cardsByName,
     dataReady,

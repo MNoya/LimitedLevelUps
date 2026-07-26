@@ -26,12 +26,14 @@ import { SLOTS } from "../data/p0p1Slots";
 import { groupBySlot, findExtremes, classifyYourPick } from "../data/p0p1Stats";
 import type { Card, SlotDefinition, SlotKey } from "../types/p0p1";
 import { SITE_LINKS } from "../data/site";
+import { NotFoundPage } from "./NotFoundPage";
 
 export function P0P1Page() {
   const { setCode: routeSetCode } = useParams<{ setCode?: string }>();
   const ballot = useP0P1Ballot(routeSetCode);
   const {
     featured,
+    setsLoaded,
     cards,
     cardsByName,
     dataReady,
@@ -58,6 +60,7 @@ export function P0P1Page() {
     ratingsSnapshot,
     ballots,
   } = ballot;
+
   const isDesktop = !useIsMobile(1024);
   const heroRef = useRef<HTMLDivElement>(null);
   const [heroHeight, setHeroHeight] = useState(0);
@@ -70,6 +73,9 @@ export function P0P1Page() {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  if (routeSetCode && setsLoaded && !featured) return <NotFoundPage />;
+
   const isCompleteEntrant = isPastDeadline && Boolean(user) && isComplete;
   const didNotVote = isPastDeadline && Boolean(user) && !isComplete;
   const groupedStats = hasParticipated && pickStats ? groupBySlot(pickStats) : undefined;
@@ -180,6 +186,7 @@ export function P0P1Page() {
               pickStats={pickStats}
               cardsByName={cardsByName}
               picksBySlot={picksBySlot}
+              setCode={featured?.code}
               yourPicks={
                 isCompleteEntrant ? (
                   <div>
