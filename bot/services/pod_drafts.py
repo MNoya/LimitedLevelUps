@@ -1243,6 +1243,55 @@ def active_event_for_discord_user_in_dm(session: Session, discord_id: str) -> tu
     return (row[0], row[1]) if row else None
 
 
+class OwnMatch(NamedTuple):
+    event_id: str
+    round_num: int
+    match_id: str
+
+
+def own_open_matches(session: Session, discord_id: str) -> list[OwnMatch]:
+    """Every unreported pairing the caller holds in the newest pod that has one, in round order.
+
+    A Swiss or bracket pod yields exactly one, since round N+1 is not paired until N is reported. A team
+    draft inserts all three rounds up front, so it yields all of them and the player reports whichever
+    they actually played.
+    """
+    rows = _own_matches(session, discord_id, reported=False)
+    if not rows:
+        return []
+    newest_event = rows[0].event_id
+    return [row for row in rows if row.event_id == newest_event]
+
+
+def latest_reported_match(session: Session, discord_id: str) -> OwnMatch | None:
+    """The caller's most recently settled pairing, so a report attempt with nothing open can name the
+    result that already stands."""
+    rows = _own_matches(session, discord_id, reported=True)
+    return rows[0] if rows else None
+
+
+def _own_matches(session: Session, discord_id: str, *, reported: bool) -> list[OwnMatch]:
+    cutoff = datetime.now(timezone.utc) - DM_SUBMISSION_WINDOW
+    participant_name = _normalized_column(PodDraftParticipant.draftmancer_name)
+    settled = PodDraftMatch.winner_name.is_not(None) if reported else PodDraftMatch.winner_name.is_(None)
+    round_order = PodDraftMatch.round.desc() if reported else PodDraftMatch.round.asc()
+    rows = session.execute(
+        select(PodDraftMatch.event_id, PodDraftMatch.round, PodDraftMatch.id)
+        .join(PodDraftEvent, PodDraftEvent.id == PodDraftMatch.event_id)
+        .join(PodDraftParticipant, PodDraftParticipant.event_id == PodDraftEvent.id)
+        .join(Player, Player.id == PodDraftParticipant.player_id)
+        .where(
+            Player.discord_id == discord_id,
+            PodDraftEvent.event_time >= cutoff,
+            settled,
+            (_normalized_column(PodDraftMatch.player_a_name) == participant_name)
+            | (_normalized_column(PodDraftMatch.player_b_name) == participant_name),
+        )
+        .order_by(PodDraftEvent.event_time.desc(), round_order)
+    ).all()
+    return [OwnMatch(event_id, round_num, match_id) for event_id, round_num, match_id in rows]
+
+
 def is_pod_thread_champion(session: Session, thread_id: str, discord_id: str) -> bool:
     """True if (thread_id, discord_id) maps to a participant with placement=1."""
     row = session.execute(

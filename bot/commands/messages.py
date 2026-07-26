@@ -69,6 +69,10 @@ MSG_ARENA_HANDLE_LINE = "{emoji} You're **{arena_name}** on Arena"
 MSG_ARENA_ALREADY_LINKED_NOTE = "Currently linked as {emoji} **{arena_name}**\nSubmit a new handle to change it"
 MSG_ARENA_LINK_CTA = "Please link your Arena handle so the bot knows it's you when joining the lobby"
 MSG_POD_ROLE_GRANTED = "{subject} now on {role} and will be notified {ping}"
+MSG_POD_NO_MATCH_TO_REPORT = (
+    "No pod draft match to report right now. Reporting opens when your round's pairings post."
+)
+MSG_POD_RESULT_ALREADY_RECORDED = "Round {round_num} recorded. Nothing else to report right now."
 MSG_FORMAT_PREFERENCE_BUTTON = "Format Preference"
 MSG_DRAFT_STARTS = "Draft scheduled for <t:{unix}:F> (<t:{unix}:R>)"
 MSG_POD_ADDED = "✅ Added to {name}"

@@ -74,7 +74,7 @@ On busy nights, once the first table fills, the bot offers a **second table** to
 
 ## After the draft
 
-Report your results in the thread as you play. Winning games earns pod points on the leaderboard, so a good run in a pod moves you up the standings the same as a strong ladder result. Pod results are always public: you do not need to opt in, and playing pods is enough to appear on the board.
+Report your results in the thread as you play. In an 8-player pod each round also DMs you your pairing with the same dropdown. `/report-results` works anywhere, including in a DM with the bot, and pulls up a private card holding every match you still owe, so a missed DM never stops you from reporting. In a team draft all three of your matches are open from the moment the draft ends, so the card lists all three and you report whichever you played. Winning games earns pod points on the leaderboard, so a good run in a pod moves you up the standings the same as a strong ladder result. Pod results are always public: you do not need to opt in, and playing pods is enough to appear on the board.
 
 Once the pod finishes, its thread gets a **Play Again** button that signs you up for the same time slot and format on the next day, whenever that format is on the next day's schedule. The launcher also keeps the result: the finished pod stays listed with its winner, whose name links to that pod's page on the website.
 

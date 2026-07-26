@@ -34,6 +34,7 @@ from bot.services.pod_tournament import (
     CLEAR_SENTINEL,
     SKIPPED_SENTINEL,
     actor_label,
+    announce_round_result,
     commit_result,
     deck_recovery_scan,
     format_match_result_log,
@@ -480,12 +481,16 @@ class TeamReportModal(ui.Modal):
 
 
 async def handle_team_report(
-    interaction: discord.Interaction, value: str, board_message: discord.Message,
+    interaction: discord.Interaction, value: str, board_message: discord.Message | None = None,
 ) -> None:
-    """Commit a board report, then rebuild the board in place. The defer ack closes the report
+    """Commit a team-pod report, then rebuild the board in place. The defer ack closes the report
     modal; the public result line is the confirmation. The last outstanding result also finalizes
     the tournament (records → pod points, winner announcement) under the manager's advance lock so
-    two closing reports can't double-finalize."""
+    two closing reports can't double-finalize.
+
+    `board_message` is the page a board click came from, and only ever a hint: it seeds board
+    rediscovery after a restart and supplies the result line's jump link. Omit it when the report
+    arrives from somewhere other than the board, such as a `/report-results` card or a DM."""
     try:
         match_id, winner_name, score = value.split("|", 2)
     except ValueError:
@@ -519,13 +524,13 @@ async def handle_team_report(
     if newly_reported:
         match_state = _board_match(data, match_id)
         if match_state is not None and match_was_played(match_state):
-            try:
-                await board_message.channel.send(
-                    format_round_announcement(round_num, match_state, board_message.jump_url),
-                    allowed_mentions=discord.AllowedMentions.none(),
-                )
-            except discord.HTTPException:
-                log.warning(f"[TEAM] result_announce_failed event={event_id}", exc_info=True)
+            await announce_round_result(
+                interaction.client, event_id,
+                format_round_announcement(
+                    round_num, match_state, round_jump_url(event_id, round_num, board_message),
+                    corrected=bool(result.get("was_reported") and result.get("winner_changed")),
+                ),
+            )
 
     finished = [
         name for name in (result["a_name"], result["b_name"]) if _player_has_no_pending(data, name)
@@ -620,11 +625,11 @@ async def sync_round_reveals(event_id: str, data: TeamBoardData) -> None:
 
 
 async def refresh_board_messages(
-    event_id: str, data: TeamBoardData, clicked_message: discord.Message,
+    event_id: str, data: TeamBoardData, clicked_message: discord.Message | None = None,
 ) -> None:
     """Re-render every rounds page; the summary embed is posted once and left alone. Pages come from
     the manager's tracked refs, or are rediscovered from the thread after a restart; the clicked
-    page is always covered."""
+    page, when there is one, is always covered."""
     views = build_team_board_views(data)
     pages = await _resolve_board_messages(event_id, clicked_message, len(views))
     for view in views:
@@ -678,37 +683,62 @@ BOARD_HISTORY_SCAN_LIMIT = 200
 
 
 async def _resolve_board_messages(
-    event_id: str, clicked_message: discord.Message, expected_pages: int,
+    event_id: str, clicked_message: discord.Message | None, expected_pages: int,
 ) -> list[discord.Message]:
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     if manager is not None and len(manager.team_board_messages) >= expected_pages:
         return list(manager.team_board_messages)
-    pages = await _find_board_messages(clicked_message, expected_pages)
+    channel = clicked_message.channel if clicked_message is not None else await _board_channel(manager)
+    if channel is None:
+        log.warning(f"[TEAM] board_channel_unresolved event={event_id}")
+        return []
+    pages = await _find_board_messages(channel, clicked_message, expected_pages)
     if manager is not None and len(pages) >= expected_pages:
         manager.team_board_messages = list(pages)
     return pages
 
 
+async def _board_channel(manager):
+    """The pod thread the board lives in, for a report that arrived without a board page in hand."""
+    return await manager._fetch_thread() if manager is not None else None
+
+
+def round_jump_url(
+    event_id: str, round_num: int, board_message: discord.Message | None = None,
+) -> str | None:
+    """Where the pod reads a team round: its reveal block once posted, else the first board page. A team
+    pod never fills `round_messages`, so the Swiss round-message lookup can't answer this — without it a
+    result announced from anywhere but the board would carry an unlinked round label."""
+    manager = ACTIVE_POD_MANAGERS.get(event_id)
+    if manager is not None:
+        reveal = manager.team_reveal_messages.get(round_num)
+        if reveal is not None:
+            return reveal.jump_url
+        if manager.team_board_messages:
+            return manager.team_board_messages[0].jump_url
+    return board_message.jump_url if board_message is not None else None
+
+
 async def _find_board_messages(
-    clicked_message: discord.Message, expected_pages: int,
+    channel, seed: discord.Message | None, expected_pages: int,
 ) -> list[discord.Message]:
     """Rediscover the big-block pages after a restart: the pinned first page, then a bounded history
     scan for the rest. Big-block pages are the only messages carrying report-button custom_ids (reveal
-    blocks carry a different prefix), so the filter can't catch reveals or other bot messages. The
-    clicked message seeds the set only when it is itself a big-block page — a click may come from a
-    reveal block, which is not one."""
+    blocks carry a different prefix), so the filter can't catch reveals or other bot messages. `seed`
+    is the clicked message when the report came from the board, and joins the set only when it is
+    itself a big-block page — a click may come from a reveal block, which is not one."""
     pages: dict[int, discord.Message] = {}
-    if message_report_ids(clicked_message):
-        pages[clicked_message.id] = clicked_message
+    if seed is not None and message_report_ids(seed):
+        pages[seed.id] = seed
     try:
-        for message in await clicked_message.channel.pins():
+        for message in await channel.pins():
             if message_report_ids(message):
                 pages[message.id] = message
     except (discord.HTTPException, AttributeError):
         log.warning("could not fetch pins to rediscover the team board", exc_info=True)
     if len(pages) < expected_pages:
         try:
-            async for message in clicked_message.channel.history(limit=BOARD_HISTORY_SCAN_LIMIT):
+            async for message in channel.history(limit=BOARD_HISTORY_SCAN_LIMIT):
                 if message_report_ids(message):
                     pages[message.id] = message
                 if len(pages) >= expected_pages:
