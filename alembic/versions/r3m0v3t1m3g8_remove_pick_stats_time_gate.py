@@ -1,11 +1,13 @@
 """Remove hardcoded time gate from public_p0p1_pick_stats view
 
 Revision ID: r3m0v3t1m3g8
-Revises: r0l1i2n3g4s5
+Revises: d3c8f1b6e4a7
 Create Date: 2026-07-24
 
-The WHERE now() > '2026-06-23T15:00:00Z' clause was an MSH-specific gate.
-Enforcement now lives in the frontend (useP0P1Ballot gates on isPastDeadline).
+The WHERE now() > '2026-06-23T15:00:00Z' clause was an MSH-specific gate, satisfied since June and
+therefore inert for every later contest. Contest windows live in p0p1_contests.json rather than the
+database, so there is no per-set deadline for the view to gate on; pre-deadline exposure is an
+accepted risk recorded in spec/p0p1-after-submissions-closed.md.
 """
 from typing import Sequence, Union
 
@@ -13,7 +15,7 @@ from alembic import op
 
 
 revision: str = "r3m0v3t1m3g8"
-down_revision: Union[str, None] = "r0l1i2n3g4s5"
+down_revision: Union[str, None] = "d3c8f1b6e4a7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
