@@ -17,10 +17,10 @@ from __future__ import annotations
 import logging
 import time as _time
 from datetime import date, timedelta
-from typing import Iterable, Protocol
+from typing import Iterable, Protocol, Sequence
 
 import requests
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -33,7 +33,7 @@ from bot.models import (
 )
 from bot.services.active_set import resolve_active_set
 from bot.services.seventeenlands import SUPPORTED_FORMATS, extract_event_row
-from bot.sets import active_set_code
+from bot.sets import active_set_code, set_code_for_expansion
 
 PERIODIC_WINDOW_DAYS = 7
 
@@ -49,7 +49,11 @@ class _DraftClient(Protocol):
 
 
 def _resolve_set_id(expansion: str, codes: list[str], sets_by_code: dict[str, MagicSet]) -> str | None:
-    """First registered set whose code substring-matches the normalized expansion."""
+    """The set an expansion belongs to: an explicit route first (the cube variants, whose raw
+    17lands names stay on the event), then the first registered set whose code substring-matches."""
+    routed = set_code_for_expansion(expansion)
+    if routed is not None and routed in sets_by_code:
+        return sets_by_code[routed].id
     for code in codes:
         if code in expansion:
             return sets_by_code[code].id
@@ -214,19 +218,22 @@ def refresh_player(
     }
 
 
-def claim_orphan_drafts(session: Session, magic_set: MagicSet, expansion_alias: str | None = None) -> set[str]:
+def claim_orphan_drafts(
+    session: Session,
+    magic_set: MagicSet,
+    expansion_alias: str | None = None,
+    expansion_matches: Sequence[str] = (),
+) -> set[str]:
     """Attach unrouted ``draft_events`` rows to ``magic_set`` when their expansion now matches.
 
     Run this after adding a set to ``bot/sets.py`` (and seeding it). Returns
     the set of player_ids that gained events, so the caller can rebuild
     ``player_stats`` and scores for each.
 
-    Match rule mirrors the ingest path: ``magic_set.code`` substring of the
-    normalized expansion. ``expansion_match`` aliases are normalized at ingest,
-    so freshly ingested rows already carry the canonical code. Rows ingested
-    before the alias existed still hold the raw 17lands string (``OM1`` for
-    SPM), so when ``expansion_alias`` is given they are normalized to the code
-    first, restoring the invariant and letting the substring claim pick them up.
+    Match rule mirrors the ingest path: an exact ``expansion_matches`` name, or ``magic_set.code``
+    as a substring of the expansion. A row ingested before its ``expansion_alias`` existed still
+    holds the raw 17lands string (``OM1`` for SPM), so the alias is rewritten to the code first,
+    restoring the invariant and letting the substring claim pick it up.
     """
     if expansion_alias is not None:
         session.execute(
@@ -234,22 +241,19 @@ def claim_orphan_drafts(session: Session, magic_set: MagicSet, expansion_alias: 
             {"code": magic_set.code, "alias": expansion_alias},
         )
 
+    matches = list(expansion_matches)
+    criteria = DraftEvent.expansion.contains(magic_set.code)
+    if matches:
+        criteria = or_(criteria, DraftEvent.expansion.in_(matches))
+
     affected = session.execute(
-        select(DraftEvent.player_id).where(
-            DraftEvent.set_id.is_(None),
-            DraftEvent.expansion.contains(magic_set.code),
-        ).distinct()
+        select(DraftEvent.player_id).where(DraftEvent.set_id.is_(None), criteria).distinct()
     ).scalars().all()
 
     session.execute(
-        text(
-            """
-            UPDATE draft_events
-            SET set_id = :sid, fetched_at = now()
-            WHERE set_id IS NULL AND expansion LIKE :pat
-            """
-        ),
-        {"sid": magic_set.id, "pat": f"%{magic_set.code}%"},
+        update(DraftEvent)
+        .where(DraftEvent.set_id.is_(None), criteria)
+        .values(set_id=magic_set.id, fetched_at=func.now())
     )
     session.expire_all()  # raw UPDATE bypassed the identity map
     return set(affected)

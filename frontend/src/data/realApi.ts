@@ -97,8 +97,9 @@ export async function fetchCubeSeasons(): Promise<CubeSeason[]> {
     const r = raw as Record<string, unknown>;
     return {
       setCode: r.set_code as string,
+      kind: r.kind as "season" | "variant",
       label: r.label as string,
-      name: r.name as string,
+      name: (r.name as string | null) ?? null,
       startDate: r.start_date as string,
       firstEvent: r.first_event as string,
       lastEvent: r.last_event as string,
@@ -130,14 +131,8 @@ export async function fetchFormatColorsLeaderboard(
   }
   const archs = Array.isArray(archetypes) ? archetypes : [archetypes];
   if (archs.length === 0) return [];
-  const archSet = new Set(archs);
-  const cube = isCubeCode(setCode);
-  // A deck matches its main-color archetype regardless of splashes, and Soup (MULTI)
-  // by the color-count rule — so a qualifying deck lands in both.
-  const matcher = (c: string) =>
-    archSet.has(colorsOf(c)) || (archSet.has(MULTI) && isSoup(c, cube));
   const bucketLabel = archs.length === 1 ? archs[0] : archs.join(",");
-  return aggregateColorsFromEvents(setCode, bucketLabel, matcher, format);
+  return aggregateColorsFromEvents(setCode, bucketLabel, bucketOf(archs), format);
 }
 
 export async function fetchAvailableFormats(setCode: string): Promise<string[]> {
@@ -336,9 +331,9 @@ export async function fetchTrophyLeaderboard(setCode: string): Promise<TrophyLea
     .map((r, i) => ({ ...r, rank: i + 1 }));
 }
 
-// Stats refresh globally, so a season's "Last updated" is the lifetime board's
-// timestamp (the windowed views carry no per-row calculation time).
-async function cubeLifetimeUpdatedAt(): Promise<string> {
+// Stats refresh globally, so a cube board's "Last updated" is the CUBE set's own
+// timestamp (the cube views carry no per-row calculation time).
+async function cubeUpdatedAt(): Promise<string> {
   const { data, error } = await client()
     .from("public_leaderboard")
     .select("last_calculated_at")
@@ -354,7 +349,7 @@ async function cubeLifetimeUpdatedAt(): Promise<string> {
 async function fetchCubeSeasonLeaderboard(setCode: string): Promise<LeaderboardRow[]> {
   const [breakdown, lastCalculatedAt] = await Promise.all([
     client().from("public_cube_season_breakdown").select("*").eq("set_code", setCode),
-    cubeLifetimeUpdatedAt(),
+    cubeUpdatedAt(),
   ]);
   if (breakdown.error) throw breakdown.error;
 
@@ -533,7 +528,7 @@ async function fetchCubeSeasonFormatLeaderboard(
   const labels = FORMAT_LABEL_GROUPS[format] ?? [format];
   const [resp, lastCalculatedAt] = await Promise.all([
     client().from("public_cube_season_breakdown").select("*").eq("set_code", setCode).in("format_label", labels),
-    cubeLifetimeUpdatedAt(),
+    cubeUpdatedAt(),
   ]);
   if (resp.error) throw resp.error;
   const data = resp.data;
@@ -703,11 +698,7 @@ export async function fetchColorsLeaderboard(
   setCode: string,
   colors: string,
 ): Promise<ColorsLeaderboardRow[]> {
-  const cube = isCubeCode(setCode);
-  const matcher = colors === MULTI
-    ? (c: string) => isSoup(c, cube)
-    : (c: string) => colorsOf(c) === colors;
-  return aggregateColorsFromEvents(setCode, colors, matcher, null);
+  return aggregateColorsFromEvents(setCode, colors, bucketOf([colors]), null);
 }
 
 export async function fetchOtherColorsLeaderboard(
@@ -719,15 +710,31 @@ export async function fetchOtherColorsLeaderboard(
   if (formatFilter === "Pod") {
     return fetchPodColorsLeaderboard(setCode, OTHER, otherCombos);
   }
-  const otherSet = new Set(otherCombos);
-  const matcher = (c: string) => otherSet.has(colorsOf(c));
-  return aggregateColorsFromEvents(setCode, OTHER, matcher, formatFilter);
+  return aggregateColorsFromEvents(setCode, OTHER, bucketOf(otherCombos), formatFilter);
+}
+
+// A chip is one colour bucket: named main-colour combos, and Soup (MULTI) by the colour-count rule.
+// public_color_events derives both, so the board reads its own slice instead of the whole set.
+interface ColorBucket {
+  combos: string[];
+  includeMulti: boolean;
+}
+
+function bucketOf(chips: string[]): ColorBucket {
+  return { combos: chips.filter((c) => c !== MULTI), includeMulti: chips.includes(MULTI) };
+}
+
+function inBucket(row: Record<string, unknown>, bucket: ColorBucket): boolean {
+  if (bucket.includeMulti && row.is_multi === true) {
+    return true;
+  }
+  return bucket.combos.includes((row.main_colors as string) ?? "");
 }
 
 async function aggregateColorsFromEvents(
   setCode: string,
   bucketLabel: string,
-  colorMatches: (colors: string) => boolean,
+  bucket: ColorBucket,
   formatFilter: string | null | undefined,
 ): Promise<ColorsLeaderboardRow[]> {
   if (formatFilter === "Pod") {
@@ -739,23 +746,19 @@ async function aggregateColorsFromEvents(
   const formatAllowed = formatGroup ? new Set(formatGroup) : null;
 
   const season = isCubeSeasonCode(setCode);
-  const eventsView = eventsViewFor(setCode);
-  const eventCols = season
-    ? "slug, format, colors, wins, losses, is_trophy, finished_at, display_name, avatar_url"
-    : "slug, format, colors, wins, losses, is_trophy, finished_at";
-  const allEvents: Array<Record<string, unknown>> = [];
-  const pageSize = 1000;
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await client()
-      .from(eventsView)
-      .select(eventCols)
-      .eq("set_code", setCode)
-      .range(from, from + pageSize - 1);
-    if (error) throw error;
-    const batch = (data ?? []) as unknown as Array<Record<string, unknown>>;
-    allEvents.push(...batch);
-    if (batch.length < pageSize) break;
+  let query = client()
+    .from("public_color_events")
+    .select("slug, format, wins, losses, is_trophy, finished_at, display_name, avatar_url, main_colors, is_multi")
+    .eq("set_code", setCode);
+  // One bucket narrows server-side; a mixed request falls back to the whole board and inBucket.
+  if (bucket.includeMulti && bucket.combos.length === 0) {
+    query = query.eq("is_multi", true);
+  } else if (!bucket.includeMulti && bucket.combos.length > 0) {
+    query = query.in("main_colors", bucket.combos);
   }
+  const { data, error } = await query;
+  if (error) throw error;
+  const allEvents = (data ?? []) as unknown as Array<Record<string, unknown>>;
 
   // Season views carry the player's name/avatar per row; lifetime boards join
   // the leaderboard view for that meta (it has no CUBE-<season> rows).
@@ -791,8 +794,7 @@ async function aggregateColorsFromEvents(
   const perSlug = new Map<string, PlayerAgg>();
 
   for (const raw of allEvents) {
-    const colors = (raw.colors as string | null) ?? "";
-    if (!colorMatches(colors)) continue;
+    if (!inBucket(raw, bucket)) continue;
 
     const slug = raw.slug as string;
     const fmt = (raw.format as string) ?? "";

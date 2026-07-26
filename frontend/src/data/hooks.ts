@@ -50,6 +50,7 @@ import type { P0P1BallotRow, P0P1Pick, SlotKey } from "../types/p0p1";
 import type { FeaturedContest } from "./p0p1Slots";
 import { resolveContestByCode, resolveFeaturedContest } from "./p0p1Slots";
 import { MULTI, OTHER } from "./filters";
+import { boardOffersSoup } from "./cubeVariants";
 import { useNow } from "../lib/countdown";
 const THIRTY_MINUTES = 30 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
@@ -367,6 +368,10 @@ export function usePrefetchers() {
   return { prefetchSet, prefetchPlayer };
 }
 
+// A board with five years of drafts clears the 1% threshold on nearly every combo, so the row caps
+// out and the rest fall into OTHER. Pairs lead, then singles, then triples, each by event count.
+const MAX_NAMED_COLOR_CHIPS = 15;
+
 // Builds the dynamic chip list for the colors filter: 2-color guilds + popular
 // 3-color combos that pass the 1% threshold, then MULTI and OTHER catchalls.
 // Returns the named chip list and the set of sub-threshold combos that get
@@ -397,12 +402,14 @@ export function useColorChips(setCode: string): { chips: string[]; otherCombos: 
       const eb = data.find((r) => r.colors === b)?.events ?? 0;
       return eb - ea;
     });
+    otherCombos.push(...named.splice(MAX_NAMED_COLOR_CHIPS));
+
     const chips: string[] = [...named];
     const hasMulti = data.some((r) => r.colors === MULTI && r.events > 0);
-    if (hasMulti) chips.push(MULTI);
+    if (hasMulti && boardOffersSoup(setCode)) chips.push(MULTI);
     if (otherCombos.length > 0) chips.push(OTHER);
     return { chips, otherCombos, loading: false };
-  }, [data, isLoading]);
+  }, [data, isLoading, setCode]);
 }
 
 

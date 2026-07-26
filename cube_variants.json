@@ -1,0 +1,27 @@
+{
+  "$schema": "Arena's cube variants, in board-dropdown order. Loaded by bot/sets.py (Python) and frontend/src/data/cubeVariants.ts (JS). Edit here, both sides pick it up. 'expansion' is 17lands' name for the variant, kept verbatim on every draft event so the boards stay separable; the board code is CUBE-<slug>; 'glyph' is a 'keyrune:<glyph>' or 'mana:<glyph>' icon spec, the same form bot/scripts/upload_app_emojis.py takes; 'seasoned' bins the variant's drafts into per-set season boards instead of one flat board; 'soup' false drops the Soup colour chip on that cube's board, for a cube multicolour enough that Soup swallows most of it.",
+  "variants": [
+    {
+      "slug": "POWERED",
+      "name": "Arena Powered Cube",
+      "expansion": "Cube - Powered",
+      "glyph": "keyrune:pz1",
+      "seasoned": true
+    },
+    {
+      "slug": "PLANAR",
+      "name": "Planar Cube",
+      "expansion": "Cube - Planar",
+      "glyph": "keyrune:pca",
+      "seasoned": false
+    },
+    {
+      "slug": "ARENA",
+      "name": "Arena Cube",
+      "expansion": "Cube",
+      "glyph": "mana:flashback",
+      "seasoned": false,
+      "soup": false
+    }
+  ]
+}

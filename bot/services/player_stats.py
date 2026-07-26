@@ -13,7 +13,7 @@ from bot.discord_helpers import player_url
 from bot.scoring import boxes_for_event, compute_score, compute_score_breakdown, pod_points
 from bot.services.active_set import resolve_active_set
 from bot.services.pod_drafts import PodSetSummary, players_for_names, pod_scoring_counts, pod_summary_by_set_for_player
-from bot.sets import active_set_code
+from bot.sets import CUBE_CODE, CubeVariant, active_set_code, cube_variant_for_expansion
 
 
 @dataclass
@@ -198,34 +198,59 @@ def rank_players_for_set(session: Session, set_id: str) -> list[RankedPlayer]:
     return [p._replace(rank=rank) for rank, p in enumerate(standings, start=1)]
 
 
-CUBE_CODE = "CUBE"
 CUBE_BURST_GAP_DAYS = 7
 
 
-def latest_cube_season(session: Session) -> str | None:
-    """Season label of the latest cube burst — the set live when the most recent cube run *began*.
+def latest_cube_board(session: Session) -> tuple[CubeVariant, str | None] | None:
+    """The cube board the newest cube activity belongs to: ``(variant, season label or None)``.
+
+    Arena runs one cube at a time, so the variant holding the newest draft is the ongoing one (or
+    the last one that ran, between runs). A seasoned variant resolves further to the season of its
+    latest burst; the rest are one flat board. None when no cube drafts exist.
+    """
+    row = session.execute(
+        text("""
+            SELECT de.expansion, MAX(de.started_at) AS last_at
+            FROM draft_events de
+            JOIN sets s ON s.id = de.set_id
+            JOIN players p ON p.id = de.player_id
+            WHERE s.code = :cube AND p.active = true AND de.started_at IS NOT NULL
+            GROUP BY de.expansion
+            ORDER BY last_at DESC
+            LIMIT 1
+        """),
+        {"cube": CUBE_CODE},
+    ).first()
+    if row is None:
+        return None
+    variant = cube_variant_for_expansion(row.expansion)
+    if variant is None:
+        return None
+    if not variant.seasoned:
+        return variant, None
+    return variant, latest_cube_season(session, variant)
+
+
+def latest_cube_season(session: Session, variant: CubeVariant) -> str | None:
+    """Season label of a variant's latest burst — the set live when its most recent run *began*.
 
     A burst is community cube activity with no gap longer than ``CUBE_BURST_GAP_DAYS``; its whole
     run inherits the season of the set window holding its first event, so a tail spilling past a set
     rotation stays with the season it started in rather than minting a phantom next-set season. None
-    if no cube drafts exist. Mirrors the burst-anchored public_cube_seasons view.
+    if the variant has no drafts. Mirrors the burst-anchored public_cube_seasons view.
     """
     row = session.execute(
-        text(f"{_CUBE_SEASON_BINNING_SQL} SELECT season FROM binned ORDER BY started_at DESC LIMIT 1")
+        text(f"{_CUBE_SEASON_BINNING_SQL} SELECT season FROM binned ORDER BY started_at DESC LIMIT 1"),
+        {"expansion": variant.expansion},
     ).first()
     return row.season if row is not None else None
 
 
-def rank_cube_season(session: Session) -> tuple[list[RankedPlayer], str] | None:
-    """Rank active, opted-in players for the latest cube season; returns (standings, season label).
-
-    Scored from the burst-anchored cube binning (cube only — no pod points) so the standings match
-    the site's CUBE-<set> board. None if there is no cube data.
-    """
-    label = latest_cube_season(session)
-    if label is None:
-        return None
-
+def rank_cube_board(
+    session: Session, variant: CubeVariant, season: str | None,
+) -> list[RankedPlayer] | None:
+    """Rank active, opted-in players on one cube board (cube only, no pod points), so the standings
+    match the site's ``CUBE-<season>`` or ``CUBE-<variant>`` board. None when the board is empty."""
     rows = session.execute(
         text(f"""
             {_CUBE_SEASON_BINNING_SQL}
@@ -237,10 +262,10 @@ def rank_cube_season(session: Session) -> tuple[list[RankedPlayer], str] | None:
                 SUM(losses) AS losses,
                 SUM(CASE WHEN is_trophy THEN 1 ELSE 0 END) AS trophies
             FROM binned
-            WHERE season = :label AND leaderboard_opt_in = true
+            WHERE (:season IS NULL OR season = :season) AND leaderboard_opt_in = true
             GROUP BY player_id, format
         """),
-        {"label": label},
+        {"expansion": variant.expansion, "season": season},
     ).all()
 
     by_player: dict[str, list[dict]] = {}
@@ -269,7 +294,7 @@ def rank_cube_season(session: Session) -> tuple[list[RankedPlayer], str] | None:
             score=compute_score(stat_rows), trophies=sum(r["trophies"] for r in stat_rows),
         ))
     standings.sort(key=lambda p: (-p.score, p.display_name.lower()))
-    return [p._replace(rank=rank) for rank, p in enumerate(standings, start=1)], label
+    return [p._replace(rank=rank) for rank, p in enumerate(standings, start=1)]
 
 
 _CUBE_SEASON_BINNING_SQL = f"""
@@ -293,7 +318,10 @@ cube_events AS (
     FROM draft_events de
     JOIN sets s ON s.id = de.set_id
     JOIN players p ON p.id = de.player_id
-    WHERE s.code = '{CUBE_CODE}' AND p.active = true AND de.started_at IS NOT NULL
+    WHERE s.code = '{CUBE_CODE}'
+      AND de.expansion = :expansion
+      AND p.active = true
+      AND de.started_at IS NOT NULL
 ),
 marked AS (
     SELECT
@@ -323,7 +351,7 @@ binned AS (
         a.*,
         seasons.code AS season
     FROM anchored a
-    JOIN seasons
+    LEFT JOIN seasons
         ON a.burst_start::date >= seasons.start_date
        AND (seasons.next_start IS NULL OR a.burst_start::date < seasons.next_start)
 )

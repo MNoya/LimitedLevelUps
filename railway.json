@@ -6,6 +6,8 @@
       "bot/**",
       "alembic/**",
       "alembic.ini",
+      "cube_variants.json",
+      "scoring_buckets.json",
       "requirements.txt",
       "railway.json"
     ]

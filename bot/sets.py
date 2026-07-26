@@ -13,9 +13,11 @@ a real ``end_date`` is filled in when a successor set is added. Keep an anticipa
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 # Arena drops a set around noon Eastern on its release day; the leaderboard rotates at that
@@ -32,11 +34,50 @@ def release_instant(d: date) -> datetime:
 
 @dataclass(frozen=True)
 class SetSeed:
+    """A set on the leaderboard.
+
+    ``expansion_alias`` is a 17lands expansion string rewritten to ``code`` at ingest, for a set
+    17lands files under another name (``MAT`` for MOM). ``expansion_matches`` routes several 17lands
+    expansions to one set and keeps the raw string on each event, which is how the cube variants
+    share the CUBE set while staying separable per board.
+    """
     code: str
     name: str
     start_date: date
     end_date: date | None
-    expansion_match: str | None = None
+    expansion_alias: str | None = None
+    expansion_matches: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CubeVariant:
+    """One of Arena's cubes. Arena swaps the cube itself every few sets and 17lands files each under
+    its own expansion, so each variant gets its own board at ``CUBE-<slug>``. ``seasoned`` bins the
+    variant's drafts into per-set season boards; the rest stay one flat board.
+    """
+    slug: str
+    name: str
+    expansion: str
+    glyph: str
+    seasoned: bool
+
+
+CUBE_CODE = "CUBE"
+
+CUBE_VARIANTS_JSON = Path(__file__).resolve().parents[1] / "cube_variants.json"
+
+CUBE_VARIANTS: tuple[CubeVariant, ...] = tuple(
+    CubeVariant(
+        slug=v["slug"],
+        name=v["name"],
+        expansion=v["expansion"],
+        glyph=v["glyph"],
+        seasoned=bool(v["seasoned"]),
+    )
+    for v in json.loads(CUBE_VARIANTS_JSON.read_text())["variants"]
+)
+
+CUBE_VARIANT_EXPANSIONS: tuple[str, ...] = tuple(v.expansion for v in CUBE_VARIANTS)
 
 
 ALL_SETS: tuple[SetSeed, ...] = (
@@ -57,7 +98,7 @@ ALL_SETS: tuple[SetSeed, ...] = (
     SetSeed("BRO", "The Brothers' War", date(2022, 11, 15), date(2023, 2, 6)),
     SetSeed("ONE", "Phyrexia: All Will Be One", date(2023, 2, 7), date(2023, 3, 20)),
     SetSeed("SIR", "Shadows over Innistrad Remastered", date(2023, 3, 21), date(2023, 4, 17)),
-    SetSeed("MOM", "March of the Machine", date(2023, 4, 18), date(2023, 6, 19), expansion_match="MAT"),
+    SetSeed("MOM", "March of the Machine", date(2023, 4, 18), date(2023, 6, 19), expansion_alias="MAT"),
     SetSeed("LTR", "The Lord of the Rings: Tales of Middle-earth", date(2023, 6, 20), date(2023, 9, 4)),
     SetSeed("WOE", "Wilds of Eldraine", date(2023, 9, 5), date(2023, 11, 13)),
     SetSeed("LCI", "The Lost Caverns of Ixalan", date(2023, 11, 14), date(2024, 2, 5)),
@@ -73,8 +114,8 @@ ALL_SETS: tuple[SetSeed, ...] = (
     SetSeed("TDM", "Tarkir: Dragonstorm", date(2025, 4, 8), date(2025, 6, 8)),
     SetSeed("FIN", "Final Fantasy", date(2025, 6, 9), date(2025, 7, 28)),
     SetSeed("EOE", "Edge of Eternities", date(2025, 7, 29), date(2025, 9, 23)),
-    SetSeed("SPM", "Marvel's Spider-Man", date(2025, 9, 23), date(2025, 11, 15), expansion_match="OM1"),
-    SetSeed("CUBE", "Arena Powered Cube", date(2025, 10, 28), None, expansion_match="Cube - Powered"),
+    SetSeed("SPM", "Marvel's Spider-Man", date(2025, 9, 23), date(2025, 11, 15), expansion_alias="OM1"),
+    SetSeed(CUBE_CODE, "Arena Powered Cube", date(2025, 10, 28), None, expansion_matches=CUBE_VARIANT_EXPANSIONS),
     SetSeed("TLA", "Avatar: The Last Airbender", date(2025, 11, 16), date(2026, 1, 19)),
     SetSeed("ECL", "Lorwyn Eclipsed", date(2026, 1, 20), date(2026, 3, 2)),
     SetSeed("TMT", "Teenage Mutant Ninja Turtles", date(2026, 3, 3), date(2026, 4, 20)),
@@ -226,12 +267,23 @@ PREVIEW_WINDOWS: tuple[PreviewWindow, ...] = (
 
 
 EXPANSION_ALIASES: dict[str, str] = {
-    s.expansion_match: s.code for s in ALL_SETS if s.expansion_match
+    s.expansion_alias: s.code for s in ALL_SETS if s.expansion_alias
+}
+
+EXPANSION_ROUTES: dict[str, str] = {
+    match: s.code for s in ALL_SETS for match in s.expansion_matches
 }
 
 
 def normalize_expansion(expansion: str) -> str:
     return EXPANSION_ALIASES.get(expansion, expansion)
+
+
+def set_code_for_expansion(expansion: str) -> str | None:
+    """The set an exactly-named 17lands expansion belongs to, for expansions kept verbatim on their
+    events (the cube variants). ``None`` when the expansion carries no explicit route, leaving the
+    caller's substring match on the set code to resolve it."""
+    return EXPANSION_ROUTES.get(expansion)
 
 
 def set_name_for(code: str) -> str:
@@ -241,6 +293,41 @@ def set_name_for(code: str) -> str:
         if s.code == upper:
             return s.name
     return MTGO_FLASHBACK_SETS.get(upper, upper)
+
+
+def cube_variant(slug: str) -> CubeVariant | None:
+    upper = slug.upper()
+    for variant in CUBE_VARIANTS:
+        if variant.slug == upper:
+            return variant
+    return None
+
+
+def cube_variant_for_expansion(expansion: str) -> CubeVariant | None:
+    for variant in CUBE_VARIANTS:
+        if variant.expansion == expansion:
+            return variant
+    return None
+
+
+def seasoned_cube_variant() -> CubeVariant:
+    """The cube whose drafts split into per-set season boards. It is the family's flagship, so a
+    season code with no cube named (``CUBE-SOS``) belongs to it."""
+    for variant in CUBE_VARIANTS:
+        if variant.seasoned:
+            return variant
+    return CUBE_VARIANTS[0]
+
+
+def cube_board_code(slug: str) -> str:
+    return f"{CUBE_CODE}-{slug.upper()}"
+
+
+def is_cube_board_code(code: str) -> bool:
+    """Whether a set code names a cube board: bare ``CUBE``, a whole cube (``CUBE-PLANAR``) or one
+    of the seasoned cube's per-set seasons (``CUBE-SOS``)."""
+    upper = code.upper()
+    return upper == CUBE_CODE or upper.startswith(f"{CUBE_CODE}-")
 
 
 def parse_caption_set_code(caption: str | None) -> str | None:

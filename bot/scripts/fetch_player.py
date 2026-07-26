@@ -76,7 +76,7 @@ def main() -> None:
         scope = "all sets"
         start_date = None
         end_date = None
-        expansion = None
+        expansions: list[str | None] = [None]
     else:
         seed = _resolve_set(set_code)
         if seed is None:
@@ -85,15 +85,17 @@ def main() -> None:
         scope = f"{seed.code} ({seed.start_date} → {seed.end_date or 'open'})"
         start_date = seed.start_date
         end_date = seed.end_date
-        expansion = seed.expansion_match or seed.code
+        expansions = list(seed.expansion_matches) or [seed.expansion_alias or seed.code]
 
     client = SeventeenLandsClient()
-    drafts = client.fetch_drafts(
-        token,
-        start_date=start_date,
-        end_date=end_date,
-        expansion=expansion,
-    )
+    drafts: list[dict] = []
+    for expansion in expansions:
+        drafts += client.fetch_drafts(
+            token,
+            start_date=start_date,
+            end_date=end_date,
+            expansion=expansion,
+        )
 
     print(f"player: {label}")
     print(f"scope:  {scope}")

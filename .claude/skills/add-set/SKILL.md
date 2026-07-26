@@ -62,7 +62,7 @@ Rotation is automatic: `active_set_code()` flips to whichever released set holds
 1. Insert the new `SetSeed(...)` row at the chronologically correct position in `ALL_SETS`, sorted by `start_date`. Use the provided `end_date` (do NOT use `None`).
 2. Do **not** touch the newest set or the frontend `ACTIVE_SET_CODE` fallback — a backfill never changes what is active.
 3. Do **not** adjust any other row's `end_date` — existing dates are already correct for sets surrounding a backfilled entry.
-4. If the user reports the set was tracked in 17lands under a non-matching expansion code, also pass `expansion_match="<17lands expansion string>"`. Otherwise omit it.
+4. If the user reports the set was tracked in 17lands under a non-matching expansion code, also pass `expansion_matches=("<17lands expansion string>",)`. Otherwise omit it.
 
 ### 4b. Generate the set symbol
 

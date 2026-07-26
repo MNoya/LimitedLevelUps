@@ -101,6 +101,15 @@ The active set is **derived from today's date** by `active_set_code()` — there
 
 Discord set channels rotate separately and are **not** driven by `!guide`: a dedicated cron in `bot/tasks/format_schedule_post.py` fires at the noon-ET release instant (the 3×/day announce tick re-runs it as an idempotent fallback) and, once the new set's `start_date` passes, posts the outgoing set's send-off standings into its channel, moves it to "Format Archive", notifies the `-admin` channel, and re-syncs channel-overview. The eve of a rotation, `bot/tasks/set_awards_post.py` runs the Set Awards ceremony (8 AM PT, with a T-15 warning) in that same channel and pins it. Creating the incoming set's channel is manual by design — the bot never creates channels, so a mod adds it during preview season for old/new coexistence.
 
+### Cube boards — `cube_variants.json`
+
+Arena swaps its cube every few sets and 17lands files each under its own expansion, so the one `CUBE` set row holds every cube and the boards split by variant. `cube_variants.json` at the repo root is the registry both sides read (`bot/sets.py` and `frontend/src/data/cubeVariants.ts`), one entry per cube: `slug`, `name`, the 17lands `expansion`, a `keyrune:`/`mana:` `glyph` spec, and `seasoned`.
+
+- Cube expansions are **kept verbatim** on `draft_events` (`Cube`, `Cube - Powered`, `Cube - Planar`) — `normalize_expansion` rewrites only `expansion_alias` sets like MAT → MOM. `SetSeed.expansion_matches` routes each cube expansion to `CUBE` without touching the string, which is what keeps the boards separable.
+- Board codes are virtual: `CUBE-<SLUG>` for a whole cube, plus `CUBE-<SET>` per-set seasons for the one `seasoned` cube (the powered cube). Bare `CUBE` is not a board — it resolves to whichever cube ran most recently (`latest_cube_board` in the bot, `ongoingCubeBoard` on the site). `CUBE-ALL` is a retired alias that lands on the seasoned cube's board.
+- The three `public_cube_season*` views emit both kinds of row, discriminated by `kind`. They derive the slug from the expansion (`Cube - Planar` → `PLANAR`, bare `Cube` → `ARENA`), so a cube Arena introduces later becomes a board with no migration — only a registry entry for its name and glyph.
+- `/leaderboard set:` takes any board code and refuses format/color filters on them; the site keeps full filtering.
+
 ### Scoring formula — `bot/scoring.py`
 
 Per queue group (Premier / Traditional / Sealed / Quick / LCQ Draft 1 / LCQ Draft 2):
