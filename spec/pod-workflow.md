@@ -38,7 +38,7 @@ Per-player standing preferences live on `Player`: `format_interests` (array), `f
 
 ### 1. Daily poll (interest collection opens)
 
-Posted by `fire_daily_poll` (`bot/tasks/pod_daily_poll.py`), armed as one APScheduler cron in `init_daily_poll`: every day at 11:00 ET (`POST_HOUR_ET` in `pod_signals.py`, timezone `SCHEDULE_TZ` = America/New_York). Idempotent per day. It posts into the pod coordination channel (`pod_draft_channel_id`), which must be a Text channel, not Announcement.
+Posted by `fire_daily_poll` (`bot/tasks/pod_daily_poll.py`), armed as one APScheduler cron in `init_daily_poll`: every day at 10:00 ET (`POST_HOUR_ET` in `pod_signals.py`, timezone `SCHEDULE_TZ` = America/New_York). Idempotent per day. It posts into the pod coordination channel (`pod_draft_channel_id`), which must be a Text channel, not Announcement.
 
 The embed (`build_poll_embed`, "Daily Pod Launcher") carries one **toggle button per pod on offer**, labelled with the format it joins (`Early MSH`, `Early PEASANT`). Buckets are defined by `PollBucket` in `pod_signals.py`:
 

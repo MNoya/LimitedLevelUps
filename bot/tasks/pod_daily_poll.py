@@ -25,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import discord
 from discord.ext import commands
@@ -87,7 +87,6 @@ from bot.services.pod_launcher_copy import (
     POLL_INTRO_TIME_AND_FORMAT,
     POLL_INTRO_TIME_ONLY,
     POLL_MECHANICS,
-    POLL_NEXT_LAUNCHER,
     POLL_TITLE,
     RANK_BUTTON_EMOJI,
     RANK_BUTTON_LABEL,
@@ -287,23 +286,8 @@ def build_poll_embed(
         value = _column_value(column, guild, pad)
         if value:
             embed.add_field(name=ZWSP, value=value, inline=True)
-    embed.add_field(name=ZWSP, value=_mechanics_note(slots, several), inline=False)
+    embed.add_field(name=ZWSP, value=_mechanics_note(several), inline=False)
     return embed
-
-
-def _next_launcher_note(slots: list[pod_launch.LauncherSlot]) -> str:
-    """The extra mechanics bullet for a board carrying a slot on a later day. Such a pod holds at quorum until the
-    next launcher graduates it, so the plain threshold line alone would promise a thread that cannot open yet.
-    Counts down to that post instead of explaining the hold, since what a reader wants from a slot they cannot
-    fire is when it becomes live. Only rendered when a later day is on the board, where it is the answer, and
-    not on a board carrying today alone, where it is noise."""
-    days = [slot.slot_time.astimezone(SCHEDULE_TZ).date() for slot in slots if slot.slot_time is not None]
-    now = datetime.now(SCHEDULE_TZ)
-    if not any(day > now.date() for day in days):
-        return ""
-    post_today = datetime.combine(now.date(), time(POST_HOUR_ET), tzinfo=SCHEDULE_TZ)
-    next_post = post_today if post_today > now else post_today + timedelta(days=1)
-    return POLL_NEXT_LAUNCHER.format(unix=int(next_post.timestamp()))
 
 
 def _finished_pad(columns: list[list[pod_launch.LauncherSlot]]) -> int:
@@ -349,17 +333,16 @@ def _format_legend(codes: list[str], guild: discord.Guild | None) -> str:
     return "\n".join(lines)
 
 
-def _mechanics_note(slots: list[pod_launch.LauncherSlot], several: bool) -> str:
+def _mechanics_note(several: bool) -> str:
     """How a pod works, seated below the board because it only matters once a reader has picked a time. The
     first-to-fill line closes it, next to the marker it explains, and only when there is more than one
     format, since a single-format board never renders that marker."""
     mechanics = POLL_MECHANICS.format(
         threshold=settings.pod_signal_fire_threshold, lead=pod_launch.REMINDER_LEAD_MIN,
     )
-    lines = [mechanics, _next_launcher_note(slots)]
     if several:
-        lines.append(POLL_FORMAT_SEVERAL)
-    return "\n".join(line for line in lines if line)
+        return f"{mechanics}\n{POLL_FORMAT_SEVERAL}"
+    return mechanics
 
 
 def _archive_embed(

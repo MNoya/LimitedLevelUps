@@ -20,7 +20,7 @@ from bot.services.pod_schedule import (
 
 SATURDAY = 5
 
-POST_HOUR_ET = 11
+POST_HOUR_ET = 10
 
 KIND_POLL = "poll"
 KIND_QUEUE = "queue"
