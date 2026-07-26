@@ -19,10 +19,12 @@ export function BreakdownList({
   title,
   headerAside,
   bySlot,
+  setCode,
 }: {
   title: string;
   headerAside?: ReactNode;
   bySlot: Map<SlotKey, BreakdownRow[]>;
+  setCode?: string;
 }) {
   return (
     <div className="flex flex-col gap-1.5 lg:gap-3">
@@ -39,6 +41,7 @@ export function BreakdownList({
             key={slot.key}
             slot={slot}
             rows={bySlot.get(slot.key) ?? []}
+            setCode={setCode}
           />
         ))}
       </div>
@@ -49,6 +52,7 @@ export function BreakdownList({
             key={slot.key}
             slot={slot}
             rows={bySlot.get(slot.key) ?? []}
+            setCode={setCode}
             collapsible
           />
         ))}
@@ -60,10 +64,12 @@ export function BreakdownList({
 function BreakdownPanel({
   slot,
   rows,
+  setCode,
   collapsible = false,
 }: {
   slot: SlotDefinition;
   rows: BreakdownRow[];
+  setCode?: string;
   collapsible?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -73,7 +79,7 @@ function BreakdownPanel({
 
   const header = (
     <div className={`flex-1 flex items-center gap-2 ${wide ? "pl-4 pr-3" : "px-3"} py-2.5 min-w-0`}>
-      <SlotPip slotKey={slot.key} size={20} />
+      <SlotPip slotKey={slot.key} size={20} setCode={setCode} />
       <span className="font-display text-[15px] tracking-[0.1em] text-white truncate">
         {slot.label.toUpperCase()}
       </span>

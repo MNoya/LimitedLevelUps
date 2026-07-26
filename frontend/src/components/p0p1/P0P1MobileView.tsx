@@ -21,12 +21,8 @@ import { MidwayResults } from "./MidwayResults";
 import { FinalResults } from "./FinalResults";
 import type { useP0P1Ballot } from "../../data/useP0P1Ballot";
 import type { P0P1Phase } from "../../data/p0p1Results";
-import {
-  P0P1_SET_CODE as SET_CODE,
-  P0P1_VOTING_DEADLINE as VOTING_DEADLINE,
-  P0P1_SCORING_DATE as SCORING_DATE,
-  SLOTS,
-} from "../../data/p0p1Slots";
+import type { FeaturedContest } from "../../data/p0p1Slots";
+import { SLOTS } from "../../data/p0p1Slots";
 import { groupBySlot, findExtremes, classifyYourPick, pickPctLabel } from "../../data/p0p1Stats";
 import { SITE_LINKS } from "../../data/site";
 import { p0p1Now } from "../../data/p0p1DevState";
@@ -37,6 +33,7 @@ type Ballot = ReturnType<typeof useP0P1Ballot>;
 
 export function P0P1MobileView({ ballot }: { ballot: Ballot }) {
   const {
+    featured,
     cards,
     cardsByName,
     dataReady,
@@ -70,6 +67,7 @@ export function P0P1MobileView({ ballot }: { ballot: Ballot }) {
         locked={isPastDeadline}
         active={false}
         onEdit={() => setEditingSlotKey(slotKey)}
+        setCode={featured?.code}
       />
     );
   };
@@ -81,7 +79,7 @@ export function P0P1MobileView({ ballot }: { ballot: Ballot }) {
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
 
       <main className={`flex-1 flex flex-col w-full px-4 pt-4 ${loginBarVisible ? "pb-20" : "pb-4"}`}>
-        <MobileIntro sets={p0p1Sets} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
+        <MobileIntro featured={featured} sets={p0p1Sets} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
         {dataReady ? (
           <>
             {!isPastDeadline && (
@@ -119,6 +117,7 @@ export function P0P1MobileView({ ballot }: { ballot: Ballot }) {
           selectedName={picksBySlot.get(editingSlotKey)}
           onSelect={(name) => selectAndClose(editingSlotKey, name)}
           onClose={() => setEditingSlotKey(null)}
+          setCode={featured?.code}
         />
       )}
     </div>
@@ -127,6 +126,7 @@ export function P0P1MobileView({ ballot }: { ballot: Ballot }) {
 
 export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
   const {
+    featured,
     cards,
     cardsByName,
     dataReady,
@@ -166,7 +166,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
 
       <main className={`flex-1 flex flex-col w-full px-3 pt-3 ${loginBarVisible ? "pb-24" : "pb-4"}`}>
-        <MobileIntro sets={p0p1Sets} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
+        <MobileIntro featured={featured} sets={p0p1Sets} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
         {dataReady ? (
           <>
             {!isPastDeadline && (
@@ -196,6 +196,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
                         yourStat={yourStat}
                         slotStats={slotStats}
                         onClick={() => setEditingSlotKey(slot.key)}
+                        setCode={featured?.code}
                       />
                     );
                   })}
@@ -259,6 +260,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
                             })}
                             cardsByName={cardsByName}
                             picksBySlot={picksBySlot}
+                            setCode={featured?.code}
                           />
                         </div>
                       ) : null
@@ -282,7 +284,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
                     autoFocusSearch={false}
                     leftLabel={
                       <>
-                        <SlotPip slotKey={activeSlot.key} size={20} />
+                        <SlotPip slotKey={activeSlot.key} size={20} setCode={featured?.code} />
                         <span className="font-display text-[18px] tracking-[0.06em] truncate">{activeSlot.label}</span>
                       </>
                     }
@@ -331,6 +333,7 @@ function MobileChip({
   yourStat,
   slotStats,
   onClick,
+  setCode,
 }: {
   slot: SlotDefinition;
   card: Card | undefined;
@@ -338,6 +341,7 @@ function MobileChip({
   yourStat?: P0P1PickStat;
   slotStats?: P0P1PickStat[];
   onClick: () => void;
+  setCode?: string;
 }) {
   const accent = SLOT_ACCENT[slot.key];
   let classification: ReturnType<typeof classifyYourPick> | undefined;
@@ -368,7 +372,7 @@ function MobileChip({
         <img src={card.imageArtCrop} alt="" className="w-full h-full object-cover" />
       ) : (
         <span className="absolute inset-0 flex items-center justify-center">
-          <SlotPip slotKey={slot.key} size={20} />
+          <SlotPip slotKey={slot.key} size={20} setCode={setCode} />
         </span>
       )}
       {yourStat && classification && (
@@ -415,16 +419,21 @@ function MobileLoginBar({ show, signIn, text }: { show: boolean; signIn: () => v
 }
 
 function MobileIntro({
+  featured,
   sets,
   phase,
   dateRange,
 }: {
+  featured: FeaturedContest | undefined;
   sets: SetSummary[] | undefined;
   phase: P0P1Phase;
   dateRange?: { start: string; end: string } | null;
 }) {
   const [open, setOpen] = useState(true);
   const isPastDeadline = phase !== "voting";
+  const setCode = featured?.code ?? "";
+  const votingDeadline = featured?.votingDeadline ?? new Date();
+  const scoringDate = featured?.scoringDate ?? new Date();
 
   return (
     <section className="bg-surface border border-border rounded-xl p-4 mb-3 flex flex-col gap-2.5">
@@ -436,9 +445,9 @@ function MobileIntro({
         className="flex w-full items-center gap-3 text-left bg-transparent border-0 p-0 cursor-pointer"
       >
         <div className="flex items-center gap-1 shrink-0">
-          <SetGlyph code={setGlyphCode(sets?.find((s) => s.code === SET_CODE) ?? { code: SET_CODE })} size={34} />
+          <SetGlyph code={setGlyphCode(sets?.find((s) => s.code === setCode) ?? { code: setCode })} size={34} />
           <span className="font-display text-text tracking-[0.04em]" style={{ fontSize: 22, lineHeight: 1 }}>
-            {SET_CODE}
+            {setCode}
           </span>
         </div>
         <span className="flex-1 min-w-0 text-center font-display text-[16px] text-text tracking-[0.1em] truncate pointer-events-none">
@@ -446,19 +455,19 @@ function MobileIntro({
         </span>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <div className="flex items-center gap-2">
-            <CountdownStacked deadline={VOTING_DEADLINE} scoringDate={SCORING_DATE} phase={phase} />
+            <CountdownStacked deadline={votingDeadline} scoringDate={scoringDate} phase={phase} />
             <ChevronDown size={22} className={`shrink-0 text-muted transition-transform ${open ? "" : "-rotate-90"}`} />
           </div>
           {isPastDeadline && (
             <div className="w-full">
-              <P0P1CountdownBar from={VOTING_DEADLINE} to={SCORING_DATE} />
+              <P0P1CountdownBar from={votingDeadline} to={scoringDate} />
             </div>
           )}
         </div>
       </button>
       {open && (
         <p className="text-subtle text-[13.5px] leading-[1.5]">
-          <P0P1IntroText phase={phase} dateRange={dateRange} />
+          <P0P1IntroText phase={phase} dateRange={dateRange} setName={featured?.name ?? ""} votingDeadline={votingDeadline} scoringDate={scoringDate} />
         </p>
       )}
     </section>
@@ -473,6 +482,7 @@ function MobilePickerSheet({
   selectedName,
   onSelect,
   onClose,
+  setCode,
 }: {
   slotKey: SlotKey;
   cards: Card[];
@@ -481,6 +491,7 @@ function MobilePickerSheet({
   selectedName: string | undefined;
   onSelect: (name: string) => void;
   onClose: () => void;
+  setCode?: string;
 }) {
   const slot = SLOTS.find((s) => s.key === slotKey)!;
   useEffect(() => {
@@ -499,7 +510,7 @@ function MobilePickerSheet({
   return (
     <div className="fixed inset-0 z-50 bg-bg flex flex-col animate-fadeIn">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
-        <SlotPip slotKey={slotKey} size={15} />
+        <SlotPip slotKey={slotKey} size={15} setCode={setCode} />
         <span className="font-display text-[18px] tracking-[0.06em]">{slot.label}</span>
         <button
           type="button"
@@ -555,7 +566,7 @@ function CountdownStacked({
   phase: P0P1Phase;
 }) {
   useTick(30_000);
-  const now = p0p1Now();
+  const now = p0p1Now(scoringDate);
   const deadlineDiff = deadline.getTime() - now;
 
   if (phase === "voting") {

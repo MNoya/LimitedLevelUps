@@ -13,10 +13,12 @@ export function CommunityGrid({
   pickStats,
   cardsByName,
   picksBySlot,
+  setCode,
 }: {
   pickStats: P0P1PickStat[];
   cardsByName: Map<string, Card>;
   picksBySlot?: Map<string, string>;
+  setCode?: string;
 }) {
   const grouped = groupBySlot(pickStats);
 
@@ -29,6 +31,7 @@ export function CommunityGrid({
       })}
       cardsByName={cardsByName}
       picksBySlot={picksBySlot}
+      setCode={setCode}
     />
   );
 }
@@ -48,11 +51,13 @@ function PickRow({
   entries,
   cardsByName,
   picksBySlot,
+  setCode,
 }: {
   title: string;
   entries: PickEntry[];
   cardsByName: Map<string, Card>;
   picksBySlot?: Map<string, string>;
+  setCode?: string;
 }) {
   return (
     <div>
@@ -61,7 +66,7 @@ function PickRow({
           {title}
         </SectionLabel>
       </div>
-      <PickGrid entries={entries} cardsByName={cardsByName} picksBySlot={picksBySlot} />
+      <PickGrid entries={entries} cardsByName={cardsByName} picksBySlot={picksBySlot} setCode={setCode} />
     </div>
   );
 }
@@ -71,12 +76,13 @@ export function PickGrid({
   cardsByName,
   picksBySlot,
   onTileOpen,
+  setCode,
 }: {
   entries: PickEntry[];
   cardsByName: Map<string, Card>;
   picksBySlot?: Map<string, string>;
-  // When set, every tile calls this instead of the internal pick%-versus pager
   onTileOpen?: (slotKey: SlotKey) => void;
+  setCode?: string;
 }) {
   const versusList: PickVersus[] = [];
   const pagerIndexBySlot = new Map<SlotKey, number>();
@@ -111,6 +117,7 @@ export function PickGrid({
             pctLabel={pctLabel}
             cardsByName={cardsByName}
             onOpenVersus={onOpen}
+            setCode={setCode}
           />
         );
       })}
@@ -127,6 +134,7 @@ function PickTile({
   onOpenVersus,
   badge,
   pctLabel,
+  setCode,
 }: {
   slotKey: SlotKey;
   label: string;
@@ -135,6 +143,7 @@ function PickTile({
   onOpenVersus?: () => void;
   badge?: string;
   pctLabel?: string;
+  setCode?: string;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const hasStats = stats.length > 0;
@@ -145,8 +154,8 @@ function PickTile({
   let art;
   if (!card) {
     art = onOpenVersus
-      ? <button type="button" onClick={onOpenVersus} className="w-full h-full cursor-pointer p-0 border-0 bg-transparent flex items-center justify-center"><SlotPip slotKey={slotKey} size={48} /></button>
-      : <SlotPip slotKey={slotKey} size={48} />;
+      ? <button type="button" onClick={onOpenVersus} className="w-full h-full cursor-pointer p-0 border-0 bg-transparent flex items-center justify-center"><SlotPip slotKey={slotKey} size={48} setCode={setCode} /></button>
+      : <SlotPip slotKey={slotKey} size={48} setCode={setCode} />;
   } else if (onOpenVersus) {
     art = (
       <button type="button" onClick={onOpenVersus} className="w-full h-full cursor-pointer p-0 border-0 bg-transparent">

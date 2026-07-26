@@ -9,9 +9,10 @@ interface Props {
   locked?: boolean;
   active?: boolean;
   onEdit: () => void;
+  setCode?: string;
 }
 
-export function SlotCard({ slot, selectedCard, locked, active, onEdit }: Props) {
+export function SlotCard({ slot, selectedCard, locked, active, onEdit, setCode }: Props) {
   const accent = SLOT_ACCENT[slot.key];
   const stripClass = `self-stretch shrink-0 transition-[width] duration-150 ${active ? "w-2" : "w-1 group-hover:w-2"}`;
 
@@ -21,7 +22,7 @@ export function SlotCard({ slot, selectedCard, locked, active, onEdit }: Props) 
     </CardImagePreview>
   ) : (
     <div className="self-stretch w-[88px] shrink-0 bg-surface2 flex items-center justify-center">
-      <SlotPip slotKey={slot.key} size={28} />
+      <SlotPip slotKey={slot.key} size={28} setCode={setCode} />
     </div>
   );
 

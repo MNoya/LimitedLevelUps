@@ -7,8 +7,9 @@ description: Flip the P0P1 results reveal phase (midway/final/none) by regenerat
 
 Flips or refreshes the P0P1 contest's results reveal. The reveal depends on two things:
 the `phase` field in `frontend/src/data/fixtures/p0p1-ratings-<set>.json` and the clock
-(`P0P1_SCORING_DATE` in `p0p1Slots.ts`). A `"final"` fixture merged before the scoring date
-is suppressed until the date arrives, so the branch can ship ahead of the reveal.
+(the contest's `scoringDate`, derived from `P0P1_CONTESTS` in `p0p1Slots.ts`). A `"final"`
+fixture merged before the scoring date is suppressed until the date arrives, so the branch
+can ship ahead of the reveal.
 
 Expected lifecycle: `voting` → `postVoting` → `midway` → `final`.
 
@@ -22,8 +23,10 @@ If no argument is given, ask the user which one and stop.
 
 ### 1. Read current state
 
-- `frontend/src/data/p0p1Slots.ts`: `P0P1_SET_CODE`, `P0P1_VOTING_DEADLINE`,
-  `P0P1_SCORING_DATE` (= voting deadline + 28 days).
+- `frontend/src/data/p0p1Slots.ts`: `P0P1_CONTESTS` registry — find the active contest entry.
+  Use `resolveFeaturedContest` logic: the featured contest's `code`, `votingDeadline`, and
+  `scoringDate` (= voting deadline + 28 days). If `$ARGUMENTS` includes a `--set <CODE>`,
+  use that code instead of the auto-featured one.
 - `bot/sets.py`: the matching `SetSeed`'s `start_date` (the set's Arena release date — this
   is also the 17lands query window's start).
 - `frontend/src/data/fixtures/p0p1-ratings-<set_code_lower>.json`: current `phase`,
@@ -78,7 +81,7 @@ only feeds the fixture's display `dateRange`, not the query.
 ### 5. Sanity checks (abort on any failure, do not proceed to step 6)
 
 - The fixture is valid JSON.
-- `setCode` matches `P0P1_SET_CODE`.
+- `setCode` matches the contest's code.
 - `phase` equals the target phase from step 4 (or is `null` for the `none` path).
 - `dateRange.start` equals the set's Arena release date from `bot/sets.py`.
 - `cards.length` is within ~10% of the previous card count recorded in step 1 (skip this

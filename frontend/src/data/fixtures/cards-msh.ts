@@ -1,6 +1,6 @@
 import type { Card } from "../../types/p0p1";
 
-export const cardsMshFixture: Card[] = [
+export default [
   {
     name: "Agent 13, Sharon Carter",
     manaCost: "{2}{W}",
@@ -3073,4 +3073,4 @@ export const cardsMshFixture: Card[] = [
     imageNormal: "https://cards.scryfall.io/normal/front/2/2/22463284-2478-4b1e-9a37-6dd2383266cf.jpg?1780413978",
     imageArtCrop: "https://cards.scryfall.io/art_crop/front/2/2/22463284-2478-4b1e-9a37-6dd2383266cf.jpg?1780413978",
   },
-];
+] satisfies Card[];

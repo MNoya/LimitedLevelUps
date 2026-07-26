@@ -3,6 +3,7 @@ import { useAuth } from "../auth/useAuth";
 import {
   useP0P1Ballots,
   useP0P1Cards,
+  useP0P1FeaturedContest,
   useP0P1PickStats,
   useP0P1Picks,
   useP0P1Ratings,
@@ -10,7 +11,8 @@ import {
   useDeleteAllP0P1Picks,
   useSets,
 } from "./hooks";
-import { P0P1_SET_CODE as SET_CODE, P0P1_VOTING_DEADLINE as VOTING_DEADLINE, P0P1_SCORING_DATE as SCORING_DATE, SLOTS } from "./p0p1Slots";
+import { SLOTS } from "./p0p1Slots";
+import type { FeaturedContest } from "./p0p1Slots";
 import { useLocalP0P1Picks, setLocalPick, clearLocalPicks, getLocalPicks } from "./localPicks";
 import { p0p1DevEnabled, p0p1Now, useP0P1DevPreset, type P0P1DevPreset } from "./p0p1DevState";
 import { syntheticBallotsFromStats } from "./p0p1DevBallots";
@@ -20,53 +22,60 @@ import type { P0P1Phase, RatingsSnapshot } from "./p0p1Results";
 
 const ADVANCE_BEAT_MS = 260;
 
-export function useP0P1Ballot() {
+export function useP0P1Ballot(overrideSetCode?: string) {
   const { user: authUser, loading: authLoading, signIn } = useAuth();
   const devPreset = useP0P1DevPreset();
   const devActive = p0p1DevEnabled && devPreset !== "live";
   const useServerPicks = Boolean(authUser);
-  const { data: cards } = useP0P1Cards(SET_CODE);
-  const { data: serverPicks } = useP0P1Picks(useServerPicks ? SET_CODE : undefined);
-  const localPicks = useLocalP0P1Picks(SET_CODE);
-  const upsertPick = useUpsertP0P1Pick(SET_CODE);
-  const clearAll = useDeleteAllP0P1Picks(SET_CODE);
+
+  const featured = useP0P1FeaturedContest(overrideSetCode);
+  const setCode = featured?.code;
+  const scoringDate = featured?.scoringDate;
+
+  const { data: cards } = useP0P1Cards(setCode);
+  const { data: serverPicks } = useP0P1Picks(useServerPicks ? setCode : undefined);
+  const localPicks = useLocalP0P1Picks(setCode ?? "");
+  const upsertPick = useUpsertP0P1Pick(setCode ?? "");
+  const clearAll = useDeleteAllP0P1Picks(setCode ?? "");
   const [editingSlotKey, setEditingSlotKey] = useState<SlotKey | null>(null);
 
   const syncDone = useRef(false);
   useEffect(() => {
-    if (!useServerPicks || !serverPicks || syncDone.current) return;
+    if (!useServerPicks || !serverPicks || !setCode || syncDone.current) return;
     syncDone.current = true;
-    const local = getLocalPicks(SET_CODE);
+    const local = getLocalPicks(setCode);
     if (local.length === 0) return;
     const serverSlots = new Set(serverPicks.map((p) => p.slot));
     const toSync = local.filter((p) => !serverSlots.has(p.slot));
     for (const p of toSync) {
       upsertPick.mutate({ slot: p.slot, cardName: p.cardName });
     }
-    clearLocalPicks(SET_CODE);
-  }, [authUser, serverPicks, upsertPick]);
+    clearLocalPicks(setCode);
+  }, [authUser, serverPicks, upsertPick, setCode]);
 
   const activePicks = authLoading ? undefined : useServerPicks ? serverPicks : localPicks;
-  const dataReady = Boolean(cards) && activePicks !== undefined;
+  const dataReady = Boolean(featured && cards) && activePicks !== undefined;
 
   const persistPick = useCallback(
     (slot: SlotKey, cardName: string) => {
+      if (!setCode) return;
       if (useServerPicks) {
         upsertPick.mutate({ slot, cardName });
       } else {
-        setLocalPick(SET_CODE, slot, cardName);
+        setLocalPick(setCode, slot, cardName);
       }
     },
-    [useServerPicks, upsertPick],
+    [useServerPicks, upsertPick, setCode],
   );
 
   const handleClearAll = useCallback(() => {
+    if (!setCode) return;
     if (useServerPicks) {
       clearAll.mutate();
     } else {
-      clearLocalPicks(SET_CODE);
+      clearLocalPicks(setCode);
     }
-  }, [useServerPicks, clearAll]);
+  }, [useServerPicks, clearAll, setCode]);
 
   const cardsByName = useMemo(() => {
     if (!cards) return new Map<string, Card>();
@@ -100,10 +109,11 @@ export function useP0P1Ballot() {
     [pickedCards, picksBySlot],
   );
 
-  const isPastDeadline = p0p1Now() > VOTING_DEADLINE.getTime();
-  const isPastScoringDate = p0p1Now() >= SCORING_DATE.getTime();
-  const { data: pickStats } = useP0P1PickStats(SET_CODE, isPastDeadline);
-  const { data: ratingsSnapshot, error: ratingsError } = useP0P1Ratings(SET_CODE);
+  const now = p0p1Now(scoringDate);
+  const isPastDeadline = featured ? now > featured.votingDeadline.getTime() : false;
+  const isPastScoringDate = featured ? now >= featured.scoringDate.getTime() : false;
+  const { data: pickStats } = useP0P1PickStats(setCode, isPastDeadline);
+  const { data: ratingsSnapshot, error: ratingsError } = useP0P1Ratings(setCode ?? "");
 
   useEffect(() => {
     if (ratingsError) console.warn("P0P1 ratings fetch failed", ratingsError);
@@ -114,27 +124,23 @@ export function useP0P1Ballot() {
   const effectivePicksBySlot = applyDevPicks(picksBySlot, pickStats, devViewPreset);
   const resultsDataReady = Boolean(ratingsSnapshot && cards && pickStats);
   const midwayDataReady = resultsDataReady && ratingsSnapshot?.phase === "midway";
-  const phase = deriveP0P1Phase(isPastDeadline, isPastScoringDate, ratingsSnapshot, resultsDataReady, devViewPreset);
+  const phase = deriveP0P1Phase(isPastDeadline, isPastScoringDate, ratingsSnapshot ?? undefined, resultsDataReady, devViewPreset);
 
   const devFinal = devActive && phase === "final";
-  const { data: fetchedBallots } = useP0P1Ballots(SET_CODE, phase === "final" && !devFinal);
-  // In dev presets, synthesize ballots from the live pick stats instead of
-  // fetching — the public_p0p1_ballots view may not exist yet in the target DB
+  const { data: fetchedBallots } = useP0P1Ballots(setCode, phase === "final" && !devFinal);
   const ballots = useMemo<P0P1BallotRow[] | undefined>(() => {
     if (!devFinal) return fetchedBallots;
-    return pickStats ? syntheticBallotsFromStats(pickStats, SET_CODE) : undefined;
-  }, [devFinal, fetchedBallots, pickStats]);
+    return pickStats && setCode ? syntheticBallotsFromStats(pickStats, setCode) : undefined;
+  }, [devFinal, fetchedBallots, pickStats, setCode]);
 
-  // In dev results presets, append a ballot row for the viewer so findUserBallot
-  // always resolves regardless of which picks the viewer has selected.
   const effectiveBallots = useMemo<P0P1BallotRow[] | undefined>(() => {
-    if (!devActive || phase !== "final" || !ballots || effectivePicksBySlot.size === 0) {
+    if (!devActive || phase !== "final" || !ballots || effectivePicksBySlot.size === 0 || !setCode) {
       return ballots;
     }
     const youRows: P0P1BallotRow[] = [];
     for (const [slot, cardName] of effectivePicksBySlot) {
       youRows.push({
-        setCode: SET_CODE,
+        setCode,
         ballotId: 0,
         name: user?.username ?? "You",
         avatarUrl: user?.avatarUrl ?? null,
@@ -143,7 +149,7 @@ export function useP0P1Ballot() {
       });
     }
     return [...ballots, ...youRows];
-  }, [devActive, phase, ballots, effectivePicksBySlot, user]);
+  }, [devActive, phase, ballots, effectivePicksBySlot, user, setCode]);
 
   const scoringFilled = SLOTS.filter((s) => effectivePicksBySlot.has(s.key)).length;
   const isComplete = scoringFilled === SLOTS.length;
@@ -190,9 +196,10 @@ export function useP0P1Ballot() {
   );
 
   const { data: allSets } = useSets();
-  const p0p1Sets = useMemo(() => allSets?.filter((s) => s.code === SET_CODE), [allSets]);
+  const p0p1Sets = useMemo(() => allSets?.filter((s) => s.code === setCode), [allSets, setCode]);
 
   return {
+    featured,
     cards,
     cardsByName,
     dataReady,
@@ -209,7 +216,7 @@ export function useP0P1Ballot() {
     isPastDeadline,
     hasParticipated,
     pickStats,
-    ratingsSnapshot,
+    ratingsSnapshot: ratingsSnapshot ?? undefined,
     phase,
     ballots: effectiveBallots,
     persistPick,
@@ -296,7 +303,6 @@ export function deriveP0P1Phase(
   if (!isPastDeadline) return "voting";
 
   if (!isPastScoringDate) {
-    // A fixture already marked final stays hidden until the scoring cutover, so the branch can merge ahead of the reveal
     if (snapshot?.phase && snapshot.phase !== "final" && dataPresent) return snapshot.phase;
     return "postVoting";
   }

@@ -6,8 +6,8 @@ import { ALogo, AWordmark } from "./Brand";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { useAuth } from "../auth/useAuth";
-import { useP0P1Picks, useP0P1Ratings, usePlayerSlugByDiscordId } from "../data/hooks";
-import { P0P1_SCORING_DATE, P0P1_SET_CODE, P0P1_VOTING_DEADLINE, SLOTS } from "../data/p0p1Slots";
+import { useP0P1FeaturedContest, useP0P1Picks, useP0P1Ratings, usePlayerSlugByDiscordId } from "../data/hooks";
+import { SLOTS } from "../data/p0p1Slots";
 import { p0p1DevEnabled, p0p1Now, useP0P1DevPreset } from "../data/p0p1DevState";
 import { deriveP0P1Phase } from "../data/useP0P1Ballot";
 import type { P0P1Phase } from "../data/p0p1Results";
@@ -384,16 +384,19 @@ function MobileMenu({
 
 function useP0P1BadgeState() {
   const { user } = useAuth();
-  const { data: picks } = useP0P1Picks(user ? P0P1_SET_CODE : undefined);
-  const { data: snapshot } = useP0P1Ratings(P0P1_SET_CODE);
+  const featured = useP0P1FeaturedContest();
+  const setCode = featured?.code;
+  const { data: picks } = useP0P1Picks(user ? setCode : undefined);
+  const { data: snapshot } = useP0P1Ratings(setCode ?? "");
   const devPreset = useP0P1DevPreset();
   const devActive = p0p1DevEnabled && devPreset !== "live";
-  const isPastDeadline = p0p1Now() > P0P1_VOTING_DEADLINE.getTime();
-  const isPastScoringDate = p0p1Now() >= P0P1_SCORING_DATE.getTime();
+  const now = p0p1Now(featured?.scoringDate);
+  const isPastDeadline = featured ? now > featured.votingDeadline.getTime() : false;
+  const isPastScoringDate = featured ? now >= featured.scoringDate.getTime() : false;
   const phase = deriveP0P1Phase(
     isPastDeadline,
     isPastScoringDate,
-    snapshot,
+    snapshot ?? undefined,
     Boolean(snapshot),
     devActive ? devPreset : "live",
   );

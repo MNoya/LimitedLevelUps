@@ -90,6 +90,7 @@ This came out of a grilling/domain-modeling session.
 
 - **Is participant history in the same PR as the core plumbing, or a fast-follow?** It's designed
   below and is fairly self-contained.
+- ~~Identity approach for participant history~~ — **settled**: frozen slug (see section below).
 
 ## Implementation — core (multi-set plumbing + generator + Adventure handling)
 
@@ -167,17 +168,21 @@ commits or pushes (matches `p0p1-phase`'s convention). Must:
 then final), independent of setup. Ordering dependency: the next set must already be in
 `bot/sets.py` (via `/add-set`) before its contest can resolve dates.
 
-## Participant history — **pending maintainer sign-off on identity approach**
+## Participant history
 
-- **Identity (open question).** The original `public_p0p1_ballots` view deliberately used an
-  unstable `dense_rank()` `ballot_id` to avoid correlating voters across fetches. History needs
-  a stable identifier. Two options:
-  1. **Expose `user_id` directly** — it's the Supabase auth UUID, already on `p0p1_voters`
-     (a regular table, no `auth.users` join, so the Supabase lint that motivated the original
-     migration doesn't apply). Simpler, no schema change.
-  2. **Add a random `public_id`** column to `p0p1_voters` — extra indirection so the auth UUID
-     never appears in URLs or API responses.
-- **Routing:** `/p0p1/players/:id` → a history page (`:id` is whichever identifier above).
+- **Identity (settled): frozen slug on `p0p1_voters`**, mirroring how `players.slug` works on
+  the leaderboard. `user_id` stays the internal FK for cross-contest history queries; a new
+  `slug` column (unique, not-null) is the public-facing URL identifier. The slug is frozen at
+  first ballot submission — derived from the voter's `name` via the same slugify logic as
+  `bot/slug.py`, never updated afterward. Display name continues to track Discord via the
+  existing `sync_p0p1_voter` trigger; only the slug stays fixed.
+  - **Collision disambiguation** (`-2`, `-3`, etc.) happens in Postgres (inside the
+    `sync_p0p1_voter` trigger or a helper function), since voter creation is trigger-driven,
+    not application code.
+  - **Migration**: add `slug` column nullable → backfill from existing `name` values with
+    disambiguation → add not-null + unique constraints. Update `public_p0p1_ballots` view to
+    expose `slug` instead of the unstable `dense_rank()` `ballot_id`.
+- **Routing:** `/p0p1/players/:slug` → a history page.
 - **Page logic:** query the set codes where this voter has ballots (participation-scoped,
   not a full archive scan), then for each, load that contest's ballots + card fixture + ratings
   fixture and reuse the existing `rankBallots` / `buildStandingsList` to compute that entrant's
@@ -186,7 +191,7 @@ then final), independent of setup. Ordering dependency: the next set must alread
   history.
 - **Entry point:** a result-row click in `FinalResults` targets the history page. Bonus cleanup
   this unlocks: the "your row" highlight could stop parsing the Discord id out of the avatar URL
-  (`findUserBallot` in `p0p1Results.ts`) and use the stable identifier instead.
+  (`findUserBallot` in `p0p1Results.ts`) and use the stable slug instead.
 
 ## Out of scope / follow-ups
 

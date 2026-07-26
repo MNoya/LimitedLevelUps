@@ -470,10 +470,15 @@ export const fetchPodSetCodes = (): Promise<PodSetCode[]> => wait(podSetCodesFix
 
 // --- P0P1 contest ---
 
-import { cardsMshFixture } from "./fixtures/cards-msh";
+import mockCards from "./fixtures/cards-msh";
 import type { RatingsSnapshot } from "./p0p1Results";
 import { GIH_SAMPLE_FLOOR } from "./p0p1Results";
 import { syntheticBallotsFromStats } from "./p0p1DevBallots";
+
+const cardLoaders = import.meta.glob<Card[]>(
+  "./fixtures/cards-*.ts",
+  { import: "default" },
+);
 
 const P0P1_SLOT_KEYS: SlotKey[] = [
   "white_common", "blue_common", "black_common", "red_common",
@@ -482,8 +487,12 @@ const P0P1_SLOT_KEYS: SlotKey[] = [
 
 const p0p1Picks = new Map<string, P0P1Pick>();
 
-export const fetchP0P1Cards = (_setCode: string): Promise<Card[]> =>
-  wait(cardsMshFixture);
+export async function fetchP0P1Cards(setCode: string): Promise<Card[]> {
+  const key = `./fixtures/cards-${setCode.toLowerCase()}.ts`;
+  const loader = cardLoaders[key];
+  if (!loader) throw new Error(`No card fixture for set ${setCode}`);
+  return loader();
+}
 
 export const fetchP0P1Picks = (_setCode: string): Promise<P0P1Pick[]> =>
   wait([...p0p1Picks.values()]);
@@ -551,7 +560,7 @@ function generateSyntheticPickStats(): P0P1PickStat[] {
 
   const stats: P0P1PickStat[] = [];
   for (const slotKey of P0P1_SLOT_KEYS) {
-    const eligible = shuffleInPlace(cardsMshFixture.filter(P0P1_SLOT_FILTERS[slotKey]), rng);
+    const eligible = shuffleInPlace(mockCards.filter(P0P1_SLOT_FILTERS[slotKey]), rng);
     if (eligible.length === 0) continue;
     const skew = 1.1 + rng() * 0.8;
     const weights = eligible.map((_, rank) => 1 / Math.pow(rank + 1, skew));
@@ -613,7 +622,7 @@ function generateSyntheticRatings(): RatingsSnapshot {
   // Seed separately from pick stats so ratings are independent
   let seed = 137;
   const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
-  const cards = cardsMshFixture.map((c) => ({
+  const cards = mockCards.map((c) => ({
     card_name: c.name,
     // Realistic GIHWR range: 44%–65%
     gihwr: 0.44 + rng() * 0.21,
@@ -629,7 +638,7 @@ function generateSyntheticRatings(): RatingsSnapshot {
 
 const syntheticRatings = generateSyntheticRatings();
 
-export const fetchP0P1Ratings = (_setCode: string): Promise<RatingsSnapshot> =>
+export const fetchP0P1Ratings = (_setCode: string): Promise<RatingsSnapshot | null> =>
   wait(syntheticRatings);
 
 const syntheticBallots = syntheticBallotsFromStats(syntheticPickStats, "MSH");

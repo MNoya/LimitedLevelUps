@@ -161,3 +161,13 @@ On push/PR to `master`: spin up Postgres service container → `alembic upgrade 
 - Production guild: LLU community server, guild ID `775371722065051658`. Bot is `DisChord Bot#1519`, app ID `1466076574372724819`.
 - Discord application emojis are generated and uploaded with `python -m bot.scripts.upload_app_emojis <keyrune|mana>:<glyph>[:<name>]`. It targets the app `DISCORD_BOT_TOKEN` belongs to, so the test and prod apps each need one run. Runtime lookup is by name via `bot/emojis.py`.
 - Discord fields in `bot/config.py` are optional so non-bot entry points (alembic CLI, seed scripts, tests) can construct `Settings` without them.
+
+## Agent skills
+
+### Issue tracker
+
+Local markdown under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context layout (`CONTEXT.md` + `docs/adr/`). See `docs/agents/domain.md`.
