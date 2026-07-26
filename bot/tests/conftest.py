@@ -21,26 +21,31 @@ def postgres_url():
         yield url
 
 
-@pytest.fixture
-def clean_db(postgres_url):
-    """Drop and recreate the public schema so each test starts empty."""
+@pytest.fixture(scope="session")
+def engine(postgres_url):
+    """One engine and one schema for the whole run: per-test isolation comes from clean_db, which is far cheaper than
+    rebuilding 18 tables per test."""
     engine = create_engine(postgres_url)
-    with engine.begin() as conn:
-        conn.execute(text("DROP SCHEMA public CASCADE"))
-        conn.execute(text("CREATE SCHEMA public"))
-    engine.dispose()
-    return postgres_url
+    Base.metadata.create_all(engine)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture
-def session(clean_db):
-    """Session bound to a DB with all tables created from models metadata."""
-    engine = create_engine(clean_db)
-    Base.metadata.create_all(engine)
+def clean_db(engine):
+    """Empty every table, sequences included, so each test starts from nothing."""
+    tables = ", ".join(f'"{name}"' for name in Base.metadata.tables)
+    with engine.begin() as conn:
+        conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+
+
+@pytest.fixture
+def session(clean_db, engine):
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     s = SessionLocal()
     try:
         yield s
     finally:
         s.close()
-        engine.dispose()
