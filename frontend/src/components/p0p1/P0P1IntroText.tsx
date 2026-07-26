@@ -71,7 +71,7 @@ function buildSentences(
     case "voting":
       return [
         <>Put together a team of {cardCount} cards from {setName}.</>,
-        <>{capitalize(windowText)} after release, teams are ranked by their total {winRateLink}.</>,
+        <>{capitalize(windowText)} after release, teams are ranked by their total {winRateLink}</>,
       ];
     case "postVoting":
       return [

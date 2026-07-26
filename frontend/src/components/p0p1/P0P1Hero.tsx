@@ -51,18 +51,13 @@ export function P0P1Hero({
           </div>
         )}
       </div>
-      <div className="relative flex-1 min-w-0 self-stretch flex flex-col items-center justify-center gap-y-3">
-        <p className="max-w-[580px] text-center text-subtle text-[14px] leading-[1.55]">
+      <div className="flex-1 min-w-0 self-stretch grid grid-rows-[1fr_auto] justify-items-center">
+        <p className="self-center max-w-[580px] text-center text-subtle text-[14px] leading-[1.55]">
           <P0P1IntroText setName={featured.name} votingDeadline={featured.votingDeadline} scoringDate={featured.scoringDate} phase={phase} dateRange={dateRange} multiline />
         </p>
-        {belowIntro}
-        {phase === "final" && (
-          // Absolute so the intro paragraph keeps its true vertical center; this sits on the same
-          // baseline as the left column's progress bar.
-          <div className="absolute bottom-0 left-0 right-0 text-subtle text-[14px]">
-            <NextContestOpens next={featured.next} />
-          </div>
-        )}
+        <div className="text-subtle text-[14px]">
+          {phase === "final" ? <NextContestOpens next={featured.next} /> : belowIntro}
+        </div>
       </div>
       <div className="shrink-0 ml-auto flex justify-end min-w-[280px]">{cta}</div>
     </div>

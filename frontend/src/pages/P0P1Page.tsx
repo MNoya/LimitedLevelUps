@@ -63,7 +63,6 @@ export function P0P1Page() {
     ballots,
   } = ballot;
 
-  // The real Discord identity, not the dev-panel stand-in the ballot hands back
   const { user: authUser } = useAuth();
   const canPreviewPre = p0p1DevEnabled || isP0P1Previewer(authUser?.discordId);
 
@@ -82,8 +81,6 @@ export function P0P1Page() {
 
   if (!featured) return <NotFoundPage />;
   if (featured.status === "pre" && !canPreviewPre) {
-    // Blank rather than a 404 until auth settles, so the ballot never flashes to a viewer who
-    // turns out not to be a previewer.
     return authLoading ? <div className="bg-bg min-h-screen" /> : <NotFoundPage />;
   }
 

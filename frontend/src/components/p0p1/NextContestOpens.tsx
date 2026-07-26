@@ -13,7 +13,7 @@ export function NextContestOpens({ next }: { next: FeaturedContest["next"] }) {
     <span className="flex items-center justify-center gap-2">
       <SetGlyph code={next.code} size={17} className="text-white" />
       <span className="font-semibold text-text">{next.code}</span>
-      <span>voting opens</span>
+      <span>picks open</span>
       <span
         className="mono text-green tabular-nums border border-border2 bg-surface2/40 px-2 py-1"
         style={{ fontSize: 13, lineHeight: 1, letterSpacing: "0.02em" }}
