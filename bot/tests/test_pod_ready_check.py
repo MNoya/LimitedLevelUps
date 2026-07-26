@@ -1,7 +1,7 @@
 import asyncio
 
 from bot.services import pod_draft_manager
-from bot.services.lobby_embed import ready_check_unlinked_text, ready_status_banner
+from bot.services.lobby_embed import ready_check_confirm_text, ready_status_banner
 from bot.services.pod_draft_manager import PodDraftManager
 
 
@@ -51,15 +51,39 @@ def test_completes_after_the_player_returns_and_re_readies():
     assert completed == [True]
 
 
-def test_initiate_blocks_odd_player_count():
-    mgr, _ = _ready_manager([str(i) for i in range(7)])
+def test_odd_and_short_rosters_need_confirmation_not_refusal():
+    cases = [
+        (8, None, False),
+        (7, None, True),
+        (4, None, True),
+        (5, None, True),
+        (4, 2, False),
+        (3, 2, True),
+    ]
+
+    for seated, min_players, expected in cases:
+        mgr, _ = _ready_manager([str(i) for i in range(seated)])
+        mgr.ready_check_active = False
+        mgr.sio = type("_Sio", (), {"connected": True})()
+
+        assert mgr.ready_check_blocker() is None
+        assert mgr.ready_check_needs_confirm([], min_players=min_players) is expected
+
+
+def test_unrecognized_seats_need_confirmation_on_a_clean_roster():
+    mgr, _ = _ready_manager([str(i) for i in range(8)])
+    mgr.ready_check_active = False
+
+    assert mgr.ready_check_needs_confirm([]) is False
+    assert mgr.ready_check_needs_confirm(["Stranger#12345"]) is True
+
+
+def test_empty_lobby_is_still_a_hard_block():
+    mgr, _ = _ready_manager([])
     mgr.ready_check_active = False
     mgr.sio = type("_Sio", (), {"connected": True})()
 
-    err = asyncio.run(mgr.initiate_ready_check(object()))
-
-    assert err is not None
-    assert "even" in err
+    assert mgr.ready_check_blocker() is not None
 
 
 def test_leaving_arms_grace_without_immediate_cancel():
@@ -139,8 +163,120 @@ def test_blocker_passes_even_count_regardless_of_linking():
     assert mgr.ready_check_blocker() is None
 
 
-def test_unlinked_confirm_text_names_the_seats():
-    text = ready_check_unlinked_text(["Stranger#12345", "Wanderer#77"])
+def test_confirm_text_covers_every_warning_at_once():
+    text = ready_check_confirm_text(5, 6, ["Stranger#12345", "Wanderer#77"])
 
+    assert "5" in text
+    assert "6" in text
     assert "Stranger#12345" in text
     assert "Wanderer#77" in text
+
+
+def test_confirm_text_omits_warnings_that_do_not_apply():
+    text = ready_check_confirm_text(8, 6, [])
+
+    assert "Stranger" not in text
+    assert len(text.splitlines()) == 1
+
+
+def _setup_manager(user_ids: list[str]) -> PodDraftManager:
+    """A manager ready to run initiate_ready_check with every network call stubbed out."""
+    mgr, _ = _ready_manager(user_ids)
+    mgr.ready_check_active = False
+    mgr.sio = type("_Sio", (), {"connected": True})()
+
+    async def _async_noop(*args, **kwargs):
+        return None
+
+    mgr._emit_with_ack = _async_noop
+    mgr._refresh_lobby_status = _async_noop
+    mgr._flip_progress_card_to_declined = _async_noop
+    mgr.refresh_lobby_now = _async_noop
+    return mgr
+
+
+def test_setup_abandoned_when_the_check_dies_mid_classification():
+    mgr = _setup_manager([str(i) for i in range(8)])
+    thread = type("_Thread", (), {"send": None})()
+
+    async def _decline_during_classification(names):
+        await mgr._invalidate_ready_check("declined", decliner_name="0")
+        return [(name, name) for name in names]
+
+    mgr._classify_users = _decline_during_classification
+    asyncio.run(mgr.initiate_ready_check(thread))
+
+    assert mgr.ready_check_active is False
+    assert mgr.ready_check_progress_message is None
+    assert mgr.last_decliner_name == "0"
+
+
+def test_stale_timeout_leaves_the_next_check_alone(monkeypatch):
+    monkeypatch.setattr(pod_draft_manager, "_READY_TIMEOUT_S", 0)
+    mgr = _setup_manager([str(i) for i in range(8)])
+    aborts: list[str] = []
+
+    async def _record(kind, *, decliner_name=None, detail=None):
+        aborts.append(kind)
+
+    mgr._invalidate_ready_check = _record
+    mgr.ready_check_active = True
+    mgr.ready_check_generation = 4
+
+    asyncio.run(mgr._ready_timeout(3))
+
+    assert aborts == []
+
+
+def test_timeout_fires_for_its_own_generation(monkeypatch):
+    monkeypatch.setattr(pod_draft_manager, "_READY_TIMEOUT_S", 0)
+    mgr = _setup_manager([str(i) for i in range(8)])
+    aborts: list[str] = []
+
+    async def _record(kind, *, decliner_name=None, detail=None):
+        aborts.append(kind)
+
+    mgr._invalidate_ready_check = _record
+    mgr.ready_check_active = True
+    mgr.ready_check_generation = 4
+
+    asyncio.run(mgr._ready_timeout(4))
+
+    assert aborts == ["timeout"]
+
+
+def test_declined_banner_survives_a_session_users_broadcast():
+    mgr, _ = _ready_manager([str(i) for i in range(8)])
+    mgr.ready_check_active = False
+    mgr.last_decliner_name = "0"
+    mgr.last_ready_summary = (7, 8)
+
+    async def _async_noop(*args, **kwargs):
+        return None
+
+    mgr._refresh_lobby_status = _async_noop
+    mgr._refresh_mock_lobby = lambda *args, **kwargs: None
+    mgr._sync_leaderboard_seeding = lambda *args, **kwargs: None
+    mgr.bot_user_id = "bot"
+
+    asyncio.run(mgr._on_session_users([{"userID": "1", "userName": "1"}]))
+
+    assert mgr.last_decliner_name == "0"
+    assert mgr.last_ready_summary == (7, 8)
+
+
+def test_progress_card_always_renders_a_clickable_state():
+    mgr, _ = _ready_manager([str(i) for i in range(8)])
+    cases = [
+        (True, "ready", "ready"),
+        (False, "notready", "notready"),
+        (False, "drafting", "drafting"),
+        (False, "complete", "complete"),
+        (False, "linked", "notready"),
+        (False, "unlinked", "notready"),
+        (False, "empty", "notready"),
+    ]
+
+    for active, state, expected in cases:
+        mgr.ready_check_active = active
+        assert mgr._progress_card_state(state) == expected

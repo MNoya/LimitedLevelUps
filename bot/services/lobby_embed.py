@@ -150,7 +150,7 @@ class ForceStartConfirmView(discord.ui.View):
         super().__init__(timeout=60)
         self.manager = manager
 
-    @discord.ui.button(label="Start now", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Start Now", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if self.manager is None:
             await interaction.response.edit_message(content="Preview only — no live pod to start.", view=None)
@@ -167,39 +167,57 @@ class ForceStartConfirmView(discord.ui.View):
         await interaction.response.edit_message(content="Force start canceled.", view=None)
 
 
-def ready_check_unlinked_text(unlinked: list[str]) -> str:
-    """Warn-but-allow prompt shown to the initiator when a ready check would include unrecognized seats the
-    bot can't pair. Shared by the live Ready Check button and the `!test` preview so the copy never drifts."""
-    names = ", ".join(f"`{name}`" for name in unlinked)
-    verb = "is" if len(unlinked) == 1 else "are"
-    return (
-        f"⚠️ {names} {verb} unrecognized. Bot won't be able to send them pairings.\n"
-        "Have them run `/link-arena` or use the buttons below to continue."
-    )
+READY_CHECK_CONFIRM_PROMPT = "Start the ready check anyway?"
 
 
-class ReadyCheckUnlinkedConfirmView(discord.ui.View):
-    """Ephemeral warn-but-allow gate shown to the initiator when a ready check would include unrecognized
-    seats — proceeds on confirm so nobody drafts a scoring-blind seat without seeing it first."""
+def ready_check_confirm_text(seated: int, floor: int, unlinked: list[str]) -> str:
+    """Warn-but-allow prompt shown to the initiator when a ready check is unusual but permitted: a roster
+    under the floor, an odd roster that cannot pair, unrecognized seats, or any combination. Shared by the
+    live Ready Check button and the `!test` preview so the copy never drifts."""
+    lines: list[str] = []
+    if seated < floor:
+        lines.append(
+            f"🛑 Only {seated} players in the Draftmancer lobby. A pod needs {floor} or more."
+        )
+    if seated % 2 != 0:
+        lines.append(
+            f"⚠️ {seated} players is an odd number. Pairings need an even number, so the draft will be "
+            "refused at start until a player joins or drops."
+        )
+    if unlinked:
+        names = ", ".join(f"`{name}`" for name in unlinked)
+        verb = "is" if len(unlinked) == 1 else "are"
+        lines.append(
+            f"⚠️ {names} {verb} unrecognized. Bot won't be able to send them pairings.\n"
+            "Have them run `/link-arena`, or use Link Players below."
+        )
+    lines.append(READY_CHECK_CONFIRM_PROMPT)
+    return "\n\n".join(lines)
 
-    def __init__(self, manager, thread, initiated_by: str | None, *, min_players: int | None = None) -> None:
+
+class ReadyCheckConfirmView(discord.ui.View):
+    """Ephemeral warn-but-allow gate shown to the initiator when a ready check is unusual but permitted, so a
+    short or odd roster can still be readied on purpose instead of leaving Force Start as the only way in."""
+
+    def __init__(
+        self, manager, thread, initiated_by: str | None, *, show_link_players: bool = True,
+    ) -> None:
         super().__init__(timeout=60)
         self.manager = manager
         self.thread = thread
         self.initiated_by = initiated_by
-        self.min_players = min_players
+        if not show_link_players:
+            self.remove_item(self.link_players)
 
-    @discord.ui.button(label="Start anyway", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Start Anyway", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if self.manager is None:
             await interaction.response.edit_message(content="Preview only — no live pod to start.", view=None)
             return
         actor = actor_label(interaction)
-        log.info(f"[{self.manager.event_name}] {actor} confirmed Ready Check with unlinked seats")
+        log.info(f"[{self.manager.event_name}] {actor} confirmed Ready Check past warnings")
         await interaction.response.defer()
-        err = await self.manager.initiate_ready_check(
-            self.thread, initiated_by=self.initiated_by, min_players=self.min_players,
-        )
+        err = await self.manager.initiate_ready_check(self.thread, initiated_by=self.initiated_by)
         message = f"⚠️ {err}" if err else "Ready check started, watch the thread."
         await interaction.edit_original_response(content=message, view=None)
 
@@ -228,19 +246,22 @@ class ReadyCheckUnlinkedConfirmView(discord.ui.View):
 
 
 async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_players=None) -> bool:
-    """Shared ready-check kickoff guard for the lobby button and /pod-ready. Runs the hard blockers, then
-    the unrecognized-seat warn-but-allow confirm. Returns True if the interaction was handled here (blocked
-    or awaiting confirm) and the caller should stop; False if the pod is clear to start now. `interaction`
-    must already be deferred ephemeral."""
-    blocker = manager.ready_check_blocker(min_players=min_players)
+    """Shared ready-check kickoff guard for the lobby button and /pod-ready. Runs the hard blockers, then the
+    warn-but-allow confirm covering a short roster, an odd roster and unrecognized seats in one prompt, so
+    confirming never leads straight into a second one. Returns True if the interaction was handled here
+    (blocked or awaiting confirm) and the caller should stop; False if the pod is clear to start now.
+    `interaction` must already be deferred ephemeral."""
+    blocker = manager.ready_check_blocker()
     if blocker:
         await interaction.followup.send(f"⚠️ {blocker}", ephemeral=True)
         return True
     unlinked = await manager.unrecognized_lobby_names()
-    if unlinked:
+    if manager.ready_check_needs_confirm(unlinked, min_players=min_players):
         await interaction.followup.send(
-            ready_check_unlinked_text(unlinked),
-            view=ReadyCheckUnlinkedConfirmView(manager, thread, initiated_by, min_players=min_players),
+            ready_check_confirm_text(
+                len(manager.player_session_users()), manager.ready_check_floor(min_players), unlinked,
+            ),
+            view=ReadyCheckConfirmView(manager, thread, initiated_by, show_link_players=bool(unlinked)),
             ephemeral=True,
         )
         return True

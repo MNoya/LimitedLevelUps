@@ -30,6 +30,10 @@ from bot.sets import active_set_code, set_name_for
 FORMAT_POLL_PROMPT = "🗳️ Format Vote!"
 FORMAT_POLL_GATHERING = "Vote for anything you would play"
 FORMAT_POLL_CLOSED = "Voting closed. The tally below is final"
+MSG_VOTE_POSTED = "Format Vote posted."
+MSG_VOTE_ALREADY_UP = "A Format Vote is already up here."
+MSG_VOTE_POST_FAILED = "Could not post the Format Vote. Try again."
+CHANNEL_POLL_ID_PREFIX = "channel-"
 ANY_FLASHBACK_CODE = "FLASH"
 ANY_FLASHBACK_LABEL = "Any Flashback"
 LATEST_BUTTON_LABEL = "Latest"
@@ -310,12 +314,12 @@ def _tally_interests(
     return []
 
 
-async def find_format_poll_card(thread: discord.Thread, event_id: str) -> discord.Message | None:
-    """The pod's format poll card, located by any option button's event-keyed custom_id, so a restart or a
-    manager takeover adopts the existing card instead of posting a second one."""
-    suffix = f":{event_id}"
+async def find_format_poll_card(channel: discord.abc.Messageable, poll_id: str) -> discord.Message | None:
+    """The format poll card for ``poll_id`` in this channel, located by any option button's keyed custom_id,
+    so a restart or a manager takeover adopts the existing card instead of posting a second one."""
+    suffix = f":{poll_id}"
     try:
-        async for message in thread.history(limit=50):
+        async for message in channel.history(limit=50):
             for row in message.components:
                 for child in getattr(row, "children", []):
                     custom_id = getattr(child, "custom_id", "") or ""

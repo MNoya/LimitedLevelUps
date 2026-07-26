@@ -18,10 +18,12 @@ from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import display_width, extract_avatar_hash, player_url
 from bot.services import championship as championship_service
+from bot.services import pod_format_poll
 from bot.services.lobby_embed import guard_ready_check
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, set_card_phase_hook
 from bot.services.pod_draft_manager import (
     cancel_pod_event,
+    post_format_vote,
     set_event_format,
     set_event_max_players,
     set_event_pairing_mode,
@@ -136,9 +138,7 @@ class PodDraft(commands.Cog):
             interaction, manager, thread, initiated_by=actor, min_players=MANUAL_READY_MIN_PLAYERS,
         ):
             return
-        err = await manager.initiate_ready_check(
-            thread, initiated_by=actor, min_players=MANUAL_READY_MIN_PLAYERS,
-        )
+        err = await manager.initiate_ready_check(thread, initiated_by=actor)
         if err is not None:
             log.warning(f"ready-check: failed — {err}")
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
@@ -182,17 +182,15 @@ class PodDraft(commands.Cog):
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
     async def vote_format(self, interaction: discord.Interaction) -> None:
-        manager = _find_manager_for_thread(interaction)
-        if manager is None:
-            await interaction.response.send_message(MSG_NO_ACTIVE_POD, ephemeral=True)
-            return
-        log.info(f"vote-format: {interaction.user} posting format vote in thread {interaction.channel_id}")
+        log.info(f"vote-format: {interaction.user} posting format vote in channel {interaction.channel_id}")
         await interaction.response.defer(ephemeral=True, thinking=False)
-        err = await manager.offer_format_poll_manual()
+        thread_id = str(interaction.channel_id) if interaction.channel_id else None
+        event_id = await asyncio.to_thread(load_event_id_by_thread_sync, thread_id) if thread_id else None
+        err = await post_format_vote(interaction.channel, event_id)
         if err is not None:
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
         else:
-            await interaction.followup.send("Format Vote posted — check the thread.", ephemeral=True)
+            await interaction.followup.send(pod_format_poll.MSG_VOTE_POSTED, ephemeral=True)
 
     @app_commands.command(name="pod-pause", description=desc.POD_PAUSE)
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)

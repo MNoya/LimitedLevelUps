@@ -21,10 +21,10 @@ from bot.database import SessionLocal
 from bot.models import MagicSet, Player, PodDraftEvent, PodDraftParticipant
 from bot.services.lobby_embed import (
     LobbyReadyButtonView,
-    ReadyCheckUnlinkedConfirmView,
+    ReadyCheckConfirmView,
     build_drafting_view,
     build_not_ready_view,
-    ready_check_unlinked_text,
+    ready_check_confirm_text,
     register_force_start_preview,
     register_settings_preview,
     render as render_lobby_embed,
@@ -859,17 +859,19 @@ class _AddFormatPreviewModal(discord.ui.Modal, title=pod_format_poll.ADD_MODAL_T
 
 
 class _ReadyCheckPreviewView(discord.ui.View):
-    """Preview-only Ready Check button for `!test readyunlinked`: drives the real unrecognized-seat
-    warn-but-allow confirm ephemerally, exactly as the initiator sees it, with no live pod behind it."""
+    """Preview-only Ready Check button for `!test readyunlinked`: drives the real warn-but-allow confirm
+    ephemerally, exactly as the initiator sees it, with no live pod behind it. The seated count is one short
+    of the floor and odd, so the preview carries every warning line at once."""
 
     def __init__(self) -> None:
         super().__init__(timeout=900)
 
     @discord.ui.button(label="Start Ready Check", style=discord.ButtonStyle.success)
     async def ready_check(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        floor = settings.pod_draft_min_ready_players
         await interaction.response.send_message(
-            ready_check_unlinked_text([_UNLINKED_SEAT]),
-            view=ReadyCheckUnlinkedConfirmView(None, None, None),
+            ready_check_confirm_text(floor - 1, floor, [_UNLINKED_SEAT]),
+            view=ReadyCheckConfirmView(None, None, None),
             ephemeral=True,
         )
 

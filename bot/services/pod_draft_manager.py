@@ -283,6 +283,7 @@ class PodDraftManager:
         self.ownership_ready = asyncio.Event()
         self._closed = False
         self.ready_check_active = False
+        self.ready_check_generation = 0
         self.ready_users: set[str] = set()
         self.expected_user_ids: set[str] = set()
         self.expected_user_names: dict[str, str] = {}
@@ -443,11 +444,6 @@ class PodDraftManager:
         log.info(f"draftmancer sessionUsers for {self.session_id}: {slim}")
         if self.draft_complete:
             return
-        # Any session change clears the notready banner; lobby reverts to its normal state
-        self.last_decliner_name = None
-        self.last_cancel_reason = None
-        self.ready_check_timed_out = False
-        self.last_ready_summary = None
         if self.bot_user_id is None:
             for u in self.session_users:
                 if u.get("userName") == BOT_USER_NAME:
@@ -723,43 +719,36 @@ class PodDraftManager:
                 event.socket_status = status
                 session.commit()
 
-    def ready_check_blocker(self, *, min_players: int | None = None) -> str | None:
+    def ready_check_blocker(self) -> str | None:
         """The hard guards that stop a ready check outright, shared by the lobby button's pre-check and
-        initiate_ready_check so they can't drift. None means the pod can start — an unrecognized seat only
-        warns, which the caller confirms. `min_players` overrides the floor."""
+        initiate_ready_check so they can't drift. None means the check may run. A roster that is short, odd,
+        or holding unrecognized seats does not block here: guard_ready_check confirms those with the
+        initiator, so a pod that needs an unusual start is never left with Force Start as its only way in."""
         if not self.sio.connected:
             return "Draftmancer session is not connected."
         if self.drafting or self.draft_complete:
             return "The draft has already started."
         if self.ready_check_active:
             return "Ready check already in progress."
-        non_bot = self.player_session_users()
-        if not non_bot:
+        if not self.player_session_users():
             return "Nobody in the Draftmancer lobby yet."
-        floor = min_players if min_players is not None else settings.pod_draft_min_ready_players
-        if len(non_bot) < floor:
-            return (
-                f"Ready check is only available with {floor} or more players. "
-                f"Currently {len(non_bot)} in the Draftmancer lobby.\n"
-                "Wait for more players to join, or run `/pod-start` to start the draft now, "
-                "skipping the ready check."
-            )
-        if len(non_bot) % 2 != 0:
-            return (
-                f"Ready check needs an even number of players. Currently {len(non_bot)} in the "
-                "Draftmancer lobby.\nAdd or drop a player, or run `/pod-start` to start the draft "
-                "now, skipping the ready check."
-            )
         return None
 
-    async def initiate_ready_check(
-        self, thread, initiated_by: str | None = None, *, min_players: int | None = None,
-    ) -> str | None:
-        """Start a Draftmancer ready check; returns an error string on failure, None on success.
-        `min_players` overrides the floor — the lobby button uses the default, the manual /pod-ready
-        command passes a lower one so a small pod can be readied. An unrecognized seat does not block
-        here; the lobby button warns and confirms before reaching this point."""
-        blocker = self.ready_check_blocker(min_players=min_players)
+    def ready_check_floor(self, min_players: int | None = None) -> int:
+        """Roster size below which a ready check warns and asks the initiator to confirm. `/pod-ready` passes
+        a lower floor so a deliberately small pod starts without the prompt."""
+        return min_players if min_players is not None else settings.pod_draft_min_ready_players
+
+    def ready_check_needs_confirm(self, unlinked: list[str], *, min_players: int | None = None) -> bool:
+        """Whether the roster is unusual enough that the initiator confirms before the check fires. Shared by
+        the interactive gate and the draft-restart path, which has nobody to ask and so skips the check."""
+        seated = len(self.player_session_users())
+        return seated < self.ready_check_floor(min_players) or seated % 2 != 0 or bool(unlinked)
+
+    async def initiate_ready_check(self, thread, initiated_by: str | None = None) -> str | None:
+        """Start a Draftmancer ready check; returns an error string on failure, None on success. Only the hard
+        blockers stop it here; a short, odd, or unrecognized roster is confirmed by the caller beforehand."""
+        blocker = self.ready_check_blocker()
         if blocker:
             return blocker
         non_bot = self.player_session_users()
@@ -768,6 +757,8 @@ class PodDraftManager:
         self.expected_user_names = {u.get("userID"): u.get("userName") for u in non_bot}
         self.ready_users = set()
         self.ready_check_active = True
+        self.ready_check_generation += 1
+        generation = self.ready_check_generation
         self._suppress_lobby_full_prompt()
         self._ready_check_started_at = asyncio.get_running_loop().time()
         self.initiated_by = initiated_by
@@ -777,6 +768,7 @@ class PodDraftManager:
         self.last_decliner_name = None
         self.last_cancel_reason = None
         self.last_ready_summary = None
+        self.ready_check_timed_out = False
         log.info(
             f"[READY] start event={self.event_id} expected={len(self.expected_user_ids)} "
             f"team_draft={self.pairing_mode == 'team'} timeout_s={_READY_TIMEOUT_S} "
@@ -790,13 +782,15 @@ class PodDraftManager:
             return f"Draftmancer rejected the ready check: {ack_error}."
         if ack is None:
             log.warning(f"[READY] no_ack event={self.event_id} — starting timer without confirmation")
-        self._ready_timeout_task = asyncio.create_task(self._ready_timeout())
+        self._ready_timeout_task = asyncio.create_task(self._ready_timeout(generation))
 
         non_bot_names = [u.get("userName") for u in non_bot if u.get("userName")]
         classified = await self._classify_users(non_bot_names) if non_bot_names else []
+        if not self._ready_check_is_live(generation):
+            await self._abandon_ready_check_setup(generation)
+            return None
 
         prior_progress = self.ready_check_progress_message
-        self.ready_check_progress_message = None
         if prior_progress is not None:
             superseded_embed = render_ready_check_progress(
                 title=self.event_name,
@@ -813,6 +807,11 @@ class PodDraftManager:
                 await prior_progress.edit(embed=superseded_embed, view=None)
             except Exception:
                 log.warning("could not lock prior ready-check progress card", exc_info=True)
+
+        if not self._ready_check_is_live(generation):
+            await self._abandon_ready_check_setup(generation)
+            return None
+        self.ready_check_progress_message = None
 
         progress_embed = render_ready_check_progress(
             title=self.event_name,
@@ -835,6 +834,19 @@ class PodDraftManager:
 
         await self._refresh_lobby_status()
         return None
+
+    def _ready_check_is_live(self, generation: int) -> bool:
+        """Whether `generation` is still the running check. Invalidation clears the active flag without
+        bumping the generation and a restart bumps it without clearing the flag, so both must be checked."""
+        return self.ready_check_active and generation == self.ready_check_generation
+
+    async def _abandon_ready_check_setup(self, generation: int) -> None:
+        """Bail out of initiate_ready_check when the check it is still building cards for already died.
+        Classification and the card edits each take a network round trip, so a decline or a roster change
+        lands mid-setup often; without this the setup posts a fresh card advertising a dead check with its
+        Ready button disabled, leaving Force Start as the only live control in the thread."""
+        log.info(f"[READY] setup_abandoned event={self.event_id} generation={generation}")
+        await self._refresh_lobby_status()
 
     async def _classify_users(self, names: list[str]) -> list[tuple[str, str | None]]:
         """Classify Draftmancer usernames against linked players, falling back to guild members
@@ -1005,12 +1017,12 @@ class PodDraftManager:
                 except Exception:
                     log.warning(f"could not edit lobby status for {self.session_id}", exc_info=True)
 
-        progress_card_live = self.ready_check_active or state in ("drafting", "complete", "notready")
-        if self.ready_check_progress_message is not None and progress_card_live:
+        if self.ready_check_progress_message is not None:
+            progress_state = self._progress_card_state(state)
             progress_embed = render_ready_check_progress(
                 title=self.event_name,
                 in_session=classified,
-                state=state,
+                state=progress_state,
                 ready_arena_names=ready_arena_names,
                 decliner_name=self.last_decliner_name,
                 cancel_reason=self.last_cancel_reason,
@@ -1020,17 +1032,17 @@ class PodDraftManager:
                 total_count=self.last_ready_summary[1] if self.last_ready_summary else None,
                 **self._settings_labels(),
             )
-            if state == "drafting":
+            if progress_state == "drafting":
                 progress_view = build_drafting_view(self.spectate_url)
-            elif state == "notready":
+            elif progress_state == "notready":
                 progress_view = build_not_ready_view()
-            elif state == "complete":
+            elif progress_state == "complete":
                 progress_view = None
             else:
                 progress_view = LobbyReadyButtonView(
                     draftmancer_url=self.draftmancer_url,
-                    ready_disabled=(state == "ready"),
-                    show_force_start=(state == "ready"),
+                    ready_disabled=(progress_state == "ready"),
+                    show_force_start=(progress_state == "ready"),
                     spectate_url=self.spectate_url,
                 )
             try:
@@ -1076,6 +1088,15 @@ class PodDraftManager:
         if any(dn is None for _, dn in classified):
             return "unlinked"
         return "linked"
+
+    def _progress_card_state(self, state: str) -> str:
+        """The lobby state coerced to one the ready-check card can render. A card only exists once a check
+        has run, so any state that is neither live nor terminal means the check ended without recording a
+        reason; showing it as canceled keeps an enabled Resume button on the card instead of freezing it on
+        the disabled view it was posted with."""
+        if self.ready_check_active or state in ("drafting", "complete", "notready"):
+            return state
+        return "notready"
 
     async def _on_end_draft(self, *_) -> None:
         if self.draft_cancelled:
@@ -1334,7 +1355,9 @@ class PodDraftManager:
                 (u.get("userName") for u in self.session_users if u.get("userID") == user_id),
                 None,
             )
-            await self._invalidate_ready_check("declined", decliner_name=decliner_name)
+            await self._invalidate_ready_check(
+                "declined", decliner_name=decliner_name, detail=UNNAMED_DECLINE_DETAIL,
+            )
             return
         await self.refresh_lobby_now()
         await self._maybe_complete_ready_check()
@@ -1356,8 +1379,7 @@ class PodDraftManager:
         log.info(f"[READY] complete event={self.event_id} ready_count={len(self.ready_users)}")
         self.ready_check_active = False
         self._cancel_ready_grace()
-        if self._ready_timeout_task is not None:
-            self._ready_timeout_task.cancel()
+        self._cancel_ready_timeout()
         await self._start_draft()
 
     async def force_start(self) -> str | None:
@@ -1368,8 +1390,7 @@ class PodDraftManager:
             return "Draft is already complete."
         if self.drafting:
             return "Draft is already in progress."
-        if self._ready_timeout_task is not None:
-            self._ready_timeout_task.cancel()
+        self._cancel_ready_timeout()
         self._cancel_ready_grace()
         self.ready_check_active = False
         self.ready_users = set()
@@ -1440,11 +1461,12 @@ class PodDraftManager:
         await self._mark_socket_status("connected")
         notify_card_phase(self.bot, self.event_id)
         await self.refresh_lobby_now()
-        ready_err = await self.initiate_ready_check(
-            thread, initiated_by=initiated_by, min_players=_RESTART_READY_MIN_PLAYERS,
-        )
-        if ready_err is not None:
-            log.info(f"[DRAFT] restart.ready_skipped event={self.event_id} reason={ready_err!r}")
+        if self.ready_check_needs_confirm([], min_players=_RESTART_READY_MIN_PLAYERS):
+            skip_reason = "roster is short or odd, and a restart has nobody to confirm with"
+        else:
+            skip_reason = await self.initiate_ready_check(thread, initiated_by=initiated_by)
+        if skip_reason is not None:
+            log.info(f"[DRAFT] restart.ready_skipped event={self.event_id} reason={skip_reason!r}")
             try:
                 await thread.send(
                     "♻️ Draft stopped and the lobby is reopened. Run `/pod-start` once everyone's ready."
@@ -1830,43 +1852,23 @@ class PodDraftManager:
         except discord.HTTPException:
             log.info(f"[TEAM_VOTE] offer_delete_failed event={self.event_id}", exc_info=True)
 
-    async def offer_format_poll_manual(self) -> str | None:
-        """Post the Format Vote on demand from /vote-format. Returns an error string when the pod can't take
-        a poll right now, else None."""
-        if self.drafting or self.draft_complete:
-            return "The draft has already started."
+    async def offer_format_poll(self) -> str | None:
+        """Post the one-time format tally in the pod's thread. The present players' standing flashback
+        rankings seed the option buttons so the likely sets are one click away, but no vote is pre-cast — the
+        split gate counts only live clicks, so the tally reads as a real attendance signal. Returns an error
+        string when this pod already holds a card, else None."""
         if self.format_poll_offered:
-            return "A Format Vote is already up in this thread."
-        await self.offer_format_poll()
-        if not self.format_poll_offered:
-            return "Could not post the Format Vote. Try again."
-        return None
-
-    async def offer_format_poll(self) -> None:
-        """Post the one-time format tally for a pod with flashback demand. The present players' standing
-        flashback rankings seed the option buttons so the likely sets are one click away, but no vote is
-        pre-cast — the split gate counts only live clicks, so the tally reads as a real attendance signal.
-        No-op once offered or once the draft is under way."""
-        if self.format_poll_offered or self.drafting or self.draft_complete:
-            return
+            return pod_format_poll.MSG_VOTE_ALREADY_UP
         thread = await self._fetch_thread()
         if thread is None:
-            return
-        options = pod_format_poll.build_options()
-        rankings = await asyncio.to_thread(event_member_rankings_sync, self.event_id)
-        _seed_options_from_rankings(options, rankings)
-        options = pod_format_poll.order_options(options, {})
+            return pod_format_poll.MSG_VOTE_POST_FAILED
         self.format_poll_offered = True
-        embed = pod_format_poll.build_format_poll_embed(options, {})
-        try:
-            self.format_poll_message = await thread.send(
-                embed=embed,
-                view=pod_format_poll.build_format_poll_view(self.event_id, options),
-            )
-        except discord.HTTPException:
+        message = await send_format_poll_card(thread, self.event_id)
+        if message is None:
             self.format_poll_offered = False
-            log.warning(f"[FORMAT_POLL] offer_post_failed event={self.event_id}", exc_info=True)
-            return
+            return pod_format_poll.MSG_VOTE_POST_FAILED
+        self.format_poll_message = message
+        return None
 
     async def assess_format_split(self) -> None:
         """The one-shot second-table decision at the settle point a few minutes before start: read the live
@@ -2078,10 +2080,13 @@ class PodDraftManager:
         await self.disconnect_safely()
         return True, ""
 
-    async def _ready_timeout(self) -> None:
+    async def _ready_timeout(self, generation: int) -> None:
         try:
             await asyncio.sleep(_READY_TIMEOUT_S)
         except asyncio.CancelledError:
+            return
+        if not self._ready_check_is_live(generation):
+            log.info(f"[READY] stale_timeout_ignored event={self.event_id} generation={generation}")
             return
         log.warning(
             f"[READY] timeout event={self.event_id} timeout_s={_READY_TIMEOUT_S} "
@@ -2099,7 +2104,9 @@ class PodDraftManager:
         self, kind: str, *, decliner_name: str | None = None, detail: str | None = None,
     ) -> None:
         """Call off an in-flight ready check. `kind` ('joined', 'left', 'declined', 'timeout') is
-        logged; `detail` is the phrase shown on the declined card's banner."""
+        logged; `detail` is the phrase shown on the declined card's banner. The timer is cancelled ahead of
+        the active-check guard so an already-cleared check can't leave a timer running into the next one."""
+        self._cancel_ready_timeout()
         if not self.ready_check_active:
             return
         log.info(
@@ -2108,8 +2115,6 @@ class PodDraftManager:
         self.ready_check_active = False
         self.last_ready_summary = (len(self.ready_users), len(self.expected_user_ids))
         self.ready_users = set()
-        if self._ready_timeout_task is not None:
-            self._ready_timeout_task.cancel()
         self.last_decliner_name = decliner_name
         self.last_cancel_reason = None if decliner_name is not None else detail
         self.ready_check_timed_out = kind == "timeout"
@@ -2153,6 +2158,11 @@ class PodDraftManager:
         if self._ready_grace_task is not None and not self._ready_grace_task.done():
             self._ready_grace_task.cancel()
         self._ready_grace_task = None
+
+    def _cancel_ready_timeout(self) -> None:
+        if self._ready_timeout_task is not None and not self._ready_timeout_task.done():
+            self._ready_timeout_task.cancel()
+        self._ready_timeout_task = None
 
     async def _ready_grace_countdown(self) -> None:
         """A player who leaves mid-check gets _READY_GRACE_S to rejoin before the check aborts, so a
@@ -2208,6 +2218,10 @@ class PodDraftManager:
             fingerprint=f"end_draft_watchdog:{self.event_id}",
             tag="DRAFT",
         )
+
+
+UNNAMED_DECLINE_DETAIL = "❌ A player is Not Ready"
+
 
 def roster_change_detail(names: list[str], verb: str) -> str:
     """Phrase for who joined or left mid-check, shown on the lobby banner and the thread notice."""
@@ -2447,6 +2461,43 @@ def _seed_options_from_rankings(
             if len(options) >= pod_format_poll.MAX_ROWED_OPTIONS:
                 continue
             options.append(code)
+
+
+async def post_format_vote(channel: "discord.abc.Messageable", event_id: str | None) -> str | None:
+    """Post a Format Vote card wherever it is asked for. It goes through the pod's live manager while that
+    pod can still act on the result, so the card closes at draft start and feeds the second-table gate;
+    everywhere else it stands alone, keyed to the channel. The card message is the tally, so its buttons work
+    with no pod behind them. Returns an error string, or None once the card is up."""
+    manager = ACTIVE_POD_MANAGERS.get(event_id) if event_id else None
+    if manager is not None and not manager.drafting and not manager.draft_complete:
+        return await manager.offer_format_poll()
+    if event_id and manager is None:
+        poll_id = event_id
+    else:
+        poll_id = f"{pod_format_poll.CHANNEL_POLL_ID_PREFIX}{channel.id}"
+    existing = await pod_format_poll.find_format_poll_card(channel, poll_id)
+    if existing is not None:
+        return pod_format_poll.MSG_VOTE_ALREADY_UP
+    if await send_format_poll_card(channel, poll_id) is None:
+        return pod_format_poll.MSG_VOTE_POST_FAILED
+    return None
+
+
+async def send_format_poll_card(channel: "discord.abc.Messageable", poll_id: str) -> "discord.Message | None":
+    """Post one format tally card, its options seeded from the standing flashback rankings of whoever signed
+    up for ``poll_id`` when that is a pod event. None when Discord refused the post."""
+    options = pod_format_poll.build_options()
+    rankings = await asyncio.to_thread(event_member_rankings_sync, poll_id)
+    _seed_options_from_rankings(options, rankings)
+    options = pod_format_poll.order_options(options, {})
+    try:
+        return await channel.send(
+            embed=pod_format_poll.build_format_poll_embed(options, {}),
+            view=pod_format_poll.build_format_poll_view(poll_id, options),
+        )
+    except discord.HTTPException:
+        log.warning(f"[FORMAT_POLL] post_failed poll={poll_id}", exc_info=True)
+        return None
 
 
 async def handle_format_poll_click(interaction: "discord.Interaction", event_id: str, code: str) -> None:
