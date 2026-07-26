@@ -19,6 +19,8 @@ import { MidwayResults } from "../components/p0p1/MidwayResults";
 import { FinalResults } from "../components/p0p1/FinalResults";
 import { P0P1DevPanel } from "../components/p0p1/P0P1DevPanel";
 import { p0p1DevEnabled } from "../data/p0p1DevState";
+import { isP0P1Previewer } from "../data/p0p1Previewers";
+import { useAuth } from "../auth/useAuth";
 import { P0P1BallotScorecard, MidwayBallotScorecard, FinalBallotScorecard, CHAMFER } from "../components/p0p1/P0P1BallotScorecard";
 import { PickGrid } from "../components/p0p1/CommunityGrid";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -61,6 +63,10 @@ export function P0P1Page() {
     ballots,
   } = ballot;
 
+  // The real Discord identity, not the dev-panel stand-in the ballot hands back
+  const { user: authUser } = useAuth();
+  const canPreviewPre = p0p1DevEnabled || isP0P1Previewer(authUser?.discordId);
+
   const isDesktop = !useIsMobile(1024);
   const heroRef = useRef<HTMLDivElement>(null);
   const [heroHeight, setHeroHeight] = useState(0);
@@ -74,7 +80,12 @@ export function P0P1Page() {
     return () => observer.disconnect();
   }, []);
 
-  if (!featured || (featured.status === "pre" && !p0p1DevEnabled)) return <NotFoundPage />;
+  if (!featured) return <NotFoundPage />;
+  if (featured.status === "pre" && !canPreviewPre) {
+    // Blank rather than a 404 until auth settles, so the ballot never flashes to a viewer who
+    // turns out not to be a previewer.
+    return authLoading ? <div className="bg-bg min-h-screen" /> : <NotFoundPage />;
+  }
 
   const isCompleteEntrant = isPastDeadline && Boolean(user) && isComplete;
   const didNotVote = isPastDeadline && Boolean(user) && !isComplete;

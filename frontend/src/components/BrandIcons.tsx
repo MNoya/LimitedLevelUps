@@ -1,4 +1,4 @@
-import { SiDiscord, SiGithub, SiPatreon, SiYoutube } from "./Icons";
+import { SiDiscord, SiPatreon, SiYoutube } from "./Icons";
 
 type IconProps = { size?: number; className?: string };
 
@@ -12,8 +12,4 @@ export function DiscordIcon({ size = 16, className }: IconProps) {
 
 export function YoutubeIcon({ size = 16, className }: IconProps) {
   return <SiYoutube size={size} className={className} aria-hidden />;
-}
-
-export function GithubIcon({ size = 16, className }: IconProps) {
-  return <SiGithub size={size} className={className} aria-hidden />;
 }
