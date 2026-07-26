@@ -237,6 +237,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
                     pickStats={pickStats}
                     cardsByName={cardsByName}
                     picksBySlot={picksBySlot}
+                    setCode={featured?.code}
                     yourPicks={
                       isCompleteEntrant ? (
                         <div>

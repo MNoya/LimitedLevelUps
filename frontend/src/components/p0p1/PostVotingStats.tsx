@@ -7,18 +7,20 @@ export function PostVotingStats({
   pickStats,
   cardsByName,
   picksBySlot,
+  setCode,
   yourPicks,
 }: {
   pickStats: P0P1PickStat[];
   cardsByName: Map<string, Card>;
   picksBySlot?: Map<string, string>;
+  setCode?: string;
   yourPicks?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-3 lg:gap-6">
-      <CommunityGrid pickStats={pickStats} cardsByName={cardsByName} picksBySlot={picksBySlot} />
+      <CommunityGrid pickStats={pickStats} cardsByName={cardsByName} picksBySlot={picksBySlot} setCode={setCode} />
       {yourPicks}
-      <FullBreakdownList pickStats={pickStats} cardsByName={cardsByName} picksBySlot={picksBySlot} />
+      <FullBreakdownList pickStats={pickStats} cardsByName={cardsByName} picksBySlot={picksBySlot} setCode={setCode} />
     </div>
   );
 }
