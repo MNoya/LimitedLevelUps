@@ -35,6 +35,7 @@ HELP_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
     ("🚀 Pod Drafts", [
         ("/pod-guide", desc.POD_GUIDE),
         ("/pod-schedule", desc.POD_SCHEDULE),
+        ("/report-results", desc.REPORT_RESULTS),
     ]),
 ]
 
@@ -50,6 +51,7 @@ POD_HELP_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         ("/pod-settings", desc.POD_SETTINGS),
         ("/pod-team", desc.POD_TEAM),
         ("/pod-takeover", desc.POD_TAKEOVER),
+        ("/report-results", desc.REPORT_RESULTS),
         ("/pod-standings", desc.POD_STANDINGS),
         ("/pod-review", desc.POD_REVIEW),
         ("/roles", desc.ROLES),

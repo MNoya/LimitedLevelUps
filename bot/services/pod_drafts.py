@@ -725,6 +725,12 @@ def draftmancer_url_for(session_id: str, user_name: str | None = None) -> str:
     return url
 
 
+def pod_page_url(event_name: str) -> str:
+    """The event's page on the website. The slug is derived from the name the same way the
+    `public_pod_draft_events` view derives it, so the link is valid from the moment the row exists."""
+    return f"{settings.public_site_url.rstrip('/')}/pods/{slugify(event_name)}"
+
+
 def update_event_format(session: Session, event_id: str, code: str) -> str | None:
     """Repoint a pre-draft pod event's set_code, set_id and format label, swapping the leading set
     token in its name to match. Returns the (possibly renamed) event name, or None if missing or
@@ -790,6 +796,13 @@ def load_event_name_sync(event_id: str) -> str:
         return session.execute(
             select(PodDraftEvent.name).where(PodDraftEvent.id == event_id)
         ).scalar_one_or_none() or "Pod Draft"
+
+
+def load_event_kind_sync(event_id: str) -> str:
+    with SessionLocal() as session:
+        return session.execute(
+            select(PodDraftEvent.kind).where(PodDraftEvent.id == event_id)
+        ).scalar_one_or_none() or "tournament"
 
 
 def load_event_closed_decklist_sync(event_id: str) -> bool:
@@ -1241,6 +1254,55 @@ def active_event_for_discord_user_in_dm(session: Session, discord_id: str) -> tu
         .limit(1)
     ).first()
     return (row[0], row[1]) if row else None
+
+
+class OwnMatch(NamedTuple):
+    event_id: str
+    round_num: int
+    match_id: str
+
+
+def own_open_matches(session: Session, discord_id: str) -> list[OwnMatch]:
+    """Every unreported pairing the caller holds in the newest pod that has one, in round order.
+
+    A Swiss or bracket pod yields exactly one, since round N+1 is not paired until N is reported. A team
+    draft inserts all three rounds up front, so it yields all of them and the player reports whichever
+    they actually played.
+    """
+    rows = _own_matches(session, discord_id, reported=False)
+    if not rows:
+        return []
+    newest_event = rows[0].event_id
+    return [row for row in rows if row.event_id == newest_event]
+
+
+def latest_reported_match(session: Session, discord_id: str) -> OwnMatch | None:
+    """The caller's most recently settled pairing, so a report attempt with nothing open can name the
+    result that already stands."""
+    rows = _own_matches(session, discord_id, reported=True)
+    return rows[0] if rows else None
+
+
+def _own_matches(session: Session, discord_id: str, *, reported: bool) -> list[OwnMatch]:
+    cutoff = datetime.now(timezone.utc) - DM_SUBMISSION_WINDOW
+    participant_name = _normalized_column(PodDraftParticipant.draftmancer_name)
+    settled = PodDraftMatch.winner_name.is_not(None) if reported else PodDraftMatch.winner_name.is_(None)
+    round_order = PodDraftMatch.round.desc() if reported else PodDraftMatch.round.asc()
+    rows = session.execute(
+        select(PodDraftMatch.event_id, PodDraftMatch.round, PodDraftMatch.id)
+        .join(PodDraftEvent, PodDraftEvent.id == PodDraftMatch.event_id)
+        .join(PodDraftParticipant, PodDraftParticipant.event_id == PodDraftEvent.id)
+        .join(Player, Player.id == PodDraftParticipant.player_id)
+        .where(
+            Player.discord_id == discord_id,
+            PodDraftEvent.event_time >= cutoff,
+            settled,
+            (_normalized_column(PodDraftMatch.player_a_name) == participant_name)
+            | (_normalized_column(PodDraftMatch.player_b_name) == participant_name),
+        )
+        .order_by(PodDraftEvent.event_time.desc(), round_order)
+    ).all()
+    return [OwnMatch(event_id, round_num, match_id) for event_id, round_num, match_id in rows]
 
 
 def is_pod_thread_champion(session: Session, thread_id: str, discord_id: str) -> bool:

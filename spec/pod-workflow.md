@@ -24,6 +24,8 @@ Two ways a pod comes into existence, both feeding the same `PodSignal` → `PodD
 
 The old fixed **weekly schedule poster** (`bot/services/pod_schedule.py`, `WEEKLY_SLOTS`, Wed/Thu/Sat, the `/create` template flow) is **deprecated** — not part of the current model and not to be supported or extended.
 
+`/mock-draft` sits outside that spine: no signal, no RSVPs, no rounds. Its channel-level surface is the anchor card (`bot/services/mock_lobby_card.py`), the thread starter, re-rendered in place by the manager through open → drafting → complete → canceled. The card is resolved from the thread id rather than a held message handle (a thread shares its starter's id), so a restart mid-lobby keeps updating it. Preview every state with `!test mockcard [SET]`.
+
 ## Core data spine
 
 Interest is gathered on a `PodSignal`; when it fires it produces a `PodDraftEvent` (the pod), and `PodSignalMember` rows are the roster that carries across. All in `bot/models.py`.
@@ -38,7 +40,7 @@ Per-player standing preferences live on `Player`: `format_interests` (array), `f
 
 ### 1. Daily poll (interest collection opens)
 
-Posted by `fire_daily_poll` (`bot/tasks/pod_daily_poll.py`), armed as one APScheduler cron in `init_daily_poll`: every day at 11:00 ET (`POST_HOUR_ET` in `pod_signals.py`, timezone `SCHEDULE_TZ` = America/New_York). Idempotent per day. It posts into the pod coordination channel (`pod_draft_channel_id`), which must be a Text channel, not Announcement.
+Posted by `fire_daily_poll` (`bot/tasks/pod_daily_poll.py`), armed as one APScheduler cron in `init_daily_poll`: every day at 10:00 ET (`POST_HOUR_ET` in `pod_signals.py`, timezone `SCHEDULE_TZ` = America/New_York). Idempotent per day. It posts into the pod coordination channel (`pod_draft_channel_id`), which must be a Text channel, not Announcement.
 
 The embed (`build_poll_embed`, "Daily Pod Launcher") carries one **toggle button per pod on offer**, labelled with the format it joins (`Early MSH`, `Early PEASANT`). Buckets are defined by `PollBucket` in `pod_signals.py`:
 

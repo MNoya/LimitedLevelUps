@@ -25,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import discord
 from discord.ext import commands
@@ -87,7 +87,6 @@ from bot.services.pod_launcher_copy import (
     POLL_INTRO_TIME_AND_FORMAT,
     POLL_INTRO_TIME_ONLY,
     POLL_MECHANICS,
-    POLL_NEXT_LAUNCHER,
     POLL_TITLE,
     RANK_BUTTON_EMOJI,
     RANK_BUTTON_LABEL,
@@ -103,8 +102,10 @@ from bot.services.pod_launcher_copy import (
     SECTION_NEXT,
 )
 from bot.services.pod_reminder_copy import SLOT_FIRE_PING
+from bot.services.pod_schedule import EARLY_POD_ROLE_NAME, LATE_POD_ROLE_NAME
 from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role, role_mention
 from bot.services.pod_signals import (
+    LANE_LATE,
     RSVP_NO,
     RSVP_YES,
     SCHEDULE_TZ,
@@ -287,23 +288,8 @@ def build_poll_embed(
         value = _column_value(column, guild, pad)
         if value:
             embed.add_field(name=ZWSP, value=value, inline=True)
-    embed.add_field(name=ZWSP, value=_mechanics_note(slots, several), inline=False)
+    embed.add_field(name=ZWSP, value=_mechanics_note(several), inline=False)
     return embed
-
-
-def _next_launcher_note(slots: list[pod_launch.LauncherSlot]) -> str:
-    """The extra mechanics bullet for a board carrying a slot on a later day. Such a pod holds at quorum until the
-    next launcher graduates it, so the plain threshold line alone would promise a thread that cannot open yet.
-    Counts down to that post instead of explaining the hold, since what a reader wants from a slot they cannot
-    fire is when it becomes live. Only rendered when a later day is on the board, where it is the answer, and
-    not on a board carrying today alone, where it is noise."""
-    days = [slot.slot_time.astimezone(SCHEDULE_TZ).date() for slot in slots if slot.slot_time is not None]
-    now = datetime.now(SCHEDULE_TZ)
-    if not any(day > now.date() for day in days):
-        return ""
-    post_today = datetime.combine(now.date(), time(POST_HOUR_ET), tzinfo=SCHEDULE_TZ)
-    next_post = post_today if post_today > now else post_today + timedelta(days=1)
-    return POLL_NEXT_LAUNCHER.format(unix=int(next_post.timestamp()))
 
 
 def _finished_pad(columns: list[list[pod_launch.LauncherSlot]]) -> int:
@@ -349,17 +335,16 @@ def _format_legend(codes: list[str], guild: discord.Guild | None) -> str:
     return "\n".join(lines)
 
 
-def _mechanics_note(slots: list[pod_launch.LauncherSlot], several: bool) -> str:
+def _mechanics_note(several: bool) -> str:
     """How a pod works, seated below the board because it only matters once a reader has picked a time. The
     first-to-fill line closes it, next to the marker it explains, and only when there is more than one
     format, since a single-format board never renders that marker."""
     mechanics = POLL_MECHANICS.format(
         threshold=settings.pod_signal_fire_threshold, lead=pod_launch.REMINDER_LEAD_MIN,
     )
-    lines = [mechanics, _next_launcher_note(slots)]
     if several:
-        lines.append(POLL_FORMAT_SEVERAL)
-    return "\n".join(line for line in lines if line)
+        return f"{mechanics}\n{POLL_FORMAT_SEVERAL}"
+    return mechanics
 
 
 def _archive_embed(
@@ -682,7 +667,9 @@ def _committed_card_link(guild: discord.Guild | None, slot: pod_launch.LauncherS
     return f"[__**{slot.thread_name}**__]({url})" if url else None
 
 
-def build_play_again_prompt(bucket_keys: list[str]) -> tuple[discord.Embed, "PlayAgainView"]:
+def build_play_again_prompt(
+    bucket_keys: list[str], guild: discord.Guild | None = None,
+) -> tuple[discord.Embed, "PlayAgainView"]:
     """The next-day re-signup prompt posted into a finished pod's thread: a thank-you over one button per pod
     the same slot offers tomorrow. An embed, so the thank-you carries as a heading and the prompt reads as its
     own card in a thread full of match reports.
@@ -693,9 +680,17 @@ def build_play_again_prompt(bucket_keys: list[str]) -> tuple[discord.Embed, "Pla
     body = PLAY_AGAIN_INTRO.format(
         love=emojis.get(PLAY_AGAIN_LOVE_EMOJI),
         next=emojis.get(NEXT_EMOJI),
-        slot=_slot_short_name(time_key_of(bucket_keys[0])),
+        pod=_slot_pod_label(guild, time_key_of(bucket_keys[0])),
     )
     return discord.Embed(description=body, color=discord.Color.green()), PlayAgainView(bucket_keys)
+
+
+def _slot_pod_label(guild: discord.Guild | None, bucket_key: str) -> str:
+    """The slot named as its weekday ping role, mentioned for the color it carries. The weekend roles are
+    named Weekend Early Pod, which would read as a different pod than the one the buttons offer."""
+    if lane_of(bucket_key) == LANE_LATE:
+        return role_mention(guild, LATE_POD_ROLE_NAME)
+    return role_mention(guild, EARLY_POD_ROLE_NAME)
 
 
 class PlayAgainView(discord.ui.View):
@@ -1559,7 +1554,7 @@ async def post_play_again_prompt(bot: commands.Bot, event_id: str, bucket_keys: 
     thread = await pod_launch.fetch_pod_thread(bot, int(thread_id))
     if thread is None:
         return
-    embed, view = build_play_again_prompt(bucket_keys)
+    embed, view = build_play_again_prompt(bucket_keys, thread.guild)
     try:
         await thread.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:

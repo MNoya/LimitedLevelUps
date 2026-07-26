@@ -21,7 +21,6 @@ POLL_MECHANICS = (
     "▫️Pod event thread opens at **{threshold} players**\n"
     "▫️Draftmancer lobby opens **{lead} minutes before** the start time"
 )
-POLL_NEXT_LAUNCHER = "▫️Next Pod Launcher opens **<t:{unix}:R>**, you can sign up in advance"
 POLL_FORMAT_SEVERAL = (
     f"{NBSP}{fi.FLEXIBLE_MARKER}{NBSP}Sign up for more than one pod to play in the first one that fills"
 )
@@ -41,7 +40,7 @@ MSG_SLOT_CLOSED = "This slot is closed. If this is a mistake, contact {organizer
 PLAY_AGAIN_LOVE_EMOJI = "chordo_love"
 PLAY_AGAIN_INTRO = (
     "### {love} Thank you for playing!\n"
-    "{next} Sign up for the next **{slot} Pod** from here, same time tomorrow"
+    "{next} Sign up for the next {pod} from here, same time tomorrow"
 )
 PLAY_AGAIN_BUTTON = "{pod} Tomorrow"
 

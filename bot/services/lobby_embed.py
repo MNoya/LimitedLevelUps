@@ -255,7 +255,7 @@ async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_p
     if blocker:
         await interaction.followup.send(f"⚠️ {blocker}", ephemeral=True)
         return True
-    unlinked = await manager.unrecognized_lobby_names()
+    unlinked = [] if manager.kind == "mock" else await manager.unrecognized_lobby_names()
     if manager.ready_check_needs_confirm(unlinked, min_players=min_players):
         await interaction.followup.send(
             ready_check_confirm_text(
@@ -343,6 +343,7 @@ def render(
     pairing_label: str | None = None,
     seating_label: str | None = None,
     teams: dict[str, str] | None = None,
+    mock: bool = False,
 ) -> discord.Embed:
     """Lobby embed. `title` is the thread/event name; `rsvps_yes` / `rsvps_maybe` are sesh display
     names by RSVP type; `in_session` is Draftmancer sessionUsers as (arena_name,
@@ -353,7 +354,11 @@ def render(
     session, no Player row), Waiting on (Yes RSVP not in session), Maybe (Maybe RSVP not in session).
     Waiting + Maybe are hidden once ready check fires; the live Ready/Pending split lives on the
     separate ready-check progress card, not here. `spectators` lists Draftmancer sessionSpectators
-    comma-separated below Maybe whenever any are present, regardless of state."""
+    comma-separated below Maybe whenever any are present, regardless of state.
+
+    `mock` drops everything a mock draft has no use for: an unrecognized seat is normal there (a
+    Discord name is enough, nobody links an Arena handle), and no matches are paired, so the
+    Unrecognized bucket, `/link-arena`, and `/report-results` all go."""
     in_draftmancer = [(arena, dn) for arena, dn in in_session if dn is not None]
     unrecognized = [arena for arena, dn in in_session if dn is None]
     mention_map = display_name_by_mention_id or {}
@@ -371,7 +376,7 @@ def render(
     show_pending = state not in ("ready", "drafting", "complete")
 
     banner_state = state
-    if state not in ("ready", "notready", "drafting", "complete") and unrecognized:
+    if state not in ("ready", "notready", "drafting", "complete") and unrecognized and not mock:
         banner_state = "has_unlinked"
     status_lines, color = ready_status_banner(
         banner_state, decliner_name=decliner_name, cancel_reason=cancel_reason,
@@ -388,18 +393,20 @@ def render(
     _set_settings_footer(embed, format_label, pairing_label, seating_label)
 
     if in_session:
+        in_drft_label = "Players" if state == "complete" else "In Draftmancer"
+        seat_label = f"✅ {in_drft_label} ({len(in_session)})"
         if teams and state in ("drafting", "complete"):
             _team_columns(embed, in_draftmancer, teams)
+        elif mock:
+            embed.add_field(name=seat_label, value=quote_block(_mock_seat_labels(in_session)), inline=False)
         else:
-            trailing = "\n​" if show_pending else ""
-            in_drft_label = "Players" if state == "complete" else "In Draftmancer"
             _player_columns(
-                embed, f"✅ {in_drft_label} ({len(in_session)})", in_draftmancer,
-                trailing=trailing, spacer=show_pending,
+                embed, seat_label, in_draftmancer,
+                trailing="\n​" if show_pending else "", spacer=show_pending,
             )
 
     if show_pending:
-        if unrecognized:
+        if unrecognized and not mock:
             embed.add_field(
                 name=f"⚠️ Unrecognized ({len(unrecognized)})",
                 value="\n".join(f"`{arena}`" for arena in unrecognized) + "\n​",
@@ -433,16 +440,19 @@ def render(
         )
 
     if state != "complete":
-        embed.add_field(
-            name="🤖 Commands",
-            value="\n".join([
-                command_line("/link-arena", desc.LINK_ARENA_LOBBY),
-                command_line("/pod-ready", desc.POD_READY),
-                command_line("/pod-start", desc.POD_START),
-            ]),
-            inline=False,
-        )
+        embed.add_field(name="🤖 Commands", value="\n".join(_command_lines(mock)), inline=False)
     return embed
+
+
+def _command_lines(mock: bool) -> list[str]:
+    lines = [command_line("/pod-ready", desc.POD_READY), command_line("/pod-start", desc.POD_START)]
+    if mock:
+        return lines
+    return [
+        command_line("/link-arena", desc.LINK_ARENA_LOBBY),
+        *lines,
+        command_line("/report-results", desc.REPORT_RESULTS_LOBBY),
+    ]
 
 
 def _set_settings_footer(
@@ -481,6 +491,7 @@ def render_ready_check_progress(
     format_label: str | None = None,
     pairing_label: str | None = None,
     seating_label: str | None = None,
+    mock: bool = False,
 ) -> discord.Embed:
     """Compact ready-check progress card.
 
@@ -495,7 +506,7 @@ def render_ready_check_progress(
     Resume Ready Check + Settings view; a superseded card carries none.
     """
     title = event_title(set_code, title)
-    roster = _seat_rows(in_session)
+    roster = _seat_rows(in_session, mock=mock)
 
     declined = state == "notready"
     resume = declined and not superseded
@@ -591,15 +602,23 @@ def ready_status_banner(
 _ARENA_SUFFIX_RE = re.compile(r"#[0-9?]+$")
 
 
-def _seat_rows(in_session: list[tuple[str, str | None]]) -> list[tuple[str, str]]:
+def _mock_seat_labels(in_session: list[tuple[str, str | None]]) -> list[str]:
+    """One name per mock-draft seat: the linked player when known, else the Draftmancer name itself.
+    A mock never links Arena handles, so an unmatched seat is ordinary and needs no marker or column."""
+    return [dn or arena for arena, dn in in_session]
+
+
+def _seat_rows(in_session: list[tuple[str, str | None]], *, mock: bool = False) -> list[tuple[str, str]]:
     """(arena_handle, display_label) for every Draftmancer seat. An unlinked seat keeps its place in
-    the roster with a ⚠️ marker rather than being dropped, so the lobby never hides who is present."""
+    the roster with a ⚠️ marker rather than being dropped, so the lobby never hides who is present.
+    `mock` drops the marker: a mock draft matches seats by Discord name and links no Arena handles."""
     rows: list[tuple[str, str]] = []
     for arena, dn in in_session:
         if dn is not None:
             rows.append((arena, dn))
         else:
-            rows.append((arena, f"{_ARENA_SUFFIX_RE.sub('', arena) or arena} ⚠️"))
+            stripped = _ARENA_SUFFIX_RE.sub("", arena) or arena
+            rows.append((arena, stripped if mock else f"{stripped} ⚠️"))
     return rows
 
 

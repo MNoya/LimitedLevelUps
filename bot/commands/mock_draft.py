@@ -15,19 +15,20 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from bot import audit, emojis
+from bot import audit
 from bot.commands import descriptions as desc
 from bot.commands.messages import (
     MSG_MOCK_ALREADY_ACTIVE,
-    MSG_MOCK_LOBBY_OPEN,
     MSG_MOCK_NOT_TEXT_CHANNEL,
     MSG_MOCK_UNKNOWN_SET,
 )
+from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
 from bot.services import pod_format
+from bot.services.mock_lobby_card import build_mock_card
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
-from bot.services.pod_drafts import draftmancer_url_for, record_mock_event
+from bot.services.pod_drafts import draftmancer_url_for, pod_page_url, record_mock_event
 from bot.services.pod_draft_manager import start_manager
 
 
@@ -75,10 +76,12 @@ class MockDraft(commands.Cog):
             session.commit()
 
         draftmancer_url = draftmancer_url_for(session_id)
-        starter = await channel.send(MSG_MOCK_LOBBY_OPEN.format(
-            draftmancer_emoji=emojis.get("draftmancer"), event_name=event_name, url=draftmancer_url,
-            counter="",
-        ))
+        embed, view = build_mock_card(
+            event_name=event_name, set_code=code, session_id=session_id, session_url=draftmancer_url,
+            site_url=pod_page_url(event_name), roster=[],
+            max_players=settings.pod_draft_max_players,
+        )
+        starter = await channel.send(embed=embed, view=view)
         thread = await starter.create_thread(name=event_name, reason=f"Mock draft started by {interaction.user}")
 
         with SessionLocal() as session:
@@ -88,7 +91,6 @@ class MockDraft(commands.Cog):
         await start_manager(
             self.bot, event_id, session_id, thread.id, code, 0,
             event_name=event_name, draftmancer_url=draftmancer_url, kind="mock",
-            mock_lobby_message=starter,
         )
 
         log.info(f"mock-draft: {interaction.user} opened {session_id} (event_id={event_id})")

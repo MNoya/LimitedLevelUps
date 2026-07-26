@@ -19,6 +19,7 @@ from bot.services.pod_drafts import player_arena_handle
 
 
 JOIN_BUTTON_PREFIX = "podjoin"
+MOCK_JOIN_BUTTON_PREFIX = "mockjoin"
 
 
 class JoinDraftButton(ui.DynamicItem[ui.Button], template=rf"{JOIN_BUTTON_PREFIX}:(?P<session_id>.+)"):
@@ -45,9 +46,39 @@ class JoinDraftButton(ui.DynamicItem[ui.Button], template=rf"{JOIN_BUTTON_PREFIX
         )
 
 
+class MockJoinDraftButton(
+    ui.DynamicItem[ui.Button], template=rf"{MOCK_JOIN_BUTTON_PREFIX}:(?P<session_id>.+)",
+):
+    """Mock-draft variant. A mock plays no Arena games, so the pre-filled name is the clicker's Discord
+    display name, which `player_for_name` already resolves. Nobody is asked to link an Arena handle."""
+
+    def __init__(self, session_id: str) -> None:
+        super().__init__(ui.Button(
+            style=discord.ButtonStyle.success, label=MSG_JOIN_DRAFT_BUTTON,
+            emoji=emojis.get("draftmancer") or None,
+            custom_id=f"{MOCK_JOIN_BUTTON_PREFIX}:{session_id}",
+        ))
+        self.session_id = session_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item: ui.Button, match: re.Match):
+        return cls(match["session_id"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            format_join_line(self.session_id, interaction.user.display_name, arena=False), ephemeral=True,
+        )
+
+
 def build_join_view(session_id: str) -> ui.View:
     view = ui.View(timeout=None)
     view.add_item(JoinDraftButton(session_id))
+    return view
+
+
+def build_mock_join_view(session_id: str) -> ui.View:
+    view = ui.View(timeout=None)
+    view.add_item(MockJoinDraftButton(session_id))
     return view
 
 

@@ -39,6 +39,7 @@ from bot.services.pod_drafts import (
     load_event_closed_decklist_sync,
     load_event_id_by_name_sync,
     load_event_id_by_thread_sync,
+    load_event_kind_sync,
     load_event_name_sync,
     load_event_pairing_mode_sync,
     load_event_seating_mode_sync,
@@ -859,11 +860,15 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
     """Settings panel wired for `event_id`. Shared by /pod-settings and the lobby Settings button.
     Link Players appears once a Draftmancer session is live and stays through the draft so an unlinked
     seat can be fixed mid-draft; the format/pairing/seats/pick-timer controls and Kick Player are
-    pre-draft only and drop away once drafting starts. Cancel Draft is bot-owner only."""
+    pre-draft only and drop away once drafting starts. Cancel Draft is bot-owner only.
+
+    A mock draft plays no matches and opens its draft logs to everyone the moment the draft ends, so
+    Pairings and Closed Decklist are left off its panel."""
     current_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
     current_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
     current_seating = await asyncio.to_thread(load_event_seating_mode_sync, event_id)
     event_name = await asyncio.to_thread(load_event_name_sync, event_id)
+    mock = await asyncio.to_thread(load_event_kind_sync, event_id) == "mock"
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     drafting = manager is not None and (manager.drafting or manager.draft_complete)
     scheduled = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id) is not None
@@ -938,7 +943,8 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
                 inter.client, event_id, raw, guild=inter.guild, actor_id=str(inter.user.id))
 
     return PodSettingsView(
-        on_format=None if drafting else on_format, on_pairing=None if drafting else on_pairing,
+        on_format=None if drafting else on_format,
+        on_pairing=None if drafting or mock else on_pairing,
         current_code=current_code, current_mode=current_mode,
         on_seating_mode=None if drafting else on_seating_mode, current_seating=current_seating,
         on_seating=on_seating, seat_order_provider=seat_order_provider,
@@ -949,7 +955,8 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
         kick_targets_provider=kick_targets_provider, on_kick=on_kick,
         link_targets_provider=link_targets_provider, on_link=on_link,
         on_cancel=on_cancel, on_reschedule=on_reschedule,
-        on_closed_decklist=on_closed_decklist, current_closed_decklist=current_closed_decklist,
+        on_closed_decklist=None if mock else on_closed_decklist,
+        current_closed_decklist=current_closed_decklist,
         event_name=event_name,
         notice_channel=notice_channel,
     )

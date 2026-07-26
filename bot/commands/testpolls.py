@@ -309,7 +309,7 @@ async def setup(bot: commands.Bot) -> None:
             named_bucket_key(early_next.key, code)
             for code in pod_format_schedule.formats_for(tomorrow, early_next.lane)
         ]
-        embed, view = build_play_again_prompt(next_keys)
+        embed, view = build_play_again_prompt(next_keys, guild)
         await ctx.send(
             "**E. Play Again prompt — posted in a finished pod's thread, offering tomorrow's formats**")
         await ctx.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
