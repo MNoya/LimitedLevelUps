@@ -5,7 +5,7 @@ import logging
 import discord
 from discord.ext import commands
 
-from bot.sets import CUBE_CODE, is_cube_board_code
+from bot.sets import CUBE_CODE, cube_glyph_emoji_name, cube_variant_for_board, is_cube_board_code
 
 
 log = logging.getLogger("bot.emojis")
@@ -23,12 +23,15 @@ def get_emoji(name: str) -> discord.Emoji | None:
 
 
 def set_symbol(code: str) -> discord.Emoji | None:
-    """The keyrune set-symbol app emoji for a set code, looked up case-insensitively. A cube board
-    code falls back to the shared cube symbol, since the boards have no symbol of their own."""
+    """The keyrune set-symbol app emoji for a set code, looked up case-insensitively. A whole-cube
+    board takes its cube's registry glyph, and any cube board whose glyph is not uploaded falls back
+    to the shared cube symbol."""
     found = _EMOJIS.get(code.lower()) or _EMOJIS.get(code.upper())
-    if found is None and is_cube_board_code(code):
-        return _EMOJIS.get(CUBE_CODE.lower())
-    return found
+    if found is not None or not is_cube_board_code(code):
+        return found
+    variant = cube_variant_for_board(code)
+    glyph = _EMOJIS.get(cube_glyph_emoji_name(variant)) if variant is not None else None
+    return glyph or _EMOJIS.get(CUBE_CODE.lower())
 
 
 def prefix(name: str) -> str:

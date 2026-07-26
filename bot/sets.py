@@ -330,6 +330,26 @@ def is_cube_board_code(code: str) -> bool:
     return upper == CUBE_CODE or upper.startswith(f"{CUBE_CODE}-")
 
 
+def cube_variant_for_board(code: str) -> CubeVariant | None:
+    """The cube a whole-cube board code names. None for bare ``CUBE`` and for season boards."""
+    upper = code.upper()
+    if not upper.startswith(f"{CUBE_CODE}-"):
+        return None
+    return cube_variant(upper.removeprefix(f"{CUBE_CODE}-"))
+
+
+def cube_list_name(variant: CubeVariant) -> str:
+    """A cube's name where the boards list together: the leading "Arena" drops when what remains
+    still names the cube, so they read as WORD+CUBE siblings. Mirrors cubeListName on the site."""
+    without_arena = variant.name.removeprefix("Arena ")
+    return without_arena if len(without_arena.split()) >= 2 else variant.name
+
+
+def cube_glyph_emoji_name(variant: CubeVariant) -> str:
+    """Application-emoji name for a cube's glyph, matching what upload_app_emojis uploads it as."""
+    return variant.glyph.split(":", 1)[-1]
+
+
 def parse_caption_set_code(caption: str | None) -> str | None:
     """Set code named in a trophy caption, matching known codes and set names — e.g.
     'MH1 flashback 3-0' -> 'MH1', "Urza's Saga trophy" -> 'USG'. Codes match only as

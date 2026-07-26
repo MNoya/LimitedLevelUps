@@ -38,7 +38,9 @@ from bot.sets import (
     CubeVariant,
     active_set_code,
     cube_board_code,
+    cube_list_name,
     cube_variant,
+    cube_variant_for_board,
     is_cube_board_code,
     is_known_set,
     is_mtgo_flashback_code,
@@ -1310,7 +1312,7 @@ def render_embed(data: LeaderboardData, show_note: bool = True) -> discord.Embed
     set_emoji = emojis.set_symbol(data.set_code)
     prefix = f"{set_emoji} " if set_emoji else ""
     embed = discord.Embed(
-        title=f"🏆 Leaderboard {prefix}{data.set_code}",
+        title=f"🏆 Leaderboard {prefix}{board_title(data.set_code)}",
         url=site_url,
         color=discord.Color.gold(),
     )
@@ -1332,6 +1334,13 @@ def render_embed(data: LeaderboardData, show_note: bool = True) -> discord.Embed
             embed.description = rows
     _apply_footer(embed, data, show_note=show_note)
     return embed
+
+
+def board_title(set_code: str) -> str:
+    """How a board names itself in a title. A set goes by its code, which players read as the set;
+    a whole cube goes by name, since ``CUBE-ARENA`` names nothing to a reader."""
+    variant = cube_variant_for_board(set_code)
+    return cube_list_name(variant) if variant is not None else set_code
 
 
 # Alias kept so external callers asking for the 'public' variant still resolve;
@@ -1957,7 +1966,7 @@ class Leaderboard(commands.Cog):
         for variant in CUBE_VARIANTS:
             code = cube_board_code(variant.slug)
             if cur in code or cur in variant.name.upper():
-                matches.append(app_commands.Choice(name=f"{code} — {variant.name}", value=code))
+                matches.append(app_commands.Choice(name=cube_list_name(variant), value=code))
         if cur in PEASANT_CODE or cur in PEASANT_LABEL.upper():
             matches.append(app_commands.Choice(name=f"{PEASANT_CODE} — {PEASANT_LABEL}", value=PEASANT_CODE))
         matches += [

@@ -1337,11 +1337,14 @@ function MobileExpandedRow({
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
+// The one CUBE row now covers every cube Arena has run, so its set name reads too narrow in a picker
+const CUBE_OPTION_LABEL = "Arena Cubes";
+
 function setFilterOptionsFrom(sets: SetSummary[]): SetFilterOption[] {
   const ordered = [...sets].sort((a, b) => setReleaseRank(b).localeCompare(setReleaseRank(a)));
   return ordered.map((s) => ({
     value: s.code,
-    label: s.name,
+    label: s.code === CUBE_BASE ? CUBE_OPTION_LABEL : s.name,
     glyphCode: setGlyphCode(s),
     meta: s.isActive ? (
       <span className="mono text-[10px] tracking-[0.18em] text-green shrink-0">LIVE</span>
