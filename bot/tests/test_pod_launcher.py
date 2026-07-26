@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -5,25 +6,29 @@ import pytest
 from bot.commands.pod_queue import _preset_slot_time, _when_options
 from bot.services.pod_format_select import WRITE_IN_VALUE
 from bot.services.pod_launch import LauncherSlot, _lazy_status
-from bot.services.pod_signals import STATUS_EXPIRED, STATUS_FIRED, STATUS_OPEN
+from bot.services.pod_signals import STATUS_EXPIRED, STATUS_FIRED, STATUS_OPEN, named_bucket_key
+from bot.sets import active_set_code
 from bot.tasks.pod_daily_poll import PodPollView, _committed_card_link, build_reminder_view
 
 
 BEFORE_EARLY = datetime(2026, 7, 14, 10, 0, tzinfo=timezone.utc)
 AFTER_LATE = datetime(2026, 7, 15, 3, 0, tzinfo=timezone.utc)
+LATEST = active_set_code()
 
 
 def _committed(bucket_key, thread_id, thread_message_id):
     return LauncherSlot(
-        bucket_key, committed=True, status=STATUS_FIRED, count=1, slot_time=None,
+        named_bucket_key(bucket_key, LATEST), committed=True, status=STATUS_FIRED, count=1,
+        slot_time=None, set_code=LATEST,
         names=["p"], thread_id=thread_id, signal_id=None, thread_message_id=thread_message_id,
     )
 
 
-def _lazy(bucket_key, status):
+def _lazy(bucket_key, status, set_code=None):
+    set_code = set_code or LATEST
     return LauncherSlot(
-        bucket_key, committed=False, status=status, count=0, slot_time=None,
-        names=[], thread_id=None, signal_id=None,
+        named_bucket_key(bucket_key, set_code), committed=False, status=status, count=0, slot_time=None,
+        names=[], thread_id=None, signal_id=None, set_code=set_code,
     )
 
 
@@ -41,9 +46,10 @@ def test_committed_slot_without_a_card_links_to_the_thread_itself():
 
 def _committed_named(thread_name, card_channel_id, card_message_id, thread_id="555", thread_message_id="777"):
     return LauncherSlot(
-        "EARLY", committed=True, status=STATUS_FIRED, count=1, slot_time=None,
+        named_bucket_key("EARLY", LATEST), committed=True, status=STATUS_FIRED, count=1, slot_time=None,
         names=["p"], thread_id=thread_id, signal_id=None, thread_message_id=thread_message_id,
         card_message_id=card_message_id, card_channel_id=card_channel_id, thread_name=thread_name,
+        set_code=LATEST,
     )
 
 
@@ -85,15 +91,35 @@ def test_format_locked_reminder_view_drops_format_preference():
     assert custom_ids == ["podreminderrsvp:yes:EVT9", "podreminderrsvp:no:EVT9"]
 
 
-def test_open_slot_button_is_enabled_a_closed_one_disabled():
+def test_open_pod_button_is_enabled_a_closed_one_disabled():
     view = PodPollView([_lazy("EARLY", STATUS_EXPIRED), _lazy("LATE", STATUS_OPEN)])
 
     disabled = {
-        child.custom_id: child.disabled
+        child.custom_id: child.item.disabled
         for child in view.children
         if child.custom_id.startswith("pod_poll:")
     }
-    assert disabled == {"pod_poll:EARLY": True, "pod_poll:LATE": False}
+    assert disabled == {
+        f"pod_poll:{named_bucket_key('EARLY', LATEST)}": True,
+        f"pod_poll:{named_bucket_key('LATE', LATEST)}": False,
+    }
+
+
+def test_a_slot_offering_two_formats_carries_one_button_per_pod():
+    view = PodPollView([_lazy("EARLY", STATUS_OPEN), _lazy("EARLY", STATUS_OPEN, set_code="PEASANT")])
+
+    assert [child.custom_id for child in view.children] == [
+        f"pod_poll:{named_bucket_key('EARLY', LATEST)}",
+        f"pod_poll:{named_bucket_key('EARLY', 'PEASANT')}",
+    ]
+
+
+def test_a_pod_that_started_drafting_carries_no_button():
+    drafting = replace(_committed("EARLY", "555", "777"), locked=True)
+
+    view = PodPollView([drafting])
+
+    assert view.children == []
 
 
 @pytest.mark.parametrize(

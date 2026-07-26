@@ -76,14 +76,14 @@ Friday, July 24, 2026 at 3:00 PM
 :msh: @Latest Set (11)
 🔗 <pod link>            ← present only once the slot has fired; sits under the playing format
 › player
-› ✦ flexible player
+› ◈ flexible player
 :flashback: @Flashback (5)
 › player
 ```
 
 - **Line 1** — bucket emoji, slot role mention, total count across formats.
 - **Line 2** — the full slot date-and-time as a Discord timestamp (`<t:…:F>`), so it renders in each viewer's own timezone.
-- **Format sub-groups** — the latest group carries the active set's own symbol emoji (e.g. `:msh:`); flashback carries a generic flashback emoji until a specific set is resolved. Flexible players keep the `✦` marker.
+- **Format sub-groups** — the latest group carries the active set's own symbol emoji (e.g. `:msh:`); flashback carries a generic flashback emoji until a specific set is resolved. Flexible players keep the `FLEXIBLE_MARKER` glyph.
 - **Fired signal** — the pod link line. Present ⇒ the slot fired and this is its pod; absent ⇒ still gathering. Replaces `✅`.
 
 ### Buttons are timezone-safe by staying plain

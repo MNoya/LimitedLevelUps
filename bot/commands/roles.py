@@ -47,7 +47,7 @@ log = logging.getLogger(__name__)
 
 MSG_INTRO = "Toggle your notifications. Green means subscribed. Times shown in your timezone."
 MSG_NO_GUILD = "Run `/roles` in the server to manage your notifications."
-MSG_ROLE_MISSING = "That role isn't set up on the server. Ask an admin."
+MSG_ROLE_MISSING = "That role isn't set up on the server. Ask an Admin."
 MSG_ROLE_TOGGLE_FAILED = "Couldn't update that role. The bot is missing the Manage Roles permission."
 MSG_DM_PREF_LABEL = "Draft Link DMs"
 MSG_DM_PREF_LINE = "**Draft Link DMs:** your Draftmancer link when Pod is ready to start"

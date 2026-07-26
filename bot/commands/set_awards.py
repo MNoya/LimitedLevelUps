@@ -35,7 +35,7 @@ MSG_NOT_ON_BOARD = (
 )
 MSG_JOINED_NO_EVENTS = (
     "You're on the leaderboard, but no {set} drafts are showing for you this set. "
-    "If this is a mistake, contact an admin."
+    "If this is a mistake, contact an Admin."
 )
 
 GAP = NBSP * 2

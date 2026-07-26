@@ -24,9 +24,9 @@ HALL_OF_FAME = (
 )
 
 PRODUCTION_SAFE_TESTS = frozenset({
-    "awards", "cardformat", "component", "deckping", "firenudge", "formatschedule", "lockroster",
-    "modalprobe", "myset", "named", "overflow", "pollnudge", "queueclosed", "reminder", "reminders",
-    "rolegrant", "rolling", "scribe", "sendoff", "setawards", "signup", "teamcard", "thread-intro",
+    "awards", "cardformat", "component", "deckping", "firenudge", "formatschedule", "lifecycle",
+    "lockroster", "myset", "named", "overflow", "pollnudge", "queueclosed", "reminder", "reminders",
+    "rolegrant", "rolling", "scribe", "sendoff", "setawards", "teamcard", "thread-intro",
     "tiebreakers", "underfill", "welcome",
 })
 

@@ -10,21 +10,21 @@ literal compositional verbs, no phrasal verbs or idioms, no em dashes, no market
 from __future__ import annotations
 
 from bot.commands.messages import MSG_PREFERENCE_LINE
+from bot.discord_helpers import NBSP
 from bot.services import pod_format_interest as fi
 
 
 POLL_TITLE = "Daily Pod Launcher"
-POLL_INTRO = (
-    "### Sign up for any time below\n"
-    "• Pod event thread opens when it reaches **{threshold} players**\n"
-    "• The Draftmancer lobby opens **{lead} minutes before** the start time"
+POLL_INTRO_TIME_ONLY = "### Choose a time to draft"
+POLL_INTRO_TIME_AND_FORMAT = "### Choose a time and format to draft"
+POLL_MECHANICS = (
+    "▫️Pod event thread opens at **{threshold} players**\n"
+    "▫️Draftmancer lobby opens **{lead} minutes before** the start time"
 )
-POLL_FORMATS = (
-    "### Format 1: {main}\n"
-    "### Format 2: {second}\n"
-    "• Sign up for both to play in the first pod to fill"
+POLL_NEXT_LAUNCHER = "▫️Next Pod Launcher opens **<t:{unix}:R>**, you can sign up in advance"
+POLL_FORMAT_SEVERAL = (
+    f"{NBSP}{fi.FLEXIBLE_MARKER}{NBSP}Sign up for more than one pod to play in the first one that fills"
 )
-POLL_FORMAT_SINGLE = "### Format: {main}"
 POLL_CLOSED_LABEL = "🔒 Signups Closed"
 ARCHIVE_INTRO = "### On This Day"
 MARKER_CLOSED = "Closed"
@@ -32,30 +32,29 @@ FINISHED_MARK = "🏆"
 PLAYING_MARK = "⚔️"
 SECTION_NEXT = "**Next**"
 NEXT_EMOJI = "chordoHello"
-MSG_POLL_INACTIVE = "This poll is no longer active."
-MSG_SLOT_CLOSED = "This slot is closed."
+MSG_ON_BOTH_PODS = "You are on both {slot} Pods: {formats}"
+MSG_ON_SEVERAL_PODS = "You are on all {count} {slot} Pods: {formats}"
+MSG_FIRST_POD_TO_FILL = "You will play in the first one to fill"
+MSG_POLL_INACTIVE = "This poll is no longer active. If this is a mistake, contact {organizer}"
+MSG_SLOT_CLOSED = "This slot is closed. If this is a mistake, contact {organizer}"
 
 PLAY_AGAIN_LOVE_EMOJI = "chordo_love"
 PLAY_AGAIN_INTRO = (
-    "{love} Thank you for playing!\n"
-    "🚀 Sign up for the next {slot} from here, same time tomorrow!"
+    "### {love} Thank you for playing!\n"
+    "{next} Sign up for the next **{slot} Pod** from here, same time tomorrow"
 )
-PLAY_AGAIN_BUTTON = "Play Again"
-PLAY_AGAIN_CONFIRM = "✅ Added to the next {slot}\nDraft scheduled for <t:{unix}:F>"
+PLAY_AGAIN_BUTTON = "{pod} Tomorrow"
 
 INTEREST_PLACEHOLDER = "Select your Format Preference"
 INTEREST_DESC_FLASHBACK = "Any Past Set, Rank Your Favorites"
 INTEREST_DESC_CUBE = "Choose from the server's cubes"
 MSG_INTEREST_PROMPT = (
     "### Choose what you would prefer to draft\n"
-    "**Save** your preference, or **Confirm** to also join that time slot today"
+    "**Save** your preference so the pods you like get scheduled"
 )
 MSG_INTEREST_SAVED = f"### ✨ Saved\n{MSG_PREFERENCE_LINE}"
-MSG_SLOT_ADDED = "✅ Added to {name}"
-MSG_SLOT_REMOVED = "❌ Removed from {name}"
 SAVE_BUTTON_LABEL = "Save"
 SAVE_BUTTON_EMOJI = "💾"
-CONFIRM_SLOT_LABEL = "Confirm {name}"
 RANK_BUTTON_LABEL = "Rank Sets"
 RANK_BUTTON_EMOJI = "📊"
 RANK_MODAL_TITLE = "Rank Flashback Sets"

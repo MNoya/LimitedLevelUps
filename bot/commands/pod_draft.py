@@ -73,6 +73,7 @@ from bot.services.pod_tournament import (
     build_replays_link_button,
     build_standings_embed_for_event,
     build_thread_link_button,
+    is_pod_organizer,
     post_trophy_hype_for_event,
     refresh_round_pairing_messages,
 )
@@ -89,6 +90,7 @@ MSG_LINK_ARENA_NO_LOBBY_MATCH = (
 )
 MSG_LINK_ARENA_DID_YOU_MEAN = "Did you mean `{suggestion}`? Re-run /link-arena with that exact handle."
 MSG_NO_ACTIVE_POD = "No active pod draft session right now."
+MSG_RESTART_NOT_ORGANIZER = "Only Organizers can restart a draft."
 
 YES_EMOJI = "✅"
 MAYBE_EMOJI = "🤷"
@@ -232,8 +234,8 @@ class PodDraft(commands.Cog):
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
     async def pod_restart(self, interaction: discord.Interaction) -> None:
-        if not await self._is_owner_or_admin(interaction.user):
-            await interaction.response.send_message(MSG_ADMIN_ONLY, ephemeral=True)
+        if not await is_pod_organizer(self.bot, interaction.user):
+            await interaction.response.send_message(MSG_RESTART_NOT_ORGANIZER, ephemeral=True)
             return
         manager = _find_manager_for_thread(interaction)
         if manager is None:
@@ -273,11 +275,6 @@ class PodDraft(commands.Cog):
             await message.add_reaction(REVIEW_EMOJI)
         except discord.HTTPException:
             log.warning("pod-review: could not add the review reaction", exc_info=True)
-
-    async def _is_owner_or_admin(self, user: discord.abc.User) -> bool:
-        if await self.bot.is_owner(user):
-            return True
-        return isinstance(user, discord.Member) and user.guild_permissions.administrator
 
     @commands.command(name="start")
     @commands.is_owner()

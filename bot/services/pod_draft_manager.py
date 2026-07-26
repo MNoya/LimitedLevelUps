@@ -613,9 +613,14 @@ class PodDraftManager:
         """
         Point the session at the current `set_code`: a registered cube → importCube, else a  plain set → setRestriction.
         Returns an error string on cube-import failure, else None.
+
+        A cube import leaves Draftmancer's `useCustomCardList` flag on, and booster generation reads that
+        flag before the set restriction, so a switch from a cube to a set has to turn it off or the pod
+        drafts the cube it came from.
         """
         cube_id = pod_format.cube_id_for(self.set_code)
         if cube_id is None:
+            await self.sio.emit("setUseCustomCardList", False)
             await self.sio.emit("setRestriction", [self.set_code.lower()])
             return None
         err = await self._import_cube(cube_id)

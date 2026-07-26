@@ -8,6 +8,7 @@ grace window are left for a later night so a live conversation is never cut off.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 
 import discord
@@ -23,7 +24,6 @@ from bot.services.pod_signals import QUEUE_BUCKET, STATUS_OPEN
 CLEANUP_HOUR_ET = 2
 LOOKBACK_DAYS = 2
 ACTIVITY_GRACE = timedelta(hours=2)
-RESET_INACTIVITY = timedelta(hours=3)
 
 log = logging.getLogger(__name__)
 
@@ -57,21 +57,27 @@ async def archive_past_threads() -> None:
     log.info(f"pod thread cleanup: archived {archived} of {total} past threads")
 
 
-async def archive_inactive_threads(guild: discord.Guild, grace: timedelta = RESET_INACTIVITY) -> int:
-    """Archive the guild's active threads with no activity inside `grace`, leaving live conversations
-    open. Used by `!test reset` to clear stale draft rooms off a test server."""
-    now = datetime.now(timezone.utc)
-    archived = 0
-    for thread in list(guild.threads):
-        if thread.archived or _last_activity(thread) > now - grace:
+async def delete_threads(bot: commands.Bot, thread_ids: Iterable[int]) -> int:
+    """Delete the given threads outright. Backs `!test reset`, where the rows that owned them are gone
+    and an archived draft room would only linger as a dead end."""
+    deleted = 0
+    for thread_id in thread_ids:
+        try:
+            channel = await bot.fetch_channel(thread_id)
+        except discord.NotFound:
+            continue
+        except discord.HTTPException as e:
+            log.warning(f"test reset: fetch_channel({thread_id}) failed: {e}")
+            continue
+        if not isinstance(channel, discord.Thread):
             continue
         try:
-            await thread.edit(archived=True, reason="!test reset cleanup")
+            await channel.delete(reason="!test reset cleanup")
         except discord.HTTPException as e:
-            log.warning(f"test reset: archive({thread.id}) failed: {e}")
+            log.warning(f"test reset: delete({thread_id}) failed: {e}")
             continue
-        archived += 1
-    return archived
+        deleted += 1
+    return deleted
 
 
 def _past_event_thread_ids(now: datetime) -> list[int]:

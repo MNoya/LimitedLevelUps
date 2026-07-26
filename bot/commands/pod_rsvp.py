@@ -31,7 +31,13 @@ import discord
 from discord.ext import commands
 
 from bot import audit, emojis
-from bot.commands.messages import MSG_DRAFT_STARTS, MSG_DRAFTMANCER_LINK_LEAD
+from bot.commands.messages import (
+    MSG_DRAFT_STARTS,
+    MSG_DRAFTMANCER_LINK_LEAD,
+    MSG_POD_ADDED,
+    MSG_POD_MAYBE,
+    MSG_POD_REMOVED,
+)
 from bot.database import SessionLocal
 from bot.discord_helpers import NBSP
 from bot.services.lobby_embed import SettingsButton
@@ -44,9 +50,11 @@ from bot.services.pod_deck_color import format_deck_color_emojis
 from bot.services.pod_draft_manager import notify_seeding_change
 from bot.services.pod_tournament import champion_card_line, load_solo_card_drafters
 from bot.services.ping_roles import (
+    NOTICE_GRANT,
     announce_pod_grant,
     auto_grant_spec_for_event,
     display_emoji,
+    pod_role_grant_text,
     send_join_confirmation_card,
     slot_grant_ping,
     spec_named,
@@ -55,7 +63,6 @@ from bot.services.pod_drafts import (
     is_championship,
     load_event_pairing_mode_sync,
     load_event_set_code_sync,
-    load_event_time_sync,
     record_ondemand_event,
 )
 from bot.services.pod_registration_embed import build_registered_embed
@@ -64,8 +71,9 @@ from bot.services.pod_roster_fields import add_roster_fields
 from bot.services import pod_team
 from bot.services.pod_team_board import TeamBoardMember, load_team_board_data, team_result_headline
 from bot.services.pod_schedule import LATE_POD_ROLE_NAME, SCHEDULE_TZ
-from bot.services.pod_slot import team_aware_pod_name
+from bot.services.pod_slot import pod_display_name, team_aware_pod_name
 from bot.services.pod_signals import RSVP_EMOJI, RSVP_MAYBE, RSVP_NO, RSVP_STATES, RSVP_YES
+from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import (
     REMINDER_LEAD_MIN,
     event_rsvps,
@@ -91,8 +99,6 @@ RSVP_CONFIRM_COLOR = {
     RSVP_MAYBE: discord.Color.orange(),
     RSVP_NO: discord.Color.red(),
 }
-MSG_RSVP_CONFIRMED = "{emoji} RSVP Confirmed"
-MSG_RSVP_REMOVED = "RSVP Removed"
 MSG_CARD_INACTIVE = "This RSVP card is no longer active."
 MSG_BAD_TIME = "Couldn't read that time. Use `+2h30m`, `21:00` (ET), or `2026-07-18 21:00` (ET), in the future."
 THREAD_NOTE_TITLE = "🕐 Pod Draft Rescheduled by {actor}"
@@ -671,7 +677,10 @@ async def apply_card_rsvp(
     launcher refreshes. The clicked surface may be the card, the thread's registered embed, or a
     launcher slot that resolves to the card, so `surface_message_id` is the card the write targets while
     `interaction.message` is whatever was clicked. A launcher-slot caller passes `refresh_launcher=False`
-    and re-renders the clicked launcher itself, so the board updates in whatever channel it lives in."""
+    and re-renders the clicked launcher itself, so the board updates in whatever channel it lives in.
+
+    Every answer names the pod it landed on, since a click can come from the card, its thread, the roster
+    reminder, or a launcher button, and only the pod's own name reads the same from all four."""
     result = await asyncio.to_thread(
         pod_launch.set_rsvp_sync,
         surface_message_id, str(interaction.user.id), interaction.user.display_name, state,
@@ -692,24 +701,24 @@ async def apply_card_rsvp(
 
     first_pod = False
     granted_role = None
-    slot_spec = slot_role = slot_ping = None
+    slot_spec = slot_ping = None
     if result.joined and isinstance(interaction.user, discord.Member):
         first_pod = await grant_pod_drafters(interaction.user)
         if not championship:
             slot_spec = auto_grant_spec_for_event(result.state.slot_time)
-            slot_role = find_role(interaction.guild, slot_spec.name) if slot_spec is not None else None
             slot_ping = slot_grant_ping(slot_spec) if slot_spec is not None else None
             granted_role = await _grant_slot_role(interaction.user, result.state.slot_time)
     notice = await announce_pod_grant(
-        interaction, first_pod=first_pod, granted_role=granted_role,
-        welcome_role=slot_role, spec=slot_spec, ping=slot_ping,
+        interaction, first_pod=first_pod, granted_role=granted_role, spec=slot_spec, ping=slot_ping,
         card_lead=await _confirmation_card_lead(result),
     )
-    if notice != "grant":
+    if notice != NOTICE_GRANT:
         if result.rsvp in (RSVP_YES, RSVP_MAYBE):
+            lead = await _confirmation_lead_text(result)
+            if granted_role is not None and slot_ping is not None:
+                lead = f"{lead}\n{pod_role_grant_text(granted_role.mention, slot_ping)}"
             await send_join_confirmation_card(
-                interaction, lead=await _confirmation_lead_text(result),
-                accent=RSVP_CONFIRM_COLOR[result.rsvp],
+                interaction, lead=lead, accent=RSVP_CONFIRM_COLOR[result.rsvp],
             )
         else:
             await interaction.followup.send(embed=await _confirmation_embed(result), ephemeral=True)
@@ -738,6 +747,19 @@ async def _refresh_launcher(bot: commands.Bot, slot_time: datetime | None) -> No
     await _launcher_refresh(bot, slot_time.astimezone(SCHEDULE_TZ).date())
 
 
+async def _refresh_launcher_for_event(bot: commands.Bot, event_id: str) -> None:
+    """Repaint the launcher for a pod whose own identity moved: the board renders a fired pod's start time
+    and its format off the event, and keys its button on that format, so a reschedule, a format change or a
+    draft start leaves the column stale until something else happens to repaint it.
+
+    Keyed on the signal's `slot_time`, the slot the pod was gathered in, not on the pod's new start: that is
+    the board carrying it, and a pod moved across midnight would otherwise refresh the wrong day."""
+    ref = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
+    if ref is None:
+        return
+    await _refresh_launcher(bot, ref[3])
+
+
 async def _grant_slot_role(member: discord.Member, slot_time: datetime | None) -> discord.Role | None:
     """Returns the role only on a fresh grant, so the ephemeral confirmation fires once per member.
     The signal's slot_time keys the role, so a postponed pod still grants its original slot."""
@@ -761,21 +783,29 @@ def _is_card_surface(message: discord.Message) -> bool:
     return any(field.name == TIME_LABEL for field in message.embeds[0].fields)
 
 
+def pod_removed_embed(pod_name: str) -> discord.Embed:
+    """The bare red note for leaving a pod, named after the pod itself. The start time and the pod controls
+    are moot once you're not in, so an add answers with the full card and a removal with this."""
+    return discord.Embed(title=MSG_POD_REMOVED.format(name=pod_name), color=discord.Color.red())
+
+
 async def _confirmation_embed(result: pod_launch.RsvpResult) -> discord.Embed:
-    """The bare one-line acknowledgement for No and a cleared RSVP, since the start time and the pod
-    controls are moot once you're not in. Yes and Maybe answer with the full confirmation card via
-    `send_join_confirmation_card` instead."""
+    """The one-line acknowledgement for No and a cleared RSVP. Yes and Maybe answer with the full
+    confirmation card via `send_join_confirmation_card` instead."""
+    name, _event_time = await _pod_identity(result)
     if result.rsvp is None:
-        return discord.Embed(title=MSG_RSVP_REMOVED, color=discord.Color.greyple())
-    title = MSG_RSVP_CONFIRMED.format(emoji=RSVP_EMOJI[result.rsvp])
+        return pod_removed_embed(name)
+    title = _rsvp_headline(result.rsvp, name)
     return discord.Embed(title=title, color=RSVP_CONFIRM_COLOR[result.rsvp])
 
 
 async def _confirmation_lead_text(result: pod_launch.RsvpResult) -> str:
-    """The Yes/Maybe acknowledgement as card text: the confirmed state over the start time."""
-    lead = f"### {MSG_RSVP_CONFIRMED.format(emoji=RSVP_EMOJI[result.rsvp])}"
-    time_line = await _rsvp_time_line(result)
-    return f"{lead}\n{time_line}" if time_line else lead
+    """The Yes/Maybe acknowledgement as card text: the pod that was joined over its start time."""
+    name, event_time = await _pod_identity(result)
+    lead = f"### {_rsvp_headline(result.rsvp, name)}"
+    if event_time is None:
+        return lead
+    return f"{lead}\n{MSG_DRAFT_STARTS.format(unix=int(event_time.timestamp()))}"
 
 
 async def _confirmation_card_lead(result: pod_launch.RsvpResult) -> str | None:
@@ -786,13 +816,20 @@ async def _confirmation_card_lead(result: pod_launch.RsvpResult) -> str | None:
     return await _confirmation_lead_text(result)
 
 
-async def _rsvp_time_line(result: pod_launch.RsvpResult) -> str | None:
-    if result.state.event_id is None:
-        return None
-    event_time = await asyncio.to_thread(load_event_time_sync, result.state.event_id)
-    if event_time is None:
-        return None
-    return MSG_DRAFT_STARTS.format(unix=int(event_time.timestamp()))
+def _rsvp_headline(rsvp: str, pod_name: str) -> str:
+    return (MSG_POD_ADDED if rsvp == RSVP_YES else MSG_POD_MAYBE).format(name=pod_name)
+
+
+async def _pod_identity(result: pod_launch.RsvpResult) -> tuple[str, datetime | None]:
+    """(pod name, start time) for an acknowledgement, read off the pod in one query. A signal with no pod on
+    it yet is named for the format and slot it will carry, which is the name the pod takes when it fires."""
+    if result.state.event_id is not None:
+        loaded = await asyncio.to_thread(_load_event, result.state.event_id)
+        if loaded is not None:
+            return loaded[0], loaded[1]
+    return pod_display_name(
+        result.state.set_code or active_set_code(), result.state.slot_time or datetime.now(timezone.utc),
+    ), result.state.slot_time
 
 
 async def _set_thread_membership(interaction: discord.Interaction, event_id: str, *, join: bool) -> None:
@@ -998,6 +1035,7 @@ async def reschedule_event(
         _edit_scheduled_card(bot, event_id, name, new_time),
         _refresh_live_messages(bot, event_id),
         _post_thread_note(bot, thread_id, new_time, actor_name, mention_block),
+        _refresh_launcher_for_event(bot, event_id),
     )
     audit.event(
         "pod_postpone", user_id=actor_id, event_id=event_id,
@@ -1102,13 +1140,16 @@ async def refresh_card_phase(bot: commands.Bot, event_id: str) -> None:
     """Re-render the channel card for a lifecycle change — draft start, a restart, draft done, the
     champion post — picking up the current status line. Embed only: no thread or native-event renames,
     so frequent transitions never touch Discord's slow rename limits. Once the championship post is
-    known, both card surfaces also gain a jump button to it."""
+    known, both card surfaces also gain a jump button to it. The launcher board repaints with it, since draft
+    start is where a pod stops taking signups and its slot has to collapse to one line then rather than
+    whenever the next click happens."""
     loaded = await asyncio.to_thread(_load_event, event_id)
     if loaded is None:
         return
     name, event_time, _status, _thread_id, _native_event_id, _created_at = loaded
     await _edit_scheduled_card(bot, event_id, name, event_time)
     await _attach_result_link(bot, event_id)
+    await _refresh_launcher_for_event(bot, event_id)
 
 
 HEAL_LOOKBACK_DAYS = 3
@@ -1205,6 +1246,7 @@ async def reflect_format_change(bot: commands.Bot, event_id: str) -> None:
     name, event_time, _status, thread_id, native_event_id, _created_at = loaded
     pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
     await _edit_scheduled_card(bot, event_id, name, event_time)
+    await _refresh_launcher_for_event(bot, event_id)
     await _rename_native_event(bot, thread_id, native_event_id, team_aware_pod_name(name, pairing_mode))
 
 
@@ -1314,7 +1356,7 @@ def _actor_display_name(guild: discord.Guild | None, actor_id: str) -> str:
             member = None
         if member is not None:
             return member.display_name
-    return "an organizer"
+    return "an Organizer"
 
 
 def parse_new_time(raw: str, current: datetime, now: datetime) -> datetime | None:

@@ -204,10 +204,9 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
         log.warning("fire_slot_underfill: pod-draft-chat channel unavailable")
         return
 
-    name = pod_display_name(active_set_code(), slot.slot_time)
-    nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(name))
+    nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
 
-    body = build_underfill_message(name, slot.count, aim, slot.slot_time, slot.jump_url)
+    body = build_underfill_message(slot.name, slot.count, aim, slot.slot_time, slot.jump_url)
     if resurface and nudge is not None:
         await _safe_delete(nudge)
         nudge = None
@@ -281,12 +280,11 @@ async def refresh_slot_nudge(bot: commands.Bot, signal_id: str) -> None:
     channel = resolve_pod_chat_channel(bot)
     if channel is None:
         return
-    name = pod_display_name(active_set_code(), slot.slot_time)
-    nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(name))
+    nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
     if nudge is None:
         return
     aim = settings.pod_signal_fire_threshold
-    body = build_underfill_message(name, slot.count, aim, slot.slot_time, slot.jump_url)
+    body = build_underfill_message(slot.name, slot.count, aim, slot.slot_time, slot.jump_url)
     await _safe_edit(nudge, body)
 
 
@@ -299,8 +297,7 @@ async def clear_slot_nudge(bot: commands.Bot, signal_id: str) -> None:
     channel = resolve_pod_chat_channel(bot)
     if channel is None:
         return
-    name = pod_display_name(active_set_code(), slot.slot_time)
-    nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(name))
+    nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
     if nudge is not None:
         await _safe_delete(nudge)
 
@@ -341,9 +338,12 @@ class _SlotNudgeContext:
     slot_time: datetime
     count: int
     jump_url: str
+    name: str
 
 
 def _load_slot_for_nudge(signal_id: str) -> _SlotNudgeContext | None:
+    """The slot's nudge context, named after the format it opens on: two pods can share one slot time and one
+    launcher link, so the name is all that tells their nudges apart."""
     with SessionLocal() as session:
         signal = session.get(PodSignal, signal_id)
         if signal is None or signal.slot_time is None:
@@ -351,7 +351,8 @@ def _load_slot_for_nudge(signal_id: str) -> _SlotNudgeContext | None:
         jump_url = (
             f"https://discord.com/channels/{signal.guild_id}/{signal.channel_id}/{signal.message_id}"
         )
-        return _SlotNudgeContext(signal.status, signal.slot_time, len(signal.members), jump_url)
+        name = pod_display_name(signal.set_code or active_set_code(), signal.slot_time)
+        return _SlotNudgeContext(signal.status, signal.slot_time, len(signal.members), jump_url, name)
 
 
 def _name_marker(name: str) -> str:

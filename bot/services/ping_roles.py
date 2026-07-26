@@ -33,8 +33,6 @@ from bot.commands.messages import (
     MSG_JOIN_LINE,
     MSG_POD_ROLE_GRANTED,
     MSG_POD_WELCOME,
-    MSG_PREFERENCE_LINE,
-    MSG_YOUR_SETS_LINE,
 )
 from bot.commands.pod_guide import render_pod_guide_embed_body
 from bot.database import SessionLocal
@@ -46,10 +44,9 @@ from bot.services.pod_drafts import (
     attach_arena_alias,
     dm_draft_link_enabled,
     draftmancer_url_for,
-    get_flashback_ranking,
-    get_format_interests,
     player_arena_handle,
 )
+from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import (
     EARLY_POD_ROLE_NAME,
     LATE_POD_ROLE_NAME,
@@ -85,30 +82,33 @@ class PingRole:
     weekend_bucket_keys: tuple[str, ...] = ()
 
 
+EARLY_POD_COLOR = "#5CA8E0"
+LATE_POD_COLOR = "#9B8AE6"
+
 PING_ROLES: tuple[PingRole, ...] = (
     PingRole(POD_DRAFTERS_ROLE_NAME, "llu", "Server-Wide Pod Announcements", color="#C0C0C0"),
     PingRole(
-        EARLY_POD_ROLE_NAME, "💫", "Weekdays", color="#5CA8E0",
+        EARLY_POD_ROLE_NAME, "💫", "Weekdays", color=EARLY_POD_COLOR,
         aliases=("Early Pods", "Early Pod Drafters", "Euro Pod Drafters"), slot_weekday=THURSDAY, auto_grant=True,
     ),
     PingRole(
-        LATE_POD_ROLE_NAME, "☄️", "Weekdays", color="#9B8AE6",
+        LATE_POD_ROLE_NAME, "☄️", "Weekdays", color=LATE_POD_COLOR,
         aliases=("Late Pods", "Late Pod Drafters"), slot_weekday=WEDNESDAY, auto_grant=True,
     ),
     PingRole(
-        WEEKEND_EARLY_POD_ROLE_NAME, "🌅", "", color="#D2B48C",
+        WEEKEND_EARLY_POD_ROLE_NAME, "🌅", "", color=EARLY_POD_COLOR,
         aliases=("Weekend Early Pods",), slot_weekday=SATURDAY, auto_grant=True,
         grant_when="on weekends", weekend_bucket_keys=("AFTERNOON",),
     ),
     PingRole(
-        WEEKEND_LATE_POD_ROLE_NAME, "🎆", "", color="#7E6FD1",
+        WEEKEND_LATE_POD_ROLE_NAME, "🎆", "", color=LATE_POD_COLOR,
         aliases=("Weekend Late Pods",), slot_weekday=SATURDAY, auto_grant=True,
         grant_when="on weekends", weekend_bucket_keys=("EVENING",),
     ),
     PingRole(POD_QUEUE_ROLE_NAME, "⚡", "Daily Draft Sign-Ups", color="#FFAC33"),
-    PingRole(fi.LATEST_SET_ROLE_NAME, "🆕", "Pods drafting the Latest Set", color="#e8e8e8"),
-    PingRole(fi.FLASHBACK_ROLE_NAME, "flashback", "Pods drafting any Past Sets", color="#B0C4DE"),
-    PingRole(fi.CUBE_ROLE_NAME, "cube", "Pods drafting a Cube", color="#B0C4DE"),
+    PingRole(fi.LATEST_SET_ROLE_NAME, "🆕", "All Pods drafting the Latest Set", color="#e8e8e8"),
+    PingRole(fi.FLASHBACK_ROLE_NAME, "flashback", "All Pods drafting any Past Sets", color="#B0C4DE"),
+    PingRole(fi.CUBE_ROLE_NAME, "cube", "All Pods drafting any Cube", color="#B0C4DE"),
 )
 
 
@@ -119,10 +119,18 @@ class ManagedRole:
 
 
 SET_CHAMPION_ROLE_NAME = "Set Champion"
+ORGANIZER_ROLE_NAME = "Organizer"
 
 MANAGED_ROLES: tuple[ManagedRole, ...] = (
     ManagedRole(SET_CHAMPION_ROLE_NAME, "#82CBFF"),
+    ManagedRole(ORGANIZER_ROLE_NAME, "#4CD4A9"),
 )
+
+
+def organizer_mention(guild: discord.Guild | None) -> str:
+    """Mention pill for the pod organizers, or plain text when the guild has no such role yet."""
+    role = find_role(guild, ORGANIZER_ROLE_NAME)
+    return role.mention if role is not None else f"@{ORGANIZER_ROLE_NAME}"
 
 
 def spec_named(name: str) -> PingRole | None:
@@ -196,40 +204,34 @@ def build_grant_embed(
 
 
 def build_welcome_view(
-    guild: discord.Guild, user_mention: str, slot_role: discord.Role | None, *, ping: str | None = None,
-    show_link_17lands: bool = False,
+    guild: discord.Guild, user_mention: str, *, show_link_17lands: bool = False,
 ) -> discord.ui.LayoutView:
     """First-pod welcome as a Components V2 container: a green accent card whose text block behaves as
-    message content, so the newcomer mention pings where an embed mention would stay silent. Folds in
-    the role grant for a one-message welcome; returning drafters get `build_grant_view` instead."""
+    message content, so the newcomer mention pings where an embed mention would stay silent. This one is
+    public, so it welcomes and points at the buttons and nothing else — which slot role the click granted
+    is between the bot and the clicker, and rides on their ephemeral confirmation instead."""
     umbrella = discord.utils.get(guild.roles, name=POD_DRAFTERS_ROLE_NAME)
     pod_drafters = umbrella.mention if umbrella is not None else POD_DRAFTERS_ROLE_NAME
-    if slot_role is not None and ping is not None:
-        grant = f"You're now on {slot_role.mention} and will be notified {ping}"
-    else:
-        grant = "Use the buttons below to link your Arena handle, read the Pod Guide and manage Notifications"
-    message = MSG_POD_WELCOME.format(user=user_mention, pod_drafters=pod_drafters, grant=grant).rstrip()
+    message = MSG_POD_WELCOME.format(user=user_mention, pod_drafters=pod_drafters).rstrip()
     return _PodButtonCard(message, show_link_17lands_button=show_link_17lands)
 
 
 def build_grant_view(
     role: discord.Role, spec: PingRole, *, ping: str | None = None, arena_name: str | None = None,
-    interests: list[str] | None = None, ranking: list[str] | None = None, card_lead: str | None = None,
-    show_link_17lands: bool = False,
+    card_lead: str | None = None, show_link_17lands: bool = False,
 ) -> discord.ui.LayoutView:
     """The ephemeral card a returning drafter gets on a fresh slot grant: the grant line plus the same
     Pod Guide and Notifications buttons as the welcome. No self-mention — the card is ephemeral, so the
-    reader is the subject. When linked, it shows their Arena handle, their format preference with a
-    Format Preference button to change it, and drops the Link Arena button; when unlinked it offers
-    Link Arena so they can link before joining the lobby. `card_lead` folds the caller's join
-    confirmation into the card, so a grant and an RSVP acknowledgement arrive as one message. Accented
+    reader is the subject. When linked, it shows their Arena handle and drops the Link Arena button; when
+    unlinked it offers Link Arena so they can link before joining the lobby. `card_lead` folds the caller's
+    join confirmation into the card, so a grant and an RSVP acknowledgement arrive as one message. Accented
     with the granted role's color."""
     grant_line = pod_role_grant_text(
         role.mention, ping or slot_grant_ping(spec), emoji=display_emoji(spec) or "",
     )
     if card_lead:
         grant_line = f"{card_lead}\n{grant_line}"
-    text = _card_body(grant_line, arena_name=arena_name, interests=interests, ranking=ranking)
+    text = _card_body(grant_line, arena_name=arena_name)
     accent = role.color if role.color.value else discord.Color.blurple()
     return _PodButtonCard(
         text, accent=accent, show_link_button=arena_name is None,
@@ -237,19 +239,14 @@ def build_grant_view(
     )
 
 
-def _card_body(
-    lead: str, *, arena_name: str | None, interests: list[str] | None, ranking: list[str] | None,
-) -> str:
-    """The card text below its lead, shared by the grant card and the RSVP confirmation card: the
-    linked reader sees their Arena handle and format preference, the unlinked reader the link prompt."""
+def _card_body(lead: str, *, arena_name: str | None) -> str:
+    """The card text below its lead, shared by the grant card and the RSVP confirmation card: the linked
+    reader sees their Arena handle, the unlinked reader the link prompt. No format preference line — the
+    saved preference decides nothing about a signup, so quoting it back on a join reads as a promise."""
     if arena_name is None:
         return f"{lead}\n{MSG_ARENA_LINK_CTA}"
     handle_line = MSG_ARENA_HANDLE_LINE.format(emoji=emojis.get("mtga"), arena_name=arena_name)
-    lines = [lead, handle_line]
-    lines.append(f"✨ {MSG_PREFERENCE_LINE.format(choice=fi.preference_display(interests))}")
-    if fi.has_flashback(interests) and ranking:
-        lines.append(MSG_YOUR_SETS_LINE.format(ranking=fi.ranking_display(ranking)))
-    return "\n".join(lines)
+    return f"{lead}\n{handle_line}"
 
 
 def persistent_pod_card_view() -> discord.ui.LayoutView:
@@ -393,11 +390,6 @@ def _has_seventeenlands_token(discord_id: str) -> bool:
     return bool(token)
 
 
-def _preference_snapshot(discord_id: str) -> tuple[list[str], list[str]]:
-    with SessionLocal() as session:
-        return get_format_interests(session, discord_id), get_flashback_ranking(session, discord_id)
-
-
 async def submit_arena_link(interaction: discord.Interaction, arena_name: str) -> str | None:
     """Validate and store an Arena handle from a modal, replying only on rejection (bad format or
     collision). Returns the linked handle on success without a response, so the caller owns the success
@@ -523,41 +515,42 @@ def forget_welcome(member_id: int) -> None:
     _welcomed_member_ids.discard(member_id)
 
 
+NOTICE_WELCOME = "welcome"
+NOTICE_GRANT = "grant"
+
+
 async def announce_pod_grant(
-    interaction: discord.Interaction, *, first_pod: bool,
-    granted_role: discord.Role | None, welcome_role: discord.Role | None,
+    interaction: discord.Interaction, *, first_pod: bool, granted_role: discord.Role | None,
     spec: PingRole | None, ping: str | None, card_lead: str | None = None,
 ) -> str | None:
-    """The post-join notice every signal surface shares: a first-ever drafter with no linked Arena
-    handle gets the public welcome in pod-draft-chat, folding in `welcome_role`; anyone already linked
-    is treated as a returning drafter, since reaching `/link-arena` means they already found pods —
-    they get only the ephemeral grant card if they freshly picked up a slot role, else nothing.
-    `granted_role` gates the returning case on an actual fresh grant, so a re-click never re-announces.
+    """The post-join notice every signal surface shares: a first-ever drafter with no linked Arena handle
+    gets the public welcome in pod-draft-chat; anyone already linked is treated as a returning drafter,
+    since reaching `/link-arena` means they already found pods — they get only the ephemeral grant card if
+    they freshly picked up a slot role, else nothing. `granted_role` gates the returning case on an actual
+    fresh grant, so a re-click never re-announces. The public welcome names no slot role: the caller's own
+    ephemeral confirmation is where a clicker learns which role the click granted them.
     `card_lead` is folded into the grant card so the caller's join confirmation and the grant arrive as
-    one message. Returns "welcome" or "grant" for the notice posted, None for none, so the caller can
-    decide whether its own confirmation still needs to be sent."""
+    one message. Returns `NOTICE_WELCOME` or `NOTICE_GRANT` for the notice posted, None for none, so the
+    caller can decide whether its own confirmation still needs to be sent."""
     user = interaction.user
     arena_name = await _linked_arena_handle(str(user.id))
     has_token = await asyncio.to_thread(_has_seventeenlands_token, str(user.id))
     wants_welcome = first_pod and arena_name is None
     if wants_welcome and _first_welcome_for(user.id):
-        welcome = build_welcome_view(
-            interaction.guild, user.mention, welcome_role, ping=ping, show_link_17lands=not has_token,
-        )
+        welcome = build_welcome_view(interaction.guild, user.mention, show_link_17lands=not has_token)
         await post_welcome(interaction, welcome)
         log.info(f"posted first-pod welcome for {user}")
-        return "welcome"
+        return NOTICE_WELCOME
     if granted_role is not None:
-        interests, ranking = await asyncio.to_thread(_preference_snapshot, str(user.id))
         grant = build_grant_view(
-            granted_role, spec, ping=ping, arena_name=arena_name, interests=interests, ranking=ranking,
+            granted_role, spec, ping=ping, arena_name=arena_name,
             card_lead=card_lead, show_link_17lands=not has_token,
         )
         await interaction.followup.send(
             view=grant, ephemeral=True, allowed_mentions=discord.AllowedMentions.none(),
         )
         log.info(f"posted returning grant card for {user} (linked={arena_name is not None})")
-        return "grant"
+        return NOTICE_GRANT
     log.info(
         f"no pod-grant notice for {user}: first_pod={first_pod} linked={arena_name is not None} "
         f"granted_role={granted_role.name if granted_role else None}"
@@ -574,10 +567,9 @@ async def send_join_confirmation_card(
     that granted a role."""
     user_id = str(interaction.user.id)
     arena_name = await _linked_arena_handle(user_id)
-    interests, ranking = await asyncio.to_thread(_preference_snapshot, user_id)
     has_token = await asyncio.to_thread(_has_seventeenlands_token, user_id)
     card = _PodButtonCard(
-        _card_body(lead, arena_name=arena_name, interests=interests, ranking=ranking),
+        _card_body(lead, arena_name=arena_name),
         accent=accent, show_link_button=arena_name is None,
         show_link_17lands_button=not has_token,
     )
@@ -596,7 +588,7 @@ async def announce_onboarding_welcome(client: discord.Client, member: discord.Me
         log.info(f"onboarding welcome skipped for {member}: already welcomed")
         return
     has_token = await asyncio.to_thread(_has_seventeenlands_token, str(member.id))
-    welcome = build_welcome_view(member.guild, member.mention, None, show_link_17lands=not has_token)
+    welcome = build_welcome_view(member.guild, member.mention, show_link_17lands=not has_token)
     posted = await send_welcome(client, member, welcome)
     log.info(f"onboarding welcome {'posted' if posted else 'failed to post'} for {member}")
 

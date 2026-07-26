@@ -37,10 +37,8 @@ from bot.commands.pod_rsvp import (
 )
 from bot.commands.pod_table import offer_second_table
 from bot.commands.test_group import HALL_OF_FAME, test_group
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
-from bot import emojis
-from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
 from bot.services import pod_format
@@ -65,11 +63,13 @@ from bot.services.ping_roles import (
 )
 from bot.services.pod_schedule import POD_QUEUE_ROLE_NAME
 from bot.services.pod_signals import (
+    KIND_POLL,
     RSVP_YES,
     SCHEDULE_TZ,
     STATUS_FIRED,
     STATUS_OPEN,
     bucket_for_lane,
+    named_bucket_key,
     poll_buckets_for,
     slot_event_time,
 )
@@ -83,7 +83,7 @@ from bot.tasks.pod_daily_poll import (
     close_launcher_for_date,
     post_launcher,
 )
-from bot.tasks.pod_thread_cleanup import archive_inactive_threads
+from bot.tasks.pod_thread_cleanup import delete_threads
 from bot.tasks.pod_draft_reminder import fire_roster_reminder
 
 
@@ -97,16 +97,11 @@ async def _show_welcome_preview(interaction: discord.Interaction, role_name: str
     ping = QUEUE_GRANT_PING if role_name == POD_QUEUE_ROLE_NAME else slot_grant_ping(spec)
     preview_role = role or _StubRole(role_name)
     await interaction.response.send_message(
-        view=build_welcome_view(guild, interaction.user.mention, role, ping=ping),
+        view=build_welcome_view(guild, interaction.user.mention),
         allowed_mentions=discord.AllowedMentions.none(),
     )
-    onboarding = build_welcome_view(guild, interaction.user.mention, None)
-    linked = build_grant_view(
-        preview_role, spec, ping=ping, arena_name="Tester#00000",
-        interests=[fi.FLASHBACK], ranking=["FIN", "DSK", "NEO"],
-    )
+    linked = build_grant_view(preview_role, spec, ping=ping, arena_name="Tester#00000")
     unlinked = build_grant_view(preview_role, spec, ping=ping, arena_name=None)
-    await _send_labeled_card(interaction, "**Welcome via onboarding (no slot role):**", onboarding)
     await _send_labeled_card(interaction, "**Returning, picks up a new slot (linked):**", linked)
     await _send_labeled_card(interaction, "**Returning, picks up a new slot (not linked):**", unlinked)
 
@@ -154,13 +149,12 @@ async def setup(bot: commands.Bot) -> None:
     @commands.is_owner()
     async def test_poll(ctx: commands.Context, *args: str) -> None:
         """Owner-only. Post a live daily launcher whose slots are still ahead — today if one remains,
-        otherwise tomorrow — so the buttons are clickable and drive real signals. Prefills fake signups
-        with a mix of Latest / Flashback / Any interests so the roster's format teams show. Args are
-        order-free: `am` posts tomorrow so every slot is fresh and open like a morning post; `held` seeds
-        the first open slot as 3 Latest-only plus 3 Flashback-only, the split that reaches six heads but
-        fills no single format, so the slot holds unfired and reads like any still-gathering slot; a set or
-        cube code overrides the day's scheduled second format, so `poll SAMP` drives that format live
-        without waiting for its date."""
+        otherwise tomorrow — so the buttons are clickable and drive real signals. Prefills each named pod
+        with fake signups, a couple of them on both formats of a slot, so the rosters and the flexible
+        marker show. Args are order-free: `am` posts tomorrow so every pod is fresh and open like a morning
+        post; `split` seeds five dedicated per format plus two on both, so one press has to split them into
+        two full pods; a set or cube code is offered beside the latest set, so `poll SAMP` drives that
+        format live without waiting for its date."""
         lowered = {arg.lower() for arg in args}
         now = datetime.now(SCHEDULE_TZ)
         if "am" in lowered:
@@ -168,49 +162,40 @@ async def setup(bot: commands.Bot) -> None:
         else:
             last_slot = slot_event_time(now.date(), poll_buckets_for(now.date())[-1].key)
             day = now.date() if last_slot is not None and last_slot > now else now.date() + timedelta(days=1)
-        for arg in args:
-            forced = pod_format.resolve_format_code(arg) if arg.lower() not in ("am", "held") else None
-            if forced:
-                _force_second_format(day, forced)
+        forced = [
+            code for code in (
+                pod_format.resolve_format_code(arg) if arg.lower() not in ("am", "split") else None
+                for arg in args
+            ) if code
+        ]
+        if forced:
+            _force_formats(day, tuple(forced))
         message = await post_launcher(ctx.bot, ctx.channel, day)
         if message is None:
             return
-        await asyncio.to_thread(_seed_poll_interests_sync, str(message.id), day, "held" in lowered)
+        await asyncio.to_thread(_seed_poll_signups_sync, str(message.id), day, "split" in lowered)
         slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, str(message.id), day)
         await message.edit(embed=build_poll_embed(slots, ctx.guild), view=PodPollView(slots, ctx.guild))
-
-    @test_group.command(name="signup")
-    @commands.is_owner()
-    async def test_signup(ctx: commands.Context, flashback: str = "NEO") -> None:
-        """Owner-only. Post the modal signup shape for a launcher whose formats are named up front: one
-        Sign Up button for the whole day, opening one multi-select of every named pod with your current
-        signups pre-checked, applied on a single submit. Submitting nothing withdraws you. Pass a set or
-        cube code to stand in for the day's second format, like `signup PEASANT`. Fixture state only, so
-        nothing is written and no pod is created."""
-        latest = active_set_code()
-        me = ctx.author.display_name
-        view = _SignupBoardView(_SignupPreview(latest, flashback.strip().upper()), me)
-        view.message = await ctx.send(embed=_signup_board_embed(view.preview, me), view=view)
 
     @test_group.command(name="named")
     @commands.is_owner()
     async def test_named(ctx: commands.Context, *codes: str) -> None:
-        """Owner-only. Post the rolling launcher with each slot's second format named: the roster's second
-        block carries the real set or cube code instead of a bare Flashback, and that lane grows a second
-        join button for it.
+        """Owner-only. Post the rolling launcher with a second format named at each slot: every pod carries
+        its own roster block under the real set or cube code, and every pod gets its own join button.
 
         One code applies to both slots (`named NEO`). Two set them per slot, and `-` means that slot offers
-        only the latest set (`named PEASANT -`). No code at all is a latest-only day, which should render
-        exactly like the launcher does today. Fixture slots through the production embed and view builders,
-        so no signal exists behind the buttons."""
+        only the latest set (`named PEASANT -`). No code at all is a latest-only day, which carries one pod
+        per slot. Fixture slots through the production embed and view builders, so no signal exists behind
+        the buttons."""
         day = datetime.now(SCHEDULE_TZ).date() + timedelta(days=1)
         buckets = poll_buckets_for(day)
         wanted = [code.strip().upper() for code in codes] or [""]
         if len(wanted) == 1:
             wanted *= len(buckets)
         slots = [
-            _named_slot(bucket, slot_event_time(day, bucket.key), _named_arg(wanted, index))
+            slot
             for index, bucket in enumerate(buckets)
+            for slot in _named_slots(bucket, slot_event_time(day, bucket.key), _named_arg(wanted, index))
         ]
         await ctx.send(embed=build_poll_embed(slots, ctx.guild), view=PodPollView(slots, ctx.guild))
 
@@ -218,27 +203,22 @@ async def setup(bot: commands.Bot) -> None:
     @commands.is_owner()
     async def test_lifecycle(ctx: commands.Context, flashback: str = "PEASANT") -> None:
         """Owner-only. Post one board per pod lifecycle state so the difference is visible side by side:
-        gathering with no thread, gathering with a thread and still taking signups, lobby open, and played.
-        The point to check is the second one — reaching six must keep its full roster and put its thread
-        link above the format it plays, not hoist it into the Played section. Fixtures through the
-        production embed builder, no signals."""
+        gathering with no thread, fired with a thread and still taking signups, one draft started, both
+        started, and played. The points to check are the second one, where a fired pod must keep its full
+        roster and put its thread link above the format it plays, and the third, where a pod that is
+        drafting must not collapse the format beside it. Fixtures through the production embed builder, no
+        signals."""
         other = flashback.strip().upper()
         day = datetime.now(SCHEDULE_TZ).date() + timedelta(days=1)
         buckets = poll_buckets_for(day)
         for label, state in _LIFECYCLE_STATES:
             slots = [
-                _lifecycle_slot(bucket, slot_event_time(day, bucket.key), other, state, str(ctx.channel.id))
+                slot
                 for bucket in buckets
+                for slot in _lifecycle_slots(
+                    bucket, slot_event_time(day, bucket.key), other, state, str(ctx.channel.id))
             ]
             await ctx.send(f"**{label}**", embed=build_poll_embed(slots, ctx.guild))
-
-    @test_group.command(name="modalprobe")
-    @commands.is_owner()
-    async def test_modalprobe(ctx: commands.Context) -> None:
-        """Owner-only, disposable. Ask Discord directly whether a modal accepts buttons: each button here
-        tries to open a modal built a different way and reports the API error when it is refused. `select`
-        is the control that should open. Delete this command once the answer is recorded."""
-        await ctx.send("Which modal shape does Discord accept?", view=_ModalProbeView())
 
     @test_group.command(name="rolling")
     @commands.is_owner()
@@ -280,58 +260,63 @@ async def setup(bot: commands.Bot) -> None:
             await ctx.send(embed=build_poll_embed(slots, guild, closed=closed), view=view)
 
         await show("A. Fresh morning board — both slots gathering today", [
-            early_today(seeds=_ROLL_SEED_FULL),
-            late_today(seeds=_ROLL_SEED_SMALL),
+            early_today(count=_ROLL_COUNT_FULL),
+            late_today(count=_ROLL_COUNT_SMALL),
         ])
 
         await show("B. Early finished — Played section links the pod, Next section is the upcoming day", [
-            early_today(seeds=_ROLL_SEED_FULL, winner="Finkel", **played),
-            late_today(seeds=_ROLL_SEED_SMALL),
-            early_tom(seeds=_ROLL_SEED_SMALL),
+            early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
+            late_today(count=_ROLL_COUNT_SMALL),
+            early_tom(count=_ROLL_COUNT_SMALL),
         ])
 
         await show("B (playing). Early fired but the draft is still running — Playing section, no winner yet", [
-            early_today(seeds=_ROLL_SEED_FULL, **playing),
-            late_today(seeds=_ROLL_SEED_SMALL),
-            early_tom(seeds=_ROLL_SEED_SMALL),
+            early_today(count=_ROLL_COUNT_FULL, **playing),
+            late_today(count=_ROLL_COUNT_SMALL),
+            early_tom(count=_ROLL_COUNT_SMALL),
         ])
 
         await show("C. Both finished — full 2x2, each column stacks Played over Next", [
-            early_today(seeds=_ROLL_SEED_FULL, winner="Finkel", **played),
-            late_today(seeds=_ROLL_SEED_LATEST6, winner="Shota", **played),
-            early_tom(seeds=_ROLL_SEED_SMALL),
-            late_tom(seeds=_ROLL_SEED_SMALL),
+            early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
+            late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
+            early_tom(count=_ROLL_COUNT_SMALL),
+            late_tom(count=_ROLL_COUNT_SMALL),
         ])
 
-        await show("C (multi-table). Early fired two tables today — the flashback second table joins Played", [
-            early_today(seeds=_ROLL_SEED_FULL, winner="Finkel", **played),
-            _rolling_slot(early, slot_event_time(today, early.key), seeds=_ROLL_SEED_SMALL, offset=12,
-                          fired=True, channel_id=channel_id, set_code="FIN", winner="LSV", table=2),
-            late_today(seeds=_ROLL_SEED_LATEST6, winner="Shota", **played),
-            early_tom(seeds=_ROLL_SEED_SMALL),
-            late_tom(seeds=_ROLL_SEED_SMALL),
+        await show("C (multi-table). Early fired two tables today — the second table joins Played", [
+            early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
+            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=12,
+                          fired=True, channel_id=channel_id, set_code=set_code, winner="LSV", table=2),
+            late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
+            early_tom(count=_ROLL_COUNT_SMALL),
+            late_tom(count=_ROLL_COUNT_SMALL),
         ])
 
         await show("C (team). Late was a team draft — the winning side is credited and links no seat", [
-            early_today(seeds=_ROLL_SEED_FULL, winner="Finkel", **played),
-            late_today(seeds=_ROLL_SEED_LATEST6, winner="Green Team", seat=False, **played),
-            early_tom(seeds=_ROLL_SEED_SMALL),
-            late_tom(seeds=_ROLL_SEED_SMALL),
+            early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
+            late_today(count=_ROLL_COUNT_FULL, winner="Green Team", seat=False, **played),
+            early_tom(count=_ROLL_COUNT_SMALL),
+            late_tom(count=_ROLL_COUNT_SMALL),
         ])
 
         await ctx.send("**D. Handoff at 11:00 — the old card retires to a compact On This Day history**")
         await ctx.send(embed=build_poll_embed([
-            early_today(seeds=_ROLL_SEED_FULL, winner="Finkel", **played),
-            late_today(seeds=_ROLL_SEED_LATEST6, winner="Shota", **played),
+            early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
+            late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
         ], guild, closed=True))
         await show("(new card, posted at the bottom)", [
-            early_tom(seeds=_ROLL_SEED_SMALL),
-            late_tom(seeds=_ROLL_SEED_SMALL),
+            early_tom(count=_ROLL_COUNT_SMALL),
+            late_tom(count=_ROLL_COUNT_SMALL),
         ])
 
-        content, view = build_play_again_prompt(early.key)
-        await ctx.send("**E. Play Again prompt — posted in a finished pod's thread**")
-        await ctx.send(content, view=view, allowed_mentions=discord.AllowedMentions.none())
+        next_keys = [
+            named_bucket_key(early_next.key, code)
+            for code in pod_format_schedule.formats_for(tomorrow, early_next.lane)
+        ]
+        embed, view = build_play_again_prompt(next_keys)
+        await ctx.send(
+            "**E. Play Again prompt — posted in a finished pod's thread, offering tomorrow's formats**")
+        await ctx.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
 
     @test_group.command(name="launcher")
     @commands.is_owner()
@@ -343,8 +328,8 @@ async def setup(bot: commands.Bot) -> None:
         today when a slot is still ahead, otherwise tomorrow, so the staged pod is always in the future.
         Args are order-free: a number sets how many Yes RSVPs to seed (default 5), the word `close`
         immediately retires it into the closed state (grey, no buttons, no role ping, committed slot
-        shown as its roster) so that surface can be eyeballed, and a set or cube code overrides the day's
-        scheduled second format so any of them can be driven live without waiting for its date."""
+        shown as its roster) so that surface can be eyeballed, and a set or cube code is offered beside the
+        latest set so any of them can be driven live without waiting for its date."""
         fill = 5
         close = False
         forced_format = None
@@ -363,7 +348,7 @@ async def setup(bot: commands.Bot) -> None:
         last_today = slot_event_time(today, poll_buckets_for(today)[-1].key)
         target_day = today if last_today > now else today + timedelta(days=1)
         if forced_format:
-            _force_second_format(target_day, forced_format)
+            _force_formats(target_day, (forced_format,))
         reflect = poll_buckets_for(target_day)[-1]
         slot_time = slot_event_time(target_day, reflect.key)
         set_code = active_set_code()
@@ -384,26 +369,28 @@ async def setup(bot: commands.Bot) -> None:
     @test_group.command(name="reset")
     @commands.is_owner()
     async def test_reset(ctx: commands.Context) -> None:
-        """Owner-only. Clear this guild's on-demand pod signals (poll / queue / scheduled) and the
-        bot-native pods they staged so the `!test` surfaces start from a clean slate — every slot goes
-        back to lazy — delete the bot's scheduled events off the Events calendar, and strip the
-        auto-granted pod ping roles. Finalized played pods and sesh pods are kept, as is any live lobby.
-        Threads with no activity for over 3 hours are archived; live conversations stay open."""
+        """Owner-only. Clear this guild's on-demand pod signals (poll / queue / scheduled) and every pod
+        of the day so the `!test` surfaces start from a clean slate: every slot goes back to lazy, the
+        cards and launcher boards are deleted, the pods' threads are deleted, the bot's scheduled events
+        come off the Events calendar, and the auto-granted pod ping roles are stripped. Unfinalized pods
+        of any day go too; finalized pods from earlier days stay as leaderboard history."""
         if ctx.guild is None:
             await ctx.send("Run `!test reset` in the test server, so the signals it clears are scoped to it.")
             return
         guild_id = str(ctx.guild.id)
-        counts = await asyncio.to_thread(pod_launch.reset_ondemand_signals_sync, guild_id)
-        purged = await purge_native_events(ctx.guild, ctx.bot.user.id) if ctx.guild else 0
-        threads_archived = await archive_inactive_threads(ctx.guild)
+        reset = await asyncio.to_thread(pod_launch.reset_ondemand_signals_sync, guild_id)
+        purged = await purge_native_events(ctx.guild, ctx.bot.user.id)
+        threads_deleted = await delete_threads(ctx.bot, reset.thread_ids)
+        cards_deleted = await pod_launch.delete_reset_cards(reset.card_refs)
         roles_removed = 0
         if isinstance(ctx.author, discord.Member):
             roles_removed = await strip_pod_roles(ctx.author)
             forget_welcome(ctx.author.id)
         await ctx.send(
-            f"Cleared on-demand pod signals: {counts['signals']} signals, {counts['members']} members, "
-            f"{counts['events']} bot-native pods. Removed {purged} scheduled events from the calendar, "
-            f"archived {threads_archived} inactive threads, and stripped {roles_removed} of your pod roles."
+            f"Cleared on-demand pod signals: {reset.signals} signals, {reset.members} members, "
+            f"{reset.events} pods. Deleted {cards_deleted} cards and {threads_deleted} pod threads, "
+            f"removed {purged} scheduled events from the calendar, and stripped {roles_removed} of "
+            f"your pod roles."
         )
 
     @test_group.command(name="welcome")
@@ -640,49 +627,44 @@ async def setup(bot: commands.Bot) -> None:
         ))
 
 
-_POLL_SEED_FIRST = [
-    [fi.LATEST], [fi.LATEST], [fi.LATEST],
-    [fi.FLASHBACK], [fi.FLASHBACK],
-    [fi.LATEST, fi.FLASHBACK], [fi.LATEST, fi.FLASHBACK],
-    [],
-]
-_POLL_SEED_REST = [[fi.LATEST], [fi.FLASHBACK], [fi.LATEST, fi.FLASHBACK], []]
-_POLL_SEED_HELD = [[fi.LATEST]] * 3 + [[fi.FLASHBACK]] * 3
+_POLL_SEED_DEDICATED = 3
+_POLL_SEED_SHARED = 1
+_POLL_SPLIT_DEDICATED = 5
+_POLL_SPLIT_SHARED = 2
+_POLL_SEED_ID_PREFIX = "polltest-"
 
-_ROLL_SEED_FULL = (
-    [fi.LATEST], [fi.LATEST], [fi.LATEST], [fi.LATEST, fi.FLASHBACK], [fi.FLASHBACK], [fi.FLASHBACK],
-)
-_ROLL_SEED_SMALL = ([fi.LATEST], [fi.LATEST], [fi.FLASHBACK])
-_ROLL_SEED_LATEST6 = [[fi.LATEST]] * 6
+_ROLL_COUNT_FULL = 6
+_ROLL_COUNT_SMALL = 3
 
 _ROSTER_NAMES = HALL_OF_FAME
 
 
 def _rolling_slot(
-    bucket, slot_time, *, seeds, offset: int = 0, fired: bool = False, finished: bool = False,
+    bucket, slot_time, *, count: int, offset: int = 0, fired: bool = False, finished: bool = False,
     winner: str | None = None, seat: bool = True, channel_id: str = "", set_code: str | None = None,
-    table: int | None = None,
+    table: int | None = None, shared: tuple[str, ...] = (),
 ):
-    """Build one fixture LauncherSlot for the rolling preview. A fired slot carries a pod link and set code;
-    `finished` marks it played, so it takes the trophy instead of the playing mark. A gathering slot carries
-    its lazy roster. `offset` shifts the fixture names so slots on one board don't repeat. `table` marks a
-    second table so the fixture can show more than one pod under a slot. `seat` off is a team draft's
-    winning side, which has no seat on the pod page to link."""
-    names = [_roster_name(offset + i) for i in range(len(seeds))]
-    interests = tuple(tuple(fi.normalize(codes)) for codes in seeds)
+    """Build one fixture LauncherSlot for the rolling preview. A fired slot carries a pod link and counts as
+    locked, so it renders as the compact line; `finished` marks it played, so it takes the trophy instead of
+    the playing mark. A gathering slot carries its own roster. `offset` shifts the fixture names so pods on
+    one board don't repeat. `table` marks a second table so the fixture can show more than one pod under a
+    slot. `seat` off is a team draft's winning side, which has no seat on the pod page to link."""
+    code = set_code or active_set_code()
+    names = [_roster_name(offset + i) for i in range(count)]
+    bucket_key = named_bucket_key(bucket.key, code)
     if fired:
         suffix = f" - Table {table}" if table else ""
-        title = f"{set_code} {slot_time.astimezone(SCHEDULE_TZ):%b %-d} {bucket.name}{suffix}"
+        title = f"{code} {slot_time.astimezone(SCHEDULE_TZ):%b %-d} {bucket.name}{suffix}"
         return pod_launch.LauncherSlot(
-            bucket.key, committed=True, status=STATUS_FIRED, count=len(names), slot_time=slot_time,
+            bucket_key, committed=True, status=STATUS_FIRED, count=len(names), slot_time=slot_time,
             names=names, thread_id="1", signal_id=None, thread_message_id="1", card_message_id="1",
-            card_channel_id=channel_id, thread_name=title, interests=interests, set_code=set_code,
-            finished=finished, winner=winner,
+            card_channel_id=channel_id, thread_name=title, set_code=code,
+            finished=finished, winner=winner, locked=True,
             winner_slug=slugify(winner) if winner and seat else None,
         )
     return pod_launch.LauncherSlot(
-        bucket.key, committed=False, status=STATUS_OPEN, count=len(names), slot_time=slot_time,
-        names=names, thread_id=None, signal_id="1", interests=interests,
+        bucket_key, committed=False, status=STATUS_OPEN, count=len(names), slot_time=slot_time,
+        names=names, thread_id=None, signal_id="1", set_code=code, shared_names=shared,
     )
 
 
@@ -974,36 +956,55 @@ class _GatherNoShowButton(discord.ui.Button):
         await view.render(interaction)
 
 
-def _seed_poll_interests_sync(message_id: str, day, held: bool = False) -> None:
-    """Insert fake signups on the launcher's open lazy slots with a spread of format interests, so `!test
-    poll` shows the format teams without needing live clickers. The first open slot gets the full Latest /
-    Flashback / Any / no-preference mix, the rest a lighter one; slots already past stay empty. `held`
-    swaps the first slot's mix for a 3 Latest-only plus 3 Flashback-only split, the case that reaches six
-    heads yet fires no format."""
+def _seed_poll_signups_sync(message_id: str, day, split: bool = False) -> None:
+    """Insert fake signups on every pod the launcher just opened, so `!test poll` shows filled rosters without
+    needing live clickers. Each pod gets its own dedicated crowd plus a couple of players signed up for both
+    formats at that slot, one id and one name each so they read as the same person in both rosters, which is
+    what the flexible marker renders. Slots already past stay empty.
+
+    `split` seeds the allocation case instead: five dedicated per format plus two on both, so both pods read
+    seven and one press has to split them into two full pods.
+
+    Seeded members are cleared before each run: a second `!test poll` for the same day adopts the signal rows
+    the first one opened, so re-inserting the same fake ids would collide. Real signups survive."""
     now = datetime.now(SCHEDULE_TZ)
-    first_open = True
+    dedicated = _POLL_SPLIT_DEDICATED if split else _POLL_SEED_DEDICATED
+    shared = _POLL_SPLIT_SHARED if split else _POLL_SEED_SHARED
     next_name = 0
-    first_seed = _POLL_SEED_HELD if held else _POLL_SEED_FIRST
     with SessionLocal() as session:
         for bucket in poll_buckets_for(day):
             slot_time = slot_event_time(day, bucket.key)
             if slot_time is not None and slot_time <= now:
                 continue
-            interest_sets = first_seed if first_open else _POLL_SEED_REST
-            first_open = False
-            signal = session.execute(
-                select(PodSignal).where(PodSignal.message_id == message_id, PodSignal.bucket == bucket.key)
-            ).scalar_one_or_none()
-            if signal is None:
-                continue
-            for seat, codes in enumerate(interest_sets):
-                session.add(PodSignalMember(
-                    signal_id=signal.id,
-                    discord_user_id=f"polltest-{bucket.key}-{seat}",
-                    display_name=_roster_name(next_name + seat),
-                    format_interest=fi.normalize(codes),
+            signals = session.execute(
+                select(PodSignal).where(
+                    PodSignal.message_id == message_id,
+                    PodSignal.slot_time == slot_time,
+                    PodSignal.kind == KIND_POLL,
+                )
+            ).scalars().all()
+            if signals:
+                session.execute(delete(PodSignalMember).where(
+                    PodSignalMember.signal_id.in_([signal.id for signal in signals]),
+                    PodSignalMember.discord_user_id.startswith(_POLL_SEED_ID_PREFIX),
                 ))
-            next_name += len(interest_sets)
+            both = [
+                (f"{_POLL_SEED_ID_PREFIX}{bucket.key}-both-{seat}", _roster_name(next_name + seat))
+                for seat in range(shared)
+            ]
+            next_name += shared
+            for signal in signals:
+                for seat in range(dedicated):
+                    session.add(PodSignalMember(
+                        signal_id=signal.id,
+                        discord_user_id=f"{_POLL_SEED_ID_PREFIX}{signal.bucket}-{seat}",
+                        display_name=_roster_name(next_name + seat),
+                    ))
+                next_name += dedicated
+                for discord_user_id, display_name in both:
+                    session.add(PodSignalMember(
+                        signal_id=signal.id, discord_user_id=discord_user_id, display_name=display_name,
+                    ))
         session.commit()
 
 
@@ -1057,233 +1058,50 @@ def _event_thread_id_sync(event_id: str) -> int | None:
         return int(event.discord_thread_id) if event is not None else None
 
 
-_SIGNUP_BUTTON = "Sign Up"
-_SIGNUP_MODAL_TITLE = "Sign Up for Today"
-_SIGNUP_FIELD = "Which pods would you play?"
-_SIGNUP_FIELD_HELP = "Pick every one. Leave it empty to withdraw."
-_SIGNUP_PLACEHOLDER = "Choose Pods"
-_SIGNUP_SAVED = "Signed up for {pods}"
-_SIGNUP_WITHDRAWN = "Withdrawn from every pod today."
-_SIGNUP_READY = "ready"
-_SIGNUP_DISTINCT = "{count} players across both pods"
-_SIGNUP_NOTE = "Preview only. Nothing is written and no pod is created."
-_SIGNUP_SEEDS = ((0, 1, 2), (1, 2, 3, 4, 5), (6, 7), (7, 8, 9, 10))
-
-
-class _SignupPreview:
-    """Fixture state for the modal signup preview: one roster per named pod of the day. Overlap is left
-    standing on purpose, so a player in both pods of a slot is counted in both and the lane shows how many
-    distinct bodies are really behind those two counts."""
-
-    def __init__(self, latest: str, other: str) -> None:
-        self.latest = latest
-        self.other = other
-        self.buckets = poll_buckets_for(datetime.now(SCHEDULE_TZ).date())
-        self.rosters: dict[tuple[str, str], list[str]] = {}
-        seeds = iter(_SIGNUP_SEEDS)
-        for bucket in self.buckets:
-            for code in self.formats:
-                self.rosters[(bucket.key, code)] = [_roster_name(i) for i in next(seeds)]
-
-    @property
-    def formats(self) -> tuple[str, str]:
-        return (self.latest, self.other)
-
-    def keys(self) -> list[tuple[str, str]]:
-        return [(bucket.key, code) for bucket in self.buckets for code in self.formats]
-
-    def joined_keys(self, name: str) -> set[tuple[str, str]]:
-        return {key for key in self.keys() if name in self.rosters[key]}
-
-    def apply(self, name: str, chosen: set[tuple[str, str]]) -> None:
-        """One submit replaces the player's whole set of signups, so the modal is both the signup and the
-        edit surface and there is no partially applied state to reconcile."""
-        for key in self.keys():
-            roster = self.rosters[key]
-            if key in chosen and name not in roster:
-                roster.append(name)
-            elif key not in chosen and name in roster:
-                roster.remove(name)
-
-    def distinct(self, bucket_key: str) -> int:
-        seen: set[str] = set()
-        for code in self.formats:
-            seen.update(self.rosters[(bucket_key, code)])
-        return len(seen)
-
-
-def _signup_option_label(bucket, code: str) -> str:
-    return f"{bucket.name.removesuffix(' Pod')} {code}"
-
-
-def _signup_key(raw: str) -> tuple[str, str]:
-    bucket_key, _, code = raw.partition("|")
-    return (bucket_key, code)
-
-
-def _signup_board_embed(preview: _SignupPreview, me: str) -> discord.Embed:
-    embed = discord.Embed(title=_SIGNUP_MODAL_TITLE, color=discord.Color.green())
-    threshold = settings.pod_signal_fire_threshold
-    for bucket in preview.buckets:
-        blocks = []
-        for code in preview.formats:
-            roster = preview.rosters[(bucket.key, code)]
-            names = "\n".join(f"**{n}**" if n == me else n for n in roster) or "-"
-            mark = f" {_SIGNUP_READY}" if len(roster) >= threshold else ""
-            blocks.append(f"{_picker_emoji(code)} **{code}** ({len(roster)}/{threshold}){mark}\n{names}")
-        distinct = _SIGNUP_DISTINCT.format(count=preview.distinct(bucket.key))
-        value = "\n\n".join(blocks) + f"\n\n-# {distinct}"
-        embed.add_field(name=f"{bucket.emoji} {bucket.name}", value=value, inline=True)
-    embed.set_footer(text=_SIGNUP_NOTE)
-    return embed
-
-
-def _picker_emoji(code: str) -> object:
-    return emojis.set_symbol(code) or fi.flashback_emoji()
-
-
-class _SignupBoardView(discord.ui.View):
-    """One button for the whole day. The modal behind it carries every named pod as one multi-select, so a
-    day can grow a third format without the launcher growing a third button."""
-
-    def __init__(self, preview: _SignupPreview, me: str) -> None:
-        super().__init__(timeout=None)
-        self.preview = preview
-        self.me = me
-        self.message: discord.Message | None = None
-        self.add_item(_SignupButton())
-
-
-class _SignupButton(discord.ui.Button):
-    def __init__(self) -> None:
-        super().__init__(style=discord.ButtonStyle.success, label=_SIGNUP_BUTTON, emoji="📝")
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        board = self.view
-        await interaction.response.send_modal(_SignupModal(board))
-
-
-class _SignupModal(discord.ui.Modal, title=_SIGNUP_MODAL_TITLE):
-    def __init__(self, board: _SignupBoardView) -> None:
-        super().__init__()
-        self.board = board
-        preview = board.preview
-        joined = preview.joined_keys(board.me)
-        options = [
-            discord.SelectOption(
-                label=_signup_option_label(bucket, code), value=f"{bucket.key}|{code}",
-                emoji=_picker_emoji(code), default=(bucket.key, code) in joined,
-            )
-            for bucket in preview.buckets for code in preview.formats
-        ]
-        self.pods = discord.ui.Select(
-            placeholder=_SIGNUP_PLACEHOLDER, min_values=0, max_values=len(options),
-            required=False, options=options,
-        )
-        self.add_item(discord.ui.Label(
-            text=_SIGNUP_FIELD, description=_SIGNUP_FIELD_HELP, component=self.pods,
-        ))
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        chosen = {_signup_key(raw) for raw in self.pods.values}
-        preview = self.board.preview
-        preview.apply(self.board.me, chosen)
-        labels = [
-            _signup_option_label(bucket, code)
-            for bucket in preview.buckets for code in preview.formats
-            if (bucket.key, code) in chosen
-        ]
-        await interaction.response.send_message(
-            _SIGNUP_SAVED.format(pods=", ".join(f"**{label}**" for label in labels))
-            if labels else _SIGNUP_WITHDRAWN,
-            ephemeral=True,
-        )
-        if self.board.message is not None:
-            await self.board.message.edit(
-                embed=_signup_board_embed(preview, self.board.me), view=self.board,
-            )
-
-
-# disposable: settles whether Discord accepts buttons inside a modal, delete once answered
-class _ModalProbeView(discord.ui.View):
-    def __init__(self) -> None:
-        super().__init__(timeout=None)
-        for shape in ("direct", "label", "actionrow", "select"):
-            self.add_item(_ModalProbeButton(shape))
-
-
-class _ModalProbeButton(discord.ui.Button):
-    def __init__(self, shape: str) -> None:
-        super().__init__(label=shape, style=discord.ButtonStyle.secondary)
-        self.shape = shape
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        modal = discord.ui.Modal(title=f"probe {self.shape}")
-        if self.shape == "direct":
-            modal.add_item(discord.ui.Button(label="Early MSH"))
-        elif self.shape == "label":
-            modal.add_item(discord.ui.Label(text="pick", component=discord.ui.Button(label="Early MSH")))
-        elif self.shape == "actionrow":
-            row = discord.ui.ActionRow()
-            row.add_item(discord.ui.Button(label="Early MSH"))
-            modal.add_item(row)
-        else:
-            modal.add_item(discord.ui.Label(text="pick", component=discord.ui.Select(
-                min_values=0, max_values=1, required=False,
-                options=[discord.SelectOption(label="Early MSH", value="a")],
-            )))
-        try:
-            await interaction.response.send_modal(modal)
-        except discord.HTTPException as e:
-            await interaction.response.send_message(
-                f"`{self.shape}` rejected: {e.status} {e.code}\n```{str(e)[:600]}```", ephemeral=True,
-            )
-
-
-_NAMED_SEEDS = ((fi.LATEST,), (fi.LATEST,), (fi.LATEST,), (fi.FLASHBACK,), (fi.FLASHBACK,), (fi.LATEST, fi.FLASHBACK))
-
-
 _LIFECYCLE_STATES = (
     ("1. Gathering, no thread yet", "open"),
-    ("2. Reached six, thread created, STILL taking signups", "threaded"),
-    ("3. Second format's lobby open, latest set still joinable", "locked_other"),
-    ("4. Everything locked in", "locked_all"),
+    ("2. Both pods fired, threads created, STILL taking signups", "threaded"),
+    ("3. Second format is drafting, latest set still joinable", "locked_other"),
+    ("4. Both drafts started", "locked_all"),
     ("5. Played", "played"),
 )
 
 
-def _lifecycle_slot(bucket, slot_time, other_format: str, state: str, channel_id: str):
-    """One fixture slot in a given lifecycle state, so the states render side by side. `locked_other` is the
-    case to check: the second format's pod is locked while the latest set at the same time stays joinable."""
-    names = [_roster_name(i) for i in range(6)]
-    interests = tuple(((fi.LATEST,) if i < 4 else (fi.FLASHBACK,)) for i in range(6))
+def _lifecycle_slots(bucket, slot_time, other_format: str, state: str, channel_id: str):
+    """The two fixture pods of one slot in a given lifecycle state, so the states render side by side.
+    `locked_other` is the case to check: the second format's draft started while the latest set at the same
+    time stays joinable."""
+    latest = _lifecycle_pod(bucket, slot_time, active_set_code(), channel_id, offset=0, state=(
+        "open" if state == "locked_other" else state
+    ))
+    other = _lifecycle_pod(bucket, slot_time, other_format, channel_id, offset=4, state=state)
+    return [latest, other]
+
+
+def _lifecycle_pod(bucket, slot_time, code: str, channel_id: str, *, offset: int, state: str):
+    names = [_roster_name(offset + i) for i in range(4)]
+    bucket_key = named_bucket_key(bucket.key, code)
     if state == "open":
         return pod_launch.LauncherSlot(
-            bucket.key, committed=False, status=STATUS_OPEN, count=len(names), slot_time=slot_time,
-            names=names, thread_id=None, signal_id="1", interests=interests, other_format=other_format,
+            bucket_key, committed=False, status=STATUS_OPEN, count=len(names), slot_time=slot_time,
+            names=names, thread_id=None, signal_id="1", set_code=code,
         )
-    if state == "locked_other":
-        locked = (other_format,)
-    elif state in ("locked_all", "played"):
-        locked = (active_set_code(), other_format)
-    else:
-        locked = ()
-    title = f"{other_format} {slot_time.astimezone(SCHEDULE_TZ):%b %-d} {bucket.name}"
+    title = f"{code} {slot_time.astimezone(SCHEDULE_TZ):%b %-d} {bucket.name}"
     return pod_launch.LauncherSlot(
-        bucket.key, committed=True, status=STATUS_FIRED, count=len(names), slot_time=slot_time,
+        bucket_key, committed=True, status=STATUS_FIRED, count=len(names), slot_time=slot_time,
         names=names, thread_id="1", signal_id=None, thread_message_id="1", card_message_id="1",
-        card_channel_id=channel_id, thread_name=title, interests=interests, set_code=other_format,
-        other_format=other_format,
-        finished=state == "played", winner=_roster_name(4) if state == "played" else None,
-        locked_formats=locked,
+        card_channel_id=channel_id, thread_name=title, set_code=code,
+        finished=state == "played", winner=_roster_name(offset) if state == "played" else None,
+        locked=state in ("locked_other", "locked_all", "played"),
     )
 
 
-def _force_second_format(day, code: str) -> None:
-    """Point the schedule at `code` for one day so a live `!test poll` / `!test launcher` can drive any
-    format without waiting for its date. Mutates the in-memory table only, so a restart drops it."""
-    pod_format_schedule.OTHER_FORMAT_BY_DAY[day] = code
-    log.info(f"[testpolls] forced second format {code} for {day}")
+def _force_formats(day, codes: tuple[str, ...]) -> None:
+    """Point the schedule at `codes` beside the latest set for one day so a live `!test poll` / `!test
+    launcher` can drive any format without waiting for its date. Mutates the in-memory table only, so a
+    restart drops it."""
+    pod_format_schedule.FORMATS_BY_DAY[day] = (pod_format_schedule.LATEST, *codes)
+    log.info(f"[testpolls] forced formats {codes} for {day}")
 
 
 def _named_arg(codes: list[str], index: int) -> str | None:
@@ -1292,12 +1110,22 @@ def _named_arg(codes: list[str], index: int) -> str | None:
     return code if code and code != "-" else None
 
 
-def _named_slot(bucket, slot_time, other_format):
-    """One fixture gathering slot carrying a mixed roster, so the latest block and the named second-format
-    block both render. `other_format` None is the latest-only day."""
-    seeds = _NAMED_SEEDS if other_format else _NAMED_SEEDS[:3]
-    names = [_roster_name(i) for i in range(len(seeds))]
-    return pod_launch.LauncherSlot(
-        bucket.key, committed=False, status=STATUS_OPEN, count=len(names), slot_time=slot_time,
-        names=names, thread_id=None, signal_id="1", interests=tuple(seeds), other_format=other_format,
+def _named_slots(bucket, slot_time, other_format):
+    """One slot's fixture pods, each with its own roster, so the per-format blocks and their buttons render.
+    `other_format` None is the latest-only slot, which carries a single pod. Two of the latest-set signups
+    also joined the other format, so the flexible marker shows."""
+    shared = tuple(_roster_name(index) for index in (1, 2)) if other_format else ()
+    latest = pod_launch.LauncherSlot(
+        named_bucket_key(bucket.key, active_set_code()), committed=False, status=STATUS_OPEN, count=3,
+        slot_time=slot_time, names=[_roster_name(i) for i in range(3)], thread_id=None, signal_id="1",
+        set_code=active_set_code(), shared_names=shared,
     )
+    if not other_format:
+        return [latest]
+    names = [_roster_name(index) for index in (1, 2, 4)]
+    other = pod_launch.LauncherSlot(
+        named_bucket_key(bucket.key, other_format), committed=False, status=STATUS_OPEN, count=len(names),
+        slot_time=slot_time, names=names, thread_id=None, signal_id="2", set_code=other_format,
+        shared_names=shared,
+    )
+    return [latest, other]

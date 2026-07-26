@@ -51,7 +51,7 @@ def _add_format_split_fields(
     embed: discord.Embed, yes: list[tuple[str, tuple[str, ...]]], maybe: list[tuple[str, tuple[str, ...]]],
 ) -> None:
     """Latest Set / Flashback columns, each sub-grouped into Yes then Maybe with counts. Flexible
-    players carry the ✦ marker and fill whichever team needs bodies, same as the launcher board."""
+    players carry the flexible marker and fill whichever team needs bodies, same as the launcher board."""
     tagged = [(name, state, codes) for state, members in ((RSVP_YES, yes), (RSVP_MAYBE, maybe))
               for name, codes in members]
     latest_team, flashback_team = fi.format_teams([(entry, entry[2]) for entry in tagged])

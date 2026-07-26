@@ -218,29 +218,6 @@ def _standing_interest(session, discord_user_id: str, name: str, interests: list
     )
 
 
-def test_committed_slot_keeps_each_name_bound_to_its_own_interest(session):
-    slot_time = datetime.now(timezone.utc) + timedelta(days=1)
-    event_id = _pod_event(session, slot_time)
-    signal = PodSignal(
-        kind=pod_signals.KIND_SCHEDULED, bucket=pod_signals.SCHEDULED_BUCKET, guild_id="1",
-        channel_id="2", message_id="card-1", signal_date=slot_time.date(), slot_time=slot_time,
-        status=pod_signals.STATUS_FIRED, event_id=event_id,
-    )
-    session.add(signal)
-    session.flush()
-    _standing_interest(session, "u0", "Latest Player", [fi.LATEST])
-    _standing_interest(session, "u1", "Maybe Player", [fi.LATEST])
-    _standing_interest(session, "u2", "Flashback Player", [fi.FLASHBACK])
-    set_rsvp(session, "card-1", "u0", "Latest Player", pod_signals.RSVP_YES)
-    set_rsvp(session, "card-1", "u1", "Maybe Player", pod_signals.RSVP_MAYBE)
-    set_rsvp(session, "card-1", "u2", "Flashback Player", pod_signals.RSVP_YES)
-
-    slot = _committed_slot(session, "AFTERNOON", event_id)
-
-    assert slot.names == ["Latest Player", "Flashback Player"]
-    assert slot.interests == (("latest",), ("flashback",))
-
-
 def _flashback_split_pod(session, slot_time: datetime, *, format_locked: bool) -> None:
     event_id = _pod_event(session, slot_time)
     signal = PodSignal(

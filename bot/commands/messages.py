@@ -13,7 +13,7 @@ MSG_TOKEN_INVALIDATED = (
     "⚠️ Your 17lands token appears to be invalid (possibly regenerated). "
     "Please use `/link-17lands` to provide your new token."
 )
-MSG_ADMIN_ONLY = "This command is reserved for the bot admin."
+MSG_ADMIN_ONLY = "This command is reserved for the bot Admin."
 
 MSG_MOCK_NOT_TEXT_CHANNEL = "Run `/mock-draft` in a server text channel — the thread is created there."
 MSG_MOCK_UNKNOWN_SET = "Unknown set `{code}`. Pick one from the suggestions, or use a registered cube format."
@@ -56,10 +56,13 @@ MSG_DM_PREF_OFF_TITLE = "🔕 Draft DMs Off"
 MSG_DM_PREF_OFF_BODY = "You won't get your Draftmancer link by DM anymore.\nRun `/roles` to manage your notifications."
 MSG_DRAFTMANCER_LINK_LEAD = "Draftmancer link will be posted {lead} minutes before."
 
-MSG_POD_WELCOME = "### 👋 Welcome {user} to {pod_drafters}\n\n{grant}"
+MSG_POD_WELCOME = (
+    "### 👋 Welcome {user} to {pod_drafters}\n\n"
+    "Use the buttons below to link your Arena handle, read the Pod Guide and manage Notifications"
+)
 MSG_ARENA_BAD_FORMAT = "❌ Expected a full MTG Arena handle: `ArenaID#12345`"
 MSG_ARENA_COLLISION = (
-    "❌ `{arena_name}` is already linked to another player. If this is your account, ask an admin for help."
+    "❌ `{arena_name}` is already linked to another player. If this is your account, ask an Admin for help."
 )
 MSG_ARENA_LINKED = "{emoji} {mention} is **{arena_name}** on Arena"
 MSG_ARENA_HANDLE_LINE = "{emoji} You're **{arena_name}** on Arena"
@@ -68,6 +71,9 @@ MSG_ARENA_LINK_CTA = "Please link your Arena handle so the bot knows it's you wh
 MSG_POD_ROLE_GRANTED = "{subject} now on {role} and will be notified {ping}"
 MSG_FORMAT_PREFERENCE_BUTTON = "Format Preference"
 MSG_DRAFT_STARTS = "Draft scheduled for <t:{unix}:F> (<t:{unix}:R>)"
+MSG_POD_ADDED = "✅ Added to {name}"
+MSG_POD_MAYBE = "🤷 Maybe for {name}"
+MSG_POD_REMOVED = "❌ Removed from {name}"
 MSG_PREFERENCE_LINE = "**Your Preference:** {choice}"
 MSG_YOUR_SETS_LINE = "**Your Sets:** {ranking}"
 MSG_YOUR_CUBES_LINE = "**Your Cubes:** {cubes}"

@@ -38,7 +38,14 @@ from bot.services.player_stats import SeededAttendee, rank_players_for_set
 from bot.services.pod_launch import LauncherSlot, event_thread_id_sync, scheduled_card_ref_sync
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
-from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES, STATUS_FIRED, STATUS_OPEN
+from bot.services.pod_signals import (
+    RSVP_MAYBE,
+    RSVP_NO,
+    RSVP_YES,
+    STATUS_FIRED,
+    STATUS_OPEN,
+    named_bucket_key,
+)
 from bot.tasks.pod_daily_poll import PodPollView, build_poll_embed
 from bot.services.pod_swiss import MatchOutcome
 from bot.services.pod_tournament import (
@@ -185,8 +192,9 @@ def _preview_launcher_slots(
         set_code=set_code, championship=True,
     )
     evening = LauncherSlot(
-        bucket_key="EVENING", committed=False, status=STATUS_OPEN, count=0,
+        bucket_key=named_bucket_key("EVENING", set_code), committed=False, status=STATUS_OPEN, count=0,
         slot_time=event_at + timedelta(hours=6), names=[], thread_id=None, signal_id="preview",
+        set_code=set_code,
     )
     return [afternoon, evening]
 

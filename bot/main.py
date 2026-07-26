@@ -92,9 +92,11 @@ from bot.commands.pod_rsvp import (
 )
 from bot.tasks.pod_draft_reminder import init_reminder
 from bot.tasks.pod_daily_poll import (
-    PlayAgainView,
-    PodPollView,
+    PlayAgainButton,
+    catch_up_daily_poll,
     ReminderFormatPreferenceButton,
+    SlotRsvpButton,
+    SlotToggleButton,
     init_daily_poll,
     reconcile_rolled_lanes,
 )
@@ -246,6 +248,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testchampionship(bot)
         await rearm_signals(bot)
         await reconcile_rolled_lanes(bot)
+        await catch_up_daily_poll(bot)
         register_pod_views(bot)
         bot.add_dynamic_items(TeamReportButton)
         bot.add_dynamic_items(TeamRevealReportButton)
@@ -259,6 +262,9 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(ChampionshipRsvpButton)
         bot.add_dynamic_items(ReminderRsvpButton)
         bot.add_dynamic_items(ReminderFormatPreferenceButton)
+        bot.add_dynamic_items(SlotToggleButton)
+        bot.add_dynamic_items(SlotRsvpButton)
+        bot.add_dynamic_items(PlayAgainButton)
         _log_startup_summary()
         bot.tree.copy_global_to(guild=guild)
 
@@ -268,8 +274,6 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_view(LobbyReadyButtonView(show_force_start=True))
         bot.add_view(RolesView())
         bot.add_view(persistent_pod_card_view())
-        bot.add_view(PlayAgainView())
-        bot.add_view(PodPollView())
         bot.add_view(PodQueueView())
         bot.add_view(PodRsvpView())
 

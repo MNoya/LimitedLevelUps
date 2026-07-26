@@ -1,26 +1,30 @@
 """Daily Pod Launcher — the always-forward-looking "who's playing next" signup surface.
 
-Posts every day at 11:00 ET with the same two columns (Early 14:00, Late 20:00). Each lazy slot fires a
-bot-native pod once it reaches the threshold, graduating into a scheduled RSVP card.
+Posts every day at 11:00 ET with the same two columns (Early 14:00, Late 20:00). A slot offers one pod per
+format the day carries (`pod_format_schedule`), each with its own signal, roster, quorum and lifecycle, and
+each with its own button naming the format it joins. A pod fires once it reaches the threshold, graduating
+into a scheduled RSVP card on its own format. Nothing here reads a stored player preference: a press says
+which pod it joins, so no format is ever inferred.
 
-Each column rolls on its own clock: the moment its pod is played, the column opens the next day's slot and
-stacks the played pod above it, so the board never offers a slot that already happened and interest never
+Each column rolls on its own clock: the moment its pod is played, the column opens the next day's pods and
+stacks the played one above them, so the board never offers a slot that already happened and interest never
 resets overnight. A slot whose start passes unfired rolls the same way. Overnight signups are held, not
-fired — a slot graduates only once its own day is the live one, which the morning post re-checks. The
-morning post adopts the slots a rolled column already opened, so the fresh board carries what accumulated
-instead of starting at zero, and the old message retires to its On This Day history.
+fired — a pod graduates only once its own day is the live one, which the morning post re-checks. The morning
+post adopts the pods a rolled column already opened, so the fresh board carries what accumulated instead of
+starting at zero, and the old message retires to its On This Day history.
 
-A slot whose time already carries a locked scheduled pod is reflected, not reopened: it renders a Yes/No
-toggle that writes to that pod's scheduled card and creates no signal of its own, so the launcher and the
-card are two live windows on one roster and never a duplicate. The launcher message is the single RSVP
-surface for its lazy slots — buttons carry static custom_ids and PodPollView re-attaches on restart, and a
-column carries one button whichever of its stacked slots is the joinable one.
+A format whose pod already exists is reflected, not reopened: it renders a Yes/No toggle that writes to that
+pod's scheduled card and creates no signal of its own, so the launcher and the card are two live windows on
+one roster and never a duplicate. The other formats at that slot keep gathering behind their own buttons.
+Reaching the threshold does not close a pod and neither does its lobby opening: it keeps its full joinable
+block until the draft starts, and only then collapses to one line. Every button is a DynamicItem, so a board
+that outlives a restart keeps working without a fixed set of keys to pre-register.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import discord
 from discord.ext import commands
@@ -29,6 +33,7 @@ from bot import emojis
 from bot.commands.messages import (
     MSG_DRAFT_STARTS,
     MSG_FORMAT_PREFERENCE_BUTTON,
+    MSG_POD_ADDED,
     MSG_YOUR_CUBES_LINE,
     MSG_YOUR_SETS_LINE,
 )
@@ -36,6 +41,7 @@ from bot.commands.pod_queue import queue_role_mention
 from bot.commands.pod_rsvp import (
     ReminderRsvpButton,
     apply_card_rsvp,
+    pod_removed_embed,
     post_scheduled_card,
     refresh_event_rsvp_surfaces,
     register_launcher_refresh,
@@ -48,7 +54,10 @@ from bot.services import pod_format_poll
 from bot.services import pod_launch
 from bot.services.pod_active import set_pod_complete_hook
 from bot.services.ping_roles import (
+    NOTICE_GRANT,
     announce_pod_grant,
+    organizer_mention,
+    pod_role_grant_text,
     register_format_preference_opener,
     send_join_confirmation_card,
     slot_grant_ping,
@@ -56,7 +65,6 @@ from bot.services.ping_roles import (
 )
 from bot.services.pod_launcher_copy import (
     ARCHIVE_INTRO,
-    CONFIRM_SLOT_LABEL,
     CUBE_SELECT_PLACEHOLDER,
     INTEREST_DESC_CUBE,
     INTEREST_DESC_FLASHBACK,
@@ -64,18 +72,20 @@ from bot.services.pod_launcher_copy import (
     MARKER_CLOSED,
     MSG_INTEREST_PROMPT,
     MSG_INTEREST_SAVED,
+    MSG_FIRST_POD_TO_FILL,
+    MSG_ON_BOTH_PODS,
+    MSG_ON_SEVERAL_PODS,
     MSG_POLL_INACTIVE,
     MSG_RANK_EMPTY,
-    MSG_SLOT_ADDED,
     MSG_SLOT_CLOSED,
-    MSG_SLOT_REMOVED,
     PLAY_AGAIN_BUTTON,
-    PLAY_AGAIN_CONFIRM,
     PLAY_AGAIN_INTRO,
     PLAY_AGAIN_LOVE_EMOJI,
-    POLL_FORMAT_SINGLE,
-    POLL_FORMATS,
-    POLL_INTRO,
+    POLL_FORMAT_SEVERAL,
+    POLL_INTRO_TIME_AND_FORMAT,
+    POLL_INTRO_TIME_ONLY,
+    POLL_MECHANICS,
+    POLL_NEXT_LAUNCHER,
     POLL_TITLE,
     RANK_BUTTON_EMOJI,
     RANK_BUTTON_LABEL,
@@ -93,7 +103,6 @@ from bot.services.pod_launcher_copy import (
 from bot.services.pod_reminder_copy import SLOT_FIRE_PING
 from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role
 from bot.services.pod_signals import (
-    ALL_BUCKETS,
     RSVP_NO,
     RSVP_YES,
     SCHEDULE_TZ,
@@ -103,11 +112,12 @@ from bot.services.pod_signals import (
     bucket_role_name,
     format_of,
     lane_of,
-    named_bucket_key,
+    should_fire,
     slot_can_fire,
     slot_role_name_for_event_time,
     time_key_of,
 )
+from bot.services.pod_slot import pod_display_name
 from bot.sets import active_set_code, set_name_for
 from bot.slug import slugify
 from bot.tasks.pod_draft_reminder import register_reminder_view_builder
@@ -163,6 +173,26 @@ async def fire_daily_poll() -> None:
     await pod_launch.close_past_pod_cards()
 
 
+async def catch_up_daily_poll(bot: commands.Bot) -> None:
+    """Startup safety net for the 11:00 post. The cron is re-armed for its next future fire every start, so a
+    bot that was down at the post hour skips that day's post altogether, and the morning post is the only
+    thing that graduates the pods that filled overnight: without this they sit full until their slot time
+    passes and expires. Posts the missing board, or runs the graduation pass when the board is already up."""
+    now = datetime.now(SCHEDULE_TZ)
+    if now.hour < POST_HOUR_ET:
+        return
+    today = now.date()
+    if not await asyncio.to_thread(pod_launch.poll_exists_for_date_sync, today):
+        log.info(f"catching up the daily launcher for {today}, missed at the post hour")
+        await fire_daily_poll()
+        return
+    board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
+    if board is None:
+        return
+    _guild_id, _channel_id, message_id, _board_date = board
+    await _graduate_held_slots(bot, message_id, today)
+
+
 async def post_launcher(
     bot: commands.Bot, channel: "discord.abc.Messageable", signal_date: date,
 ) -> discord.Message | None:
@@ -172,7 +202,13 @@ async def post_launcher(
 
     Binding adopts the slots a rolled column already opened for today, so the fresh board carries the
     signups collected since yesterday and the first render (which runs before binding, off an empty board)
-    is corrected by the re-render right after."""
+    is corrected by the re-render right after.
+
+    A slot whose time already passed is closed and rolled here rather than armed: an expiry job dated in the
+    past is a misfire APScheduler drops, which would leave the column offering a dead slot until a restart
+    swept it. Reached whenever a board is posted late in the day, by the startup catch-up after downtime or
+    by `!test poll`, and it runs before graduation so a slot full but already started never fires a pod into
+    the past."""
     guild = getattr(channel, "guild", None)
     guild_id = str(guild.id) if guild else ""
     slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, "", signal_date)
@@ -186,6 +222,9 @@ async def post_launcher(
     )
     posted_at = datetime.now(timezone.utc)
     for signal_id, slot_time in bound:
+        if slot_time <= posted_at:
+            await pod_launch.fire_slot_expiry(signal_id)
+            continue
         pod_launch.arm_slot_expiry(bot, signal_id, slot_time)
         schedule_slot_underfill_checks(bot.pod_scheduler, signal_id, slot_time, posted_at)
     await _rerender_poll(bot, str(message.id), signal_date, channel)
@@ -198,7 +237,7 @@ async def _graduate_held_slots(bot: commands.Bot, message_id: str, signal_date: 
     all evening but holds, so the morning post is where a full slot finally graduates into a pod."""
     candidates = await asyncio.to_thread(pod_launch.slot_fire_candidates_sync, message_id, signal_date)
     for state in candidates:
-        if not await asyncio.to_thread(pod_launch.claim_fire_sync, state.signal_id):
+        if not await asyncio.to_thread(pod_launch.claim_slot_fire_sync, state.signal_id):
             continue
         log.info(f"graduating held slot {state.signal_id} at the daily post with {state.count} signups")
         await _launch_slot(bot, state, message_id)
@@ -213,9 +252,11 @@ def build_poll_embed(
 ) -> discord.Embed:
     """One inline field per bucket, so the two slots read as two columns and each column stacks its slots
     by time: a finished pod above the next day's gathering slot, under one slot-name header with Played
-    and Next sections. `closed` renders the terminal state as a compact On This Day history list in the
-    description instead of columns, so a reader scrolling up sees the day's results with no empty column
-    space."""
+    and Next sections. The description carries only the choice a reader has to make, and the mechanics
+    follow the columns as a full-width field: an embed renders every field after its description, so a
+    field is the only way to seat that copy below the board. `closed` renders the terminal state as a
+    compact On This Day history list in the description instead of columns, so a reader scrolling up sees
+    the day's results with no empty column space."""
     slot_times = [slot.slot_time for slot in slots if slot.slot_time is not None]
     earliest = min(slot_times) if slot_times else None
     day = earliest.astimezone(SCHEDULE_TZ) if earliest else None
@@ -223,10 +264,11 @@ def build_poll_embed(
     heading = f"## {NBSP * 2}🚀 {title}"
     if closed:
         return _archive_embed(slots, guild, heading)
-    intro = POLL_INTRO.format(
-        threshold=settings.pod_signal_fire_threshold, lead=pod_launch.REMINDER_LEAD_MIN,
-    )
-    description = f"{heading}\n{intro}\n{_formats_intro(slots, guild)}"
+    codes = _offered_formats(slots)
+    several = len(codes) > 1
+    intro = POLL_INTRO_TIME_AND_FORMAT if several else POLL_INTRO_TIME_ONLY
+    parts = (heading, intro, _format_legend(codes, guild))
+    description = "\n".join(part for part in parts if part)
     embed = discord.Embed(description=description, color=discord.Color.green())
     columns = [_lane_slots(slots, lane) for lane in _lane_order(slots)]
     pad = _finished_pad(columns)
@@ -234,7 +276,23 @@ def build_poll_embed(
         value = _column_value(column, guild, pad)
         if value:
             embed.add_field(name=ZWSP, value=value, inline=True)
+    embed.add_field(name=ZWSP, value=_mechanics_note(slots, several), inline=False)
     return embed
+
+
+def _next_launcher_note(slots: list[pod_launch.LauncherSlot]) -> str:
+    """The extra mechanics bullet for a board carrying a slot on a later day. Such a pod holds at quorum until the
+    next launcher graduates it, so the plain threshold line alone would promise a thread that cannot open yet.
+    Counts down to that post instead of explaining the hold, since what a reader wants from a slot they cannot
+    fire is when it becomes live. Only rendered when a later day is on the board, where it is the answer, and
+    not on a board carrying today alone, where it is noise."""
+    days = [slot.slot_time.astimezone(SCHEDULE_TZ).date() for slot in slots if slot.slot_time is not None]
+    now = datetime.now(SCHEDULE_TZ)
+    if not any(day > now.date() for day in days):
+        return ""
+    post_today = datetime.combine(now.date(), time(POST_HOUR_ET), tzinfo=SCHEDULE_TZ)
+    next_post = post_today if post_today > now else post_today + timedelta(days=1)
+    return POLL_NEXT_LAUNCHER.format(unix=int(next_post.timestamp()))
 
 
 def _finished_pad(columns: list[list[pod_launch.LauncherSlot]]) -> int:
@@ -242,35 +300,55 @@ def _finished_pad(columns: list[list[pod_launch.LauncherSlot]]) -> int:
     and the Next rows line up across the two side-by-side columns. Columns without a Next are ignored."""
     pad = 0
     for column in columns:
-        finished = sum(1 for slot in column if slot.committed)
-        gathering = any(not slot.committed for slot in column)
-        if finished and gathering:
-            pad = max(pad, finished)
+        groups = _time_groups(column)
+        played = sum(len(group) for group in groups if _group_locked(group))
+        gathering = any(not _group_locked(group) for group in groups)
+        if played and gathering:
+            pad = max(pad, played)
     return pad
 
 
-def _formats_intro(slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> str:
-    """Names the formats on offer. A board that only offers the latest set drops the numbering and the
-    sign-up-for-both line, since there is no second format to choose between. Per-slot schedules can put
-    different second formats on one board, so every distinct one is listed."""
-    seconds = []
+def _offered_formats(slots: list[pod_launch.LauncherSlot]) -> list[str]:
+    """The distinct formats a reader can still join, latest set first then in column order. Per-slot
+    schedules can put different formats on one board, so every one is collected."""
+    codes = []
     for slot in slots:
-        if slot.other_format and slot.other_format not in seconds:
-            seconds.append(slot.other_format)
+        if slot.championship or slot.locked or not slot.set_code or slot.set_code in codes:
+            continue
+        codes.append(slot.set_code)
     latest = active_set_code()
-    main = f"{_named_pod_emoji(latest)} {pod_format.format_name(latest)}"
-    if not seconds:
-        return POLL_FORMAT_SINGLE.format(main=main)
-    return POLL_FORMATS.format(
-        main=main, second=", ".join(_format_intro_name(code, guild) for code in seconds),
+    if latest in codes:
+        codes = [latest] + [code for code in codes if code != latest]
+    return codes
+
+
+def _format_legend(codes: list[str], guild: discord.Guild | None) -> str:
+    """One line per format the board offers: the full name glossing the abbreviated code a column header
+    carries, a cube's CubeCobra link, and the role that gets pinged for it.
+
+    Deliberately not a numbered list of choices: lanes can sit on different days carrying different formats,
+    and a numbered slate would then claim a pod is on offer tonight when it is tomorrow's. Which format is
+    where stays the columns' job."""
+    lines = []
+    for code in codes:
+        name = pod_format.format_name_link(code)
+        if not pod_format.is_custom(code):
+            name = f"**{name}**"
+        lines.append(f"{_named_pod_emoji(code)} {name} {_format_role_label(guild, code)}")
+    return "\n".join(lines)
+
+
+def _mechanics_note(slots: list[pod_launch.LauncherSlot], several: bool) -> str:
+    """How a pod works, seated below the board because it only matters once a reader has picked a time. The
+    first-to-fill line closes it, next to the marker it explains, and only when there is more than one
+    format, since a single-format board never renders that marker."""
+    mechanics = POLL_MECHANICS.format(
+        threshold=settings.pod_signal_fire_threshold, lead=pod_launch.REMINDER_LEAD_MIN,
     )
-
-
-def _format_intro_name(code: str, guild: discord.Guild | None) -> str:
-    """The format's name followed by the role that gets pinged for it, so the kind of format reads off the
-    role instead of being spelled into the name."""
-    role = _other_format_role_label(guild, code)
-    return f"{_named_pod_emoji(code)} {pod_format.format_name_link(code)} {role}"
+    lines = [mechanics, _next_launcher_note(slots)]
+    if several:
+        lines.append(POLL_FORMAT_SEVERAL)
+    return "\n".join(line for line in lines if line)
 
 
 def _archive_embed(
@@ -303,90 +381,125 @@ def _lane_slots(slots: list[pod_launch.LauncherSlot], lane: str) -> list[pod_lau
     return sorted(matches, key=lambda slot: slot.slot_time or datetime.max.replace(tzinfo=timezone.utc))
 
 
-def _representative_slot(
-    slots: list[pod_launch.LauncherSlot], lane: str,
-) -> pod_launch.LauncherSlot | None:
-    """The slot a lane's single launcher button acts on: the open gathering slot when one exists (the
-    joinable one, today's or the next day's), otherwise the committed pod, otherwise an expired slot. A
-    lane carries one button even while its column stacks a finished pod above a gathering one."""
-    lane_slots = _lane_slots(slots, lane)
-    for slot in lane_slots:
-        if not slot.committed and slot.status != STATUS_EXPIRED:
-            return slot
-    for slot in lane_slots:
-        if slot.committed:
-            return slot
-    return lane_slots[-1] if lane_slots else None
+def _time_groups(
+    bucket_slots: list[pod_launch.LauncherSlot],
+) -> list[list[pod_launch.LauncherSlot]]:
+    """A column's pods grouped by start time, earliest first. A group renders as one dated block, so a slot
+    offering two formats reads as two format blocks under one header rather than as two slots."""
+    groups: dict[datetime, list[pod_launch.LauncherSlot]] = {}
+    far_future = datetime.max.replace(tzinfo=timezone.utc)
+    for slot in bucket_slots:
+        groups.setdefault(slot.slot_time or far_future, []).append(slot)
+    return [groups[slot_time] for slot_time in sorted(groups)]
+
+
+def _group_locked(group: list[pod_launch.LauncherSlot]) -> bool:
+    """Whether every pod at this slot time has started drafting, the only case where the whole group
+    collapses to compact lines. One format drafting leaves the other a full joinable block."""
+    return all(slot.locked for slot in group)
 
 
 def _column_value(
     bucket_slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None, pad_finished: int = 0,
 ) -> str:
-    """One bucket column. Championship lanes and plain gathering columns render as familiar single
-    blocks. A column that stacks a pod whose lobby already opened above a still-gathering slot leads with
-    one slot-name header, then a Played (or Playing) section listing those pods, then a Next section with
-    the upcoming date and roster, so the slot name and date are never doubled.
+    """One lane column. Championship lanes and plain gathering columns render as familiar single blocks. A
+    column that stacks a slot whose pods all started above a still-gathering slot leads with one slot-name
+    header, then a Played (or Playing) section listing those pods, then a Next section with the upcoming
+    date and rosters, so the slot name and date are never doubled.
 
-    Reaching the threshold does not hoist a pod up there. A pod keeps taking signups until its lobby
-    opens, so it stays a full roster block with its thread link until then; only a fully locked slot moves."""
+    Reaching the threshold does not hoist a pod up there, and neither does its lobby opening. A pod keeps
+    taking signups until the draft starts, so it stays a full roster block with its thread link until then."""
     if any(slot.championship for slot in bucket_slots):
-        blocks = [block for block in (_slot_block(slot, guild) for slot in bucket_slots) if block]
+        blocks = [block for block in (_championship_block(slot, guild) for slot in bucket_slots) if block]
         return f"\n{NBSP}\n".join(blocks) if blocks else "-"
-    finished = [slot for slot in bucket_slots if _slot_fully_locked(slot)]
-    gathering = [slot for slot in bucket_slots if not _slot_fully_locked(slot)]
-    if not finished:
-        blocks = [block for block in (_slot_block(slot, guild) for slot in gathering) if block]
+    groups = _time_groups(bucket_slots)
+    played = [group for group in groups if _group_locked(group)]
+    gathering = [group for group in groups if not _group_locked(group)]
+    if not played:
+        blocks = []
+        for index, group in enumerate(gathering):
+            block = _group_block(group, guild, named=index == 0)
+            if block:
+                blocks.append(block)
         return f"\n{NBSP}\n".join(blocks) if blocks else "-"
     sections: list[str] = []
-    finished_lines = [line for line in (_finished_line(slot, guild, full_name=False) for slot in finished) if line]
-    if finished_lines:
-        blanks = [NBSP] * max(0, pad_finished - len(finished_lines))
-        sections.append("\n".join(finished_lines + blanks))
-    for slot in gathering:
-        relative = f"<t:{int(slot.slot_time.timestamp())}:R>" if slot.slot_time else ""
+    played_lines = [
+        line for group in played for line in (_finished_line(slot, guild, full_name=False) for slot in group)
+        if line
+    ]
+    if played_lines:
+        blanks = [NBSP] * max(0, pad_finished - len(played_lines))
+        sections.append("\n".join(played_lines + blanks))
+    for group in gathering:
+        lead = group[0]
+        relative = f"<t:{int(lead.slot_time.timestamp())}:R>" if lead.slot_time else ""
         next_label = " ".join(part for part in (emojis.get(NEXT_EMOJI), SECTION_NEXT, relative) if part)
-        when = _slot_when_line(slot)
-        count = f"**({slot.count})**" if slot.count else ""
-        date_line = " ".join(part for part in (when, count) if part)
-        body = _gathering_body(slot, guild)
-        sections.append(f"{next_label}\n{date_line}\n{body}" if date_line else f"{next_label}\n{body}")
-    lead = gathering[0] if gathering else finished[0]
+        when = _slot_when_line(lead)
+        body = _group_body(group, guild)
+        sections.append(f"{next_label}\n{when}\n{body}" if when else f"{next_label}\n{body}")
+    lead = gathering[0][0] if gathering else played[0][0]
     header = _slot_name_only(lead, guild)
     if not gathering:
-        start = _slot_start_time(finished[0])
+        start = _slot_start_time(played[0][0])
         header = f"{header}{NBSP}{NBSP}{start}" if start else header
     return f"{header}\n" + f"\n{NBSP}\n".join(sections)
 
 
-def _slot_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str | None:
-    """One full self-contained block for a single slot: header, date, then roster or link-and-winner.
-    Used for the championship lane and a plain gathering column, where each slot renders on its own."""
-    bucket = bucket_by_key(slot.bucket_key)
-    if bucket is None:
+def _group_block(
+    group: list[pod_launch.LauncherSlot], guild: discord.Guild | None, named: bool = True,
+) -> str | None:
+    """One full self-contained block for a slot time: the date, then a block per format the slot carries.
+
+    The lane name leads the column's first block only. A later dated block is another time in the same
+    column, a pod moved off its slot or a day this column rolled to, and repeating the name there reads as a
+    second slot. The Played and Next sections do the same, heading the column once."""
+    if bucket_by_key(group[0].bucket_key) is None:
         return None
-    if slot.championship:
-        when = _slot_when_line(slot)
-        symbol = emojis.get(slot.set_code.lower()) if slot.set_code else ""
-        label = f"**{CHAMPIONSHIP_SLOT_LABEL}**"
-        title_line = " ".join(part for part in (CHAMPIONSHIP_CROWN, symbol, label) if part)
-        header = f"{title_line}\n{when}" if when else title_line
-        return f"{header}\n{_championship_body(slot, guild)}"
-    body = _finished_line(slot, guild, full_name=False) if _slot_fully_locked(slot) else _gathering_body(slot, guild)
-    return f"{_slot_head(slot, guild)}\n{body}"
+    parts = [_slot_name_only(group[0], guild)] if named else []
+    when = _slot_when_line(group[0])
+    if when:
+        parts.append(when)
+    parts.append(_group_body(group, guild))
+    return "\n".join(parts)
 
 
-def _slot_head(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
+def _group_body(group: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> str:
+    """The slot's pods in the day's format order, whatever state each is in, so a format holds its place in
+    the column from the moment it is offered until it is played."""
+    blocks = [block for block in (_pod_block(slot, guild) for slot in group) if block]
+    return f"\n> {NBSP}\n".join(blocks) if blocks else "-"
+
+
+def _pod_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str | None:
+    """One pod inside its slot: a compact line once its draft started, otherwise its format header over its
+    roster, with a fired pod's thread link above it so the link reads as belonging to that format. The
+    compact line is quoted here, unlike in a Played section, so a slot mixing a drafting pod with a
+    gathering one reads as one block."""
+    if slot.locked:
+        return f"> {_finished_line(slot, guild, full_name=False)}"
+    if slot.set_code is None:
+        return None
+    block = _roster_block(slot, guild)
+    link = _committed_card_link(guild, slot) if slot.committed else None
+    return f"{link}\n{block}" if link else block
+
+
+def _championship_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str | None:
+    """The championship lane's own block: crown, set symbol, date, then the thread link and top RSVPs."""
+    if bucket_by_key(slot.bucket_key) is None:
+        return None
     when = _slot_when_line(slot)
-    header = _slot_header_line(slot, guild)
-    return f"{header}\n{when}" if when else header
-
-
-def _slot_header_line(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
-    count = f"**({slot.count})**" if slot.count and not _slot_fully_locked(slot) else ""
-    return " ".join(part for part in (_slot_name_only(slot, guild), count) if part)
+    symbol = emojis.get(slot.set_code.lower()) if slot.set_code else ""
+    label = f"**{CHAMPIONSHIP_SLOT_LABEL}**"
+    title_line = " ".join(part for part in (CHAMPIONSHIP_CROWN, symbol, label) if part)
+    header = f"{title_line}\n{when}" if when else title_line
+    return f"{header}\n{_championship_body(slot, guild)}"
 
 
 def _slot_name_only(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
+    """The lane header wears its ping role, so the colored pill both names the column and shows the role a
+    player joins to be pinged for it. Weekend lanes keep their own `Weekend` roles: the day a pod runs on is
+    worth spelling out, and they carry their weekday counterpart's color so early and late stay one hue."""
     bucket = bucket_by_key(slot.bucket_key)
     slot_emoji = emojis.resolve(bucket.emoji) if bucket else None
     role = find_role(guild, bucket_role_name(slot.bucket_key) or "")
@@ -454,32 +567,6 @@ def _winner_seat_url(slot: pod_launch.LauncherSlot) -> str | None:
     return f"{base}/{slot.winner_slug}" if slot.winner_slug else base
 
 
-def _gathering_body(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
-    """A pod that already has a thread but is still taking signups shows its link above the format block
-    it is playing, so the link reads as belonging to that format rather than to the whole slot."""
-    if slot.status == STATUS_EXPIRED:
-        return MARKER_CLOSED
-    link = _committed_card_link(guild, slot) if slot.committed else None
-    return _roster_lines(
-        slot.names, slot.interests, link, _slot_pod_format(slot), guild, slot.other_format,
-        locked_formats=slot.locked_formats, locked_line=_locked_line(slot, guild))
-
-
-def _slot_fully_locked(slot: pod_launch.LauncherSlot) -> bool:
-    """Whether every format this slot offers is locked in, the only case where the whole slot collapses to
-    one line. A slot whose other format is still joinable keeps its full block."""
-    if not slot.committed or not slot.locked_formats:
-        return False
-    offered = {active_set_code()}
-    if slot.other_format:
-        offered.add(slot.other_format)
-    return offered <= set(slot.locked_formats)
-
-
-def _locked_line(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str | None:
-    return _finished_line(slot, guild, full_name=False) if slot.locked_formats else None
-
-
 def _championship_body(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
     """The championship lane on the launcher: a link into the thread and the current top Yes RSVPs,
     read-only. Signup happens in the thread, so this lane carries no join toggle."""
@@ -492,78 +579,45 @@ def _championship_body(slot: pod_launch.LauncherSlot, guild: discord.Guild | Non
     return "\n".join(lines) if lines else "-"
 
 
-def _roster_lines(
-    names: list[str], interests: tuple[tuple[str, ...], ...],
-    thread_link: str | None = None, pod_format: str = fi.LATEST, guild: discord.Guild | None = None,
-    other_format: str | None = None, locked_formats: tuple[str, ...] = (), locked_line: str | None = None,
-) -> str:
-    """The slot's roster sorted into format teams, each under an emoji-and-count header. Dedicated picks
-    anchor their team, Any players fill whichever team is closer to a table, no-preference rides with
-    Latest. Names and interests share the created-at order, so the pairs line up. A committed pod's thread
-    link sits directly above the team block playing its format.
-
-    Every format the day offers keeps its block whether or not anyone is in it, so an untouched slot shows
-    what it is offering rather than a bare dash. A day with no second format still shows one block."""
-    paired = []
-    for index, name in enumerate(names):
-        codes = interests[index] if index < len(interests) else ()
-        display = f"{fi.FLEXIBLE_MARKER} {name}" if fi.is_flexible(codes) else name
-        paired.append((display, codes))
-    latest_team, flashback_team = fi.format_teams(paired)
-    latest_label = _format_role_label(guild, fi.LATEST_SET_ROLE_NAME)
-    flashback_label = _format_role_label(guild, fi.FLASHBACK_ROLE_NAME)
-    flashback_icon = fi.flashback_emoji()
-    flashback_gap = ""
-    if other_format:
-        flashback_label = f"**{other_format}** {_other_format_role_label(guild, other_format)}"
-        flashback_icon = _named_pod_emoji(other_format)
-        flashback_gap = " "
-    latest_block = _team_block(fi.latest_emoji(), latest_label, latest_team)
-    show_flashback = bool(other_format) or bool(flashback_team)
-    flashback_block = (
-        _team_block(flashback_icon, flashback_label, flashback_team, flashback_gap)
-        if show_flashback else None
-    )
-    if locked_line:
-        if other_format and other_format in locked_formats:
-            flashback_block = locked_line
-        if active_set_code() in locked_formats:
-            latest_block = locked_line
-    if thread_link and not locked_line:
-        if flashback_block is not None and (pod_format == fi.FLASHBACK or latest_block is None):
-            flashback_block = f"{thread_link}\n{flashback_block}"
-        else:
-            latest_block = f"{thread_link}\n{latest_block}"
-    blocks = [block for block in (latest_block, flashback_block) if block]
-    return f"\n> {NBSP}\n".join(blocks)
+def _roster_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
+    """One pod's block: the words its own button carries, over its own roster, so a press lands on a block a
+    reader recognizes. A member who also signed up for another format at this slot carries the flexible
+    marker, so the crowd that will play either reads at a glance. An empty pod still renders its header over
+    a dash, so a slot nobody joined yet keeps advertising every format it offers. A closed slot says so in
+    place of the roster."""
+    icon = _named_pod_emoji(slot.set_code)
+    label = f"**{_named_pod_label(slot.bucket_key, slot.set_code)}**"
+    closed = slot.status == STATUS_EXPIRED and not slot.committed
+    count = f" **({slot.count})**" if slot.count and not closed else ""
+    if closed:
+        lines = [f"> {MARKER_CLOSED}"]
+    else:
+        lines = [f"> {_marked_name(name, slot.shared_names)}" for name in slot.names] or ["> -"]
+    return "\n".join([f"> {icon} {label}{count}"] + lines)
 
 
-def _slot_pod_format(slot: pod_launch.LauncherSlot) -> str:
-    if slot.set_code and slot.set_code != active_set_code():
-        return fi.FLASHBACK
-    return fi.LATEST
+def _marked_name(name: str, shared_names: tuple[str, ...]) -> str:
+    return f"{fi.FLEXIBLE_MARKER} {name}" if name in shared_names else name
 
 
-def _format_role_label(guild: discord.Guild | None, role_name: str) -> str:
+def _role_label(guild: discord.Guild | None, role_name: str) -> str:
     role = find_role(guild, role_name)
     return role.mention if role else role_name
 
 
-def _other_format_role_label(guild: discord.Guild | None, code: str) -> str:
-    """A cube pings Cube and a past set pings Flashback. A cube is drafted out of the latest set's client,
-    so it is not a flashback, and the two crowds are not the same people."""
-    role_name = fi.CUBE_ROLE_NAME if pod_format.is_custom(code) else fi.FLASHBACK_ROLE_NAME
-    return _format_role_label(guild, role_name)
+def _format_role_name(code: str) -> str:
+    """The role a format pings: the latest set pings Latest Set, a cube pings Cube, a past set pings
+    Flashback. A cube is drafted out of the latest set's client, so it is not a flashback, and the two
+    crowds are not the same people."""
+    if code == active_set_code():
+        return fi.LATEST_SET_ROLE_NAME
+    if pod_format.is_custom(code):
+        return fi.CUBE_ROLE_NAME
+    return fi.FLASHBACK_ROLE_NAME
 
 
-def _team_block(icon: object, label: str, team: list[str], gap: str = "") -> str:
-    """A format's block. An empty one still renders its header over a dash, so a slot nobody has joined yet
-    still advertises both formats on offer instead of collapsing to a bare dash. The count is dropped at
-    zero, matching the slot header, which also only counts once someone is in. `gap` separates a set symbol
-    from the format name, which the role-name-only headers do not want."""
-    count = f" **({len(team)})**" if team else ""
-    lines = [f"> {name}" for name in team] or ["> -"]
-    return "\n".join([f"> {icon}{gap}{label}{count}"] + lines)
+def _format_role_label(guild: discord.Guild | None, code: str) -> str:
+    return _role_label(guild, _format_role_name(code))
 
 
 def _jump_url(guild: discord.Guild | None, channel_id: str, message_id: str | None = None) -> str:
@@ -590,61 +644,71 @@ def _committed_card_link(guild: discord.Guild | None, slot: pod_launch.LauncherS
     return f"[__**{slot.thread_name}**__]({url})" if url else None
 
 
-def build_play_again_prompt(bucket_key: str) -> tuple[str, "PlayAgainView"]:
-    """The next-day re-signup prompt posted into a finished pod's thread: a thank-you and a button that
-    signs the clicker up for the same slot on the next day."""
-    bucket = bucket_by_key(bucket_key)
-    slot_label = bucket.name if bucket else bucket_key
-    content = PLAY_AGAIN_INTRO.format(love=emojis.get(PLAY_AGAIN_LOVE_EMOJI), slot=slot_label)
-    return content, PlayAgainView(bucket_key)
+def build_play_again_prompt(bucket_keys: list[str]) -> tuple[discord.Embed, "PlayAgainView"]:
+    """The next-day re-signup prompt posted into a finished pod's thread: a thank-you over one button per pod
+    the same slot offers tomorrow. An embed, so the thank-you carries as a heading and the prompt reads as its
+    own card in a thread full of match reports.
+
+    The buttons name tomorrow's formats, not the one just played: a group that drafted a cube tonight is still
+    the group to invite back when tomorrow's slot runs a past set, and picking one of the formats on offer for
+    them would decide something they can decide themselves."""
+    body = PLAY_AGAIN_INTRO.format(
+        love=emojis.get(PLAY_AGAIN_LOVE_EMOJI),
+        next=emojis.get(NEXT_EMOJI),
+        slot=_slot_short_name(time_key_of(bucket_keys[0])),
+    )
+    return discord.Embed(description=body, color=discord.Color.green()), PlayAgainView(bucket_keys)
 
 
 class PlayAgainView(discord.ui.View):
-    """Persistent. One button that signs the clicker up for the same slot on the next day; with no bucket
-    (the startup registration) it carries one per bucket so a restart re-attaches the handler to whichever
-    prompt is live in a thread."""
+    """One button per pod the slot offers on the next day."""
 
-    def __init__(self, bucket_key: str | None = None) -> None:
+    def __init__(self, bucket_keys: list[str]) -> None:
         super().__init__(timeout=None)
-        keys = [bucket.key for bucket in ALL_BUCKETS] if bucket_key is None else [bucket_key]
-        for key in keys:
-            self.add_item(_PlayAgainButton(key))
+        for bucket_key in bucket_keys:
+            self.add_item(PlayAgainButton(bucket_key))
 
 
-class _PlayAgainButton(discord.ui.Button):
-    """The slot it writes to is resolved at click time, not at post time: the prompt outlives the day it
-    was posted on, and the soonest open slot of that bucket is always the one the launcher is offering."""
+PLAY_AGAIN_PREFIX = "pod_play_again"
+
+
+class PlayAgainButton(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=rf"{PLAY_AGAIN_PREFIX}:(?P<bucket>.+)",
+):
+    """The pod it writes to is resolved at click time, not at post time: the prompt outlives the day it was
+    posted on, and the soonest open pod of that slot and format is always the one the launcher is offering.
+    Dynamic so the key can name the format, which no startup registration could enumerate."""
 
     def __init__(self, bucket_key: str) -> None:
-        bucket = bucket_by_key(bucket_key)
-        super().__init__(
-            label=PLAY_AGAIN_BUTTON, style=discord.ButtonStyle.success,
-            emoji=emojis.resolve(bucket.emoji) if bucket else None,
-            custom_id=f"pod_play_again:{bucket_key}",
-        )
+        super().__init__(discord.ui.Button(
+            label=PLAY_AGAIN_BUTTON.format(pod=_named_pod_label(bucket_key)),
+            style=discord.ButtonStyle.success, emoji=_slot_button_emoji(bucket_key),
+            custom_id=f"{PLAY_AGAIN_PREFIX}:{bucket_key}",
+        ))
         self.bucket_key = bucket_key
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls(match["bucket"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         await _handle_play_again_click(interaction, self.bucket_key)
 
 
 async def _handle_play_again_click(interaction: discord.Interaction, bucket_key: str) -> None:
-    bucket = bucket_by_key(bucket_key)
-    slot_label = bucket.name if bucket else bucket_key
     await interaction.response.defer(ephemeral=True, thinking=True)
     ref = await asyncio.to_thread(
         pod_launch.open_slot_for_bucket_sync, bucket_key, datetime.now(timezone.utc),
     )
     if ref is None:
-        await interaction.followup.send(MSG_SLOT_CLOSED, ephemeral=True)
+        await interaction.followup.send(_organizer_notice(MSG_SLOT_CLOSED, interaction.guild), ephemeral=True)
         return
     signal_id, launcher_message_id, slot_time = ref
     joined = await asyncio.to_thread(
         pod_launch.join_slot_signal_sync, signal_id, str(interaction.user.id), interaction.user.display_name,
     )
-    await interaction.followup.send(
-        PLAY_AGAIN_CONFIRM.format(slot=slot_label, unix=int(slot_time.timestamp())), ephemeral=True,
-    )
+    await interaction.followup.send(_slot_effect_lead(bucket_key, slot_time), ephemeral=True)
     if not joined:
         return
     if isinstance(interaction.user, discord.Member):
@@ -657,63 +721,68 @@ async def _handle_play_again_click(interaction: discord.Interaction, bucket_key:
 
 
 class PodPollView(discord.ui.View):
-    """Persistent. With no slots (the startup registration) it carries every bucket's lazy-toggle and
-    committed-RSVP button so a restart re-attaches the handler for whichever slots a live message shows.
-    Built from a snapshot it carries the day's surface: a lazy slot renders its join toggle, a committed
-    slot renders a Yes/No toggle that writes to its scheduled card. A slot offering a second format carries
-    one button per format, so the press itself says which pod it joins and no stored preference is
-    consulted. Bucket emoji are application emoji that can't render in label text, so each button gets its
-    glyph in the emoji slot."""
+    """The day's surface, one button per pod: a gathering pod renders its join toggle, a pod that fired
+    renders a Yes/No toggle writing to its scheduled card, and a pod whose draft started renders nothing —
+    its own line already links to it. Each button names the format it joins, so the press itself says which
+    pod it commits to and no stored preference is consulted. Every button is a DynamicItem, so a board that
+    outlives a restart keeps working without a fixed set of keys to pre-register. Bucket emoji are
+    application emoji that can't render in label text, so each button gets its glyph in the emoji slot."""
 
     def __init__(
-        self, slots: list[pod_launch.LauncherSlot] | None = None, guild: discord.Guild | None = None,
+        self, slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None = None,
     ) -> None:
         super().__init__(timeout=None)
-        if slots is None:
-            for bucket in ALL_BUCKETS:
-                self.add_item(_slot_toggle_button(bucket.key))
-                self.add_item(_slot_rsvp_button(bucket.key))
-            return
         for lane in _lane_order(slots):
-            slot = _representative_slot(slots, lane)
-            bucket = bucket_by_key(slot.bucket_key) if slot else None
-            if bucket is None:
-                continue
-            if slot.committed and slot.championship and slot.thread_id:
-                self.add_item(discord.ui.Button(
-                    style=discord.ButtonStyle.link,
-                    url=_jump_url(guild, slot.thread_id, slot.thread_message_id),
-                    label=CHAMPIONSHIP_SLOT_LABEL, emoji=CHAMPIONSHIP_CROWN,
-                ))
-            elif slot.committed and slot.card_message_id:
-                self.add_item(_slot_rsvp_button(
-                    slot.bucket_key, slot.set_code if slot.other_format else None))
-            elif slot.committed and slot.thread_id:
-                self.add_item(discord.ui.Button(
-                    style=discord.ButtonStyle.link,
-                    url=_jump_url(guild, slot.thread_id, slot.thread_message_id),
-                    label=bucket.name, emoji=emojis.resolve(bucket.emoji),
-                ))
-            elif not slot.committed:
-                for key in _slot_button_keys(slot):
-                    self.add_item(_slot_toggle_button(key, closed=slot.status == STATUS_EXPIRED))
+            for slot in _lane_slots(slots, lane):
+                item = _slot_item(slot, guild)
+                if item is not None:
+                    self.add_item(item)
 
 
-def _slot_button_keys(slot: pod_launch.LauncherSlot) -> list[str]:
-    """One key per pod a gathering slot offers. A day with no second format keeps the plain slot key, so
-    its launcher is identical to one that never had a second offer; a day that offers two carries a named
-    key per format, and the labels name the format a press commits to."""
-    if not slot.other_format:
-        return [slot.bucket_key]
-    return [named_bucket_key(slot.bucket_key, code) for code in (active_set_code(), slot.other_format)]
+def _slot_item(
+    slot: pod_launch.LauncherSlot, guild: discord.Guild | None,
+) -> "discord.ui.Item | None":
+    if bucket_by_key(slot.bucket_key) is None:
+        return None
+    if slot.championship:
+        if not slot.thread_id:
+            return None
+        return discord.ui.Button(
+            style=discord.ButtonStyle.link,
+            url=_jump_url(guild, slot.thread_id, slot.thread_message_id),
+            label=CHAMPIONSHIP_SLOT_LABEL, emoji=CHAMPIONSHIP_CROWN,
+        )
+    if slot.locked or slot.set_code is None:
+        return None
+    if slot.committed:
+        if slot.card_message_id:
+            return SlotRsvpButton(slot.bucket_key)
+        if slot.thread_id:
+            return discord.ui.Button(
+                style=discord.ButtonStyle.link,
+                url=_jump_url(guild, slot.thread_id, slot.thread_message_id),
+                label=_named_pod_label(slot.bucket_key), emoji=_slot_button_emoji(slot.bucket_key),
+            )
+        return None
+    return SlotToggleButton(slot.bucket_key, closed=slot.status == STATUS_EXPIRED)
 
 
-def _named_pod_label(bucket_key: str, code: str | None = None) -> str:
-    """`Early NEO`, the shortest label that names both the time and the format a press commits to. A
-    committed pod passes its own `code`, since its key is the plain slot and carries no format."""
-    code = code or format_of(bucket_key)
+def _named_pod_label(bucket_key: str, set_code: str | None = None) -> str:
+    """`Early NEO`, the shortest label that names both the time and the format a press commits to, and the
+    same words that pod's roster block heads itself with. `set_code` names the format for a slot whose key
+    does not carry one; with neither, the label falls back to the slot's own name."""
+    code = format_of(bucket_key) or set_code
     short = _slot_short_name(time_key_of(bucket_key))
     return f"{short} {code}" if code else short
+
+
+def _slot_button_emoji(bucket_key: str) -> "discord.Emoji | str | None":
+    """The format's glyph for a named pod's button, the slot's own for a key carrying no format."""
+    code = format_of(bucket_key)
+    if code:
+        return _named_pod_emoji(code)
+    bucket = bucket_by_key(bucket_key)
+    return emojis.resolve(bucket.emoji) if bucket else None
 
 
 INTEREST_BUTTON_ID = "pod_poll_interest"
@@ -766,36 +835,14 @@ async def _send_interest_prompt(
     interaction: discord.Interaction, launcher_message_id: str, signal_date: date,
     event_id: str | None = None,
 ) -> None:
-    """A picker opened from a committed pod (`event_id` set) carries no per-slot Confirm buttons — the
-    player is already in that pod, so it saves the preference only and re-renders that pod's surfaces."""
+    """Save only. The picker records a standing preference and nothing else: every launcher pod names the
+    format it plays on its own button, so no signup is ever inferred from what a player saved here."""
     user_id = str(interaction.user.id)
     current = await asyncio.to_thread(pod_launch.player_interest_sync, user_id)
     ranking = await asyncio.to_thread(pod_launch.player_flashback_ranking_sync, user_id)
     cubes = await asyncio.to_thread(pod_launch.player_cube_choices_sync, user_id)
-    if event_id is None:
-        slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, launcher_message_id, signal_date)
-        slot_states = _confirm_slot_states(slots)
-    else:
-        slot_states = []
-    view = InterestPromptView(
-        launcher_message_id, signal_date, current, ranking, cubes, slot_states, event_id,
-    )
+    view = InterestPromptView(launcher_message_id, signal_date, current, ranking, cubes, event_id)
     await interaction.followup.send(view=view, ephemeral=True)
-
-
-def _confirm_slot_states(
-    slots: list[pod_launch.LauncherSlot],
-) -> list[tuple[str, bool, str | None]]:
-    """(bucket_key, joinable, scheduled-card message_id) per column, so the picker offers one Confirm per
-    column and writes to whichever slot that column is currently offering. The card id is set only for a
-    column whose pod already locked, where Confirm RSVPs on the card instead of the poll signal."""
-    states: list[tuple[str, bool, str | None]] = []
-    for lane in _lane_order(slots):
-        slot = _representative_slot(slots, lane)
-        if slot is None or bucket_by_key(slot.bucket_key) is None:
-            continue
-        states.append((slot.bucket_key, slot.status != STATUS_EXPIRED, slot.card_message_id))
-    return states
 
 
 REMINDER_FORMAT_PREFIX = "podremindfmt"
@@ -859,14 +906,14 @@ def _slot_short_name(bucket_key: str) -> str:
 
 
 class InterestPromptView(discord.ui.LayoutView):
-    """Ephemeral preference picker opened from the launcher's Format Preference button. A Components V2
-    layout: prompt, the interest select, and the Save / Confirm row. A Flashback pick inserts the ranking
-    line above a Rank Sets button; a Cube pick inserts the chosen-cubes line above a Choose Cubes button
-    that reveals the server cube list. Short-lived and per-user, so it carries no persistent custom_ids."""
+    """Ephemeral preference picker opened from the welcome card's Format Preference button. A Components V2
+    layout: prompt, the interest select, and Save. A Flashback pick inserts the ranking line above a Rank Sets
+    button; a Cube pick inserts the chosen-cubes line above a Choose Cubes button that reveals the server cube
+    list. Short-lived and per-user, so it carries no persistent custom_ids."""
 
     def __init__(
         self, launcher_message_id: str, signal_date: date, current: list[str], ranking: list[str],
-        cubes: list[str], slot_states: list[tuple[str, bool, str | None]], event_id: str | None = None,
+        cubes: list[str], event_id: str | None = None,
     ) -> None:
         super().__init__(timeout=300)
         self.launcher_message_id = launcher_message_id
@@ -874,7 +921,6 @@ class InterestPromptView(discord.ui.LayoutView):
         self.values = fi.normalize(current)
         self.ranking = list(ranking)
         self.cubes = list(cubes)
-        self.slot_states = slot_states
         self.event_id = event_id
         self._rebuild()
 
@@ -907,18 +953,6 @@ class InterestPromptView(discord.ui.LayoutView):
                                  emoji=SAVE_BUTTON_EMOJI)
         save.callback = self._on_save
         button_row.add_item(save)
-        for bucket_key, is_open, card_message_id in self.slot_states:
-            bucket = bucket_by_key(bucket_key)
-            if bucket is None:
-                continue
-            button = discord.ui.Button(
-                label=CONFIRM_SLOT_LABEL.format(name=_slot_short_name(bucket_key)),
-                style=discord.ButtonStyle.success if is_open else discord.ButtonStyle.secondary,
-                emoji=emojis.resolve(bucket.emoji), disabled=not is_open,
-            )
-            if is_open:
-                button.callback = self._make_confirm_slot(bucket_key, card_message_id)
-            button_row.add_item(button)
         container.add_item(button_row)
         self.add_item(container)
 
@@ -1000,41 +1034,6 @@ class InterestPromptView(discord.ui.LayoutView):
             refresh_event_rsvp_surfaces(bot, self.event_id),
         )
 
-    def _make_confirm_slot(self, bucket_key: str, card_message_id: str | None):
-        async def callback(interaction: discord.Interaction) -> None:
-            if card_message_id is not None:
-                await self._on_confirm_committed(interaction, card_message_id)
-            else:
-                await self._on_confirm_slot(interaction, bucket_key)
-        return callback
-
-    async def _on_confirm_slot(self, interaction: discord.Interaction, bucket_key: str) -> None:
-        """Save the preference and join the slot. The join feedback is the grant card or the full
-        confirmation card out of `_apply_slot_join`, both of which carry the saved preference, so the
-        picker itself closes silently instead of adding a second message."""
-        await interaction.response.defer()
-        await self._persist(interaction.user)
-        launcher_message = await _fetch_launcher_message(interaction.channel, self.launcher_message_id)
-        err = MSG_POLL_INACTIVE
-        if launcher_message is not None:
-            err, _ = await _apply_slot_join(
-                interaction, launcher_message=launcher_message, signal_date=self.signal_date,
-                bucket_key=bucket_key, action="join", notify_effect=True,
-            )
-        if err:
-            await self._finish(interaction, err)
-            return
-        await self._dismiss(interaction)
-
-    async def _on_confirm_committed(self, interaction: discord.Interaction, card_message_id: str) -> None:
-        """A slot whose pod already committed joins through the pod's scheduled card, not the launcher
-        poll signal, so the row lands on the live roster and the card, thread, and launcher re-render in
-        step. Confirm always sets Yes; already-Yes stays Yes. `apply_card_rsvp` posts the join card and
-        refreshes the board, so the picker deletes itself once done."""
-        await self._persist(interaction.user)
-        await apply_card_rsvp(interaction, card_message_id, RSVP_YES)
-        await self._dismiss(interaction)
-
 
 class _RankModal(discord.ui.Modal, title=RANK_MODAL_TITLE):
     codes = discord.ui.TextInput(
@@ -1102,39 +1101,54 @@ def _cube_display(codes: list[str]) -> str:
     return (NBSP * 3).join(links)
 
 
-def _slot_toggle_button(bucket_key: str, closed: bool = False) -> discord.ui.Button:
-    bucket = bucket_by_key(bucket_key)
-    code = format_of(bucket_key)
-    style = discord.ButtonStyle.secondary if closed else discord.ButtonStyle.success
-    button = discord.ui.Button(
-        label=_named_pod_label(bucket_key) if code else bucket.name, style=style, disabled=closed,
-        custom_id=f"pod_poll:{bucket_key}",
-        emoji=_named_pod_emoji(code) if code else emojis.resolve(bucket.emoji),
-    )
-
-    async def callback(interaction: discord.Interaction) -> None:
-        await _handle_poll_click(interaction, bucket_key)
-
-    button.callback = callback
-    return button
+SLOT_TOGGLE_PREFIX = "pod_poll"
+SLOT_RSVP_PREFIX = "pod_slot_rsvp"
 
 
-def _slot_rsvp_button(bucket_key: str, set_code: str | None = None) -> discord.ui.Button:
-    """`set_code` names the committed pod's own format, so on a day offering two the button reads `Late MSH`
-    instead of a bare `Late Pod` that gives no clue which of the two it RSVPs to."""
-    bucket = bucket_by_key(bucket_key)
-    code = format_of(bucket_key) or set_code
-    button = discord.ui.Button(
-        label=_named_pod_label(bucket_key, code) if code else bucket.name,
-        style=discord.ButtonStyle.success, custom_id=f"pod_slot_rsvp:{bucket_key}",
-        emoji=_named_pod_emoji(code) if code else emojis.resolve(bucket.emoji),
-    )
+class SlotToggleButton(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=rf"{SLOT_TOGGLE_PREFIX}:(?P<bucket>.+)",
+):
+    """Join or leave one named pod. The key carries the slot and the format, so there is no fixed set of
+    keys a startup registration could enumerate and the button survives a restart on its own."""
 
-    async def callback(interaction: discord.Interaction) -> None:
-        await _handle_slot_rsvp_click(interaction, bucket_key)
+    def __init__(self, bucket_key: str, closed: bool = False) -> None:
+        super().__init__(discord.ui.Button(
+            label=_named_pod_label(bucket_key),
+            style=discord.ButtonStyle.secondary if closed else discord.ButtonStyle.success,
+            disabled=closed, custom_id=f"{SLOT_TOGGLE_PREFIX}:{bucket_key}",
+            emoji=_slot_button_emoji(bucket_key),
+        ))
+        self.bucket_key = bucket_key
 
-    button.callback = callback
-    return button
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls(match["bucket"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _handle_poll_click(interaction, self.bucket_key)
+
+
+class SlotRsvpButton(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=rf"{SLOT_RSVP_PREFIX}:(?P<bucket>.+)",
+):
+    """The same toggle for a pod that already fired: it writes Yes or No on that pod's scheduled card. The
+    key names the format, so a slot carrying two pods gets one button each instead of one ambiguous one."""
+
+    def __init__(self, bucket_key: str) -> None:
+        super().__init__(discord.ui.Button(
+            label=_named_pod_label(bucket_key), style=discord.ButtonStyle.success,
+            custom_id=f"{SLOT_RSVP_PREFIX}:{bucket_key}", emoji=_slot_button_emoji(bucket_key),
+        ))
+        self.bucket_key = bucket_key
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls(match["bucket"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _handle_slot_rsvp_click(interaction, self.bucket_key)
 
 
 async def _fetch_launcher_message(
@@ -1152,28 +1166,30 @@ async def _apply_slot_join(
     interaction: discord.Interaction, *, launcher_message: discord.Message, signal_date: date,
     bucket_key: str, action: str, notify_effect: bool = False,
 ) -> tuple[str | None, str | None]:
-    """Join or toggle a launcher slot for the clicker, then run the shared fire, launcher re-render, role
-    grant, announce, and nudge-refresh steps. Returns (error, notice): an error string when the slot is
-    gone or closed, and the grant/welcome notice that was posted, so a caller with its own confirmation
-    can skip it instead of doubling up. Shared by the launcher slot buttons (toggle) and the Format
-    Preference Confirm buttons (join). `notify_effect` confirms the add or removal ephemerally when no
-    grant notice already did."""
+    """Join or toggle a launcher pod for the clicker, then run the shared fire, launcher re-render, role
+    grant, announce, and nudge-refresh steps. Returns (error, notice): an error string when the pod is gone
+    or closed, and the grant/welcome notice that was posted, so a caller with its own confirmation can skip
+    it instead of doubling up.
+
+    `notify_effect` confirms the add or the removal ephemerally. A join always gets that confirmation, even
+    when a public welcome went to pod chat: the welcome is for the channel, and only the ephemeral says which
+    pod the clicker is on, when it starts, and which slot role the click granted them. The one exception is
+    the grant card, which already carries all of that folded in."""
     message_id = str(launcher_message.id)
     result = await asyncio.to_thread(
         pod_launch.toggle_member_sync,
         message_id, bucket_key, str(interaction.user.id), interaction.user.display_name, action,
     )
     if result is None:
-        return MSG_POLL_INACTIVE, None
+        return _organizer_notice(MSG_POLL_INACTIVE, interaction.guild), None
     if result.closed:
-        return MSG_SLOT_CLOSED, None
+        return _organizer_notice(MSG_SLOT_CLOSED, interaction.guild), None
     fired = (
         result.joined
-        and result.composition is not None
-        and fi.slot_fires_latest(result.composition, settings.pod_signal_fire_threshold)
+        and should_fire(result.state.count, settings.pod_signal_fire_threshold)
         and result.state.slot_time is not None
         and slot_can_fire(result.state.slot_time, datetime.now(timezone.utc))
-        and await asyncio.to_thread(pod_launch.claim_fire_sync, result.state.signal_id)
+        and await asyncio.to_thread(pod_launch.claim_slot_fire_sync, result.state.signal_id)
     )
     guild = getattr(launcher_message.channel, "guild", None) or interaction.guild
     slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, signal_date)
@@ -1190,19 +1206,26 @@ async def _apply_slot_join(
         if granted_role is not None:
             spec = spec_named(granted_role.name)
     ping = slot_grant_ping(spec) if spec is not None else None
-    card_lead = _slot_effect_lead(bucket_key, result.state.slot_time) if result.joined else None
+    lead = None
+    if result.joined:
+        on_formats = await asyncio.to_thread(
+            pod_launch.joined_formats_at_slot_sync,
+            message_id, result.state.slot_time, str(interaction.user.id),
+        )
+        lead = _slot_effect_lead(bucket_key, result.state.slot_time, on_formats)
     notice = await announce_pod_grant(
-        interaction, first_pod=first_pod, granted_role=granted_role,
-        welcome_role=granted_role, spec=spec, ping=ping, card_lead=card_lead,
+        interaction, first_pod=first_pod, granted_role=granted_role, spec=spec, ping=ping,
+        card_lead=lead,
     )
-    if notify_effect and not notice:
-        if result.joined and (result.changed or action == "join"):
-            await send_join_confirmation_card(
-                interaction, lead=_slot_effect_lead(bucket_key, result.state.slot_time),
-                accent=discord.Color.green(),
-            )
-        elif result.changed:
-            await interaction.followup.send(embed=_slot_removed_embed(bucket_key), ephemeral=True)
+    if notify_effect and result.joined and notice != NOTICE_GRANT:
+        if granted_role is not None and ping is not None:
+            lead = f"{lead}\n{pod_role_grant_text(granted_role.mention, ping)}"
+        await send_join_confirmation_card(interaction, lead=lead, accent=discord.Color.green())
+    elif notify_effect and result.changed:
+        await interaction.followup.send(
+            embed=pod_removed_embed(_gathering_pod_name(bucket_key, result.state.slot_time)),
+            ephemeral=True,
+        )
     if fired:
         asyncio.create_task(_launch_slot(interaction.client, result.state, message_id))
     elif result.changed:
@@ -1222,17 +1245,18 @@ async def _handle_poll_click(interaction: discord.Interaction, bucket_key: str) 
 
 
 async def _handle_slot_rsvp_click(interaction: discord.Interaction, bucket_key: str) -> None:
-    """A committed slot's button toggles the clicker on its scheduled card: Yes when they were out or
-    Maybe, No when they already held Yes. The card is read off the board's own snapshot, so a rolled column
-    targets the pod it is showing. The write and every follow-on run through the card's shared
-    apply_card_rsvp, so the card, the launcher, and the native event re-render in step."""
+    """A fired pod's button toggles the clicker on its scheduled card: Yes when they were out or Maybe, No
+    when they already held Yes. The card is read off the board's own snapshot by the key the button carries,
+    so a slot holding two pods writes to the one that was pressed. The write and every follow-on run through
+    the card's shared apply_card_rsvp, so the card, the launcher, and the native event re-render in step and
+    the answer names the pod off its own event, reading the same as a press on a pod that has not fired."""
     signal_date = await _launcher_signal_date(interaction.message)
     slots = await asyncio.to_thread(
         pod_launch.launcher_snapshot_sync, str(interaction.message.id), signal_date,
     )
-    slot = _representative_slot(slots, lane_of(bucket_key) or "")
+    slot = _slot_by_key(slots, bucket_key)
     if slot is None or slot.card_message_id is None:
-        await interaction.response.send_message(MSG_SLOT_CLOSED, ephemeral=True)
+        await interaction.response.send_message(_organizer_notice(MSG_SLOT_CLOSED, interaction.guild), ephemeral=True)
         return
     card_message_id = slot.card_message_id
     current = await asyncio.to_thread(
@@ -1249,55 +1273,105 @@ async def _handle_slot_rsvp_click(interaction: discord.Interaction, bucket_key: 
         log.warning(f"could not re-render launcher message {launcher_message.id}", exc_info=True)
 
 
-def _slot_effect_lead(bucket_key: str, slot_time: datetime | None) -> str:
+def _slot_by_key(
+    slots: list[pod_launch.LauncherSlot], bucket_key: str,
+) -> pod_launch.LauncherSlot | None:
+    """The pod a press acts on, matched on the key the button carries. A rolled column stacks two days of one
+    format on one board, so the soonest still-joinable one wins and a played pod stands in when none is."""
+    matches = [slot for slot in slots if slot.bucket_key == bucket_key]
+    for slot in matches:
+        if not slot.locked:
+            return slot
+    return matches[-1] if matches else None
+
+
+def _slot_effect_lead(
+    bucket_key: str, slot_time: datetime | None, on_formats: list[str] | None = None,
+) -> str:
     """The join confirmation as card text: folded into the grant card when a fresh role grant rides
-    the same click, else the lead of the plain confirmation card."""
-    bucket = bucket_by_key(bucket_key)
-    name = bucket.name if bucket else bucket_key
-    lead = f"### {MSG_SLOT_ADDED.format(name=name)}"
+    the same click, else the lead of the plain confirmation card.
+
+    A clicker now on more than one pod of that slot is told which ones and what happens next. Nothing else on
+    the surface explains what signing up twice does, and the click that just did it is when it matters."""
+    lead = f"### {MSG_POD_ADDED.format(name=_gathering_pod_name(bucket_key, slot_time))}"
     if slot_time is not None:
         lead = f"{lead}\n{MSG_DRAFT_STARTS.format(unix=int(slot_time.timestamp()))}"
+    if on_formats and len(on_formats) > 1:
+        lead = f"{lead}\n{_several_pods_line(bucket_key, on_formats)}"
     return lead
 
 
-def _slot_removed_embed(bucket_key: str) -> discord.Embed:
-    """The bare red removal note, mirroring the scheduled card's No acknowledgement — the start time
-    and the pod controls are moot once you're out. An add answers with the full confirmation card."""
-    bucket = bucket_by_key(bucket_key)
-    name = bucket.name if bucket else bucket_key
-    return discord.Embed(title=MSG_SLOT_REMOVED.format(name=name), color=discord.Color.red())
+def _organizer_notice(template: str, guild: discord.Guild | None) -> str:
+    return template.format(organizer=organizer_mention(guild))
 
 
-def _fire_announcement(guild: discord.Guild | None, slot_time: datetime) -> str | None:
-    """The @slot creation announcement carried on a fired slot's card, or None to post the card
-    silently. Numberless, so it never goes stale as players join — the card's roster carries the count.
-    Gated to a fire close to the draft time: an earlier fire posts silently and the underfill checks
-    recruit the last seats near game time."""
+def _several_pods_line(bucket_key: str, on_formats: list[str]) -> str:
+    """`You are on both Early Pods: MSH & Peasant Cube`, over the promise that decides where they play."""
+    names = [pod_format.format_display(code) for code in on_formats]
+    listed = f"{', '.join(names[:-1])} & {names[-1]}"
+    slot = _slot_short_name(time_key_of(bucket_key))
+    if len(names) == 2:
+        pods = MSG_ON_BOTH_PODS.format(slot=slot, formats=listed)
+    else:
+        pods = MSG_ON_SEVERAL_PODS.format(count=len(names), slot=slot, formats=listed)
+    return f"{pods}\n{MSG_FIRST_POD_TO_FILL}"
+
+
+def _gathering_pod_name(bucket_key: str, slot_time: datetime | None) -> str:
+    """The name a pod that has not fired yet will carry once it does, `PEASANT Jul 26 Early Pod`, so a signup
+    on it is acknowledged by the same name its card, its thread and every later answer use. Falls back to the
+    button's own label for a key with no format or a slot with no time to name."""
+    code = format_of(bucket_key)
+    if code is None or slot_time is None:
+        return _named_pod_label(bucket_key)
+    return pod_display_name(code, slot_time)
+
+
+def _fire_announcement(
+    guild: discord.Guild | None, slot_time: datetime, set_code: str,
+) -> str | None:
+    """The creation announcement carried on a fired slot's card, or None to post the card silently. Pings the
+    slot's own role and the role for the format it drafts, so a player who follows only cubes or only the
+    latest set hears about the pods they would actually join. Numberless, so it never goes stale as players
+    join — the card's roster carries the count. Gated to a fire close to the draft time: an earlier fire posts
+    silently and the underfill checks recruit the last seats near game time."""
     window = timedelta(hours=max(settings.pod_underfill_check_hours_tuple))
     if slot_time - datetime.now(timezone.utc) > window:
         return None
-    role = find_role(guild, slot_role_name_for_event_time(slot_time) or "")
-    if role is None:
+    slot_role = find_role(guild, slot_role_name_for_event_time(slot_time) or "")
+    if slot_role is None:
         return None
-    return SLOT_FIRE_PING.format(unix=int(slot_time.timestamp()), mention=role.mention)
+    format_role = find_role(guild, _format_role_name(set_code))
+    mentions = [slot_role.mention]
+    if format_role is not None:
+        mentions.append(format_role.mention)
+    return SLOT_FIRE_PING.format(unix=int(slot_time.timestamp()), mention=" ".join(mentions))
 
 
-async def _launch_slot(bot: commands.Bot, state, message_id: str) -> None:
-    """A fired lazy slot graduates into a scheduled RSVP card: the signups carry over as Yes, and the
-    card gathers any late signups right up to the lobby open. The slot then reflects the card as a
-    jump-link on the next render and its own nudge is cleared — the card's underfill checks recruit
-    from here. Falls back to reopening the slot if the card can't be posted."""
-    set_code = active_set_code()
+async def _launch_slot(bot: commands.Bot, state, message_id: str, announce: bool = True) -> None:
+    """A fired pod graduates into a scheduled RSVP card on its own format: the signups carry over as Yes, and
+    the card gathers any late signups right up to the lobby open. The slot then reflects the card as a
+    jump-link on the next render and its own nudge is cleared — the card's underfill checks recruit from here.
+    Falls back to reopening the pod if the card can't be posted.
+
+    The roster is settled first, so the members it shares with the other formats at this slot go where they
+    are needed; whichever of those the release brings up to a full pod fires right after. Those keep their
+    cards silent (`announce`): the first card already pinged the slot, and two pods graduating a second apart
+    are one crowd, not two."""
+    set_code = state.set_code or active_set_code()
     slot_time = state.slot_time
     name = await asyncio.to_thread(pod_launch.ondemand_event_name_sync, set_code, slot_time)
+    kept, released = await asyncio.to_thread(pod_launch.allocate_fire_roster_sync, state.signal_id)
+    if released:
+        log.info(f"slot {state.signal_id} fires with {kept} and released {released} to the other formats")
     signups = await asyncio.to_thread(pod_launch.poll_yes_members_sync, state.signal_id)
     channel = _poll_channel(bot)
     event_id = None
     if isinstance(channel, discord.TextChannel):
-        announcement = _fire_announcement(channel.guild, slot_time)
+        announcement = _fire_announcement(channel.guild, slot_time, set_code) if announce else None
         event_id = await post_scheduled_card(
             bot, channel, set_code=set_code, event_time=slot_time, name=name, preseed_yes=signups,
-            ping_role=False, content_override=announcement, format_locked=False,
+            ping_role=False, content_override=announcement,
         )
     if event_id is None:
         await asyncio.to_thread(pod_launch.release_fire_sync, state.signal_id)
@@ -1305,6 +1379,20 @@ async def _launch_slot(bot: commands.Bot, state, message_id: str) -> None:
     else:
         await clear_slot_nudge(bot, state.signal_id)
     await _rerender_board(bot, message_id, slot_time.astimezone(SCHEDULE_TZ).date())
+    await _launch_ready_siblings(bot, state.signal_id, message_id)
+
+
+async def _launch_ready_siblings(bot: commands.Bot, signal_id: str, message_id: str) -> None:
+    """Fire the other formats at this slot that the release just brought up to a full pod. A sibling that
+    fires runs this again, and an already-fired one never claims, so the pass settles the whole slot."""
+    candidates = await asyncio.to_thread(pod_launch.sibling_fire_candidates_sync, signal_id)
+    for state in candidates:
+        if state.slot_time is None or not slot_can_fire(state.slot_time, datetime.now(timezone.utc)):
+            continue
+        if not await asyncio.to_thread(pod_launch.claim_slot_fire_sync, state.signal_id):
+            continue
+        log.info(f"firing {state.bucket} beside {signal_id} with {state.count} signups")
+        await _launch_slot(bot, state, message_id, announce=False)
 
 
 async def _grant_slot_role(member: discord.Member, bucket_key: str) -> discord.Role | None:
@@ -1340,16 +1428,17 @@ async def refresh_launcher_for_date(bot: commands.Bot, signal_date: date) -> Non
 async def roll_lane_after_pod(bot: commands.Bot, event_id: str) -> None:
     """Move the launcher column a played pod sat in to the next day, then invite that pod's players back a
     few minutes later. Fired once the pod is finalized, so a column can gather tomorrow while the other
-    still plays today. No-op for an off-grid pod, which no column owns."""
+    still plays today. No-op for an off-grid pod, which no column owns.
+
+    Play Again then offers whatever the slot carries tomorrow, one button per format, so a group that drafted
+    a cube tonight is invited back to the past set running at their time tomorrow."""
     ref = await asyncio.to_thread(pod_launch.event_lane_ref_sync, event_id)
     if ref is None:
         return
     lane, played_day = ref
     rolled = await _roll_lane(bot, lane, played_day)
-    if rolled is None:
-        return
-    bucket_key, _slot_time = rolled
-    _schedule_play_again(bot, event_id, bucket_key)
+    if rolled:
+        _schedule_play_again(bot, event_id, [bucket_key for bucket_key, _slot_time in rolled])
 
 
 async def roll_lane_after_expired_slot(bot: commands.Bot, signal_id: str) -> None:
@@ -1371,38 +1460,42 @@ async def reconcile_rolled_lanes(bot: commands.Bot) -> None:
     _guild_id, _channel_id, message_id, board_date = board
     slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, board_date)
     for lane in _lane_order(slots):
-        last = _lane_slots(slots, lane)[-1]
-        if last.slot_time is None:
+        last = _time_groups(_lane_slots(slots, lane))[-1]
+        if last[0].slot_time is None:
             continue
-        played_out = last.committed and last.finished
-        dead = not last.committed and last.status == STATUS_EXPIRED
-        if played_out or dead:
-            await _roll_lane(bot, lane, last.slot_time.astimezone(SCHEDULE_TZ).date())
+        settled = all(
+            (slot.committed and slot.finished) or (not slot.committed and slot.status == STATUS_EXPIRED)
+            for slot in last
+        )
+        if settled:
+            await _roll_lane(bot, lane, last[0].slot_time.astimezone(SCHEDULE_TZ).date())
 
 
-async def _roll_lane(bot: commands.Bot, lane: str, from_day: date) -> tuple[str, datetime] | None:
-    """Open the next day's slot for a lane, arm its beats, and re-render the live board so the column shows
-    it. Returns (bucket_key, slot_time) of the slot now gathering, or None when the lane has nothing to roll
-    to because a pod already holds that slot."""
+async def _roll_lane(
+    bot: commands.Bot, lane: str, from_day: date,
+) -> list[tuple[str, datetime]]:
+    """Open the next day's pods for a lane, arm each one's beats, and re-render the live board so the column
+    shows them. Returns (bucket_key, slot_time) per pod now gathering, empty when a pod already covers every
+    format that slot offers."""
     board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
     if board is None:
-        return None
+        return []
     guild_id, channel_id, message_id, board_date = board
     rolled = await asyncio.to_thread(
         pod_launch.roll_slot_forward_sync,
         lane=lane, from_day=from_day, guild_id=guild_id, channel_id=channel_id, message_id=message_id,
     )
     await _rerender_poll(bot, message_id, board_date)
-    if rolled is None:
-        return None
-    signal_id, bucket_key, slot_time = rolled
-    pod_launch.arm_slot_expiry(bot, signal_id, slot_time)
-    schedule_slot_underfill_checks(bot.pod_scheduler, signal_id, slot_time, datetime.now(timezone.utc))
-    log.info(f"rolled {lane} lane from {from_day} to {slot_time.isoformat()} as signal {signal_id}")
-    return bucket_key, slot_time
+    opened: list[tuple[str, datetime]] = []
+    for signal_id, bucket_key, slot_time in rolled:
+        pod_launch.arm_slot_expiry(bot, signal_id, slot_time)
+        schedule_slot_underfill_checks(bot.pod_scheduler, signal_id, slot_time, datetime.now(timezone.utc))
+        log.info(f"rolled {lane} lane from {from_day} to {slot_time.isoformat()} as signal {signal_id}")
+        opened.append((bucket_key, slot_time))
+    return opened
 
 
-def _schedule_play_again(bot: commands.Bot, event_id: str, bucket_key: str) -> None:
+def _schedule_play_again(bot: commands.Bot, event_id: str, bucket_keys: list[str]) -> None:
     """Post the next-day prompt a few minutes after the pod's result lands, so it never sits on top of the
     final game."""
     scheduler = getattr(bot, "pod_scheduler", None)
@@ -1411,12 +1504,12 @@ def _schedule_play_again(bot: commands.Bot, event_id: str, bucket_key: str) -> N
     scheduler.add_job(
         post_play_again_prompt, "date",
         run_date=datetime.now(timezone.utc) + timedelta(minutes=PLAY_AGAIN_DELAY_MIN),
-        args=[bot, event_id, bucket_key],
+        args=[bot, event_id, bucket_keys],
         id=f"pod-play-again-{event_id}", replace_existing=True,
     )
 
 
-async def post_play_again_prompt(bot: commands.Bot, event_id: str, bucket_key: str) -> None:
+async def post_play_again_prompt(bot: commands.Bot, event_id: str, bucket_keys: list[str]) -> None:
     """Post the Play Again prompt in the finished pod's own thread, where the players who just drafted
     together already are."""
     thread_id = await asyncio.to_thread(pod_launch.event_thread_id_sync, event_id)
@@ -1425,9 +1518,9 @@ async def post_play_again_prompt(bot: commands.Bot, event_id: str, bucket_key: s
     thread = await pod_launch.fetch_pod_thread(bot, int(thread_id))
     if thread is None:
         return
-    content, view = build_play_again_prompt(bucket_key)
+    embed, view = build_play_again_prompt(bucket_keys)
     try:
-        await thread.send(content, view=view, allowed_mentions=discord.AllowedMentions.none())
+        await thread.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:
         log.warning(f"could not post the play again prompt in thread {thread_id}", exc_info=True)
 

@@ -313,8 +313,7 @@ async def _post_join_followups(interaction: discord.Interaction, result, fired: 
         await _add_to_discussion_thread(interaction)
         first_pod = await grant_pod_drafters(interaction.user)
     await announce_pod_grant(
-        interaction, first_pod=first_pod, granted_role=None,
-        welcome_role=None, spec=None, ping=None,
+        interaction, first_pod=first_pod, granted_role=None, spec=None, ping=None,
     )
     if result.joined and not fired:
         await _maybe_nudge(interaction, result.state)

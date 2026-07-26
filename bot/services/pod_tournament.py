@@ -103,15 +103,15 @@ GRACE_SECONDS = 60  # window after round completion during which edits regenerat
 BRACKET_EDIT_BLOCKED_MSG = "That result can't be changed now — a later round already reported a result."
 POD_RESULT_LOCKED_MSG = "This pod draft is finished. Results can no longer be changed."
 MANAGE_ROUND_CUSTOM_PREFIX = "podmanageround"
-ORGANIZER_ROLE_NAMES = frozenset({"admin", "moderator"})
-MSG_FIX_NOT_ORGANIZER = "Only pod organizers can reorganize a round's matches."
+ORGANIZER_ROLE_NAMES = frozenset({"admin", "moderator", "organizer"})
+MSG_FIX_NOT_ORGANIZER = "Only Organizers can reorganize a round's matches."
 MSG_FIX_NOT_POD_THREAD = "Open this from inside the pod-draft thread."
 MSG_FIX_NO_MATCHES = "This round has no matches to reorganize yet."
 MSG_FIX_SAME_PLAYER = "Pick two different players for the match."
 MSG_FIX_MATCH_GONE = "That match no longer exists — reopen the editor to see the current round."
 POD_PAIRING_FAILED_MSG = (
     "⚠️ Round {round_num} pairings couldn't be generated. Reported results are safe, but the next "
-    "round won't post on its own — an organizer needs to step in."
+    "round won't post on its own. An Organizer needs to start it."
 )
 POD_ROSTER_TOO_SMALL_MSG = "⚠️ Not enough players to start the tournament — at least 2 are needed."
 POD_ROSTER_ODD_MSG = (
@@ -120,7 +120,7 @@ POD_ROSTER_ODD_MSG = (
 )
 POD_REPAIR_FAILED_MSG = (
     "⚠️ Round {round_num} couldn't be re-paired after the edit, so its previous pairings stand. "
-    "An organizer should double-check the matchups."
+    "An Organizer should check the matchups."
 )
 ANNOUNCEMENT_TOP_N = 4  # channel-level announcement shows top performers only; thread keeps full standings
 TROPHY_HYPE_HISTORY_LIMIT = 100  # messages scanned for a champion's own trophy post before the bot posts
@@ -130,7 +130,8 @@ TOURNAMENT_REHYDRATE_WINDOW = timedelta(hours=24)  # startup sweep only rebuilds
 
 
 async def is_pod_organizer(bot, user: discord.abc.User) -> bool:
-    """Owner, admin or moderator — the roles allowed to reorganize pod rounds and run backfill."""
+    """Owner, admin, moderator or organizer — the roles allowed to reorganize pod rounds and run backfill.
+    Organizer is the role given to someone who runs pods without any wider moderation duty."""
     if await bot.is_owner(user):
         return True
     roles = getattr(user, "roles", None) or []

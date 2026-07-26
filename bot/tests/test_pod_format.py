@@ -58,6 +58,7 @@ def test_emit_format_loads_cube_for_registered_code():
     expected_import = ("importCube", ({"service": "Cube Cobra", "cubeID": PEASANT_CUBE_ID, "matchVersions": True},))
     assert expected_import in mgr.sio.calls
     assert "setRestriction" not in mgr.sio.events()
+    assert ("setUseCustomCardList", (False,)) not in mgr.sio.calls
 
 
 def test_emit_format_restricts_to_set_for_plain_code():
@@ -65,6 +66,17 @@ def test_emit_format_restricts_to_set_for_plain_code():
     asyncio.run(mgr._emit_session_settings())
     assert ("setRestriction", (["sos"],)) in mgr.sio.calls
     assert "importCube" not in mgr.sio.events()
+
+
+def test_emit_format_unloads_cube_before_restricting_to_set():
+    mgr = _manager(PEASANT_CODE)
+    asyncio.run(mgr._emit_format())
+
+    mgr.set_code = "SOS"
+    asyncio.run(mgr._emit_format())
+
+    events = mgr.sio.events()
+    assert events.index("setUseCustomCardList") < events.index("setRestriction")
 
 
 # --- name swap on format change ---

@@ -4,7 +4,7 @@ from bot.models import Player, PodDraftEvent, PodSignal
 from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services.pod_drafts import get_flashback_ranking, set_flashback_ranking
-from bot.services.pod_launch import _launcher_day_signal_ids, _member_interests, set_rsvp, toggle_member
+from bot.services.pod_launch import _launcher_day_signal_ids, set_rsvp, toggle_member
 
 
 def _poll_signal(session, message_id="7001", bucket="EARLY"):
@@ -31,6 +31,12 @@ def _scheduled_signal(session, message_id="8001"):
     return signal
 
 
+def _seeded_interests(signal):
+    """The standing preference each signup carried onto the roster. Dormant data: no signup path reads it
+    back, and the launcher names each pod's format on its own button."""
+    return [list(member.format_interest) for member in signal.members]
+
+
 def test_join_seeds_interest_from_the_players_standing_preference(session):
     session.add(Player(
         slug="rowan-1", discord_id="u1", display_name="Rowan", format_interests=[fi.LATEST, fi.FLASHBACK]))
@@ -38,7 +44,7 @@ def test_join_seeds_interest_from_the_players_standing_preference(session):
 
     toggle_member(session, signal.message_id, signal.bucket, "u1", "Rowan")
 
-    assert list(_member_interests(session, signal.id)[0]) == [fi.LATEST, fi.FLASHBACK]
+    assert _seeded_interests(signal) == [[fi.LATEST, fi.FLASHBACK]]
 
 
 def test_join_without_a_player_row_seeds_no_interest(session):
@@ -46,7 +52,7 @@ def test_join_without_a_player_row_seeds_no_interest(session):
 
     toggle_member(session, signal.message_id, signal.bucket, "u2", "Guest")
 
-    assert _member_interests(session, signal.id) == ((),)
+    assert _seeded_interests(signal) == [[]]
 
 
 def test_scheduled_card_rsvp_seeds_interest_from_the_players_standing_preference(session):
@@ -56,7 +62,7 @@ def test_scheduled_card_rsvp_seeds_interest_from_the_players_standing_preference
 
     set_rsvp(session, signal.message_id, "u3", "Wren", pod_signals.RSVP_YES)
 
-    assert list(_member_interests(session, signal.id)[0]) == [fi.FLASHBACK]
+    assert _seeded_interests(signal) == [[fi.FLASHBACK]]
 
 
 def test_launcher_day_signals_include_the_reflected_scheduled_pod(session):
