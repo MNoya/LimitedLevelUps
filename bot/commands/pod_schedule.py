@@ -31,9 +31,9 @@ from bot.sets import active_set_code, release_instant, set_name_for
 
 MSG_TITLE = "### 🗓️ Pod Format Schedule"
 MSG_SLOT = "{emoji} {role} **<t:{unix}:t>**"
-MSG_DAILY_SET = "{symbol} **{code} every day** on every Pod slot"
+MSG_DAILY_SET = "{symbol} {role} **every day** on every Pod slot"
 MSG_CHAMPIONSHIP = "👑 **Set Championship** <t:{unix}:R>"
-MSG_ARRIVAL = "{symbol} **{name}** arrives <t:{unix}:R>"
+MSG_ARRIVAL = "{symbol} **{name}** <t:{unix}:R>"
 
 IMAGE_FILENAME = "pod-schedule.png"
 IMAGE_URL = f"attachment://{IMAGE_FILENAME}"
@@ -71,7 +71,7 @@ def build_schedule_view(guild: discord.Guild | None, now: datetime, weeks: int,
     container = discord.ui.Container(accent_color=discord.Color.green())
     container.add_item(discord.ui.TextDisplay(MSG_TITLE))
     container.add_item(discord.ui.TextDisplay(slot_line(guild, now)))
-    container.add_item(discord.ui.TextDisplay(daily_set_line(now.date())))
+    container.add_item(discord.ui.TextDisplay(daily_set_line(guild)))
     container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=IMAGE_URL)))
     marked = marked_days_line(days, championship_at)
     if marked:
@@ -95,10 +95,13 @@ def slot_line(guild: discord.Guild | None, now: datetime) -> str:
     return COLUMN_GAP.join(slots)
 
 
-def daily_set_line(today: date) -> str:
-    """The set every pod drafts, said once here so no cell has to repeat it."""
+def daily_set_line(guild: discord.Guild | None) -> str:
+    """The set every pod drafts, said once here so no cell has to repeat it. Named by its ping role rather
+    than by code, which keeps the line true across a rotation and lets the days after one stay blank."""
     code = active_set_code()
-    return MSG_DAILY_SET.format(symbol=fi.format_emoji(code), code=code)
+    return MSG_DAILY_SET.format(
+        symbol=fi.format_emoji(code), role=role_mention(guild, fi.LATEST_SET_ROLE_NAME),
+    )
 
 
 def marked_days_line(days: list[date], championship_at: datetime | None) -> str:

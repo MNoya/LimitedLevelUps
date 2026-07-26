@@ -124,15 +124,13 @@ def _rows_for(day: date, *, past: bool, arrival: date | None,
     shows the crown alone: its other pod is still on the schedule and still opens, but the day is read as one
     thing.
 
-    Every day from an arrival onward names the incoming set, since the message only promises the current set
-    every day up to that point. The arrival itself carries the accent; the days after it are ordinary."""
+    Only the arrival itself names the incoming set. The days after it stay blank like any other day on the
+    daily set, which the message names by role rather than by code, so the calendar never has to repeat a
+    set that a rotation is about to change."""
     if day == championship:
         return [(CHAMPIONSHIP_LABEL, CHAMPIONSHIP, None)]
     ink = DIM if past else TEXT
-    rows = []
-    if arrival is not None and day >= arrival:
-        code = latest_on(day)
-        rows.append((code, ARRIVAL if day == arrival else ink, code))
+    rows = [(latest_on(day), ARRIVAL, latest_on(day))] if day == arrival else []
     rows.extend((code, ink, code) for code in extras_on(day))
     return rows
 
