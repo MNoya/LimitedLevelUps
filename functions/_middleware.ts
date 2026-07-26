@@ -18,7 +18,7 @@ import {
 } from "../frontend/src/data/public-supabase-config";
 import { SITE_NAME as SITE, TITLE_SEPARATOR, TIER_LIST_PREVIEW_SETS } from "../frontend/src/data/constants";
 import { mtgoSetName } from "../frontend/src/data/mtgoSets";
-import { P0P1_SET_CODE, P0P1_VOTING_DEADLINE, P0P1_SCORING_DATE } from "../frontend/src/data/p0p1Slots";
+import { resolveContestByCode, resolveFeaturedContest } from "../frontend/src/data/p0p1Slots";
 import { categoryFromSlug } from "../frontend/src/data/episodes";
 import { cubeVariantForBoard } from "../frontend/src/data/cubeVariants";
 
@@ -39,11 +39,20 @@ const HOME_DESCRIPTION = "Weekly episodes, set reviews, strategy and community e
 
 const P0P1_PICK_SENTENCE = "Pick a team of eight cards you think will perform best from the upcoming set.";
 
-const p0p1Description = (): string => {
+// A bare /p0p1 unfurls whichever contest is featured; /p0p1/<code> unfurls that one, so an archive
+// link carries its own set symbol instead of the live contest's.
+const p0p1Meta = (routeCode: string | undefined): RouteMeta => {
   const now = Date.now();
-  if (now <= P0P1_VOTING_DEADLINE.getTime()) return P0P1_PICK_SENTENCE;
-  if (now < P0P1_SCORING_DATE.getTime()) return `${P0P1_PICK_SENTENCE} Preliminary data now available!`;
-  return `${P0P1_PICK_SENTENCE} Final standings now available!`;
+  const contest = routeCode ? resolveContestByCode(routeCode, now) : resolveFeaturedContest(now);
+  if (contest === null) return page("P0P1 Challenge", P0P1_PICK_SENTENCE);
+
+  let description = P0P1_PICK_SENTENCE;
+  if (now > contest.votingDeadline.getTime()) {
+    description = now < contest.scoringDate.getTime()
+      ? `${P0P1_PICK_SENTENCE} Preliminary data now available!`
+      : `${P0P1_PICK_SENTENCE} Final standings now available!`;
+  }
+  return page("P0P1 Challenge", description, { kind: "setSymbol", code: contest.code });
 };
 
 type ImageIntent =
@@ -219,7 +228,7 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
   }
 
   if (section === "p0p1") {
-    return page("P0P1 Challenge", p0p1Description(), { kind: "setSymbol", code: P0P1_SET_CODE });
+    return p0p1Meta(rest[0]);
   }
   if (section === "episodes") {
     const slug = rest[0];
