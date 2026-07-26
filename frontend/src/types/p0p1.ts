@@ -17,6 +17,16 @@ export interface P0P1Pick {
   lastUpdated: string;
 }
 
+/** One contest's window, keyed by set code in the shared `p0p1_contests.json`. Dates are ISO
+ * instants so a contest resolves before its set is public anywhere, and so the noon-ET release
+ * boundary is computed once in `bot/sets.py` instead of re-derived in the browser. */
+export interface ContestConfig {
+  name: string;
+  release: string;
+  previewsOpen: string;
+  votingDeadline?: string;
+}
+
 export type SlotKey =
   | "white_common"
   | "blue_common"

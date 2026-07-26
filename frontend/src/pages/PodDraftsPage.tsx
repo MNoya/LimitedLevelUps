@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 
@@ -26,6 +26,7 @@ import {
   type SortKey,
   type SortState,
 } from "../components/LeaderboardTable";
+import { formatCountdown, useNow } from "../lib/countdown";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { cn } from "../lib/utils";
 import { cleanPodEventName, fmtRange, playerPath, podDiscordName, stripDiscriminator, weekOfSet } from "../data/utils";
@@ -61,28 +62,6 @@ function formatLocalTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(d);
-}
-
-function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
-}
-
-function formatCountdown(targetMs: number, nowMs: number): string {
-  let secs = Math.max(0, Math.floor((targetMs - nowMs) / 1000));
-  const days = Math.floor(secs / 86400);
-  secs -= days * 86400;
-  const hours = Math.floor(secs / 3600);
-  secs -= hours * 3600;
-  const minutes = Math.floor(secs / 60);
-  const seconds = secs - minutes * 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  if (days > 0) return `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 }
 
 function CountdownChip({ iso }: { iso: string }) {

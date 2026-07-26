@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
 import { p0p1Now } from "../../data/p0p1DevState";
 import type { P0P1Phase } from "../../data/p0p1Results";
+import { useNow } from "../../lib/countdown";
 
 export function pluralizeUnit(value: number, unit: string) {
   return `${value} ${unit}${value === 1 ? "" : "s"}`;
@@ -32,14 +32,6 @@ export function formatScoringRemaining(diff: number): string {
   return pluralizeUnit(minutes, "minute");
 }
 
-export function useTick(intervalMs: number) {
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-}
-
 export function P0P1Countdown({
   deadline,
   scoringDate,
@@ -51,7 +43,7 @@ export function P0P1Countdown({
   size?: number;
   phase: P0P1Phase;
 }) {
-  useTick(30_000);
+  useNow(30_000);
   const now = p0p1Now();
   const deadlineDiff = deadline.getTime() - now;
 

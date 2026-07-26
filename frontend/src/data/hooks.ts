@@ -50,8 +50,10 @@ import type { P0P1BallotRow, P0P1Pick, SlotKey } from "../types/p0p1";
 import type { FeaturedContest } from "./p0p1Slots";
 import { resolveContestByCode, resolveFeaturedContest } from "./p0p1Slots";
 import { MULTI, OTHER } from "./filters";
+import { useNow } from "../lib/countdown";
 const THIRTY_MINUTES = 30 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
+const CONTEST_TICK_MS = 30_000;
 
 export function useEpisodes() {
   return useQuery({
@@ -478,14 +480,13 @@ export function usePodSetCodes() {
 // --- P0P1 contest ---
 
 export function useP0P1FeaturedContest(overrideCode?: string): FeaturedContest | undefined {
-  const { data: sets } = useSets();
+  const now = useNow(CONTEST_TICK_MS);
   return useMemo(
     () => {
-      if (!sets) return undefined;
-      if (overrideCode) return resolveContestByCode(sets, overrideCode, Date.now()) ?? undefined;
-      return resolveFeaturedContest(sets, Date.now()) ?? undefined;
+      if (overrideCode) return resolveContestByCode(overrideCode, now) ?? undefined;
+      return resolveFeaturedContest(now) ?? undefined;
     },
-    [sets, overrideCode],
+    [overrideCode, now],
   );
 }
 

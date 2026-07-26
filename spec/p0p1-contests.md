@@ -1,11 +1,13 @@
-# P0P1 Multiple Set Support
+# P0P1 Contests
 
-Support for future p0p1 contests. Today everything is hard-coded to MSH — set code, name,
-voting deadline, scoring date, the eligible-card pool, and the ratings fixture wiring. This
-spec makes adding a future contest a repeatable operation, and designs (pending maintainer
-sign-off) a participant-history view across contests.
+The engineering map for how a Pack 0 Pick 1 contest is scheduled and resolved: the per-set registry,
+which contest `/p0p1` features, the card-pool generator, and the archive routes. Read this before
+changing contest scheduling instead of re-inferring it, and for the reasoning behind decisions that
+look arbitrary from the code alone (chiefly why contest windows sit outside Postgres).
 
-This came out of a grilling/domain-modeling session.
+Not covered here: the ballot and results UI (`p0p1-voting-mvp.md`, `p0p1-after-submissions-closed.md`,
+`p0p1-results.md`) or the ratings phase flip (the `p0p1-phase` skill). Participant history is designed
+below but not built.
 
 ## Human-written high-level summary
 
@@ -21,18 +23,22 @@ This came out of a grilling/domain-modeling session.
 
 - **Contest** — one P0P1 event per set, identified by set code. Per-set data:
   `{ code, name, previewsOpen, votingDeadline, cardPool, ratingsSnapshot }`.
-- **Allowlist** — the set codes that have a P0P1 contest = the keys of `P0P1_CONTESTS`.
-  A set with no entry is not a contest.
+- **Allowlist** — the set codes present in `p0p1_contests.json`. A set with no entry is not a contest.
 - **Featured contest** — the single contest shown at `/p0p1`. Resolved from dates (see rule below).
 - **Frozen contest** — a finished contest, permanently browsable at a stable URL.
 - **Voting window** — `[previewsOpen → votingDeadline)`; picks can be submitted/changed.
   `votingDeadline` defaults to `release` but can be set earlier per contest.
-- **Reveal window** — `[release → release+28d)`; results shown (midway, then final).
+- **Results window** — `[votingDeadline → release+28d)`; community stats, then midway, then final.
+  Anchored to the deadline rather than `release` so a contest stays featured across the gap when
+  voting closes early, which is otherwise a stretch of days handing `/p0p1` back to the last set.
 - **Slots** — the shared 8-slot skeleton (5 mono-color commons, 1 multicolor uncommon, 2
   wildcards), **set-independent**. Filters by rarity + color only.
-- Dates: `release` and `name` come from `public_sets` (already driven by `bot/sets.py`).
-  `previewsOpen` and optionally `votingDeadline` are the P0P1-specific per-set scalars.
-  Reveal end = `release + 28d`.
+- Dates: every instant lives in the contest fixture. `release` and `name` come from `bot/sets.py`;
+  `previewsOpen` is set by the generator when the pool first passes its coverage check, so voting
+  opens as soon as a complete pool ships. Reveal end = `release + 28d`. Only `votingDeadline` is a
+  genuine input, and it defaults to `release`.
+- **Pre-contest** — a contest whose `previewsOpen` has not arrived. Never featured, and 404s at its
+  archive URL, so a pool still being spoiled can be committed early without exposing a ballot.
 
 ## Decisions (settled)
 
@@ -40,11 +46,12 @@ This came out of a grilling/domain-modeling session.
    permanently browsable at a stable URL.
 2. **Slots are a shared constant** across all sets (`SLOTS` in `p0p1Slots.ts` stays as-is; the
    per-set MSH constants leave).
-3. **Featured-contest rule** (evaluate over allowlisted sets, dates from `public_sets`):
+3. **Featured-contest rule** (evaluate over the contest fixtures, no DB read):
    1. If any set's **voting** window contains now → feature it (**voting wins** on overlap;
       newest release breaks a multi-match).
-   2. Else if any set's **reveal** window contains now → feature it.
+   2. Else if any set's **results** window contains now → feature it.
    3. Else feature the most recently finished contest (max `release+28d ≤ now`).
+   4. Else (nothing has opened yet) the earliest contest, reported `pre` so no ballot renders.
 4. **Overlap tiebreak = voting wins.** Rationale: voting is time-boxed (miss the release deadline
    and it's gone forever); a reveal is static and stays reachable at its archived URL, so it can
    lose the front slot a few days early at no real cost. Additionally, the setup skill **warns**
@@ -59,8 +66,20 @@ This came out of a grilling/domain-modeling session.
    growth as contests accumulate. A missing ratings file (true during voting) is simply absent
    from the glob map and treated as the existing pre-results kill switch — no placeholder fixture
    needed.
-7. **Only static per-set config is `P0P1_CONTESTS`.** `name`/dates derive from `public_sets`;
-   each entry carries `previewsOpen` and optionally `votingDeadline` (defaults to `release`).
+7. **A contest is self-contained and generated** — one root `p0p1_contests.json`, keyed by set code,
+   each entry carrying `name`, `release`, `previewsOpen` and optional `votingDeadline` (defaults to
+   `release`), all as ISO instants. Same shared-config shape as `scoring_buckets.json`: the frontend
+   imports it directly and the generator upserts one key at a time, so `python -m json` is the writer
+   and there is no TS literal to edit. One file rather than a fixture per contest, so the whole
+   schedule is readable at a glance and a deadline edit has one obvious place to go. **Superseded the original
+   `public_sets`-derived design**: that view hides a set until its release day, which is exactly
+   the span a P0P1 contest runs in, so a contest could not exist before its set did. Deriving
+   `name`/`release` in the fixture also puts the noon-ET release boundary in one place —
+   `bot/sets.py` computes it with a real tz database, instead of the browser assuming 16:00 UTC
+   and being an hour off for winter releases. Values are machine-written, so `bot/sets.py` stays
+   the source of truth, and hand-editing a single deadline stays a safe one-line change.
+   Consequences: `/p0p1` no longer needs the sets query, and a deadline change is a one-line
+   fixture edit with no migration and no query.
 8. **Card fixtures standardize on `export default`** (migrate `cards-msh.ts` off its named
    `cardsMshFixture` export) so the glob loader can load them uniformly.
 9. **Generator emits common + uncommon only** — no rare/mythic. No slot filter accepts rarity
@@ -99,12 +118,17 @@ This came out of a grilling/domain-modeling session.
 - `frontend/src/data/p0p1Slots.ts`: keep `SLOTS` and the slot filter helpers. Remove
   `P0P1_SET_CODE` / `P0P1_SET_NAME` / `P0P1_VOTING_DEADLINE` / `P0P1_SCORING_DATE` /
   `P0P1_NEXT_SET_CODE` / `P0P1_NEXT_SET_NAME`. Add:
-  - `P0P1_CONTESTS: Record<string, { previewsOpen: string; votingDeadline?: string }>` — the
-    allowlist + per-set config (the setup skill appends one entry per set). `votingDeadline`
-    defaults to the set's `release` date from `public_sets` when omitted.
-  - `resolveFeaturedContest(sets, now)` implementing the rule in Decision 3, where `sets` comes
-    from `public_sets` (release date + name) intersected with the allowlist. Returns
-    `{ code, name, previewsOpen, votingDeadline, revealEnd, isVoting/isReveal/isFrozen }`.
+  - `P0P1_CONTESTS: Record<string, ContestConfig>` — the shared `p0p1_contests.json` imported
+    directly, mirroring how `data/format-buckets.ts` imports `scoring_buckets.json`. Not globbed and
+    not code-split: every window is needed synchronously to decide which contest is featured, and
+    they are a handful of strings each.
+  - `resolveFeaturedContest(now)` / `resolveContestByCode(code, now)` implementing Decision 3,
+    sharing one `describeContest(contest, contests, now)` that derives `status` and `next`. Both are
+    pure functions of the fixtures and the clock — no `sets` argument.
+- `frontend/src/data/hooks.ts`: `useP0P1FeaturedContest` drops `useSets()`. Because the resolver no
+  longer depends on a query, it needs its own clock or it freezes at first render and never crosses
+  the deadline without a reload — so it memoizes on `useTick(30_000)`, hoisted from
+  `components/p0p1/Countdown.tsx` to `lib/use-tick.ts` and returning its counter as a dep handle.
 - `frontend/src/data/realApi.ts` (currently around L1513-1526): replace the static
   `cards-msh` / `p0p1-ratings-msh` imports with:
 
@@ -136,12 +160,14 @@ This came out of a grilling/domain-modeling session.
   any allowlisted set regardless of date (reuses `FinalResults`). `/p0p1` (no param) stays = the
   resolved featured contest.
 - `frontend/src/pages/P0P1Page.tsx`: take the contest code from the route param, falling back to
-  the resolved featured contest for the bare `/p0p1`.
+  the resolved featured contest for the bare `/p0p1`. A `pre` contest 404s: `status` is derived from
+  `previewsOpen` upward, so a fixture committed during spoiler season cannot serve a ballot early
+  through its archive URL.
 - **Out of scope:** a discovery UI (an index/list page to _find_ old contests without already
   knowing the code). Stable URLs work; reaching them requires the code or a link (e.g. a future
   result-row click). Follow-up.
 
-### Bot: card-pool generator
+### Bot: contest generator
 
 - New `bot/scripts/fetch_p0p1_cards.py`: pull `set:<scryfall_code>` from Scryfall, filter to
   **common + uncommon**, exclude bonus-sheet / Special Guest printings and non-draftable extras,
@@ -149,15 +175,30 @@ This came out of a grilling/domain-modeling session.
   per-layout extraction table in Decision 10. Confirm the Scryfall set code vs the 17lands
   expansion code up front — they can diverge for promos/Alchemy/supplemental sets, and a mismatch
   breaks the ratings join silently.
+- The same run upserts this set's key in `p0p1_contests.json`, reading `name` and the noon-ET
+  `release` from `bot/sets.py` and leaving every other contest byte-identical. **The script decides
+  the window, not the caller** — one invocation is correct at any
+  point in spoiler season, which is what makes `/p0p1 <CODE>` a single-argument call:
+  no window plus an incomplete pool writes nothing; no window plus a complete pool opens voting
+  immediately; an existing window is left alone so a top-up cannot reschedule a live vote. `--opens`
+  and `--deadline` override explicitly, each preserving the other. Bare dates mean noon ET.
+- **Slot-coverage preflight.** After writing, report commons per color plus multicolor uncommons and
+  flag empty slots as `POOL INCOMPLETE`. Mid-spoiler a set is nearly all uncommons — HOB at
+  2026-07-26 had 34 cards, 5 of its 6 commons basic lands, and 4 of the 8 slots unfillable. The
+  report describes the pool rather than reimplementing `SLOTS`, so the check cannot drift from the
+  TypeScript filters.
 
-### New skill: p0p1-contest-setup
+### New skill: p0p1
 
-Runs the generator, appends the `P0P1_CONTESTS` entry, and validates the handoff. Never
-commits or pushes (matches `p0p1-phase`'s convention). Must:
+`/p0p1 <CODE>` runs the generator and validates the handoff. Never commits or pushes (matches
+`p0p1-phase`'s convention). Must:
 
 - Warn on overlap (Decision 4) and on finalize-ordering (Decision 5).
-- Run at/after full spoiler (voting needs the complete card pool); a late-spoiler top-up re-run is
-  fine.
+- Relay the script's window decision and name the empty slots when the pool is short. A hidden set
+  mid-spoiler is the expected outcome, not a failure.
+- Never reschedule an existing window unless asked, since players may be voting in it.
+- Report how many days of Arena play the reveal will cover when `votingDeadline` precedes `release`
+  by more than a day, since `scoringDate` is `votingDeadline + 28d` regardless.
 - Report a ratings join-check when a ratings fixture exists: for each pool card, did it match a
   rating by normalized name? Flag misses (especially `//` and special-character names). The ratings
   fixture is already filtered to C/U pool cards by `fetch_p0p1_ratings`, so a count gap means
@@ -196,17 +237,31 @@ then final), independent of setup. Ordering dependency: the next set must alread
 
 - Archive discovery UI (a browsable index of past contests).
 - transform / modal_dfc generator path (specified, not built until a set needs it).
-- Moving P0P1 config into the database (the TODO that used to sit in `p0p1Slots.ts`) — the glob +
-  `P0P1_CONTESTS` map supersede the need for this.
+- Moving P0P1 config into the database (the TODO that used to sit in `p0p1Slots.ts`) — the contest
+  glob supersedes the need for this, and keeping windows out of Postgres is what lets a deadline
+  change ship without a migration.
+- Widening `public_sets` to expose upcoming sets. Considered and rejected for this: `early` and the
+  release-day gate exist so an unreleased set cannot leak into the UI, six `useSets()` consumers
+  build user-facing pickers straight off that list, and the guarantee would move from one SQL clause
+  to a convention every future caller has to remember. Revisit only if something other than P0P1
+  needs pre-release sets.
+- A bot-side P0P1 surface (daily voting notices). Nothing exists today, but `p0p1_contests.json` is
+  already the shared file a bot task would read, the same way `bot/scoring.py` reads
+  `scoring_buckets.json`. No further config decision is pending.
 
 ## Verification (for whoever implements)
 
-- **Multi-set plumbing:** add a second fixture pair (`cards-<code>.ts` +
-  `p0p1-ratings-<code>.ts`) and a `P0P1_CONTESTS` entry with dates that make it the featured
-  contest; `npm run dev`, confirm `/p0p1` renders it, the 8 slots populate from its pool, and
-  `/p0p1/msh` still renders MSH frozen.
-- **Featured resolution:** unit-test `resolveFeaturedContest` for voting-only, reveal-only, gap,
-  and the overlap case (voting wins).
+- **Multi-set plumbing:** generate a second contest (`cards-<code>.ts` + a `p0p1_contests.json` key) with
+  dates that make it featured; `npm run dev`, confirm `/p0p1` renders it, the 8 slots populate from
+  its pool, and `/p0p1/msh` still renders MSH frozen.
+- **Featured resolution:** voting-only, reveal-only, gap, pre-previews, and the overlap case (voting
+  wins). No test runner exists in `frontend/` yet, and `import.meta.glob` only resolves under Vite,
+  so covering this means standing up vitest rather than a plain node script.
+- **Generator fidelity:** re-running on a released set must reproduce its committed fixture byte for
+  byte (verified against `cards-msh.ts`), and a bare `--deadline` date must land on noon ET in both
+  EDT and EST. Cover all four window decisions: incomplete-and-unscheduled writes nothing,
+  complete-and-unscheduled opens now, an existing window survives a top-up, and `--deadline` alone
+  preserves `previewsOpen`.
 - **Adventure handling:** run the generator on HOB (or another Adventure set), confirm an
   uncommon Adventure appears with the creature's name/cost/art and lands in
   `wildcard_uncommon`; with a ratings fixture present, confirm the normalized join matches it (no

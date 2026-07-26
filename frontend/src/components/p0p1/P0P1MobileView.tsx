@@ -2,17 +2,19 @@ import { useEffect, useState } from "react";
 import { AppHeader } from "../AppHeader";
 import { CtaPill } from "../CtaPill";
 import { DiscordIcon } from "../BrandIcons";
-import { SetGlyph, setGlyphCode } from "../Brand";
+import { SetGlyph } from "../Brand";
 import { SectionLabel } from "../SectionLabel";
 import { SlotCard } from "./SlotCard";
 import { CardSelectionGrid } from "./CardSelectionGrid";
 import { PostVotingStats } from "./PostVotingStats";
 import { PickGrid } from "./CommunityGrid";
 import { P0P1IntroText } from "./P0P1IntroText";
+import { NextContestOpens } from "./NextContestOpens";
 import { SlotPip, SLOT_ACCENT } from "./slotVisuals";
 import { P0P1ProgressBar } from "./ProgressBar";
 import { P0P1CountdownBar } from "./CountdownBar";
-import { formatRemaining, formatScoringRemaining, useTick } from "./Countdown";
+import { formatRemaining, formatScoringRemaining } from "./Countdown";
+import { useNow } from "../../lib/countdown";
 import { ClearAll } from "./ClearAll";
 import { GoToTopButton } from "../GoToTopButton";
 import { SiteFooter } from "../SiteFooter";
@@ -27,7 +29,6 @@ import { groupBySlot, findExtremes, classifyYourPick, pickPctLabel } from "../..
 import { SITE_LINKS } from "../../data/site";
 import { p0p1Now } from "../../data/p0p1DevState";
 import type { Card, P0P1PickStat, SlotDefinition, SlotKey } from "../../types/p0p1";
-import type { SetSummary } from "../../types/leaderboard";
 
 type Ballot = ReturnType<typeof useP0P1Ballot>;
 
@@ -53,7 +54,6 @@ export function P0P1MobileView({ ballot }: { ballot: Ballot }) {
     selectAndClose,
     phase,
     ratingsSnapshot,
-    p0p1Sets,
   } = ballot;
 
   const slotCard = (slotKey: SlotKey) => {
@@ -79,7 +79,7 @@ export function P0P1MobileView({ ballot }: { ballot: Ballot }) {
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
 
       <main className={`flex-1 flex flex-col w-full px-4 pt-4 ${loginBarVisible ? "pb-20" : "pb-4"}`}>
-        <MobileIntro featured={featured} sets={p0p1Sets} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
+        <MobileIntro featured={featured} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
         {dataReady ? (
           <>
             {!isPastDeadline && (
@@ -152,7 +152,6 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
     phase,
     ratingsSnapshot,
     ballots,
-    p0p1Sets,
   } = ballot;
 
   const loginBarVisible = !authLoading && !user;
@@ -166,7 +165,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
 
       <main className={`flex-1 flex flex-col w-full px-3 pt-3 ${loginBarVisible ? "pb-24" : "pb-4"}`}>
-        <MobileIntro featured={featured} sets={p0p1Sets} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
+        <MobileIntro featured={featured} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
         {dataReady ? (
           <>
             {!isPastDeadline && (
@@ -421,12 +420,10 @@ function MobileLoginBar({ show, signIn, text }: { show: boolean; signIn: () => v
 
 function MobileIntro({
   featured,
-  sets,
   phase,
   dateRange,
 }: {
   featured: FeaturedContest | undefined;
-  sets: SetSummary[] | undefined;
   phase: P0P1Phase;
   dateRange?: { start: string; end: string } | null;
 }) {
@@ -446,7 +443,7 @@ function MobileIntro({
         className="flex w-full items-center gap-3 text-left bg-transparent border-0 p-0 cursor-pointer"
       >
         <div className="flex items-center gap-1 shrink-0">
-          <SetGlyph code={setGlyphCode(sets?.find((s) => s.code === setCode) ?? { code: setCode })} size={34} />
+          <SetGlyph code={setCode} size={34} />
           <span className="font-display text-text tracking-[0.04em]" style={{ fontSize: 22, lineHeight: 1 }}>
             {setCode}
           </span>
@@ -470,6 +467,11 @@ function MobileIntro({
         <p className="text-subtle text-[13.5px] leading-[1.5]">
           <P0P1IntroText phase={phase} dateRange={dateRange} setName={featured?.name ?? ""} votingDeadline={votingDeadline} scoringDate={scoringDate} />
         </p>
+      )}
+      {phase === "final" && (
+        <div className="text-subtle text-[13.5px]">
+          <NextContestOpens next={featured?.next} />
+        </div>
       )}
     </section>
   );
@@ -566,7 +568,7 @@ function CountdownStacked({
   scoringDate?: Date;
   phase: P0P1Phase;
 }) {
-  useTick(30_000);
+  useNow(30_000);
   const now = p0p1Now(scoringDate);
   const deadlineDiff = deadline.getTime() - now;
 

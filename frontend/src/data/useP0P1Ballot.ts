@@ -9,7 +9,6 @@ import {
   useP0P1Ratings,
   useUpsertP0P1Pick,
   useDeleteAllP0P1Picks,
-  useSets,
 } from "./hooks";
 import { SLOTS } from "./p0p1Slots";
 import type { FeaturedContest } from "./p0p1Slots";
@@ -195,13 +194,8 @@ export function useP0P1Ballot(overrideSetCode?: string) {
     [persistPick],
   );
 
-  const { data: allSets } = useSets();
-  const setsLoaded = allSets !== undefined;
-  const p0p1Sets = useMemo(() => allSets?.filter((s) => s.code === setCode), [allSets, setCode]);
-
   return {
     featured,
-    setsLoaded,
     cards,
     cardsByName,
     dataReady,
@@ -230,7 +224,6 @@ export function useP0P1Ballot(overrideSetCode?: string) {
     activeSlot,
     selectAdvance,
     selectAndClose,
-    p0p1Sets,
   };
 }
 

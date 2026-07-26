@@ -10,7 +10,7 @@ A Discord bot + public website for an MTGA community leaderboard called **LLU**.
 - **Frontend** (`frontend/`): React 18 + Vite + TanStack Query + Tailwind, deployed on Cloudflare Pages at `https://limitedlevelups.com/` (production fed by `master`; `dischord.pages.dev` redirects here, branch previews at `<branch>.dischord.pages.dev`)
 - **Database**: Postgres — local Docker for dev, Supabase (project `yrecdosksgigpceholjl`) for prod
 
-Spec documents live under `spec/` (original project spec, frontend contract, pod-draft design). Two pod docs, kept distinct: `spec/pod-workflow.md` is the engineering map (modules, models, config, the ready-check redesign, open decisions) — read it before touching pod code instead of re-inferring the flow. `spec/pod-coordination.md` is the plain-language player guide describing only live behavior — when a pod behavior change ships, update it in the same commit; it's destined to become a Discord Server Guide page.
+Spec documents live under `spec/`. Each one opens with what it covers and when to read it — check there before re-inferring a subsystem's design.
 
 ## Common commands
 
@@ -148,6 +148,7 @@ On push/PR to `master`: spin up Postgres service container → `alembic upgrade 
 - **Shared user-facing message strings live in `bot/commands/messages.py`** (the `MSG_*` constants), parallel to `descriptions.py` for command descriptions. Any string used by more than one command/listener goes there — never duplicate the same copy inline across modules, and don't park shared strings in a service module just because the first caller lived there. A string used by exactly one command may stay as a local `MSG_*` in that command's module; promote it to `messages.py` the moment a second caller needs it. Service modules (`bot/services/`) hold logic, not user copy.
 - **User-facing copy is plain declarative microcopy.** Name the real thing and the real action in the plainest accurate word. Literal, compositional verbs only, never phrasal verbs or idioms (many readers are non-native). No em dashes, no marketing register. Full guidance and examples in the `plain_declarative_copy` memory.
 - **Code comments: default to none.** If a comment runs longer than one line, delete the whole block — don't shrink it, delete it. The code is already self-explanatory if names are right. No periods at end of single-line comments (they're labels, not sentences). No parenthetical asides. Don't paraphrase library / decorator behavior at the declaration site — that belongs in upstream docs, not your file.
+- **When a pod behavior change ships, update `spec/pod-coordination.md` in the same commit.** It's the plain-language player guide describing only live behavior, destined to become a Discord Server Guide page, so it must never describe a state the bot isn't in.
 - **Commit style**: subjects start with uppercase; no manual line wrapping in description paragraphs; no `Co-Authored-By: Claude` or any AI trailer; plain senior-engineer prose, no AI/ML jargon. Use `- ` bullets when a commit has 2+ distinct changes; prefer one bullet per distinct change over fewer "and"-joined bullets.
 - **Ask before saving memory** and **ask before architectural decisions** — surface structural questions rather than auto-deciding.
 

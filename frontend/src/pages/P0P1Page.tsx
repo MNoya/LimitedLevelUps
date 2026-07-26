@@ -18,6 +18,7 @@ import { PostVotingStats } from "../components/p0p1/PostVotingStats";
 import { MidwayResults } from "../components/p0p1/MidwayResults";
 import { FinalResults } from "../components/p0p1/FinalResults";
 import { P0P1DevPanel } from "../components/p0p1/P0P1DevPanel";
+import { p0p1DevEnabled } from "../data/p0p1DevState";
 import { P0P1BallotScorecard, MidwayBallotScorecard, FinalBallotScorecard, CHAMFER } from "../components/p0p1/P0P1BallotScorecard";
 import { PickGrid } from "../components/p0p1/CommunityGrid";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -33,7 +34,6 @@ export function P0P1Page() {
   const ballot = useP0P1Ballot(routeSetCode);
   const {
     featured,
-    setsLoaded,
     cards,
     cardsByName,
     dataReady,
@@ -74,7 +74,7 @@ export function P0P1Page() {
     return () => observer.disconnect();
   }, []);
 
-  if (routeSetCode && setsLoaded && !featured) return <NotFoundPage />;
+  if (!featured || (featured.status === "pre" && !p0p1DevEnabled)) return <NotFoundPage />;
 
   const isCompleteEntrant = isPastDeadline && Boolean(user) && isComplete;
   const didNotVote = isPastDeadline && Boolean(user) && !isComplete;

@@ -56,36 +56,33 @@ This is a nice-to-have. We'll size the effort during implementation and decide w
 
 The `p0p1_entries` table is small — at most ~200 users × 8 slots = ~1,600 rows. A `GROUP BY` + `COUNT` is sub-millisecond. No precomputed snapshot table or script needed.
 
-A new view `public_p0p1_pick_stats` aggregates pick counts per `(set_code, slot, card_name)`:
-
-```sql
-CREATE OR REPLACE VIEW public_p0p1_pick_stats AS
-SELECT
-    set_code,
-    slot,
-    card_name,
-    COUNT(*)::int AS pick_count,
-    ROUND(COUNT(*)::numeric * 100.0 /
-        NULLIF(SUM(COUNT(*)) OVER (PARTITION BY set_code, slot), 0), 1
-    ) AS pick_pct
-FROM p0p1_entries
-WHERE now() > '2026-06-23T15:00:00Z'
-GROUP BY set_code, slot, card_name;
-```
+`public_p0p1_pick_stats` aggregates pick counts per `(set_code, slot, card_name)`. The live definition
+is the latest migration that touches it; don't mirror the SQL here.
 
 Key design points:
 
 - **View bypasses RLS** — runs as the view owner (same pattern as `public_leaderboard` reading `player_set_scores`). The underlying `p0p1_entries` table keeps its user-scoped RLS for direct authenticated access.
-- **Aggregates only** — the view exposes card name + count, not which user picked what. No privacy concern.
-- **Hidden until deadline** — the `WHERE now() > ...` clause returns empty results before voting closes, preventing aggregate stats from influencing picks during voting. The MSH deadline is hardcoded in the view SQL for now.
+- **Complete ballots only** — a `HAVING COUNT(*) = total_slots` gate means partial entries never reach the aggregates, so percentages always share one denominator. Partial entrants are handled entirely in the frontend, which shows their filled picks and flags the empty slots. **Open:** whether partials should contribute to the aggregates (earlier lean was yes — they can't win, but they can inform). Changing it means the view's gate and the entrant-count denominator together.
 - **`GRANT SELECT TO anon, authenticated`** — readable by all frontend visitors, same as other `public_*` views.
 - **Total voters derivable** — since every voter picks exactly one card per slot, `SUM(pick_count)` for any single slot = total voter count. No separate query needed.
 
 The frontend cross-references the user's own picks (already fetched via the existing RLS-scoped `p0p1_entries` query) against the view rows to compute "picked by X%."
 
-### Hardcoded deadline in the view (temporary)
+### Pre-deadline exposure is accepted, not prevented
 
-The `WHERE now() > '2026-06-23T15:00:00Z'` is specific to the MSH contest. When a second contest is created, we'll introduce a `contests` table (holding `set_code`, `voting_deadline`, `scoring_date`) and update the view to join against it. For a single contest this is simpler than building the table upfront.
+An earlier design hid aggregates behind `WHERE now() > '<MSH deadline>'` in the view, with the plan to
+join a `contests` table once a second contest existed. Neither survives:
+
+- The gate was a fixed MSH timestamp, so it was permanently satisfied and did nothing for any later
+  contest. It was dropped rather than reimplemented.
+- Contest windows live in `p0p1_contests.json`, outside Postgres (see `p0p1-contests.md`), so the view
+  has no deadline to gate on and adding one would mean a second source of truth for every window.
+
+So during voting, anyone holding the publishable key — embedded in the client bundle by design — can
+read `public_p0p1_pick_stats`, and `public_p0p1_ballots` exposes individual ballots with names at any
+time. The frontend only *requests* either after the deadline; that is a UI convention, not
+enforcement. **This is an accepted risk for a friendly community contest, decided deliberately, and
+was equally true for MSH.** Revisit only if a contest gains real stakes.
 
 ---
 
@@ -97,7 +94,7 @@ The `WHERE now() > '2026-06-23T15:00:00Z'` is specific to the MSH contest. When 
 - **Card ratings table**: `p0p1_card_ratings(set_code, card_name, gih_wr, format)` storing GIH WR for all eligible cards (not just picked ones)
 - **Scoring script**: manual trigger (`python -m bot.scripts.score_p0p1`), idempotent (upsert) so it can be rerun for informal midway check-ins posted to Discord
 - **Midway check-in**: informal — rerun scoring script partway through, post results to Discord. No UI feature.
-- **Contests table**: `set_code`, `voting_deadline`, `scoring_date`, plus optional `tiebreaker_label` / `tiebreaker_constraint`. Bot-managed via seed script, read through `public_p0p1_contests` view. Build when second contest rotates in.
+- ~~**Contests table**~~ — not built. The second contest (HOB) rotated in without one: windows are a shared JSON file, not database rows. See `p0p1-contests.md` decision 7 for why.
 - **Tiebreaker slot**: removed from the contest format. 8 scoring slots only.
 
 ---

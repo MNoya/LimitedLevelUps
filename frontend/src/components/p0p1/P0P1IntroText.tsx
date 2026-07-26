@@ -93,7 +93,7 @@ function buildSentences(
     case "final":
       return [
         <>After {windowText}, {setName} results are in!</>,
-        <>Check out the final standings based on {dataLink}.</>,
+        <>Check out the final standings based on {dataLink}</>,
       ];
   }
 }

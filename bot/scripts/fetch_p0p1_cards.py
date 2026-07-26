@@ -1,12 +1,26 @@
-"""Fetch the P0P1 card pool from Scryfall for a given set and write the frontend fixture.
+"""Set up or refresh a P0P1 contest: pull the card pool from Scryfall and schedule the voting window.
 
 Usage:
-    python -m bot.scripts.fetch_p0p1_cards --set-code HOB
+    python -m bot.scripts.fetch_p0p1_cards --set-code HOB [--deadline 2026-08-05] [--opens ...]
 
-Writes frontend/src/data/fixtures/cards-{code_lower}.ts with common + uncommon cards
-for the P0P1 contest. Excludes rares/mythics, bonus-sheet, and Special Guest printings.
-All Scryfall layouts are handled (normal, adventure, saga, transform, modal_dfc, split,
-prepare, class, case, etc.).
+Safe to run repeatedly at any point in spoiler season; it works out what the set needs.
+
+Writes cards-{code_lower}.ts with common + uncommon cards, excluding rares/mythics, bonus-sheet
+and Special Guest printings. All Scryfall layouts are handled (normal, adventure, saga, transform,
+modal_dfc, split, prepare, class, case).
+
+Then decides the contest window in the shared p0p1_contests.json at the repo root, the one file the
+frontend imports and a future bot task can read:
+
+- Pool still missing a slot's worth of cards, no window yet: writes no window. The set stays hidden
+  on /p0p1 rather than serving a ballot with unfillable slots.
+- Pool complete, no window yet: opens voting immediately, so the contest goes live when this ships.
+- Window already on disk: left alone. This is the mid-spoiler top-up, and it must not reschedule a
+  window players may already be voting in.
+- ``--opens`` / ``--deadline``: reschedules explicitly, keeping whichever of the two is not given.
+
+``--deadline`` is the only input that cannot be derived; it defaults to the Arena release instant.
+Bare dates mean noon ET, matching the release clock in ``bot/sets.py``.
 """
 from __future__ import annotations
 
@@ -15,11 +29,14 @@ import json
 import time
 import urllib.parse
 import urllib.request
+from datetime import date, datetime, timezone
 from pathlib import Path
 
-from bot.sets import ALL_SETS
+from bot.sets import ALL_SETS, RELEASE_TZ, SetSeed, release_instant
 
-FIXTURES_DIR = Path(__file__).parent.parent.parent / "frontend/src/data/fixtures"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+FIXTURES_DIR = REPO_ROOT / "frontend/src/data/fixtures"
+CONTESTS_JSON = REPO_ROOT / "p0p1_contests.json"
 SCRYFALL_SEARCH = "https://api.scryfall.com/cards/search"
 USER_AGENT = "DischordLeaderboard/1.0"
 
@@ -76,9 +93,86 @@ def extract_card(raw: dict) -> dict:
     }
 
 
+def report_pool_coverage(cards: list[dict]) -> list[str]:
+    """Print what the 8 slots have to draw from and return the shortfalls. Mid-spoiler a set is
+    mostly uncommons, which leaves the mono-color common slots unfillable — the pool has to be
+    complete before voting opens, so say so here instead of on the live ballot."""
+    playable = [c for c in cards if not c["typeLine"].startswith("Basic Land")]
+    shortfalls: list[str] = []
+
+    print("Slot coverage:")
+    for color in ("W", "U", "B", "R", "G"):
+        count = sum(1 for c in playable if c["rarity"] == "common" and c["colors"] == [color])
+        print(f"  {color} common          {count:4}")
+        if count == 0:
+            shortfalls.append(f"no {color} commons")
+
+    multicolor = sum(1 for c in playable if c["rarity"] == "uncommon" and len(c["colors"]) >= 2)
+    uncommons = sum(1 for c in playable if c["rarity"] == "uncommon")
+    commons = sum(1 for c in playable if c["rarity"] == "common")
+    print(f"  multicolor uncommon {multicolor:4}")
+    print(f"  any common          {commons:4}")
+    print(f"  any uncommon        {uncommons:4}")
+    if multicolor == 0:
+        shortfalls.append("no multicolor uncommons")
+    return shortfalls
+
+
+def contest_instant(value: str) -> str:
+    """A schedule argument as a UTC ISO instant. A bare date means noon ET, so a maintainer types the
+    wall-clock day the community sees and gets the release clock."""
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        parsed = None
+    if parsed is not None:
+        moment = release_instant(parsed)
+    else:
+        moment = datetime.fromisoformat(value)
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=RELEASE_TZ)
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def now_instant() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def read_contests() -> dict[str, dict[str, str]]:
+    if not CONTESTS_JSON.exists():
+        return {}
+    return json.loads(CONTESTS_JSON.read_text())
+
+
+def write_contest(seed: SetSeed, opens: str, deadline: str | None) -> None:
+    """Upsert this set's window, leaving every other contest byte-identical. Newest release first so
+    the live contest is the first thing a maintainer sees when opening the file."""
+    contests = read_contests()
+    entry = {
+        "name": seed.name,
+        "release": release_instant(seed.start_date).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "previewsOpen": opens,
+    }
+    if deadline is not None:
+        entry["votingDeadline"] = deadline
+    contests[seed.code] = entry
+
+    ordered = dict(sorted(contests.items(), key=lambda kv: kv[1]["release"], reverse=True))
+    CONTESTS_JSON.write_text(json.dumps(ordered, indent=2, ensure_ascii=False) + "\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--set-code", required=True, help="Scryfall set code, e.g. HOB")
+    parser.add_argument(
+        "--deadline",
+        help="When voting closes: YYYY-MM-DD (noon ET) or a full ISO timestamp. "
+        "Defaults to the Arena release instant, and is the one thing that cannot be derived",
+    )
+    parser.add_argument(
+        "--opens",
+        help="Schedule voting to open later instead of as soon as this pool ships",
+    )
     args = parser.parse_args()
 
     set_code = args.set_code.upper()
@@ -107,7 +201,7 @@ def main() -> None:
     commons = sum(1 for c in cards if c["rarity"] == "common")
     uncommons = sum(1 for c in cards if c["rarity"] == "uncommon")
     print(f"Extracted {len(cards)} cards: {commons} common, {uncommons} uncommon")
-    if any(l != "normal" for l in layout_counts):
+    if any(name != "normal" for name in layout_counts):
         for layout, count in sorted(layout_counts.items()):
             if layout != "normal":
                 print(f"  {count} {layout}")
@@ -121,6 +215,32 @@ def main() -> None:
     )
     output.write_text(ts_content)
     print(f"Wrote {len(cards)} cards → {output}")
+
+    shortfalls = report_pool_coverage(cards)
+    existing = read_contests().get(set_code)
+
+    if shortfalls:
+        print(f"POOL INCOMPLETE: {', '.join(shortfalls)}. Those slots have nothing to pick from.")
+
+    if args.opens or args.deadline:
+        opens = contest_instant(args.opens) if args.opens else (
+            existing["previewsOpen"] if existing else now_instant()
+        )
+        deadline = contest_instant(args.deadline) if args.deadline else (
+            existing.get("votingDeadline") if existing else None
+        )
+        write_contest(matched, opens, deadline)
+        print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: opens {opens}, closes {deadline or 'at release'}")
+    elif existing:
+        print(f"Voting already scheduled for {existing['previewsOpen']}, window left as is")
+    elif shortfalls:
+        print(f"Voting not opened: {set_code} stays hidden on /p0p1 until the pool fills in. "
+              f"Re-run this when the Scryfall gallery is complete.")
+    else:
+        opens = now_instant()
+        write_contest(matched, opens, None)
+        print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: voting opens at {opens}, "
+              f"so it goes live as soon as this ships.")
 
 
 if __name__ == "__main__":
