@@ -19,9 +19,10 @@ from discord.ext import commands
 
 from bot import audit
 from bot.commands import descriptions as desc
-from bot.discord_helpers import EM_SPACE, posts_publicly
+from bot.discord_helpers import EM_SPACE, NBSP, posts_publicly
 from bot.services import championship
 from bot.services import pod_format_interest as fi
+from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
 from bot.services.pod_format import is_custom
 from bot.services.pod_format_schedule import calendar_days, extras_on, latest_on, rotation_in
 from bot.services.pod_roles import role_mention
@@ -32,18 +33,19 @@ from bot.sets import active_set_code, release_instant, set_name_for
 
 MSG_TITLE = "### 🗓️ Pod Format Schedule"
 MSG_SLOT = "{emoji} {role} **<t:{unix}:t>**"
-MSG_DAILY_SET = "{symbol} {role} **every day** on every Pod slot"
+MSG_DAILY_SET = "{symbol} {role} **every day**"
 MSG_EXTRA_FORMAT = "{symbol} {role} **{days}**"
 MSG_EXTRA_FORMAT_ANY_DAY = "{symbol} {role}"
 DAYS_WEEKDAY = "Mon-Fri"
 DAYS_WEEKEND = "Weekends"
-MSG_CHAMPIONSHIP = "👑 **Set Championship** <t:{unix}:R>"
+MSG_CHAMPIONSHIP = "👑 {role} <t:{unix}:R>"
 MSG_ARRIVAL = "{symbol} **{name}** <t:{unix}:R>"
 
 IMAGE_FILENAME = "pod-schedule.png"
 IMAGE_URL = f"attachment://{IMAGE_FILENAME}"
 DEFAULT_WEEKS = 4
 COLUMN_GAP = EM_SPACE * 2
+CAPTION_GAP = NBSP * 2
 
 
 class PodSchedule(commands.Cog):
@@ -81,7 +83,7 @@ def build_schedule_view(guild: discord.Guild | None, now: datetime, weeks: int,
     if extras:
         container.add_item(discord.ui.TextDisplay(extras))
     container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=IMAGE_URL)))
-    marked = marked_days_line(days, championship_at)
+    marked = marked_days_line(guild, days, championship_at)
     if marked:
         container.add_item(discord.ui.TextDisplay(marked))
     view = discord.ui.LayoutView()
@@ -148,12 +150,15 @@ def _days_label(weekends: set[bool]) -> str:
     return ""
 
 
-def marked_days_line(days: list[date], championship_at: datetime | None) -> str:
-    """Caption for the days the calendar flags, soonest first, in the same two columns the slots use above
-    the image. Empty in an ordinary span, where every day is the daily set plus whatever its cell shows."""
+def marked_days_line(guild: discord.Guild | None, days: list[date], championship_at: datetime | None) -> str:
+    """Caption for the days the calendar flags, soonest first, in the same two columns the rows above the
+    image use. These items run longer, so they take a narrower gap to land under the same column. Empty in
+    an ordinary span, where every day is the daily set plus whatever its cell shows."""
     lines = []
     if championship_at is not None and championship_at.date() in days:
-        lines.append(MSG_CHAMPIONSHIP.format(unix=int(championship_at.timestamp())))
+        lines.append(MSG_CHAMPIONSHIP.format(
+            role=role_mention(guild, SET_CHAMPION_ROLE_NAME), unix=int(championship_at.timestamp()),
+        ))
     arrival = rotation_in(days)
     if arrival is not None:
         code = latest_on(arrival)
@@ -162,7 +167,7 @@ def marked_days_line(days: list[date], championship_at: datetime | None) -> str:
             name=set_name_for(code),
             unix=int(release_instant(arrival).timestamp()),
         ))
-    return COLUMN_GAP.join(lines)
+    return CAPTION_GAP.join(lines)
 
 
 async def setup(bot: commands.Bot) -> None:
