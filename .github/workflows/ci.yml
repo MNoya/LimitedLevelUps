@@ -49,3 +49,21 @@ jobs:
 
       - name: Run pytest
         run: pytest bot/tests/ -v
+
+  # functions/ is outside frontend/tsconfig.json, so only wrangler catches broken imports, at deploy time
+  build-pages-functions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Bundle Pages Functions
+        run: |
+          mapfile -d '' entries < <(find functions -name '*.ts' -print0)
+          printf 'entry: %s\n' "${entries[@]}"
+          npx --yes esbuild@0.21.5 "${entries[@]}" \
+            --bundle --format=esm --platform=neutral --outdir="$RUNNER_TEMP/pages-check"
