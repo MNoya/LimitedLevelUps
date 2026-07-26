@@ -33,7 +33,7 @@ def scryfall_search(query: str) -> list[dict]:
     cards: list[dict] = []
     url = f"{SCRYFALL_SEARCH}?q={urllib.parse.quote(query)}&order=set"
     while url:
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read())
         cards.extend(data.get("data", []))
@@ -70,8 +70,6 @@ def extract_card(raw: dict) -> dict | None:
     cmc = raw.get("cmc", 0)
 
     images = raw.get("image_uris") or {}
-    if not images and layout == "adventure":
-        images = raw.get("image_uris") or {}
 
     return {
         "name": name,
@@ -126,7 +124,7 @@ def main() -> None:
         print(f"  Skipped {count} {layout} card(s)")
 
     output = FIXTURES_DIR / f"cards-{set_code.lower()}.ts"
-    cards_json = json.dumps(cards, indent=2)
+    cards_json = json.dumps(cards, indent=2, ensure_ascii=False)
     ts_content = (
         'import type { Card } from "../../types/p0p1";\n'
         "\n"
