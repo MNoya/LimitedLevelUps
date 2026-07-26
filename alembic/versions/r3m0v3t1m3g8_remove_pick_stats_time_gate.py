@@ -1,7 +1,7 @@
 """Remove hardcoded time gate from public_p0p1_pick_stats view
 
 Revision ID: r3m0v3t1m3g8
-Revises: t1r2o3p4h5y6
+Revises: r0l1i2n3g4s5
 Create Date: 2026-07-24
 
 The WHERE now() > '2026-06-23T15:00:00Z' clause was an MSH-specific gate.
@@ -13,7 +13,7 @@ from alembic import op
 
 
 revision: str = "r3m0v3t1m3g8"
-down_revision: Union[str, None] = "t1r2o3p4h5y6"
+down_revision: Union[str, None] = "r0l1i2n3g4s5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
