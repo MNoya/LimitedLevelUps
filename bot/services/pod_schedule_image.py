@@ -41,7 +41,7 @@ WEEKDAY_H = 12
 BAND_H = 12
 ROW_H = 11
 SYMBOL_PX = 9
-SYMBOL_GAP = 3
+SYMBOL_GAP = 1.5
 NUM_SIZE = 9
 CODE_SIZE = 9
 WEEKDAY_SIZE = 6
@@ -185,8 +185,8 @@ def _draw_tracked(draw: ImageDraw.ImageDraw, text: str, center_x: int, y: int, c
         x += width + tracking
 
 
-def _px(logical: int) -> int:
-    return logical * SCALE
+def _px(logical: float) -> int:
+    return round(logical * SCALE)
 
 
 @lru_cache(maxsize=8)

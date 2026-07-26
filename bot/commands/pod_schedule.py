@@ -22,16 +22,21 @@ from bot.commands import descriptions as desc
 from bot.discord_helpers import EM_SPACE, posts_publicly
 from bot.services import championship
 from bot.services import pod_format_interest as fi
-from bot.services.pod_format_schedule import calendar_days, latest_on, rotation_in
+from bot.services.pod_format import is_custom
+from bot.services.pod_format_schedule import calendar_days, extras_on, latest_on, rotation_in
 from bot.services.pod_roles import role_mention
 from bot.services.pod_schedule import SCHEDULE_TZ
 from bot.services.pod_schedule_image import render_calendar_png
-from bot.services.pod_signals import WEEKDAY_BUCKETS, next_slot_start
+from bot.services.pod_signals import WEEKDAY_BUCKETS, is_weekend, next_slot_start
 from bot.sets import active_set_code, release_instant, set_name_for
 
 MSG_TITLE = "### 🗓️ Pod Format Schedule"
 MSG_SLOT = "{emoji} {role} **<t:{unix}:t>**"
 MSG_DAILY_SET = "{symbol} {role} **every day** on every Pod slot"
+MSG_EXTRA_FORMAT = "{symbol} {role} **{days}**"
+MSG_EXTRA_FORMAT_ANY_DAY = "{symbol} {role}"
+DAYS_WEEKDAY = "Mon-Fri"
+DAYS_WEEKEND = "Weekends"
 MSG_CHAMPIONSHIP = "👑 **Set Championship** <t:{unix}:R>"
 MSG_ARRIVAL = "{symbol} **{name}** <t:{unix}:R>"
 
@@ -72,6 +77,9 @@ def build_schedule_view(guild: discord.Guild | None, now: datetime, weeks: int,
     container.add_item(discord.ui.TextDisplay(MSG_TITLE))
     container.add_item(discord.ui.TextDisplay(slot_line(guild, now)))
     container.add_item(discord.ui.TextDisplay(daily_set_line(guild)))
+    extras = extras_line(guild, days, now.date())
+    if extras:
+        container.add_item(discord.ui.TextDisplay(extras))
     container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=IMAGE_URL)))
     marked = marked_days_line(days, championship_at)
     if marked:
@@ -96,12 +104,48 @@ def slot_line(guild: discord.Guild | None, now: datetime) -> str:
 
 
 def daily_set_line(guild: discord.Guild | None) -> str:
-    """The set every pod drafts, said once here so no cell has to repeat it. Named by its ping role rather
-    than by code, which keeps the line true across a rotation and lets the days after one stay blank."""
+    """The set every pod drafts, named by its ping role rather than by code, which keeps the line true across
+    a rotation and lets the days after one stay blank on the calendar."""
     code = active_set_code()
-    return MSG_DAILY_SET.format(
-        symbol=fi.format_emoji(code), role=role_mention(guild, fi.LATEST_SET_ROLE_NAME),
-    )
+    return MSG_DAILY_SET.format(symbol=fi.format_emoji(code), role=role_mention(guild, fi.LATEST_SET_ROLE_NAME))
+
+
+def extras_line(guild: discord.Guild | None, days: list[date], today: date) -> str:
+    """The formats that run beside the daily set, in the same columns the slots use. Empty until a set cycle
+    has days written for them."""
+    items = []
+    for role_name, symbol, when in scheduled_extras(days, today):
+        template = MSG_EXTRA_FORMAT if when else MSG_EXTRA_FORMAT_ANY_DAY
+        items.append(template.format(symbol=symbol, role=role_mention(guild, role_name), days=when))
+    return COLUMN_GAP.join(items)
+
+
+def scheduled_extras(days: list[date], today: date) -> list[tuple[str, object, str]]:
+    """The flashback and cube roles that have pods still to come in the rendered span, each with the days it
+    runs on. A cadence a set cycle has not been written yet, the weeks straight after a rotation, drops off
+    the line rather than promising pods no day carries."""
+    weekends: dict[str, set[bool]] = {}
+    for day in days:
+        if day < today:
+            continue
+        for code in extras_on(day):
+            role_name = fi.CUBE_ROLE_NAME if is_custom(code) else fi.FLASHBACK_ROLE_NAME
+            weekends.setdefault(role_name, set()).add(is_weekend(day))
+    ordered = ((fi.FLASHBACK_ROLE_NAME, fi.flashback_emoji()), (fi.CUBE_ROLE_NAME, fi.cube_emoji()))
+    return [
+        (role_name, symbol, _days_label(weekends[role_name]))
+        for role_name, symbol in ordered if role_name in weekends
+    ]
+
+
+def _days_label(weekends: set[bool]) -> str:
+    """Named as the week half a role's pods sit in, and left unnamed once they sit in both, so the label
+    never promises a day the table does not carry."""
+    if weekends == {False}:
+        return DAYS_WEEKDAY
+    if weekends == {True}:
+        return DAYS_WEEKEND
+    return ""
 
 
 def marked_days_line(days: list[date], championship_at: datetime | None) -> str:
