@@ -27,6 +27,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:test@localhost:5432/dischord_test
+      TEST_DATABASE_URL: postgresql://postgres:test@localhost:5432/dischord_test
 
     steps:
       - uses: actions/checkout@v4

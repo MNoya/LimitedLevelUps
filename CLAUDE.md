@@ -22,7 +22,7 @@ All Python commands assume the venv: `.venv/bin/python`, `.venv/bin/pytest`, `.v
 # Run the bot (reads .env)
 .venv/bin/python -u -m bot.main
 
-# Tests (spins up a Postgres testcontainer)
+# Tests (spins up a Postgres testcontainer unless TEST_DATABASE_URL is set)
 .venv/bin/pytest bot/tests/
 .venv/bin/pytest bot/tests/test_scoring.py::test_specific_thing  # single test
 
@@ -154,6 +154,7 @@ On push/PR to `master`: spin up Postgres service container → `alembic upgrade 
 ## Operational notes
 
 - Local Postgres: container `dischord-pg` on host `:5433`, db `dischord`, user `postgres`, password `devpw`.
+- Tests truncate every table in their database. Set `TEST_DATABASE_URL` to skip the testcontainer (`…:5433/dischord_test`); the db name must contain `test` or the fixtures refuse it.
 - Supabase prod pooler URL (with encoded password) lives in gitignored `.env.supabase`.
 - 17lands cache: per-token JSONs at `cache/17lands/<token>__YYYY-MM-DD.json`. Use `refresh_stats --cache` for free re-aggregation, omit `--cache` for live fetch.
 - Bot logs: `logs/bot.log` (gitignored). Audit log: append-only JSONL at `logs/events.jsonl`.
