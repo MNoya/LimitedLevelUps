@@ -24,6 +24,8 @@ Two ways a pod comes into existence, both feeding the same `PodSignal` → `PodD
 
 The old fixed **weekly schedule poster** (`bot/services/pod_schedule.py`, `WEEKLY_SLOTS`, Wed/Thu/Sat, the `/create` template flow) is **deprecated** — not part of the current model and not to be supported or extended.
 
+`/mock-draft` sits outside that spine: no signal, no RSVPs, no rounds. Its channel-level surface is the anchor card (`bot/services/mock_lobby_card.py`), the thread starter, re-rendered in place by the manager through open → drafting → complete → canceled. The card is resolved from the thread id rather than a held message handle (a thread shares its starter's id), so a restart mid-lobby keeps updating it. Preview every state with `!test mockcard [SET]`.
+
 ## Core data spine
 
 Interest is gathered on a `PodSignal`; when it fires it produces a `PodDraftEvent` (the pod), and `PodSignalMember` rows are the roster that carries across. All in `bot/models.py`.

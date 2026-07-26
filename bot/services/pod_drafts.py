@@ -725,6 +725,12 @@ def draftmancer_url_for(session_id: str, user_name: str | None = None) -> str:
     return url
 
 
+def pod_page_url(event_name: str) -> str:
+    """The event's page on the website. The slug is derived from the name the same way the
+    `public_pod_draft_events` view derives it, so the link is valid from the moment the row exists."""
+    return f"{settings.public_site_url.rstrip('/')}/pods/{slugify(event_name)}"
+
+
 def update_event_format(session: Session, event_id: str, code: str) -> str | None:
     """Repoint a pre-draft pod event's set_code, set_id and format label, swapping the leading set
     token in its name to match. Returns the (possibly renamed) event name, or None if missing or
@@ -790,6 +796,13 @@ def load_event_name_sync(event_id: str) -> str:
         return session.execute(
             select(PodDraftEvent.name).where(PodDraftEvent.id == event_id)
         ).scalar_one_or_none() or "Pod Draft"
+
+
+def load_event_kind_sync(event_id: str) -> str:
+    with SessionLocal() as session:
+        return session.execute(
+            select(PodDraftEvent.kind).where(PodDraftEvent.id == event_id)
+        ).scalar_one_or_none() or "tournament"
 
 
 def load_event_closed_decklist_sync(event_id: str) -> bool:

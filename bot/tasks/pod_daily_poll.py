@@ -102,8 +102,10 @@ from bot.services.pod_launcher_copy import (
     SECTION_NEXT,
 )
 from bot.services.pod_reminder_copy import SLOT_FIRE_PING
+from bot.services.pod_schedule import EARLY_POD_ROLE_NAME, LATE_POD_ROLE_NAME
 from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role, role_mention
 from bot.services.pod_signals import (
+    LANE_LATE,
     RSVP_NO,
     RSVP_YES,
     SCHEDULE_TZ,
@@ -665,7 +667,9 @@ def _committed_card_link(guild: discord.Guild | None, slot: pod_launch.LauncherS
     return f"[__**{slot.thread_name}**__]({url})" if url else None
 
 
-def build_play_again_prompt(bucket_keys: list[str]) -> tuple[discord.Embed, "PlayAgainView"]:
+def build_play_again_prompt(
+    bucket_keys: list[str], guild: discord.Guild | None = None,
+) -> tuple[discord.Embed, "PlayAgainView"]:
     """The next-day re-signup prompt posted into a finished pod's thread: a thank-you over one button per pod
     the same slot offers tomorrow. An embed, so the thank-you carries as a heading and the prompt reads as its
     own card in a thread full of match reports.
@@ -676,9 +680,17 @@ def build_play_again_prompt(bucket_keys: list[str]) -> tuple[discord.Embed, "Pla
     body = PLAY_AGAIN_INTRO.format(
         love=emojis.get(PLAY_AGAIN_LOVE_EMOJI),
         next=emojis.get(NEXT_EMOJI),
-        slot=_slot_short_name(time_key_of(bucket_keys[0])),
+        pod=_slot_pod_label(guild, time_key_of(bucket_keys[0])),
     )
     return discord.Embed(description=body, color=discord.Color.green()), PlayAgainView(bucket_keys)
+
+
+def _slot_pod_label(guild: discord.Guild | None, bucket_key: str) -> str:
+    """The slot named as its weekday ping role, mentioned for the color it carries. The weekend roles are
+    named Weekend Early Pod, which would read as a different pod than the one the buttons offer."""
+    if lane_of(bucket_key) == LANE_LATE:
+        return role_mention(guild, LATE_POD_ROLE_NAME)
+    return role_mention(guild, EARLY_POD_ROLE_NAME)
 
 
 class PlayAgainView(discord.ui.View):
@@ -1542,7 +1554,7 @@ async def post_play_again_prompt(bot: commands.Bot, event_id: str, bucket_keys: 
     thread = await pod_launch.fetch_pod_thread(bot, int(thread_id))
     if thread is None:
         return
-    embed, view = build_play_again_prompt(bucket_keys)
+    embed, view = build_play_again_prompt(bucket_keys, thread.guild)
     try:
         await thread.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:

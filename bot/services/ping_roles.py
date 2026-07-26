@@ -454,13 +454,13 @@ class _LinkArenaModal(discord.ui.Modal, title="Link Arena Handle"):
         await _handoff_active_lobby_link(interaction)
 
 
-def format_join_line(session_id: str, arena_name: str) -> str:
+def format_join_line(session_id: str, name: str, *, arena: bool = True) -> str:
     """The one-line join call to action shared by the lobby DM, the in-thread Join Draft reply, and the
-    post-link handoff: the personalized Draftmancer link plus the Arena identity, mtga emoji first when
-    the app emoji resolves."""
-    emoji = emojis.get("mtga")
-    identity = f"{emoji} **{arena_name}**" if emoji else f"**{arena_name}**"
-    return MSG_JOIN_LINE.format(url=draftmancer_url_for(session_id, arena_name), identity=identity)
+    post-link handoff: the personalized Draftmancer link plus the identity, mtga emoji first when the app
+    emoji resolves. `arena` is False for a mock draft, where the name is a Discord one."""
+    emoji = emojis.get("mtga") if arena else ""
+    identity = f"{emoji} **{name}**" if emoji else f"**{name}**"
+    return MSG_JOIN_LINE.format(url=draftmancer_url_for(session_id, name), identity=identity)
 
 
 async def _handoff_active_lobby_link(interaction: discord.Interaction) -> None:

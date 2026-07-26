@@ -26,8 +26,6 @@ from bot.commands.messages import (
     MSG_BOT_RECONNECTED,
     MSG_LOBBY_FULL_PROMPT,
     MSG_MOCK_COMPLETE,
-    MSG_MOCK_LOBBY_COUNTER,
-    MSG_MOCK_LOBBY_OPEN,
 )
 from bot.config import settings
 from bot.database import SessionLocal
@@ -42,6 +40,13 @@ from bot.services.lobby_embed import (
     event_title,
     render as render_lobby_embed,
     render_ready_check_progress,
+)
+from bot.services.mock_lobby_card import (
+    STATE_CANCELED,
+    STATE_COMPLETE,
+    STATE_DRAFTING,
+    STATE_OPEN,
+    build_mock_card,
 )
 from bot.services import pod_format
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase, notify_pod_complete
@@ -80,6 +85,7 @@ from bot.services.pod_drafts import (
     load_event_time_sync,
     name_token_match,
     player_for_name,
+    pod_page_url,
     seed_event_participants,
     update_event_format,
 )
@@ -238,6 +244,7 @@ async def cancel_pod_event(event_id: str, *, actor: str) -> str | None:
         for task in (manager.grace_task, manager.championship_task):
             if task is not None and not task.done():
                 task.cancel()
+        await manager.mark_canceled(actor)
         await manager.disconnect_safely()
     if _CARD_CANCEL_HOOK is not None:
         await _CARD_CANCEL_HOOK(event_id)
@@ -251,7 +258,6 @@ class PodDraftManager:
                  event_name: str = "Pod Draft",
                  draftmancer_url: str = "",
                  kind: str = "tournament",
-                 mock_lobby_message: "discord.Message | None" = None,
                  rsvps_yes: list[str] | None = None,
                  rsvps_maybe: list[str] | None = None,
                  reconnect: bool = False) -> None:
@@ -267,7 +273,8 @@ class PodDraftManager:
         self.kind = kind
         self.reconnect = reconnect
         self._lobby_card_adopt_attempted = False
-        self.mock_lobby_message = mock_lobby_message
+        self._mock_anchor_message: "discord.Message | None" = None
+        self.canceled_by: str | None = None
         self._thread_added_ids: set[str] = set()
         self.rsvps_yes: list[str] = list(rsvps_yes or [])
         self.rsvps_maybe: list[str] = list(rsvps_maybe or [])
@@ -743,7 +750,8 @@ class PodDraftManager:
         """Whether the roster is unusual enough that the initiator confirms before the check fires. Shared by
         the interactive gate and the draft-restart path, which has nobody to ask and so skips the check."""
         seated = len(self.player_session_users())
-        return seated < self.ready_check_floor(min_players) or seated % 2 != 0 or bool(unlinked)
+        unrecognized = bool(unlinked) and self.kind != "mock"
+        return seated < self.ready_check_floor(min_players) or seated % 2 != 0 or unrecognized
 
     async def initiate_ready_check(self, thread, initiated_by: str | None = None) -> str | None:
         """Start a Draftmancer ready check; returns an error string on failure, None on success. Only the hard
@@ -920,14 +928,17 @@ class PodDraftManager:
             out[mid] = member.display_name
         return out
 
-    def _settings_labels(self) -> dict[str, str]:
+    def _settings_labels(self) -> dict:
         """Render inputs shared by the lobby + progress cards: the set code that prefixes the title's
-        keyrune symbol, plus the Format / Pairings / Seats footer labels."""
+        keyrune symbol, the Format / Pairings / Seats footer labels, and the mock flag both cards read to
+        drop tournament machinery. A mock draft pairs no matches, so it carries no Pairings label."""
+        mock = self.kind == "mock"
         return {
             "set_code": self.set_code,
             "format_label": pod_format.format_display(self.set_code),
-            "pairing_label": pairing_label(self.pairing_mode),
+            "pairing_label": None if mock else pairing_label(self.pairing_mode),
             "seating_label": seating_mode_label(self.seating_mode),
+            "mock": mock,
         }
 
     async def _refresh_lobby_status(self) -> None:
@@ -1016,6 +1027,8 @@ class PodDraftManager:
                     await self.lobby_status_message.edit(embed=embed, view=view)
                 except Exception:
                     log.warning(f"could not edit lobby status for {self.session_id}", exc_info=True)
+            if self.kind == "mock":
+                await self._update_mock_anchor(classified)
 
         if self.ready_check_progress_message is not None:
             progress_state = self._progress_card_state(state)
@@ -1085,7 +1098,7 @@ class PodDraftManager:
             return "ready"
         if not classified:
             return "empty"
-        if any(dn is None for _, dn in classified):
+        if any(dn is None for _, dn in classified) and self.kind != "mock":
             return "unlinked"
         return "linked"
 
@@ -1139,7 +1152,7 @@ class PodDraftManager:
         log.info(f"[DRAFT] mock_finalized event={self.event_id}")
         thread = await self._fetch_thread()
         if thread is not None:
-            event_url = f"{settings.public_site_url.rstrip('/')}/pods/{slugify(self.event_name)}"
+            event_url = pod_page_url(self.event_name)
             try:
                 await thread.send(MSG_MOCK_COMPLETE.format(
                     event_name=self.event_name, url=event_url, manat=emojis.get("manat"),
@@ -1155,27 +1168,63 @@ class PodDraftManager:
 
     def _refresh_mock_lobby(self) -> None:
         """Mock-only reaction to a lobby change (join, leave, or rename): add recognized members to the
-        thread and update the live player count on the anchor message. No-op for tournament pods."""
+        thread. The anchor card itself re-renders from `_refresh_lobby_status`, which every lobby change
+        already runs through. No-op for tournament pods."""
         if self.kind != "mock" or self.draft_complete:
             return
         asyncio.create_task(self._sync_thread_membership())
-        asyncio.create_task(self._update_mock_lobby_counter())
 
-    async def _update_mock_lobby_counter(self) -> None:
-        if self.mock_lobby_message is None:
+    async def _update_mock_anchor(self, roster: list[tuple[str, str | None]]) -> None:
+        """Re-render the channel-level mock card in place. `roster` is the classification the lobby card
+        was just built from, so the two surfaces never disagree about who is at the table."""
+        anchor = await self._mock_anchor()
+        if anchor is None:
             return
-        count = len(self.player_session_users())
-        counter = MSG_MOCK_LOBBY_COUNTER.format(count=count) if count >= 1 else ""
-        content = MSG_MOCK_LOBBY_OPEN.format(
-            draftmancer_emoji=emojis.get("draftmancer"),
-            event_name=self.event_name,
-            url=self.draftmancer_url,
-            counter=counter,
+        embed, view = build_mock_card(
+            event_name=self.event_name, set_code=self.set_code, session_id=self.session_id,
+            session_url=self.draftmancer_url, site_url=pod_page_url(self.event_name),
+            roster=roster, max_players=self.max_players, state=self._mock_card_state(),
+            spectate_url=self.spectate_url, canceled_by=self.canceled_by,
         )
         try:
-            await self.mock_lobby_message.edit(content=content)
+            await anchor.edit(embed=embed, view=view)
         except discord.HTTPException:
-            log.info(f"[MOCK] counter_edit_failed event={self.event_id}", exc_info=True)
+            log.info(f"[MOCK] anchor_edit_failed event={self.event_id}", exc_info=True)
+
+    def _mock_card_state(self) -> str:
+        if self.canceled_by is not None:
+            return STATE_CANCELED
+        if self.draft_complete:
+            return STATE_COMPLETE
+        if self.drafting:
+            return STATE_DRAFTING
+        return STATE_OPEN
+
+    async def _mock_anchor(self) -> "discord.Message | None":
+        """The card `/mock-draft` posted, resolved from the thread instead of a held reference: the
+        thread was created off that message, so they share an id. A restart mid-lobby can keep editing
+        the same card that way."""
+        if self._mock_anchor_message is not None:
+            return self._mock_anchor_message
+        thread = await self._fetch_thread()
+        parent = getattr(thread, "parent", None)
+        if parent is None:
+            return None
+        try:
+            self._mock_anchor_message = await parent.fetch_message(self.thread_id)
+        except discord.HTTPException:
+            log.info(f"[MOCK] anchor_fetch_failed event={self.event_id}", exc_info=True)
+            return None
+        return self._mock_anchor_message
+
+    async def mark_canceled(self, actor: str) -> None:
+        """Flip a mock draft's anchor card to canceled before the event row goes away. Tournament pods
+        retire their RSVP card through the cancel hook instead, so this is mock-only."""
+        if self.kind != "mock":
+            return
+        self.canceled_by = actor
+        roster = await self.classified_session_users()
+        await self._update_mock_anchor(roster)
 
     async def _sync_thread_membership(self) -> None:
         """Add Draftmancer joiners we recognize as guild members to the mock-draft thread, so the
@@ -2274,7 +2323,6 @@ async def start_manager(
     event_name: str = "Pod Draft",
     draftmancer_url: str = "",
     kind: str = "tournament",
-    mock_lobby_message: "discord.Message | None" = None,
     rsvps_yes: list[str] | None = None,
     rsvps_maybe: list[str] | None = None,
     reconnect: bool = False,
@@ -2286,7 +2334,6 @@ async def start_manager(
     manager = PodDraftManager(
         bot, event_id, session_id, thread_id, set_code, expected_attendee_count,
         event_name=event_name, draftmancer_url=draftmancer_url, kind=kind,
-        mock_lobby_message=mock_lobby_message,
         rsvps_yes=rsvps_yes, rsvps_maybe=rsvps_maybe, reconnect=reconnect,
     )
     persisted_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)

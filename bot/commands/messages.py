@@ -18,14 +18,19 @@ MSG_ADMIN_ONLY = "This command is reserved for the bot Admin."
 MSG_MOCK_NOT_TEXT_CHANNEL = "Run `/mock-draft` in a server text channel — the thread is created there."
 MSG_MOCK_UNKNOWN_SET = "Unknown set `{code}`. Pick one from the suggestions, or use a registered cube format."
 MSG_MOCK_ALREADY_ACTIVE = "A mock draft is already running in {thread}. Finish or cancel it before starting another."
-MSG_MOCK_LOBBY_OPEN = (
-    "{draftmancer_emoji} **{event_name}** lobby is open!{counter}\n"
-    "**Join the Draftmancer session:** <{url}>\n"
-    "-# Use your Discord name so the bot can match you. No matches are played. When the draft ends, "
-    "the table and draft logs will be posted on the site."
-)
 MSG_MOCK_COMPLETE = "✅ **{event_name} complete!** [Draft Recap here](<{url}>) {manat}"
-MSG_MOCK_LOBBY_COUNTER = " 👥 {count}/8"
+MSG_MOCK_CARD_OPEN = "Looking for players"
+MSG_MOCK_CARD_FULL = "Table is full"
+MSG_MOCK_CARD_DRAFTING = "Drafting now"
+MSG_MOCK_CARD_COMPLETE = "Draft finished"
+MSG_MOCK_CARD_CANCELED = "Lobby closed by {actor}"
+MSG_MOCK_CARD_CANCELED_NO_ACTOR = "Lobby closed"
+MSG_MOCK_CARD_PLAYERS = "👥 Players ({count})"
+MSG_MOCK_CARD_EMPTY_TABLE = "-"
+MSG_MOCK_CARD_LOGS_PENDING = "Draft logs will be saved [**on the site**](<{url}>) {llu}"
+MSG_MOCK_CARD_DISCORD_NAME = "Use your Discord name in Draftmancer so the bot can match you"
+MSG_MOCK_CARD_RECAP_BUTTON = "Draft Recap"
+MSG_MOCK_CARD_SPECTATE_BUTTON = "Spectate"
 MSG_LOBBY_FULL_PROMPT = "{count} Players locked in! Initiate Ready Check?"
 MSG_BOT_RECONNECTED = "🤖 Bot reconnected — back to managing the lobby."
 
@@ -33,7 +38,11 @@ MSG_JOIN_DRAFT_BUTTON = "Join Draft"
 MSG_JOIN_LINE = (
     "Open this [**Draftmancer Link**](<{url}>) to join the draft as {identity}"
 )
-MSG_LINK_ARENA_PROMPT = "Please click **Link Arena** below so the bot recognizes you."
+MSG_LINK_ARENA_PROMPT = (
+    "Seats are matched by your MTG Arena handle, the full name with the numbers, like `YourName#12345`. "
+    "Click **Link Arena** below to save it once. **Join Draft** then gives you a link with your name "
+    "already set."
+)
 
 MSG_DM_RSVP_YES = "✅ You replied **Yes** to {thread}"
 MSG_DM_RSVP_MAYBE = "🤷 You replied **Maybe** to {thread}"

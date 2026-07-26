@@ -54,6 +54,7 @@ from bot.commands.testawards import setup as setup_testawards
 from bot.commands.testchampionship import setup as setup_testchampionship
 from bot.commands.testcomponent import setup as setup_testcomponent
 from bot.commands.testlobby import setup as setup_testlobby
+from bot.commands.testmockcard import setup as setup_testmockcard
 from bot.commands.testschedule import setup as setup_testschedule
 from bot.commands.testthreadintro import setup as setup_testthreadintro
 from bot.commands.testpolls import setup as setup_testpolls
@@ -68,7 +69,7 @@ from bot.services.bot_log import BotLog
 from bot.services.lobby_embed import LobbyReadyButtonView
 from bot.services.pod_draft_manager import rehydrate_active_lobbies
 from bot.services.pod_team_board import TeamReportButton, TeamRevealReportButton
-from bot.services.pod_join_button import JoinDraftButton
+from bot.services.pod_join_button import JoinDraftButton, MockJoinDraftButton
 from bot.services.pod_link_dm import DmLinkArenaButton, DmNotifyToggleButton
 from bot.services.pod_team_vote import TeamVoteButton
 from bot.services.pod_format_poll import AddFormatButton, FormatPollButton
@@ -250,6 +251,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testscribe(bot)
         await setup_testformatschedule(bot)
         await setup_testchampionship(bot)
+        await setup_testmockcard(bot)
         await rearm_signals(bot)
         await reconcile_rolled_lanes(bot)
         await catch_up_daily_poll(bot)
@@ -260,6 +262,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(FormatPollButton)
         bot.add_dynamic_items(AddFormatButton)
         bot.add_dynamic_items(JoinDraftButton)
+        bot.add_dynamic_items(MockJoinDraftButton)
         bot.add_dynamic_items(DmNotifyToggleButton)
         bot.add_dynamic_items(DmLinkArenaButton)
         bot.add_dynamic_items(ChampionshipConfirmButton)

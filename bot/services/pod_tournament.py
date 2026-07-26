@@ -68,6 +68,7 @@ from bot.services.pod_drafts import (
     load_event_name_sync,
     load_event_pairing_mode_sync,
     latest_reported_match,
+    pod_page_url,
     load_event_thread_id_sync,
     own_open_matches,
     parse_record,
@@ -212,10 +213,6 @@ def build_thread_link_button(guild_id: int | str, thread_id: int | str) -> ui.Bu
         url=f"https://discord.com/channels/{guild_id}/{thread_id}",
         emoji=emojis.get_emoji("manat"),
     )
-
-
-def pod_page_url(event_name: str) -> str:
-    return f"{settings.public_site_url.rstrip('/')}/pods/{slugify(event_name)}"
 
 
 def build_replays_link_button(event_name: str) -> ui.Button:
@@ -402,7 +399,7 @@ def _build_standings_row(
     color_suffix = f"  {color_glyph}" if color_glyph else ""
     log_suffix = ""
     if event_has_log and slug and event_name:
-        review_url = f"{settings.public_site_url.rstrip('/')}/pods/{slugify(event_name)}/{slug}"
+        review_url = f"{pod_page_url(event_name)}/{slug}"
         log_suffix = f"  [Draft Log]({review_url}) 📜"
     caption_cleaned = (
         clean_caption(data.screenshot_caption)
