@@ -2088,13 +2088,15 @@ class PodDraftManager:
         if not self._ready_check_is_live(generation):
             log.info(f"[READY] stale_timeout_ignored event={self.event_id} generation={generation}")
             return
+        missing_ids = self.expected_user_ids - self.ready_users
         log.warning(
             f"[READY] timeout event={self.event_id} timeout_s={_READY_TIMEOUT_S} "
-            f"ready={len(self.ready_users)}/{len(self.expected_user_ids)} "
-            f"missing={self.expected_user_ids - self.ready_users}"
+            f"ready={len(self.ready_users)}/{len(self.expected_user_ids)} missing={missing_ids}"
         )
+        tally = f"{len(self.ready_users)}/{len(self.expected_user_ids)} ready"
+        cause = f"waiting on {self._missing_names(missing_ids)}" if missing_ids else "the lobby roster changed"
         await bot_log_mod.get(self.bot).post(
-            f"Ready check timed out for event `{self.event_id}` — draft did not start.",
+            f"Ready check expired for event `{self.event_id}`. {tally}, {cause}.",
             fingerprint=f"ready_check_timeout:{self.event_id}",
             tag="READY",
         )
@@ -2190,6 +2192,11 @@ class PodDraftManager:
         names = [self.expected_user_names.get(uid) for uid in left_ids]
         names = [name for name in names if name]
         return roster_change_detail(names, "left")
+
+    def _missing_names(self, missing_ids: set[str]) -> str:
+        """Seats that never answered a ready check, for the admin notice. Falls back to the raw Draftmancer
+        userID when a name was not captured, so the notice stays traceable instead of dropping the seat."""
+        return ", ".join(self.expected_user_names.get(uid) or uid for uid in sorted(missing_ids))
 
     def _schedule_end_watchdog(self) -> None:
         self._cancel_end_watchdog()
