@@ -47,7 +47,7 @@ export function gihwrBounds(
   let min = Infinity;
   let max = -Infinity;
   for (const stat of pickStats) {
-    const r = ratingsByName.get(stat.cardName);
+    const r = ratingsByName.get(normalizeCardName(stat.cardName));
     if (!r || r.gih < GIH_SAMPLE_FLOOR || r.gihwr === null) continue;
     if (r.gihwr < min) min = r.gihwr;
     if (r.gihwr > max) max = r.gihwr;
@@ -55,8 +55,12 @@ export function gihwrBounds(
   return { min: min === Infinity ? 0 : min, max: max === -Infinity ? 0 : max };
 }
 
+export function normalizeCardName(name: string): string {
+  return name.split(" // ")[0].trim();
+}
+
 export function buildRatingsByName(snapshot: RatingsSnapshot): Map<string, CardRating> {
-  return new Map(snapshot.cards.map((c) => [c.card_name, c]));
+  return new Map(snapshot.cards.map((c) => [normalizeCardName(c.card_name), c]));
 }
 
 // Sum GIHWR for a ballot. Cards absent from ratings, below the GIH floor,
@@ -67,7 +71,7 @@ export function scoreBallot(
 ): number {
   let total = 0;
   for (const cardName of picks.values()) {
-    const rating = ratingsByName.get(cardName);
+    const rating = ratingsByName.get(normalizeCardName(cardName));
     if (!rating || rating.gih < GIH_SAMPLE_FLOOR || rating.gihwr === null) continue;
     total += rating.gihwr * 100;
   }
@@ -90,7 +94,7 @@ export function bestPossibleTeam(
     cards
       .filter((c) => slot.filter(c, empty))
       .flatMap((c) => {
-        const r = ratingsByName.get(c.name);
+        const r = ratingsByName.get(normalizeCardName(c.name));
         if (!r || r.gih < GIH_SAMPLE_FLOOR || r.gihwr === null) return [];
         return [{ name: c.name, gihwr: r.gihwr }];
       })
@@ -149,7 +153,7 @@ export function mostPopularTeam(
     for (const stat of candidates) {
       if (!usedCards.has(stat.cardName)) {
         usedCards.add(stat.cardName);
-        const r = ratingsByName.get(stat.cardName);
+        const r = ratingsByName.get(normalizeCardName(stat.cardName));
         picked = {
           slot: slot.key,
           cardName: stat.cardName,
@@ -188,7 +192,7 @@ function makeSide(
   ratingsByName: Map<string, CardRating>,
   cardsByName: Map<string, Card>,
 ): MidwayVersusSide {
-  const r = ratingsByName.get(cardName);
+  const r = ratingsByName.get(normalizeCardName(cardName));
   const gihwr = r && r.gih >= GIH_SAMPLE_FLOOR && r.gihwr !== null ? r.gihwr : null;
   return {
     name: cardName,
@@ -432,7 +436,7 @@ export function highlightsFeed(
   feedSize = 5,
 ): Highlight[] {
   const rated = (name: string): number | null => {
-    const r = ratingsByName.get(name);
+    const r = ratingsByName.get(normalizeCardName(name));
     return r && r.gih >= GIH_SAMPLE_FLOOR && r.gihwr !== null ? r.gihwr : null;
   };
 

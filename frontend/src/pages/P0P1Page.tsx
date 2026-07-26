@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { Crossfade } from "../components/Crossfade";
 import { CtaPill } from "../components/CtaPill";
@@ -17,6 +18,7 @@ import { PostVotingStats } from "../components/p0p1/PostVotingStats";
 import { MidwayResults } from "../components/p0p1/MidwayResults";
 import { FinalResults } from "../components/p0p1/FinalResults";
 import { P0P1DevPanel } from "../components/p0p1/P0P1DevPanel";
+import { p0p1DevEnabled } from "../data/p0p1DevState";
 import { P0P1BallotScorecard, MidwayBallotScorecard, FinalBallotScorecard, CHAMFER } from "../components/p0p1/P0P1BallotScorecard";
 import { PickGrid } from "../components/p0p1/CommunityGrid";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -25,10 +27,13 @@ import { SLOTS } from "../data/p0p1Slots";
 import { groupBySlot, findExtremes, classifyYourPick } from "../data/p0p1Stats";
 import type { Card, SlotDefinition, SlotKey } from "../types/p0p1";
 import { SITE_LINKS } from "../data/site";
+import { NotFoundPage } from "./NotFoundPage";
 
 export function P0P1Page() {
-  const ballot = useP0P1Ballot();
+  const { setCode: routeSetCode } = useParams<{ setCode?: string }>();
+  const ballot = useP0P1Ballot(routeSetCode);
   const {
+    featured,
     cards,
     cardsByName,
     dataReady,
@@ -55,6 +60,7 @@ export function P0P1Page() {
     ratingsSnapshot,
     ballots,
   } = ballot;
+
   const isDesktop = !useIsMobile(1024);
   const heroRef = useRef<HTMLDivElement>(null);
   const [heroHeight, setHeroHeight] = useState(0);
@@ -67,6 +73,9 @@ export function P0P1Page() {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  if (!featured || (featured.status === "pre" && !p0p1DevEnabled)) return <NotFoundPage />;
+
   const isCompleteEntrant = isPastDeadline && Boolean(user) && isComplete;
   const didNotVote = isPastDeadline && Boolean(user) && !isComplete;
   const groupedStats = hasParticipated && pickStats ? groupBySlot(pickStats) : undefined;
@@ -125,7 +134,7 @@ export function P0P1Page() {
   return (
     <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
-      <P0P1Hero innerRef={heroRef} cta={heroCta} belowIntro={belowIntro} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
+      {featured && <P0P1Hero featured={featured} innerRef={heroRef} cta={heroCta} belowIntro={belowIntro} phase={phase} dateRange={ratingsSnapshot?.dateRange} />}
 
       <main className="flex-1 px-10 pb-5 pt-5">
         {!isPastDeadline &&
@@ -134,6 +143,7 @@ export function P0P1Page() {
               activeSlotKey={activeSlotKey}
               picksBySlot={picksBySlot}
               cardsByName={cardsByName}
+              setCode={featured?.code}
               onSelect={(key) => setEditingSlotKey(key)}
             />
           ) : (
@@ -176,6 +186,7 @@ export function P0P1Page() {
               pickStats={pickStats}
               cardsByName={cardsByName}
               picksBySlot={picksBySlot}
+              setCode={featured?.code}
               yourPicks={
                 isCompleteEntrant ? (
                   <div>
@@ -185,6 +196,7 @@ export function P0P1Page() {
                     <PickGrid
                       cardsByName={cardsByName}
                       picksBySlot={picksBySlot}
+                      setCode={featured?.code}
                       entries={SLOTS.map((slot) => {
                         const cardName = picksBySlot.get(slot.key);
                         const slotStats = groupedStats?.get(slot.key) ?? [];
@@ -219,6 +231,7 @@ export function P0P1Page() {
                   selectedName={picksBySlot.get(activeSlot.key)}
                   onSelect={(name) => selectAdvance(activeSlot.key, name)}
                   minColW={200}
+                  setCode={featured?.code}
                   footerRight={
                     <ClearAll
                       onClear={handleClearAll}
@@ -269,11 +282,13 @@ function RosterStrip({
   activeSlotKey,
   picksBySlot,
   cardsByName,
+  setCode,
   onSelect,
 }: {
   activeSlotKey: SlotKey;
   picksBySlot: Map<string, string>;
   cardsByName: Map<string, Card>;
+  setCode?: string;
   onSelect: (key: SlotKey) => void;
 }) {
   return (
@@ -286,6 +301,7 @@ function RosterStrip({
             slot={slot}
             card={cardName ? cardsByName.get(cardName) : undefined}
             active={activeSlotKey === slot.key}
+            setCode={setCode}
             onClick={() => onSelect(slot.key)}
           />
         );
@@ -298,11 +314,13 @@ function RosterTile({
   slot,
   card,
   active,
+  setCode,
   onClick,
 }: {
   slot: SlotDefinition;
   card: Card | undefined;
   active: boolean;
+  setCode?: string;
   onClick: () => void;
 }) {
   const accent = SLOT_ACCENT[slot.key];
@@ -322,7 +340,7 @@ function RosterTile({
         {card ? (
           <img src={card.imageArtCrop} alt={card.name} className="w-full h-full object-cover" />
         ) : (
-          <SlotPip slotKey={slot.key} size={48} />
+          <SlotPip slotKey={slot.key} size={48} setCode={setCode} />
         )}
       </div>
       <div className="px-2 pt-2 pb-1.5 shrink-0">

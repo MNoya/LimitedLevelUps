@@ -127,6 +127,7 @@ export function MidwayResults({
         score={viewingYours ? yourScore : crowdTeam.score}
         entries={viewingYours ? yourEntries : crowdEntries}
         cardsByName={cardsByName}
+        setCode={setCode}
         onTileOpen={onSlotOpen}
         aligned={showYourPicks}
         toggle={showYourPicks ? { viewingYours, onClick: () => setTopView(topView === "yours" ? "crowd" : "yours") } : undefined}
@@ -141,6 +142,7 @@ export function MidwayResults({
         aligned={showYourPicks}
         entries={bestEntries}
         cardsByName={cardsByName}
+        setCode={setCode}
         onTileOpen={onSlotOpen}
       />
 
@@ -153,6 +155,7 @@ export function MidwayResults({
         yourCardBySlot={yourCardBySlot}
         pickStats={pickStats}
         bounds={bounds}
+        setCode={setCode}
       />
     </div>
   );
@@ -175,6 +178,7 @@ function TeamRow({
   showHelp = true,
   entries,
   cardsByName,
+  setCode,
   onTileOpen,
   toggle,
   aligned = false,
@@ -187,6 +191,7 @@ function TeamRow({
   showHelp?: boolean;
   entries: PickEntry[];
   cardsByName: Map<string, Card>;
+  setCode?: string;
   onTileOpen: (slotKey: SlotKey) => void;
   toggle?: Toggle;
   aligned?: boolean;
@@ -225,7 +230,7 @@ function TeamRow({
         </div>
       </div>
 
-      <PickGrid entries={entries} cardsByName={cardsByName} onTileOpen={onTileOpen} />
+      <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} onTileOpen={onTileOpen} />
     </div>
   );
 }

@@ -37,6 +37,7 @@ interface Props {
   footerRight?: ReactNode;
   autoFocusSearch?: boolean;
   animateMount?: boolean;
+  setCode?: string;
 }
 
 export function CardSelectionGrid({
@@ -52,6 +53,7 @@ export function CardSelectionGrid({
   footerRight,
   autoFocusSearch = true,
   animateMount = true,
+  setCode,
 }: Props) {
   const [search, setSearch] = useState("");
   const [color, setColor] = useState<Color | null>(null);
@@ -126,7 +128,7 @@ export function CardSelectionGrid({
       {showLabel ? (
         <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mb-3">
           <div className="flex items-center gap-2 min-w-0 pl-3">
-            <SlotPip slotKey={slot.key} size={24} />
+            <SlotPip slotKey={slot.key} size={24} setCode={setCode} />
             <span className="font-display text-text text-[22px] tracking-[0.1em] truncate">{slot.label}</span>
           </div>
           <div className="flex justify-center">{colorFilter}</div>

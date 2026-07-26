@@ -9,10 +9,12 @@ export function FullBreakdownList({
   pickStats,
   cardsByName,
   picksBySlot,
+  setCode,
 }: {
   pickStats: P0P1PickStat[];
   cardsByName: Map<string, Card>;
   picksBySlot?: Map<string, string>;
+  setCode?: string;
 }) {
   const bySlot = useMemo(() => {
     const grouped = groupBySlot(pickStats);
@@ -43,6 +45,7 @@ export function FullBreakdownList({
       title="FULL BREAKDOWN"
       headerAside={`${entryCount} player${entryCount !== 1 ? "s" : ""}`}
       bySlot={bySlot}
+      setCode={setCode}
     />
   );
 }

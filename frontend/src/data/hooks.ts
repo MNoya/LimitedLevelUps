@@ -47,10 +47,14 @@ import { fetchEpisodes } from "./episodes";
 import { fetchDiscordStats } from "./discord";
 import { fetchYouTubeVideos, mergeMedia, overlayLiveMedia, toVideoEpisode, type YouTubeVideo } from "./youtube";
 import type { P0P1BallotRow, P0P1Pick, SlotKey } from "../types/p0p1";
+import type { FeaturedContest } from "./p0p1Slots";
+import { resolveContestByCode, resolveFeaturedContest } from "./p0p1Slots";
 import { MULTI, OTHER } from "./filters";
 import { boardOffersSoup } from "./cubeVariants";
+import { useNow } from "../lib/countdown";
 const THIRTY_MINUTES = 30 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
+const CONTEST_TICK_MS = 30_000;
 
 export function useEpisodes() {
   return useQuery({
@@ -482,6 +486,17 @@ export function usePodSetCodes() {
 
 // --- P0P1 contest ---
 
+export function useP0P1FeaturedContest(overrideCode?: string): FeaturedContest | undefined {
+  const now = useNow(CONTEST_TICK_MS);
+  return useMemo(
+    () => {
+      if (overrideCode) return resolveContestByCode(overrideCode, now) ?? undefined;
+      return resolveFeaturedContest(now) ?? undefined;
+    },
+    [overrideCode, now],
+  );
+}
+
 export function useP0P1Cards(setCode: string | undefined) {
   return useQuery({
     queryKey: ["p0p1-cards", setCode],
@@ -560,11 +575,12 @@ export function useDeleteAllP0P1Picks(setCode: string) {
   });
 }
 
-// Ratings snapshot is a static import — staleTime: Infinity so it never re-fetches.
+// Ratings snapshot is a static fixture — staleTime: Infinity so it never re-fetches.
+// Returns null when no fixture exists (contest in voting/post-voting phase).
 export function useP0P1Ratings(setCode: string) {
   return useQuery({
     queryKey: ["p0p1-ratings", setCode] as const,
-    queryFn: (): Promise<import("./p0p1Results").RatingsSnapshot> => fetchP0P1Ratings(setCode),
+    queryFn: () => fetchP0P1Ratings(setCode),
     staleTime: Infinity,
   });
 }

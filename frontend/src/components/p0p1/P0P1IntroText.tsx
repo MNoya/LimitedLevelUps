@@ -1,15 +1,8 @@
 import { Fragment, type ReactNode } from "react";
-import {
-  P0P1_SET_NAME,
-  P0P1_VOTING_DEADLINE,
-  P0P1_SCORING_DATE,
-  SLOTS,
-} from "../../data/p0p1Slots";
+import { SLOTS } from "../../data/p0p1Slots";
 import type { P0P1Phase } from "../../data/p0p1Results";
 
 const SEVENTEEN_LANDS_URL = "https://www.17lands.com/card_data";
-
-const setName = <span className="font-semibold text-text">{P0P1_SET_NAME}</span>;
 
 const winRateLink = (
   <a
@@ -34,19 +27,26 @@ const dataLink = (
 );
 
 export function P0P1IntroText({
+  setName: setNameProp,
+  votingDeadline,
+  scoringDate,
   phase,
   dateRange,
   multiline = false,
 }: {
+  setName: string;
+  votingDeadline: Date;
+  scoringDate: Date;
   phase: P0P1Phase;
   dateRange?: { start: string; end: string } | null;
   multiline?: boolean;
 }) {
+  const setName = <span className="font-semibold text-text">{setNameProp}</span>;
   const cardCount = spellOut(SLOTS.length);
-  const windowText = describeDuration(P0P1_SCORING_DATE.getTime() - P0P1_VOTING_DEADLINE.getTime());
+  const windowText = describeDuration(scoringDate.getTime() - votingDeadline.getTime());
   const formattedRange = dateRange ? formatDateRange(dateRange.start, dateRange.end) : null;
 
-  const sentences: ReactNode[] = buildSentences(phase, cardCount, windowText, formattedRange);
+  const sentences: ReactNode[] = buildSentences(phase, setName, cardCount, windowText, formattedRange);
 
   return (
     <>
@@ -62,6 +62,7 @@ export function P0P1IntroText({
 
 function buildSentences(
   phase: P0P1Phase,
+  setName: ReactNode,
   cardCount: string,
   windowText: string,
   formattedRange: string | null,
@@ -92,7 +93,7 @@ function buildSentences(
     case "final":
       return [
         <>After {windowText}, {setName} results are in!</>,
-        <>Check out the final standings based on {dataLink}.</>,
+        <>Check out the final standings based on {dataLink}</>,
       ];
   }
 }

@@ -36,13 +36,15 @@ export function VsCardShell({
 export function VsCategoryHeader({
   slotKey,
   slotLabel,
+  setCode,
 }: {
   slotKey: SlotKey;
   slotLabel: string;
+  setCode?: string;
 }) {
   return (
     <div className="flex items-center justify-center gap-2 px-2 pb-3 pt-1.5 lg:gap-2.5 lg:pb-4">
-      <SlotPip slotKey={slotKey} size={20} />
+      <SlotPip slotKey={slotKey} size={20} setCode={setCode} />
       <span className="font-display text-[18px] leading-none tracking-[0.2em] text-text lg:text-[22px]">
         {slotLabel.toUpperCase()}
       </span>

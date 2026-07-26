@@ -1,15 +1,117 @@
-import type { Card, SlotDefinition } from "../types/p0p1";
+import contestsConfig from "../../../p0p1_contests.json";
+import type { Card, ContestConfig, SlotDefinition } from "../types/p0p1";
 
-// TODO: get this data from the database instead of hardcoding to support other sets
-export const P0P1_SET_CODE = "MSH";
-export const P0P1_SET_NAME = "Marvel Super Heroes";
-export const P0P1_VOTING_DEADLINE = new Date("2026-06-23T15:00:00Z");
-export const P0P1_SCORING_DATE = new Date(
-  P0P1_VOTING_DEADLINE.getTime() + 28 * 24 * 60 * 60 * 1000,
-);
+// The same file bot/scripts writes and a future bot task reads, alongside scoring_buckets.json
+export const P0P1_CONTESTS: Record<string, ContestConfig> = contestsConfig;
 
-export const P0P1_NEXT_SET_CODE = "HOB";
-export const P0P1_NEXT_SET_NAME = "The Hobbit";
+// --- Featured-contest resolution (Decision 3) ---
+
+const DAY_MS = 86_400_000;
+
+export interface FeaturedContest {
+  code: string;
+  name: string;
+  release: Date;
+  votingDeadline: Date;
+  scoringDate: Date;
+  revealEnd: Date;
+  status: "pre" | "voting" | "reveal" | "frozen";
+  next?: { code: string; name: string; previewsOpen: Date };
+}
+
+interface ResolvedContest {
+  code: string;
+  name: string;
+  release: number;
+  previewsOpen: number;
+  votingDeadline: number;
+  revealEnd: number;
+}
+
+function resolveContests(): ResolvedContest[] {
+  return Object.entries(P0P1_CONTESTS)
+    .map(([code, config]) => {
+      const release = new Date(config.release).getTime();
+      return {
+        code,
+        name: config.name,
+        release,
+        previewsOpen: new Date(config.previewsOpen).getTime(),
+        votingDeadline: config.votingDeadline ? new Date(config.votingDeadline).getTime() : release,
+        revealEnd: release + 28 * DAY_MS,
+      };
+    })
+    .sort((a, b) => b.release - a.release);
+}
+
+export function resolveFeaturedContest(now: number): FeaturedContest | null {
+  const contests = resolveContests();
+  if (contests.length === 0) return null;
+
+  // 1. Voting window wins (newest release breaks ties — array is newest-first)
+  let featured = contests.find((c) => now >= c.previewsOpen && now < c.votingDeadline);
+
+  // 2. Results window, which opens the instant voting closes. Anchoring it to `release` instead
+  // would un-feature a contest for the whole gap between an early deadline and the Arena drop,
+  // sending fresh voters back to the previous set's archive.
+  if (!featured) {
+    featured = contests.find((c) => now >= c.votingDeadline && now < c.revealEnd);
+  }
+
+  // 3. Most recently finished
+  if (!featured) {
+    featured = contests.find((c) => now >= c.revealEnd);
+  }
+
+  // 4. Nothing has opened yet: the earliest contest, which describeContest reports as "pre"
+  if (!featured) featured = contests[contests.length - 1];
+
+  return describeContest(featured, contests, now);
+}
+
+/** A contest addressed by its own URL is the historic viewer, so it carries no `next` — a frozen
+ * archive page should not advertise a later contest the way the featured page does. */
+export function resolveContestByCode(code: string, now: number): FeaturedContest | null {
+  const contests = resolveContests();
+  const match = contests.find((c) => c.code === code.toUpperCase());
+  if (!match) return null;
+  return describeContest(match, [], now);
+}
+
+function describeContest(
+  contest: ResolvedContest,
+  contests: ResolvedContest[],
+  now: number,
+): FeaturedContest {
+  let status: FeaturedContest["status"] = "frozen";
+  if (now < contest.previewsOpen) {
+    status = "pre";
+  } else if (now < contest.votingDeadline) {
+    status = "voting";
+  } else if (now < contest.revealEnd) {
+    status = "reveal";
+  }
+
+  const laterContests = contests
+    .filter((c) => c.release > contest.release)
+    .sort((a, b) => a.release - b.release);
+  const next = laterContests[0];
+
+  return {
+    code: contest.code,
+    name: contest.name,
+    release: new Date(contest.release),
+    votingDeadline: new Date(contest.votingDeadline),
+    scoringDate: new Date(contest.votingDeadline + 28 * DAY_MS),
+    revealEnd: new Date(contest.revealEnd),
+    status,
+    next: next
+      ? { code: next.code, name: next.name, previewsOpen: new Date(next.previewsOpen) }
+      : undefined,
+  };
+}
+
+// --- Slot definitions (set-independent) ---
 
 function isBasicLand(card: Card) {
   return card.typeLine.startsWith("Basic Land");

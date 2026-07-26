@@ -65,6 +65,7 @@ export function App() {
       <Route path="/tier-list/:setCode" element={<TierListPage />} />
 
       <Route path="/p0p1" element={<P0P1Page />} />
+      <Route path="/p0p1/:setCode" element={<P0P1Page />} />
 
       <Route path="/banner" element={<BannerLab />} />
 

@@ -1582,20 +1582,30 @@ function adaptPodLeaderboardRow(row: Record<string, unknown>): PodLeaderboardRow
 // --- P0P1 contest ---
 
 import type { Card, P0P1BallotRow, P0P1Pick, P0P1PickStat, SlotKey } from "../types/p0p1";
-import { cardsMshFixture } from "./fixtures/cards-msh";
 import type { RatingsSnapshot } from "./p0p1Results";
-import ratingsMsh from "./fixtures/p0p1-ratings-msh.json";
-const RATINGS_BY_SET: Record<string, RatingsSnapshot> = {
-  MSH: ratingsMsh as RatingsSnapshot,
-};
-export const fetchP0P1Ratings = (setCode: string): Promise<RatingsSnapshot> => {
-  const snapshot = RATINGS_BY_SET[setCode];
-  if (!snapshot) return Promise.reject(new Error(`No ratings fixture for set ${setCode}`));
-  return Promise.resolve(snapshot);
-};
 
-export const fetchP0P1Cards = (_setCode: string): Promise<Card[]> =>
-  Promise.resolve(cardsMshFixture);
+const cardLoaders = import.meta.glob<Card[]>(
+  "./fixtures/cards-*.ts",
+  { import: "default" },
+);
+const ratingLoaders = import.meta.glob<RatingsSnapshot>(
+  "./fixtures/p0p1-ratings-*.ts",
+  { import: "default" },
+);
+
+export async function fetchP0P1Cards(setCode: string): Promise<Card[]> {
+  const key = `./fixtures/cards-${setCode.toLowerCase()}.ts`;
+  const loader = cardLoaders[key];
+  if (!loader) throw new Error(`No card fixture for set ${setCode}`);
+  return loader();
+}
+
+export async function fetchP0P1Ratings(setCode: string): Promise<RatingsSnapshot | null> {
+  const key = `./fixtures/p0p1-ratings-${setCode.toLowerCase()}.ts`;
+  const loader = ratingLoaders[key];
+  if (!loader) return null;
+  return loader();
+}
 
 export async function fetchP0P1Picks(setCode: string): Promise<P0P1Pick[]> {
   const { data, error } = await client()

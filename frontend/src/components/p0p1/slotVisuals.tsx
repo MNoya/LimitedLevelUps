@@ -1,6 +1,5 @@
 import { Pip } from "../ManaPips";
 import { keyruneClass } from "../Brand";
-import { P0P1_SET_CODE } from "../../data/p0p1Slots";
 import type { SlotKey } from "../../types/p0p1";
 
 type Color = "W" | "U" | "B" | "R" | "G";
@@ -32,7 +31,7 @@ const MONO: Partial<Record<SlotKey, Color>> = {
   green_common: "G",
 };
 
-export function SlotPip({ slotKey, size = 15 }: { slotKey: SlotKey; size?: number }) {
+export function SlotPip({ slotKey, size = 15, setCode = "" }: { slotKey: SlotKey; size?: number; setCode?: string }) {
   const mono = MONO[slotKey];
   if (mono) {
     return <Pip c={mono} size={Math.round(size * 0.64)} />;
@@ -40,7 +39,7 @@ export function SlotPip({ slotKey, size = 15 }: { slotKey: SlotKey; size?: numbe
   if (slotKey === "multicolor_uncommon") {
     return <i className="ms ms-multicolor ms-duo ms-duo-color ms-grad" style={{ fontSize: size, lineHeight: 1 }} />;
   }
-  const setSymbol = `ss ss-${keyruneClass(P0P1_SET_CODE)}`;
+  const setSymbol = `ss ss-${keyruneClass(setCode)}`;
   if (slotKey === "wildcard_common") {
     return <i className={setSymbol} style={{ fontSize: size, color: "#fff", lineHeight: 1 }} />;
   }

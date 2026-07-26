@@ -13,6 +13,7 @@ export function MidwayBreakdownList({
   yourCardBySlot,
   pickStats,
   bounds,
+  setCode,
 }: {
   cards: Card[];
   cardsByName: Map<string, Card>;
@@ -20,6 +21,7 @@ export function MidwayBreakdownList({
   yourCardBySlot: Map<SlotKey, string>;
   pickStats: P0P1PickStat[];
   bounds: GihwrBounds;
+  setCode?: string;
 }) {
   const pickedBySlot = useMemo(() => {
     const map = new Map<SlotKey, Set<string>>();
@@ -79,5 +81,5 @@ export function MidwayBreakdownList({
     );
   }, [rawBySlot, bounds, cardsByName]);
 
-  return <BreakdownList title="GIH WINRATE BREAKDOWN" bySlot={bySlot} />;
+  return <BreakdownList title="GIH WINRATE BREAKDOWN" bySlot={bySlot} setCode={setCode} />;
 }

@@ -71,7 +71,7 @@ Selection metric was chosen empirically by prototyping both candidates against t
 
 The frontend reads two data sources for the results phases:
 
-1. **Ratings JSON** (`frontend/src/data/fixtures/p0p1-ratings-msh.json`) — a manually committed snapshot of 17lands card ratings for MSH Premier Draft. Generated via a one-off script against the 17lands `/card_ratings/data` endpoint, committed, and deployed. Updated once at midway and once at final. The JSON includes:
+1. **Ratings fixture** (`frontend/src/data/fixtures/p0p1-ratings-msh.ts`) — a manually committed snapshot of 17lands card ratings for MSH Premier Draft. Generated via `fetch_p0p1_ratings`, committed, and deployed. Updated once at midway and once at final. Only common/uncommon cards (the P0P1 pool) are included; rares, mythics, and bonus sheet reprints are filtered out by cross-referencing the card fixture. The fixture includes:
    - Per-card `{ card_name, gihwr, gih }` entries
    - `phase: "midway" | "final"` — gates which UI is shown
    - `dateRange: { start, end }` — the 17lands data window, displayed in the UI

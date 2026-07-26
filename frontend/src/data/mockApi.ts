@@ -470,10 +470,14 @@ export const fetchPodSetCodes = (): Promise<PodSetCode[]> => wait(podSetCodesFix
 
 // --- P0P1 contest ---
 
-import { cardsMshFixture } from "./fixtures/cards-msh";
 import type { RatingsSnapshot } from "./p0p1Results";
 import { GIH_SAMPLE_FLOOR } from "./p0p1Results";
 import { syntheticBallotsFromStats } from "./p0p1DevBallots";
+
+const cardLoaders = import.meta.glob<Card[]>(
+  "./fixtures/cards-*.ts",
+  { import: "default" },
+);
 
 const P0P1_SLOT_KEYS: SlotKey[] = [
   "white_common", "blue_common", "black_common", "red_common",
@@ -482,8 +486,12 @@ const P0P1_SLOT_KEYS: SlotKey[] = [
 
 const p0p1Picks = new Map<string, P0P1Pick>();
 
-export const fetchP0P1Cards = (_setCode: string): Promise<Card[]> =>
-  wait(cardsMshFixture);
+export async function fetchP0P1Cards(setCode: string): Promise<Card[]> {
+  const key = `./fixtures/cards-${setCode.toLowerCase()}.ts`;
+  const loader = cardLoaders[key];
+  if (!loader) throw new Error(`No card fixture for set ${setCode}`);
+  return loader();
+}
 
 export const fetchP0P1Picks = (_setCode: string): Promise<P0P1Pick[]> =>
   wait([...p0p1Picks.values()]);
@@ -503,8 +511,33 @@ export const deleteAllP0P1Picks = async (
   p0p1Picks.clear();
 };
 
-export const fetchP0P1PickStats = (_setCode: string): Promise<P0P1PickStat[]> =>
-  wait(syntheticPickStats);
+const syntheticDataCache = new Map<string, Promise<{
+  stats: P0P1PickStat[];
+  ratings: RatingsSnapshot;
+  ballots: P0P1BallotRow[];
+}>>();
+
+function getSyntheticData(setCode: string) {
+  let p = syntheticDataCache.get(setCode);
+  if (!p) {
+    const key = `./fixtures/cards-${setCode.toLowerCase()}.ts`;
+    const loader = cardLoaders[key];
+    if (!loader) throw new Error(`No card fixture for set ${setCode}`);
+    p = loader().then((cards) => {
+      const stats = generateSyntheticPickStats(cards, setCode);
+      const picks = buildSyntheticPicks(stats);
+      for (const pick of picks) p0p1Picks.set(pick.slot, pick);
+      const ratings = generateSyntheticRatings(cards, setCode);
+      const ballots = syntheticBallotsFromStats(stats, setCode);
+      return { stats, ratings, ballots };
+    });
+    syntheticDataCache.set(setCode, p);
+  }
+  return p;
+}
+
+export const fetchP0P1PickStats = (setCode: string): Promise<P0P1PickStat[]> =>
+  getSyntheticData(setCode).then((d) => d.stats);
 
 const P0P1_COMPLETE_ENTRANTS = 91;
 
@@ -544,21 +577,21 @@ function allocateVotes(weights: number[], total: number): number[] {
   return counts;
 }
 
-function generateSyntheticPickStats(): P0P1PickStat[] {
+function generateSyntheticPickStats(cards: Card[], setCode: string): P0P1PickStat[] {
   let seed = 42;
   const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
   const N = P0P1_COMPLETE_ENTRANTS;
 
   const stats: P0P1PickStat[] = [];
   for (const slotKey of P0P1_SLOT_KEYS) {
-    const eligible = shuffleInPlace(cardsMshFixture.filter(P0P1_SLOT_FILTERS[slotKey]), rng);
+    const eligible = shuffleInPlace(cards.filter(P0P1_SLOT_FILTERS[slotKey]), rng);
     if (eligible.length === 0) continue;
     const skew = 1.1 + rng() * 0.8;
     const weights = eligible.map((_, rank) => 1 / Math.pow(rank + 1, skew));
     const counts = allocateVotes(weights, N);
     const slotStats = eligible
       .map((card, i) => ({
-        setCode: "MSH",
+        setCode,
         slot: slotKey,
         cardName: card.name,
         pickCount: counts[i],
@@ -603,39 +636,27 @@ function buildSyntheticPicks(stats: P0P1PickStat[]): P0P1Pick[] {
   return picks;
 }
 
-const syntheticPickStats = generateSyntheticPickStats();
-const syntheticPicks = buildSyntheticPicks(syntheticPickStats);
-for (const pick of syntheticPicks) {
-  p0p1Picks.set(pick.slot, pick);
-}
-
-function generateSyntheticRatings(): RatingsSnapshot {
-  // Seed separately from pick stats so ratings are independent
+function generateSyntheticRatings(mockCards: Card[], setCode: string): RatingsSnapshot {
   let seed = 137;
   const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
-  const cards = cardsMshFixture.map((c) => ({
+  const cards = mockCards.map((c) => ({
     card_name: c.name,
-    // Realistic GIHWR range: 44%–65%
     gihwr: 0.44 + rng() * 0.21,
     gih: Math.floor(GIH_SAMPLE_FLOOR + rng() * 8000),
   }));
   return {
-    setCode: "MSH",
+    setCode,
     phase: "midway",
     dateRange: { start: "2026-06-23", end: "2026-07-07" },
     cards,
   };
 }
 
-const syntheticRatings = generateSyntheticRatings();
+export const fetchP0P1Ratings = (setCode: string): Promise<RatingsSnapshot | null> =>
+  getSyntheticData(setCode).then((d) => d.ratings);
 
-export const fetchP0P1Ratings = (_setCode: string): Promise<RatingsSnapshot> =>
-  wait(syntheticRatings);
-
-const syntheticBallots = syntheticBallotsFromStats(syntheticPickStats, "MSH");
-
-export const fetchP0P1Ballots = (_setCode: string): Promise<P0P1BallotRow[]> =>
-  wait(syntheticBallots);
+export const fetchP0P1Ballots = (setCode: string): Promise<P0P1BallotRow[]> =>
+  getSyntheticData(setCode).then((d) => d.ballots);
 
 export const initialAuthUser = {
   id: "mock-user-id",

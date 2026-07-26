@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from "react";
-import { P0P1_SCORING_DATE } from "./p0p1Slots";
 
 export type P0P1DevPreset =
   | "live"
@@ -94,10 +93,11 @@ export function useP0P1DevSelfPlacement(): P0P1DevSelfPlacement {
 const DEV_RESULTS_REMAINING_MS = (20 * 24 + 1) * 60 * 60 * 1000;
 const DEV_PAST_SCORING_MS = 60 * 60 * 1000;
 
-export function p0p1Now(): number {
+export function p0p1Now(scoringDate?: Date): number {
   if (!p0p1DevEnabled || current === "live") return Date.now();
+  const anchor = scoringDate?.getTime() ?? Date.now();
   if (current === "finalScoring" || current === "finalLoggedOut") {
-    return P0P1_SCORING_DATE.getTime() + DEV_PAST_SCORING_MS;
+    return anchor + DEV_PAST_SCORING_MS;
   }
-  return P0P1_SCORING_DATE.getTime() - DEV_RESULTS_REMAINING_MS;
+  return anchor - DEV_RESULTS_REMAINING_MS;
 }

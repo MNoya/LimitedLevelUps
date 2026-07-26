@@ -362,7 +362,7 @@ function SyntheticRow({
 
       {expanded && (
         <div className="px-3 lg:px-4 pb-4 pt-1">
-          <PickGrid entries={entries} cardsByName={cardsByName} />
+          <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} />
         </div>
       )}
     </div>
@@ -479,7 +479,7 @@ function BroadcastTop3({
       </div>
 
       <div className="mx-[10px]">
-        <PickGrid entries={entries} cardsByName={cardsByName} />
+        <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} />
       </div>
 
       <div className="flex flex-col gap-1.5 mt-1">
@@ -588,7 +588,7 @@ function BroadcastSubBar({
 
       {expanded && (
         <div className="mx-[10px]">
-          <PickGrid entries={entries} cardsByName={cardsByName} />
+          <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} />
         </div>
       )}
     </div>
@@ -688,7 +688,7 @@ function MedalRow({
 
       {expanded && (
         <div className="px-3 lg:px-4 pb-4 pt-1">
-          <PickGrid entries={entries} cardsByName={cardsByName} />
+          <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} />
         </div>
       )}
     </div>
@@ -774,7 +774,7 @@ function LeaderboardRow({
 
       {expanded && (
         <div className="px-3 lg:px-4 pb-4 pt-1">
-          <PickGrid entries={entries} cardsByName={cardsByName} />
+          <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} />
         </div>
       )}
     </div>

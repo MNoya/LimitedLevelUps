@@ -5,10 +5,13 @@ description: Flip the P0P1 results reveal phase (midway/final/none) by regenerat
 
 # p0p1-phase
 
-Flips or refreshes the P0P1 contest's results reveal. The reveal is single-sourced on the
-`phase` field baked into `frontend/src/data/fixtures/p0p1-ratings-<set>.json` — there is no
-separate deploy-gated constant. Deploying a fixture with a new `phase` is what flips the
-site; `phase: null` is the kill switch that hides results entirely.
+Flips or refreshes the P0P1 contest's results reveal. The reveal depends on two things:
+the `phase` field in `frontend/src/data/fixtures/p0p1-ratings-<set>.ts` and the clock
+(the contest's `scoringDate`, derived from `P0P1_CONTESTS` in `p0p1Slots.ts`). A `"final"`
+fixture merged before the scoring date is suppressed until the date arrives, so the branch
+can ship ahead of the reveal.
+
+Expected lifecycle: `voting` → `postVoting` → `midway` → `final`.
 
 ## Argument
 
@@ -20,11 +23,13 @@ If no argument is given, ask the user which one and stop.
 
 ### 1. Read current state
 
-- `frontend/src/data/p0p1Slots.ts`: `P0P1_SET_CODE`, `P0P1_VOTING_DEADLINE`,
-  `P0P1_SCORING_DATE` (= voting deadline + 28 days).
+- `frontend/src/data/p0p1Slots.ts`: `P0P1_CONTESTS` registry — find the active contest entry.
+  Use `resolveFeaturedContest` logic: the featured contest's `code`, `votingDeadline`, and
+  `scoringDate` (= voting deadline + 28 days). If `$ARGUMENTS` includes a `--set <CODE>`,
+  use that code instead of the auto-featured one.
 - `bot/sets.py`: the matching `SetSeed`'s `start_date` (the set's Arena release date — this
   is also the 17lands query window's start).
-- `frontend/src/data/fixtures/p0p1-ratings-<set_code_lower>.json`: current `phase`,
+- `frontend/src/data/fixtures/p0p1-ratings-<set_code_lower>.ts`: current `phase`,
   `dateRange`, and `cards.length`.
 
 Print a short summary: set code, current fixture phase, current `dateRange`, current card
@@ -32,20 +37,20 @@ count, today's date, voting deadline, scoring date.
 
 ### 2. State-machine reference
 
-The frontend derives one of five phases (`voting`, `postVoting`, `midway`, `finalizing`,
-`final`) from the fixture `phase` and the clock:
+The site phase is derived from the fixture `phase` + clock in `deriveP0P1Phase`
+(`useP0P1Ballot.ts`):
 
-| Fixture `phase`            | Clock                              | Resulting site phase                |
-| -------------------------- | ---------------------------------- | ----------------------------------- |
-| any                        | before voting deadline             | `voting`                            |
-| `null`                     | past deadline, before scoring date | `postVoting`                        |
-| `"midway"`                 | past deadline, before scoring date | `midway`                            |
-| `"final"`                  | past deadline, before scoring date | `final` (console.warn: early final) |
-| `null` or stale `"midway"` | past scoring date                  | `finalizing`                        |
-| `"final"`                  | past scoring date                  | `final`                             |
+| Fixture `phase`            | Clock                              | Site phase     |
+| -------------------------- | ---------------------------------- | -------------- |
+| any                        | before voting deadline             | `voting`       |
+| `null`                     | past deadline, before scoring date | `postVoting`   |
+| `"midway"`                 | past deadline, before scoring date | `midway`       |
+| `"final"`                  | past deadline, before scoring date | `postVoting`   |
+| `null` or stale `"midway"` | past scoring date                  | `finalizing`   |
+| `"final"`                  | past scoring date                  | `final`        |
 
-`phase: null` is the kill switch at any point — it always regresses to `postVoting` (pre
-scoring date) or `finalizing` (post scoring date), never reveals ratings-derived content.
+`phase: null` is the kill switch — regresses to `postVoting` or `finalizing` depending on
+the clock.
 
 ### 3. `none` — kill switch
 
@@ -68,7 +73,7 @@ Run:
 .venv/bin/python -m bot.scripts.fetch_p0p1_ratings --set-code <CODE> --phase <phase> --end-date <end date>
 ```
 
-This overwrites `frontend/src/data/fixtures/p0p1-ratings-<code>.json` with a fresh 17lands
+This overwrites `frontend/src/data/fixtures/p0p1-ratings-<code>.ts` with a fresh 17lands
 pull. The pull itself uses `time_period=ALL_TIME` (the script's default — always correct here
 since the set's Arena release is the natural start of "all time" for a fresh set); `--end-date`
 only feeds the fixture's display `dateRange`, not the query.
@@ -76,7 +81,7 @@ only feeds the fixture's display `dateRange`, not the query.
 ### 5. Sanity checks (abort on any failure, do not proceed to step 6)
 
 - The fixture is valid JSON.
-- `setCode` matches `P0P1_SET_CODE`.
+- `setCode` matches the contest's code.
 - `phase` equals the target phase from step 4 (or is `null` for the `none` path).
 - `dateRange.start` equals the set's Arena release date from `bot/sets.py`.
 - `cards.length` is within ~10% of the previous card count recorded in step 1 (skip this
