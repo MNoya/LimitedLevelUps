@@ -55,7 +55,7 @@ This came out of a grilling/domain-modeling session.
    never gets stuck mid-reveal.
 6. **Frontend data via `import.meta.glob`.** Card pools and ratings fixtures become lazily-loaded,
    code-split chunks, auto-discovered by filename (`cards-<code>.ts`,
-   `p0p1-ratings-<code>.json`). No per-set import wiring in `realApi.ts`/`mockApi.ts`; no bundle
+   `p0p1-ratings-<code>.ts`). No per-set import wiring in `realApi.ts`/`mockApi.ts`; no bundle
    growth as contests accumulate. A missing ratings file (true during voting) is simply absent
    from the glob map and treated as the existing pre-results kill switch — no placeholder fixture
    needed.
@@ -112,7 +112,7 @@ This came out of a grilling/domain-modeling session.
   const cardLoaders = import.meta.glob("./fixtures/cards-*.ts", {
     import: "default",
   });
-  const ratingLoaders = import.meta.glob("./fixtures/p0p1-ratings-*.json");
+  const ratingLoaders = import.meta.glob("./fixtures/p0p1-ratings-*.ts", { import: "default" });
   ```
 
   `fetchP0P1Cards(code)` / `fetchP0P1Ratings(code)` index by `code` and `await` the matching
@@ -159,12 +159,11 @@ commits or pushes (matches `p0p1-phase`'s convention). Must:
 - Run at/after full spoiler (voting needs the complete card pool); a late-spoiler top-up re-run is
   fine.
 - Report a ratings join-check when a ratings fixture exists: for each pool card, did it match a
-  rating by normalized name? Flag misses (especially `//` and special-character names). Note that
-  a pool-vs-ratings count gap is _expected_ (17lands folds bonus sheets into the same expansion
-  code; the pool excludes rare/mythic) and is not itself an error signal — only unmatched
-  _pool_ cards are.
+  rating by normalized name? Flag misses (especially `//` and special-character names). The ratings
+  fixture is already filtered to C/U pool cards by `fetch_p0p1_ratings`, so a count gap means
+  unmatched names, not rarity differences.
 
-`p0p1-phase` is **unchanged** — it still produces `p0p1-ratings-<code>.json` weeks later (midway,
+`p0p1-phase` is **unchanged** — it still produces `p0p1-ratings-<code>.ts` weeks later (midway,
 then final), independent of setup. Ordering dependency: the next set must already be in
 `bot/sets.py` (via `/add-set`) before its contest can resolve dates.
 
@@ -203,7 +202,7 @@ then final), independent of setup. Ordering dependency: the next set must alread
 ## Verification (for whoever implements)
 
 - **Multi-set plumbing:** add a second fixture pair (`cards-<code>.ts` +
-  `p0p1-ratings-<code>.json`) and a `P0P1_CONTESTS` entry with dates that make it the featured
+  `p0p1-ratings-<code>.ts`) and a `P0P1_CONTESTS` entry with dates that make it the featured
   contest; `npm run dev`, confirm `/p0p1` renders it, the 8 slots populate from its pool, and
   `/p0p1/msh` still renders MSH frozen.
 - **Featured resolution:** unit-test `resolveFeaturedContest` for voting-only, reveal-only, gap,

@@ -51,7 +51,7 @@ If the voting deadline should differ from the default (noon ET on release day), 
 - If `previewsOpen` falls before the previous contest's `revealEnd` (release + 28 days),
   warn: "Voting windows overlap — the newer contest's voting window will take priority
   per Decision 3, but the older contest's reveal phase will be interrupted."
-- If the previous contest's ratings fixture (`frontend/src/data/fixtures/p0p1-ratings-<prev>.json`)
+- If the previous contest's ratings fixture (`frontend/src/data/fixtures/p0p1-ratings-<prev>.ts`)
   exists and its `phase` is not `"final"`, warn: "The outgoing contest hasn't reached
   final results yet."
 
@@ -77,8 +77,7 @@ and push themselves. Never run `git commit` or `git push`.
 
 - The card fixture uses `export default [...] satisfies Card[]` with the Card type
   imported from `../../types/p0p1`.
-- `fetch_p0p1_cards.py` handles `normal` and `adventure` layouts. It warns about
-  skipped `transform`/`modal_dfc` cards — if a set has those at common/uncommon,
-  the script will need extending.
+- `fetch_p0p1_cards.py` handles all Scryfall layouts (normal, adventure, saga,
+  transform, modal_dfc, split, prepare, class, case, etc.).
 - The contest entry alone is enough — the featured-contest resolver picks it up
   automatically based on dates. No other files need editing.

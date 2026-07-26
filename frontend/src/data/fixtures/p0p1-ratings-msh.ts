@@ -1,4 +1,6 @@
-{
+import { RatingsSnapshot } from "../p0p1Results";
+
+export default {
   "setCode": "MSH",
   "phase": "final",
   "dateRange": {
@@ -1677,4 +1679,4 @@
       "gih": 372
     }
   ]
-}
+} satisfies RatingsSnapshot

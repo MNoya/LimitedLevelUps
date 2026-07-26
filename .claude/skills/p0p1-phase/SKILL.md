@@ -6,7 +6,7 @@ description: Flip the P0P1 results reveal phase (midway/final/none) by regenerat
 # p0p1-phase
 
 Flips or refreshes the P0P1 contest's results reveal. The reveal depends on two things:
-the `phase` field in `frontend/src/data/fixtures/p0p1-ratings-<set>.json` and the clock
+the `phase` field in `frontend/src/data/fixtures/p0p1-ratings-<set>.ts` and the clock
 (the contest's `scoringDate`, derived from `P0P1_CONTESTS` in `p0p1Slots.ts`). A `"final"`
 fixture merged before the scoring date is suppressed until the date arrives, so the branch
 can ship ahead of the reveal.
@@ -29,7 +29,7 @@ If no argument is given, ask the user which one and stop.
   use that code instead of the auto-featured one.
 - `bot/sets.py`: the matching `SetSeed`'s `start_date` (the set's Arena release date — this
   is also the 17lands query window's start).
-- `frontend/src/data/fixtures/p0p1-ratings-<set_code_lower>.json`: current `phase`,
+- `frontend/src/data/fixtures/p0p1-ratings-<set_code_lower>.ts`: current `phase`,
   `dateRange`, and `cards.length`.
 
 Print a short summary: set code, current fixture phase, current `dateRange`, current card
@@ -73,7 +73,7 @@ Run:
 .venv/bin/python -m bot.scripts.fetch_p0p1_ratings --set-code <CODE> --phase <phase> --end-date <end date>
 ```
 
-This overwrites `frontend/src/data/fixtures/p0p1-ratings-<code>.json` with a fresh 17lands
+This overwrites `frontend/src/data/fixtures/p0p1-ratings-<code>.ts` with a fresh 17lands
 pull. The pull itself uses `time_period=ALL_TIME` (the script's default — always correct here
 since the set's Arena release is the natural start of "all time" for a fresh set); `--end-date`
 only feeds the fixture's display `dateRange`, not the query.

@@ -1517,7 +1517,7 @@ const cardLoaders = import.meta.glob<Card[]>(
   { import: "default" },
 );
 const ratingLoaders = import.meta.glob<RatingsSnapshot>(
-  "./fixtures/p0p1-ratings-*.json",
+  "./fixtures/p0p1-ratings-*.ts",
   { import: "default" },
 );
 
@@ -1529,7 +1529,7 @@ export async function fetchP0P1Cards(setCode: string): Promise<Card[]> {
 }
 
 export async function fetchP0P1Ratings(setCode: string): Promise<RatingsSnapshot | null> {
-  const key = `./fixtures/p0p1-ratings-${setCode.toLowerCase()}.json`;
+  const key = `./fixtures/p0p1-ratings-${setCode.toLowerCase()}.ts`;
   const loader = ratingLoaders[key];
   if (!loader) return null;
   return loader();
