@@ -1449,16 +1449,19 @@ async def refresh_launcher_for_date(bot: commands.Bot, signal_date: date) -> Non
     """Re-render the launcher board carrying this day's slots, so a committed slot tracks late Yes/No churn
     on its scheduled card. The board is resolved by the days it covers, not the day it was posted: a rolled
     column puts tomorrow's slot on today's board, and today's slots sit on yesterday's board until the
-    morning post. A day already past renders closed instead, so late churn can never reopen a retired
-    board."""
-    if signal_date < datetime.now(SCHEDULE_TZ).date():
-        await close_launcher_for_date(bot, signal_date)
-        return
+    morning post.
+
+    Staleness is measured against the live board, never against the calendar day. A board posted yesterday
+    stays the live surface past midnight until the morning post replaces it, so closing on the date alone
+    retires the board players are signing up on and leaves the hours until 11:00 with no launcher at all.
+    Only a board older than the live one renders closed, which still keeps late churn from reopening a
+    retired one."""
     board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
     if board is None:
         return
     _guild_id, _channel_id, message_id, board_date = board
     if signal_date < board_date:
+        await close_launcher_for_date(bot, signal_date)
         return
     await _rerender_poll(bot, message_id, board_date)
 
