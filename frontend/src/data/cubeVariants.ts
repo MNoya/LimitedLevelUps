@@ -26,6 +26,13 @@ export function cubeVariant(slug: string): CubeVariant | undefined {
 // The cube whose drafts split into per-set season boards, and the board CUBE-ALL now resolves to.
 export const SEASONED_CUBE_VARIANT = CUBE_VARIANTS.find((v) => v.seasoned) ?? CUBE_VARIANTS[0];
 
+// The board list keeps a WORD+CUBE convention, so a cube whose full name leads with Arena drops it
+// there; "Arena Cube" keeps its own, since "Cube" alone names nothing. The hero prints the full name.
+export function cubeListName(variant: CubeVariant): string {
+  const withoutArena = variant.name.replace(/^Arena\s+/, "");
+  return withoutArena.split(/\s+/).length >= 2 ? withoutArena : variant.name;
+}
+
 export function cubeVariantForBoard(code: string): CubeVariant | undefined {
   if (!code.startsWith(CUBE_BOARD_PREFIX)) {
     return undefined;

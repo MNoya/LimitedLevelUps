@@ -347,15 +347,29 @@ async function cubeUpdatedAt(): Promise<string> {
 // slug, aggregate (confidence is aggregate) — but reads the windowed season view
 // and carries no pod points (seasons are 17lands-cube only).
 async function fetchCubeSeasonLeaderboard(setCode: string): Promise<LeaderboardRow[]> {
+  const { rows, lastCalculatedAt } = await fetchCubeBoardBreakdown(setCode);
+  return rankCubeBoardRows(setCode, rows, lastCalculatedAt);
+}
+
+async function fetchCubeBoardBreakdown(
+  setCode: string,
+): Promise<{ rows: Array<Record<string, unknown>>; lastCalculatedAt: string }> {
   const [breakdown, lastCalculatedAt] = await Promise.all([
     client().from("public_cube_season_breakdown").select("*").eq("set_code", setCode),
     cubeUpdatedAt(),
   ]);
   if (breakdown.error) throw breakdown.error;
+  return { rows: (breakdown.data ?? []) as Array<Record<string, unknown>>, lastCalculatedAt };
+}
 
+function rankCubeBoardRows(
+  setCode: string,
+  breakdownRows: Array<Record<string, unknown>>,
+  lastCalculatedAt: string,
+): LeaderboardRow[] {
   interface Agg { displayName: string; avatarUrl: string | null; groups: GroupTotals[]; trophies: number; events: number; wins: number; losses: number }
   const bySlug = new Map<string, Agg>();
-  for (const raw of breakdown.data ?? []) {
+  for (const raw of breakdownRows) {
     const r = raw as Record<string, unknown>;
     const slug = r.slug as string;
     let agg = bySlug.get(slug);
@@ -857,11 +871,68 @@ async function aggregateColorsFromEvents(
 
 // ─── public_player_format_breakdown + public_player composite ──────────────
 
+// A cube board is its own resume. The CUBE set holds every cube Arena has run, so collapsing a board
+// to it would answer an Arena Cube profile with Powered Cube drafts. Rank comes from the board the
+// visitor came from, and a self-reported trophy names no cube, so no board claims one.
+async function fetchCubeBoardPlayerProfile(
+  slug: string,
+  setCode: string,
+): Promise<PlayerProfile | null> {
+  const { rows, lastCalculatedAt } = await fetchCubeBoardBreakdown(setCode);
+  const mine = rows.filter((r) => r.slug === slug);
+  if (mine.length === 0) {
+    return null;
+  }
+  const standing = rankCubeBoardRows(setCode, rows, lastCalculatedAt).find((r) => r.slug === slug);
+
+  const breakdown: PlayerFormatBreakdown[] = mine.map((r) => ({
+    setCode,
+    slug,
+    formatLabel: r.format_label as string,
+    events: (r.events as number) ?? 0,
+    wins: (r.wins as number) ?? 0,
+    losses: (r.losses as number) ?? 0,
+    trophies: (r.trophies as number) ?? 0,
+    scoreContribution: 0,
+  }));
+  const agg = aggregate(breakdown.map((b) => ({
+    label: b.formatLabel,
+    events: b.events,
+    wins: b.wins,
+    losses: b.losses,
+    trophies: b.trophies,
+  })));
+  for (const b of breakdown) {
+    b.scoreContribution = Math.round((agg.contributionByLabel.get(b.formatLabel) ?? 0) * 100) / 100;
+  }
+
+  const sum = (pick: (b: PlayerFormatBreakdown) => number) => breakdown.reduce((t, b) => t + pick(b), 0);
+  return {
+    slug,
+    displayName: standing?.displayName ?? (mine[0].display_name as string) ?? slug,
+    avatarUrl: standing?.avatarUrl ?? ((mine[0].avatar_url ?? null) as string | null),
+    setCode,
+    rank: standing?.rank ?? 0,
+    score: standing?.score ?? 0,
+    trophies: sum((b) => b.trophies),
+    events: sum((b) => b.events),
+    wins: sum((b) => b.wins),
+    losses: sum((b) => b.losses),
+    linked17lands: true,
+    lastCalculatedAt,
+    formatBreakdown: breakdown,
+    selfReportedEvents: [],
+  };
+}
+
 export async function fetchPlayerProfile(
   slug: string,
   setCode: string,
 ): Promise<PlayerProfile | null> {
-  setCode = baseSetCode(setCode); // cube seasons share the lifetime profile
+  if (isCubeSeasonCode(setCode)) {
+    return fetchCubeBoardPlayerProfile(slug, setCode);
+  }
+  setCode = baseSetCode(setCode);
   const [headlineResp, breakdownResp, podResp, trophiesResp] = await Promise.all([
     client()
       .from("public_player")
@@ -1040,9 +1111,8 @@ export async function fetchPlayerDraftEvents(
   slug: string,
   setCode: string,
 ): Promise<PlayerDraftEvent[]> {
-  setCode = baseSetCode(setCode); // cube seasons share the lifetime profile
   const { data, error } = await client()
-    .from("public_player_draft_events")
+    .from(eventsViewFor(setCode))
     .select(DRAFT_EVENT_COLUMNS)
     .eq("slug", slug)
     .eq("set_code", setCode)

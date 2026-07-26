@@ -363,7 +363,7 @@ def google_calendar_url(name: str, event_time: datetime) -> str:
     return f"https://www.google.com/calendar/event?{query}"
 
 
-LOCKED_DRAFTERS_LABEL = "Drafters"
+LOCKED_DRAFTERS_LABEL = "Players"
 LOCKED_STANDINGS_LABEL = "Final Standings"
 _LOCKED_MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 ROSTER_GAP = NBSP * 2
