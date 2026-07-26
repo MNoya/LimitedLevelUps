@@ -7,6 +7,7 @@ import logging
 import discord
 
 from bot import emojis
+from bot.services import pod_format_interest as fi
 from bot.services.lobby_embed import SettingsButton
 from bot.services.pod_format import format_display
 from bot.services.pod_pairing_select import pairing_label
@@ -65,9 +66,9 @@ def build_registered_embed(
     if championship:
         reigning_champion = role_holder_mention(guild, SET_CHAMPION_ROLE_NAME)
         body = f"{championship_flavor(set_code, reigning_champion)}\n\n{body}"
-    title = CHAMPIONSHIP_TITLE if championship else f"{emojis.prefix(set_code.lower())}{REGISTERED_TITLE_TEXT}"
+    title = CHAMPIONSHIP_TITLE if championship else f"{emojis.prefix('chordoHello')}{REGISTERED_TITLE_TEXT}"
     embed = discord.Embed(title=title, description=body, color=discord.Color.green())
-    embed.add_field(name="Format", value=format_display(set_code), inline=True)
+    embed.add_field(name="Format", value=f"{fi.format_emoji(set_code)} {format_display(set_code)}", inline=True)
     embed.add_field(name="Pairings", value=pairing_label(pairing_mode), inline=True)
     embed.add_field(name="Seats", value=seating_mode_label(seating_mode), inline=True)
     if rsvp_hint:

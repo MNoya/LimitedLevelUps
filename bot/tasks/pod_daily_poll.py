@@ -334,7 +334,7 @@ def _format_legend(codes: list[str], guild: discord.Guild | None) -> str:
         name = pod_format.format_name_link(code)
         if not pod_format.is_custom(code):
             name = f"**{name}**"
-        lines.append(f"{_named_pod_emoji(code)} {name} {_format_role_label(guild, code)}")
+        lines.append(f"{fi.format_emoji(code)} {name} {_format_role_label(guild, code)}")
     return "\n".join(lines)
 
 
@@ -507,16 +507,6 @@ def _slot_name_only(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) 
     return " ".join(part for part in (slot_emoji, label) if part)
 
 
-def _named_pod_emoji(code: str) -> "discord.Emoji | str":
-    """A format's glyph for a button's emoji slot or an f-string, which take the object. A cube has no set
-    symbol, so it falls back to the cube glyph rather than the flashback one. Never pass this into
-    `str.join`: an Emoji is not a str, which is how the first named-pod render crashed."""
-    symbol = emojis.set_symbol(code)
-    if symbol is not None:
-        return symbol
-    return fi.cube_emoji() if pod_format.is_custom(code) else fi.flashback_emoji()
-
-
 def _slot_when_line(slot: pod_launch.LauncherSlot) -> str:
     return f"<t:{int(slot.slot_time.timestamp())}:F>" if slot.slot_time else ""
 
@@ -585,7 +575,7 @@ def _roster_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) ->
     marker, so the crowd that will play either reads at a glance. An empty pod still renders its header over
     a dash, so a slot nobody joined yet keeps advertising every format it offers. A closed slot says so in
     place of the roster."""
-    icon = _named_pod_emoji(slot.set_code)
+    icon = fi.format_emoji(slot.set_code)
     label = f"**{_named_pod_label(slot.bucket_key, slot.set_code)}**"
     closed = slot.status == STATUS_EXPIRED and not slot.committed
     count = f" **({slot.count})**" if slot.count and not closed else ""
@@ -780,7 +770,7 @@ def _slot_button_emoji(bucket_key: str) -> "discord.Emoji | str | None":
     """The format's glyph for a named pod's button, the slot's own for a key carrying no format."""
     code = format_of(bucket_key)
     if code:
-        return _named_pod_emoji(code)
+        return fi.format_emoji(code)
     bucket = bucket_by_key(bucket_key)
     return emojis.resolve(bucket.emoji) if bucket else None
 

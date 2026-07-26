@@ -12,6 +12,7 @@ import discord
 from discord import ui
 
 from bot import emojis
+from bot.services import pod_format_interest as fi
 from bot.services.pod_format import (
     CUSTOM_FORMATS,
     SELECT_PLACEHOLDER,
@@ -70,7 +71,7 @@ def format_options(current_code: str | None) -> list[discord.SelectOption]:
             label=f"Format: {fmt.label}",
             value=fmt.code,
             description=f"CubeCobra: {fmt.cube_id}",
-            emoji=emojis.get_emoji("cube"),
+            emoji=fi.cube_emoji(),
             default=(cur == fmt.code.upper()),
         ))
     for seed in recent:

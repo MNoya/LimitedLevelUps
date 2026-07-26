@@ -17,6 +17,7 @@ import discord
 
 from bot import emojis
 from bot.config import settings
+from bot.services import pod_format
 from bot.sets import active_set_code
 
 
@@ -55,6 +56,16 @@ def flashback_emoji() -> "discord.Emoji | str":
 
 def cube_emoji() -> "discord.Emoji | str":
     return emojis.get_emoji("cube") or INTEREST_EMOJI[CUBE]
+
+
+def format_emoji(code: str) -> "discord.Emoji | str":
+    """A format's glyph for a button's emoji slot or an f-string, which take the object. A cube has no set
+    symbol, so it falls back to the cube glyph rather than the flashback one. Never pass this into
+    `str.join`: an Emoji is not a str, which is how the first named-pod render crashed."""
+    symbol = emojis.set_symbol(code)
+    if symbol is not None:
+        return symbol
+    return cube_emoji() if pod_format.is_custom(code) else flashback_emoji()
 
 
 def normalize(values: Iterable[str] | None) -> list[str]:
@@ -121,7 +132,7 @@ def preference_display(values: Iterable[str] | None) -> str:
 
 def ranking_display(codes: Iterable[str]) -> str:
     """The ranked set codes, each led by its set-symbol icon, the :flashback: glyph when a set has none."""
-    return " **→** ".join(f"{emojis.set_symbol(code) or flashback_emoji()} {code}" for code in codes)
+    return " **→** ".join(f"{format_emoji(code)} {code}" for code in codes)
 
 
 @dataclass(frozen=True)

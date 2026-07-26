@@ -26,6 +26,7 @@ from bot.commands.messages import MSG_LOBBY_GATHERING, MSG_PLAYERS_JOINED
 from bot.commands.pod_rsvp import parse_new_time, post_scheduled_card
 from bot.config import settings
 from bot.discord_helpers import NBSP
+from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
 from bot.services.pod_draft_manager import (
     set_event_pairing_mode,
@@ -215,9 +216,7 @@ def _queue_title(role_mention: str | None, set_code: str | None) -> str:
     """`SET Pod Draft Queue {emoji}` so a non-default queue is legible before anyone joins. The queue
     role is itself named "Pod Draft Queue", so its mention doubles as the label and the ping."""
     code = (set_code or active_set_code()).upper()
-    emoji = emojis.set_symbol(code)
-    suffix = f" {emoji}" if emoji else ""
-    return f"{format_display(code)} {role_mention or QUEUE_TITLE}{suffix}"
+    return f"{format_display(code)} {role_mention or QUEUE_TITLE} {fi.format_emoji(code)}"
 
 
 def inactivity_window_text(minutes: int) -> str:
@@ -481,7 +480,7 @@ def _set_options(current: str | None) -> list[discord.SelectOption]:
     for fmt in cubes:
         options.append(discord.SelectOption(
             label=f"Set: {fmt.label}", value=fmt.code, description=f"CubeCobra: {fmt.cube_id}",
-            emoji=emojis.get_emoji("cube"), default=(chosen == fmt.code)))
+            emoji=fi.cube_emoji(), default=(chosen == fmt.code)))
     for code in recent:
         options.append(set_select_option(
             code, label=f"Set: {code}", description=set_name_for(code), default=(chosen == code)))
@@ -847,9 +846,8 @@ def _joinable_line(guild: discord.Guild, signal) -> str:
         name = LAUNCHER_QUEUE_NAME.format(set_code=format_display(set_code))
     else:
         name = pod_display_name(set_code, signal.slot_time)
-    symbol = emojis.set_symbol(set_code)
-    emoji = f" {symbol}" if symbol else ""
-    return LAUNCHER_JOINABLE_LINE.format(name=name, url=url, emoji=emoji, count=signal.count)
+    return LAUNCHER_JOINABLE_LINE.format(
+        name=name, url=url, emoji=f" {fi.format_emoji(set_code)}", count=signal.count)
 
 
 def _launcher_content(guild: discord.Guild | None, joinable: list) -> str:
