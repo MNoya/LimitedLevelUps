@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { usePlayerProfile, useSets } from "../data/hooks";
 import { categoryFromSlug } from "../data/episodes";
+import { cubeVariantForBoard } from "../data/cubeVariants";
 import { ACTIVE_SET_CODE, SITE_NAME, TITLE_SEPARATOR } from "../data/constants";
 
 // Mirrors functions/_middleware.ts so the in-app tab title matches the crawler/unfurl title.
@@ -52,11 +53,13 @@ const titleCaseSlug = (slug: string, setCodes: Set<string>): string =>
     })
     .join(" ");
 
-// Set codes are acronyms (SOS, ECL) so they stay uppercase, but CUBE is a word —
-// render "Cube" and its seasons as "Cube SOS".
+// Set codes are acronyms (SOS, ECL) so they stay uppercase, but CUBE is a word — render "Cube", its
+// seasons as "Cube SOS", and a whole-cube board by the cube's own name ("Arena Cube").
 const setTitleLabel = (code: string): string => {
   const upper = code.toUpperCase();
   if (upper === "CUBE") return "Cube";
+  const variant = cubeVariantForBoard(upper);
+  if (variant) return variant.name;
   if (upper.startsWith("CUBE-")) return `Cube ${upper.slice("CUBE-".length)}`;
   return upper;
 };

@@ -47,6 +47,9 @@ import {
 import { isMtgoFlashbackCode, mtgoSetName, withMtgoSets, MTGO_BLOCK_GLYPHS } from "../data/mtgoSets";
 import { useAuth } from "../auth/useAuth";
 import { baseSetCode, canonicalSetCode, colorsOf, CUBE_BASE, CUBE_LIFETIME, cubeSeasonLabel, eventDate, fmtRange, fmtShortDate, isCubeCode, isCubeSeasonCode, isSoup, lastUpdated, leaderboardPath, playerPath, profileSearch, prettyFormat, relativeTime, sumEvents, weekOfSet, winPct } from "../data/utils";
+import {
+  cubeBoardCode, cubeVariantForBoard, isCubeBoardLive, ongoingCubeBoard, SEASONED_CUBE_VARIANT,
+} from "../data/cubeVariants";
 import { CubeSeasonSelector } from "../components/CubeSeasonSelector";
 import { colorsDisplayName, FORMAT_LABEL_GROUPS, FORMAT_OPTIONS, matchesFormatFilter, MULTI, OTHER } from "../data/filters";
 import { FMT_COLORS, FMT_DEFAULT_COLOR, renderFormatOption, shortFormat } from "../data/format-display";
@@ -66,11 +69,15 @@ export function LeaderboardPage() {
   const liveSetCode = sets?.find((s) => s.isActive)?.code;
   const requestedSet = params.setCode ? canonicalSetCode(params.setCode, sets) : undefined;
   const routeSet = requestedSet ?? liveSetCode ?? ACTIVE_SET_CODE;
-  // CUBE-ALL is the lifetime sentinel; every data read scores it as the bare lifetime board.
-  const activeSet = routeSet === CUBE_LIFETIME ? CUBE_BASE : routeSet;
-  const setMeta = sets?.find((s) => s.code === baseSetCode(activeSet));
   const { data: cubeSeasons } = useCubeSeasons();
-  const latestCubeSeason = cubeSeasons?.[0]?.setCode;
+  // Bare CUBE is not a board of its own: it opens whichever cube is running. The retired CUBE-ALL
+  // lifetime sentinel now means the seasoned cube's own board, so old links keep landing somewhere.
+  const cubeEntryBoard = ongoingCubeBoard(cubeSeasons);
+  const cubeBoard = routeSet === CUBE_LIFETIME
+    ? cubeBoardCode(SEASONED_CUBE_VARIANT.slug)
+    : (routeSet === CUBE_BASE ? cubeEntryBoard : undefined);
+  const activeSet = cubeBoard ?? routeSet;
+  const setMeta = sets?.find((s) => s.code === baseSetCode(activeSet));
   const dropdownSets = useMemo(() => withMtgoSets(sets), [sets]);
   const isMtgo = isMtgoFlashbackCode(activeSet);
   const trophyLb = useTrophyLeaderboard(isMtgo ? activeSet : undefined);
@@ -83,12 +90,12 @@ export function LeaderboardPage() {
     if (!params.setCode) return;
     if (routeSet === liveSetCode) {
       navigate({ pathname: leaderboardPath(), search: searchParams.toString() }, { replace: true });
-    } else if (requestedSet === CUBE_BASE && latestCubeSeason) {
-      navigate({ pathname: leaderboardPath(latestCubeSeason), search: searchParams.toString() }, { replace: true });
+    } else if (cubeBoard) {
+      navigate({ pathname: leaderboardPath(cubeBoard), search: searchParams.toString() }, { replace: true });
     } else if (routeSet !== params.setCode) {
       navigate({ pathname: leaderboardPath(routeSet), search: searchParams.toString() }, { replace: true });
     }
-  }, [params.setCode, requestedSet, routeSet, liveSetCode, latestCubeSeason, navigate, searchParams]);
+  }, [params.setCode, routeSet, liveSetCode, cubeBoard, navigate, searchParams]);
   const format = searchParams.get("format") ?? "ALL";
   const colors = searchParams.get("colors") ?? "ALL";
   const colorsMode = colors !== "ALL";
@@ -207,7 +214,7 @@ export function LeaderboardPage() {
         rows={trophyLb.data}
         loading={trophyLb.isLoading}
         searchParams={searchParams}
-        latestCubeSeason={latestCubeSeason}
+        cubeEntryBoard={cubeEntryBoard}
       />
     );
   }
@@ -217,7 +224,7 @@ export function LeaderboardPage() {
       activeSet={activeSet}
       sets={dropdownSets}
       cubeSeasons={cubeSeasons}
-      latestCubeSeason={latestCubeSeason}
+      cubeEntryBoard={cubeEntryBoard}
       rows={rows}
       isLoading={isLoading}
       error={error}
@@ -235,7 +242,7 @@ export function LeaderboardPage() {
       sets={dropdownSets}
       setMeta={setMeta}
       cubeSeasons={cubeSeasons}
-      latestCubeSeason={latestCubeSeason}
+      cubeEntryBoard={cubeEntryBoard}
       rows={rows}
       isLoading={isLoading}
       error={error}
@@ -288,18 +295,18 @@ function MtgoBoard({
   rows,
   loading,
   searchParams,
-  latestCubeSeason,
+  cubeEntryBoard,
 }: {
   activeSet: string;
   sets: SetSummary[] | undefined;
   rows: TrophyLeaderboardRow[] | undefined;
   loading: boolean;
   searchParams: URLSearchParams;
-  latestCubeSeason?: string;
+  cubeEntryBoard?: string;
 }) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const onSelectSet = (c: string) => goToSet(navigate, c, sets, searchParams, latestCubeSeason);
+  const onSelectSet = (c: string) => goToSet(navigate, c, sets, searchParams, cubeEntryBoard);
   const releaseDate = sets?.find((s) => s.code === activeSet)?.startDate;
   const blockGlyphs = MTGO_BLOCK_GLYPHS[activeSet];
   return (
@@ -372,7 +379,7 @@ function Desktop({
   sets,
   setMeta,
   cubeSeasons,
-  latestCubeSeason,
+  cubeEntryBoard,
   rows,
   isLoading,
   error,
@@ -388,7 +395,7 @@ function Desktop({
   sets: SetSummary[] | undefined;
   setMeta: SetSummary | undefined;
   cubeSeasons: CubeSeason[] | undefined;
-  latestCubeSeason: string | undefined;
+  cubeEntryBoard: string | undefined;
   rows: LeaderboardTableRow[] | undefined;
   isLoading: boolean;
   error: Error | null;
@@ -411,7 +418,7 @@ function Desktop({
         setMeta={setMeta}
         sets={sets}
         cubeSeasons={cubeSeasons}
-        onSelectSet={(c) => goToSet(navigate, c, sets, searchParams, latestCubeSeason)}
+        onSelectSet={(c) => goToSet(navigate, c, sets, searchParams, cubeEntryBoard)}
         onSelectSeason={(c) => navigate({ pathname: leaderboardPath(c), search: searchParams.toString() })}
         onPrefetchSet={prefetchSet}
         format={filters.format}
@@ -496,18 +503,24 @@ function SetHero({
   // Start at the actual cube burst (cube opens after release); end at the set's planned rotation
   // date rather than the latest event, so a live season doesn't read "— <today>". EOE is the
   // exception — its cube ran after the set already rotated — so never end before the last event.
+  // A cube board with no row yet shows no range at all: the CUBE set's own open-ended window spans
+  // every cube and belongs to no board.
   let seasonRange: string | null = null;
   if (cubeSeason) {
     const setEnd = seasonSet?.endDate;
     const end = setEnd && setEnd >= cubeSeason.lastEvent ? setEnd : cubeSeason.lastEvent;
     seasonRange = fmtRange(cubeSeason.firstEvent, end);
-  } else if (isCube && setMeta) {
+  } else if (!isCube && setMeta) {
     seasonRange = fmtRange(setMeta.startDate, setMeta.endDate);
   }
-  // The live marker shows on the active set; for CUBE that's only when the selected season is the
-  // live one, and it reads "LIVE" rather than "CURRENT SET" (a season is a window, not the set).
-  const isActive = isCube ? Boolean(seasonSet?.isActive) : (setMeta?.isActive ?? false);
+  // The live marker shows on the active set; a cube board is live while its cube is still running,
+  // and it reads "LIVE" rather than "CURRENT SET" (a cube run is a window, not the set).
+  const isActive = isCube ? isCubeBoardLive(cubeSeason) : (setMeta?.isActive ?? false);
   const liveLabel = isCube ? "LIVE" : "CURRENT SET";
+  // A cube board is named for the cube it scores, so a season reads as the cube that ran it
+  const heroName = isCube
+    ? (cubeVariantForBoard(activeSet) ?? SEASONED_CUBE_VARIANT).name
+    : (setMeta?.name ?? "");
   return (
     <div className="relative px-10 py-5 border-b border-border bg-surface flex items-center gap-6">
       <SetGlyph code={base} size={84} />
@@ -518,19 +531,18 @@ function SetHero({
             {base}
           </span>
           <span className="font-display text-[22px] text-muted tracking-[0.06em]">
-            {setMeta?.name?.toUpperCase() ?? ""}
+            {heroName.toUpperCase()}
           </span>
         </div>
         {isCube ? (
           // Height is driven by the same text-[11px] date element a normal set uses, so the hero
           // matches exactly; the larger selector floats over it and doesn't affect layout height.
-          <div className="relative mono text-[11px] text-muted mt-1 tracking-[0.04em]">
-            {/* inset-y-0 + flex centers without a transform — a transform here would create a
-                stacking context and trap the dropdown's z-index below the filter row. */}
-            <div className="absolute left-0 inset-y-0 flex items-center">
+          <div className="mono text-[11px] text-muted mt-1 tracking-[0.04em] flex items-center gap-6">
+            {/* Zero height holds the hero to a normal set's while the selector keeps its width */}
+            <div className="h-0 shrink-0 flex items-center">
               <CubeSeasonSelector activeSet={activeSet} seasons={cubeSeasons} onSelect={onSelectSeason} />
             </div>
-            <div className="text-right whitespace-nowrap">{seasonRange || " "}</div>
+            <span className="whitespace-nowrap ml-auto">{seasonRange || " "}</span>
           </div>
         ) : (
           <div className="mono text-[11px] text-muted mt-1 flex justify-between gap-4">
@@ -697,7 +709,7 @@ function Mobile({
   activeSet,
   sets,
   cubeSeasons,
-  latestCubeSeason,
+  cubeEntryBoard,
   rows,
   isLoading,
   error,
@@ -712,7 +724,7 @@ function Mobile({
   activeSet: string;
   sets: SetSummary[] | undefined;
   cubeSeasons: CubeSeason[] | undefined;
-  latestCubeSeason: string | undefined;
+  cubeEntryBoard: string | undefined;
   rows: LeaderboardTableRow[] | undefined;
   isLoading: boolean;
   otherCombos: string[];
@@ -768,7 +780,7 @@ function Mobile({
               <SetFilterDropdown
                 value={profileSet}
                 options={setOptions}
-                onChange={(code) => goToSet(navigate, code, sets, searchParams, latestCubeSeason)}
+                onChange={(code) => goToSet(navigate, code, sets, searchParams, cubeEntryBoard)}
                 variant="mobile"
                 align="right"
                 searchable
@@ -1346,11 +1358,11 @@ function goToSet(
   code: string,
   sets: SetSummary[] | undefined,
   searchParams: URLSearchParams,
-  latestCubeSeason?: string,
+  cubeEntryBoard?: string,
 ) {
   // The CUBE chip drops into the newest season; LIFETIME (CUBE-ALL) is reached
   // only from the in-header season selector.
-  if (code === CUBE_BASE && latestCubeSeason) code = latestCubeSeason;
+  if (code === CUBE_BASE && cubeEntryBoard) code = cubeEntryBoard;
   const activeCode = sets?.find((s) => s.isActive)?.code;
   navigate({
     pathname: code === activeCode ? leaderboardPath() : leaderboardPath(code),

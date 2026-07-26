@@ -16,6 +16,7 @@ from sqlalchemy import create_engine, text
 log = logging.getLogger(__name__)
 
 _ALLOWED_VIEWS = {
+    "public_color_events",
     "public_colors_summary",
     "public_cube_seasons",
     "public_cube_season_breakdown",
@@ -101,6 +102,10 @@ async def _handle_view(request: web.Request) -> web.Response:
     limit = request.query.get("limit")
     if limit and limit.isdigit():
         sql += f" LIMIT {int(limit)}"
+    # Without OFFSET a paging caller re-reads page one forever, so dropping it hangs the client
+    offset = request.query.get("offset")
+    if offset and offset.isdigit():
+        sql += f" OFFSET {int(offset)}"
 
     with engine.connect() as conn:
         rows = conn.execute(text(sql), params).mappings().all()

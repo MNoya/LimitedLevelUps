@@ -19,12 +19,13 @@ export interface PodSetCode {
 }
 
 export interface CubeSeason {
-  setCode: string; // virtual code, e.g. "CUBE-SOS"
-  label: string; // the season's set code, e.g. "SOS"
-  name: string;
-  startDate: string; // the set's release date
+  setCode: string; // virtual code, e.g. "CUBE-SOS" or "CUBE-PLANAR"
+  kind: "season" | "variant"; // a set window of the seasoned cube, or a whole cube
+  label: string; // the season's set code ("SOS") or the variant's slug ("PLANAR")
+  name: string | null; // the season's set name; null on a variant row
+  startDate: string; // the set's release date, or the variant's first event
   firstEvent: string; // first cube event of the season's burst (cube opens after release)
-  lastEvent: string; // latest cube event in the season
+  lastEvent: string; // latest cube event on the board
   events: number;
   players: number;
 }

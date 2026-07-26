@@ -20,6 +20,7 @@ import { SITE_NAME as SITE, TITLE_SEPARATOR, TIER_LIST_PREVIEW_SETS } from "../f
 import { mtgoSetName } from "../frontend/src/data/mtgoSets";
 import { P0P1_SET_CODE, P0P1_VOTING_DEADLINE, P0P1_SCORING_DATE } from "../frontend/src/data/p0p1Slots";
 import { categoryFromSlug } from "../frontend/src/data/episodes";
+import { cubeVariantForBoard } from "../frontend/src/data/cubeVariants";
 
 const EPISODE_CATEGORY_DESCRIPTIONS: Record<string, string> = {
   "Set Review": "Card-by-card set reviews and first impressions for MTG limited.",
@@ -175,13 +176,15 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
     if (rest[1] === "player" && rest[2]) {
       return playerMeta(await fetchPlayerName(rest[2]), rest[2]);
     }
-    // CUBE is a word, not an acronym, and its seasons are virtual CUBE-<SET> codes;
-    // render "Cube" / "Cube SOS" but resolve the symbol/name from the base CUBE set.
+    // CUBE is a word, not an acronym, and its boards are virtual CUBE-<SET|VARIANT> codes; render
+    // "Cube" / "Cube SOS" / the cube's own name, resolving the symbol from the base CUBE set.
     const baseCode = setCode.startsWith("CUBE-") ? "CUBE" : setCode;
+    const variant = cubeVariantForBoard(setCode);
     const label = setCode === "CUBE" ? "Cube"
+      : variant ? variant.name
       : setCode.startsWith("CUBE-") ? `Cube ${setCode.slice("CUBE-".length)}`
       : setCode;
-    const setName = await fetchSetName(baseCode);
+    const setName = variant?.name ?? await fetchSetName(baseCode);
     return page(
       `${label} Leaderboard`,
       `Check ${setName} ranks and trophies on the leaderboard.`,

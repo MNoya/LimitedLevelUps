@@ -15,7 +15,8 @@ from bot import audit, emojis
 from bot.commands import descriptions as desc
 from bot.commands.messages import MSG_NOT_REGISTERED
 from bot.services.player_stats import (
-    process_stats, rank_cube_season, rank_players_for_set, render_embed as render_stats_embed, resolve_player,
+    latest_cube_board, process_stats, rank_cube_board, rank_players_for_set,
+    render_embed as render_stats_embed, resolve_player,
 )
 from bot.config import settings
 from bot.database import SessionLocal
@@ -29,7 +30,21 @@ from bot.services.pod_drafts import pod_summary_by_set_for_player
 from bot.services.active_set import resolve_active_set
 from bot.services.pod_format import PEASANT_CODE, PEASANT_LABEL
 from bot.services.self_reported_events import rank_self_reported_events
-from bot.sets import ALL_SETS, MTGO_FLASHBACK_SETS, active_set_code, is_mtgo_flashback_code, set_name_for
+from bot.sets import (
+    ALL_SETS,
+    CUBE_CODE,
+    CUBE_VARIANTS,
+    MTGO_FLASHBACK_SETS,
+    CubeVariant,
+    active_set_code,
+    cube_board_code,
+    cube_variant,
+    is_cube_board_code,
+    is_known_set,
+    is_mtgo_flashback_code,
+    seasoned_cube_variant,
+    set_name_for,
+)
 
 
 # Color archetype label → PlayerArchetypeScore.archetype key
@@ -175,18 +190,23 @@ def process_leaderboard(
     )
 
 
-def process_cube_season(
-    session: Session, viewer_discord_id: str | None, top_n: int = 10,
+def process_cube_board(
+    session: Session, viewer_discord_id: str | None, top_n: int = 10, board: str | None = None,
 ) -> LeaderboardData | None:
-    """Latest CUBE season board — cube drafts windowed to the set live when they were played.
+    """One cube board: a variant in full (``CUBE-PLANAR``) or one of the powered cube's per-set
+    seasons (``CUBE-SOS``). ``board`` of None takes the ongoing cube, or the last one that ran.
 
-    set_code is the virtual season code (e.g. ``CUBE-SOS``) so the embed title and site link land
-    on that season's page. No pod points (seasons are 17lands-cube only).
+    set_code is the virtual board code so the embed title and site link land on that board's page.
+    No pod points (cube boards are 17lands-cube only).
     """
-    result = rank_cube_season(session)
-    if result is None:
+    target = resolve_cube_board(session, board)
+    if target is None:
         return None
-    ranked, label = result
+    variant, season = target
+
+    ranked = rank_cube_board(session, variant, season)
+    if not ranked:
+        return None
 
     top = [
         LeaderboardEntry(
@@ -212,13 +232,34 @@ def process_cube_season(
     ).scalar()
 
     return LeaderboardData(
-        set_code=f"{CUBE_CODE}-{label}",
-        set_name=f"Arena Powered Cube — {label} Season",
+        set_code=cube_board_code(season or variant.slug),
+        set_name=f"{variant.name} — {season} Season" if season else variant.name,
         top=top,
         viewer=viewer_entry,
         last_updated=last_updated,
         drafter_count=len(ranked),
     )
+
+
+def resolve_cube_board(session: Session, board: str | None) -> tuple[CubeVariant, str | None] | None:
+    """Which cube board a ``/leaderboard set:`` value names, as ``(variant, season label or None)``.
+
+    ``CUBE`` takes the board of the cube running now, or of the last one that ran.
+    ``CUBE-<VARIANT>`` is that cube in full and ``CUBE-<SET>`` a season of the seasoned cube, whose
+    own board the retired ``CUBE-ALL`` lands on. None when the value names no cube board, or when no
+    cube has been drafted at all.
+    """
+    slug = "" if board is None else board.upper().removeprefix(f"{CUBE_CODE}-")
+    if slug == LIFETIME_SET:
+        return seasoned_cube_variant(), None
+    if board is None or slug in ("", CUBE_CODE):
+        return latest_cube_board(session)
+    variant = cube_variant(slug)
+    if variant is not None:
+        return variant, None
+    if is_known_set(slug):
+        return seasoned_cube_variant(), slug
+    return None
 
 
 def _ranked_for_format(
@@ -684,8 +725,6 @@ def _pod_board(
 PERSONAL_STANDINGS_LIMIT = 10
 DIRECT_FILTER = "Direct"
 LIFETIME_SET = "ALL"
-CUBE_CODE = "CUBE"
-CUBE_LIFETIME = "CUBE-ALL"
 
 
 def process_personal_standings(
@@ -1268,7 +1307,7 @@ def _apply_footer(embed: discord.Embed, data: LeaderboardData, show_note: bool =
 def render_embed(data: LeaderboardData, show_note: bool = True) -> discord.Embed:
     base_url = settings.public_site_url.rstrip("/")
     site_url = board_site_url(data.set_code, data.filter_type, data.filter_value)
-    set_emoji = emojis.get(data.set_code.lower())
+    set_emoji = emojis.set_symbol(data.set_code)
     prefix = f"{set_emoji} " if set_emoji else ""
     embed = discord.Embed(
         title=f"🏆 Leaderboard {prefix}{data.set_code}",
@@ -1798,14 +1837,20 @@ class Leaderboard(commands.Cog):
                 f"Color filtering isn't available for `{format_value}` yet.", ephemeral=ephemeral,
             )
             return
+        # set:CUBE takes the cube running now; set:CUBE-PLANAR and set:CUBE-SOS name a board directly
+        cube_board = set.upper() if set is not None and is_cube_board_code(set) else None
+        if cube_board is not None and (format_value is not None or color_value is not None):
+            await interaction.response.send_message(
+                f"Format and color filters aren't available for `{cube_board}`.", ephemeral=ephemeral,
+            )
+            return
+
         filter_type, filter_value = encode_filter(format_value, color_value)
-        # set:CUBE defaults to the latest cube season; set:CUBE-ALL is the all-time cube board.
-        cube_lifetime = set is not None and set.upper() == CUBE_LIFETIME
 
         await interaction.response.defer()
 
         with SessionLocal() as session:
-            if cube_lifetime:
+            if cube_board is not None:
                 magic_set = session.execute(
                     select(MagicSet).where(MagicSet.code == CUBE_CODE)
                 ).scalar_one_or_none()
@@ -1825,8 +1870,8 @@ class Leaderboard(commands.Cog):
                 await interaction.followup.send(msg, ephemeral=ephemeral)
                 return
 
-            if magic_set.code == CUBE_CODE and not cube_lifetime and filter_type is None:
-                data, suffix = process_cube_season(session, viewer_discord_id=user_id), None
+            if cube_board is not None:
+                data, suffix = process_cube_board(session, viewer_discord_id=user_id, board=cube_board), None
             else:
                 data, suffix = render_filtered_data(
                     session,
@@ -1903,19 +1948,16 @@ class Leaderboard(commands.Cog):
         self, interaction: discord.Interaction, current: str,
     ) -> list[app_commands.Choice[str]]:
         cur = current.upper()
-        cube_name = ""
-        for s in ALL_SETS:
-            if s.code == CUBE_CODE:
-                cube_name = s.name.upper()
-                break
 
         matches: list[app_commands.Choice[str]] = []
         if cur in LIFETIME_SET:
             matches.append(app_commands.Choice(name="ALL — Lifetime Sets", value=LIFETIME_SET))
-        if cur in CUBE_CODE or (cube_name and cur in cube_name):
-            matches.append(app_commands.Choice(name=f"{CUBE_CODE} — Latest Season", value=CUBE_CODE))
-        if cur in CUBE_LIFETIME or cur in "CUBE LIFETIME":
-            matches.append(app_commands.Choice(name=f"{CUBE_LIFETIME} — Cube Lifetime", value=CUBE_LIFETIME))
+        if cur in CUBE_CODE:
+            matches.append(app_commands.Choice(name=f"{CUBE_CODE} — Cube Running Now", value=CUBE_CODE))
+        for variant in CUBE_VARIANTS:
+            code = cube_board_code(variant.slug)
+            if cur in code or cur in variant.name.upper():
+                matches.append(app_commands.Choice(name=f"{code} — {variant.name}", value=code))
         if cur in PEASANT_CODE or cur in PEASANT_LABEL.upper():
             matches.append(app_commands.Choice(name=f"{PEASANT_CODE} — {PEASANT_LABEL}", value=PEASANT_CODE))
         matches += [

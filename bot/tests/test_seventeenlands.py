@@ -446,10 +446,18 @@ def test_extract_event_row_keeps_unknown_format():
     assert row["format"] == "MidWeekSealed"
 
 
-def test_extract_event_row_normalizes_expansion_alias():
-    """``Cube - Powered`` aliases to ``CUBE`` via ``normalize_expansion``."""
-    row = extract_event_row(_draft(expansion="Cube - Powered"))
-    assert row["expansion"] == "CUBE"
+@pytest.mark.parametrize("expansion, stored", [
+    ("MAT", "MOM"),
+    ("OM1", "SPM"),
+    ("Cube - Powered", "Cube - Powered"),
+    ("Cube - Planar", "Cube - Planar"),
+    ("Cube", "Cube"),
+])
+def test_extract_event_row_normalizes_only_aliased_expansions(expansion, stored):
+    """An aliased set's expansion becomes its code; a cube variant stays verbatim so its board
+    stays separable from the other cubes sharing the CUBE set."""
+    row = extract_event_row(_draft(expansion=expansion))
+    assert row["expansion"] == stored
 
 
 def test_extract_event_row_returns_none_without_id():

@@ -326,6 +326,24 @@ def test_claim_orphan_drafts_normalizes_legacy_alias_rows(session):
     assert affected == {p.id}
 
 
+def test_claim_orphan_drafts_keeps_matched_expansions_verbatim(session):
+    """``expansion_matches`` rows join the set without losing their 17lands name, which is what keeps
+    the cube variants separable on their own boards."""
+    ecl = _seed_set(session, code="ECL")
+    p = _seed_player(session)
+    drafts = [_draft("a", expansion="Cube - Planar"), _draft("b", expansion="Cube")]
+    bulk_upsert_draft_events(session, p.id, drafts, [ecl])
+    session.flush()
+
+    cube = _seed_set(session, code="CUBE", start_date=date(2026, 7, 1))
+    affected = claim_orphan_drafts(session, cube, expansion_matches=("Cube - Planar", "Cube"))
+
+    rows = session.execute(select(DraftEvent)).scalars().all()
+    assert {row.set_id for row in rows} == {cube.id}
+    assert {row.expansion for row in rows} == {"Cube - Planar", "Cube"}
+    assert affected == {p.id}
+
+
 # ---------------------------------------------------------------------------
 # refresh_player
 # ---------------------------------------------------------------------------

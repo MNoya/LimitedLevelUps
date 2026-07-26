@@ -1,19 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { SetGlyph } from "./Brand";
 import { ChevronDown } from "./Icons";
-import { CUBE_BASE, CUBE_LIFETIME, isCubeSeasonCode } from "../data/utils";
+import { isCubeSeasonCode } from "../data/utils";
+import { cubeBoardCode, CUBE_VARIANTS, SEASONED_CUBE_VARIANT } from "../data/cubeVariants";
 import { cn } from "../lib/utils";
 import type { CubeSeason } from "../types/leaderboard";
 
 const LIFETIME_LABEL = "LIFETIME";
 
-// CUBE recurs every set; this picks which window the board scores over. LIFETIME
-// is the all-time board (CUBE-ALL sentinel); each season is a virtual CUBE-<SET> code
-// scoped to that set's release window. Seasons arrive newest-first from the view.
+interface BoardOption {
+  value: string;
+  label: string;
+  glyph: string;
+  trigger?: string;
+}
+
+// Arena swaps its cube every few sets; this picks which cube, or which of the seasoned cube's set
+// windows, the board scores over. The seasoned cube leads as LIFETIME with its seasons under it,
+// then one entry per other cube, historical ones last. Each option shows its own symbol.
 //
-// The "hero" variant renders inline, matched to the set-hero date line so the CUBE
-// header keeps a normal set's height; "mobile" is a tappable boxed trigger. Each
-// option shows the set symbol — LIFETIME falls back to the generic cube glyph.
+// The "hero" variant renders inline, matched to the set-hero date line so the CUBE header keeps a
+// normal set's height; "mobile" is a tappable boxed trigger.
 export function CubeSeasonSelector({
   activeSet,
   seasons,
@@ -25,12 +32,34 @@ export function CubeSeasonSelector({
   onSelect: (setCode: string) => void;
   variant?: "hero" | "mobile";
 }) {
-  const value = isCubeSeasonCode(activeSet) ? activeSet : CUBE_LIFETIME;
-  const options = [
-    { value: CUBE_LIFETIME, label: LIFETIME_LABEL, glyph: CUBE_BASE },
-    ...(seasons ?? []).map((s) => ({ value: s.setCode, label: `${s.label} SEASON`, glyph: s.label })),
+  const seasonedBoard = cubeBoardCode(SEASONED_CUBE_VARIANT.slug);
+  const value = isCubeSeasonCode(activeSet) ? activeSet : seasonedBoard;
+  const rowByCode = new Map((seasons ?? []).map((s) => [s.setCode, s]));
+  // Every cube comes from the registry, so the list is complete before any data arrives; only the
+  // seasons wait on the view. A slow fetch never hides a board, it just delays the seasons.
+  const boards: BoardOption[] = [
+    ...(seasons ?? [])
+      .filter((s) => s.kind === "season")
+      .map((s) => ({ value: s.setCode, label: `${s.label} SEASON`, glyph: s.label })),
+    // A cube without seasons is one window, so the closed selector spells that out
+    ...CUBE_VARIANTS.filter((v) => !v.seasoned).map((v) => ({
+      value: cubeBoardCode(v.slug),
+      label: v.name.toUpperCase(),
+      trigger: `LIFETIME`,
+      glyph: cubeBoardCode(v.slug),
+    })),
+  ];
+  // Cubes and seasons interleave in one historical order, newest run first, so a cube that ran after
+  // a season sits above it. A cube with no drafts yet has no date and falls to the bottom.
+  const lastEventOf = (code: string) => rowByCode.get(code)?.lastEvent ?? "";
+  boards.sort((a, b) => lastEventOf(b.value).localeCompare(lastEventOf(a.value)));
+
+  const options: BoardOption[] = [
+    { value: seasonedBoard, label: LIFETIME_LABEL, glyph: seasonedBoard },
+    ...boards,
   ];
   const selected = options.find((o) => o.value === value) ?? options[0];
+  const triggerLabel = selected.trigger ?? selected.label;
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -65,7 +94,7 @@ export function CubeSeasonSelector({
         )}
       >
         <SetGlyph code={selected.glyph} size={hero ? 22 : 20} />
-        <span className={cn(hero ? "text-text" : "")}>{selected.label}</span>
+        <span className={cn(hero ? "text-text" : "")}>{triggerLabel}</span>
         {!hero && <span className="flex-1" />}
         <ChevronDown
           strokeWidth={2.5}

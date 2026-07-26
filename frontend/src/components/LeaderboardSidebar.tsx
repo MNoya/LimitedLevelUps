@@ -13,6 +13,7 @@ import { Record } from "./Record";
 import { ArenaRankIcon } from "./ArenaRankIcon";
 import { FilterDropdown, type FilterOption } from "./FilterDropdown";
 import { useAllRecentTrophies, useColorsSummary, useFormatScopedTrophies, useRecentTrophies } from "../data/hooks";
+import { boardOffersSoup } from "../data/cubeVariants";
 import { lcqDraft2Earnings } from "../data/scoring";
 import { formatsForBucket } from "../data/format-buckets";
 import { colorsOf, isCubeCode, isSoup, mainColors, playerPath, profileSearch, relativeTime } from "../data/utils";
@@ -466,9 +467,11 @@ function useInsightsData(
     ? trophyPool?.filter((t) => rankTierOf(t.endRank) === rank)
     : trophyPool;
 
+  // A board that offers no Soup chip does not rank Soup either — it would top the list and say nothing
+  const ranksSoup = boardOffersSoup(setCode);
   const topColors: ColorsSummary[] | undefined = formatScoped || rankScoped
     ? rankFiltered && topColorsFromTrophies(setCode, rankFiltered)
-    : topColorsAll?.filter((r) => r.trophies > 0);
+    : topColorsAll?.filter((r) => r.trophies > 0 && (ranksSoup || r.colors !== MULTI));
 
   const recentSource: RecentTrophy[] | undefined = rankFiltered;
   const recentScoped = !colorsScoped

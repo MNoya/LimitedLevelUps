@@ -29,7 +29,7 @@ FLASHBACK_HEADING = "🪦 Flashback"
 QUICK_DRAFT_HEADING = "🤖 Quick Draft"
 
 MTGA_EMOJI_NAME = "mtga"
-CUBE_LIST_URLS: dict[str, str] = {"CUBE": "https://cubecobra.com/cube/about/mtgapc"}
+CUBE_LIST_URLS: dict[str, str] = {"Arena Powered Cube": "https://cubecobra.com/cube/about/mtgapc"}
 
 LINE_MAX_WIDTH = 50
 SAFE_STARTS_WIDTH = 44
@@ -197,11 +197,18 @@ def build_announcement(group: mtgscribe.EventGroup, emojis: dict, *, format_word
 
 
 def _cube_list_url(group: mtgscribe.EventGroup) -> str | None:
-    """The cube's decklist URL, or ``None`` for a non-cube event or a cube without a known list."""
+    """The cube's decklist URL, or ``None`` for a non-cube event or a cube without a known list.
+
+    Keyed on the cube variant the schedule names ("Arena Powered Cube", "Planar Cube") — every
+    variant shares the one CUBE seed, so the seed cannot tell them apart.
+    """
     if not group.cube:
         return None
-    seed = _seed_for_label(group.label)
-    return CUBE_LIST_URLS.get(seed.code) if seed else None
+    lowered = group.label.lower()
+    for variant, url in CUBE_LIST_URLS.items():
+        if variant.lower() in lowered:
+            return url
+    return None
 
 
 def build_competitive_reminder(group: mtgscribe.EventGroup, emojis: dict) -> discord.Embed:

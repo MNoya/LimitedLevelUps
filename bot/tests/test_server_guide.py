@@ -69,7 +69,7 @@ def test_find_channel_falls_back_to_substring_then_none():
     ("🦉🏫-strixhaven", "Strixhaven: School of Mages", True),
     ("🤫-secrets-of-strixhaven", "Secrets of Strixhaven", True),
     ("🤫-secrets-of-strixhaven", "Strixhaven: School of Mages", False),
-    ("📦-cube-talk", "Arena Powered Cube", False),
+    ("📦-cube-talk", "MTGA Cube", False),
     ("❓-whats-the-pick", "Marvel Super Heroes", False),
     ("🌅-modern-horizons-2", "Modern Horizons 3", False),
 ])
