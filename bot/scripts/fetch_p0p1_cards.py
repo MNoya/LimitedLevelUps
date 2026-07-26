@@ -5,9 +5,8 @@ Usage:
 
 Writes frontend/src/data/fixtures/cards-{code_lower}.ts with common + uncommon cards
 for the P0P1 contest. Excludes rares/mythics, bonus-sheet, and Special Guest printings.
-
-Handles adventure layouts (HOB+); transform/modal-DFC layouts are skipped with a warning
-until a set actually needs them.
+All Scryfall layouts are handled (normal, adventure, saga, transform, modal_dfc, split,
+prepare, class, case, etc.).
 """
 from __future__ import annotations
 
@@ -24,8 +23,7 @@ FIXTURES_DIR = Path(__file__).parent.parent.parent / "frontend/src/data/fixtures
 SCRYFALL_SEARCH = "https://api.scryfall.com/cards/search"
 USER_AGENT = "DischordLeaderboard/1.0"
 
-HANDLED_LAYOUTS = {"normal", "adventure"}
-DEFERRED_LAYOUTS = {"transform", "modal_dfc"}
+FRONT_FACE_NAME_LAYOUTS = {"adventure", "transform", "modal_dfc", "prepare", "flip"}
 
 
 def scryfall_search(query: str) -> list[dict]:
@@ -43,42 +41,35 @@ def scryfall_search(query: str) -> list[dict]:
     return cards
 
 
-def extract_card(raw: dict) -> dict | None:
-    """Extract Card fields per the layout table in Decision 10."""
+def extract_card(raw: dict) -> dict:
+    """Extract Card fields from any Scryfall layout.
+
+    Name/mana: front face for multi-face layouts, top-level for split and single-face.
+    Images: top-level when available, otherwise front face (transform, modal_dfc).
+    """
     layout = raw.get("layout", "normal")
+    faces = raw.get("card_faces", [])
 
-    if layout in DEFERRED_LAYOUTS:
-        return None
-
-    if layout not in HANDLED_LAYOUTS:
-        return None
-
-    if layout == "adventure":
-        faces = raw.get("card_faces", [])
-        if not faces:
-            return None
+    if layout in FRONT_FACE_NAME_LAYOUTS and faces:
         name = faces[0].get("name", raw.get("name", ""))
         mana_cost = faces[0].get("mana_cost", "")
     else:
         name = raw.get("name", "")
         mana_cost = raw.get("mana_cost", "")
 
-    colors = raw.get("colors", [])
-    rarity = raw.get("rarity", "common")
-    type_line = raw.get("type_line", "")
-    collector_number = raw.get("collector_number", "")
-    cmc = raw.get("cmc", 0)
-
-    images = raw.get("image_uris") or {}
+    images = raw.get("image_uris")
+    if not images and faces:
+        images = faces[0].get("image_uris") or {}
+    images = images or {}
 
     return {
         "name": name,
         "manaCost": mana_cost,
-        "cmc": cmc,
-        "colors": colors,
-        "rarity": rarity,
-        "typeLine": type_line,
-        "collectorNumber": collector_number,
+        "cmc": raw.get("cmc", 0),
+        "colors": raw.get("colors", []),
+        "rarity": raw.get("rarity", "common"),
+        "typeLine": raw.get("type_line", ""),
+        "collectorNumber": raw.get("collector_number", ""),
         "imageSmall": images.get("small", ""),
         "imageNormal": images.get("normal", ""),
         "imageArtCrop": images.get("art_crop", ""),
@@ -105,23 +96,21 @@ def main() -> None:
     raw_cards = scryfall_search(query)
     print(f"Received {len(raw_cards)} cards from Scryfall")
 
-    cards: list[dict] = []
-    skipped_layouts: dict[str, int] = {}
+    cards = [extract_card(raw) for raw in raw_cards]
+    cards.sort(key=lambda c: c["collectorNumber"])
+
+    layout_counts: dict[str, int] = {}
     for raw in raw_cards:
         layout = raw.get("layout", "normal")
-        card = extract_card(raw)
-        if card is None:
-            skipped_layouts[layout] = skipped_layouts.get(layout, 0) + 1
-            continue
-        cards.append(card)
-
-    cards.sort(key=lambda c: c["collectorNumber"])
+        layout_counts[layout] = layout_counts.get(layout, 0) + 1
 
     commons = sum(1 for c in cards if c["rarity"] == "common")
     uncommons = sum(1 for c in cards if c["rarity"] == "uncommon")
     print(f"Extracted {len(cards)} cards: {commons} common, {uncommons} uncommon")
-    for layout, count in skipped_layouts.items():
-        print(f"  Skipped {count} {layout} card(s)")
+    if any(l != "normal" for l in layout_counts):
+        for layout, count in sorted(layout_counts.items()):
+            if layout != "normal":
+                print(f"  {count} {layout}")
 
     output = FIXTURES_DIR / f"cards-{set_code.lower()}.ts"
     cards_json = json.dumps(cards, indent=2, ensure_ascii=False)
