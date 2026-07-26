@@ -1612,6 +1612,9 @@ async def _rerender_poll(
     bot: commands.Bot, message_id: str, signal_date: date,
     channel: "discord.abc.Messageable | None" = None,
 ) -> None:
+    """Repaint a live board in place, ping line included. Retiring a board drops that line, so a board that
+    is retired and rendered live again comes back without its queue mention unless every render restates it.
+    Discord notifies on the post, never on an edit, so restating it cannot ping the role a second time."""
     channel = channel or _poll_channel(bot)
     if channel is None:
         return
@@ -1619,6 +1622,9 @@ async def _rerender_poll(
     slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, signal_date)
     try:
         message = await channel.fetch_message(int(message_id))
-        await message.edit(embed=build_poll_embed(slots, guild), view=PodPollView(slots, guild))
+        await message.edit(
+            content=poll_ping_line(guild), embed=build_poll_embed(slots, guild),
+            view=PodPollView(slots, guild), allowed_mentions=discord.AllowedMentions(roles=True),
+        )
     except discord.HTTPException:
         log.warning(f"could not re-render launcher message {message_id}", exc_info=True)
