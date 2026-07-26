@@ -616,14 +616,14 @@ def record_ondemand_event(
     return event
 
 
-_TABLE_SUFFIX_RE = re.compile(r"\s+(?:[-–]\s+)?Table\s+\d+\s*$", re.IGNORECASE)
+TABLE_SUFFIX_RE = re.compile(r"\s+(?:[-–]\s+)?Table\s+(\d+)\s*$", re.IGNORECASE)
 _TABLE_INDEX_RE = re.compile(r"Table\s+(\d+)\s*$", re.IGNORECASE)
 
 
 def table_base_name(name: str) -> str:
     """The event name with any trailing ` - Table N` stripped, so opening a table off a Table 2 still
     bases new tables on the original pod name rather than nesting `... Table 2 - Table 3`."""
-    return _TABLE_SUFFIX_RE.sub("", name).strip()
+    return TABLE_SUFFIX_RE.sub("", name).strip()
 
 
 def next_table_index(session: Session, base_name: str) -> int:

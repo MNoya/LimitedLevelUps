@@ -37,6 +37,13 @@ def find_role(guild: discord.Guild | None, name: str) -> discord.Role | None:
     return discord.utils.get(guild.roles, name=name)
 
 
+def role_mention(guild: discord.Guild | None, name: str) -> str:
+    """The role's mention, or its plain `@name` when the guild is out of reach, as in a DM. In an embed a
+    role mention renders without pinging."""
+    role = find_role(guild, name)
+    return role.mention if role is not None else f"@{name}"
+
+
 def role_holder_mention(guild: discord.Guild | None, name: str) -> str | None:
     """Mention of the first member holding `name`, or None when the role is missing or unheld. In an
     embed a mention renders the member's handle without pinging."""

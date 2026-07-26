@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import date, datetime, time, timedelta, timezone
 
 import discord
@@ -55,6 +56,7 @@ from bot.services import pod_launch
 from bot.services.pod_active import set_pod_complete_hook
 from bot.services.ping_roles import (
     NOTICE_GRANT,
+    SET_CHAMPION_ROLE_NAME,
     announce_pod_grant,
     organizer_mention,
     pod_role_grant_text,
@@ -101,7 +103,7 @@ from bot.services.pod_launcher_copy import (
     SECTION_NEXT,
 )
 from bot.services.pod_reminder_copy import SLOT_FIRE_PING
-from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role
+from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role, role_mention
 from bot.services.pod_signals import (
     RSVP_NO,
     RSVP_YES,
@@ -117,6 +119,7 @@ from bot.services.pod_signals import (
     slot_role_name_for_event_time,
     time_key_of,
 )
+from bot.services.pod_drafts import TABLE_SUFFIX_RE
 from bot.services.pod_slot import pod_display_name
 from bot.sets import active_set_code, set_name_for
 from bot.slug import slugify
@@ -134,6 +137,14 @@ PLAY_AGAIN_DELAY_MIN = 5
 CHAMPIONSHIP_SLOT_LABEL = "Set Championship"
 CHAMPIONSHIP_CROWN = "👑"
 CHAMPIONSHIP_POINTER_TOP = 8
+
+COLUMN_FIT_BUDGET = 35
+EMOJI_UNITS = 3
+WINNER_GAP_UNITS = 2 + EMOJI_UNITS
+WINNER_MIN_CHARS = 6
+ELLIPSIS = "…"
+ORDINAL_SUFFIXES = {1: "st", 2: "nd", 3: "rd"}
+NAME_DATE_RE = re.compile(r"\s(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}\b")
 
 
 def init_daily_poll(bot: commands.Bot) -> None:
@@ -356,7 +367,7 @@ def _archive_embed(
 ) -> discord.Embed:
     """The retired card: On This Day plus one line per finished pod, all in the description, so it reads
     as a compact day-history with no empty column space. A second table adds its own line."""
-    lines = [_finished_line(slot, guild, full_name=True) for slot in slots if slot.committed]
+    lines = [_finished_line(slot, guild) for slot in slots if slot.committed]
     body = "\n".join(line for line in lines if line) if lines else "-"
     return discord.Embed(
         description=f"{heading}\n{ARCHIVE_INTRO}\n{body}", color=discord.Color.dark_grey(),
@@ -423,10 +434,7 @@ def _column_value(
                 blocks.append(block)
         return f"\n{NBSP}\n".join(blocks) if blocks else "-"
     sections: list[str] = []
-    played_lines = [
-        line for group in played for line in (_finished_line(slot, guild, full_name=False) for slot in group)
-        if line
-    ]
+    played_lines = [_finished_column_line(slot, guild) for group in played for slot in group]
     if played_lines:
         blanks = [NBSP] * max(0, pad_finished - len(played_lines))
         sections.append("\n".join(played_lines + blanks))
@@ -476,7 +484,7 @@ def _pod_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> st
     compact line is quoted here, unlike in a Played section, so a slot mixing a drafting pod with a
     gathering one reads as one block."""
     if slot.locked:
-        return f"> {_finished_line(slot, guild, full_name=False)}"
+        return f"> {_finished_column_line(slot, guild)}"
     if slot.set_code is None:
         return None
     block = _roster_block(slot, guild)
@@ -485,12 +493,14 @@ def _pod_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> st
 
 
 def _championship_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str | None:
-    """The championship lane's own block: crown, set symbol, date, then the thread link and top RSVPs."""
+    """The championship lane's own block: crown, set symbol, the role at stake, date, then the thread link
+    and top RSVPs. The header names `@Set Champion` rather than the event, so the column says what the pod
+    is played for. The button below it keeps the event name, since a button label cannot carry a mention."""
     if bucket_by_key(slot.bucket_key) is None:
         return None
     when = _slot_when_line(slot)
     symbol = emojis.get(slot.set_code.lower()) if slot.set_code else ""
-    label = f"**{CHAMPIONSHIP_SLOT_LABEL}**"
+    label = role_mention(guild, SET_CHAMPION_ROLE_NAME)
     title_line = " ".join(part for part in (CHAMPIONSHIP_CROWN, symbol, label) if part)
     header = f"{title_line}\n{when}" if when else title_line
     return f"{header}\n{_championship_body(slot, guild)}"
@@ -517,34 +527,77 @@ def _slot_start_time(slot: pod_launch.LauncherSlot) -> str:
     return f"<t:{int(slot.slot_time.timestamp())}:t>" if slot.slot_time else ""
 
 
-def _finished_line(slot: pod_launch.LauncherSlot, guild: discord.Guild | None, *, full_name: bool) -> str:
-    """One line for a finished or in-progress pod: a trophy once the pod is played (else a playing mark),
-    the pod name linking to its Discord thread, then the LLU glyph and the bold winner name after a
-    two-space gap, linking to that player's seat on the website pod page. The launcher column strips the
-    slot name so the pod reads "MSH Jul 24"; the archive keeps the full name to tell Early from Late. A
-    team draft is credited to its winning side, which has no seat, so its name links nowhere and a draw
-    carries no name."""
+def _finished_line(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
+    """The archive form: a full-width line, so the event name and the winner both run at full length."""
+    return _finished_row(slot, guild, _finished_link_text(slot, full_name=True), slot.winner or "")
+
+
+def _finished_column_line(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
+    """The column form, shrunk to fit a third of the embed width. A row that wraps in one column while its
+    neighbour holds one line pushes every row below it out of level, so the row gives up the date first,
+    which the card title and the Next section both still carry, and cuts the winner's name only when that
+    is not enough. Discord wraps on a pixel width no bot can measure, so the budget is a character
+    estimate calibrated against a live card."""
+    text, winner = _fit_row(_finished_link_text(slot, full_name=False), slot.winner or "")
+    return _finished_row(slot, guild, text, winner)
+
+
+def _finished_row(
+    slot: pod_launch.LauncherSlot, guild: discord.Guild | None, text: str, winner: str,
+) -> str:
+    """A trophy once the pod is played (else a playing mark), the pod name linking to its Discord thread,
+    then the LLU glyph and the winner linking to that player's seat on the website pod page. A team draft
+    is credited to its winning side, which has no seat, so that name links nowhere."""
     mark = FINISHED_MARK if slot.finished else PLAYING_MARK
-    text = _finished_link_text(slot, full_name)
     card_url = _card_url(guild, slot)
     pod_link = f"[__**{text}**__]({card_url})" if card_url and text else text
-    winner = ""
-    if slot.winner:
+    parts = [f"{mark} {pod_link}" if pod_link else mark]
+    if winner:
         seat_url = _winner_seat_url(slot)
-        name = f"[__**{slot.winner}**__]({seat_url})" if seat_url else f"__**{slot.winner}**__"
-        winner = f"{NBSP}{NBSP}{emojis.prefix('llu')}{name}"
-    head = f"{mark} {pod_link}" if pod_link else mark
-    return f"{head}{winner}"
+        name = f"[__**{winner}**__]({seat_url})" if seat_url else f"__**{winner}**__"
+        parts.append(f"{emojis.prefix('llu')}{name}")
+    return f"{NBSP}{NBSP}".join(parts)
+
+
+def _fit_row(text: str, winner: str) -> tuple[str, str]:
+    """The pod name and the winner cut down to the budget: the date goes first, then the winner's name."""
+    if _row_units(text, winner) > COLUMN_FIT_BUDGET:
+        text = _without_date(text)
+    room = COLUMN_FIT_BUDGET - _row_units(text, "") - WINNER_GAP_UNITS
+    return text, _clipped(winner, room) if winner and len(winner) > room else winner
+
+
+def _row_units(text: str, winner: str) -> int:
+    """The row's width in characters, an emoji counting as several since it renders wider than a glyph."""
+    units = EMOJI_UNITS + 1 + len(text)
+    return units + WINNER_GAP_UNITS + len(winner) if winner else units
+
+
+def _without_date(text: str) -> str:
+    return NAME_DATE_RE.sub("", text, count=1)
+
+
+def _clipped(winner: str, room: int) -> str:
+    keep = max(room - len(ELLIPSIS), WINNER_MIN_CHARS)
+    return winner if keep >= len(winner) else f"{winner[:keep].rstrip()}{ELLIPSIS}"
 
 
 def _finished_link_text(slot: pod_launch.LauncherSlot, full_name: bool) -> str:
-    """The pod link text: the full event name in the archive, or set and date once the slot name is
-    stripped for the launcher column, so it reads "MSH Jul 24"."""
+    """The archive keeps the full event name to tell Early from Late; a column already carries the slot
+    name in its header, so it drops to set and date, and a split table to its ordinal."""
     name = slot.thread_name or ""
     if full_name:
         return name
     bucket = bucket_by_key(slot.bucket_key)
-    return name.replace(f" {bucket.name}", "") if bucket else name
+    if bucket:
+        name = name.replace(f" {bucket.name}", "")
+    return TABLE_SUFFIX_RE.sub(lambda match: f" {_ordinal(int(match.group(1)))}", name)
+
+
+def _ordinal(number: int) -> str:
+    if 11 <= number % 100 <= 13:
+        return f"{number}th"
+    return f"{number}{ORDINAL_SUFFIXES.get(number % 10, 'th')}"
 
 
 def _winner_seat_url(slot: pod_launch.LauncherSlot) -> str | None:
@@ -590,11 +643,6 @@ def _marked_name(name: str, shared_names: tuple[str, ...]) -> str:
     return f"{fi.FLEXIBLE_MARKER} {name}" if name in shared_names else name
 
 
-def _role_label(guild: discord.Guild | None, role_name: str) -> str:
-    role = find_role(guild, role_name)
-    return role.mention if role else role_name
-
-
 def _format_role_name(code: str) -> str:
     """The role a format pings: the latest set pings Latest Set, a cube pings Cube, a past set pings
     Flashback. A cube is drafted out of the latest set's client, so it is not a flashback, and the two
@@ -607,7 +655,7 @@ def _format_role_name(code: str) -> str:
 
 
 def _format_role_label(guild: discord.Guild | None, code: str) -> str:
-    return _role_label(guild, _format_role_name(code))
+    return role_mention(guild, _format_role_name(code))
 
 
 def _jump_url(guild: discord.Guild | None, channel_id: str, message_id: str | None = None) -> str:

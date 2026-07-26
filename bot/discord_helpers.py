@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 NBSP = "\u00a0"  # Discord collapses runs of regular spaces; non-breaking spaces survive
 ZWSP = "\u200b"  # anchors a -# subtext line so Discord keeps the NBSP indent that follows
 BLANK_LINE = f"{NBSP}{ZWSP}"  # a line Discord won't collapse, for spacing before a trailing button
+EM_SPACE = " "  # wide gap between items sharing one line, where a run of spaces would collapse
 
 
 def command_line(cmd: str, blurb: str) -> str:

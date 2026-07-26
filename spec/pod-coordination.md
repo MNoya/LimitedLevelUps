@@ -46,6 +46,8 @@ Every pod plays one Magic format, and you know which one before you sign up. A d
 
 The formats are set ahead of time, so there is no vote and nothing to resolve later. If you want a set or a cube on the schedule, ask a mod.
 
+Run `/pod-schedule` to see a calendar of the formats each day offers over the weeks ahead. It marks today, shows when the next Early and Late pods start in your own time zone, and marks the day a new set arrives, after which every day drafts the new set.
+
 You can also save a **Format Preference** on your welcome card to say what you like to draft. It changes nothing about signing up, it just tells us which formats to schedule more of.
 
 ## The lead-up to a pod

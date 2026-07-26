@@ -21,11 +21,19 @@ from bot.services.pod_signals import (
     bucket_for_lane,
     lane_of,
     named_bucket_key,
+    next_slot_start,
     slot_can_fire,
     slot_event_time,
 )
 from bot.sets import active_set_code
-from bot.tasks.pod_daily_poll import _lane_order, _lane_slots, _slot_by_key
+from bot.tasks.pod_daily_poll import (
+    COLUMN_FIT_BUDGET,
+    _fit_row,
+    _lane_order,
+    _lane_slots,
+    _row_units,
+    _slot_by_key,
+)
 
 
 DAYS_TO_FRIDAY = ((4 - datetime.now(SCHEDULE_TZ).date().weekday()) % 7) or 7
@@ -36,6 +44,21 @@ THRESHOLD = settings.pod_signal_fire_threshold
 
 
 # --- lanes ---
+
+@pytest.mark.parametrize("lane, called_at, expected_start", [
+    (LANE_EARLY, datetime(2026, 7, 26, 0, 35, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 26, 14, 0)),
+    (LANE_EARLY, datetime(2026, 7, 26, 15, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 27, 14, 0)),
+    (LANE_LATE, datetime(2026, 7, 26, 15, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 26, 20, 0)),
+    (LANE_LATE, datetime(2026, 7, 26, 21, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 27, 20, 0)),
+    (LANE_EARLY, datetime(2026, 11, 1, 20, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 11, 2, 14, 0)),
+])
+def test_a_slot_rolls_to_tomorrow_once_todays_start_has_passed(lane, called_at, expected_start):
+    bucket = bucket_for_lane(called_at.date(), lane)
+
+    start = next_slot_start(bucket, called_at)
+
+    assert start == expected_start.replace(tzinfo=SCHEDULE_TZ)
+
 
 def test_weekday_and_weekend_buckets_of_one_time_share_a_lane():
     friday_late = bucket_for_lane(FRIDAY, LANE_LATE)
@@ -92,6 +115,24 @@ def test_a_rolled_column_stays_one_column_across_the_weekend_boundary():
 
     assert lanes == [LANE_LATE]
     assert [slot.set_code for slot in _lane_slots(slots, LANE_LATE)] == [LATEST, LATEST]
+
+
+LONG_HANDLE = "_".join(HALL_OF_FAME[12:15]).replace(" ", "")
+
+
+@pytest.mark.parametrize("pod, winner, keeps_date, keeps_winner", [
+    ("MSH Jul 25", HALL_OF_FAME[0], True, True),
+    ("MSH Jul 25 2nd", HALL_OF_FAME[1], True, True),
+    ("Peasant Cube Jul 25", "Android5000", False, True),
+    ("Peasant Cube Jul 25 2nd", LONG_HANDLE, False, False),
+    ("Peasant Cube Jul 25", "", True, True),
+])
+def test_a_played_row_gives_up_its_date_before_it_cuts_the_winner(pod, winner, keeps_date, keeps_winner):
+    text, name = _fit_row(pod, winner)
+
+    assert ("Jul 25" in text) is keeps_date
+    assert (name == winner) is keeps_winner
+    assert _row_units(text, name) <= COLUMN_FIT_BUDGET
 
 
 def test_a_press_targets_the_pod_its_own_key_names():
@@ -241,6 +282,33 @@ def test_a_pod_waiting_in_its_lobby_is_not_locked_yet(session, monkeypatch, late
 
     lobby_open = [slot for slot in slots if slot.set_code == LATEST and slot.committed][0]
     assert lobby_open.locked is False
+
+
+def test_a_closed_slot_opens_no_pod_while_the_other_slot_still_does(session, monkeypatch):
+    monkeypatch.setattr(
+        "bot.services.pod_format_schedule.FORMATS_BY_DAY",
+        {FRIDAY: (schedule.LATEST,), (FRIDAY, LANE_EARLY): schedule.CLOSED},
+    )
+
+    bound = create_poll_signals(
+        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY,
+    )
+
+    late = bucket_for_lane(FRIDAY, LANE_LATE).key
+    assert _buckets_of(session, bound) == [named_bucket_key(late, LATEST)]
+
+
+def test_rolling_into_a_closed_slot_opens_nothing(session, monkeypatch):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    monkeypatch.setattr(
+        "bot.services.pod_format_schedule.FORMATS_BY_DAY", {(SATURDAY, LANE_LATE): schedule.CLOSED},
+    )
+
+    rolled = pod_launch.roll_slot_forward_sync(
+        lane=LANE_LATE, from_day=FRIDAY, guild_id="g", channel_id="c", message_id="today",
+    )
+
+    assert rolled == []
 
 
 def test_rolling_a_lane_opens_the_next_day_and_is_idempotent(session, monkeypatch, latest_only):

@@ -120,6 +120,17 @@ def bucket_for_lane(day: date, lane: str) -> PollBucket | None:
     return None
 
 
+def next_slot_start(bucket: PollBucket, now: datetime) -> datetime:
+    """When the bucket's slot next comes around: today's start while it is still ahead, tomorrow's once it
+    has passed. Rebuilt from the wall clock rather than shifted by a day, so a start stays at its ET hour
+    across a daylight saving change."""
+    local = now.astimezone(SCHEDULE_TZ)
+    start = datetime.combine(local.date(), bucket.start, tzinfo=SCHEDULE_TZ)
+    if start > now:
+        return start
+    return datetime.combine(local.date() + timedelta(days=1), bucket.start, tzinfo=SCHEDULE_TZ)
+
+
 def slot_can_fire(slot_time: datetime, now: datetime) -> bool:
     """Whether a slot at threshold may graduate into a pod yet. A slot on a later day holds instead: a
     rolled column collects signups all evening, and the morning post is what lets them fire."""

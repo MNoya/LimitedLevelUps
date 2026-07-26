@@ -73,6 +73,7 @@ from bot.services.pod_signals import (
     poll_buckets_for,
     slot_event_time,
 )
+from bot.services.pod_slot import pod_display_name
 from bot.services.pod_team_vote import find_team_vote_card, rerender_gathering
 from bot.sets import active_set_code
 from bot.slug import slugify
@@ -232,12 +233,7 @@ async def setup(bot: commands.Bot) -> None:
         guild = ctx.guild
         channel_id = str(ctx.channel.id)
         set_code = active_set_code()
-        now = datetime.now(SCHEDULE_TZ)
-        today, tomorrow = now.date(), now.date() + timedelta(days=1)
-        buckets = poll_buckets_for(today)
-        early, late = buckets[0], buckets[1]
-        early_next = bucket_for_lane(tomorrow, early.lane)
-        late_next = bucket_for_lane(tomorrow, late.lane)
+        today, tomorrow, early, late, early_next, late_next = _rolling_lanes()
 
         def early_today(**kw):
             return _rolling_slot(early, slot_event_time(today, early.key), **kw)
@@ -317,6 +313,36 @@ async def setup(bot: commands.Bot) -> None:
         await ctx.send(
             "**E. Play Again prompt — posted in a finished pod's thread, offering tomorrow's formats**")
         await ctx.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+
+    @test_group.command(name="widths")
+    @commands.is_owner()
+    async def test_widths(ctx: commands.Context) -> None:
+        """Owner-only. Post the Played row at the widths that decide whether it wraps: a short set code with
+        short names, the long cube label, a second table, and a winner name past what a column fits. Every
+        board pairs a short name against a long one, which is the pair that pushed the two columns out of
+        level, so the check is whether both Next headers still sit on the same line. Fixtures through the
+        production embed builder, no signals."""
+        guild = ctx.guild
+        channel_id = str(ctx.channel.id)
+        today, tomorrow, early, late, early_next, late_next = _rolling_lanes()
+
+        def played(bucket, code, winner, offset, table=None):
+            return _rolling_slot(
+                bucket, slot_event_time(today, bucket.key), count=_ROLL_COUNT_FULL, offset=offset,
+                fired=True, finished=True, channel_id=channel_id, set_code=code, winner=winner, table=table,
+            )
+
+        def gathering(bucket, offset):
+            return _rolling_slot(bucket, slot_event_time(tomorrow, bucket.key), count=_ROLL_COUNT_SMALL,
+                                 offset=offset)
+
+        for label, code, short_winner, long_winner, tables in _WIDTH_CASES:
+            slots = [played(early, code, short_winner, 0), played(late, code, long_winner, 6)]
+            if tables:
+                slots.append(played(early, code, _handle(1), 12, table=2))
+            slots += [gathering(early_next, 3), gathering(late_next, 9)]
+            await ctx.send(f"**{label}**")
+            await ctx.send(embed=build_poll_embed(slots, guild))
 
     @test_group.command(name="launcher")
     @commands.is_owner()
@@ -639,6 +665,32 @@ _ROLL_COUNT_SMALL = 3
 _ROSTER_NAMES = HALL_OF_FAME
 
 
+def _handle(*indexes: int) -> str:
+    """A fixture Discord handle of a chosen length, joined out of hall-of-fame names so a width preview
+    never puts an invented community member on the board."""
+    return "_".join(HALL_OF_FAME[index].replace(" ", "") for index in indexes)
+
+
+_WIDTH_CASES = (
+    ("A. Short set code, short names: both rows keep their date", None, _handle(0), _handle(4), False),
+    ("B. Long cube label: the row drops the date to keep the winner beside the pod",
+     pod_format.PEASANT_CODE, _handle(0), _handle(12, 13), False),
+    ("C. Second table: the split table reads as an ordinal, so the row keeps its date", None,
+     _handle(0), _handle(12, 13), True),
+    ("D. Winner name past what a column fits: the name is cut once the date is already gone",
+     pod_format.PEASANT_CODE, _handle(1), _handle(12, 13, 14), True),
+)
+
+
+def _rolling_lanes():
+    """Today's two lane buckets and the ones they roll into tomorrow, shared by the rolling and width
+    previews."""
+    today = datetime.now(SCHEDULE_TZ).date()
+    tomorrow = today + timedelta(days=1)
+    early, late = poll_buckets_for(today)[:2]
+    return today, tomorrow, early, late, bucket_for_lane(tomorrow, early.lane), bucket_for_lane(tomorrow, late.lane)
+
+
 def _rolling_slot(
     bucket, slot_time, *, count: int, offset: int = 0, fired: bool = False, finished: bool = False,
     winner: str | None = None, seat: bool = True, channel_id: str = "", set_code: str | None = None,
@@ -654,7 +706,7 @@ def _rolling_slot(
     bucket_key = named_bucket_key(bucket.key, code)
     if fired:
         suffix = f" - Table {table}" if table else ""
-        title = f"{code} {slot_time.astimezone(SCHEDULE_TZ):%b %-d} {bucket.name}{suffix}"
+        title = f"{pod_display_name(code, slot_time)}{suffix}"
         return pod_launch.LauncherSlot(
             bucket_key, committed=True, status=STATUS_FIRED, count=len(names), slot_time=slot_time,
             names=names, thread_id="1", signal_id=None, thread_message_id="1", card_message_id="1",

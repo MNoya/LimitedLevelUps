@@ -27,7 +27,7 @@ PRODUCTION_SAFE_TESTS = frozenset({
     "awards", "cardformat", "component", "deckping", "firenudge", "formatschedule", "lifecycle",
     "lockroster", "myset", "named", "overflow", "pollnudge", "queueclosed", "reminder", "reminders",
     "rolegrant", "rolling", "scribe", "sendoff", "setawards", "teamcard", "thread-intro",
-    "tiebreakers", "underfill", "welcome",
+    "tiebreakers", "underfill", "welcome", "widths",
 })
 
 MSG_TEST_PRODUCTION_BLOCKED = (

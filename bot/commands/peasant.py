@@ -7,10 +7,9 @@ import discord
 from discord.ext import commands
 
 from bot import emojis
-from bot.discord_helpers import BLANK_LINE, NBSP
+from bot.discord_helpers import BLANK_LINE, EM_SPACE, NBSP
 from bot.services.pod_format import PEASANT_CODE, cube_id_for
 
-EM_SPACE = "\u2003"
 LEAD_EMOJI_NAME = "cube"
 FALLBACK_LEAD_EMOJI = "🧊"
 
