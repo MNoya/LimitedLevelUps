@@ -18,6 +18,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from sqlalchemy import func, select
 
+from bot.commands.advertise import setup as setup_advertise
 from bot.commands.delete_account import setup as setup_delete_account
 from bot.commands.event_scribe import setup as setup_event_scribe
 from bot.commands.guide import setup as setup_guide
@@ -50,6 +51,7 @@ from bot.database import SessionLocal, run_migrations
 from bot.discord_helpers import refresh_player_profiles
 from bot import emojis
 from bot.commands.test_group import setup as setup_test_group
+from bot.commands.testads import setup as setup_testads
 from bot.commands.testawards import setup as setup_testawards
 from bot.commands.testchampionship import setup as setup_testchampionship
 from bot.commands.testcomponent import setup as setup_testcomponent
@@ -222,6 +224,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_trophy(bot)
         await setup_save_resource(bot)
         await setup_guide(bot)
+        await setup_advertise(bot)
         await setup_help(bot)
         await setup_event_scribe(bot)
         await setup_link_17lands(bot)
@@ -244,6 +247,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_test_group(bot)
         await setup_testlobby(bot)
         await setup_testcomponent(bot)
+        await setup_testads(bot)
         await setup_testawards(bot)
         await setup_testschedule(bot)
         await setup_testthreadintro(bot)

@@ -95,7 +95,7 @@ async def setup(bot: commands.Bot) -> None:
         card_body = cc.card_content(
             set_name=plan.set_name, set_code=plan.set_code, next_set_name=plan.next_set_name,
             next_set_code=plan.next_set_code, next_release_at=plan.next_release_at,
-            champion_mention=cc.card_champion_mention(champion_role),
+            champion_mention=cc.champion_role_mention(champion_role),
         )
         event_id = await post_scheduled_card(
             ctx.bot, channel, set_code=plan.set_code, event_time=event_at,

@@ -1,0 +1,72 @@
+"""Copy for the `!p0p1` advertisement, worded from the contest's phase."""
+from __future__ import annotations
+
+from datetime import datetime
+
+import discord
+from discord import ui
+
+from bot import emojis
+from bot.config import settings
+from bot.services.containers import build_container
+from bot.services.mock_lobby_card import set_symbol_url
+from bot.services.p0p1_contest import Contest, PHASE_LOCKED, PHASE_PRE, PHASE_VOTING
+from bot.services.ping_roles import TOP_P0P1_CHALLENGER_ROLE_NAME
+
+SAVED_PICKS = "Log in with Discord, your picks save automatically."
+CHANGE_PICKS_EARLY_ACCESS = "Update anytime before the Early-Access deadline"
+SYNTHETIC_CHALLENGER_TAG = f"**@{TOP_P0P1_CHALLENGER_ROLE_NAME}**"
+
+
+def challenger_mention(role: discord.Role | None) -> str:
+    """Mention pill for the top challengers, or plain text when the guild has no such role yet."""
+    return role.mention if role is not None else SYNTHETIC_CHALLENGER_TAG
+
+
+def contest_url(code: str, featured_code: str | None) -> str:
+    """The site serves 404 for a contest still in previews, so only the featured one gets the bare URL."""
+    if featured_code is not None and code.upper() == featured_code.upper():
+        return f"{settings.public_site_url.rstrip('/')}/p0p1"
+    return archive_url(code)
+
+
+def archive_url(code: str) -> str:
+    """A contest's own page, which keeps pointing at it once a newer contest takes over the bare URL."""
+    return f"{settings.public_site_url.rstrip('/')}/p0p1/{code.upper()}"
+
+
+def advertisement(
+    contest: Contest, when: datetime, *, featured_code: str | None, challenger_mention: str,
+) -> ui.Container:
+    url = contest_url(contest.code, featured_code)
+    phase = contest.phase(when)
+    title = f"{contest.code} Pack 0 Pick 1 Challenge"
+    deadline = _stamp(contest.voting_deadline, "R")
+    llu = emojis.prefix("llu")
+
+    if phase == PHASE_PRE:
+        lines = [f"## {title} is coming soon!",
+                 f"Opens {_stamp(contest.previews_open, 'R')}, {_stamp(contest.previews_open, 'F')}",
+                 f"Voting closes {deadline}, {_stamp(contest.voting_deadline, 'D')}"]
+        if featured_code is not None and featured_code.upper() != contest.code.upper():
+            featured = featured_code.upper()
+            lines.append(f"\n{llu}{challenger_mention} "
+                         f"[**{featured} final standings**]({archive_url(featured)})")
+    elif phase == PHASE_VOTING:
+        lines = [f"## [{title}]({url}) is now open!",
+                 f"{SAVED_PICKS}\n{CHANGE_PICKS_EARLY_ACCESS} {deadline}",
+                 f"### {llu}[**Pick your team**]({url})"]
+    elif phase == PHASE_LOCKED:
+        lines = [f"## [{title}]({url}) voting closed",
+                 f"Results {_stamp(contest.scoring_date, 'R')}, {_stamp(contest.scoring_date, 'D')}",
+                 f"### {llu}[**See the most popular picks**]({url})"]
+    else:
+        lines = [f"## [{title}]({url}) results are in!",
+                 f"### {llu}[**See the final standings**]({url})",
+                 f"Who are the new {challenger_mention}?"]
+
+    return build_container("\n".join(lines), set_symbol_url(contest.code))
+
+
+def _stamp(when: datetime, style: str) -> str:
+    return f"<t:{int(when.timestamp())}:{style}>"

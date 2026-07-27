@@ -10,10 +10,13 @@ from __future__ import annotations
 from datetime import datetime
 
 import discord
+from discord import ui
 
 from bot import emojis
 from bot.config import settings
 from bot.services.championship import INVITE_WAVE_TIERS
+from bot.services.containers import build_container
+from bot.services.mock_lobby_card import set_symbol_url
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
 from bot.services.pod_signals import RSVP_EMOJI
 
@@ -25,9 +28,10 @@ def standings_url(set_code: str) -> str:
     return f"{settings.public_site_url.rstrip('/')}/leaderboard/{set_code.upper()}"
 
 
-def card_champion_mention(role: discord.Role | None) -> str:
-    """The card mention lives in an embed, which never pings, so it always carries the real role tag
-    to render the sky-blue pill. A missing role falls back to the synthetic label."""
+def champion_role_mention(role: discord.Role | None) -> str:
+    """The real role tag, which renders the sky-blue pill. Safe for the card and the advertisement: the
+    card is an embed, which never pings, and the advertisement suppresses mentions. A missing role falls
+    back to the synthetic label."""
     return role.mention if role is not None else SYNTHETIC_CHAMPION_TAG
 
 
@@ -65,6 +69,32 @@ def card_content(
         "• Best of 3, Swiss, three rounds, one Champion.\n\n"
         f"{next_symbol}**{next_set_name}** arrives <t:{arrival}:R>"
     )
+
+
+def explainer(
+    *, set_code: str, event_at: datetime | None, signup_at: datetime | None, champion_mention: str,
+    card_url: str | None, coordination_channel: str,
+) -> ui.Container:
+    """The `!championship` container. Evergreen: the date shows only while an edition is ahead, and the
+    signup line either links the posted card or says when it arrives."""
+    symbol = emojis.prefix(set_code.lower())
+    header = (
+        "## 👑 Set Championship\n"
+        "Each set we host a tournament where top performing Discord members draft for the privilege of being crowned "
+        f"{champion_mention}"
+    )
+    lines = []
+    if event_at is not None:
+        lines.append(f"{symbol}**{set_code} Championship:** <t:{int(event_at.timestamp())}:F>")
+        lines.append("")
+    lines.append(f"{emojis.prefix('llu')}[**Leaderboard**](<{standings_url(set_code)}>) standings decide who plays. "
+                 f"Matches streamed at [**twitch.tv/GatoDelFuego**](<{TWITCH_URL}>)")
+    if card_url is not None:
+        lines.append(f"\n[**Event signup**]({card_url}) is now open at {coordination_channel}")
+    elif signup_at is not None:
+        lines.append(f"\nEvent signup will be posted on {coordination_channel} "
+                     f"<t:{int(signup_at.timestamp())}:R>")
+    return build_container(header, set_symbol_url(set_code), "\n".join(lines))
 
 
 def wave_invite_ping(

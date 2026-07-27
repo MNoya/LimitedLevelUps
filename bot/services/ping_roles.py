@@ -120,10 +120,12 @@ class ManagedRole:
 
 SET_CHAMPION_ROLE_NAME = "Set Champion"
 ORGANIZER_ROLE_NAME = "Organizer"
+TOP_P0P1_CHALLENGER_ROLE_NAME = "Top P0P1 Challenger"
 
 MANAGED_ROLES: tuple[ManagedRole, ...] = (
     ManagedRole(SET_CHAMPION_ROLE_NAME, "#82CBFF"),
     ManagedRole(ORGANIZER_ROLE_NAME, "#4CD4A9"),
+    ManagedRole(TOP_P0P1_CHALLENGER_ROLE_NAME, "#EFBF04"),
 )
 
 

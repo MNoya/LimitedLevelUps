@@ -20,6 +20,7 @@ from bot.sets import ALL_SETS, RELEASE_TZ, active_set_code, release_instant
 SATURDAY = 5
 CHAMPIONSHIP_TIME = time(14, 0)
 CREATION_LEAD_DAYS = 5
+CREATION_HOUR_ET = 12
 SEAT_COUNT = 8
 INVITE_DEPTH = 32
 INVITE_WAVE_TIERS: tuple[tuple[int, int], ...] = ((0, 10), (10, 20), (20, 32))
@@ -68,6 +69,11 @@ def plan_for(when: datetime | None = None) -> ChampionshipPlan | None:
         next_set_name=successor.name,
         next_release_at=release_instant(successor.start_date),
     )
+
+
+def signup_post_at(plan: ChampionshipPlan) -> datetime:
+    """When the tick posts the signup card."""
+    return datetime.combine(plan.create_on, time(CREATION_HOUR_ET), tzinfo=RELEASE_TZ)
 
 
 def plan_due_for_creation(when: datetime) -> ChampionshipPlan | None:
@@ -181,6 +187,19 @@ def wave_recipients(seeds: list[SeedRow], wave_index: int) -> list[SeedRow]:
     anyone may RSVP whether or not they were pinged."""
     low, high = INVITE_WAVE_TIERS[wave_index]
     return [seed for seed in seeds[low:high] if seed.discord_id]
+
+
+def event_for_set_sync(set_code: str) -> tuple[str, datetime] | None:
+    """(event_id, event_time) of a set's championship, or None while it has not been created. Matched by
+    name, the same marker the creator guards double-creation with."""
+    with SessionLocal() as session:
+        row = session.execute(
+            select(PodDraftEvent.id, PodDraftEvent.event_time).where(
+                func.upper(PodDraftEvent.set_code) == set_code.upper(),
+                func.lower(PodDraftEvent.name).like("%championship%"),
+            )
+        ).first()
+    return (row.id, row.event_time) if row else None
 
 
 def event_meta_sync(event_id: str) -> tuple[str, datetime] | None:

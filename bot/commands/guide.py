@@ -21,6 +21,7 @@ from discord.ext import commands
 from discord.http import Route
 
 from bot import audit
+from bot.commands.authorization import MODERATOR_ROLE_NAME, moderator_authorized
 from bot.commands.pod_guide import GUIDE_MARKER, render_pod_guide_embed_body
 from bot.config import settings
 from bot.services.format_schedule import (
@@ -39,7 +40,6 @@ HISTORY_SCAN_LIMIT = 20
 WEBHOOK_NAME = "LLU Server Guide"
 WEBHOOK_USERNAME_LIMIT = 80
 WEBHOOK_FALLBACK_NOTE = " (posted as the bot, grant Manage Webhooks to post as the server owner)"
-MODERATOR_ROLE_NAME = "Moderator"
 
 TEXT_DISPLAY_TYPE = 10
 
@@ -346,24 +346,9 @@ def _text_contents(payload) -> list[str]:
     return contents
 
 
-async def guide_authorized(ctx: commands.Context) -> bool:
-    if await ctx.bot.is_owner(ctx.author):
-        return True
-    guild = ctx.bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
-    member = guild.get_member(ctx.author.id) if guild is not None else None
-    if member is None:
-        return False
-    if member.guild_permissions.administrator:
-        return True
-    if settings.discord_admin_role_id and any(
-            role.id == settings.discord_admin_role_id for role in member.roles):
-        return True
-    return any(role.name == MODERATOR_ROLE_NAME for role in member.roles)
-
-
 async def setup(bot: commands.Bot) -> None:
     @bot.command(name="guide")
-    @commands.check(guide_authorized)
+    @commands.check(moderator_authorized)
     async def guide_cmd(ctx: commands.Context) -> None:
         """Sync every Server Guide channel and report per-channel results."""
         guild = bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None

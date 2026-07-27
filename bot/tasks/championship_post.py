@@ -15,13 +15,10 @@ from datetime import datetime, timedelta
 
 import discord
 from discord.ext import commands
-from sqlalchemy import func, select
 
 from bot.commands.pod_draft import build_leaderboard_standings_embed, refresh_seeding_table
 from bot.commands.pod_rsvp import build_championship_wave_view, post_scheduled_card
 from bot.config import settings
-from bot.database import SessionLocal
-from bot.models import PodDraftEvent
 from bot.services import championship
 from bot.services import championship_copy as cc
 from bot.services import pod_launch
@@ -33,8 +30,6 @@ log = logging.getLogger(__name__)
 
 _bot: commands.Bot | None = None
 
-CHAMPIONSHIP_TICK_HOUR_ET = 12
-
 WAVE_OFFSETS_MIN: tuple[int, ...] = (10, 120, 240)
 SEEDING_TALLY_OFFSET_MIN = WAVE_OFFSETS_MIN[-1] + 60
 
@@ -43,10 +38,10 @@ def init_championship_schedule(bot: commands.Bot) -> None:
     global _bot
     _bot = bot
     bot.pod_scheduler.add_job(
-        fire_championship_tick, "cron", hour=CHAMPIONSHIP_TICK_HOUR_ET, minute=0,
+        fire_championship_tick, "cron", hour=championship.CREATION_HOUR_ET, minute=0,
         timezone=SCHEDULE_TZ, id="championship-create", replace_existing=True,
     )
-    log.info(f"scheduled set championship tick at {CHAMPIONSHIP_TICK_HOUR_ET:02d}:00 ET")
+    log.info(f"scheduled set championship tick at {championship.CREATION_HOUR_ET:02d}:00 ET")
 
 
 async def fire_championship_tick() -> None:
@@ -55,7 +50,8 @@ async def fire_championship_tick() -> None:
     plan = championship.plan_due_for_creation(datetime.now(SCHEDULE_TZ))
     if plan is None:
         return
-    if await asyncio.to_thread(_championship_exists_sync, plan.set_code):
+    existing = await asyncio.to_thread(championship.event_for_set_sync, plan.set_code)
+    if existing is not None:
         log.info(f"championship for {plan.set_code} already exists; skipping")
         return
     await create_championship(_bot, plan)
@@ -67,7 +63,7 @@ async def create_championship(bot: commands.Bot, plan: championship.Championship
         log.warning("championship: coordination channel unresolved or not a text channel")
         return None
     role = find_role(channel.guild, SET_CHAMPION_ROLE_NAME)
-    champion_mention = cc.card_champion_mention(role)
+    champion_mention = cc.champion_role_mention(role)
     content = cc.card_content(
         set_name=plan.set_name, set_code=plan.set_code, next_set_name=plan.next_set_name,
         next_set_code=plan.next_set_code, next_release_at=plan.next_release_at,
@@ -188,15 +184,4 @@ async def fire_wave(
         )
     except discord.HTTPException:
         log.warning(f"championship: could not post wave {wave_index} in thread {thread.id}", exc_info=True)
-
-
-def _championship_exists_sync(set_code: str) -> bool:
-    with SessionLocal() as session:
-        row = session.execute(
-            select(PodDraftEvent.id).where(
-                func.upper(PodDraftEvent.set_code) == set_code.upper(),
-                func.lower(PodDraftEvent.name).like("%championship%"),
-            )
-        ).first()
-        return row is not None
 
