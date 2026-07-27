@@ -14,7 +14,7 @@ from bot.services.p0p1_contest import Contest, PHASE_LOCKED, PHASE_PRE, PHASE_VO
 from bot.services.ping_roles import TOP_P0P1_CHALLENGER_ROLE_NAME
 
 SAVED_PICKS = "Log in with Discord, your picks save automatically."
-CHANGE_PICKS_EARLY_ACCESS = "Update anytime before the Early-Access deadline"
+CHANGE_PICKS_EARLY_ACCESS = "Update anytime before the Early Access deadline"
 SYNTHETIC_CHALLENGER_TAG = f"**@{TOP_P0P1_CHALLENGER_ROLE_NAME}**"
 
 
@@ -46,8 +46,10 @@ def advertisement(
 
     if phase == PHASE_PRE:
         lines = [f"## {title} is coming soon!",
-                 f"Opens {_stamp(contest.previews_open, 'R')}, {_stamp(contest.previews_open, 'F')}",
-                 f"Voting closes {deadline}, {_stamp(contest.voting_deadline, 'D')}"]
+                 f"Opens when previews end {_stamp(contest.previews_open, 'R')}, "
+                 f"{_stamp(contest.previews_open, 'F')}",
+                 f"Voting closes when Early Access starts {deadline}, "
+                 f"{_stamp(contest.voting_deadline, 'D')}"]
         if featured_code is not None and featured_code.upper() != contest.code.upper():
             featured = featured_code.upper()
             lines.append(f"\n{llu}{challenger_mention} "
