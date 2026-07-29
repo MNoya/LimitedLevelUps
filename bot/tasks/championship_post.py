@@ -22,7 +22,7 @@ from bot.config import settings
 from bot.services import championship
 from bot.services import championship_copy as cc
 from bot.services import pod_launch
-from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
+from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, champion_role_mention
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
 
@@ -63,7 +63,7 @@ async def create_championship(bot: commands.Bot, plan: championship.Championship
         log.warning("championship: coordination channel unresolved or not a text channel")
         return None
     role = find_role(channel.guild, SET_CHAMPION_ROLE_NAME)
-    champion_mention = cc.champion_role_mention(role)
+    champion_mention = champion_role_mention(role)
     content = cc.card_content(
         set_name=plan.set_name, set_code=plan.set_code, next_set_name=plan.next_set_name,
         next_set_code=plan.next_set_code, next_release_at=plan.next_release_at,

@@ -8,6 +8,7 @@ which is the part of a decline worth reading.
 """
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -33,6 +34,12 @@ ALTERNATES_EMOJI = "🪑"
 NO_EMOJI = "❌"
 MAYBE_MARKER = r"\*"
 EMPTY_VALUE = "-"
+NAME_LIMIT = 18
+ELLIPSIS = "…"
+PARENTHETICAL = re.compile(r"\s*\([^)]*\)")
+EMOJI_TAIL = re.compile(
+    r"[←-⇿⌀-➿⬀-⯿️\U0001f000-\U0001faff].*", re.DOTALL,
+)
 
 
 @dataclass(frozen=True)
@@ -114,7 +121,21 @@ def _row(attendee: SeededAttendee, *, maybe: bool = False) -> str:
     instead of pushing the rank onto a line of its own. A Maybe is marked with an escaped asterisk, so a
     column of them cannot pair up into italics."""
     marker = MAYBE_MARKER if maybe else ""
-    return f"> **{attendee_rnk(attendee)}** {NBSP}{attendee.display_name}{marker}"
+    return f"> **{attendee_rnk(attendee)}** {NBSP}{short_name(attendee.display_name)}{marker}"
+
+
+def short_name(display_name: str) -> str:
+    """A display name cut down to what a third-of-a-card column holds: the parenthetical alias goes, so
+    does everything from the first emoji on, and what is left is capped at a word boundary. Falls back to
+    the raw name when a rule would leave nothing, as for a name that is only emoji."""
+    name = PARENTHETICAL.sub("", display_name).strip()
+    name = EMOJI_TAIL.sub("", name).strip() or name
+    if len(name) <= NAME_LIMIT:
+        return name
+    cut = name[: NAME_LIMIT - 1]
+    if not name[NAME_LIMIT - 1].isspace() and " " in cut.strip():
+        cut = cut.rpartition(" ")[0]
+    return f"{cut.rstrip()}{ELLIPSIS}"
 
 
 def _column(rows: Sequence[str]) -> str:

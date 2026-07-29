@@ -33,7 +33,7 @@ from bot.models import MagicSet
 from bot.services import championship
 from bot.services import championship_copy as cc
 from bot.services import pod_swiss
-from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
+from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, champion_role_mention
 from bot.services.player_stats import SeededAttendee, rank_players_for_set
 from bot.services.pod_launch import LauncherSlot, event_thread_id_sync, scheduled_card_ref_sync
 from bot.services.pod_roles import find_role
@@ -86,7 +86,7 @@ async def setup(bot: commands.Bot) -> None:
         event_at = plan.event_at
         champion_role = find_role(channel.guild, SET_CHAMPION_ROLE_NAME)
 
-        champion_mention = cc.champion_role_mention(champion_role)
+        champion_mention = champion_role_mention(champion_role)
         card_body = cc.card_content(
             set_name=plan.set_name, set_code=plan.set_code, next_set_name=plan.next_set_name,
             next_set_code=plan.next_set_code, next_release_at=plan.next_release_at,

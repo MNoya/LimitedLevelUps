@@ -39,9 +39,8 @@ MSG_JOIN_LINE = (
     "Open this [**Draftmancer Link**](<{url}>) to join the draft as {identity}"
 )
 MSG_LINK_ARENA_PROMPT = (
-    "Seats are matched by your MTG Arena handle, the full name with the numbers, like `YourName#12345`. "
-    "Click **Link Arena** below to save it once. **Join Draft** then gives you a link with your name "
-    "already set."
+    "Seats are matched by your MTG Arena handle, like `YourName#12345`\n"
+    "Click **Link Arena** below to save it and get your draft link"
 )
 
 MSG_DM_RSVP_YES = "✅ You replied **Yes** to {thread}"
@@ -57,8 +56,7 @@ MSG_DM_LOBBY_LINK_UNLINKED = (
     "{rsvp}\n\n"
     + MSG_LINK_ARENA_PROMPT
 )
-MSG_DM_NOTIFY_TOGGLE_LABEL = "Draft DMs"
-MSG_DM_NOTIFY_HINT = "-# Manage your notifications with this button or with `/roles`"
+MSG_DM_NOTIFY_HINT = "-# Manage your notifications with `/roles`"
 MSG_DM_PREF_ON_TITLE = "🔔 Draft DMs On"
 MSG_DM_PREF_ON_BODY = "You'll get your Draftmancer link by DM when a Pod Draft is ready"
 MSG_DM_PREF_OFF_TITLE = "🔕 Draft DMs Off"

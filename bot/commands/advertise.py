@@ -18,7 +18,11 @@ from bot.config import settings
 from bot.services import championship, p0p1_contest, p0p1_copy, pod_launch
 from bot.services import championship_copy as cc
 from bot.services.containers import as_view
-from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, TOP_P0P1_CHALLENGER_ROLE_NAME
+from bot.services.ping_roles import (
+    SET_CHAMPION_ROLE_NAME,
+    TOP_P0P1_CHALLENGER_ROLE_NAME,
+    champion_role_mention,
+)
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import SCHEDULE_TZ
 from bot.sets import active_set_code
@@ -42,7 +46,7 @@ async def setup(bot: commands.Bot) -> None:
         guild = _guild(bot, ctx)
         container = cc.explainer(
             set_code=set_code, event_at=event_at, signup_at=signup_at,
-            champion_mention=cc.champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
+            champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
             card_url=await _signup_card_url(event, guild),
             coordination_channel=f"<#{settings.pod_draft_channel_id}>",
         )

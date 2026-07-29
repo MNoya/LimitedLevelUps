@@ -12,7 +12,11 @@ from bot.config import settings
 from bot.services import championship, p0p1_contest, p0p1_copy
 from bot.services import championship_copy as cc
 from bot.services.containers import as_view
-from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, TOP_P0P1_CHALLENGER_ROLE_NAME
+from bot.services.ping_roles import (
+    SET_CHAMPION_ROLE_NAME,
+    TOP_P0P1_CHALLENGER_ROLE_NAME,
+    champion_role_mention,
+)
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import SCHEDULE_TZ
 
@@ -46,7 +50,7 @@ def _championship_variations(ctx: commands.Context) -> list[tuple[str, ui.Contai
     plan = championship.plan_for(datetime.now(SCHEDULE_TZ))
     set_code = plan.set_code if plan is not None else "MSH"
     event_at = plan.event_at if plan is not None else datetime.now(SCHEDULE_TZ) + timedelta(days=5)
-    champion_mention = cc.champion_role_mention(find_role(ctx.guild, SET_CHAMPION_ROLE_NAME))
+    champion_mention = champion_role_mention(find_role(ctx.guild, SET_CHAMPION_ROLE_NAME))
     signup_at = championship.signup_post_at(plan) if plan is not None else None
     states = [
         ("championship: signup card posted", event_at, signup_at, CARD_URL),

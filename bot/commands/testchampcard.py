@@ -19,7 +19,7 @@ from bot.commands.testchampionship import MSG_NO_SUCCESSOR
 from bot.services import championship
 from bot.services import championship_copy as cc
 from bot.services.championship_roster_card import ChampionshipRoster, championship_roster
-from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
+from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, champion_role_mention
 from bot.services.player_stats import SeededAttendee
 from bot.services.pod_roles import find_role
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
@@ -73,7 +73,7 @@ def _gathering_card(name, plan, roster: ChampionshipRoster, guild) -> discord.Em
     card_body = cc.card_content(
         set_name=plan.set_name, set_code=plan.set_code, next_set_name=plan.next_set_name,
         next_set_code=plan.next_set_code, next_release_at=plan.next_release_at,
-        champion_mention=cc.champion_role_mention(champion_role),
+        champion_mention=champion_role_mention(champion_role),
     )
     return build_rsvp_embed(
         name, plan.event_at, _rsvp_names(roster), set_code=plan.set_code, announcement=card_body,

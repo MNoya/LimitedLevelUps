@@ -78,6 +78,7 @@ from bot.services.pod_tournament import (
     REVIEW_EMOJI,
     ParticipantDeckData,
     actor_label,
+    build_champion_announcement_view,
     build_draft_review_message,
     build_trophy_hype_view,
     mark_trophy_match,
@@ -86,6 +87,8 @@ from bot.services.pod_tournament import (
     round_embed,
     start_tournament,
 )
+from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, champion_role_mention
+from bot.services.pod_roles import find_role
 from bot.slug import disambiguate_slug, slugify
 
 
@@ -922,6 +925,82 @@ def _trophy_hype_preview() -> discord.ui.LayoutView:
     )
 
 
+_CHAMPION_PREVIEW_NAMES = (
+    "Thistledown (Maramir)", "u/Longpost_Enjoyer", "SilverbackGorilla⭐-_-💧", "C. Vulgaris",
+    "driftwood", "quickfox", "mo", "yo",
+)
+_CHAMPION_PREVIEW_RECORDS = ((3, 0), (2, 1), (2, 1), (2, 1), (1, 2), (1, 2), (1, 2), (0, 3))
+_CHAMPION_PREVIEW_COLORS = ("URg", "WB", "RG", "UB", "WU", "BRw", "GW", "WUBRG")
+_CHAMPION_PREVIEW_CAPTIONS = (
+    "three bombs and a prayer", "fliers win games", None, "rakdos did rakdos things",
+    None, "never drew the bomb", None, "five colors, zero wins",
+)
+
+
+def _preview_deck_url(rank: int) -> str:
+    """A placeholder deck shot labeled with its finishing place, so the gallery grid reads as eight
+    distinct decks instead of one image repeated."""
+    return f"https://placehold.co/1280x720/2b2d31/ffffff/png?text=Deck+%23{rank}"
+
+
+def _championship_preview_name() -> str:
+    return f"👑 {active_set_code()} Set Championship"
+
+
+def _champion_preview_parts():
+    """Fixture parts for both championship surfaces. The winner carries a parenthetical alias, so the
+    previews show how an aliased display name reads in each headline."""
+    standings = [
+        Standing(rank=i + 1, player_id=n, player_name=n, wins=wins, losses=losses,
+                 omw_pct=0.0, gw_pct=0.0, ogw_pct=0.0)
+        for i, (n, (wins, losses)) in enumerate(zip(_CHAMPION_PREVIEW_NAMES, _CHAMPION_PREVIEW_RECORDS))
+    ]
+    displays = {normalize_player_name(n): {"display_name": n} for n in _CHAMPION_PREVIEW_NAMES}
+    player_colors = {
+        normalize_player_name(n): colors
+        for n, colors in zip(_CHAMPION_PREVIEW_NAMES, _CHAMPION_PREVIEW_COLORS)
+    }
+    deck_data = {
+        normalize_player_name(n): ParticipantDeckData(
+            colors=colors, screenshot_url=_preview_deck_url(rank), screenshot_caption=caption,
+        )
+        for rank, (n, colors, caption) in enumerate(zip(
+            _CHAMPION_PREVIEW_NAMES, _CHAMPION_PREVIEW_COLORS, _CHAMPION_PREVIEW_CAPTIONS), start=1)
+    }
+    return standings, displays, player_colors, deck_data
+
+
+def _champion_announcement_preview(guild) -> discord.ui.LayoutView:
+    standings, displays, player_colors, deck_data = _champion_preview_parts()
+    return build_champion_announcement_view(
+        standings,
+        event_name=_championship_preview_name(),
+        displays=displays,
+        player_colors=player_colors,
+        deck_data=deck_data,
+        leaderboard_url=settings.leaderboard_url,
+        guild_id=1,
+        thread_id=1,
+        champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
+    )
+
+
+def _champion_hype_preview(guild) -> discord.ui.LayoutView:
+    """The #trophy-hype card for the same fixture championship, so its headline can be read beside the
+    announcement's."""
+    standings, displays, player_colors, deck_data = _champion_preview_parts()
+    return build_trophy_hype_view(
+        standings[:1],
+        event_name=_championship_preview_name(),
+        displays=displays,
+        player_colors=player_colors,
+        deck_data=deck_data,
+        guild_id=1,
+        thread_id=1,
+        champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
+    )
+
+
 def _round1_preview_states(seated: bool) -> list[dict]:
     """In-memory Round-1 match states for the no-DB `round1` snapshot, fed through the prod `round_embed`
     builder so the rendering stays in sync — only the match data is fixtured. Arena handles come from
@@ -996,7 +1075,8 @@ _VALID_STATES = (
     "readyunlinked", "readycancel",
     "drafting", "complete", "submit", "lobby", "lobbyopen", "dmlink", "unlink", "podbracket", "podswiss", "podrandom",
     "podteam", "podlobby", "podteamvote",
-    "format", "seeding", "trophyhype", "round1", "round2", "round3", "voicelink", "review", "table",
+    "format", "seeding", "trophyhype", "champ", "round1", "round2", "round3", "voicelink", "review",
+    "table",
     "teams", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "formatpoll", "linkpicker",
 )
 
@@ -1198,11 +1278,12 @@ async def setup(bot: commands.Bot) -> None:
     register_force_start_preview(lambda: (5, 8, ["Bram", "Cara", "Dex"]))
 
     async def test_lobby(ctx: commands.Context, state: str = "", extra: str = "") -> None:
-        """Owner-only. Render the pod-draft lobby embed in this channel.
+        """Owner-only. The `!test` fallback, so each state below is a top-level word: `!test champ`.
+        Renders the pod-draft lobby embed in this channel.
 
         `state` ∈ empty | partial | linked | unlinked | ready | notready | cancelled | left | superseded |
         readyunlinked | drafting | complete | submit | lobbyopen | podbracket | podswiss | podrandom | podteam |
-        podlobby | format | seeding | trophyhype | round1 | round2 | round3 | voicelink | linkpicker.
+        podlobby | format | seeding | trophyhype | champ | round1 | round2 | round3 | voicelink | linkpicker.
         `lobbyopen` posts the real lobby-open message and its Join Draft button — click it to get the
         ephemeral link with your Arena name pre-filled, or the Link Arena nudge when unlinked.
         `dmlink` DMs you both lobby-open link DMs (linked + unlinked) and the opt-in test DM, so every
@@ -1328,6 +1409,17 @@ async def setup(bot: commands.Bot) -> None:
 
         if state == "trophyhype":
             await ctx.send(view=_trophy_hype_preview())
+            return
+
+        if state == "champ":
+            await ctx.send(
+                view=_champion_announcement_preview(ctx.guild),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            await ctx.send(
+                view=_champion_hype_preview(ctx.guild),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
             return
 
         if state == "teamstandings":

@@ -1,8 +1,9 @@
 """Lobby-open DM carrying the personalized Draftmancer link. A DM is per-user, so it delivers the
 pre-filled link as a one-click open where the in-thread Join Draft button needs two. Sent to opted-in Yes
 and Maybe RSVPs when a lobby opens; the in-thread button stays as the fallback for anyone the DM can't
-reach (DMs closed, drop-ins, guests). The link and notification toggle ride as buttons, not link text or
-a `/roles` callout. Reuses the send-with-Forbidden-skip and batching shape the tournament pairing DMs use.
+reach (DMs closed, drop-ins, guests). Notification changes go through `/roles`, so the only button a DM
+ever carries is Link Arena. Reuses the send-with-Forbidden-skip and batching shape the tournament pairing
+DMs use.
 """
 from __future__ import annotations
 
@@ -19,7 +20,6 @@ from bot.commands.messages import (
     MSG_DM_LOBBY_LINK,
     MSG_DM_LOBBY_LINK_UNLINKED,
     MSG_DM_NOTIFY_HINT,
-    MSG_DM_NOTIFY_TOGGLE_LABEL,
     MSG_DM_PREF_OFF_BODY,
     MSG_DM_PREF_OFF_TITLE,
     MSG_DM_PREF_ON_BODY,
@@ -28,20 +28,15 @@ from bot.commands.messages import (
     MSG_DM_RSVP_YES,
 )
 from bot.database import SessionLocal
-from bot.discord_helpers import BLANK_LINE, extract_avatar_hash, fetch_dm_user
+from bot.discord_helpers import BLANK_LINE, fetch_dm_user
 from bot.services.ping_roles import build_link_arena_modal, format_join_line
-from bot.services.pod_drafts import (
-    dm_draft_link_enabled,
-    player_arena_handle,
-    toggle_dm_draft_link,
-)
+from bot.services.pod_drafts import dm_draft_link_enabled, player_arena_handle
 
 
 log = logging.getLogger(__name__)
 
 DM_BATCH_SIZE = 8
 DM_BATCH_DELAY = 1.0
-NOTIFY_TOGGLE_PREFIX = "poddmtoggle"
 LINK_ARENA_PREFIX = "poddmlinkarena"
 
 
@@ -83,7 +78,7 @@ def build_link_dm(
         body = f"{link_body}\n\n{MSG_DM_NOTIFY_HINT}"
     else:
         body = f"{MSG_DM_LOBBY_LINK_UNLINKED.format(rsvp=rsvp_line)}\n{BLANK_LINE}"
-    return body, _link_dm_view(session_id, arena_name, notify_enabled=True)
+    return body, _link_dm_view(session_id, arena_name)
 
 
 async def send_lobby_link_dms(
@@ -121,37 +116,10 @@ def dm_pref_embed(enabled: bool) -> discord.Embed:
     )
 
 
-class DmNotifyToggleButton(ui.DynamicItem[ui.Button], template=rf"{NOTIFY_TOGGLE_PREFIX}:(?P<session_id>.+)"):
-    """Toggles the recipient's lobby-open DM preference from inside the DM, replacing a `/roles` text
-    callout. Green when subscribed. One registration dispatches every DM; on click it flips the pref,
-    re-renders the DM's buttons (re-reading the handle so a mid-DM Link Arena upgrades the link too), and
-    confirms the new state with an embed."""
-
-    def __init__(self, session_id: str, enabled: bool) -> None:
-        super().__init__(ui.Button(
-            style=discord.ButtonStyle.success if enabled else discord.ButtonStyle.secondary,
-            label=MSG_DM_NOTIFY_TOGGLE_LABEL, emoji="🔔",
-            custom_id=f"{NOTIFY_TOGGLE_PREFIX}:{session_id}",
-        ))
-        self.session_id = session_id
-
-    @classmethod
-    async def from_custom_id(cls, interaction: discord.Interaction, item: ui.Button, match: re.Match):
-        enabled = await asyncio.to_thread(_dm_enabled, str(interaction.user.id))
-        return cls(match["session_id"], enabled)
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        new_state = await asyncio.to_thread(_toggle_notify, interaction.user)
-        arena_name = await asyncio.to_thread(_arena_handle_for, str(interaction.user.id))
-        await interaction.response.edit_message(view=_link_dm_view(self.session_id, arena_name, new_state))
-        await interaction.followup.send(embed=dm_pref_embed(new_state), ephemeral=True)
-
-
 class DmLinkArenaButton(ui.DynamicItem[ui.Button], template=rf"{LINK_ARENA_PREFIX}:(?P<session_id>.+)"):
-    """Link Arena inside a lobby DM. On a successful link it re-renders this DM in place — the shared
-    link and Link Arena buttons become the personalized link button — so the personal link appears with
-    no extra message and no in-channel announcement. The session id rides in the custom_id, so it works
-    with or without a live lobby and after a restart."""
+    """Link Arena inside a lobby DM. On a successful link it rewrites this DM in place, so the personal
+    link arrives with no extra message and no in-channel announcement. The session id rides in the
+    custom_id, so it works with or without a live lobby and after a restart."""
 
     def __init__(self, session_id: str) -> None:
         super().__init__(ui.Button(
@@ -170,23 +138,19 @@ class DmLinkArenaButton(ui.DynamicItem[ui.Button], template=rf"{LINK_ARENA_PREFI
 
         async def after_link(inner: discord.Interaction, arena_name: str) -> None:
             await inner.response.defer()
-            enabled = await asyncio.to_thread(_dm_enabled, str(inner.user.id))
             await message.edit(
                 content=_relink_content(message.content, session_id, arena_name),
-                view=_link_dm_view(session_id, arena_name, enabled),
+                view=_link_dm_view(session_id, arena_name),
             )
 
         await interaction.response.send_modal(build_link_arena_modal(after_link=after_link))
 
 
-def _link_dm_view(session_id: str, arena_name: str | None, notify_enabled: bool) -> discord.ui.View:
-    """An unlinked recipient sees only Link Arena, so the one action is unambiguous; the Draft DMs toggle
-    returns once they link and the DM upgrades to the personalized form."""
-    view = discord.ui.View(timeout=None)
+def _link_dm_view(session_id: str, arena_name: str | None) -> discord.ui.View | None:
     if arena_name:
-        view.add_item(DmNotifyToggleButton(session_id, notify_enabled))
-    else:
-        view.add_item(DmLinkArenaButton(session_id))
+        return None
+    view = discord.ui.View(timeout=None)
+    view.add_item(DmLinkArenaButton(session_id))
     return view
 
 
@@ -216,21 +180,3 @@ def _resolve_recipients(recipients: list[tuple[str, str, str]]) -> list[tuple[st
     return resolved
 
 
-def _dm_enabled(discord_id: str) -> bool:
-    with SessionLocal() as session:
-        return dm_draft_link_enabled(session, discord_id)
-
-
-def _arena_handle_for(discord_id: str) -> str | None:
-    with SessionLocal() as session:
-        return player_arena_handle(session, discord_id)
-
-
-def _toggle_notify(user) -> bool:
-    with SessionLocal() as session:
-        new_state = toggle_dm_draft_link(
-            session, discord_id=str(user.id), discord_username=user.name,
-            display_name=user.display_name, avatar_hash=extract_avatar_hash(user),
-        )
-        session.commit()
-        return new_state

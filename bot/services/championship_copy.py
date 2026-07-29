@@ -17,22 +17,14 @@ from bot.config import settings
 from bot.services.championship import INVITE_WAVE_TIERS
 from bot.services.containers import build_container
 from bot.services.mock_lobby_card import set_symbol_url
-from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
+from bot.services.ping_roles import SYNTHETIC_CHAMPION_TAG
 from bot.services.pod_signals import RSVP_EMOJI
 
 TWITCH_URL = "https://twitch.tv/GatoDelFuego"
-SYNTHETIC_CHAMPION_TAG = f"**@{SET_CHAMPION_ROLE_NAME}**"
 
 
 def standings_url(set_code: str) -> str:
     return f"{settings.public_site_url.rstrip('/')}/leaderboard/{set_code.upper()}"
-
-
-def champion_role_mention(role: discord.Role | None) -> str:
-    """The real role tag, which renders the sky-blue pill. Safe for the card and the advertisement: the
-    card is an embed, which never pings, and the advertisement suppresses mentions. A missing role falls
-    back to the synthetic label."""
-    return role.mention if role is not None else SYNTHETIC_CHAMPION_TAG
 
 
 def champion_mention_for_wave(wave_index: int, role: discord.Role | None) -> str:

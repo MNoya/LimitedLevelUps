@@ -58,6 +58,7 @@ from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
     announce_pod_grant,
     auto_grant_spec_for_event,
+    champion_role_mention,
     display_emoji,
     pod_role_grant_text,
     send_join_confirmation_card,
@@ -1170,7 +1171,7 @@ def _championship_announcement(
     return cc.card_content(
         set_name=plan.set_name, set_code=plan.set_code, next_set_name=plan.next_set_name,
         next_set_code=plan.next_set_code, next_release_at=plan.next_release_at,
-        champion_mention=cc.champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
+        champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
     )
 
 

@@ -46,7 +46,13 @@ from bot.services.pod_deck_color import (
     format_deck_color_emojis,
 )
 from bot.services.player_stats import leaderboard_seat_order
-from bot.services.ping_roles import swap_set_champion_role
+from bot.services.ping_roles import (
+    SET_CHAMPION_ROLE_NAME,
+    SYNTHETIC_CHAMPION_TAG,
+    champion_role_mention,
+    swap_set_champion_role,
+)
+from bot.services.pod_roles import find_role
 from bot.services.pod_pairing_select import DEFAULT_PAIRING_MODE
 from bot.services.pod_replays import capture_event_replays
 from bot.services.seventeenlands import SeventeenLandsClient
@@ -141,6 +147,7 @@ POD_REPAIR_FAILED_MSG = (
     "An Organizer should check the matchups."
 )
 ANNOUNCEMENT_TOP_N = 4  # channel-level announcement shows top performers only; thread keeps full standings
+RUNNER_UP_GALLERY_CAP = 6  # Discord grids three per row; a seventh deck strands one on a row of its own
 TROPHY_HYPE_HISTORY_LIMIT = 100  # messages scanned for a champion's own trophy post before the bot posts
 CHAMPIONSHIP_DEADLINE_SECONDS = 600  # hard cap from R3 end: post the announcement with whatever decks landed
 CHAMPIONSHIP_RECONCILE_WINDOW = timedelta(hours=24)  # startup sweep only revisits recently-finalized pods
@@ -2655,10 +2662,14 @@ CHAMPION_TITLE_GLYPH = "🏆"
 SET_CHAMPION_TITLE_GLYPH = "👑"
 
 
-def _format_champion_title(names_with_colors: list[tuple[str, str | None]], short_event: str) -> str:
+def _format_champion_title(
+    names_with_colors: list[tuple[str, str | None]], short_event: str, champion_mention: str | None = None,
+) -> str:
     """Headline-style title — single: `Name takes {event} with {colors}`; multi: `A {colors} and
     B {colors} share {event}`. A Set Championship wears the crown instead of the trophy and drops the
-    one its pod name already carries, so the headline never shows two glyphs."""
+    one its pod name already carries, so the headline never shows two glyphs. It names the winner as the
+    set's new champion instead of taking the event, and carries no deck colors: the crown and the role
+    are the headline, and the colors read on the standings row below."""
     championship = is_championship(short_event)
     glyph = SET_CHAMPION_TITLE_GLYPH if championship else CHAMPION_TITLE_GLYPH
     event = _stripped_event_title(short_event) if championship else short_event
@@ -2668,11 +2679,20 @@ def _format_champion_title(names_with_colors: list[tuple[str, str | None]], shor
 
     if len(names_with_colors) == 1:
         name, color = names_with_colors[0]
+        if championship:
+            mention = champion_mention or SYNTHETIC_CHAMPION_TAG
+            return f"{glyph} {name} is the new {_event_set_code(event)} {mention}"
         emoji_run = format_deck_color_emojis(color)
-        suffix = f" {emoji_run}" if championship and emoji_run else f" with {emoji_run}" if emoji_run else ""
+        suffix = f" with {emoji_run}" if emoji_run else ""
         return f"{glyph} {name} takes {article}{event}{suffix}"
 
-    return f"{glyph} {_join_champion_names(names_with_colors)} share {article}{event}"
+    names = _join_champion_names(names_with_colors, colors=not championship)
+    return f"{glyph} {names} share {article}{event}"
+
+
+def _event_set_code(event: str) -> str:
+    """The set code leading a championship's name, so the headline reads `the new MSH @Set Champion`."""
+    return event.split(" ", 1)[0]
 
 
 def _stripped_event_title(event_name: str) -> str:
@@ -2692,10 +2712,10 @@ def _format_champion_thread_callout(names_with_colors: list[tuple[str, str | Non
     return f"{_join_champion_names(names_with_colors)} share the draft"
 
 
-def _join_champion_names(names_with_colors: list[tuple[str, str | None]]) -> str:
+def _join_champion_names(names_with_colors: list[tuple[str, str | None]], *, colors: bool = True) -> str:
     chunks = []
     for name, color in names_with_colors:
-        emoji_run = format_deck_color_emojis(color)
+        emoji_run = format_deck_color_emojis(color) if colors else ""
         chunks.append(f"{name} {emoji_run}" if emoji_run else name)
     if len(chunks) == 2:
         return f"{chunks[0]} and {chunks[1]}"
@@ -2775,15 +2795,18 @@ def build_champion_announcement_view(
     thread_id: int | None = None,
     event_started_at: datetime | None = None,
     subtitle_override: str | None = None,
+    champion_mention: str | None = None,
 ) -> ui.LayoutView:
     """One-shot 'champion crowned' Components V2 layout for the pod-draft channel (not the thread).
 
     Layout: Container (green accent) holds the headline + localized timestamp, then the top
-    ANNOUNCEMENT_TOP_N standings rows. Every player who finished with zero losses (champion) is
+    ANNOUNCEMENT_TOP_N standings rows, or the whole pod for a Set Championship, whose full field is the
+    record worth keeping. Every player who finished with zero losses (champion) is
     rendered with an optional italicized caption line and a full-size deck shot. Everyone else in
     the top-N collapses into a single compact text block, with their deck screenshots batched
-    into one MediaGallery beneath. Full standings stay in the thread embed. Thread-link button
-    sits OUTSIDE the container at LayoutView top level.
+    into one MediaGallery beneath, capped at RUNNER_UP_GALLERY_CAP so the grid ends on a full row and
+    the last finisher's deck is the one dropped. Full standings stay in the thread embed. Thread-link
+    button sits OUTSIDE the container at LayoutView top level.
     """
     displays = displays or {}
     player_colors = player_colors or {}
@@ -2807,7 +2830,7 @@ def build_champion_announcement_view(
         champs_named.append((display, player_colors.get(key)))
 
     short = short_event_name(event_name) or event_name
-    title = _format_champion_title(champs_named, short)
+    title = _format_champion_title(champs_named, short, champion_mention)
 
     view = ui.LayoutView()
     container = ui.Container(accent_colour=discord.Color.green())
@@ -2819,8 +2842,9 @@ def build_champion_announcement_view(
     container.add_item(ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
     # Hide rows whose record isn't yet final; the announcement re-edits when later R3 results land
+    depth = announcement_depth(standings, event_name)
     top_standings = [
-        s for s in standings[:ANNOUNCEMENT_TOP_N]
+        s for s in standings[:depth]
         if s.wins + s.losses >= TOTAL_ROUNDS
     ]
     pending_lines: list[str] = []
@@ -2859,7 +2883,7 @@ def build_champion_announcement_view(
     if pending_lines:
         container.add_item(ui.TextDisplay("\n".join(pending_lines)))
     if runners_up_items:
-        container.add_item(ui.MediaGallery(*runners_up_items))
+        container.add_item(ui.MediaGallery(*runners_up_items[:RUNNER_UP_GALLERY_CAP]))
 
     view.add_item(container)
 
@@ -3083,6 +3107,7 @@ async def build_champion_announcement_view_for_event(
     event_id: str,
     *,
     guild_id: int | None = None,
+    guild=None,
 ) -> ui.LayoutView | None:
     """Manager-free builder for the channel-level champion announcement view. Returns None when the
     trophy match has no winner yet, nobody is undefeated, or the event has neither pairings nor
@@ -3112,6 +3137,7 @@ async def build_champion_announcement_view_for_event(
         event_started_at=event_started_at,
         guild_id=guild_id,
         thread_id=thread_id,
+        champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
     )
 
 
@@ -3402,11 +3428,20 @@ def deck_missing_parts(data: "ParticipantDeckData | None") -> list[str]:
     return missing
 
 
-def incomplete_top_decks(standings, deck_data) -> list[str]:
-    """Names among the top finishers (ANNOUNCEMENT_TOP_N, or fewer for a smaller pod) still missing
-    colors or a screenshot. Empty list means the championship post is clear to go up."""
+def announcement_depth(standings, event_name: str | None) -> int:
+    """How far down the standings the channel announcement reaches: the top finishers for a normal pod,
+    the whole field for a Set Championship, whose full result is the record worth keeping. The same depth
+    gates the post, so every row it shows has had its deck waited for."""
+    if is_championship(event_name):
+        return len(standings)
+    return ANNOUNCEMENT_TOP_N
+
+
+def incomplete_top_decks(standings, deck_data, *, depth: int = ANNOUNCEMENT_TOP_N) -> list[str]:
+    """Names among the announced finishers (`depth`, or fewer for a smaller pod) still missing colors or
+    a screenshot. Empty list means the championship post is clear to go up."""
     return [
-        s.player_name for s in standings[:ANNOUNCEMENT_TOP_N]
+        s.player_name for s in standings[:depth]
         if not deck_complete(deck_data.get(normalize_player_name(s.player_name)))
     ]
 
@@ -3431,7 +3466,8 @@ async def ping_missing_deck_participants(manager, blocking_keys: set[str] | None
     prior = await asyncio.to_thread(load_matches, event_id)
     event_name = await asyncio.to_thread(load_event_name_sync, event_id)
     standings = pod_swiss.compute_standings(manager.tournament_players, prior)
-    blocking, other = _missing_deck_mentions(standings, dm_info, deck_data, blocking_keys)
+    blocking, other = _missing_deck_mentions(
+        standings, dm_info, deck_data, blocking_keys, event_name=event_name)
     content = build_deck_ping(blocking, other, pod_page_url(event_name))
     if not content:
         log.info(f"[FINALIZE] deck_ping.skip event={event_id} reason=all_complete")
@@ -3457,13 +3493,16 @@ async def ping_missing_deck_participants(manager, blocking_keys: set[str] | None
         log.warning(f"[FINALIZE] deck_ping.error event={event_id}", exc_info=True)
 
 
-def _missing_deck_mentions(standings, dm_info, deck_data,
-                           blocking_keys: set[str] | None = None) -> tuple[DeckPingAudience, DeckPingAudience]:
+def _missing_deck_mentions(standings, dm_info, deck_data, blocking_keys: set[str] | None = None,
+                           *, event_name: str | None = None) -> tuple[DeckPingAudience, DeckPingAudience]:
     """Split incomplete participants into the championship blockers (the gating set still owing a
     deck) and everyone else, each as (owes-screenshot, owes-colors) id lists. Standings order first
     so top finishers lead; participants absent from standings fall to the non-blocking audience."""
     if blocking_keys is None:
-        blocking_keys = {normalize_player_name(n) for n in incomplete_top_decks(standings, deck_data)}
+        depth = announcement_depth(standings, event_name)
+        blocking_keys = {
+            normalize_player_name(n) for n in incomplete_top_decks(standings, deck_data, depth=depth)
+        }
     blocking: DeckPingAudience = ([], [])
     other: DeckPingAudience = ([], [])
     seen: set[str] = set()
@@ -3539,11 +3578,13 @@ async def maybe_post_championship(manager, *, force: bool = False) -> None:
         log.info(f"[FINALIZE] champion.skip event={event_id} reason=no_standings")
         return
 
+    event_name = await asyncio.to_thread(load_event_name_sync, event_id)
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
-    incomplete = incomplete_top_decks(standings, deck_data)
+    depth = announcement_depth(standings, event_name)
+    incomplete = incomplete_top_decks(standings, deck_data, depth=depth)
     if incomplete and not force:
         log.info(
-            f"[FINALIZE] champion.skip event={event_id} reason=awaiting_top{ANNOUNCEMENT_TOP_N} "
+            f"[FINALIZE] champion.skip event={event_id} reason=awaiting_top{depth} "
             f"missing={incomplete}"
         )
         return
@@ -3564,8 +3605,7 @@ async def maybe_post_championship(manager, *, force: bool = False) -> None:
         if key in champion_keys and info.discord_id
     }
     thread_id = int(manager.thread_id) if isinstance(manager.thread_id, (int, str)) else None
-    guild_id = getattr(getattr(target, "guild", None), "id", None)
-    event_name = await asyncio.to_thread(load_event_name_sync, event_id)
+    guild = getattr(target, "guild", None)
     player_colors = colors_only(deck_data)
 
     view = build_champion_announcement_view(
@@ -3577,12 +3617,14 @@ async def maybe_post_championship(manager, *, force: bool = False) -> None:
         pending_count=0,
         deck_data=deck_data,
         event_started_at=await asyncio.to_thread(load_event_started_at_sync, event_id),
-        guild_id=guild_id,
+        guild_id=getattr(guild, "id", None),
         thread_id=thread_id,
+        champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
     )
     manager.champion_announced = True  # claim before the await so concurrent triggers don't double-post
     try:
-        manager.champion_announcement_message = await target.send(view=view)
+        manager.champion_announcement_message = await target.send(
+            view=view, allowed_mentions=discord.AllowedMentions.none())
         await asyncio.to_thread(mark_championship_posted_sync, event_id)
         log.info(
             f"[FINALIZE] champion.posted event={event_id} rank1={champions[0].player_name!r} "
@@ -3726,6 +3768,7 @@ def build_trophy_hype_view(
     guild_id: int | None = None,
     thread_id: int | None = None,
     format_title=None,
+    champion_mention: str | None = None,
 ) -> ui.LayoutView:
     """Champion-only announcement for #trophy-hype: headline, italic deck caption, and the deck
     shot, with Thread + Draft Recap link buttons. A simplified take on the championship post,
@@ -3734,7 +3777,7 @@ def build_trophy_hype_view(
     short = short_event_name(event_name) or event_name
     if format_title is None:
         def format_title(name, colors, short_event):
-            return _format_champion_title([(name, colors)], short_event)
+            return _format_champion_title([(name, colors)], short_event, champion_mention)
     view = ui.LayoutView()
     container = ui.Container(accent_colour=discord.Color.gold())
     for index, s in enumerate(champions):
@@ -3831,9 +3874,10 @@ async def post_trophy_hype(
         player_colors=player_colors, deck_data=deck_data,
         guild_id=getattr(guild, "id", None), thread_id=thread_id,
         format_title=format_title,
+        champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
     )
     try:
-        await channel.send(view=hype_view)
+        await channel.send(view=hype_view, allowed_mentions=discord.AllowedMentions.none())
         log.info(f"[FINALIZE] trophy_hype.posted event={event_id} channel={channel.id}")
         return True
     except Exception:

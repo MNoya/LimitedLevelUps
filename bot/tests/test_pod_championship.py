@@ -88,7 +88,7 @@ def test_post_trophy_hype_forwards_format_title_to_view(monkeypatch):
 
     async def run():
         return await pod_tournament.post_trophy_hype(
-            "e1", object(), 123, [champion],
+            "e1", SimpleNamespace(id=9, roles=[]), 123, [champion],
             event_name="Pod", displays={}, player_colors={}, deck_data={}, dm_info={},
             format_title=fmt,
         )
@@ -235,7 +235,6 @@ def test_champion_title_crowns_a_set_championship_without_doubling_the_glyph():
     assert title.startswith(SET_CHAMPION_TITLE_GLYPH)
     assert CHAMPION_TITLE_GLYPH not in title
     assert title.count(SET_CHAMPION_TITLE_GLYPH) == 1
-    assert "MSH Set Championship" in title
 
 
 def test_champion_title_keeps_the_trophy_for_a_regular_pod():

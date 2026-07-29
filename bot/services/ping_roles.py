@@ -119,6 +119,7 @@ class ManagedRole:
 
 
 SET_CHAMPION_ROLE_NAME = "Set Champion"
+SYNTHETIC_CHAMPION_TAG = f"**@{SET_CHAMPION_ROLE_NAME}**"
 PRIOR_SET_CHAMPION_ROLE_NAME = "Prior Set Champion"
 ORGANIZER_ROLE_NAME = "Organizer"
 TOP_P0P1_CHALLENGER_ROLE_NAME = "Top P0P1 Challenger"
@@ -615,6 +616,12 @@ def plan_set_champion_swap(
     already wear it step up. A back-to-back champion appears in neither, so their role is left alone."""
     holders, champions = set(holder_ids), set(champion_ids)
     return holders - champions, champions - holders
+
+
+def champion_role_mention(role: discord.Role | None) -> str:
+    """The real role tag, which renders the sky-blue pill. Safe wherever mentions are suppressed or the
+    surface is an embed, which never pings. A missing role falls back to the synthetic label."""
+    return role.mention if role is not None else SYNTHETIC_CHAMPION_TAG
 
 
 async def swap_set_champion_role(guild: discord.Guild | None, champion_ids: Iterable[str]) -> None:

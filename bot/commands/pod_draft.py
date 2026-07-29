@@ -508,7 +508,8 @@ class PodDraft(commands.Cog):
         if pairing_mode == "team":
             view = await build_team_championship_view_for_event(event_id, guild_id=interaction.guild_id)
         else:
-            view = await build_champion_announcement_view_for_event(event_id, guild_id=interaction.guild_id)
+            view = await build_champion_announcement_view_for_event(
+                event_id, guild_id=interaction.guild_id, guild=interaction.guild)
         if view is None:
             await interaction.followup.send(
                 "Champion announcement isn't ready — trophy match has no winner on record yet.",
@@ -517,7 +518,7 @@ class PodDraft(commands.Cog):
             return
 
         log.info(f"pod-champion: {interaction.user} re-posted champion announcement for event_id={event_id}")
-        await interaction.followup.send(view=view)
+        await interaction.followup.send(view=view, allowed_mentions=discord.AllowedMentions.none())
         await post_trophy_hype_for_event(interaction.client, event_id, interaction.guild)
 
     @pod_champion.autocomplete("event")

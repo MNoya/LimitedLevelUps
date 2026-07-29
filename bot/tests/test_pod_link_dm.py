@@ -22,10 +22,7 @@ def test_build_link_dm_linked_personalizes_url_in_body():
     )
 
     assert "userName=Tarmo%231" in body
-    assert not _button_urls(view)
-    custom_ids = _button_custom_ids(view)
-    assert _has_prefix(custom_ids, link_dm.NOTIFY_TOGGLE_PREFIX)
-    assert not _has_prefix(custom_ids, link_dm.LINK_ARENA_PREFIX)
+    assert view is None
 
 
 def test_build_link_dm_unlinked_omits_link_and_offers_link_arena_button():
@@ -35,9 +32,7 @@ def test_build_link_dm_unlinked_omits_link_and_offers_link_arena_button():
 
     assert "draftmancer" not in body.lower()
     assert not _button_urls(view)
-    custom_ids = _button_custom_ids(view)
-    assert _has_prefix(custom_ids, link_dm.LINK_ARENA_PREFIX)
-    assert not _has_prefix(custom_ids, link_dm.NOTIFY_TOGGLE_PREFIX)
+    assert _has_prefix(_button_custom_ids(view), link_dm.LINK_ARENA_PREFIX)
 
 
 def test_build_link_dm_rsvp_branch_differs():
