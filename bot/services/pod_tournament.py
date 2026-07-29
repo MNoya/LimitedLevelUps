@@ -107,7 +107,8 @@ MIDDLE = "middle"
 LAST_CHANCE = "last_chance"
 GRACE_SECONDS = 60  # window after round completion during which edits regenerate the next round
 BRACKET_EDIT_BLOCKED_MSG = "That result can't be changed now — a later round already reported a result."
-RESULT_CORRECTED_LEAD = "**Result corrected:**"
+RESULT_CORRECTED_LEAD = "Result corrected:"
+RESULT_CLEARED_LEAD = "Result cleared:"
 POD_RESULT_LOCKED_MSG = "This pod draft is finished. Results can no longer be changed."
 MANAGE_ROUND_CUSTOM_PREFIX = "podmanageround"
 ORGANIZER_ROLE_NAMES = frozenset({"admin", "moderator", "organizer"})
@@ -1723,9 +1724,15 @@ async def _handle_result_submission(interaction: discord.Interaction, value: str
         asyncio.create_task(_propagate_match_to_other_surfaces(
             interaction.client, event_id, match_id, round_num, exclude_channel_id=exclude_channel_id,
         ))
+        if result.get("was_reported") and match_state is not None:
+            await announce_round_result(
+                interaction.client, event_id,
+                format_round_clear_announcement(
+                    round_num, match_state, _resolve_pairings_url(event_id, round_num),
+                ),
+            )
         if bracket and round_num < TOTAL_ROUNDS and manager is not None and result.get("winner_changed"):
-            phrase = format_result_change(result["a_name"], result["b_name"], None, None, a_disp, b_disp)
-            await bracket_regenerate_downstream(manager, round_num, phrase)
+            await bracket_regenerate_downstream(manager, round_num)
         return
 
     log.info(format_match_result_log(
@@ -1756,9 +1763,8 @@ async def _handle_result_submission(interaction: discord.Interaction, value: str
         interaction.client, event_id, match_id, round_num, exclude_channel_id=exclude_channel_id,
     ))
 
-    corrected = bool(result.get("was_reported") and result.get("winner_changed"))
-    newly_reported = not result.get("was_reported") or result.get("winner_changed")
-    if match_state is not None and match_was_played(match_state) and newly_reported:
+    corrected = result_was_corrected(result)
+    if match_state is not None and match_was_played(match_state) and result_needs_announcement(result):
         pairings_url = _resolve_pairings_url(event_id, round_num)
         await announce_round_result(
             interaction.client, event_id,
@@ -2077,6 +2083,7 @@ def commit_result(match_id: str, winner_name: str, score: str):
             return "not_found"
         was_reported = match.reported_at is not None
         prev_winner = match.winner_name
+        prev_score = match.score
         if winner_name == CLEAR_SENTINEL:
             match.winner_name = None
             match.score = None
@@ -2099,12 +2106,25 @@ def commit_result(match_id: str, winner_name: str, score: str):
         return {
             "was_reported": was_reported,
             "winner_changed": (prev_winner or "").lower() != (winner_name or "").lower(),
+            "score_changed": (prev_score or "") != (score or ""),
             "loser_name": loser,
             "a_name": match.player_a_name,
             "b_name": match.player_b_name,
             "round": match.round,
             "event_id": match.event_id,
         }
+
+
+def result_was_corrected(result: dict) -> bool:
+    """Whether a re-report changed the recorded outcome. A score-only fix counts: game win percentage
+    is a Swiss tiebreaker, so 2-0 against 2-1 moves the standings even with the same winner."""
+    changed = result.get("winner_changed") or result.get("score_changed")
+    return bool(result.get("was_reported") and changed)
+
+
+def result_needs_announcement(result: dict) -> bool:
+    """Whether the thread should get a result line: a first report, or a correction to a reported one."""
+    return not result.get("was_reported") or result_was_corrected(result)
 
 
 async def announce_round_result(bot_client, event_id: str, phrase: str,
@@ -4167,11 +4187,15 @@ def name_with_arena(display: str, arena: str | None) -> str:
     return f"`{arena}` ({display})"
 
 
+def match_displays(m: dict) -> tuple[str, str]:
+    """Both players of a match state as they should be shown, Discord display preferred over handle."""
+    return m.get("a_display") or m["a_name"], m.get("b_display") or m["b_name"]
+
+
 def format_reported_result(m: dict) -> str:
     """A reported match as plain text, display names preferred: 'Marlo wins 2-1 vs Bob'. Shared by
     the round-results list and the live per-result announcement so their wording can't drift."""
-    a_disp = m.get("a_display") or m["a_name"]
-    b_disp = m.get("b_display") or m["b_name"]
+    a_disp, b_disp = match_displays(m)
     if m["winner_name"].lower() == m["a_name"].lower():
         winner_disp, loser_disp = a_disp, b_disp
     else:
@@ -4179,13 +4203,19 @@ def format_reported_result(m: dict) -> str:
     return f"{winner_disp} wins {m['score']} vs {loser_disp}"
 
 
-def round_link_label(round_num: int, pairings_url: str | None = None) -> str:
-    """Bold round label, linked to that round's pairings message and underlined to signal the link
-    when the URL is known ('**[__Round 2__](url)**'); a bare bold label otherwise. Shared by the
-    per-result announcement and the waiting-slot footer so their round labels can't drift."""
+def round_link_target(round_num: int, pairings_url: str | None = None) -> str:
+    """Unbolded round label, linked to that round's pairings message and underlined to signal the link
+    when the URL is known ('[__Round 2__](url)'). Callers that lead with more than the round bold the
+    whole lead around it."""
     if pairings_url:
-        return f"**[__Round {round_num}__]({pairings_url})**"
-    return f"**Round {round_num}**"
+        return f"[__Round {round_num}__]({pairings_url})"
+    return f"Round {round_num}"
+
+
+def round_link_label(round_num: int, pairings_url: str | None = None) -> str:
+    """Bold round label ('**[__Round 2__](url)**'). Shared by the per-result announcement and the
+    waiting-slot footer so their round labels can't drift."""
+    return f"**{round_link_target(round_num, pairings_url)}**"
 
 
 def format_round_announcement(round_num: int, m: dict, pairings_url: str | None = None,
@@ -4195,17 +4225,25 @@ def format_round_announcement(round_num: int, m: dict, pairings_url: str | None 
     A `corrected` result is marked as one, so overwriting a reported match reads as a fix to the round
     rather than as a second match played in it.
     """
-    label = round_link_label(round_num, pairings_url)
-    lead = f"♻️ {label} {RESULT_CORRECTED_LEAD}" if corrected else label
+    if corrected:
+        lead = f"♻️ **{round_link_target(round_num, pairings_url)} {RESULT_CORRECTED_LEAD}**"
+    else:
+        lead = round_link_label(round_num, pairings_url)
     return f"{lead} {format_reported_result(m)}"
+
+
+def format_round_clear_announcement(round_num: int, m: dict, pairings_url: str | None = None) -> str:
+    """The thread note when a reported result is cleared, so a round never loses a result silently."""
+    a_disp, b_disp = match_displays(m)
+    lead = f"♻️ **{round_link_target(round_num, pairings_url)} {RESULT_CLEARED_LEAD}**"
+    return f"{lead} {a_disp} vs {b_disp}"
 
 
 def _match_line(m: dict, *, seat_label: str | None = None, show_arena: bool = False) -> str:
     """One pairing line: result once reported, otherwise the matchup. Pending cross-record matches
     show inline records with the higher record first; same-record matches lean on the group header.
     `show_arena` leads each unreported matchup with the players' Arena handles."""
-    a_disp = m.get("a_display") or m["a_name"]
-    b_disp = m.get("b_display") or m["b_name"]
+    a_disp, b_disp = match_displays(m)
     winner = m["winner_name"]
     if winner == SKIPPED_SENTINEL:
         return f"🚫{NBSP}{NBSP}Not played: {a_disp} vs {b_disp}"
@@ -4713,7 +4751,7 @@ def format_result_change(a_name: str, b_name: str, winner_name: str | None, scor
 
 def bracket_regen_notice(result_phrase: str | None, round_num: int, pairings_url: str | None) -> str:
     """The single source of truth for the thread note posted when an edit re-pairs a bracket round."""
-    head = f"{RESULT_CORRECTED_LEAD} {result_phrase} - " if result_phrase else ""
+    head = f"**{RESULT_CORRECTED_LEAD}** {result_phrase} - " if result_phrase else ""
     updated = f"[Pairings Updated]({pairings_url})" if pairings_url else "Pairings Updated"
     return f"♻️ {head}Round {round_num} {updated} {emojis.get('manat')}".rstrip()
 

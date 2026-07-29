@@ -130,6 +130,46 @@ def test_refuses_a_card_and_explains_why(
     assert (report.embed, report.view) == (None, None)
 
 
+@pytest.mark.parametrize("winner, score, expected_flags", [
+    (LSV, "2-1", {"winner_changed": False, "score_changed": True}),
+    (FINKEL, "2-0", {"winner_changed": True, "score_changed": False}),
+    (FINKEL, "2-1", {"winner_changed": True, "score_changed": True}),
+    (LSV, "2-0", {"winner_changed": False, "score_changed": False}),
+], ids=["score_only", "winner_only", "both", "nothing"])
+def test_re_report_reports_what_it_changed(monkeypatch, session, winner, score, expected_flags) -> None:
+    monkeypatch.setattr(pod_tournament, "SessionLocal", _session_factory(session))
+    event = _event(session, NOW - timedelta(hours=1))
+    match = _match(session, event, 1, FINKEL, LSV, winner=LSV, score="2-0")
+    session.commit()
+
+    result = pod_tournament.commit_result(match.id, winner, score)
+
+    assert result["was_reported"] is True
+    assert {key: result[key] for key in expected_flags} == expected_flags
+
+
+def test_clearing_a_reported_match_reports_it_was_reported(monkeypatch, session) -> None:
+    monkeypatch.setattr(pod_tournament, "SessionLocal", _session_factory(session))
+    event = _event(session, NOW - timedelta(hours=1))
+    match = _match(session, event, 1, FINKEL, LSV, winner=LSV, score="2-0")
+    session.commit()
+
+    result = pod_tournament.commit_result(match.id, pod_tournament.CLEAR_SENTINEL, "0-0")
+
+    assert (result["cleared"], result["was_reported"]) == (True, True)
+
+
+@pytest.mark.parametrize("result, expected", [
+    ({"was_reported": False, "winner_changed": False, "score_changed": False}, True),
+    ({"was_reported": True, "winner_changed": True, "score_changed": False}, True),
+    ({"was_reported": True, "winner_changed": False, "score_changed": True}, True),
+    ({"was_reported": True, "winner_changed": False, "score_changed": False}, False),
+], ids=["first_report", "winner_fixed", "score_fixed", "same_result_again"])
+def test_the_thread_hears_about_a_result_that_changed(result, expected) -> None:
+    assert pod_tournament.result_needs_announcement(result) is expected
+    assert pod_tournament.result_was_corrected(result) is (expected and result["was_reported"])
+
+
 def test_serves_deck_colors_once_the_matches_are_in(monkeypatch) -> None:
     _stub_builder(monkeypatch, [], reported=OwnMatch("evt", 3, "m3"), owed_colors=("evt", "thread-1"))
 
@@ -211,7 +251,7 @@ def _participant(session, event, draftmancer_name: str, *, discord_id: str) -> P
     return participant
 
 
-def _match(session, event, round_num: int, a: str, b: str, *, winner=None) -> PodDraftMatch:
+def _match(session, event, round_num: int, a: str, b: str, *, winner=None, score=None) -> PodDraftMatch:
     match = PodDraftMatch(
         event_id=event.id,
         round=round_num,
@@ -219,9 +259,20 @@ def _match(session, event, round_num: int, a: str, b: str, *, winner=None) -> Po
         player_a_name=a,
         player_b_name=b,
         winner_name=winner,
-        score="2-1" if winner else None,
+        score=(score or "2-1") if winner else None,
         reported_at=NOW if winner else None,
     )
     session.add(match)
     session.flush()
     return match
+
+
+def _session_factory(session):
+    class _Ctx:
+        def __enter__(self):
+            return session
+
+        def __exit__(self, *exc):
+            return False
+
+    return lambda: _Ctx()

@@ -40,9 +40,12 @@ from bot.services.pod_tournament import (
     format_match_result_log,
     format_reported_result,
     format_round_announcement,
+    format_round_clear_announcement,
     load_participant_displays,
     match_was_played,
     name_with_arena,
+    result_needs_announcement,
+    result_was_corrected,
     send_final_submit_deck_dms,
 )
 
@@ -518,17 +521,20 @@ async def handle_team_report(
         ))
 
     data = await asyncio.to_thread(load_team_board_data, event_id)
-    newly_reported = not result.get("cleared") and (
-        not result.get("was_reported") or result.get("winner_changed")
-    )
-    if newly_reported:
-        match_state = _board_match(data, match_id)
+    match_state = _board_match(data, match_id)
+    pairings_url = round_jump_url(event_id, round_num, board_message)
+    if result.get("cleared"):
+        if result.get("was_reported") and match_state is not None:
+            await announce_round_result(
+                interaction.client, event_id,
+                format_round_clear_announcement(round_num, match_state, pairings_url),
+            )
+    elif result_needs_announcement(result):
         if match_state is not None and match_was_played(match_state):
             await announce_round_result(
                 interaction.client, event_id,
                 format_round_announcement(
-                    round_num, match_state, round_jump_url(event_id, round_num, board_message),
-                    corrected=bool(result.get("was_reported") and result.get("winner_changed")),
+                    round_num, match_state, pairings_url, corrected=result_was_corrected(result),
                 ),
             )
 
