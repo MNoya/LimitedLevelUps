@@ -45,6 +45,8 @@ from sqlalchemy import select
 
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.models import PodDraftEvent, PodSignal
+from bot.services import championship
+from bot.services import championship_copy as cc
 from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
@@ -53,6 +55,7 @@ from bot.services.pod_draft_manager import notify_seeding_change
 from bot.services.pod_tournament import champion_card_line, load_solo_card_drafters
 from bot.services.ping_roles import (
     NOTICE_GRANT,
+    SET_CHAMPION_ROLE_NAME,
     announce_pod_grant,
     auto_grant_spec_for_event,
     display_emoji,
@@ -1144,12 +1147,31 @@ async def _edit_scheduled_card(bot: commands.Bot, event_id: str, name: str, even
         message = await channel.fetch_message(int(message_id))
         await message.edit(embed=build_rsvp_embed(
             name, event_time, rosters, slot_time, description, set_code=set_code,
+            announcement=_championship_announcement(getattr(channel, "guild", None), set_code, name),
             team_draft=pairing_mode == "team", status_line=status_line,
             roster_interests=roster_interests, team_rosters=team_rosters,
             locked_roster=locked_roster, draft_complete=draft_complete,
             championship_roster=await resolve_championship_card_roster(event_id, rosters)))
     except discord.HTTPException:
         log.warning(f"could not edit scheduled card {message_id}", exc_info=True)
+
+
+def _championship_announcement(
+    guild: discord.Guild | None, set_code: str | None, name: str,
+) -> str | None:
+    """The fixed body a championship card carries, rebuilt so a full re-render puts it back in place of
+    the RSVP intro. Nothing stores the text, so it comes off the plan the card was posted for, and only
+    while that plan still names the set the card closes."""
+    if not is_championship(name) or set_code is None:
+        return None
+    plan = championship.plan_for()
+    if plan is None or plan.set_code.upper() != set_code.upper():
+        return None
+    return cc.card_content(
+        set_name=plan.set_name, set_code=plan.set_code, next_set_name=plan.next_set_name,
+        next_set_code=plan.next_set_code, next_release_at=plan.next_release_at,
+        champion_mention=cc.champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
+    )
 
 
 async def _team_card_rosters(
