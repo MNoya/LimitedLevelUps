@@ -32,8 +32,14 @@ from bot.models import Player, PodDraftEvent, PodDraftMatch, PodDraftParticipant
 from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services import pod_team
-from bot.services.pod_draft_manager import set_card_cancel_hook, set_card_close_hook, start_manager
+from bot.services.pod_draft_manager import (
+    PodDraftManager,
+    set_card_cancel_hook,
+    set_card_close_hook,
+    start_manager,
+)
 from bot.services.pod_drafts import (
+    build_ondemand_session,
     draftmancer_url_for,
     get_cube_choices,
     get_flashback_ranking,
@@ -1668,7 +1674,10 @@ async def launch_from_signal(
 
 
 async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
-    """Post the Draftmancer link, ping the roster, start the pod manager."""
+    """Seat the bot in the Draftmancer session, then post the link and ping the roster. Draftmancer makes
+    whoever enters an empty session first its owner, so the bot has to be holding ownership before any
+    player can see the link. A session it could not own is abandoned for a fresh one, which makes the
+    announced link always a session the bot controls."""
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, event_id)
         if event is None:
@@ -1693,8 +1702,19 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
         log.warning(f"open_ondemand_lobby: thread {thread_id} unreachable")
         return
 
-    mention_block = " ".join(f"<@{did}>" for did, _ in roster)
+    manager = await start_manager(
+        bot, event_id, session_id, thread_id, set_code, len(display_names),
+        event_name=event_name, draftmancer_url=draftmancer_url,
+        rsvps_yes=display_names, rsvps_maybe=maybe_names,
+    )
+    if manager is not None and not await manager.await_ownership():
+        manager, session_id = await _reseat_on_fresh_session(
+            bot, event_id, manager, thread_id=thread_id, set_code=set_code, event_name=event_name,
+            display_names=display_names, maybe_names=maybe_names,
+        )
+        draftmancer_url = draftmancer_url_for(session_id)
 
+    mention_block = " ".join(f"<@{did}>" for did, _ in roster)
     body = build_lobby_open_body(draftmancer_url, mention_block)
     try:
         await thread.send(
@@ -1703,14 +1723,6 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
         )
     except discord.HTTPException:
         log.warning(f"open_ondemand_lobby: could not post in thread {thread_id}", exc_info=True)
-
-    manager = await start_manager(
-        bot, event_id, session_id, thread_id, set_code, len(display_names),
-        event_name=event_name, draftmancer_url=draftmancer_url,
-        rsvps_yes=display_names, rsvps_maybe=maybe_names,
-    )
-    if manager is not None:
-        await manager.await_ownership()
 
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, event_id)
@@ -1732,6 +1744,44 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
         pick_timer = await asyncio.to_thread(scheduled_pick_timer_for_event_sync, event_id)
         if pick_timer is not None:
             await manager.apply_pick_timer(pick_timer)
+
+
+async def _reseat_on_fresh_session(
+    bot: commands.Bot, event_id: str, stale: PodDraftManager, *,
+    thread_id: int, set_code: str, event_name: str,
+    display_names: list[str], maybe_names: list[str],
+) -> tuple[PodDraftManager | None, str]:
+    """Abandon a Draftmancer session the bot could not own and reopen the pod on a fresh one. The session
+    id exists for the ~hour between the card posting and the lobby opening, so anyone holding it can be
+    sitting in the session first, and Draftmancer never hands ownership to a later arrival. Announcing a
+    different session is the only way to guarantee the bot controls the one players get.
+
+    Returns the live manager (None when the fresh session also failed) and the session id to announce.
+    """
+    await stale.disconnect_safely()
+    session_id = await asyncio.to_thread(_mint_fresh_session_sync, event_id)
+    if session_id is None:
+        return None, stale.session_id
+    log.warning(f"open_ondemand_lobby: {event_id} lost ownership; reseating on fresh session {session_id}")
+    manager = await start_manager(
+        bot, event_id, session_id, thread_id, set_code, len(display_names),
+        event_name=event_name, draftmancer_url=draftmancer_url_for(session_id),
+        rsvps_yes=display_names, rsvps_maybe=maybe_names,
+    )
+    if manager is not None:
+        await manager.await_ownership()
+    return manager, session_id
+
+
+def _mint_fresh_session_sync(event_id: str) -> str | None:
+    with SessionLocal() as session:
+        event = session.get(PodDraftEvent, event_id)
+        if event is None:
+            return None
+        session_id = build_ondemand_session(session, event.event_time.date())
+        event.draftmancer_session = session_id
+        session.commit()
+        return session_id
 
 
 def arm_scheduled_pod_jobs(

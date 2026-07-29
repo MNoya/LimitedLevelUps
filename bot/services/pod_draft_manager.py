@@ -287,6 +287,8 @@ class PodDraftManager:
         self.bot_user_id: str | None = None
         self.owner_claimed = False
         self.is_owner = False
+        self._ownership_claim_in_flight = False
+        self._ownership_lost_reported = False
         self.ownership_ready = asyncio.Event()
         self._closed = False
         self.ready_check_active = False
@@ -456,9 +458,9 @@ class PodDraftManager:
                 if u.get("userName") == BOT_USER_NAME:
                     self.bot_user_id = u.get("userID")
                     log.info(f"found bot userID={self.bot_user_id} for {self.session_id}")
-                    if not self.owner_claimed:
-                        asyncio.create_task(self._claim_ownership_and_apply_settings())
                     break
+        if self.bot_user_id is not None and not self.is_owner and not self.drafting:
+            asyncio.create_task(self._claim_ownership_and_apply_settings())
 
         await self._refresh_lobby_status()
 
@@ -522,14 +524,22 @@ class PodDraftManager:
         return False
 
     async def _claim_ownership_and_apply_settings(self) -> None:
-        if self.bot_user_id is None or self.owner_claimed:
+        """Claim Draftmancer ownership, then push the owner-only session settings. Re-attempted on every
+        pre-draft roster change while the bot is not owner: Draftmancer seats the first arrival in an
+        empty session as owner and rotates ownership when that player leaves, so a lobby that opened
+        under a human recovers by itself once they go."""
+        if self.bot_user_id is None or self._ownership_claim_in_flight:
             return
+        self._ownership_claim_in_flight = True
         self.owner_claimed = True
         try:
             await self.sio.emit("setSessionOwner", self.bot_user_id)
             await asyncio.sleep(0.3)
             self.is_owner = await self._enable_spectators_and_share_link()
             if not self.is_owner:
+                if self._ownership_lost_reported:
+                    return
+                self._ownership_lost_reported = True
                 log.error(f"[LIFECYCLE] ownership_lost event={self.event_id} bot_user={self.bot_user_id}")
                 await bot_log_mod.get(self.bot).post(
                     f"Bot did not hold Draftmancer ownership for event `{self.event_id}`. Owner-only "
@@ -538,6 +548,7 @@ class PodDraftManager:
                     tag="LIFECYCLE",
                 )
                 return
+            self._ownership_lost_reported = False
             await self._emit_session_settings()
             await self.apply_seating_mode()
             log.info(f"[LIFECYCLE] ownership_applied event={self.event_id} bot_user={self.bot_user_id}")
@@ -549,6 +560,7 @@ class PodDraftManager:
                 tag="LIFECYCLE",
             )
         finally:
+            self._ownership_claim_in_flight = False
             self.ownership_ready.set()
 
     async def await_ownership(self, timeout_s: float = 10.0) -> bool:
