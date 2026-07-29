@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Copy, X, ZoomIn, ZoomOut } from "lucide-react";
 import { ArrowRight, GiRoundTable, ImageIcon, LuScrollText, SiDiscord, TbCards } from "../Icons";
 import { ChamferedButton } from "../ChamferedButton";
 import { Pips } from "../ManaPips";
@@ -206,13 +206,14 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
         {breakdownHref && (
           <Link to={breakdownHref} className="hidden lg:block no-underline border-t border-border shrink-0">
             <div className="flex items-center justify-between gap-4 px-4 py-3 bg-surface hover:bg-green/5 transition-colors cursor-pointer">
-              {participant.deckScreenshotCaption ? (
-                <span className="text-muted text-[15px] font-body italic leading-snug min-w-0 truncate pr-1 pl-5">
-                  {participant.deckScreenshotCaption}
-                </span>
-              ) : (
-                <span className="pl-5" />
-              )}
+              <div className="flex flex-1 items-center gap-3 min-w-0 pl-5">
+                {participant.deckScreenshotCaption && (
+                  <span className="text-muted text-[15px] font-body italic leading-snug min-w-0 truncate">
+                    {participant.deckScreenshotCaption}
+                  </span>
+                )}
+                {hasDecklist && <CopyDeckButton mainboard={participant.mainboard!} className="ml-auto" />}
+              </div>
               <div className="flex items-center gap-4 shrink-0">
                 <span className="text-muted text-[13px] font-body">
                   {BREAKDOWN_CAPTION}
@@ -228,14 +229,19 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
             </div>
           </Link>
         )}
-        {participant.deckScreenshotCaption && (
+        {(participant.deckScreenshotCaption || hasDecklist) && (
           <div
             className={cn(
-              "px-4 py-3 lg:pl-9 lg:pr-5 lg:py-4 text-muted text-[15px] font-body italic leading-snug border-t border-border shrink-0 bg-surface",
+              "flex items-center gap-3 px-4 py-3 lg:pl-9 lg:pr-5 lg:py-4 border-t border-border shrink-0 bg-surface",
               breakdownHref && "lg:hidden",
             )}
           >
-            {participant.deckScreenshotCaption}
+            {participant.deckScreenshotCaption && (
+              <span className="text-muted text-[15px] font-body italic leading-snug min-w-0">
+                {participant.deckScreenshotCaption}
+              </span>
+            )}
+            {hasDecklist && <CopyDeckButton mainboard={participant.mainboard!} className="ml-auto" />}
           </div>
         )}
       </div>
@@ -313,6 +319,62 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
     </div>,
     document.body,
   );
+}
+
+function CopyDeckButton({ mainboard, className }: { mainboard: Mainboard; className?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const copy = async (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(arenaDeckText(mainboard));
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label="Copy deck to clipboard"
+      className={cn(
+        "shrink-0 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface2 px-3 py-1.5 font-display tracking-[0.14em] leading-none text-subtle hover:text-text hover:border-green/50 transition-colors cursor-pointer outline-none focus:outline-none focus-visible:outline-none",
+        className,
+      )}
+      style={{ fontSize: 13 }}
+    >
+      {copied ? <Check size={14} /> : <Copy size={14} />}
+      {copied ? "COPIED" : "COPY DECK"}
+    </button>
+  );
+}
+
+function arenaDeckText(mainboard: Mainboard): string {
+  const lines = ["Deck", ...mainboard.cards.map((card) => arenaCardLine(card, mainboard.set))];
+  if (mainboard.sideboard.length > 0) {
+    lines.push("", "Sideboard", ...mainboard.sideboard.map((card) => arenaCardLine(card, mainboard.set)));
+  }
+  return lines.join("\n");
+}
+
+function arenaCardLine(card: DeckCard, deckSet: string | null): string {
+  const set = card.set ?? deckSet;
+  const line = `${card.count ?? 1} ${card.name}`;
+  if (!set || !card.cn) {
+    return line;
+  }
+  return `${line} (${set.toUpperCase()}) ${card.cn}`;
 }
 
 function PanelChevron({ side, onClick }: { side: "left" | "right"; onClick: () => void }) {
