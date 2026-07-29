@@ -110,9 +110,11 @@ def _alternate_order(alternate: Alternate) -> tuple[bool, int, str]:
 
 
 def _row(attendee: SeededAttendee, *, maybe: bool = False) -> str:
-    """A Maybe is marked with an escaped asterisk, so a column of them cannot pair up into italics."""
+    """The rank leads the row, so a name too long for the third-of-a-card column wraps its own tail
+    instead of pushing the rank onto a line of its own. A Maybe is marked with an escaped asterisk, so a
+    column of them cannot pair up into italics."""
     marker = MAYBE_MARKER if maybe else ""
-    return f"> **{attendee.display_name}**{marker} {NBSP}{attendee_rnk(attendee)}"
+    return f"> **{attendee_rnk(attendee)}** {NBSP}{attendee.display_name}{marker}"
 
 
 def _column(rows: Sequence[str]) -> str:
