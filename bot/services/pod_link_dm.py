@@ -28,7 +28,7 @@ from bot.commands.messages import (
     MSG_DM_RSVP_YES,
 )
 from bot.database import SessionLocal
-from bot.discord_helpers import BLANK_LINE, extract_avatar_hash
+from bot.discord_helpers import BLANK_LINE, extract_avatar_hash, fetch_dm_user
 from bot.services.ping_roles import build_link_arena_modal, format_join_line
 from bot.services.pod_drafts import (
     dm_draft_link_enabled,
@@ -49,7 +49,9 @@ async def try_dm(bot, discord_id: str, body: str, view: discord.ui.View | None =
     """Send a DM, swallowing the closed-DMs case. Returns whether it landed — the player most likely to
     have DMs off is the one a time-sensitive nudge can't reach, so callers surface that where it matters."""
     try:
-        user = bot.get_user(int(discord_id)) or await bot.fetch_user(int(discord_id))
+        user = await fetch_dm_user(bot, discord_id)
+        if user is None:
+            return False
         await user.send(body, view=view)
         return True
     except discord.Forbidden:

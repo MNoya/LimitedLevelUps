@@ -53,6 +53,7 @@ from bot import emojis
 from bot.commands.test_group import setup as setup_test_group
 from bot.commands.testads import setup as setup_testads
 from bot.commands.testawards import setup as setup_testawards
+from bot.commands.testchampcard import setup as setup_testchampcard
 from bot.commands.testchampionship import setup as setup_testchampionship
 from bot.commands.testcomponent import setup as setup_testcomponent
 from bot.commands.testlobby import setup as setup_testlobby
@@ -255,6 +256,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testscribe(bot)
         await setup_testformatschedule(bot)
         await setup_testchampionship(bot)
+        await setup_testchampcard(bot)
         await setup_testmockcard(bot)
         await rearm_signals(bot)
         await reconcile_rolled_lanes(bot)

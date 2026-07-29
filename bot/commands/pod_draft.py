@@ -16,12 +16,13 @@ from bot.commands import descriptions as desc
 from bot.commands.messages import MSG_ADMIN_ONLY, MSG_ARENA_BAD_FORMAT, MSG_ARENA_COLLISION, MSG_ARENA_LINKED
 from bot.config import settings
 from bot.database import SessionLocal
-from bot.discord_helpers import display_width, extract_avatar_hash, player_url
+from bot.discord_helpers import extract_avatar_hash
 from bot.services import championship as championship_service
 from bot.services import pod_format_poll
 from bot.services.lobby_embed import guard_ready_check
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, set_card_phase_hook
 from bot.services.pod_draft_manager import (
+    TeamVotePoster,
     cancel_pod_event,
     post_format_vote,
     set_event_format,
@@ -37,6 +38,7 @@ from bot.services.pod_draft_manager import (
 from bot.services.pod_drafts import (
     is_championship,
     load_event_closed_decklist_sync,
+    load_event_description_sync,
     load_event_id_by_name_sync,
     load_event_id_by_thread_sync,
     load_event_kind_sync,
@@ -50,10 +52,12 @@ from bot.services.pod_drafts import (
     lobby_match_status,
     search_event_names_sync,
     set_event_closed_decklist_sync,
+    set_event_description_sync,
 )
 from bot.commands.pod_rsvp import (
     fetch_channel,
     reflect_format_change,
+    refresh_card_note,
     refresh_card_phase,
     refresh_scheduled_card,
     reschedule_event,
@@ -62,6 +66,7 @@ from bot.services import pod_launch
 from bot.services.player_stats import SeededAttendee, rank_ordered_names, seed_attendees, seated_ring_order
 from bot.services.pod_seating_select import SEATING_ORDER_MARKER, seating_change_message
 from bot.services.pod_seating_image import drop_unrenderable, render_octagon_png
+from bot.services.seeding_table import seeding_block
 from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import event_rsvps
 from bot.services.pod_settings_view import PodSettingsView
@@ -172,12 +177,10 @@ class PodDraft(commands.Cog):
             await interaction.response.send_message(MSG_NO_ACTIVE_POD, ephemeral=True)
             return
         log.info(f"pod-team: {interaction.user} offering team vote in thread {interaction.channel_id}")
-        await interaction.response.defer(ephemeral=True, thinking=False)
-        err = await manager.offer_team_vote_manual()
+        await interaction.response.defer(ephemeral=False, thinking=False)
+        err = await manager.offer_team_vote_manual(post=_reply_poster(interaction))
         if err is not None:
-            await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
-        else:
-            await interaction.followup.send("Team-Draft vote posted — check the thread.", ephemeral=True)
+            await interaction.followup.send(f"⚠️ {err}")
 
     @app_commands.command(name="vote-format", description=desc.VOTE_FORMAT)
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
@@ -555,6 +558,17 @@ class PodDraft(commands.Cog):
         )
 
 
+def _reply_poster(interaction: discord.Interaction) -> TeamVotePoster:
+    """Place a card as the command's own reply, then hand back the channel's copy of it. The webhook handle
+    a followup returns can only be edited or deleted while the interaction token lives, and these cards
+    outlive that by hours."""
+    async def post(**kwargs) -> discord.Message:
+        sent = await interaction.followup.send(**kwargs, wait=True)
+        return await interaction.channel.fetch_message(sent.id)
+
+    return post
+
+
 def _seed_rsvps(
     yes: list[str], maybe: list[str],
 ) -> tuple[list[SeededAttendee], list[SeededAttendee]]:
@@ -619,7 +633,7 @@ def build_leaderboard_standings_embed(attendees: list[SeededAttendee], *, timest
     shown = attendees[:CHAMPIONSHIP_STANDINGS_MAX]
     description = header
     while shown:
-        candidate = f"{header}\n\n{_seeding_block(shown)}"
+        candidate = f"{header}\n\n{seeding_block(shown)}"
         if len(candidate) <= CHAMPIONSHIP_STANDINGS_BUDGET:
             description = candidate
             break
@@ -673,77 +687,11 @@ def _build_seeding_embed(
         yes_seats = [seat_of.get(id(a)) for a in yes]
         parts.append(
             f"{SEEDING_YES_HEADER}{len(yes)})**\n"
-            + _seeding_block(yes, seats=yes_seats, cut_after=cut, cut_label=cut_label)
+            + seeding_block(yes, seats=yes_seats, cut_after=cut, cut_label=cut_label)
         )
     if maybe:
-        parts.append(f"{SEEDING_MAYBE_HEADER}{len(maybe)})**\n" + _seeding_block(maybe))
+        parts.append(f"{SEEDING_MAYBE_HEADER}{len(maybe)})**\n" + seeding_block(maybe))
     return discord.Embed(description="\n\n".join(parts), color=discord.Color.green())
-
-
-def _attendee_rnk(a: SeededAttendee) -> str:
-    return f"#{a.rank}" if a.rank is not None else "—"
-
-
-def _attendee_pts(a: SeededAttendee) -> str:
-    return "—" if a.score is None else str(round(a.score))
-
-
-def _attendee_trophies(a: SeededAttendee) -> str:
-    return "—" if a.trophies is None else str(a.trophies)
-
-
-SEEDING_COLS = (
-    ("Rnk", "r", _attendee_rnk),
-    ("Player", "l", lambda a: a.display_name),
-    ("Pts", "r", _attendee_pts),
-    ("🏆", "r", _attendee_trophies),
-)
-
-
-def _seeding_block(
-    attendees: list[SeededAttendee], *, seats: list[int | None] | None = None,
-    cut_after: int | None = None, cut_label: str | None = None, lead_label: str = "🪑",
-) -> str:
-    """Inline-code rows (monospace) linked to each player's page, same trick /leaderboard uses. With
-    `seats` (aligned with `attendees`) a leading seat column is shown, blank for anyone past the pod
-    cut; pass None for an unseated list. Unranked attendees show — and link nowhere.
-    """
-    numbered = seats is not None
-    leads = [f"{s}." if s is not None else "" for s in (seats or [])]
-    lead_w = max([display_width(lead_label), *(display_width(lead) for lead in leads)]) if numbered else 0
-
-    def fmt(value: str, width: int, align: str) -> str:
-        pad = max(0, width - display_width(value))
-        return value + " " * pad if align == "l" else " " * pad + value
-
-    header_cells: list[str] = []
-    row_cells: list[list[str]] = [[] for _ in attendees]
-    for header, align, cell in SEEDING_COLS:
-        values = [cell(a) for a in attendees]
-        is_wide = header == "🏆"
-        width = max(max(display_width(v) for v in values), 2 if is_wide else len(header))
-        header_cells.append(fmt(header, width - 1 if is_wide else width, "l" if align == "l" else "r"))
-        for i, v in enumerate(values):
-            row_cells[i].append(fmt(v, width, align))
-
-    def line(lead: str, cells: list[str]) -> str:
-        prefix = fmt(lead, lead_w, "l") + " " if numbered else ""
-        return prefix + "  ".join(cells)
-
-    header_line = line(lead_label, header_cells)
-    lines = [f"`{header_line}`"]
-    active = active_set_code()
-    for i, a in enumerate(attendees):
-        if cut_after is not None and i == cut_after:
-            lines.append(f"`{'─' * display_width(header_line)}`")
-            if cut_label:
-                lines.append(f"**{cut_label}**")
-        inner = line(leads[i] if numbered else "", row_cells[i])
-        if a.slug:
-            lines.append(f"[`{inner}`](<{player_url(a.slug, active)}>)")
-        else:
-            lines.append(f"`{inner}`")
-    return "\n".join(lines)
 
 
 def _ring_trunc(text: str, width: int) -> str:
@@ -937,10 +885,18 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
             return await cancel_pod_event(event_id, actor=actor_label(inter))
 
     on_reschedule = None
+    on_description = None
+    current_description = None
     if scheduled and not drafting:
         async def on_reschedule(inter: discord.Interaction, raw: str) -> str | None:
             return await reschedule_event(
                 inter.client, event_id, raw, guild=inter.guild, actor_id=str(inter.user.id))
+
+        current_description = await asyncio.to_thread(load_event_description_sync, event_id)
+
+        async def on_description(inter: discord.Interaction, text: str | None) -> None:
+            await asyncio.to_thread(set_event_description_sync, event_id, text)
+            await refresh_card_note(bot, event_id)
 
     return PodSettingsView(
         on_format=None if drafting else on_format,
@@ -955,6 +911,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
         kick_targets_provider=kick_targets_provider, on_kick=on_kick,
         link_targets_provider=link_targets_provider, on_link=on_link,
         on_cancel=on_cancel, on_reschedule=on_reschedule,
+        on_description=on_description, current_description=current_description,
         on_closed_decklist=None if mock else on_closed_decklist,
         current_closed_decklist=current_closed_decklist,
         event_name=event_name,

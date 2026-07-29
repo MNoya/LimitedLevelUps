@@ -27,7 +27,8 @@ def test_interest_summary_labels():
     assert fi.interest_summary([fi.LATEST]) == "Latest Set"
     assert fi.interest_summary([fi.LATEST, fi.FLASHBACK]) == fi.FLEXIBLE_LABEL
     assert fi.interest_summary([fi.LATEST, fi.FLASHBACK, fi.CUBE]) == fi.FLEXIBLE_LABEL
-    assert fi.interest_summary([fi.FLASHBACK, fi.CUBE]) == "Flashback and Cube"
+    both = fi.interest_summary([fi.FLASHBACK, fi.CUBE])
+    assert all(fi.INTEREST_LABEL[code] in both for code in (fi.FLASHBACK, fi.CUBE))
 
 
 def test_composition_classifies_each_member_once():

@@ -206,6 +206,16 @@ def player_deck_url(slug: str, set_code: str, source_message_id: str) -> str:
     return f"{player_url(slug, set_code)}?deck={source_message_id}"
 
 
+async def fetch_dm_user(bot: "commands.Bot", discord_id: str | None) -> "discord.User | None":
+    """The Discord user behind a stored `players.discord_id`, or None when it can't be one: fictional
+    test rosters carry placeholder ids like `testlobby-cara`, and `int()` on those raises out of
+    whatever round-advance step was sending the DM."""
+    if not discord_id or not str(discord_id).isdigit():
+        return None
+    user_id = int(discord_id)
+    return bot.get_user(user_id) or await bot.fetch_user(user_id)
+
+
 async def resolve_display_name(bot: "commands.Bot", user: "discord.User") -> str:
     """Prefer the LLU guild nickname, falling back to the user's global display name.
 

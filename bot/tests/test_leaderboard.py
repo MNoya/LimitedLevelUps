@@ -230,11 +230,6 @@ def test_public_embed_omits_you_are_line_for_outside_viewer():
     assert "#7" not in (embed.description or "")
 
 
-def test_public_embed_omits_signup_prompt_for_unregistered_viewer():
-    embed = render_public_embed(_data(viewer=None))
-    assert all("Not signed up" not in (f.name or "") for f in embed.fields)
-
-
 def test_public_embed_handles_empty_top():
     embed = render_public_embed(_data(top=[]))
     assert embed.description

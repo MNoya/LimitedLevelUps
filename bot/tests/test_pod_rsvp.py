@@ -3,13 +3,15 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from bot.commands.pod_rsvp import (
-    CARD_INTRO,
+    CARD_RSVP_PROMPT,
     CARD_STATUS_DRAFTING,
     CARD_STATUS_PLAYING,
     MULTIPOD_NOTICE,
     POD_CAPACITY,
     TIME_LABEL,
     build_rsvp_embed,
+    native_body_from_description,
+    native_event_description,
     parse_new_time,
     refresh_roster_fields,
 )
@@ -265,6 +267,15 @@ def test_refresh_never_stacks_the_multipod_notice():
     assert embed.description.count(MULTIPOD_NOTICE) == 1
 
 
+def test_description_takes_the_rsvp_prompt_line():
+    event_time = datetime(2026, 7, 18, 16, 0, tzinfo=timezone.utc)
+
+    embed = build_rsvp_embed("Early Pod", event_time, {RSVP_YES: []}, description="bring snacks")
+
+    assert "bring snacks" in embed.description
+    assert CARD_RSVP_PROMPT not in embed.description
+
+
 def test_status_line_replaces_the_rsvp_intro_and_notice():
     event_time = datetime(2026, 7, 18, 16, 0, tzinfo=timezone.utc)
     full_yes = {RSVP_YES: [f"p{i}" for i in range(POD_CAPACITY)]}
@@ -275,11 +286,11 @@ def test_status_line_replaces_the_rsvp_intro_and_notice():
 
     assert CARD_STATUS_DRAFTING in embed.description
     assert MULTIPOD_NOTICE not in embed.description
-    assert CARD_INTRO.format(emoji="").strip() not in embed.description
-    assert "> bring snacks" in embed.description
+    assert CARD_RSVP_PROMPT not in embed.description
+    assert "bring snacks" not in embed.description
 
 
-def test_refresh_swaps_status_across_phases_and_keeps_the_note():
+def test_refresh_swaps_status_across_phases():
     event_time = datetime(2026, 7, 18, 16, 0, tzinfo=timezone.utc)
     full_yes = {RSVP_YES: [f"p{i}" for i in range(POD_CAPACITY)]}
     embed = build_rsvp_embed("Early Pod", event_time, full_yes, description="bring snacks")
@@ -292,7 +303,7 @@ def test_refresh_swaps_status_across_phases_and_keeps_the_note():
     assert CARD_STATUS_DRAFTING not in embed.description
     assert embed.description.count(CARD_STATUS_PLAYING) == 1
     assert MULTIPOD_NOTICE not in embed.description
-    assert "> bring snacks" in embed.description
+    assert "bring snacks" not in embed.description
 
 
 def test_team_rosters_replace_the_rsvp_columns_in_flight():
@@ -393,3 +404,20 @@ def test_parse_new_time_rejects_a_past_discord_timestamp():
     past = datetime(2020, 1, 1, 12, 0, tzinfo=SCHEDULE_TZ)
 
     assert parse_new_time(f"<t:{int(past.timestamp())}:F>", REF, REF) is None
+
+
+JUMP_URL = "https://discord.com/channels/1/2/3"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [None, "one paragraph", "two\n\nparagraphs", "a line\nand another\n\nafter a break"],
+)
+def test_a_tally_re_render_keeps_the_announcement(body):
+    posted = native_event_description({RSVP_YES: ["a"]}, JUMP_URL, body)
+
+    carried = native_body_from_description(posted)
+    resynced = native_event_description({RSVP_YES: ["a", "b"]}, JUMP_URL, carried)
+
+    assert carried == body
+    assert native_body_from_description(resynced) == body

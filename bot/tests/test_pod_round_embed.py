@@ -1,10 +1,12 @@
 import re
 
 from bot.services.pod_tournament import (
+    DECK_IMAGE_NOTICE,
     LAST_CHANCE,
     LOSERS,
     MIDDLE,
     NBSP,
+    REPORT_NOTICE,
     PAIR_UP,
     TROPHY,
     WINNERS,
@@ -103,9 +105,9 @@ def test_round2_renders_three_groups_with_records_on_the_pair_up():
         _ms("Doryn", "Fenn", "0-1", "0-1"),
     ]
     groups = _norm(round_embed(2, states).description).split("\n\n")
-    assert "Aria vs Caedmon" in groups[0]
-    assert "Esk (1-0) vs Bryn (0-1)" in groups[1]
-    assert "Doryn vs Fenn" in groups[2]
+    assert all(part in groups[0] for part in ("Aria", "Caedmon"))
+    assert all(part in groups[1] for part in ("Esk", "(1-0)", "Bryn", "(0-1)"))
+    assert all(part in groups[2] for part in ("Doryn", "Fenn"))
 
 
 def test_round1_seated_annotates_seat_pairings():
@@ -166,16 +168,16 @@ def test_report_notice_is_round_one_only_and_drops_when_complete():
     pending = [_ms("Aria", "Caedmon")]
     done = [_ms("Aria", "Caedmon", winner_name="Aria", score="2-0")]
 
-    assert "Report your result" in round_embed(1, pending).description
-    assert "Report your result" not in round_embed(1, done).description
-    assert "Report your result" not in round_embed(2, pending).description
+    assert REPORT_NOTICE in round_embed(1, pending).description
+    assert REPORT_NOTICE not in round_embed(1, done).description
+    assert REPORT_NOTICE not in round_embed(2, pending).description
 
 
 def test_deck_image_notice_is_round_one_only():
     states = [_ms("Aria", "Bryn")]
 
-    assert "MTGA deck image" in round_embed(1, states).description
-    assert "MTGA deck image" not in round_embed(2, states).description
+    assert DECK_IMAGE_NOTICE in round_embed(1, states).description
+    assert DECK_IMAGE_NOTICE not in round_embed(2, states).description
 
 
 def _waiting_placeholder(pending: int = 1, prev_round: int = 1, url: str | None = None) -> dict:

@@ -43,6 +43,7 @@ KickTargetsProvider = Callable[[], list[tuple[str, str]]]
 LinkApply = Callable[[discord.Interaction, str, discord.abc.User], Awaitable[str | None]]
 LinkTargetsProvider = Callable[[], Awaitable[list[str]]]
 CancelApply = Callable[[discord.Interaction], Awaitable[str | None]]
+DescriptionApply = Callable[[discord.Interaction, str | None], Awaitable[None]]
 
 LINK_SEAT_PROMPT = "Pick the unlinked Draftmancer seat to assign:"
 
@@ -50,6 +51,8 @@ TIMER_MIN = 10
 TIMER_MAX = 600
 
 MAX_PLAYERS_OPTIONS = (8, 10)
+
+DESCRIPTION_MAX_LEN = 300
 
 
 def kick_notice(actor: str, name: str) -> str:
@@ -84,6 +87,16 @@ def closed_decklist_notice(actor: str, closed: bool) -> str:
     return settings_change_message(actor, "Closed Decklist", "On" if closed else "Off", subtext=subtext)
 
 
+def description_notice(actor: str, text: str | None) -> str:
+    """The note can be several lines; the notice collapses it to one so the thread reads as a log."""
+    value = " ".join(text.split()) if text else "none"
+    return settings_change_message(actor, "Description", value)
+
+
+def description_label(current: str | None) -> str:
+    return "Description ✓" if current else "Description"
+
+
 class PodSettingsView(ui.View):
     def __init__(self, *, on_format: Apply | None = None, on_pairing: Apply | None = None,
                  current_code: str | None = None, current_mode: str | None = None,
@@ -100,6 +113,7 @@ class PodSettingsView(ui.View):
                  on_link: LinkApply | None = None,
                  on_cancel: CancelApply | None = None,
                  on_reschedule: Apply | None = None,
+                 on_description: DescriptionApply | None = None, current_description: str | None = None,
                  on_closed_decklist: Apply | None = None, current_closed_decklist: bool = False,
                  event_name: str | None = None,
                  notice_channel: discord.abc.Messageable | None = None) -> None:
@@ -125,6 +139,8 @@ class PodSettingsView(ui.View):
         self.on_link = on_link
         self.on_cancel = on_cancel
         self.on_reschedule = on_reschedule
+        self.on_description = on_description
+        self.current_description = current_description
         self.on_closed_decklist = on_closed_decklist
         self.current_closed_decklist = current_closed_decklist
         self.event_name = event_name
@@ -148,6 +164,8 @@ class PodSettingsView(ui.View):
             self.add_item(_KickPlayerButton(row=3))
         if on_closed_decklist is not None:
             self.add_item(_ClosedDecklistButton(current_closed_decklist, row=4))
+        if on_description is not None:
+            self.add_item(_DescriptionButton(current_description, row=4))
         if on_reschedule is not None:
             self.add_item(_RescheduleButton(row=4))
         if on_cancel is not None:
@@ -183,6 +201,7 @@ class PodSettingsView(ui.View):
             kick_targets_provider=self.kick_targets_provider, on_kick=self.on_kick,
             link_targets_provider=self.link_targets_provider, on_link=self.on_link,
             on_cancel=self.on_cancel, on_reschedule=self.on_reschedule,
+            on_description=self.on_description, current_description=self.current_description,
             on_closed_decklist=self.on_closed_decklist,
             current_closed_decklist=self.current_closed_decklist,
             event_name=self.event_name,
@@ -210,6 +229,13 @@ class PodSettingsView(ui.View):
         self.current_closed_decklist = closed
         notice = closed_decklist_notice(actor_label(interaction), closed)
         await self._render(interaction, [(notice, settings_notice_marker("Closed Decklist"))])
+
+    async def _apply_description(self, interaction: discord.Interaction, text: str | None) -> None:
+        await interaction.response.defer()
+        await self.on_description(interaction, text)
+        self.current_description = text
+        notice = description_notice(actor_label(interaction), text)
+        await self._render(interaction, [(notice, settings_notice_marker("Description"))])
 
     async def _apply_format_code(self, interaction: discord.Interaction, code: str) -> None:
         if not await self._commit(interaction, self.on_format, "current_code", code):
@@ -369,6 +395,36 @@ class _ClosedDecklistButton(ui.Button):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         await self.view._apply_closed_decklist(interaction, not self.view.current_closed_decklist)
+
+
+class _DescriptionButton(ui.Button):
+    def __init__(self, current: str | None, row: int | None = None) -> None:
+        super().__init__(label=description_label(current), emoji="📝",
+                         style=discord.ButtonStyle.grey, row=row)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: PodSettingsView = self.view
+        await interaction.response.send_modal(
+            PodDescriptionModal(view.current_description, view._apply_description))
+
+
+class PodDescriptionModal(ui.Modal, title="Pod description"):
+    """The organizer's note on a pod card. Shared by the /draft launcher, which holds the text until the
+    pod exists, and the Settings panel, which persists it on a live pod."""
+
+    text = ui.TextInput(
+        label="Description", style=discord.TextStyle.paragraph, required=False,
+        max_length=DESCRIPTION_MAX_LEN,
+        placeholder="Optional note shown on the pod card and its discussion thread")
+
+    def __init__(self, current: str | None, apply: DescriptionApply) -> None:
+        super().__init__()
+        self.apply = apply
+        if current:
+            self.text.default = current
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await self.apply(interaction, self.text.value.strip() or None)
 
 
 class _RescheduleButton(ui.Button):

@@ -31,6 +31,7 @@ from bot.tasks.pod_daily_poll import (
     _fit_row,
     _lane_order,
     _lane_slots,
+    _played_on_day,
     _row_units,
     _slot_by_key,
 )
@@ -187,6 +188,15 @@ def test_a_played_pod_is_never_dropped_by_a_roll():
     assert [slot.slot_time for slot in kept] == [
         slot_event_time(FRIDAY, "LATE"), slot_event_time(SATURDAY, "EVENING"),
     ]
+
+
+@pytest.mark.parametrize("slot, expected", [
+    (_played("LATE", FRIDAY), True),
+    (_played("EVENING", SATURDAY), False),
+    (_gathering("EARLY", FRIDAY), False),
+])
+def test_a_retired_board_keeps_only_the_pods_its_own_day_played(slot, expected):
+    assert _played_on_day(slot, FRIDAY) is expected
 
 
 # --- adopt or create ---

@@ -42,7 +42,7 @@ Every pod plays one Magic format, and you know which one before you sign up. A d
 
 - **Latest set** — the current Arena set everyone is drafting.
 - **Flashback** — an older set. The launcher names the exact set and pings the Flashback role.
-- **Cube** — one of the server's cubes. The launcher names it and links its card list, and pings the Cube role.
+- **Cube** — one of the server's cubes. The launcher names it and links its card list, and pings the Cube role. The signup card carries the same link, so you can read the list before you sign up.
 
 The formats are set ahead of time, so there is no vote and nothing to resolve later. If you want a set or a cube on the schedule, ask a mod.
 
@@ -76,6 +76,8 @@ On busy nights, once the first table fills, the bot offers a **second table** to
 
 Report your results in the thread as you play. In an 8-player pod each round also DMs you your pairing with the same dropdown. `/report-results` works anywhere, including in a DM with the bot, and pulls up a private card holding every match you still owe, so a missed DM never stops you from reporting. In a team draft all three of your matches are open from the moment the draft ends, so the card lists all three and you report whichever you played. Winning games earns pod points on the leaderboard, so a good run in a pod moves you up the standings the same as a strong ladder result. Pod results are always public: you do not need to opt in, and playing pods is enough to appear on the board.
 
+A reported result can be corrected until a later round reports. In a bracket pod, correcting one re-pairs the rounds after it from the fixed result. Only the players whose record moved get a new opponent: every other pairing stays as it was. The thread gets a single note with the correction, the round that moved, and the new matchups, pinging the players who changed opponent, and their pairing DM is rewritten to the new opponent instead of arriving a second time.
+
 Once the pod finishes, its thread gets a **Play Again** button that signs you up for the same time slot and format on the next day, whenever that format is on the next day's schedule. The launcher also keeps the result: the finished pod stays listed with its winner, whose name links to that pod's page on the website.
 
 ## Closed decklists
@@ -99,5 +101,7 @@ Beyond the daily launcher, you can schedule a pod at any time with the `/draft` 
 Which formats a day offers is a table in the bot's code, so ask for a change ahead of time. A pod that already exists can change format from its lobby Settings panel.
 
 The pod Settings panel also carries a Closed Decklist toggle: turn it on to hide that pod's decklists on the website until it finishes. Set Championship pods start with it on.
+
+A scheduled pod's Settings panel has a Description button. Whatever you write there takes the place of the "Please RSVP" line on the signup card, so you can say what the pod is about. Leave it empty to bring the RSVP line back. The card drops the note once the draft starts.
 
 Inside a pod thread, the pod controls (ready check, start, team draft, pause, restart, seeding, standings, champion) run the draft. The daily launcher, reminders, and second-table offers all run on their own, so most pods need no hands-on management.

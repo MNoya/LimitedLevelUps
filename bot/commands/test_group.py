@@ -21,13 +21,16 @@ from bot.config import PRODUCTION_GUILD_ID
 HALL_OF_FAME = (
     "Finkel", "LSV", "The Hump", "Paolo", "Shota", "Reid", "Chapin", "JED",
     "Nassif", "Huey", "Kibler", "Levy", "Nakamura", "Karsten", "Juza", "Owen",
+    "Budde", "Kastle", "Maher", "Rietzl", "Zvi", "Pikula", "Ruel", "Herberholz",
+    "Rubin", "Wafo", "Comer", "Baker", "Watanabe", "Mihara", "Sadin", "Duke",
+    "Yurchick", "Tsumura",
 )
 
 PRODUCTION_SAFE_TESTS = frozenset({
-    "ads", "awards", "cardformat", "component", "deckping", "firenudge", "formatschedule", "lifecycle",
-    "lockroster", "mockcard", "myset", "named", "overflow", "pollnudge", "queueclosed", "reminder",
-    "reminders", "rolegrant", "rolling", "scribe", "sendoff", "setawards", "teamcard", "thread-intro",
-    "tiebreakers", "underfill", "welcome", "widths",
+    "ads", "awards", "cardformat", "champcard", "component", "deckping", "firenudge", "formatschedule",
+    "lifecycle", "lockroster", "mockcard", "myset", "named", "overflow", "pollnudge", "queueclosed",
+    "reminder", "reminders", "rolegrant", "rolling", "scribe", "sendoff", "setawards", "teamcard",
+    "thread-intro", "tiebreakers", "underfill", "welcome", "widths",
 })
 
 MSG_TEST_PRODUCTION_BLOCKED = (

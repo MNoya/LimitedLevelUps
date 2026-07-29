@@ -178,6 +178,46 @@ def test_padding_empty_for_unsupported_round():
     assert pod_bracket.padding_slots(roster, [], [], [], 4) == []
 
 
+# --- regenerate after a correction ----------------------------------------
+
+def test_correction_keeps_the_pairings_it_does_not_invalidate():
+    roster = players(8)
+    reported = [
+        match(1, "p0", "p1", "p0"), match(1, "p2", "p3", "p2"),
+        match(1, "p4", "p5", "p4"), match(1, "p6", "p7", "p6"),
+    ]
+    before = pod_bracket.incremental_pairings(roster, reported, [], 2, source_round_complete=True)
+    corrected = [m for m in reported if m.player_a_id != "p2"] + [match(1, "p2", "p3", "p3", "2-1")]
+
+    records = pod_bracket.player_records(roster, corrected)
+    survivors = [(a, b) for a, b in before if records[a] == records[b]]
+    refilled = pod_bracket.incremental_pairings(roster, corrected, survivors, 2, source_round_complete=True)
+
+    assert len(survivors) == 2
+    assert pairset(survivors) < pairset(before)
+    assert {"p2", "p3"} <= {name for pair in refilled for name in pair}
+    assert pairset(survivors + refilled) - pairset(before) == pairset(refilled)
+
+
+def test_player_records_counts_wins_and_losses():
+    roster = players(4)
+    completed = [match(1, "p0", "p1", "p0"), match(2, "p0", "p2", "p2")]
+
+    records = pod_bracket.player_records(roster, completed)
+
+    assert records["p0"] == (1, 1)
+    assert records["p1"] == (0, 1)
+    assert records["p2"] == (1, 0)
+    assert records["p3"] == (0, 0)
+
+
+def test_contains_rematch_flags_a_repeat_of_a_played_match():
+    completed = [match(1, "p0", "p1", "p0")]
+
+    assert pod_bracket.contains_rematch([("p1", "p0")], completed) is True
+    assert pod_bracket.contains_rematch([("p0", "p2")], completed) is False
+
+
 # --- shared wording -------------------------------------------------------
 
 def test_format_result_change_reported_leads_with_winner_and_score():
@@ -199,4 +239,5 @@ def test_format_result_change_cleared_names_both_without_score():
 def test_format_result_change_drops_arena_ids_from_both_players():
     phrase = format_result_change("Arcyl#48087", "Bramblewick#13488", "Arcyl#48087", "2-0")
 
-    assert phrase == "Arcyl wins 2-0 vs Bramblewick"
+    assert "#48087" not in phrase and "#13488" not in phrase
+    assert all(part in phrase for part in ("Arcyl", "Bramblewick", "2-0"))

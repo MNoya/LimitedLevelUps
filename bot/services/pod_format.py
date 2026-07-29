@@ -16,22 +16,28 @@ from dataclasses import dataclass
 from bot.sets import ALL_SETS, active_set_code, is_known_set, set_name_for
 
 
+CUBECOBRA_LIST_URL = "https://cubecobra.com/cube/list/{cube_id}"
+
+
 @dataclass(frozen=True)
 class PodFormat:
     code: str
     label: str
     cube_id: str | None
     session_slug: str
-    url: str
     link_text: str
     pick_label: str
+
+    @property
+    def url(self) -> str:
+        """Always the card list, the page a player opens to prepare for the draft."""
+        return CUBECOBRA_LIST_URL.format(cube_id=self.cube_id)
 
 
 PEASANT_CODE = "PEASANT"
 PEASANT_LABEL = "Peasant Cube"
 PEASANT_CUBE_ID = "DaneeliusPeasantAllStars"
 PEASANT_SESSION_SLUG = "Peasant"
-PEASANT_URL = "https://cubecobra.com/cube/list/DaneeliusPeasantAllStars"
 PEASANT_LINK_TEXT = "Peasant"
 PEASANT_PICK_LABEL = "Daneelius' Peasant"
 
@@ -39,17 +45,16 @@ SAMP_CODE = "SAMP"
 SAMP_LABEL = "samp Cube"
 SAMP_CUBE_ID = "samp"
 SAMP_SESSION_SLUG = "Samp"
-SAMP_URL = "https://cubecobra.com/cube/about/samp"
 SAMP_LINK_TEXT = "samp"
 SAMP_PICK_LABEL = "Samp's Arena"
 
 # Registered custom (CubeCobra) pod formats, keyed by the code stored in pod_draft_events.set_code.
 CUSTOM_FORMATS: dict[str, PodFormat] = {
     PEASANT_CODE: PodFormat(
-        PEASANT_CODE, PEASANT_LABEL, PEASANT_CUBE_ID, PEASANT_SESSION_SLUG, PEASANT_URL, PEASANT_LINK_TEXT,
+        PEASANT_CODE, PEASANT_LABEL, PEASANT_CUBE_ID, PEASANT_SESSION_SLUG, PEASANT_LINK_TEXT,
         PEASANT_PICK_LABEL),
     SAMP_CODE: PodFormat(
-        SAMP_CODE, SAMP_LABEL, SAMP_CUBE_ID, SAMP_SESSION_SLUG, SAMP_URL, SAMP_LINK_TEXT, SAMP_PICK_LABEL),
+        SAMP_CODE, SAMP_LABEL, SAMP_CUBE_ID, SAMP_SESSION_SLUG, SAMP_LINK_TEXT, SAMP_PICK_LABEL),
 }
 
 SELECT_PLACEHOLDER = "Select a format"
@@ -132,6 +137,13 @@ def format_name(code: str) -> str:
     return fmt.pick_label if fmt is not None else set_name_for(code)
 
 
+def format_short_name(code: str) -> str:
+    """The format named for a sentence that supplies its own kind word, `the next Late Peasant Pod`: a
+    cube's short name, since Cube would land next to Pod, or the bare set code."""
+    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    return fmt.link_text if fmt is not None else (code or "").upper()
+
+
 def format_name_link(code: str) -> str:
     """`format_name` with a cube's name linked to its CubeCobra page, so a reader can open the card list
     before signing up. A set has no list to open and stays plain text."""
@@ -139,6 +151,15 @@ def format_name_link(code: str) -> str:
     if fmt is None:
         return set_name_for(code)
     return f"[__**{fmt.pick_label}**__]({fmt.url})"
+
+
+def cube_list_link(code: str | None) -> str | None:
+    """The cube's CubeCobra id linked to its card list, so a reader searching the site finds the same list
+    under the same name. None for a set, which has no list to open."""
+    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    if fmt is None:
+        return None
+    return f"[__**{fmt.cube_id}**__]({fmt.url})"
 
 
 def format_applied_message(code: str) -> str:

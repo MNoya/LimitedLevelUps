@@ -299,7 +299,8 @@ async def setup(bot: commands.Bot) -> None:
         await ctx.send(embed=build_poll_embed([
             early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
             late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
-        ], guild, closed=True))
+            early_tom(count=_ROLL_COUNT_FULL, winner="Reid", **played),
+        ], guild, closed=True, board_date=today))
         await show("(new card, posted at the bottom)", [
             early_tom(count=_ROLL_COUNT_SMALL),
             late_tom(count=_ROLL_COUNT_SMALL),

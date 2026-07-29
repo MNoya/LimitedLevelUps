@@ -4,7 +4,8 @@
 recruiting nudge across its states, the launcher slot nudge and fire ping, and each fired-record
 variant. `underfill`, `pollnudge`, `firenudge` and `overflow` render those same surfaces one at a time
 in the current channel, with arguments for targeted checks. `cardformat` renders the scheduled card
-with a mixed sample roster to eyeball the format split. `reminder` renders the roster reminder embed.
+with a mixed sample roster to eyeball the format split, or any set or cube passed to it.
+`reminder` renders the roster reminder embed.
 `rolegrant`
 posts the auto-grant announcement embed so its look can be checked. The scheduled RSVP card is
 exercised through `!test rsvp`.
@@ -29,6 +30,7 @@ from bot.services.pod_schedule import (
     build_underfill_message,
     slots_for_week,
 )
+from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_YES, slot_role_name_for_event_time
 from bot.sets import active_set_code
@@ -101,9 +103,14 @@ async def setup(bot: commands.Bot) -> None:
 
     @test_group.command(name="cardformat")
     @commands.is_owner()
-    async def test_cardformat(ctx: commands.Context) -> None:
+    async def test_cardformat(ctx: commands.Context, set_code: str = "") -> None:
         """Owner-only. Post the scheduled RSVP card through the production builder with a mixed sample
-        roster, so the live format-split layout can be eyeballed."""
+        roster, so the live format-split layout can be eyeballed. `set_code` renders another format's
+        card: a cube shows the cube-list line and plain roster columns, matching a format-locked pod."""
+        code = pod_format.resolve_format_code(set_code)
+        if code is None:
+            await ctx.send(f"`{set_code}` is not a registered set or cube.")
+            return
         event_time = datetime.now(SCHEDULE_TZ) + timedelta(hours=1)
         names = iter(HALL_OF_FAME)
         yes_interests = ((fi.LATEST,), (fi.LATEST, fi.FLASHBACK), (fi.FLASHBACK,), (fi.LATEST,), (), (fi.FLASHBACK,))
@@ -114,8 +121,8 @@ async def setup(bot: commands.Bot) -> None:
         }
         rosters = {state: [name for name, _ in members] for state, members in roster_interests.items()}
         embed = build_rsvp_embed(
-            "MSH Jul 21 Late Pod", event_time, rosters, set_code=active_set_code(),
-            roster_interests=roster_interests,
+            ondemand_event_name_sync(code, event_time), event_time, rosters, set_code=code,
+            roster_interests=None if pod_format.is_custom(code) else roster_interests,
         )
         await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 

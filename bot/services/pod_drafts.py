@@ -821,6 +821,22 @@ def set_event_closed_decklist_sync(event_id: str, closed: bool) -> None:
         session.commit()
 
 
+def load_event_description_sync(event_id: str) -> str | None:
+    """The organizer's note on the pod, shown in place of the card's RSVP prompt."""
+    with SessionLocal() as session:
+        return session.execute(
+            select(PodDraftEvent.description).where(PodDraftEvent.id == event_id)
+        ).scalar_one_or_none()
+
+
+def set_event_description_sync(event_id: str, description: str | None) -> None:
+    with SessionLocal() as session:
+        session.execute(
+            update(PodDraftEvent).where(PodDraftEvent.id == event_id).values(description=description)
+        )
+        session.commit()
+
+
 def delete_event_sync(event_id: str) -> None:
     """Delete a pod event row; the cascade drops participants, matches, replays, and DM trackers."""
     with SessionLocal() as session:

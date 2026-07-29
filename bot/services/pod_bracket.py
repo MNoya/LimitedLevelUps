@@ -44,14 +44,13 @@ def incremental_pairings(
     """
     expected_prior = target_round - 1
     ids = {p.id for p in players}
-    wins: dict[str, int] = {pid: 0 for pid in ids}
-    losses: dict[str, int] = {pid: 0 for pid in ids}
+    records = player_records(players, completed)
+    wins = {pid: records[pid][0] for pid in ids}
+    losses = {pid: records[pid][1] for pid in ids}
     last_index: dict[str, int] = {}
     for idx, m in enumerate(completed):
         if m.player_a_id not in ids or m.player_b_id not in ids:
             continue
-        wins[m.winner_id] += 1
-        losses[m.loser_id] += 1
         last_index[m.player_a_id] = idx
         last_index[m.player_b_id] = idx
 
@@ -77,6 +76,28 @@ def incremental_pairings(
     return new_pairings
 
 
+def player_records(players: list[Player], completed: list[MatchOutcome]) -> dict[str, tuple[int, int]]:
+    """(wins, losses) per player id. Outcomes naming a player outside the roster are ignored."""
+    ids = {p.id for p in players}
+    wins = {pid: 0 for pid in ids}
+    losses = {pid: 0 for pid in ids}
+    for m in completed:
+        if m.player_a_id not in ids or m.player_b_id not in ids:
+            continue
+        wins[m.winner_id] += 1
+        losses[m.loser_id] += 1
+    return {pid: (wins[pid], losses[pid]) for pid in ids}
+
+
+def contains_rematch(pairings: list[tuple[str, str]], completed: list[MatchOutcome]) -> bool:
+    """Whether any of these pairings repeats a match the players already played."""
+    played = {frozenset((m.player_a_id, m.player_b_id)) for m in completed}
+    for a, b in pairings:
+        if frozenset((a, b)) in played:
+            return True
+    return False
+
+
 def held_records(
     players: list[Player], completed: list[MatchOutcome], target_round: int,
 ) -> set[tuple[int, int]]:
@@ -87,13 +108,9 @@ def held_records(
     lock can never disagree — the divergence that let a preview name a pairing the lock then moved."""
     expected_prior = target_round - 1
     ids = {p.id for p in players}
-    wins = {pid: 0 for pid in ids}
-    losses = {pid: 0 for pid in ids}
-    for m in completed:
-        if m.player_a_id not in ids or m.player_b_id not in ids:
-            continue
-        wins[m.winner_id] += 1
-        losses[m.loser_id] += 1
+    records = player_records(players, completed)
+    wins = {pid: records[pid][0] for pid in ids}
+    losses = {pid: records[pid][1] for pid in ids}
     played = {frozenset((m.player_a_id, m.player_b_id)) for m in completed}
     still_playing = [pid for pid in ids if wins[pid] + losses[pid] < expected_prior]
 

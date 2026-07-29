@@ -26,7 +26,7 @@ from bot.commands.pod_draft import (
     seeding_phase_projected,
 )
 from bot.commands.pod_rsvp import build_championship_wave_view, post_scheduled_card
-from bot.commands.test_group import test_group
+from bot.commands.test_group import HALL_OF_FAME, test_group
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import MagicSet
@@ -64,13 +64,7 @@ MSG_CARD_FAILED = "Could not post the championship card."
 MSG_THREAD_FAILED = "Could not resolve the championship thread."
 
 _FALLBACK_PLAYERS: list[tuple[str, float]] = [
-    (name, 130.0 - index * 3.5)
-    for index, name in enumerate((
-        "Jace Beleren", "Liliana Vess", "Chandra Nalaar", "Nissa Revane", "Gideon Jura",
-        "Teferi Akosa", "Kaya Ghost", "Vraska Golgari", "Ajani Goldmane", "Sorin Markov",
-        "Ral Zarek", "Kiora Atua", "Domri Rade", "Ashiok Nightmare", "Tamiyo Moon",
-        "Narset Reversal", "Dovin Baan", "Saheeli Rai", "Angrath Flame", "Karn Silver",
-    ))
+    (name, 130.0 - index * 3.5) for index, name in enumerate(HALL_OF_FAME)
 ]
 
 
@@ -92,15 +86,20 @@ async def setup(bot: commands.Bot) -> None:
         event_at = plan.event_at
         champion_role = find_role(channel.guild, SET_CHAMPION_ROLE_NAME)
 
+        champion_mention = cc.champion_role_mention(champion_role)
         card_body = cc.card_content(
             set_name=plan.set_name, set_code=plan.set_code, next_set_name=plan.next_set_name,
             next_set_code=plan.next_set_code, next_release_at=plan.next_release_at,
-            champion_mention=cc.champion_role_mention(champion_role),
+            champion_mention=champion_mention,
+        )
+        native_body = cc.native_event_body(
+            set_name=plan.set_name, set_code=plan.set_code, champion_mention=champion_mention,
         )
         event_id = await post_scheduled_card(
             ctx.bot, channel, set_code=plan.set_code, event_time=event_at,
             name=f"👑 {plan.set_code} Set Championship", notify_role_name=POD_DRAFTERS_ROLE_NAME,
             pairing_mode="swiss", seating_mode="leaderboard", card_body=card_body,
+            native_body=native_body,
         )
         if event_id is None:
             await ctx.send(MSG_CARD_FAILED)

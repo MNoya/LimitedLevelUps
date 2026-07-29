@@ -497,6 +497,27 @@ async def _start_live_test_lobby(ctx) -> None:
     await ctx.send(f"🧪 Connected to Draftmancer `{session_id}`.")
 
 
+async def _arm_pod_team_command(ctx) -> None:
+    """Register a socket-less manager holding a fake six-player lobby for this channel, so `/pod-team`
+    finds a pod and posts its card through the production path with no Draftmancer session open. Local
+    DB only."""
+    if await _refuse_if_prod(ctx):
+        return
+    await _purge_and_reset_test(ctx)
+    channel_id = ctx.channel.id
+    roster = [ctx.author.display_name] + _LIVE_TEST_ROSTER[1:6]
+    event_id, session_id = await asyncio.to_thread(
+        _seed_live_test_event_sync, channel_id, DEFAULT_PAIRING_MODE,
+    )
+    manager = _build_live_test_manager(
+        ctx.bot, event_id, session_id, channel_id, DEFAULT_PAIRING_MODE, roster,
+    )
+    manager.session_users = [{"userID": f"testlobby-{name}", "userName": name} for name in roster]
+    ACTIVE_POD_MANAGERS[event_id] = manager
+    log.info(f"[testlobby] armed /pod-team event={event_id} channel={channel_id} lobby={len(roster)}")
+    await ctx.send(f"🧪 Fake {len(roster)}-player lobby armed. Run `/pod-team` in this channel.")
+
+
 async def _start_test_table(ctx) -> None:
     """Drive the real `/pod-table` flow: seed a source pod, then post the prod claim card preseeded to
     one below threshold so the invoker's single click materializes the overflow table (real thread +
@@ -974,7 +995,7 @@ _VALID_STATES = (
     "empty", "partial", "linked", "unlinked", "ready", "notready", "cancelled", "left", "superseded",
     "readyunlinked", "readycancel",
     "drafting", "complete", "submit", "lobby", "lobbyopen", "dmlink", "unlink", "podbracket", "podswiss", "podrandom",
-    "podteam", "podlobby",
+    "podteam", "podlobby", "podteamvote",
     "format", "seeding", "trophyhype", "round1", "round2", "round3", "voicelink", "review", "table",
     "teams", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "formatpoll", "linkpicker",
 )
@@ -983,7 +1004,7 @@ _LIVE_POD_MODES = {
     "podbracket": "bracket", "podswiss": "swiss", "podrandom": "random", "podteam": "team",
 }
 
-_PRODUCTION_BLOCKED_STATES = frozenset(_LIVE_POD_MODES) | {"podlobby", "unlink"}
+_PRODUCTION_BLOCKED_STATES = frozenset(_LIVE_POD_MODES) | {"podlobby", "podteamvote", "unlink"}
 
 _LAST_MESSAGE: dict[int, discord.Message] = {}
 _LAST_PROGRESS_MESSAGES: dict[int, list[discord.Message]] = {}
@@ -1115,6 +1136,12 @@ async def _settings_preview_noop(interaction: discord.Interaction, value: str) -
     return None
 
 
+async def _settings_preview_description_noop(
+    interaction: discord.Interaction, text: str | None,
+) -> None:
+    return None
+
+
 async def _settings_preview_seating_noop(
     interaction: discord.Interaction, ordered_user_names: list[str],
 ) -> str | None:
@@ -1160,6 +1187,7 @@ def _settings_preview_view() -> PodSettingsView:
         on_timer=_settings_preview_noop, current_timer=60,
         on_max_players=_settings_preview_noop, current_max_players=8,
         on_closed_decklist=_settings_preview_noop, current_closed_decklist=False,
+        on_description=_settings_preview_description_noop,
         link_targets_provider=_settings_preview_link_targets, on_link=_settings_preview_on_link,
     )
 
@@ -1194,6 +1222,8 @@ async def setup(bot: commands.Bot) -> None:
         Buttons are inert here — use `podteam` to drive real reports and reveals.
         `teamvote` shows the Team-Draft offer card with a working 🤝 vote button and three votes
         prefilled — your click is the fourth, locking it to Team Draft and proposing a Ready Check.
+        `podteamvote` arms a fake six-player lobby on this channel so `/pod-team` posts the real card
+        as its own reply, with no Draftmancer session needed; re-run `/pod-team` for the re-offer path.
         `formatpoll` shows the flashback format tally with a working button per option and prefilled
         votes — clicks toggle votes on the card, nothing locks.
         `ready` shows the active ready-check card; clicking its Force Start button previews the ephemeral
@@ -1252,6 +1282,10 @@ async def setup(bot: commands.Bot) -> None:
 
         if state == "podlobby":
             await _start_live_test_lobby(ctx)
+            return
+
+        if state == "podteamvote":
+            await _arm_pod_team_command(ctx)
             return
 
         if state == "readyunlinked":

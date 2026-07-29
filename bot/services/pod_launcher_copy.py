@@ -43,6 +43,7 @@ PLAY_AGAIN_INTRO = (
     "{next} Sign up for the next {pod} from here, same time tomorrow"
 )
 PLAY_AGAIN_BUTTON = "{pod} Tomorrow"
+PLAY_AGAIN_SIGNED_UP = "✅ {player} signed up for the next {pod} Pod"
 
 INTEREST_PLACEHOLDER = "Select your Format Preference"
 INTEREST_DESC_FLASHBACK = "Any Past Set, Rank Your Favorites"

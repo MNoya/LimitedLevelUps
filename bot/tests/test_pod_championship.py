@@ -3,8 +3,13 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from bot.services import pod_tournament
+from bot.services.ping_roles import plan_set_champion_swap
 from bot.services.pod_tournament import (
     ANNOUNCEMENT_TOP_N,
+    CHAMPION_TITLE_GLYPH,
+    CHAMPIONSHIP_DECK_HEADER,
+    SET_CHAMPION_TITLE_GLYPH,
+    _format_champion_title,
     ParticipantDeckData,
     deck_complete,
     incomplete_champion_decks,
@@ -165,8 +170,8 @@ def test_deck_ping_pod_link_embeds_and_hides_scheme():
 
 def test_deck_ping_drops_championship_header_once_post_is_clear():
     text = build_deck_ping(([], []), (["3"], ["3"]), "https://limitedlevelups.com/pods/pod-7")
-    assert "waiting" not in text
-    assert text.startswith("Please post your deck screenshot")
+    assert CHAMPIONSHIP_DECK_HEADER not in text
+    assert "<@3>" in text
 
 
 def test_deck_ping_is_empty_when_nobody_owes_anything():
@@ -222,3 +227,30 @@ def _deck(colors: str | None, screenshot: str | None) -> ParticipantDeckData:
 
 def _complete_decks(*names: str) -> dict:
     return {normalize_player_name(n): _deck("WU", "http://img/x.png") for n in names}
+
+
+def test_champion_title_crowns_a_set_championship_without_doubling_the_glyph():
+    title = _format_champion_title([("ironick", None)], "👑 MSH Set Championship")
+
+    assert title.startswith(SET_CHAMPION_TITLE_GLYPH)
+    assert CHAMPION_TITLE_GLYPH not in title
+    assert title.count(SET_CHAMPION_TITLE_GLYPH) == 1
+    assert "MSH Set Championship" in title
+
+
+def test_champion_title_keeps_the_trophy_for_a_regular_pod():
+    title = _format_champion_title([("ironick", None)], "MSH Jul 21 Late Pod")
+
+    assert title.startswith(CHAMPION_TITLE_GLYPH)
+    assert SET_CHAMPION_TITLE_GLYPH not in title
+
+
+def test_champion_role_swap_moves_outgoing_holders_and_leaves_a_repeat_winner_alone():
+    cases = [
+        (({"1", "2"}, {"3"}), ({"1", "2"}, {"3"})),
+        (({"1"}, {"1"}), (set(), set())),
+        ((set(), {"9"}), (set(), {"9"})),
+        (({"1", "2"}, {"2", "5"}), ({"1"}, {"5"})),
+    ]
+    for (holders, champions), expected in cases:
+        assert plan_set_champion_swap(holders, champions) == expected

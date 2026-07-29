@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 
 import discord
@@ -119,11 +119,13 @@ class ManagedRole:
 
 
 SET_CHAMPION_ROLE_NAME = "Set Champion"
+PRIOR_SET_CHAMPION_ROLE_NAME = "Prior Set Champion"
 ORGANIZER_ROLE_NAME = "Organizer"
 TOP_P0P1_CHALLENGER_ROLE_NAME = "Top P0P1 Challenger"
 
 MANAGED_ROLES: tuple[ManagedRole, ...] = (
     ManagedRole(SET_CHAMPION_ROLE_NAME, "#82CBFF"),
+    ManagedRole(PRIOR_SET_CHAMPION_ROLE_NAME, "#F1C40F"),
     ManagedRole(ORGANIZER_ROLE_NAME, "#4CD4A9"),
     ManagedRole(TOP_P0P1_CHALLENGER_ROLE_NAME, "#EFBF04"),
 )
@@ -604,6 +606,63 @@ def auto_grant_spec_for_event(event_time) -> PingRole | None:
         return None
     spec = spec_named(role_name)
     return spec if spec is not None and spec.auto_grant else None
+
+
+def plan_set_champion_swap(
+    holder_ids: Iterable[str], champion_ids: Iterable[str],
+) -> tuple[set[str], set[str]]:
+    """(outgoing, incoming) for the crown: holders who did not win again step down, winners who do not
+    already wear it step up. A back-to-back champion appears in neither, so their role is left alone."""
+    holders, champions = set(holder_ids), set(champion_ids)
+    return holders - champions, champions - holders
+
+
+async def swap_set_champion_role(guild: discord.Guild | None, champion_ids: Iterable[str]) -> None:
+    """Hand the crown to the new Set Champion once the championship post is up, and move the outgoing
+    holder to Prior Set Champion. The two roles are exclusive: a champion who held Prior from an earlier
+    set drops it while the crown is theirs, and takes it back when the next champion is crowned."""
+    champions = {str(user_id) for user_id in champion_ids}
+    if guild is None or not champions:
+        return
+    champion_role = find_role(guild, SET_CHAMPION_ROLE_NAME)
+    if champion_role is None:
+        log.warning(f"no {SET_CHAMPION_ROLE_NAME!r} role in {guild.name}, crown not handed over")
+        return
+    prior_role = find_role(guild, PRIOR_SET_CHAMPION_ROLE_NAME)
+    holders = {str(member.id): member for member in champion_role.members}
+    outgoing, incoming = plan_set_champion_swap(holders, champions)
+    for user_id in outgoing:
+        await _step_down_champion(holders[user_id], champion_role, prior_role)
+    for user_id in incoming:
+        member = guild.get_member(int(user_id))
+        if member is None:
+            log.info(f"champion {user_id} is not a member of {guild.name}, crown not granted")
+            continue
+        await _crown_champion(member, champion_role, prior_role)
+
+
+async def _crown_champion(
+    member: discord.Member, champion_role: discord.Role, prior_role: discord.Role | None,
+) -> None:
+    try:
+        await member.add_roles(champion_role, reason="set championship won")
+        if prior_role is not None and prior_role in member.roles:
+            await member.remove_roles(prior_role, reason="set championship won")
+        log.info(f"granted {champion_role.name!r} to {member}")
+    except discord.HTTPException:
+        log.warning(f"could not grant {champion_role.name!r} to {member}", exc_info=True)
+
+
+async def _step_down_champion(
+    member: discord.Member, champion_role: discord.Role, prior_role: discord.Role | None,
+) -> None:
+    try:
+        await member.remove_roles(champion_role, reason="set championship ended")
+        if prior_role is not None and prior_role not in member.roles:
+            await member.add_roles(prior_role, reason="set championship ended")
+        log.info(f"moved {member} from {champion_role.name!r} to {PRIOR_SET_CHAMPION_ROLE_NAME!r}")
+    except discord.HTTPException:
+        log.warning(f"could not step {member} down from {champion_role.name!r}", exc_info=True)
 
 
 async def reconcile_ping_roles(bot: discord.Client) -> None:

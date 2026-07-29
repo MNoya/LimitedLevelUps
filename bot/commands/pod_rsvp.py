@@ -45,6 +45,8 @@ from sqlalchemy import select
 
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.models import PodDraftEvent, PodSignal
+from bot.services import pod_format
+from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
 from bot.services.pod_deck_color import format_deck_color_emojis
 from bot.services.pod_draft_manager import notify_seeding_change
@@ -61,12 +63,19 @@ from bot.services.ping_roles import (
 )
 from bot.services.pod_drafts import (
     is_championship,
+    load_event_description_sync,
     load_event_pairing_mode_sync,
     load_event_set_code_sync,
     record_ondemand_event,
 )
 from bot.services.pod_registration_embed import build_registered_embed
 from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role
+from bot.services.championship_roster_card import (
+    ChampionshipRoster,
+    add_championship_roster_fields,
+    championship_roster,
+    championship_roster_for_event_sync,
+)
 from bot.services.pod_roster_fields import add_roster_fields
 from bot.services import pod_team
 from bot.services.pod_team_board import TeamBoardMember, load_team_board_data, team_result_headline
@@ -87,7 +96,9 @@ log = logging.getLogger(__name__)
 EVENT_DURATION_H = 2
 POD_CAPACITY = 8
 
-CARD_INTRO = "{emoji} Please RSVP"
+CARD_INTRO = "{emoji} {note}"
+CARD_CUBE_LIST = "{emoji} Cube List: {link}"
+CARD_RSVP_PROMPT = "Please RSVP"
 MULTIPOD_NOTICE = "🔥 Keep signing up to fire a second table"
 CARD_STATUS_DRAFTING = "🎉 **Draft started!**"
 CARD_STATUS_PLAYING = "⚔️ **Matches In Progress**"
@@ -290,13 +301,15 @@ def build_rsvp_embed(
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None = None,
     locked_roster: list[DraftedPlayer] | None = None, draft_complete: bool = False,
     team_rosters: dict[str, list[TeamBoardMember]] | None = None,
+    championship_roster: ChampionshipRoster | None = None,
 ) -> discord.Embed:
     """The RSVP surface. Time and the roster columns are embed fields so sesh's vertical breathing
     room comes for free. `role_time` keys the slot emoji; it defaults to `event_time` and callers
     pass the signal's original slot time after a reschedule. `description` is the optional organizer
-    note, shown between the intro and the multi-pod notice so a roster refresh preserves it.
+    note; it takes the RSVP prompt's line while the pod gathers, and sits quoted under a championship
+    announcement, which owns that line itself.
     `set_code` trails the format's keyrune symbol after the name; `team_draft` marks the title once
-    the pod locks into teams. `status_line` replaces the RSVP intro and the multi-pod notice once the
+    the pod locks into teams. `status_line` replaces the intro line and the multi-pod notice once the
     pod is past gathering, so the card never asks for RSVPs into a draft that already started.
     `announcement` is a fixed body a championship card carries in place of the RSVP intro and the
     multi-pod notice, since a championship is not a lazy pod that fires a second table.
@@ -306,16 +319,18 @@ def build_rsvp_embed(
     and closes on how long ago the pod started, since the pod name already carries the date.
     `team_rosters` maps team key to its members and takes the same in-flight treatment for a team
     draft, rendering the two team columns in place of the RSVP columns. Once the draft finalizes the
-    members carry each player's record and deck colors, which the column then shows beside the name."""
+    members carry each player's record and deck colors, which the column then shows beside the name.
+    `championship_roster` replaces the RSVP columns with the seeded Top 8, Alternates, and declined
+    columns, and unlike every other roster surface it survives the locked phases, so the seeding record
+    stays on the card once the pod is over."""
     unix = int(event_time.timestamp())
-    note = f"\n> {description}" if description else ""
     symbol = emojis.get(set_code.lower()) if set_code else ""
     suffix = f"{NBSP}{symbol}" if symbol else ""
     title_name = team_aware_pod_name(name, "team" if team_draft else None)
     title = f"### {NBSP * 2}🗓️ {title_name}{suffix}"
     if team_rosters is not None:
         header = f"{title}\n{status_line}" if status_line else title
-        embed = discord.Embed(description=f"{header}{note}", color=discord.Color.green())
+        embed = discord.Embed(description=header, color=discord.Color.green())
         _add_team_columns(embed, team_rosters)
         embed.add_field(name=NBSP, value=f"<t:{unix}:R>", inline=False)
         return embed
@@ -323,27 +338,45 @@ def build_rsvp_embed(
         header = f"{title}\n{status_line}" if status_line else title
         roster_text = _locked_roster_text(locked_roster, draft_complete)
         embed = discord.Embed(
-            description=f"{header}{note}\n\n{roster_text}\n<t:{unix}:R>",
+            description=f"{header}\n\n{roster_text}\n<t:{unix}:R>",
             color=discord.Color.green(),
         )
+        if championship_roster is not None:
+            add_championship_roster_fields(embed, championship_roster)
         return embed
     calendar_url = google_calendar_url(name, event_time)
     if status_line is not None:
-        middle = f"{status_line}{note}"
+        middle = status_line
     elif announcement is not None:
-        middle = f"{announcement}{note}"
+        middle = f"{announcement}\n> {description}" if description else announcement
     else:
-        middle = f"{_intro_line(role_time or event_time)}{note}{_multipod_suffix(rosters)}"
+        intro = _intro_line(role_time or event_time, description)
+        middle = f"{intro}{_cube_list_line(set_code)}{_multipod_suffix(rosters)}"
     embed = discord.Embed(description=f"{title}\n{middle}", color=discord.Color.green())
     time_value = f"<t:{unix}:F> (<t:{unix}:R>) [[+]](<{calendar_url}>)"
     embed.add_field(name=TIME_LABEL, value=time_value, inline=False)
-    add_roster_fields(embed, rosters, roster_interests, championship=announcement is not None)
+    if championship_roster is not None:
+        add_championship_roster_fields(embed, championship_roster)
+    else:
+        add_roster_fields(embed, rosters, roster_interests, championship=announcement is not None)
     return embed
 
 
-def _intro_line(role_time: datetime) -> str:
+def _intro_line(role_time: datetime, description: str | None = None) -> str:
+    """The line under the pod name: the organizer's note when there is one, else the RSVP prompt. The
+    slot emoji leads either way, so the card still reads as Early / Late / Weekend at a glance."""
     spec = auto_grant_spec_for_event(role_time) or spec_named(LATE_POD_ROLE_NAME)
-    return CARD_INTRO.format(emoji=display_emoji(spec) or "")
+    return CARD_INTRO.format(emoji=display_emoji(spec) or "", note=description or CARD_RSVP_PROMPT)
+
+
+def _cube_list_line(set_code: str | None) -> str:
+    """The cube a pod drafts, linked to its CubeCobra page so a reader can look at the list before the
+    draft. Empty for a set pod, which has no list to open. Sits above the multi-pod notice, so a roster
+    refresh peeling that notice leaves the line in place."""
+    link = pod_format.cube_list_link(set_code)
+    if link is None:
+        return ""
+    return f"\n{CARD_CUBE_LIST.format(emoji=fi.format_emoji(set_code), link=link)}"
 
 
 def _multipod_suffix(rosters: dict[str, list[str]]) -> str:
@@ -434,13 +467,34 @@ def _team_member_row(member: TeamBoardMember) -> str:
 def refresh_roster_fields(
     embed: discord.Embed, rosters: dict[str, list[str]], status_line: str | None = None,
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None = None,
-    championship: bool = False,
+    championship: bool = False, championship_roster: ChampionshipRoster | None = None,
 ) -> None:
     """Swap the roster columns on a fetched surface while keeping its Time field untouched, so a
     click never needs a DB round trip for the event row. The multi-pod notice toggles with the Yes
     count on the same click, without touching the header or intro; a `status_line` replaces both
     once the pod is past gathering. A `championship` card keeps its fixed announcement body across
     refreshes and never grows the multi-pod notice, since it is not a lazy pod."""
+    keep_only_time_field(embed)
+    if championship_roster is not None:
+        add_championship_roster_fields(embed, championship_roster)
+    else:
+        add_roster_fields(embed, rosters, roster_interests, championship=championship)
+    if status_line is not None:
+        embed.description = _swap_status_line(embed.description or "", status_line)
+    elif not championship:
+        embed.description = _strip_multipod_notice(embed.description or "") + _multipod_suffix(rosters)
+
+
+async def resolve_championship_card_roster(
+    event_id: str | None, rosters: dict[str, list[str]],
+) -> ChampionshipRoster | None:
+    """The seeded columns for a Set Championship card, off the main thread. None for any other pod."""
+    return await asyncio.to_thread(championship_roster_for_event_sync, event_id, rosters)
+
+
+def keep_only_time_field(embed: discord.Embed) -> None:
+    """Drop every field but the Time one, so a caller can render fresh roster columns onto a card it
+    already has in hand."""
     time_field = None
     for field in embed.fields:
         if field.name == TIME_LABEL:
@@ -449,11 +503,6 @@ def refresh_roster_fields(
     embed.clear_fields()
     if time_field is not None:
         embed.add_field(name=TIME_LABEL, value=time_field.value, inline=False)
-    add_roster_fields(embed, rosters, roster_interests, championship=championship)
-    if status_line is not None:
-        embed.description = _swap_status_line(embed.description or "", status_line)
-    elif not championship:
-        embed.description = _strip_multipod_notice(embed.description or "") + _multipod_suffix(rosters)
 
 
 def _strip_multipod_notice(description: str) -> str:
@@ -575,7 +624,8 @@ async def post_scheduled_card(
     preseed_yes: list[tuple[str, str]] | None = None, ping_role: bool = True,
     notify_role_name: str | None = None, description: str | None = None,
     pairing_mode: str | None = None, seating_mode: str | None = None, pick_timer: int | None = None,
-    content_override: str | None = None, card_body: str | None = None, format_locked: bool = True,
+    content_override: str | None = None, card_body: str | None = None, native_body: str | None = None,
+    format_locked: bool = True,
 ) -> str | None:
     """Create a scheduled pod end to end and return its event id, or None when the thread or the
     card could not be posted. The signal is born fired, so the RSVP buttons never close.
@@ -594,12 +644,14 @@ async def post_scheduled_card(
 
     `content_override` replaces the card's content ping outright — a fired launcher slot's creation
     announcement, carrying its own role mention. `card_body` is a fixed announcement rendered inside
-    the embed in place of the RSVP intro, for a championship card that never fires a second table."""
+    the embed in place of the RSVP intro, for a championship card that never fires a second table, and
+    `native_body` is its counterpart on the native event, above the tally."""
     preseed_yes = preseed_yes or []
     rosters = {state: [] for state in RSVP_STATES}
     rosters[RSVP_YES] = [display for _, display in preseed_yes]
     guild = channel.guild
     name = await pod_launch.dedupe_pod_name(channel, name)
+    championship_card_roster = championship_roster((), (), ()) if is_championship(name) else None
     content = content_override if content_override is not None else _card_ping(
         guild, event_time, ping_role, notify_role_name)
     try:
@@ -608,6 +660,7 @@ async def post_scheduled_card(
             embed=build_rsvp_embed(
                 name, event_time, rosters, description=description, set_code=set_code,
                 team_draft=pairing_mode == "team", announcement=card_body,
+                championship_roster=championship_card_roster,
             ),
             view=PodRsvpView(),
             allowed_mentions=discord.AllowedMentions(roles=True),
@@ -624,7 +677,8 @@ async def post_scheduled_card(
     )
     if preseed_yes:
         await asyncio.to_thread(pod_launch.seed_yes_members_sync, signal_id, preseed_yes)
-    native_event_id = await _create_native_event(channel, name, event_time, message.jump_url, rosters)
+    native_event_id = await _create_native_event(
+        channel, name, event_time, message.jump_url, rosters, native_body)
     event_id, created_at, pairing_mode, seating_mode = await asyncio.to_thread(
         _record_scheduled_event, set_code, event_time, name, str(thread.id), native_event_id,
         pairing_mode, seating_mode, description,
@@ -690,10 +744,12 @@ async def apply_card_rsvp(
         return
 
     status_line, championship = await resolve_card_render_state(result.state.event_id)
+    champ_roster = await resolve_championship_card_roster(result.state.event_id, result.rosters)
     if _is_card_surface(interaction.message):
         embed = interaction.message.embeds[0]
         refresh_roster_fields(
             embed, result.rosters, status_line, result.roster_interests, championship=championship,
+            championship_roster=champ_roster,
         )
         await interaction.response.edit_message(embed=embed)
     else:
@@ -721,7 +777,7 @@ async def apply_card_rsvp(
                 interaction, lead=lead, accent=RSVP_CONFIRM_COLOR[result.rsvp],
             )
         else:
-            await interaction.followup.send(embed=await _confirmation_embed(result), ephemeral=True)
+            await interaction.followup.send(embed=await _decline_embed(result), ephemeral=True)
 
     if result.state.event_id is not None:
         join = result.rsvp in (RSVP_YES, RSVP_MAYBE)
@@ -789,14 +845,12 @@ def pod_removed_embed(pod_name: str) -> discord.Embed:
     return discord.Embed(title=MSG_POD_REMOVED.format(name=pod_name), color=discord.Color.red())
 
 
-async def _confirmation_embed(result: pod_launch.RsvpResult) -> discord.Embed:
-    """The one-line acknowledgement for No and a cleared RSVP. Yes and Maybe answer with the full
-    confirmation card via `send_join_confirmation_card` instead."""
+async def _decline_embed(result: pod_launch.RsvpResult) -> discord.Embed:
+    """The one-line acknowledgement for No and for a cleared RSVP. Both read as a removal to the player,
+    including a championship's No, which the roster keeps as a tracked state. Yes and Maybe answer with
+    the full confirmation card through `send_join_confirmation_card`."""
     name, _event_time = await _pod_identity(result)
-    if result.rsvp is None:
-        return pod_removed_embed(name)
-    title = _rsvp_headline(result.rsvp, name)
-    return discord.Embed(title=title, color=RSVP_CONFIRM_COLOR[result.rsvp])
+    return pod_removed_embed(name)
 
 
 async def _confirmation_lead_text(result: pod_launch.RsvpResult) -> str:
@@ -817,6 +871,7 @@ async def _confirmation_card_lead(result: pod_launch.RsvpResult) -> str | None:
 
 
 def _rsvp_headline(rsvp: str, pod_name: str) -> str:
+    """Yes or Maybe only. A No and a cleared RSVP are acknowledged by `_decline_embed`."""
     return (MSG_POD_ADDED if rsvp == RSVP_YES else MSG_POD_MAYBE).format(name=pod_name)
 
 
@@ -899,7 +954,9 @@ async def _render_channel_card(
         return
     embed = message.embeds[0]
     status_line, championship = await resolve_card_render_state(event_id)
-    refresh_roster_fields(embed, rosters, status_line, roster_interests, championship=championship)
+    champ_roster = await resolve_championship_card_roster(event_id, rosters)
+    refresh_roster_fields(embed, rosters, status_line, roster_interests, championship=championship,
+                          championship_roster=champ_roster)
     try:
         await message.edit(embed=embed)
     except discord.HTTPException:
@@ -916,19 +973,34 @@ async def fetch_channel(bot: commands.Bot, channel_id: str) -> discord.abc.Messa
         return None
 
 
-def native_event_description(rosters: dict[str, list[str]], jump_url: str) -> str:
-    """The native event's body: a live RSVP tally over the card's link. Discord exposes no read/write
-    interest API for a guild scheduled event, so this text is the only surface that can carry the
-    counts the card holds."""
+def native_event_description(
+    rosters: dict[str, list[str]], jump_url: str, body: str | None = None,
+) -> str:
+    """The native event's body: an optional announcement over a live RSVP tally over the card's link.
+    Discord exposes no read/write interest API for a guild scheduled event, so this text is the only
+    surface that can carry the counts the card holds."""
     tally = " ".join(
         f"{RSVP_EMOJI[state]} {len(rosters.get(state) or [])}" for state in (RSVP_YES, RSVP_MAYBE)
     )
-    return f"{tally}\n\n{NATIVE_EVENT_SIGNUP.format(jump_url=jump_url)}"
+    sections = [tally, NATIVE_EVENT_SIGNUP.format(jump_url=jump_url)]
+    if body:
+        sections.insert(0, body)
+    return "\n\n".join(sections)
+
+
+def native_body_from_description(description: str | None) -> str | None:
+    """The announcement a native event already carries, read back off its description so a tally
+    re-render keeps it. The tally and the signup line are the last two blank-line-separated sections,
+    and everything before them is the announcement."""
+    if not description:
+        return None
+    sections = description.split("\n\n")
+    return "\n\n".join(sections[:-2]) or None
 
 
 async def _create_native_event(
     channel: discord.TextChannel, name: str, event_time: datetime, jump_url: str,
-    rosters: dict[str, list[str]],
+    rosters: dict[str, list[str]], body: str | None,
 ) -> str | None:
     if event_time <= datetime.now(timezone.utc):
         return None
@@ -940,7 +1012,7 @@ async def _create_native_event(
             entity_type=discord.EntityType.external,
             privacy_level=discord.PrivacyLevel.guild_only,
             location=jump_url,
-            description=native_event_description(rosters, jump_url),
+            description=native_event_description(rosters, jump_url, body),
         )
     except discord.HTTPException:
         log.warning("could not create the native scheduled event", exc_info=True)
@@ -963,7 +1035,8 @@ async def _sync_native_event_tally(
     try:
         event_id_int = int(native_event_id)
         native = guild.get_scheduled_event(event_id_int) or await guild.fetch_scheduled_event(event_id_int)
-        await native.edit(description=native_event_description(rosters, jump_url))
+        body = native_body_from_description(native.description)
+        await native.edit(description=native_event_description(rosters, jump_url, body))
     except discord.HTTPException:
         log.warning(f"could not sync native event tally {native_event_id}", exc_info=True)
 
@@ -1061,7 +1134,7 @@ async def _edit_scheduled_card(bot: commands.Bot, event_id: str, name: str, even
     channel = await fetch_channel(bot, channel_id)
     if channel is None:
         return
-    description = await asyncio.to_thread(_event_description, event_id)
+    description = await asyncio.to_thread(load_event_description_sync, event_id)
     set_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
     pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
     status_line = await resolve_card_status_line(event_id)
@@ -1073,7 +1146,8 @@ async def _edit_scheduled_card(bot: commands.Bot, event_id: str, name: str, even
             name, event_time, rosters, slot_time, description, set_code=set_code,
             team_draft=pairing_mode == "team", status_line=status_line,
             roster_interests=roster_interests, team_rosters=team_rosters,
-            locked_roster=locked_roster, draft_complete=draft_complete))
+            locked_roster=locked_roster, draft_complete=draft_complete,
+            championship_roster=await resolve_championship_card_roster(event_id, rosters)))
     except discord.HTTPException:
         log.warning(f"could not edit scheduled card {message_id}", exc_info=True)
 
@@ -1134,6 +1208,16 @@ async def refresh_scheduled_card(bot: commands.Bot, event_id: str) -> None:
     await _edit_scheduled_card(bot, event_id, name, event_time)
     await _rename_thread(bot, thread_id, display_name)
     await _rename_native_event(bot, thread_id, native_event_id, display_name)
+
+
+async def refresh_card_note(bot: commands.Bot, event_id: str) -> None:
+    """Re-render the channel card after an edit to the organizer's note. Embed only: the note rides no
+    other surface, so the thread and the native event are left alone."""
+    loaded = await asyncio.to_thread(_load_event, event_id)
+    if loaded is None:
+        return
+    name, event_time, _status, _thread_id, _native_event_id, _created_at = loaded
+    await _edit_scheduled_card(bot, event_id, name, event_time)
 
 
 async def refresh_card_phase(bot: commands.Bot, event_id: str) -> None:
@@ -1444,12 +1528,6 @@ def _load_event(event_id: str) -> tuple[str, datetime, str, str, str | None, dat
             event.name, event.event_time, event.socket_status,
             event.discord_thread_id, event.discord_scheduled_event_id, event.created_at,
         )
-
-
-def _event_description(event_id: str) -> str | None:
-    with SessionLocal() as session:
-        event = session.get(PodDraftEvent, event_id)
-        return event.description if event is not None else None
 
 
 def _apply_new_time(event_id: str, new_time: datetime) -> None:

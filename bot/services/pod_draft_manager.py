@@ -13,6 +13,7 @@ import json
 import logging
 import random
 import re
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 
 import discord
@@ -250,6 +251,9 @@ async def cancel_pod_event(event_id: str, *, actor: str) -> str | None:
         await _CARD_CANCEL_HOOK(event_id)
     await asyncio.to_thread(delete_event_sync, event_id)
     return None
+
+
+TeamVotePoster = Callable[..., Awaitable[discord.Message]]
 
 
 class PodDraftManager:
@@ -1820,7 +1824,7 @@ class PodDraftManager:
             return
         await self.offer_team_vote_if_eligible()
 
-    async def offer_team_vote_manual(self) -> str | None:
+    async def offer_team_vote_manual(self, *, post: TeamVotePoster | None = None) -> str | None:
         """Post the Team-Draft vote on demand from /pod-team. A proposal, not a commitment, so it takes
         any pod of at least four and leaves the parity to settle before start — unlike the auto nudge,
         which waits for an even lobby. Re-running with a vote already up deletes that card and re-posts it
@@ -1839,7 +1843,7 @@ class PodDraftManager:
         team, wait = await self._clear_existing_team_vote(thread)
         self.team_vote_offered = False
         self.team_vote_message = None
-        await self.offer_team_vote(count, team=team, wait=wait)
+        await self.offer_team_vote(count, team=team, wait=wait, post=post)
         return None
 
     async def _clear_existing_team_vote(self, thread: "discord.Thread") -> tuple[list[str], list[str]]:
@@ -1862,11 +1866,13 @@ class PodDraftManager:
 
     async def offer_team_vote(
         self, pod_size: int, *, team: list[str] | None = None, wait: list[str] | None = None,
+        post: TeamVotePoster | None = None,
     ) -> None:
         """Post the one-time Team-Draft vote offer for a settled small pod. The caller decides the pod is
         eligible (even, at most six); `pod_size` fixes the majority the vote needs to lock. `team`/`wait`
-        seed the columns when a re-offer carries votes over. No-op once offered, already a team pod, or the
-        draft is under way."""
+        seed the columns when a re-offer carries votes over. `post` swaps in another way to place the card,
+        so /pod-team can make it the command's own visible reply. No-op once offered, already a team pod, or
+        the draft is under way."""
         if self.team_vote_offered or self.pairing_mode == "team" or self.drafting or self.draft_complete:
             return
         thread = await self._fetch_thread()
@@ -1875,7 +1881,7 @@ class PodDraftManager:
         self.team_vote_size = pod_size
         self.team_vote_offered = True
         try:
-            self.team_vote_message = await thread.send(
+            self.team_vote_message = await (post or thread.send)(
                 embed=build_team_vote_offer_embed(team or [], wait or [], pod_size),
                 view=build_team_vote_view(self.event_id),
             )

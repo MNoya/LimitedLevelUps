@@ -41,7 +41,9 @@ from bot.services.ping_roles import announce_pod_grant
 from bot.services.pod_roles import find_role, grant_pod_drafters
 from bot.services.pod_schedule import POD_QUEUE_ROLE_NAME
 from bot.services.pod_slot import pod_display_name, queue_display_name
-from bot.services.pod_settings_view import TIMER_MAX, TIMER_MIN, pick_timer_label
+from bot.services.pod_settings_view import (
+    TIMER_MAX, TIMER_MIN, PodDescriptionModal, description_label, pick_timer_label,
+)
 from bot.services.pod_signals import (
     KIND_QUEUE,
     QUEUE_BUCKET,
@@ -83,7 +85,6 @@ JOINABLE_WINDOW = timedelta(hours=6)
 MAX_JOINABLE_LINES = 3
 SET_PLACEHOLDER = "Choose the set"
 WHEN_PLACEHOLDER = "When to draft"
-DESCRIPTION_MAX_LEN = 300
 LAUNCHER_TITLE = "### Start a Pod Draft"
 LAUNCHER_PROMPT = "Set your options below, then open a queue now or schedule a pod for later."
 LAUNCHER_JOIN_HINT = "Join an existing pod instead of starting a new one:"
@@ -651,28 +652,18 @@ class _LauncherTimerModal(discord.ui.Modal, title="Pick timer"):
 
 class _LauncherDescriptionButton(discord.ui.Button):
     def __init__(self, current: str | None, row: int | None = None) -> None:
-        label = "Description ✓" if current else "Description"
-        super().__init__(label=label, emoji="📝", style=discord.ButtonStyle.grey, row=row)
+        super().__init__(label=description_label(current), emoji="📝",
+                         style=discord.ButtonStyle.grey, row=row)
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_modal(_LauncherDescriptionModal(self.view))
+        launcher: DraftLauncherView = self.view
+        await interaction.response.send_modal(
+            PodDescriptionModal(launcher.description, self._apply))
 
-
-class _LauncherDescriptionModal(discord.ui.Modal, title="Pod description"):
-    text = discord.ui.TextInput(
-        label="Description", style=discord.TextStyle.paragraph, required=False, max_length=DESCRIPTION_MAX_LEN,
-        placeholder="Optional note shown on the pod card and its discussion thread")
-
-    def __init__(self, view: DraftLauncherView) -> None:
-        super().__init__()
-        self.launcher = view
-        if view.description:
-            self.text.default = view.description
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        entered = self.text.value.strip()
-        self.launcher.description = entered or None
-        await self.launcher.rerender(interaction)
+    async def _apply(self, interaction: discord.Interaction, text: str | None) -> None:
+        launcher: DraftLauncherView = self.view
+        launcher.description = text
+        await launcher.rerender(interaction)
 
 
 class _LauncherStartButton(discord.ui.Button):

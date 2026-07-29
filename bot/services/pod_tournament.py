@@ -23,7 +23,14 @@ from sqlalchemy.orm import Session
 from bot import emojis
 from bot.commands.messages import MSG_POD_NO_MATCH_TO_REPORT, MSG_POD_RESULT_ALREADY_RECORDED
 from bot.config import settings
-from bot.discord_helpers import NBSP, channel_matching_name, display_width, first_image_url, player_url
+from bot.discord_helpers import (
+    NBSP,
+    channel_matching_name,
+    display_width,
+    fetch_dm_user,
+    first_image_url,
+    player_url,
+)
 from bot.slug import slugify
 from bot.database import SessionLocal
 from bot.models import Player as DbPlayer, PodDraftEvent, PodDraftMatch, PodDraftParticipant
@@ -39,6 +46,7 @@ from bot.services.pod_deck_color import (
     format_deck_color_emojis,
 )
 from bot.services.player_stats import leaderboard_seat_order
+from bot.services.ping_roles import swap_set_champion_role
 from bot.services.pod_pairing_select import DEFAULT_PAIRING_MODE
 from bot.services.pod_replays import capture_event_replays
 from bot.services.seventeenlands import SeventeenLandsClient
@@ -49,6 +57,7 @@ from bot.services.pod_drafts import (
     FinalStanding,
     OwnMatch,
     has_arena_suffix,
+    is_championship,
     normalize_player_name,
     strip_arena_suffix,
     _normalized_column,
@@ -109,6 +118,7 @@ GRACE_SECONDS = 60  # window after round completion during which edits regenerat
 BRACKET_EDIT_BLOCKED_MSG = "That result can't be changed now — a later round already reported a result."
 RESULT_CORRECTED_LEAD = "Result corrected:"
 RESULT_CLEARED_LEAD = "Result cleared:"
+ORGANIZER_CORRECTED_LEAD = "Result corrected by Organizer:"
 POD_RESULT_LOCKED_MSG = "This pod draft is finished. Results can no longer be changed."
 MANAGE_ROUND_CUSTOM_PREFIX = "podmanageround"
 ORGANIZER_ROLE_NAMES = frozenset({"admin", "moderator", "organizer"})
@@ -231,9 +241,13 @@ async def _dm_round_pairings(
     round_num: int,
     pending_rows: list[tuple[str, str, str]],
     pairings_url: str,
+    reuse_dms: dict[tuple[int, str], tuple[str, str]] | None = None,
 ) -> None:
     """DM each linked participant their opponent for this round, with a single-match dropdown
-    so they can report from DM. Persists each DM message ref so later edits can sync."""
+    so they can report from DM. Persists each DM message ref so later edits can sync.
+
+    `reuse_dms` carries the pairing DMs a re-pair is replacing; a recipient found there has their old
+    DM rewritten to the new opponent instead of receiving a second one."""
     dm_info = await asyncio.to_thread(load_dm_info_sync, event_id)
     event_name = await asyncio.to_thread(load_event_name_sync, event_id)
     match_states = await asyncio.to_thread(_load_round_states, event_id, round_num)
@@ -243,10 +257,14 @@ async def _dm_round_pairings(
         match_state = by_match_id.get(match_id)
         a_key = normalize_player_name(a_name)
         b_key = normalize_player_name(b_name)
-        await _send_pairing_dm(bot_client, dm_info, a_key, b_key, round_num, pairings_url,
-                               event_id=event_id, match_state=match_state, event_name=event_name)
-        await _send_pairing_dm(bot_client, dm_info, b_key, a_key, round_num, pairings_url,
-                               event_id=event_id, match_state=match_state, event_name=event_name)
+        for recipient_key, opponent_key in ((a_key, b_key), (b_key, a_key)):
+            recipient = dm_info.get(recipient_key)
+            reuse = None
+            if reuse_dms and recipient is not None:
+                reuse = reuse_dms.get((round_num, recipient.participant_id))
+            await _send_pairing_dm(bot_client, dm_info, recipient_key, opponent_key, round_num, pairings_url,
+                                   event_id=event_id, match_state=match_state, event_name=event_name,
+                                   updated=reuse is not None, reuse=reuse)
 
 
 def load_dm_info_sync(event_id: str):
@@ -486,6 +504,7 @@ async def _send_pairing_dm(
     match_state: dict | None = None,
     event_name: str | None = None,
     updated: bool = False,
+    reuse: tuple[str, str] | None = None,
 ) -> None:
     recipient = dm_info.get(recipient_key)
     if recipient is None or not recipient.discord_id:
@@ -509,8 +528,13 @@ async def _send_pairing_dm(
     view = RoundResultsView([match_state]) if match_state else None
     msg = None
     try:
-        user = bot_client.get_user(int(recipient.discord_id)) or await bot_client.fetch_user(int(recipient.discord_id))
-        msg = await user.send(embed=embed, view=view) if view else await user.send(embed=embed)
+        if reuse is not None:
+            msg = await _edit_pairing_dm(bot_client, reuse, embed, view)
+        if msg is None:
+            user = await fetch_dm_user(bot_client, recipient.discord_id)
+            if user is None:
+                return
+            msg = await user.send(embed=embed, view=view) if view else await user.send(embed=embed)
     except discord.Forbidden:
         log.info(f"pairing DM blocked for user {recipient.discord_id}")
         return
@@ -529,6 +553,19 @@ async def _send_pairing_dm(
             dm_channel_id=str(msg.channel.id),
             dm_message_id=str(msg.id),
         )
+
+
+async def _edit_pairing_dm(bot_client, ref: tuple[str, str], embed, view) -> discord.Message | None:
+    """Rewrite an already-delivered pairing DM in place, so a re-pair reaches the player without a
+    second notification. None when the message is gone, which falls back to sending a fresh one."""
+    channel_id, message_id = ref
+    try:
+        channel = bot_client.get_channel(int(channel_id)) or await bot_client.fetch_channel(int(channel_id))
+        msg = await channel.fetch_message(int(message_id))
+        return await msg.edit(embed=embed, view=view)
+    except discord.HTTPException:
+        log.info(f"pairing DM {message_id} could not be edited, sending a new one")
+        return None
 
 
 def _persist_dm_message_sync(
@@ -767,7 +804,9 @@ async def send_submit_deck_dms(bot_client, event_id: str) -> None:
         view = build_live_deck_color_select_view(p["deck_colors"])
         msg = None
         try:
-            user = bot_client.get_user(int(p["discord_id"])) or await bot_client.fetch_user(int(p["discord_id"]))
+            user = await fetch_dm_user(bot_client, p["discord_id"])
+            if user is None:
+                continue
             msg = await user.send(embed=embed, view=view)
         except discord.Forbidden:
             log.info(f"submit-deck DM blocked for {p['discord_id']}")
@@ -823,8 +862,9 @@ async def send_final_submit_deck_dms(bot_client, event_id: str, names: list[str]
         view = build_live_deck_color_select_view(deck_colors)
         msg = None
         try:
-            user = bot_client.get_user(int(info.discord_id)) \
-                or await bot_client.fetch_user(int(info.discord_id))
+            user = await fetch_dm_user(bot_client, info.discord_id)
+            if user is None:
+                continue
             msg = await user.send(embed=embed, view=view)
         except discord.Forbidden:
             log.info(f"final submit-deck DM blocked for {info.discord_id}")
@@ -1515,18 +1555,19 @@ class FixPairingView(ui.View):
         a_disp = _roster_display(self.roster, self.selected_a)
         b_disp = _roster_display(self.roster, self.selected_b)
         url = self.round_message.jump_url if self.round_message is not None else None
-        label = f"[__Round {self.round_num}__]({url})" if url else f"[Round {self.round_num}]"
+        label = round_link_label(self.round_num, url)
 
-        if await self._regenerate_bracket_after_result(choice, result_meta, a_disp, b_disp):
+        if await self._regenerate_bracket_after_result(choice, result_meta, a_disp, b_disp, url):
             return
         if result_meta is not None:
-            phrase = f"**{label}** Result corrected by Organizer: {self._result_phrase(choice, a_disp, b_disp)}"
-            await announce_round_result(interaction.client, self.event_id, phrase)
+            await announce_round_result(interaction.client, self.event_id, format_round_change(
+                self.round_num, self._result_phrase(choice, a_disp, b_disp), url, ORGANIZER_CORRECTED_LEAD,
+            ))
             return
         a_ref = await _resolve_discord_mention(self.event_id, self.selected_a) or a_disp
         b_ref = await _resolve_discord_mention(self.event_id, self.selected_b) or b_disp
         note = " — report the result again" if result["cleared"] else ""
-        phrase = f"**{label}** Match updated by Organizer: {a_ref} vs {b_ref}{note}"
+        phrase = f"{label} Match updated by Organizer: {a_ref} vs {b_ref}{note}"
         await announce_round_result(interaction.client, self.event_id, phrase, mention_users=True)
 
     def _resolve_result_choice(self) -> tuple[str, str] | None:
@@ -1551,9 +1592,11 @@ class FixPairingView(ui.View):
 
     async def _regenerate_bracket_after_result(self, choice: tuple[str, str] | None,
                                                result_meta: dict | None,
-                                               a_disp: str, b_disp: str) -> bool:
-        """Rebuild downstream bracket rounds when a corrected result changed the winner. Posts its own
-        thread note, so the caller skips the plain announcement. Returns whether it ran."""
+                                               a_disp: str, b_disp: str,
+                                               pairings_url: str | None) -> bool:
+        """Rebuild downstream bracket rounds when a corrected result changed the winner. Posts the
+        correction and the new pairings as one thread note, so the caller skips the plain announcement.
+        Returns whether it ran."""
         if result_meta is None or not result_meta.get("winner_changed"):
             return False
         manager = ACTIVE_POD_MANAGERS.get(self.event_id)
@@ -1566,7 +1609,8 @@ class FixPairingView(ui.View):
             winner_name if settled else None, score if settled else None,
             a_disp, b_disp,
         )
-        await bracket_regenerate_downstream(manager, self.round_num, phrase)
+        head = format_round_change(self.round_num, phrase, pairings_url, ORGANIZER_CORRECTED_LEAD)
+        await bracket_regenerate_downstream(manager, self.round_num, head)
         return True
 
 
@@ -1680,9 +1724,6 @@ async def _handle_result_submission(interaction: discord.Interaction, value: str
 
     round_num = result["round"]
     event_id = result["event_id"]
-    displays = await asyncio.to_thread(load_participant_displays, event_id)
-    a_disp = _discord_display(displays, result["a_name"])
-    b_disp = _discord_display(displays, result["b_name"])
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     bracket = manager is not None and manager.pairing_mode == "bracket"
     match_states = await asyncio.to_thread(render_round_states, event_id, round_num, bracket=bracket)
@@ -1724,15 +1765,17 @@ async def _handle_result_submission(interaction: discord.Interaction, value: str
         asyncio.create_task(_propagate_match_to_other_surfaces(
             interaction.client, event_id, match_id, round_num, exclude_channel_id=exclude_channel_id,
         ))
+        head = None
         if result.get("was_reported") and match_state is not None:
-            await announce_round_result(
-                interaction.client, event_id,
-                format_round_clear_announcement(
-                    round_num, match_state, _resolve_pairings_url(event_id, round_num),
-                ),
+            head = format_round_clear_announcement(
+                round_num, match_state, _resolve_pairings_url(event_id, round_num),
             )
-        if bracket and round_num < TOTAL_ROUNDS and manager is not None and result.get("winner_changed"):
-            await bracket_regenerate_downstream(manager, round_num)
+        regenerating = bracket and round_num < TOTAL_ROUNDS and manager is not None \
+            and bool(result.get("winner_changed"))
+        if head and not regenerating:
+            await announce_round_result(interaction.client, event_id, head)
+        if regenerating:
+            await bracket_regenerate_downstream(manager, round_num, head)
         return
 
     log.info(format_match_result_log(
@@ -1764,17 +1807,18 @@ async def _handle_result_submission(interaction: discord.Interaction, value: str
     ))
 
     corrected = result_was_corrected(result)
+    regenerating = bracket and corrected and round_num < TOTAL_ROUNDS and manager is not None
+    head = None
     if match_state is not None and match_was_played(match_state) and result_needs_announcement(result):
         pairings_url = _resolve_pairings_url(event_id, round_num)
-        await announce_round_result(
-            interaction.client, event_id,
-            format_round_announcement(round_num, match_state, pairings_url, corrected=corrected),
-        )
+        head = format_round_announcement(round_num, match_state, pairings_url, corrected=corrected)
+        if not regenerating:
+            await announce_round_result(interaction.client, event_id, head)
 
     await _maybe_advance(
         interaction.client, event_id, round_num,
         is_edit=corrected,
-        result_phrase=format_result_change(result["a_name"], result["b_name"], winner_name, score, a_disp, b_disp),
+        head=head if regenerating else None,
     )
     if round_num >= TOTAL_ROUNDS:
         asyncio.create_task(send_final_submit_deck_dms(
@@ -2224,7 +2268,7 @@ def _capture_recovery_sync(thread_id: str, discord_id: str, image_url: str, capt
 
 
 async def _maybe_advance(bot_client, event_id: str, round_num: int, is_edit: bool = False,
-                         result_phrase: str | None = None) -> None:
+                         head: str | None = None) -> None:
     """Advance, finalize, or regenerate-on-edit, depending on round state.
 
     First time a round completes → advance to N+1 (or for R3 start the finalize grace).
@@ -2249,13 +2293,13 @@ async def _maybe_advance(bot_client, event_id: str, round_num: int, is_edit: boo
         return
 
     async with manager._advance_lock:
-        await _advance_locked(manager, event_id, round_num, is_edit, result_phrase)
+        await _advance_locked(manager, event_id, round_num, is_edit, head)
 
 
 async def _advance_locked(manager, event_id: str, round_num: int, is_edit: bool,
-                          result_phrase: str | None) -> None:
+                          head: str | None) -> None:
     if manager.pairing_mode == "bracket":
-        await _bracket_maybe_advance(manager, round_num, is_edit, result_phrase)
+        await _bracket_maybe_advance(manager, round_num, is_edit, head)
         return
 
     if round_num == TOTAL_ROUNDS:
@@ -2371,7 +2415,7 @@ def _load_participant_slugs(event_id: str) -> dict[str, str]:
 
 
 def load_participant_displays(event_id: str) -> dict[str, dict]:
-    """Map normalized name → {'display_name', 'slug', 'arena'}.
+    """Map normalized name → {'display_name', 'slug', 'arena', 'discord_id'}.
 
     Indexed by both draftmancer_name and the participant's display_name so pre-draft and post-draft
     participants both resolve. The display_name we *expose* prefers Player.display_name (the Discord
@@ -2387,16 +2431,17 @@ def load_participant_displays(event_id: str) -> dict[str, dict]:
                 DbPlayer.display_name,
                 DbPlayer.slug,
                 DbPlayer.arena_name,
+                DbPlayer.discord_id,
             )
             .outerjoin(DbPlayer, DbPlayer.id == PodDraftParticipant.player_id)
             .where(PodDraftParticipant.event_id == event_id)
         ).all()
     out: dict[str, dict] = {}
-    for dm, participant_dn, player_dn, slug, arena in rows:
+    for dm, participant_dn, player_dn, slug, arena, discord_id in rows:
         raw = player_dn or participant_dn
         display = strip_arena_suffix(raw) if raw else raw
         arena_ref = arena or _first_arena_handle(dm, participant_dn)
-        info = {"display_name": display, "slug": slug, "arena": arena_ref}
+        info = {"display_name": display, "slug": slug, "arena": arena_ref, "discord_id": discord_id}
         if dm:
             out[normalize_player_name(dm)] = info
         if participant_dn:
@@ -2439,6 +2484,17 @@ def _discord_display(displays: dict[str, dict], name: str) -> str:
     if info and info.get("display_name"):
         return info["display_name"]
     return strip_arena_suffix(name)
+
+
+def _discord_mention(displays: dict[str, dict], name: str) -> str:
+    """Pingable `<@id>` for a raw Draftmancer/Arena name, falling back to the plain display when the
+    participant has no linked Discord account. Fixture rosters carry non-numeric ids, so those render
+    as names instead of a mention that resolves to nobody."""
+    info = displays.get(normalize_player_name(name))
+    discord_id = info.get("discord_id") if info else None
+    if discord_id and discord_id.isdigit():
+        return f"<@{discord_id}>"
+    return _discord_display(displays, name)
 
 
 def register_persistent_views(bot) -> None:
@@ -2595,19 +2651,33 @@ def tally_match_records(rows: Sequence[tuple[str, str, str | None]]) -> dict[str
     return {key: f"{wins.get(key, 0)}-{losses.get(key, 0)}" for key in set(wins) | set(losses)}
 
 
+CHAMPION_TITLE_GLYPH = "🏆"
+SET_CHAMPION_TITLE_GLYPH = "👑"
+
+
 def _format_champion_title(names_with_colors: list[tuple[str, str | None]], short_event: str) -> str:
     """Headline-style title — single: `Name takes {event} with {colors}`; multi: `A {colors} and
-    B {colors} share {event}`."""
+    B {colors} share {event}`. A Set Championship wears the crown instead of the trophy and drops the
+    one its pod name already carries, so the headline never shows two glyphs."""
+    championship = is_championship(short_event)
+    glyph = SET_CHAMPION_TITLE_GLYPH if championship else CHAMPION_TITLE_GLYPH
+    event = _stripped_event_title(short_event) if championship else short_event
+    article = "the " if championship else ""
     if not names_with_colors:
-        return f"🏆 {short_event}"
+        return f"{glyph} {event}"
 
     if len(names_with_colors) == 1:
         name, color = names_with_colors[0]
         emoji_run = format_deck_color_emojis(color)
-        suffix = f" with {emoji_run}" if emoji_run else ""
-        return f"🏆 {name} takes {short_event}{suffix}"
+        suffix = f" {emoji_run}" if championship and emoji_run else f" with {emoji_run}" if emoji_run else ""
+        return f"{glyph} {name} takes {article}{event}{suffix}"
 
-    return f"🏆 {_join_champion_names(names_with_colors)} share {short_event}"
+    return f"{glyph} {_join_champion_names(names_with_colors)} share {article}{event}"
+
+
+def _stripped_event_title(event_name: str) -> str:
+    """The event name without the leading glyph its pod name carries, so the headline supplies its own."""
+    return event_name.lstrip(f"{SET_CHAMPION_TITLE_GLYPH}{CHAMPION_TITLE_GLYPH} ").strip()
 
 
 def _format_champion_thread_callout(names_with_colors: list[tuple[str, str | None]]) -> str:
@@ -3175,11 +3245,48 @@ def _load_pairings_for_round(event_id: str, round_num: int) -> list[tuple[str, s
     return [(a, b) for a, b in rows]
 
 
+def _dm_refs_for_rounds_sync(event_id: str, rounds) -> dict[tuple[int, str], tuple[str, str]]:
+    """(round, participant_id) → (dm_channel_id, dm_message_id) for the pairing DMs already delivered.
+
+    Read before a regenerate deletes the match rows: the DM refs hang off match_id with ON DELETE
+    CASCADE, so they go with them, and the rebuilt round would DM everyone a second time.
+    """
+    refs: dict[tuple[int, str], tuple[str, str]] = {}
+    with SessionLocal() as session:
+        for round_num in rounds:
+            for row in dm_messages_for_round(session, event_id, round_num):
+                refs[(round_num, row.participant_id)] = (row.dm_channel_id, row.dm_message_id)
+    return refs
+
+
 def _delete_round_rows(event_id: str, round_num: int) -> None:
     with SessionLocal() as session:
         session.execute(
             delete(PodDraftMatch).where(PodDraftMatch.event_id == event_id, PodDraftMatch.round == round_num)
         )
+        session.commit()
+
+
+def _prune_stale_pairings(event_id: str, round_num: int, keep: list[tuple[str, str]]) -> None:
+    """Delete this round's pairings except `keep`, then compact pairing_index over the survivors so the
+    pairer can append from len(survivors) without landing on an index still in use."""
+    kept_keys = _pairing_keys(keep)
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(PodDraftMatch)
+            .where(PodDraftMatch.event_id == event_id, PodDraftMatch.round == round_num)
+            .order_by(PodDraftMatch.pairing_index)
+        ).scalars().all()
+        index = 0
+        for row in rows:
+            key = frozenset((
+                normalize_player_name(row.player_a_name), normalize_player_name(row.player_b_name),
+            ))
+            if key in kept_keys:
+                row.pairing_index = index
+                index += 1
+            else:
+                session.delete(row)
         session.commit()
 
 
@@ -3240,10 +3347,12 @@ async def _dm_changed_opponents(
             updated=True,
         )
         try:
-            user = bot_client.get_user(int(info.discord_id)) or await bot_client.fetch_user(int(info.discord_id))
+            user = await fetch_dm_user(bot_client, info.discord_id)
+            if user is None:
+                continue
             await user.send(embed=embed)
         except discord.Forbidden:
-            log.info("re-pair DM blocked for %s", info.discord_id)
+            log.info(f"re-pair DM blocked for {info.discord_id}")
         except discord.HTTPException:
             log.warning("re-pair DM failed", exc_info=True)
 
@@ -3483,6 +3592,8 @@ async def maybe_post_championship(manager, *, force: bool = False) -> None:
         manager.champion_announced = False
         log.warning(f"[FINALIZE] champion.post_error event={event_id}", exc_info=True)
         return
+    if is_championship(event_name):
+        await swap_set_champion_role(getattr(target, "guild", None), manager.champion_discord_ids)
     await _send_champion_thread_ping(manager, champions, player_colors)
     await _react_trophy_on_champion_screenshots(manager, deck_data, dm_info)
     if not force and manager.championship_task is not None and not manager.championship_task.done():
@@ -4226,17 +4337,22 @@ def format_round_announcement(round_num: int, m: dict, pairings_url: str | None 
     rather than as a second match played in it.
     """
     if corrected:
-        lead = f"♻️ **{round_link_target(round_num, pairings_url)} {RESULT_CORRECTED_LEAD}**"
-    else:
-        lead = round_link_label(round_num, pairings_url)
-    return f"{lead} {format_reported_result(m)}"
+        return format_round_change(round_num, format_reported_result(m), pairings_url)
+    return f"{round_link_label(round_num, pairings_url)} {format_reported_result(m)}"
+
+
+def format_round_change(round_num: int, phrase: str, pairings_url: str | None = None,
+                        lead: str = RESULT_CORRECTED_LEAD) -> str:
+    """A change to an already-reported round as one line: '♻️ **[__Round 2__] Result corrected:** Marlo
+    wins 2-1 vs Bob'. Also the head a bracket re-pair note continues from, so a correction that moves
+    later pairings stays one message."""
+    return f"♻️ **{round_link_target(round_num, pairings_url)} {lead}** {phrase}"
 
 
 def format_round_clear_announcement(round_num: int, m: dict, pairings_url: str | None = None) -> str:
     """The thread note when a reported result is cleared, so a round never loses a result silently."""
     a_disp, b_disp = match_displays(m)
-    lead = f"♻️ **{round_link_target(round_num, pairings_url)} {RESULT_CLEARED_LEAD}**"
-    return f"{lead} {a_disp} vs {b_disp}"
+    return format_round_change(round_num, f"{a_disp} vs {b_disp}", pairings_url, RESULT_CLEARED_LEAD)
 
 
 def _match_line(m: dict, *, seat_label: str | None = None, show_arena: bool = False) -> str:
@@ -4273,7 +4389,7 @@ def _round1_lines(match_states: list[dict], seated: bool) -> list[str]:
     return lines
 
 
-REPORT_NOTICE = f"🎯{NBSP}{NBSP}Opponent DM'd. Report your result using the dropdowns below"
+REPORT_NOTICE = f"🎯{NBSP}{NBSP}Opponent DM'd. Use `/report-results` or the menu below after your match"
 DECK_IMAGE_NOTICE = f"🚨{NBSP}{NBSP}Change your MTGA deck image before you play, or it leaks your P1P1"
 
 
@@ -4605,7 +4721,8 @@ def bracket_edit_blocked(match_id: str) -> bool:
     return downstream > 0
 
 
-async def bracket_advance(manager, source_round: int, *, announce_fill: bool = True) -> None:
+async def bracket_advance(manager, source_round: int, *, announce_fill: bool = True,
+                          reuse_dms: dict[tuple[int, str], tuple[str, str]] | None = None) -> None:
     """Fast-advance: after a result in source_round, append whatever target-round pairings the new
     records now allow and grow the target round's message in place. Posts the target round the first
     time it has a real pairing — never an all-placeholder slate. The 2-0 trophy match opens the
@@ -4613,7 +4730,8 @@ async def bracket_advance(manager, source_round: int, *, announce_fill: bool = T
 
     When later matches lock into an already-posted round, a thread note names them so the other-half
     fill reads as an event rather than the message silently changing. `announce_fill` is False during
-    the edit-driven regenerate, which posts its own corrected-pairings note."""
+    the edit-driven regenerate, which posts its own corrected-pairings note, and `reuse_dms` lets it
+    rewrite the pairing DMs it already sent instead of sending a second set."""
     if source_round >= TOTAL_ROUNDS:
         return
     event_id = manager.event_id
@@ -4622,13 +4740,9 @@ async def bracket_advance(manager, source_round: int, *, announce_fill: bool = T
 
     outcomes = await asyncio.to_thread(load_matches, event_id)
     existing = await asyncio.to_thread(_load_pairings_for_round, event_id, target)
-    source_states = await asyncio.to_thread(_load_round_states, event_id, source_round)
-    source_complete = (
-        len(source_states) == len(players) // 2
-        and all(m["winner_name"] for m in source_states)
-    )
     new = pod_bracket.incremental_pairings(
-        players, outcomes, existing, target, source_round_complete=source_complete,
+        players, outcomes, existing, target,
+        source_round_complete=await _round_fully_reported(manager, source_round),
     )
     new_rows: list[tuple[str, str, str]] = []
     if new:
@@ -4667,9 +4781,19 @@ async def bracket_advance(manager, source_round: int, *, announce_fill: bool = T
             log.warning(f"could not edit bracket round {target}", exc_info=True)
 
     if new_rows:
-        await _dm_round_pairings(manager.bot, event_id, target, new_rows, target_msg.jump_url)
+        await _dm_round_pairings(manager.bot, event_id, target, new_rows, target_msg.jump_url, reuse_dms)
         if was_posted and announce_fill:
             await _announce_bracket_fill(manager, target, new_rows, target_msg.jump_url)
+
+
+async def _round_fully_reported(manager, round_num: int) -> bool:
+    """Whether every match of the round is paired and reported. The pairer only forces a rematch out of
+    a group it can't pair cleanly once the source round is settled, so this gates that fallback."""
+    states = await asyncio.to_thread(_load_round_states, manager.event_id, round_num)
+    return (
+        len(states) == len(manager.tournament_players) // 2
+        and all(m["winner_name"] for m in states)
+    )
 
 
 def bracket_fill_notice(round_num: int, matchups: list[tuple[str, str]], url: str | None) -> str:
@@ -4700,10 +4824,13 @@ async def _announce_bracket_fill(manager, round_num: int, new_rows: list[tuple[s
 
 
 async def _bracket_maybe_advance(manager, round_num: int, is_edit: bool = False,
-                                  result_phrase: str | None = None) -> None:
+                                  head: str | None = None) -> None:
     """Bracket counterpart to the Swiss advance branch in _maybe_advance: append the next round after
     a fresh result, regenerate downstream after an edit, and on the final round refresh standings +
-    schedule the finalize grace once the full slate (roster/2 matches) has reported."""
+    schedule the finalize grace once the full slate (roster/2 matches) has reported.
+
+    `head` is the corrected-result line the caller held back for the regenerate to post as one message
+    with the pairing change; see `bracket_regenerate_downstream`."""
     event_id = manager.event_id
     roster_size = len(manager.tournament_players)
     if round_num >= TOTAL_ROUNDS:
@@ -4713,7 +4840,7 @@ async def _bracket_maybe_advance(manager, round_num: int, is_edit: bool = False,
             await manager.share_draft_log()
             _schedule_grace(manager, round_num)
     elif is_edit:
-        await bracket_regenerate_downstream(manager, round_num, result_phrase)
+        await bracket_regenerate_downstream(manager, round_num, head)
     else:
         await bracket_advance(manager, round_num)
     await _relock_prior_rounds(manager, round_num)
@@ -4749,43 +4876,117 @@ def format_result_change(a_name: str, b_name: str, winner_name: str | None, scor
     return f"{a_disp} vs {b_disp} result cleared"
 
 
-def bracket_regen_notice(result_phrase: str | None, round_num: int, pairings_url: str | None) -> str:
-    """The single source of truth for the thread note posted when an edit re-pairs a bracket round."""
-    head = f"**{RESULT_CORRECTED_LEAD}** {result_phrase} - " if result_phrase else ""
-    updated = f"[Pairings Updated]({pairings_url})" if pairings_url else "Pairings Updated"
-    return f"♻️ {head}Round {round_num} {updated} {emojis.get('manat')}".rstrip()
+PAIRING_GAP = NBSP * 5
 
 
-async def bracket_regenerate_downstream(manager, edited_round: int, result_phrase: str | None = None) -> None:
+def bracket_regen_notice(head: str | None, round_num: int, pairings_url: str | None,
+                         new_matchups: list[tuple[str, str]] | None = None) -> str:
+    """The single source of truth for the thread note posted when an edit re-pairs a bracket round.
+
+    `head` is the corrected-result line the re-pair follows from, so the correction and the pairing
+    change read as one message. `new_matchups` carries the pairings the regenerate created, each side a
+    mention where the player has a linked Discord account, so the re-paired players are pinged.
+    """
+    updated = f"[**Pairings Updated**]({pairings_url})" if pairings_url else "**Pairings Updated**"
+    lead = f"{head} - " if head else "♻️ "
+    notice = f"{lead}Round {round_num} {updated} {emojis.get('manat')}".rstrip()
+    if new_matchups:
+        pairings = PAIRING_GAP.join(f"{a} vs {b}" for a, b in new_matchups)
+        notice += f"\n⚠️ **New Pairings:** {pairings}"
+    return notice
+
+
+async def bracket_regenerate_downstream(manager, edited_round: int, head: str | None = None) -> None:
     """An upstream result changed (edit/clear) while no later round had reported yet: discard the
     downstream rounds and rebuild them from the corrected results, editing the round messages in
-    place. Posts a one-line thread note (the corrected result + a link to the changed round). DMs
-    follow via bracket_advance, which re-DMs every pairing it creates."""
+    place.
+
+    Pairings the correction did not invalidate are kept, so only the players whose record moved get a
+    new opponent. Posts `head` (the corrected-result line the caller held back) with the changed round
+    and its new pairings appended, so a correction is one thread message instead of two. Each re-paired
+    player's existing round DM is rewritten in place, which reaches them without a second notification.
+    """
     event_id = manager.event_id
-    old = {
-        r: await asyncio.to_thread(_load_pairings_for_round, event_id, r)
-        for r in range(edited_round + 1, TOTAL_ROUNDS + 1)
-    }
-    for r in range(edited_round + 1, TOTAL_ROUNDS + 1):
-        await asyncio.to_thread(_delete_round_rows, event_id, r)
+    downstream = range(edited_round + 1, TOTAL_ROUNDS + 1)
+    old = {r: await asyncio.to_thread(_load_pairings_for_round, event_id, r) for r in downstream}
+    sent_dms = await asyncio.to_thread(_dm_refs_for_rounds_sync, event_id, downstream)
+    keep = await _pairings_to_keep(manager, downstream, old)
+    for r in downstream:
+        await asyncio.to_thread(_prune_stale_pairings, event_id, r, keep[r])
     for src in range(edited_round, TOTAL_ROUNDS):
-        await bracket_advance(manager, src, announce_fill=False)
+        await bracket_advance(manager, src, announce_fill=False, reuse_dms=sent_dms)
 
     changed_rounds = []
-    for r in range(edited_round + 1, TOTAL_ROUNDS + 1):
-        now = await asyncio.to_thread(_load_pairings_for_round, event_id, r)
-        if {frozenset(p) for p in now} != {frozenset(p) for p in old.get(r, [])}:
+    current: dict[int, list[tuple[str, str]]] = {}
+    for r in downstream:
+        current[r] = await asyncio.to_thread(_load_pairings_for_round, event_id, r)
+        if _pairing_keys(current[r]) != _pairing_keys(old.get(r, [])):
             changed_rounds.append(r)
-    if not changed_rounds:
-        return
-    log.info(f"[BRACKET] event={event_id} regenerate after R{edited_round} edit changed rounds {changed_rounds}")
     thread = await manager._fetch_thread()
     if thread is None:
         return
+    if not changed_rounds:
+        if head:
+            await _send_regen_notice(thread, head)
+        return
+    log.info(f"[BRACKET] event={event_id} regenerate after R{edited_round} edit changed rounds {changed_rounds}")
     target = changed_rounds[0]
     target_msg = manager.round_messages.get(target)
     url = target_msg.jump_url if target_msg is not None else None
+    displays = await asyncio.to_thread(load_participant_displays, event_id)
+    new_matchups = [
+        (_discord_mention(displays, a), _discord_mention(displays, b))
+        for a, b in _added_pairings(old.get(target, []), current[target])
+    ]
+    await _send_regen_notice(thread, bracket_regen_notice(head, target, url, new_matchups))
+
+
+async def _pairings_to_keep(manager, downstream, old: dict[int, list[tuple[str, str]]],
+                            ) -> dict[int, list[tuple[str, str]]]:
+    """Which downstream pairings survive a corrected result, per round.
+
+    A bracket round pairs same-record players, so a pairing whose two players still share a record is
+    still a legal pairing and re-pairing it would move players for nothing. Keeping some pairings does
+    shrink the pool the rest re-pair from, which can force a rematch a full re-pair would have avoided;
+    when that happens the round is re-paired from scratch instead.
+    """
+    players = manager.tournament_players
+    outcomes = await asyncio.to_thread(load_matches, manager.event_id)
+    records = pod_bracket.player_records(players, outcomes)
+    keep: dict[int, list[tuple[str, str]]] = {}
+    for r in downstream:
+        survivors = [
+            (a, b) for a, b in old.get(r, [])
+            if a in records and b in records and records[a] == records[b]
+        ]
+        candidate = pod_bracket.incremental_pairings(
+            players, outcomes, survivors, r,
+            source_round_complete=await _round_fully_reported(manager, r - 1),
+        )
+        if pod_bracket.contains_rematch(candidate, outcomes):
+            log.info(f"[BRACKET] event={manager.event_id} keeping R{r} pairings would force a rematch, full re-pair")
+            survivors = []
+        keep[r] = survivors
+    return keep
+
+
+async def _send_regen_notice(thread, notice: str) -> None:
     try:
-        await thread.send(bracket_regen_notice(result_phrase, target, url))
+        await thread.send(notice, allowed_mentions=discord.AllowedMentions(users=True))
     except discord.HTTPException:
         log.warning("could not post bracket regenerate announcement", exc_info=True)
+
+
+def _pairing_keys(pairs: list[tuple[str, str]]) -> set[frozenset[str]]:
+    return {frozenset((normalize_player_name(a), normalize_player_name(b))) for a, b in pairs}
+
+
+def _added_pairings(old: list[tuple[str, str]], now: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """The pairings in `now` that `old` did not have, so a regenerate names only the matchups it
+    actually changed instead of the whole round."""
+    previous = _pairing_keys(old)
+    added = []
+    for a, b in now:
+        if frozenset((normalize_player_name(a), normalize_player_name(b))) not in previous:
+            added.append((a, b))
+    return added

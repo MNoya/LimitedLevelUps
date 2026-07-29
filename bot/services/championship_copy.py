@@ -59,8 +59,7 @@ def card_content(
     arrival = int(next_release_at.timestamp())
     next_symbol = emojis.prefix(next_set_code.lower())
     return (
-        f"Closing off **{set_name}**!\n"
-        f"The leaderboard decides who plays for the championship, and the winner is crowned {champion_mention}\n\n"
+        f"{_closing_lines(set_name, champion_mention)}\n\n"
         f"📊 **Standings:** [limitedlevelups.com/leaderboard](<{standings_url(set_code)}>)\n"
         f"📺 **Streamed live:** [twitch.tv/GatoDelFuego](<{TWITCH_URL}>)\n\n"
         "**How it works**\n"
@@ -68,6 +67,17 @@ def card_content(
         "the rest are alternates for no-shows.\n"
         "• Best of 3, Swiss, three rounds, one Champion.\n\n"
         f"{next_symbol}**{next_set_name}** arrives <t:{arrival}:R>"
+    )
+
+
+def native_event_body(*, set_name: str, set_code: str, champion_mention: str) -> str:
+    """The card's opening, for the native scheduled event's description. The Events tab renders no
+    masked links, so the standings and stream addresses are written out, and the seat rules stay on
+    the card where the RSVP buttons are."""
+    return (
+        f"{_closing_lines(set_name, champion_mention)}\n\n"
+        f"📊 **Standings:** {bare_url(standings_url(set_code))}\n"
+        f"📺 **Streamed live:** {bare_url(TWITCH_URL)}"
     )
 
 
@@ -116,6 +126,17 @@ def wave_invite_ping(
         "-# 8-player Pod Draft, Best-of-Three, three Swiss rounds paired by record. "
         "You can play all rounds even after a loss. "
         f"Winner is crowned {champion_mention}"
+    )
+
+
+def bare_url(url: str) -> str:
+    return url.removeprefix("https://")
+
+
+def _closing_lines(set_name: str, champion_mention: str) -> str:
+    return (
+        f"Closing off **{set_name}**!\n"
+        f"The leaderboard decides who plays for the championship, and the winner is crowned {champion_mention}"
     )
 
 

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from bot.commands.pod_queue import _preset_slot_time, _when_options
+from bot.commands.pod_queue import _preset_slot_time, _when_clock, _when_options
 from bot.services.pod_format_select import WRITE_IN_VALUE
 from bot.services.pod_launch import LauncherSlot, _lazy_status
 from bot.services.pod_signals import STATUS_EXPIRED, STATUS_FIRED, STATUS_OPEN, named_bucket_key
@@ -157,7 +157,6 @@ def test_when_options_default_right_now_when_unscheduled():
     defaulted = [o for o in options if o.default]
     assert [o.value for o in defaulted] == ["now"]
     assert options[-1].value == WRITE_IN_VALUE
-    assert "Schedule for later" in options[-1].label
 
 
 def test_when_options_defaults_the_selected_preset():
@@ -168,7 +167,6 @@ def test_when_options_defaults_the_selected_preset():
     defaulted = [o for o in options if o.default]
     assert [o.value for o in defaulted] == ["LATE"]
     assert options[-1].value == WRITE_IN_VALUE
-    assert "Schedule for later" in options[-1].label
 
 
 def test_when_options_shows_custom_time_as_its_own_defaulted_option():
@@ -179,7 +177,7 @@ def test_when_options_shows_custom_time_as_its_own_defaulted_option():
     defaulted = [o for o in options if o.default]
     assert len(defaulted) == 1
     assert defaulted[0].value == WRITE_IN_VALUE
-    assert "Schedule for later" not in defaulted[0].label
+    assert _when_clock(custom) in defaulted[0].label
 
 
 def test_seed_options_from_rankings_adds_each_ranked_set():

@@ -69,10 +69,13 @@ async def create_championship(bot: commands.Bot, plan: championship.Championship
         next_set_code=plan.next_set_code, next_release_at=plan.next_release_at,
         champion_mention=champion_mention,
     )
+    native_body = cc.native_event_body(
+        set_name=plan.set_name, set_code=plan.set_code, champion_mention=champion_mention,
+    )
     event_id = await post_scheduled_card(
         bot, channel, set_code=plan.set_code, event_time=plan.event_at,
         name=f"👑 {plan.set_code} Set Championship", notify_role_name=POD_DRAFTERS_ROLE_NAME,
-        pairing_mode="swiss", seating_mode="leaderboard", card_body=content,
+        pairing_mode="swiss", seating_mode="leaderboard", card_body=content, native_body=native_body,
     )
     if event_id is None:
         log.warning(f"championship for {plan.set_code} failed to post its card")

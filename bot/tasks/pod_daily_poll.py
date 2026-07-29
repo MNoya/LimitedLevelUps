@@ -83,6 +83,7 @@ from bot.services.pod_launcher_copy import (
     PLAY_AGAIN_BUTTON,
     PLAY_AGAIN_INTRO,
     PLAY_AGAIN_LOVE_EMOJI,
+    PLAY_AGAIN_SIGNED_UP,
     POLL_FORMAT_SEVERAL,
     POLL_INTRO_TIME_AND_FORMAT,
     POLL_INTRO_TIME_ONLY,
@@ -261,6 +262,7 @@ def poll_ping_line(guild: discord.Guild | None) -> str | None:
 
 def build_poll_embed(
     slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None = None, closed: bool = False,
+    board_date: date | None = None,
 ) -> discord.Embed:
     """One inline field per bucket, so the two slots read as two columns and each column stacks its slots
     by time: a finished pod above the next day's gathering slot, under one slot-name header with Played
@@ -268,14 +270,16 @@ def build_poll_embed(
     follow the columns as a full-width field: an embed renders every field after its description, so a
     field is the only way to seat that copy below the board. `closed` renders the terminal state as a
     compact On This Day history list in the description instead of columns, so a reader scrolling up sees
-    the day's results with no empty column space."""
-    slot_times = [slot.slot_time for slot in slots if slot.slot_time is not None]
-    earliest = min(slot_times) if slot_times else None
-    day = earliest.astimezone(SCHEDULE_TZ) if earliest else None
+    the day's results with no empty column space.
+
+    A live board titles itself after the earliest slot it still carries, so a board whose columns rolled
+    names the day it plays. A retired board is a record of one day, so `board_date` titles and filters it:
+    the later-day pods a rolled column opened belong to that day's own history."""
+    day = _title_day(slots, closed, board_date)
     title = f"{POLL_TITLE} - {day:%b %-d}" if day else POLL_TITLE
     heading = f"## {NBSP * 2}🚀 {title}"
     if closed:
-        return _archive_embed(slots, guild, heading)
+        return _archive_embed(slots, guild, heading, day)
     codes = _offered_formats(slots)
     several = len(codes) > 1
     intro = POLL_INTRO_TIME_AND_FORMAT if several else POLL_INTRO_TIME_ONLY
@@ -290,6 +294,17 @@ def build_poll_embed(
             embed.add_field(name=ZWSP, value=value, inline=True)
     embed.add_field(name=ZWSP, value=_mechanics_note(several), inline=False)
     return embed
+
+
+def _title_day(
+    slots: list[pod_launch.LauncherSlot], closed: bool, board_date: date | None,
+) -> date | None:
+    if closed and board_date is not None:
+        return board_date
+    slot_times = [slot.slot_time for slot in slots if slot.slot_time is not None]
+    if not slot_times:
+        return None
+    return min(slot_times).astimezone(SCHEDULE_TZ).date()
 
 
 def _finished_pad(columns: list[list[pod_launch.LauncherSlot]]) -> int:
@@ -348,15 +363,28 @@ def _mechanics_note(several: bool) -> str:
 
 
 def _archive_embed(
-    slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None, heading: str,
+    slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None, heading: str, day: date | None,
 ) -> discord.Embed:
-    """The retired card: On This Day plus one line per finished pod, all in the description, so it reads
-    as a compact day-history with no empty column space. A second table adds its own line."""
-    lines = [_finished_line(slot, guild) for slot in slots if slot.committed]
+    """The retired card: On This Day plus one line per pod the day played, all in the description, so it
+    reads as a compact day-history with no empty column space. A second table adds its own line.
+
+    A board carries the later-day pods its rolled columns opened, which the live card wants and this one
+    does not: they belong to their own day's history, and that day's board records them."""
+    lines = [_finished_line(slot, guild) for slot in slots if _played_on_day(slot, day)]
     body = "\n".join(line for line in lines if line) if lines else "-"
     return discord.Embed(
         description=f"{heading}\n{ARCHIVE_INTRO}\n{body}", color=discord.Color.dark_grey(),
     )
+
+
+def _played_on_day(slot: pod_launch.LauncherSlot, day: date | None) -> bool:
+    """Whether a pod belongs to the retired board's day. A pod with no start time at all is kept: it is a
+    real played pod, and dropping it would lose it from every history."""
+    if not slot.committed:
+        return False
+    if day is None or slot.slot_time is None:
+        return True
+    return slot.slot_time.astimezone(SCHEDULE_TZ).date() == day
 
 
 def _lane_order(slots: list[pod_launch.LauncherSlot]) -> list[str]:
@@ -744,6 +772,7 @@ async def _handle_play_again_click(interaction: discord.Interaction, bucket_key:
     await interaction.followup.send(_slot_effect_lead(bucket_key, slot_time), ephemeral=True)
     if not joined:
         return
+    await _announce_play_again_signup(interaction, bucket_key)
     if isinstance(interaction.user, discord.Member):
         await grant_pod_drafters(interaction.user)
         await _grant_slot_role(interaction.user, bucket_key)
@@ -751,6 +780,25 @@ async def _handle_play_again_click(interaction: discord.Interaction, bucket_key:
     if board_date is not None:
         await _rerender_poll(interaction.client, launcher_message_id, board_date)
     await refresh_slot_nudge(interaction.client, signal_id)
+
+
+async def _announce_play_again_signup(interaction: discord.Interaction, bucket_key: str) -> None:
+    """Say a Play Again signup out loud where the prompt sits, so the group that just drafted sees who is
+    already in for the next one without opening the launcher. The click itself is confirmed privately, and a
+    thread full of match reports is where a rematch gets agreed. Best-effort: a failed send keeps the signup.
+
+    Names the pod by slot and format without a day: the prompt outlives the day it was posted on, and the
+    click joins whichever pod of that slot is soonest."""
+    channel = interaction.channel
+    if not isinstance(channel, discord.abc.Messageable):
+        return
+    line = PLAY_AGAIN_SIGNED_UP.format(
+        player=interaction.user.display_name, pod=_signed_up_pod_label(bucket_key),
+    )
+    try:
+        await channel.send(line)
+    except discord.HTTPException:
+        log.warning(f"could not announce play-again signup bucket={bucket_key}", exc_info=True)
 
 
 class PodPollView(discord.ui.View):
@@ -807,6 +855,14 @@ def _named_pod_label(bucket_key: str, set_code: str | None = None) -> str:
     code = format_of(bucket_key) or set_code
     short = _slot_short_name(time_key_of(bucket_key))
     return f"{short} {code}" if code else short
+
+
+def _signed_up_pod_label(bucket_key: str) -> str:
+    """`Late Peasant`, the same pod a button names but written for prose: a cube reads as its name instead
+    of the stored code, which would shout mid-sentence."""
+    short = _slot_short_name(time_key_of(bucket_key))
+    code = format_of(bucket_key)
+    return f"{short} {pod_format.format_short_name(code)}" if code else short
 
 
 def _slot_button_emoji(bucket_key: str) -> "discord.Emoji | str | None":
@@ -1591,7 +1647,8 @@ async def close_launcher_for_date(bot: commands.Bot, signal_date: date) -> None:
         message = await channel.fetch_message(int(message_id))
         if not message.components and not message.content:
             return
-        await message.edit(content=None, embed=build_poll_embed(slots, guild, closed=True), view=None)
+        embed = build_poll_embed(slots, guild, closed=True, board_date=signal_date)
+        await message.edit(content=None, embed=embed, view=None)
     except discord.HTTPException:
         log.warning(f"could not close launcher message {message_id}", exc_info=True)
 
