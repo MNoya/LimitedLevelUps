@@ -61,7 +61,7 @@ def link_notice(actor: str, member_mention: str, arena_name: str) -> str:
 
 
 def cancel_notice(actor: str) -> str:
-    return f"{actor} canceled the draft 🥀"
+    return f"{actor} canceled the draft"
 
 
 def timer_notice(actor: str, seconds: int) -> str:

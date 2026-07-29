@@ -1902,6 +1902,8 @@ async def cancel_event_card(event_id: str) -> None:
 
 
 async def _mark_card_canceled(channel_id: int, message_id: int) -> None:
+    """A canceled card keeps only its name and the canceled stamp: the RSVP columns and the start time
+    are what someone reads to decide whether to join, and there is nothing left to join."""
     channel = await _resolve_channel(channel_id)
     if channel is None:
         return
@@ -1911,10 +1913,11 @@ async def _mark_card_canceled(channel_id: int, message_id: int) -> None:
         log.warning(f"could not fetch card {message_id} to cancel", exc_info=True)
         return
     embed = message.embeds[0] if message.embeds else None
-    if embed is not None and CARD_CANCELED_MARKER not in (embed.description or ""):
+    if embed is not None:
         title_line = (embed.description or "").split("\n", 1)[0]
         embed.color = discord.Color.dark_grey()
         embed.description = f"{title_line}\n{CARD_CANCELED_MARKER}"
+        embed.clear_fields()
     try:
         await message.edit(content=None, embed=embed, view=None)
     except discord.HTTPException:
