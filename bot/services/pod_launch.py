@@ -34,8 +34,8 @@ from bot.services import pod_signals
 from bot.services import pod_team
 from bot.services.pod_draft_manager import (
     PodDraftManager,
-    set_card_cancel_hook,
     set_card_close_hook,
+    set_pod_cancel_hook,
     start_manager,
 )
 from bot.services.pod_drafts import (
@@ -887,6 +887,24 @@ def expire_signal_sync(signal_id: str) -> bool:
         )
         session.commit()
         return result.rowcount == 1
+
+
+def close_canceled_pod_slot_sync(event_id: str) -> str | None:
+    """Close the launcher slot a canceled pod fired out of; returns its signal id, or None for a pod no slot
+    owns. A row left marked fired with its pod deleted reads as a slot still gathering, so the board renders
+    the roster it fired on and a button that joins a pod nobody will run."""
+    with SessionLocal() as session:
+        slot = session.execute(
+            select(PodSignal).where(
+                PodSignal.event_id == event_id, PodSignal.kind == pod_signals.KIND_POLL
+            )
+        ).scalars().first()
+        if slot is None:
+            return None
+        slot.status = pod_signals.STATUS_EXPIRED
+        slot.event_id = None
+        session.commit()
+        return slot.id
 
 
 @dataclass(frozen=True)
@@ -1885,20 +1903,24 @@ async def close_event_card(bot: commands.Bot, event_id: str) -> None:
 CARD_CANCELED_MARKER = "🗑️ **Draft canceled**"
 
 
-async def cancel_event_card(event_id: str) -> None:
-    """Retire a canceled pod's card: grey it, stamp it canceled, and drop its buttons on both the
-    channel card and the thread mirror. Fired from `cancel_pod_event` before the event row is deleted,
-    so the card surfaces still resolve; a no-op for pods without a card."""
+async def retire_canceled_pod(event_id: str) -> None:
+    """Stand every surface of a canceled pod down: grey its card and stamp it canceled, drop the buttons on
+    the thread mirror, then close the launcher slot it came from so the board stops offering a pod that no
+    longer exists. Fired from `cancel_pod_event` before the event row is deleted, so each surface still
+    resolves; the card steps are a no-op for pods without a card."""
     if _bot is None:
         return
     await clear_underfill_nudge(_bot, event_id)
     surfaces = await asyncio.to_thread(event_card_surfaces_sync, event_id)
-    if surfaces is None:
-        return
-    channel_id, message_id, thread_id, thread_message_id = surfaces
-    await _mark_card_canceled(int(channel_id), int(message_id))
-    if thread_id and thread_message_id:
-        await _retire_message(int(thread_id), int(thread_message_id))
+    if surfaces is not None:
+        channel_id, message_id, thread_id, thread_message_id = surfaces
+        await _mark_card_canceled(int(channel_id), int(message_id))
+        if thread_id and thread_message_id:
+            await _retire_message(int(thread_id), int(thread_message_id))
+    signal_id = await asyncio.to_thread(close_canceled_pod_slot_sync, event_id)
+    if signal_id is not None:
+        await clear_slot_nudge(_bot, signal_id)
+        await notify_slot_rolled(_bot, signal_id)
 
 
 async def _mark_card_canceled(channel_id: int, message_id: int) -> None:
@@ -2067,7 +2089,7 @@ def init_launch(bot: commands.Bot) -> None:
     global _bot
     _bot = bot
     set_card_close_hook(close_event_card)
-    set_card_cancel_hook(cancel_event_card)
+    set_pod_cancel_hook(retire_canceled_pod)
 
 
 def set_slot_roll_hook(callback) -> None:

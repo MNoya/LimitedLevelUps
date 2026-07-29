@@ -522,6 +522,39 @@ def test_a_fired_pod_is_never_offered_a_second_time(session, monkeypatch, latest
     assert pod_launch.sibling_fire_candidates_sync(firing.id) == []
 
 
+# --- cancel ---
+
+def test_canceling_a_pod_closes_the_slot_it_fired_out_of(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    late = bucket_for_lane(FRIDAY, LANE_LATE).key
+    slot = _seed_signal(session, late, FRIDAY, message_id="today", status=STATUS_FIRED)
+    _fill(session, slot, THRESHOLD)
+    event = _seed_pod(session, slot_event_time(FRIDAY, late), set_code=LATEST)
+    slot.event_id = event.id
+    session.commit()
+
+    signal_id = pod_launch.close_canceled_pod_slot_sync(event.id)
+    session.delete(event)
+    session.commit()
+
+    assert signal_id == slot.id
+    assert slot.status == STATUS_EXPIRED
+    late_column = [
+        entry for entry in pod_launch.launcher_snapshot_sync("today", FRIDAY)
+        if lane_of(entry.bucket_key) == LANE_LATE
+    ]
+    assert [(entry.committed, entry.status) for entry in late_column] == [(False, STATUS_EXPIRED)]
+
+
+def test_canceling_a_pod_no_column_owns_closes_no_slot(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    late = bucket_for_lane(FRIDAY, LANE_LATE).key
+    event = _seed_pod(session, slot_event_time(FRIDAY, late), set_code=LATEST)
+    session.commit()
+
+    assert pod_launch.close_canceled_pod_slot_sync(event.id) is None
+
+
 @pytest.fixture
 def latest_only(monkeypatch):
     monkeypatch.setattr("bot.services.pod_format_schedule.FORMATS_BY_DAY", {})

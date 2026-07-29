@@ -123,7 +123,7 @@ _SEEDING_REPOST_HOOK = None
 _SECOND_TABLE_HOOK = None
 _FORMAT_TABLE_HOOK = None
 _CARD_CLOSE_HOOK = None
-_CARD_CANCEL_HOOK = None
+_POD_CANCEL_HOOK = None
 _CARD_REFRESH_HOOK = None
 _UNDERFILL_FIRED_HOOK = None
 
@@ -135,12 +135,12 @@ def set_card_close_hook(callback) -> None:
     _CARD_CLOSE_HOOK = callback
 
 
-def set_card_cancel_hook(callback) -> None:
-    """pod_launch registers its RSVP-card cancel here so `cancel_pod_event` can retire the card before
-    the event row is deleted — awaited, not fire-and-forget, so the card surfaces resolve while the row
-    still exists."""
-    global _CARD_CANCEL_HOOK
-    _CARD_CANCEL_HOOK = callback
+def set_pod_cancel_hook(callback) -> None:
+    """pod_launch registers its cancel teardown here so `cancel_pod_event` can retire the pod's card and
+    close its launcher slot before the event row is deleted — awaited, not fire-and-forget, so every
+    surface resolves while the row still exists."""
+    global _POD_CANCEL_HOOK
+    _POD_CANCEL_HOOK = callback
 
 
 def notify_card_close(bot, event_id: str) -> None:
@@ -247,8 +247,8 @@ async def cancel_pod_event(event_id: str, *, actor: str) -> str | None:
                 task.cancel()
         await manager.mark_canceled(actor)
         await manager.disconnect_safely()
-    if _CARD_CANCEL_HOOK is not None:
-        await _CARD_CANCEL_HOOK(event_id)
+    if _POD_CANCEL_HOOK is not None:
+        await _POD_CANCEL_HOOK(event_id)
     await asyncio.to_thread(delete_event_sync, event_id)
     return None
 
