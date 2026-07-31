@@ -72,6 +72,7 @@ class Player(Base):
     format_interests     = Column(ARRAY(String), nullable=False, server_default="{}")
     flashback_ranking    = Column(ARRAY(String), nullable=False, server_default="{}")
     cube_choices         = Column(ARRAY(String), nullable=False, server_default="{}")
+    declined_pod_roles   = Column(ARRAY(String), nullable=False, server_default="{}")
 
     stats = relationship(
         "PlayerStats",

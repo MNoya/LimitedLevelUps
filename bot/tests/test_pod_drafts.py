@@ -11,6 +11,7 @@ from bot.services.pod_drafts import (
     FinalStanding,
     active_event_for_discord_user_in_dm,
     capture_deck_screenshot,
+    declined_pod_roles,
     dm_draft_link_enabled,
     draftmancer_url_for,
     finalize_champion,
@@ -24,6 +25,7 @@ from bot.services.pod_drafts import (
     record_ondemand_event,
     seed_event_participants,
     set_dm_draft_link,
+    set_pod_roles_declined,
     set_participant_deck_colors,
     upsert_participant,
 )
@@ -702,3 +704,40 @@ def test_set_dm_draft_link_updates_existing_row(session):
     )
 
     assert dm_draft_link_enabled(session, "7") is False
+
+
+def test_declined_pod_roles_is_empty_for_a_player_with_no_row(session):
+    assert declined_pod_roles(session, "999") == set()
+
+
+def test_declining_a_role_creates_a_lightweight_row_and_sticks(session):
+    set_pod_roles_declined(
+        session, discord_id="42", discord_username="ann", display_name="Ann",
+        avatar_hash=None, keys=["early"], declined=True,
+    )
+
+    assert declined_pod_roles(session, "42") == {"early"}
+    player = session.execute(select(Player).where(Player.discord_id == "42")).scalar_one()
+    assert player.leaderboard_opt_in is False
+
+
+def test_declines_accumulate_and_clear_one_role_at_a_time(session):
+    _seed_player(session, discord_id="7", username="bo", display_name="Bo")
+    choice = dict(discord_id="7", discord_username="bo", display_name="Bo", avatar_hash=None)
+
+    set_pod_roles_declined(session, **choice, keys=["early"], declined=True)
+    set_pod_roles_declined(session, **choice, keys=["wknd_late"], declined=True)
+    set_pod_roles_declined(session, **choice, keys=["early"], declined=False)
+
+    assert declined_pod_roles(session, "7") == {"wknd_late"}
+
+
+def test_declining_a_role_twice_stores_it_once(session):
+    _seed_player(session, discord_id="7", username="bo", display_name="Bo")
+    choice = dict(discord_id="7", discord_username="bo", display_name="Bo", avatar_hash=None)
+
+    set_pod_roles_declined(session, **choice, keys=["late"], declined=True)
+    set_pod_roles_declined(session, **choice, keys=["late"], declined=True)
+
+    player = session.execute(select(Player).where(Player.discord_id == "7")).scalar_one()
+    assert player.declined_pod_roles == ["late"]

@@ -7,7 +7,7 @@ import secrets
 import string
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import NamedTuple, Sequence
+from typing import Iterable, NamedTuple, Sequence
 from urllib.parse import quote
 
 from sqlalchemy import any_, delete, func, select, update
@@ -370,25 +370,79 @@ def set_dm_draft_link(
 ) -> None:
     """Persist the lobby-open DM preference, creating a lightweight player row when none exists so an
     onboarding-only member's choice sticks. Mirrors the row `attach_arena_alias` seeds, minus the handle."""
+    player = _player_for_preference(
+        session, discord_id=discord_id, discord_username=discord_username, display_name=display_name,
+        avatar_hash=avatar_hash,
+    )
+    player.dm_draft_link = enabled
+    session.flush()
+
+
+def declined_pod_roles(session: Session, discord_id: str) -> set[str]:
+    """The `PingRole.key`s this player switched off in `/roles`. Keys rather than role names, so a role
+    that is renamed or retired never turns a stored no back into a yes. Empty for a player with no row."""
+    declined = session.execute(
+        select(Player.declined_pod_roles).where(Player.discord_id == discord_id)
+    ).scalar_one_or_none()
+    return set(declined or ())
+
+
+def set_pod_roles_declined(
+    session: Session, *, discord_id: str, discord_username: str, display_name: str,
+    avatar_hash: str | None, keys: Iterable[str], declined: bool,
+) -> None:
+    """Record or clear an explicit choice about ping roles, creating a lightweight player row the same
+    way the DM preference does. A decline never expires: the auto-grant reads it forever, and only the
+    player turning the role back on in `/roles` clears it."""
+    player = _player_for_preference(
+        session, discord_id=discord_id, discord_username=discord_username, display_name=display_name,
+        avatar_hash=avatar_hash,
+    )
+    stored = set(player.declined_pod_roles or ())
+    player.declined_pod_roles = sorted(stored | set(keys) if declined else stored - set(keys))
+    session.flush()
+
+
+def declined_pod_roles_sync(discord_id: str) -> set[str]:
+    with SessionLocal() as session:
+        return declined_pod_roles(session, discord_id)
+
+
+def set_pod_roles_declined_sync(
+    *, discord_id: str, discord_username: str, display_name: str, avatar_hash: str | None,
+    keys: Iterable[str], declined: bool,
+) -> None:
+    with SessionLocal() as session:
+        set_pod_roles_declined(
+            session, discord_id=discord_id, discord_username=discord_username, display_name=display_name,
+            avatar_hash=avatar_hash, keys=keys, declined=declined,
+        )
+        session.commit()
+
+
+def _player_for_preference(
+    session: Session, *, discord_id: str, discord_username: str, display_name: str,
+    avatar_hash: str | None,
+) -> Player:
+    """The row a preference hangs on, created when the member has none: someone who arrived through
+    Discord onboarding and never linked anything still gets to keep a choice."""
     player = session.execute(
         select(Player).where(Player.discord_id == discord_id)
     ).scalar_one_or_none()
-    if player is None:
-        taken_slugs = set(session.execute(select(Player.slug)).scalars().all())
-        player = Player(
-            slug=disambiguate_slug(slugify(display_name), taken_slugs),
-            discord_id=discord_id,
-            discord_username=discord_username,
-            display_name=display_name,
-            avatar_hash=avatar_hash,
-            active=True,
-            leaderboard_opt_in=False,
-            dm_draft_link=enabled,
-        )
-        session.add(player)
-    else:
-        player.dm_draft_link = enabled
-    session.flush()
+    if player is not None:
+        return player
+    taken_slugs = set(session.execute(select(Player.slug)).scalars().all())
+    player = Player(
+        slug=disambiguate_slug(slugify(display_name), taken_slugs),
+        discord_id=discord_id,
+        discord_username=discord_username,
+        display_name=display_name,
+        avatar_hash=avatar_hash,
+        active=True,
+        leaderboard_opt_in=False,
+    )
+    session.add(player)
+    return player
 
 
 def toggle_dm_draft_link(

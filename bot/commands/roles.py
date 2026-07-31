@@ -17,15 +17,20 @@ from discord.ext import commands
 from bot.commands import descriptions as desc
 from bot.config import settings
 from bot.database import SessionLocal
-from bot.discord_helpers import extract_avatar_hash
+from bot.discord_helpers import extract_avatar_hash, run_detached
 from bot.services.ping_roles import (
     PING_ROLES,
     announce_onboarding_welcome,
     blurb_with_time,
     button_custom_id,
     display_emoji,
+    spec_named,
 )
-from bot.services.pod_drafts import dm_draft_link_enabled, toggle_dm_draft_link
+from bot.services.pod_drafts import (
+    dm_draft_link_enabled,
+    set_pod_roles_declined_sync,
+    toggle_dm_draft_link,
+)
 from bot.services.pod_link_dm import dm_pref_embed
 from bot.services.pod_roles import (
     consume_bot_umbrella_grant,
@@ -81,6 +86,7 @@ class _RoleToggleButton(discord.ui.Button):
         if new_state is None:
             await interaction.response.send_message(MSG_ROLE_TOGGLE_FAILED, ephemeral=True)
             return
+        _remember_role_choice(member, self.role_name, held=new_state)
         refreshed = guild.get_member(member.id) or member
         held = {held_role.name for held_role in refreshed.roles}
         held.add(self.role_name) if new_state else held.discard(self.role_name)
@@ -155,6 +161,20 @@ async def _resolve_member(
         except discord.HTTPException:
             return None, None
     return member, guild
+
+
+def _remember_role_choice(member: discord.Member, role_name: str, *, held: bool) -> None:
+    """Persist a toggle so the pod auto-grant obeys it, without the panel waiting on the write. Only the
+    auto-granted slot roles are worth storing: Pod Drafters comes back on the next pod whatever is set
+    here, and no path re-adds the others behind a player's back."""
+    spec = spec_named(role_name)
+    if spec is None or not spec.auto_grant:
+        return
+    run_detached(asyncio.to_thread(
+        set_pod_roles_declined_sync,
+        discord_id=str(member.id), discord_username=member.name, display_name=member.display_name,
+        avatar_hash=extract_avatar_hash(member), keys=[spec.key], declined=not held,
+    ), f"role choice {spec.key} for {member.id}")
 
 
 def _dm_opt_in_for(discord_id: str) -> bool:

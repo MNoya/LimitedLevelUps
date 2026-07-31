@@ -5,9 +5,11 @@ the three entry points that touch it.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import unicodedata
+from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Iterable
 
 import discord
@@ -27,6 +29,24 @@ NBSP = "\u00a0"  # Discord collapses runs of regular spaces; non-breaking spaces
 ZWSP = "\u200b"  # anchors a -# subtext line so Discord keeps the NBSP indent that follows
 BLANK_LINE = f"{NBSP}{ZWSP}"  # a line Discord won't collapse, for spacing before a trailing button
 EM_SPACE = " "  # wide gap between items sharing one line, where a run of spaces would collapse
+
+
+_detached: set["asyncio.Task"] = set()
+
+
+def run_detached(coro: "Coroutine", label: str) -> None:
+    """Run follow-on work off the interaction that started it, for a click already answered. A failure
+    has no one left to tell and is logged. The task is held until it finishes: the event loop keeps only
+    a weak reference and would otherwise collect it mid-flight."""
+    async def runner() -> None:
+        try:
+            await coro
+        except Exception:  # noqa: BLE001 - a detached task must never die silently
+            logger.warning(f"could not finish {label}", exc_info=True)
+
+    task = asyncio.create_task(runner())
+    _detached.add(task)
+    task.add_done_callback(_detached.discard)
 
 
 def command_line(cmd: str, blurb: str) -> str:
