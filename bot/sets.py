@@ -263,6 +263,7 @@ class PreviewWindow:
 # Independent of ALL_SETS — a set gets its window before it joins the rotation.
 PREVIEW_WINDOWS: tuple[PreviewWindow, ...] = (
     PreviewWindow("MSH", date(2026, 6, 2), date(2026, 6, 8)),
+    PreviewWindow("HOB", date(2026, 7, 18), date(2026, 7, 31)),
 )
 
 
