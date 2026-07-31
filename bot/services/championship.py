@@ -11,10 +11,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.orm import Session
 
 from bot.database import SessionLocal
 from bot.models import MagicSet, PodChampionshipSeed, PodDraftEvent
 from bot.services.player_stats import SeededAttendee, rank_players_for_set
+from bot.services.pod_drafts import is_championship
 from bot.sets import ALL_SETS, RELEASE_TZ, active_set_code, release_instant
 
 SATURDAY = 5
@@ -132,16 +134,36 @@ def frozen_seeds_sync(event_id: str) -> list[SeedRow]:
     ]
 
 
-def frozen_rank_by_player_sync(event_id: str) -> dict[str, int]:
+def frozen_rank_by_player(session: Session, event_id: str) -> dict[str, int]:
     """The frozen seed rank keyed by player_id, so the seeding table seeds off the snapshot taken at
     creation instead of live standings. Players outside the snapshot are absent and fall back to their
-    live rank in the seeding path."""
-    with SessionLocal() as session:
-        rows = session.execute(
-            select(PodChampionshipSeed.player_id, PodChampionshipSeed.rank)
-            .where(PodChampionshipSeed.event_id == event_id)
-        ).all()
+    live rank in the seeding path: a player who joined the board after the freeze is placed where they
+    stand now, which keeps them from passing anyone who was already ranked on the freeze day."""
+    rows = session.execute(
+        select(PodChampionshipSeed.player_id, PodChampionshipSeed.rank)
+        .where(PodChampionshipSeed.event_id == event_id)
+    ).all()
     return {row.player_id: row.rank for row in rows if row.player_id is not None}
+
+
+def frozen_rank_by_player_sync(event_id: str) -> dict[str, int]:
+    with SessionLocal() as session:
+        return frozen_rank_by_player(session, event_id)
+
+
+def rank_override(session: Session, event_id: str) -> dict[str, int] | None:
+    """The frozen seed ranks a championship orders off, or None for any other pod so a regular leaderboard
+    pod stays on live standings. Every surface that ranks a championship roster resolves through here, so
+    the card, the launcher and the seats the draft is dealt in cannot read different scales."""
+    event = session.get(PodDraftEvent, event_id)
+    if not is_championship(event.name if event else None):
+        return None
+    return frozen_rank_by_player(session, event_id)
+
+
+def rank_override_sync(event_id: str) -> dict[str, int] | None:
+    with SessionLocal() as session:
+        return rank_override(session, event_id)
 
 
 def standings_seed_attendees_sync(set_code: str) -> list[SeededAttendee]:

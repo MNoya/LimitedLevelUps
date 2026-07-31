@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from bot.config import PRODUCTION_GUILD_ID, settings
 from bot.database import SessionLocal
 from bot.models import Player, PodDraftEvent, PodDraftMatch, PodDraftParticipant, PodSignal, PodSignalMember
+from bot.services import championship as championship_seeds
 from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services import pod_team
@@ -1431,7 +1432,7 @@ def _committed_slot(session: Session, time_key: str, event_id: str) -> LauncherS
     yes_names = [name for name, _ in yes_roster]
     championship = is_championship(event.name if event else None)
     if championship:
-        yes_names = rank_ordered_names(session, yes_names)
+        yes_names = rank_ordered_names(session, yes_names, championship_seeds.rank_override(session, event_id))
     finished = event is not None and event.finalized_at is not None
     winner, winner_slug = _pod_winner(session, event) if finished else (None, None)
     return LauncherSlot(

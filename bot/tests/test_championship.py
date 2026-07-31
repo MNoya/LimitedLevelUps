@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 
-from bot.models import MagicSet, Player, PlayerStats, PodDraftEvent
+from bot.models import MagicSet, Player, PlayerStats, PodChampionshipSeed, PodDraftEvent
 from bot.services import championship
 from bot.services.championship import (
     CREATION_LEAD_DAYS,
@@ -149,6 +149,35 @@ def test_frozen_override_seeds_against_live_standings(session):
     assert live_order == ["Bob", "Alice"]
     assert frozen_order == ["Alice", "Bob"]
     assert [(a.display_name, a.rank) for a in seeded] == [("Alice", 1), ("Bob", 2)]
+
+
+def test_the_override_is_the_frozen_snapshot_for_a_championship_and_nothing_for_a_pod(session):
+    """Every surface that ranks a championship roster resolves through one override, so the seeding card,
+    the launcher pointer and the seats the draft is dealt in cannot read different scales. A player who
+    joined the board after the freeze is absent from it and keeps their live rank."""
+    magic_set = _seed_set(session, "MSH")
+    alice = _seed_player(session, "Alice", "1")
+    bob = _seed_player(session, "Bob", "2")
+    _seed_stats(session, alice, magic_set, trophies=2, events=4)
+    _seed_stats(session, bob, magic_set, trophies=5, events=8)
+    event = _seed_event(session)
+    ordinary = PodDraftEvent(
+        event_date=date(2026, 8, 1), event_time=datetime(2026, 8, 1, 18, tzinfo=timezone.utc),
+        set_code="MSH", name="MSH Aug 1 Early Pod", draftmancer_session="pod",
+        discord_thread_id="thread-pod", socket_status="pending",
+    )
+    session.add(ordinary)
+    session.flush()
+    session.add(PodChampionshipSeed(
+        event_id=event.id, player_id=alice.id, discord_id="1", display_name="Alice", rank=1, score=9.0,
+    ))
+    session.commit()
+
+    override = championship.rank_override(session, event.id)
+
+    assert override == {alice.id: 1}
+    assert championship.rank_override(session, ordinary.id) is None
+    assert rank_ordered_names(session, ["Alice", "Bob"], override) == ["Alice", "Bob"]
 
 
 def test_freeze_replaces_a_prior_snapshot(session, monkeypatch):

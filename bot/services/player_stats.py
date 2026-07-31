@@ -447,13 +447,16 @@ def rank_ordered_names(
     return [name for name, _ in sorted(resolved, key=sort_key)]
 
 
-def leaderboard_seat_order(session: Session, names: Sequence[str]) -> list[str]:
+def leaderboard_seat_order(
+    session: Session, names: Sequence[str], rank_override: Mapping[str, int] | None = None,
+) -> list[str]:
     """The given names in seeded-ring seat order (seat 0 first) by active-set leaderboard rank.
 
     Rank order best-first via `rank_ordered_names`, then mapped onto the seat ring — ready to map to
-    Draftmancer userIDs for setSeating.
+    Draftmancer userIDs for setSeating. `rank_override` carries a Set Championship's frozen snapshot, so
+    the table is dealt in the order its seeding table published.
     """
-    return seated_ring_order(rank_ordered_names(session, names))
+    return seated_ring_order(rank_ordered_names(session, names, rank_override))
 
 
 def _stats_by_player(session: Session, set_id: str) -> dict[str, list[dict]]:

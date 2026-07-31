@@ -34,6 +34,7 @@ from bot.discord_helpers import extract_avatar_hash
 from bot.models import Player, PodDraftEvent, PodDraftParticipant
 from bot.scripts.draftmancer_log import build_compact
 from bot.services import bot_log as bot_log_mod
+from bot.services import championship
 from bot.services.lobby_embed import (
     LobbyReadyButtonView,
     build_drafting_view,
@@ -2025,7 +2026,9 @@ class PodDraftManager:
         }
         if len(name_to_id) < 2:
             return
-        ordered_names = await asyncio.to_thread(_leaderboard_seat_order_sync, list(name_to_id))
+        ordered_names = await asyncio.to_thread(
+            _leaderboard_seat_order_sync, list(name_to_id), self.event_id,
+        )
         user_id_order = tuple(name_to_id[name] for name in ordered_names if name in name_to_id)
         if len(user_id_order) != len(name_to_id):
             log.warning(f"[SEATING] leaderboard_order_mismatch event={self.event_id} names={ordered_names}")
@@ -2821,9 +2824,9 @@ def discord_ids_for_names_sync(names: list[str]) -> dict[str, str | None]:
         return result
 
 
-def _leaderboard_seat_order_sync(names: list[str]) -> list[str]:
+def _leaderboard_seat_order_sync(names: list[str], event_id: str) -> list[str]:
     with SessionLocal() as session:
-        return leaderboard_seat_order(session, names)
+        return leaderboard_seat_order(session, names, championship.rank_override(session, event_id))
 
 
 def _find_guild_member_for_arena(guild: discord.Guild, arena_name: str) -> discord.Member | None:

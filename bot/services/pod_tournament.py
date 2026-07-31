@@ -34,7 +34,7 @@ from bot.discord_helpers import (
 from bot.slug import slugify
 from bot.database import SessionLocal
 from bot.models import Player as DbPlayer, PodDraftEvent, PodDraftMatch, PodDraftParticipant
-from bot.services import bot_log as bot_log_mod, pod_bracket, pod_swiss
+from bot.services import bot_log as bot_log_mod, championship, pod_bracket, pod_swiss
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase, notify_pod_complete
 from bot.services.pod_deck_color import (
     SAVED_MSG,
@@ -1074,7 +1074,7 @@ def _apply_fallback_seats_sync(event_id: str, seating_mode: str, names: list[str
     written. No-op for random seating, which has no intended order to recover."""
     with SessionLocal() as session:
         if seating_mode == "leaderboard":
-            order = leaderboard_seat_order(session, names)
+            order = leaderboard_seat_order(session, names, championship.rank_override(session, event_id))
         elif seating_mode == "manual" and desired_seating:
             roster = set(names)
             order = [name for name in desired_seating if name in roster]
