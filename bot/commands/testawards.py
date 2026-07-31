@@ -1,21 +1,26 @@
 """Owner-only `!test awards` — preview season awards post rendered from fixture data.
 
-Feeds a hardcoded `AwardsData` through the production `build_awards_view` so the
+Feeds fixture data through the production `build_awards_view` so the
 Components V2 layout can be tweaked and confirmed visually without scanning channels.
 To remove: delete the file + drop the `setup` call from bot/main.py setup_hook.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
 import discord
 from discord.ext import commands
 
+from bot import emojis
 from bot.commands.preview_season_awards import (
+    MSG_COUNTED,
+    PROGRESS_INTERVAL_SECONDS,
     AwardsData,
     AwardWinner,
     build_awards_view,
+    build_notice_view,
     channel_label,
     reveal_awards,
     window_label,
@@ -93,6 +98,8 @@ _IMAGE_COMEDY = "https://cdn.discordapp.com/attachments/775822803328040961/15313
 _IMAGE_FLAVOR_WIN = f"{_CDN}/1531714154849632336/image0.png"
 
 _POST_DEEP_LINK = "https://discord.com/channels/1465844083107827745/1505053484976836720"
+COUNTING_FRAMES = 6
+FIXTURE_POSTS = 655
 
 
 def _awards_fixture(guild: discord.Guild | None) -> AwardsData:
@@ -126,10 +133,18 @@ def _awards_fixture(guild: discord.Guild | None) -> AwardsData:
             caption="Little through Gigantic Bear",
         ),
         totals=(
-            ("🔥", 1127), ("👍", 146), ("🤔", 103), ("🥀", 251), ("😂", 41), ("🐻", 47), ("👀", 23),
+            ("🔥", 1129), ("👍", 146), ("🤔", 104), ("🥀", 251), ("😂", 41),
+            ("🐻", 47), ("👀", 23), ("🎺", 22), ("😴", 13), ("🐺", 12),
         ),
         hot_pct=82,
     )
+
+
+async def _play_counting(scan: discord.Message, fixture: AwardsData) -> None:
+    """The percentage is invented: the live one measures how far through the window the scan has walked."""
+    for frame in range(1, COUNTING_FRAMES + 1):
+        await asyncio.sleep(PROGRESS_INTERVAL_SECONDS)
+        await scan.edit(view=build_awards_view(fixture, scanned_pct=round(frame * 100 / COUNTING_FRAMES)))
 
 
 def _latest_preview_window() -> PreviewWindow:
@@ -146,11 +161,18 @@ async def setup(bot: commands.Bot) -> None:
     async def test_awards(ctx: commands.Context, mode: str = "") -> None:
         """Owner-only. Post the fixture-backed preview season awards sample in this channel.
 
-        `!test awards gated` plays the timed one-award-per-edit reveal instead of the full post.
+        `!test awards gated` plays the whole live sequence: the scan bar filling, then the
+        ceremony posted separately and revealed one award per edit.
         """
         fixture = _awards_fixture(ctx.guild)
         if mode == "gated":
+            scan = await ctx.send(view=build_awards_view(fixture, scanned_pct=0))
+            await _play_counting(scan, fixture)
             ceremony = await ctx.send(view=build_awards_view(fixture, reveal=0))
+            counted = MSG_COUNTED.format(
+                posts=FIXTURE_POSTS, url=ceremony.jump_url, tap=emojis.get("manat"),
+            )
+            await scan.edit(view=build_notice_view(counted))
             await reveal_awards(ceremony, fixture)
             return
         await ctx.send(view=build_awards_view(fixture))

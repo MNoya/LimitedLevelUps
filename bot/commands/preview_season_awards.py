@@ -5,23 +5,29 @@ set's preview window, tallies emoji reactions, and posts a Components V2 ceremon
 one award per reaction category plus a hype meter of fire vs trash sentiment.
 
 Presentation is fully decoupled from data: `build_awards_view` renders an
-`AwardsData`, so `!testawards` can feed fixture data through the same builder.
+`AwardsData`, so `!test awards` can feed fixture data through the same builder.
+
+The command's own reply carries the scan bar and ends as a link to the ceremony, which is
+posted separately so it never sits half built while the scan runs.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
+from time import monotonic
 from zoneinfo import ZoneInfo
 
 import discord
 from discord import app_commands, ui
 from discord.ext import commands
 
-from bot import audit
+from bot import audit, emojis
 from bot.commands import descriptions as desc
 from bot.commands.messages import MSG_ADMIN_ONLY
+from bot.config import PRODUCTION_GUILD_ID
 from bot.discord_helpers import NBSP, ZWSP, first_image_url
 from bot.sets import PREVIEW_WINDOWS, PreviewWindow
 
@@ -37,26 +43,34 @@ WILTED_ROSE = "🥀"
 JOY = "😂"
 CORE_EMOJIS = (FIRE, THUMBS_UP, THINKING, WASTEBASKET, WILTED_ROSE, JOY)
 EMOJI_DISPLAY = {WASTEBASKET: "🗑️"}
-SKIN_TONE_MODIFIERS = {chr(codepoint): None for codepoint in range(0x1F3FB, 0x1F400)}
+SKIN_TONE_MODIFIERS = str.maketrans({chr(codepoint): None for codepoint in range(0x1F3FB, 0x1F400)})
 
 GAP = NBSP * 2
 SUBTEXT_START = f"-# {ZWSP}"
 
-HYPE_BAR_SLOTS = 10
+BAR_SLOTS = 10
 CAPTION_MAX_CHARS = 100
 CREDIT_NBSP_PER_CHAR = 2.0
 CREDIT_PAD_MAX = 120
-FOOTER_MAX_EMOJIS = 7
+FOOTER_MAX_EMOJIS = 12
+FOOTER_MIN_EXTRA_COUNT = 12
 REVEAL_DELAY_SECONDS = 5
+PROGRESS_INTERVAL_SECONDS = 5
+SCAN_BUDGET_SECONDS = 300
 
-SUSPENSE_COUNTING = "Counting the Votes…"
+COUNTING_LABEL = "Counting the Votes…"
 SUSPENSE_UP_NEXT = "Up Next…"
 SUSPENSE_FINAL = "Final Verdict…"
 
 MSG_NO_CHANNELS = "No channels with “preview-season” in the name were found in this server."
-MSG_NO_POSTS = "No image posts found between {start} and {end} — nothing to award."
+MSG_NO_POSTS = "No image posts found between {start} and {end}, so there is nothing to award."
 MSG_NO_REACTIONS = "Found {count} image posts but no reactions to score."
-MSG_POSTED = "🏆 Awards posted — {awards} prizes handed out across {posts} posts."
+PREVIEW_SEASON_CHANNEL_ID = 775822803328040961
+PREVIEW_SEASON_CHANNEL_URL = f"https://discord.com/channels/{PRODUCTION_GUILD_ID}/{PREVIEW_SEASON_CHANNEL_ID}"
+MSG_COUNTED = (
+    f"🧮 **{{posts}}** {PREVIEW_SEASON_CHANNEL_URL} posts accounted for! "
+    "[**Check the Awards**]({url}) {tap}"
+)
 
 
 @dataclass(frozen=True)
@@ -98,9 +112,10 @@ class ScoredPost:
     reactions: dict[str, int]
 
 
-def build_awards_view(data: AwardsData, reveal: int | None = None) -> ui.LayoutView:
-    """Render the ceremony; `reveal=N` shows only the first N awards with a suspense line and
-    holds back the hype meter + footer for the final full render (`reveal=None`)."""
+def build_awards_view(data: AwardsData, reveal: int | None = None, scanned_pct: int | None = None) -> ui.LayoutView:
+    """Render the ceremony; `reveal=N` shows only the first N awards with a suspense line and holds
+    back the hype meter + footer for the final full render (`reveal=None`). `scanned_pct` renders the
+    scan bar alone, suppressing every award `data` carries, since nothing is decided while it runs."""
     view = ui.LayoutView()
     container = ui.Container(accent_colour=discord.Color.green())
 
@@ -116,10 +131,15 @@ def build_awards_view(data: AwardsData, reveal: int | None = None) -> ui.LayoutV
         ("### 🤔 The Jury is Still Out", "Ask Again in Two Weeks", data.jury),
         ("### 🗑️ Last-Pick Material", "Leave in the Sideboard", data.trash),
         ("### 😂 Comedy Gold", "No Notes", data.comedy),
-        ("### ⭐ Flavor Win", "Nailed It", data.flavor),
+        ("### ⭐ Flavor Win", "Unbearable", data.flavor),
     )
     awarded_rows = [(heading, tagline, winner) for heading, tagline, winner in rows if winner is not None]
-    shown_rows = awarded_rows if reveal is None else awarded_rows[:reveal]
+    if scanned_pct is not None:
+        shown_rows = []
+    elif reveal is None:
+        shown_rows = awarded_rows
+    else:
+        shown_rows = awarded_rows[:reveal]
     for i, (heading, tagline, winner) in enumerate(shown_rows):
         award_text = _award_text(heading, tagline, winner, caption_replaces=winner is data.comedy)
         container.add_item(ui.Section(
@@ -129,7 +149,9 @@ def build_awards_view(data: AwardsData, reveal: int | None = None) -> ui.LayoutV
         if i < len(shown_rows) - 1:
             container.add_item(ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
 
-    if reveal is not None:
+    if scanned_pct is not None:
+        container.add_item(ui.TextDisplay(_counting_meter_text(scanned_pct)))
+    elif reveal is not None:
         if shown_rows:
             container.add_item(ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
         container.add_item(ui.TextDisplay(f"{SUBTEXT_START}🥁{GAP}{_suspense_line(reveal, len(awarded_rows))}"))
@@ -145,6 +167,12 @@ def build_awards_view(data: AwardsData, reveal: int | None = None) -> ui.LayoutV
     return view
 
 
+def build_notice_view(text: str) -> ui.LayoutView:
+    view = ui.LayoutView()
+    view.add_item(ui.TextDisplay(text))
+    return view
+
+
 async def reveal_awards(message: discord.Message, data: AwardsData) -> None:
     for shown in range(1, data.award_count + 1):
         await asyncio.sleep(REVEAL_DELAY_SECONDS)
@@ -154,8 +182,6 @@ async def reveal_awards(message: discord.Message, data: AwardsData) -> None:
 
 
 def _suspense_line(reveal: int, award_total: int) -> str:
-    if reveal == 0:
-        return SUSPENSE_COUNTING
     if reveal < award_total:
         return SUSPENSE_UP_NEXT
     return SUSPENSE_FINAL
@@ -185,9 +211,16 @@ def _credit_suffix(caption: str, recount: str, author: str) -> str:
 
 
 def _hype_meter_text(hot_pct: int) -> str:
-    filled = round(hot_pct * HYPE_BAR_SLOTS / 100)
-    bar = "|".join(["🟩"] * filled + ["⬛"] * (HYPE_BAR_SLOTS - filled))
-    return f"### 📊 Hype Meter\n{bar}{GAP}**{hot_pct}%**"
+    return f"### 📊 Hype Meter\n{_bar_text(hot_pct)}{GAP}**{hot_pct}%**"
+
+
+def _counting_meter_text(scanned_pct: int) -> str:
+    return f"### 🧮 {COUNTING_LABEL}\n{_bar_text(scanned_pct)}{GAP}**{scanned_pct}%**"
+
+
+def _bar_text(pct: int) -> str:
+    filled = round(pct * BAR_SLOTS / 100)
+    return "|".join(["🟩"] * filled + ["⬛"] * (BAR_SLOTS - filled))
 
 
 def _footer_text(totals: tuple[tuple[str, int], ...]) -> str:
@@ -223,7 +256,6 @@ class PreviewSeasonAwards(commands.Cog):
             await interaction.response.send_message(MSG_NO_CHANNELS, ephemeral=True)
             return
 
-        await interaction.response.defer(ephemeral=True)
         empty_data = AwardsData(
             set_code=set,
             window_label=window_label(window),
@@ -231,24 +263,25 @@ class PreviewSeasonAwards(commands.Cog):
             hottest=None, acceptable=None, jury=None, trash=None, comedy=None, flavor=None,
             totals=(), hot_pct=None,
         )
-        ceremony = await interaction.channel.send(view=build_awards_view(empty_data, reveal=0))
+        await interaction.response.send_message(view=build_awards_view(empty_data, scanned_pct=0))
 
-        posts = await _collect_posts(channels, window)
+        async def show_scan(scanned_pct: int) -> None:
+            await interaction.edit_original_response(view=build_awards_view(empty_data, scanned_pct=scanned_pct))
+
+        posts = await _collect_posts(channels, window, show_scan)
         if not posts:
-            await ceremony.delete()
-            await interaction.followup.send(
-                MSG_NO_POSTS.format(start=_day_label(window.start_date), end=_day_label(window.end_date)),
-                ephemeral=True,
-            )
+            no_posts = MSG_NO_POSTS.format(start=_day_label(window.start_date), end=_day_label(window.end_date))
+            await interaction.edit_original_response(view=build_notice_view(no_posts))
             return
 
         data = replace(empty_data, **_tally_fields(posts))
         if data.award_count == 0:
-            await ceremony.delete()
-            await interaction.followup.send(MSG_NO_REACTIONS.format(count=len(posts)), ephemeral=True)
+            await interaction.edit_original_response(view=build_notice_view(MSG_NO_REACTIONS.format(count=len(posts))))
             return
 
-        await reveal_awards(ceremony, data)
+        ceremony = await interaction.channel.send(view=build_awards_view(data, reveal=0))
+        counted = MSG_COUNTED.format(posts=len(posts), url=ceremony.jump_url, tap=emojis.get("manat"))
+        await interaction.edit_original_response(view=build_notice_view(counted))
         audit.event(
             "preview_season_awards_posted",
             set_code=set,
@@ -257,31 +290,39 @@ class PreviewSeasonAwards(commands.Cog):
             channel_id=str(interaction.channel.id),
         )
         log.info(f"preview season awards posted for {set}: {data.award_count} awards from {len(posts)} posts")
-        await interaction.followup.send(
-            MSG_POSTED.format(awards=data.award_count, posts=len(posts)), ephemeral=True,
-        )
+        await reveal_awards(ceremony, data)
 
 
-def _tally_fields(posts: list[ScoredPost]) -> dict:
-    totals: dict[str, int] = {}
+def _footer_totals(
+    totals: dict[str, int], extra_totals: dict[str, int], posts_using: dict[str, int],
+) -> tuple[tuple[str, int], ...]:
+    core_counts = [(emoji, count) for emoji, count in totals.items() if count > 0 and posts_using[emoji] > 1]
+    reused_extras = [(emoji, count) for emoji, count in extra_totals.items()
+                     if posts_using[emoji] > 1 and count >= FOOTER_MIN_EXTRA_COUNT]
+    extras_room = max(FOOTER_MAX_EMOJIS - len(core_counts), 0)
+    top_extras = sorted(reused_extras, key=lambda item: item[1], reverse=True)[:extras_room]
+    return tuple(core_counts + top_extras)
+
+
+def _emoji_totals(posts: list[ScoredPost]) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
+    totals: dict[str, int] = {emoji: 0 for emoji in CORE_EMOJIS}
     extra_totals: dict[str, int] = {}
     posts_using: dict[str, int] = {}
     for post in posts:
         for emoji in CORE_EMOJIS:
-            totals[emoji] = totals.get(emoji, 0) + post.reactions.get(emoji, 0)
+            totals[emoji] += post.reactions.get(emoji, 0)
         for emoji, count in post.reactions.items():
             if count > 0:
                 posts_using[emoji] = posts_using.get(emoji, 0) + 1
             if emoji not in CORE_EMOJIS:
                 extra_totals[emoji] = extra_totals.get(emoji, 0) + count
+    return totals, extra_totals, posts_using
 
+
+def _tally_fields(posts: list[ScoredPost]) -> dict:
+    totals, extra_totals, posts_using = _emoji_totals(posts)
     hot_denominator = totals[FIRE] + totals[WASTEBASKET] + totals[WILTED_ROSE]
     hot_pct = round(totals[FIRE] * 100 / hot_denominator) if hot_denominator else None
-
-    core_counts = [(emoji, count) for emoji, count in totals.items() if count > 0 and posts_using[emoji] > 1]
-    reused_extras = [(emoji, count) for emoji, count in extra_totals.items() if posts_using[emoji] > 1]
-    extras_room = max(FOOTER_MAX_EMOJIS - len(core_counts), 0)
-    top_extras = sorted(reused_extras, key=lambda item: item[1], reverse=True)[:extras_room]
 
     pool = list(posts)
 
@@ -312,7 +353,7 @@ def _tally_fields(posts: list[ScoredPost]) -> dict:
         trash=trash,
         comedy=comedy,
         flavor=flavor,
-        totals=tuple(core_counts + top_extras),
+        totals=_footer_totals(totals, extra_totals, posts_using),
         hot_pct=hot_pct,
     )
 
@@ -382,12 +423,32 @@ def _trim_caption(content: str) -> str | None:
     return caption
 
 
-async def _collect_posts(channels: list[discord.TextChannel], window: PreviewWindow) -> list[ScoredPost]:
+async def _collect_posts(
+    channels: list[discord.TextChannel],
+    window: PreviewWindow,
+    on_progress: Callable[[int], Awaitable[None]] | None = None,
+) -> list[ScoredPost]:
+    """`on_progress` reports how far through the window each channel has walked. `SCAN_BUDGET_SECONDS`
+    bounds the walk so the ceremony still finishes while the interaction token is valid: rate limit
+    backoff makes a busy season's cost open ended."""
     start = datetime.combine(window.start_date, time.min, tzinfo=COMMUNITY_TZ)
     end = datetime.combine(window.end_date + timedelta(days=1), time.min, tzinfo=COMMUNITY_TZ)
+    span = (end - start).total_seconds()
     posts: list[ScoredPost] = []
-    for channel in channels:
+    due = monotonic() + PROGRESS_INTERVAL_SECONDS
+    deadline = monotonic() + SCAN_BUDGET_SECONDS
+    for index, channel in enumerate(channels):
         async for message in channel.history(after=start, before=end, limit=None):
+            if monotonic() >= deadline:
+                log.warning(
+                    f"preview season scan stopped at its {SCAN_BUDGET_SECONDS}s budget in "
+                    f"#{channel.name} with {len(posts)} posts collected"
+                )
+                return posts
+            if on_progress is not None and monotonic() >= due:
+                due = monotonic() + PROGRESS_INTERVAL_SECONDS
+                walked = min((message.created_at - start).total_seconds() / span, 1.0)
+                await on_progress(round((index + walked) * 100 / len(channels)))
             image_url = first_image_url(message, include_embeds=True)
             if image_url is None:
                 continue
@@ -419,7 +480,7 @@ def _emoji_available(emoji: discord.PartialEmoji | discord.Emoji | str, guild: d
 def _normalize_emoji(emoji: discord.PartialEmoji | discord.Emoji | str) -> str:
     """Skin tone variants collapse onto the bare emoji, so a \ud83d\udc4d\ud83c\udffb vote lands on
     the \ud83d\udc4d tally instead of splitting off as its own one-off reaction."""
-    return str(emoji).replace("\ufe0f", "").translate(str.maketrans(SKIN_TONE_MODIFIERS))
+    return str(emoji).replace("\ufe0f", "").translate(SKIN_TONE_MODIFIERS)
 
 
 def window_label(window: PreviewWindow) -> str:
