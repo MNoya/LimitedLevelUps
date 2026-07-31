@@ -69,10 +69,11 @@ from bot.services.pod_drafts import (
     is_championship,
     load_event_description_sync,
     load_event_pairing_mode_sync,
+    load_event_seating_mode_sync,
     load_event_set_code_sync,
     record_ondemand_event,
 )
-from bot.services.pod_registration_embed import build_registered_embed
+from bot.services.pod_registration_embed import build_registered_embed, update_registered_embed
 from bot.services.pod_roles import find_role
 from bot.services.championship_roster_card import (
     ChampionshipRoster,
@@ -694,7 +695,7 @@ async def post_scheduled_card(
             embed=build_registered_embed(
                 set_code.upper(), pairing_mode, seating_mode,
                 championship=is_championship(name), rsvp_hint=True,
-                channel_post_url=message.jump_url, guild=guild,
+                channel_post_url=message.jump_url, guild=guild, event_time=event_time,
             ),
             view=ScheduledRegisteredView(),
         )
@@ -1137,6 +1138,7 @@ async def reschedule_event(
         _edit_scheduled_card(bot, event_id, name, new_time),
         _refresh_live_messages(bot, event_id),
         _post_thread_note(bot, thread_id, new_time, actor_name, mention_block),
+        _retime_registered_embed(bot, event_id, thread_id, name, new_time),
         _refresh_launcher_for_event(bot, event_id),
     )
     audit.event(
@@ -1144,6 +1146,25 @@ async def reschedule_event(
         old_time=event_time.isoformat(), new_time=new_time.isoformat(),
     )
     return None
+
+
+async def _retime_registered_embed(
+    bot: commands.Bot, event_id: str, thread_id: str | None, name: str, event_time: datetime,
+) -> None:
+    """Re-render the thread's registration embed so the start time it repeats follows the reschedule."""
+    if thread_id is None:
+        return
+    thread = await fetch_channel(bot, thread_id)
+    if thread is None:
+        return
+    set_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
+    pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
+    seating_mode = await asyncio.to_thread(load_event_seating_mode_sync, event_id)
+    await update_registered_embed(
+        thread, client_user=bot.user, set_code=(set_code or active_set_code()).upper(),
+        pairing_mode=pairing_mode, seating_mode=seating_mode,
+        championship=is_championship(name), event_time=event_time,
+    )
 
 
 async def _edit_scheduled_card(bot: commands.Bot, event_id: str, name: str, event_time: datetime) -> None:

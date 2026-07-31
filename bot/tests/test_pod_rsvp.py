@@ -22,6 +22,11 @@ from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services.pod_drafts import set_format_interests
 from bot.services.pod_launch import _committed_slot, _event_id_for_slot, set_rsvp
+from bot.services.pod_registration_embed import (
+    build_registered_embed,
+    closed_registered_embed,
+    embed_event_time,
+)
 from bot.services.pod_schedule import SCHEDULE_TZ
 from bot.services.pod_signals import RSVP_YES
 
@@ -421,3 +426,25 @@ def test_a_tally_re_render_keeps_the_announcement(body):
 
     assert carried == body
     assert native_body_from_description(resynced) == body
+
+
+@pytest.mark.parametrize("hours", [-3, 3])
+def test_closing_the_registered_embed_keeps_the_columns_and_the_time(hours):
+    event_time = datetime.now(timezone.utc) + timedelta(hours=hours)
+    open_embed = build_registered_embed(
+        "LTR", "bracket", "random", rsvp_hint=True, channel_post_url=JUMP_URL, event_time=event_time)
+
+    closed = closed_registered_embed(open_embed)
+
+    assert len(open_embed.fields) == len(closed.fields) + 1
+    assert [field.name for field in closed.fields] == [field.name for field in open_embed.fields[:-1]]
+    assert embed_event_time(closed) == event_time.replace(microsecond=0)
+
+
+def test_closing_a_registered_embed_without_a_time_drops_the_body():
+    open_embed = build_registered_embed("LTR", "bracket", "random")
+
+    closed = closed_registered_embed(open_embed)
+
+    assert closed.description is None
+    assert len(closed.fields) == len(open_embed.fields)

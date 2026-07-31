@@ -159,6 +159,7 @@ On push/PR to `master`: spin up Postgres service container → `alembic upgrade 
 - **Code comments: default to none.** If a comment runs longer than one line, delete the whole block — don't shrink it, delete it. The code is already self-explanatory if names are right. No periods at end of single-line comments (they're labels, not sentences). No parenthetical asides. Don't paraphrase library / decorator behavior at the declaration site — that belongs in upstream docs, not your file.
 - **When a pod behavior change ships, update `spec/pod-coordination.md` in the same commit.** It's the plain-language player guide describing only live behavior, destined to become a Discord Server Guide page, so it must never describe a state the bot isn't in.
 - **Commit style**: subjects start with uppercase; no manual line wrapping in description paragraphs; no `Co-Authored-By: Claude` or any AI trailer; plain senior-engineer prose, no AI/ML jargon. Use `- ` bullets when a commit has 2+ distinct changes; prefer one bullet per distinct change over fewer "and"-joined bullets.
+- **Every Discord-facing change ends with how to look at it.** Close the reply with a `**Check on Discord:**` line: the exact `!test` invocation on the local test server, plus any clicks needed to reach the state that changed. Last line, nothing after it. A passing test suite is not a look at the output, so don't open with pytest results.
 - **Ask before saving memory** and **ask before architectural decisions** — surface structural questions rather than auto-deciding.
 
 ## Operational notes

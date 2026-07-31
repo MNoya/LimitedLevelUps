@@ -54,6 +54,7 @@ from bot.services.pod_drafts import (
     table_base_name,
 )
 from bot.services.pod_join_button import build_join_view
+from bot.services.pod_registration_embed import closed_registered_embed
 from bot.services.pod_link_dm import send_lobby_link_dms
 from bot.services.player_stats import rank_ordered_names
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
@@ -1967,7 +1968,7 @@ async def close_event_card(bot: commands.Bot, event_id: str) -> None:
     channel_id, message_id, thread_id, thread_message_id = surfaces
     await _retire_message(int(channel_id), int(message_id))
     if thread_id and thread_message_id:
-        await _retire_message(int(thread_id), int(thread_message_id))
+        await _retire_registered_message(int(thread_id), int(thread_message_id))
 
 
 CARD_CANCELED_MARKER = "🗑️ **Draft canceled**"
@@ -1987,7 +1988,7 @@ async def retire_canceled_pod(event_id: str) -> None:
         channel_id, message_id, thread_id, thread_message_id = surfaces
         await _mark_card_canceled(int(channel_id), int(message_id))
         if thread_id and thread_message_id:
-            await _retire_message(int(thread_id), int(thread_message_id))
+            await _retire_registered_message(int(thread_id), int(thread_message_id))
     signal_id = await asyncio.to_thread(fired_slot_for_pod_sync, event_id)
     if signal_id is not None:
         await notify_slot_rolled(_bot, signal_id)
@@ -2028,7 +2029,7 @@ async def close_past_pod_cards() -> None:
     for channel_id, message_id, thread_id, thread_message_id in cards:
         await _retire_message(int(channel_id), int(message_id))
         if thread_id and thread_message_id:
-            await _retire_message(int(thread_id), int(thread_message_id))
+            await _retire_registered_message(int(thread_id), int(thread_message_id))
 
 
 async def _resolve_channel(channel_id: int) -> "discord.abc.Messageable | None":
@@ -2039,6 +2040,23 @@ async def _resolve_channel(channel_id: int) -> "discord.abc.Messageable | None":
         except discord.HTTPException:
             return None
     return channel
+
+
+async def _retire_registered_message(channel_id: int, message_id: int) -> None:
+    """Retire the thread's registration embed: drop its controls and re-render it for a pod that no
+    longer takes signups, so the card stops pointing at a Draftmancer link and a sign-up row that are
+    both gone."""
+    channel = await _resolve_channel(channel_id)
+    if channel is None:
+        return
+    try:
+        message = await channel.fetch_message(message_id)
+        if message.embeds:
+            await message.edit(content=None, embed=closed_registered_embed(message.embeds[0]), view=None)
+        else:
+            await message.edit(content=None, view=None)
+    except discord.HTTPException:
+        log.warning(f"could not retire registered message {message_id}", exc_info=True)
 
 
 async def _retire_message(channel_id: int, message_id: int) -> None:

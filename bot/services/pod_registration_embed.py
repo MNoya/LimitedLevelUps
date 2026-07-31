@@ -3,6 +3,8 @@ place whenever Format, Pairings, or Seats change through the lobby Settings pane
 from __future__ import annotations
 
 import logging
+import re
+from datetime import datetime, timezone
 
 import discord
 
@@ -24,7 +26,11 @@ CHAMPIONSHIP_TITLE = "👑 Set Championship registered!"
 HISTORY_SCAN_LIMIT = 25
 RSVP_HINT_LEAD = "Sign up with the buttons below or on the"
 EVENT_POST_LABEL = "event post"
-LINK_POSTED_LINE = "Draftmancer link will be posted {lead} minutes before the event starts"
+LINK_POSTED_LEAD = "Draftmancer link will be posted"
+LINK_POSTED_LINE = LINK_POSTED_LEAD + " {lead} minutes before the event starts"
+TIME_LINE = "<t:{unix}:F> (<t:{unix}:R>)"
+STARTED_TIME_LINE = "Started <t:{unix}:R>"
+TIME_TOKEN_RE = re.compile(r"<t:(\d{1,15}):[a-zA-Z]>")
 
 
 class RegisteredSettingsView(discord.ui.View):
@@ -57,12 +63,17 @@ def rsvp_hint_line(channel_post_url: str | None) -> str:
 def build_registered_embed(
     set_code: str, pairing_mode: str | None, seating_mode: str | None = None,
     *, championship: bool = False, rsvp_hint: bool = False, channel_post_url: str | None = None,
-    guild: discord.Guild | None = None,
+    guild: discord.Guild | None = None, event_time: datetime | None = None,
 ) -> discord.Embed:
     """`rsvp_hint` is on only for the bot-native scheduled card, which carries the RSVP buttons and a
     channel post; sesh pods reuse this embed as a config panel with neither, so they leave it off.
-    `guild` resolves the reigning Set Champion mention for the championship flavor when known."""
+    `guild` resolves the reigning Set Champion mention for the championship flavor when known.
+    `event_time` repeats the start time the channel card carries, so a reader who came straight to the
+    thread does not have to climb back out to the card to see when the pod fires. A sesh config panel
+    has no event of its own and leaves it off."""
     body = LINK_POSTED_LINE.format(lead=REMINDER_LEAD_MIN)
+    if event_time is not None:
+        body = f"{TIME_LINE.format(unix=int(event_time.timestamp()))}\n{body}"
     if championship:
         reigning_champion = role_holder_mention(guild, SET_CHAMPION_ROLE_NAME)
         body = f"{championship_flavor(set_code, reigning_champion)}\n\n{body}"
@@ -84,21 +95,65 @@ async def update_registered_embed(
     pairing_mode: str | None,
     seating_mode: str | None = None,
     championship: bool = False,
+    event_time: datetime | None = None,
 ) -> None:
-    """Walk the thread for the bot's registration embed and re-render it with the current settings."""
+    """Walk the thread for the bot's registration embed and re-render it with the current settings.
+    `event_time` is for a reschedule, which is the only caller that knows the time changed; every other
+    caller leaves it off and the embed keeps the time it already shows."""
     if channel is None or client_user is None:
         return
     guild = getattr(channel, "guild", None)
     try:
         async for msg in channel.history(limit=HISTORY_SCAN_LIMIT, oldest_first=True):
             if msg.author.id == client_user.id and msg.embeds and _is_registered_title(msg.embeds[0].title):
-                rsvp_hint = any(RSVP_HINT_LEAD in (f.value or "") for f in msg.embeds[0].fields)
-                await msg.edit(embed=build_registered_embed(
+                existing = msg.embeds[0]
+                rsvp_hint = any(RSVP_HINT_LEAD in (f.value or "") for f in existing.fields)
+                rebuilt = build_registered_embed(
                     set_code, pairing_mode, seating_mode, championship=championship,
-                    rsvp_hint=rsvp_hint, channel_post_url=_card_url_from_thread(channel), guild=guild))
+                    rsvp_hint=rsvp_hint, channel_post_url=_card_url_from_thread(channel), guild=guild,
+                    event_time=event_time or embed_event_time(existing))
+                if _is_closed(existing):
+                    rebuilt = closed_registered_embed(rebuilt)
+                await msg.edit(embed=rebuilt)
                 return
     except discord.HTTPException:
         log.warning("could not update Pod Draft registered embed", exc_info=True)
+
+
+def closed_registered_embed(embed: discord.Embed) -> discord.Embed:
+    """The registration embed once its pod stops taking signups. Format, Pairings, and Seats stay as the
+    record of what was drafted; the lines that only hold while signups are open go."""
+    unix = _time_token(embed.description)
+    closed = discord.Embed(
+        title=embed.title, description=_closed_time_line(unix) if unix else None, color=embed.color)
+    for field in embed.fields:
+        if RSVP_HINT_LEAD not in (field.value or ""):
+            closed.add_field(name=field.name, value=field.value, inline=field.inline)
+    return closed
+
+
+def embed_event_time(embed: discord.Embed) -> datetime | None:
+    """The start time a registration embed already carries, so a re-render keeps it without every caller
+    having to load the event row."""
+    unix = _time_token(embed.description)
+    return datetime.fromtimestamp(unix, timezone.utc) if unix else None
+
+
+def _time_token(text: str | None) -> int | None:
+    match = TIME_TOKEN_RE.search(text or "")
+    return int(match.group(1)) if match else None
+
+
+def _closed_time_line(unix: int) -> str:
+    """A pod closed after its start time ran; one closed before it never did, so it keeps the plain
+    timestamp instead of claiming a start that did not happen."""
+    if unix <= int(datetime.now(timezone.utc).timestamp()):
+        return STARTED_TIME_LINE.format(unix=unix)
+    return TIME_LINE.format(unix=unix)
+
+
+def _is_closed(embed: discord.Embed) -> bool:
+    return LINK_POSTED_LEAD not in (embed.description or "")
 
 
 def _previous_set_symbol(set_code: str) -> str:
