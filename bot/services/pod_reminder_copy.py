@@ -10,21 +10,24 @@ pod_daily_poll.py and pod_draft_reminder.py format these constants; new reminder
 to its siblings, not back in those modules.
 """
 
-RECRUITING_NEEDS_MORE = (
-    "{hello}**{name}** looking for **{needed} more player{plural}** <t:{unix}:R> {manat} "
-    "[**Sign up here**]({jump_url})"
+RECRUITING_BELOW_FLOOR = (
+    "{hello}**{name}** <t:{unix}:R> needs **{to_floor} more player{plural}** to fire a Team Draft "
+    "{manat} [**Sign up here**]({jump_url})"
+)
+
+RECRUITING_SHORT = (
+    "{hello}**{name}** <t:{unix}:R> needs **{to_aim} more player{plural}** for a full Pod Draft "
+    "{manat} [**Sign up here**]({jump_url})"
 )
 
 RECRUITING_READY = (
-    "{hello}**{name}** is ready to draft <t:{unix}:R> {manat} [**Sign up here**]({jump_url})"
+    "{hello}**{name}** <t:{unix}:R> has ✅ {yes}{maybe}{tail} {manat} "
+    "[**Sign up here**]({jump_url})"
 )
 
-RECRUITING_OVERFLOW = (
-    "{hello}**{name}** is ready to draft <t:{unix}:R>\n"
-    "✅ {yes} 🤷 {maybe}{split} {manat} [**Sign up here**]({jump_url})"
-)
+RECRUITING_MAYBE = " 🤷 {maybe}"
 
-RECRUITING_OVERFLOW_SPLIT = ", with {latest} locked for {seticon} and {flashback} {flashback_emoji}"
+RECRUITING_SECOND_TABLE = ", enough for a second table"
 
 SLOT_FIRE_PING = "{mention} starts <t:{unix}:R>"
 

@@ -16,7 +16,7 @@ Posts the RSVP embed (localized time, duration), tracks Yes / Maybe / No via but
 
 ### Signal model — reuse, not invent
 
-A scheduled pod is a `pod_signal` with `kind='scheduled'`, created already in status `'fired'` with `event_id` linked — the thread and `PodDraftEvent` exist from post time, exactly like sesh. That single choice buys the fired-signal semantics for free: RSVPs stay open forever (over-signups welcome), expiry never triggers, and `toggle_member` needs no new states.
+A scheduled pod is a `pod_signal` with `kind='scheduled'`, created already in status `'fired'` with `event_id` linked — the thread and `PodDraftEvent` exist from post time, exactly like sesh. That single choice buys the fired-signal semantics for free: RSVPs stay open forever (over-signups welcome), expiry never triggers, and `set_membership` needs no new states.
 
 New migration: `pod_signal_members.rsvp TEXT NOT NULL DEFAULT 'yes'` (`yes` | `maybe` | `no`). Poll and queue members are implicit yes; the scheduled card is the only surface that writes the other two.
 
@@ -81,7 +81,7 @@ Deploy → the poster starts posting bot cards → the owner stops pasting `/cre
 
 ## Implementation order
 
-1. Migration + `rsvp` column through `toggle_member`.
+1. Migration + `rsvp` column through `set_membership`.
 2. Scheduled creation path in `pod_launch` (event + thread + card + native Discord event at post time, status `'fired'`, arming).
 3. Card builder + `PodRsvpView` with the three-state toggle, per-click ephemeral confirmations, and grants.
 4. Poster rework with the Saturday instant.

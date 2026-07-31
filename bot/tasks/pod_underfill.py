@@ -1,23 +1,26 @@
-"""Time-anchored recruiting nudge fired by APScheduler date jobs, plus live RSVP-driven updates.
+"""A pod's public status message in pod-draft-chat: one living post per pod, driven by APScheduler date
+jobs and by RSVP changes as they land.
 
-The check offsets live in POD_UNDERFILL_CHECK_HOURS (default 3, 2, 1). T-3h posts a silent nudge in the
+The check offsets live in POD_UNDERFILL_CHECK_HOURS (default 3, 2, 1). T-3h posts a silent status in the
 pod-draft-chat channel carrying the signup link back to the RSVP message; T-2h is the catch-up beat for
-a pod born after T-3h; T-1h (the min offset) deletes and reposts the nudge so it resurfaces near the
-event, and pings the slot role when the pod is close to its aim — see `_nudge_ping_role`. Every other
-post stays silent. Each check re-reads the Yes list off the pod's signal at fire time.
+a pod born after T-3h; T-1h (the min offset) deletes and reposts it so it resurfaces near the event, and
+pings the slot role when the pod is close to the number it is chasing — see `_nudge_ping_role`. Every
+other post stays silent. Each check re-reads the Yes list off the pod's signal at fire time.
 
-Unfired launcher slots run the same beats through `fire_slot_underfill`, aiming at the fire threshold
-and linking to the launcher — the slot's signup surface until it fires. On fire the slot's nudge is
-cleared and recruiting hands over to the scheduled card's own checks, now aiming at the target.
+Unfired launcher slots run the same beats through `fire_slot_underfill`, linking to the launcher, which is
+the slot's signup surface until it fires. On fire the message is not deleted: `hand_slot_nudge_to_card`
+rewrites it against the new card, so one message carries a pod from its first signup to its lobby. That is
+the moment the pod most needs a status up, since reaching the floor means the draft is on and still short
+of a full table.
 
-The nudge is one living message: it is never deleted on a player count, so an 8 -> 7 drop flips the text
-back to "looking for 1 more" instead of vanishing, and reaching the aim shows the ready line silently.
-It is deleted only when the pod starts (the lobby opens) via `clear_underfill_nudge`, or for a launcher
-slot when it fires or expires via `clear_slot_nudge`. While the nudge is up, RSVP changes keep the count
-current. An edit re-carries any role mention the message already holds so a player pinged at T-1h still
-sees why when the text later flips; the edit never re-pings. The nudge is located by scanning channel
-history for the bot's own message carrying the signup link (plus the pod name for launcher slots, which
-share one launcher URL) — nothing is persisted.
+The copy asks for one number at a time (`build_recruiting_message`): the floor while the draft is not yet
+on, the aim once it is, and its Yes and Maybe counts once it is full. It is never deleted on a player
+count, so an 8 -> 7 drop flips the text back to asking for one more instead of vanishing. It is deleted
+only when the pod starts (the lobby opens) via `clear_underfill_nudge`, or when a launcher slot expires
+unfired via `clear_slot_nudge`. An edit re-carries any role mention the message
+already holds so a player pinged at T-1h still sees why when the text later flips; the edit never re-pings.
+The message is located by scanning channel history for the bot's own post carrying the signup link (plus
+the pod name for launcher slots, which share one launcher URL) — nothing is persisted.
 
 A pod pushes at most one last-call ping, claimed on `pod_signals.last_call_pinged_at`, so a caught-up
 T-1h beat after a restart can never ping the slot role twice.
@@ -39,13 +42,11 @@ from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import resolve_pod_chat_channel
 from bot.models import PodDraftEvent, PodSignal
-from bot.services import pod_format_interest as fi
-from bot.services.pod_drafts import event_member_interests_sync
 from bot.services.pod_roles import find_role
 from bot.services.pod_draft_manager import set_underfill_fired_hook
 from bot.services.pod_schedule import (
+    build_recruiting_message,
     build_underfill_fired_message,
-    build_underfill_message,
     short_event_name,
 )
 from bot.services.pod_signals import KIND_SCHEDULED, STATUS_OPEN, slot_role_name_for_event_time
@@ -153,7 +154,8 @@ async def fire_underfill(event_id: str, hours_before: int, resurface: bool = Fal
         return
     yes_count = len(rsvps[0])
     maybe_count = len(rsvps[1])
-    target = settings.pod_draft_target_players
+    floor = settings.pod_signal_fire_threshold
+    aim = settings.pod_draft_target_players
 
     channel = resolve_pod_chat_channel(_bot)
     if channel is None:
@@ -162,8 +164,7 @@ async def fire_underfill(event_id: str, hours_before: int, resurface: bool = Fal
 
     nudge = await _find_nudge(channel, jump_url)
 
-    composition = await _overflow_composition(event_id, yes_count, maybe_count)
-    body = build_underfill_message(name, yes_count, target, event_time, jump_url, maybe_count, composition)
+    body = build_recruiting_message(name, yes_count, floor, aim, event_time, jump_url, maybe_count)
     if resurface and nudge is not None:
         await _safe_delete(nudge)
         nudge = None
@@ -171,17 +172,17 @@ async def fire_underfill(event_id: str, hours_before: int, resurface: bool = Fal
         await _safe_edit(nudge, body)
     else:
         signal_id = await asyncio.to_thread(_scheduled_signal_id, event_id)
-        role = await _claimed_ping_role(channel, signal_id, event_time, yes_count, target, hours_before)
+        role = await _claimed_ping_role(channel, signal_id, event_time, yes_count, floor, aim, hours_before)
         post_body = f"{body} {role.mention}" if role is not None else body
         await _safe_post(channel, post_body, mention_role=role is not None)
-    log.info(f"T-{hours_before}h underfill nudge for {event_id}: {yes_count}/{target} Yes")
+    log.info(f"T-{hours_before}h underfill nudge for {event_id}: {yes_count}/{aim} Yes")
 
 
 async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool = False) -> None:
-    """The launcher-slot twin of `fire_underfill`, running while the slot is still open: it aims at the
-    fire threshold and its signup link is the launcher. A fired or expired slot is skipped — the card's
-    own checks recruit a fired slot's last seats. An empty slot stays silent: there is no pod-in-waiting
-    to rally around, and the launcher already advertises the open slot."""
+    """The launcher-slot twin of `fire_underfill`, running while the slot is still open: same two numbers,
+    with the launcher as the signup link. A fired or expired slot is skipped — a fired slot's message has
+    already been handed to its card, whose own checks carry it from there. An empty slot stays silent: there
+    is no pod-in-waiting to rally around, and the launcher already advertises the open slot."""
     if _bot is None:
         log.error(f"fire_slot_underfill for {signal_id}: bot reference is not initialised")
         return
@@ -194,9 +195,10 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
         return
     if slot.slot_time <= datetime.now(timezone.utc):
         return
-    aim = settings.pod_signal_fire_threshold
-    if slot.count == 0 or slot.count >= aim:
-        log.info(f"fire_slot_underfill: slot {signal_id} has {slot.count} signups; skipping")
+    floor = settings.pod_signal_fire_threshold
+    aim = settings.pod_draft_target_players
+    if slot.count == 0:
+        log.info(f"fire_slot_underfill: slot {signal_id} has no signups; skipping")
         return
 
     channel = resolve_pod_chat_channel(_bot)
@@ -206,17 +208,19 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
 
     nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
 
-    body = build_underfill_message(slot.name, slot.count, aim, slot.slot_time, slot.jump_url)
+    body = build_recruiting_message(slot.name, slot.count, floor, aim, slot.slot_time, slot.jump_url)
     if resurface and nudge is not None:
         await _safe_delete(nudge)
         nudge = None
     if nudge is not None:
         await _safe_edit(nudge, body)
     else:
-        role = await _claimed_ping_role(channel, signal_id, slot.slot_time, slot.count, aim, hours_before)
+        role = await _claimed_ping_role(
+            channel, signal_id, slot.slot_time, slot.count, floor, aim, hours_before,
+        )
         post_body = f"{body} {role.mention}" if role is not None else body
         await _safe_post(channel, post_body, mention_role=role is not None)
-    log.info(f"T-{hours_before}h slot underfill nudge for {signal_id}: {slot.count}/{aim} signed up")
+    log.info(f"T-{hours_before}h slot underfill nudge for {signal_id}: {slot.count} signed up")
 
 
 async def refresh_underfill_nudge_for_event(
@@ -230,8 +234,7 @@ async def refresh_underfill_nudge_for_event(
     jump_url = await asyncio.to_thread(_card_jump_url, event_id)
     if jump_url is None:
         return
-    composition = await _overflow_composition(event_id, yes_count, maybe_count)
-    await _sync_nudge(bot, loaded, jump_url, yes_count, maybe_count, composition)
+    await _sync_nudge(bot, loaded, jump_url, yes_count, maybe_count)
 
 
 async def clear_underfill_nudge(bot: commands.Bot, event_id: str) -> None:
@@ -283,14 +286,57 @@ async def refresh_slot_nudge(bot: commands.Bot, signal_id: str) -> None:
     nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
     if nudge is None:
         return
-    aim = settings.pod_signal_fire_threshold
-    body = build_underfill_message(slot.name, slot.count, aim, slot.slot_time, slot.jump_url)
+    body = build_recruiting_message(
+        slot.name, slot.count, settings.pod_signal_fire_threshold, settings.pod_draft_target_players,
+        slot.slot_time, slot.jump_url,
+    )
     await _safe_edit(nudge, body)
 
 
+async def hand_slot_nudge_to_card(bot: commands.Bot, signal_id: str, event_id: str) -> None:
+    """Move a slot's standing status message onto the pod it just fired into, and post one when the slot
+    never had a message up.
+
+    Firing used to delete the slot's message, and the card's own beats posted a fresh one hours later. That
+    left the pod with no public status at the very moment it gained one: the draft is on, the thread is open,
+    and it is still short of a full table. One message carries the pod through instead, so a player watching
+    pod chat sees the same line count up rather than vanish at six."""
+    channel = resolve_pod_chat_channel(bot)
+    if channel is None:
+        return
+    slot = await asyncio.to_thread(_load_slot_for_nudge, signal_id)
+    nudge = None
+    if slot is not None:
+        nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
+    body = await _card_status_body(event_id)
+    if body is None:
+        return
+    if nudge is not None:
+        await _safe_edit(nudge, body)
+    else:
+        await _safe_post(channel, body)
+
+
+async def _card_status_body(event_id: str) -> str | None:
+    """A fired pod's status line, read off its card. None when the pod is gone or has no card to link."""
+    loaded = await asyncio.to_thread(_load_event_by_id_for_nudge, event_id)
+    jump_url = await asyncio.to_thread(_card_jump_url, event_id)
+    if loaded is None or jump_url is None:
+        return None
+    name, event_time, _status = loaded
+    rsvps = await event_rsvps(event_id)
+    yes_count = len(rsvps[0])
+    maybe_count = len(rsvps[1])
+    return build_recruiting_message(
+        name, yes_count, settings.pod_signal_fire_threshold, settings.pod_draft_target_players,
+        event_time, jump_url, maybe_count,
+    )
+
+
 async def clear_slot_nudge(bot: commands.Bot, signal_id: str) -> None:
-    """Delete a launcher slot's standing nudge when its window ends: the slot fired into a card (whose
-    own checks take over) or expired unfired. No-op when no nudge is up."""
+    """Delete a launcher slot's standing status when its start passes with no pod: nobody can join it and
+    there is nothing left to advertise. A slot that fires hands its message to the card instead. No-op when
+    no message is up."""
     slot = await asyncio.to_thread(_load_slot_for_nudge, signal_id)
     if slot is None:
         return
@@ -304,7 +350,7 @@ async def clear_slot_nudge(bot: commands.Bot, signal_id: str) -> None:
 
 async def _sync_nudge(
     bot: commands.Bot, loaded: tuple[str, datetime, str], jump_url: str, yes_count: int,
-    maybe_count: int = 0, composition=None,
+    maybe_count: int = 0,
 ) -> None:
     name, event_time, status = loaded
     if status != "pending":
@@ -318,18 +364,11 @@ async def _sync_nudge(
     if nudge is None:
         return
 
-    target = settings.pod_draft_target_players
-    body = build_underfill_message(name, yes_count, target, event_time, jump_url, maybe_count, composition)
+    body = build_recruiting_message(
+        name, yes_count, settings.pod_signal_fire_threshold, settings.pod_draft_target_players,
+        event_time, jump_url, maybe_count,
+    )
     await _safe_edit(nudge, body)
-
-
-async def _overflow_composition(event_id: str, yes_count: int, maybe_count: int):
-    """The signup format-preference breakdown, read only when Yes plus Maybe reach a second table's
-    worth — the sole case the overflow line needs it — so a routine RSVP change skips the query."""
-    if yes_count + maybe_count < 2 * settings.pod_draft_target_players:
-        return None
-    interests = await asyncio.to_thread(event_member_interests_sync, event_id)
-    return fi.composition(interests)
 
 
 @dataclass(frozen=True)
@@ -387,11 +426,11 @@ async def _find_nudge(
 
 async def _claimed_ping_role(
     channel: discord.abc.Messageable, signal_id: str | None, event_time: datetime, yes_count: int,
-    aim: int, hours_before: int,
+    floor: int, aim: int, hours_before: int,
 ) -> discord.Role | None:
     """`_nudge_ping_role` with the last-call claim on top: the role only survives when this signal has
     not pinged before. A missing signal_id pings unclaimed."""
-    role = _nudge_ping_role(channel, event_time, yes_count, aim, hours_before)
+    role = _nudge_ping_role(channel, event_time, yes_count, floor, aim, hours_before)
     if role is None:
         return None
     if signal_id is not None and not await asyncio.to_thread(claim_last_call_ping_sync, signal_id):
@@ -400,18 +439,21 @@ async def _claimed_ping_role(
 
 
 def _nudge_ping_role(
-    channel: discord.abc.Messageable, event_time: datetime, yes_count: int, aim: int, hours_before: int,
+    channel: discord.abc.Messageable, event_time: datetime, yes_count: int, floor: int, aim: int,
+    hours_before: int,
 ) -> discord.Role | None:
     """The slot role to ping on a fresh nudge, or None to stay silent.
 
-    Pinging is gated to the check hours in POD_UNDERFILL_PING_HOURS and to a pod that is close to its
-    aim — it needs at most POD_UNDERFILL_PING_CLOSE_GAP more players. A pod still far from the aim, or one
-    already at it, stays silent. The role resolves off the daily poll buckets, so weekly and launcher
-    slots both ping; an off-grid custom time resolves no role and stays silent.
+    Pinging is gated to the check hours in POD_UNDERFILL_PING_HOURS and to a pod that is close to the
+    number it is currently chasing — the floor while the draft is not yet on, the aim once it is. It needs
+    at most POD_UNDERFILL_PING_CLOSE_GAP more to get there. A pod still far from that number, or one already
+    past the aim, stays silent. The role resolves off the daily poll buckets, so weekly and launcher slots
+    both ping; an off-grid custom time resolves no role and stays silent.
     """
     if hours_before not in settings.pod_underfill_ping_hours_set:
         return None
-    needed = aim - yes_count
+    chasing = floor if yes_count < floor else aim
+    needed = chasing - yes_count
     if needed <= 0 or needed > settings.pod_underfill_ping_close_gap:
         return None
     role_name = slot_role_name_for_event_time(event_time)

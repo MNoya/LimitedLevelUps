@@ -109,7 +109,7 @@ The poll renders as two inline-field columns, one per slot, each headed by the s
 
 Slot times: `slot_time = signal_date @ 14:00 ET (early)` / `@ 20:00 ET (late)`.
 
-`PodPollView` (persistent): each button toggles the clicker in/out of that bucket, edits the embed counts, and grants the slot role + Pod Drafters umbrella on join. When a bucket hits threshold and is still open → launch with `open_now=False`, mark that row `fired` (rendered as a ✅ on the count; the slot keeps taking over-signups). At `slot_time`, an unfired slot flips to `expired` — enforced in the DB, so its button goes inert on click.
+`PodPollView` (persistent): each pod button adds the clicker to that bucket and answers them straight off the write, with the embed re-render, the slot role grant and the Pod Drafters umbrella settled in a background task after; the board's own Leave button takes them off every pod on it. When a bucket hits threshold and is still open → launch with `open_now=False`, mark that row `fired` (rendered as a ✅ on the count; the slot keeps taking over-signups). At `slot_time`, an unfired slot flips to `expired` — enforced in the DB, so its button goes inert on click.
 
 Slots fire **independently**: a hot day can produce both an Early pod and a Late pod.
 

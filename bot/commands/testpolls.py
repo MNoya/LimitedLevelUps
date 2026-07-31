@@ -64,6 +64,8 @@ from bot.services.ping_roles import (
 from bot.services.pod_schedule import POD_QUEUE_ROLE_NAME
 from bot.services.pod_signals import (
     KIND_POLL,
+    LANE_EARLY,
+    LANE_LATE,
     RSVP_YES,
     SCHEDULE_TZ,
     STATUS_FIRED,
@@ -82,7 +84,10 @@ from bot.tasks.pod_daily_poll import (
     build_play_again_prompt,
     build_poll_embed,
     close_launcher_for_date,
+    lane_settled_for_day,
     post_launcher,
+    repost_board_after_the_late_pods,
+    resurface_board_after_the_early_pods,
 )
 from bot.tasks.pod_thread_cleanup import delete_threads
 from bot.tasks.pod_draft_reminder import fire_roster_reminder
@@ -393,6 +398,52 @@ async def setup(bot: commands.Bot) -> None:
         if close:
             await close_launcher_for_date(ctx.bot, target_day)
 
+    @test_group.command(name="repost")
+    @commands.is_owner()
+    async def test_repost(ctx: commands.Context, *args: str) -> None:
+        """Owner-only. Drive the two reposts against the live board without waiting for a pod to finish.
+        With no argument it runs both real triggers and says which guard stopped each: the early one
+        resurfaces the same day below the pods that played, the late one posts the next day's board and
+        retires the current one as its On This Day card. `force` skips the guards and posts the late one,
+        `force early` the early one, so the cards can be eyeballed side by side."""
+        board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
+        if board is None:
+            await ctx.send("No launcher board is live. Run `!test poll` first.")
+            return
+        _guild_id, _channel_id, message_id, board_day = board
+        lowered = {arg.lower() for arg in args}
+        if "force" not in lowered:
+            slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, board_day)
+            early_done = lane_settled_for_day(slots, LANE_EARLY, board_day)
+            late_done = lane_settled_for_day(slots, LANE_LATE, board_day)
+            resurfaced = await resurface_board_after_the_early_pods(ctx.bot, board_day)
+            reposted = await repost_board_after_the_late_pods(ctx.bot, board_day)
+            await ctx.send("\n".join([
+                f"Board dated **{board_day}**",
+                f"Early pods finished: **{_yes_no(early_done)}** — Late pods finished: **{_yes_no(late_done)}**",
+                f"Early resurface: **{_posted_or_skipped(resurfaced)}**. "
+                "It runs when the early pods are finished, the late ones are not, and the board went up "
+                "before the early slot started.",
+                f"Evening repost: **{_posted_or_skipped(reposted)}**. "
+                "It runs when the late pods are finished and tomorrow has no board yet.",
+                "Add `force early` or `force` to post either one now.",
+            ]))
+            return
+        if "early" in lowered:
+            posted = await resurface_board_after_the_early_pods(ctx.bot, board_day, force=True)
+            if not posted:
+                await ctx.send("Could not resurface the board. Check the logs.")
+                return
+            await ctx.send(f"Forced the early resurface: reposted {board_day} and deleted the old board.")
+            return
+        next_day = board_day + timedelta(days=1)
+        message = await post_launcher(ctx.bot, ctx.channel, next_day, ping=False, graduate=False)
+        if message is None:
+            await ctx.send("Could not post the repost. Check the logs.")
+            return
+        await close_launcher_for_date(ctx.bot, board_day)
+        await ctx.send(f"Forced the evening repost: posted {next_day} and retired {board_day}.")
+
     @test_group.command(name="reset")
     @commands.is_owner()
     async def test_reset(ctx: commands.Context) -> None:
@@ -670,6 +721,14 @@ def _handle(*indexes: int) -> str:
     """A fixture Discord handle of a chosen length, joined out of hall-of-fame names so a width preview
     never puts an invented community member on the board."""
     return "_".join(HALL_OF_FAME[index].replace(" ", "") for index in indexes)
+
+
+def _yes_no(value: bool) -> str:
+    return "yes" if value else "no"
+
+
+def _posted_or_skipped(value: bool) -> str:
+    return "posted" if value else "skipped"
 
 
 _WIDTH_CASES = (

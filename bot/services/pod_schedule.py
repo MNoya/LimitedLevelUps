@@ -11,13 +11,13 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from bot import emojis
-from bot.services.pod_format_interest import flashback_emoji, latest_emoji
 from bot.services.pod_reminder_copy import (
     DRAFT_STARTED,
-    RECRUITING_NEEDS_MORE,
-    RECRUITING_OVERFLOW,
-    RECRUITING_OVERFLOW_SPLIT,
+    RECRUITING_BELOW_FLOOR,
+    RECRUITING_MAYBE,
     RECRUITING_READY,
+    RECRUITING_SECOND_TABLE,
+    RECRUITING_SHORT,
 )
 
 
@@ -110,35 +110,46 @@ def short_event_name(name: str) -> str:
     return _DATE_SUFFIX_RE.sub("", name)
 
 
-def build_underfill_message(
+def build_recruiting_message(
     thread_name: str,
-    yes_count: int,
-    target: int,
+    count: int,
+    floor: int,
+    aim: int,
     event_time: datetime,
     jump_url: str,
     maybe_count: int = 0,
-    composition=None,
 ) -> str:
-    """Plain count-toward-target nudge copy; the ready line once the aim is met; or the overflow line
-    once Yes plus Maybe reach a second table's worth, which quantifies the RSVPs and the format split.
-    The link stays live since the pod stays open past the aim. Never adds a role mention — pinging is
-    the caller's call; edits keep a mention already in the message so a pinged player still sees why."""
+    """The pod's public status in one message: how many are in, what the next number gets them, and where
+    to sign up. One shape carries a pod from its first signup to its lobby, so the surface a player learns
+    to read never disappears and never reads as closed.
+
+    One number is asked for at a time. Under the floor the only thing a reader decides is whether to make
+    the draft happen, so the aim would compete with the ask; past the floor the aim is the ask. A full pod
+    has nothing left to ask for and switches to its Yes and Maybe counts, keeping the link, because a player
+    who drops at game time is the common way an eight-player pod plays with seven. Once Yes and Maybe
+    together reach two tables, the same line says so.
+
+    Never adds a role mention — pinging is the caller's call; edits keep a mention already in the message so
+    a pinged player still sees why."""
     name = short_event_name(thread_name)
     unix = int(event_time.timestamp())
-    needed = target - yes_count
-    if needed > 0:
-        body = RECRUITING_NEEDS_MORE.format(
-            hello=emojis.prefix("chordoHello"), name=name, needed=needed,
-            plural="s" if needed != 1 else "", unix=unix, jump_url=jump_url, manat=emojis.get("manat"),
-        )
-        return body.rstrip()
-    if yes_count + maybe_count >= 2 * target:
-        return _underfill_overflow_message(name, unix, yes_count, maybe_count, jump_url, composition)
-    body = RECRUITING_READY.format(
-        hello=emojis.prefix("chordoHello"), name=name, unix=unix, jump_url=jump_url,
-        manat=emojis.get("manat"),
-    )
-    return body.rstrip()
+    shared = {
+        "hello": emojis.prefix("chordoHello"), "name": name, "count": count, "unix": unix,
+        "jump_url": jump_url, "manat": emojis.get("manat"),
+    }
+    if count < floor:
+        needed = floor - count
+        return RECRUITING_BELOW_FLOOR.format(to_floor=needed, plural=_plural(needed), **shared).rstrip()
+    if count < aim:
+        needed = aim - count
+        return RECRUITING_SHORT.format(to_aim=needed, plural=_plural(needed), **shared).rstrip()
+    maybe = RECRUITING_MAYBE.format(maybe=maybe_count) if maybe_count else ""
+    tail = RECRUITING_SECOND_TABLE if count + maybe_count >= 2 * aim else ""
+    return RECRUITING_READY.format(yes=count, maybe=maybe, tail=tail, **shared).rstrip()
+
+
+def _plural(count: int) -> str:
+    return "" if count == 1 else "s"
 
 
 def build_underfill_fired_message(name: str, player_count: int, thread_url: str) -> str:
@@ -153,18 +164,3 @@ def build_underfill_fired_message(name: str, player_count: int, thread_url: str)
     )
 
 
-def _underfill_overflow_message(name, unix, yes_count, maybe_count, jump_url, composition) -> str:
-    return RECRUITING_OVERFLOW.format(
-        hello=emojis.prefix("chordoHello"), name=name, unix=unix, yes=yes_count, maybe=maybe_count,
-        split=_overflow_split_clause(composition), jump_url=jump_url, manat=emojis.get("manat"),
-    ).rstrip()
-
-
-def _overflow_split_clause(composition) -> str:
-    """The format-preference tail on the overflow line, empty when no signup stated a preference."""
-    if composition is None or not composition.has_signal:
-        return ""
-    return RECRUITING_OVERFLOW_SPLIT.format(
-        latest=composition.latest_only, seticon=latest_emoji(),
-        flashback=composition.flashback_only, flashback_emoji=flashback_emoji(),
-    )

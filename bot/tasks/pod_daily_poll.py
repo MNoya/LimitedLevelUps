@@ -13,8 +13,8 @@ fired — a pod graduates only once its own day is the live one, which the morni
 post adopts the pods a rolled column already opened, so the fresh board carries what accumulated instead of
 starting at zero, and the old message retires to its On This Day history.
 
-A format whose pod already exists is reflected, not reopened: it renders a Yes/No toggle that writes to that
-pod's scheduled card and creates no signal of its own, so the launcher and the card are two live windows on
+A format whose pod already exists is reflected, not reopened: its button writes a Yes to that pod's
+scheduled card and creates no signal of its own, so the launcher and the card are two live windows on
 one roster and never a duplicate. The other formats at that slot keep gathering behind their own buttons.
 Reaching the threshold does not close a pod and neither does its lobby opening: it keeps its full joinable
 block until the draft starts, and only then collapses to one line. Every button is a DynamicItem, so a board
@@ -41,7 +41,9 @@ from bot.commands.messages import (
 from bot.commands.pod_queue import queue_role_mention
 from bot.commands.pod_rsvp import (
     ReminderRsvpButton,
+    apply_card_leave,
     apply_card_rsvp,
+    pod_already_on_embed,
     pod_removed_embed,
     post_scheduled_card,
     refresh_event_rsvp_surfaces,
@@ -55,18 +57,17 @@ from bot.services import pod_format_poll
 from bot.services import pod_launch
 from bot.services.pod_active import set_pod_complete_hook
 from bot.services.ping_roles import (
-    NOTICE_GRANT,
     SET_CHAMPION_ROLE_NAME,
     announce_pod_grant,
+    grant_pod_roles,
     organizer_mention,
-    pod_role_grant_text,
     register_format_preference_opener,
     send_join_confirmation_card,
-    slot_grant_ping,
-    spec_named,
 )
 from bot.services.pod_launcher_copy import (
     ARCHIVE_INTRO,
+    BOARD_LEAVE_EMOJI,
+    BOARD_LEAVE_LABEL,
     CUBE_SELECT_PLACEHOLDER,
     INTEREST_DESC_CUBE,
     INTEREST_DESC_FLASHBACK,
@@ -74,11 +75,13 @@ from bot.services.pod_launcher_copy import (
     MARKER_CLOSED,
     MSG_INTEREST_PROMPT,
     MSG_INTEREST_SAVED,
-    MSG_FIRST_POD_TO_FILL,
+    MSG_POD_THAT_NEEDS_YOU,
     MSG_ON_BOTH_PODS,
+    MSG_ON_NO_POD,
     MSG_ON_SEVERAL_PODS,
     MSG_POLL_INACTIVE,
     MSG_RANK_EMPTY,
+    MSG_REMOVED_FROM_PODS,
     MSG_SLOT_CLOSED,
     PLAY_AGAIN_BUTTON,
     PLAY_AGAIN_INTRO,
@@ -104,9 +107,11 @@ from bot.services.pod_launcher_copy import (
 )
 from bot.services.pod_reminder_copy import SLOT_FIRE_PING
 from bot.services.pod_schedule import EARLY_POD_ROLE_NAME, LATE_POD_ROLE_NAME
-from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role, role_mention
+from bot.services.pod_roles import find_role, role_mention
 from bot.services.pod_signals import (
+    LANE_EARLY,
     LANE_LATE,
+    RSVP_MAYBE,
     RSVP_NO,
     RSVP_YES,
     SCHEDULE_TZ,
@@ -126,7 +131,11 @@ from bot.services.pod_slot import pod_display_name
 from bot.sets import active_set_code, set_name_for
 from bot.slug import slugify
 from bot.tasks.pod_draft_reminder import register_reminder_view_builder
-from bot.tasks.pod_underfill import clear_slot_nudge, refresh_slot_nudge, schedule_slot_underfill_checks
+from bot.tasks.pod_underfill import (
+    hand_slot_nudge_to_card,
+    refresh_slot_nudge,
+    schedule_slot_underfill_checks,
+)
 
 
 log = logging.getLogger(__name__)
@@ -135,6 +144,9 @@ _bot: commands.Bot | None = None
 
 LAUNCHER_CLOSE_LOOKBACK_DAYS = 3
 PLAY_AGAIN_DELAY_MIN = 5
+
+_repost_lock = asyncio.Lock()
+_settling: set[asyncio.Task] = set()
 
 CHAMPIONSHIP_SLOT_LABEL = "Set Championship"
 CHAMPIONSHIP_CROWN = "👑"
@@ -169,33 +181,55 @@ def _poll_channel(bot: commands.Bot) -> "discord.abc.Messageable | None":
 
 
 async def fire_daily_poll() -> None:
+    """Post today's board with the day's ping, replacing the one the evening repost may already have put up
+    for today. The board itself is what players read, so the day's ping goes on a fresh board at the bottom
+    of the channel instead of on a line pointing up at one posted the night before. Adoption moves every open
+    row onto the new message first, so the one it replaces is left holding nothing and is deleted."""
     if _bot is None:
         return
     today = datetime.now(SCHEDULE_TZ).date()
-    if await asyncio.to_thread(pod_launch.poll_exists_for_date_sync, today):
-        log.info(f"daily launcher already posted for {today}; skipping")
-        return
     channel = _poll_channel(_bot)
     if channel is None:
         log.warning("fire_daily_poll: coordination channel unresolved")
         return
+    superseded = await asyncio.to_thread(pod_launch.launcher_ref_for_date_sync, today)
     message = await post_launcher(_bot, channel, today)
     if message is not None:
         log.info(f"posted daily pod launcher for {today} as message {message.id}")
+        if superseded is not None:
+            await _delete_launcher_message(_bot, superseded)
     await close_recent_launchers(_bot, today)
     await pod_launch.close_past_pod_cards()
 
 
+async def _delete_launcher_message(bot: commands.Bot, ref: tuple[str, str]) -> None:
+    """Delete a board a fresh post has replaced. Nothing links to a launcher message, and the day it covered
+    keeps its history on the retired card the evening transition left behind, so there is nothing to keep."""
+    channel_id, message_id = ref
+    channel = bot.get_channel(int(channel_id))
+    if channel is None:
+        return
+    try:
+        message = await channel.fetch_message(int(message_id))
+        await message.delete()
+    except discord.HTTPException:
+        log.warning(f"could not delete the superseded launcher message {message_id}", exc_info=True)
+
+
 async def catch_up_daily_poll(bot: commands.Bot) -> None:
-    """Startup safety net for the 11:00 post. The cron is re-armed for its next future fire every start, so a
-    bot that was down at the post hour skips that day's post altogether, and the morning post is the only
+    """Startup safety net for the morning post. The cron is re-armed for its next future fire every start, so
+    a bot that was down at the post hour skips that day's post altogether, and the morning post is the only
     thing that graduates the pods that filled overnight: without this they sit full until their slot time
-    passes and expires. Posts the missing board, or runs the graduation pass when the board is already up."""
+    passes and expires. Posts the missing board, or runs the graduation pass when the board is already up.
+
+    A board for today that went up before the post hour is last night's repost, not the day's post, so it is
+    caught up too: the day's ping is still owed."""
     now = datetime.now(SCHEDULE_TZ)
     if now.hour < POST_HOUR_ET:
         return
     today = now.date()
-    if not await asyncio.to_thread(pod_launch.poll_exists_for_date_sync, today):
+    ref = await asyncio.to_thread(pod_launch.launcher_ref_for_date_sync, today)
+    if ref is None or _posted_before_the_post_hour(ref[1], now):
         log.info(f"catching up the daily launcher for {today}, missed at the post hour")
         await fire_daily_poll()
         return
@@ -206,8 +240,18 @@ async def catch_up_daily_poll(bot: commands.Bot) -> None:
     await _graduate_held_slots(bot, message_id, today)
 
 
+def _posted_before_the_post_hour(message_id: str, now: datetime) -> bool:
+    """Whether a board went up before today's post hour, read off the message's own id."""
+    return _posted_before(message_id, now.replace(hour=POST_HOUR_ET, minute=0, second=0, microsecond=0))
+
+
+def _posted_before(message_id: str, moment: datetime) -> bool:
+    return discord.utils.snowflake_time(int(message_id)) < moment
+
+
 async def post_launcher(
     bot: commands.Bot, channel: "discord.abc.Messageable", signal_date: date,
+    *, ping: bool = True, graduate: bool = True,
 ) -> discord.Message | None:
     """Render and post the day's launcher, bind a lazy signal per open slot and arm its expiry and underfill
     beats, then re-render and graduate whatever arrived overnight. Shared by the daily cron and `!test poll`
@@ -221,13 +265,17 @@ async def post_launcher(
     past is a misfire APScheduler drops, which would leave the column offering a dead slot until a restart
     swept it. Reached whenever a board is posted late in the day, by the startup catch-up after downtime or
     by `!test poll`, and it runs before graduation so a slot full but already started never fires a pod into
-    the past."""
+    the past.
+
+    `ping` and `graduate` are both off for the evening repost, which posts the next day's board hours early:
+    the day's one ping belongs to the morning post, and graduating a slot that filled before its day arrived
+    would post its card ten hours ahead of the draft."""
     guild = getattr(channel, "guild", None)
     guild_id = str(guild.id) if guild else ""
     slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, "", signal_date)
     message = await channel.send(
-        content=poll_ping_line(guild), embed=build_poll_embed(slots, guild),
-        view=PodPollView(slots, guild), allowed_mentions=discord.AllowedMentions(roles=True),
+        content=poll_ping_line(guild) if ping else None, embed=build_poll_embed(slots, guild),
+        view=PodPollView(slots, guild), allowed_mentions=discord.AllowedMentions(roles=ping),
     )
     bound = await asyncio.to_thread(
         pod_launch.create_poll_signals_sync,
@@ -241,7 +289,8 @@ async def post_launcher(
         pod_launch.arm_slot_expiry(bot, signal_id, slot_time)
         schedule_slot_underfill_checks(bot.pod_scheduler, signal_id, slot_time, posted_at)
     await _rerender_poll(bot, str(message.id), signal_date, channel)
-    await _graduate_held_slots(bot, str(message.id), signal_date)
+    if graduate:
+        await _graduate_held_slots(bot, str(message.id), signal_date)
     return message
 
 
@@ -774,8 +823,7 @@ async def _handle_play_again_click(interaction: discord.Interaction, bucket_key:
         return
     await _announce_play_again_signup(interaction, bucket_key)
     if isinstance(interaction.user, discord.Member):
-        await grant_pod_drafters(interaction.user)
-        await _grant_slot_role(interaction.user, bucket_key)
+        await grant_pod_roles(interaction.user, bucket_role_name(bucket_key))
     board_date = await asyncio.to_thread(pod_launch.launcher_date_for_message_sync, launcher_message_id)
     if board_date is not None:
         await _rerender_poll(interaction.client, launcher_message_id, board_date)
@@ -802,22 +850,43 @@ async def _announce_play_again_signup(interaction: discord.Interaction, bucket_k
 
 
 class PodPollView(discord.ui.View):
-    """The day's surface, one button per pod: a gathering pod renders its join toggle, a pod that fired
-    renders a Yes/No toggle writing to its scheduled card, and a pod whose draft started renders nothing —
-    its own line already links to it. Each button names the format it joins, so the press itself says which
-    pod it commits to and no stored preference is consulted. Every button is a DynamicItem, so a board that
-    outlives a restart keeps working without a fixed set of keys to pre-register. Bucket emoji are
-    application emoji that can't render in label text, so each button gets its glyph in the emoji slot."""
+    """The day's surface, one button per pod plus the board's own Leave: a gathering pod and a pod that fired
+    both render a green button that only ever adds you, and a pod whose draft started renders nothing — its
+    own line already links to it. Each button names the format it joins, so the press itself says which pod
+    it commits to and no stored preference is consulted.
+
+    Adding and leaving are two buttons on purpose. One button that toggled meant a press whose meaning
+    depended on state the player could not see, and a second press given to a slow first one signed them
+    back off. Every button is a DynamicItem, so a board that outlives a restart keeps working without a
+    fixed set of keys to pre-register. Bucket emoji are application emoji that can't render in label text,
+    so each button gets its glyph in the emoji slot."""
 
     def __init__(
         self, slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None = None,
     ) -> None:
         super().__init__(timeout=None)
+        pods = 0
         for lane in _lane_order(slots):
             for slot in _lane_slots(slots, lane):
                 item = _slot_item(slot, guild)
                 if item is not None:
                     self.add_item(item)
+                    pods += 1
+        if any(_leavable(slot) for slot in slots):
+            self.add_item(BoardLeaveButton(row=min(4, pods // BUTTONS_PER_ROW + 1)))
+
+
+BUTTONS_PER_ROW = 5
+
+
+def _leavable(slot: pod_launch.LauncherSlot) -> bool:
+    """Whether the board carries a pod this slot's players can still be taken off, which is what decides
+    if the Leave button is worth a seat on the row. A pod already drafting keeps its roster."""
+    if slot.locked or bucket_by_key(slot.bucket_key) is None:
+        return False
+    if slot.committed:
+        return slot.card_message_id is not None
+    return slot.status != STATUS_EXPIRED
 
 
 def _slot_item(
@@ -837,7 +906,7 @@ def _slot_item(
         return None
     if slot.committed:
         if slot.card_message_id:
-            return SlotRsvpButton(slot.bucket_key)
+            return SlotSignUpButton(slot.bucket_key)
         if slot.thread_id:
             return discord.ui.Button(
                 style=discord.ButtonStyle.link,
@@ -845,7 +914,7 @@ def _slot_item(
                 label=_named_pod_label(slot.bucket_key), emoji=_slot_button_emoji(slot.bucket_key),
             )
         return None
-    return SlotToggleButton(slot.bucket_key, closed=slot.status == STATUS_EXPIRED)
+    return SlotJoinButton(slot.bucket_key, closed=slot.status == STATUS_EXPIRED)
 
 
 def _named_pod_label(bucket_key: str, set_code: str | None = None) -> str:
@@ -1192,14 +1261,17 @@ def _cube_display(codes: list[str]) -> str:
 
 SLOT_TOGGLE_PREFIX = "pod_poll"
 SLOT_RSVP_PREFIX = "pod_slot_rsvp"
+BOARD_LEAVE_ID = "pod_poll_leave"
 
 
-class SlotToggleButton(
+class SlotJoinButton(
     discord.ui.DynamicItem[discord.ui.Button],
     template=rf"{SLOT_TOGGLE_PREFIX}:(?P<bucket>.+)",
 ):
-    """Join or leave one named pod. The key carries the slot and the format, so there is no fixed set of
-    keys a startup registration could enumerate and the button survives a restart on its own."""
+    """Sign up for one named pod. The key carries the slot and the format, so there is no fixed set of keys
+    a startup registration could enumerate and the button survives a restart on its own. The custom_id
+    prefix is the one this button carried when it was a toggle, so boards posted before it split into
+    Sign Up and Leave keep dispatching."""
 
     def __init__(self, bucket_key: str, closed: bool = False) -> None:
         super().__init__(discord.ui.Button(
@@ -1218,12 +1290,12 @@ class SlotToggleButton(
         await _handle_poll_click(interaction, self.bucket_key)
 
 
-class SlotRsvpButton(
+class SlotSignUpButton(
     discord.ui.DynamicItem[discord.ui.Button],
     template=rf"{SLOT_RSVP_PREFIX}:(?P<bucket>.+)",
 ):
-    """The same toggle for a pod that already fired: it writes Yes or No on that pod's scheduled card. The
-    key names the format, so a slot carrying two pods gets one button each instead of one ambiguous one."""
+    """The same sign up for a pod that already fired: it writes Yes on that pod's scheduled card. The key
+    names the format, so a slot carrying two pods gets one button each instead of one ambiguous one."""
 
     def __init__(self, bucket_key: str) -> None:
         super().__init__(discord.ui.Button(
@@ -1237,7 +1309,26 @@ class SlotRsvpButton(
         return cls(match["bucket"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await _handle_slot_rsvp_click(interaction, self.bucket_key)
+        await _handle_slot_signup_click(interaction, self.bucket_key)
+
+
+class BoardLeaveButton(discord.ui.DynamicItem[discord.ui.Button], template=BOARD_LEAVE_ID):
+    """One Leave for the whole board: it takes the presser off every pod the board is still gathering or
+    holding a card for. Leaving is the rare press and it names no pod, so it costs one seat on the row
+    instead of doubling it, and a player on two formats of one slot is not left half signed up."""
+
+    def __init__(self, row: int | None = None) -> None:
+        super().__init__(discord.ui.Button(
+            label=BOARD_LEAVE_LABEL, style=discord.ButtonStyle.secondary, emoji=BOARD_LEAVE_EMOJI,
+            custom_id=BOARD_LEAVE_ID, row=row,
+        ))
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls()
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _handle_board_leave_click(interaction)
 
 
 async def _fetch_launcher_message(
@@ -1251,28 +1342,64 @@ async def _fetch_launcher_message(
         return None
 
 
-async def _apply_slot_join(
-    interaction: discord.Interaction, *, launcher_message: discord.Message, signal_date: date,
-    bucket_key: str, action: str, notify_effect: bool = False,
-) -> tuple[str | None, str | None]:
-    """Join or toggle a launcher pod for the clicker, then run the shared fire, launcher re-render, role
-    grant, announce, and nudge-refresh steps. Returns (error, notice): an error string when the pod is gone
-    or closed, and the grant/welcome notice that was posted, so a caller with its own confirmation can skip
-    it instead of doubling up.
+async def _handle_poll_click(interaction: discord.Interaction, bucket_key: str) -> None:
+    """Sign the presser up for one gathering pod, and answer them before anything else runs.
 
-    `notify_effect` confirms the add or the removal ephemerally. A join always gets that confirmation, even
-    when a public welcome went to pod chat: the welcome is for the channel, and only the ephemeral says which
-    pod the clicker is on, when it starts, and which slot role the click granted them. The one exception is
-    the grant card, which already carries all of that folded in."""
-    message_id = str(launcher_message.id)
+    The answer is the point. The write is one statement and the confirmation goes out on it; the board
+    re-render, the role grant, the welcome and the fire all settle after. Waiting on that whole chain first
+    left the button looking dead for seconds, and the press people gave it a second time used to take their
+    signup straight back off — which is why adding and leaving are now two buttons and this one only adds."""
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    launcher_message = interaction.message
+    signal_date = await _launcher_signal_date(launcher_message)
     result = await asyncio.to_thread(
-        pod_launch.toggle_member_sync,
-        message_id, bucket_key, str(interaction.user.id), interaction.user.display_name, action,
+        pod_launch.set_membership_sync,
+        str(launcher_message.id), bucket_key, str(interaction.user.id), interaction.user.display_name, "join",
     )
     if result is None:
-        return _organizer_notice(MSG_POLL_INACTIVE, interaction.guild), None
+        await interaction.followup.send(_organizer_notice(MSG_POLL_INACTIVE, interaction.guild), ephemeral=True)
+        return
     if result.closed:
-        return _organizer_notice(MSG_SLOT_CLOSED, interaction.guild), None
+        await interaction.followup.send(_organizer_notice(MSG_SLOT_CLOSED, interaction.guild), ephemeral=True)
+        return
+    await _confirm_slot_join(interaction, bucket_key, result)
+    _settle_in_background(
+        _settle_slot_join(
+            interaction, launcher_message=launcher_message, signal_date=signal_date,
+            bucket_key=bucket_key, result=result,
+        ),
+        f"slot join {bucket_key}",
+    )
+
+
+async def _confirm_slot_join(
+    interaction: discord.Interaction, bucket_key: str, result: pod_launch.ToggleResult,
+) -> None:
+    """The private answer to a sign up, sent on the write and nothing else. A press by someone already on
+    the pod says so plainly: the button only adds, so a second press is a question about state, not a
+    change to it."""
+    slot_time = result.state.slot_time
+    if not result.joined:
+        await interaction.followup.send(
+            embed=pod_already_on_embed(_gathering_pod_name(bucket_key, slot_time)), ephemeral=True,
+        )
+        return
+    on_formats = await asyncio.to_thread(
+        pod_launch.joined_formats_at_slot_sync,
+        str(interaction.message.id), slot_time, str(interaction.user.id),
+    )
+    lead = _slot_effect_lead(bucket_key, slot_time, on_formats)
+    await send_join_confirmation_card(interaction, lead=lead, accent=discord.Color.green())
+
+
+async def _settle_slot_join(
+    interaction: discord.Interaction, *, launcher_message: discord.Message, signal_date: date,
+    bucket_key: str, result: pod_launch.ToggleResult,
+) -> None:
+    """Everything a sign up sets off once the presser has their answer: the fire claim, the board re-render,
+    the role grant and whichever notice it earns, and the standing nudge. The fire claim leads because it is
+    the one step two presses can race, and it is settled atomically in the database."""
+    message_id = str(launcher_message.id)
     fired = (
         result.joined
         and should_fire(result.state.count, settings.pod_signal_fire_threshold)
@@ -1286,80 +1413,120 @@ async def _apply_slot_join(
         await launcher_message.edit(embed=build_poll_embed(slots, guild), view=PodPollView(slots, guild))
     except discord.HTTPException:
         log.warning(f"could not re-render launcher message {message_id}", exc_info=True)
-    granted_role = None
-    spec = None
-    first_pod = False
     if result.joined and isinstance(interaction.user, discord.Member):
-        first_pod = await grant_pod_drafters(interaction.user)
-        granted_role = await _grant_slot_role(interaction.user, bucket_key)
-        if granted_role is not None:
-            spec = spec_named(granted_role.name)
-    ping = slot_grant_ping(spec) if spec is not None else None
-    lead = None
-    if result.joined:
-        on_formats = await asyncio.to_thread(
-            pod_launch.joined_formats_at_slot_sync,
-            message_id, result.state.slot_time, str(interaction.user.id),
-        )
-        lead = _slot_effect_lead(bucket_key, result.state.slot_time, on_formats)
-    notice = await announce_pod_grant(
-        interaction, first_pod=first_pod, granted_role=granted_role, spec=spec, ping=ping,
-        card_lead=lead,
-    )
-    if notify_effect and result.joined and notice != NOTICE_GRANT:
-        if granted_role is not None and ping is not None:
-            lead = f"{lead}\n{pod_role_grant_text(granted_role.mention, ping)}"
-        await send_join_confirmation_card(interaction, lead=lead, accent=discord.Color.green())
-    elif notify_effect and result.changed:
-        await interaction.followup.send(
-            embed=pod_removed_embed(_gathering_pod_name(bucket_key, result.state.slot_time)),
-            ephemeral=True,
-        )
+        await _announce_slot_grant(interaction, bucket_key)
     if fired:
-        asyncio.create_task(_launch_slot(interaction.client, result.state, message_id))
-    elif result.changed:
+        await _launch_slot(interaction.client, result.state, message_id)
+    elif result.joined:
         await refresh_slot_nudge(interaction.client, result.state.signal_id)
-    return None, notice
 
 
-async def _handle_poll_click(interaction: discord.Interaction, bucket_key: str) -> None:
-    await interaction.response.defer()
-    signal_date = await _launcher_signal_date(interaction.message)
-    err, _ = await _apply_slot_join(
-        interaction, launcher_message=interaction.message, signal_date=signal_date,
-        bucket_key=bucket_key, action="toggle", notify_effect=True,
-    )
-    if err:
-        await interaction.followup.send(err, ephemeral=True)
+async def _announce_slot_grant(interaction: discord.Interaction, bucket_key: str) -> None:
+    """Take the roles a signup earns and post the one notice left: the public welcome for a first-ever
+    drafter. Picking up a slot role is silent — it says nothing a player acts on, and the confirmation they
+    already have carries the Notifications button for changing it."""
+    first_pod = await grant_pod_roles(interaction.user, bucket_role_name(bucket_key))
+    await announce_pod_grant(interaction, first_pod=first_pod)
 
 
-async def _handle_slot_rsvp_click(interaction: discord.Interaction, bucket_key: str) -> None:
-    """A fired pod's button toggles the clicker on its scheduled card: Yes when they were out or Maybe, No
-    when they already held Yes. The card is read off the board's own snapshot by the key the button carries,
-    so a slot holding two pods writes to the one that was pressed. The write and every follow-on run through
-    the card's shared apply_card_rsvp, so the card, the launcher, and the native event re-render in step and
-    the answer names the pod off its own event, reading the same as a press on a pod that has not fired."""
-    signal_date = await _launcher_signal_date(interaction.message)
+async def _handle_slot_signup_click(interaction: discord.Interaction, bucket_key: str) -> None:
+    """A fired pod's button signs the presser up on its scheduled card. The card is read off the board's own
+    snapshot by the key the button carries, so a slot holding two pods writes to the one that was pressed.
+    The write and every follow-on run through the card's shared apply_card_rsvp, so the card, the launcher,
+    and the native event re-render in step and the answer names the pod off its own event, reading the same
+    as a press on a pod that has not fired."""
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    launcher_message = interaction.message
+    signal_date = await _launcher_signal_date(launcher_message)
     slots = await asyncio.to_thread(
-        pod_launch.launcher_snapshot_sync, str(interaction.message.id), signal_date,
+        pod_launch.launcher_snapshot_sync, str(launcher_message.id), signal_date,
     )
     slot = _slot_by_key(slots, bucket_key)
     if slot is None or slot.card_message_id is None:
-        await interaction.response.send_message(_organizer_notice(MSG_SLOT_CLOSED, interaction.guild), ephemeral=True)
+        await interaction.followup.send(_organizer_notice(MSG_SLOT_CLOSED, interaction.guild), ephemeral=True)
         return
-    card_message_id = slot.card_message_id
-    current = await asyncio.to_thread(
-        pod_launch.card_rsvp_for_user_sync, card_message_id, str(interaction.user.id),
+    await apply_card_rsvp(interaction, slot.card_message_id, RSVP_YES, refresh_launcher=False)
+    _settle_in_background(
+        _rerender_board(interaction.client, str(launcher_message.id), signal_date),
+        f"board re-render after {bucket_key} signup",
     )
-    target = RSVP_NO if current == RSVP_YES else RSVP_YES
+
+
+async def _handle_board_leave_click(interaction: discord.Interaction) -> None:
+    """Take the presser off every pod the board carries: the rows still gathering in one write, then No on
+    the card of each pod that already fired. The answer names what it undid and goes out on the writes the
+    board owns; the cards and the re-render settle after. A press with nothing to undo says so, instead of
+    reading as a click that failed."""
+    await interaction.response.defer(ephemeral=True, thinking=True)
     launcher_message = interaction.message
-    await apply_card_rsvp(interaction, card_message_id, target, refresh_launcher=False)
-    guild = getattr(launcher_message.channel, "guild", None) or interaction.guild
-    slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, str(launcher_message.id), signal_date)
-    try:
-        await launcher_message.edit(embed=build_poll_embed(slots, guild), view=PodPollView(slots, guild))
-    except discord.HTTPException:
-        log.warning(f"could not re-render launcher message {launcher_message.id}", exc_info=True)
+    signal_date = await _launcher_signal_date(launcher_message)
+    message_id = str(launcher_message.id)
+    user_id = str(interaction.user.id)
+    left = await asyncio.to_thread(pod_launch.leave_board_slots_sync, message_id, user_id)
+    slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, signal_date)
+    cards = await asyncio.to_thread(_cards_holding_user, slots, user_id)
+    names = [_gathering_pod_name(slot.bucket_key, slot.slot_time) for slot in left]
+    names += [_gathering_pod_name(slot.bucket_key, slot.slot_time) for slot in cards]
+    await interaction.followup.send(embed=_left_pods_embed(names), ephemeral=True)
+    _settle_in_background(
+        _settle_board_leave(interaction, launcher_message, signal_date, left, cards), "board leave",
+    )
+
+
+async def _settle_board_leave(
+    interaction: discord.Interaction, launcher_message: discord.Message, signal_date: date,
+    left: list[pod_launch.LeftSlot], cards: list[pod_launch.LauncherSlot],
+) -> None:
+    """The Discord side of a Leave: No on each fired pod's card and every surface it feeds, then the board,
+    then the standing nudge of each pod the presser left gathering."""
+    for slot in cards:
+        await apply_card_leave(
+            interaction.client, interaction.user, interaction.guild, slot.card_message_id,
+        )
+    await _rerender_board(interaction.client, str(launcher_message.id), signal_date)
+    for slot in left:
+        await refresh_slot_nudge(interaction.client, slot.signal_id)
+
+
+def _cards_holding_user(
+    slots: list[pod_launch.LauncherSlot], discord_user_id: str,
+) -> list[pod_launch.LauncherSlot]:
+    """The board's fired pods this player still holds a seat on. One thread reads them all, so a Leave costs
+    one hop however many pods the board carries."""
+    held = []
+    for slot in slots:
+        if not slot.committed or slot.locked or slot.card_message_id is None:
+            continue
+        rsvp = pod_launch.card_rsvp_for_user_sync(slot.card_message_id, discord_user_id)
+        if rsvp in (RSVP_YES, RSVP_MAYBE):
+            held.append(slot)
+    return held
+
+
+def _left_pods_embed(names: list[str]) -> discord.Embed:
+    """The answer to a Leave: the one pod it removed, the several it removed, or that there was none."""
+    if not names:
+        return discord.Embed(title=MSG_ON_NO_POD, color=discord.Color.greyple())
+    if len(names) == 1:
+        return pod_removed_embed(names[0])
+    return discord.Embed(
+        title=MSG_REMOVED_FROM_PODS, description="\n".join(names), color=discord.Color.red(),
+    )
+
+
+def _settle_in_background(coro, label: str) -> None:
+    """Run a click's follow-on work off the interaction that started it. The press is already answered, so a
+    failure here has no one to tell and is logged instead. The task is held until it finishes, since the
+    event loop keeps only a weak reference and would otherwise collect it mid-flight."""
+    async def settle() -> None:
+        try:
+            await coro
+        except Exception:  # noqa: BLE001 - a detached task must never die silently
+            log.warning(f"could not settle {label}", exc_info=True)
+
+    task = asyncio.create_task(settle())
+    _settling.add(task)
+    task.add_done_callback(_settling.discard)
 
 
 def _slot_by_key(
@@ -1395,7 +1562,9 @@ def _organizer_notice(template: str, guild: discord.Guild | None) -> str:
 
 
 def _several_pods_line(bucket_key: str, on_formats: list[str]) -> str:
-    """`You are on both Early Pods: MSH & Peasant Cube`, over the promise that decides where they play."""
+    """`You are on both Early Pods: MSH & Peasant Cube`, over the line that says where they end up. The pod
+    that fires first keeps only the shared players it needs and hands the rest to the other format, so the
+    placement is where a table is short and not where the click landed."""
     names = [pod_format.format_display(code) for code in on_formats]
     listed = f"{', '.join(names[:-1])} & {names[-1]}"
     slot = _slot_short_name(time_key_of(bucket_key))
@@ -1403,7 +1572,7 @@ def _several_pods_line(bucket_key: str, on_formats: list[str]) -> str:
         pods = MSG_ON_BOTH_PODS.format(slot=slot, formats=listed)
     else:
         pods = MSG_ON_SEVERAL_PODS.format(count=len(names), slot=slot, formats=listed)
-    return f"{pods}\n{MSG_FIRST_POD_TO_FILL}"
+    return f"{pods}\n{MSG_POD_THAT_NEEDS_YOU}"
 
 
 def _gathering_pod_name(bucket_key: str, slot_time: datetime | None) -> str:
@@ -1466,7 +1635,7 @@ async def _launch_slot(bot: commands.Bot, state, message_id: str, announce: bool
         await asyncio.to_thread(pod_launch.release_fire_sync, state.signal_id)
         log.warning(f"slot fire for {state.signal_id} failed to launch; reverted to open")
     else:
-        await clear_slot_nudge(bot, state.signal_id)
+        await hand_slot_nudge_to_card(bot, state.signal_id, event_id)
     await _rerender_board(bot, message_id, slot_time.astimezone(SCHEDULE_TZ).date())
     await _launch_ready_siblings(bot, state.signal_id, message_id)
 
@@ -1482,18 +1651,6 @@ async def _launch_ready_siblings(bot: commands.Bot, signal_id: str, message_id: 
             continue
         log.info(f"firing {state.bucket} beside {signal_id} with {state.count} signups")
         await _launch_slot(bot, state, message_id, announce=False)
-
-
-async def _grant_slot_role(member: discord.Member, bucket_key: str) -> discord.Role | None:
-    """Returns the role only on a fresh grant, so the ephemeral confirmation fires once per member."""
-    role_name = bucket_role_name(bucket_key)
-    if role_name is None:
-        return None
-    role = find_role(member.guild, role_name)
-    if role is None:
-        return None
-    granted = await grant_role(member, role)
-    return role if granted else None
 
 
 async def refresh_launcher_for_date(bot: commands.Bot, signal_date: date) -> None:
@@ -1531,6 +1688,134 @@ async def roll_lane_after_pod(bot: commands.Bot, event_id: str) -> None:
     rolled = await _roll_lane(bot, lane, played_day)
     if rolled:
         _schedule_play_again(bot, event_id, [bucket_key for bucket_key, _slot_time in rolled])
+    if lane == LANE_LATE:
+        await repost_board_after_the_late_pods(bot, played_day)
+    else:
+        await resurface_board_after_the_early_pods(bot, played_day)
+
+
+async def repost_board_after_the_late_pods(bot: commands.Bot, played_day: date) -> bool:
+    """Post the next day's board once the night's late pods are finished, silently, below everything they
+    left in the channel.
+
+    Someone opening pod coordination should find a current board near the bottom. The board is posted in the
+    morning and edited in place from then on, so by night it sits above a whole day of pod cards, threads and
+    reminders, and the freshest thing in the channel is a pod that already played. Reposting is not a second
+    surface: it is the morning post run early, and the morning post then replaces it and carries the ping.
+
+    Strictly the late lane, and strictly on the transition: an early pod still playing does not hold it, and
+    a night whose late slot never fires simply leaves the morning post to do its normal job. The board for
+    the next day existing is itself the claim, so two pods finalizing seconds apart, or a startup sweep
+    re-rolling a lane it already rolled, cannot post it twice."""
+    async with _repost_lock:
+        board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
+        if board is None:
+            return False
+        _guild_id, _channel_id, message_id, board_day = board
+        slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, board_day)
+        if not lane_settled_for_day(slots, LANE_LATE, played_day):
+            return False
+        next_day = board_day + timedelta(days=1)
+        if await asyncio.to_thread(pod_launch.poll_exists_for_date_sync, next_day):
+            return False
+        channel = _poll_channel(bot)
+        if channel is None:
+            return False
+        message = await post_launcher(bot, channel, next_day, ping=False, graduate=False)
+        if message is None:
+            return False
+        log.info(f"reposted the launcher for {next_day} as message {message.id}, the late pods are done")
+        await close_launcher_for_date(bot, board_day)
+        return True
+
+
+async def resurface_board_after_the_early_pods(
+    bot: commands.Bot, played_day: date, *, force: bool = False,
+) -> bool:
+    """Post the day's own board again once the early pods are finished, silently, below what they left in
+    the channel.
+
+    The late column is still gathering at that hour, so this is the same day reposted and not the next one:
+    the rows move to the new message, the old message is deleted, and the day keeps exactly one board. It
+    covers the stretch the evening repost cannot reach — a card, a thread, a reminder and a result stacked
+    on top of a board that has not moved since the morning, while the late pod is the one still recruiting.
+
+    Skipped once the whole day is settled, which is the late transition's own repost, and skipped when the
+    live board already went up after the early slot started, so the two formats of one slot and a second
+    table finishing seconds apart cannot each post one. `force` is `!test repost`, which drives the same
+    post without waiting for a pod to finish."""
+    async with _repost_lock:
+        board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
+        if board is None:
+            return False
+        _guild_id, channel_id, message_id, board_day = board
+        if board_day != played_day:
+            return False
+        if not force and not _early_transition_is_live(
+            await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, board_day),
+            played_day, message_id,
+        ):
+            return False
+        channel = _poll_channel(bot)
+        if channel is None:
+            return False
+        message = await post_launcher(bot, channel, board_day, ping=False, graduate=False)
+        if message is None:
+            return False
+        moved = await asyncio.to_thread(pod_launch.rebind_launcher_rows_sync, message_id, str(message.id))
+        if moved:
+            await _rerender_poll(bot, str(message.id), board_day, channel)
+        log.info(f"resurfaced the launcher for {board_day} as message {message.id}, the early pods are done")
+        await _delete_launcher_message(bot, (channel_id, message_id))
+        return True
+
+
+def _early_transition_is_live(
+    slots: list[pod_launch.LauncherSlot], played_day: date, message_id: str,
+) -> bool:
+    """Whether the board is at the moment between the day's early pods and its late ones, with no board
+    posted for it since."""
+    if not lane_settled_for_day(slots, LANE_EARLY, played_day):
+        return False
+    if lane_settled_for_day(slots, LANE_LATE, played_day):
+        return False
+    started = _lane_start_for_day(slots, LANE_EARLY, played_day)
+    return started is not None and _posted_before(message_id, started)
+
+
+def lane_settled_for_day(
+    slots: list[pod_launch.LauncherSlot], lane: str, day: date,
+) -> bool:
+    """Whether a column has nothing left to happen on one day: every pod it carried is finished and no slot
+    of that day is still gathering. A slot offering two formats and a second table at the same time all
+    finalize seconds apart, so the day is only settled once the last of them is."""
+    on_day = _lane_slots_on_day(slots, lane, day)
+    if not on_day:
+        return False
+    return all(
+        (slot.committed and slot.finished) or (not slot.committed and slot.status == STATUS_EXPIRED)
+        for slot in on_day
+    )
+
+
+def _lane_slots_on_day(
+    slots: list[pod_launch.LauncherSlot], lane: str, day: date,
+) -> list[pod_launch.LauncherSlot]:
+    on_day = []
+    for slot in _lane_slots(slots, lane):
+        if slot.slot_time is not None and slot.slot_time.astimezone(SCHEDULE_TZ).date() == day:
+            on_day.append(slot)
+    return on_day
+
+
+def _lane_start_for_day(
+    slots: list[pod_launch.LauncherSlot], lane: str, day: date,
+) -> datetime | None:
+    """When a column's pods of one day were due to start, or None when it carries none of that day."""
+    on_day = _lane_slots_on_day(slots, lane, day)
+    if not on_day:
+        return None
+    return on_day[0].slot_time
 
 
 async def roll_lane_after_expired_slot(bot: commands.Bot, signal_id: str) -> None:

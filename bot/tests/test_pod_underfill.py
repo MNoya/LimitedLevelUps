@@ -11,6 +11,7 @@ ET = ZoneInfo("America/New_York")
 WEDNESDAY_LATE = datetime(2026, 6, 24, 20, 0, tzinfo=ET)
 WEDNESDAY_OFF_GRID = datetime(2026, 6, 24, 9, 0, tzinfo=ET)
 SUNDAY_LATE = datetime(2026, 6, 28, 20, 0, tzinfo=ET)
+FLOOR = 6
 AIM = 8
 
 
@@ -36,57 +37,34 @@ def _channel(*role_names: str) -> _Channel:
 def test_nudge_ping_role_silent_when_check_hour_not_in_ping_set(monkeypatch):
     monkeypatch.setattr(settings, "pod_underfill_ping_hours", "1")
 
-    role = _nudge_ping_role(_channel("Late Pod"), WEDNESDAY_LATE, 7, AIM, hours_before=3)
+    role = _nudge_ping_role(_channel("Late Pod"), WEDNESDAY_LATE, 7, FLOOR, AIM, hours_before=3)
 
     assert role is None
 
 
-def test_nudge_ping_role_silent_when_far_from_the_aim(monkeypatch):
+@pytest.mark.parametrize("count, pings", [
+    (3, False),
+    (4, True),
+    (5, True),
+    (6, True),
+    (7, True),
+    (8, False),
+    (9, False),
+])
+def test_nudge_ping_role_pings_only_close_to_the_number_the_pod_is_chasing(monkeypatch, count, pings):
     monkeypatch.setattr(settings, "pod_underfill_ping_hours", "1")
     monkeypatch.setattr(settings, "pod_underfill_ping_close_gap", 2)
 
-    role = _nudge_ping_role(_channel("Late Pod"), WEDNESDAY_LATE, 4, AIM, hours_before=1)
+    role = _nudge_ping_role(_channel("Late Pod"), WEDNESDAY_LATE, count, FLOOR, AIM, hours_before=1)
 
-    assert role is None
-
-
-def test_nudge_ping_role_silent_when_already_at_the_aim(monkeypatch):
-    monkeypatch.setattr(settings, "pod_underfill_ping_hours", "1")
-
-    role = _nudge_ping_role(_channel("Late Pod"), WEDNESDAY_LATE, 8, AIM, hours_before=1)
-
-    assert role is None
-
-
-def test_nudge_ping_role_resolves_slot_role_when_close_to_the_aim(monkeypatch):
-    monkeypatch.setattr(settings, "pod_underfill_ping_hours", "1")
-    monkeypatch.setattr(settings, "pod_underfill_ping_close_gap", 2)
-    channel = _channel("Late Pod")
-
-    needs_one = _nudge_ping_role(channel, WEDNESDAY_LATE, 7, AIM, hours_before=1)
-    needs_two = _nudge_ping_role(channel, WEDNESDAY_LATE, 6, AIM, hours_before=1)
-
-    assert needs_one is not None and needs_one.name == "Late Pod"
-    assert needs_two is not None and needs_two.name == "Late Pod"
-
-
-def test_nudge_ping_role_honours_the_slot_aim(monkeypatch):
-    monkeypatch.setattr(settings, "pod_underfill_ping_hours", "1")
-    monkeypatch.setattr(settings, "pod_underfill_ping_close_gap", 2)
-    channel = _channel("Late Pod")
-
-    close_to_fire = _nudge_ping_role(channel, WEDNESDAY_LATE, 4, aim=6, hours_before=1)
-    far_from_fire = _nudge_ping_role(channel, WEDNESDAY_LATE, 3, aim=6, hours_before=1)
-
-    assert close_to_fire is not None and close_to_fire.name == "Late Pod"
-    assert far_from_fire is None
+    assert (role is not None) is pings
 
 
 def test_nudge_ping_role_resolves_weekend_bucket_roles(monkeypatch):
     monkeypatch.setattr(settings, "pod_underfill_ping_hours", "1")
     monkeypatch.setattr(settings, "pod_underfill_ping_close_gap", 2)
 
-    role = _nudge_ping_role(_channel("Weekend Late Pod"), SUNDAY_LATE, 7, AIM, hours_before=1)
+    role = _nudge_ping_role(_channel("Weekend Late Pod"), SUNDAY_LATE, 7, FLOOR, AIM, hours_before=1)
 
     assert role is not None and role.name == "Weekend Late Pod"
 
@@ -94,7 +72,7 @@ def test_nudge_ping_role_resolves_weekend_bucket_roles(monkeypatch):
 def test_nudge_ping_role_silent_for_an_off_grid_event(monkeypatch):
     monkeypatch.setattr(settings, "pod_underfill_ping_hours", "1")
 
-    role = _nudge_ping_role(_channel("Late Pod"), WEDNESDAY_OFF_GRID, 7, AIM, hours_before=1)
+    role = _nudge_ping_role(_channel("Late Pod"), WEDNESDAY_OFF_GRID, 7, FLOOR, AIM, hours_before=1)
 
     assert role is None
 

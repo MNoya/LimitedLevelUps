@@ -258,7 +258,7 @@ def derived_notify_role(scheduled_time: datetime | None, notify: bool) -> str | 
 async def _handle_click(interaction: discord.Interaction, action: str) -> None:
     message_id = str(interaction.message.id)
     result = await asyncio.to_thread(
-        pod_launch.toggle_member_sync,
+        pod_launch.set_membership_sync,
         message_id, QUEUE_BUCKET, str(interaction.user.id), interaction.user.display_name, action,
     )
     if result is None:
@@ -312,9 +312,7 @@ async def _post_join_followups(interaction: discord.Interaction, result, fired: 
     if result.joined and isinstance(interaction.user, discord.Member):
         await _add_to_discussion_thread(interaction)
         first_pod = await grant_pod_drafters(interaction.user)
-    await announce_pod_grant(
-        interaction, first_pod=first_pod, granted_role=None, spec=None, ping=None,
-    )
+    await announce_pod_grant(interaction, first_pod=first_pod)
     if result.joined and not fired:
         await _maybe_nudge(interaction, result.state)
     if fired:
@@ -712,7 +710,7 @@ async def _open_queue(
     )
     await _open_discussion_thread(message, set_code, description, interaction.user, signal_id)
     result = await asyncio.to_thread(
-        pod_launch.toggle_member_sync,
+        pod_launch.set_membership_sync,
         str(message.id), QUEUE_BUCKET, str(interaction.user.id), interaction.user.display_name, "join",
     )
     teardown = teardown_at(datetime.now(timezone.utc), settings.pod_queue_inactivity_minutes)

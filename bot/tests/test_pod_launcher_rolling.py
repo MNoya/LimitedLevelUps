@@ -1,6 +1,7 @@
 from datetime import datetime, time, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from bot.commands.test_group import HALL_OF_FAME
 from bot.config import settings
@@ -522,37 +523,113 @@ def test_a_fired_pod_is_never_offered_a_second_time(session, monkeypatch, latest
     assert pod_launch.sibling_fire_candidates_sync(firing.id) == []
 
 
+# --- reposting ---
+
+def test_reposting_a_board_carries_the_column_that_already_rolled_to_tomorrow(
+    session, monkeypatch, latest_only,
+):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    early = bucket_for_lane(FRIDAY, LANE_EARLY).key
+    late = bucket_for_lane(FRIDAY, LANE_LATE).key
+    _seed_signal(session, early, SATURDAY, message_id="today")
+    tonight = _seed_signal(session, late, FRIDAY, message_id="today")
+    _join(session, tonight, "player", "Finkel")
+    session.commit()
+
+    moved = pod_launch.rebind_launcher_rows_sync("today", "resurfaced")
+
+    resurfaced = pod_launch.launcher_snapshot_sync("resurfaced", FRIDAY)
+    superseded = pod_launch.launcher_snapshot_sync("today", FRIDAY)
+    assert moved == 2
+    assert [entry.signal_id for entry in superseded] == [None, None]
+    assert [(entry.bucket_key, entry.count) for entry in resurfaced if entry.signal_id] == [
+        (named_bucket_key(early, LATEST), 0), (named_bucket_key(late, LATEST), 1),
+    ]
+
+
+# --- leaving ---
+
+def test_leaving_the_board_drops_the_player_from_every_pod_still_gathering(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    early = bucket_for_lane(FRIDAY, LANE_EARLY).key
+    late = bucket_for_lane(FRIDAY, LANE_LATE).key
+    early_latest = _seed_signal(session, early, FRIDAY, message_id="today")
+    early_peasant = _seed_signal(session, early, FRIDAY, message_id="today", set_code="PEASANT")
+    late_slot = _seed_signal(session, late, FRIDAY, message_id="today")
+    for slot in (early_latest, early_peasant, late_slot):
+        _join(session, slot, "leaver", "Finkel")
+        _join(session, slot, "stayer", "LSV")
+    session.commit()
+
+    left = pod_launch.leave_board_slots_sync("today", "leaver")
+
+    assert [slot.signal_id for slot in left] == [early_latest.id, early_peasant.id, late_slot.id]
+    assert _member_ids(session, early_latest) == ["stayer"]
+    assert _member_ids(session, late_slot) == ["stayer"]
+
+
+def test_leaving_one_board_leaves_another_boards_signups_alone(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    late = bucket_for_lane(FRIDAY, LANE_LATE).key
+    fired = _seed_signal(session, late, FRIDAY, message_id="today", status=STATUS_FIRED)
+    tomorrow = _seed_signal(session, late, SATURDAY, message_id="other")
+    _join(session, fired, "leaver", "Finkel")
+    _join(session, tomorrow, "leaver", "Finkel")
+    session.commit()
+
+    left = pod_launch.leave_board_slots_sync("today", "leaver")
+
+    assert left == []
+    assert _member_ids(session, fired) == ["leaver"]
+    assert _member_ids(session, tomorrow) == ["leaver"]
+
+
 # --- cancel ---
 
-def test_canceling_a_pod_closes_the_slot_it_fired_out_of(session, monkeypatch, latest_only):
+def test_a_fired_slot_with_no_pod_left_renders_closed(session, monkeypatch, latest_only):
     monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
     late = bucket_for_lane(FRIDAY, LANE_LATE).key
     slot = _seed_signal(session, late, FRIDAY, message_id="today", status=STATUS_FIRED)
     _fill(session, slot, THRESHOLD)
-    event = _seed_pod(session, slot_event_time(FRIDAY, late), set_code=LATEST)
-    slot.event_id = event.id
     session.commit()
 
-    signal_id = pod_launch.close_canceled_pod_slot_sync(event.id)
-    session.delete(event)
-    session.commit()
-
-    assert signal_id == slot.id
-    assert slot.status == STATUS_EXPIRED
     late_column = [
         entry for entry in pod_launch.launcher_snapshot_sync("today", FRIDAY)
         if lane_of(entry.bucket_key) == LANE_LATE
     ]
+
     assert [(entry.committed, entry.status) for entry in late_column] == [(False, STATUS_EXPIRED)]
 
 
-def test_canceling_a_pod_no_column_owns_closes_no_slot(session, monkeypatch, latest_only):
+def test_a_fired_slot_still_covered_by_its_pod_renders_as_the_pod(session, monkeypatch, latest_only):
     monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
     late = bucket_for_lane(FRIDAY, LANE_LATE).key
-    event = _seed_pod(session, slot_event_time(FRIDAY, late), set_code=LATEST)
+    slot = _seed_signal(session, late, FRIDAY, message_id="today", status=STATUS_FIRED)
+    _fill(session, slot, THRESHOLD)
+    _seed_pod(session, slot_event_time(FRIDAY, late), set_code=LATEST)
     session.commit()
 
-    assert pod_launch.close_canceled_pod_slot_sync(event.id) is None
+    late_column = [
+        entry for entry in pod_launch.launcher_snapshot_sync("today", FRIDAY)
+        if lane_of(entry.bucket_key) == LANE_LATE
+    ]
+
+    assert [entry.committed for entry in late_column] == [True]
+
+
+@pytest.mark.parametrize("pod_set_code, expected_match", [(LATEST, True), ("PEASANT", False)])
+def test_a_canceled_pod_finds_the_slot_it_fired_out_of(
+    session, monkeypatch, latest_only, pod_set_code, expected_match,
+):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    late = bucket_for_lane(FRIDAY, LANE_LATE).key
+    slot = _seed_signal(session, late, FRIDAY, message_id="today", status=STATUS_FIRED)
+    event = _seed_pod(session, slot_event_time(FRIDAY, late), set_code=pod_set_code)
+    session.commit()
+
+    found = pod_launch.fired_slot_for_pod_sync(event.id)
+
+    assert found == (slot.id if expected_match else None)
 
 
 @pytest.fixture
@@ -607,6 +684,15 @@ def _join(session, signal, discord_user_id, display_name):
         signal_id=signal.id, discord_user_id=discord_user_id, display_name=display_name,
     ))
     session.flush()
+
+
+def _member_ids(session, signal):
+    session.expire_all()
+    return [
+        member.discord_user_id for member in session.execute(
+            select(PodSignalMember).where(PodSignalMember.signal_id == signal.id)
+        ).scalars().all()
+    ]
 
 
 def _fill(session, signal, count, prefix="member"):

@@ -26,8 +26,8 @@ from bot.services.pod_reminder_copy import SLOT_FIRE_PING
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import (
     SCHEDULE_TZ,
+    build_recruiting_message,
     build_underfill_fired_message,
-    build_underfill_message,
     slots_for_week,
 )
 from bot.services import pod_format
@@ -47,8 +47,9 @@ async def setup(bot: commands.Bot) -> None:
     async def test_underfill(ctx: commands.Context, yes_count: int = 5) -> None:
         """Owner-only. Post a sample underfill nudge in this channel — no DB or sesh lookup."""
         name = ctx.channel.name if isinstance(ctx.channel, discord.Thread) else "Sample Pod Draft - Jun 25"
-        body = build_underfill_message(
-            name, yes_count, settings.pod_draft_target_players, _next_slot(), ctx.message.jump_url,
+        body = build_recruiting_message(
+            name, yes_count, settings.pod_signal_fire_threshold, settings.pod_draft_target_players,
+            _next_slot(), ctx.message.jump_url,
         )
         await ctx.send(body, allowed_mentions=discord.AllowedMentions.none())
 
@@ -59,7 +60,9 @@ async def setup(bot: commands.Bot) -> None:
         slot = _next_slot()
         name = ondemand_event_name_sync(active_set_code(), slot)
         threshold = settings.pod_signal_fire_threshold
-        body = build_underfill_message(name, threshold - 1, threshold, slot, ctx.message.jump_url)
+        body = build_recruiting_message(
+            name, threshold - 1, threshold, settings.pod_draft_target_players, slot, ctx.message.jump_url,
+        )
         await ctx.send(body, allowed_mentions=discord.AllowedMentions.none())
 
     @test_group.command(name="firenudge")
@@ -76,15 +79,12 @@ async def setup(bot: commands.Bot) -> None:
     @test_group.command(name="overflow")
     @commands.is_owner()
     async def test_overflow(ctx: commands.Context) -> None:
-        """Owner-only. Render the live second-table overflow nudge through the production builder, with
-        sample counts at the trigger boundary (10 Yes + 6 Maybe = 16) three hours out."""
+        """Owner-only. Render the live second-table nudge through the production builder, with sample
+        counts at the trigger boundary (10 Yes + 6 Maybe = 16) three hours out."""
         event_time = datetime.now(SCHEDULE_TZ) + timedelta(hours=3)
-        interests = (
-            [(fi.LATEST,)] * 7 + [(fi.FLASHBACK,)] * 3 + [(fi.LATEST, fi.FLASHBACK)] * 4 + [()] * 2
-        )
-        body = build_underfill_message(
-            "MSH Jul 21 Early Pod", 10, settings.pod_draft_target_players, event_time,
-            ctx.message.jump_url, maybe_count=6, composition=fi.composition(interests),
+        body = build_recruiting_message(
+            "MSH Jul 21 Early Pod", 10, settings.pod_signal_fire_threshold,
+            settings.pod_draft_target_players, event_time, ctx.message.jump_url, maybe_count=6,
         )
         await ctx.send(body, allowed_mentions=discord.AllowedMentions.none())
 
@@ -178,20 +178,18 @@ def _next_slot() -> datetime:
 
 def _reminder_timeline(ctx: commands.Context) -> list[tuple[str, str | None, discord.Embed | None]]:
     """The pod reminder timeline in lifecycle order, each entry built through its production builder with
-    sample numbers, as (label, body, embed). The recruiting nudge across its three states, the launcher
+    sample numbers, as (label, body, embed). The pod's status message across its states, the launcher
     slot fire ping, the roster reminder embed, the lobby-open post, and the fired record. Each label
     names the constant(s) in pod_reminder_copy.py so the copy can be edited straight from the preview."""
     slot = _next_slot()
     unix = int(slot.timestamp())
+    floor = settings.pod_signal_fire_threshold
     target = settings.pod_draft_target_players
     url = ctx.message.jump_url
     pod_name = "MSH Late Pod - Jul 21"
 
     role = find_role(ctx.guild, slot_role_name_for_event_time(slot) or "") if ctx.guild else None
     mention = role.mention if role is not None else "@Early Pod"
-    overflow_interests = (
-        [(fi.LATEST,)] * 7 + [(fi.FLASHBACK,)] * 3 + [(fi.LATEST, fi.FLASHBACK)] * 4 + [()] * 2
-    )
     yes = list(HALL_OF_FAME[:5])
     maybe = list(HALL_OF_FAME[5:7])
     yes_interests = ((fi.LATEST,), (fi.FLASHBACK,), (fi.LATEST, fi.FLASHBACK), (fi.LATEST,), ())
@@ -207,13 +205,16 @@ def _reminder_timeline(ctx: commands.Context) -> list[tuple[str, str | None, dis
         return (f"`{const}` ({desc})", body, None)
 
     return [
-        text("RECRUITING_NEEDS_MORE", "needs more",
-             build_underfill_message(pod_name, target - 2, target, slot, url)),
-        text("RECRUITING_READY", "target met",
-             build_underfill_message(pod_name, target, target, slot, url)),
-        text("RECRUITING_OVERFLOW + RECRUITING_OVERFLOW_SPLIT", "second table", build_underfill_message(
-            pod_name, 10, target, slot, url, maybe_count=6, composition=fi.composition(overflow_interests),
-        )),
+        text("RECRUITING_BELOW_FLOOR", "short of the floor",
+             build_recruiting_message(pod_name, floor - 2, floor, target, slot, url)),
+        text("RECRUITING_BELOW_FLOOR", "one short of the floor",
+             build_recruiting_message(pod_name, floor - 1, floor, target, slot, url)),
+        text("RECRUITING_SHORT", "the draft is on, short of the aim",
+             build_recruiting_message(pod_name, floor, floor, target, slot, url)),
+        text("RECRUITING_READY", "full pod",
+             build_recruiting_message(pod_name, target, floor, target, slot, url, maybe_count=2)),
+        text("RECRUITING_READY + RECRUITING_SECOND_TABLE", "second table",
+             build_recruiting_message(pod_name, 10, floor, target, slot, url, maybe_count=6)),
         text("SLOT_FIRE_PING", "launcher slot fires", SLOT_FIRE_PING.format(unix=unix, mention=mention)),
         ("`ROSTER_REMINDER_TITLE` + `ROSTER_REMINDER_LINE` (T-60 reminder)", None, roster_embed),
         text("LOBBY_OPEN + LOBBY_OPEN_HEADLINE", "Draftmancer link posted",

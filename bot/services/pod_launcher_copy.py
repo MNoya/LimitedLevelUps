@@ -33,9 +33,14 @@ SECTION_NEXT = "**Next**"
 NEXT_EMOJI = "chordoHello"
 MSG_ON_BOTH_PODS = "You are on both {slot} Pods: {formats}"
 MSG_ON_SEVERAL_PODS = "You are on all {count} {slot} Pods: {formats}"
-MSG_FIRST_POD_TO_FILL = "You will play in the first one to fill"
+MSG_POD_THAT_NEEDS_YOU = "You will play the pod that needs you to fill a table"
 MSG_POLL_INACTIVE = "This poll is no longer active. If this is a mistake, contact {organizer}"
 MSG_SLOT_CLOSED = "This slot is closed. If this is a mistake, contact {organizer}"
+
+BOARD_LEAVE_LABEL = "Leave"
+BOARD_LEAVE_EMOJI = "❌"
+MSG_ON_NO_POD = "You are not signed up for a pod"
+MSG_REMOVED_FROM_PODS = "❌ Removed from your pods"
 
 PLAY_AGAIN_LOVE_EMOJI = "chordo_love"
 PLAY_AGAIN_INTRO = (

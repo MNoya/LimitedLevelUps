@@ -109,6 +109,14 @@ class ToggleResult:
 
 
 @dataclass(frozen=True)
+class LeftSlot:
+    """One gathering pod a player was just dropped from, named so the answer can list what it undid."""
+    signal_id: str
+    bucket_key: str
+    slot_time: datetime | None
+
+
+@dataclass(frozen=True)
 class LeaveResolution:
     """Outcome of the last-player Leave confirmation. `cancelled` when the confirmer was still the only
     member and the queue was closed; `left` when others joined during the prompt so the confirmer was
@@ -147,7 +155,7 @@ class LauncherSlot:
     roster, quorum and lifecycle.
 
     `committed` is a pod that exists: `count`/`thread_id`/`slot_time` are read off the event, `names`
-    projects the card's Yes roster, and `card_message_id` is the scheduled card its button toggles. A
+    projects the card's Yes roster, and `card_message_id` is the scheduled card its button writes to. A
     gathering pod carries its own poll `signal_id`, roster `names`, and `status`.
 
     `finished` is the played pod, so the render marks it with a trophy rather than the playing mark even
@@ -228,6 +236,25 @@ def create_poll_signals_sync(
         )
         session.commit()
         return created
+
+
+def rebind_launcher_rows_sync(old_message_id: str, new_message_id: str) -> int:
+    """Move every poll row hanging on one launcher message onto another, and return how many moved.
+
+    `create_poll_signals` adopts by day, which covers the board's own slots and misses a column already
+    gathering for tomorrow: a lane rolls forward the moment its pod finishes, and the row it opens is bound
+    to the message that was live then. A board reposted mid-day would render without that column."""
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(PodSignal).where(
+                PodSignal.kind == pod_signals.KIND_POLL,
+                PodSignal.message_id == old_message_id,
+            )
+        ).scalars().all()
+        for signal in rows:
+            signal.message_id = new_message_id
+        session.commit()
+        return len(rows)
 
 
 def _open_poll_signal_for_slot(
@@ -347,6 +374,29 @@ def join_slot_signal_sync(
         signal.last_activity_at = datetime.now(timezone.utc)
         session.commit()
         return True
+
+
+def leave_board_slots_sync(message_id: str, discord_user_id: str) -> list[LeftSlot]:
+    """Drop the player from every pod still gathering on one board, newest slot last. The board's Leave
+    button is the one place a signup is taken back, so it acts on the whole board: a player on two formats of
+    one slot means two rows, and leaving one of them while the other still holds them is not what the button
+    says. A pod that already fired is not touched here — its roster lives on its card."""
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(PodSignal, PodSignalMember)
+            .join(PodSignalMember, PodSignalMember.signal_id == PodSignal.id)
+            .where(
+                PodSignal.kind == pod_signals.KIND_POLL,
+                PodSignal.status == pod_signals.STATUS_OPEN,
+                PodSignal.message_id == message_id,
+                PodSignalMember.discord_user_id == discord_user_id,
+            )
+        ).all()
+        left = [LeftSlot(signal.id, signal.bucket, signal.slot_time) for signal, _member in rows]
+        for _signal, member in rows:
+            session.delete(member)
+        session.commit()
+    return sorted(left, key=lambda slot: (slot.slot_time is None, slot.slot_time))
 
 
 def open_slot_for_bucket_sync(bucket_key: str, now: datetime) -> tuple[str, str, datetime] | None:
@@ -594,15 +644,18 @@ def _signal_is_championship(session: Session, signal: PodSignal) -> bool:
     return is_championship(event.name if event else None)
 
 
-def toggle_member(
+def set_membership(
     session: Session, message_id: str, bucket: str, discord_user_id: str, display_name: str,
-    action: str = "toggle",
+    action: str = "join",
 ) -> ToggleResult | None:
-    """Change the user's membership of a bucket. `action` is 'toggle' (poll), 'join', or 'leave'
-    (queue). Returns None when no such signal exists; a closed result (no mutation) when the signal
-    has expired. A fired signal still accepts joins — over-signups ride along and are in the roster
-    when the lobby opens. `joined` is True only on a fresh add; `changed` is True when the roster
-    actually moved. Bumps last_activity_at on an add so queue teardown resets. Does not commit."""
+    """Put the user on a bucket or take them off it. Returns None when no such signal exists; a closed
+    result (no mutation) when the signal has expired. A fired signal still accepts joins — over-signups
+    ride along and are in the roster when the lobby opens. `joined` is True only on a fresh add; `changed`
+    is True when the roster actually moved. Bumps last_activity_at on an add so queue teardown resets.
+    Does not commit.
+
+    Every surface names the action it takes. A press whose meaning depended on membership the presser could
+    not see read as a dead button when it was slow, and the second press they gave it undid the first."""
     signal = _signal_by_message_bucket(session, message_id, bucket)
     if signal is None:
         return None
@@ -617,7 +670,7 @@ def toggle_member(
             PodSignalMember.discord_user_id == discord_user_id,
         )
     ).scalar_one_or_none()
-    add = existing is None if action == "toggle" else action == "join"
+    add = action == "join"
     joined = changed = False
     if add and existing is None:
         session.add(PodSignalMember(
@@ -634,11 +687,11 @@ def toggle_member(
     return ToggleResult(_state(signal, len(names)), names, joined=joined, changed=changed, closed=False)
 
 
-def toggle_member_sync(
-    message_id: str, bucket: str, discord_user_id: str, display_name: str, action: str = "toggle",
+def set_membership_sync(
+    message_id: str, bucket: str, discord_user_id: str, display_name: str, action: str = "join",
 ) -> ToggleResult | None:
     with SessionLocal() as session:
-        result = toggle_member(session, message_id, bucket, discord_user_id, display_name, action)
+        result = set_membership(session, message_id, bucket, discord_user_id, display_name, action)
         session.commit()
         return result
 
@@ -889,22 +942,26 @@ def expire_signal_sync(signal_id: str) -> bool:
         return result.rowcount == 1
 
 
-def close_canceled_pod_slot_sync(event_id: str) -> str | None:
-    """Close the launcher slot a canceled pod fired out of; returns its signal id, or None for a pod no slot
-    owns. A row left marked fired with its pod deleted reads as a slot still gathering, so the board renders
-    the roster it fired on and a button that joins a pod nobody will run."""
+def fired_slot_for_pod_sync(event_id: str) -> str | None:
+    """The launcher slot a pod fired out of, or None for a pod no slot owns. Matched on the slot's time and
+    format: firing hands the `event_id` to the scheduled card's own row, so the poll row it came from is
+    never linked to the pod and this is the only way back to it."""
     with SessionLocal() as session:
-        slot = session.execute(
-            select(PodSignal).where(
-                PodSignal.event_id == event_id, PodSignal.kind == pod_signals.KIND_POLL
-            )
-        ).scalars().first()
-        if slot is None:
+        event = session.get(PodDraftEvent, event_id)
+        if event is None:
             return None
-        slot.status = pod_signals.STATUS_EXPIRED
-        slot.event_id = None
-        session.commit()
-        return slot.id
+        slots = session.execute(
+            select(PodSignal).where(
+                PodSignal.kind == pod_signals.KIND_POLL,
+                PodSignal.status == pod_signals.STATUS_FIRED,
+                PodSignal.slot_time == event.event_time,
+            )
+        ).scalars().all()
+        wanted = event.set_code or active_set_code()
+        for slot in slots:
+            if _signal_format(slot) == wanted:
+                return slot.id
+        return None
 
 
 @dataclass(frozen=True)
@@ -1260,12 +1317,25 @@ def _gathering_slots(
     for signal in day_signals:
         rows = rosters[signal.id]
         slots.append(LauncherSlot(
-            signal.bucket, committed=False, status=_lazy_status(signal.status, signal.slot_time, now),
+            signal.bucket, committed=False, status=_gathering_status(signal, now),
             count=len(rows), slot_time=signal.slot_time, names=[name for _id, name in rows],
             thread_id=None, signal_id=signal.id, set_code=_signal_format(signal),
             shared_names=tuple(name for user_id, name in rows if joined_pods[user_id] > 1),
         ))
     return slots
+
+
+def _gathering_status(signal: PodSignal, now: datetime) -> str:
+    """A row still gathering that already fired has lost the pod it fired: the pod was canceled, or its
+    format was switched and the row no longer matches it. A slot cannot fire twice, so the slot is closed
+    whatever the cause, and the board stops offering the roster it fired on.
+
+    Kept out of `_lazy_status` on purpose: `set_membership` shares that function, and a fired signal must
+    keep accepting the over-signups that ride along into the lobby.
+    """
+    if signal.status == pod_signals.STATUS_FIRED:
+        return pod_signals.STATUS_EXPIRED
+    return _lazy_status(signal.status, signal.slot_time, now)
 
 
 def _format_order(slot: LauncherSlot) -> tuple[int, str]:
@@ -1843,7 +1913,7 @@ def arm_slot_expiry(bot: commands.Bot, signal_id: str, slot_time: datetime) -> N
 async def fire_slot_expiry(signal_id: str) -> None:
     """At slot time, close an unfired poll slot, drop its standing nudge, and roll the column to the next
     day — the recruiting window is over, and a slot nobody can join is not worth a column. The slot's
-    button stays but toggle_member_sync now refuses it, so a late click gets a graceful ephemeral and
+    button stays but set_membership_sync now refuses it, so a late click gets a graceful ephemeral and
     never joins a dead slot."""
     if await asyncio.to_thread(expire_signal_sync, signal_id):
         log.info(f"poll slot {signal_id} expired unfired")
@@ -1905,9 +1975,10 @@ CARD_CANCELED_MARKER = "🗑️ **Draft canceled**"
 
 async def retire_canceled_pod(event_id: str) -> None:
     """Stand every surface of a canceled pod down: grey its card and stamp it canceled, drop the buttons on
-    the thread mirror, then close the launcher slot it came from so the board stops offering a pod that no
-    longer exists. Fired from `cancel_pod_event` before the event row is deleted, so each surface still
-    resolves; the card steps are a no-op for pods without a card."""
+    the thread mirror, then roll the launcher column it sat in so the board offers the next day instead of a
+    dead slot. Fired from `cancel_pod_event` before the event row is deleted, so each surface still resolves;
+    the card steps are a no-op for pods without a card. The slot row itself needs no write — a fired row with
+    no pod covering it already renders closed."""
     if _bot is None:
         return
     await clear_underfill_nudge(_bot, event_id)
@@ -1917,9 +1988,8 @@ async def retire_canceled_pod(event_id: str) -> None:
         await _mark_card_canceled(int(channel_id), int(message_id))
         if thread_id and thread_message_id:
             await _retire_message(int(thread_id), int(thread_message_id))
-    signal_id = await asyncio.to_thread(close_canceled_pod_slot_sync, event_id)
+    signal_id = await asyncio.to_thread(fired_slot_for_pod_sync, event_id)
     if signal_id is not None:
-        await clear_slot_nudge(_bot, signal_id)
         await notify_slot_rolled(_bot, signal_id)
 
 

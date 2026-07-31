@@ -101,8 +101,9 @@ from bot.tasks.pod_daily_poll import (
     PlayAgainButton,
     catch_up_daily_poll,
     ReminderFormatPreferenceButton,
-    SlotRsvpButton,
-    SlotToggleButton,
+    BoardLeaveButton,
+    SlotJoinButton,
+    SlotSignUpButton,
     init_daily_poll,
     reconcile_rolled_lanes,
 )
@@ -274,8 +275,9 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(ChampionshipRsvpButton)
         bot.add_dynamic_items(ReminderRsvpButton)
         bot.add_dynamic_items(ReminderFormatPreferenceButton)
-        bot.add_dynamic_items(SlotToggleButton)
-        bot.add_dynamic_items(SlotRsvpButton)
+        bot.add_dynamic_items(SlotJoinButton)
+        bot.add_dynamic_items(SlotSignUpButton)
+        bot.add_dynamic_items(BoardLeaveButton)
         bot.add_dynamic_items(PlayAgainButton)
         _log_startup_summary()
         bot.tree.copy_global_to(guild=guild)

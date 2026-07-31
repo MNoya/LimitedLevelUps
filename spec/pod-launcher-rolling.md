@@ -60,9 +60,23 @@ Because the fresh morning post binds to the same DB signals the flipped columns 
 
 Pre-day signups **must not fire early** just by reaching the threshold the night before. A slot becomes eligible to fire only once its own date is the active board day. Concretely: at the 11:00 relabel/adopt, re-check thresholds and graduate any slot already at or above the fire threshold; before that, overnight signups accumulate and are shown but do not fire. So a popular slot can be confirmed at 11:00 (a few hours before its start) but never at 22:00 the night before.
 
-### The 11:00 repost
+### The morning post
 
-The 11:00 ET post stays as the daily anchor, and its job in this model is: **repost fresh at the bottom of the channel (resurface), relabel the rolled columns' identity for the new day, retire the prior message, and run the firing-gate re-check.** The retired message is edited to its terminal state with the footer `🔒 Signups Closed` and no buttons (`close_launcher_for_date`), unchanged from today.
+The morning ET post stays as the daily anchor, and its job in this model is: **repost fresh at the bottom of the channel (resurface), relabel the rolled columns' identity for the new day, retire the prior message, and run the firing-gate re-check.** The retired message is edited to its terminal state with the footer `🔒 Signups Closed` and no buttons (`close_launcher_for_date`), unchanged from today.
+
+### Reposting on a lane transition
+
+The board is posted once and edited in place from then on, so it sinks as the day fills the channel with pod cards, threads, reminders and results, and the freshest thing there is a pod that already played. So the board reposts itself on each lane transition: same primitive, run early, silent, and below everything the pods left behind.
+
+**After the early pods** it resurfaces **the same day**, because the late column is still gathering and the day still needs the board it has. The rows move onto the new message and the old message is deleted. This is the stretch the players who matter are in: the late pod is the one still recruiting, and until now it recruited from a board posted before lunch and buried since.
+
+**After the late pods** it posts **the next day's** board, carrying only that day's rows, and the message it replaces is retired in place as that day's `### On This Day` card.
+
+Strictly on a transition, and once each. An early pod still playing holds neither, and a night whose late slot never fires leaves the morning post to do its normal job. The next day's board existing is the claim on the evening one; for the afternoon one it is the board's own post time, which sits before the early slot until the resurface moves it after.
+
+Two changes fall out of this. The morning post no longer skips when a board for today exists — it reposts and deletes the one it replaces, because the day's ping belongs on a board at the bottom of the channel, not on a line pointing up at one from last night. And neither repost runs a graduation pass: a slot that filled before its day arrived would otherwise post its card hours early.
+
+The rows a repost must carry are not all the day's own. A lane rolls forward the moment its pod finishes, so by the afternoon transition the early column is already gathering for tomorrow on a row dated tomorrow. `create_poll_signals` adopts by day and would miss it, so a same-day repost rebinds every poll row on the old message to the new one (`rebind_launcher_rows_sync`).
 
 Note on the global community: 11:00 ET is ~1:00 AM next-day in eastern Australia and around midnight in Japan, so the repost lands in the small hours there. This is acceptable and unavoidable for any single global post time, and low-stakes here precisely because the roll is continuous — players in those zones have been accumulating on the rolled columns since their previous evening and do not wait on the 11:00 post to act.
 
@@ -88,7 +102,7 @@ Friday, July 24, 2026 at 3:00 PM
 
 ### Buttons are timezone-safe by staying plain
 
-A button label is static text — it renders identically for every viewer worldwide, so it can carry no date or relative-day word without being wrong for someone (an Asia player's "Jul 24 3 PM ET" is their Saturday morning). All day/date information lives in the localized timestamp line instead. Per-slot rolling guarantees exactly one Early and one Late slot are live at any moment (a column is either its day or the next, never both), so there are always exactly two join buttons, each spatially paired with one dated column. The buttons therefore stay `Early Pod` / `Late Pod` with no date, and the localized date line disambiguates which instant every viewer is joining. A committed (fired) slot keeps its button as today — it becomes the Yes/No RSVP toggle onto the pod's card, exactly as now.
+A button label is static text — it renders identically for every viewer worldwide, so it can carry no date or relative-day word without being wrong for someone (an Asia player's "Jul 24 3 PM ET" is their Saturday morning). All day/date information lives in the localized timestamp line instead. Per-slot rolling guarantees exactly one Early and one Late slot are live at any moment (a column is either its day or the next, never both), so there are always exactly two join buttons, each spatially paired with one dated column. The buttons therefore stay `Early Pod` / `Late Pod` with no date, and the localized date line disambiguates which instant every viewer is joining. A committed (fired) slot keeps its button: it signs the presser up on the pod's card. Every pod button only adds, and the board carries one Leave that takes the presser off all of them.
 
 ### Title date
 

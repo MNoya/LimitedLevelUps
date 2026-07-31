@@ -22,27 +22,31 @@ Aiming governs recruiting and framing only:
 1. The count in the copy — "looking for X more" where X = N − current.
 2. When the pod stops asking — reaching N flips it to **ready** and it goes quiet.
 
-Aiming does **not** decide whether the draft happens (the floor does), and **ready is not full**: the pod stays open past the aim up to the Max Players cap, and further joins spill to a second table. A ninth player is never turned away.
+Aiming does **not** decide whether the draft happens (the floor does), and **ready is not full**: the pod stays open past the aim up to the Max Players cap, and further joins spill to a second table. A ninth player is never turned away. Past the aim the message says so, because a pod sitting on exactly 8 is one drop away from 7 and the organizer should not have to talk it back open by hand.
 
-Per type:
-
-- **Scheduled** aims at **8** the whole way.
-- **Launcher** shifts its aim: below the floor it aims at **6** (get it to fire); once it fires it aims at **8** (fill the last seats).
+One number is asked for at a time. Under the floor the only decision a reader makes is whether to make the draft happen, so the aim is not mentioned and would only compete with the ask; past the floor the aim is the ask. A pod at the aim has nothing left to ask for and shows its Yes and Maybe counts instead, which is also how a second table's worth announces itself. Scheduled and Launcher pods read identically — the launcher slot is not a different thing to a player, so it does not get different copy.
 
 ## The rally model — shared by Scheduled and Launcher
 
 Every recruiting notification is anchored to the draft time and is never fired far from it. Two escalating steps:
 
 1. **T-3h — silent reminder.** A message in the pod chat, **no ping**, saying the session is looking for players. Sent for any short pod, however far from the aim, because it costs nothing. If T-3h was skipped — the bot was down, or the pod did not exist yet at T-3h (a short-notice Scheduled pod, or a Launcher slot that only reached the floor later) — a **T-2h catch-up** covers it. If the pod is created inside T-2h there is simply no silent step; it goes straight to the T-1h behaviour.
-2. **T-1h — @slot ping.** Fires only when the pod is **close**: it needs 1 or 2 to reach its current aim. A pod still far from viable at T-1h gets no ping, only the standing silent message.
+2. **T-1h — @slot ping.** Fires only when the pod is **close**: it needs 1 or 2 to reach the number it is currently chasing, the floor while the draft is not yet on and the aim once it is. A pod still far from that number at T-1h gets no ping, only the standing silent message.
 
 This encodes the organizer instinct: first a low-key "we need a few more in a couple hours" in chat, then lean on the @slot an hour out only if the soft nudge did not move it.
 
-### The nudge is one living message
+### One living message, from the first signup to the lobby
 
-- It is **deleted only when the pod actually starts** (the lobby opens / the event leaves `pending`) or its recruiting window closes. Never deleted on a player count. So an 8 → 7 drop (someone leaves) flips the text back to "looking for 1 more" instead of the message vanishing.
+- It is **deleted only when the pod actually starts** (the lobby opens / the event leaves `pending`) or its recruiting window closes. Never deleted on a player count. So an 8 → 7 drop (someone leaves) flips the text back to asking for one more instead of the message vanishing.
+- **Firing does not end it either.** A slot that reaches the floor hands its message to the pod it just made, rewritten against the new card. Deleting it there was the worst possible moment: the draft has just become real and is still short of a full table, and the surface saying so disappeared until the card's own T-3h beat hours later.
 - To survive chat burial it **resends** — delete then repost at the channel bottom — at the T-3h and T-1h beats. Live RSVP changes between those beats edit it in place, silently.
-- Reaching the aim shows **ready**, silently. Goal met, nothing to say.
+- Reaching the aim keeps the message and the signup link, silently.
+
+### Not built: promoting a short pod outside pod chat
+
+Attendance is advertised in the pod channels only, so a quiet day is invisible to anyone not already watching them. The planned answer is a **short pointer** — pod name, start time, current count, what is still needed, link to the launcher — posted in one other channel, at most once per pod, edited if the count moves, removed when the pod starts.
+
+Open, and the reason this is not built yet: **which channel, and when.** The channel is per pod, not global (a flashback or cube pod belongs in the flashback channel, a latest-set pod does not), so it needs a format-to-channel map that does not exist. The timing leans late — around T-10min and only below the aim — rather than the T-3h recruiting beat, which the pod-chat message already covers.
 
 ## Launcher fire and the creation announcement
 

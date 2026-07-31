@@ -35,6 +35,8 @@ from bot.commands.messages import (
     MSG_DRAFT_STARTS,
     MSG_DRAFTMANCER_LINK_LEAD,
     MSG_POD_ADDED,
+    MSG_POD_ALREADY_ON,
+    MSG_POD_ALREADY_ON_HINT,
     MSG_POD_MAYBE,
     MSG_POD_REMOVED,
 )
@@ -54,15 +56,13 @@ from bot.services.pod_deck_color import format_deck_color_emojis
 from bot.services.pod_draft_manager import notify_seeding_change
 from bot.services.pod_tournament import champion_card_line, load_solo_card_drafters
 from bot.services.ping_roles import (
-    NOTICE_GRANT,
     SET_CHAMPION_ROLE_NAME,
     announce_pod_grant,
     auto_grant_spec_for_event,
     champion_role_mention,
     display_emoji,
-    pod_role_grant_text,
+    grant_pod_roles,
     send_join_confirmation_card,
-    slot_grant_ping,
     spec_named,
 )
 from bot.services.pod_drafts import (
@@ -73,7 +73,7 @@ from bot.services.pod_drafts import (
     record_ondemand_event,
 )
 from bot.services.pod_registration_embed import build_registered_embed
-from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role
+from bot.services.pod_roles import find_role
 from bot.services.championship_roster_card import (
     ChampionshipRoster,
     add_championship_roster_fields,
@@ -738,13 +738,20 @@ async def apply_card_rsvp(
     and re-renders the clicked launcher itself, so the board updates in whatever channel it lives in.
 
     Every answer names the pod it landed on, since a click can come from the card, its thread, the roster
-    reminder, or a launcher button, and only the pod's own name reads the same from all four."""
+    reminder, or a launcher button, and only the pod's own name reads the same from all four.
+
+    A caller that has already acknowledged the click keeps its acknowledgement: a surface that wants the
+    presser to see something happen the instant they press defers first, and every answer here goes out as
+    a follow-up."""
     result = await asyncio.to_thread(
         pod_launch.set_rsvp_sync,
         surface_message_id, str(interaction.user.id), interaction.user.display_name, state,
     )
     if result is None or result.closed:
-        await interaction.response.send_message(MSG_CARD_INACTIVE, ephemeral=True)
+        if interaction.response.is_done():
+            await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
+        else:
+            await interaction.response.send_message(MSG_CARD_INACTIVE, ephemeral=True)
         return
 
     status_line, championship = await resolve_card_render_state(result.state.event_id)
@@ -756,32 +763,24 @@ async def apply_card_rsvp(
             championship_roster=champ_roster,
         )
         await interaction.response.edit_message(embed=embed)
-    else:
+    elif not interaction.response.is_done():
         await interaction.response.defer(ephemeral=True)
 
     first_pod = False
-    granted_role = None
-    slot_spec = slot_ping = None
     if result.joined and isinstance(interaction.user, discord.Member):
-        first_pod = await grant_pod_drafters(interaction.user)
-        if not championship:
-            slot_spec = auto_grant_spec_for_event(result.state.slot_time)
-            slot_ping = slot_grant_ping(slot_spec) if slot_spec is not None else None
-            granted_role = await _grant_slot_role(interaction.user, result.state.slot_time)
-    notice = await announce_pod_grant(
-        interaction, first_pod=first_pod, granted_role=granted_role, spec=slot_spec, ping=slot_ping,
-        card_lead=await _confirmation_card_lead(result),
-    )
-    if notice != NOTICE_GRANT:
-        if result.rsvp in (RSVP_YES, RSVP_MAYBE):
-            lead = await _confirmation_lead_text(result)
-            if granted_role is not None and slot_ping is not None:
-                lead = f"{lead}\n{pod_role_grant_text(granted_role.mention, slot_ping)}"
-            await send_join_confirmation_card(
-                interaction, lead=lead, accent=RSVP_CONFIRM_COLOR[result.rsvp],
-            )
-        else:
-            await interaction.followup.send(embed=await _decline_embed(result), ephemeral=True)
+        slot_role_name = None if championship else _auto_grant_role_name(result.state.slot_time)
+        first_pod = await grant_pod_roles(interaction.user, slot_role_name)
+    await announce_pod_grant(interaction, first_pod=first_pod)
+    if result.rsvp == RSVP_YES and not result.joined:
+        name, _event_time = await _pod_identity(result)
+        await interaction.followup.send(embed=pod_already_on_embed(name), ephemeral=True)
+    elif result.rsvp in (RSVP_YES, RSVP_MAYBE):
+        await send_join_confirmation_card(
+            interaction, lead=await _confirmation_lead_text(result),
+            accent=RSVP_CONFIRM_COLOR[result.rsvp],
+        )
+    else:
+        await interaction.followup.send(embed=await _decline_embed(result), ephemeral=True)
 
     if result.state.event_id is not None:
         join = result.rsvp in (RSVP_YES, RSVP_MAYBE)
@@ -799,6 +798,36 @@ async def apply_card_rsvp(
             notify_seeding_change(interaction.client, result.state.event_id)
         if result.yes_changed and refresh_launcher:
             await _refresh_launcher(interaction.client, result.state.slot_time)
+
+
+async def apply_card_leave(
+    bot: commands.Bot, user: discord.abc.User, guild: discord.Guild | None, card_message_id: str,
+) -> str | None:
+    """Record No on a pod's card for a player leaving from another surface, then re-render everything that
+    carries the roster. The launcher's Leave button drops one player from every pod at once, so the write
+    cannot own the interaction the way `apply_card_rsvp` does and the caller answers for all of them.
+    Returns the pod's name, or None when the card is gone or closed."""
+    result = await asyncio.to_thread(
+        pod_launch.set_rsvp_sync, card_message_id, str(user.id), user.display_name, RSVP_NO,
+    )
+    if result is None or result.closed:
+        return None
+    name, _event_time = await _pod_identity(result)
+    event_id = result.state.event_id
+    if event_id is None:
+        return name
+    await _render_channel_card(bot, event_id, result.rosters, result.roster_interests)
+    await _move_member_thread(bot, event_id, user, join=False)
+    await _sync_native_event_tally(guild, card_message_id, result.rosters)
+    yes = result.rosters.get(RSVP_YES) or []
+    maybe = result.rosters.get(RSVP_MAYBE) or []
+    await refresh_underfill_nudge_for_event(bot, event_id, len(yes), len(maybe))
+    await refresh_roster_reminder_for_event(event_id)
+    if result.yes_changed:
+        _status_line, championship = await resolve_card_render_state(event_id)
+        if championship:
+            notify_seeding_change(bot, event_id)
+    return name
 
 
 async def _refresh_launcher(bot: commands.Bot, slot_time: datetime | None) -> None:
@@ -820,19 +849,13 @@ async def _refresh_launcher_for_event(bot: commands.Bot, event_id: str) -> None:
     await _refresh_launcher(bot, ref[3])
 
 
-async def _grant_slot_role(member: discord.Member, slot_time: datetime | None) -> discord.Role | None:
-    """Returns the role only on a fresh grant, so the ephemeral confirmation fires once per member.
-    The signal's slot_time keys the role, so a postponed pod still grants its original slot."""
+def _auto_grant_role_name(slot_time: datetime | None) -> str | None:
+    """The slot role an RSVP earns, keyed on the signal's slot_time so a postponed pod still grants the
+    slot it was gathered in."""
     if slot_time is None:
         return None
     spec = auto_grant_spec_for_event(slot_time)
-    if spec is None:
-        return None
-    role = find_role(member.guild, spec.name)
-    if role is None:
-        return None
-    granted = await grant_role(member, role)
-    return role if granted else None
+    return spec.name if spec is not None else None
 
 
 def _is_card_surface(message: discord.Message) -> bool:
@@ -847,6 +870,16 @@ def pod_removed_embed(pod_name: str) -> discord.Embed:
     """The bare red note for leaving a pod, named after the pod itself. The start time and the pod controls
     are moot once you're not in, so an add answers with the full card and a removal with this."""
     return discord.Embed(title=MSG_POD_REMOVED.format(name=pod_name), color=discord.Color.red())
+
+
+def pod_already_on_embed(pod_name: str) -> discord.Embed:
+    """The answer to a sign up by someone the pod already holds. A press that changed nothing gets the bare
+    note, not the full card: the presser is asking whether the first press landed, and the hint names the one
+    press that would change it. ❌ is the launcher's Leave and the card's Can't, so one line serves both."""
+    return discord.Embed(
+        title=MSG_POD_ALREADY_ON.format(name=pod_name), description=MSG_POD_ALREADY_ON_HINT,
+        color=discord.Color.green(),
+    )
 
 
 async def _decline_embed(result: pod_launch.RsvpResult) -> discord.Embed:
@@ -864,14 +897,6 @@ async def _confirmation_lead_text(result: pod_launch.RsvpResult) -> str:
     if event_time is None:
         return lead
     return f"{lead}\n{MSG_DRAFT_STARTS.format(unix=int(event_time.timestamp()))}"
-
-
-async def _confirmation_card_lead(result: pod_launch.RsvpResult) -> str | None:
-    """The RSVP acknowledgement as grant-card text, so a click that also grants a role delivers one
-    message instead of an embed plus a card. Only a fresh Yes can grant, so other states return None."""
-    if not result.joined or result.rsvp is None:
-        return None
-    return await _confirmation_lead_text(result)
 
 
 def _rsvp_headline(rsvp: str, pod_name: str) -> str:

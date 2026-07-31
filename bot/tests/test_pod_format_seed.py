@@ -4,7 +4,7 @@ from bot.models import Player, PodDraftEvent, PodSignal
 from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services.pod_drafts import get_flashback_ranking, set_flashback_ranking
-from bot.services.pod_launch import _launcher_day_signal_ids, set_rsvp, toggle_member
+from bot.services.pod_launch import _launcher_day_signal_ids, set_membership, set_rsvp
 
 
 def _poll_signal(session, message_id="7001", bucket="EARLY"):
@@ -42,7 +42,7 @@ def test_join_seeds_interest_from_the_players_standing_preference(session):
         slug="rowan-1", discord_id="u1", display_name="Rowan", format_interests=[fi.LATEST, fi.FLASHBACK]))
     signal = _poll_signal(session)
 
-    toggle_member(session, signal.message_id, signal.bucket, "u1", "Rowan")
+    set_membership(session, signal.message_id, signal.bucket, "u1", "Rowan")
 
     assert _seeded_interests(signal) == [[fi.LATEST, fi.FLASHBACK]]
 
@@ -50,7 +50,7 @@ def test_join_seeds_interest_from_the_players_standing_preference(session):
 def test_join_without_a_player_row_seeds_no_interest(session):
     signal = _poll_signal(session)
 
-    toggle_member(session, signal.message_id, signal.bucket, "u2", "Guest")
+    set_membership(session, signal.message_id, signal.bucket, "u2", "Guest")
 
     assert _seeded_interests(signal) == [[]]
 

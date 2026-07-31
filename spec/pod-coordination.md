@@ -14,13 +14,17 @@ Times are Eastern. Each slot shows its start as a timestamp in your own timezone
 
 Each column moves forward on its own. As soon as a pod finishes, its column shows the result above the next day's slot and starts collecting for that one, so there is always a slot you can join. The other column keeps its own day until its pod plays. A fresh launcher posts every morning at 10 AM ET and carries over everyone who already signed up for that day.
 
+The launcher also posts itself again each time a pod finishes, quietly and at the bottom of the channel, so the board is never buried under the pods that already played. Your signups move to it. After the early pod it is the same board again, still carrying tonight's late pod. After the late pod it is the next day's board. The morning post then replaces that one and is the post that pings the queue role.
+
 ## How to join
 
-Every pod on the launcher has its own button, named for the time and the format it plays: **Early MSH**, **Early PEASANT**. Click one to add yourself to that pod, click it again to leave. That is all it takes. Clicking is a plan, not a promise: if your day changes you can leave, and if you never show up you just catch the next one.
+Every pod on the launcher has its own button, named for the time and the format it plays: **Early MSH**, **Early PEASANT**. Click one to add yourself to that pod. A button only ever adds you, so pressing it twice cannot take you back off: the second press just tells you that you are already on that pod. Clicking is a plan, not a promise: if your day changes you can leave, and if you never show up you just catch the next one.
+
+To leave, press **Leave** at the end of the button row. It takes you off every pod on that board, including one that already opened its thread.
 
 You can join more than one pod, including both formats of one time slot, which tells the bot you will play either. If both fill, the bot splits the players who joined both between them so two tables can run instead of one, and it takes only as many as each table needs.
 
-Every click answers you privately with the pod you are on, its start time, and any ping role you just picked up. Sign up for two formats at one time and it names both, and tells you that you play in the first one to fill. The first time you ever join a pod, the channel also gets a public welcome.
+Every click answers you privately with the pod you are on, its start time, and any ping role you just picked up. Sign up for two formats at one time and it names both, and tells you that you play the pod that needs you. The first time you ever join a pod, the channel also gets a public welcome.
 
 When a pod reaches 6 people, it opens for real. The bot posts a signup card with its own thread, and everyone who clicked that pod is carried over as a Yes. The other formats at that time keep collecting behind their own buttons. A pod for a later day waits: it collects signups overnight and opens on the morning of its own day, so nothing starts hours early.
 
@@ -55,7 +59,8 @@ You can also save a **Format Preference** on your welcome card to say what you l
 In the hour before a pod, a few things happen in the thread:
 
 - The bot posts a reminder that lists the roster. It carries Sign Up and Can't buttons to confirm whether you are still playing. There is no Maybe at this point: you are confirming a yes or a no.
-- If a pod needs more players, the bot nudges the channel, and closer to start it pings the slot's role.
+- The pod's status message in pod chat says where it stands: how many players it still needs, and once it has enough, how many said yes and how many said maybe. It is one message from the first signup to the lobby, so the numbers move in place instead of the message coming and going. An hour out it moves to the bottom of the channel, and pings the slot's role if the pod is one or two players short.
+- Reaching 8 does not close the pod. Signups stay open, because people do drop before the start, and extra players get a second table.
 
 None of this is binding. It is there so you can see whether the pod is going to fire.
 

@@ -1,14 +1,29 @@
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
+import discord
 import pytest
 
 from bot.commands.pod_queue import _preset_slot_time, _when_clock, _when_options
 from bot.services.pod_format_select import WRITE_IN_VALUE
 from bot.services.pod_launch import LauncherSlot, _lazy_status
-from bot.services.pod_signals import STATUS_EXPIRED, STATUS_FIRED, STATUS_OPEN, named_bucket_key
+from bot.services.pod_signals import (
+    LANE_LATE,
+    SCHEDULE_TZ,
+    STATUS_EXPIRED,
+    STATUS_FIRED,
+    STATUS_OPEN,
+    named_bucket_key,
+)
 from bot.sets import active_set_code
-from bot.tasks.pod_daily_poll import PodPollView, _committed_card_link, build_reminder_view
+from bot.tasks.pod_daily_poll import (
+    BOARD_LEAVE_ID,
+    PodPollView,
+    _committed_card_link,
+    _early_transition_is_live,
+    build_reminder_view,
+    lane_settled_for_day,
+)
 
 
 BEFORE_EARLY = datetime(2026, 7, 14, 10, 0, tzinfo=timezone.utc)
@@ -111,7 +126,86 @@ def test_a_slot_offering_two_formats_carries_one_button_per_pod():
     assert [child.custom_id for child in view.children] == [
         f"pod_poll:{named_bucket_key('EARLY', LATEST)}",
         f"pod_poll:{named_bucket_key('EARLY', 'PEASANT')}",
+        BOARD_LEAVE_ID,
     ]
+
+
+def test_the_board_carries_one_leave_for_every_pod_on_it():
+    view = PodPollView([
+        _lazy("EARLY", STATUS_OPEN),
+        _lazy("EARLY", STATUS_OPEN, set_code="PEASANT"),
+        _committed("LATE", "555", "777"),
+    ])
+
+    assert [child.custom_id for child in view.children].count(BOARD_LEAVE_ID) == 1
+
+
+def test_a_board_with_nothing_left_to_leave_carries_no_leave_button():
+    view = PodPollView([_lazy("EARLY", STATUS_EXPIRED)])
+
+    assert BOARD_LEAVE_ID not in [child.custom_id for child in view.children]
+
+
+LATE_TONIGHT = datetime(2026, 7, 18, 20, 0, tzinfo=SCHEDULE_TZ)
+LATE_TOMORROW = LATE_TONIGHT + timedelta(days=1)
+
+
+def _late_slot(slot_time, *, committed, finished=False, status=STATUS_OPEN, set_code=None):
+    set_code = set_code or LATEST
+    return LauncherSlot(
+        named_bucket_key("LATE", set_code), committed=committed, status=status, count=8,
+        slot_time=slot_time, names=[], thread_id=None, signal_id=None, set_code=set_code,
+        finished=finished,
+    )
+
+
+@pytest.mark.parametrize("slots, settled", [
+    ([_late_slot(LATE_TONIGHT, committed=True, finished=True, status=STATUS_FIRED)], True),
+    ([_late_slot(LATE_TONIGHT, committed=True, status=STATUS_FIRED)], False),
+    ([_late_slot(LATE_TONIGHT, committed=False, status=STATUS_EXPIRED)], True),
+    ([_late_slot(LATE_TONIGHT, committed=False, status=STATUS_OPEN)], False),
+    ([
+        _late_slot(LATE_TONIGHT, committed=True, finished=True, status=STATUS_FIRED),
+        _late_slot(LATE_TONIGHT, committed=True, set_code="PEASANT", status=STATUS_FIRED),
+    ], False),
+    ([
+        _late_slot(LATE_TONIGHT, committed=True, finished=True, status=STATUS_FIRED),
+        _late_slot(LATE_TOMORROW, committed=False, status=STATUS_OPEN),
+    ], True),
+    ([_late_slot(LATE_TOMORROW, committed=False, status=STATUS_OPEN)], False),
+])
+def test_a_lane_settles_only_once_every_pod_of_that_day_is_done(slots, settled):
+    assert lane_settled_for_day(slots, LANE_LATE, LATE_TONIGHT.date()) is settled
+
+
+EARLY_TODAY = datetime(2026, 7, 18, 14, 0, tzinfo=SCHEDULE_TZ)
+MORNING_BOARD = str(discord.utils.time_snowflake(datetime(2026, 7, 18, 10, 0, tzinfo=SCHEDULE_TZ)))
+RESURFACED_BOARD = str(discord.utils.time_snowflake(datetime(2026, 7, 18, 17, 0, tzinfo=SCHEDULE_TZ)))
+
+
+def _early_slot(*, committed, finished=False, status=STATUS_OPEN):
+    return LauncherSlot(
+        named_bucket_key("EARLY", LATEST), committed=committed, status=status, count=8,
+        slot_time=EARLY_TODAY, names=[], thread_id=None, signal_id=None, set_code=LATEST,
+        finished=finished,
+    )
+
+
+EARLY_PLAYED = _early_slot(committed=True, finished=True, status=STATUS_FIRED)
+EARLY_PLAYING = _early_slot(committed=True, status=STATUS_FIRED)
+LATE_GATHERING = _late_slot(LATE_TONIGHT, committed=False, status=STATUS_OPEN)
+LATE_PLAYED = _late_slot(LATE_TONIGHT, committed=True, finished=True, status=STATUS_FIRED)
+
+
+@pytest.mark.parametrize("slots, message_id, live", [
+    ([EARLY_PLAYED, LATE_GATHERING], MORNING_BOARD, True),
+    ([EARLY_PLAYING, LATE_GATHERING], MORNING_BOARD, False),
+    ([EARLY_PLAYED, LATE_PLAYED], MORNING_BOARD, False),
+    ([EARLY_PLAYED, LATE_GATHERING], RESURFACED_BOARD, False),
+    ([LATE_GATHERING], MORNING_BOARD, False),
+])
+def test_the_early_transition_is_live_only_between_the_two_pods_of_a_day(slots, message_id, live):
+    assert _early_transition_is_live(slots, EARLY_TODAY.date(), message_id) is live
 
 
 def test_a_pod_that_started_drafting_carries_no_button():
