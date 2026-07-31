@@ -126,7 +126,7 @@ from bot.services.pod_signals import (
     slot_role_name_for_event_time,
     time_key_of,
 )
-from bot.services.pod_drafts import TABLE_SUFFIX_RE
+from bot.services.pod_drafts import TABLE_SUFFIX_RE, table_base_name
 from bot.services.pod_slot import pod_display_name
 from bot.sets import active_set_code, set_name_for
 from bot.slug import slugify
@@ -237,6 +237,18 @@ async def catch_up_daily_poll(bot: commands.Bot) -> None:
         return
     _guild_id, _channel_id, message_id, _board_date = board
     await _graduate_held_slots(bot, message_id, today)
+
+
+async def resync_live_launcher(bot: commands.Bot) -> None:
+    """Repaint the live board once at startup, so a deploy that changes what the board says lands on the
+    message already posted. The board is edited in place all day and nothing else redraws it until the next
+    signup, which can be hours after a pod players need to see appears on it."""
+    board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
+    if board is None:
+        return
+    _guild_id, _channel_id, message_id, board_date = board
+    log.info(f"re-rendering the live launcher {message_id} for {board_date} at startup")
+    await _rerender_poll(bot, message_id, board_date)
 
 
 def _posted_before_the_post_hour(message_id: str, now: datetime) -> bool:
@@ -468,19 +480,31 @@ def _time_groups(
 def _column_value(
     bucket_slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None, pad_finished: int = 0,
 ) -> str:
-    """One lane column. Championship lanes and plain gathering columns render as familiar single blocks. A
-    column carrying a pod that started leads with one slot-name header, then a Played (or Playing) section
-    listing those pods, then a section per remaining start time with its date and rosters, so the slot name
-    and date are never doubled.
+    """One lane column: the pods it offers, then the championship it points at. A championship is read-only
+    and carries its own header, so it renders as a block below the column's own pods and never replaces
+    them: on the eve of a championship the column still shows the pods it played that day."""
+    pods = [slot for slot in bucket_slots if not slot.championship]
+    blocks = [block for block in [_pod_column_value(pods, guild, pad_finished)] if block]
+    blocks += [
+        block for block in (_championship_block(slot, guild) for slot in bucket_slots if slot.championship)
+        if block
+    ]
+    return f"\n{NBSP}\n".join(blocks) if blocks else "-"
+
+
+def _pod_column_value(
+    bucket_slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None, pad_finished: int,
+) -> str:
+    """A column's joinable pods. A plain gathering column renders as familiar single blocks. A column carrying
+    a pod that started leads with one slot-name header, then a Played (or Playing) section listing those pods,
+    then a section per remaining start time with its date and rosters, so the slot name and date are never
+    doubled.
 
     Played is per pod, not per start time: a pod that started belongs on top whatever the formats beside it
     are doing, and one still gathering at that time keeps its own joinable block below.
 
     Reaching the threshold does not hoist a pod up there, and neither does its lobby opening. A pod keeps
     taking signups until the draft starts, so it stays a full roster block with its thread link until then."""
-    if any(slot.championship for slot in bucket_slots):
-        blocks = [block for block in (_championship_block(slot, guild) for slot in bucket_slots) if block]
-        return f"\n{NBSP}\n".join(blocks) if blocks else "-"
     played, gathering = _column_sections(bucket_slots)
     if not played:
         blocks = []
@@ -488,7 +512,7 @@ def _column_value(
             block = _group_block(group, guild, named=index == 0)
             if block:
                 blocks.append(block)
-        return f"\n{NBSP}\n".join(blocks) if blocks else "-"
+        return f"\n{NBSP}\n".join(blocks)
     played_lines = [_finished_column_line(slot, guild) for slot in played]
     blanks = [NBSP] * max(0, pad_finished - len(played_lines))
     sections = ["\n".join(played_lines + blanks)]
@@ -504,14 +528,32 @@ def _column_sections(
     bucket_slots: list[pod_launch.LauncherSlot],
 ) -> tuple[list[pod_launch.LauncherSlot], list[list[pod_launch.LauncherSlot]]]:
     """A column's pods split into the Played rows and the groups still gathering behind them, each group one
-    start time earliest first. Pods that started are collected across every start time in column order, so a
-    pod and the extra tables it spun off read as consecutive rows, and a format still gathering at a time
-    another format is already drafting keeps its own block instead of dragging the drafting pod down with
-    it."""
+    start time earliest first. A format still gathering at a time another format is already drafting keeps its
+    own block instead of dragging the drafting pod down with it."""
     groups = _time_groups(bucket_slots)
-    played = [slot for group in groups for slot in group if slot.locked]
     gathering = [[slot for slot in group if not slot.locked] for group in groups]
-    return played, [group for group in gathering if group]
+    return _played_order(bucket_slots), [group for group in gathering if group]
+
+
+def _played_order(bucket_slots: list[pod_launch.LauncherSlot]) -> list[pod_launch.LauncherSlot]:
+    """A column's played pods earliest first, each extra table right under the pod it spun off. A table starts
+    the moment it is split, often minutes before its own pod's slot time is even reached, so ordering the rows
+    on the clock alone lifts the table above the pod it came from."""
+    played = [slot for slot in bucket_slots if slot.locked]
+    pod_times = {
+        slot.thread_name: slot.slot_time for slot in played
+        if slot.thread_name and not TABLE_SUFFIX_RE.search(slot.thread_name)
+    }
+    return sorted(played, key=lambda slot: _played_row_key(slot, pod_times))
+
+
+def _played_row_key(
+    slot: pod_launch.LauncherSlot, pod_times: dict[str, datetime | None],
+) -> tuple[datetime, int]:
+    name = slot.thread_name or ""
+    table = TABLE_SUFFIX_RE.search(name)
+    when = pod_times.get(table_base_name(name), slot.slot_time) if table else slot.slot_time
+    return (when or datetime.max.replace(tzinfo=timezone.utc), int(table.group(1)) if table else 1)
 
 
 def _gathering_section(group: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> str:

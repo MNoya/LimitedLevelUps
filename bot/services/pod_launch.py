@@ -1275,9 +1275,8 @@ def _lane_snapshot(
     whatever state they are in, so a format keeps its place in the column and on the button row from the
     moment it is offered to the moment it is played."""
     lane_signals = [signal for signal in signals if pod_signals.lane_of(signal.bucket) == lane]
-    rolled_days = {signal.signal_date for signal in lane_signals if signal.signal_date > board_date}
     lane_slots: list[LauncherSlot] = []
-    for day in [board_date] + sorted(rolled_days):
+    for day in _lane_days(session, lane, lane_signals, board_date):
         bucket = pod_signals.bucket_for_lane(day, lane)
         if bucket is None:
             continue
@@ -1301,6 +1300,30 @@ def _lane_snapshot(
                 count=0, slot_time=slot_time, names=[], thread_id=None, signal_id=None,
             ))
     return _without_rolled_past_slots(lane_slots)
+
+
+def _lane_days(
+    session: Session, lane: str, lane_signals: list[PodSignal], board_date: date,
+) -> list[date]:
+    """The days a lane renders, earliest first: the board's own, every later day it has already rolled to, and
+    tomorrow whenever a pod exists at its slot there.
+
+    A lane reaches a later day through the signals it opened, so a day whose slot the format schedule closes
+    is a day the lane never looks at. That is exactly the day the Set Championship sits on, and the launcher
+    is the surface players read the night before, so a pod committed ahead of time is looked up directly
+    instead of waiting for a signal that will never be opened."""
+    days = {signal.signal_date for signal in lane_signals if signal.signal_date > board_date}
+    tomorrow = board_date + timedelta(days=1)
+    if tomorrow not in days and _lane_slot_has_pod(session, tomorrow, lane):
+        days.add(tomorrow)
+    return [board_date] + sorted(days)
+
+
+def _lane_slot_has_pod(session: Session, day: date, lane: str) -> bool:
+    bucket = pod_signals.bucket_for_lane(day, lane)
+    if bucket is None:
+        return False
+    return bool(_event_ids_for_slot(session, slot_event_time(day, bucket.key)))
 
 
 def _gathering_slots(

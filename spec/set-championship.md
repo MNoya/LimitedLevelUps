@@ -34,7 +34,7 @@ Once the invitations are out, the bot posts a seeding table in the thread. It li
 
 ## On the day
 
-On championship Saturday the pod launcher's afternoon slot is not a normal joinable slot. It points to the championship instead. The evening Late Pod runs as usual, so regular drafting still happens that night.
+On championship Saturday the pod launcher's afternoon slot is not a normal joinable slot. It points to the championship instead, and that pointer is already on the launcher the day before. The evening Late Pod runs as usual, so regular drafting still happens that night.
 
 Players sign up on the card if they can make it. Signing up early helps set the roster ahead of time. Seats go to the highest standings among those who show up. The rest are alternates for no-shows: a player who confirmed but is not present at event time is passed over for anyone on the wait list.
 

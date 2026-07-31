@@ -106,6 +106,7 @@ from bot.tasks.pod_daily_poll import (
     SlotSignUpButton,
     init_daily_poll,
     reconcile_rolled_lanes,
+    resync_live_launcher,
 )
 from bot.services.pod_launch import init_launch, rearm_signals
 from bot.tasks.format_schedule_post import init_format_schedule
@@ -262,6 +263,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await rearm_signals(bot)
         await reconcile_rolled_lanes(bot)
         await catch_up_daily_poll(bot)
+        await resync_live_launcher(bot)
         register_pod_views(bot)
         bot.add_dynamic_items(TeamReportButton)
         bot.add_dynamic_items(TeamRevealReportButton)

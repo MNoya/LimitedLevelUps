@@ -107,8 +107,11 @@ def _committed_card(bucket_key, day, *, card_message_id):
 
 
 def _table(pod, index=2):
+    """A split table starts the moment it is opened, so it carries its own event time and not the slot time
+    of the pod it came from — usually a few minutes earlier, since a pod splits while it is still seating."""
     return LauncherSlot(
-        pod.bucket_key, committed=True, status=STATUS_FIRED, count=0, slot_time=pod.slot_time,
+        pod.bucket_key, committed=True, status=STATUS_FIRED, count=0,
+        slot_time=pod.slot_time - timedelta(minutes=6),
         set_code=pod.set_code, names=[], thread_id="2", signal_id=None,
         thread_name=f"{pod.thread_name} - Table {index}", locked=True,
     )
@@ -366,6 +369,30 @@ def test_a_pod_waiting_in_its_lobby_is_not_locked_yet(session, monkeypatch, late
 
     lobby_open = [slot for slot in slots if slot.set_code == LATEST and slot.committed][0]
     assert lobby_open.locked is False
+
+
+def test_a_lane_looks_at_tomorrow_for_a_pod_its_closed_slot_can_never_open(session, monkeypatch):
+    """The Set Championship sits on a slot the format schedule closes, so no signal ever reaches its day and
+    the lane it holds would never look there. The launcher is what players read the night before, so a pod
+    that already exists at tomorrow's slot is found without one. The lane with nothing tomorrow stays put."""
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    monkeypatch.setattr(
+        "bot.services.pod_format_schedule.FORMATS_BY_DAY", {(SATURDAY, LANE_EARLY): schedule.CLOSED},
+    )
+    afternoon = bucket_for_lane(SATURDAY, LANE_EARLY).key
+    _seed_pod(
+        session, slot_event_time(SATURDAY, afternoon), set_code=LATEST, name="👑 MSH Set Championship",
+    )
+    session.commit()
+
+    slots = pod_launch.launcher_snapshot_sync("today", FRIDAY)
+
+    early = [slot for slot in slots if lane_of(slot.bucket_key) == LANE_EARLY]
+    late = [slot for slot in slots if lane_of(slot.bucket_key) == LANE_LATE]
+    assert [(slot.championship, slot.slot_time) for slot in early if slot.committed] == [
+        (True, slot_event_time(SATURDAY, afternoon)),
+    ]
+    assert [slot.slot_time for slot in late] == [slot_event_time(FRIDAY, bucket_for_lane(FRIDAY, LANE_LATE).key)]
 
 
 def test_a_closed_slot_opens_no_pod_while_the_other_slot_still_does(session, monkeypatch):
@@ -732,12 +759,12 @@ def _seed_signal(
     return signal
 
 
-def _seed_pod(session, slot_time, *, set_code, socket_status="pending"):
+def _seed_pod(session, slot_time, *, set_code, socket_status="pending", name=None):
     """A scheduled pod at a slot, as a fired signal points at it: the launcher reflects the event, and the
     card signal carrying the slot_time is what ties it to the column."""
     event = PodDraftEvent(
         event_date=slot_time.date(), event_time=slot_time, set_code=set_code,
-        name=f"{set_code} pod", draftmancer_session="s1", discord_thread_id="tid-1",
+        name=name or f"{set_code} pod", draftmancer_session="s1", discord_thread_id="tid-1",
         socket_status=socket_status,
     )
     session.add(event)

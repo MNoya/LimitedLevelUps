@@ -14,6 +14,8 @@ Times are Eastern. Each slot shows its start as a timestamp in your own timezone
 
 Each column moves forward on its own. As soon as a pod finishes, its column shows the result above the next day's slot and starts collecting for that one, so there is always a slot you can join. The other column keeps its own day until its pod plays. A fresh launcher posts every morning at 10 AM ET and carries over everyone who already signed up for that day.
 
+A slot can be held by an event that is already scheduled, the Set Championship being the standing case. That slot takes no signups: the column points at the event instead, with a link to its post and the players who confirmed so far. The pointer shows up on the board the day before as well, so the launcher still says what is happening next even while the slot itself is closed to signups.
+
 The launcher also posts itself again each time a pod finishes, quietly and at the bottom of the channel, so the board is never buried under the pods that already played. Your signups move to it. After the early pod it is the same board again, still carrying tonight's late pod. After the late pod it is the next day's board. The morning post then replaces that one and is the post that pings the queue role.
 
 ## How to join

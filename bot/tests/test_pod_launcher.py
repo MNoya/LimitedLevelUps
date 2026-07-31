@@ -19,6 +19,7 @@ from bot.sets import active_set_code
 from bot.tasks.pod_daily_poll import (
     BOARD_LEAVE_ID,
     PodPollView,
+    _column_value,
     _committed_card_link,
     _early_transition_is_live,
     build_reminder_view,
@@ -296,7 +297,7 @@ def _committed_championship(thread_id="555", card_message_id="900"):
     return LauncherSlot(
         "AFTERNOON", committed=True, status=STATUS_FIRED, count=8, slot_time=None,
         names=["a", "b"], thread_id=thread_id, signal_id=None, thread_message_id="777",
-        card_message_id=card_message_id, championship=True,
+        card_message_id=card_message_id, thread_name="👑 MSH Set Championship", championship=True,
     )
 
 
@@ -308,3 +309,17 @@ def test_championship_slot_is_a_link_not_an_rsvp_toggle():
 
     assert not any(cid.startswith("pod_slot_rsvp") for cid in custom_ids)
     assert link_buttons and link_buttons[0].url.endswith("/555/777")
+
+
+def test_a_championship_lane_keeps_the_pods_its_column_already_played():
+    """The eve of a championship, where the column has played its own pods and also points at tomorrow's
+    event: the pointer is a block below them and never a replacement for the column."""
+    played = replace(
+        _committed("EARLY", "111", "222"), finished=True, locked=True, winner="Finkel",
+        thread_name="MSH Jul 31 Early Pod", slot_time=BEFORE_EARLY,
+    )
+
+    value = _column_value([played, _committed_championship()], guild=None)
+
+    assert "/111/222" in value
+    assert "/555/777" in value
