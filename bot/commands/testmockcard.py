@@ -17,7 +17,7 @@ from bot.services.mock_lobby_card import (
     build_mock_card,
 )
 from bot.services.pod_drafts import draftmancer_url_for, pod_page_url
-from bot.sets import active_set_code
+from bot.sets import active_set_code, upcoming_sets
 
 
 EVENT_NAME_TEMPLATE = "{code} Mock Draft 5"
@@ -29,7 +29,7 @@ async def setup(bot: commands.Bot) -> None:
     @commands.is_owner()
     async def test_mockcard(ctx: commands.Context, set_code: str = "") -> None:
         """Owner-only. Post the mock-draft card in each lifecycle state in this channel."""
-        code = (set_code or active_set_code()).upper()
+        code = (set_code or preview_set_code()).upper()
         event_name = EVENT_NAME_TEMPLATE.format(code=code)
         seated = [(name.lower(), name) for name in HALL_OF_FAME[:7]]
         early = [*seated[:2], ("unlinked_seat", None)]
@@ -50,3 +50,12 @@ async def setup(bot: commands.Bot) -> None:
                 spectate_url=f"{session_url}&spectate=preview", canceled_by=canceled_by,
             )
             await ctx.send(embed=embed, view=view)
+
+
+def preview_set_code() -> str:
+    """Mock drafts run on the set in spoiler season, so the card preview defaults to the nearest
+    upcoming set and falls back to the active set once nothing newer is registered."""
+    upcoming = upcoming_sets()
+    if upcoming:
+        return upcoming[0].code
+    return active_set_code()

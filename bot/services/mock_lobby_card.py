@@ -71,14 +71,15 @@ def build_mock_card(
     thumbnail = set_symbol_url(set_code)
     if thumbnail and state != STATE_CANCELED:
         embed.set_thumbnail(url=thumbnail)
-    embed.add_field(
-        name=MSG_MOCK_CARD_PLAYERS.format(count=len(roster)),
-        value=_seat_list(roster),
-        inline=False,
-    )
+    seats = _seat_list(roster)
     if state in (STATE_OPEN, STATE_DRAFTING):
         pending = MSG_MOCK_CARD_LOGS_PENDING.format(url=site_url, llu=emojis.get("llu")).rstrip()
-        embed.add_field(name="​", value=pending, inline=False)
+        seats = f"{seats}\n{pending}"
+    embed.add_field(
+        name=MSG_MOCK_CARD_PLAYERS.format(count=len(roster)),
+        value=seats,
+        inline=False,
+    )
     if state == STATE_OPEN:
         embed.set_footer(text=MSG_MOCK_CARD_DISCORD_NAME)
     return embed, _view(state, session_id, site_url, spectate_url)
