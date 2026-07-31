@@ -1,4 +1,6 @@
+import re
 from datetime import date, datetime, timezone
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
@@ -10,9 +12,13 @@ from bot.services.pod_drafts import (
     capture_deck_screenshot,
     finalize_mock_event,
     record_mock_event,
+    reroll_session_suffix,
 )
 from bot.services.pod_format_select import format_options
 from bot.sets import active_set_code, is_known_set, recent_released_sets, upcoming_sets
+
+
+MOCK_SESSION_RE = re.compile(r"LLU-([A-Z]+)-Mock-(\d+)-[a-z]{4}")
 
 
 def _seed_player(session, discord_id="901", username="cap", display_name="Cap"):
@@ -74,9 +80,45 @@ def test_build_mock_session_numbers_per_set(session, monkeypatch):
     second_id, second_n = build_mock_session(session, "MSH")
     other_id, other_n = build_mock_session(session, "SOS")
 
-    assert (first_id, first_n) == ("LLU-MSH-Mock-1", 1)
-    assert (second_id, second_n) == ("LLU-MSH-Mock-2", 2)
-    assert (other_id, other_n) == ("LLU-SOS-Mock-1", 1)
+    assert (first_n, second_n, other_n) == (1, 2, 1)
+    assert MOCK_SESSION_RE.fullmatch(first_id).group(1, 2) == ("MSH", "1")
+    assert MOCK_SESSION_RE.fullmatch(second_id).group(1, 2) == ("MSH", "2")
+    assert MOCK_SESSION_RE.fullmatch(other_id).group(1, 2) == ("SOS", "1")
+
+
+def test_build_mock_session_never_reuses_a_freed_number(session, monkeypatch):
+    monkeypatch.setattr(settings, "pod_draft_session_prefix", "LLU")
+    canceled = record_mock_event(
+        session, set_code="MSH",
+        event_time=datetime(2026, 6, 23, tzinfo=timezone.utc), discord_thread_id="t1",
+    )
+    abandoned_session = canceled.draftmancer_session
+
+    session.delete(canceled)
+    session.flush()
+    reopened_session, number = build_mock_session(session, "MSH")
+
+    assert number == 1
+    assert reopened_session != abandoned_session
+
+
+def test_reroll_session_suffix_keeps_the_base_and_changes_the_tail(session, monkeypatch):
+    monkeypatch.setattr(settings, "pod_draft_session_prefix", "LLU")
+    event = record_mock_event(
+        session, set_code="MSH",
+        event_time=datetime(2026, 6, 23, tzinfo=timezone.utc), discord_thread_id="t1",
+    )
+    original = event.draftmancer_session
+
+    fresh = reroll_session_suffix(session, event.id)
+
+    assert fresh != original
+    assert event.draftmancer_session == fresh
+    assert MOCK_SESSION_RE.fullmatch(fresh).group(1, 2) == ("MSH", "1")
+
+
+def test_reroll_session_suffix_returns_none_for_a_missing_event(session):
+    assert reroll_session_suffix(session, str(uuid4())) is None
 
 
 def test_record_mock_event_fields(session, monkeypatch):
@@ -92,7 +134,7 @@ def test_record_mock_event_fields(session, monkeypatch):
     assert event.kind == "mock"
     assert event.set_code == "MSH"
     assert event.name == "MSH Mock Draft 1"
-    assert event.draftmancer_session == "LLU-MSH-Mock-1"
+    assert MOCK_SESSION_RE.fullmatch(event.draftmancer_session)
     assert event.set_id is not None
 
 

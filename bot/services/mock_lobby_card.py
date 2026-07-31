@@ -20,6 +20,7 @@ from bot.commands.messages import (
     MSG_MOCK_CARD_FULL,
     MSG_MOCK_CARD_LOGS_PENDING,
     MSG_MOCK_CARD_OPEN,
+    MSG_MOCK_CARD_OPENING,
     MSG_MOCK_CARD_PLAYERS,
     MSG_MOCK_CARD_RECAP_BUTTON,
     MSG_MOCK_CARD_SPECTATE_BUTTON,
@@ -32,6 +33,7 @@ from bot.services.pod_join_button import build_mock_join_view
 from bot.sets import is_cube_board_code
 
 
+STATE_OPENING = "opening"
 STATE_OPEN = "open"
 STATE_DRAFTING = "drafting"
 STATE_COMPLETE = "complete"
@@ -40,6 +42,7 @@ STATE_CANCELED = "canceled"
 CUBE_SYMBOL = "cube"
 
 _COLORS = {
+    STATE_OPENING: discord.Color.green(),
     STATE_OPEN: discord.Color.green(),
     STATE_DRAFTING: discord.Color.blurple(),
     STATE_COMPLETE: discord.Color.gold(),
@@ -62,7 +65,10 @@ def build_mock_card(
 ) -> tuple[discord.Embed, discord.ui.View | None]:
     """`roster` is Draftmancer session users as (arena_name, linked_display_name_or_None), the same
     shape the in-thread lobby card renders. A canceled card drops the site link because cancelling
-    deletes the event row, which takes its page with it."""
+    deletes the event row, which takes its page with it.
+
+    STATE_OPENING withholds the session link and the Join button: Draftmancer makes whoever enters an
+    empty session first its owner, so a player reaching the lobby before the bot would take it."""
     embed = discord.Embed(
         title=event_title(set_code, event_name),
         description=_description(state, session_url, canceled_by, table_full=len(roster) >= max_players),
@@ -72,7 +78,7 @@ def build_mock_card(
     if thumbnail and state != STATE_CANCELED:
         embed.set_thumbnail(url=thumbnail)
     seats = _seat_list(roster)
-    if state in (STATE_OPEN, STATE_DRAFTING):
+    if state in (STATE_OPENING, STATE_OPEN, STATE_DRAFTING):
         pending = MSG_MOCK_CARD_LOGS_PENDING.format(url=site_url, llu=emojis.get("llu")).rstrip()
         seats = f"{seats}\n{pending}"
     embed.add_field(
@@ -80,7 +86,7 @@ def build_mock_card(
         value=seats,
         inline=False,
     )
-    if state == STATE_OPEN:
+    if state in (STATE_OPENING, STATE_OPEN):
         embed.set_footer(text=MSG_MOCK_CARD_DISCORD_NAME)
     return embed, _view(state, session_id, site_url, spectate_url)
 
@@ -99,6 +105,7 @@ def _description(state: str, session_url: str, canceled_by: str | None, *, table
         heading = MSG_MOCK_CARD_FULL if table_full else MSG_MOCK_CARD_OPEN
         return f"### {heading}\n{session_url}"
     heading = {
+        STATE_OPENING: MSG_MOCK_CARD_OPENING,
         STATE_DRAFTING: MSG_MOCK_CARD_DRAFTING,
         STATE_COMPLETE: MSG_MOCK_CARD_COMPLETE,
         STATE_CANCELED: _canceled_heading(canceled_by),

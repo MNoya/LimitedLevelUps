@@ -1,5 +1,14 @@
 import asyncio
 
+import pytest
+
+from bot.services.mock_lobby_card import (
+    STATE_CANCELED,
+    STATE_COMPLETE,
+    STATE_DRAFTING,
+    STATE_OPEN,
+    STATE_OPENING,
+)
 from bot.services.pod_draft_manager import PodDraftManager
 
 
@@ -169,6 +178,25 @@ def test_await_ownership_times_out_when_claim_never_resolves():
     result = asyncio.run(mgr.await_ownership(timeout_s=0.05))
 
     assert result is False
+
+
+@pytest.mark.parametrize(
+    "flags, expected",
+    [
+        ({}, STATE_OPENING),
+        ({"is_owner": True}, STATE_OPEN),
+        ({"drafting": True}, STATE_DRAFTING),
+        ({"draft_complete": True}, STATE_COMPLETE),
+        ({"canceled_by": "Finkel"}, STATE_CANCELED),
+    ],
+    ids=["not-owner-yet", "owner", "drafting", "complete", "canceled"],
+)
+def test_mock_card_state_withholds_open_until_the_bot_owns_the_lobby(flags, expected):
+    mgr = _manager()
+    for flag, value in flags.items():
+        setattr(mgr, flag, value)
+
+    assert mgr._mock_card_state() == expected
 
 
 def _manager() -> PodDraftManager:

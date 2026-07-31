@@ -19,6 +19,7 @@ MSG_MOCK_NOT_TEXT_CHANNEL = "Run `/mock-draft` in a server text channel — the 
 MSG_MOCK_UNKNOWN_SET = "Unknown set `{code}`. Pick one from the suggestions, or use a registered cube format."
 MSG_MOCK_ALREADY_ACTIVE = "A mock draft is already running in {thread}. Finish or cancel it before starting another."
 MSG_MOCK_COMPLETE = "✅ **{event_name} complete!** [Draft Recap here](<{url}>) {manat}"
+MSG_MOCK_CARD_OPENING = "Opening the lobby"
 MSG_MOCK_CARD_OPEN = "Looking for players"
 MSG_MOCK_CARD_FULL = "Table is full"
 MSG_MOCK_CARD_DRAFTING = "Drafting now"

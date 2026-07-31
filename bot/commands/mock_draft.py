@@ -26,10 +26,15 @@ from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
 from bot.services import pod_format
-from bot.services.mock_lobby_card import build_mock_card
+from bot.services.mock_lobby_card import STATE_OPENING, build_mock_card
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
-from bot.services.pod_drafts import draftmancer_url_for, pod_page_url, record_mock_event
-from bot.services.pod_draft_manager import start_manager
+from bot.services.pod_drafts import (
+    draftmancer_url_for,
+    pod_page_url,
+    record_mock_event,
+    reroll_session_suffix,
+)
+from bot.services.pod_draft_manager import PodDraftManager, start_manager
 
 
 log = logging.getLogger(__name__)
@@ -75,11 +80,10 @@ class MockDraft(commands.Cog):
             event_id, session_id, event_name = event.id, event.draftmancer_session, event.name
             session.commit()
 
-        draftmancer_url = draftmancer_url_for(session_id)
         embed, view = build_mock_card(
-            event_name=event_name, set_code=code, session_id=session_id, session_url=draftmancer_url,
-            site_url=pod_page_url(event_name), roster=[],
-            max_players=settings.pod_draft_max_players,
+            event_name=event_name, set_code=code, session_id=session_id,
+            session_url=draftmancer_url_for(session_id), site_url=pod_page_url(event_name), roster=[],
+            max_players=settings.pod_draft_max_players, state=STATE_OPENING,
         )
         starter = await channel.send(embed=embed, view=view)
         thread = await starter.create_thread(name=event_name, reason=f"Mock draft started by {interaction.user}")
@@ -88,12 +92,10 @@ class MockDraft(commands.Cog):
             session.get(PodDraftEvent, event_id).discord_thread_id = str(thread.id)
             session.commit()
 
-        await start_manager(
-            self.bot, event_id, session_id, thread.id, code, 0,
-            event_name=event_name, draftmancer_url=draftmancer_url, kind="mock",
-        )
+        manager = await _seat_bot_in_lobby(self.bot, event_id, session_id, thread.id, code, event_name)
 
-        log.info(f"mock-draft: {interaction.user} opened {session_id} (event_id={event_id})")
+        opened_session = manager.session_id if manager is not None else session_id
+        log.info(f"mock-draft: {interaction.user} opened {opened_session} (event_id={event_id})")
         await interaction.delete_original_response()
 
     @mock_draft.autocomplete("set")
@@ -104,6 +106,36 @@ class MockDraft(commands.Cog):
         choices = pod_format.format_choices()
         matched = [(label, code) for label, code in choices if cur in label.lower() or cur in code.lower()]
         return [app_commands.Choice(name=label, value=code) for label, code in matched[:25]]
+
+
+async def _seat_bot_in_lobby(
+    bot: commands.Bot, event_id: str, session_id: str, thread_id: int, set_code: str, event_name: str,
+) -> PodDraftManager | None:
+    """Connect the bot to the Draftmancer session and hold it until ownership resolves. The card posts
+    with no link until that lands, so the bot is always the first one in the lobby and stays its owner.
+    A session it could not own is abandoned for a fresh one, since Draftmancer never hands ownership to
+    a later arrival."""
+    manager = await start_manager(
+        bot, event_id, session_id, thread_id, set_code, 0,
+        event_name=event_name, draftmancer_url=draftmancer_url_for(session_id), kind="mock",
+    )
+    if manager is None or await manager.await_ownership():
+        return manager
+
+    await manager.disconnect_safely()
+    with SessionLocal() as session:
+        fresh_session_id = reroll_session_suffix(session, event_id)
+        session.commit()
+    if fresh_session_id is None:
+        return None
+    log.warning(f"mock-draft: {session_id} could not be owned; reseating on {fresh_session_id}")
+    manager = await start_manager(
+        bot, event_id, fresh_session_id, thread_id, set_code, 0,
+        event_name=event_name, draftmancer_url=draftmancer_url_for(fresh_session_id), kind="mock",
+    )
+    if manager is not None:
+        await manager.await_ownership()
+    return manager
 
 
 async def setup(bot: commands.Bot) -> None:

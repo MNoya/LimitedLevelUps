@@ -48,6 +48,7 @@ from bot.services.mock_lobby_card import (
     STATE_COMPLETE,
     STATE_DRAFTING,
     STATE_OPEN,
+    STATE_OPENING,
     build_mock_card,
 )
 from bot.services import pod_format
@@ -1209,12 +1210,16 @@ class PodDraftManager:
             log.info(f"[MOCK] anchor_edit_failed event={self.event_id}", exc_info=True)
 
     def _mock_card_state(self) -> str:
+        """A lobby the bot does not hold reads as opening, not open: the card's link and Join button are
+        what send players into the session, and until ownership lands the first arrival takes it."""
         if self.canceled_by is not None:
             return STATE_CANCELED
         if self.draft_complete:
             return STATE_COMPLETE
         if self.drafting:
             return STATE_DRAFTING
+        if not self.is_owner:
+            return STATE_OPENING
         return STATE_OPEN
 
     async def _mock_anchor(self) -> "discord.Message | None":

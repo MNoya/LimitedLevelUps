@@ -14,6 +14,7 @@ from bot.services.mock_lobby_card import (
     STATE_COMPLETE,
     STATE_DRAFTING,
     STATE_OPEN,
+    STATE_OPENING,
     build_mock_card,
 )
 from bot.services.pod_drafts import draftmancer_url_for, pod_page_url
@@ -34,6 +35,7 @@ async def setup(bot: commands.Bot) -> None:
         seated = [(name.lower(), name) for name in HALL_OF_FAME[:7]]
         early = [*seated[:2], ("unlinked_seat", None)]
         cases = (
+            (STATE_OPENING, [], None),
             (STATE_OPEN, [], None),
             (STATE_OPEN, early, None),
             (STATE_OPEN, [*seated, ("chapin", "Chapin")], None),

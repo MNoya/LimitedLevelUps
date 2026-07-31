@@ -85,6 +85,9 @@ def _session_suffix() -> str:
     return "".join(secrets.choice(string.ascii_lowercase) for _ in range(_SESSION_SUFFIX_LEN))
 
 
+_SESSION_SUFFIX_RE = re.compile(rf"-[a-z]{{{_SESSION_SUFFIX_LEN}}}$")
+
+
 def _session_id_off_base(session: Session, base: str) -> str:
     """A `<base>-<rand4>` session id not already taken by another event with the same base."""
     taken = set(session.execute(
@@ -601,16 +604,24 @@ def player_arena_handle(session: Session, discord_id: str) -> str | None:
 
 
 def build_mock_session(session: Session, set_code: str) -> tuple[str, int]:
-    """`LLU-<SET>-Mock-<N>` with N the next free per-set mock number. Collisions bump N, so two
-    mocks opened back to back never share a Draftmancer lobby."""
+    """`LLU-<SET>-Mock-<N>-<rand4>` with N the next free per-set mock number. The random tail keeps the
+    id unguessable and un-reusable: cancelling a mock deletes its event row, which frees N, and without
+    the tail the next mock of that set would reopen the exact lobby the cancelled one left behind, with
+    whoever stayed in it still holding Draftmancer ownership."""
     base = f"{settings.pod_draft_session_prefix}-{set_code.upper()}-Mock"
-    taken = set(session.execute(
+    taken = session.execute(
         select(PodDraftEvent.draftmancer_session).where(PodDraftEvent.draftmancer_session.like(f"{base}-%"))
-    ).scalars().all())
-    n = 1
-    while f"{base}-{n}" in taken:
-        n += 1
-    return f"{base}-{n}", n
+    ).scalars().all()
+    highest = 0
+    for session_id in taken:
+        match = _MOCK_NUMBER_RE.search(session_id or "")
+        if match:
+            highest = max(highest, int(match.group(1)))
+    number = highest + 1
+    return _session_id_off_base(session, f"{base}-{number}"), number
+
+
+_MOCK_NUMBER_RE = re.compile(r"-Mock-(\d+)")
 
 
 def record_mock_event(
@@ -635,6 +646,19 @@ def record_mock_event(
     session.add(event)
     session.flush()
     return event
+
+
+def reroll_session_suffix(session: Session, event_id: str) -> str | None:
+    """Re-roll the random tail of an event's Draftmancer session id, abandoning a lobby the bot could not
+    own for one nobody can already be sitting in. Draftmancer never hands ownership to a later arrival, so
+    moving to a different session is the only way to get a lobby the bot controls. Returns the new id, or
+    None when the event is gone."""
+    event = session.get(PodDraftEvent, event_id)
+    if event is None:
+        return None
+    base = _SESSION_SUFFIX_RE.sub("", event.draftmancer_session)
+    event.draftmancer_session = _session_id_off_base(session, base)
+    return event.draftmancer_session
 
 
 def build_ondemand_session(session: Session, event_date: date) -> str:
