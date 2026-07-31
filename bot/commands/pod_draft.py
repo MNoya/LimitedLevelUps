@@ -20,7 +20,7 @@ from bot.discord_helpers import extract_avatar_hash
 from bot.services import championship as championship_service
 from bot.services import pod_format_poll
 from bot.services.lobby_embed import guard_ready_check
-from bot.services.pod_active import ACTIVE_POD_MANAGERS, set_card_phase_hook
+from bot.services.pod_active import ACTIVE_POD_MANAGERS, set_card_phase_hook, set_pod_card_hook
 from bot.services.pod_draft_manager import (
     TeamVotePoster,
     cancel_pod_event,
@@ -56,6 +56,7 @@ from bot.services.pod_drafts import (
 )
 from bot.commands.pod_rsvp import (
     fetch_channel,
+    post_pod_card,
     reflect_format_change,
     refresh_card_note,
     refresh_card_phase,
@@ -1217,4 +1218,5 @@ async def setup(bot: commands.Bot) -> None:
     set_seeding_repost_hook(repost_seeding_table)
     set_card_refresh_hook(refresh_scheduled_card)
     set_card_phase_hook(refresh_card_phase)
+    set_pod_card_hook(post_pod_card)
     await bot.add_cog(PodDraft(bot))

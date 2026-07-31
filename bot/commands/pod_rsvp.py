@@ -41,7 +41,7 @@ from bot.commands.messages import (
     MSG_POD_REMOVED,
 )
 from bot.database import SessionLocal
-from bot.discord_helpers import NBSP
+from bot.discord_helpers import NBSP, run_detached
 from bot.services.lobby_embed import SettingsButton
 from sqlalchemy import select
 
@@ -107,6 +107,7 @@ CARD_RSVP_PROMPT = "Please RSVP"
 MULTIPOD_NOTICE = "🔥 Keep signing up to fire a second table"
 CARD_STATUS_DRAFTING = "🎉 **Draft started!**"
 CARD_STATUS_PLAYING = "⚔️ **Matches In Progress**"
+CARD_STATUS_LOBBY_OPEN = "{emoji} **Lobby is open**"
 TIME_LABEL = "Time"
 NATIVE_EVENT_SIGNUP = "**Event Details and Signup Link: {jump_url}**"
 RSVP_LABELS = {RSVP_YES: "Sign Up", RSVP_MAYBE: "Maybe", RSVP_NO: "Can't"}
@@ -186,7 +187,7 @@ class ScheduledRegisteredView(discord.ui.View):
 async def _apply_surface_rsvp(interaction: discord.Interaction, event_id: str, state: str) -> None:
     """Record an RSVP from a non-card surface (championship invite wave, roster reminder) by resolving
     the pod's card from its event id, then routing through the shared card path."""
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True, thinking=True)
     card = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
     if card is None:
         await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
@@ -713,6 +714,28 @@ async def post_scheduled_card(
     return event_id
 
 
+async def post_pod_card(
+    channel: discord.abc.Messageable, *, name: str, event_time: datetime, set_code: str,
+    roster: list[str] | None = None,
+) -> discord.Message | None:
+    """The card for a pod no scheduled signal created: a fired queue, a table. No RSVP row, since the
+    roster settled on the surface that fired the pod. The caller anchors the pod thread on the returned
+    message and records it with `record_pod_card_sync`, which is what later re-renders it to standings."""
+    players = [DraftedPlayer(display_name=display) for display in roster or []]
+    try:
+        return await channel.send(embed=build_rsvp_embed(
+            name, event_time, {}, set_code=set_code, status_line=_lobby_open_status_line(),
+            locked_roster=players,
+        ))
+    except discord.HTTPException:
+        log.warning(f"could not post the pod card for {name}", exc_info=True)
+        return None
+
+
+def _lobby_open_status_line() -> str:
+    return CARD_STATUS_LOBBY_OPEN.format(emoji=emojis.get("draftmancer"))
+
+
 async def _add_members_to_thread(thread: discord.Thread, members: list[tuple[str, str]]) -> None:
     """Pull preseeded Yes players into the thread so coordination reaches them from the start."""
     for user_id, _ in members:
@@ -742,12 +765,14 @@ async def apply_card_rsvp(
     Every answer names the pod it landed on, since a click can come from the card, its thread, the roster
     reminder, or a launcher button, and only the pod's own name reads the same from all four.
 
-    The click is acknowledged before any database work, since the roster write, the lifecycle row, and a
-    championship card's seed snapshot together run past the three seconds Discord allows a first response.
-    Every answer goes out as a follow-up, and the card is edited over the bot's own message, so it does not
-    matter how the click was acknowledged."""
+    Only the roster write and the presser's own answer run on the click. Everything the RSVP moves besides
+    that settles after, so the press never waits on a card render, a role grant, or a launcher repaint.
+
+    The acknowledgement is a thinking one, which puts the pending answer on screen the instant the button
+    is pressed. A silent acknowledgement holds the click open just as safely but shows the presser nothing
+    until the confirmation lands, so a slow answer reads as a button that did nothing."""
     if not interaction.response.is_done():
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True, thinking=True)
     result = await asyncio.to_thread(
         pod_launch.set_rsvp_sync,
         surface_message_id, str(interaction.user.id), interaction.user.display_name, state,
@@ -756,6 +781,35 @@ async def apply_card_rsvp(
         await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
         return
 
+    await _answer_presser(interaction, result)
+    run_detached(
+        _settle_card_rsvp(interaction, surface_message_id, result, refresh_launcher=refresh_launcher),
+        f"the RSVP on card {surface_message_id}",
+    )
+
+
+async def _answer_presser(interaction: discord.Interaction, result: pod_launch.RsvpResult) -> None:
+    """The presser's private acknowledgement, sent off the roster write alone so it lands before any
+    surface re-renders."""
+    if result.rsvp == RSVP_YES and not result.joined:
+        name, _event_time = await _pod_identity(result)
+        await interaction.followup.send(embed=pod_already_on_embed(name), ephemeral=True)
+    elif result.rsvp in (RSVP_YES, RSVP_MAYBE):
+        await send_join_confirmation_card(
+            interaction, lead=await _confirmation_lead_text(result),
+            accent=RSVP_CONFIRM_COLOR[result.rsvp],
+        )
+    else:
+        await interaction.followup.send(embed=await _decline_embed(result), ephemeral=True)
+
+
+async def _settle_card_rsvp(
+    interaction: discord.Interaction, surface_message_id: str, result: pod_launch.RsvpResult,
+    *, refresh_launcher: bool,
+) -> None:
+    """Everything an RSVP moves once the presser has an answer: the clicked card, the pod roles and the
+    first-pod welcome, thread membership, the other surfaces carrying the roster, the native event tally,
+    the standing nudges, and the launcher board."""
     (status_line, championship), champ_roster = await asyncio.gather(
         resolve_card_render_state(result.state.event_id),
         resolve_championship_card_roster(result.state.event_id, result.rosters),
@@ -776,33 +830,24 @@ async def apply_card_rsvp(
         slot_role_name = None if championship else _auto_grant_role_name(result.state.slot_time)
         first_pod = await grant_pod_roles(interaction.user, slot_role_name)
     await announce_pod_grant(interaction, first_pod=first_pod)
-    if result.rsvp == RSVP_YES and not result.joined:
-        name, _event_time = await _pod_identity(result)
-        await interaction.followup.send(embed=pod_already_on_embed(name), ephemeral=True)
-    elif result.rsvp in (RSVP_YES, RSVP_MAYBE):
-        await send_join_confirmation_card(
-            interaction, lead=await _confirmation_lead_text(result),
-            accent=RSVP_CONFIRM_COLOR[result.rsvp],
-        )
-    else:
-        await interaction.followup.send(embed=await _decline_embed(result), ephemeral=True)
 
-    if result.state.event_id is not None:
-        join = result.rsvp in (RSVP_YES, RSVP_MAYBE)
-        await _set_thread_membership(interaction, result.state.event_id, join=join)
-        await _sync_other_surfaces(
-            interaction.client, result.state.event_id, str(interaction.message.id),
-            result.rosters, result.roster_interests,
-        )
-        await _sync_native_event_tally(interaction.guild, surface_message_id, result.rosters)
-        yes = result.rosters.get(RSVP_YES) or []
-        maybe = result.rosters.get(RSVP_MAYBE) or []
-        await refresh_underfill_nudge_for_event(interaction.client, result.state.event_id, len(yes), len(maybe))
-        await refresh_roster_reminder_for_event(result.state.event_id)
-        if championship and result.yes_changed:
-            notify_seeding_change(interaction.client, result.state.event_id)
-        if result.yes_changed and refresh_launcher:
-            await _refresh_launcher(interaction.client, result.state.slot_time)
+    if result.state.event_id is None:
+        return
+    join = result.rsvp in (RSVP_YES, RSVP_MAYBE)
+    await _set_thread_membership(interaction, result.state.event_id, join=join)
+    await _sync_other_surfaces(
+        interaction.client, result.state.event_id, str(interaction.message.id),
+        result.rosters, result.roster_interests,
+    )
+    await _sync_native_event_tally(interaction.guild, surface_message_id, result.rosters)
+    yes = result.rosters.get(RSVP_YES) or []
+    maybe = result.rosters.get(RSVP_MAYBE) or []
+    await refresh_underfill_nudge_for_event(interaction.client, result.state.event_id, len(yes), len(maybe))
+    await refresh_roster_reminder_for_event(result.state.event_id)
+    if championship and result.yes_changed:
+        notify_seeding_change(interaction.client, result.state.event_id)
+    if result.yes_changed and refresh_launcher:
+        await _refresh_launcher(interaction.client, result.state.slot_time)
 
 
 async def apply_card_leave(
@@ -1173,18 +1218,20 @@ async def _retime_registered_embed(
 
 async def _edit_scheduled_card(bot: commands.Bot, event_id: str, name: str, event_time: datetime) -> None:
     """Re-render the channel card from scratch — name, set symbol, time, description, rosters. It is
-    the thread starter, so the thread view moves with it. Poll and queue-born pods have no card at
-    all. Shared by reschedule (new time) and a format change (new name + symbol)."""
-    ref = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
+    the thread starter, so the thread view moves with it. A pod with no scheduled card renders on its
+    own card, which never falls back to the RSVP prompt since nothing on it takes a click. Shared by
+    reschedule (new time) and a format change (new name + symbol)."""
+    ref = await asyncio.to_thread(pod_launch.pod_card_ref_sync, event_id)
     if ref is None:
         return
-    _, channel_id, message_id, slot_time = ref
+    channel_id, message_id, slot_time = ref
     roster_interests = await asyncio.to_thread(pod_launch.rsvp_rosters_with_interest_sync, message_id)
-    if roster_interests is None:
-        return
-    rosters = {state: [name for name, _ in members] for state, members in roster_interests.items()}
-    if await asyncio.to_thread(pod_launch.format_locked_for_event_sync, event_id):
-        roster_interests = None
+    own_card = roster_interests is None
+    rosters: dict[str, list[str]] = {}
+    if not own_card:
+        rosters = {state: [name for name, _ in members] for state, members in roster_interests.items()}
+        if await asyncio.to_thread(pod_launch.format_locked_for_event_sync, event_id):
+            roster_interests = None
     channel = await fetch_channel(bot, channel_id)
     if channel is None:
         return
@@ -1192,8 +1239,12 @@ async def _edit_scheduled_card(bot: commands.Bot, event_id: str, name: str, even
     set_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
     pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
     status_line = await resolve_card_status_line(event_id)
+    if status_line is None and own_card:
+        status_line = _lobby_open_status_line()
     team_rosters = await _team_card_rosters(event_id, pairing_mode, status_line)
     locked_roster, draft_complete = await _solo_card_roster(event_id, pairing_mode, status_line)
+    if own_card and locked_roster is None and team_rosters is None:
+        locked_roster = await asyncio.to_thread(_own_card_lobby_roster_sync, event_id)
     try:
         message = await channel.fetch_message(int(message_id))
         await message.edit(embed=build_rsvp_embed(
@@ -1205,6 +1256,16 @@ async def _edit_scheduled_card(bot: commands.Bot, event_id: str, name: str, even
             championship_roster=await resolve_championship_card_roster(event_id, rosters)))
     except discord.HTTPException:
         log.warning(f"could not edit scheduled card {message_id}", exc_info=True)
+
+
+def _own_card_lobby_roster_sync(event_id: str) -> list[DraftedPlayer]:
+    """Who the card lists before the draft seats anyone. A table has no signal to read, so it falls
+    back to the live lobby."""
+    names = [name for _, name in pod_launch.roster_for_event_sync(event_id)]
+    if not names:
+        manager = ACTIVE_POD_MANAGERS.get(event_id)
+        names = [name for name in manager.non_bot_session_names() if name] if manager else []
+    return [DraftedPlayer(display_name=name) for name in names]
 
 
 def _championship_announcement(

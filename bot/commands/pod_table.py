@@ -38,6 +38,7 @@ from bot.commands.messages import (
     MSG_TABLE_SUPERSEDED,
     MSG_TABLE_UNKNOWN_EVENT,
 )
+from bot.commands.pod_rsvp import post_pod_card
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
@@ -90,19 +91,27 @@ async def materialize_table(
     format's own pod. Returns the created thread."""
     with SessionLocal() as session:
         event = record_table_event(session, source_event_id=source_event_id, format_code=format_code)
-        event_id, session_id, event_name, set_code = (
-            event.id, event.draftmancer_session, event.name, event.set_code,
+        event_id, session_id, event_name, set_code, event_time = (
+            event.id, event.draftmancer_session, event.name, event.set_code, event.event_time,
         )
         session.commit()
 
     draftmancer_url = draftmancer_url_for(session_id)
-    starter = await lobby_channel.send(MSG_TABLE_LOBBY_STARTER.format(
+    card = await post_pod_card(
+        lobby_channel, name=event_name, event_time=event_time, set_code=set_code,
+        roster=list(claims.values()),
+    )
+    starter = card or await lobby_channel.send(MSG_TABLE_LOBBY_STARTER.format(
         draftmancer_emoji=emojis.get("draftmancer"), event_name=event_name,
     ))
     thread = await starter.create_thread(name=event_name, reason="Pod table")
 
     with SessionLocal() as session:
-        session.get(PodDraftEvent, event_id).discord_thread_id = str(thread.id)
+        event = session.get(PodDraftEvent, event_id)
+        event.discord_thread_id = str(thread.id)
+        if card is not None:
+            event.card_channel_id = str(card.channel.id)
+            event.card_message_id = str(card.id)
         session.commit()
 
     mention_block = _mention_block(claims)
@@ -204,9 +213,9 @@ class TableClaimView(discord.ui.View):
                 return
             self.superseded = True
             self._join_button.disabled = True
-        await self._edit_card()
+        await self.refresh_card()
 
-    async def _edit_card(self) -> None:
+    async def refresh_card(self) -> None:
         """Edit the posted claim card through the bot token rather than the command's interaction
         webhook, so the swap lands even past the interaction token's 15-minute expiry."""
         if self.claim_message is None:
@@ -245,7 +254,7 @@ class TableClaimView(discord.ui.View):
             ))
             if ACTIVE_TABLE_VIEWS.get(self.source_event_id) is self:
                 del ACTIVE_TABLE_VIEWS[self.source_event_id]
-            await self._edit_card()
+            await self.refresh_card()
 
 
 async def build_table_view(

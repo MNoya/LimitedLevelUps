@@ -57,6 +57,7 @@ from bot.services.pod_join_button import build_join_view
 from bot.services.pod_registration_embed import closed_registered_embed
 from bot.services.pod_link_dm import send_lobby_link_dms
 from bot.services.player_stats import rank_ordered_names
+from bot.services import pod_active
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_signals import SCHEDULE_TZ, slot_event_time
 from bot.services.pod_format_schedule import formats_for
@@ -1605,6 +1606,37 @@ def scheduled_card_ref_sync(event_id: str) -> tuple[str, str, str, datetime | No
     return (row[0], row[1], row[2], row[3]) if row else None
 
 
+def pod_card_ref_sync(event_id: str) -> tuple[str, str, datetime | None] | None:
+    """(channel_id, message_id, slot_time) of the card this pod renders on: the scheduled signal's, else
+    the one a queue or table pod posted for itself. Only a signal carries a slot_time."""
+    signal_card = scheduled_card_ref_sync(event_id)
+    if signal_card is not None:
+        _, channel_id, message_id, slot_time = signal_card
+        return channel_id, message_id, slot_time
+    own_card = own_card_ref_sync(event_id)
+    return (*own_card, None) if own_card else None
+
+
+def own_card_ref_sync(event_id: str) -> tuple[str, str] | None:
+    with SessionLocal() as session:
+        row = session.execute(
+            select(PodDraftEvent.card_channel_id, PodDraftEvent.card_message_id)
+            .where(PodDraftEvent.id == event_id)
+        ).first()
+    if row is None or not row[0] or not row[1]:
+        return None
+    return row[0], row[1]
+
+
+def record_pod_card_sync(event_id: str, channel_id: str, message_id: str) -> None:
+    with SessionLocal() as session:
+        session.execute(
+            update(PodDraftEvent).where(PodDraftEvent.id == event_id)
+            .values(card_channel_id=channel_id, card_message_id=message_id)
+        )
+        session.commit()
+
+
 def set_thread_message_sync(signal_id: str, thread_message_id: str) -> None:
     with SessionLocal() as session:
         session.execute(
@@ -1718,21 +1750,26 @@ async def launch_from_signal(
     the event id, or None if the coordination channel is unreachable. Participants are not pre-seeded:
     the live Draftmancer session is authoritative, matching record_mock_event.
 
-    An open-now pod skips the anchor message — the lobby-open post inside the thread is the whole
-    announcement. A scheduled pod anchors its thread on the message carrying the start time."""
+    An open-now pod anchors its thread on a pod card of its own, so the pod still leaves standings in the
+    channel. A scheduled pod anchors its thread on the message carrying the start time."""
     channel = await _fetch_text_channel(bot, settings.pod_draft_channel_id)
     if channel is None:
         log.error(f"launch_from_signal: coordination channel {settings.pod_draft_channel_id} unreachable")
         return None
 
     name = await dedupe_pod_name(channel, name)
+    roster = await asyncio.to_thread(queue_member_names_sync, signal_id)
     try:
         if open_now:
-            thread = await channel.create_thread(name=name[:100], type=discord.ChannelType.public_thread)
+            anchor = await pod_active.post_pod_card(
+                channel, name=name, event_time=event_time, set_code=set_code, roster=roster,
+            )
         else:
             unix = int(event_time.timestamp())
-            intro = f"🚀 **{name}** is set for <t:{unix}:F> (<t:{unix}:R>)."
-            anchor = await channel.send(intro)
+            anchor = await channel.send(f"🚀 **{name}** is set for <t:{unix}:F> (<t:{unix}:R>).")
+        if anchor is None:
+            thread = await channel.create_thread(name=name[:100], type=discord.ChannelType.public_thread)
+        else:
             thread = await anchor.create_thread(name=name[:100])
     except discord.HTTPException:
         log.warning("launch_from_signal: could not create pod thread", exc_info=True)
@@ -1752,6 +1789,8 @@ async def launch_from_signal(
 
     event_id = await asyncio.to_thread(_create)
     await asyncio.to_thread(link_event_sync, signal_id, event_id)
+    if open_now and anchor is not None:
+        await asyncio.to_thread(record_pod_card_sync, event_id, str(channel.id), str(anchor.id))
 
     if open_now:
         await open_ondemand_lobby(bot, event_id)
@@ -1941,8 +1980,9 @@ def past_pod_cards_sync(now: datetime, since: datetime) -> list[tuple[str, str, 
 
 
 def event_card_surfaces_sync(event_id: str) -> tuple[str, str, str | None, str | None] | None:
-    """(card channel_id, card message_id, thread_id, thread-controls message_id) for one scheduled
-    pod, or None when the pod has no card (poll/queue-born pods carry no RSVP card)."""
+    """(card channel_id, card message_id, thread_id, thread-controls message_id) for one pod, or None
+    when it has no card at all. A pod on its own card has no thread controls: nothing there takes
+    signups."""
     with SessionLocal() as session:
         row = session.execute(
             select(
@@ -1952,10 +1992,14 @@ def event_card_surfaces_sync(event_id: str) -> tuple[str, str, str | None, str |
             .join(PodDraftEvent, PodDraftEvent.id == PodSignal.event_id)
             .where(PodSignal.event_id == event_id, PodSignal.kind == pod_signals.KIND_SCHEDULED)
         ).first()
-    if row is None:
+    if row is not None:
+        channel_id, message_id, thread_message_id, thread_id = row
+        return channel_id, message_id, thread_id, thread_message_id
+    own_card = own_card_ref_sync(event_id)
+    if own_card is None:
         return None
-    channel_id, message_id, thread_message_id, thread_id = row
-    return channel_id, message_id, thread_id, thread_message_id
+    channel_id, message_id = own_card
+    return channel_id, message_id, None, None
 
 
 async def close_event_card(bot: commands.Bot, event_id: str) -> None:

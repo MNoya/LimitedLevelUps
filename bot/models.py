@@ -228,6 +228,8 @@ class PodDraftEvent(Base):
     draft_log_gz        = Column(LargeBinary, nullable=True)
     draft_log           = Column(JSONB, nullable=True)
     discord_scheduled_event_id = Column(String, nullable=True)
+    card_channel_id     = Column(String, nullable=True)
+    card_message_id     = Column(String, nullable=True)
     created_at          = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     finalized_at        = Column(DateTime(timezone=True), nullable=True)
     championship_posted_at = Column(DateTime(timezone=True), nullable=True)

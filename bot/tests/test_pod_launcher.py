@@ -106,18 +106,12 @@ def test_format_locked_reminder_view_drops_format_preference():
     assert custom_ids == ["podreminderrsvp:yes:EVT9", "podreminderrsvp:no:EVT9"]
 
 
-def test_open_pod_button_is_enabled_a_closed_one_disabled():
+def test_a_closed_slot_carries_no_join_button_while_an_open_one_does():
     view = PodPollView([_lazy("EARLY", STATUS_EXPIRED), _lazy("LATE", STATUS_OPEN)])
 
-    disabled = {
-        child.custom_id: child.item.disabled
-        for child in view.children
-        if child.custom_id.startswith("pod_poll:")
-    }
-    assert disabled == {
-        f"pod_poll:{named_bucket_key('EARLY', LATEST)}": True,
-        f"pod_poll:{named_bucket_key('LATE', LATEST)}": False,
-    }
+    pods = [child.custom_id for child in view.children if child.custom_id != BOARD_LEAVE_ID]
+
+    assert pods == [f"pod_poll:{named_bucket_key('LATE', LATEST)}"]
 
 
 def test_a_slot_offering_two_formats_carries_one_button_per_pod():

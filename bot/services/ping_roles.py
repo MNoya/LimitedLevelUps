@@ -45,6 +45,7 @@ from bot.services.pod_drafts import (
     declined_pod_roles_sync,
     dm_draft_link_enabled,
     draftmancer_url_for,
+    full_arena_handle,
     player_arena_handle,
 )
 from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role
@@ -500,8 +501,25 @@ def build_link_arena_modal(after_link=None) -> discord.ui.Modal:
 
 
 async def _linked_arena_handle(discord_id: str) -> str | None:
+    return await asyncio.to_thread(_arena_handle_sync, discord_id)
+
+
+def _arena_handle_sync(discord_id: str) -> str | None:
     with SessionLocal() as session:
         return player_arena_handle(session, discord_id)
+
+
+def _link_state_sync(discord_id: str) -> tuple[str | None, bool]:
+    """The Arena handle and whether a 17lands token is on file, off one read of the player row. Both gate
+    the same card, and reading them apart puts a second round trip in front of a click's answer."""
+    with SessionLocal() as session:
+        player = session.execute(
+            select(Player).where(Player.discord_id == discord_id)
+        ).scalar_one_or_none()
+        if player is None:
+            return None, False
+        handle = player.arena_name if full_arena_handle(player.arena_name) else None
+        return handle, bool(player.seventeenlands_token)
 
 
 _welcomed_member_ids: set[int] = set()
@@ -545,9 +563,7 @@ async def send_join_confirmation_card(
     the confirmation lead over the same Link Arena / Pod Guide / Notifications / Format Preference row
     the grant card carries, so every join click offers the self-service controls, not only the click
     that granted a role."""
-    user_id = str(interaction.user.id)
-    arena_name = await _linked_arena_handle(user_id)
-    has_token = await asyncio.to_thread(_has_seventeenlands_token, user_id)
+    arena_name, has_token = await asyncio.to_thread(_link_state_sync, str(interaction.user.id))
     card = _PodButtonCard(
         _card_body(lead, arena_name=arena_name),
         accent=accent, show_link_button=arena_name is None,

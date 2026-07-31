@@ -29,12 +29,16 @@ from bot.services.pod_signals import (
 from bot.sets import active_set_code
 from bot.tasks.pod_daily_poll import (
     COLUMN_FIT_BUDGET,
+    SECTION_NEXT,
+    _column_sections,
     _fit_row,
+    _gathering_section,
     _lane_order,
     _lane_slots,
     _played_on_day,
     _row_units,
     _slot_by_key,
+    _slot_item,
 )
 
 
@@ -99,6 +103,14 @@ def _committed_card(bucket_key, day, *, card_message_id):
         slot_time=slot_event_time(day, bucket_key), set_code=LATEST,
         names=list(HALL_OF_FAME[:4]), thread_id="1", signal_id=None, card_message_id=card_message_id,
         card_channel_id="2", thread_name="MSH Jul 24 Late Pod",
+    )
+
+
+def _table(pod, index=2):
+    return LauncherSlot(
+        pod.bucket_key, committed=True, status=STATUS_FIRED, count=0, slot_time=pod.slot_time,
+        set_code=pod.set_code, names=[], thread_id="2", signal_id=None,
+        thread_name=f"{pod.thread_name} - Table {index}", locked=True,
     )
 
 
@@ -198,6 +210,67 @@ def test_a_played_pod_is_never_dropped_by_a_roll():
 ])
 def test_a_retired_board_keeps_only_the_pods_its_own_day_played(slot, expected):
     assert _played_on_day(slot, FRIDAY) is expected
+
+
+@pytest.mark.parametrize("slots, played_codes, gathering_codes", [
+    ([_played("LATE", FRIDAY), _gathering("LATE", FRIDAY, set_code="PEASANT")], [LATEST], [["PEASANT"]]),
+    ([_played("LATE", FRIDAY), _gathering("EVENING", SATURDAY)], [LATEST], [[LATEST]]),
+    ([_gathering("LATE", FRIDAY), _gathering("LATE", FRIDAY, set_code="PEASANT")], [], [[LATEST, "PEASANT"]]),
+    ([_played("LATE", FRIDAY)], [LATEST], []),
+])
+def test_a_column_splits_played_pods_off_the_times_still_gathering(slots, played_codes, gathering_codes):
+    played, gathering = _column_sections(slots)
+
+    assert [slot.set_code for slot in played] == played_codes
+    assert [[slot.set_code for slot in group] for group in gathering] == gathering_codes
+
+
+def test_a_second_table_follows_the_pod_it_spun_off():
+    pod = _played("LATE", FRIDAY)
+    slots = [pod, _table(pod)]
+
+    played, gathering = _column_sections(slots)
+
+    assert [slot.thread_name for slot in played] == [pod.thread_name, f"{pod.thread_name} - Table 2"]
+    assert gathering == []
+
+
+@pytest.mark.parametrize("beside, links_to_pod", [
+    ([_played("LATE", FRIDAY)], True),
+    ([_committed_card("LATE", FRIDAY, card_message_id="1")], False),
+    ([_gathering("LATE", FRIDAY)], False),
+    ([_played("LATE", FRIDAY), _gathering("EVENING", SATURDAY)], False),
+    ([], False),
+])
+def test_a_closed_slot_gives_its_button_to_the_pod_drafting_at_its_time(beside, links_to_pod):
+    closed = _gathering("LATE", FRIDAY, status=STATUS_EXPIRED, set_code="PEASANT")
+
+    item = _slot_item(closed, None, beside + [closed])
+
+    assert (item is not None and item.url is not None) is links_to_pod
+    assert item is None or not item.disabled
+
+
+def test_two_closed_formats_at_one_time_point_at_their_pod_once():
+    pod = _played("LATE", FRIDAY)
+    first = _gathering("LATE", FRIDAY, status=STATUS_EXPIRED, set_code="PEASANT")
+    second = _gathering("LATE", FRIDAY, status=STATUS_EXPIRED, set_code="CUBE")
+    lane_slots = [pod, first, second]
+
+    links = [_slot_item(slot, None, lane_slots) for slot in (first, second)]
+
+    assert [link is not None for link in links] == [True, False]
+
+
+@pytest.mark.parametrize("status, heads_as_next", [(STATUS_OPEN, True), (STATUS_EXPIRED, False)])
+def test_only_a_time_still_joinable_heads_as_next(status, heads_as_next):
+    group = [_gathering("LATE", FRIDAY, status=status)]
+
+    section = _gathering_section(group, None)
+
+    assert (SECTION_NEXT in section) is heads_as_next
+    assert (":R>" in section) is heads_as_next
+    assert ":F>" in section
 
 
 # --- adopt or create ---

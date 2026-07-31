@@ -69,6 +69,7 @@ def test_record_table_event_clones_source_into_table_two(session):
     assert table_two.set_id == source.set_id
     assert table_two.format_label == source.format_label
     assert table_two.event_date == source.event_date
+    assert table_two.event_time == source.event_time
     assert table_two.pairing_mode == "swiss"
     assert table_two.seating_mode == "leaderboard"
     assert _session_base(table_two.draftmancer_session) == "LLU-MSH-D8-T2"
@@ -152,7 +153,7 @@ def _claim_card(source_event_id="src-1"):
 def test_edit_card_goes_through_bot_token_not_interaction(clean_table_registry):
     view, edit = _claim_card()
 
-    asyncio.run(view._edit_card())
+    asyncio.run(view.refresh_card())
 
     view.claim_message.channel.get_partial_message.assert_called_once_with(view.claim_message.id)
     edit.assert_awaited_once()

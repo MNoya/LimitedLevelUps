@@ -697,11 +697,15 @@ def build_table_session(session: Session, source_session_id: str, table_index: i
 
 def record_table_event(session: Session, *, source_event_id: str, format_code: str | None = None) -> PodDraftEvent:
     """Insert a kind='tournament' table cloned from `source_event_id` — same pairings, seating, and
-    event date, but its own Draftmancer session and no sesh RSVP. The roster arrives from the new
+    start, but its own Draftmancer session and no sesh RSVP. The roster arrives from the new
     lobby. `discord_thread_id` is a placeholder the caller overwrites once the thread exists (as
     record_mock_event does). By default the table keeps the source's format and the ` - Table N`
     lineage name; a `format_code` differing from the source repoints set, label, and set id, and the
-    table is named as its own pod of that format instead."""
+    table is named as its own pod of that format instead.
+
+    The start is the source's, not the moment the table is opened: a table is one half of a pod that
+    split, so a launcher column that groups its pods by start reads the two as one slot instead of
+    sorting the table above the pod it came from."""
     source = session.get(PodDraftEvent, source_event_id)
     if source is None:
         raise ValueError(f"source pod event {source_event_id} not found")
@@ -720,7 +724,7 @@ def record_table_event(session: Session, *, source_event_id: str, format_code: s
         format_label = pod_format.label_for(code)
     event = PodDraftEvent(
         event_date=source.event_date,
-        event_time=datetime.now(timezone.utc),
+        event_time=source.event_time,
         set_id=set_id,
         set_code=set_code,
         format_label=format_label,

@@ -31,11 +31,12 @@ from bot.commands.pod_rsvp import (
     CARD_STATUS_PLAYING,
     DraftedPlayer,
     build_rsvp_embed,
+    post_pod_card,
     post_scheduled_card,
     purge_native_events,
     refresh_scheduled_card,
 )
-from bot.commands.pod_table import offer_second_table
+from bot.commands.pod_table import ACTIVE_TABLE_VIEWS, offer_second_table
 from bot.commands.test_group import HALL_OF_FAME, test_group
 from sqlalchemy import delete, select
 
@@ -68,6 +69,7 @@ from bot.services.pod_signals import (
     LANE_LATE,
     RSVP_YES,
     SCHEDULE_TZ,
+    STATUS_EXPIRED,
     STATUS_FIRED,
     STATUS_OPEN,
     bucket_for_lane,
@@ -231,10 +233,11 @@ async def setup(bot: commands.Bot) -> None:
     async def test_rolling(ctx: commands.Context) -> None:
         """Owner-only. Post the rolling launcher render across its situations as static previews from
         fixtures: a fresh morning board, one slot finished (Played over Next), the full 2x2 with both
-        finished, a multi-table variant, a team draft, and the handoff (retired On This Day history plus the
-        fresh next-day card) — plus the next-day Play Again prompt, whose button is live and joins the
-        soonest open slot of that name. The embeds are fixtures: no signals, threads, or jobs. Reuses the
-        production embed and view builders so the preview can't drift from what players see."""
+        finished, a multi-table variant, a slot whose sibling format closed unfired, a team draft, and the
+        handoff (retired On This Day history plus the fresh next-day card) — plus the next-day Play Again
+        prompt, whose button is live and joins the soonest open slot of that name. The embeds are fixtures: no
+        signals, threads, or jobs. Reuses the production embed and view builders so the preview can't drift
+        from what players see."""
         guild = ctx.guild
         channel_id = str(ctx.channel.id)
         set_code = active_set_code()
@@ -291,6 +294,15 @@ async def setup(bot: commands.Bot) -> None:
             late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
             early_tom(count=_ROLL_COUNT_SMALL),
             late_tom(count=_ROLL_COUNT_SMALL),
+        ])
+
+        await show("C (sibling closed). Early drafted two tables while the format beside them closed unfired", [
+            early_today(count=_ROLL_COUNT_FULL, **playing),
+            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=12,
+                          fired=True, channel_id=channel_id, set_code=set_code, table=2),
+            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=15,
+                          set_code=pod_format.PEASANT_CODE, closed=True),
+            late_today(count=_ROLL_COUNT_SMALL),
         ])
 
         await show("C (team). Late was a team draft — the winning side is credited and links no seat", [
@@ -516,14 +528,18 @@ async def setup(bot: commands.Bot) -> None:
     @test_group.command(name="lockroster")
     @commands.is_owner()
     async def test_lockroster(ctx: commands.Context, minutes: int = 60) -> None:
-        """Owner-only. Preview the locked-roster card across its three post-gathering states — draft
-        started, matches in progress, final standings — as three static embeds from fixture drafters.
-        Look-only: no thread, event, or timed jobs. Shows what replaces the RSVP columns once the draft
-        starts, and that the Draft Recap button rides only the completed card. `minutes` sets how long
-        ago the pod started, since a locked card is always a draft already in flight."""
+        """Owner-only. Preview the pod card across its four states — lobby open, draft started, matches
+        in progress, final standings — as static embeds from fixture drafters. Look-only: no thread,
+        event, or timed jobs. Lobby open is what a queue pod or a table posts for itself; the three
+        locked states are what replaces the RSVP columns on any card once the draft starts, with the
+        Draft Recap button riding only the completed one. `minutes` sets how long ago the pod started."""
         event_time = datetime.now(SCHEDULE_TZ) - timedelta(minutes=minutes)
         set_code = active_set_code()
         name = await asyncio.to_thread(pod_launch.ondemand_event_name_sync, set_code, event_time)
+        await post_pod_card(
+            ctx.channel, name=name, event_time=event_time, set_code=set_code,
+            roster=[_roster_name(i) for i in range(8)],
+        )
         colors = ["WU", "BR", "URg", "WBg", "GW", "UB", "RG", "WUBRG"]
         records = ["3-0", "2-1", "2-1", "2-1", "1-2", "1-2", "1-2", "0-3"]
 
@@ -593,11 +609,14 @@ async def setup(bot: commands.Bot) -> None:
 
     @test_group.command(name="secondtable")
     @commands.is_owner()
-    async def test_secondtable(ctx: commands.Context, total: int = 14, seated: int = 8) -> None:
+    async def test_secondtable(
+        ctx: commands.Context, total: int = 14, seated: int = 8, preseed: int | None = None,
+    ) -> None:
         """Owner-only. Post a scheduled card, seed `total` fake Yes, then simulate the first pod firing
         with `seated` of them locked in and offer a second table to the rest. No live draft needed —
         this drives the same offer path `_start_draft` fires. Needs `total - seated` at or above the
-        table threshold to actually post an offer."""
+        table threshold to actually post an offer. The offer card comes preseeded to one seat short of
+        its threshold, so your own click fires the table; pass `preseed` to set that count yourself."""
         if not isinstance(ctx.channel, discord.TextChannel):
             await ctx.send("Run `!test secondtable` in a server text channel.")
             return
@@ -614,7 +633,11 @@ async def setup(bot: commands.Bot) -> None:
         ref = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
         for i, display in enumerate(names):
             await asyncio.to_thread(pod_launch.set_rsvp_sync, ref[2], f"filltest-{i}", display, RSVP_YES)
-        await offer_second_table(ctx.bot, event_id, {f"filltest-{i}" for i in range(seated)})
+        offer = await offer_second_table(ctx.bot, event_id, {f"filltest-{i}" for i in range(seated)})
+        if offer is None:
+            await ctx.send(f"No offer posted: fewer than the table threshold left over from {total} - {seated}.")
+            return
+        await _preseed_table_claims(event_id, first_leftover=seated, count=preseed)
 
     @test_group.command(name="teamoffer")
     @commands.is_owner()
@@ -754,13 +777,14 @@ def _rolling_lanes():
 def _rolling_slot(
     bucket, slot_time, *, count: int, offset: int = 0, fired: bool = False, finished: bool = False,
     winner: str | None = None, seat: bool = True, channel_id: str = "", set_code: str | None = None,
-    table: int | None = None, shared: tuple[str, ...] = (),
+    table: int | None = None, shared: tuple[str, ...] = (), closed: bool = False,
 ):
     """Build one fixture LauncherSlot for the rolling preview. A fired slot carries a pod link and counts as
     locked, so it renders as the compact line; `finished` marks it played, so it takes the trophy instead of
-    the playing mark. A gathering slot carries its own roster. `offset` shifts the fixture names so pods on
-    one board don't repeat. `table` marks a second table so the fixture can show more than one pod under a
-    slot. `seat` off is a team draft's winning side, which has no seat on the pod page to link."""
+    the playing mark. A gathering slot carries its own roster, or says Closed when `closed` is its recruiting
+    window running out unfired. `offset` shifts the fixture names so pods on one board don't repeat. `table`
+    marks a second table so the fixture can show more than one pod under a slot. `seat` off is a team draft's
+    winning side, which has no seat on the pod page to link."""
     code = set_code or active_set_code()
     names = [_roster_name(offset + i) for i in range(count)]
     bucket_key = named_bucket_key(bucket.key, code)
@@ -775,13 +799,26 @@ def _rolling_slot(
             winner_slug=slugify(winner) if winner and seat else None,
         )
     return pod_launch.LauncherSlot(
-        bucket_key, committed=False, status=STATUS_OPEN, count=len(names), slot_time=slot_time,
-        names=names, thread_id=None, signal_id="1", set_code=code, shared_names=shared,
+        bucket_key, committed=False, status=STATUS_EXPIRED if closed else STATUS_OPEN, count=len(names),
+        slot_time=slot_time, names=names, thread_id=None, signal_id="1", set_code=code, shared_names=shared,
     )
 
 
 def _roster_name(index: int) -> str:
     return _ROSTER_NAMES[index % len(_ROSTER_NAMES)]
+
+
+async def _preseed_table_claims(event_id: str, *, first_leftover: int, count: int | None) -> None:
+    """Fill the live offer card with fixture claimers, one short of its threshold by default, so the
+    owner running the preview can fire the table with their own single click. Fixture claimers take
+    negative ids, which `materialize_table` renders as plain names instead of dead mentions."""
+    view = ACTIVE_TABLE_VIEWS.get(event_id)
+    if view is None:
+        return
+    wanted = view.threshold - 1 if count is None else count
+    for seat in range(max(0, min(wanted, view.threshold - 1))):
+        view.claims[-(seat + 1)] = _roster_name(first_leftover + seat)
+    await view.refresh_card()
 
 
 _GATHER_SLOT_LABEL = "Late"

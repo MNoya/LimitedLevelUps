@@ -12,6 +12,7 @@ ACTIVE_POD_MANAGERS = {}
 
 _CARD_PHASE_HOOK = None
 _POD_COMPLETE_HOOK = None
+_POD_CARD_HOOK = None
 
 
 def set_card_phase_hook(callback) -> None:
@@ -26,6 +27,20 @@ def set_pod_complete_hook(callback) -> None:
     different modules, and none of them may import the launcher task."""
     global _POD_COMPLETE_HOOK
     _POD_COMPLETE_HOOK = callback
+
+
+def set_pod_card_hook(callback) -> None:
+    """pod_rsvp registers the pod-card poster here so a pod born in the service layer can post one
+    without importing the command module."""
+    global _POD_CARD_HOOK
+    _POD_CARD_HOOK = callback
+
+
+async def post_pod_card(channel, *, name: str, event_time, set_code: str, roster=None):
+    """The card a pod with no scheduled signal owns, or None if the hook is unset or the post failed."""
+    if _POD_CARD_HOOK is None:
+        return None
+    return await _POD_CARD_HOOK(channel, name=name, event_time=event_time, set_code=set_code, roster=roster)
 
 
 def notify_card_phase(bot, event_id: str) -> None:
