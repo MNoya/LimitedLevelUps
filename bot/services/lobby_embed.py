@@ -273,8 +273,12 @@ async def open_settings_panel(interaction: discord.Interaction) -> None:
     through the DB rather than ACTIVE_POD_MANAGERS so the button works from registration onward,
     before the Draftmancer session launches. From inside the thread the interaction channel is the
     thread; from the channel card the interaction channel is the parent, so it falls back to the
-    clicked message id — the starter message and its thread share the same id."""
+    clicked message id — the starter message and its thread share the same id.
+
+    Acknowledged before the lookups, which together can run past the three seconds Discord allows a
+    first response."""
     from bot.commands.pod_draft import build_pod_settings_view
+    await interaction.response.defer(ephemeral=True, thinking=True)
     channel_id = interaction.channel_id
     actor = actor_label(interaction)
     thread_id = str(channel_id) if channel_id else None
@@ -283,14 +287,14 @@ async def open_settings_panel(interaction: discord.Interaction) -> None:
         event_id = await asyncio.to_thread(load_event_id_by_thread_sync, str(interaction.message.id))
     if event_id is None:
         if _settings_preview_factory is not None:
-            await interaction.response.send_message(view=_settings_preview_factory(), ephemeral=True)
+            await interaction.followup.send(view=_settings_preview_factory(), ephemeral=True)
             return
         log.info(f"{actor} clicked Settings in channel={channel_id} (no pod-draft event)")
-        await interaction.response.send_message(_NO_ACTIVE_POD_MSG, ephemeral=True)
+        await interaction.followup.send(_NO_ACTIVE_POD_MSG, ephemeral=True)
         return
     log.info(f"{actor} clicked Settings for event {event_id}")
     is_owner = await interaction.client.is_owner(interaction.user)
-    await interaction.response.send_message(
+    await interaction.followup.send(
         view=await build_pod_settings_view(interaction.client, event_id, is_owner=is_owner),
         ephemeral=True,
     )

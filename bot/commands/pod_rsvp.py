@@ -186,9 +186,10 @@ class ScheduledRegisteredView(discord.ui.View):
 async def _apply_surface_rsvp(interaction: discord.Interaction, event_id: str, state: str) -> None:
     """Record an RSVP from a non-card surface (championship invite wave, roster reminder) by resolving
     the pod's card from its event id, then routing through the shared card path."""
+    await interaction.response.defer()
     card = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
     if card is None:
-        await interaction.response.send_message(MSG_CARD_INACTIVE, ephemeral=True)
+        await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
         return
     _, _, card_message_id, _ = card
     await apply_card_rsvp(interaction, card_message_id, state)
@@ -741,31 +742,34 @@ async def apply_card_rsvp(
     Every answer names the pod it landed on, since a click can come from the card, its thread, the roster
     reminder, or a launcher button, and only the pod's own name reads the same from all four.
 
-    A caller that has already acknowledged the click keeps its acknowledgement: a surface that wants the
-    presser to see something happen the instant they press defers first, and every answer here goes out as
-    a follow-up."""
+    The click is acknowledged before any database work, since the roster write, the lifecycle row, and a
+    championship card's seed snapshot together run past the three seconds Discord allows a first response.
+    Every answer goes out as a follow-up, and the card is edited over the bot's own message, so it does not
+    matter how the click was acknowledged."""
+    if not interaction.response.is_done():
+        await interaction.response.defer()
     result = await asyncio.to_thread(
         pod_launch.set_rsvp_sync,
         surface_message_id, str(interaction.user.id), interaction.user.display_name, state,
     )
     if result is None or result.closed:
-        if interaction.response.is_done():
-            await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
-        else:
-            await interaction.response.send_message(MSG_CARD_INACTIVE, ephemeral=True)
+        await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
         return
 
-    status_line, championship = await resolve_card_render_state(result.state.event_id)
-    champ_roster = await resolve_championship_card_roster(result.state.event_id, result.rosters)
+    (status_line, championship), champ_roster = await asyncio.gather(
+        resolve_card_render_state(result.state.event_id),
+        resolve_championship_card_roster(result.state.event_id, result.rosters),
+    )
     if _is_card_surface(interaction.message):
         embed = interaction.message.embeds[0]
         refresh_roster_fields(
             embed, result.rosters, status_line, result.roster_interests, championship=championship,
             championship_roster=champ_roster,
         )
-        await interaction.response.edit_message(embed=embed)
-    elif not interaction.response.is_done():
-        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.message.edit(embed=embed)
+        except discord.HTTPException:
+            log.warning(f"could not render the clicked card {interaction.message.id}", exc_info=True)
 
     first_pod = False
     if result.joined and isinstance(interaction.user, discord.Member):
