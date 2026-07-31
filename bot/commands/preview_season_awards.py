@@ -30,12 +30,14 @@ log = logging.getLogger(__name__)
 COMMUNITY_TZ = ZoneInfo("America/New_York")
 
 FIRE = "🔥"
+THUMBS_UP = "👍"
+THINKING = "🤔"
 WASTEBASKET = "🗑"
 WILTED_ROSE = "🥀"
 JOY = "😂"
-EYES = "👀"
-CORE_EMOJIS = (FIRE, WASTEBASKET, WILTED_ROSE, JOY, EYES)
+CORE_EMOJIS = (FIRE, THUMBS_UP, THINKING, WASTEBASKET, WILTED_ROSE, JOY)
 EMOJI_DISPLAY = {WASTEBASKET: "🗑️"}
+SKIN_TONE_MODIFIERS = {chr(codepoint): None for codepoint in range(0x1F3FB, 0x1F400)}
 
 GAP = NBSP * 2
 SUBTEXT_START = f"-# {ZWSP}"
@@ -72,16 +74,17 @@ class AwardsData:
     window_label: str
     channel_label: str
     hottest: AwardWinner | None
+    acceptable: AwardWinner | None
+    jury: AwardWinner | None
     trash: AwardWinner | None
     comedy: AwardWinner | None
-    surprise: AwardWinner | None
     flavor: AwardWinner | None
     totals: tuple[tuple[str, int], ...]
     hot_pct: int | None
 
     @property
     def award_count(self) -> int:
-        winners = (self.hottest, self.trash, self.comedy, self.surprise, self.flavor)
+        winners = (self.hottest, self.acceptable, self.jury, self.trash, self.comedy, self.flavor)
         return sum(winner is not None for winner in winners)
 
 
@@ -109,9 +112,10 @@ def build_awards_view(data: AwardsData, reveal: int | None = None) -> ui.LayoutV
 
     rows = (
         ("### 🔥 Windmill Slam", "Certified Heater", data.hottest),
+        ("### 👍 Voted Most Acceptable", "Playable", data.acceptable),
+        ("### 🤔 The Jury is Still Out", "Ask Again in Two Weeks", data.jury),
         ("### 🗑️ Last-Pick Material", "Leave in the Sideboard", data.trash),
         ("### 😂 Comedy Gold", "No Notes", data.comedy),
-        ("### 👀 Wait, It Does What?", "Read It Again", data.surprise),
         ("### ⭐ Flavor Win", "Nailed It", data.flavor),
     )
     awarded_rows = [(heading, tagline, winner) for heading, tagline, winner in rows if winner is not None]
@@ -222,9 +226,9 @@ class PreviewSeasonAwards(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         empty_data = AwardsData(
             set_code=set,
-            window_label=_window_label(window),
-            channel_label=_channel_label(channels),
-            hottest=None, trash=None, comedy=None, surprise=None, flavor=None,
+            window_label=window_label(window),
+            channel_label=channel_label(channels),
+            hottest=None, acceptable=None, jury=None, trash=None, comedy=None, flavor=None,
             totals=(), hot_pct=None,
         )
         ceremony = await interaction.channel.send(view=build_awards_view(empty_data, reveal=0))
@@ -289,22 +293,24 @@ def _tally_fields(posts: list[ScoredPost]) -> dict:
         return _winner_from_post(post, _recounts(post, emojis))
 
     hottest = claim_category((FIRE,))
+    acceptable = claim_category((THUMBS_UP,))
+    jury = claim_category((THINKING,))
     trash = claim_category((WASTEBASKET, WILTED_ROSE))
     comedy = claim_category((JOY,))
-    surprise = claim_category((EYES,))
 
     flavor = None
     flavor_best = _flavor_best(pool)
     if flavor_best is not None:
-        post, one_off_emojis = flavor_best
+        post, emoji = flavor_best
         pool.remove(post)
-        flavor = _winner_from_post(post, _recounts(post, one_off_emojis))
+        flavor = _winner_from_post(post, _recounts(post, (emoji,)))
 
     return dict(
         hottest=hottest,
+        acceptable=acceptable,
+        jury=jury,
         trash=trash,
         comedy=comedy,
-        surprise=surprise,
         flavor=flavor,
         totals=tuple(core_counts + top_extras),
         hot_pct=hot_pct,
@@ -325,26 +331,25 @@ def _category_best(posts: list[ScoredPost], emojis: tuple[str, ...]) -> ScoredPo
     return best
 
 
-def _flavor_best(posts: list[ScoredPost]) -> tuple[ScoredPost, tuple[str, ...]] | None:
+def _flavor_best(posts: list[ScoredPost]) -> tuple[ScoredPost, str] | None:
+    """Score each off-core emoji on its own count, never the sum of a post's off-core reactions, so a
+    card that collected a scattering of one-offs cannot beat one the room tagged with a single fitting
+    emoji. Returns the winning post and the emoji that won it."""
     best: ScoredPost | None = None
-    best_one_offs: list[tuple[str, int]] = []
+    best_emoji: str | None = None
     best_key: tuple[int, int, datetime] | None = None
     for post in posts:
-        one_offs = [(emoji, count) for emoji, count in post.reactions.items()
-                    if emoji not in CORE_EMOJIS and count > 0]
-        if not one_offs:
-            continue
-        one_off_emojis = tuple(emoji for emoji, _ in one_offs)
-        score = sum(count for _, count in one_offs)
-        key = (score, _extra_reactions(post, one_off_emojis), post.created_at)
-        if best_key is None or key > best_key:
-            best = post
-            best_one_offs = one_offs
-            best_key = key
+        for emoji, count in post.reactions.items():
+            if emoji in CORE_EMOJIS or count <= 0:
+                continue
+            key = (count, _extra_reactions(post, (emoji,)), post.created_at)
+            if best_key is None or key > best_key:
+                best = post
+                best_emoji = emoji
+                best_key = key
     if best is None:
         return None
-    best_one_offs.sort(key=lambda item: item[1], reverse=True)
-    return best, tuple(emoji for emoji, _ in best_one_offs)
+    return best, best_emoji
 
 
 def _recounts(post: ScoredPost, primary: tuple[str, ...]) -> tuple[tuple[str, int], ...]:
@@ -412,10 +417,12 @@ def _emoji_available(emoji: discord.PartialEmoji | discord.Emoji | str, guild: d
 
 
 def _normalize_emoji(emoji: discord.PartialEmoji | discord.Emoji | str) -> str:
-    return str(emoji).replace("\ufe0f", "")
+    """Skin tone variants collapse onto the bare emoji, so a \ud83d\udc4d\ud83c\udffb vote lands on
+    the \ud83d\udc4d tally instead of splitting off as its own one-off reaction."""
+    return str(emoji).replace("\ufe0f", "").translate(str.maketrans(SKIN_TONE_MODIFIERS))
 
 
-def _window_label(window: PreviewWindow) -> str:
+def window_label(window: PreviewWindow) -> str:
     if window.start_date.month == window.end_date.month:
         return f"{_day_label(window.start_date)} – {window.end_date.day}"
     return f"{_day_label(window.start_date)} – {_day_label(window.end_date)}"
@@ -425,7 +432,7 @@ def _day_label(day: date) -> str:
     return f"{day:%B} {day.day}"
 
 
-def _channel_label(channels: list[discord.TextChannel]) -> str:
+def channel_label(channels: list[discord.TextChannel]) -> str:
     return " & ".join(channel.mention for channel in channels)
 
 

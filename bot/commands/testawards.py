@@ -12,7 +12,14 @@ from datetime import datetime, timedelta, timezone
 import discord
 from discord.ext import commands
 
-from bot.commands.preview_season_awards import AwardsData, AwardWinner, build_awards_view, reveal_awards
+from bot.commands.preview_season_awards import (
+    AwardsData,
+    AwardWinner,
+    build_awards_view,
+    channel_label,
+    reveal_awards,
+    window_label,
+)
 from bot.commands.set_awards import (
     SetAwardsData,
     build_data,
@@ -23,7 +30,7 @@ from bot.commands.set_awards import (
 from bot.commands.test_group import test_group
 from bot.services import set_awards as awards_svc
 from bot.services.set_awards import AwardCandidate
-from bot.sets import ALL_SETS, active_set_code
+from bot.sets import ALL_SETS, PREVIEW_WINDOWS, PreviewWindow, active_set_code
 
 log = logging.getLogger(__name__)
 
@@ -77,58 +84,60 @@ def _set_awards_fixture(guild: discord.Guild | None) -> SetAwardsData:
     return build_data(code, seed, winners, runners, guild)
 
 
-_IMAGE_HOTTEST = (
-    "https://media.discordapp.net/attachments/1387550143234052156/1512089489307205783/"
-    "RDT_20260604_0943126322219300266296225.jpg"
-    "?ex=6a242413&is=6a22d293&hm=af6622ff8efec55a72a663c635c6d4332059439cded4c6816c6f0db914c72f6e"
-    "&=&format=webp&width=585&height=887"
-)
-_IMAGE_TRASH = (
-    "https://media.discordapp.net/attachments/1387550143234052156/1511427842330853417/image.png"
-    "?ex=6a23b61e&is=6a22649e&hm=5fa9cc8f804ed49ba8406c532d6b2abaf9584a5c1697dc1b3f471bfbf4e7ca7f"
-    "&=&format=webp&quality=lossless"
-)
-_IMAGE_COMEDY = (
-    "https://media.discordapp.net/attachments/775822803328040961/1511766280527417575/image.png"
-    "?ex=6a244890&is=6a22f710&hm=32773fe81f12611d50eefc6888c6f8e06183406d7b709eff926d2da40b853039"
-    "&=&format=webp&quality=lossless"
-)
-_IMAGE_READ_AGAIN = (
-    "https://media.discordapp.net/attachments/1387550143234052156/1511908884468469840/mbdm9oqu165h1.png"
-    "?ex=6a24249f&is=6a22d31f&hm=d2e595e1a437384c6198a923b3ab28a8a96fae67df49d765e3fda49d7e27b223"
-    "&=&format=webp&quality=lossless"
-)
-_IMAGE_FLAVOR_WIN = (
-    "https://media.discordapp.net/attachments/1387550143234052156/1512130862135771266/image0.jpg"
-    "?ex=6a244a9b&is=6a22f91b&hm=c05f65f6d91414f23679079e136158d7d55839a11cbca97dfde4f07ac9de76d1"
-    "&=&format=webp&width=635&height=887"
-)
+_CDN = "https://cdn.discordapp.com/attachments/1387550143234052156"
+_IMAGE_HOTTEST = f"{_CDN}/1532089472231936020/9a8qlidvl7gh1.png"
+_IMAGE_ACCEPTABLE = f"{_CDN}/1532169425388830800/59dpajjv49gh1.png"
+_IMAGE_JURY = f"{_CDN}/1532089250928136209/n5vdcvv6l7gh1.png"
+_IMAGE_TRASH = f"{_CDN}/1532378613108834314/skgzb0s6bdgh1.png"
+_IMAGE_COMEDY = "https://cdn.discordapp.com/attachments/775822803328040961/1531373624928501810/image.png"
+_IMAGE_FLAVOR_WIN = f"{_CDN}/1531714154849632336/image0.png"
 
 _POST_DEEP_LINK = "https://discord.com/channels/1465844083107827745/1505053484976836720"
 
-_FIXTURE = AwardsData(
-    set_code="MSH",
-    window_label="June 2 – 8",
-    channel_label="<#775822803328040961> & <#1387550143234052156>",
-    hottest=AwardWinner(_POST_DEEP_LINK, _IMAGE_HOTTEST, (("🔥", 23),), caption="Okoye, Dora Milaje Leader"),
-    trash=AwardWinner(
-        _POST_DEEP_LINK, _IMAGE_TRASH, (("🗑", 12), ("🥀", 5), ("👀", 4)), caption="Madame Hydra",
-    ),
-    comedy=AwardWinner(
-        _POST_DEEP_LINK, _IMAGE_COMEDY, (("😂", 31),),
-        caption="me when I win with a pile of serra angels and 6/6 no texts",
-        author="MemeSmith",
-    ),
-    surprise=AwardWinner(
-        _POST_DEEP_LINK, _IMAGE_READ_AGAIN, (("👀", 14), ("❤️", 3)), caption="Evil's Thrall",
-    ),
-    flavor=AwardWinner(
-        _POST_DEEP_LINK, _IMAGE_FLAVOR_WIN, (("🦅", 8), ("🇺🇸", 6), ("🔥", 10)),
-        caption="Captain America, Wings of Freedom",
-    ),
-    totals=(("🔥", 87), ("🗑", 22), ("🥀", 12), ("😂", 31), ("👀", 14), ("🦅", 11), ("🇺🇸", 6)),
-    hot_pct=72,
-)
+
+def _awards_fixture(guild: discord.Guild | None) -> AwardsData:
+    """Header follows the newest preview window, not `active_set_code()`: previews run weeks before a
+    set's Arena release, so the set being spoiled is not yet the active one."""
+    window = _latest_preview_window()
+    channels = [c for c in guild.text_channels if "preview-season" in c.name] if guild else []
+    return AwardsData(
+        set_code=window.set_code,
+        window_label=window_label(window),
+        channel_label=channel_label(channels) if channels else "#preview-season",
+        hottest=AwardWinner(_POST_DEEP_LINK, _IMAGE_HOTTEST, (("🔥", 33),), caption="Plunder the Trollshaws"),
+        acceptable=AwardWinner(
+            _POST_DEEP_LINK, _IMAGE_ACCEPTABLE, (("👍", 10), ("🔥", 4), ("🌞", 1)),
+            caption="Front Porch Sentries",
+        ),
+        jury=AwardWinner(
+            _POST_DEEP_LINK, _IMAGE_JURY, (("🤔", 10), ("🔥", 5), ("🥀", 3), ("😆", 2)),
+            caption="Gandalf, Wandering Wizard",
+        ),
+        trash=AwardWinner(
+            _POST_DEEP_LINK, _IMAGE_TRASH, (("🥀", 22), ("🤔", 2), ("🔥", 1)), caption="Mirkwood Meditator",
+        ),
+        comedy=AwardWinner(
+            _POST_DEEP_LINK, _IMAGE_COMEDY, (("😂", 8),),
+            caption="man even the heron's flavor text is pro-thrush propaganda",
+            author="MemeSmith",
+        ),
+        flavor=AwardWinner(
+            _POST_DEEP_LINK, _IMAGE_FLAVOR_WIN, (("🐻", 25), ("😂", 6), ("😆", 2), ("🔥", 2)),
+            caption="Little through Gigantic Bear",
+        ),
+        totals=(
+            ("🔥", 1127), ("👍", 146), ("🤔", 103), ("🥀", 251), ("😂", 41), ("🐻", 47), ("👀", 23),
+        ),
+        hot_pct=82,
+    )
+
+
+def _latest_preview_window() -> PreviewWindow:
+    latest = PREVIEW_WINDOWS[0]
+    for window in PREVIEW_WINDOWS[1:]:
+        if window.start_date > latest.start_date:
+            latest = window
+    return latest
 
 
 async def setup(bot: commands.Bot) -> None:
@@ -139,11 +148,12 @@ async def setup(bot: commands.Bot) -> None:
 
         `!test awards gated` plays the timed one-award-per-edit reveal instead of the full post.
         """
+        fixture = _awards_fixture(ctx.guild)
         if mode == "gated":
-            ceremony = await ctx.send(view=build_awards_view(_FIXTURE, reveal=0))
-            await reveal_awards(ceremony, _FIXTURE)
+            ceremony = await ctx.send(view=build_awards_view(fixture, reveal=0))
+            await reveal_awards(ceremony, fixture)
             return
-        await ctx.send(view=build_awards_view(_FIXTURE))
+        await ctx.send(view=build_awards_view(fixture))
 
     @test_group.command(name="setawards")
     @commands.is_owner()
