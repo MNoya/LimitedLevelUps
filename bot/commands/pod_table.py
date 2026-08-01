@@ -42,7 +42,7 @@ from bot.commands.pod_rsvp import post_pod_card
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
-from bot.services import pod_format, pod_launch
+from bot.services import championship, pod_format, pod_launch
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_roles import grant_pod_drafters
 from bot.services.pod_draft_manager import (
@@ -373,6 +373,9 @@ async def _second_table_candidates(event_id: str) -> list[tuple[str, str]]:
 async def _second_table_hook(bot: commands.Bot, event_id: str) -> None:
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     if manager is None:
+        return
+    if await asyncio.to_thread(championship.rank_override_sync, event_id) is not None:
+        log.info(f"pod-table: no second table off championship {event_id}")
         return
     name_to_id = await asyncio.to_thread(discord_ids_for_names_sync, manager.non_bot_session_names())
     seated_ids = {discord_id for discord_id in name_to_id.values() if discord_id}

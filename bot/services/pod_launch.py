@@ -56,6 +56,7 @@ from bot.services.pod_drafts import (
 from bot.services.pod_join_button import build_join_view
 from bot.services.pod_registration_embed import closed_registered_embed
 from bot.services.pod_link_dm import send_lobby_link_dms
+from bot.services import championship as championship_seeds
 from bot.services.championship import frozen_seeds_by_player
 from bot.services.player_stats import rank_ordered_names
 from bot.services import pod_active
@@ -1835,9 +1836,12 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
         event_name = event.name
 
     roster = await asyncio.to_thread(roster_for_event_sync, event_id)
+    seated = await asyncio.to_thread(championship_seeds.playing_roster_sync, event_id, roster)
+    single_table = len(seated) != len(roster)
+    roster = seated
     display_names = [name for _, name in roster]
     rsvps = await asyncio.to_thread(signal_rsvps_sync, event_id)
-    maybe_names = rsvps[1] if rsvps else []
+    maybe_names = [] if single_table else (rsvps[1] if rsvps else [])
     draftmancer_url = draftmancer_url_for(session_id)
 
     thread = await fetch_pod_thread(bot, thread_id)
@@ -1873,7 +1877,7 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
             event.socket_status = "reminded"
             session.commit()
 
-    maybe_roster = await asyncio.to_thread(maybe_roster_for_event_sync, event_id)
+    maybe_roster = [] if single_table else await asyncio.to_thread(maybe_roster_for_event_sync, event_id)
     recipients = (
         [(did, name, "yes") for did, name in roster]
         + [(did, name, "maybe") for did, name in maybe_roster]

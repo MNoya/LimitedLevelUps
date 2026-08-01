@@ -174,6 +174,35 @@ def rank_override(session: Session, event_id: str) -> dict[str, FrozenSeed] | No
     return frozen_seeds_by_player(session, event_id)
 
 
+def playing_roster(
+    session: Session, event_id: str, roster: list[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    """The (discord id, name) pairs a pod actually seats: `roster` untouched for an ordinary pod, and for a
+    championship the `SEAT_COUNT` best frozen seeds in it.
+
+    A championship is one table of eight and nothing else. Every Yes past the cut is an alternate, so the
+    lobby ping, the waiting list and the link DMs all narrow through here instead of addressing a roster of
+    thirty. Ordering is the frozen seed, which is what makes a seat pass down to the next player when
+    someone above them drops. A player carrying no seed sorts last, keeping a roster that lost its snapshot
+    seatable rather than empty."""
+    if rank_override(session, event_id) is None:
+        return roster
+    ranks = {
+        row.discord_id: row.rank for row in session.execute(
+            select(PodChampionshipSeed.discord_id, PodChampionshipSeed.rank)
+            .where(PodChampionshipSeed.event_id == event_id)
+        ).all()
+        if row.discord_id is not None
+    }
+    ordered = sorted(roster, key=lambda pair: ranks.get(pair[0], len(ranks) + 1))
+    return ordered[:SEAT_COUNT]
+
+
+def playing_roster_sync(event_id: str, roster: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    with SessionLocal() as session:
+        return playing_roster(session, event_id, roster)
+
+
 def rank_override_sync(event_id: str) -> dict[str, FrozenSeed] | None:
     with SessionLocal() as session:
         return rank_override(session, event_id)

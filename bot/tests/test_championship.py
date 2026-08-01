@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 
+from bot.commands.test_group import HALL_OF_FAME
 from bot.models import DraftEvent, MagicSet, Player, PlayerStats, PodChampionshipSeed, PodDraftEvent
 from bot.services import championship
 from bot.services.championship import (
@@ -232,6 +233,32 @@ def test_the_freeze_counts_what_was_played_by_the_deadline_whenever_the_profile_
 
     assert [seed.display_name for seed in seeds] == ["LateLinker", "Early"]
     assert order == ["LateLinker", "Early", "AfterOnly"]
+
+
+def test_a_championship_seats_only_its_top_eight_and_any_other_pod_keeps_everyone(session):
+    """A championship is one table of eight, so the lobby ping, the Draftmancer waiting list and the link
+    DMs all address the eight best seeds and leave the rest as alternates. A seat passes down the frozen
+    order when someone above drops out, and a Yes carrying no seed at all sorts last."""
+    event = _seed_event(session)
+    ordinary = PodDraftEvent(
+        event_date=date(2026, 8, 1), event_time=datetime(2026, 8, 1, 18, tzinfo=timezone.utc),
+        set_code="MSH", name="MSH Aug 1 Early Pod", draftmancer_session="pod",
+        discord_thread_id="thread-pod", socket_status="pending",
+    )
+    session.add(ordinary)
+    for rank, name in enumerate(HALL_OF_FAME[:10], 1):
+        session.add(PodChampionshipSeed(
+            event_id=event.id, player_id=None, discord_id=f"d{rank}", display_name=name,
+            rank=rank, score=100.0 - rank,
+        ))
+    session.commit()
+    roster = [(f"d{rank}", name) for rank, name in reversed(list(enumerate(HALL_OF_FAME[:10], 1)))]
+    roster.append(("unseeded", "Walk On"))
+
+    seated = championship.playing_roster(session, event.id, roster)
+
+    assert [name for _, name in seated] == list(HALL_OF_FAME[:8])
+    assert championship.playing_roster(session, ordinary.id, roster) == roster
 
 
 def test_freeze_replaces_a_prior_snapshot(session, monkeypatch):

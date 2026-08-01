@@ -42,6 +42,7 @@ from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import resolve_pod_chat_channel
 from bot.models import PodDraftEvent, PodSignal
+from bot.services.pod_drafts import is_championship
 from bot.services.pod_roles import find_role
 from bot.services.pod_draft_manager import set_underfill_fired_hook
 from bot.services.pod_schedule import (
@@ -139,6 +140,9 @@ async def fire_underfill(event_id: str, hours_before: int, resurface: bool = Fal
             return
         if event.socket_status != "pending":
             log.info(f"fire_underfill: event {event_id} is {event.socket_status}; skipping")
+            return
+        if is_championship(event.name):
+            log.info(f"fire_underfill: {event_id} is a championship, which recruits nobody; skipping")
             return
         event_time = event.event_time
         name = event.name
