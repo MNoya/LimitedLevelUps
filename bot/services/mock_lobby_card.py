@@ -62,7 +62,7 @@ _COLORS = {
     STATE_OPENING: discord.Color.green(),
     STATE_OPEN: discord.Color.green(),
     STATE_DRAFTING: discord.Color.blurple(),
-    STATE_COMPLETE: discord.Color.gold(),
+    STATE_COMPLETE: discord.Color.green(),
     STATE_CANCELED: discord.Color.light_grey(),
 }
 
@@ -108,10 +108,7 @@ def build_mock_card(
         )
     if state in (STATE_OPENING, STATE_OPEN):
         embed.set_footer(text=MSG_MOCK_CARD_DISCORD_NAME)
-    content = MSG_MOCK_CARD_CONTENT.format(
-        role=role_mention,
-        state=_state_line(state, canceled_by, seated=len(roster), max_players=max_players),
-    )
+    content = _content(state, role_mention, seated=len(roster), max_players=max_players)
     return content, embed, _view(state, session_id, site_url, spectate_url)
 
 
@@ -150,12 +147,13 @@ def _description(state: str, session_url: str, canceled_by: str | None) -> str:
     return f"### {phase[:1].upper()}{phase[1:]}"
 
 
-def _state_line(state: str, canceled_by: str | None, *, seated: int, max_players: int) -> str:
-    """What the tagged role is being told. A lobby still gathering asks for drafters even while it opens:
-    the card below says the lobby is opening, and the message that pinged should keep saying why."""
-    if state in (STATE_OPENING, STATE_OPEN):
-        return _open_line(seated, max_players)
-    return _phase_line(state, canceled_by)
+def _content(state: str, role_mention: str, *, seated: int, max_players: int) -> str:
+    """The line above the card, which is where the role tag lives. Only a lobby taking drafters carries
+    one: the tag asks the role to come and draft, and once the lobby stops taking them the card heading
+    says where it stands on its own. A lobby still gathering asks for drafters even while it opens."""
+    if state not in (STATE_OPENING, STATE_OPEN):
+        return ""
+    return MSG_MOCK_CARD_CONTENT.format(role=role_mention, state=_open_line(seated, max_players))
 
 
 def _phase_line(state: str, canceled_by: str | None) -> str:
