@@ -44,6 +44,8 @@ from bot.services.lobby_embed import (
     render_ready_check_progress,
 )
 from bot.services.mock_lobby_card import (
+    MOCK_CARD_PING,
+    MOCK_CARD_QUIET,
     STATE_CANCELED,
     STATE_COMPLETE,
     STATE_DRAFTING,
@@ -52,7 +54,10 @@ from bot.services.mock_lobby_card import (
     build_mock_card,
 )
 from bot.services import pod_format
+from bot.services.ping_roles import grant_mock_draft_role
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase, notify_pod_complete
+from bot.services.pod_roles import role_mention
+from bot.services.pod_schedule import MOCK_DRAFT_ROLE_NAME
 from bot.services.pod_pairing_select import pairing_label
 from bot.services.pod_seating_select import seating_mode_label
 from bot.services import pod_format_poll
@@ -86,9 +91,11 @@ from bot.services.pod_drafts import (
     load_event_seating_mode_sync,
     load_event_thread_id_sync,
     load_event_time_sync,
+    mock_repost_sync,
     name_token_match,
     player_for_name,
     pod_page_url,
+    record_mock_repost_sync,
     seed_event_participants,
     update_event_format,
 )
@@ -280,6 +287,7 @@ class PodDraftManager:
         self.reconnect = reconnect
         self._lobby_card_adopt_attempted = False
         self._mock_anchor_message: "discord.Message | None" = None
+        self._mock_repost_message: "discord.Message | None" = None
         self.canceled_by: str | None = None
         self._thread_added_ids: set[str] = set()
         self.rsvps_yes: list[str] = list(rsvps_yes or [])
@@ -1193,21 +1201,92 @@ class PodDraftManager:
         asyncio.create_task(self._sync_thread_membership())
 
     async def _update_mock_anchor(self, roster: list[tuple[str, str | None]]) -> None:
-        """Re-render the channel-level mock card in place. `roster` is the classification the lobby card
-        was just built from, so the two surfaces never disagree about who is at the table."""
-        anchor = await self._mock_anchor()
-        if anchor is None:
+        """Re-render the channel-level mock card in place, and any repost of it with the same content, so
+        a bumped card can never drift from the anchor. `roster` is the classification the lobby card was
+        just built from, so the two surfaces never disagree about who is at the table.
+
+        Each card is edited under the mentions it was posted with. An edit never notifies anyone, but the
+        allowed list still drives the highlight, so re-rendering under the other card's setting would
+        either strip the anchor's highlight or light up a repost that deliberately arrived quiet."""
+        cards = await self._mock_cards()
+        if not cards:
             return
-        embed, view = build_mock_card(
+        content, embed, view = self._build_mock_card(roster, cards[0][0].guild)
+        for card, mentions in cards:
+            try:
+                await card.edit(content=content, embed=embed, view=view, allowed_mentions=mentions)
+            except discord.HTTPException:
+                log.info(f"[MOCK] card_edit_failed event={self.event_id} msg={card.id}", exc_info=True)
+
+    def _build_mock_card(self, roster: list[tuple[str, str | None]], guild: "discord.Guild | None"):
+        return build_mock_card(
             event_name=self.event_name, set_code=self.set_code, session_id=self.session_id,
             session_url=self.draftmancer_url, site_url=pod_page_url(self.event_name),
             roster=roster, max_players=self.max_players, state=self._mock_card_state(),
+            role_mention=role_mention(guild, MOCK_DRAFT_ROLE_NAME),
             spectate_url=self.spectate_url, canceled_by=self.canceled_by,
         )
+
+    async def _mock_cards(self) -> list[tuple["discord.Message", discord.AllowedMentions]]:
+        """Every live copy of the mock card, each paired with the mentions it was posted under."""
+        pairs = (
+            (await self._mock_anchor(), MOCK_CARD_PING),
+            (await self._mock_repost(), MOCK_CARD_QUIET),
+        )
+        return [(card, mentions) for card, mentions in pairs if card is not None]
+
+    async def repost_mock_card(self) -> "discord.Message | None":
+        """Post the mock card again at the bottom of its channel, so a lobby still looking for players is
+        not lost above the conversation. The anchor and its thread stay where they are — the thread hangs
+        off the anchor — and the repost is edited in step with it from then on. Any earlier repost is
+        deleted first, so the channel never carries two live copies of one lobby."""
+        anchor = await self._mock_anchor()
+        if self.kind != "mock" or anchor is None:
+            return None
+        await self._retire_mock_repost()
+        content, embed, view = self._build_mock_card(await self.classified_session_users(), anchor.guild)
         try:
-            await anchor.edit(embed=embed, view=view)
+            repost = await anchor.channel.send(
+                content=content, embed=embed, view=view, allowed_mentions=MOCK_CARD_QUIET,
+            )
         except discord.HTTPException:
-            log.info(f"[MOCK] anchor_edit_failed event={self.event_id}", exc_info=True)
+            log.warning(f"[MOCK] repost_send_failed event={self.event_id}", exc_info=True)
+            return None
+        self._mock_repost_message = repost
+        await asyncio.to_thread(
+            record_mock_repost_sync, self.event_id, str(repost.channel.id), str(repost.id),
+        )
+        log.info(f"[MOCK] card_reposted event={self.event_id} msg={repost.id}")
+        return repost
+
+    async def _mock_repost(self) -> "discord.Message | None":
+        """The reposted card, resolved from the event row so a restart mid-lobby keeps editing it."""
+        if self._mock_repost_message is not None:
+            return self._mock_repost_message
+        recorded = await asyncio.to_thread(mock_repost_sync, self.event_id)
+        if recorded is None:
+            return None
+        channel_id, message_id = recorded
+        channel = self.bot.get_channel(int(channel_id))
+        if channel is None:
+            return None
+        try:
+            self._mock_repost_message = await channel.fetch_message(int(message_id))
+        except discord.HTTPException:
+            log.info(f"[MOCK] repost_fetch_failed event={self.event_id}", exc_info=True)
+            return None
+        return self._mock_repost_message
+
+    async def _retire_mock_repost(self) -> None:
+        repost = await self._mock_repost()
+        self._mock_repost_message = None
+        await asyncio.to_thread(record_mock_repost_sync, self.event_id, None, None)
+        if repost is None:
+            return
+        try:
+            await repost.delete()
+        except discord.HTTPException:
+            log.info(f"[MOCK] repost_delete_failed event={self.event_id}", exc_info=True)
 
     def _mock_card_state(self) -> str:
         """A lobby the bot does not hold reads as opening, not open: the card's link and Join button are
@@ -1249,8 +1328,8 @@ class PodDraftManager:
         await self._update_mock_anchor(roster)
 
     async def _sync_thread_membership(self) -> None:
-        """Add Draftmancer joiners we recognize as guild members to the mock-draft thread, so the
-        people drafting see the thread without being manually invited. Idempotent per discord id."""
+        """Admit Draftmancer joiners we recognize as guild members, so the people drafting see the thread
+        without being manually invited."""
         thread = await self._fetch_thread()
         guild = thread.guild if thread is not None else None
         if guild is None:
@@ -1262,14 +1341,26 @@ class PodDraftManager:
         for name in names:
             discord_id = discord_id_by_name.get(name)
             member = guild.get_member(int(discord_id)) if discord_id else _find_guild_member_for_arena(guild, name)
-            if member is None or str(member.id) in self._thread_added_ids:
-                continue
-            self._thread_added_ids.add(str(member.id))
-            try:
-                await thread.add_user(member)
-                log.info(f"[MOCK] thread_add event={self.event_id} member={member.display_name}")
-            except discord.HTTPException:
-                log.info(f"[MOCK] thread_add_failed event={self.event_id} member={member.display_name}", exc_info=True)
+            if member is not None:
+                await self.admit_to_mock_thread(member)
+
+    async def admit_to_mock_thread(self, member: discord.Member) -> None:
+        """Put a mock-draft joiner in the thread and on the mock ping, at most once per member. Shared by
+        the Join Draft button and the Draftmancer arrival sweep, so clicking Join and walking into the
+        lobby unprompted land in the same place."""
+        if self.kind != "mock" or str(member.id) in self._thread_added_ids:
+            return
+        thread = await self._fetch_thread()
+        if thread is None:
+            return
+        self._thread_added_ids.add(str(member.id))
+        if await grant_mock_draft_role(member):
+            log.info(f"[MOCK] role_granted event={self.event_id} member={member.display_name}")
+        try:
+            await thread.add_user(member)
+            log.info(f"[MOCK] thread_add event={self.event_id} member={member.display_name}")
+        except discord.HTTPException:
+            log.info(f"[MOCK] thread_add_failed event={self.event_id} member={member.display_name}", exc_info=True)
 
     def _snapshot_tournament_roster(self) -> list[str]:
         """The locked drafter list, frozen at endDraft. Prefers the draft log's seated users — immune
@@ -1697,9 +1788,9 @@ class PodDraftManager:
     async def link_seat(self, member: discord.abc.User, arena_name: str) -> str | None:
         """Bind `member`'s Discord identity to the exact Draftmancer seat `arena_name`, then refresh
         the lobby so the seat resolves. Returns an error string on failure, None on success."""
-        def _link() -> tuple[str | None, str | None]:
+        def _link() -> None:
             with SessionLocal() as session:
-                player_id, collision_id = attach_arena_alias(
+                attach_arena_alias(
                     session,
                     discord_id=str(member.id),
                     discord_username=member.name,
@@ -1707,13 +1798,9 @@ class PodDraftManager:
                     avatar_hash=extract_avatar_hash(member),
                     arena_name=arena_name,
                 )
-                if collision_id is None:
-                    session.commit()
-                return player_id, collision_id
+                session.commit()
 
-        _, collision_id = await asyncio.to_thread(_link)
-        if collision_id is not None:
-            return f"`{arena_name}` is already linked to another player."
+        await asyncio.to_thread(_link)
         log.info(f"[LINK] seat_linked event={self.event_id} member={member} arena={arena_name!r}")
         await self.refresh_lobby_now()
         await refresh_round_pairing_messages(self)
@@ -1836,6 +1923,8 @@ class PodDraftManager:
         which waits for an even lobby. Re-running with a vote already up deletes that card and re-posts it
         at the bottom of the thread, carrying its votes over. Returns an error string when the pod can't
         take a vote right now, else None."""
+        if self.kind == "mock":
+            return "A mock draft plays no matches, so it cannot be a Team Draft."
         if self.pairing_mode == "team":
             return "This pod is already a Team Draft."
         if self.drafting or self.draft_complete:
@@ -1878,7 +1967,10 @@ class PodDraftManager:
         eligible (even, at most six); `pod_size` fixes the majority the vote needs to lock. `team`/`wait`
         seed the columns when a re-offer carries votes over. `post` swaps in another way to place the card,
         so /pod-team can make it the command's own visible reply. No-op once offered, already a team pod, or
-        the draft is under way."""
+        the draft is under way. Mock drafts never take the offer: they play no matches, so there are no
+        sides for a team split to mean anything to."""
+        if self.kind == "mock":
+            return
         if self.team_vote_offered or self.pairing_mode == "team" or self.drafting or self.draft_complete:
             return
         thread = await self._fetch_thread()

@@ -165,8 +165,8 @@ async def _resolve_member(
 
 def _remember_role_choice(member: discord.Member, role_name: str, *, held: bool) -> None:
     """Persist a toggle so the pod auto-grant obeys it, without the panel waiting on the write. Only the
-    auto-granted slot roles are worth storing: Pod Drafters comes back on the next pod whatever is set
-    here, and no path re-adds the others behind a player's back."""
+    auto-granted roles are worth storing: Pod Drafters comes back on the next pod whatever is set here,
+    and no path re-adds the others behind a player's back."""
     spec = spec_named(role_name)
     if spec is None or not spec.auto_grant:
         return

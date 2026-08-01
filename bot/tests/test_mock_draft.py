@@ -15,7 +15,13 @@ from bot.services.pod_drafts import (
     reroll_session_suffix,
 )
 from bot.services.pod_format_select import format_options
-from bot.sets import active_set_code, is_known_set, recent_released_sets, upcoming_sets
+from bot.sets import (
+    active_set_code,
+    is_known_set,
+    preview_set_code,
+    recent_released_sets,
+    upcoming_sets,
+)
 
 
 MOCK_SESSION_RE = re.compile(r"LLU-([A-Z]+)-Mock-(\d+)-[a-z]{4}")
@@ -57,6 +63,14 @@ def test_recent_released_sets_excludes_active_and_upcoming_and_caps():
 def test_recent_released_sets_honors_limit():
     when = datetime(2026, 7, 14, 12, tzinfo=timezone.utc)
     assert len(recent_released_sets(limit=3, when=when)) == 3
+
+
+def test_preview_set_code_prefers_the_set_in_spoiler_season():
+    before_msh_rotates = datetime(2026, 6, 20, 12, tzinfo=timezone.utc)
+    after_the_last_registered_set = datetime(2099, 1, 1, tzinfo=timezone.utc)
+
+    assert preview_set_code(before_msh_rotates) == "MSH"
+    assert preview_set_code(after_the_last_registered_set) == active_set_code(after_the_last_registered_set)
 
 
 def test_format_options_excludes_unreleased_sets():

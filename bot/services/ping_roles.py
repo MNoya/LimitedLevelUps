@@ -25,7 +25,6 @@ from bot import audit, emojis
 from bot.commands.messages import (
     MSG_ARENA_ALREADY_LINKED_NOTE,
     MSG_ARENA_BAD_FORMAT,
-    MSG_ARENA_COLLISION,
     MSG_ARENA_HANDLE_LINE,
     MSG_ARENA_LINK_CTA,
     MSG_ARENA_LINKED,
@@ -52,6 +51,7 @@ from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role
 from bot.services.pod_schedule import (
     EARLY_POD_ROLE_NAME,
     LATE_POD_ROLE_NAME,
+    MOCK_DRAFT_ROLE_NAME,
     POD_DRAFTERS_ROLE_NAME,
     POD_QUEUE_ROLE_NAME,
     SATURDAY,
@@ -64,6 +64,7 @@ from bot.services.pod_schedule import (
 )
 from bot.services.pod_signals import slot_event_time, slot_role_name_for_event_time
 from bot.services.token_link_flow import start_link_17lands_flow
+from bot.sets import preview_set_code
 
 
 log = logging.getLogger(__name__)
@@ -109,6 +110,10 @@ PING_ROLES: tuple[PingRole, ...] = (
         grant_when="on weekends", weekend_bucket_keys=("EVENING",),
     ),
     PingRole("queue", POD_QUEUE_ROLE_NAME, "⚡", "Daily Draft Sign-Ups", color="#FFAC33"),
+    PingRole(
+        "mock", MOCK_DRAFT_ROLE_NAME, "🃏", "On-Demand Mock Drafts", color="#7FD1B9",
+        auto_grant=True, grant_when="opening on demand",
+    ),
     PingRole("latest", fi.LATEST_SET_ROLE_NAME, "🆕", "All Pods drafting the Latest Set", color="#e8e8e8"),
     PingRole("flashback", fi.FLASHBACK_ROLE_NAME, "flashback", "All Pods drafting any Past Sets", color="#B0C4DE"),
     PingRole("cube", fi.CUBE_ROLE_NAME, "cube", "All Pods drafting any Cube", color="#B0C4DE"),
@@ -171,9 +176,13 @@ def blurb_with_time(spec: PingRole) -> str:
 
 
 def display_emoji(spec: PingRole) -> str | None:
-    """The Latest Set role wears the active set's symbol, so it rotates with the board."""
+    """The Latest Set role wears the active set's symbol, so it rotates with the board; Mock Draft wears
+    the preview set's, which is what mock drafts are for."""
     if spec.name == fi.LATEST_SET_ROLE_NAME:
         return str(fi.latest_emoji())
+    if spec.name == MOCK_DRAFT_ROLE_NAME:
+        symbol = emojis.set_symbol(preview_set_code())
+        return str(symbol) if symbol is not None else emojis.resolve(spec.emoji)
     return emojis.resolve(spec.emoji)
 
 
@@ -399,14 +408,14 @@ def _has_seventeenlands_token(discord_id: str) -> bool:
 
 
 async def submit_arena_link(interaction: discord.Interaction, arena_name: str) -> str | None:
-    """Validate and store an Arena handle from a modal, replying only on rejection (bad format or
-    collision). Returns the linked handle on success without a response, so the caller owns the success
-    reply — the in-channel announcement, or a DM's in-place re-render. Shared so validation can't drift."""
+    """Validate and store an Arena handle from a modal, replying only on a bad format. Returns the linked
+    handle on success without a response, so the caller owns the success reply — the in-channel
+    announcement, or a DM's in-place re-render. Shared so validation can't drift."""
     if not _ARENA_HANDLE_RE.match(arena_name):
         await interaction.response.send_message(MSG_ARENA_BAD_FORMAT, ephemeral=True)
         return None
     with SessionLocal() as session:
-        player_id, collision_id = attach_arena_alias(
+        player_id = attach_arena_alias(
             session,
             discord_id=str(interaction.user.id),
             discord_username=interaction.user.name,
@@ -415,11 +424,6 @@ async def submit_arena_link(interaction: discord.Interaction, arena_name: str) -
             arena_name=arena_name,
             overwrite=True,
         )
-        if collision_id is not None:
-            await interaction.response.send_message(
-                MSG_ARENA_COLLISION.format(arena_name=arena_name), ephemeral=True,
-            )
-            return None
         session.commit()
     log.info(f"pod-welcome-link: {interaction.user} linked {arena_name} (player_id={player_id})")
     return arena_name
@@ -611,6 +615,22 @@ async def grant_pod_roles(member: discord.Member, role_name: str | None) -> bool
     return first_pod
 
 
+async def grant_mock_draft_role(member: discord.Member) -> bool:
+    """Subscribe a mock-draft joiner to the mock ping, and say whether the grant happened. Silent, and
+    skipped once they switched the role off in `/roles` — that choice never expires. Unlike a scheduled
+    pod's slot roles this carries no Pod Drafters grant: joining one mock lobby is not a request for
+    server-wide pod announcements."""
+    spec = spec_named(MOCK_DRAFT_ROLE_NAME)
+    role = find_role(member.guild, MOCK_DRAFT_ROLE_NAME)
+    if spec is None or role is None or role in member.roles:
+        return False
+    declined = await asyncio.to_thread(declined_pod_roles_sync, str(member.id))
+    if spec.key in declined:
+        log.info(f"{member} declined {spec.name}; leaving it off")
+        return False
+    return await grant_role(member, role)
+
+
 def auto_grant_spec_for_event(event_time) -> PingRole | None:
     """The ping role auto-granted to RSVPs of the pod at this time, or None. Resolves off the poll
     buckets (weekend + time-of-day), so a launcher pod and a weekly-schedule pod at the same slot map
@@ -700,9 +720,9 @@ async def reconcile_ping_roles(bot: discord.Client) -> None:
 
 
 async def strip_pod_roles(member: discord.Member) -> int:
-    """Remove the auto-granted pod ping roles — the slot roles plus the Pod Drafters umbrella — from
-    one member. Backs `!test reset` so the tester's own re-test starts with no leftover grants; the
-    opt-in-only Pod Queue role is left alone. Returns the number of roles removed."""
+    """Remove the auto-granted pod ping roles — the slot roles, Mock Drafters, and the Pod Drafters
+    umbrella — from one member. Backs `!test reset` so the tester's own re-test starts with no leftover
+    grants; the opt-in-only Pod Queue role is left alone. Returns the number of roles removed."""
     target_names = {POD_DRAFTERS_ROLE_NAME} | {spec.name for spec in PING_ROLES if spec.auto_grant}
     roles = [role for role in member.roles if role.name in target_names]
     if not roles:

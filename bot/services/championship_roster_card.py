@@ -16,9 +16,8 @@ import discord
 
 from bot.database import SessionLocal
 from bot.discord_helpers import NBSP
-from bot.services.championship import frozen_rank_by_player_sync
+from bot.services.championship import rank_override
 from bot.services.player_stats import SeededAttendee, seed_attendees
-from bot.services.pod_drafts import is_championship, load_event_name_sync
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
 from bot.services.seeding_table import attendee_rnk
 
@@ -79,11 +78,10 @@ def championship_roster_for_event_sync(
     snapshot fall back to their live rank, the same as the in-thread seeding table."""
     if event_id is None:
         return None
-    name = load_event_name_sync(event_id)
-    if name is None or not is_championship(name):
-        return None
-    override = frozen_rank_by_player_sync(event_id)
     with SessionLocal() as session:
+        override = rank_override(session, event_id)
+        if override is None:
+            return None
         seeded = {
             state: seed_attendees(session, rosters.get(state) or [], override)
             for state in (RSVP_YES, RSVP_MAYBE, RSVP_NO)

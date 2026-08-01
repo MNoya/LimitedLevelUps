@@ -2,8 +2,11 @@ import asyncio
 from datetime import datetime
 from types import SimpleNamespace
 
+import pytest
+
 from bot.services.ping_roles import (
     EARLY_POD_ROLE_NAME,
+    MOCK_DRAFT_ROLE_NAME,
     PING_ROLES,
     LATE_POD_ROLE_NAME,
     WEEKEND_EARLY_POD_ROLE_NAME,
@@ -13,6 +16,7 @@ from bot.services.ping_roles import (
     blurb_with_time,
     button_custom_id,
     forget_welcome,
+    grant_mock_draft_role,
     grant_pod_roles,
 )
 from bot.services.pod_roles import consume_bot_umbrella_grant, grant_role
@@ -119,6 +123,25 @@ def test_pod_drafters_is_granted_whatever_the_player_declined(monkeypatch):
     asyncio.run(grant_pod_roles(member, None))
 
     assert [role.name for role in member.roles] == [POD_DRAFTERS_ROLE_NAME]
+
+
+@pytest.mark.parametrize(
+    "declined, held, expected",
+    [
+        (set(), [], [MOCK_DRAFT_ROLE_NAME]),
+        ({"mock"}, [], []),
+        (set(), [MOCK_DRAFT_ROLE_NAME], [MOCK_DRAFT_ROLE_NAME]),
+    ],
+    ids=["grants-on-join", "respects-the-decline", "already-held"],
+)
+def test_mock_draft_role_grant_never_reaches_past_its_own_role(monkeypatch, declined, held, expected):
+    monkeypatch.setattr("bot.services.ping_roles.declined_pod_roles_sync", lambda user_id: declined)
+    member = _FakeMember(6161)
+    member.roles = [role for role in member.guild.roles if role.name in held]
+
+    asyncio.run(grant_mock_draft_role(member))
+
+    assert [role.name for role in member.roles] == expected
 
 
 def test_every_ping_role_carries_a_distinct_key():

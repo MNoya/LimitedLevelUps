@@ -10,6 +10,7 @@ from discord.ext import commands
 from bot.commands.test_group import HALL_OF_FAME, test_group
 from bot.config import settings
 from bot.services.mock_lobby_card import (
+    MOCK_CARD_QUIET,
     STATE_CANCELED,
     STATE_COMPLETE,
     STATE_DRAFTING,
@@ -18,7 +19,9 @@ from bot.services.mock_lobby_card import (
     build_mock_card,
 )
 from bot.services.pod_drafts import draftmancer_url_for, pod_page_url
-from bot.sets import active_set_code, upcoming_sets
+from bot.services.pod_roles import role_mention
+from bot.services.pod_schedule import MOCK_DRAFT_ROLE_NAME
+from bot.sets import preview_set_code
 
 
 EVENT_NAME_TEMPLATE = "{code} Mock Draft 5"
@@ -44,20 +47,12 @@ async def setup(bot: commands.Bot) -> None:
             (STATE_CANCELED, early, HALL_OF_FAME[0]),
         )
         session_url = draftmancer_url_for(SESSION_ID)
+        mention = role_mention(ctx.guild, MOCK_DRAFT_ROLE_NAME)
         for state, roster, canceled_by in cases:
-            embed, view = build_mock_card(
+            content, embed, view = build_mock_card(
                 event_name=event_name, set_code=code, session_id=SESSION_ID, session_url=session_url,
                 site_url=pod_page_url(event_name), roster=roster,
-                max_players=settings.pod_draft_max_players, state=state,
+                max_players=settings.pod_draft_max_players, state=state, role_mention=mention,
                 spectate_url=f"{session_url}&spectate=preview", canceled_by=canceled_by,
             )
-            await ctx.send(embed=embed, view=view)
-
-
-def preview_set_code() -> str:
-    """Mock drafts run on the set in spoiler season, so the card preview defaults to the nearest
-    upcoming set and falls back to the active set once nothing newer is registered."""
-    upcoming = upcoming_sets()
-    if upcoming:
-        return upcoming[0].code
-    return active_set_code()
+            await ctx.send(content=content, embed=embed, view=view, allowed_mentions=MOCK_CARD_QUIET)

@@ -4,8 +4,18 @@ lobby open through draft finished.
 It is the only mock-draft surface people outside the thread see, so it carries the live Draftmancer
 roster and exactly one call to action per phase. The site link rides the card as text while the draft
 is pending and graduates to a Draft Recap button once there is something to read.
+
+The ask reads on the message content, not inside the embed, because that line is also where the Mock
+Draft role is tagged and only content delivers a ping; the embed carries the lobby's own phase.
+Content, embed, and view are built together so the two can never contradict each other.
+
+`MOCK_CARD_PING` and `MOCK_CARD_QUIET` are the two ways a copy of the card can carry that tag. The
+allowed list also drives Discord's mention highlight, so a card has to be edited under the same one it
+was posted with: the anchor announced the lobby and stays highlighted, a `!mock` repost stays quiet.
 """
 from __future__ import annotations
+
+import re
 
 import discord
 
@@ -14,11 +24,15 @@ from bot.commands.messages import (
     MSG_MOCK_CARD_CANCELED,
     MSG_MOCK_CARD_CANCELED_NO_ACTOR,
     MSG_MOCK_CARD_COMPLETE,
+    MSG_MOCK_CARD_CONTENT,
     MSG_MOCK_CARD_DISCORD_NAME,
+    MSG_MOCK_CARD_DRAFTERS,
     MSG_MOCK_CARD_DRAFTING,
     MSG_MOCK_CARD_EMPTY_TABLE,
     MSG_MOCK_CARD_FULL,
     MSG_MOCK_CARD_LOGS_PENDING,
+    MSG_MOCK_CARD_NEEDS,
+    MSG_MOCK_CARD_NEEDS_ONE,
     MSG_MOCK_CARD_OPEN,
     MSG_MOCK_CARD_OPENING,
     MSG_MOCK_CARD_PLAYERS,
@@ -32,6 +46,9 @@ from bot.services.pod_format import is_custom
 from bot.services.pod_join_button import build_mock_join_view
 from bot.sets import is_cube_board_code
 
+
+MOCK_CARD_PING = discord.AllowedMentions(roles=True)
+MOCK_CARD_QUIET = discord.AllowedMentions.none()
 
 STATE_OPENING = "opening"
 STATE_OPEN = "open"
@@ -59,36 +76,52 @@ def build_mock_card(
     site_url: str,
     roster: list[tuple[str, str | None]],
     max_players: int,
+    role_mention: str,
     state: str = STATE_OPEN,
     spectate_url: str | None = None,
     canceled_by: str | None = None,
-) -> tuple[discord.Embed, discord.ui.View | None]:
-    """`roster` is Draftmancer session users as (arena_name, linked_display_name_or_None), the same
-    shape the in-thread lobby card renders. A canceled card drops the site link because cancelling
-    deletes the event row, which takes its page with it.
+) -> tuple[str, discord.Embed, discord.ui.View | None]:
+    """The card as (content, embed, view). `roster` is Draftmancer session users as (arena_name,
+    linked_display_name_or_None), the same shape the in-thread lobby card renders. A canceled card drops
+    the seat list and the site link: nobody drafted, and cancelling deletes the event row, which takes
+    its page with it.
 
     STATE_OPENING withholds the session link and the Join button: Draftmancer makes whoever enters an
     empty session first its owner, so a player reaching the lobby before the bot would take it."""
     embed = discord.Embed(
-        title=event_title(set_code, event_name),
-        description=_description(state, session_url, canceled_by, table_full=len(roster) >= max_players),
+        title=event_title(set_code, card_name(event_name)),
+        description=_description(state, session_url, canceled_by),
         color=_COLORS.get(state, discord.Color.green()),
     )
     thumbnail = set_symbol_url(set_code)
     if thumbnail and state != STATE_CANCELED:
         embed.set_thumbnail(url=thumbnail)
-    seats = _seat_list(roster)
-    if state in (STATE_OPENING, STATE_OPEN, STATE_DRAFTING):
-        pending = MSG_MOCK_CARD_LOGS_PENDING.format(url=site_url, llu=emojis.get("llu")).rstrip()
-        seats = f"{seats}\n{pending}"
-    embed.add_field(
-        name=MSG_MOCK_CARD_PLAYERS.format(count=len(roster)),
-        value=seats,
-        inline=False,
-    )
+    if state != STATE_CANCELED:
+        seats = _seat_list(roster)
+        if state != STATE_COMPLETE:
+            pending = MSG_MOCK_CARD_LOGS_PENDING.format(url=site_url, llu=emojis.get("llu")).rstrip()
+            seats = f"{seats}\n{pending}"
+        embed.add_field(
+            name=_seat_label(state).format(count=len(roster)),
+            value=seats,
+            inline=False,
+        )
     if state in (STATE_OPENING, STATE_OPEN):
         embed.set_footer(text=MSG_MOCK_CARD_DISCORD_NAME)
-    return embed, _view(state, session_id, site_url, spectate_url)
+    content = MSG_MOCK_CARD_CONTENT.format(
+        role=role_mention,
+        state=_state_line(state, canceled_by, seated=len(roster), max_players=max_players),
+    )
+    return content, embed, _view(state, session_id, site_url, spectate_url)
+
+
+_CARD_NUMBER_RE = re.compile(r"\s+\d+$")
+
+
+def card_name(event_name: str) -> str:
+    """The event name without its trailing per-set number. The thread beside the card already carries
+    the numbered name, so repeating it in the title reads as noise."""
+    return _CARD_NUMBER_RE.sub("", event_name)
 
 
 def set_symbol_url(set_code: str) -> str | None:
@@ -100,20 +133,56 @@ def set_symbol_url(set_code: str) -> str | None:
     return f"{base}/set-symbols/{name}.png" if base else None
 
 
-def _description(state: str, session_url: str, canceled_by: str | None, *, table_full: bool) -> str:
+def _seat_label(state: str) -> str:
+    """The check mark answers the question a gathering lobby is asking, which is who has actually turned
+    up in Draftmancer. Once the draft is under way they are simply the players at the table."""
+    if state in (STATE_DRAFTING, STATE_COMPLETE):
+        return MSG_MOCK_CARD_PLAYERS
+    return MSG_MOCK_CARD_DRAFTERS
+
+
+def _description(state: str, session_url: str, canceled_by: str | None) -> str:
+    """The card's own line about where the lobby is. An open lobby shows the link instead: the content
+    line above already asks for drafters, and the link is the only thing left to act on."""
     if state == STATE_OPEN:
-        heading = MSG_MOCK_CARD_FULL if table_full else MSG_MOCK_CARD_OPEN
-        return f"### {heading}\n{session_url}"
-    heading = {
+        return session_url
+    phase = _phase_line(state, canceled_by)
+    return f"### {phase[:1].upper()}{phase[1:]}"
+
+
+def _state_line(state: str, canceled_by: str | None, *, seated: int, max_players: int) -> str:
+    """What the tagged role is being told. A lobby still gathering asks for drafters even while it opens:
+    the card below says the lobby is opening, and the message that pinged should keep saying why."""
+    if state in (STATE_OPENING, STATE_OPEN):
+        return _open_line(seated, max_players)
+    return _phase_line(state, canceled_by)
+
+
+def _phase_line(state: str, canceled_by: str | None) -> str:
+    """Where a lobby that is not taking drafters stands. Written lowercase because its other home is
+    mid-sentence, after the role tag on the content line; the card heading capitalizes it."""
+    return {
         STATE_OPENING: MSG_MOCK_CARD_OPENING,
         STATE_DRAFTING: MSG_MOCK_CARD_DRAFTING,
         STATE_COMPLETE: MSG_MOCK_CARD_COMPLETE,
-        STATE_CANCELED: _canceled_heading(canceled_by),
+        STATE_CANCELED: _canceled_line(canceled_by),
     }[state]
-    return f"### {heading}"
 
 
-def _canceled_heading(canceled_by: str | None) -> str:
+def _open_line(seated: int, max_players: int) -> str:
+    """An empty lobby asks for drafters; a lobby with someone in it counts the seats left, which is what
+    a repost into live chat needs to say. The count is what makes a bump worth reading."""
+    if seated >= max_players:
+        return MSG_MOCK_CARD_FULL
+    if seated == 0:
+        return MSG_MOCK_CARD_OPEN
+    missing = max_players - seated
+    if missing == 1:
+        return MSG_MOCK_CARD_NEEDS_ONE
+    return MSG_MOCK_CARD_NEEDS.format(count=missing)
+
+
+def _canceled_line(canceled_by: str | None) -> str:
     if canceled_by is None:
         return MSG_MOCK_CARD_CANCELED_NO_ACTOR
     return MSG_MOCK_CARD_CANCELED.format(actor=canceled_by)

@@ -226,54 +226,69 @@ def test_fuzzy_ignores_short_aliases(session):
 # --- attach_arena_alias ---
 
 def test_attach_creates_player_for_new_discord_id(session):
-    player_id, collision_id = attach_arena_alias(
+    player_id = attach_arena_alias(
         session, discord_id="30", discord_username="newbie", display_name="Newbie",
         avatar_hash=None, arena_name="Vortexia#48954",
     )
 
     created = session.execute(select(Player).where(Player.discord_id == "30")).scalar_one()
-    assert collision_id is None
     assert created.id == player_id
     assert "vortexia" in created.arena_aliases
 
 
-def test_attach_relinking_own_handle_is_not_a_collision(session):
+def test_attach_relinking_own_handle_keeps_it(session):
     _seed_player(session, discord_id="31", username="owner", display_name="Owner", arena_name="Vortexia#1")
 
-    player_id, collision_id = attach_arena_alias(
+    attach_arena_alias(
         session, discord_id="31", discord_username="owner", display_name="Owner",
         avatar_hash=None, arena_name="Vortexia#999",
     )
 
-    assert collision_id is None
-    assert player_id is not None
+    owner = session.execute(select(Player).where(Player.discord_id == "31")).scalar_one()
+    assert owner.arena_aliases == ["vortexia"]
+    assert owner.arena_name == "Vortexia#1"
 
 
-def test_attach_collision_with_another_player_returns_owner(session):
+def test_attach_takes_a_shared_handle_from_its_previous_holder(session):
     owner = _seed_player(session, discord_id="32", username="owner", display_name="Owner", arena_name="Vortexia#1")
 
-    player_id, collision_id = attach_arena_alias(
-        session, discord_id="33", discord_username="thief", display_name="Thief",
+    borrower_id = attach_arena_alias(
+        session, discord_id="33", discord_username="borrower", display_name="Borrower",
         avatar_hash=None, arena_name="Vortexia#999",
     )
 
-    assert player_id is None
-    assert collision_id == owner.id
-    assert session.execute(select(Player).where(Player.discord_id == "33")).scalar_one_or_none() is None
+    assert player_for_name(session, "Vortexia#999").id == borrower_id
+    assert owner.arena_aliases == []
+    assert owner.arena_name is None
+
+
+def test_a_released_handle_leaves_the_prior_holders_row_intact(session):
+    owner = _seed_player(
+        session, discord_id="34", username="owner", display_name="Owner",
+        arena_name="Vortexia#1", arena_aliases=["vortexia", "othername"],
+    )
+
+    attach_arena_alias(
+        session, discord_id="35", discord_username="borrower", display_name="Borrower",
+        avatar_hash=None, arena_name="Vortexia#999",
+    )
+
+    assert owner.arena_aliases == ["othername"]
+    assert owner.active is True
 
 
 def test_attach_dedupes_alias_and_keeps_existing_arena_name(session):
     _seed_player(
-        session, discord_id="34", username="dev", display_name="Dev",
+        session, discord_id="36", username="dev", display_name="Dev",
         arena_name="Primary#1", arena_aliases=["primary"],
     )
 
     attach_arena_alias(
-        session, discord_id="34", discord_username="dev", display_name="Dev",
+        session, discord_id="36", discord_username="dev", display_name="Dev",
         avatar_hash=None, arena_name="Primary#2",
     )
 
-    player = session.execute(select(Player).where(Player.discord_id == "34")).scalar_one()
+    player = session.execute(select(Player).where(Player.discord_id == "36")).scalar_one()
     assert player.arena_aliases == ["primary"]
     assert player.arena_name == "Primary#1"
 

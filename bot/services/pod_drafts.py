@@ -303,12 +303,13 @@ def attach_arena_alias(
     avatar_hash: str | None,
     arena_name: str,
     overwrite: bool = False,
-) -> tuple[str | None, str | None]:
-    """Find-or-create the active player for `discord_id` and bind `arena_name` as a normalized alias.
+) -> str:
+    """Find-or-create the active player for `discord_id`, bind `arena_name` as a normalized alias, and
+    return the player id. Shared by /link-arena and the lobby claim-seat button so the two never drift.
 
-    Returns (player_id, collision_player_id). On a clean link collision_player_id is None; when the
-    alias already belongs to a different active player, player_id is None and collision_player_id
-    names the owner. Shared by /link-arena and the lobby claim-seat button so the two never drift.
+    Linking a handle someone else holds takes it from them, so a borrowed Arena account credits whoever
+    is playing it now. Only future pods move: a finished pod already recorded which player sat in the
+    seat. One holder at a time is also what keeps every seat lookup a single answer.
 
     Player.arena_name only ever holds a full ArenaID#12345 handle — a bare Draftmancer nickname is
     stored as an alias only, so it can't shadow the real handle in pairing displays. `overwrite` is
@@ -316,17 +317,7 @@ def attach_arena_alias(
     stored.
     """
     normalized = normalize_player_name(arena_name)
-
-    collision = session.execute(
-        select(Player).where(
-            Player.active.is_(True),
-            Player.discord_id != discord_id,
-            normalized == any_(Player.arena_aliases),
-        ).limit(1)
-    ).scalar_one_or_none()
-    if collision is not None:
-        return None, collision.id
-
+    _release_handle(session, normalized, keep_discord_id=discord_id)
     player = session.execute(
         select(Player).where(Player.discord_id == discord_id)
     ).scalar_one_or_none()
@@ -350,7 +341,23 @@ def attach_arena_alias(
         if normalized not in player.arena_aliases:
             player.arena_aliases = [*player.arena_aliases, normalized]
     session.flush()
-    return player.id, None
+    return player.id
+
+
+def _release_handle(session: Session, normalized: str, *, keep_discord_id: str) -> None:
+    """Drop `normalized` from every other player holding it, clearing the stored handle when that is
+    what it was. They keep their history and their row; they just stop answering to this name."""
+    holders = session.execute(
+        select(Player).where(
+            Player.discord_id != keep_discord_id,
+            normalized == any_(Player.arena_aliases),
+        )
+    ).scalars().all()
+    for holder in holders:
+        holder.arena_aliases = [alias for alias in holder.arena_aliases if alias != normalized]
+        if normalize_player_name(holder.arena_name) == normalized:
+            holder.arena_name = None
+        log.info(f"arena handle {normalized!r} released from player {holder.id} to discord {keep_discord_id}")
 
 
 def full_arena_handle(name: str | None) -> bool:
@@ -646,6 +653,28 @@ def record_mock_event(
     session.add(event)
     session.flush()
     return event
+
+
+def record_mock_repost_sync(event_id: str, channel_id: str | None, message_id: str | None) -> None:
+    """Track a mock draft's reposted card in the event's card columns. A mock's first card is its thread
+    starter, resolved off the thread id, so these stay free for the repost — which the manager keeps in
+    step with the anchor and retires before posting a newer one. Both None clears the record."""
+    with SessionLocal() as session:
+        event = session.get(PodDraftEvent, event_id)
+        if event is None:
+            return
+        event.card_channel_id = channel_id
+        event.card_message_id = message_id
+        session.commit()
+
+
+def mock_repost_sync(event_id: str) -> tuple[str, str] | None:
+    """(channel id, message id) of the mock draft's reposted card, or None when it has none."""
+    with SessionLocal() as session:
+        event = session.get(PodDraftEvent, event_id)
+        if event is None or not (event.card_channel_id and event.card_message_id):
+            return None
+        return event.card_channel_id, event.card_message_id
 
 
 def reroll_session_suffix(session: Session, event_id: str) -> str | None:

@@ -6,9 +6,11 @@ import pytest
 
 from bot.commands.pod_queue import _preset_slot_time, _when_clock, _when_options
 from bot.services.pod_format_select import WRITE_IN_VALUE
+from bot.services import pod_launch
 from bot.services.pod_launch import LauncherSlot, _lazy_status
 from bot.services.pod_signals import (
     LANE_LATE,
+    RSVP_YES,
     SCHEDULE_TZ,
     STATUS_EXPIRED,
     STATUS_FIRED,
@@ -19,6 +21,7 @@ from bot.sets import active_set_code
 from bot.tasks.pod_daily_poll import (
     BOARD_LEAVE_ID,
     PodPollView,
+    _cards_holding_user,
     _column_value,
     _committed_card_link,
     _early_transition_is_live,
@@ -323,3 +326,19 @@ def test_a_championship_lane_keeps_the_pods_its_column_already_played():
 
     assert "/111/222" in value
     assert "/555/777" in value
+
+
+def test_a_board_leave_never_reaches_a_championship_seat(monkeypatch):
+    """The launcher only points at a championship, which is answered on its own card. A Leave pressed to get
+    off tonight's pod must not withdraw a seat, and a board carrying nothing else needs no Leave at all."""
+    monkeypatch.setattr(
+        pod_launch, "card_rsvp_for_user_sync", lambda card_message_id, discord_user_id: RSVP_YES,
+    )
+    championship_slot = _committed_championship()
+    pod = replace(_committed("LATE", "111", "222"), card_message_id="333", card_channel_id="444")
+
+    held = _cards_holding_user([championship_slot, pod], "u1")
+    view = PodPollView([championship_slot])
+
+    assert [slot.thread_id for slot in held] == ["111"]
+    assert BOARD_LEAVE_ID not in [child.custom_id for child in view.children]

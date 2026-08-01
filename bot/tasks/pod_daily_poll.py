@@ -126,7 +126,7 @@ from bot.services.pod_signals import (
     slot_role_name_for_event_time,
     time_key_of,
 )
-from bot.services.pod_drafts import TABLE_SUFFIX_RE, table_base_name
+from bot.services.pod_drafts import TABLE_SUFFIX_RE
 from bot.services.pod_slot import pod_display_name
 from bot.sets import active_set_code, set_name_for
 from bot.slug import slugify
@@ -150,6 +150,8 @@ _repost_lock = asyncio.Lock()
 CHAMPIONSHIP_SLOT_LABEL = "Set Championship"
 CHAMPIONSHIP_CROWN = "👑"
 CHAMPIONSHIP_POINTER_TOP = 8
+
+FAR_FUTURE = datetime.max.replace(tzinfo=timezone.utc)
 
 COLUMN_FIT_BUDGET = 35
 EMOJI_UNITS = 3
@@ -222,31 +224,25 @@ async def catch_up_daily_poll(bot: commands.Bot) -> None:
     passes and expires. Posts the missing board, or runs the graduation pass when the board is already up.
 
     A board for today that went up before the post hour is last night's repost, not the day's post, so it is
-    caught up too: the day's ping is still owed."""
+    caught up too: the day's ping is still owed.
+
+    A board that stands is repainted on the way out, so a deploy that changes what the board says lands on the
+    message already posted: it is edited in place all day and nothing else redraws it until the next signup,
+    which can be hours later. A board this just posted is already current and is left alone."""
     now = datetime.now(SCHEDULE_TZ)
-    if now.hour < POST_HOUR_ET:
-        return
     today = now.date()
-    ref = await asyncio.to_thread(pod_launch.launcher_ref_for_date_sync, today)
-    if ref is None or _posted_before_the_post_hour(ref[1], now):
-        log.info(f"catching up the daily launcher for {today}, missed at the post hour")
-        await fire_daily_poll()
-        return
-    board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
-    if board is None:
-        return
-    _guild_id, _channel_id, message_id, _board_date = board
-    await _graduate_held_slots(bot, message_id, today)
-
-
-async def resync_live_launcher(bot: commands.Bot) -> None:
-    """Repaint the live board once at startup, so a deploy that changes what the board says lands on the
-    message already posted. The board is edited in place all day and nothing else redraws it until the next
-    signup, which can be hours after a pod players need to see appears on it."""
+    if now.hour >= POST_HOUR_ET:
+        ref = await asyncio.to_thread(pod_launch.launcher_ref_for_date_sync, today)
+        if ref is None or _posted_before_the_post_hour(ref[1], now):
+            log.info(f"catching up the daily launcher for {today}, missed at the post hour")
+            await fire_daily_poll()
+            return
     board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
     if board is None:
         return
     _guild_id, _channel_id, message_id, board_date = board
+    if now.hour >= POST_HOUR_ET:
+        await _graduate_held_slots(bot, message_id, today)
     log.info(f"re-rendering the live launcher {message_id} for {board_date} at startup")
     await _rerender_poll(bot, message_id, board_date)
 
@@ -462,7 +458,7 @@ def _lane_order(slots: list[pod_launch.LauncherSlot]) -> list[str]:
 def _lane_slots(slots: list[pod_launch.LauncherSlot], lane: str) -> list[pod_launch.LauncherSlot]:
     """A lane's slots stacked earliest first, so today's block sits above the next day's in the column."""
     matches = [slot for slot in slots if lane_of(slot.bucket_key) == lane]
-    return sorted(matches, key=lambda slot: slot.slot_time or datetime.max.replace(tzinfo=timezone.utc))
+    return sorted(matches, key=lambda slot: slot.slot_time or FAR_FUTURE)
 
 
 def _time_groups(
@@ -471,9 +467,8 @@ def _time_groups(
     """A column's pods grouped by start time, earliest first. A group renders as one dated block, so a slot
     offering two formats reads as two format blocks under one header rather than as two slots."""
     groups: dict[datetime, list[pod_launch.LauncherSlot]] = {}
-    far_future = datetime.max.replace(tzinfo=timezone.utc)
     for slot in bucket_slots:
-        groups.setdefault(slot.slot_time or far_future, []).append(slot)
+        groups.setdefault(slot.slot_time or FAR_FUTURE, []).append(slot)
     return [groups[slot_time] for slot_time in sorted(groups)]
 
 
@@ -484,7 +479,7 @@ def _column_value(
     and carries its own header, so it renders as a block below the column's own pods and never replaces
     them: on the eve of a championship the column still shows the pods it played that day."""
     pods = [slot for slot in bucket_slots if not slot.championship]
-    blocks = [block for block in [_pod_column_value(pods, guild, pad_finished)] if block]
+    blocks = _pod_blocks(pods, guild, pad_finished)
     blocks += [
         block for block in (_championship_block(slot, guild) for slot in bucket_slots if slot.championship)
         if block
@@ -492,13 +487,13 @@ def _column_value(
     return f"\n{NBSP}\n".join(blocks) if blocks else "-"
 
 
-def _pod_column_value(
+def _pod_blocks(
     bucket_slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None, pad_finished: int,
-) -> str:
-    """A column's joinable pods. A plain gathering column renders as familiar single blocks. A column carrying
-    a pod that started leads with one slot-name header, then a Played (or Playing) section listing those pods,
-    then a section per remaining start time with its date and rosters, so the slot name and date are never
-    doubled.
+) -> list[str]:
+    """The blocks a column's own pods render as. A plain gathering column is one block per slot time. A column
+    carrying a pod that started is a single block: one slot-name header, then a Played (or Playing) section
+    listing those pods, then a section per remaining start time with its date and rosters, so the slot name
+    and date are never doubled.
 
     Played is per pod, not per start time: a pod that started belongs on top whatever the formats beside it
     are doing, and one still gathering at that time keeps its own joinable block below.
@@ -512,7 +507,7 @@ def _pod_column_value(
             block = _group_block(group, guild, named=index == 0)
             if block:
                 blocks.append(block)
-        return f"\n{NBSP}\n".join(blocks)
+        return blocks
     played_lines = [_finished_column_line(slot, guild) for slot in played]
     blanks = [NBSP] * max(0, pad_finished - len(played_lines))
     sections = ["\n".join(played_lines + blanks)]
@@ -521,7 +516,7 @@ def _pod_column_value(
     if not gathering:
         start = _slot_start_time(played[0])
         header = f"{header}{NBSP}{NBSP}{start}" if start else header
-    return f"{header}\n" + f"\n{NBSP}\n".join(sections)
+    return [f"{header}\n" + f"\n{NBSP}\n".join(sections)]
 
 
 def _column_sections(
@@ -529,31 +524,18 @@ def _column_sections(
 ) -> tuple[list[pod_launch.LauncherSlot], list[list[pod_launch.LauncherSlot]]]:
     """A column's pods split into the Played rows and the groups still gathering behind them, each group one
     start time earliest first. A format still gathering at a time another format is already drafting keeps its
-    own block instead of dragging the drafting pod down with it."""
+    own block instead of dragging the drafting pod down with it.
+
+    Played rows run by start time, then by when the pod's row was written: an extra table can only be created
+    after the pod it spun off, so that tiebreak reads the two as one pod and its table whatever start the
+    table ended up carrying."""
     groups = _time_groups(bucket_slots)
+    played = sorted(
+        (slot for slot in bucket_slots if slot.locked),
+        key=lambda slot: (slot.slot_time or FAR_FUTURE, slot.created_at or FAR_FUTURE),
+    )
     gathering = [[slot for slot in group if not slot.locked] for group in groups]
-    return _played_order(bucket_slots), [group for group in gathering if group]
-
-
-def _played_order(bucket_slots: list[pod_launch.LauncherSlot]) -> list[pod_launch.LauncherSlot]:
-    """A column's played pods earliest first, each extra table right under the pod it spun off. A table starts
-    the moment it is split, often minutes before its own pod's slot time is even reached, so ordering the rows
-    on the clock alone lifts the table above the pod it came from."""
-    played = [slot for slot in bucket_slots if slot.locked]
-    pod_times = {
-        slot.thread_name: slot.slot_time for slot in played
-        if slot.thread_name and not TABLE_SUFFIX_RE.search(slot.thread_name)
-    }
-    return sorted(played, key=lambda slot: _played_row_key(slot, pod_times))
-
-
-def _played_row_key(
-    slot: pod_launch.LauncherSlot, pod_times: dict[str, datetime | None],
-) -> tuple[datetime, int]:
-    name = slot.thread_name or ""
-    table = TABLE_SUFFIX_RE.search(name)
-    when = pod_times.get(table_base_name(name), slot.slot_time) if table else slot.slot_time
-    return (when or datetime.max.replace(tzinfo=timezone.utc), int(table.group(1)) if table else 1)
+    return played, [group for group in gathering if group]
 
 
 def _gathering_section(group: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> str:
@@ -941,8 +923,9 @@ BUTTONS_PER_ROW = 5
 
 def _leavable(slot: pod_launch.LauncherSlot) -> bool:
     """Whether the board carries a pod this slot's players can still be taken off, which is what decides
-    if the Leave button is worth a seat on the row. A pod already drafting keeps its roster."""
-    if slot.locked or bucket_by_key(slot.bucket_key) is None:
+    if the Leave button is worth a seat on the row. A pod already drafting keeps its roster, and a
+    championship is answered on its own card rather than here."""
+    if slot.locked or slot.championship or bucket_by_key(slot.bucket_key) is None:
         return False
     if slot.committed:
         return slot.card_message_id is not None
@@ -981,12 +964,14 @@ def _closed_slot_link(
     this format are the ones left with nothing to press, and that pod's thread is where a late seat gets
     asked for.
 
-    Nothing when its time drafted no pod, when a slot with a button of its own already wears that label (a
-    lane that rolled offers the same slot and format tomorrow, and two buttons reading alike would hide which
-    of them joins), or when an earlier closed format at this time is already pointing there."""
+    Nothing once that pod is finished, since there is no seat left to ask for and a button on a played pod
+    reads as a pod still on offer. Nothing either when its time drafted no pod, when a slot with a button of
+    its own already wears that label (a lane that rolled offers the same slot and format tomorrow, and two
+    buttons reading alike would hide which of them joins), or when an earlier closed format at this time is
+    already pointing there."""
     pod = None
     for other in lane_slots:
-        if other.committed and other.locked and other.slot_time == slot.slot_time:
+        if other.committed and other.locked and not other.finished and other.slot_time == slot.slot_time:
             pod = other
             break
     if pod is None:
@@ -1600,10 +1585,13 @@ def _cards_holding_user(
     slots: list[pod_launch.LauncherSlot], discord_user_id: str,
 ) -> list[pod_launch.LauncherSlot]:
     """The board's fired pods this player still holds a seat on. One thread reads them all, so a Leave costs
-    one hop however many pods the board carries."""
+    one hop however many pods the board carries.
+
+    A championship is not one of them: the board only points at it, and answering it happens on its own card,
+    so a Leave pressed to get off tonight's pod must not withdraw a championship seat with it."""
     held = []
     for slot in slots:
-        if not slot.committed or slot.locked or slot.card_message_id is None:
+        if not slot.committed or slot.locked or slot.championship or slot.card_message_id is None:
             continue
         rsvp = pod_launch.card_rsvp_for_user_sync(slot.card_message_id, discord_user_id)
         if rsvp in (RSVP_YES, RSVP_MAYBE):

@@ -128,7 +128,7 @@ def test_frozen_rank_map_keys_by_player(session, monkeypatch):
     session.commit()
     championship.freeze_seeds_sync(event.id, "MSH")
 
-    ranks = championship.frozen_rank_by_player_sync(event.id)
+    ranks = championship.rank_override(session, event.id)
 
     assert ranks == {bob.id: 1, alice.id: 2}
 

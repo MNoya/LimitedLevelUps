@@ -3,6 +3,8 @@ from datetime import date, datetime, timezone
 
 import pytest
 
+from sqlalchemy import update
+
 from bot.models import PodDraftEvent, PodSignal
 from bot.services import pod_launch, pod_signals
 
@@ -79,3 +81,11 @@ def test_recording_a_card_moves_the_pod_onto_it(session):
     pod_launch.record_pod_card_sync(event_id, "chan-own", "msg-own")
 
     assert pod_launch.pod_card_ref_sync(event_id) == ("chan-own", "msg-own", None)
+
+
+def test_a_mocks_reposted_card_is_not_a_pod_card(session):
+    event_id = _event(session, card_channel_id="chan-own", card_message_id="msg-own")
+    session.execute(update(PodDraftEvent).where(PodDraftEvent.id == event_id).values(kind="mock"))
+    session.commit()
+
+    assert pod_launch.pod_card_ref_sync(event_id) is None

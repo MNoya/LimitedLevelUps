@@ -51,8 +51,7 @@ SUBTEXT_START = f"-# {ZWSP}"
 BAR_SLOTS = 10
 CAPTION_MAX_CHARS = 100
 CREDIT_NBSP_PER_CHAR = 2.0
-CREDIT_LINE_UNITS = 70
-CREDIT_CHAR_UNITS = 2.2
+CREDIT_LINE_CHARS = 32
 FOOTER_MAX_EMOJIS = 12
 FOOTER_MIN_EXTRA_COUNT = 12
 REVEAL_DELAY_SECONDS = 5
@@ -203,18 +202,14 @@ def _award_text(heading: str, tagline: str, winner: AwardWinner, caption_replace
 
 
 def _credit_suffix(caption: str, recount: str, author: str) -> str:
-    """Push the credit toward the end of the quote above, approximately: Discord has no real
-    alignment, so pad with NBSPs scaled by how much of the caption's width the recount left over.
-
-    The padding is then held inside what is left of the line, since a caption long enough to wrap already
-    wrapped and the credit chasing its full width runs off the end and breaks the name in half. The line is
-    narrower than the card: an award sits in a Section with a thumbnail beside it. Both budgets are character
-    estimates calibrated against a phone, which is where the line runs out first."""
+    """Push the credit toward the end of the quote above, approximately: Discord has no real alignment, so
+    pad with NBSPs by what the recount and the credit did not spend of the caption's width. A caption wider
+    than the line already wrapped, so it counts as no wider: chasing its full width runs the credit off the
+    end and breaks the name in half on a phone, which is where the line runs out first."""
     credit = f"~{author}"
-    pad_chars = round((len(caption) - len(recount) - len(credit)) * CREDIT_NBSP_PER_CHAR)
-    room = CREDIT_LINE_UNITS - round((len(recount) + len(credit)) * CREDIT_CHAR_UNITS)
-    pad = NBSP * max(min(pad_chars, room), 0)
-    return f"{pad}{credit}"
+    spent = len(recount) + len(credit)
+    pad_chars = round((min(len(caption), CREDIT_LINE_CHARS) - spent) * CREDIT_NBSP_PER_CHAR)
+    return f"{NBSP * max(pad_chars, 0)}{credit}"
 
 
 def _hype_meter_text(hot_pct: int) -> str:

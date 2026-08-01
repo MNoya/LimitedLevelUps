@@ -13,7 +13,7 @@ from discord.ext import commands
 
 from bot import audit, emojis
 from bot.commands import descriptions as desc
-from bot.commands.messages import MSG_ADMIN_ONLY, MSG_ARENA_BAD_FORMAT, MSG_ARENA_COLLISION, MSG_ARENA_LINKED
+from bot.commands.messages import MSG_ADMIN_ONLY, MSG_ARENA_BAD_FORMAT, MSG_ARENA_LINKED
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import extract_avatar_hash
@@ -336,7 +336,7 @@ class PodDraft(commands.Cog):
             return
 
         with SessionLocal() as session:
-            player_id, collision_id = attach_arena_alias(
+            player_id = attach_arena_alias(
                 session,
                 discord_id=user_id,
                 discord_username=interaction.user.name,
@@ -345,13 +345,6 @@ class PodDraft(commands.Cog):
                 arena_name=arena_name,
                 overwrite=True,
             )
-            if collision_id is not None:
-                audit.event("pod_link_arena_collision", user_id=user_id, arena_name=arena_name,
-                            collides_with=collision_id)
-                await interaction.response.send_message(
-                    MSG_ARENA_COLLISION.format(arena_name=arena_name), ephemeral=True,
-                )
-                return
             session.commit()
 
         audit.event("pod_link_arena_success", user_id=user_id, player_id=player_id)

@@ -89,6 +89,14 @@ Once the pod finishes, its thread gets a **Play Again** button that signs you up
 
 Every pod also leaves its final standings in the channel, on the card its thread hangs off. Pods that never gathered signups post a card of their own when they open, so a queue pod and a second table end the night with the same standings card as a scheduled pod.
 
+## Mock drafts
+
+A mock draft is a draft with no rounds after it, for practising a set before it lands. Run `/mock-draft` and the bot opens a Draftmancer lobby right away, with a card in the channel and a thread of its own. Anyone can start one, and any set can be drafted, including one still in spoiler season.
+
+The card shows the link once the bot holds the lobby, then keeps the seat list current as people arrive. Use your Discord name in Draftmancer so the bot can match you. Joining subscribes you to the `Mock Draft` role, so the next one reaches you; switch it off in `/roles` any time and it stays off.
+
+When the draft ends, the decks and the draft log are saved to the website. Nothing is paired, nothing is reported, and no pod points are earned.
+
 ## Closed decklists
 
 Some pods hide their decklists and draft log on the website until the pod finishes, so nobody can scout an opponent's cards mid-tournament. Standings, pairings, and round results stay visible the whole time. Set Championship pods start closed; a mod can turn Closed Decklist on or off for any pod from the pod Settings panel.

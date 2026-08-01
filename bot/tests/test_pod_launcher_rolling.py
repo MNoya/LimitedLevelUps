@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, time, timedelta
 
 import pytest
@@ -94,7 +95,14 @@ def _played(bucket_key, day, winner="Finkel"):
         slot_time=slot_event_time(day, bucket_key), set_code=LATEST,
         names=list(HALL_OF_FAME[:8]), thread_id="1", signal_id=None, thread_name="MSH Jul 24 Late Pod",
         finished=True, locked=True, winner=winner, winner_slug="finkel",
+        created_at=slot_event_time(day, bucket_key) - timedelta(hours=3),
     )
+
+
+def _drafting(bucket_key, day):
+    """A pod whose draft started but is not finalized, the only state a closed slot beside it still has a
+    late seat to ask for."""
+    return replace(_played(bucket_key, day), finished=False, winner=None, winner_slug=None)
 
 
 def _committed_card(bucket_key, day, *, card_message_id):
@@ -107,13 +115,13 @@ def _committed_card(bucket_key, day, *, card_message_id):
 
 
 def _table(pod, index=2):
-    """A split table starts the moment it is opened, so it carries its own event time and not the slot time
-    of the pod it came from — usually a few minutes earlier, since a pod splits while it is still seating."""
+    """A split table carries the start of the pod it came from (`record_table_event` copies it over) and is
+    written while that pod is already seating, minutes before either of them starts."""
     return LauncherSlot(
-        pod.bucket_key, committed=True, status=STATUS_FIRED, count=0,
-        slot_time=pod.slot_time - timedelta(minutes=6),
+        pod.bucket_key, committed=True, status=STATUS_FIRED, count=0, slot_time=pod.slot_time,
         set_code=pod.set_code, names=[], thread_id="2", signal_id=None,
         thread_name=f"{pod.thread_name} - Table {index}", locked=True,
+        created_at=pod.slot_time - timedelta(minutes=6),
     )
 
 
@@ -230,7 +238,7 @@ def test_a_column_splits_played_pods_off_the_times_still_gathering(slots, played
 
 def test_a_second_table_follows_the_pod_it_spun_off():
     pod = _played("LATE", FRIDAY)
-    slots = [pod, _table(pod)]
+    slots = [_table(pod), pod]
 
     played, gathering = _column_sections(slots)
 
@@ -239,10 +247,11 @@ def test_a_second_table_follows_the_pod_it_spun_off():
 
 
 @pytest.mark.parametrize("beside, links_to_pod", [
-    ([_played("LATE", FRIDAY)], True),
+    ([_drafting("LATE", FRIDAY)], True),
+    ([_played("LATE", FRIDAY)], False),
     ([_committed_card("LATE", FRIDAY, card_message_id="1")], False),
     ([_gathering("LATE", FRIDAY)], False),
-    ([_played("LATE", FRIDAY), _gathering("EVENING", SATURDAY)], False),
+    ([_drafting("LATE", FRIDAY), _gathering("EVENING", SATURDAY)], False),
     ([], False),
 ])
 def test_a_closed_slot_gives_its_button_to_the_pod_drafting_at_its_time(beside, links_to_pod):
@@ -255,7 +264,7 @@ def test_a_closed_slot_gives_its_button_to_the_pod_drafting_at_its_time(beside, 
 
 
 def test_two_closed_formats_at_one_time_point_at_their_pod_once():
-    pod = _played("LATE", FRIDAY)
+    pod = _drafting("LATE", FRIDAY)
     first = _gathering("LATE", FRIDAY, status=STATUS_EXPIRED, set_code="PEASANT")
     second = _gathering("LATE", FRIDAY, status=STATUS_EXPIRED, set_code="CUBE")
     lane_slots = [pod, first, second]

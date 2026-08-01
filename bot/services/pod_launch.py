@@ -29,7 +29,6 @@ from sqlalchemy.orm import Session
 from bot.config import PRODUCTION_GUILD_ID, settings
 from bot.database import SessionLocal
 from bot.models import Player, PodDraftEvent, PodDraftMatch, PodDraftParticipant, PodSignal, PodSignalMember
-from bot.services import championship as championship_seeds
 from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services import pod_team
@@ -57,6 +56,7 @@ from bot.services.pod_drafts import (
 from bot.services.pod_join_button import build_join_view
 from bot.services.pod_registration_embed import closed_registered_embed
 from bot.services.pod_link_dm import send_lobby_link_dms
+from bot.services.championship import frozen_rank_by_player
 from bot.services.player_stats import rank_ordered_names
 from bot.services import pod_active
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
@@ -83,6 +83,9 @@ log = logging.getLogger(__name__)
 
 REMINDER_LEAD_MIN = 10
 CARD_CLOSE_WINDOW_H = 48
+LANE_LOOKAHEAD_DAYS = 1
+"""How far past its own day a launcher column looks for a pod already committed at its slot. One day, so the
+board points at tomorrow's Set Championship the evening before without carrying it all five days it exists."""
 
 
 @dataclass(frozen=True)
@@ -188,6 +191,8 @@ class LauncherSlot:
     shared_names: tuple[str, ...] = ()
     """Members of this pod who also signed up for another format at the same slot time, so the roster can
     mark them as playing either."""
+    created_at: datetime | None = None
+    """When the pod's row was written, which orders an extra table after the pod it spun off."""
 
 
 def create_poll_signals(
@@ -1274,10 +1279,16 @@ def _lane_snapshot(
     A pod that exists covers its own format only. The other formats at that slot time keep gathering, so a
     locked pod never hides the table beside it. Within a slot time the pods hold the day's format order
     whatever state they are in, so a format keeps its place in the column and on the button row from the
-    moment it is offered to the moment it is played."""
+    moment it is offered to the moment it is played.
+
+    A lane reaches a later day through the signals it opened, so it also always walks tomorrow: a day whose
+    slot the format schedule closes opens no signal, and that is exactly the day the Set Championship sits on.
+    The loop appends nothing for a day carrying neither a pod nor a signal, so this costs an empty read on an
+    ordinary day and shows a pod committed ahead of time on the eve, which is when players read the board."""
     lane_signals = [signal for signal in signals if pod_signals.lane_of(signal.bucket) == lane]
+    rolled_days = {signal.signal_date for signal in lane_signals if signal.signal_date > board_date}
     lane_slots: list[LauncherSlot] = []
-    for day in _lane_days(session, lane, lane_signals, board_date):
+    for day in sorted({board_date, board_date + timedelta(days=LANE_LOOKAHEAD_DAYS)} | rolled_days):
         bucket = pod_signals.bucket_for_lane(day, lane)
         if bucket is None:
             continue
@@ -1301,30 +1312,6 @@ def _lane_snapshot(
                 count=0, slot_time=slot_time, names=[], thread_id=None, signal_id=None,
             ))
     return _without_rolled_past_slots(lane_slots)
-
-
-def _lane_days(
-    session: Session, lane: str, lane_signals: list[PodSignal], board_date: date,
-) -> list[date]:
-    """The days a lane renders, earliest first: the board's own, every later day it has already rolled to, and
-    tomorrow whenever a pod exists at its slot there.
-
-    A lane reaches a later day through the signals it opened, so a day whose slot the format schedule closes
-    is a day the lane never looks at. That is exactly the day the Set Championship sits on, and the launcher
-    is the surface players read the night before, so a pod committed ahead of time is looked up directly
-    instead of waiting for a signal that will never be opened."""
-    days = {signal.signal_date for signal in lane_signals if signal.signal_date > board_date}
-    tomorrow = board_date + timedelta(days=1)
-    if tomorrow not in days and _lane_slot_has_pod(session, tomorrow, lane):
-        days.add(tomorrow)
-    return [board_date] + sorted(days)
-
-
-def _lane_slot_has_pod(session: Session, day: date, lane: str) -> bool:
-    bucket = pod_signals.bucket_for_lane(day, lane)
-    if bucket is None:
-        return False
-    return bool(_event_ids_for_slot(session, slot_event_time(day, bucket.key)))
 
 
 def _gathering_slots(
@@ -1431,8 +1418,9 @@ def _committed_slot(session: Session, time_key: str, event_id: str) -> LauncherS
     yes_roster = _members_by_rsvp_with_interest(session, signal.id)[pod_signals.RSVP_YES] if signal else []
     yes_names = [name for name, _ in yes_roster]
     championship = is_championship(event.name if event else None)
-    if championship:
-        yes_names = rank_ordered_names(session, yes_names, championship_seeds.rank_override(session, event_id))
+    if championship and yes_names:
+        frozen = frozen_rank_by_player(session, event_id)
+        yes_names = rank_ordered_names(session, yes_names, frozen)
     finished = event is not None and event.finalized_at is not None
     winner, winner_slug = _pod_winner(session, event) if finished else (None, None)
     return LauncherSlot(
@@ -1445,6 +1433,7 @@ def _committed_slot(session: Session, time_key: str, event_id: str) -> LauncherS
         thread_name=event.name if event else None,
         set_code=set_code,
         championship=championship, finished=finished, winner=winner, winner_slug=winner_slug,
+        created_at=event.created_at if event else None,
         locked=finished or signal is None or (event is not None and _draft_started(event)),
     )
 
@@ -1642,10 +1631,12 @@ def pod_card_ref_sync(event_id: str) -> tuple[str, str, datetime | None] | None:
 
 
 def own_card_ref_sync(event_id: str) -> tuple[str, str] | None:
+    """A mock holds its reposted card in the same columns and renders it itself, so it never resolves
+    here — a pod card rendered over one would replace the mock card with an RSVP card."""
     with SessionLocal() as session:
         row = session.execute(
             select(PodDraftEvent.card_channel_id, PodDraftEvent.card_message_id)
-            .where(PodDraftEvent.id == event_id)
+            .where(PodDraftEvent.id == event_id, PodDraftEvent.kind != "mock")
         ).first()
     if row is None or not row[0] or not row[1]:
         return None

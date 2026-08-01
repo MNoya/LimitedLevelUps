@@ -5,6 +5,8 @@ straight from the command: the bot opens a Draftmancer lobby, creates a thread, 
 live, and once the draft ends it records the seating + draft logs to the site. No ready windows are
 required, no matches are paired. Anyone can run it; any registered set (including an unreleased one
 like MSH) can be drafted.
+
+`!mock` reposts the open lobby's card at the bottom of the channel, for when chat buries it.
 """
 from __future__ import annotations
 
@@ -18,15 +20,16 @@ from discord.ext import commands
 from bot import audit
 from bot.commands import descriptions as desc
 from bot.commands.messages import (
-    MSG_MOCK_ALREADY_ACTIVE,
+    MSG_MOCK_NONE_RUNNING,
     MSG_MOCK_NOT_TEXT_CHANNEL,
+    MSG_MOCK_REPOST_FAILED,
     MSG_MOCK_UNKNOWN_SET,
 )
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
 from bot.services import pod_format
-from bot.services.mock_lobby_card import STATE_OPENING, build_mock_card
+from bot.services.mock_lobby_card import MOCK_CARD_PING, STATE_OPENING, build_mock_card
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_drafts import (
     draftmancer_url_for,
@@ -35,6 +38,9 @@ from bot.services.pod_drafts import (
     reroll_session_suffix,
 )
 from bot.services.pod_draft_manager import PodDraftManager, start_manager
+from bot.services.pod_roles import role_mention
+from bot.services.pod_schedule import MOCK_DRAFT_ROLE_NAME
+from bot.sets import preview_set_code
 
 
 log = logging.getLogger(__name__)
@@ -45,11 +51,11 @@ class MockDraft(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="mock-draft", description=desc.MOCK_DRAFT)
-    @app_commands.describe(set="Set or cube to draft; defaults to the current set")
+    @app_commands.describe(set="Set or cube to draft; defaults to the set in preview")
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
     async def mock_draft(self, interaction: discord.Interaction, set: str | None = None) -> None:
-        code = pod_format.resolve_format_code(set)
+        code = pod_format.resolve_format_code(set or preview_set_code())
         if code is None:
             await interaction.response.send_message(
                 MSG_MOCK_UNKNOWN_SET.format(code=(set or "").strip().upper()), ephemeral=True,
@@ -63,13 +69,6 @@ class MockDraft(commands.Cog):
             await interaction.response.send_message(MSG_MOCK_NOT_TEXT_CHANNEL, ephemeral=True)
             return
 
-        running = next((m for m in ACTIVE_POD_MANAGERS.values() if m.kind == "mock"), None)
-        if running is not None:
-            await interaction.response.send_message(
-                MSG_MOCK_ALREADY_ACTIVE.format(thread=f"<#{running.thread_id}>"), ephemeral=True,
-            )
-            return
-
         await interaction.response.defer(ephemeral=True, thinking=True)
         audit.event("mock_draft_invoked", user_id=str(interaction.user.id), set_code=code)
 
@@ -80,12 +79,15 @@ class MockDraft(commands.Cog):
             event_id, session_id, event_name = event.id, event.draftmancer_session, event.name
             session.commit()
 
-        embed, view = build_mock_card(
+        content, embed, view = build_mock_card(
             event_name=event_name, set_code=code, session_id=session_id,
             session_url=draftmancer_url_for(session_id), site_url=pod_page_url(event_name), roster=[],
             max_players=settings.pod_draft_max_players, state=STATE_OPENING,
+            role_mention=role_mention(interaction.guild, MOCK_DRAFT_ROLE_NAME),
         )
-        starter = await channel.send(embed=embed, view=view)
+        starter = await channel.send(
+            content=content, embed=embed, view=view, allowed_mentions=MOCK_CARD_PING,
+        )
         thread = await starter.create_thread(name=event_name, reason=f"Mock draft started by {interaction.user}")
 
         with SessionLocal() as session:
@@ -106,6 +108,36 @@ class MockDraft(commands.Cog):
         choices = pod_format.format_choices()
         matched = [(label, code) for label, code in choices if cur in label.lower() or cur in code.lower()]
         return [app_commands.Choice(name=label, value=code) for label, code in matched[:25]]
+
+
+def latest_mock_manager() -> PodDraftManager | None:
+    """The most recently opened live mock draft, or None. Several can run at once, so `!mock` bumps the
+    newest. Ordered by each event's own start instant, since the restart sweep restores managers in no
+    particular order."""
+    latest = None
+    for manager in ACTIVE_POD_MANAGERS.values():
+        if manager.kind != "mock":
+            continue
+        if latest is None or _opened_after(manager, latest):
+            latest = manager
+    return latest
+
+
+async def _delete_invocation(ctx: commands.Context) -> None:
+    """Remove the `!mock` message once the card is up. The point of the command is to leave the card at
+    the bottom of the channel, which the invocation sitting under it would undo."""
+    try:
+        await ctx.message.delete()
+    except discord.HTTPException:
+        log.info("mock: could not delete the invocation", exc_info=True)
+
+
+def _opened_after(manager: PodDraftManager, other: PodDraftManager) -> bool:
+    if manager.scheduled_start is None:
+        return False
+    if other.scheduled_start is None:
+        return True
+    return manager.scheduled_start >= other.scheduled_start
 
 
 async def _seat_bot_in_lobby(
@@ -140,3 +172,19 @@ async def _seat_bot_in_lobby(
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(MockDraft(bot))
+
+    @bot.command(name="mock")
+    async def mock(ctx: commands.Context) -> None:
+        """Repost the newest open mock draft's card at the bottom of the channel, for a lobby that chat
+        has buried. The thread and its anchor card stay put, an earlier repost is retired, and no role
+        is pinged: the lobby was announced when it opened."""
+        running = latest_mock_manager()
+        if running is None:
+            await ctx.send(MSG_MOCK_NONE_RUNNING)
+            return
+        reposted = await running.repost_mock_card()
+        if reposted is None:
+            await ctx.send(MSG_MOCK_REPOST_FAILED)
+            return
+        await _delete_invocation(ctx)
+        log.info(f"mock: {ctx.author} reposted the card for event {running.event_id}")

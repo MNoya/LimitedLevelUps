@@ -193,6 +193,16 @@ def upcoming_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:
     return ALL_SETS[codes.index(active) + 1:]
 
 
+def preview_set_code(when: datetime | None = None) -> str:
+    """The set mock drafts are for: the nearest set still in preview season, falling back to the active
+    set once nothing newer is registered. Drives the mock-draft card preview and the Mock Draft role
+    symbol, so both rotate with spoiler season on their own."""
+    upcoming = upcoming_sets(when)
+    if upcoming:
+        return upcoming[0].code
+    return active_set_code(when)
+
+
 def recent_released_sets(limit: int = 8, when: datetime | None = None) -> tuple[SetSeed, ...]:
     """Released sets other than the active one, newest first, capped at `limit` — the pool a set
     picker offers below the active set. Unreleased upcoming sets are excluded (no card pool to draft)."""

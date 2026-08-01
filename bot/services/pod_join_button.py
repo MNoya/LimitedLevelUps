@@ -15,6 +15,7 @@ from bot import emojis
 from bot.commands.messages import MSG_JOIN_DRAFT_BUTTON, MSG_LINK_ARENA_PROMPT
 from bot.database import SessionLocal
 from bot.services.ping_roles import build_link_arena_view, format_join_line
+from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_drafts import player_arena_handle
 
 
@@ -50,7 +51,8 @@ class MockJoinDraftButton(
     ui.DynamicItem[ui.Button], template=rf"{MOCK_JOIN_BUTTON_PREFIX}:(?P<session_id>.+)",
 ):
     """Mock-draft variant. A mock plays no Arena games, so the pre-filled name is the clicker's Discord
-    display name, which `player_for_name` already resolves. Nobody is asked to link an Arena handle."""
+    display name, which `player_for_name` already resolves. Nobody is asked to link an Arena handle, and
+    the click also admits the clicker to the draft thread."""
 
     def __init__(self, session_id: str) -> None:
         super().__init__(ui.Button(
@@ -68,6 +70,7 @@ class MockJoinDraftButton(
         await interaction.response.send_message(
             format_join_line(self.session_id, interaction.user.display_name, arena=False), ephemeral=True,
         )
+        await _admit_clicker_to_mock_thread(interaction, self.session_id)
 
 
 def build_join_view(session_id: str) -> ui.View:
@@ -80,6 +83,19 @@ def build_mock_join_view(session_id: str) -> ui.View:
     view = ui.View(timeout=None)
     view.add_item(MockJoinDraftButton(session_id))
     return view
+
+
+async def _admit_clicker_to_mock_thread(interaction: discord.Interaction, session_id: str) -> None:
+    """Clicking Join Draft is joining the mock, so it puts the clicker in the thread right away instead of
+    waiting for them to turn up in the Draftmancer lobby. The manager is reached through the registry
+    rather than an import: it renders the card this button rides on, so importing it here would cycle."""
+    member = interaction.user
+    if not isinstance(member, discord.Member):
+        return
+    for manager in ACTIVE_POD_MANAGERS.values():
+        if manager.kind == "mock" and manager.session_id == session_id:
+            await manager.admit_to_mock_thread(member)
+            return
 
 
 def _arena_handle_for(discord_id: str) -> str | None:

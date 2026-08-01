@@ -146,17 +146,17 @@ def frozen_rank_by_player(session: Session, event_id: str) -> dict[str, int]:
     return {row.player_id: row.rank for row in rows if row.player_id is not None}
 
 
-def frozen_rank_by_player_sync(event_id: str) -> dict[str, int]:
-    with SessionLocal() as session:
-        return frozen_rank_by_player(session, event_id)
-
-
 def rank_override(session: Session, event_id: str) -> dict[str, int] | None:
     """The frozen seed ranks a championship orders off, or None for any other pod so a regular leaderboard
     pod stays on live standings. Every surface that ranks a championship roster resolves through here, so
-    the card, the launcher and the seats the draft is dealt in cannot read different scales."""
-    event = session.get(PodDraftEvent, event_id)
-    if not is_championship(event.name if event else None):
+    the card, the launcher and the seats the draft is dealt in cannot read different scales.
+
+    Reads the name column alone: a `PodDraftEvent` carries its whole draft log, which is a lot to pull over
+    the wire to answer what the pod is called."""
+    name = session.execute(
+        select(PodDraftEvent.name).where(PodDraftEvent.id == event_id)
+    ).scalar_one_or_none()
+    if not is_championship(name):
         return None
     return frozen_rank_by_player(session, event_id)
 

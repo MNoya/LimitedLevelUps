@@ -27,6 +27,10 @@ Dedup between the two paths avoids a double welcome: bot-mediated umbrella grant
 
 A welcomed-once guard (`_first_welcome_for` / `forget_welcome`) stops a re-toggle of the role from re-posting the public welcome. It is **in-memory**, so it re-arms on restart — acceptable because a member only picks the role once in normal use. `!test reset` clears the tester's mark so the flow stays replayable.
 
+## Shared Arena accounts
+
+An Arena account passed between players is a normal thing here, so linking a handle someone else holds is allowed and takes it from them: their row keeps its history, it just stops answering to that name. Only future pods move, since a finished pod already recorded which player sat in the seat. One holder at a time is what keeps a Draftmancer seat a single lookup with a single answer, and it makes the link itself the declaration of who is playing the account now.
+
 ## Persistence
 
 `persistent_pod_card_view()` is registered at startup (`bot.add_view` in `bot/main.py`) so the card's buttons keep dispatching after a restart; both surfaces share the same custom_ids. The card view is `timeout=None` and the grant card is ephemeral with no `delete_after`, so it stays until the player dismisses it.
