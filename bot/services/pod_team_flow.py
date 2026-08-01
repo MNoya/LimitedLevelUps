@@ -31,8 +31,8 @@ from bot.services.pod_drafts import (
 from bot.services.pod_replays import capture_event_replays
 from bot.services.pod_team_board import (
     build_team_board_views,
+    build_team_summary,
     load_team_board_data,
-    team_summary_embed,
 )
 from bot.discord_helpers import NBSP, ZWSP, player_url
 from bot.services.pod_tournament import (
@@ -131,8 +131,12 @@ async def start_team_tournament(manager: "PodDraftManager") -> None:
     if thread is None:
         return
     data = await asyncio.to_thread(load_team_board_data, event_id)
+    summary_embed, seating_file = await asyncio.to_thread(build_team_summary, data)
     try:
-        await thread.send(embed=team_summary_embed(data))
+        if seating_file is not None:
+            await thread.send(embed=summary_embed, file=seating_file)
+        else:
+            await thread.send(embed=summary_embed)
         board_messages = [await thread.send(view=view) for view in build_team_board_views(data)]
     except discord.HTTPException:
         log.warning(f"[TEAM] board_post_failed event={event_id}", exc_info=True)

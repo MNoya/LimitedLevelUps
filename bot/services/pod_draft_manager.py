@@ -605,14 +605,18 @@ class PodDraftManager:
         )
 
     async def apply_team_draft_setting(self) -> None:
-        """Push the teamDraft flag so Draftmancer splits and colors the sides. The full settings emit
-        only fires once at ownership claim, so a later toggle through the Settings panel or the team
-        vote needs this to reach the live table. Pre-draft only."""
+        """Push the teamDraft flag so Draftmancer splits and colors the sides, then re-push the seating
+        mode. The full settings emit only fires once at ownership claim, so a later toggle through the
+        Settings panel or the team vote needs this to reach the live table. The seating re-push matters
+        under Seats: Random, where the two pairing modes want opposite things — a non-team pod leaves
+        Draftmancer's start-time shuffle on, a team pod needs the order known at startDraft and so
+        pushes its own. Pre-draft only."""
         if not self.sio.connected or self.drafting or self.draft_complete:
             return
         team_draft = self.pairing_mode == "team"
         await self.sio.emit("teamDraft", team_draft)
         log.info(f"[TEAM] team_draft_flag_pushed event={self.event_id} team_draft={team_draft}")
+        await self.apply_seating_mode()
 
     @property
     def _draft_log_recipients(self) -> str:
@@ -1069,6 +1073,7 @@ class PodDraftManager:
                 timed_out=self.ready_check_timed_out,
                 ready_count=self.last_ready_summary[0] if self.last_ready_summary else None,
                 total_count=self.last_ready_summary[1] if self.last_ready_summary else None,
+                teams=teams,
                 **self._settings_labels(),
             )
             if progress_state == "drafting":

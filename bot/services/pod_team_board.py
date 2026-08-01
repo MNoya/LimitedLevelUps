@@ -16,6 +16,7 @@ together along with the summary embed.
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 import re
 from typing import NamedTuple
@@ -30,6 +31,7 @@ from bot.models import PodDraftEvent, PodDraftMatch, PodDraftParticipant
 from bot.services import pod_team
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_drafts import load_event_name_sync, normalize_player_name
+from bot.services.pod_seating_image import octagon_text, render_octagon_png, seat_label
 from bot.services.pod_tournament import (
     CLEAR_SENTINEL,
     SKIPPED_SENTINEL,
@@ -71,6 +73,7 @@ class TeamBoardData(NamedTuple):
     rounds: list[tuple[int, list[dict]]]
     pending: int
     finalized: bool
+    seating: tuple[tuple[str, str], ...] = ()  # (display name, team) in draft-seat order
 
 
 def build_board_data(
@@ -84,16 +87,19 @@ def build_board_data(
     carries match_id / round / a_name / b_name / winner_name / score in round + pairing order."""
     teams: dict[str, str] = {}
     rosters: dict[str, list[TeamBoardMember]] = {pod_team.TEAM_A: [], pod_team.TEAM_B: []}
+    seating: list[tuple[str, str]] = []
     for name, team in team_rows:
         key = normalize_player_name(name)
         teams[key] = team
         info = displays.get(key, {})
-        rosters[team].append(TeamBoardMember(
+        member = TeamBoardMember(
             display=info.get("display_name") or name,
             arena=info.get("arena"),
             record=info.get("record"),
             deck_colors=info.get("deck_colors"),
-        ))
+        )
+        rosters[team].append(member)
+        seating.append((member.display, team))
 
     for m in matches:
         a_info = displays.get(normalize_player_name(m["a_name"]), {})
@@ -121,6 +127,7 @@ def build_board_data(
         rounds=rounds,
         pending=pending,
         finalized=finalized,
+        seating=tuple(seating),
     )
 
 
@@ -178,6 +185,8 @@ BOARD_WIDTH_PAD = NBSP * 45 + ZWSP
 PROGRESS_GAP = NBSP * 2
 PROGRESS_PENDING = "🔳"
 PROGRESS_SKIPPED = "⬜"
+
+CLINCH_NOTE = "The remaining matches still count for leaderboard points"
 
 
 def plan_board_pages(rounds: list[tuple[int, list[dict]]]) -> list[list[tuple[int, list[dict]]]]:
@@ -246,7 +255,8 @@ class TeamBoardView(ui.LayoutView):
             for m in matches:
                 button = button_cls.for_match(m, disabled=data.finalized)
                 self.report_custom_ids.add(button.custom_id)
-                container.add_item(ui.Section(match_line(m), accessory=button))
+                line = match_line(m, waiting_on=blocking_round(data, m))
+                container.add_item(ui.Section(line, accessory=button))
         if include_footer:
             container.add_item(ui.Separator())
             container.add_item(ui.TextDisplay(match_progress_bar(data, footer_scope)))
@@ -258,8 +268,12 @@ def match_progress_bar(
 ) -> str:
     """One square per match in board order, pipe-joined like the Set Awards hype meter — the winning
     team's emoji, pending and skipped squares otherwise — then the running score, leader first, and
-    who leads (or won, once every match is in). `rounds` scopes the squares to a subset (a single
-    round's message shows only its own squares); the running score always reflects the whole draft."""
+    who leads (or won, once the draft is decided). `rounds` scopes the squares to a subset (a single
+    round's message shows only its own squares); the running score always reflects the whole draft.
+
+    A draft decided with matches still open closes with the clinch note: the team result is a
+    headline, but pod points are per-player records, so a dead rubber left unplayed costs its two
+    players real leaderboard points."""
     icons = []
     for _, matches in (rounds if rounds is not None else data.rounds):
         for m in matches:
@@ -270,20 +284,31 @@ def match_progress_bar(
     a_wins = data.wins.get(pod_team.TEAM_A, 0)
     b_wins = data.wins.get(pod_team.TEAM_B, 0)
     tail = f"{max(a_wins, b_wins)}-{min(a_wins, b_wins)}"
-    status = _score_status(a_wins, b_wins, done=data.pending == 0)
+    status = _score_status(a_wins, b_wins, pending=data.pending)
     if status:
         tail = f"{tail}{PROGRESS_GAP}{status}"
-    return f"{'|'.join(icons)}{PROGRESS_GAP}**{tail}**"
+    bar = f"{'|'.join(icons)}{PROGRESS_GAP}**{tail}**"
+    if data.pending and clinched(a_wins, b_wins, data.pending):
+        return f"{bar}\n-# {CLINCH_NOTE}"
+    return bar
 
 
-def _score_status(a_wins: int, b_wins: int, *, done: bool) -> str | None:
-    if done:
+def _score_status(a_wins: int, b_wins: int, *, pending: int) -> str | None:
+    """The score's trailing phrase. A side that leads by more than the matches left has clinched the
+    draft, so it reads as won right then instead of waiting for the last dead rubber to report."""
+    if clinched(a_wins, b_wins, pending):
         winner = pod_team.team_winner(a_wins, b_wins)
         return f"{pod_team.team_label(winner)} wins!" if winner else "Teams are tied"
     if a_wins == b_wins:
         return "Teams are tied" if a_wins else None
     leader = pod_team.TEAM_A if a_wins > b_wins else pod_team.TEAM_B
     return f"{pod_team.team_label(leader)} lead"
+
+
+def clinched(a_wins: int, b_wins: int, pending: int) -> bool:
+    """Whether the draft is decided: every match reported, or one side out of reach even if the other
+    takes everything left. Skipped matches are not pending, so they shrink the pool the same way."""
+    return pending == 0 or abs(a_wins - b_wins) > pending
 
 
 def team_result_headline(data: TeamBoardData) -> str | None:
@@ -299,13 +324,36 @@ def team_result_headline(data: TeamBoardData) -> str | None:
     return pod_team.draft_result_line(winner, members, a_wins, b_wins)
 
 
-def team_summary_embed(data: TeamBoardData) -> discord.Embed:
-    """The board's header message: both rosters side by side, posted once and never edited. A
-    classic embed because V2 has no column primitive; the running score lives on the board's
-    progress bar, not here."""
+def build_team_summary(data: TeamBoardData) -> tuple[discord.Embed, discord.File | None]:
+    """The board's header message: both rosters side by side over the round-table ring the pod drafted
+    from, posted once and never edited. A classic embed because V2 has no column primitive; the
+    running score lives on the board's progress bar, not here. The ring is the image `/pod-seeding`
+    draws, each seat tinted with its team color, and comes back as an attachment to send alongside."""
     embed = discord.Embed(color=discord.Color.green())
     add_team_roster_fields(embed, data.rosters)
-    return embed
+    png = team_seating_png(data)
+    if png is None:
+        return embed, None
+    embed.set_image(url=f"attachment://{SEATING_IMAGE_NAME}")
+    return embed, discord.File(io.BytesIO(png), SEATING_IMAGE_NAME)
+
+
+SEATING_IMAGE_NAME = "seating.png"
+RING_SIZES = (6, 8, 10)
+TEAM_SEAT_COLORS = {
+    pod_team.TEAM_A: (87, 242, 135),
+    pod_team.TEAM_B: (114, 137, 218),
+}
+
+
+def team_seating_png(data: TeamBoardData) -> bytes | None:
+    """The draft table as a round-table ring, seat colors matching the team emoji. None when the
+    seating is missing or not a drawable ring, which leaves the summary a plain roster embed."""
+    seats = list(data.seating)
+    if len(seats) not in RING_SIZES:
+        return None
+    colors = {seat_label(display): TEAM_SEAT_COLORS[team] for display, team in seats}
+    return render_octagon_png(octagon_text([display for display, _ in seats]), colors)
 
 
 def add_team_roster_fields(embed: discord.Embed, rosters: dict[str, list[TeamBoardMember]]) -> None:
@@ -324,10 +372,12 @@ def add_team_roster_fields(embed: discord.Embed, rosters: dict[str, list[TeamBoa
         )
 
 
-def match_line(m: dict) -> str:
+def match_line(m: dict, waiting_on: int | None = None) -> str:
     """One match. A reported match leads with the winning team's emoji and reads by display name,
     matching the progress bar; a pending matchup leads with each player's Arena handle so opponents
-    can find each other in-client once the round has scrolled past the summary embed."""
+    can find each other in-client once the round has scrolled past the summary embed. `waiting_on`
+    marks a matchup whose players are still owed a result in that earlier round, so a posted round
+    never reads as fully playable when only part of it is."""
     if match_was_played(m):
         marker = pod_team.TEAM_EMOJI.get(m.get("winner_team"), "▫️")
         return f"{marker} {format_reported_result(m)}"
@@ -335,6 +385,8 @@ def match_line(m: dict) -> str:
         return f"🚫 Not played: {m['a_display']} vs {m['b_display']}"
     a = name_with_arena(m["a_display"], m.get("a_arena"))
     b = name_with_arena(m["b_display"], m.get("b_arena"))
+    if waiting_on is not None:
+        return f"⌛ {a} vs {b}\n-# waiting on Round {waiting_on}"
     return f"⚔️ {a} vs {b}"
 
 
@@ -565,28 +617,34 @@ def _player_has_no_pending(data: TeamBoardData, name: str) -> bool:
     return True
 
 
+def blocking_round(data: TeamBoardData, m: dict) -> int | None:
+    """The earliest round still holding one of `m`'s players in an unreported match, or None when the
+    match can be played now. Rounds are a presented cadence, not a gate — a player free of every
+    earlier round can play ahead while their round-mates are still going."""
+    a = normalize_player_name(m["a_name"])
+    b = normalize_player_name(m["b_name"])
+    for round_num, matches in data.rounds:
+        if round_num >= m["round"]:
+            break
+        for prior in matches:
+            if prior["winner_name"]:
+                continue
+            names = {normalize_player_name(prior["a_name"]), normalize_player_name(prior["b_name"])}
+            if a in names or b in names:
+                return round_num
+    return None
+
+
+def match_is_playable(data: TeamBoardData, m: dict) -> bool:
+    return blocking_round(data, m) is None
+
+
 def _round_has_playable_match(data: TeamBoardData, round_num: int) -> bool:
-    """True when at least one match in round_num can be played now: both its players have a reported
-    result (win or skip) in every earlier round. In the fixed 3v3 rotation this first happens once two
-    of the three prior-round matches are in."""
-    if round_num <= 1:
-        return True
-    pending_prior: set[str] = set()
+    """True when at least one match in round_num can be played now. In the fixed 3v3 rotation this
+    first happens once two of the three prior-round matches are in."""
     for r, matches in data.rounds:
-        if r >= round_num:
-            continue
-        for m in matches:
-            if not m["winner_name"]:
-                pending_prior.add(normalize_player_name(m["a_name"]))
-                pending_prior.add(normalize_player_name(m["b_name"]))
-    for r, matches in data.rounds:
-        if r != round_num:
-            continue
-        for m in matches:
-            a = normalize_player_name(m["a_name"])
-            b = normalize_player_name(m["b_name"])
-            if a not in pending_prior and b not in pending_prior:
-                return True
+        if r == round_num:
+            return any(match_is_playable(data, m) for m in matches)
     return False
 
 

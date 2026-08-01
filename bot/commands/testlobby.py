@@ -58,7 +58,7 @@ from bot.services.pod_team_board import (
     build_board_data,
     build_team_board_views,
     build_team_round_view,
-    team_summary_embed,
+    build_team_summary,
 )
 from bot.services.pod_team_flow import build_team_final_embed
 from bot.services.pod_team_showcase import build_team_championship_view, format_team_trophy_title
@@ -617,10 +617,14 @@ def _team_preview_board_data() -> TeamBoardData:
     return build_board_data("team-preview", team_rows, matches, displays, finalized=False)
 
 
-def _team_round_preview_data() -> TeamBoardData:
-    """Fixture for the per-round board snapshot: rounds 1-2 fully reported, round 3 pending, so the
-    preview shows the whole cadence — settled rounds, the fresh active round, and its cumulative
-    9-square footer. Winners alternate so both teams carry Wins. Match ids are fake — buttons inert."""
+def _team_round_preview_data(clinch: bool = False) -> TeamBoardData:
+    """Fixture for the per-round board snapshot at the moment round 2 first goes up: two of round 1's
+    three matches are in, so round 2 has one live matchup and two still waiting. That is the exact
+    state the ⌛ marker exists for. Winners alternate so both teams carry Wins; match ids are fake, so
+    the buttons are inert.
+
+    `clinch` instead reports rounds 1 and 2 with Green taking five, putting the draft out of reach
+    with round 3 still open — the state where the score reads as won before the last match lands."""
     seat_order = [name for pair in zip(_TEAM1, _TEAM2) for name in pair]
     teams = pod_team.assign_teams(seat_order)
     team_rows = [(name, teams[name]) for name in seat_order]
@@ -635,13 +639,29 @@ def _team_round_preview_data() -> TeamBoardData:
                 "match_id": f"team-round-preview-{len(matches) + 1}", "round": round_num,
                 "a_name": a, "b_name": b, "winner_name": None, "score": None,
             })
-    scores = ["2-0", "2-1", "2-1"]
-    for m in matches:
-        if m["round"] in (1, 2):
-            index = matches.index(m)
-            winner = m["a_name"] if index % 2 == 0 else m["b_name"]
-            m.update(winner_name=winner, score=scores[index % len(scores)])
+    if clinch:
+        for index, m in enumerate(matches[:6]):
+            winner = m["b_name"] if index == 1 else m["a_name"]
+            m.update(winner_name=winner, score="2-1" if index % 2 else "2-0")
+    else:
+        matches[0].update(winner_name=matches[0]["a_name"], score="2-0")
+        matches[1].update(winner_name=matches[1]["b_name"], score="2-1")
     return build_board_data("team-round-preview", team_rows, matches, displays, finalized=False)
+
+
+async def _send_team_summary(ctx, data: TeamBoardData) -> None:
+    embed, seating_file = build_team_summary(data)
+    if seating_file is not None:
+        await ctx.send(embed=embed, file=seating_file)
+        return
+    await ctx.send(embed=embed)
+
+
+def _team_reveal_preview_parts() -> tuple[list[str], dict[str, str]]:
+    """Seat order and teams for the draft-start reveal: the ready-check card carrying team columns,
+    the state a team pod lands in the moment the draft starts."""
+    seat_order = [name for pair in zip(_TEAM1, _TEAM2) for name in pair]
+    return seat_order, pod_team.assign_teams(seat_order)
 
 
 _TEAM_PREVIEW_RECORDS = [(3, 0), (2, 1), (1, 2), (3, 0), (0, 3), (0, 3)]
@@ -1077,7 +1097,8 @@ _VALID_STATES = (
     "podteam", "podlobby", "podteamvote",
     "format", "seeding", "trophyhype", "champ", "round1", "round2", "round3", "voicelink", "review",
     "table",
-    "teams", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "formatpoll", "linkpicker",
+    "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote",
+    "formatpoll", "linkpicker",
 )
 
 _LIVE_POD_MODES = {
@@ -1448,14 +1469,24 @@ async def setup(bot: commands.Bot) -> None:
 
         if state == "teams":
             preview_data = _team_preview_board_data()
-            await ctx.send(embed=team_summary_embed(preview_data))
+            await _send_team_summary(ctx, preview_data)
             for view in build_team_board_views(preview_data):
                 await ctx.send(view=view)
             return
 
+        if state == "teamreveal":
+            seat_order, teams = _team_reveal_preview_parts()
+            labels = {**_preview_settings_labels(), "pairing_label": pairing_label("team")}
+            await ctx.send(embed=render_ready_check_progress(
+                _THREAD_NAME, [(_TEAM_ARENA[name], name) for name in seat_order],
+                state="drafting", teams={_TEAM_ARENA[n]: t for n, t in teams.items()},
+                initiated_by=_INVOKER_SEAT, **labels,
+            ))
+            return
+
         if state == "teamround":
-            preview_data = _team_round_preview_data()
-            await ctx.send(embed=team_summary_embed(preview_data))
+            preview_data = _team_round_preview_data(clinch=extra == "clinch")
+            await _send_team_summary(ctx, preview_data)
             for view in build_team_board_views(preview_data):
                 await ctx.send(view=view)
             for round_num in (2, 3):

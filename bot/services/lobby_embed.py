@@ -506,6 +506,7 @@ def render_ready_check_progress(
     format_label: str | None = None,
     pairing_label: str | None = None,
     seating_label: str | None = None,
+    teams: dict[str, str] | None = None,
     mock: bool = False,
 ) -> discord.Embed:
     """Compact ready-check progress card.
@@ -519,6 +520,9 @@ def render_ready_check_progress(
     Canceled` with an `❌ <reason>` line + `✅ ready_count/total_count Ready`; the `timed_out` variant
     titles `Ready Check Timed Out` and drops the reason line. The live declined card carries the
     Resume Ready Check + Settings view; a superseded card carries none.
+
+    `teams` swaps the flat roster for the two team columns once a team pod is drafting, matching the
+    lobby card, so the card that stays at the bottom of the thread names the sides.
     """
     title = event_title(set_code, title)
     roster = _seat_rows(in_session, mock=mock)
@@ -543,6 +547,10 @@ def render_ready_check_progress(
     _set_settings_footer(embed, format_label, pairing_label, seating_label)
 
     if declined or superseded:
+        return embed
+
+    if teams and state in ("drafting", "complete"):
+        _team_columns(embed, roster, teams)
         return embed
 
     if state in ("drafting", "complete"):

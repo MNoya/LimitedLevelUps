@@ -12,12 +12,14 @@ from bot.services.pod_team_board import (
     TeamBoardView,
     _round_all_reported,
     _round_has_playable_match,
+    blocking_round,
     build_board_data,
     build_team_board_views,
     build_team_round_view,
+    build_team_summary,
+    clinched,
     match_line,
     match_progress_bar,
-    team_summary_embed,
 )
 from bot.services.pod_tournament import SKIPPED_SENTINEL
 
@@ -122,13 +124,13 @@ def test_finalized_board_disables_every_button():
 
 
 def test_summary_embed_column_headers_carry_no_score():
-    embed = team_summary_embed(_fixture_data(reported=[(0, "Ava", "2-0"), (3, "Ava", "2-1")]))
+    embed, _ = build_team_summary(_fixture_data(reported=[(0, "Ava", "2-0"), (3, "Ava", "2-1")]))
 
     assert all(not any(ch.isdigit() for ch in field.name) for field in embed.fields)
 
 
 def test_summary_embed_splits_names_and_arena_handles_into_two_columns():
-    embed = team_summary_embed(_fixture_data())
+    embed, _ = build_team_summary(_fixture_data())
 
     assert len(embed.fields) == 6
     assert all(field.inline for field in embed.fields)
@@ -238,6 +240,43 @@ def test_round_has_playable_match_needs_both_players_free_of_prior_rounds():
     assert _round_has_playable_match(none_done, 2) is False
     assert _round_has_playable_match(one_r1_done, 2) is False
     assert _round_has_playable_match(two_r1_done, 2) is True
+
+
+@pytest.mark.parametrize("a_wins,b_wins,pending,expected", [
+    (0, 0, 9, False),
+    (2, 1, 6, False),
+    (4, 1, 4, False),
+    (5, 1, 3, True),
+    (5, 4, 0, True),
+    (3, 3, 0, True),
+])
+def test_clinched_when_the_lead_outruns_the_matches_left(a_wins, b_wins, pending, expected):
+    assert clinched(a_wins, b_wins, pending) is expected
+
+
+def test_blocking_round_names_the_earliest_round_still_holding_either_player():
+    two_r1_done = _fixture_data(reported=[(0, "Ava", "2-0"), (1, "Dex", "2-1")])
+    round2 = dict(_matches_in_round(two_r1_done, 2))
+
+    assert blocking_round(two_r1_done, round2["Ava"]) is None
+    assert blocking_round(two_r1_done, round2["Cara"]) == 1
+    assert blocking_round(two_r1_done, round2["Eli"]) == 1
+
+
+def test_blocking_round_clears_once_both_players_are_free():
+    all_r1_done = _fixture_data(
+        reported=[(0, "Ava", "2-0"), (1, "Dex", "2-1"), (2, SKIPPED_SENTINEL, "0-0")],
+    )
+    round2 = dict(_matches_in_round(all_r1_done, 2))
+
+    assert all(blocking_round(all_r1_done, m) is None for m in round2.values())
+
+
+def _matches_in_round(data, round_num):
+    for r, matches in data.rounds:
+        if r == round_num:
+            return [(m["a_name"], m) for m in matches]
+    return []
 
 
 def test_round_has_playable_match_counts_skips_as_finished():
