@@ -61,11 +61,7 @@ export function LeaderboardSidebar({
       <SurfaceCard>
         <div className="mb-1 flex items-center gap-1.5">
           <Trophy size={16} color="#ffc63a" />
-          <SectionLabel
-            size={16}
-            letterSpacing={d.lcqScope ? "0.14em" : undefined}
-            className="text-subtle whitespace-nowrap"
-          >
+          <SectionLabel size={16} className="text-subtle whitespace-nowrap">
             {d.topColorsTitle}
           </SectionLabel>
           <FilterDropdown
@@ -500,11 +496,7 @@ function useInsightsData(
   const recentEmpty = scoped || rankScoped
     ? ["NO RECENT", rankScoped ? rank.toUpperCase() : "", scopeLabel, recentNoun].filter(Boolean).join(" ")
     : "NO TROPHIES YET";
-  const topColorsTitle = formatScoped ? (
-    <>TOP COLORS {scopeChip} {lcqScope ? "TROPHIES & CASH" : "TROPHIES"}</>
-  ) : (
-    "TOP COLORS"
-  );
+  const topColorsTitle = formatScoped ? <>TOP COLORS {scopeChip}</> : "TOP COLORS";
   const namedScope = colorsScoped && colors !== MULTI && colors !== OTHER;
   const showRowPips = !namedScope;
 
