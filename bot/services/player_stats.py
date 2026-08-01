@@ -44,11 +44,12 @@ class RankedPlayer(NamedTuple):
 
 
 class FrozenSeed(NamedTuple):
-    """One player's standing at a Set Championship's deadline: the rank it seeds them at and the score that
-    rank came from. Both travel together so a seeding table cannot show a frozen rank beside a live score,
-    which reads as a table sorted wrong."""
+    """One player's standing at a Set Championship's deadline: the rank it seeds them at and the figures that
+    rank came from. They travel together so a seeding table cannot show a frozen rank beside a score or a
+    trophy count from a later day, which reads as a table sorted wrong."""
     rank: int
     score: float | None
+    trophies: int | None = None
 
 
 def process_stats(
@@ -401,9 +402,10 @@ def seed_attendees(
     is shown when no Player matches.
 
     `rank_override` is the only scale when it is given: a Set Championship seeds off the board frozen at its
-    deadline, so both the rank and the score come from that day, and a player absent from it did not rank by
-    the deadline, so they trail the players who did instead of being placed among them on a live rank the
-    deadline never saw. Trophies stay live, being a count rather than an ordering.
+    deadline, so every figure printed comes from that day, and a player absent from it did not rank by the
+    deadline, so they trail the players who did instead of being placed among them on a live rank the
+    deadline never saw. A seed frozen before trophies were stored keeps showing the live count, which is
+    closer to the truth than a blank.
     """
     active = resolve_active_set(session)
     set_id = active.id if active else None
@@ -419,9 +421,13 @@ def seed_attendees(
         rp = ranked.get(player.id) if player is not None else None
         if rp is not None:
             frozen = rank_override.get(player.id) if rank_override else None
-            rank = frozen.rank if frozen else (None if rank_override else rp.rank)
-            score = frozen.score if frozen else (None if rank_override else rp.score)
-            seeded.append(SeededAttendee(rp.slug, rp.display_name, rank, score, rp.trophies))
+            if frozen is not None:
+                trophies = frozen.trophies if frozen.trophies is not None else rp.trophies
+                seeded.append(SeededAttendee(rp.slug, rp.display_name, frozen.rank, frozen.score, trophies))
+            elif rank_override:
+                seeded.append(SeededAttendee(rp.slug, rp.display_name, None, None, None))
+            else:
+                seeded.append(SeededAttendee(rp.slug, rp.display_name, rp.rank, rp.score, rp.trophies))
         else:
             slug = player.slug if player is not None else None
             display = player.display_name if player is not None else name

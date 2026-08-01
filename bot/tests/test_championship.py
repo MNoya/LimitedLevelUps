@@ -148,7 +148,9 @@ def test_frozen_rank_map_keys_by_player(session, monkeypatch):
 
     ranks = championship.rank_override(session, event.id)
 
-    assert ranks == {bob.id: FrozenSeed(1, ranks[bob.id].score), alice.id: FrozenSeed(2, ranks[alice.id].score)}
+    assert [(ranks[bob.id].rank, ranks[bob.id].trophies), (ranks[alice.id].rank, ranks[alice.id].trophies)] == [
+        (1, 5), (2, 2),
+    ]
     assert ranks[bob.id].score > ranks[alice.id].score
 
 

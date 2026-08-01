@@ -123,6 +123,7 @@ def freeze_seeds_sync(
             session.add(PodChampionshipSeed(
                 event_id=event_id, player_id=player.player_id, discord_id=player.discord_id,
                 display_name=player.display_name, rank=player.rank, score=player.score,
+                trophies=player.trophies,
             ))
         session.commit()
         return len(ranked)
@@ -150,11 +151,14 @@ def frozen_seeds_by_player(session: Session, event_id: str) -> dict[str, FrozenS
     """The frozen standings keyed by player_id, rank and score together, so every surface seeds and prints
     off the board as it stood at the deadline rather than mixing that rank with today's points."""
     rows = session.execute(
-        select(PodChampionshipSeed.player_id, PodChampionshipSeed.rank, PodChampionshipSeed.score)
+        select(
+            PodChampionshipSeed.player_id, PodChampionshipSeed.rank,
+            PodChampionshipSeed.score, PodChampionshipSeed.trophies,
+        )
         .where(PodChampionshipSeed.event_id == event_id)
     ).all()
     return {
-        row.player_id: FrozenSeed(rank=row.rank, score=row.score)
+        row.player_id: FrozenSeed(rank=row.rank, score=row.score, trophies=row.trophies)
         for row in rows if row.player_id is not None
     }
 
