@@ -250,22 +250,33 @@ async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_p
     warn-but-allow confirm covering a short roster, an odd roster and unrecognized seats in one prompt, so
     confirming never leads straight into a second one. Returns True if the interaction was handled here
     (blocked or awaiting confirm) and the caller should stop; False if the pod is clear to start now.
-    `interaction` must already be deferred ephemeral."""
+    Runs before /pod-ready acknowledges, so that command can answer publicly once it knows the check will
+    actually fire, and every answer from here stays private to the initiator either way."""
     blocker = manager.ready_check_blocker()
     if blocker:
-        await interaction.followup.send(f"⚠️ {blocker}", ephemeral=True)
+        await reply_private(interaction, content=f"⚠️ {blocker}")
         return True
     unlinked = [] if manager.kind == "mock" else await manager.unrecognized_lobby_names()
     if manager.ready_check_needs_confirm(unlinked, min_players=min_players):
-        await interaction.followup.send(
-            ready_check_confirm_text(
+        await reply_private(
+            interaction,
+            content=ready_check_confirm_text(
                 len(manager.player_session_users()), manager.ready_check_floor(min_players), unlinked,
             ),
             view=ReadyCheckConfirmView(manager, thread, initiated_by, show_link_players=bool(unlinked)),
-            ephemeral=True,
         )
         return True
     return False
+
+
+async def reply_private(interaction: discord.Interaction, **kwargs) -> None:
+    """Answer the presser alone whether or not the interaction is already acknowledged. A followup inherits
+    the flags of the response that opened it, so an ephemeral answer is only guaranteed when it is itself
+    the first response."""
+    if interaction.response.is_done():
+        await interaction.followup.send(**kwargs, ephemeral=True)
+    else:
+        await interaction.response.send_message(**kwargs, ephemeral=True)
 
 
 async def open_settings_panel(interaction: discord.Interaction) -> None:

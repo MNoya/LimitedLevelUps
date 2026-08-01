@@ -1344,23 +1344,24 @@ class PodDraftManager:
             if member is not None:
                 await self.admit_to_mock_thread(member)
 
-    async def admit_to_mock_thread(self, member: discord.Member) -> None:
-        """Put a mock-draft joiner in the thread and on the mock ping, at most once per member. Shared by
-        the Join Draft button and the Draftmancer arrival sweep, so clicking Join and walking into the
+    async def admit_to_mock_thread(self, member: discord.Member) -> tuple[bool, bool]:
+        """Put a mock-draft joiner in the thread and on the pod roles, at most once per member. Returns
+        the (first pod, holds the mock ping) pair the Join Draft reply renders its roles notice from.
+        Shared by that button and the Draftmancer arrival sweep, so clicking Join and walking into the
         lobby unprompted land in the same place."""
         if self.kind != "mock" or str(member.id) in self._thread_added_ids:
-            return
+            return False, False
         thread = await self._fetch_thread()
         if thread is None:
-            return
+            return False, False
         self._thread_added_ids.add(str(member.id))
-        if await grant_mock_draft_role(member):
-            log.info(f"[MOCK] role_granted event={self.event_id} member={member.display_name}")
+        grants = await grant_mock_draft_role(member)
         try:
             await thread.add_user(member)
             log.info(f"[MOCK] thread_add event={self.event_id} member={member.display_name}")
         except discord.HTTPException:
             log.info(f"[MOCK] thread_add_failed event={self.event_id} member={member.display_name}", exc_info=True)
+        return grants
 
     def _snapshot_tournament_roster(self) -> list[str]:
         """The locked drafter list, frozen at endDraft. Prefers the draft log's seated users — immune
@@ -1473,6 +1474,9 @@ class PodDraftManager:
 
     async def _fetch_thread(self):
         try:
+            cached = self.bot.get_channel(self.thread_id)
+            if cached is not None:
+                return cached
             return await self.bot.fetch_channel(self.thread_id)
         except Exception:
             log.warning(f"could not fetch thread {self.thread_id}", exc_info=True)
@@ -1816,11 +1820,11 @@ class PodDraftManager:
             asyncio.create_task(self._apply_leaderboard_seating())
         notify_seeding_change(self.bot, self.event_id)
 
-    @staticmethod
-    def _lobby_pod_full(classified: list[tuple[str, str | None]]) -> bool:
+    def _lobby_pod_full(self, classified: list[tuple[str, str | None]]) -> bool:
         """A full, ready-checkable pod: a full pod's worth of players present and every one of them
-        linked. Unlinked players can't draft and disable the Ready Check, so they don't count."""
-        if any(display is None for _, display in classified):
+        linked. Unlinked players can't draft and disable the Ready Check, so they don't count. A mock
+        pairs no matches and reports no results, so an unrecognized seat is a seat like any other."""
+        if self.kind != "mock" and any(display is None for _, display in classified):
             return False
         return len(classified) >= _LOBBY_FULL_THRESHOLD
 
@@ -1850,8 +1854,7 @@ class PodDraftManager:
         """Arm a one-shot nudge to start a Ready Check once the lobby first fills with a full pod of
         linked players. The delayed task re-validates before posting, so a transient dip-and-refill is
         harmless and a sustained drop just lets it lapse. Sent at most once per lobby."""
-        if (self.kind == "mock" or self.draft_complete or self.drafting
-                or self.ready_check_active or self._lobby_full_prompted):
+        if self.draft_complete or self.drafting or self.ready_check_active or self._lobby_full_prompted:
             return
         if not self._lobby_pod_full(classified):
             return

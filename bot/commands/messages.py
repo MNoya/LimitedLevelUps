@@ -73,6 +73,11 @@ MSG_POD_WELCOME = (
     "### 👋 Welcome {user} to {pod_drafters}\n\n"
     "Use the buttons below to link your Arena handle, read the Pod Guide and manage Notifications"
 )
+MSG_MOCK_WELCOME = (
+    "{join_line}\n\n"
+    "{emoji} You're now on {roles}\n"
+    "-# Manage your notifications with the button below"
+)
 MSG_ARENA_BAD_FORMAT = "❌ Expected a full MTG Arena handle: `ArenaID#12345`"
 MSG_ARENA_LINKED = "{emoji} {mention} is **{arena_name}** on Arena"
 MSG_ARENA_HANDLE_LINE = "{emoji} You're **{arena_name}** on Arena"

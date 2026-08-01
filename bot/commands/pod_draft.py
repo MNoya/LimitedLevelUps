@@ -100,6 +100,7 @@ MSG_LINK_ARENA_NO_LOBBY_MATCH = (
 MSG_LINK_ARENA_DID_YOU_MEAN = "Did you mean `{suggestion}`? Re-run /link-arena with that exact handle."
 MSG_NO_ACTIVE_POD = "No active pod draft session right now."
 MSG_RESTART_NOT_ORGANIZER = "Only Organizers can restart a draft."
+MSG_READY_CHECK_STARTED = "Ready Check initiated, accept in Draftmancer!"
 
 YES_EMOJI = "✅"
 MAYBE_EMOJI = "🤷"
@@ -139,18 +140,18 @@ class PodDraft(commands.Cog):
             return
         thread = interaction.channel
         log.info(f"ready-check: {interaction.user} in thread {interaction.channel_id}")
-        await interaction.response.defer(ephemeral=True, thinking=False)
         actor = actor_label(interaction)
         if await guard_ready_check(
             interaction, manager, thread, initiated_by=actor, min_players=MANUAL_READY_MIN_PLAYERS,
         ):
             return
+        await interaction.response.defer(thinking=False)
         err = await manager.initiate_ready_check(thread, initiated_by=actor)
         if err is not None:
             log.warning(f"ready-check: failed — {err}")
-            await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
+            await interaction.followup.send(f"⚠️ {err}")
         else:
-            await interaction.followup.send("Ready Check initiated, accept in Draftmancer!", ephemeral=False)
+            await interaction.followup.send(MSG_READY_CHECK_STARTED)
 
     @app_commands.command(name="pod-start", description=desc.POD_START)
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)

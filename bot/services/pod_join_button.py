@@ -14,7 +14,7 @@ from discord import ui
 from bot import emojis
 from bot.commands.messages import MSG_JOIN_DRAFT_BUTTON, MSG_LINK_ARENA_PROMPT
 from bot.database import SessionLocal
-from bot.services.ping_roles import build_link_arena_view, format_join_line
+from bot.services.ping_roles import build_link_arena_view, format_join_line, send_mock_welcome_card
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_drafts import player_arena_handle
 
@@ -67,10 +67,15 @@ class MockJoinDraftButton(
         return cls(match["session_id"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_message(
-            format_join_line(self.session_id, interaction.user.display_name, arena=False), ephemeral=True,
-        )
-        await _admit_clicker_to_mock_thread(interaction, self.session_id)
+        join_line = format_join_line(self.session_id, interaction.user.display_name, arena=False)
+        await interaction.response.defer(ephemeral=True)
+        first_pod, holds_mock_ping = await _admit_clicker_to_mock_thread(interaction, self.session_id)
+        if first_pod:
+            await send_mock_welcome_card(
+                interaction, join_line=join_line, holds_mock_ping=holds_mock_ping,
+            )
+            return
+        await interaction.followup.send(join_line, ephemeral=True)
 
 
 def build_join_view(session_id: str) -> ui.View:
@@ -85,17 +90,20 @@ def build_mock_join_view(session_id: str) -> ui.View:
     return view
 
 
-async def _admit_clicker_to_mock_thread(interaction: discord.Interaction, session_id: str) -> None:
+async def _admit_clicker_to_mock_thread(
+    interaction: discord.Interaction, session_id: str,
+) -> tuple[bool, bool]:
     """Clicking Join Draft is joining the mock, so it puts the clicker in the thread right away instead of
-    waiting for them to turn up in the Draftmancer lobby. The manager is reached through the registry
-    rather than an import: it renders the card this button rides on, so importing it here would cycle."""
+    waiting for them to turn up in the Draftmancer lobby. Returns the manager's (first pod, holds the mock
+    ping) pair. The manager is reached through the registry rather than an import: it renders the card this
+    button rides on, so importing it here would cycle."""
     member = interaction.user
     if not isinstance(member, discord.Member):
-        return
+        return False, False
     for manager in ACTIVE_POD_MANAGERS.values():
         if manager.kind == "mock" and manager.session_id == session_id:
-            await manager.admit_to_mock_thread(member)
-            return
+            return await manager.admit_to_mock_thread(member)
+    return False, False
 
 
 def _arena_handle_for(discord_id: str) -> str | None:

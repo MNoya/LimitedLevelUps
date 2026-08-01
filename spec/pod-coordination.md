@@ -93,7 +93,9 @@ Every pod also leaves its final standings in the channel, on the card its thread
 
 A mock draft is a draft with no rounds after it, for practising a set before it lands. Run `/mock-draft` and the bot opens a Draftmancer lobby right away, with a card in the channel and a thread of its own. Anyone can start one, and any set can be drafted, including one still in spoiler season.
 
-The card shows the link once the bot holds the lobby, then keeps the seat list current as people arrive. Use your Discord name in Draftmancer so the bot can match you. Joining subscribes you to the `Mock Draft` role, so the next one reaches you; switch it off in `/roles` any time and it stays off.
+The card shows the link once the bot holds the lobby, then keeps the seat list current as people arrive. Use your Discord name in Draftmancer so the bot can match you. Joining subscribes you to the `Mock Draft` role, so the next one reaches you; switch it off in `/roles` any time and it stays off. It also puts you in `Pod Drafters`, the same as joining any pod does.
+
+Once 8 players are in the lobby, the bot offers a ready check in the thread. Unlike a scheduled pod, a seat it cannot match to a Discord name still counts toward the 8.
 
 When the draft ends, the decks and the draft log are saved to the website. Nothing is paired, nothing is reported, and no pod points are earned.
 

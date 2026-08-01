@@ -78,6 +78,24 @@ def test_unrecognized_seats_need_confirmation_on_a_clean_roster():
     assert mgr.ready_check_needs_confirm(["Stranger#12345"]) is True
 
 
+def test_a_full_lobby_arms_the_ready_check_nudge_on_pods_and_mocks():
+    cases = [
+        ("pod", 8, 0, True),
+        ("pod", 7, 0, False),
+        ("pod", 8, 1, False),
+        ("mock", 8, 0, True),
+        ("mock", 8, 3, True),
+        ("mock", 7, 1, False),
+    ]
+
+    for kind, seated, unlinked, expected in cases:
+        mgr, _ = _ready_manager([])
+        mgr.kind = kind
+        classified = [(f"p{i}", None if i < unlinked else f"P{i}") for i in range(seated)]
+
+        assert mgr._lobby_pod_full(classified) is expected
+
+
 def test_empty_lobby_is_still_a_hard_block():
     mgr, _ = _ready_manager([])
     mgr.ready_check_active = False

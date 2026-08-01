@@ -31,6 +31,7 @@ from bot.commands.messages import (
     MSG_FORMAT_PREFERENCE_BUTTON,
     MSG_JOIN_LINE,
     MSG_POD_ROLE_GRANTED,
+    MSG_MOCK_WELCOME,
     MSG_POD_WELCOME,
 )
 from bot.commands.pod_guide import render_pod_guide_embed_body
@@ -47,7 +48,7 @@ from bot.services.pod_drafts import (
     full_arena_handle,
     player_arena_handle,
 )
-from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role
+from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role, role_mention
 from bot.services.pod_schedule import (
     EARLY_POD_ROLE_NAME,
     LATE_POD_ROLE_NAME,
@@ -281,6 +282,7 @@ class _PodButtonCard(discord.ui.LayoutView):
     def __init__(
         self, text: str, *, accent: discord.Color | None = None, show_link_button: bool = True,
         show_format_button: bool = False, show_link_17lands_button: bool = False,
+        show_guide_button: bool = True,
     ) -> None:
         super().__init__(timeout=None)
         container = discord.ui.Container(accent_colour=accent or discord.Color.green())
@@ -290,7 +292,8 @@ class _PodButtonCard(discord.ui.LayoutView):
             row.add_item(_LinkArenaButton())
         if show_link_17lands_button:
             row.add_item(_Link17LandsButton())
-        row.add_item(_PodGuideButton())
+        if show_guide_button:
+            row.add_item(_PodGuideButton())
         row.add_item(_ManageRolesButton())
         if show_format_button:
             row.add_item(_FormatPreferenceButton())
@@ -593,6 +596,25 @@ async def announce_onboarding_welcome(client: discord.Client, member: discord.Me
     log.info(f"onboarding welcome {'posted' if posted else 'failed to post'} for {member}")
 
 
+async def send_mock_welcome_card(
+    interaction: discord.Interaction, *, join_line: str, holds_mock_ping: bool,
+) -> None:
+    """The first-pod notice for a drafter whose first pod is a mock, folded into their Join Draft reply.
+    Ephemeral where a scheduled pod's welcome is public: a mock is a practice lobby anyone can open at any
+    hour, so welcoming each joiner in pod-draft-chat would be noise in a channel they were never sent to.
+    Carries only the Notifications button: a mock seats players by their Discord name and pairs no matches,
+    so neither an Arena handle nor the Pod Guide has anything to do with the click."""
+    role_mentions = [role_mention(interaction.guild, POD_DRAFTERS_ROLE_NAME)]
+    emoji = emojis.get("llu")
+    mock_spec = spec_named(MOCK_DRAFT_ROLE_NAME) if holds_mock_ping else None
+    if mock_spec is not None:
+        role_mentions.insert(0, role_mention(interaction.guild, MOCK_DRAFT_ROLE_NAME))
+        emoji = display_emoji(mock_spec) or emoji
+    text = MSG_MOCK_WELCOME.format(join_line=join_line, emoji=emoji, roles=" and ".join(role_mentions))
+    card = _PodButtonCard(text, show_link_button=False, show_guide_button=False)
+    await interaction.followup.send(view=card, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+
 async def grant_pod_roles(member: discord.Member, role_name: str | None) -> bool:
     """Give a signup the roles it earns and say whether this was their first pod, which is all a caller
     acts on now: both grants are silent.
@@ -615,20 +637,29 @@ async def grant_pod_roles(member: discord.Member, role_name: str | None) -> bool
     return first_pod
 
 
-async def grant_mock_draft_role(member: discord.Member) -> bool:
-    """Subscribe a mock-draft joiner to the mock ping, and say whether the grant happened. Silent, and
-    skipped once they switched the role off in `/roles` — that choice never expires. Unlike a scheduled
-    pod's slot roles this carries no Pod Drafters grant: joining one mock lobby is not a request for
-    server-wide pod announcements."""
+async def grant_mock_draft_role(member: discord.Member) -> tuple[bool, bool]:
+    """Give a mock-draft joiner the Pod Drafters umbrella and the mock ping. Returns whether this was
+    their first pod, and whether they hold the mock ping afterwards, which the Join Draft click turns into
+    a notice naming the roles it granted. Both grants are silent.
+
+    Pod Drafters is unconditional, the same as on a scheduled pod: a mock is a pod draft, so its joiners
+    belong on the server-wide announcements. The mock ping is skipped once they switched it off in
+    `/roles` — that choice never expires."""
+    first_pod = await grant_pod_drafters(member)
     spec = spec_named(MOCK_DRAFT_ROLE_NAME)
     role = find_role(member.guild, MOCK_DRAFT_ROLE_NAME)
-    if spec is None or role is None or role in member.roles:
-        return False
+    if spec is None or role is None:
+        return first_pod, False
+    if role in member.roles:
+        return first_pod, True
     declined = await asyncio.to_thread(declined_pod_roles_sync, str(member.id))
     if spec.key in declined:
         log.info(f"{member} declined {spec.name}; leaving it off")
-        return False
-    return await grant_role(member, role)
+        return first_pod, False
+    granted = await grant_role(member, role)
+    if granted:
+        log.info(f"granted {spec.name!r} to {member}")
+    return first_pod, granted
 
 
 def auto_grant_spec_for_event(event_time) -> PingRole | None:

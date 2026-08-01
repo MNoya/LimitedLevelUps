@@ -128,13 +128,13 @@ def test_pod_drafters_is_granted_whatever_the_player_declined(monkeypatch):
 @pytest.mark.parametrize(
     "declined, held, expected",
     [
-        (set(), [], [MOCK_DRAFT_ROLE_NAME]),
-        ({"mock"}, [], []),
-        (set(), [MOCK_DRAFT_ROLE_NAME], [MOCK_DRAFT_ROLE_NAME]),
+        (set(), [], [POD_DRAFTERS_ROLE_NAME, MOCK_DRAFT_ROLE_NAME]),
+        ({"mock"}, [], [POD_DRAFTERS_ROLE_NAME]),
+        (set(), [MOCK_DRAFT_ROLE_NAME], [MOCK_DRAFT_ROLE_NAME, POD_DRAFTERS_ROLE_NAME]),
     ],
     ids=["grants-on-join", "respects-the-decline", "already-held"],
 )
-def test_mock_draft_role_grant_never_reaches_past_its_own_role(monkeypatch, declined, held, expected):
+def test_mock_draft_join_carries_the_umbrella(monkeypatch, declined, held, expected):
     monkeypatch.setattr("bot.services.ping_roles.declined_pod_roles_sync", lambda user_id: declined)
     member = _FakeMember(6161)
     member.roles = [role for role in member.guild.roles if role.name in held]
