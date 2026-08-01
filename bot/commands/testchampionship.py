@@ -37,6 +37,7 @@ from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, champion_role_mentio
 from bot.services.player_stats import SeededAttendee, rank_players_for_set
 from bot.services.pod_launch import LauncherSlot, event_thread_id_sync, scheduled_card_ref_sync
 from bot.services.pod_drafts import draftmancer_url_for
+from bot.services.pod_join_button import build_join_view
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
 from bot.services.pod_signals import (
@@ -148,11 +149,13 @@ async def setup(bot: commands.Bot) -> None:
         await _thread_send(thread, seeding_file, seeding_embed)
 
         await _stage(thread, "Posted in the thread when the lobby opens, 10 minutes before the draft")
+        preview_session = "preview-session"
         await thread.send(
             cc.lobby_open_body(
-                set_code=plan.set_code, draftmancer_url=draftmancer_url_for("preview-session"),
+                set_code=plan.set_code, draftmancer_url=draftmancer_url_for(preview_session),
                 seat_mentions=[f"**@{name}**" for name in names[: championship.SEAT_COUNT]],
             ),
+            view=build_join_view(preview_session),
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
