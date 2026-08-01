@@ -194,6 +194,8 @@ def playing_roster(
         ).all()
         if row.discord_id is not None
     }
+    if not ranks:
+        return roster
     ordered = sorted(roster, key=lambda pair: ranks.get(pair[0], len(ranks) + 1))
     return ordered[:SEAT_COUNT]
 

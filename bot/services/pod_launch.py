@@ -57,6 +57,7 @@ from bot.services.pod_join_button import build_join_view
 from bot.services.pod_registration_embed import closed_registered_embed
 from bot.services.pod_link_dm import send_lobby_link_dms
 from bot.services import championship as championship_seeds
+from bot.services import championship_copy
 from bot.services.championship import frozen_seeds_by_player
 from bot.services.player_stats import rank_ordered_names
 from bot.services import pod_active
@@ -1836,9 +1837,9 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
         event_name = event.name
 
     roster = await asyncio.to_thread(roster_for_event_sync, event_id)
-    seated = await asyncio.to_thread(championship_seeds.playing_roster_sync, event_id, roster)
-    single_table = len(seated) != len(roster)
-    roster = seated
+    single_table = await asyncio.to_thread(championship_seeds.rank_override_sync, event_id) is not None
+    if single_table:
+        roster = await asyncio.to_thread(championship_seeds.playing_roster_sync, event_id, roster)
     display_names = [name for _, name in roster]
     rsvps = await asyncio.to_thread(signal_rsvps_sync, event_id)
     maybe_names = [] if single_table else (rsvps[1] if rsvps else [])
@@ -1861,8 +1862,13 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
         )
         draftmancer_url = draftmancer_url_for(session_id)
 
-    mention_block = " ".join(f"<@{did}>" for did, _ in roster)
-    body = build_lobby_open_body(draftmancer_url, mention_block)
+    mentions = [f"<@{did}>" for did, _ in roster]
+    if single_table:
+        body = championship_copy.lobby_open_body(
+            set_code=set_code, draftmancer_url=draftmancer_url, seat_mentions=mentions,
+        )
+    else:
+        body = build_lobby_open_body(draftmancer_url, " ".join(mentions))
     try:
         await thread.send(
             body, view=build_join_view(session_id),

@@ -36,6 +36,7 @@ from bot.services import pod_swiss
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, champion_role_mention
 from bot.services.player_stats import SeededAttendee, rank_players_for_set
 from bot.services.pod_launch import LauncherSlot, event_thread_id_sync, scheduled_card_ref_sync
+from bot.services.pod_drafts import draftmancer_url_for
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
 from bot.services.pod_signals import (
@@ -145,6 +146,15 @@ async def setup(bot: commands.Bot) -> None:
             seat_cap=CHAMPIONSHIP_CUT, header=seeding_phase_projected(), cut_label=SEEDING_CUT_ALTERNATES,
         )
         await _thread_send(thread, seeding_file, seeding_embed)
+
+        await _stage(thread, "Posted in the thread when the lobby opens, 10 minutes before the draft")
+        await thread.send(
+            cc.lobby_open_body(
+                set_code=plan.set_code, draftmancer_url=draftmancer_url_for("preview-session"),
+                seat_mentions=[f"**@{name}**" for name in names[: championship.SEAT_COUNT]],
+            ),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
         await _stage(channel, "Posted on the Daily Pod Launcher, championship day")
         slots = _preview_launcher_slots(plan.set_code, event_at, names, str(thread.id))

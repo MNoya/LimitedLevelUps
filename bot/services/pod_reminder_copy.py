@@ -35,12 +35,15 @@ ROSTER_REMINDER_TITLE = "🔔 Pod Draft Starting Soon"
 ROSTER_REMINDER_LINE = "**{name}** starts <t:{unix}:R>"
 
 LOBBY_OPEN_HEADLINE = "Lobby opened!"
+LOBBY_ARENA_NAME = (
+    "Set your **Arena name** (like `YourName#12345`) as your Draftmancer name or use **Join Draft** "
+    "below for your personal link."
+)
 LOBBY_OPEN = (
     "{draftmancer} {headline}\n"
     "**Join the Draftmancer session:** <{url}>\n\n"
-    "Set your **Arena name** (like `YourName#12345`) as your Draftmancer name or use **Join Draft** "
-    "below for your personal link."
-    "{mentions}"
+    + LOBBY_ARENA_NAME
+    + "{mentions}"
 )
 
 DRAFT_STARTED = (

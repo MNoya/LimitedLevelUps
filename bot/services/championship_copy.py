@@ -7,6 +7,7 @@ shape without pinging anyone).
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 import discord
@@ -18,6 +19,7 @@ from bot.services.championship import INVITE_WAVE_TIERS
 from bot.services.containers import build_container
 from bot.services.mock_lobby_card import set_symbol_url
 from bot.services.ping_roles import SYNTHETIC_CHAMPION_TAG
+from bot.services.pod_reminder_copy import LOBBY_ARENA_NAME
 from bot.services.pod_signals import RSVP_EMOJI
 
 TWITCH_URL = "https://twitch.tv/GatoDelFuego"
@@ -59,6 +61,19 @@ def card_content(
         "the rest are alternates for no-shows.\n"
         "• Best of 3, Swiss, three rounds, one Champion.\n\n"
         f"{next_symbol}**{next_set_name}** arrives <t:{arrival}:R>"
+    )
+
+
+def lobby_open_body(*, set_code: str, draftmancer_url: str, seat_mentions: Sequence[str]) -> str:
+    """The lobby post for a championship: its own headline over the seated players in seed order, so the one
+    ping the event sends both opens the lobby and says who is playing. Alternates are not pinged, so the list
+    is the table. Mention tokens are passed in, letting the preview show the shape without pinging anyone."""
+    seats = "\n".join(f"{seat}. {mention}" for seat, mention in enumerate(seat_mentions, 1))
+    return (
+        f"👑 **{set_code} Set Championship** is now live!\n\n"
+        f"**Join the Draftmancer session:** <{draftmancer_url}>\n\n"
+        f"{LOBBY_ARENA_NAME}\n\n"
+        f"**Your seats**\n{seats}"
     )
 
 
