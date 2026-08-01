@@ -1686,10 +1686,13 @@ class PodSetSummary(NamedTuple):
     wins_2_1: int
 
 
-def pod_scoring_counts(session: Session, set_code: str) -> dict[str, tuple[int, int]]:
-    """Per active player: (trophy count, 2-1 count) for the set, keyed by player_id. 
-    Pods are always public, no opt-in gate."""
-    rows = session.execute(
+def pod_scoring_counts(
+    session: Session, set_code: str, before: datetime | None = None,
+) -> dict[str, tuple[int, int]]:
+    """Per active player: (trophy count, 2-1 count) for the set, keyed by player_id.
+    Pods are always public, no opt-in gate. `before` counts only the pods played by that instant, for a
+    board rebuilt as it stood at a past deadline."""
+    query = (
         select(PodDraftParticipant.player_id, PodDraftParticipant.record, PodDraftParticipant.placement)
         .join(PodDraftEvent, PodDraftEvent.id == PodDraftParticipant.event_id)
         .join(Player, Player.id == PodDraftParticipant.player_id)
@@ -1698,7 +1701,10 @@ def pod_scoring_counts(session: Session, set_code: str) -> dict[str, tuple[int, 
             Player.active.is_(True),
             PodDraftParticipant.record.isnot(None),
         )
-    ).all()
+    )
+    if before is not None:
+        query = query.where(PodDraftEvent.event_time < before)
+    rows = session.execute(query).all()
     by_player: dict[str, list[tuple[str | None, int | None]]] = {}
     for player_id, record, placement in rows:
         by_player.setdefault(player_id, []).append((record, placement))

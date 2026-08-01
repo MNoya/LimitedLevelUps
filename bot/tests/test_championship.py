@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 
-from bot.models import MagicSet, Player, PlayerStats, PodChampionshipSeed, PodDraftEvent
+from bot.models import DraftEvent, MagicSet, Player, PlayerStats, PodChampionshipSeed, PodDraftEvent
 from bot.services import championship
 from bot.services.championship import (
     CREATION_LEAD_DAYS,
@@ -8,8 +8,11 @@ from bot.services.championship import (
     plan_due_for_creation,
     plan_for,
 )
-from bot.services.player_stats import rank_ordered_names, seed_attendees
+from bot.services.player_stats import FrozenSeed, rank_ordered_names, seed_attendees
 from bot.sets import RELEASE_TZ
+
+
+_ACTIVE_SET: dict = {}
 
 
 def _session_factory(session):
@@ -47,6 +50,20 @@ def _seed_stats(session, player, magic_set, trophies, events):
         events=events, wins=trophies * 7, losses=max(0, events - trophies), games_played=events * 5,
         trophies=trophies,
     ))
+
+
+def _seed_drafts(session, player, magic_set, *, finished_at, trophies, events):
+    """Individual drafts, which is what an as-of-deadline board is rebuilt from. `player_stats` is left
+    alone on purpose: a cutoff has to reach past the derived aggregates to the event log."""
+    for index in range(events):
+        session.add(DraftEvent(
+            player_id=player.id, set_id=magic_set.id,
+            seventeenlands_event_id=f"{player.id}-{finished_at:%m%d}-{index}",
+            format="PremierDraft", expansion=magic_set.code,
+            wins=7 if index < trophies else 3, losses=0 if index < trophies else 3,
+            is_trophy=index < trophies, finished_at=finished_at,
+        ))
+    session.flush()
 
 
 def _seed_event(session):
@@ -130,7 +147,8 @@ def test_frozen_rank_map_keys_by_player(session, monkeypatch):
 
     ranks = championship.rank_override(session, event.id)
 
-    assert ranks == {bob.id: 1, alice.id: 2}
+    assert ranks == {bob.id: FrozenSeed(1, ranks[bob.id].score), alice.id: FrozenSeed(2, ranks[alice.id].score)}
+    assert ranks[bob.id].score > ranks[alice.id].score
 
 
 def test_frozen_override_seeds_against_live_standings(session):
@@ -140,7 +158,7 @@ def test_frozen_override_seeds_against_live_standings(session):
     _seed_stats(session, alice, magic_set, trophies=2, events=4)
     _seed_stats(session, bob, magic_set, trophies=5, events=8)
     session.commit()
-    frozen = {alice.id: 1, bob.id: 2}
+    frozen = {alice.id: FrozenSeed(1, 40.0), bob.id: FrozenSeed(2, 30.0)}
 
     live_order = rank_ordered_names(session, ["Alice", "Bob"])
     frozen_order = rank_ordered_names(session, ["Alice", "Bob"], frozen)
@@ -148,13 +166,13 @@ def test_frozen_override_seeds_against_live_standings(session):
 
     assert live_order == ["Bob", "Alice"]
     assert frozen_order == ["Alice", "Bob"]
-    assert [(a.display_name, a.rank) for a in seeded] == [("Alice", 1), ("Bob", 2)]
+    assert [(a.display_name, a.rank, a.score) for a in seeded] == [("Alice", 1, 40.0), ("Bob", 2, 30.0)]
 
 
 def test_the_override_is_the_frozen_snapshot_for_a_championship_and_nothing_for_a_pod(session):
     """Every surface that ranks a championship roster resolves through one override, so the seeding card,
-    the launcher pointer and the seats the draft is dealt in cannot read different scales. A player who
-    joined the board after the freeze is absent from it and keeps their live rank."""
+    the launcher pointer and the seats the draft is dealt in cannot read different scales. A player absent
+    from the snapshot did not rank by the deadline, so they trail the players who did."""
     magic_set = _seed_set(session, "MSH")
     alice = _seed_player(session, "Alice", "1")
     bob = _seed_player(session, "Bob", "2")
@@ -175,9 +193,45 @@ def test_the_override_is_the_frozen_snapshot_for_a_championship_and_nothing_for_
 
     override = championship.rank_override(session, event.id)
 
-    assert override == {alice.id: 1}
+    assert override == {alice.id: FrozenSeed(1, 9.0)}
     assert championship.rank_override(session, ordinary.id) is None
     assert rank_ordered_names(session, ["Alice", "Bob"], override) == ["Alice", "Bob"]
+
+
+def test_the_freeze_counts_what_was_played_by_the_deadline_whenever_the_profile_was_linked(
+    session, monkeypatch,
+):
+    """The deadline is a time, not a guest list. A player who linked 17lands after it is ranked on the drafts
+    they had already finished before it, and drafts finished after it count for nobody."""
+    monkeypatch.setattr(championship, "SessionLocal", _session_factory(session))
+    monkeypatch.setattr(
+        "bot.services.player_stats.resolve_active_set", lambda _session: _ACTIVE_SET.get("row")
+    )
+    magic_set = _seed_set(session, "MSH")
+    _ACTIVE_SET["row"] = magic_set
+    deadline = datetime(2026, 7, 27, 16, tzinfo=timezone.utc)
+    early = _seed_player(session, "Early", "1")
+    late_linker = _seed_player(session, "LateLinker", "2")
+    after_only = _seed_player(session, "AfterOnly", "3")
+    _seed_drafts(session, early, magic_set, finished_at=deadline - timedelta(days=2), trophies=2, events=8)
+    _seed_drafts(
+        session, late_linker, magic_set, finished_at=deadline - timedelta(days=1), trophies=5, events=8,
+    )
+    _seed_drafts(
+        session, late_linker, magic_set, finished_at=deadline + timedelta(days=1), trophies=0, events=6,
+    )
+    _seed_drafts(session, after_only, magic_set, finished_at=deadline + timedelta(hours=2), trophies=6, events=8)
+    event = _seed_event(session)
+    session.commit()
+
+    championship.freeze_seeds_sync(event.id, "MSH", deadline)
+    seeds = championship.frozen_seeds_sync(event.id)
+    order = rank_ordered_names(
+        session, ["Early", "LateLinker", "AfterOnly"], championship.rank_override(session, event.id),
+    )
+
+    assert [seed.display_name for seed in seeds] == ["LateLinker", "Early"]
+    assert order == ["LateLinker", "Early", "AfterOnly"]
 
 
 def test_freeze_replaces_a_prior_snapshot(session, monkeypatch):

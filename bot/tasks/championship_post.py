@@ -80,8 +80,14 @@ async def create_championship(bot: commands.Bot, plan: championship.Championship
     if event_id is None:
         log.warning(f"championship for {plan.set_code} failed to post its card")
         return None
-    frozen = await asyncio.to_thread(championship.freeze_seeds_sync, event_id, plan.set_code)
-    log.info(f"created {plan.set_code} Set Championship (event {event_id}, froze {frozen} seeds)")
+    deadline = championship.signup_post_at(plan)
+    frozen = await asyncio.to_thread(
+        championship.freeze_seeds_sync, event_id, plan.set_code, deadline,
+    )
+    log.info(
+        f"created {plan.set_code} Set Championship (event {event_id}, froze {frozen} seeds "
+        f"as of {deadline:%Y-%m-%d %H:%M %Z})"
+    )
     championship.mark_invites_pending(event_id)
     thread = await _resolve_thread(bot, event_id)
     if thread is not None:

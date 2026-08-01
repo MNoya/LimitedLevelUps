@@ -56,7 +56,7 @@ from bot.services.pod_drafts import (
 from bot.services.pod_join_button import build_join_view
 from bot.services.pod_registration_embed import closed_registered_embed
 from bot.services.pod_link_dm import send_lobby_link_dms
-from bot.services.championship import frozen_rank_by_player
+from bot.services.championship import frozen_seeds_by_player
 from bot.services.player_stats import rank_ordered_names
 from bot.services import pod_active
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
@@ -1419,7 +1419,7 @@ def _committed_slot(session: Session, time_key: str, event_id: str) -> LauncherS
     yes_names = [name for name, _ in yes_roster]
     championship = is_championship(event.name if event else None)
     if championship and yes_names:
-        frozen = frozen_rank_by_player(session, event_id)
+        frozen = frozen_seeds_by_player(session, event_id)
         yes_names = rank_ordered_names(session, yes_names, frozen)
     finished = event is not None and event.finalized_at is not None
     winner, winner_slug = _pod_winner(session, event) if finished else (None, None)

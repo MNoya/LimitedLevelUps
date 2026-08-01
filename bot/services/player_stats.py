@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Mapping, NamedTuple, Sequence
 
 import discord
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.orm import Session
 
 from bot.models import DraftEvent, MagicSet, Player, PlayerStats
@@ -41,6 +41,14 @@ class RankedPlayer(NamedTuple):
     discord_id: str | None
     score: float
     trophies: int
+
+
+class FrozenSeed(NamedTuple):
+    """One player's standing at a Set Championship's deadline: the rank it seeds them at and the score that
+    rank came from. Both travel together so a seeding table cannot show a frozen rank beside a live score,
+    which reads as a table sorted wrong."""
+    rank: int
+    score: float | None
 
 
 def process_stats(
@@ -160,16 +168,25 @@ def render_embed(data: StatsData) -> discord.Embed:
     return embed
 
 
-def rank_players_for_set(session: Session, set_id: str) -> list[RankedPlayer]:
+def rank_players_for_set(
+    session: Session, set_id: str, cutoff: datetime | None = None,
+) -> list[RankedPlayer]:
     """Compute every active, opted-in player's score for the set; sort and rank.
 
     Score is the 17lands total (PlayerStats) plus the flat pod-draft bonus. Pod-only
     players (no 17lands drafts this set) enter the board on pod points alone.
     Shared by the /stats and /leaderboard surfaces.
+
+    `cutoff` rebuilds the board as it stood at that instant, off the event log instead of the derived
+    aggregates. A Set Championship freezes on one, so a deadline counts what a player had actually played
+    by it, whenever their 17lands profile happened to be linked.
     """
-    stats_by_player = _stats_by_player(session, set_id)
+    stats_by_player = (
+        _stats_by_player(session, set_id) if cutoff is None
+        else _stats_by_player_asof(session, set_id, cutoff)
+    )
     set_code = session.execute(select(MagicSet.code).where(MagicSet.id == set_id)).scalar_one_or_none()
-    pod_counts = pod_scoring_counts(session, set_code) if set_code else {}
+    pod_counts = pod_scoring_counts(session, set_code, before=cutoff) if set_code else {}
 
     identities = {
         p.id: (p.slug, p.display_name, p.discord_id)
@@ -375,14 +392,18 @@ class SeededAttendee:
 
 
 def seed_attendees(
-    session: Session, names: Sequence[str], rank_override: Mapping[str, int] | None = None,
+    session: Session, names: Sequence[str], rank_override: Mapping[str, FrozenSeed] | None = None,
 ) -> list[SeededAttendee]:
     """Place sesh RSVP names against the active-set leaderboard, ordered by standing.
 
     Each name is resolved to a Player by the same matching the pod pipeline uses; ranked players
     sort by leaderboard rank, everyone else falls to the bottom by display name. The raw sesh name
-    is shown when no Player matches. `rank_override` (player_id -> rank) replaces the live rank for
-    its players, so a Set Championship seeds off its frozen snapshot; players outside it keep live.
+    is shown when no Player matches.
+
+    `rank_override` is the only scale when it is given: a Set Championship seeds off the board frozen at its
+    deadline, so both the rank and the score come from that day, and a player absent from it did not rank by
+    the deadline, so they trail the players who did instead of being placed among them on a live rank the
+    deadline never saw. Trophies stay live, being a count rather than an ordering.
     """
     active = resolve_active_set(session)
     set_id = active.id if active else None
@@ -397,8 +418,10 @@ def seed_attendees(
             seen.add(player.id)
         rp = ranked.get(player.id) if player is not None else None
         if rp is not None:
-            rank = rank_override.get(player.id, rp.rank) if rank_override else rp.rank
-            seeded.append(SeededAttendee(rp.slug, rp.display_name, rank, rp.score, rp.trophies))
+            frozen = rank_override.get(player.id) if rank_override else None
+            rank = frozen.rank if frozen else (None if rank_override else rp.rank)
+            score = frozen.score if frozen else (None if rank_override else rp.score)
+            seeded.append(SeededAttendee(rp.slug, rp.display_name, rank, score, rp.trophies))
         else:
             slug = player.slug if player is not None else None
             display = player.display_name if player is not None else name
@@ -424,19 +447,22 @@ def seated_ring_order(ranked: Sequence) -> list:
 
 
 def rank_ordered_names(
-    session: Session, names: Sequence[str], rank_override: Mapping[str, int] | None = None,
+    session: Session, names: Sequence[str], rank_override: Mapping[str, FrozenSeed] | None = None,
 ) -> list[str]:
     """The given names sorted by active-set leaderboard rank, best first, unranked trailing by name.
 
     Unranked players (unlinked, opted out, no score, or an unresolvable handle) fall to the end —
-    same treatment as `/pod-seeding`. Returns the original names, just reordered. `rank_override`
-    (player_id -> rank) overlays a frozen snapshot so a Set Championship orders off it.
+    same treatment as `/pod-seeding`. Returns the original names, just reordered.
+
+    `rank_override` replaces the live board rather than overlaying it, so a Set Championship orders off the
+    standings frozen at its deadline alone and a player who ranked only after it trails, the same rule the
+    seeding table places them by.
     """
-    active = resolve_active_set(session)
-    set_id = active.id if active else None
-    ranks = {r.player_id: r.rank for r in rank_players_for_set(session, set_id)} if set_id else {}
     if rank_override:
-        ranks = {**ranks, **rank_override}
+        ranks = {player_id: seed.rank for player_id, seed in rank_override.items()}
+    else:
+        active = resolve_active_set(session)
+        ranks = {r.player_id: r.rank for r in rank_players_for_set(session, active.id)} if active else {}
     resolved = players_for_names(session, names)
 
     def sort_key(item: tuple[str, Player | None]) -> tuple:
@@ -448,7 +474,7 @@ def rank_ordered_names(
 
 
 def leaderboard_seat_order(
-    session: Session, names: Sequence[str], rank_override: Mapping[str, int] | None = None,
+    session: Session, names: Sequence[str], rank_override: Mapping[str, FrozenSeed] | None = None,
 ) -> list[str]:
     """The given names in seeded-ring seat order (seat 0 first) by active-set leaderboard rank.
 
@@ -472,6 +498,41 @@ def _stats_by_player(session: Session, set_id: str) -> dict[str, list[dict]]:
             Player.leaderboard_opt_in.is_(True),
             PlayerStats.set_id == set_id,
         )
+    ).all()
+    by_player: dict[str, list[dict]] = {}
+    for r in rows:
+        by_player.setdefault(r.player_id, []).append({
+            "format": r.format, "events": int(r.events or 0),
+            "wins": int(r.wins or 0), "losses": int(r.losses or 0),
+            "trophies": int(r.trophies or 0),
+        })
+    return by_player
+
+
+def _stats_by_player_asof(session: Session, set_id: str, cutoff: datetime) -> dict[str, list[dict]]:
+    """The same rows `_stats_by_player` reads, aggregated instead from the drafts finished before `cutoff`.
+
+    `player_stats` carries one total per (player, format) and no time dimension, so a past instant can only
+    be rebuilt from `draft_events`, which keeps a row per draft with the time it finished. A draft still in
+    progress has no finish time and counts for no instant."""
+    rows = session.execute(
+        select(
+            DraftEvent.player_id,
+            DraftEvent.format,
+            func.count().label("events"),
+            func.sum(DraftEvent.wins).label("wins"),
+            func.sum(DraftEvent.losses).label("losses"),
+            func.sum(case((DraftEvent.is_trophy, 1), else_=0)).label("trophies"),
+        )
+        .join(Player, Player.id == DraftEvent.player_id)
+        .where(
+            Player.active.is_(True),
+            Player.leaderboard_opt_in.is_(True),
+            DraftEvent.set_id == set_id,
+            DraftEvent.finished_at.isnot(None),
+            DraftEvent.finished_at < cutoff,
+        )
+        .group_by(DraftEvent.player_id, DraftEvent.format)
     ).all()
     by_player: dict[str, list[dict]] = {}
     for r in rows:
