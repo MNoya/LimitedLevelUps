@@ -30,9 +30,12 @@ from bot.services.pod_drafts import (
 )
 from bot.services.pod_replays import capture_event_replays
 from bot.services.pod_team_board import (
+    TeamBoardData,
+    build_opponent_summary,
     build_team_board_views,
     build_team_summary,
     load_team_board_data,
+    seating_attachment,
 )
 from bot.discord_helpers import NBSP, ZWSP, player_url
 from bot.services.pod_tournament import (
@@ -131,12 +134,9 @@ async def start_team_tournament(manager: "PodDraftManager") -> None:
     if thread is None:
         return
     data = await asyncio.to_thread(load_team_board_data, event_id)
-    summary_embed, seating_file = await asyncio.to_thread(build_team_summary, data)
+    summary_embed, seating_png = await asyncio.to_thread(build_team_summary, data)
     try:
-        if seating_file is not None:
-            await thread.send(embed=summary_embed, file=seating_file)
-        else:
-            await thread.send(embed=summary_embed)
+        await thread.send(embed=summary_embed, file=seating_attachment(seating_png))
         board_messages = [await thread.send(view=view) for view in build_team_board_views(data)]
     except discord.HTTPException:
         log.warning(f"[TEAM] board_post_failed event={event_id}", exc_info=True)
@@ -147,7 +147,7 @@ async def start_team_tournament(manager: "PodDraftManager") -> None:
     except discord.HTTPException:
         log.warning(f"[TEAM] board_pin_failed event={event_id}", exc_info=True)
     asyncio.create_task(send_submit_deck_dms(manager.bot, event_id))
-    await _create_team_threads(manager, board_messages[0])
+    await _create_team_threads(manager, board_messages[0], data, seating_png)
 
 
 def _load_or_assign_teams_sync(event_id: str, roster: list[str]) -> tuple[dict[str, str], list[str]]:
@@ -211,9 +211,15 @@ def _persist_team_thread_ids_sync(event_id: str, team_a_id: str | None, team_b_i
         session.commit()
 
 
-async def _create_team_threads(manager: "PodDraftManager", board_message: discord.Message) -> None:
+async def _create_team_threads(
+    manager: "PodDraftManager",
+    board_message: discord.Message,
+    data: TeamBoardData,
+    seating_png: bytes | None,
+) -> None:
     """Open a private thread per team off the pod's parent channel, add each side's linked members,
-    and post the one-line intro pointing at the board — then the bot never posts there again.
+    and post the intro pointing at the board over the opposing roster and the seating ring, so a team
+    scouts who they play without leaving the room — then the bot never posts there again.
 
     Best-effort: a pod without a parent text channel (or lacking the private-thread permission) skips
     the threads rather than failing the tournament. Matches stay reportable on the shared board.
@@ -257,11 +263,15 @@ async def _create_team_threads(manager: "PodDraftManager", board_message: discor
             except (discord.HTTPException, ValueError):
                 log.warning(f"[TEAM] thread_add_user_failed team={team} user={discord_id}", exc_info=True)
         try:
-            await thread.send(TEAM_THREAD_INTRO.format(
-                emoji=pod_team.team_emoji(team),
-                label=pod_team.team_label(team),
-                board_url=board_message.jump_url,
-            ).rstrip())
+            await thread.send(
+                TEAM_THREAD_INTRO.format(
+                    emoji=pod_team.team_emoji(team),
+                    label=pod_team.team_label(team),
+                    board_url=board_message.jump_url,
+                ).rstrip(),
+                embed=build_opponent_summary(data, team, seating_png),
+                file=seating_attachment(seating_png),
+            )
         except discord.HTTPException:
             log.warning(f"[TEAM] thread_intro_failed event={manager.event_id} team={team}", exc_info=True)
 

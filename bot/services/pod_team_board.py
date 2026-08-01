@@ -324,18 +324,39 @@ def team_result_headline(data: TeamBoardData) -> str | None:
     return pod_team.draft_result_line(winner, members, a_wins, b_wins)
 
 
-def build_team_summary(data: TeamBoardData) -> tuple[discord.Embed, discord.File | None]:
+def build_team_summary(data: TeamBoardData) -> tuple[discord.Embed, bytes | None]:
     """The board's header message: both rosters side by side over the round-table ring the pod drafted
     from, posted once and never edited. A classic embed because V2 has no column primitive; the
     running score lives on the board's progress bar, not here. The ring is the image `/pod-seeding`
-    draws, each seat tinted with its team color, and comes back as an attachment to send alongside."""
+    draws, each seat tinted with its team color, returned as raw bytes so every surface repeating the
+    card uploads one render."""
     embed = discord.Embed(color=discord.Color.green())
     add_team_roster_fields(embed, data.rosters)
     png = team_seating_png(data)
     if png is None:
         return embed, None
     embed.set_image(url=f"attachment://{SEATING_IMAGE_NAME}")
-    return embed, discord.File(io.BytesIO(png), SEATING_IMAGE_NAME)
+    return embed, png
+
+
+def build_opponent_summary(data: TeamBoardData, team: str, seating_png: bytes | None) -> discord.Embed:
+    """The summary card as one side sees it in their private team thread: only the team they play,
+    over the same seating ring. Their own roster is the thread's member list already."""
+    opponents = pod_team.other_team(team)
+    embed = discord.Embed(color=discord.Color.green())
+    title = f"{pod_team.team_emoji(opponents)} {pod_team.team_label(opponents)} Opponents"
+    add_roster_field(embed, title, data.rosters.get(opponents, []))
+    if seating_png is not None:
+        embed.set_image(url=f"attachment://{SEATING_IMAGE_NAME}")
+    return embed
+
+
+def seating_attachment(png: bytes | None) -> discord.File | None:
+    """A single-use upload handle for rendered seating bytes. Each message carrying the summary embed
+    needs its own, since a sent file is consumed."""
+    if png is None:
+        return None
+    return discord.File(io.BytesIO(png), SEATING_IMAGE_NAME)
 
 
 SEATING_IMAGE_NAME = "seating.png"
@@ -362,14 +383,18 @@ def add_team_roster_fields(embed: discord.Embed, rosters: dict[str, list[TeamBoa
     Arena handle apart instead of wrapping into each other. Shared by the board summary header and the
     team-draft lobby card so both surfaces render identically."""
     for team in (pod_team.TEAM_A, pod_team.TEAM_B):
-        members = rosters.get(team, [])
-        add_two_column_field(
-            embed,
-            f"{pod_team.team_emoji(team)} {pod_team.team_label(team)}",
-            [member.display for member in members],
-            [f"`{member.arena}`" if member.arena else ZWSP for member in members],
-            spacer=True,
-        )
+        title = f"{pod_team.team_emoji(team)} {pod_team.team_label(team)}"
+        add_roster_field(embed, title, rosters.get(team, []))
+
+
+def add_roster_field(embed: discord.Embed, title: str, members: list[TeamBoardMember]) -> None:
+    add_two_column_field(
+        embed,
+        title,
+        [member.display for member in members],
+        [f"`{member.arena}`" if member.arena else ZWSP for member in members],
+        spacer=True,
+    )
 
 
 def match_line(m: dict, waiting_on: int | None = None) -> str:

@@ -59,6 +59,7 @@ from bot.services.pod_team_board import (
     build_team_board_views,
     build_team_round_view,
     build_team_summary,
+    seating_attachment,
 )
 from bot.services.pod_team_flow import build_team_final_embed
 from bot.services.pod_team_showcase import build_team_championship_view, format_team_trophy_title
@@ -650,11 +651,8 @@ def _team_round_preview_data(clinch: bool = False) -> TeamBoardData:
 
 
 async def _send_team_summary(ctx, data: TeamBoardData) -> None:
-    embed, seating_file = build_team_summary(data)
-    if seating_file is not None:
-        await ctx.send(embed=embed, file=seating_file)
-        return
-    await ctx.send(embed=embed)
+    embed, seating_png = build_team_summary(data)
+    await ctx.send(embed=embed, file=seating_attachment(seating_png))
 
 
 def _team_reveal_preview_parts() -> tuple[list[str], dict[str, str]]:
