@@ -3,8 +3,9 @@
 Available to the bot owner, administrators and the Moderator role. Each page renders into a
 Components V2 container: the title sits beside the page thumbnail, the rest of the body runs
 full-width below so lists never wrap around the image. Pages are synced per channel — a channel
-whose containers all match the source is left alone, otherwise every guide message in it is deleted
-and reposted in page order, so a multi-page channel never ends up out of order. Pages post through a
+whose containers all match the source is left alone, one holding a message per page is edited in
+place so the sync leaves no unread mark, and anything else has every guide message deleted and
+reposted in page order, so a multi-page channel never ends up out of order. Pages post through a
 bot-managed webhook wearing the server owner's name and avatar, so the guide reads as posted by them
 (with Discord's APP tag); without Manage Webhooks the bot posts as itself. Native Server Guide
 resource channels default-deny the bot — each needs explicit channel-level overwrites for the bot's
@@ -71,6 +72,9 @@ async def sync_channel(guild: discord.Guild, channel_name: str,
         topic_note = await _sync_topic(channel, _channel_topic(rendered))
         if _all_current(messages, views, webhook):
             return SYNC_CURRENT, f"✅ {channel.mention} up to date{topic_note}{webhook_note}"
+        if _editable_in_place(messages, views, webhook):
+            await _edit_pages(webhook, messages, views)
+            return SYNC_UPDATED, f"✅ {channel.mention} edited{topic_note}{webhook_note}"
         had_existing = bool(messages)
         for message in messages:
             await _delete_guide_message(message, webhook)
@@ -216,14 +220,41 @@ def _all_current(messages: list[discord.Message], views: list[ui.LayoutView],
     """A channel is current when its guide messages match the rendered pages one-for-one in order —
     same count, same author, same content. Matching by position rather than title lets a page carry
     no heading at all (a channel's sole page repeats the channel name, so it drops the title)."""
-    if len(messages) != len(views):
+    if not _editable_in_place(messages, views, webhook):
         return False
     for message, view in zip(messages, views):
-        if webhook is not None and message.webhook_id != webhook.id:
-            return False
         if _message_signature(message) != _view_signature(view):
             return False
     return True
+
+
+def _editable_in_place(messages: list[discord.Message], views: list[ui.LayoutView],
+                       webhook: discord.Webhook | None) -> bool:
+    """True when the channel already holds one message per page, in order, all owned by the identity
+    the sync posts as now. Editing keeps the channel from showing as unread, so a delete-and-repost
+    is kept for the cases an edit cannot express: a page added or removed, or a channel whose pages
+    were posted as the bot before it gained its webhook."""
+    if len(messages) != len(views):
+        return False
+    if webhook is None:
+        return True
+    for message in messages:
+        if message.webhook_id != webhook.id:
+            return False
+    return True
+
+
+async def _edit_pages(webhook: discord.Webhook | None, messages: list[discord.Message],
+                      views: list[ui.LayoutView]) -> None:
+    """Rewrite only the pages whose content moved, so a sync that touches one page of a multi-page
+    channel leaves the others alone."""
+    for message, view in zip(messages, views):
+        if _message_signature(message) == _view_signature(view):
+            continue
+        if webhook is not None:
+            await webhook.edit_message(message.id, view=view, allowed_mentions=discord.AllowedMentions.none())
+        else:
+            await message.edit(view=view, allowed_mentions=discord.AllowedMentions.none())
 
 
 async def _sync_topic(channel: discord.TextChannel, topic: str | None) -> str:
