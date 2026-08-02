@@ -208,6 +208,20 @@ below but not built.
 then final), independent of setup. Ordering dependency: the next set must already be in
 `bot/sets.py` (via `/add-set`) before its contest can resolve dates.
 
+### Bot: T-1 day vote reminder
+
+An hourly UTC tick (`bot/tasks/p0p1_reminder_post.py`) fires one ping into the contest set's own discussion channel once `now` is inside the last day of voting. A contest whose whole window is shorter than the lead qualifies from the moment it opens, so a short contest still gets its nudge. There is deliberately no hand-invoked equivalent on production: Discord grants a role one member per call (no bulk endpoint exists), measured at ~0.64s per call, so a 90-person sweep is ~180 calls and about two minutes. That is fine unattended and far too slow to hang a command on. `!test p0p1reminder` runs the identical path on the test server, held to the caller. The set channel is matched by word overlap, so a stylised name like `#🏔️-the-hobbit` resolves without configuration.
+
+**Targeting is a throwaway role, not DMs.** A bot can only message a user who shares a guild with it, so a DM sweep reaches nobody a role grant misses, and a burst of unsolicited DMs is the pattern Discord reads as spam. `bot/services/p0p1_reminder.py` grants the shared `Reminder` role to every non-voter present in the guild, makes it mentionable only for the send, posts, then empties it. The role is deliberately generic so any future one-off nudge can borrow the same swap; the swap itself still lives in the P0P1 module and moves out when a second caller wants it. It sits in `MANAGED_ROLES` with `REMINDER_COLOR`, so the reconcile owns its name and color, and `ManagedRole.aliases` renames an existing role in place instead of orphaning it. `reminder_role` only creates it for a guild the reconcile has not reached yet. The role is never deleted: a deleted role renders as `@deleted-role` in the history the ping leaves behind. It is emptied before the grants as well as after, so a run that died mid-strip cannot ping the previous contest's list.
+
+**Audience** is everyone holding a P0P1 identity (`p0p1_voters` union anyone with entries) who has no entry for this contest. Identity resolves through `auth.identities`, not `players` — most voters signed in on the website and never joined the leaderboard, so `auth.identities` is the only place their Discord id exists. The reach ceiling is guild membership, which is why the run reports `pinged / targeted` and an `absent` count for voters who are not in the server: no notification surface can reach those, and a growing `absent` is the number worth watching.
+
+**Only the production guild gets a real sweep.** Anywhere else `audience` holds the ping to whoever ran `!test p0p1reminder`, and to nobody at all when the scheduled tick fires. A test server holds real people who never signed up for a P0P1 nudge, and its audience comes from the dev fallback below anyway, so a full sweep there would ping the wrong crowd. The post itself still goes up, so the card stays reviewable.
+
+Supabase owns `auth`, so no developer database has it. Rather than making the role-swap path testable only against production, a missing schema falls back to every local `players` row and labels the outcome `SOURCE_PLAYERS`; the bot-spam report then says outright that the audience is not the real one. Nothing links a local `players` row to a P0P1 identity, so the fallback deliberately excludes nobody.
+
+**One post per contest** is enforced off channel history, matched on the reminder role's own mention (nothing else posts it in a set channel) plus the contest name. A history read that fails suppresses the post, since a duplicate mass ping is worse than a missed one, and the hourly tick retries on its own. Every run mirrors its reach to bot-spam, which is the only trace left once the role is emptied.
+
 ## Participant history
 
 - **Identity (settled): frozen slug on `p0p1_voters`**, mirroring how `players.slug` works on

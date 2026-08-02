@@ -8,14 +8,16 @@ from discord import ui
 
 from bot import emojis
 from bot.config import settings
-from bot.services.containers import build_container
+from bot.services.containers import as_view, build_container
 from bot.services.mock_lobby_card import set_symbol_url
 from bot.services.p0p1_contest import Contest, PHASE_LOCKED, PHASE_PRE, PHASE_VOTING
-from bot.services.ping_roles import TOP_P0P1_CHALLENGER_ROLE_NAME
+from bot.services.ping_roles import P0P1_COLOR, TOP_P0P1_CHALLENGER_ROLE_NAME
 
 SAVED_PICKS = "Log in with Discord, your picks save automatically."
 CHANGE_PICKS_EARLY_ACCESS = "Update anytime before the Early Access deadline"
 SYNTHETIC_CHALLENGER_TAG = f"**@{TOP_P0P1_CHALLENGER_ROLE_NAME}**"
+P0P1_ACCENT = discord.Color.from_str(P0P1_COLOR)
+REMINDER_ADDRESS = "{role_mention} if you haven't made your P0P1 picks yet!"
 
 
 def challenger_mention(role: discord.Role | None) -> str:
@@ -68,6 +70,35 @@ def advertisement(
                  f"Who are the new {challenger_mention}?"]
 
     return build_container("\n".join(lines), set_symbol_url(contest.code))
+
+
+def reminder_view(contest: Contest, *, featured_code: str | None, role_mention: str, voter_count: int) -> ui.LayoutView:
+    """The T-1 nudge as it is sent: the addressed line as a bare text block above the card, so the ping
+    reads as an address to the reader instead of as part of the post."""
+    address = REMINDER_ADDRESS.format(role_mention=role_mention)
+    return as_view(ui.TextDisplay(address), reminder(contest, featured_code=featured_code,
+                                                     voter_count=voter_count))
+
+
+def reminder(contest: Contest, *, featured_code: str | None, voter_count: int) -> ui.Container:
+    """The T-1 day nudge. Turnout rides as subtext, where it reads as encouragement instead of as a
+    scoreboard the reader is missing from."""
+    url = contest_url(contest.code, featured_code)
+    lines = [f"## {contest.name} Pack 0 Pick 1 Challenge closes soon"]
+    turnout = _turnout_line(voter_count)
+    if turnout:
+        lines.append(turnout)
+    lines.append(f"Voting closes {_stamp(contest.voting_deadline, 'R')}, {_stamp(contest.voting_deadline, 'F')}")
+    lines.append(f"### {emojis.prefix('llu')}[**Pick your team**]({url})")
+    return build_container("\n".join(lines), set_symbol_url(contest.code), accent=P0P1_ACCENT)
+
+
+def _turnout_line(voter_count: int) -> str:
+    """Empty at zero, where naming the count would advertise that nobody has played."""
+    if voter_count <= 0:
+        return ""
+    players = "player has" if voter_count == 1 else "players have"
+    return f"-# {voter_count} {players} voted so far"
 
 
 def _stamp(when: datetime, style: str) -> str:

@@ -53,6 +53,7 @@ from bot.discord_helpers import refresh_player_profiles
 from bot import emojis
 from bot.commands.test_group import setup as setup_test_group
 from bot.commands.testads import setup as setup_testads
+from bot.commands.testp0p1reminder import setup as setup_testp0p1reminder
 from bot.commands.testawards import setup as setup_testawards
 from bot.commands.testchampcard import setup as setup_testchampcard
 from bot.commands.testchampionship import setup as setup_testchampionship
@@ -113,6 +114,7 @@ from bot.services.pod_launch import init_launch, rearm_signals
 from bot.tasks.format_schedule_post import init_format_schedule
 from bot.tasks.set_awards_post import init_set_awards_schedule
 from bot.tasks.championship_post import init_championship_schedule
+from bot.tasks.p0p1_reminder_post import init_p0p1_reminder
 from bot.tasks.pod_underfill import init_underfill
 from bot.tasks.pod_thread_cleanup import init_thread_cleanup
 
@@ -214,6 +216,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         init_format_schedule(bot)
         init_set_awards_schedule(bot)
         init_championship_schedule(bot)
+        init_p0p1_reminder(bot)
         init_launch(bot)
         init_daily_poll(bot)
         init_thread_cleanup(bot)
@@ -253,6 +256,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testlobby(bot)
         await setup_testcomponent(bot)
         await setup_testads(bot)
+        await setup_testp0p1reminder(bot)
         await setup_testawards(bot)
         await setup_testschedule(bot)
         await setup_testthreadintro(bot)

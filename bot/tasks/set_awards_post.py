@@ -17,6 +17,7 @@ from discord.ext import commands
 from bot import emojis
 from bot.commands.set_awards import run_set_awards_ceremony
 from bot.config import settings
+from bot.discord_helpers import message_text
 from bot.services.format_schedule import (
     FORMAT_ARCHIVE_CATEGORY,
     OPEN_TZ,
@@ -24,7 +25,6 @@ from bot.services.format_schedule import (
     channel_for_set,
     set_before,
 )
-from bot.tasks.format_schedule_post import message_text
 
 log = logging.getLogger(__name__)
 

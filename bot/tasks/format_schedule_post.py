@@ -28,6 +28,7 @@ from bot.commands.guide import SYNC_CURRENT, sync_channel, sync_set_tracking_tod
 from bot.commands.leaderboard import build_set_send_off_embeds
 from bot.config import settings
 from bot.database import SessionLocal
+from bot.discord_helpers import message_text
 from bot.models import MagicSet
 from bot.services import mtgscribe
 from bot.services.format_schedule import (
@@ -309,32 +310,6 @@ async def _pinned_schedule(channel: discord.TextChannel, marker: str) -> discord
     except discord.HTTPException:
         log.warning(f"format-schedule: could not read pins in #{channel.name}", exc_info=True)
     return None
-
-
-def message_text(message: discord.Message) -> str:
-    """Flatten everything a bot message might carry its text in. A schedule pin is a Components V2
-    message (title in a TextDisplay), an announcement is an embed (text in the description), and plain
-    posts use ``content`` — so pin-matching and announcement dedup both read from one place."""
-    parts = [message.content] if message.content else []
-    for embed in message.embeds:
-        if embed.title:
-            parts.append(embed.title)
-        if embed.description:
-            parts.append(embed.description)
-    parts.append(_component_text(message.components))
-    return "\n".join(part for part in parts if part)
-
-
-def _component_text(components) -> str:
-    parts = []
-    for component in components:
-        content = getattr(component, "content", None)
-        if isinstance(content, str):
-            parts.append(content)
-        children = getattr(component, "children", None)
-        if children:
-            parts.append(_component_text(children))
-    return "\n".join(parts)
 
 
 async def _announce(channel: discord.TextChannel, pin: SchedulePin, fresh: list,

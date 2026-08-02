@@ -138,11 +138,12 @@ def archive_candidates(text_channels, when: datetime | None = None) -> list:
     return candidates
 
 
-def channel_for_set(channels, seed: SetSeed, category: str = LATEST_SET_CATEGORY):
+def channel_for_set(channels, seed: SetSeed, category: str | None = LATEST_SET_CATEGORY):
     """The discussion channel for a set within ``category``, matched by name — MTG Strategy for the live
-    set, Format Archive for one that rotated out. ``None`` when none matches."""
+    set, Format Archive for one that rotated out. ``category=None`` matches anywhere, for a preview-season
+    channel a mod created before it was filed. ``None`` when none matches."""
     for channel in channels:
-        if channel.category is None or channel.category.name != category:
+        if category is not None and (channel.category is None or channel.category.name != category):
             continue
         if channel_matches_set(channel.name, seed.name):
             return channel

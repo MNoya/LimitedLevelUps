@@ -2,15 +2,20 @@ import asyncio
 from datetime import datetime
 from types import SimpleNamespace
 
+import discord
 import pytest
 
 from bot.services.ping_roles import (
     EARLY_POD_ROLE_NAME,
+    MANAGED_ROLES,
+    REMINDER_COLOR,
+    REMINDER_ROLE_NAME,
     MOCK_DRAFT_ROLE_NAME,
     PING_ROLES,
     LATE_POD_ROLE_NAME,
     WEEKEND_EARLY_POD_ROLE_NAME,
     WEEKEND_LATE_POD_ROLE_NAME,
+    _ensure_managed_role,
     _first_welcome_for,
     auto_grant_spec_for_event,
     blurb_with_time,
@@ -181,3 +186,51 @@ def _spec_named(name):
         if spec.name == name:
             return spec
     raise AssertionError(f"no spec named {name}")
+
+
+class FakeManagedGuild:
+    def __init__(self, *roles):
+        self.name = "guild"
+        self.roles = list(roles)
+        self.created = []
+
+    async def create_role(self, **kwargs):
+        self.created.append(kwargs)
+        return SimpleNamespace(**kwargs)
+
+
+class FakeManagedRole:
+    def __init__(self, name, colour):
+        self.name = name
+        self.colour = colour
+
+    async def edit(self, **kwargs):
+        for field, value in kwargs.items():
+            if field != "reason":
+                setattr(self, field, value)
+
+
+def test_a_renamed_managed_role_is_adopted_rather_than_orphaned():
+    wanted = discord.Colour.from_str(REMINDER_COLOR)
+    stale = FakeManagedRole("P0P1 Reminder", discord.Colour.default())
+    guild = FakeManagedGuild(stale)
+
+    asyncio.run(_ensure_managed_role(guild, managed_named(REMINDER_ROLE_NAME)))
+
+    assert (stale.name, stale.colour) == (REMINDER_ROLE_NAME, wanted)
+    assert guild.created == []
+
+
+def test_a_managed_role_with_no_alias_present_is_created():
+    guild = FakeManagedGuild()
+
+    asyncio.run(_ensure_managed_role(guild, managed_named(REMINDER_ROLE_NAME)))
+
+    assert [role["name"] for role in guild.created] == [REMINDER_ROLE_NAME]
+
+
+def managed_named(name):
+    for spec in MANAGED_ROLES:
+        if spec.name == name:
+            return spec
+    raise AssertionError(f"{name} is not a managed role")

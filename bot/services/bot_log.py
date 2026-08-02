@@ -2,7 +2,7 @@
 
 Smoke alarm, not audit log — Railway has the full picture. Posts a terse line per
 surprise event, with a 60s per-fingerprint cooldown to collapse storms.
-Silent no-op when the channel is unconfigured.
+Resolves by configured id, else by channel name; silent no-op when neither is found.
 """
 from __future__ import annotations
 
@@ -12,6 +12,9 @@ import time
 
 import discord
 from discord.ext import commands
+
+from bot.config import settings
+from bot.discord_helpers import channel_matching_name
 
 
 log = logging.getLogger(__name__)
@@ -28,8 +31,6 @@ class BotLog:
         self._last_posted: dict[str, float] = {}
 
     async def post(self, summary: str, *, fingerprint: str | None = None, tag: str = "INFO") -> None:
-        if self.channel_id is None:
-            return
         now = time.monotonic()
         fp = fingerprint or hashlib.sha1(f"{tag}|{summary}".encode("utf-8")).hexdigest()
         last = self._last_posted.get(fp)
@@ -54,8 +55,6 @@ class BotLog:
 
     async def post_plain(self, content: str | None = None, *, embed: "discord.Embed | None" = None) -> None:
         """Send raw content/embed to the bot-spam channel"""
-        if self.channel_id is None:
-            return
         if content is None and embed is None:
             return
         if content is not None and len(content) > _MESSAGE_MAX_CHARS:
@@ -69,11 +68,23 @@ class BotLog:
             log.warning("bot_log channel send failed", exc_info=True)
 
     async def _resolve_channel(self):
+        """Falls back to a channel named `bot-spam` when no id is configured, so a test server logs without
+        anyone setting a per-environment id."""
+        if self.channel_id is None:
+            return self._channel_by_name()
         try:
             return self.bot.get_channel(self.channel_id) or await self.bot.fetch_channel(self.channel_id)
         except discord.HTTPException:
             log.warning(f"bot_log channel {self.channel_id} unreachable", exc_info=True)
-            return None
+            return self._channel_by_name()
+
+    def _channel_by_name(self):
+        """`get` hands the silent fallback whatever object it was called with, which need not be a Bot."""
+        for guild in getattr(self.bot, "guilds", ()):
+            channel = channel_matching_name(guild, settings.discord_botlog_channel_name)
+            if channel is not None:
+                return channel
+        return None
 
 
 _NOOP_LOG: "BotLog | None" = None

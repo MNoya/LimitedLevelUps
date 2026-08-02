@@ -12,8 +12,10 @@ from discord import ui
 ACCENT = discord.Color.green()
 
 
-def build_container(header: str, thumbnail_url: str | None, body: str | None = None) -> ui.Container:
-    container = ui.Container(accent_colour=ACCENT)
+def build_container(
+    header: str, thumbnail_url: str | None, body: str | None = None, accent: discord.Color | None = None,
+) -> ui.Container:
+    container = ui.Container(accent_colour=accent or ACCENT)
     if thumbnail_url:
         container.add_item(ui.Section(ui.TextDisplay(header), accessory=ui.Thumbnail(media=thumbnail_url)))
     else:

@@ -132,6 +132,7 @@ PING_ROLES: tuple[PingRole, ...] = (
 class ManagedRole:
     name: str
     color: str
+    aliases: tuple[str, ...] = ()
 
 
 SET_CHAMPION_ROLE_NAME = "Set Champion"
@@ -139,12 +140,17 @@ SYNTHETIC_CHAMPION_TAG = f"**@{SET_CHAMPION_ROLE_NAME}**"
 PRIOR_SET_CHAMPION_ROLE_NAME = "Prior Set Champion"
 ORGANIZER_ROLE_NAME = "Organizer"
 TOP_P0P1_CHALLENGER_ROLE_NAME = "Top P0P1 Challenger"
+P0P1_COLOR = "#EFBF04"
+
+REMINDER_ROLE_NAME = "Reminder"
+REMINDER_COLOR = "#EFBF04"
 
 MANAGED_ROLES: tuple[ManagedRole, ...] = (
     ManagedRole(SET_CHAMPION_ROLE_NAME, "#82CBFF"),
     ManagedRole(PRIOR_SET_CHAMPION_ROLE_NAME, "#F1C40F"),
     ManagedRole(ORGANIZER_ROLE_NAME, "#4CD4A9"),
-    ManagedRole(TOP_P0P1_CHALLENGER_ROLE_NAME, "#EFBF04"),
+    ManagedRole(TOP_P0P1_CHALLENGER_ROLE_NAME, P0P1_COLOR),
+    ManagedRole(REMINDER_ROLE_NAME, REMINDER_COLOR, aliases=("P0P1 Reminder",)),
 )
 
 
@@ -824,7 +830,7 @@ async def _ensure_role(guild: discord.Guild, spec: PingRole) -> None:
 
 async def _ensure_managed_role(guild: discord.Guild, spec: ManagedRole) -> None:
     wanted = discord.Colour.from_str(spec.color)
-    role = discord.utils.get(guild.roles, name=spec.name)
+    role = discord.utils.get(guild.roles, name=spec.name) or await _adopt_managed_alias(guild, spec)
     if role is None:
         try:
             await guild.create_role(name=spec.name, colour=wanted, reason="managed-role create")
@@ -838,6 +844,22 @@ async def _ensure_managed_role(guild: discord.Guild, spec: ManagedRole) -> None:
             log.info(f"recolored {spec.name!r} in {guild.name}")
         except discord.HTTPException:
             log.warning(f"could not recolor {spec.name!r} in {guild.name}", exc_info=True)
+
+
+async def _adopt_managed_alias(guild: discord.Guild, spec: ManagedRole) -> discord.Role | None:
+    """Rename a managed role in place when its name moves to `aliases`, so the members already holding it
+    keep it. Without this a rename orphans the old role and silently starts an empty new one."""
+    for alias in spec.aliases:
+        existing = discord.utils.get(guild.roles, name=alias)
+        if existing is None:
+            continue
+        try:
+            await existing.edit(name=spec.name, reason="managed-role rename")
+            log.info(f"renamed {alias!r} -> {spec.name!r} in {guild.name}")
+        except discord.HTTPException:
+            log.warning(f"could not rename {alias!r} in {guild.name}", exc_info=True)
+        return existing
+    return None
 
 
 async def _adopt_alias(guild: discord.Guild, spec: PingRole) -> discord.Role | None:
