@@ -56,3 +56,11 @@ def notify_pod_complete(bot, event_id: str) -> None:
     finalized, never at draft done: a pod mid-rounds still owns its slot."""
     if _POD_COMPLETE_HOOK is not None:
         asyncio.create_task(_POD_COMPLETE_HOOK(bot, event_id))
+
+
+def active_manager_for_channel(channel_id: int | None):
+    """The live manager whose pod thread is this channel, or None."""
+    for manager in ACTIVE_POD_MANAGERS.values():
+        if manager.thread_id == channel_id:
+            return manager
+    return None

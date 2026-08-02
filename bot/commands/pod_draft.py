@@ -19,7 +19,7 @@ from bot.database import SessionLocal
 from bot.discord_helpers import extract_avatar_hash
 from bot.services import championship as championship_service
 from bot.services import pod_format_poll
-from bot.services.lobby_embed import guard_ready_check
+from bot.services.lobby_embed import guard_ready_check, open_settings_panel
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, set_card_phase_hook, set_pod_card_hook
 from bot.services.pod_draft_manager import (
     TeamVotePoster,
@@ -303,20 +303,7 @@ class PodDraft(commands.Cog):
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
     async def pod_settings(self, interaction: discord.Interaction) -> None:
-        thread_id = str(interaction.channel_id) if interaction.channel_id else None
-        event_id = await asyncio.to_thread(load_event_id_by_thread_sync, thread_id) if thread_id else None
-        if event_id is None:
-            await interaction.response.send_message(
-                "Run this inside a pod-draft thread.",
-                ephemeral=True,
-            )
-            return
-        log.info(f"pod-settings: {interaction.user} opened panel for event_id={event_id}")
-        is_owner = await self.bot.is_owner(interaction.user)
-        await interaction.response.send_message(
-            view=await build_pod_settings_view(self.bot, event_id, is_owner=is_owner),
-            ephemeral=True,
-        )
+        await open_settings_panel(interaction)
 
     @app_commands.command(
         name="link-arena",

@@ -16,6 +16,7 @@ from bot import emojis
 from bot.commands import descriptions as desc
 from bot.discord_helpers import add_two_column_field, command_line, quote_block
 from bot.services import pod_team
+from bot.services.pod_active import active_manager_for_channel
 from bot.services.pod_drafts import load_event_id_by_thread_sync, normalize_player_name
 from bot.services.pod_team_board import TeamBoardMember, add_team_roster_fields
 from bot.services.pod_tournament import actor_label
@@ -28,11 +29,6 @@ SETTINGS_CUSTOM_ID = "pod-draft:settings"
 FORCE_START_CUSTOM_ID = "pod-draft:force-start"
 
 _NO_ACTIVE_POD_MSG = "No active pod-draft session in this thread."
-
-
-def _active_manager_for_channel(channel_id: int | None):
-    from bot.services.pod_active import ACTIVE_POD_MANAGERS
-    return next((m for m in ACTIVE_POD_MANAGERS.values() if m.thread_id == channel_id), None)
 
 
 class LobbyReadyButtonView(discord.ui.View):
@@ -71,7 +67,7 @@ class LobbyReadyButtonView(discord.ui.View):
         channel = interaction.channel
         channel_id = channel.id if channel else None
         actor = actor_label(interaction)
-        manager = _active_manager_for_channel(channel_id)
+        manager = active_manager_for_channel(channel_id)
         if manager is None:
             log.info(f"{actor} clicked Ready Check in channel={channel_id} (no active pod)")
             await interaction.response.send_message(_NO_ACTIVE_POD_MSG, ephemeral=True)
@@ -109,7 +105,7 @@ class ForceStartButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         actor = actor_label(interaction)
-        manager = _active_manager_for_channel(interaction.channel_id)
+        manager = active_manager_for_channel(interaction.channel_id)
         if manager is None:
             if _force_start_preview_factory is not None:
                 ready, total, pending = _force_start_preview_factory()
@@ -280,11 +276,12 @@ async def reply_private(interaction: discord.Interaction, **kwargs) -> None:
 
 
 async def open_settings_panel(interaction: discord.Interaction) -> None:
-    """Resolve the thread's pod-draft event and open the ephemeral Settings panel. Resolution goes
-    through the DB rather than ACTIVE_POD_MANAGERS so the button works from registration onward,
-    before the Draftmancer session launches. From inside the thread the interaction channel is the
-    thread; from the channel card the interaction channel is the parent, so it falls back to the
-    clicked message id — the starter message and its thread share the same id.
+    """Resolve the thread's pod-draft event and open the ephemeral Settings panel. Shared by the lobby
+    Settings button and /pod-settings. Resolution goes through the DB rather than ACTIVE_POD_MANAGERS
+    so it works from registration onward, before the Draftmancer session launches. From inside the
+    thread the interaction channel is the thread; from the channel card the interaction channel is the
+    parent, so it falls back to the clicked message id — the starter message and its thread share the
+    same id.
 
     Acknowledged before the lookups, which together can run past the three seconds Discord allows a
     first response."""
@@ -300,10 +297,10 @@ async def open_settings_panel(interaction: discord.Interaction) -> None:
         if _settings_preview_factory is not None:
             await interaction.followup.send(view=_settings_preview_factory(), ephemeral=True)
             return
-        log.info(f"{actor} clicked Settings in channel={channel_id} (no pod-draft event)")
+        log.info(f"{actor} opened Settings in channel={channel_id} (no pod-draft event)")
         await interaction.followup.send(_NO_ACTIVE_POD_MSG, ephemeral=True)
         return
-    log.info(f"{actor} clicked Settings for event {event_id}")
+    log.info(f"{actor} opened Settings for event {event_id}")
     is_owner = await interaction.client.is_owner(interaction.user)
     await interaction.followup.send(
         view=await build_pod_settings_view(interaction.client, event_id, is_owner=is_owner),
