@@ -315,9 +315,14 @@ def build_not_ready_view() -> discord.ui.View:
     return view
 
 
-def build_drafting_view(spectate_url: str | None) -> discord.ui.View | None:
-    """The lobby cards' controls once drafting starts: Spectate plus a Settings button so an unlinked
-    seat can still be fixed mid-draft. Settings routes through the registered LobbyReadyButtonView."""
+def build_started_lobby_view(spectate_url: str | None) -> discord.ui.View:
+    """The lobby card's controls from the start of the draft to the end of the pod: a Settings button,
+    plus Spectate while the draft is live. Settings routes through the registered
+    LobbyReadyButtonView.
+
+    The card keeps it after the draft finishes because that panel is where the organizer fixes an
+    unlinked seat and reorganizes a round, and the finished card is the one message that stays up for
+    the whole match phase."""
     view = discord.ui.View(timeout=None)
     view.add_item(SettingsButton())
     if spectate_url:

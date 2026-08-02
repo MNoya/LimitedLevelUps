@@ -84,8 +84,10 @@ from bot.services.pod_tournament import (
     build_standings_embed_for_event,
     build_thread_link_button,
     is_pod_organizer,
+    open_manage_rounds,
     post_trophy_hype_for_event,
     refresh_round_pairing_messages,
+    round_picker_options,
 )
 from bot.services.pod_team_showcase import build_team_championship_view_for_event
 
@@ -776,6 +778,11 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
             async def on_kick(inter: discord.Interaction, user_id: str) -> str | None:
                 return await manager.kick_player(user_id)
 
+    on_manage_rounds = None
+    if await asyncio.to_thread(round_picker_options, event_id):
+        async def on_manage_rounds(inter: discord.Interaction) -> None:
+            await open_manage_rounds(inter, event_id)
+
     on_cancel = None
     if is_owner:
         async def on_cancel(inter: discord.Interaction) -> str | None:
@@ -809,6 +816,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
         current_max_players=current_max_players,
         kick_targets_provider=kick_targets_provider, on_kick=on_kick,
         link_targets_provider=link_targets_provider, on_link=on_link,
+        on_manage_rounds=on_manage_rounds,
         on_cancel=on_cancel, on_reschedule=on_reschedule,
         on_description=on_description, current_description=current_description,
         on_closed_decklist=None if mock else on_closed_decklist,

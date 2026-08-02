@@ -183,8 +183,8 @@ reaches the expected size — flagged, not decided.
 
 1. **Odd / non-8 pods.** `half = N // 2`; round-1 pairs seat *i* vs seat *i+half*; the leftover middle seat
    takes a **bye**. *Open choice:* does the bye go to the **top** seed (reward) or **bottom** seed? Recommend
-   **top seed** — consistent with rewarding standing. (Fast Bracket already restricts to exactly 8; Swiss
-   handles other sizes.)
+   **top seed** — consistent with rewarding standing. (Fast Bracket runs at 8 and 10, the two table sizes;
+   Swiss handles everything else.)
 2. **Fast Bracket + Leaderboard.** Fast Bracket uses the seeded seats only for its opening cross-table round,
    then advances by record/readiness (no proximity). Seeding still gives the seeded R1; that's by design.
 3. **Unresolvable handles.** A connected Draftmancer name that matches no player → treated as unranked

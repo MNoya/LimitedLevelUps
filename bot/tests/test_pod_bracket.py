@@ -1,12 +1,50 @@
+import pytest
+
 from bot.services import pod_bracket
 from bot.services.pod_tournament import format_result_change
 from bot.tests.pod_helpers import match, pairset, players
 
 
+def _seat(player_id: str) -> int:
+    return int(player_id[1:])
+
+
+def _ten_player_round1() -> list:
+    return [
+        match(1, "p0", "p1", "p0"), match(1, "p2", "p3", "p2"), match(1, "p4", "p5", "p4"),
+        match(1, "p6", "p7", "p6"), match(1, "p8", "p9", "p8"),
+    ]
+
+
+def _play_bracket(roster, pick_winner) -> tuple[list, dict[int, list[tuple[str, str]]]]:
+    """Play three rounds the way the bot does: report one match at a time and pair the next round
+    after each result, so the pairer only ever sees a partly-finished source round."""
+    half = len(roster) // 2
+    pairings = {1: [(roster[i].id, roster[i + half].id) for i in range(half)], 2: [], 3: []}
+    completed: list = []
+    for round_num in (1, 2, 3):
+        for index, (a, b) in enumerate(pairings[round_num]):
+            completed.append(match(round_num, a, b, pick_winner(a, b)))
+            if round_num < 3:
+                pairings[round_num + 1] += pod_bracket.incremental_pairings(
+                    roster, completed, pairings[round_num + 1], round_num + 1,
+                    source_round_complete=index == half - 1,
+                )
+    return completed, pairings
+
+
+_WINNER_PICKS = {
+    "lower seat wins": lambda a, b: min((a, b), key=_seat),
+    "higher seat wins": lambda a, b: max((a, b), key=_seat),
+    "alternating": lambda a, b: (min if (_seat(a) + _seat(b)) % 2 else max)((a, b), key=_seat),
+}
+
+
 # --- supports -------------------------------------------------------------
 
-def test_supports_only_eight():
+def test_supports_the_two_table_sizes():
     assert pod_bracket.supports(8) is True
+    assert pod_bracket.supports(10) is True
     assert pod_bracket.supports(6) is False
     assert pod_bracket.supports(4) is False
 
@@ -62,17 +100,18 @@ def test_round3_trophy_opens_before_loser_bracket_finishes():
     assert frozenset({"p0", "p2"}) in pairset(new)
 
 
-def test_rematch_is_held_then_forced_when_source_complete():
+def test_a_rematch_only_group_plays_across_records_instead():
     roster = players(4)
     completed = [
         match(1, "p0", "p1", "p0"), match(1, "p2", "p3", "p2"),
         match(2, "p2", "p0", "p2"), match(2, "p1", "p3", "p1"),
     ]
     # entering R3: 2-0 p2 (alone), 1-1 {p0, p1} who already met in R1, 0-2 p3 (alone)
-    held = pod_bracket.incremental_pairings(roster, completed, [], 3, source_round_complete=False)
-    assert held == []  # the only same-record pair is a rematch → wait
-    forced = pod_bracket.incremental_pairings(roster, completed, [], 3, source_round_complete=True)
-    assert pairset(forced) == {frozenset({"p0", "p1"})}  # forced so the bracket can't stall
+    new = pod_bracket.incremental_pairings(roster, completed, [], 3, source_round_complete=True)
+
+    assert len(new) == 2
+    assert frozenset({"p0", "p1"}) not in pairset(new)
+    assert pod_bracket.contains_rematch(new, completed) is False
 
 
 def test_round3_holds_one_one_group_until_no_avoidable_rematch():
@@ -109,13 +148,56 @@ def test_round3_holds_one_one_group_until_no_avoidable_rematch():
     assert {pid for pair in one_one_pairs for pid in pair} == one_one
 
 
+@pytest.mark.parametrize("pick_winner", _WINNER_PICKS.values(), ids=list(_WINNER_PICKS))
+@pytest.mark.parametrize("size", (8, 10))
+def test_bracket_fills_every_round_and_never_repeats_a_match(size, pick_winner):
+    roster = players(size)
+
+    _, pairings = _play_bracket(roster, pick_winner)
+
+    everyone = {p.id for p in roster}
+    for round_num in (2, 3):
+        assert len(pairings[round_num]) == size // 2
+        assert {pid for pair in pairings[round_num] for pid in pair} == everyone
+    played = [frozenset(pair) for round_num in (1, 2, 3) for pair in pairings[round_num]]
+    assert len(played) == len(set(played))
+
+
+def test_round2_at_ten_starts_three_matches_before_round1_finishes():
+    # The last R1 match leaves a 1-0 and a 0-1 who just played, so the fifth and fourth R2 matches
+    # can only be made once it reports. The first three do not have to wait for it.
+    roster = players(10)
+    completed: list = []
+    accumulated: list = []
+    for result in _ten_player_round1()[:4]:
+        completed.append(result)
+        accumulated += pod_bracket.incremental_pairings(
+            roster, completed, accumulated, 2, source_round_complete=False,
+        )
+
+    assert len(accumulated) == 3
+
+
+def test_round2_at_ten_plays_the_leftovers_across_records():
+    roster = players(10)
+    completed = _ten_player_round1()
+
+    new = pod_bracket.incremental_pairings(roster, completed, [], 2, source_round_complete=True)
+
+    records = pod_bracket.player_records(roster, completed)
+    across = [pair for pair in new if records[pair[0]] != records[pair[1]]]
+    assert len(new) == 5
+    assert len(across) == 1  # ten players cannot split evenly, so exactly one match crosses records
+    assert pod_bracket.contains_rematch(new, completed) is False
+
+
 # --- padding_slots --------------------------------------------------------
 
 def test_padding_all_unknown_before_any_result():
     roster = players(8)
     slots = pod_bracket.padding_slots(roster, [], [], [], 2)
-    assert slots == [((1, 0), None, None), ((1, 0), None, None),
-                     ((0, 1), None, None), ((0, 1), None, None)]
+    assert slots == [((1, 0), (1, 0), None, None), ((1, 0), (1, 0), None, None),
+                     ((0, 1), (0, 1), None, None), ((0, 1), (0, 1), None, None)]
 
 
 def test_padding_names_a_waiting_player():
@@ -123,20 +205,20 @@ def test_padding_names_a_waiting_player():
     completed = [match(1, "p0", "p1", "p0"), match(1, "p2", "p3", "p2"), match(1, "p4", "p5", "p4")]
     # two real R2 matches already exist (a winner pair + a loser pair)
     slots = pod_bracket.padding_slots(
-        roster, completed, real_records=[(1, 0), (0, 1)],
+        roster, completed, real_pairs=[((1, 0), (1, 0)), ((0, 1), (0, 1))],
         paired_names=["p0", "p2", "p1", "p3"], round_num=2,
     )
-    assert slots == [((1, 0), "p4", None), ((0, 1), "p5", None)]
+    assert slots == [((1, 0), (1, 0), "p4", None), ((0, 1), (0, 1), "p5", None)]
 
 
 def test_padding_unknown_when_no_one_waiting():
     roster = players(8)
     completed = [match(1, "p0", "p1", "p0"), match(1, "p2", "p3", "p2")]
     slots = pod_bracket.padding_slots(
-        roster, completed, real_records=[(1, 0), (0, 1)],
+        roster, completed, real_pairs=[((1, 0), (1, 0)), ((0, 1), (0, 1))],
         paired_names=["p0", "p2", "p1", "p3"], round_num=2,
     )
-    assert slots == [((1, 0), None, None), ((0, 1), None, None)]
+    assert slots == [((1, 0), (1, 0), None, None), ((0, 1), (0, 1), None, None)]
 
 
 def test_padding_pairs_two_waiting_players_in_one_slot():
@@ -148,10 +230,10 @@ def test_padding_pairs_two_waiting_players_in_one_slot():
     ]
     # R3 has the 1-1 match created; the two 2-0 players (p0, p2) still wait for the trophy slot
     slots = pod_bracket.padding_slots(
-        roster, completed, real_records=[(1, 1)],
+        roster, completed, real_pairs=[((1, 1), (1, 1))],
         paired_names=["p1", "p3"], round_num=3,
     )
-    assert slots[0] == ((2, 0), "p0", "p2")  # trophy slot names both finalists
+    assert slots[0] == ((2, 0), (2, 0), "p0", "p2")  # trophy slot names both finalists
 
 
 def test_padding_stays_anonymous_for_a_held_rematch_prone_group():
@@ -165,17 +247,42 @@ def test_padding_stays_anonymous_for_a_held_rematch_prone_group():
         match(2, "p5", "p7", "p5"),  # p5 → 1-1
         match(2, "p4", "p6", "p4"),  # p6 → 1-1
     ]
-    slots = pod_bracket.padding_slots(roster, completed, real_records=[], paired_names=[], round_num=3)
+    slots = pod_bracket.padding_slots(roster, completed, real_pairs=[], paired_names=[], round_num=3)
 
     one_one = [s for s in slots if s[0] == (1, 1)]
-    assert one_one == [((1, 1), None, None), ((1, 1), None, None)]
-    assert ((1, 1), "p5", "p6") not in slots
+    assert one_one == [((1, 1), (1, 1), None, None), ((1, 1), (1, 1), None, None)]
+    assert ((1, 1), (1, 1), "p5", "p6") not in slots
 
 
 def test_padding_empty_for_unsupported_round():
     roster = players(8)
     assert pod_bracket.padding_slots(roster, [], [], [], 1) == []
     assert pod_bracket.padding_slots(roster, [], [], [], 4) == []
+
+
+def test_padding_projects_the_ten_player_round2_pair_up_slot():
+    roster = players(10)
+    slots = pod_bracket.padding_slots(roster, [], [], [], 2)
+
+    assert len(slots) == 5
+    assert [(a, b) for a, b, _, _ in slots] == [
+        ((1, 0), (1, 0)), ((1, 0), (1, 0)), ((1, 0), (0, 1)), ((0, 1), (0, 1)), ((0, 1), (0, 1)),
+    ]
+
+
+def test_padding_leaves_records_open_while_a_pair_up_decides_the_shape():
+    # 10 players: the R2 pair-up sends R3 to three 2-0 players if the 1-0 wins and two if the 0-1 does,
+    # so R3 has no shape to preview until it reports.
+    roster = players(10)
+    completed = _ten_player_round1() + [
+        match(2, "p0", "p2", "p0"),  # 1-0 bracket
+        match(2, "p4", "p6", "p4"),  # 1-0 bracket
+    ]
+    # p8 (1-0) vs p1 (0-1) is the pair-up and is still unreported
+    slots = pod_bracket.padding_slots(roster, completed, real_pairs=[], paired_names=[], round_num=3)
+
+    assert len(slots) == 5
+    assert all(slot == (None, None, None, None) for slot in slots)
 
 
 # --- regenerate after a correction ----------------------------------------

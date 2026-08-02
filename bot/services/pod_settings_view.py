@@ -80,18 +80,18 @@ def pick_timer_label(seconds: int | None) -> str:
     return f"Pick Timer: {seconds if seconds is not None else settings.pod_draft_pick_timer}s"
 
 
-def picks_per_pack_notice(actor: str, picks: int) -> str:
-    return settings_change_message(actor, "Picks Per Pack", str(picks))
-
-
-def pick_options_label(seconds: int | None, picks: int | None) -> str:
-    """Button label for the pick controls. The pick count only shows once it leaves the standard one
-    card per pack, so the common pod reads as a plain timer."""
-    timer = seconds if seconds is not None else settings.pod_draft_pick_timer
+def pick_mode_name(picks: int | None) -> str:
+    """How many cards a player takes from each pack, named the way the pod is announced."""
     count = picks if picks is not None else settings.pod_draft_picks_per_pack
-    if count > 1:
-        return f"Pick Options: {timer}s, Pick {count}"
-    return f"Pick Options: {timer}s"
+    return "Pick Two" if count > PICKS_PER_PACK_MIN else "Pick One"
+
+
+def picks_per_pack_label(picks: int | None) -> str:
+    return f"Mode: {pick_mode_name(picks)}"
+
+
+def picks_per_pack_notice(actor: str, picks: int) -> str:
+    return settings_change_message(actor, "Mode", pick_mode_name(picks))
 
 
 def max_players_notice(actor: str, count: int) -> str:
@@ -129,6 +129,7 @@ class PodSettingsView(ui.View):
                  on_kick: KickApply | None = None,
                  link_targets_provider: LinkTargetsProvider | None = None,
                  on_link: LinkApply | None = None,
+                 on_manage_rounds: Callable[[discord.Interaction], Awaitable[None]] | None = None,
                  on_cancel: CancelApply | None = None,
                  on_reschedule: Apply | None = None,
                  on_description: DescriptionApply | None = None, current_description: str | None = None,
@@ -157,6 +158,7 @@ class PodSettingsView(ui.View):
         self.on_kick = on_kick
         self.link_targets_provider = link_targets_provider
         self.on_link = on_link
+        self.on_manage_rounds = on_manage_rounds
         self.on_cancel = on_cancel
         self.on_reschedule = on_reschedule
         self.on_description = on_description
@@ -175,13 +177,17 @@ class PodSettingsView(ui.View):
             self.add_item(SeatOrderButton(
                 seat_order_provider=seat_order_provider, on_seating=on_seating, on_seated=on_seated, row=3))
         if on_timer is not None:
-            self.add_item(_PickOptionsButton(current_timer, current_picks_per_pack, row=3))
+            self.add_item(_PickTimerButton(current_timer, row=3))
         if on_max_players is not None:
             self.add_item(_MaxPlayersButton(current_max_players, row=3))
         if link_targets_provider is not None and on_link is not None:
             self.add_item(_LinkPlayersButton(row=3))
         if kick_targets_provider is not None and on_kick is not None:
             self.add_item(_KickPlayerButton(row=3))
+        if on_picks_per_pack is not None:
+            self.add_item(_PicksPerPackButton(current_picks_per_pack, row=4))
+        if on_manage_rounds is not None:
+            self.add_item(_ManageRoundsButton(row=4))
         if on_closed_decklist is not None:
             self.add_item(_ClosedDecklistButton(current_closed_decklist, row=4))
         if on_description is not None:
@@ -232,6 +238,7 @@ class PodSettingsView(ui.View):
             on_max_players=self.on_max_players, current_max_players=self.current_max_players,
             kick_targets_provider=self.kick_targets_provider, on_kick=self.on_kick,
             link_targets_provider=self.link_targets_provider, on_link=self.on_link,
+            on_manage_rounds=self.on_manage_rounds,
             on_cancel=self.on_cancel, on_reschedule=self.on_reschedule,
             on_description=self.on_description, current_description=self.current_description,
             on_closed_decklist=self.on_closed_decklist,
@@ -293,29 +300,27 @@ class PodSettingsView(ui.View):
         self.current_timer = target
         return timer_notice(actor_label(interaction), target), settings_notice_marker("Pick timer")
 
-    async def _apply_pick_options(self, interaction: discord.Interaction,
-                                  seconds: int, picks: int | None) -> None:
-        """Apply both pick controls from the one modal, noticing only the values that moved. The panel
-        re-renders around whatever was accepted, so a failure on the second control still shows the
-        first one applied."""
+    async def _apply_pick_timer(self, interaction: discord.Interaction, seconds: int) -> None:
         await interaction.response.defer()
-        notices: list[tuple[str, str]] = []
-        error = None
-        if seconds != self.pick_timer:
-            error = await self.on_timer(interaction, str(seconds))
-            if error is None:
-                self.current_timer = seconds
-                notices.append((timer_notice(actor_label(interaction), seconds),
-                                settings_notice_marker("Pick timer")))
-        if error is None and picks is not None and picks != self.picks_per_pack:
-            error = await self.on_picks_per_pack(interaction, str(picks))
-            if error is None:
-                self.current_picks_per_pack = picks
-                notices.append((picks_per_pack_notice(actor_label(interaction), picks),
-                                settings_notice_marker("Picks Per Pack")))
-        await self._render(interaction, notices)
+        if seconds == self.pick_timer:
+            return
+        error = await self.on_timer(interaction, str(seconds))
         if error:
             await interaction.followup.send(f"⚠️ {error}", ephemeral=True)
+            return
+        self.current_timer = seconds
+        notice = timer_notice(actor_label(interaction), seconds)
+        await self._render(interaction, [(notice, settings_notice_marker("Pick timer"))])
+
+    async def _apply_picks_per_pack(self, interaction: discord.Interaction, picks: int) -> None:
+        await interaction.response.defer()
+        error = await self.on_picks_per_pack(interaction, str(picks))
+        if error:
+            await interaction.followup.send(f"⚠️ {error}", ephemeral=True)
+            return
+        self.current_picks_per_pack = picks
+        notice = picks_per_pack_notice(actor_label(interaction), picks)
+        await self._render(interaction, [(notice, settings_notice_marker("Mode"))])
 
 
 class _FormatSetting(ui.Select):
@@ -360,21 +365,18 @@ class _SeatingSetting(ui.Select):
             await view.on_seating_table(interaction)
 
 
-class _PickOptionsButton(ui.Button):
-    def __init__(self, current_timer: int | None, current_picks: int | None,
-                 row: int | None = None) -> None:
-        super().__init__(label=pick_options_label(current_timer, current_picks), emoji="⏱️",
+class _PickTimerButton(ui.Button):
+    def __init__(self, current_timer: int | None, row: int | None = None) -> None:
+        super().__init__(label=pick_timer_label(current_timer), emoji="⏱️",
                          style=discord.ButtonStyle.grey, row=row)
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_modal(_PickOptionsModal(self.view))
+        await interaction.response.send_modal(_PickTimerModal(self.view))
 
 
-class _PickOptionsModal(ui.Modal, title="Pick Options"):
-    """Both pick controls in one modal. Picks Per Pack only appears when the panel can apply it, so a
-    pod without a live session never offers a field that would refuse. A timer left at its prefilled
-    value passes even when it sits outside the range, so a pod configured below it can still edit
-    picks per pack."""
+class _PickTimerModal(ui.Modal, title="Pick Timer"):
+    """A timer left at its prefilled value passes even when it sits outside the range, so reopening the
+    modal on a pod configured below the floor does not trap the organizer."""
 
     def __init__(self, view: PodSettingsView) -> None:
         super().__init__()
@@ -383,12 +385,6 @@ class _PickOptionsModal(ui.Modal, title="Pick Options"):
             label="Seconds Per Pick", placeholder="e.g. 60", default=str(view.pick_timer),
             min_length=1, max_length=3)
         self.add_item(self.seconds)
-        self.picks: ui.TextInput | None = None
-        if view.on_picks_per_pack is not None:
-            self.picks = ui.TextInput(
-                label="Picks Per Pack", placeholder="1 or 2", default=str(view.picks_per_pack),
-                min_length=1, max_length=1)
-            self.add_item(self.picks)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         seconds = self.seconds.value.strip()
@@ -398,16 +394,24 @@ class _PickOptionsModal(ui.Modal, title="Pick Options"):
                 f"⚠️ Enter a whole number of seconds between {TIMER_MIN} and {TIMER_MAX}.", ephemeral=True,
             )
             return
-        picks = None
-        if self.picks is not None:
-            raw = self.picks.value.strip()
-            if not raw.isdigit() or not (PICKS_PER_PACK_MIN <= int(raw) <= PICKS_PER_PACK_MAX):
-                await interaction.response.send_message(
-                    f"⚠️ Enter {PICKS_PER_PACK_MIN} or {PICKS_PER_PACK_MAX} picks per pack.", ephemeral=True,
-                )
-                return
-            picks = int(raw)
-        await self.view._apply_pick_options(interaction, int(seconds), picks)
+        await self.view._apply_pick_timer(interaction, int(seconds))
+
+
+class _PicksPerPackButton(ui.Button):
+    """Pick One / Pick Two as a toggle, since two is the only alternative to the standard one card per
+    pack. Green while on, so a pod running the variant reads as changed at a glance."""
+
+    def __init__(self, current_picks: int | None, row: int | None = None) -> None:
+        pick_two = pick_mode_name(current_picks) == "Pick Two"
+        super().__init__(
+            label=picks_per_pack_label(current_picks), emoji="🃏", row=row,
+            style=discord.ButtonStyle.success if pick_two else discord.ButtonStyle.grey,
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: PodSettingsView = self.view
+        toggled = PICKS_PER_PACK_MIN if view.picks_per_pack > PICKS_PER_PACK_MIN else PICKS_PER_PACK_MAX
+        await view._apply_picks_per_pack(interaction, toggled)
 
 
 class _MaxPlayersButton(ui.Button):
@@ -521,6 +525,18 @@ class _RescheduleModal(ui.Modal, title="Reschedule pod"):
         err = await self.view.on_reschedule(interaction, self.new_time.value)
         if err:
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
+
+
+class _ManageRoundsButton(ui.Button):
+    """Post-draft route into the round pairing editor. The round messages carry the same editor behind
+    a 🔧, except on a ten-player pod, whose rounds fill every dropdown row and leave it no space."""
+
+    def __init__(self, row: int | None = None) -> None:
+        super().__init__(label="Manage Rounds", emoji="🔧", style=discord.ButtonStyle.grey, row=row)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: PodSettingsView = self.view
+        await view.on_manage_rounds(interaction)
 
 
 class _KickPlayerButton(ui.Button):

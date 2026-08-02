@@ -87,6 +87,7 @@ Written inside a pod's own thread, `!pod` does something else: it moves the lobb
 ## Table shapes
 
 - **8-player pod** — a full table drafts, then plays 3 rounds. Winners play winners and losers play losers, so nobody is knocked out: everyone plays all three rounds and finishes with a record like 3-0 or 2-1. The two unbeaten players meet in a Trophy Match as soon as they both reach 2-0.
+- **10-player pod** — the same 3 rounds, and pairings still go up as soon as two players reach the same record. Ten does not split evenly, so one match per round puts a player against someone on a different record. Those show under a Pair Up heading, so an uneven match always reads as one. Round 3 can open with three unbeaten players, which makes two Trophy Matches, and two players can finish 3-0.
 - **6-player team draft** — six players split into two teams of three and draft against each other. This is a different, more social format, so it happens when the group wants it.
 - **4-player round robin** — four players draft and each one plays the other three, one per round. Everyone still finishes with a record like 3-0 or 2-1, worth the same pod points as any other pod.
 
@@ -96,7 +97,7 @@ When a lobby sits at 4 players for a couple of minutes with nobody new arriving,
 
 ## After the draft
 
-Report your results in the thread as you play. In an 8-player pod each round also DMs you your pairing with the same dropdown. `/report-results` works anywhere, including in a DM with the bot, and pulls up a private card holding every match you still owe, so a missed DM never stops you from reporting. In a team draft all three of your matches are open from the moment the draft ends, so the card lists all three and you report whichever you played. A match whose players are still finishing an earlier round carries an hourglass and the round it waits on, so the board never reads as ready when only part of a round is. Winning games earns pod points on the leaderboard, so a good run in a pod moves you up the standings the same as a strong ladder result. Pod results are always public: you do not need to opt in, and playing pods is enough to appear on the board.
+Report your results in the thread as you play. In an 8-player or 10-player pod each round also DMs you your pairing with the same dropdown. `/report-results` works anywhere, including in a DM with the bot, and pulls up a private card holding every match you still owe, so a missed DM never stops you from reporting. In a team draft all three of your matches are open from the moment the draft ends, so the card lists all three and you report whichever you played. A match whose players are still finishing an earlier round carries an hourglass and the round it waits on, so the board never reads as ready when only part of a round is. Winning games earns pod points on the leaderboard, so a good run in a pod moves you up the standings the same as a strong ladder result. Pod results are always public: you do not need to opt in, and playing pods is enough to appear on the board.
 
 A reported result can be corrected until a later round reports. In a bracket pod, correcting one re-pairs the rounds after it from the fixed result. Only the players whose record moved get a new opponent: every other pairing stays as it was. The thread gets a single note with the correction, the round that moved, and the new matchups, pinging the players who changed opponent, and their pairing DM is rewritten to the new opponent instead of arriving a second time.
 
@@ -134,10 +135,12 @@ Beyond the daily launcher, you can schedule a pod at any time with the `/draft` 
 
 Which formats a day offers is a table in the bot's code, so ask for a change ahead of time. A pod that already exists can change format from its lobby Settings panel.
 
-Pick Options on the Settings panel holds the two Draftmancer pick controls: seconds per pick, and how many cards each player takes from a pack before passing it. Picks per pack is 1 for a normal draft; set it to 2 for a Pick 2 pod, and the lobby card footer then reads the format as "Pick 2" so everyone sees it. Both are locked once the draft starts.
+Pick Timer on the Settings panel sets the seconds each player gets per pick. Next to it, Mode toggles between Pick One and Pick Two, which is how many cards a player takes from a pack before passing it. Pick One is the normal draft and the button sits grey; turn it on for a Pick Two pod and it goes green, and the lobby card footer reads the format as "Pick 2" so everyone sees it. Both are locked once the draft starts.
 
 The pod Settings panel also carries a Closed Decklist toggle: turn it on to hide that pod's decklists on the website until it finishes. Set Championship pods start with it on.
 
 A scheduled pod's Settings panel has a Description button. Whatever you write there takes the place of the "Please RSVP" line on the signup card, so you can say what the pod is about. Leave it empty to bring the RSVP line back. The card drops the note once the draft starts.
+
+The Settings button stays on the lobby card after the draft finishes, because the panel is where you fix things during the rounds. Once a pod has pairings the panel carries Manage Rounds: pick a round and you get the same editor the 🔧 on a round message opens, where you can reassign a match's two players or set a result. Only Organizers can use it. Each round message keeps its own 🔧 where there is room for it, but a ten-player round fills every dropdown slot, so on those pods the Settings panel is the way in.
 
 Inside a pod thread, the pod controls (ready check, start, team draft, pause, restart, seeding, standings, champion) run the draft. The daily launcher, reminders, and second-table offers all run on their own, so most pods need no hands-on management.

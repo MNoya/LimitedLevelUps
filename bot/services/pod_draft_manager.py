@@ -37,7 +37,7 @@ from bot.services import bot_log as bot_log_mod
 from bot.services import championship
 from bot.services.lobby_embed import (
     LobbyReadyButtonView,
-    build_drafting_view,
+    build_started_lobby_view,
     build_not_ready_view,
     event_title,
     render as render_lobby_embed,
@@ -1095,10 +1095,8 @@ class PodDraftManager:
             if self.round_robin_vote_message is not None and round_robin_lobby_moved:
                 await self._retire_round_robin_offer()
                 self.round_robin_vote_offered = False
-            if state == "drafting":
-                view = build_drafting_view(self.spectate_url)
-            elif state == "complete":
-                view = None
+            if state in ("drafting", "complete"):
+                view = build_started_lobby_view(self.spectate_url if state == "drafting" else None)
             else:
                 view = LobbyReadyButtonView(
                     draftmancer_url=self.draftmancer_url,
@@ -1158,7 +1156,7 @@ class PodDraftManager:
                 **self._settings_labels(),
             )
             if progress_state == "drafting":
-                progress_view = build_drafting_view(self.spectate_url)
+                progress_view = build_started_lobby_view(self.spectate_url)
             elif progress_state == "notready":
                 progress_view = build_not_ready_view()
             elif progress_state == "complete":

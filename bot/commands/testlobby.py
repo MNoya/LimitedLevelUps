@@ -22,7 +22,7 @@ from bot.models import MagicSet, Player, PodDraftEvent, PodDraftParticipant
 from bot.services.lobby_embed import (
     LobbyReadyButtonView,
     ReadyCheckConfirmView,
-    build_drafting_view,
+    build_started_lobby_view,
     build_not_ready_view,
     ready_check_confirm_text,
     register_force_start_preview,
@@ -77,7 +77,9 @@ from bot.services.pod_team_vote import (
     team_vote_needed,
 )
 from bot.services.pod_tournament import (
+    MSG_PICK_ROUND,
     REVIEW_EMOJI,
+    ManageRoundsPickerView,
     ParticipantDeckData,
     actor_label,
     build_champion_announcement_view,
@@ -1129,19 +1131,31 @@ def _round1_preview_states(seated: bool) -> list[dict]:
 # Fixture records for the no-DB `round2` / `round3` snapshots: round 2 splits into Winners (1-0) and
 # Losers (0-1); round 3 into Trophy (2-0), 1-1, and Last Chance (0-2).
 _LATER_ROUND_PREVIEW = {
-    2: [("Ava", "Bram", "1-0", "1-0"), ("Cara", "Dex", "1-0", "1-0"),
-        ("Eli", "Fern", "0-1", "0-1"), ("Gus", "Hana", "0-1", "0-1")],
-    3: [("Ava", "Bram", "2-0", "2-0"), ("Cara", "Dex", "1-1", "1-1"),
-        ("Eli", "Fern", "1-1", "1-1"), ("Gus", "Hana", "0-2", "0-2")],
+    8: {
+        2: [("Ava", "Bram", "1-0", "1-0"), ("Cara", "Dex", "1-0", "1-0"),
+            ("Eli", "Fern", "0-1", "0-1"), ("Gus", "Hana", "0-1", "0-1")],
+        3: [("Ava", "Bram", "2-0", "2-0"), ("Cara", "Dex", "1-1", "1-1"),
+            ("Eli", "Fern", "1-1", "1-1"), ("Gus", "Hana", "0-2", "0-2")],
+    },
+    # Ten never splits evenly, so every round carries one match across records and round 3 opens with
+    # three undefeated players — two trophy matches, one of them played down into the 1-1 group
+    10: {
+        2: [("Ava", "Bram", "1-0", "1-0"), ("Cara", "Dex", "1-0", "1-0"),
+            ("Eli", "Fern", "1-0", "0-1"), ("Gus", "Hana", "0-1", "0-1"),
+            ("Iris", "Juno", "0-1", "0-1")],
+        3: [("Ava", "Cara", "2-0", "2-0"), ("Eli", "Bram", "2-0", "1-1"),
+            ("Dex", "Gus", "1-1", "1-1"), ("Hana", "Fern", "1-1", "0-2"),
+            ("Iris", "Juno", "0-2", "0-2")],
+    },
 }
 
 
-def _later_round_preview_states(round_num: int) -> list[dict]:
+def _later_round_preview_states(round_num: int, size: int = 8) -> list[dict]:
     """In-memory match states for the no-DB `round2` / `round3` snapshots, fed through the prod
-    `round_embed` builder so the grouped rendering (Winners/Losers, Trophy/1-1/Last Chance) and arena
-    handles stay in sync. Only the match data is fixtured."""
+    `round_embed` builder so the grouped rendering (Winners/Losers/Pair Up, Trophy/1-1/Last Chance) and
+    arena handles stay in sync. Only the match data is fixtured."""
     states: list[dict] = []
-    for a, b, a_record, b_record in _LATER_ROUND_PREVIEW[round_num]:
+    for a, b, a_record, b_record in _LATER_ROUND_PREVIEW[size][round_num]:
         states.append({
             "match_id": f"{a}-{b}", "a_name": a, "b_name": b,
             "a_display": a, "b_display": b,
@@ -1258,10 +1272,9 @@ def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
         **_preview_settings_labels(),
     )
     spectate_url = f"{_DRAFTMANCER_URL}&spectate=preview"
-    if state == "drafting":
-        view: discord.ui.View | None = build_drafting_view(spectate_url)
-    elif state == "complete":
-        view = None
+    if state in ("drafting", "complete"):
+        view: discord.ui.View | None = build_started_lobby_view(
+            spectate_url if state == "drafting" else None)
     else:
         view = LobbyReadyButtonView(
             draftmancer_url=_DRAFTMANCER_URL,
@@ -1359,10 +1372,21 @@ async def _post_link_picker_preview(ctx) -> None:
     await ctx.send(LINK_SEAT_PROMPT, view=LinkSeatSelectView([_UNLINKED_SEAT], _settings_preview_on_link))
 
 
+_SETTINGS_PREVIEW_ROUNDS = [(1, "All Reported"), (2, "3 of 5 Reported"), (3, "0 of 5 Reported")]
+
+
+async def _settings_preview_manage_rounds(interaction: discord.Interaction) -> None:
+    """Preview only the round picker: the editor behind it needs real matches, so picking a round here
+    lands on the no-matches notice. Use `podbracket` / `podswiss` to reach the editor itself."""
+    await interaction.response.send_message(
+        MSG_PICK_ROUND, view=ManageRoundsPickerView("preview", _SETTINGS_PREVIEW_ROUNDS), ephemeral=True,
+    )
+
+
 def _settings_preview_view() -> PodSettingsView:
     """No-op Settings panel so `!test` can preview the format + pairing + seats dropdowns plus the Link
-    Players flow with no pod. Defaults to Seats: Random (like a fresh pod); pick Manual in the dropdown
-    to reveal the Seat Order button."""
+    Players and Manage Rounds flows with no pod. Defaults to Seats: Random (like a fresh pod); pick
+    Manual in the dropdown to reveal the Seat Order button."""
     return PodSettingsView(
         on_format=_settings_preview_noop, on_pairing=_settings_preview_noop,
         current_code=None, current_mode=DEFAULT_PAIRING_MODE,
@@ -1375,6 +1399,7 @@ def _settings_preview_view() -> PodSettingsView:
         on_closed_decklist=_settings_preview_noop, current_closed_decklist=False,
         on_description=_settings_preview_description_noop,
         link_targets_provider=_settings_preview_link_targets, on_link=_settings_preview_on_link,
+        on_manage_rounds=_settings_preview_manage_rounds,
     )
 
 
@@ -1424,9 +1449,11 @@ async def setup(bot: commands.Bot) -> None:
         roster-change join, and a timeout — as the progress card plus (for the non-decline cases) the
         thread notice, so the resume surfaces can be compared.
         `round1`/`round2`/`round3` are no-DB snapshots of each round
-        embed (`round1 random` for the random-pairing header).
+        embed (`round1 random` for the random-pairing header, `round2 10` / `round3 10` for the
+        ten-player shape, where one match per round crosses records and round 3 opens two trophies).
         No arg → posts the beginning lobby state. Every invocation posts fresh messages.
-        `podbracket` / `podswiss` / `podrandom` seed a real 8-player pod (seat 1 = you) and hand off to
+        `podbracket` / `podswiss` / `podrandom` `[6|8|10]` seed a real pod at that player count
+        (default 8; seat 1 = you) and hand off to
         the prod tournament code, so the round embeds + result dropdowns drive the real round-to-round
         flow (these write to the local DB). `round1` (`round1 random` for random pairing) is a no-DB
         snapshot of the Round 1 embed only — to drive rounds, use `podswiss`. `podlobby` connects to a
@@ -1609,7 +1636,8 @@ async def setup(bot: commands.Bot) -> None:
 
         if state in ("round2", "round3"):
             round_num = int(state[-1])
-            await ctx.send(embed=round_embed(round_num, _later_round_preview_states(round_num)))
+            size = 10 if extra == "10" else 8
+            await ctx.send(embed=round_embed(round_num, _later_round_preview_states(round_num, size)))
             return
 
         if state == "voicelink":

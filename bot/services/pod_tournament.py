@@ -120,6 +120,7 @@ PAIR_UP = "pair_up"
 TROPHY = "trophy"
 MIDDLE = "middle"
 LAST_CHANCE = "last_chance"
+UNDECIDED = "undecided"
 GRACE_SECONDS = 60  # window after round completion during which edits regenerate the next round
 BRACKET_EDIT_BLOCKED_MSG = "That result can't be changed now — a later round already reported a result."
 RESULT_CORRECTED_LEAD = "Result corrected:"
@@ -131,6 +132,9 @@ ORGANIZER_ROLE_NAMES = frozenset({"admin", "moderator", "organizer"})
 MSG_FIX_NOT_ORGANIZER = "Only Organizers can reorganize a round's matches."
 MSG_FIX_NOT_POD_THREAD = "Open this from inside the pod-draft thread."
 MSG_FIX_NO_MATCHES = "This round has no matches to reorganize yet."
+MSG_FIX_PROMPT = "Reorganize Round {round_num} — pick a match, then set its players and result."
+MSG_PICK_ROUND = "Pick the round to reorganize."
+PICK_ROUND_PLACEHOLDER = "Choose Round"
 MSG_FIX_SAME_PLAYER = "Pick two different players for the match."
 MSG_FIX_MATCH_GONE = "That match no longer exists — reopen the editor to see the current round."
 POD_PAIRING_FAILED_MSG = (
@@ -1394,15 +1398,12 @@ class ManageRoundButton(ui.DynamicItem[ui.Button], template=rf"{MANAGE_ROUND_CUS
         if event_id is None:
             await interaction.response.send_message(MSG_FIX_NOT_POD_THREAD, ephemeral=True)
             return
-        matches = await asyncio.to_thread(_load_round_states, event_id, self.round_num)
-        if not matches:
+        view = await build_round_editor(event_id, self.round_num, interaction.message)
+        if view is None:
             await interaction.response.send_message(MSG_FIX_NO_MATCHES, ephemeral=True)
             return
-        roster = await asyncio.to_thread(_load_round_roster, event_id)
-        view = FixPairingView(event_id, self.round_num, interaction.message, matches, roster)
         await interaction.response.send_message(
-            f"Reorganize Round {self.round_num} — pick a match, then set its players and result.",
-            view=view, ephemeral=True,
+            MSG_FIX_PROMPT.format(round_num=self.round_num), view=view, ephemeral=True,
         )
 
 
@@ -1626,6 +1627,91 @@ class FixPairingView(ui.View):
         head = format_round_change(self.round_num, phrase, pairings_url, ORGANIZER_CORRECTED_LEAD)
         await bracket_regenerate_downstream(manager, self.round_num, head)
         return True
+
+
+async def build_round_editor(
+    event_id: str, round_num: int, round_message: discord.Message | None,
+) -> "FixPairingView | None":
+    """The pairing editor for one round, or None when the round has no matches yet. `round_message` is
+    what the editor re-renders after a save; it is None when the editor was opened away from that
+    message and the pod's manager is gone, which only costs the in-place refresh."""
+    matches = await asyncio.to_thread(_load_round_states, event_id, round_num)
+    if not matches:
+        return None
+    roster = await asyncio.to_thread(_load_round_roster, event_id)
+    return FixPairingView(event_id, round_num, round_message, matches, roster)
+
+
+async def open_manage_rounds(interaction: discord.Interaction, event_id: str) -> None:
+    """The Settings panel's route into the pairing editor, picking the round first.
+
+    A ten-player round fills every dropdown row, so its message has no space for the 🔧 button and this
+    is the only way in. Organizer-gated on its own, since opening Settings is not organizer-only.
+    """
+    if not await is_pod_organizer(interaction.client, interaction.user):
+        await interaction.response.send_message(MSG_FIX_NOT_ORGANIZER, ephemeral=True)
+        return
+    rounds = await asyncio.to_thread(round_picker_options, event_id)
+    if not rounds:
+        await interaction.response.send_message(MSG_FIX_NO_MATCHES, ephemeral=True)
+        return
+    await interaction.response.send_message(
+        MSG_PICK_ROUND, view=ManageRoundsPickerView(event_id, rounds), ephemeral=True,
+    )
+
+
+def round_picker_options(event_id: str) -> list[tuple[int, str]]:
+    """(round, how far along it is) for every round that has matches, ordered. Empty until a pod has
+    pairings, which is what keeps Manage Rounds off a lobby that has not drafted yet."""
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(
+                PodDraftMatch.round,
+                func.count(PodDraftMatch.id),
+                func.count(PodDraftMatch.winner_name),
+            )
+            .where(PodDraftMatch.event_id == event_id)
+            .group_by(PodDraftMatch.round)
+            .order_by(PodDraftMatch.round)
+        ).all()
+    options = []
+    for round_num, total, reported in rows:
+        state = "All Reported" if reported == total else f"{reported} of {total} Reported"
+        options.append((round_num, state))
+    return options
+
+
+class ManageRoundsPickerView(ui.View):
+    """Ephemeral round picker behind the Settings panel's Manage Rounds button. Picking a round swaps
+    this message for the same editor the round message's 🔧 opens."""
+
+    def __init__(self, event_id: str, rounds: list[tuple[int, str]]) -> None:
+        super().__init__(timeout=300)
+        self.add_item(_RoundPickerSelect(event_id, rounds))
+
+
+class _RoundPickerSelect(ui.Select):
+    def __init__(self, event_id: str, rounds: list[tuple[int, str]]) -> None:
+        self.event_id = event_id
+        super().__init__(
+            placeholder=PICK_ROUND_PLACEHOLDER,
+            options=[
+                discord.SelectOption(label=f"Round {num}", value=str(num), description=state)
+                for num, state in rounds
+            ],
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        round_num = int(self.values[0])
+        manager = ACTIVE_POD_MANAGERS.get(self.event_id)
+        round_message = manager.round_messages.get(round_num) if manager is not None else None
+        view = await build_round_editor(self.event_id, round_num, round_message)
+        if view is None:
+            await interaction.response.edit_message(content=MSG_FIX_NO_MATCHES, view=None)
+            return
+        await interaction.response.edit_message(
+            content=MSG_FIX_PROMPT.format(round_num=round_num), view=view,
+        )
 
 
 def apply_pairing_swap(match_id: str, new_a: str, new_b: str) -> dict | None:
@@ -4463,8 +4549,11 @@ def round_groups(round_num: int, match_states: list[dict]) -> list[tuple[str, li
 def _swiss_round_groups(match_states: list[dict]) -> list[tuple[str, list[dict]]]:
     same: dict[tuple[int, int], list[dict]] = {}
     pairups: list[dict] = []
+    undecided: list[dict] = []
     for m in match_states:
-        if _parse_wl(m["a_record"]) == _parse_wl(m["b_record"]):
+        if m["a_record"] is None or m["b_record"] is None:
+            undecided.append(m)
+        elif _parse_wl(m["a_record"]) == _parse_wl(m["b_record"]):
             same.setdefault(_parse_wl(m["a_record"]), []).append(m)
         else:
             pairups.append(m)
@@ -4474,35 +4563,42 @@ def _swiss_round_groups(match_states: list[dict]) -> list[tuple[str, list[dict]]
     ]
     if pairups:
         groups.insert(1 if groups else 0, (PAIR_UP, pairups))
+    if undecided:
+        groups.append((UNDECIDED, undecided))
     return groups
 
 
 def _final_round_groups(match_states: list[dict]) -> list[tuple[str, list[dict]]]:
+    """Trophy first, then the even 1-1 matches, then anyone playing across records, then the pair with
+    no win between them. A match across records is its own group: filing a 1-1 against a 0-2 under the
+    1-1 header reads as an even match and misnames the 0-2 player's round."""
     trophy: list[dict] = []
     middle: list[dict] = []
+    pairups: list[dict] = []
     last_chance: list[dict] = []
+    undecided: list[dict] = []
     for m in match_states:
         if m.get("is_trophy_match"):
             trophy.append(m)
-        elif _parse_wl(m["a_record"])[0] == 0 and _parse_wl(m["b_record"])[0] == 0:
+        elif m["a_record"] is None or m["b_record"] is None:
+            undecided.append(m)
+        elif _parse_wl(m["a_record"]) != _parse_wl(m["b_record"]):
+            pairups.append(m)
+        elif _parse_wl(m["a_record"])[0] == 0:
             last_chance.append(m)
         else:
             middle.append(m)
-    groups: list[tuple[str, list[dict]]] = []
-    if trophy:
-        groups.append((TROPHY, trophy))
-    if middle:
-        groups.append((MIDDLE, middle))
-    if last_chance:
-        groups.append((LAST_CHANCE, last_chance))
-    return groups
+    named = ((TROPHY, trophy), (MIDDLE, middle), (PAIR_UP, pairups),
+             (LAST_CHANCE, last_chance), (UNDECIDED, undecided))
+    return [(kind, matches) for kind, matches in named if matches]
 
 
 _GROUP_EMOJI = {
     WINNERS: "⬆️", LOSERS: "⬇️", PAIR_UP: "🌉",
-    TROPHY: "🏆", MIDDLE: "⚖️", LAST_CHANCE: "🎯",
+    TROPHY: "🏆", MIDDLE: "⚖️", LAST_CHANCE: "🎯", UNDECIDED: "⏳",
 }
-_GROUP_LABEL = {PAIR_UP: "Pair Up", TROPHY: "Trophy", MIDDLE: "1-1", LAST_CHANCE: "Last Chance"}
+_GROUP_LABEL = {PAIR_UP: "Pair Up", TROPHY: "Trophy", MIDDLE: "1-1", LAST_CHANCE: "Last Chance",
+                UNDECIDED: "Waiting"}
 
 
 def _grouped_lines(round_num: int, match_states: list[dict]) -> list[str]:
@@ -4634,17 +4730,18 @@ def _load_pod_player_names(event_id: str) -> list[str]:
 
 
 def bracket_placeholder_states(event_id: str, round_num: int, real: list[dict] | None = None) -> list[dict]:
-    """Waiting-match states padding a bracket round to its full fixed slate, so the round always
-    renders the same number of dropdowns. A known waiting player is named ('Alice vs 1-0'); a slot
-    with no known side reads 'waiting on Round N' in the embed (the record comes from the group
-    header) and '1-1 Match waiting on Round N' in the dropdown (no header there). Each state carries
-    the previous round's still-unreported count so the embed can footer 'how many matches remain
-    before these pairings are set'. `real` is this round's reportable matches."""
+    """Waiting-match states padding a bracket round to its full slate, so the round always renders one
+    dropdown per match it will hold. A known waiting player is named ('Alice vs 1-0'); a slot with no
+    known side reads 'waiting on Round N' in the embed (the record comes from the group header) and
+    '1-1 Match waiting on Round N' in the dropdown (no header there). A slot whose records the
+    projection can't yet fix carries none and reads as waiting on both. Each state carries the
+    previous round's still-unreported count so the embed can footer 'how many matches remain before
+    these pairings are set'. `real` is this round's reportable matches."""
     if round_num < 2:
         return []
     if real is None:
         real = _load_round_states(event_id, round_num)
-    real_records = [_parse_wl(m["a_record"]) for m in real]
+    real_pairs = [(_parse_wl(m["a_record"]), _parse_wl(m["b_record"])) for m in real]
     paired = [n for m in real for n in (m["a_name"], m["b_name"])]
     players = [Player(id=n, name=n) for n in _load_pod_player_names(event_id)]
     completed = load_matches(event_id)
@@ -4657,15 +4754,20 @@ def bracket_placeholder_states(event_id: str, round_num: int, real: list[dict] |
         return displays.get(normalize_player_name(name), {}).get("display_name") or name
 
     out: list[dict] = []
-    for (wins, losses), a, b in pod_bracket.padding_slots(players, completed, real_records, paired, round_num):
-        rec = f"{wins}-{losses}"
+    for record_a, record_b, a, b in pod_bracket.padding_slots(
+        players, completed, real_pairs, paired, round_num,
+    ):
+        rec_a = _format_wl(record_a)
+        rec_b = _format_wl(record_b)
         if a and b:
             label = dropdown_label = f"{disp(a)} vs {disp(b)}"
         elif a:
-            label = dropdown_label = f"{disp(a)} vs {rec}"
+            label = dropdown_label = f"{disp(a)} vs {rec_b}"
+        elif b:
+            label = dropdown_label = f"{rec_a} vs {disp(b)}"
         else:
             label = f"waiting on Round {prev_round}"
-            dropdown_label = f"{rec} Match waiting on Round {prev_round}"
+            dropdown_label = f"{_slot_record_label(rec_a, rec_b)} waiting on Round {prev_round}"
         out.append({
             "placeholder": True,
             "label": label,
@@ -4673,12 +4775,27 @@ def bracket_placeholder_states(event_id: str, round_num: int, real: list[dict] |
             "waiting_prev_round": prev_round,
             "waiting_pending": prev_pending,
             "waiting_prev_url": prev_url,
-            "a_record": rec,
-            "b_record": rec,
+            "a_record": rec_a,
+            "b_record": rec_b,
             "winner_name": None,
             "score": None,
         })
     return out
+
+
+def _format_wl(record: tuple[int, int] | None) -> str | None:
+    return None if record is None else "{}-{}".format(*record)
+
+
+def _slot_record_label(rec_a: str | None, rec_b: str | None) -> str:
+    """How a waiting slot names itself where no group header carries its record: '1-1 Match', or
+    '1-1 vs 0-2 Match' when the two sides come from different records. Empty while the projection
+    can't yet say which records the slot holds."""
+    if rec_a is None or rec_b is None:
+        return "Match"
+    if rec_a == rec_b:
+        return f"{rec_a} Match"
+    return f"{rec_a} vs {rec_b} Match"
 
 
 def load_bracket_round_states(event_id: str, round_num: int) -> list[dict]:
@@ -4996,23 +5113,28 @@ async def _pairings_to_keep(manager, downstream, old: dict[int, list[tuple[str, 
                             ) -> dict[int, list[tuple[str, str]]]:
     """Which downstream pairings survive a corrected result, per round.
 
-    A bracket round pairs same-record players, so a pairing whose two players still share a record is
-    still a legal pairing and re-pairing it would move players for nothing. Keeping some pairings does
-    shrink the pool the rest re-pair from, which can force a rematch a full re-pair would have avoided;
-    when that happens the round is re-paired from scratch instead.
+    A pairing whose two players still share a record is still a legal pairing and re-pairing it would
+    move players for nothing. So is one a from-scratch re-pair would make anyway, which is how a pod
+    that plays someone across records keeps that match instead of churning it on every correction.
+    Keeping some pairings does shrink the pool the rest re-pair from, which can force a rematch a full
+    re-pair would have avoided; when that happens the round is re-paired from scratch instead.
     """
     players = manager.tournament_players
     outcomes = await asyncio.to_thread(load_matches, manager.event_id)
     records = pod_bracket.player_records(players, outcomes)
     keep: dict[int, list[tuple[str, str]]] = {}
     for r in downstream:
+        source_complete = await _round_fully_reported(manager, r - 1)
+        from_scratch = _pairing_keys(pod_bracket.incremental_pairings(
+            players, outcomes, [], r, source_round_complete=source_complete,
+        ))
         survivors = [
             (a, b) for a, b in old.get(r, [])
-            if a in records and b in records and records[a] == records[b]
+            if a in records and b in records
+            and (records[a] == records[b] or _pairing_keys([(a, b)]) <= from_scratch)
         ]
         candidate = pod_bracket.incremental_pairings(
-            players, outcomes, survivors, r,
-            source_round_complete=await _round_fully_reported(manager, r - 1),
+            players, outcomes, survivors, r, source_round_complete=source_complete,
         )
         if pod_bracket.contains_rematch(candidate, outcomes):
             log.info(f"[BRACKET] event={manager.event_id} keeping R{r} pairings would force a rematch, full re-pair")
