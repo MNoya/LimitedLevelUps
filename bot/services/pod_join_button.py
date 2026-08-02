@@ -45,6 +45,7 @@ class JoinDraftButton(ui.DynamicItem[ui.Button], template=rf"{JOIN_BUTTON_PREFIX
         await interaction.response.send_message(
             format_join_line(self.session_id, handle), ephemeral=True,
         )
+        await _admit_clicker_to_thread(interaction, self.session_id)
 
 
 class MockJoinDraftButton(
@@ -69,7 +70,9 @@ class MockJoinDraftButton(
     async def callback(self, interaction: discord.Interaction) -> None:
         join_line = format_join_line(self.session_id, interaction.user.display_name, arena=False)
         await interaction.response.defer(ephemeral=True)
-        first_pod, holds_mock_ping = await _admit_clicker_to_mock_thread(interaction, self.session_id)
+        first_pod, holds_mock_ping = await _admit_clicker_to_thread(
+            interaction, self.session_id, mock_only=True,
+        )
         if first_pod:
             await send_mock_welcome_card(
                 interaction, join_line=join_line, holds_mock_ping=holds_mock_ping,
@@ -90,10 +93,10 @@ def build_mock_join_view(session_id: str) -> ui.View:
     return view
 
 
-async def _admit_clicker_to_mock_thread(
-    interaction: discord.Interaction, session_id: str,
+async def _admit_clicker_to_thread(
+    interaction: discord.Interaction, session_id: str, *, mock_only: bool = False,
 ) -> tuple[bool, bool]:
-    """Clicking Join Draft is joining the mock, so it puts the clicker in the thread right away instead of
+    """Clicking Join Draft is joining the draft, so it puts the clicker in the thread right away instead of
     waiting for them to turn up in the Draftmancer lobby. Returns the manager's (first pod, holds the mock
     ping) pair. The manager is reached through the registry rather than an import: it renders the card this
     button rides on, so importing it here would cycle."""
@@ -101,8 +104,11 @@ async def _admit_clicker_to_mock_thread(
     if not isinstance(member, discord.Member):
         return False, False
     for manager in ACTIVE_POD_MANAGERS.values():
-        if manager.kind == "mock" and manager.session_id == session_id:
-            return await manager.admit_to_mock_thread(member)
+        if manager.session_id != session_id:
+            continue
+        if mock_only and manager.kind != "mock":
+            continue
+        return await manager.admit_to_thread(member)
     return False, False
 
 

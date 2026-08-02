@@ -38,6 +38,7 @@ from bot.commands.messages import (
     MSG_MOCK_CARD_PLAYERS,
     MSG_MOCK_CARD_RECAP_BUTTON,
     MSG_MOCK_CARD_SPECTATE_BUTTON,
+    MSG_MOCK_CARD_THREAD_BUTTON,
 )
 from bot.config import settings
 from bot.discord_helpers import quote_block
@@ -80,11 +81,15 @@ def build_mock_card(
     state: str = STATE_OPEN,
     spectate_url: str | None = None,
     canceled_by: str | None = None,
+    thread_url: str | None = None,
 ) -> tuple[str, discord.Embed, discord.ui.View | None]:
     """The card as (content, embed, view). `roster` is Draftmancer session users as (arena_name,
     linked_display_name_or_None), the same shape the in-thread lobby card renders. A canceled card drops
     the seat list and the site link: nobody drafted, and cancelling deletes the event row, which takes
     its page with it.
+
+    `thread_url` adds a button into the draft thread, and is passed by the `!mock` repost only: the
+    anchor has its thread hanging off it, while a repost is a plain message with no way in.
 
     STATE_OPENING withholds the session link and the Join button: Draftmancer makes whoever enters an
     empty session first its owner, so a player reaching the lobby before the bot would take it."""
@@ -109,7 +114,7 @@ def build_mock_card(
     if state in (STATE_OPENING, STATE_OPEN):
         embed.set_footer(text=MSG_MOCK_CARD_DISCORD_NAME)
     content = _content(state, role_mention, seated=len(roster), max_players=max_players)
-    return content, embed, _view(state, session_id, site_url, spectate_url)
+    return content, embed, _view(state, session_id, site_url, spectate_url, thread_url)
 
 
 _CARD_NUMBER_RE = re.compile(r"\s+\d+$")
@@ -195,6 +200,20 @@ def _seat_list(roster: list[tuple[str, str | None]]) -> str:
 
 
 def _view(
+    state: str, session_id: str, site_url: str, spectate_url: str | None, thread_url: str | None,
+) -> discord.ui.View | None:
+    view = _state_view(state, session_id, site_url, spectate_url)
+    if thread_url is None:
+        return view
+    if view is None:
+        view = discord.ui.View(timeout=None)
+    view.add_item(discord.ui.Button(
+        label=MSG_MOCK_CARD_THREAD_BUTTON, style=discord.ButtonStyle.link, url=thread_url,
+    ))
+    return view
+
+
+def _state_view(
     state: str, session_id: str, site_url: str, spectate_url: str | None,
 ) -> discord.ui.View | None:
     if state == STATE_OPEN:

@@ -3,9 +3,10 @@
 Posts a real card and event thread in the pod-draft coordination channel (with the @Pod Drafters
 mention), then sends every follow-on message inside that thread in order, each titled with when the
 live flow would post it: the frozen standings, the three invite waves with the Confirm / Maybe / Can't
-row, the Yes-tally seeding table, and finally the Daily Pod Launcher in the channel. Shares the
-production builders (`championship_copy`, `pod_draft` seeding, `pod_rsvp`); it owns only the synthetic
-roster it feeds in and the staging titles. Meant for a test server, since it creates a real card.
+row, the Yes-tally seeding table, the T-60 roster reminder, the lobby-open post, and finally the Daily Pod
+Launcher in the channel. Shares the production builders (`championship_copy`, `pod_draft` seeding,
+`pod_rsvp`, `pod_draft_reminder`); it owns only the synthetic roster it feeds in and the staging titles.
+Meant for a test server, since it creates a real card.
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from discord import ui
 from discord.ext import commands
 from sqlalchemy import select
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from bot.commands.pod_draft import (
     CHAMPIONSHIP_CUT,
@@ -32,6 +33,7 @@ from bot.database import SessionLocal
 from bot.models import MagicSet
 from bot.services import championship
 from bot.services import championship_copy as cc
+from bot.services.championship_roster_card import ChampionshipRoster, championship_roster
 from bot.services import pod_swiss
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, champion_role_mention
 from bot.services.player_stats import SeededAttendee, rank_players_for_set
@@ -41,14 +43,19 @@ from bot.services.pod_join_button import build_join_view
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
 from bot.services.pod_signals import (
+    LANE_EARLY,
+    LANE_LATE,
     RSVP_MAYBE,
     RSVP_NO,
     RSVP_YES,
     STATUS_FIRED,
     STATUS_OPEN,
+    bucket_for_lane,
     named_bucket_key,
+    slot_event_time,
 )
 from bot.tasks.pod_daily_poll import PodPollView, build_poll_embed
+from bot.tasks.pod_draft_reminder import build_roster_embed
 from bot.services.pod_swiss import MatchOutcome
 from bot.services.pod_tournament import (
     TOTAL_ROUNDS,
@@ -148,6 +155,16 @@ async def setup(bot: commands.Bot) -> None:
         )
         await _thread_send(thread, seeding_file, seeding_embed)
 
+        await _stage(thread, "Posted 1 hour before the draft")
+        preview_roster = _preview_championship_roster(attendees)
+        await thread.send(
+            embed=build_roster_embed(
+                f"👑 {plan.set_code} Set Championship", event_at, _preview_rsvp_rosters(preview_roster),
+                championship_roster=preview_roster,
+            ),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
         await _stage(thread, "Posted in the thread when the lobby opens, 10 minutes before the draft")
         preview_session = "preview-session"
         await thread.send(
@@ -197,18 +214,40 @@ def _preview_launcher_slots(
 ) -> list[LauncherSlot]:
     """Championship-day launcher slots for the preview: the Early lane overridden to the committed
     championship pointer, the Late lane a normal open weekend slot."""
+    day = event_at.astimezone(SCHEDULE_TZ).date()
+    early_bucket = bucket_for_lane(day, LANE_EARLY)
+    late_bucket = bucket_for_lane(day, LANE_LATE)
     top_yes = names[: championship.SEAT_COUNT]
     afternoon = LauncherSlot(
-        bucket_key="AFTERNOON", committed=True, status=STATUS_FIRED, count=len(top_yes),
+        bucket_key=early_bucket.key, committed=True, status=STATUS_FIRED, count=len(top_yes),
         slot_time=event_at, names=top_yes, thread_id=thread_id, signal_id=None,
         set_code=set_code, championship=True,
     )
     evening = LauncherSlot(
-        bucket_key=named_bucket_key("EVENING", set_code), committed=False, status=STATUS_OPEN, count=0,
-        slot_time=event_at + timedelta(hours=6), names=[], thread_id=None, signal_id="preview",
+        bucket_key=named_bucket_key(late_bucket.key, set_code), committed=False, status=STATUS_OPEN, count=0,
+        slot_time=slot_event_time(day, late_bucket.key), names=[], thread_id=None, signal_id="preview",
         set_code=set_code,
     )
     return [afternoon, evening]
+
+
+def _preview_championship_roster(attendees: list[SeededAttendee]) -> ChampionshipRoster:
+    """The three seeded columns off the synthetic standings. The best seeds decline and a couple answer
+    Maybe, so the preview shows a Top 8 that has slid down past them rather than the board's first eight,
+    which is what a real championship looks like by the time it starts."""
+    return championship_roster(attendees[5:], attendees[3:5], attendees[:3])
+
+
+def _preview_rsvp_rosters(roster: ChampionshipRoster) -> dict[str, list[str]]:
+    """The plain name lists behind the seeded columns, so the preview passes the same shape the live
+    reminder reads even though a championship renders off the seeds."""
+    return {
+        RSVP_YES: [a.display_name for a in roster.playing] + [
+            alt.attendee.display_name for alt in roster.alternates if not alt.maybe
+        ],
+        RSVP_MAYBE: [alt.attendee.display_name for alt in roster.alternates if alt.maybe],
+        RSVP_NO: [a.display_name for a in roster.declined],
+    }
 
 
 def _preview_rsvp_states(names: list[str]) -> dict[str, str]:

@@ -19,7 +19,7 @@ MSG_MOCK_NOT_TEXT_CHANNEL = "Run `/mock-draft` in a server text channel — the 
 MSG_MOCK_UNKNOWN_SET = "Unknown set `{code}`. Pick one from the suggestions, or use a registered cube format."
 MSG_MOCK_NONE_RUNNING = "No mock draft is open right now. Start one with `/mock-draft`."
 MSG_MOCK_REPOST_FAILED = "Could not repost the mock draft card. Check that the bot can post in this channel."
-MSG_MOCK_COMPLETE = "✅ **{event_name} complete!** [Draft Recap here](<{url}>) {manat}"
+MSG_MOCK_COMPLETE = "✅ **{event_name} complete!** [**Draft Recap here**](<{url}>) {manat}"
 MSG_MOCK_CARD_CONTENT = "{role} {state}"
 MSG_MOCK_CARD_OPENING = "opening the lobby"
 MSG_MOCK_CARD_OPEN = "looking for drafters"
@@ -37,6 +37,7 @@ MSG_MOCK_CARD_LOGS_PENDING = "Draft logs will be saved [**on the site**](<{url}>
 MSG_MOCK_CARD_DISCORD_NAME = "Use your Discord name in Draftmancer so the bot can match you"
 MSG_MOCK_CARD_RECAP_BUTTON = "Draft Recap"
 MSG_MOCK_CARD_SPECTATE_BUTTON = "Spectate"
+MSG_MOCK_CARD_THREAD_BUTTON = "Thread"
 MSG_LOBBY_FULL_PROMPT = "{count} Players locked in! Initiate Ready Check?"
 MSG_BOT_RECONNECTED = "🤖 Bot reconnected — back to managing the lobby."
 

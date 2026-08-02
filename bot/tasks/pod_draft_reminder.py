@@ -19,6 +19,11 @@ from bot import emojis
 from bot.database import SessionLocal
 from bot.discord_helpers import BLANK_LINE
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
+from bot.services.championship_roster_card import (
+    ChampionshipRoster,
+    add_championship_roster_fields,
+    championship_roster_for_event_sync,
+)
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_reminder_copy import (
     LOBBY_OPEN,
@@ -116,7 +121,10 @@ async def fire_roster_reminder(event_id: str) -> None:
         return
 
     rosters, roster_interests = await event_rsvp_rosters(event_id)
-    embed = build_roster_embed(event_name, event_time, rosters, roster_interests)
+    championship_roster = await asyncio.to_thread(championship_roster_for_event_sync, event_id, rosters)
+    embed = build_roster_embed(
+        event_name, event_time, rosters, roster_interests, championship_roster,
+    )
     format_locked = await asyncio.to_thread(signal_format_locked_sync, event_id)
     view = _reminder_view_builder(event_id, format_locked) if _reminder_view_builder is not None else None
     try:
@@ -232,7 +240,10 @@ async def _edit_roster_reminder(
     reminder = await _find_roster_reminder(thread)
     if reminder is None:
         return
-    embed = build_roster_embed(event_name, event_time, rosters, roster_interests)
+    championship_roster = await asyncio.to_thread(championship_roster_for_event_sync, event_id, rosters)
+    embed = build_roster_embed(
+        event_name, event_time, rosters, roster_interests, championship_roster,
+    )
     format_locked = await asyncio.to_thread(signal_format_locked_sync, event_id)
     view = _reminder_view_builder(event_id, format_locked) if _reminder_view_builder is not None else None
     try:
@@ -351,14 +362,22 @@ def build_lobby_open_body(draftmancer_url: str, mention_block: str) -> str:
 def build_roster_embed(
     event_name: str, event_time: datetime, rosters: dict[str, list[str]],
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None = None,
+    championship_roster: ChampionshipRoster | None = None,
 ) -> discord.Embed:
     """Same roster columns the scheduled card renders, so the T-60 reminder mirrors the card: a plain
-    Yes / Maybe pair until a signup wants flashback, then a Latest Set / Flashback split."""
+    Yes / Maybe pair until a signup wants flashback, then a Latest Set / Flashback split.
+
+    A championship mirrors the card the same way, by its seeded Top 8 / Alternates / Can't columns. Its Yes
+    list is not a roster, it is a queue for eight seats, so a flat list of everyone who answered says nothing
+    about who is playing an hour before the draft."""
     unix = int(event_time.timestamp())
     embed = discord.Embed(
         title=ROSTER_REMINDER_TITLE,
         description=ROSTER_REMINDER_LINE.format(name=event_name, unix=unix),
         color=discord.Color.green(),
     )
-    add_roster_fields(embed, rosters, roster_interests)
+    if championship_roster is not None:
+        add_championship_roster_fields(embed, championship_roster)
+    else:
+        add_roster_fields(embed, rosters, roster_interests)
     return embed

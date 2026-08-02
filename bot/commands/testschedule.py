@@ -5,7 +5,8 @@ recruiting nudge across its states, the launcher slot nudge and fire ping, and e
 variant. `underfill`, `pollnudge`, `firenudge` and `overflow` render those same surfaces one at a time
 in the current channel, with arguments for targeted checks. `cardformat` renders the scheduled card
 with a mixed sample roster to eyeball the format split, or any set or cube passed to it.
-`reminder` renders the roster reminder embed.
+`reminder` renders the roster reminder embed. `rally` renders every `!pod` rally state, which the live
+command cannot show without a Draftmancer lobby to stand up.
 `rolegrant`
 posts the auto-grant announcement embed so its look can be checked. The scheduled RSVP card is
 exercised through `!test rsvp`.
@@ -20,7 +21,9 @@ from discord.ext import commands
 from bot.commands.pod_rsvp import build_rsvp_embed
 from bot.commands.test_group import HALL_OF_FAME, test_group
 from bot.config import settings
+from bot.services import pod_rally
 from bot.services.ping_roles import PING_ROLES, build_grant_embed
+from bot.services.pod_join_button import build_join_view
 from bot.services.pod_launch import ondemand_event_name_sync
 from bot.services.pod_reminder_copy import SLOT_FIRE_PING
 from bot.services.pod_roles import find_role
@@ -101,6 +104,21 @@ async def setup(bot: commands.Bot) -> None:
                 embed=embed, allowed_mentions=discord.AllowedMentions.none(),
             )
 
+    @test_group.command(name="rally")
+    @commands.is_owner()
+    async def test_rally(ctx: commands.Context) -> None:
+        """Owner-only. Post every `!pod` rally state in this channel through the production builder, so
+        the copy can be read without a live Draftmancer lobby to stand up. The Join Draft button rides on
+        the state that carries one; its session is a fixture, so the link it hands back is dead."""
+        await ctx.send("-# `!pod` rally states. Constants live in `bot/services/pod_reminder_copy.py`")
+        thread = ctx.message.jump_url
+        for label, target in _rally_states(thread):
+            await ctx.send(
+                f"-# {label}\n{pod_rally.build_rally_line(target)}",
+                view=build_join_view(target.session_id) if target.session_id else None,
+                suppress_embeds=True, allowed_mentions=discord.AllowedMentions.none(),
+            )
+
     @test_group.command(name="cardformat")
     @commands.is_owner()
     async def test_cardformat(ctx: commands.Context, set_code: str = "") -> None:
@@ -164,6 +182,34 @@ async def setup(bot: commands.Bot) -> None:
             posted += 1
         if posted == 0:
             await ctx.send("No auto-grant roles to preview.")
+
+
+def _rally_states(thread_url: str) -> list[tuple[str, pod_rally.RallyTarget]]:
+    """Every shape `!pod` can post, in the order a pod passes through them. The lobby states carry a
+    session so the Join Draft button renders; the rest have none, which is what the live command sees."""
+    name = "MSH Aug 1 Late Pod"
+    session = "msh-late-preview"
+    slot = _next_slot()
+    lobby = [
+        ("Lobby open, nobody has arrived", 0),
+        ("Lobby open, one arrival", 1),
+        ("Lobby open, below the fire threshold", 5),
+        ("Lobby open, one seat short", 7),
+    ]
+    states = [
+        (label, pod_rally.RallyTarget(
+            pod_rally.KIND_LOBBY, name, thread_url, seated=seated, session_id=session))
+        for label, seated in lobby
+    ]
+    states.append(("Gathering, below the fire threshold", pod_rally.RallyTarget(
+        pod_rally.KIND_GATHERING, name, thread_url, yes=5, event_time=slot)))
+    states.append(("Gathering, short of a full table", pod_rally.RallyTarget(
+        pod_rally.KIND_GATHERING, name, thread_url, yes=6, maybe=2, event_time=slot)))
+    states.append(("Open queue, no start time", pod_rally.RallyTarget(
+        pod_rally.KIND_QUEUE_SIGNAL, "MSH Aug 1 Pod Draft Queue", thread_url, yes=3)))
+    states.append(("Draft already running", pod_rally.RallyTarget(
+        pod_rally.KIND_STARTED, name, thread_url, seated=8)))
+    return states
 
 
 def _next_slot() -> datetime:

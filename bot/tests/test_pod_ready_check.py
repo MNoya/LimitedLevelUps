@@ -117,7 +117,7 @@ def test_leaving_arms_grace_without_immediate_cancel():
 
     mgr._invalidate_ready_check = _record
     mgr._refresh_lobby_status = _async_noop
-    mgr._refresh_mock_lobby = lambda *args, **kwargs: None
+    mgr._admit_lobby_arrivals = lambda *args, **kwargs: None
     mgr._sync_leaderboard_seeding = lambda *args, **kwargs: None
 
     remaining = [{"userID": str(i), "userName": str(i)} for i in range(7)]
@@ -272,7 +272,7 @@ def test_declined_banner_survives_a_session_users_broadcast():
         return None
 
     mgr._refresh_lobby_status = _async_noop
-    mgr._refresh_mock_lobby = lambda *args, **kwargs: None
+    mgr._admit_lobby_arrivals = lambda *args, **kwargs: None
     mgr._sync_leaderboard_seeding = lambda *args, **kwargs: None
     mgr.bot_user_id = "bot"
 

@@ -49,3 +49,22 @@ LOBBY_OPEN = (
 DRAFT_STARTED = (
     "{hello}**{name}** started with **{count} {players}** {manat} [**Event Thread**]({thread_url})"
 )
+
+RALLY_LOBBY = (
+    "{thread_url} needs **{needed} more player{plural}**{waiting} in the {manat} "
+    "[**Draftmancer Lobby**]({session_url})"
+)
+
+RALLY_LOBBY_WAITING = ", {seated} waiting"
+
+RALLY_QUEUE = (
+    "{hello}**{name}** needs **{needed} more player{plural}** to start, {seated} waiting "
+    "{manat} [**Sign up here**]({jump_url})"
+)
+
+RALLY_NO_POD = (
+    "{hello}No pod is gathering right now {manat} [**Today's Launcher**]({launcher_url})\n"
+    "Use `/draft` to open one."
+)
+
+RALLY_NO_POD_NO_LAUNCHER = "{hello}No pod is gathering right now. Use `/draft` to open one."

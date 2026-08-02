@@ -76,11 +76,13 @@ When enough players are ready the bot runs a quick ready check, then starts the 
 
 A lobby that is one or two players short is the most common way a pod fails to fire. Anyone can type `!pod` in any channel to ask for them. The bot deletes your message and posts one line: which pod is open, how many players it still needs, how many are already sitting in the Draftmancer lobby, and a link to the thread. The line carries a Join Draft button that hands back a Draftmancer link with your Arena name already filled in, so you arrive matched to your leaderboard profile.
 
+Pressing Join Draft also puts you in the pod's thread. So does walking into the Draftmancer lobby on your own, as soon as the bot recognizes your name, so the people drafting and the people talking are the same list either way.
+
 Once a lobby is open the count is read from Draftmancer itself, so it is who is actually there and not who said yes earlier. Before a lobby opens there is nothing to read, so `!pod` reports the signup counts instead and links the signup card. When no pod is gathering at all it points at the day's launcher.
 
-It only ever names one pod, the one closest to a full table, so the message asks you to fill a seat instead of to pick between pods. Running it again replaces the previous rally rather than adding a second one.
+It only ever names one pod, the one closest to a full table, so the message asks you to fill a seat instead of to pick between pods. A pod that already has a full table gets no message: the bot tells you so and posts nothing. Running `!pod` again replaces the previous rally rather than adding a second one, and once the draft starts the rally rewrites itself into a record of the pod firing, so it can never keep asking for players who are no longer needed.
 
-Typed inside a pod's own thread, `!pod` does something else: it moves the lobby card back to the bottom of the thread, for a lobby that conversation has buried. For a mock draft use `!mock` instead.
+Typed inside a pod's own thread, `!pod` does something else: it moves the lobby card back to the bottom of the thread, for a lobby that conversation has buried. For a mock draft use `!mock` instead: it posts the mock card again at the bottom of the channel, with a Thread button on it, since a reposted card has no thread of its own.
 
 ## Table shapes
 
