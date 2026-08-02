@@ -107,6 +107,7 @@ _TEST_DECK_COLORS: dict[int, str] = {}
 _LIVE_TEST_ROSTER = ["Ava", "Bram", "Cara", "Dex", "Eli", "Fern", "Gus", "Hana", "Iris", "Juno"]
 _LIVE_TEST_POD_SIZES = ("6", "8", "10")
 _LIVE_TEST_STATUS = "test"
+_TEST_SESSION_PREFIX = "TESTLOBBY-"
 
 # Arena handles for the fictional roster so the live round embeds exercise the real Round 1 arena
 # rendering. Bram's handle diverges from the Discord name (shows the 'arena (discord)' form); the rest
@@ -185,7 +186,7 @@ def _seed_live_test_event_sync(
     participants arrive from the live Draftmancer session. Returns (event_id, session_id)."""
     now = datetime.now(timezone.utc)
     event_id = str(uuid4())
-    session_id = f"TESTLOBBY-{channel_id}"
+    session_id = f"{_TEST_SESSION_PREFIX}{channel_id}"
     with SessionLocal() as session:
         session.add(PodDraftEvent(
             id=event_id,
@@ -297,6 +298,21 @@ def _purge_live_test_pods_sync(channel_id: int) -> list[str]:
     return list(ids)
 
 
+def _purge_all_live_test_pods_sync() -> list[str]:
+    """Every leftover live-test event, in whichever channel it was seeded. Keyed on the session id
+    testlobby stamps, so a real pod or a mock draft sharing a channel is never caught."""
+    with SessionLocal() as session:
+        ids = session.execute(
+            select(PodDraftEvent.id).where(
+                PodDraftEvent.draftmancer_session.startswith(_TEST_SESSION_PREFIX),
+            )
+        ).scalars().all()
+        if ids:
+            session.execute(delete(PodDraftEvent).where(PodDraftEvent.id.in_(ids)))
+            session.commit()
+    return list(ids)
+
+
 def _build_live_test_manager(
     bot, event_id: str, session_id: str, channel_id: int, mode: str, roster: list[str],
 ) -> PodDraftManager:
@@ -321,29 +337,49 @@ async def _refuse_if_prod(ctx) -> bool:
     return False
 
 
+async def _evict_managers(event_ids: list[str]) -> None:
+    for event_id in event_ids:
+        manager = ACTIVE_POD_MANAGERS.get(event_id)
+        if manager is None:
+            continue
+        for task in (manager.grace_task, manager.championship_task):
+            if task is not None and not task.done():
+                task.cancel()
+        await manager.disconnect_safely()
+
+
 async def _evict_test_managers_for_channel(channel_id: int) -> None:
     """Drop any lingering manager for this channel so a fresh `!test` preview isn't intercepted by a
     prior podX run's manager — otherwise its current_round>0 trips the pairing-lock guard on the
     preview's Settings panel."""
-    stale = [m for m in ACTIVE_POD_MANAGERS.values() if m.thread_id == channel_id]
-    for mgr in stale:
-        for task in (mgr.grace_task, mgr.championship_task):
-            if task is not None and not task.done():
-                task.cancel()
-        await mgr.disconnect_safely()
+    stale = [
+        event_id for event_id, manager in ACTIVE_POD_MANAGERS.items() if manager.thread_id == channel_id
+    ]
+    await _evict_managers(stale)
 
 
 async def _purge_and_reset_test(ctx) -> None:
     """Delete prior test events for this channel, disconnect/evict their managers, and clear the thread."""
     purged = await asyncio.to_thread(_purge_live_test_pods_sync, ctx.channel.id)
-    for old_id in purged:
-        old = ACTIVE_POD_MANAGERS.get(old_id)
-        if old is not None:
-            for task in (old.grace_task, old.championship_task):
-                if task is not None and not task.done():
-                    task.cancel()
-            await old.disconnect_safely()
+    await _evict_managers(purged)
     await _delete_last_test_messages(ctx.channel)
+
+
+async def _reset_live_test_pods(ctx) -> None:
+    """The `reset` path: drop every leftover live-test pod, in any channel, from the DB and from the live
+    registry. A test event outlives the run that seeded it, so each restart rehydrates a manager that binds
+    its channel to a lobby whose card is long gone, and `!pod` there answers for a pod nobody is in. The
+    registry is swept on its own, since a manager can outlive the row that seeded it."""
+    if await _refuse_if_prod(ctx):
+        return
+    purged = await asyncio.to_thread(_purge_all_live_test_pods_sync)
+    stale = set(purged) | {
+        event_id for event_id, manager in ACTIVE_POD_MANAGERS.items()
+        if manager.session_id.startswith(_TEST_SESSION_PREFIX)
+    }
+    await _evict_managers(sorted(stale))
+    await _delete_last_test_messages(ctx.channel)
+    await ctx.send(f"🧪 Cleared {len(stale)} leftover test pod(s).")
 
 
 def _top_ranked_names_sync(n: int) -> list[str]:
@@ -1146,14 +1182,14 @@ _VALID_STATES = (
     "format", "seeding", "trophyhype", "champ", "round1", "round2", "round3", "voicelink", "review",
     "table",
     "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "p2vote",
-    "formatpoll", "linkpicker", "settings",
+    "formatpoll", "linkpicker", "settings", "reset",
 )
 
 _LIVE_POD_MODES = {
     "podbracket": "bracket", "podswiss": "swiss", "podrandom": "random", "podteam": "team",
 }
 
-_PRODUCTION_BLOCKED_STATES = frozenset(_LIVE_POD_MODES) | {"podlobby", "podteamvote", "unlink"}
+_PRODUCTION_BLOCKED_STATES = frozenset(_LIVE_POD_MODES) | {"podlobby", "podteamvote", "unlink", "reset"}
 
 _LAST_MESSAGE: dict[int, discord.Message] = {}
 _LAST_PROGRESS_MESSAGES: dict[int, list[discord.Message]] = {}
@@ -1394,13 +1430,19 @@ async def setup(bot: commands.Bot) -> None:
         the prod tournament code, so the round embeds + result dropdowns drive the real round-to-round
         flow (these write to the local DB). `round1` (`round1 random` for random pairing) is a no-DB
         snapshot of the Round 1 embed only — to drive rounds, use `podswiss`. `podlobby` connects to a
-        live Draftmancer session for ready-check testing. `seeding [count]` posts the /pod-seeding embed
-        (table + round-table PNG) for `count` players (default 8; ranked padded with fillers), no sesh."""
+        live Draftmancer session for ready-check testing. `reset` deletes every leftover live-test pod in
+        any channel, so no stale manager keeps binding a channel after its card is gone. `seeding [count]`
+        posts the /pod-seeding embed (table + round-table PNG) for `count` players (default 8; ranked
+        padded with fillers), no sesh."""
         if state and state not in _VALID_STATES:
             await ctx.send(f"unknown state `{state}`; pick one of: {', '.join(_VALID_STATES)}")
             return
 
         if state in _PRODUCTION_BLOCKED_STATES and await refused_on_production(ctx, state):
+            return
+
+        if state == "reset":
+            await _reset_live_test_pods(ctx)
             return
 
         if state in _LIVE_POD_MODES:
