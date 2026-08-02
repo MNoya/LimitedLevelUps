@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import discord
 from discord.ext import commands
@@ -97,6 +97,9 @@ from bot.tasks.pod_draft_reminder import fire_roster_reminder
 
 log = logging.getLogger(__name__)
 
+WEEKDAY_ARGS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+POLL_KEYWORDS = ("am", "split", *WEEKDAY_ARGS)
+
 
 async def _show_welcome_preview(interaction: discord.Interaction, role_name: str) -> None:
     guild = interaction.guild
@@ -160,19 +163,16 @@ async def setup(bot: commands.Bot) -> None:
         otherwise tomorrow — so the buttons are clickable and drive real signals. Prefills each named pod
         with fake signups, a couple of them on both formats of a slot, so the rosters and the flexible
         marker show. Args are order-free: `am` posts tomorrow so every pod is fresh and open like a morning
-        post; `split` seeds five dedicated per format plus two on both, so one press has to split them into
-        two full pods; a set or cube code is offered beside the latest set, so `poll SAMP` drives that
+        post; a weekday name posts that weekday's board, so `poll sat` shows the slots and formats Saturday
+        carries; `split` seeds five dedicated per format plus two on both, so one press has to split them
+        into two full pods; a set or cube code is offered beside the latest set, so `poll SAMP` drives that
         format live without waiting for its date."""
         lowered = {arg.lower() for arg in args}
         now = datetime.now(SCHEDULE_TZ)
-        if "am" in lowered:
-            day = now.date() + timedelta(days=1)
-        else:
-            last_slot = slot_event_time(now.date(), poll_buckets_for(now.date())[-1].key)
-            day = now.date() if last_slot is not None and last_slot > now else now.date() + timedelta(days=1)
+        day = _poll_day(now, args)
         forced = [
             code for code in (
-                pod_format.resolve_format_code(arg) if arg.lower() not in ("am", "split") else None
+                pod_format.resolve_format_code(arg) if arg.lower() not in POLL_KEYWORDS else None
                 for arg in args
             ) if code
         ]
@@ -1243,6 +1243,30 @@ def _lifecycle_pod(bucket, slot_time, code: str, channel_id: str, *, offset: int
         finished=state == "played", winner=_roster_name(offset) if state == "played" else None,
         locked=state in ("locked_other", "locked_all", "played"),
     )
+
+
+def _poll_day(now: datetime, args: tuple[str, ...]) -> date:
+    """The day a live `!test poll` posts for: the weekday it names, tomorrow on `am`, otherwise today while
+    a slot is still ahead. A named weekday is how a board another day of the week builds is reached, the
+    Saturday late pod running an hour later than the rest."""
+    for arg in args:
+        if arg.lower() in WEEKDAY_ARGS:
+            return _next_weekday_still_gathering(now, WEEKDAY_ARGS.index(arg.lower()))
+    if "am" in {arg.lower() for arg in args}:
+        return now.date() + timedelta(days=1)
+    return now.date() if _slots_remain(now, now.date()) else now.date() + timedelta(days=1)
+
+
+def _next_weekday_still_gathering(now: datetime, weekday: int) -> date:
+    """The soonest date on `weekday` that still has a slot ahead of it, so every pod on the board it posts
+    is open and clickable."""
+    day = now.date() + timedelta(days=(weekday - now.weekday()) % 7)
+    return day if _slots_remain(now, day) else day + timedelta(days=7)
+
+
+def _slots_remain(now: datetime, day: date) -> bool:
+    last_slot = slot_event_time(day, poll_buckets_for(day)[-1].key)
+    return last_slot is not None and last_slot > now
 
 
 def _force_formats(day, codes: tuple[str, ...]) -> None:

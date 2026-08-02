@@ -46,12 +46,14 @@ from bot.services.pod_settings_view import (
 )
 from bot.services.pod_signals import (
     KIND_QUEUE,
+    LANE_EARLY,
+    LANE_LATE,
     QUEUE_BUCKET,
     SCHEDULE_TZ,
     STATUS_FIRED,
-    bucket_by_key,
+    bucket_for_lane,
+    next_lane_start,
     should_fire,
-    slot_event_time,
     slot_role_name_for_event_time,
     teardown_at,
 )
@@ -511,17 +513,6 @@ class _LauncherSetModal(discord.ui.Modal, title="Draft a different set"):
         await self.launcher.rerender(interaction)
 
 
-def _preset_slot_time(bucket_key: str, now: datetime) -> datetime | None:
-    """The next occurrence of an Early / Late slot: today's if still ahead, otherwise tomorrow's."""
-    today = now.astimezone(SCHEDULE_TZ).date()
-    slot = slot_event_time(today, bucket_key)
-    if slot is None:
-        return None
-    if slot <= now:
-        slot = slot_event_time(today + timedelta(days=1), bucket_key)
-    return slot
-
-
 def _when_day_label(when: datetime, now: datetime) -> str:
     local = when.astimezone(SCHEDULE_TZ)
     today = now.astimezone(SCHEDULE_TZ).date()
@@ -539,15 +530,16 @@ def _when_clock(when: datetime) -> str:
 def _when_options(scheduled_time: datetime | None, now: datetime) -> list[discord.SelectOption]:
     """Right now (default) plus the two named slots at their next occurrence, then a custom write-in.
     A custom time shows as its own defaulted option."""
-    early = _preset_slot_time("EARLY", now)
-    late = _preset_slot_time("LATE", now)
+    today = now.astimezone(SCHEDULE_TZ).date()
+    early = next_lane_start(LANE_EARLY, now)
+    late = next_lane_start(LANE_LATE, now)
     options = [discord.SelectOption(
         label="When: Right now", value="now", emoji="⚡", description="Open a live queue now",
         default=(scheduled_time is None))]
-    for key, slot in (("EARLY", early), ("LATE", late)):
-        bucket = bucket_by_key(key)
+    for lane, slot in ((LANE_EARLY, early), (LANE_LATE, late)):
+        bucket = bucket_for_lane(today, lane)
         options.append(discord.SelectOption(
-            label=f"When: {bucket.name}", value=key, emoji=bucket.emoji,
+            label=f"When: {bucket.name}", value=lane, emoji=bucket.emoji,
             description=f"{_when_day_label(slot, now)} {_when_clock(slot)}",
             default=(scheduled_time is not None and scheduled_time == slot)))
     is_custom = scheduled_time is not None and scheduled_time not in (early, late)
@@ -575,7 +567,7 @@ class _LauncherWhenSelect(discord.ui.Select):
         if value == "now":
             self.view.scheduled_time = None
         else:
-            self.view.scheduled_time = _preset_slot_time(value, datetime.now(timezone.utc))
+            self.view.scheduled_time = next_lane_start(value, datetime.now(timezone.utc))
         await self.view.rerender(interaction)
 
 

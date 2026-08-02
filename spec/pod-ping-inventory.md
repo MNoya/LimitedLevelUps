@@ -20,8 +20,9 @@ The roles that get mentioned, and how they differ (easy to conflate):
 | EARLY (weekday) | 14:00 | 20:00 | Early Pod | EU-friendly |
 | LATE (weekday) | 20:00 | 02:00 | Late Pod | EU late-night |
 | MORNING (weekend) | 10:00 | 16:00 | Weekend Early Pod | |
-| AFTERNOON (weekend) | 15:00 | 21:00 | Weekend Early Pod | bucket is *named* "Early Pod" |
-| EVENING (weekend) | 20:00 | 02:00 | Weekend Late Pod | bucket is *named* "Late Pod" |
+| AFTERNOON (weekend) | 14:00 | 20:00 | Weekend Early Pod | bucket is *named* "Early Pod" |
+| EVENING (Sunday) | 20:00 | 02:00 | Weekend Late Pod | bucket is *named* "Late Pod" |
+| SATURDAY_EVENING | 21:00 | 03:00 | Weekend Late Pod | Saturday's late lane runs an hour later |
 
 Weekend now splits daytime (Morning + Afternoon → Weekend Early Pod) from evening (Weekend Late Pod), mirroring the weekday Early/Late split, so a weekend subscriber is no longer force-pinged for the 20:00 ET (~02:00 CET) slot. A dedicated Weekend Morning role was deferred — that 10:00 ET slot has not fired yet, so Morning folds into Weekend Early for now.
 

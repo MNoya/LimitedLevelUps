@@ -28,7 +28,7 @@ from bot.services.pod_format_schedule import calendar_days, extras_on, latest_on
 from bot.services.pod_roles import role_mention
 from bot.services.pod_schedule import SCHEDULE_TZ
 from bot.services.pod_schedule_image import render_calendar_png
-from bot.services.pod_signals import WEEKDAY_BUCKETS, is_weekend, next_slot_start
+from bot.services.pod_signals import WEEKDAY_BUCKETS, is_weekend, next_lane_start
 from bot.sets import active_set_code, release_instant, set_name_for
 
 MSG_TITLE = "### 🗓️ Pod Format Schedule"
@@ -94,14 +94,14 @@ def build_schedule_view(guild: discord.Guild | None, now: datetime, weeks: int,
 def slot_line(guild: discord.Guild | None, now: datetime) -> str:
     """Both slots on one row, each naming the role to hold and when it next drafts. The weekday roles carry
     the line: a reader wants the role to pick up, and the weekend variants are the launcher's bookkeeping."""
-    slots = [
-        MSG_SLOT.format(
-            emoji=bucket.emoji,
-            role=role_mention(guild, bucket.role_name),
-            unix=int(next_slot_start(bucket, now).timestamp()),
-        )
-        for bucket in WEEKDAY_BUCKETS
-    ]
+    slots = []
+    for bucket in WEEKDAY_BUCKETS:
+        start = next_lane_start(bucket.lane, now)
+        if start is None:
+            continue
+        slots.append(MSG_SLOT.format(
+            emoji=bucket.emoji, role=role_mention(guild, bucket.role_name), unix=int(start.timestamp()),
+        ))
     return COLUMN_GAP.join(slots)
 
 

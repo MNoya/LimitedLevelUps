@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 import discord
 import pytest
 
-from bot.commands.pod_queue import _preset_slot_time, _when_clock, _when_options
+from bot.commands.pod_queue import _when_clock, _when_options
 from bot.services.pod_format_select import WRITE_IN_VALUE
 from bot.services import pod_launch
 from bot.services.pod_launch import LauncherSlot, _lazy_status
@@ -16,6 +16,7 @@ from bot.services.pod_signals import (
     STATUS_FIRED,
     STATUS_OPEN,
     named_bucket_key,
+    next_lane_start,
 )
 from bot.sets import active_set_code
 from bot.tasks.pod_daily_poll import (
@@ -31,7 +32,6 @@ from bot.tasks.pod_daily_poll import (
 
 
 BEFORE_EARLY = datetime(2026, 7, 14, 10, 0, tzinfo=timezone.utc)
-AFTER_LATE = datetime(2026, 7, 15, 3, 0, tzinfo=timezone.utc)
 LATEST = active_set_code()
 
 
@@ -229,20 +229,6 @@ def test_lazy_status_closes_only_a_passed_open_slot(status, slot_hour, expected)
     assert _lazy_status(status, slot_time, now) == expected
 
 
-def test_preset_slot_time_uses_today_when_slot_is_ahead():
-    early = _preset_slot_time("EARLY", BEFORE_EARLY)
-
-    assert early.astimezone(timezone.utc).date() == BEFORE_EARLY.date()
-    assert early > BEFORE_EARLY
-
-
-def test_preset_slot_time_rolls_to_tomorrow_once_slot_has_passed():
-    late = _preset_slot_time("LATE", AFTER_LATE)
-
-    assert late > AFTER_LATE
-    assert (late - AFTER_LATE) < timedelta(days=1, hours=18)
-
-
 def test_when_options_default_right_now_when_unscheduled():
     options = _when_options(None, BEFORE_EARLY)
 
@@ -252,7 +238,7 @@ def test_when_options_default_right_now_when_unscheduled():
 
 
 def test_when_options_defaults_the_selected_preset():
-    late = _preset_slot_time("LATE", BEFORE_EARLY)
+    late = next_lane_start(LANE_LATE, BEFORE_EARLY)
 
     options = _when_options(late, BEFORE_EARLY)
 

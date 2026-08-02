@@ -17,6 +17,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 
 import discord
 from sqlalchemy import select
@@ -63,7 +64,13 @@ from bot.services.pod_schedule import (
     next_slot_datetime,
     slot_by_weekday,
 )
-from bot.services.pod_signals import slot_event_time, slot_role_name_for_event_time
+from bot.services.pod_signals import (
+    LANE_EARLY,
+    LANE_LATE,
+    bucket_for_lane,
+    slot_event_time,
+    slot_role_name_for_event_time,
+)
 from bot.services.token_link_flow import start_link_17lands_flow
 from bot.sets import preview_set_code
 
@@ -84,7 +91,7 @@ class PingRole:
     slot_weekday: int | None = None
     auto_grant: bool = False
     grant_when: str = "at this time of day"
-    weekend_bucket_keys: tuple[str, ...] = ()
+    weekend_lane: str | None = None
 
 
 EARLY_POD_COLOR = "#5CA8E0"
@@ -103,12 +110,12 @@ PING_ROLES: tuple[PingRole, ...] = (
     PingRole(
         "wknd_early", WEEKEND_EARLY_POD_ROLE_NAME, "🌅", "", color=EARLY_POD_COLOR,
         aliases=("Weekend Early Pods",), slot_weekday=SATURDAY, auto_grant=True,
-        grant_when="on weekends", weekend_bucket_keys=("AFTERNOON",),
+        grant_when="on weekends", weekend_lane=LANE_EARLY,
     ),
     PingRole(
         "wknd_late", WEEKEND_LATE_POD_ROLE_NAME, "🎆", "", color=LATE_POD_COLOR,
         aliases=("Weekend Late Pods",), slot_weekday=SATURDAY, auto_grant=True,
-        grant_when="on weekends", weekend_bucket_keys=("EVENING",),
+        grant_when="on weekends", weekend_lane=LANE_LATE,
     ),
     PingRole("queue", POD_QUEUE_ROLE_NAME, "⚡", "Daily Draft Sign-Ups", color="#FFAC33"),
     PingRole(
@@ -159,21 +166,33 @@ def button_custom_id(spec: PingRole) -> str:
 
 
 def blurb_with_time(spec: PingRole) -> str:
-    """A slot role pairs its blurb with its recurring local times: one for a weekday slot, and for a
-    weekend role only the buckets it covers (`weekend_bucket_keys`). Roles with no slot show their
-    blurb alone."""
+    """A slot role pairs its blurb with its recurring local times: one for a weekday slot, and for a weekend
+    role every hour its lane runs at across the two days. Roles with no slot show their blurb alone."""
     if spec.slot_weekday is None:
         return spec.blurb
     slot = slot_by_weekday(spec.slot_weekday)
     if slot is None:
         return spec.blurb
-    slot_date = next_slot_datetime(slot).date()
-    if spec.weekend_bucket_keys:
-        stamps = [slot_event_time(slot_date, key) for key in spec.weekend_bucket_keys]
+    if spec.weekend_lane is not None:
+        stamps = _weekend_lane_stamps(spec.weekend_lane, next_slot_datetime(slot).date())
     else:
         stamps = [next_slot_datetime(slot)]
     times = ", ".join(f"<t:{int(stamp.timestamp())}:t>" for stamp in stamps)
     return f"{spec.blurb} at {times}" if spec.blurb else f"at {times}"
+
+
+def _weekend_lane_stamps(lane: str, saturday: date) -> list[datetime]:
+    """One stamp per distinct start the lane runs at over a weekend, Saturday first: a lane holding the same
+    hour both days names it once, and one that shifts on Saturday names both hours."""
+    stamps = []
+    starts = set()
+    for day in (saturday, saturday + timedelta(days=1)):
+        bucket = bucket_for_lane(day, lane)
+        if bucket is None or bucket.start in starts:
+            continue
+        starts.add(bucket.start)
+        stamps.append(slot_event_time(day, bucket.key))
+    return stamps
 
 
 def display_emoji(spec: PingRole) -> str | None:

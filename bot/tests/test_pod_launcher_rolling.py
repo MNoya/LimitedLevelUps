@@ -23,7 +23,7 @@ from bot.services.pod_signals import (
     bucket_for_lane,
     lane_of,
     named_bucket_key,
-    next_slot_start,
+    next_lane_start,
     slot_can_fire,
     slot_event_time,
 )
@@ -58,11 +58,11 @@ THRESHOLD = settings.pod_signal_fire_threshold
     (LANE_LATE, datetime(2026, 7, 26, 15, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 26, 20, 0)),
     (LANE_LATE, datetime(2026, 7, 26, 21, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 27, 20, 0)),
     (LANE_EARLY, datetime(2026, 11, 1, 20, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 11, 2, 14, 0)),
+    (LANE_LATE, datetime(2026, 7, 25, 15, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 25, 21, 0)),
+    (LANE_LATE, datetime(2026, 7, 24, 21, 30, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 25, 21, 0)),
 ])
 def test_a_slot_rolls_to_tomorrow_once_todays_start_has_passed(lane, called_at, expected_start):
-    bucket = bucket_for_lane(called_at.date(), lane)
-
-    start = next_slot_start(bucket, called_at)
+    start = next_lane_start(lane, called_at)
 
     assert start == expected_start.replace(tzinfo=SCHEDULE_TZ)
 
@@ -476,7 +476,7 @@ def test_a_rolled_slot_and_todays_slot_share_the_message_and_the_snapshot_stacks
 
     late_column = [slot for slot in slots if lane_of(slot.bucket_key) == LANE_LATE]
     assert [slot.slot_time for slot in late_column] == [
-        slot_event_time(FRIDAY, "LATE"), slot_event_time(SATURDAY, "EVENING"),
+        slot_event_time(FRIDAY, "LATE"), slot_event_time(SATURDAY, bucket_for_lane(SATURDAY, LANE_LATE).key),
     ]
     assert _lane_order(slots) == [LANE_EARLY, LANE_LATE]
 

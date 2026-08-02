@@ -58,15 +58,20 @@ class PollBucket:
     lane: str
 
 
+WEEKEND_EARLY_BUCKET = PollBucket(
+    "AFTERNOON", "Early Pod", "💫", time(14, 0), WEEKEND_EARLY_POD_ROLE_NAME, LANE_EARLY)
+WEEKEND_LATE_BUCKET = PollBucket(
+    "EVENING", "Late Pod", "☄️", time(20, 0), WEEKEND_LATE_POD_ROLE_NAME, LANE_LATE)
+SATURDAY_LATE_BUCKET = PollBucket(
+    "SATURDAY_EVENING", "Late Pod", "☄️", time(21, 0), WEEKEND_LATE_POD_ROLE_NAME, LANE_LATE)
+
 WEEKDAY_BUCKETS: tuple[PollBucket, ...] = (
     PollBucket("EARLY", "Early Pod", "💫", time(14, 0), EARLY_POD_ROLE_NAME, LANE_EARLY),
     PollBucket("LATE", "Late Pod", "☄️", time(20, 0), LATE_POD_ROLE_NAME, LANE_LATE),
 )
-WEEKEND_BUCKETS: tuple[PollBucket, ...] = (
-    PollBucket("AFTERNOON", "Early Pod", "💫", time(14, 0), WEEKEND_EARLY_POD_ROLE_NAME, LANE_EARLY),
-    PollBucket("EVENING", "Late Pod", "☄️", time(20, 0), WEEKEND_LATE_POD_ROLE_NAME, LANE_LATE),
-)
-ALL_BUCKETS: tuple[PollBucket, ...] = WEEKDAY_BUCKETS + WEEKEND_BUCKETS
+WEEKEND_BUCKETS: tuple[PollBucket, ...] = (WEEKEND_EARLY_BUCKET, WEEKEND_LATE_BUCKET)
+SATURDAY_BUCKETS: tuple[PollBucket, ...] = (WEEKEND_EARLY_BUCKET, SATURDAY_LATE_BUCKET)
+ALL_BUCKETS: tuple[PollBucket, ...] = WEEKDAY_BUCKETS + WEEKEND_BUCKETS + (SATURDAY_LATE_BUCKET,)
 
 
 def is_weekend(day: date) -> bool:
@@ -74,6 +79,10 @@ def is_weekend(day: date) -> bool:
 
 
 def poll_buckets_for(day: date) -> tuple[PollBucket, ...]:
+    """Saturday drafts its late pod an hour after every other day's, so it carries a bucket of its own. Same
+    lane and same ping role as the rest of the weekend: only the hour differs."""
+    if day.weekday() == SATURDAY:
+        return SATURDAY_BUCKETS
     return WEEKEND_BUCKETS if is_weekend(day) else WEEKDAY_BUCKETS
 
 
@@ -120,15 +129,20 @@ def bucket_for_lane(day: date, lane: str) -> PollBucket | None:
     return None
 
 
-def next_slot_start(bucket: PollBucket, now: datetime) -> datetime:
-    """When the bucket's slot next comes around: today's start while it is still ahead, tomorrow's once it
-    has passed. Rebuilt from the wall clock rather than shifted by a day, so a start stays at its ET hour
-    across a daylight saving change."""
-    local = now.astimezone(SCHEDULE_TZ)
-    start = datetime.combine(local.date(), bucket.start, tzinfo=SCHEDULE_TZ)
-    if start > now:
-        return start
-    return datetime.combine(local.date() + timedelta(days=1), bucket.start, tzinfo=SCHEDULE_TZ)
+def next_lane_start(lane: str, now: datetime) -> datetime | None:
+    """When the lane's slot next comes around: today's start while it is still ahead, tomorrow's once it has
+    passed. The hour is read off the day the slot lands on, so a day running its slot at its own hour is
+    named at that hour. Rebuilt from the wall clock rather than shifted by a day, so a start stays at its ET
+    hour across a daylight saving change."""
+    today = now.astimezone(SCHEDULE_TZ).date()
+    for day in (today, today + timedelta(days=1)):
+        bucket = bucket_for_lane(day, lane)
+        if bucket is None:
+            continue
+        start = datetime.combine(day, bucket.start, tzinfo=SCHEDULE_TZ)
+        if start > now:
+            return start
+    return None
 
 
 def slot_can_fire(slot_time: datetime, now: datetime) -> bool:

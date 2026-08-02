@@ -22,7 +22,9 @@ def _slot(bucket_key: str, day: str) -> datetime:
     (_slot("EARLY", "2026-07-16"), EARLY_POD_ROLE_NAME),
     (_slot("LATE", "2026-07-16"), LATE_POD_ROLE_NAME),
     (_slot("AFTERNOON", "2026-07-18"), WEEKEND_EARLY_POD_ROLE_NAME),
-    (_slot("EVENING", "2026-07-18"), WEEKEND_LATE_POD_ROLE_NAME),
+    (_slot("SATURDAY_EVENING", "2026-07-18"), WEEKEND_LATE_POD_ROLE_NAME),
+    (_slot("EVENING", "2026-07-19"), WEEKEND_LATE_POD_ROLE_NAME),
+    (_slot("EVENING", "2026-07-18"), POD_QUEUE_ROLE_NAME),
     (datetime(2026, 7, 16, 17, 13, tzinfo=SCHEDULE_TZ), POD_QUEUE_ROLE_NAME),
 ])
 def test_notify_on_derives_role_from_time(scheduled_time, expected):

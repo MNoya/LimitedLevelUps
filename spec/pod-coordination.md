@@ -8,7 +8,7 @@ This guide describes how pods work right now. It stays current as the system cha
 
 The bot posts a Daily Pod Launcher every day in the pod channel. It lists the day's time slots and, under each one, every format that slot is playing:
 
-- Every day: Early Pod at 2 PM ET, Late Pod at 8 PM ET.
+- Every day: Early Pod at 2 PM ET, Late Pod at 8 PM ET. On Saturday the Late Pod starts at 9 PM ET.
 
 Times are Eastern. Each slot shows its start as a timestamp in your own timezone, so you never have to convert. The community is global, so pick whichever slot fits your day. Mods can also schedule extra pods at other times, which show up as their own signup posts.
 
