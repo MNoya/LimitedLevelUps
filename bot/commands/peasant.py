@@ -66,7 +66,7 @@ def _cube_message(link: CubeLink, owner_mention: str) -> str:
     cube_id = link.cube_id
     lead = emojis.get(LEAD_EMOJI_NAME) or FALLBACK_LEAD_EMOJI
     overview_path = f"cubecobra.com/cube/overview/{cube_id}"
-    overview_link = f"{lead} [{overview_path}](https://{overview_path}) {owner_mention}"
+    overview_link = f"{lead} [{overview_path}](<https://{overview_path}>) {owner_mention}"
     shortcuts = (EM_SPACE * 2).join(
         (
             f"📊{NBSP}[{bold_underline('Tier List')}](<https://cubecobra.com/cube/list/{cube_id}?view=mainboard&s1=Tags>)",
