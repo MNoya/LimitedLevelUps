@@ -42,7 +42,7 @@ MSG_BOT_RECONNECTED = "🤖 Bot reconnected — back to managing the lobby."
 
 MSG_JOIN_DRAFT_BUTTON = "Join Draft"
 MSG_JOIN_LINE = (
-    "## Open this [**Draftmancer Link**](<{url}>) to join the draft as {identity}"
+    "### ➡️ Open this [**Draftmancer Link**](<{url}>) to join the draft as {identity}"
 )
 MSG_LINK_ARENA_PROMPT = (
     "Seats are matched by your MTG Arena handle, like `YourName#12345`\n"
