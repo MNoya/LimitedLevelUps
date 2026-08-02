@@ -61,6 +61,7 @@ from bot.services.pod_schedule import MOCK_DRAFT_ROLE_NAME
 from bot.services.pod_pairing_select import pairing_label
 from bot.services.pod_seating_select import seating_mode_label
 from bot.services import pod_format_poll
+from bot.services import pod_round_robin_vote
 from bot.services.pod_team_vote import (
     SIDE_TEAM,
     TEAM_VOTE_POD_SIZE,
@@ -351,7 +352,7 @@ class PodDraftManager:
         self.finalized = False
         self.tournament_roster: list[str] = []  # draftmancer userNames, set on endDraft
         self.tournament_players: list = []       # pod_swiss.Player list, set by pod_tournament.start_tournament
-        self.pairing_mode = "swiss"              # 'swiss', 'bracket', 'random', or 'team'; resolved in start_tournament
+        self.pairing_mode = "swiss"              # resolved in start_tournament; see pod_pairing_select.PAIRING_MODES
         self.seating_mode = "random"             # 'random', 'manual', or 'leaderboard'; hydrated on connect
         self.pick_timer = settings.pod_draft_pick_timer
         self.picks_per_pack = settings.pod_draft_picks_per_pack
@@ -363,6 +364,10 @@ class PodDraftManager:
         self.team_vote_offered = False
         self.team_vote_pending_size: int | None = None
         self.team_vote_size = 0
+        self.round_robin_vote_message: "discord.Message | None" = None
+        self.round_robin_vote_offered = False
+        self.round_robin_vote_size = 0
+        self._round_robin_offer_task: asyncio.Task | None = None
         self.format_poll_message: "discord.Message | None" = None
         self.format_poll_offered = False
         self.format_table_offered = False
@@ -811,8 +816,13 @@ class PodDraftManager:
 
     def ready_check_floor(self, min_players: int | None = None) -> int:
         """Roster size below which a ready check warns and asks the initiator to confirm. `/pod-ready` passes
-        a lower floor so a deliberately small pod starts without the prompt."""
-        return min_players if min_players is not None else settings.pod_draft_min_ready_players
+        a lower floor so a deliberately small pod starts without the prompt. A Round Robin pod is meant to
+        play four, so four is not short for it."""
+        if min_players is not None:
+            return min_players
+        if self.pairing_mode == "roundrobin":
+            return settings.pod_round_robin_size
+        return settings.pod_draft_min_ready_players
 
     def ready_check_needs_confirm(self, unlinked: list[str], *, min_players: int | None = None) -> bool:
         """Whether the roster is unusual enough that the initiator confirms before the check fires. Shared by
@@ -1075,11 +1085,16 @@ class PodDraftManager:
                 **self._settings_labels(),
             )
             self._maybe_schedule_lobby_full_prompt(classified)
+            self._maybe_schedule_round_robin_offer()
             await self._maybe_offer_armed_team_vote()
             await self._maybe_offer_team_vote_after_start()
             outgrew_vote = len(self.player_session_users()) > max(6, self.team_vote_size)
             if self.team_vote_message is not None and outgrew_vote:
                 await self._retire_team_vote_offer()
+            round_robin_lobby_moved = len(self.player_session_users()) != self.round_robin_vote_size
+            if self.round_robin_vote_message is not None and round_robin_lobby_moved:
+                await self._retire_round_robin_offer()
+                self.round_robin_vote_offered = False
             if state == "drafting":
                 view = build_drafting_view(self.spectate_url)
             elif state == "complete":
@@ -1759,6 +1774,7 @@ class PodDraftManager:
         self._schedule_end_watchdog()
         await self._retire_lobby_full_prompt()
         await self._retire_team_vote_offer()
+        await self._retire_round_robin_offer()
         await self._retire_format_poll_offer()
         await asyncio.to_thread(self._seed_participants_at_draft_start)
         notify_second_table_offer(self.bot, self.event_id)
@@ -1990,6 +2006,90 @@ class PodDraftManager:
         A full pod plays a bracket. The manual /pod-team path allows any pod of at least four and does not
         use this."""
         return 6 if len(self.player_session_users()) == 6 else None
+
+    def _maybe_schedule_round_robin_offer(self) -> None:
+        """Arm the Round Robin offer while the lobby sits at exactly four players. The delayed task
+        re-validates before posting, so a fifth player arriving inside the window just cancels it — four
+        players who keep waiting are the only ones asked."""
+        if not self._round_robin_offer_eligible():
+            if self._round_robin_offer_task is not None and not self._round_robin_offer_task.done():
+                self._round_robin_offer_task.cancel()
+                self._round_robin_offer_task = None
+            return
+        if self._round_robin_offer_task is not None and not self._round_robin_offer_task.done():
+            return
+        self._round_robin_offer_task = asyncio.create_task(self._offer_round_robin_after_delay())
+
+    def _round_robin_offer_eligible(self) -> bool:
+        """Whether the lobby is one a four-player pod should be proposed to. Never before the pod's own
+        start time: until then more players are still expected, and a lobby resting at four is normal.
+        Limited to the sets on `pod_format.PICK_2_SETS` while the format is being tried out."""
+        if self.kind == "mock" or self.round_robin_vote_offered:
+            return False
+        if self.drafting or self.draft_complete or self.ready_check_active:
+            return False
+        if self.pairing_mode == "roundrobin":
+            return False
+        if not pod_format.pick_2_offered_for(self.set_code):
+            return False
+        if self.scheduled_start is not None and datetime.now(timezone.utc) < self.scheduled_start:
+            return False
+        return len(self.player_session_users()) == settings.pod_round_robin_size
+
+    async def _offer_round_robin_after_delay(self) -> None:
+        """Post the offer once the lobby has held at four for the quiet window. Re-validates first, so a
+        lobby that grew, shrank, or started a check in the meantime is left alone."""
+        try:
+            await asyncio.sleep(settings.pod_round_robin_offer_delay_s)
+        except asyncio.CancelledError:
+            return
+        if not self._round_robin_offer_eligible():
+            return
+        await self.offer_round_robin_vote()
+
+    async def offer_round_robin_vote(self) -> None:
+        """Post the one-time Round Robin offer card. No-op once offered or the draft is under way."""
+        if self.round_robin_vote_offered or self.drafting or self.draft_complete:
+            return
+        thread = await self._fetch_thread()
+        if thread is None:
+            return
+        self.round_robin_vote_offered = True
+        size = len(self.player_session_users()) or settings.pod_round_robin_size
+        self.round_robin_vote_size = size
+        try:
+            self.round_robin_vote_message = await thread.send(
+                embed=pod_round_robin_vote.build_offer_embed([], [], size),
+                view=pod_round_robin_vote.build_vote_view(self.event_id),
+            )
+        except discord.HTTPException:
+            self.round_robin_vote_offered = False
+            log.warning(f"[RR_VOTE] offer_post_failed event={self.event_id}", exc_info=True)
+
+    async def _retire_round_robin_offer(self) -> None:
+        """Delete the offer card so its buttons can't outlive the offer. A card pulled because the lobby
+        changed size leaves `round_robin_vote_offered` cleared by the caller, so a lobby that returns to
+        four and stalls again gets asked again. Best-effort."""
+        if self._round_robin_offer_task is not None and not self._round_robin_offer_task.done():
+            self._round_robin_offer_task.cancel()
+        self._round_robin_offer_task = None
+        message = self.round_robin_vote_message
+        self.round_robin_vote_message = None
+        if message is None:
+            return
+        try:
+            await message.delete()
+        except discord.HTTPException:
+            log.info(f"[RR_VOTE] offer_delete_failed event={self.event_id}", exc_info=True)
+
+    async def apply_round_robin_outcome(self) -> None:
+        """Turn the pod into a Pick 2 Round Robin: the pairing mode plus the pick count, which is the
+        default way four players draft. Both stay changeable in Settings."""
+        self.pairing_mode = "roundrobin"
+        await asyncio.to_thread(persist_pairing_mode, self.event_id, "roundrobin")
+        await self.apply_picks_per_pack(2)
+        await self.refresh_lobby_now()
+        notify_card_refresh(self.bot, self.event_id)
 
     async def offer_team_vote_if_eligible(self) -> None:
         """Offer the vote when the lobby sits at an auto-eligible size right now. Shared by the start-time
@@ -2610,7 +2710,7 @@ async def _rename_event_thread(bot: commands.Bot, event_id: str, name: str) -> N
 async def set_event_pairing_mode(event_id: str, mode: str) -> str | None:
     """Set a pod's pairing mode by event id; updates the live manager when one exists and persists.
     Locked once the tournament has started. Returns an error string or None."""
-    if mode not in ("swiss", "bracket", "random", "team"):
+    if mode not in ("swiss", "bracket", "random", "team", "roundrobin"):
         return "Unknown pairing mode."
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     if manager is not None:
@@ -2689,6 +2789,44 @@ async def handle_team_vote_click(interaction: "discord.Interaction", event_id: s
 
 
 register_team_vote_click_handler(handle_team_vote_click)
+
+
+_round_robin_vote_click_locks: dict[str, asyncio.Lock] = {}
+
+
+async def handle_round_robin_vote_click(interaction: "discord.Interaction", event_id: str, side: str) -> None:
+    """Move the clicker to their side of the Pick 2 offer against the card message, which holds the tally.
+    Every player has to agree, so the card has one outcome and no deadline: Wait keeps it open, and a player
+    who wanted to wait can move to Pick 2 once nobody else arrives. Serialized per pod so rapid clicks can't
+    race."""
+    lock = _round_robin_vote_click_locks.setdefault(event_id, asyncio.Lock())
+    async with lock:
+        manager = ACTIVE_POD_MANAGERS.get(event_id)
+        card = interaction.message.embeds[0] if interaction.message.embeds else None
+        if card is None or manager is None or manager.drafting or manager.draft_complete:
+            await interaction.response.defer()
+            return
+        mention = interaction.user.mention
+        for_rr = [voter for voter in pod_round_robin_vote.round_robin_voters_from_embed(card) if voter != mention]
+        for_wait = [voter for voter in pod_round_robin_vote.wait_voters_from_embed(card) if voter != mention]
+        (for_rr if side == pod_round_robin_vote.SIDE_ROUND_ROBIN else for_wait).append(mention)
+        if len(for_rr) >= pod_round_robin_vote.votes_needed(manager.round_robin_vote_size):
+            manager.round_robin_vote_message = None
+            await manager.apply_round_robin_outcome()
+            log.info(f"[RR_VOTE] locked round_robin event={event_id} voters={for_rr}")
+            await interaction.response.edit_message(
+                embed=pod_round_robin_vote.build_locked_embed(for_rr, for_wait), view=None)
+            return
+        try:
+            await interaction.response.edit_message(
+                embed=pod_round_robin_vote.rerender_gathering(card, for_rr, for_wait),
+                view=pod_round_robin_vote.build_vote_view(event_id),
+            )
+        except discord.HTTPException:
+            log.warning(f"[RR_VOTE] edit_failed event={event_id}", exc_info=True)
+
+
+pod_round_robin_vote.register_vote_click_handler(handle_round_robin_vote_click)
 
 
 _format_poll_click_locks: dict[str, asyncio.Lock] = {}

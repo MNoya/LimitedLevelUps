@@ -49,6 +49,7 @@ from bot.commands.pod_table import build_table_view
 from bot.commands.test_group import refused_on_production, register_test_fallback
 from bot.services.pod_format_select import FormatSelectView
 from bot.services import pod_format_poll
+from bot.services import pod_round_robin_vote
 from bot.services.pod_settings_view import PodSettingsView
 from bot.services.pod_drafts import normalize_player_name
 from bot.services import pod_team
@@ -788,6 +789,55 @@ class _TeamVotePreviewView(discord.ui.View):
             embed=build_team_vote_offer_embed(self.team, self.wait, _TEAM_VOTE_POD_SIZE), view=self)
 
 
+_ROUND_ROBIN_POD_SIZE = 4
+
+
+def _round_robin_vote_seed() -> list[str]:
+    """Three prefilled voters so the previewer's own click is the fourth — the unanimous vote that locks it."""
+    return [name for _, name in _LINKED_EIGHT[1:4]]
+
+
+class _RoundRobinVotePreviewView(discord.ui.View):
+    """Interactible preview of the Pick 2 offer a lobby stalled at four gets. Three votes are prefilled on the
+    Pick 2 side, so the previewer's click is the fourth — the unanimous vote that locks Pick 2 Round Robin.
+    Clicking Wait instead leaves the card open, since waiting is not a verdict. No live pod behind it."""
+
+    def __init__(self) -> None:
+        super().__init__(timeout=900)
+        self.round_robin = _round_robin_vote_seed()
+        self.wait: list[str] = []
+
+    @discord.ui.button(
+        emoji=pod_round_robin_vote.ROUND_ROBIN_EMOJI, label=pod_round_robin_vote.ROUND_ROBIN_LABEL,
+        style=discord.ButtonStyle.success)
+    async def round_robin_vote(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._vote(interaction, pod_round_robin_vote.SIDE_ROUND_ROBIN)
+
+    @discord.ui.button(
+        emoji=pod_round_robin_vote.WAIT_EMOJI, label=pod_round_robin_vote.WAIT_LABEL,
+        style=discord.ButtonStyle.secondary)
+    async def wait_vote(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._vote(interaction, pod_round_robin_vote.SIDE_WAIT)
+
+    async def _vote(self, interaction: discord.Interaction, side: str) -> None:
+        name = interaction.user.display_name
+        self.round_robin = [voter for voter in self.round_robin if voter != name]
+        self.wait = [voter for voter in self.wait if voter != name]
+        if side == pod_round_robin_vote.SIDE_ROUND_ROBIN:
+            self.round_robin.append(name)
+        else:
+            self.wait.append(name)
+        if len(self.round_robin) >= pod_round_robin_vote.votes_needed(_ROUND_ROBIN_POD_SIZE):
+            await interaction.response.edit_message(
+                embed=pod_round_robin_vote.build_locked_embed(self.round_robin, self.wait), view=None)
+            return
+        await interaction.response.edit_message(
+            embed=pod_round_robin_vote.build_offer_embed(
+                self.round_robin, self.wait, _ROUND_ROBIN_POD_SIZE),
+            view=self,
+        )
+
+
 class _FormatPollPreviewView(discord.ui.View):
     """Interactible preview of the multiple-choice flashback format tally: the Add Format button first, then
     one working button per option. Votes are prefilled so the bars read as a mid-evening tally. No live pod
@@ -1095,7 +1145,7 @@ _VALID_STATES = (
     "podteam", "podlobby", "podteamvote",
     "format", "seeding", "trophyhype", "champ", "round1", "round2", "round3", "voicelink", "review",
     "table",
-    "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote",
+    "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "p2vote",
     "formatpoll", "linkpicker", "settings",
 )
 
@@ -1326,6 +1376,9 @@ async def setup(bot: commands.Bot) -> None:
         Buttons are inert here — use `podteam` to drive real reports and reveals.
         `teamvote` shows the Team-Draft offer card with a working 🤝 vote button and three votes
         prefilled — your click is the fourth, locking it to Team Draft and proposing a Ready Check.
+        `p2vote` shows the Pick 2 offer card a lobby stalled at four gets, with working buttons and three
+        votes prefilled — your click is the fourth, the unanimous vote that locks Pick 2 Round Robin. Click
+        Wait instead and the card stays open, since waiting is not a verdict.
         `podteamvote` arms a fake six-player lobby on this channel so `/pod-team` posts the real card
         as its own reply, with no Draftmancer session needed; re-run `/pod-team` for the re-offer path.
         `formatpoll` shows the flashback format tally with a working button per option and prefilled
@@ -1465,6 +1518,15 @@ async def setup(bot: commands.Bot) -> None:
             seeded = list(_team_vote_seed().values())
             embed = build_team_vote_offer_embed(seeded, [], _TEAM_VOTE_POD_SIZE)
             await ctx.send(embed=embed, view=_TeamVotePreviewView())
+            return
+
+        if state == "p2vote":
+            preview = _RoundRobinVotePreviewView()
+            await ctx.send(
+                embed=pod_round_robin_vote.build_offer_embed(
+                    preview.round_robin, preview.wait, _ROUND_ROBIN_POD_SIZE),
+                view=preview,
+            )
             return
 
         if state == "formatpoll":

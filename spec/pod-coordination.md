@@ -74,22 +74,25 @@ When enough players are ready the bot runs a quick ready check, then starts the 
 
 ## Asking for the last players
 
-A lobby that is one or two players short is the most common way a pod fails to fire. Anyone can type `!pod` in any channel to ask for them. The bot deletes your message and posts one line: which pod is open, how many players it still needs, how many are already sitting in the Draftmancer lobby, and a link to the thread. The line carries a Join Draft button that hands back a Draftmancer link with your Arena name already filled in, so you arrive matched to your leaderboard profile.
+A lobby that is one or two players short is the most common way a pod fails to fire. Anyone can write `!pod` in any channel to ask for them. It counts anywhere in the message, not only at the start, so it fits at the end of a sentence you were writing anyway. Your message stays up and the bot posts one line under it: which pod is open, how many players it still needs, how many are already sitting in the Draftmancer lobby, and a link to the thread. The line carries a Join Draft button that hands back a Draftmancer link with your Arena name already filled in, so you arrive matched to your leaderboard profile.
 
 Pressing Join Draft also puts you in the pod's thread. So does walking into the Draftmancer lobby on your own, as soon as the bot recognizes your name, so the people drafting and the people talking are the same list either way.
 
 Once a lobby is open the count is read from Draftmancer itself, so it is who is actually there and not who said yes earlier. Before a lobby opens there is nothing to read, so `!pod` reports the signup counts instead and links the signup card. When no pod is gathering at all it points at the day's launcher.
 
-It only ever names one pod, the one closest to a full table, so the message asks you to fill a seat instead of to pick between pods. A pod that already has a full table gets no message: the bot tells you so and posts nothing. Running `!pod` again replaces the previous rally rather than adding a second one, and once the draft starts the rally rewrites itself into a record of the pod firing, so it can never keep asking for players who are no longer needed.
+It only ever names one pod, the one closest to a full table, so the message asks you to fill a seat instead of to pick between pods. A pod that already has a full table gets no message: the bot tells you so and posts nothing. A second `!pod` replaces the rally the channel already has, and a channel answers at most once a minute, so several people asking together still produce one line. Once the draft starts the rally rewrites itself into a record of the pod firing, so it can never keep asking for players who are no longer needed.
 
-Typed inside a pod's own thread, `!pod` does something else: it moves the lobby card back to the bottom of the thread, for a lobby that conversation has buried. For a mock draft use `!mock` instead: it posts the mock card again at the bottom of the channel, with a Thread button on it, since a reposted card has no thread of its own.
+Written inside a pod's own thread, `!pod` does something else: it moves the lobby card back to the bottom of the thread, for a lobby that conversation has buried. For a mock draft use `!mock` instead: it posts the mock card again at the bottom of the channel, with a Thread button on it, since a reposted card has no thread of its own.
 
 ## Table shapes
 
 - **8-player pod** — a full table drafts, then plays 3 rounds. Winners play winners and losers play losers, so nobody is knocked out: everyone plays all three rounds and finishes with a record like 3-0 or 2-1. The two unbeaten players meet in a Trophy Match as soon as they both reach 2-0.
 - **6-player team draft** — six players split into two teams of three and draft against each other. This is a different, more social format, so it happens when the group wants it.
+- **4-player round robin** — four players draft and each one plays the other three, one per round. Everyone still finishes with a record like 3-0 or 2-1, worth the same pod points as any other pod.
 
-On busy nights, once the first table fills, the bot offers a **second table** to the players left over, so more people get to play. A second table plays the same format as the pod it comes from unless a mod picks another.
+On busy nights, once the first table fills, the bot offers a **second table** to the players left over, so more people get to play. A second table plays the same format as the pod it comes from unless a mod picks another. A second table opens with 4 players, not 6, so a small group left over still gets a draft.
+
+When a lobby sits at 4 players for a couple of minutes with nobody new arriving, and the pod's start time has already passed, the bot asks that lobby whether to play now as a Pick 2 Round Robin or keep waiting. It only asks on the sets being tried out for it, HOB and MSH to start with, and it never asks before the start time, since more players are still expected until then. All 4 have to agree, so Wait is not a verdict: the card stays open, you can change your vote, and someone who wanted to wait can move to Round Robin once it is clear nobody else is coming. The card also reminds you that `!pod` in another channel calls for more players. Once all 4 agree the pod switches to 2 picks per pack and round robin pairings, both still changeable in Settings. A ready check on a round robin pod does not warn about the short roster, since 4 is the point.
 
 ## After the draft
 

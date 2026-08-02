@@ -1,8 +1,8 @@
-"""Pod-draft pairing-mode options: Swiss Tournament, Fast Bracket, or Random.
+"""Pod-draft pairing-mode options: Swiss Tournament, Fast Bracket, Random, Team Draft, or Round Robin.
 
 Surfaced through the lobby Settings panel (pod_settings_view). Fast Bracket is honored at start only
-when the roster is exactly 8; other sizes fall back to Swiss. Random pairs round 1 at random (seats
-ignored), later rounds by record.
+when the roster is exactly 8 and Round Robin only when it is exactly 4; other sizes fall back to Swiss.
+Random pairs round 1 at random (seats ignored), later rounds by record.
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ PAIRING_MODES = (
     ("bracket", "Fast Bracket", "Pairs players the moment two reach the same record. 8p"),
     ("random", "Random", "Round 1 randomized ignoring seats. Later rounds by record."),
     ("team", "Team Draft", "Group players into teams. Team with best score wins. 6p"),
+    ("roundrobin", "Round Robin", "Play every player at the table, one per round. 4p"),
 )
 DEFAULT_PAIRING_MODE = "bracket"
 SELECT_PLACEHOLDER = "Choose pairing mode"

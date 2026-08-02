@@ -191,6 +191,15 @@ def format_change_message(actor: str, code: str) -> str:
     return settings_change_message(actor, "Format", label_for(code) or code)
 
 
+PICK_2_SETS = ("HOB", "MSH")
+
+
+def pick_2_offered_for(code: str | None) -> bool:
+    """Whether a four-player lobby on this set is offered Pick 2 Round Robin. Sets earn a place on the list
+    by drafting well at two picks a pack; a mod can still set Pick 2 by hand on any pod."""
+    return (code or "").upper() in PICK_2_SETS
+
+
 OLDER_SET_PICK_TIMER = 75
 
 

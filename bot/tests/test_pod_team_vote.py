@@ -1,5 +1,7 @@
 from bot.services.pod_team_vote import (
     TEAM_VOTE_LOCKED_TITLE,
+    TEAM_VOTE_TEAM_COLUMN,
+    TEAM_VOTE_WAIT_COLUMN,
     TEAM_VOTE_SETTINGS_HINT,
     build_team_vote_locked_embed,
     build_team_vote_offer_embed,
@@ -23,8 +25,8 @@ def test_offer_embed_states_the_target_and_shows_both_columns_empty():
     embed = build_team_vote_offer_embed([], [], pod_size=6)
 
     assert needed_from_embed(embed) == 4
-    assert "Team Draft" in embed.fields[0].name
-    assert "Wait for" in embed.fields[1].name
+    assert TEAM_VOTE_TEAM_COLUMN in embed.fields[0].name
+    assert TEAM_VOTE_WAIT_COLUMN in embed.fields[1].name
     assert "(0)" not in embed.fields[0].name
     assert embed.fields[0].value == "-"
     assert embed.fields[1].value == "-"

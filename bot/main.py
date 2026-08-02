@@ -75,6 +75,7 @@ from bot.services.pod_draft_manager import rehydrate_active_lobbies
 from bot.services.pod_team_board import TeamReportButton, TeamRevealReportButton
 from bot.services.pod_join_button import JoinDraftButton, MockJoinDraftButton
 from bot.services.pod_link_dm import DmLinkArenaButton
+from bot.services.pod_round_robin_vote import RoundRobinVoteButton
 from bot.services.pod_team_vote import TeamVoteButton
 from bot.services.pod_format_poll import AddFormatButton, FormatPollButton
 from bot.services.pod_tournament import (
@@ -268,6 +269,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(TeamReportButton)
         bot.add_dynamic_items(TeamRevealReportButton)
         bot.add_dynamic_items(TeamVoteButton)
+        bot.add_dynamic_items(RoundRobinVoteButton)
         bot.add_dynamic_items(FormatPollButton)
         bot.add_dynamic_items(AddFormatButton)
         bot.add_dynamic_items(JoinDraftButton)

@@ -34,7 +34,7 @@ from bot.discord_helpers import (
 from bot.slug import slugify
 from bot.database import SessionLocal
 from bot.models import Player as DbPlayer, PodDraftEvent, PodDraftMatch, PodDraftParticipant
-from bot.services import bot_log as bot_log_mod, championship, pod_bracket, pod_swiss
+from bot.services import bot_log as bot_log_mod, championship, pod_bracket, pod_round_robin, pod_swiss
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase, notify_pod_complete
 from bot.services.pod_deck_color import (
     SAVED_MSG,
@@ -1025,6 +1025,8 @@ async def start_tournament(manager: "PodDraftManager") -> None:
     effective_mode = manager.pairing_mode or DEFAULT_PAIRING_MODE
     if effective_mode == "bracket" and not pod_bracket.supports(len(roster)):
         effective_mode = "swiss"
+    if effective_mode == "roundrobin" and not pod_round_robin.supports(len(roster)):
+        effective_mode = "swiss"
     manager.pairing_mode = effective_mode
     await asyncio.to_thread(persist_pairing_mode, manager.event_id, effective_mode)
     # Idempotent re-seed — _start_draft already seeded at draft-start time. Kept as a safety net
@@ -1035,6 +1037,8 @@ async def start_tournament(manager: "PodDraftManager") -> None:
 
         await start_team_tournament(manager)
         return
+    if effective_mode == "roundrobin":
+        await asyncio.to_thread(manager.persist_seat_indexes_from_log)
     await advance_to_round(manager, 1)
 
 
@@ -1117,9 +1121,12 @@ async def advance_to_round(manager: "PodDraftManager", round_num: int) -> None:
     if seats and manager.pairing_mode != "random":
         pairing_players = [replace(p, seat=seats.get(normalize_player_name(p.id))) for p in players]
     try:
-        pairings = pod_swiss.pair_round(
-            pairing_players, prior, round_num, final_round=round_num == TOTAL_ROUNDS,
-        )
+        if manager.pairing_mode == "roundrobin":
+            pairings = pod_round_robin.pair_round(pairing_players, round_num)
+        else:
+            pairings = pod_swiss.pair_round(
+                pairing_players, prior, round_num, final_round=round_num == TOTAL_ROUNDS,
+            )
     except ValueError as e:
         log.error("pairing for round %d failed for %s: %s", round_num, manager.event_id, e)
         await alert_thread_and_owner(

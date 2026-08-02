@@ -18,6 +18,7 @@ import discord
 from discord import ui
 
 from bot import emojis
+from bot.services import pod_vote_card
 
 
 TEAM_VOTE_POD_SIZE = 6
@@ -28,17 +29,15 @@ TEAM_VOTE_SETTINGS_HINT = "Change it in ⚙️ **Settings** anytime"
 TEAM_VOTE_LOCKED_TITLE = "👥 Team Draft is on!"
 TEAM_VOTE_WAITED_TITLE = "⏳ Waiting for {wait} players"
 TEAM_VOTE_TEAM_COLUMN = "🤝 Team Draft"
-TEAM_VOTE_WAIT_COLUMN = "⏳ Wait for {wait}"
+TEAM_VOTE_WAIT_COLUMN = "⏳ Wait"
 TEAM_VOTE_TEAM_LABEL = "Team Draft"
 TEAM_VOTE_WAIT_LABEL = "Wait"
 TEAM_VOTE_TEAM_EMOJI = "🤝"
 TEAM_VOTE_WAIT_EMOJI = "⏳"
-TEAM_VOTE_EMPTY = "-"
 VOTE_BUTTON_PREFIX = "podteamvote"
 SIDE_TEAM = "team"
 SIDE_WAIT = "wait"
 
-_MENTION_RE = re.compile(r"<@!?(\d+)>")
 _NEEDED_RE = re.compile(r"with (\d+) vote")
 
 
@@ -57,6 +56,7 @@ def build_team_vote_offer_embed(team: list[str], wait: list[str], pod_size: int)
         description=TEAM_VOTE_GATHERING.format(needed=team_vote_needed(pod_size)),
     )
     _set_columns(embed, team, wait)
+    pod_vote_card.add_rally_line(embed)
     return embed
 
 
@@ -86,45 +86,22 @@ def rerender_gathering(embed: discord.Embed, team: list[str], wait: list[str]) -
     handler re-renders without needing the original pod size."""
     fresh = discord.Embed.from_dict(embed.to_dict())
     _set_columns(fresh, team, wait)
+    pod_vote_card.add_rally_line(fresh)
     return fresh
 
 
 def _set_columns(embed: discord.Embed, team: list[str], wait: list[str]) -> None:
-    embed.clear_fields()
-    wait_base = TEAM_VOTE_WAIT_COLUMN.format(wait=emojis.mana_number(TEAM_VOTE_WAIT_SIZE))
-    embed.add_field(name=_column_name(TEAM_VOTE_TEAM_COLUMN, len(team)), value=_column_value(team), inline=True)
-    embed.add_field(name=_column_name(wait_base, len(wait)), value=_column_value(wait), inline=True)
-
-
-def _column_name(base: str, count: int) -> str:
-    return f"{base} ({count})" if count else base
-
-
-def _column_value(voters: list[str]) -> str:
-    return "\n".join(f"> {voter}" for voter in voters) if voters else TEAM_VOTE_EMPTY
+    pod_vote_card.set_columns(embed, [(TEAM_VOTE_TEAM_COLUMN, team), (TEAM_VOTE_WAIT_COLUMN, wait)])
 
 
 def team_voters_from_embed(embed: discord.Embed) -> list[str]:
-    """The Team-Draft voters read back off the card as `<@id>` mentions, in order, deduped."""
-    return _voters_from_field(embed, "Team Draft")
+    """The Team-Draft voters read back off the card, in order."""
+    return pod_vote_card.voters_from_field(embed, TEAM_VOTE_TEAM_COLUMN)
 
 
 def wait_voters_from_embed(embed: discord.Embed) -> list[str]:
-    """The wait-for-eight voters read back off the card as `<@id>` mentions, in order, deduped."""
-    return _voters_from_field(embed, "Wait for")
-
-
-def _voters_from_field(embed: discord.Embed, marker: str) -> list[str]:
-    mentions: list[str] = []
-    seen: set[str] = set()
-    for field in embed.fields:
-        if marker not in field.name:
-            continue
-        for user_id in _MENTION_RE.findall(field.value or ""):
-            if user_id not in seen:
-                seen.add(user_id)
-                mentions.append(f"<@{user_id}>")
-    return mentions
+    """The wait voters read back off the card, in order."""
+    return pod_vote_card.voters_from_field(embed, TEAM_VOTE_WAIT_COLUMN)
 
 
 def needed_from_embed(embed: discord.Embed) -> int | None:
