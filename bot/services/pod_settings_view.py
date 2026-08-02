@@ -372,7 +372,9 @@ class _PickOptionsButton(ui.Button):
 
 class _PickOptionsModal(ui.Modal, title="Pick Options"):
     """Both pick controls in one modal. Picks Per Pack only appears when the panel can apply it, so a
-    pod without a live session never offers a field that would refuse."""
+    pod without a live session never offers a field that would refuse. A timer left at its prefilled
+    value passes even when it sits outside the range, so a pod configured below it can still edit
+    picks per pack."""
 
     def __init__(self, view: PodSettingsView) -> None:
         super().__init__()
@@ -390,7 +392,8 @@ class _PickOptionsModal(ui.Modal, title="Pick Options"):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         seconds = self.seconds.value.strip()
-        if not seconds.isdigit() or not (TIMER_MIN <= int(seconds) <= TIMER_MAX):
+        unchanged = seconds.isdigit() and int(seconds) == self.view.pick_timer
+        if not seconds.isdigit() or not (unchanged or TIMER_MIN <= int(seconds) <= TIMER_MAX):
             await interaction.response.send_message(
                 f"⚠️ Enter a whole number of seconds between {TIMER_MIN} and {TIMER_MAX}.", ephemeral=True,
             )

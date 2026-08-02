@@ -185,7 +185,6 @@ def test_confirm_text_covers_every_warning_at_once():
     text = ready_check_confirm_text(5, 6, ["Stranger#12345", "Wanderer#77"])
 
     assert "5" in text
-    assert "6" in text
     assert "Stranger#12345" in text
     assert "Wanderer#77" in text
 

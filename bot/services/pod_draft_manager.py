@@ -747,6 +747,7 @@ class PodDraftManager:
             log.exception(f"[TIMER] picks_per_pack_emit_failed event={self.event_id} picks={n}")
             return "Could not update the picks per pack."
         log.info(f"[TIMER] picks_per_pack_set event={self.event_id} picks={n}")
+        await self._refresh_lobby_status()
         return None
 
     async def apply_max_players(self, n: int) -> str | None:
@@ -985,7 +986,7 @@ class PodDraftManager:
         mock = self.kind == "mock"
         return {
             "set_code": self.set_code,
-            "format_label": pod_format.format_display(self.set_code),
+            "format_label": pod_format.format_display_with_picks(self.set_code, self.picks_per_pack),
             "pairing_label": None if mock else pairing_label(self.pairing_mode),
             "seating_label": seating_mode_label(self.seating_mode),
             "mock": mock,

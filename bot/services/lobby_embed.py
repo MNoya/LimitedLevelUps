@@ -172,9 +172,7 @@ def ready_check_confirm_text(seated: int, floor: int, unlinked: list[str]) -> st
     live Ready Check button and the `!test` preview so the copy never drifts."""
     lines: list[str] = []
     if seated < floor:
-        lines.append(
-            f"🛑 Only {seated} players in the Draftmancer lobby. A pod needs {floor} or more."
-        )
+        lines.append(f"🛑 Only {seated} players in the Draftmancer lobby.")
     if seated % 2 != 0:
         lines.append(
             f"⚠️ {seated} players is an odd number. Pairings need an even number, so the draft will be "

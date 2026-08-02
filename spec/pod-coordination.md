@@ -72,6 +72,16 @@ About 10 minutes before the start time, the bot opens the draft lobby on Draftma
 
 When enough players are ready the bot runs a quick ready check, then starts the draft. A full table of 8 starts as soon as everyone is ready.
 
+## Asking for the last players
+
+A lobby that is one or two players short is the most common way a pod fails to fire. Anyone can type `!pod` in any channel to ask for them. The bot deletes your message and posts one line: which pod is open, how many players it still needs, how many are already sitting in the Draftmancer lobby, and a link to the thread. The line carries a Join Draft button that hands back a Draftmancer link with your Arena name already filled in, so you arrive matched to your leaderboard profile.
+
+Once a lobby is open the count is read from Draftmancer itself, so it is who is actually there and not who said yes earlier. Before a lobby opens there is nothing to read, so `!pod` reports the signup counts instead and links the signup card. When no pod is gathering at all it points at the day's launcher.
+
+It only ever names one pod, the one closest to a full table, so the message asks you to fill a seat instead of to pick between pods. Running it again replaces the previous rally rather than adding a second one.
+
+Typed inside a pod's own thread, `!pod` does something else: it moves the lobby card back to the bottom of the thread, for a lobby that conversation has buried. For a mock draft use `!mock` instead.
+
 ## Table shapes
 
 - **8-player pod** — a full table drafts, then plays 3 rounds. Winners play winners and losers play losers, so nobody is knocked out: everyone plays all three rounds and finishes with a record like 3-0 or 2-1. The two unbeaten players meet in a Trophy Match as soon as they both reach 2-0.
@@ -119,7 +129,7 @@ Beyond the daily launcher, you can schedule a pod at any time with the `/draft` 
 
 Which formats a day offers is a table in the bot's code, so ask for a change ahead of time. A pod that already exists can change format from its lobby Settings panel.
 
-Pick Options on the Settings panel holds the two Draftmancer pick controls: seconds per pick, and how many cards each player takes from a pack before passing it. Picks per pack is 1 for a normal draft; set it to 2 for a Pick 2 pod. Both are locked once the draft starts.
+Pick Options on the Settings panel holds the two Draftmancer pick controls: seconds per pick, and how many cards each player takes from a pack before passing it. Picks per pack is 1 for a normal draft; set it to 2 for a Pick 2 pod, and the lobby card footer then reads the format as "Pick 2" so everyone sees it. Both are locked once the draft starts.
 
 The pod Settings panel also carries a Closed Decklist toggle: turn it on to hide that pod's decklists on the website until it finishes. Set Championship pods start with it on.
 

@@ -130,6 +130,15 @@ def format_display(code: str) -> str:
     return label_for(code) or code.upper()
 
 
+def format_display_with_picks(code: str, picks_per_pack: int | None) -> str:
+    """`format_display` carrying the pick count when a pod takes more than one card per pack, since that
+    changes the draft enough that players need it beside the format."""
+    label = format_display(code)
+    if picks_per_pack is not None and picks_per_pack > 1:
+        return f"{label} Pick {picks_per_pack}"
+    return label
+
+
 def format_name(code: str) -> str:
     """The format's own name carrying no kind word: a cube's name, since the @Cube role mention beside it
     already says Cube, or a set's full name. `format_display` stays the short label for footers."""
