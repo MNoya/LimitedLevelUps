@@ -5,6 +5,7 @@ import { ExternalLink } from "../components/Icons";
 import { setGlyphCode } from "../components/Brand";
 import { TierFilterBar } from "../components/TierFilterBar";
 import { TierGrid } from "../components/TierGrid";
+import { GradeGuideIcon, GradeGuideProvider, GradeGuideTrigger } from "../components/TierGuide";
 import { TierSetDropdown } from "../components/TierSetDropdown";
 import { useSets } from "../data/hooks";
 import { relativeTime } from "../data/utils";
@@ -69,172 +70,174 @@ export function TierListPage() {
   }, []);
 
   return (
-    <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
-      <AppHeader subtitle="TIER LIST" />
-      <main className="flex flex-col w-full px-2 md:px-[15px] pb-4 overflow-x-clip">
-        <div ref={headerRef} className="sticky top-0 z-20 bg-bg py-2 md:py-3">
-          {isMobile ? (
-            <>
-              <div className="flex items-center gap-x-5 gap-y-2">
-                <h1 className="font-display tracking-[0.12em] flex flex-1 items-center gap-2 leading-none min-w-0">
-                  <TierSetDropdown
-                    sets={tierListSets}
-                    activeCode={current}
-                    glyphCode={glyphCode}
-                    label={setMeta?.name?.toUpperCase() ?? current}
-                    isMobile
-                    loading={!sets}
-                    onChange={pickSet}
-                  />
-                </h1>
+    <GradeGuideProvider>
+      <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
+        <AppHeader subtitle="TIER LIST" />
+        <main className="flex flex-col w-full px-2 md:px-[15px] pb-4 overflow-x-clip">
+          <div ref={headerRef} className="sticky top-0 z-20 bg-bg py-2 md:py-3">
+            {isMobile ? (
+              <>
+                <div className="flex items-center gap-x-5 gap-y-2">
+                  <h1 className="font-display tracking-[0.12em] flex flex-1 items-center gap-2 leading-none min-w-0">
+                    <TierSetDropdown
+                      sets={tierListSets}
+                      activeCode={current}
+                      glyphCode={glyphCode}
+                      label={setMeta?.name?.toUpperCase() ?? current}
+                      isMobile
+                      loading={!sets}
+                      onChange={pickSet}
+                    />
+                  </h1>
 
-                {effectiveUid && (
-                  <button
-                    type="button"
-                    onClick={() => setFiltersOpen((open) => !open)}
-                    aria-expanded={filtersOpen}
-                    disabled={!filtersReady}
-                    className={cn(
-                      "flex h-9 shrink-0 items-center gap-1.5 rounded border px-2.5 text-[12px] transition-colors",
-                      filtersOpen || hasActiveFilters(filters)
-                        ? "border-green text-text"
-                        : "border-border2 text-muted",
-                      !filtersReady && "opacity-50",
-                    )}
-                  >
-                    <svg
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path
-                        d="M3 5h18l-7 8v6l-4-2v-4z"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    Filters
-                    {activeFilterCount > 0 && (
-                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-green px-1 text-[10px] font-bold text-bg">
-                        {activeFilterCount}
-                      </span>
-                    )}
-                    <span
+                  {effectiveUid && (
+                    <button
+                      type="button"
+                      onClick={() => setFiltersOpen((open) => !open)}
+                      aria-expanded={filtersOpen}
+                      disabled={!filtersReady}
                       className={cn(
-                        "text-[10px] transition-transform",
-                        filtersOpen && "rotate-180",
+                        "flex h-9 shrink-0 items-center gap-1.5 rounded border px-2.5 text-[12px] transition-colors",
+                        filtersOpen || hasActiveFilters(filters)
+                          ? "border-green text-text"
+                          : "border-border2 text-muted",
+                        !filtersReady && "opacity-50",
                       )}
                     >
-                      ▾
-                    </span>
-                  </button>
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path
+                          d="M3 5h18l-7 8v6l-4-2v-4z"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      Filters
+                      {activeFilterCount > 0 && (
+                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-green px-1 text-[10px] font-bold text-bg">
+                          {activeFilterCount}
+                        </span>
+                      )}
+                      <span
+                        className={cn(
+                          "text-[10px] transition-transform",
+                          filtersOpen && "rotate-180",
+                        )}
+                      >
+                        ▾
+                      </span>
+                    </button>
+                  )}
+                </div>
+
+                <ListMeta
+                  lastUpdated={lastUpdated}
+                  indent
+                  className="mt-1.5 whitespace-nowrap text-[clamp(8px,2.8vw,11px)]"
+                />
+
+                {effectiveUid && filtersReady && filtersOpen && (
+                  <div className="pt-3">
+                    <TierFilterBar
+                      filters={filters}
+                      setFilters={setFilters}
+                      options={filterOptions}
+                      setCode={glyphCode}
+                      hideArt={hideArt}
+                      setHideArt={setHideArt}
+                      stacked
+                    />
+                  </div>
                 )}
-              </div>
-
-              <ListMeta
-                lastUpdated={lastUpdated}
-                split
-                className="mt-1.5 whitespace-nowrap text-[clamp(8px,2.8vw,11px)]"
-              />
-
-              {effectiveUid && filtersReady && filtersOpen && (
-                <div className="pt-3">
-                  <TierFilterBar
-                    filters={filters}
-                    setFilters={setFilters}
-                    options={filterOptions}
-                    setCode={glyphCode}
-                    hideArt={hideArt}
-                    setHideArt={setHideArt}
-                    stacked
-                  />
+              </>
+            ) : (
+              <div className="grid items-center gap-x-[clamp(0.75rem,2.5vw,2.5rem)] grid-cols-[minmax(0,1fr)_auto] min-[1500px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                <div className="w-fit min-w-0 max-w-full">
+                  <h1 className="font-display tracking-[0.12em] flex items-center gap-3 leading-none min-w-0">
+                    <TierSetDropdown
+                      sets={tierListSets}
+                      activeCode={current}
+                      glyphCode={glyphCode}
+                      label={setMeta?.name?.toUpperCase() ?? current}
+                      isMobile={false}
+                      loading={!sets}
+                      onChange={pickSet}
+                    />
+                  </h1>
+                  <ListMeta lastUpdated={lastUpdated} className="mt-1 pl-[2px] text-[11px]" />
                 </div>
-              )}
-            </>
+
+                {effectiveUid && filtersReady ? (
+                  <div className="justify-self-center -translate-y-1">
+                    <TierFilterBar
+                      filters={filters}
+                      setFilters={setFilters}
+                      options={filterOptions}
+                      setCode={glyphCode}
+                      hideArt={hideArt}
+                      setHideArt={setHideArt}
+                    />
+                  </div>
+                ) : (
+                  <div />
+                )}
+
+                <div className="hidden min-[1500px]:block" />
+              </div>
+            )}
+          </div>
+
+          {effectiveUid ? (
+            <TierGrid
+              uid={effectiveUid}
+              graders={graders}
+              comparison={comparison}
+              filters={filters}
+              hideArt={hideArt}
+              stickyTop={headerHeight}
+            />
           ) : (
-            <div className="grid items-center gap-x-[clamp(0.75rem,2.5vw,2.5rem)] grid-cols-[minmax(0,1fr)_auto] min-[1500px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-              <div className="min-w-0">
-                <h1 className="font-display tracking-[0.12em] flex items-center gap-3 leading-none min-w-0">
-                  <TierSetDropdown
-                    sets={tierListSets}
-                    activeCode={current}
-                    glyphCode={glyphCode}
-                    label={setMeta?.name?.toUpperCase() ?? current}
-                    isMobile={false}
-                    loading={!sets}
-                    onChange={pickSet}
-                  />
-                </h1>
-                <ListMeta lastUpdated={lastUpdated} className="mt-1 pl-[2px] text-[11px]" />
-              </div>
-
-              {effectiveUid && filtersReady ? (
-                <div className="justify-self-center -translate-y-1">
-                  <TierFilterBar
-                    filters={filters}
-                    setFilters={setFilters}
-                    options={filterOptions}
-                    setCode={glyphCode}
-                    hideArt={hideArt}
-                    setHideArt={setHideArt}
-                  />
-                </div>
-              ) : (
-                <div />
-              )}
-
-              <div className="hidden min-[1500px]:block" />
+            <div className="flex items-center justify-center border border-border bg-surface text-muted text-[14px] min-h-[300px]">
+              No tier list is available for {current} yet.
             </div>
           )}
-        </div>
 
-        {effectiveUid ? (
-          <TierGrid
-            uid={effectiveUid}
-            graders={graders}
-            comparison={comparison}
-            filters={filters}
-            hideArt={hideArt}
-            stickyTop={headerHeight}
-          />
-        ) : (
-          <div className="flex items-center justify-center border border-border bg-surface text-muted text-[14px] min-h-[300px]">
-            No tier list is available for {current} yet.
-          </div>
-        )}
-
-        <div className="flex items-center justify-between gap-3 pt-2">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            {graders.length > 0 && (
-              <div className="flex items-center gap-x-2">
-                <span className="mono text-[10px] md:text-[12px] text-muted">Set Reviews:</span>
-                <div className="flex items-center gap-x-3.5">
-                  {graders.map((grader) => (
-                    <SourceLink key={grader.uid} uid={grader.uid} label={`${grader.name}'s`} />
-                  ))}
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              {graders.length > 0 && (
+                <div className="flex items-center gap-x-2">
+                  <span className="mono text-[10px] md:text-[12px] text-muted">Set Reviews:</span>
+                  <div className="flex items-center gap-x-3.5">
+                    {graders.map((grader) => (
+                      <SourceLink key={grader.uid} uid={grader.uid} label={`${grader.name}'s`} />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            {uid && (
-              <div className="flex items-center gap-x-2">
-                <span className="mono text-[10px] md:text-[12px] text-muted">Live:</span>
-                <SourceLink uid={uid} label="LLU" />
-              </div>
-            )}
+              )}
+              {uid && (
+                <div className="flex items-center gap-x-2">
+                  <span className="mono text-[10px] md:text-[12px] text-muted">Live:</span>
+                  <SourceLink uid={uid} label="LLU" />
+                </div>
+              )}
+            </div>
+            <a
+              href={`https://www.17lands.com/tier_list/${effectiveUid ?? ""}`}
+              target="_blank"
+              rel="noreferrer"
+              className="mono text-[10px] md:text-[12px] text-muted hover:text-green transition-colors no-underline whitespace-nowrap"
+            >
+              Powered by 17Lands
+            </a>
           </div>
-          <a
-            href={`https://www.17lands.com/tier_list/${effectiveUid ?? ""}`}
-            target="_blank"
-            rel="noreferrer"
-            className="mono text-[10px] md:text-[12px] text-muted hover:text-green transition-colors no-underline whitespace-nowrap"
-          >
-            Powered by 17Lands
-          </a>
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </GradeGuideProvider>
   );
 }
 
@@ -255,24 +258,22 @@ function SourceLink({ uid, label }: { uid: string; label: string }) {
 function ListMeta({
   lastUpdated,
   className,
-  split = false,
+  indent = false,
 }: {
   lastUpdated: string | null;
   className?: string;
-  split?: boolean;
+  indent?: boolean;
 }) {
   const updated = lastUpdated ? lastUpdatedLabel(lastUpdated) : null;
-  if (split) {
-    return (
-      <div className={cn("mono flex justify-between gap-x-4 text-muted", className)}>
-        <span className="pl-[calc(0.75rem+26px+0.5rem)] tracking-[0.16em]">SET REVIEW GRADES</span>
-        {updated && <span className="tracking-[0.06em]">{updated}</span>}
-      </div>
-    );
-  }
   return (
-    <div className={cn("mono tracking-[0.16em] text-muted", className)}>
-      SET REVIEW GRADES{updated ? ` — ${updated}` : ""}
+    <div className={cn("mono flex w-full items-center justify-between gap-x-4 text-muted", className)}>
+      <GradeGuideTrigger
+        className={cn("tracking-[0.16em]", indent && "pl-[calc(0.75rem+26px+0.5rem)]")}
+      >
+        SET REVIEW GRADES
+        <GradeGuideIcon className="ml-1.5" />
+      </GradeGuideTrigger>
+      {updated && <span className="tracking-[0.06em]">{updated}</span>}
     </div>
   );
 }

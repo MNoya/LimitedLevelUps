@@ -1,8 +1,10 @@
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { RefreshCw } from "./Icons";
+import { GradeLabel } from "./TierGuide";
 import { ModalNavButton } from "./ModalNavButton";
 import { cn } from "../lib/utils";
+import { TEXT_OUTLINE } from "../lib/text-styles";
 import { useIsMobile } from "../lib/use-is-mobile";
 import {
   hasActiveFilters,
@@ -298,12 +300,11 @@ function DesktopGrid({
       >
         {tiers.map((tier) => (
           <Fragment key={tier}>
-            <div
+            <GradeLabel
+              tier={tier}
               className="border-l-4 border-border bg-bg flex items-center justify-center font-display text-[20px] leading-none text-text"
               style={{ borderLeftColor: tierColor(tier) }}
-            >
-              {tier}
-            </div>
+            />
             {COLUMN_CODES.map((code) => {
               const bucket = byKey.get(`${code}|${tier}`) ?? [];
               return (
@@ -359,9 +360,10 @@ function MobileTiers({
     <div className="flex flex-col gap-[5px]">
       {visibleTiers.map(({ tier, colors }) => (
         <div key={tier} className="border border-border bg-surface">
-          <div className="bg-bg border-b border-border py-1.5 text-center font-display text-[18px] leading-none text-text">
-            {tier}
-          </div>
+          <GradeLabel
+            tier={tier}
+            className="w-full bg-bg border-b border-border py-1.5 text-center font-display text-[18px] leading-none text-text"
+          />
           <div
             className="border-l-4 border-border"
             style={{ borderLeftColor: tierColor(tier) }}
@@ -474,9 +476,6 @@ export const PREVIEW_RATIO = 1.4;
 export const PREVIEW_GAP = 12;
 export const PREVIEW_EXTRAS_H = 60;
 const PREVIEW_MAT = "#161b26";
-
-const TEXT_OUTLINE =
-  "[text-shadow:1px_1px_1px_rgba(0,0,0,0.85),-1px_-1px_1px_rgba(0,0,0,0.85),1px_-1px_1px_rgba(0,0,0,0.85),-1px_1px_1px_rgba(0,0,0,0.85)]";
 
 export interface PreviewAnchor {
   left: number;

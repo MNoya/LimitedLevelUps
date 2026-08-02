@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
           rewrite: (p) => p.replace(/^\/api\/tier-list/, "/data/tier_list"),
         },
       },
-      allowedHosts: [".ngrok-free.dev", ".ngrok-free.app", "1761-2001-f70-a280-3900-38b2-71d9-d0a5-bae8.ngrok-free.app"]
+      allowedHosts: [".ngrok-free.dev", ".ngrok-free.app", ".trycloudflare.com"]
     },
   };
 });

@@ -86,6 +86,67 @@ export function tierColor(tier: string): string {
   return `hsl(${hue}, 62%, 47%)`;
 }
 
+export interface TierDescription {
+  title: string;
+  body?: string;
+}
+
+// Alex and Marc's definitions from the set review: the opening clause becomes the title,
+// the rest reads as the explanation.
+export const TIER_DESCRIPTIONS: Record<string, TierDescription> = {
+  "A+": {
+    title: "The Best Cards in the set",
+    body: "Game winning when cast or hugely catch you up from behind",
+  },
+  A: {
+    title: "Game Warping Card",
+    body: "Often generates value or is difficult to deal with",
+  },
+  "A-": {
+    title: "Very strong card",
+    body: "Game winning if it sticks, usually a bit easier to deal with than A or A+ cards.\nHyper efficient cards like Lightning Bolt also often get an A- grade",
+  },
+  "B+": {
+    title: "Cards you're excited to first pick",
+    body: "Not quite bomb tier but will be one of the best cards in your deck",
+  },
+  B: {
+    title: "Good early picks",
+    body: "Cards you might consider pivoting for",
+  },
+  "B-": {
+    title: "Some of the better cards in your deck",
+    body: "Often the top commons live here",
+  },
+  "C+": {
+    title: "Cards that are close to uncuttable",
+    body: "Cards you're happy to take if they're in your color, not quite good enough to pivot for",
+  },
+  C: { title: "Good Filler/Pillars of certain archetypes" },
+  "C-": { title: "Solid Filler" },
+  "D+": { title: "Medium Filler/Not fully supported Synergy Cards" },
+  D: { title: "Bad Filler" },
+  "D-": { title: "Try to avoid" },
+  F: {
+    title: "Actual Limited unplayable",
+    body: "Cards that will always make your deck worse",
+  },
+  SB: {
+    title: "Sideboard card",
+    body: "Not maindeckable, but worth bringing in against the right deck",
+  },
+};
+
+// Grade blocks as they were written, one letter family per block; the guide rules between them.
+export const TIER_GUIDE_BLOCKS: string[][] = [
+  ["A+", "A", "A-"],
+  ["B+", "B", "B-"],
+  ["C+", "C", "C-"],
+  ["D+", "D", "D-"],
+  ["F"],
+  ["SB"],
+];
+
 export const COLOR_CODES = ["W", "U", "B", "R", "G", "M", "C", "L"];
 export const COLOR_NAMES = [
   "White",
