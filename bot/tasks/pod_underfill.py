@@ -161,7 +161,7 @@ async def fire_underfill(event_id: str, hours_before: int, resurface: bool = Fal
     floor = settings.pod_signal_fire_threshold
     aim = settings.pod_draft_target_players
 
-    channel = resolve_pod_chat_channel(_bot)
+    channel = await _nudge_channel()
     if channel is None:
         log.warning("fire_underfill: pod-draft-chat channel unavailable")
         return
@@ -205,7 +205,7 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
         log.info(f"fire_slot_underfill: slot {signal_id} has no signups; skipping")
         return
 
-    channel = resolve_pod_chat_channel(_bot)
+    channel = await _nudge_channel()
     if channel is None:
         log.warning("fire_slot_underfill: pod-draft-chat channel unavailable")
         return
@@ -225,6 +225,14 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
         post_body = f"{body} {role.mention}" if role is not None else body
         await _safe_post(channel, post_body, mention_role=role is not None)
     log.info(f"T-{hours_before}h slot underfill nudge for {signal_id}: {slot.count} signed up")
+
+
+async def _nudge_channel() -> discord.abc.Messageable | None:
+    """The nudge channel, held until the guild cache is populated. Every channel lookup is a pure cache
+    read, and a catch-up beat is armed from `setup_hook` and fires seconds later, before the gateway
+    connects: without the wait the beat missed to downtime resolves nothing and is dropped a second time."""
+    await _bot.wait_until_ready()
+    return resolve_pod_chat_channel(_bot)
 
 
 async def refresh_underfill_nudge_for_event(
