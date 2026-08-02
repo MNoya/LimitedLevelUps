@@ -88,26 +88,40 @@ def build_compact(log: dict) -> dict:
         "cards": card_table,
         "packs": packs,
         "picks": picks_by_seat,
+        "pp": picks_per_turn(log),
         "decks": decks,
     }
+
+
+def picks_per_turn(log: dict) -> int:
+    """Cards each seat takes before passing. A Pick 2 turn records two positions in one booster, and
+    picks_by_seat flattens them, so the count is what tells the two forms apart when replaying."""
+    most = 1
+    for user in log["users"].values():
+        for p in user["picks"]:
+            most = max(most, len(p["pick"]))
+    return most
 
 
 def simulate(compact: dict) -> list[list[list[int]]]:
     n_seats = len(compact["seats"])
     packs = compact["packs"]
     picks = compact["picks"]
+    per_turn = compact.get("pp", 1)
     out: list[list[list[int]]] = [[[] for _ in range(3)] for _ in range(n_seats)]
     for pack_num in range(3):
         booster_at: list[list[int]] = [list(packs[seat + pack_num * n_seats]) for seat in range(n_seats)]
         direction = PASS_DIRS[pack_num]
-        pack_size = len(booster_at[0])
-        for pick_num in range(pack_size):
-            taken: list[int] = []
+        turns = len(picks[0][pack_num]) // per_turn
+        for turn in range(turns):
+            taken: list[list[int]] = []
             for seat in range(n_seats):
-                pick_idx = picks[seat][pack_num][pick_num]
-                taken.append(booster_at[seat].pop(pick_idx))
-            for seat, card in enumerate(taken):
-                out[seat][pack_num].append(card)
+                positions = picks[seat][pack_num][turn * per_turn:(turn + 1) * per_turn]
+                taken.append([booster_at[seat][pos] for pos in positions])
+                for pos in sorted(positions, reverse=True):
+                    booster_at[seat].pop(pos)
+            for seat, cards in enumerate(taken):
+                out[seat][pack_num].extend(cards)
             booster_at = [booster_at[(seat - direction) % n_seats] for seat in range(n_seats)]
     return out
 
@@ -128,28 +142,28 @@ def cmd_verify(log: dict) -> int:
     seats = list(log["users"].values())
     n_seats = len(seats)
 
-    original = [[[None] * 14 for _ in range(3)] for _ in range(n_seats)]
+    original: list[list[list[str]]] = [[[] for _ in range(3)] for _ in range(n_seats)]
     for i, user in enumerate(seats):
-        for p in user["picks"]:
-            original[i][p["packNum"]][p["pickNum"]] = p["booster"][p["pick"][0]]
+        for p in sorted(user["picks"], key=lambda pick: (pick["packNum"], pick["pickNum"])):
+            original[i][p["packNum"]].extend(p["booster"][k] for k in p["pick"])
 
     sim = simulate(compact)
     fails = 0
     for i, user in enumerate(seats):
         for pn in range(3):
-            for k in range(14):
+            for k, want in enumerate(original[i][pn]):
                 got = ids[sim[i][pn][k]]
-                want = original[i][pn][k]
                 if got != want:
                     fails += 1
                     print(f"  seat {i} ({user['userName']}) P{pn + 1}P{k + 1:02d}: want {want[:8]} got {got[:8]}")
-        picked_ids = sorted(ids[sim[i][pn][k]] for pn in range(3) for k in range(14))
+        picked_ids = sorted(ids[card] for pn in range(3) for card in sim[i][pn])
         pool_ids = sorted(user["cards"])
         if picked_ids != pool_ids:
             fails += 1
             print(f"  seat {i} ({user['userName']}): final pool multiset mismatch")
     if fails == 0:
-        print(f"OK — {n_seats} seats × 3 packs × 14 picks reconstructed losslessly")
+        picks_per_pack = len(original[0][0])
+        print(f"OK — {n_seats} seats × 3 packs × {picks_per_pack} picks reconstructed losslessly")
     else:
         print(f"FAIL — {fails} mismatch(es)")
     return fails

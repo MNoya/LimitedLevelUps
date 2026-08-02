@@ -10,7 +10,7 @@ import { cardImageSources, useCardImageMap } from "../../../data/cardImages";
 import { highlightEventLabel } from "../EventLabel";
 import { AAvatar } from "../../Brand";
 import { DeckScreenshotModal, type DeckLike } from "../DeckScreenshotModal";
-import { poolBefore, poolByPack, reconstructDraft, resolveDeck, seatHandle, type DraftPickView } from "../../../data/draft-artifact";
+import { picksPerTurn, poolBefore, poolByPack, reconstructDraft, resolveDeck, seatHandle, type DraftPickView } from "../../../data/draft-artifact";
 import { cleanPodEventName, stripDiscriminator } from "../../../data/utils";
 import type { ArtifactCard, PodDraftArtifact } from "../../../types/leaderboard";
 
@@ -60,6 +60,7 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
   const seatInfoMap = useMemo(() => new Map((seatInfo ?? []).map((s) => [s.seatIndex, s])), [seatInfo]);
 
   const views = useMemo(() => reconstructDraft(artifact), [artifact]);
+  const perTurn = useMemo(() => picksPerTurn(artifact), [artifact]);
   const imageItems = useMemo(
     () => artifact.cards.map((card) => ({ name: card.n, set: card.s ?? artifact.set })),
     [artifact],
@@ -106,7 +107,7 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
     };
   }, []);
 
-  const packSize = views[seat][pack].length;
+  const packTurns = views[seat][pack].length;
   const totalPicks = views[seat].reduce((sum, p) => sum + p.length, 0);
   const linearIndex = views[seat].slice(0, pack).reduce((sum, p) => sum + p.length, 0) + pick;
 
@@ -217,8 +218,7 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
   const pool = toCards(hasSideboard ? poolIdx.filter((idx) => !sideSet.has(idx)) : poolIdx);
   const poolRows = (hasSideboard ? poolRowsIdx.map((row) => row.filter((idx) => !sideSet.has(idx))) : poolRowsIdx).map(toCards);
   const sideboardCards = hasSideboard ? toCards(poolIdx.filter((idx) => sideSet.has(idx))) : [];
-  const lastPickIdx = poolIdx.length > 0 ? poolIdx[poolIdx.length - 1] : null;
-  const lastInSideboard = hasSideboard && lastPickIdx != null && sideSet.has(lastPickIdx);
+  const lastPicks = markedLastPicks(poolIdx.slice(-perTurn), hasSideboard ? sideSet : EMPTY_SIDEBOARD);
 
   const activeInfo = seatInfoMap.get(seat);
   const canOpenDeck = !!activeInfo && (activeInfo.deckScreenshotUrl != null || (deck?.main.length ?? 0) > 0);
@@ -250,8 +250,7 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
     const side = new Set(artifact.decks?.[seatIndex]?.side ?? []);
     const main = toCards(indices.filter((i) => !side.has(i)));
     const board = toCards(indices.filter((i) => side.has(i)));
-    const lastInSide = indices.length > 0 && side.has(indices[indices.length - 1]);
-    return { main, board, lastInSide };
+    return { main, board, lastPicks: markedLastPicks(indices.slice(-perTurn), side) };
   };
   const leftPile = pileFor(left);
   const centerPile = pileFor(seat);
@@ -284,7 +283,8 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
         backHref={backHref}
         pack={pack}
         pick={pick}
-        packSize={packSize}
+        turns={packTurns}
+        perTurn={perTurn}
         onJump={goTo}
         onPrev={handlePrev}
         onNext={handleNext}
@@ -315,6 +315,7 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
               <DraftScrollRecap
                 packs={views[seat]}
                 cards={artifact.cards}
+                perTurn={perTurn}
                 revealMode={revealMode}
                 initialPack={pack}
                 initialPick={pick}
@@ -328,13 +329,14 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
             <>
               <BoosterPanel
                 cards={boosterCards}
-                pickedPos={pickShown ? view.takenPos : null}
+                pickedPositions={pickShown ? view.takenPositions : []}
                 fadeKey={`${seat}-${pack}-${pick}`}
                 onNaturalHeight={reportBoosterHeight}
               />
               <MobileNavDivider
                 pack={pack}
                 pick={pick}
+                perTurn={perTurn}
                 onJump={goTo}
                 onPrev={handlePrev}
                 onNext={handleNext}
@@ -349,7 +351,7 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
                 cards={pool}
                 rows={poolRows}
                 sideboard={sideboardCards}
-                lastInSideboard={lastInSideboard}
+                lastPicks={lastPicks}
                 deckLayout={deckLayout}
                 onToggleDeckLayout={() => setDeckLayout((l) => (l === "order" ? "columns" : "order"))}
                 canSplit={hasSideboard}
@@ -386,7 +388,7 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
           cards={pool}
           rows={poolRows}
           sideboard={sideboardCards}
-          lastInSideboard={lastInSideboard}
+          lastPicks={lastPicks}
           deckLayout={deckLayout}
           onToggleDeckLayout={() => setDeckLayout((l) => (l === "order" ? "columns" : "order"))}
           canSplit={hasSideboard}
@@ -474,7 +476,47 @@ interface Seat {
 interface Pile {
   main: ArtifactCard[];
   board: ArtifactCard[];
-  lastInSide: boolean;
+  lastPicks: LastPicks;
+}
+
+// How many of the newest cards to glow in each pool list. A Pick 2 turn adds two cards, and they can
+// land on opposite sides of the maindeck/sideboard split.
+interface LastPicks {
+  main: number;
+  side: number;
+}
+
+const NO_LAST_PICKS: LastPicks = { main: 0, side: 0 };
+const EMPTY_SIDEBOARD: ReadonlySet<number> = new Set();
+
+function markedLastPicks(taken: number[], side: ReadonlySet<number>): LastPicks {
+  let main = 0;
+  let board = 0;
+  for (const idx of taken) {
+    if (side.has(idx)) {
+      board += 1;
+    } else {
+      main += 1;
+    }
+  }
+  return { main, side: board };
+}
+
+// Indices of the last `count` cards in a list, the ones a just-taken glow lands on.
+function lastIndexes(length: number, count: number): number[] {
+  const out: number[] = [];
+  for (let i = Math.max(0, length - count); i < length; i++) {
+    out.push(i);
+  }
+  return out;
+}
+
+// A turn's label: the card numbers it takes, so a Pick 2 pass reads "1-2" over the 1-14 card count.
+function pickLabel(turn: number, perTurn: number): string {
+  if (perTurn === 1) {
+    return String(turn + 1);
+  }
+  return `${turn * perTurn + 1}-${turn * perTurn + perTurn}`;
 }
 
 // Custom formats (peasant cube, etc.) have no per-set art, so fall back to the generic cube icon.
@@ -602,7 +644,8 @@ function Header({
   backHref,
   pack,
   pick,
-  packSize,
+  turns,
+  perTurn,
   onJump,
   onPrev,
   onNext,
@@ -624,7 +667,8 @@ function Header({
   backHref?: string;
   pack: number;
   pick: number;
-  packSize: number;
+  turns: number;
+  perTurn: number;
   onJump: (pack: number, pick: number) => void;
   onPrev: () => void;
   onNext: () => void;
@@ -697,9 +741,9 @@ function Header({
             ))}
           </ChipRow>
           <ChipRow label="PICK">
-            {Array.from({ length: packSize }, (_, k) => (
+            {Array.from({ length: turns }, (_, k) => (
               <Chip key={k} active={k === pick} onClick={() => onJump(pack, k)}>
-                {k + 1}
+                {pickLabel(k, perTurn)}
               </Chip>
             ))}
           </ChipRow>
@@ -854,12 +898,12 @@ const BOOSTER_PAD = 12;
 
 function BoosterPanel({
   cards,
-  pickedPos,
+  pickedPositions,
   fadeKey,
   onNaturalHeight,
 }: {
   cards: ArtifactCard[];
-  pickedPos: number | null;
+  pickedPositions: number[];
   fadeKey: string;
   onNaturalHeight?: (height: number) => void;
 }) {
@@ -878,18 +922,18 @@ function BoosterPanel({
   return (
     <div ref={scrollRef} className="themed-scrollbar min-h-0 flex-1 overflow-y-auto" style={{ padding: BOOSTER_PAD }}>
       <div key={fadeKey} className="animate-fadeUpIn">
-        <BoosterGrid cards={cards} pickedPos={pickedPos} />
+        <BoosterGrid cards={cards} pickedPositions={pickedPositions} />
       </div>
     </div>
   );
 }
 
-function BoosterGrid({ cards, pickedPos }: { cards: ArtifactCard[]; pickedPos: number | null }) {
+function BoosterGrid({ cards, pickedPositions }: { cards: ArtifactCard[]; pickedPositions: number[] }) {
   return (
     <div className="flex flex-wrap content-start justify-center" style={{ gap: BOOSTER_GAP }}>
       {cards.map((card, i) => (
         <div key={i} className="w-[calc((100%-16px)/3)] sm:w-[calc((100%-24px)/4)] lg:w-[210px]">
-          <BoosterCard card={card} picked={i === pickedPos} />
+          <BoosterCard card={card} picked={pickedPositions.includes(i)} />
         </div>
       ))}
     </div>
@@ -915,6 +959,7 @@ function BoosterCard({ card, picked }: { card: ArtifactCard; picked: boolean }) 
 function DraftScrollRecap({
   packs,
   cards,
+  perTurn,
   revealMode,
   initialPack,
   initialPick,
@@ -922,6 +967,7 @@ function DraftScrollRecap({
 }: {
   packs: DraftPickView[][];
   cards: ArtifactCard[];
+  perTurn: number;
   revealMode: RevealMode;
   initialPack: number;
   initialPick: number;
@@ -965,7 +1011,7 @@ function DraftScrollRecap({
     <div ref={ref} className="themed-scrollbar min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1 lg:px-8 lg:py-6">
       {packs.map((pickViews, p) =>
         pickViews.map((view, k) => (
-          <RecapSection key={`${p}-${k}`} pack={p} pick={k} view={view} cards={cards} revealMode={revealMode} />
+          <RecapSection key={`${p}-${k}`} pack={p} pick={k} perTurn={perTurn} view={view} cards={cards} revealMode={revealMode} />
         )),
       )}
     </div>
@@ -975,12 +1021,14 @@ function DraftScrollRecap({
 function RecapSection({
   pack,
   pick,
+  perTurn,
   view,
   cards,
   revealMode,
 }: {
   pack: number;
   pick: number;
+  perTurn: number;
   view: DraftPickView;
   cards: ArtifactCard[];
   revealMode: RevealMode;
@@ -988,16 +1036,16 @@ function RecapSection({
   const [clicked, setClicked] = useState(false);
   const shown = revealMode === "revealed" || clicked;
   const boosterCards = view.booster.map((idx) => cards[idx]);
-  const takenName = boosterCards[view.takenPos]?.n ?? "";
+  const takenNames = view.takenPositions.map((pos) => boosterCards[pos]?.n ?? "").join(", ");
   return (
     <section data-pick={`${pack}-${pick}`} className="mb-7 scroll-mt-3 lg:mb-9">
       <div className="mb-2 flex h-9 items-center gap-3 border-b border-border lg:mb-3 lg:h-10">
         <span className="font-display text-[15px] tracking-[0.16em] text-subtle">PACK {pack + 1}</span>
-        <span className="font-display text-[15px] tracking-[0.16em] text-subtle">PICK {pick + 1}</span>
+        <span className="font-display text-[15px] tracking-[0.16em] text-subtle">PICK {pickLabel(pick, perTurn)}</span>
         {shown ? (
           <span className="flex min-w-0 items-center gap-2">
             <ArrowRight size={16} className="shrink-0 text-subtle" aria-hidden="true" />
-            <span className="truncate font-display text-[16px] tracking-[0.04em] text-green">{takenName}</span>
+            <span className="truncate font-display text-[16px] tracking-[0.04em] text-green">{takenNames}</span>
           </span>
         ) : (
           <button
@@ -1010,7 +1058,7 @@ function RecapSection({
       </div>
       <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(104px,1fr))] lg:[grid-template-columns:repeat(auto-fill,minmax(148px,1fr))]">
         {boosterCards.map((card, i) => (
-          <BoosterCard key={i} card={card} picked={shown && i === view.takenPos} />
+          <BoosterCard key={i} card={card} picked={shown && view.takenPositions.includes(i)} />
         ))}
       </div>
     </section>
@@ -1141,7 +1189,7 @@ function PoolBar({
   cards,
   rows,
   sideboard,
-  lastInSideboard,
+  lastPicks,
   deckLayout,
   onToggleDeckLayout,
   canSplit,
@@ -1152,7 +1200,7 @@ function PoolBar({
   cards: ArtifactCard[];
   rows: ArtifactCard[][];
   sideboard: ArtifactCard[];
-  lastInSideboard: boolean;
+  lastPicks: LastPicks;
   deckLayout: "order" | "columns";
   onToggleDeckLayout: () => void;
   canSplit: boolean;
@@ -1178,7 +1226,7 @@ function PoolBar({
           order={order}
           rows={rows}
           cards={cards}
-          lastInSideboard={lastInSideboard}
+          lastPicks={lastPicks}
           splitSideboard={splitSideboard}
           sideboard={sideboard}
           cardWidth={104}
@@ -1195,7 +1243,7 @@ function PoolCards({
   order,
   rows,
   cards,
-  lastInSideboard,
+  lastPicks,
   splitSideboard,
   sideboard,
   cardWidth,
@@ -1207,7 +1255,7 @@ function PoolCards({
   order: boolean;
   rows: ArtifactCard[][];
   cards: ArtifactCard[];
-  lastInSideboard: boolean;
+  lastPicks: LastPicks;
   splitSideboard: boolean;
   sideboard: ArtifactCard[];
   cardWidth: number;
@@ -1222,13 +1270,13 @@ function PoolCards({
     <>
       <div className="relative min-w-0 flex-1">
         {order ? (
-          <OrderStrip rows={rows} sideboard={inlineSideboard} lastPickInSideboard={lastInSideboard} markLast cardWidth={cardWidth} reveal={reveal} />
+          <OrderStrip rows={rows} sideboard={inlineSideboard} lastPicks={lastPicks} cardWidth={cardWidth} reveal={reveal} />
         ) : (
-          <Pool cards={cards} sideboard={inlineSideboard} lastPickInSideboard={lastInSideboard} groupByType={groupByType} align={poolAlign} markLast cardWidth={cardWidth} reveal={reveal} />
+          <Pool cards={cards} sideboard={inlineSideboard} lastPicks={lastPicks} groupByType={groupByType} align={poolAlign} cardWidth={cardWidth} reveal={reveal} />
         )}
       </div>
       {showPane && (
-        <SideboardPane cards={sideboard} markLast={lastInSideboard} cardWidth={Math.round(cardWidth * 0.9)} reveal={sideReveal} />
+        <SideboardPane cards={sideboard} markCount={lastPicks.side} cardWidth={Math.round(cardWidth * 0.9)} reveal={sideReveal} />
       )}
     </>
   );
@@ -1243,7 +1291,7 @@ function BottomPanel({
   cards,
   rows,
   sideboard,
-  lastInSideboard,
+  lastPicks,
   deckLayout,
   onToggleDeckLayout,
   canSplit,
@@ -1263,7 +1311,7 @@ function BottomPanel({
   cards: ArtifactCard[];
   rows: ArtifactCard[][];
   sideboard: ArtifactCard[];
-  lastInSideboard: boolean;
+  lastPicks: LastPicks;
   deckLayout: "order" | "columns";
   onToggleDeckLayout: () => void;
   canSplit: boolean;
@@ -1335,7 +1383,7 @@ function BottomPanel({
               order={order}
               rows={rows}
               cards={cards}
-              lastInSideboard={lastInSideboard}
+              lastPicks={lastPicks}
               splitSideboard={splitSideboard}
               sideboard={sideboard}
               cardWidth={DECK_CARD_WIDTH}
@@ -1461,15 +1509,15 @@ function NeighborColumns({ left, center, right }: { left: Pile; center: Pile; ri
   return (
     <div className="flex h-full items-stretch">
       <div className="min-w-0 flex-1 pt-2">
-        <Pool cards={left.main} sideboard={left.board} lastPickInSideboard={left.lastInSide} markLast cardWidth={140} reveal={22} />
+        <Pool cards={left.main} sideboard={left.board} lastPicks={left.lastPicks} cardWidth={140} reveal={22} />
       </div>
       <div className="w-0.5 shrink-0 self-stretch bg-border" />
       <div className="min-w-0 flex-[1.7] pt-2">
-        <Pool cards={center.main} sideboard={center.board} lastPickInSideboard={center.lastInSide} markLast cardWidth={166} reveal={26} />
+        <Pool cards={center.main} sideboard={center.board} lastPicks={center.lastPicks} cardWidth={166} reveal={26} />
       </div>
       <div className="w-0.5 shrink-0 self-stretch bg-border" />
       <div className="min-w-0 flex-1 pt-2">
-        <Pool cards={right.main} sideboard={right.board} lastPickInSideboard={right.lastInSide} markLast cardWidth={140} reveal={22} align="right" />
+        <Pool cards={right.main} sideboard={right.board} lastPicks={right.lastPicks} cardWidth={140} reveal={22} align="right" />
       </div>
     </div>
   );
@@ -1526,12 +1574,12 @@ function PoolControls({
 // like a pool column; the last-pick glow lands here when the most recent pick was ultimately cut.
 function SideboardPane({
   cards,
-  markLast,
+  markCount,
   cardWidth,
   reveal,
 }: {
   cards: ArtifactCard[];
-  markLast: boolean;
+  markCount: number;
   cardWidth: number;
   reveal: number;
 }) {
@@ -1543,7 +1591,7 @@ function SideboardPane({
           reveal={reveal}
           width={cardWidth}
           cardClassName={POOL_CARD_CLASS}
-          glowIndex={markLast ? cards.length - 1 : null}
+          glowIndexes={lastIndexes(cards.length, markCount)}
           cardAt={(i) => cards[i]}
           renderCard={(i) => <CardImage card={cards[i]} />}
         />
@@ -1557,6 +1605,7 @@ function SideboardPane({
 function MobileNavDivider({
   pack,
   pick,
+  perTurn,
   onJump,
   onPrev,
   onNext,
@@ -1569,6 +1618,7 @@ function MobileNavDivider({
 }: {
   pack: number;
   pick: number;
+  perTurn: number;
   onJump: (pack: number, pick: number) => void;
   onPrev: () => void;
   onNext: () => void;
@@ -1609,7 +1659,7 @@ function MobileNavDivider({
           <ChevronIcon dir="left" />
         </button>
         <span className="min-w-[56px] text-center font-display text-[17px] tracking-[0.06em] text-text">
-          P{pack + 1}P{pick + 1}
+          P{pack + 1}P{pickLabel(pick, perTurn)}
         </span>
         <button
           onClick={awaitingReveal ? onReveal : onNext}
@@ -1653,15 +1703,13 @@ function LayoutToggle({ layout, onToggle }: { layout: "order" | "columns"; onTog
 function OrderStrip({
   rows,
   sideboard = [],
-  lastPickInSideboard = false,
-  markLast = false,
+  lastPicks = NO_LAST_PICKS,
   cardWidth,
   reveal,
 }: {
   rows: ArtifactCard[][];
   sideboard?: ArtifactCard[];
-  lastPickInSideboard?: boolean;
-  markLast?: boolean;
+  lastPicks?: LastPicks;
   cardWidth: number;
   reveal: number;
 }) {
@@ -1672,8 +1720,8 @@ function OrderStrip({
       lastRow = r;
     }
   }
-  const lastCol = lastRow >= 0 ? rows[lastRow].length - 1 : -1;
-  const glowStrip = markLast && !lastPickInSideboard;
+  const glowCols = lastRow >= 0 ? lastIndexes(rows[lastRow].length, lastPicks.main) : [];
+  const glowSide = lastIndexes(sideboard.length, lastPicks.side);
   return (
     <div className="themed-scrollbar flex h-full items-start gap-1 overflow-x-auto px-2 py-2">
       {Array.from({ length: positions }, (_, i) => {
@@ -1689,7 +1737,7 @@ function OrderStrip({
                 key={di}
                 className={cn(
                   "absolute w-full overflow-hidden rounded-[4.5%/3.2%] [outline-style:solid] outline-1 -outline-offset-1 outline-white/10 shadow-[0_-2px_6px_rgba(0,0,0,0.6)]",
-                  glowStrip && ri === lastRow && i === lastCol && "review-last-pick z-10",
+                  ri === lastRow && glowCols.includes(i) && "review-last-pick z-10",
                 )}
                 style={{ top: di * reveal }}
               >
@@ -1710,7 +1758,7 @@ function OrderStrip({
               key={di}
               className={cn(
                 "absolute w-full overflow-hidden rounded-[4.5%/3.2%] [outline-style:solid] outline-1 -outline-offset-1 outline-white/10 shadow-[0_-2px_6px_rgba(0,0,0,0.6)]",
-                markLast && lastPickInSideboard && di === sideboard.length - 1 && "review-last-pick z-10",
+                glowSide.includes(di) && "review-last-pick z-10",
               )}
               style={{ top: di * reveal }}
             >
@@ -1734,21 +1782,19 @@ const POOL_CARD_CLASS =
 function Pool({
   cards,
   sideboard = [],
-  lastPickInSideboard = false,
+  lastPicks = NO_LAST_PICKS,
   groupByType = false,
   align = "left",
   cardWidth = 116,
   reveal = 26,
-  markLast = false,
 }: {
   cards: ArtifactCard[];
   sideboard?: ArtifactCard[];
-  lastPickInSideboard?: boolean;
+  lastPicks?: LastPicks;
   groupByType?: boolean;
   align?: "left" | "right";
   cardWidth?: number;
   reveal?: number;
-  markLast?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [poolWidth, setPoolWidth] = useState(0);
@@ -1763,7 +1809,7 @@ function Pool({
     observer.observe(el);
     return () => observer.disconnect();
   }, [groupByType]);
-  const column = (key: string, group: PoolEntry[], lastIndex: number, glow: boolean) => (
+  const column = (key: string, group: PoolEntry[], glowing: number[]) => (
     <StackColumn
       key={key}
       count={group.length}
@@ -1771,14 +1817,14 @@ function Pool({
       width={cardWidth}
       className="shrink-0"
       cardClassName={POOL_CARD_CLASS}
-      glowIndex={glow ? group.findIndex((e) => e.idx === lastIndex) : null}
+      glowIndexes={group.flatMap((e, i) => (glowing.includes(e.idx) ? [i] : []))}
       cardAt={(i) => group[i].card}
       renderCard={(i) => <CardImage card={group[i].card} />}
     />
   );
   const entries = cards.map((card, idx) => ({ card, idx }));
-  const lastIndex = cards.length - 1;
-  const glow = markLast && !lastPickInSideboard;
+  const glowMain = lastIndexes(cards.length, lastPicks.main);
+  const glowSide = lastIndexes(sideboard.length, lastPicks.side);
 
   let track;
   if (groupByType) {
@@ -1806,33 +1852,31 @@ function Pool({
     }
     track = (
       <>
-        {creatureCols.map((group, i) => column(`c${i}`, group, lastIndex, glow))}
+        {creatureCols.map((group, i) => column(`c${i}`, group, glowMain))}
         {lands.length > 0 ? (
-          column("lands", lands, lastIndex, glow)
+          column("lands", lands, glowMain)
         ) : (
           <div key="land-gap" className="shrink-0" style={{ width: spacerWidth }} />
         )}
-        {spellCols.map(([, group], i) => column(`o${i}`, group, lastIndex, glow))}
+        {spellCols.map(([, group], i) => column(`o${i}`, group, glowMain))}
         {sideboard.length > 0 && <div key="side-gap" className="shrink-0" style={{ width: spacerWidth }} />}
         {sideboard.length > 0 &&
           column(
             "side",
             sideboard.map((card, idx) => ({ card, idx })),
-            sideboard.length - 1,
-            markLast && lastPickInSideboard,
+            glowSide,
           )}
       </>
     );
   } else {
     track = (
       <>
-        {cmcColumns(entries).map(([cmc, group]) => column(`m${cmc}`, group, lastIndex, glow))}
+        {cmcColumns(entries).map(([cmc, group]) => column(`m${cmc}`, group, glowMain))}
         {sideboard.length > 0 &&
           column(
             "side",
             sideboard.map((card, idx) => ({ card, idx })),
-            sideboard.length - 1,
-            markLast && lastPickInSideboard,
+            glowSide,
           )}
       </>
     );

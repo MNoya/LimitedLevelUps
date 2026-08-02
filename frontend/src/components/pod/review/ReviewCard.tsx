@@ -72,7 +72,7 @@ export function StackColumn({
   width,
   className,
   cardClassName,
-  glowIndex = null,
+  glowIndexes = [],
   cardAt,
   renderCard,
 }: {
@@ -81,7 +81,7 @@ export function StackColumn({
   width?: number;
   className?: string;
   cardClassName?: string;
-  glowIndex?: number | null;
+  glowIndexes?: number[];
   cardAt?: (i: number) => ArtifactCard | undefined;
   renderCard: (i: number) => React.ReactNode;
 }) {
@@ -102,7 +102,7 @@ export function StackColumn({
     <div className={cn("relative [display:flow-root]", className)} style={style}>
       {Array.from({ length: count }, (_, i) => {
         const isLast = i === count - 1;
-        const isGlow = i === glowIndex;
+        const isGlow = glowIndexes.includes(i);
         const z = raised === i ? 30 : isGlow ? 10 : undefined;
         const hover = {
           onMouseEnter: () => setRaised(i),

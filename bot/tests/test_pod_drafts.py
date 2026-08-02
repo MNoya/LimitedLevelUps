@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from bot.config import settings
 from bot.models import MagicSet, Player, PodDraftEvent, PodDraftParticipant
-from bot.scripts.draftmancer_log import build_compact
+from bot.scripts.draftmancer_log import build_compact, simulate
 from bot.services.pod_drafts import (
     FinalStanding,
     active_event_for_discord_user_in_dm,
@@ -526,6 +526,34 @@ def test_build_compact_decks_are_card_indices_aligned_to_seats():
     assert len(compact["decks"]) == len(compact["seats"])
     assert compact["decks"][0] == {"main": [0, 2], "side": [1]}
     assert compact["decks"][1] == {"main": [], "side": []}
+
+
+@pytest.mark.parametrize("pick_positions, expected_pp", [([0], 1), ([0, 2], 2)])
+def test_build_compact_records_picks_per_turn(pick_positions, expected_pp):
+    payload = _draft_log_payload()
+    payload["users"]["u1"]["picks"] = [{"packNum": 0, "pickNum": 0, "booster": ["a", "b", "c", "d"],
+                                        "pick": pick_positions}]
+
+    compact = build_compact(payload)
+
+    assert compact["pp"] == expected_pp
+    assert compact["picks"][0][0] == pick_positions
+
+
+def test_simulate_takes_both_cards_of_a_pick_2_turn_from_the_same_booster():
+    compact = {
+        "seats": ["Alice", "Bob"],
+        "packs": [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11], [12, 13, 14, 15],
+                  [16, 17, 18, 19], [20, 21, 22, 23]],
+        "picks": [[[0, 2, 0, 1], [0, 1, 0, 1], [0, 1, 0, 1]],
+                  [[1, 3, 0, 1], [0, 1, 0, 1], [0, 1, 0, 1]]],
+        "pp": 2,
+    }
+
+    out = simulate(compact)
+
+    assert out[0][0] == [0, 2, 4, 6]
+    assert out[1][0] == [5, 7, 1, 3]
 
 
 def test_build_compact_decklist_ids_absent_from_card_table_are_dropped():

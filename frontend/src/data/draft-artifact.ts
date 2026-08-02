@@ -5,33 +5,39 @@ import type { Mainboard, MainboardCard, PodDraftArtifact } from "../types/leader
 
 type ArtifactCard = PodDraftArtifact["cards"][number];
 
-// One pick from a single seat's vantage: the booster exactly as that seat saw it, the position taken,
-// and the card index taken. Indices address the artifact card table.
+// One turn from a single seat's vantage: the booster exactly as that seat saw it, the positions taken,
+// and the card indices taken. A Pick 2 draft takes two of each. Indices address the artifact card table.
 export interface DraftPickView {
   booster: number[];
-  takenPos: number;
-  takenCard: number;
+  takenPositions: number[];
+  takenCards: number[];
 }
 
 const PASS_DIRS = [1, -1, 1];
 
-// Replays the whole draft and captures every seat's view at every pick. Returns views[seat][pack][pick].
+// Replays the whole draft and captures every seat's view at every turn. Returns views[seat][pack][turn].
 // The pass rotation mirrors bot/scripts/draftmancer_log.py::simulate so positions stay faithful.
 export function reconstructDraft(artifact: PodDraftArtifact): DraftPickView[][][] {
   const n = artifact.seats.length;
+  const perTurn = picksPerTurn(artifact);
   const views: DraftPickView[][][] = artifact.seats.map(() => [[], [], []]);
   for (let pack = 0; pack < 3; pack++) {
     let boosters = artifact.seats.map((_, seat) => [...artifact.packs[seat + pack * n]]);
     const dir = PASS_DIRS[pack];
-    const size = boosters[0]?.length ?? 0;
-    for (let pick = 0; pick < size; pick++) {
+    const turns = Math.floor((artifact.picks[0]?.[pack]?.length ?? 0) / perTurn);
+    for (let turn = 0; turn < turns; turn++) {
+      const positionsAt = artifact.seats.map((_, seat) =>
+        artifact.picks[seat][pack].slice(turn * perTurn, turn * perTurn + perTurn),
+      );
       for (let seat = 0; seat < n; seat++) {
-        const pos = artifact.picks[seat][pack][pick];
         const booster = [...boosters[seat]];
-        views[seat][pack].push({ booster, takenPos: pos, takenCard: booster[pos] });
+        const positions = positionsAt[seat];
+        views[seat][pack].push({ booster, takenPositions: positions, takenCards: positions.map((p) => booster[p]) });
       }
       for (let seat = 0; seat < n; seat++) {
-        boosters[seat].splice(artifact.picks[seat][pack][pick], 1);
+        for (const pos of [...positionsAt[seat]].sort((a, b) => b - a)) {
+          boosters[seat].splice(pos, 1);
+        }
       }
       boosters = boosters.map((_, seat) => boosters[((seat - dir) % n + n) % n]);
     }
@@ -39,14 +45,21 @@ export function reconstructDraft(artifact: PodDraftArtifact): DraftPickView[][][
   return views;
 }
 
-// Card indices a seat has taken strictly before the given pick — the pool built up to this point.
+// Cards a seat takes per turn. Draftmancer records a Pick 2 turn as two positions in the same booster
+// and the artifact stores them flat, so a 14-card pack reads exactly like 14 single picks — `pp` is
+// what tells them apart. Artifacts written before Pick 2 existed carry no `pp` and are all single-pick.
+export function picksPerTurn(artifact: PodDraftArtifact): number {
+  return artifact.pp ?? 1;
+}
+
+// Card indices a seat has taken strictly before the given turn — the pool built up to this point.
 export function poolBefore(views: DraftPickView[][][], seat: number, pack: number, pick: number): number[] {
   const out: number[] = [];
   for (let p = 0; p <= pack; p++) {
     const picks = views[seat][p];
     const upto = p < pack ? picks.length : pick;
     for (let k = 0; k < upto; k++) {
-      out.push(picks[k].takenCard);
+      out.push(...picks[k].takenCards);
     }
   }
   return out;
@@ -59,7 +72,7 @@ export function poolByPack(views: DraftPickView[][][], seat: number, pack: numbe
   for (let p = 0; p <= pack; p++) {
     const picks = views[seat][p];
     const upto = p < pack ? picks.length : pick;
-    rows.push(picks.slice(0, upto).map((v) => v.takenCard));
+    rows.push(picks.slice(0, upto).flatMap((v) => v.takenCards));
   }
   return rows;
 }
