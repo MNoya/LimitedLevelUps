@@ -562,12 +562,23 @@ def _group_block(
     second slot. The Played and Next sections do the same, heading the column once."""
     if bucket_by_key(group[0].bucket_key) is None:
         return None
-    parts = [_slot_name_only(group[0], guild)] if named else []
+    parts = [_group_header(group, guild)] if named else []
     when = _slot_when_line(group[0])
     if when:
         parts.append(when)
     parts.append(_group_body(group, guild))
     return "\n".join(parts)
+
+
+def _group_header(group: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> str:
+    """The lane header with its countdown beside it. A column with no Played rows renders no Next section, so
+    without this the block carries a date and nothing about how soon the pod starts. A time whose every
+    format has closed drops the countdown, which would otherwise read as a pod about to happen."""
+    lead = group[0]
+    name = _slot_name_only(lead, guild)
+    if lead.slot_time is None or all(_slot_closed(slot) for slot in group):
+        return name
+    return f"{name}{NBSP}{NBSP}<t:{int(lead.slot_time.timestamp())}:R>"
 
 
 def _group_body(group: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> str:
