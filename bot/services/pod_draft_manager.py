@@ -108,6 +108,7 @@ from bot.services.pod_tournament import (
     refresh_round_pairing_messages,
     start_tournament,
 )
+from bot.services.pod_voice import build_voice_offer_message, pod_voice_channel
 from bot.services.player_stats import leaderboard_seat_order
 from bot.slug import disambiguate_slug, slugify
 
@@ -1176,14 +1177,14 @@ class PodDraftManager:
         await self._maybe_post_voice_link(classified, thread)
 
     async def _maybe_post_voice_link(self, classified: list[tuple[str, str | None]], thread) -> None:
-        """Once half the table has gathered in the Draftmancer lobby, drop a one-time link to the pod
-        voice channel so players hop in to chat while the rest fill in. Resolved by name from the guild's
-        cached channels, so it costs no extra Discord request."""
+        """Once half the table has gathered in the Draftmancer lobby, post a one-time offer of the pod voice
+        channel, so players talk while the rest fill in. An invite link instead of the channel link, since
+        that is what makes Discord draw its join card with the members already in there."""
         if self._voice_link_posted or self.kind == "mock" or self.drafting or self.draft_complete:
             return
         if len(classified) < _LOBBY_HALF_THRESHOLD:
             return
-        channel = discord.utils.get(thread.guild.voice_channels, name=settings.pod_draft_voice_channel_name)
+        channel = pod_voice_channel(thread.guild)
         self._voice_link_posted = True
         if channel is None:
             log.info(
@@ -1192,7 +1193,7 @@ class PodDraftManager:
             )
             return
         try:
-            await thread.send(channel.jump_url)
+            await thread.send(await build_voice_offer_message(channel))
         except discord.HTTPException:
             self._voice_link_posted = False
             log.warning(f"[LOBBY] voice_link_send_failed event={self.event_id}", exc_info=True)

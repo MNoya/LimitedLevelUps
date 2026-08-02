@@ -86,12 +86,17 @@ from bot.services.pod_tournament import (
     build_draft_review_message,
     build_trophy_hype_view,
     mark_trophy_match,
-    pod_voice_channel_url,
     render_draft_review_embed,
     round_embed,
     start_tournament,
 )
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, champion_role_mention
+from bot.services.pod_voice import (
+    VOICE_OFFER_TEMPLATE,
+    build_voice_offer_message,
+    pod_voice_channel,
+    pod_voice_channel_url,
+)
 from bot.services.pod_roles import find_role
 from bot.slug import disambiguate_slug, slugify
 
@@ -1421,6 +1426,8 @@ async def setup(bot: commands.Bot) -> None:
         `dmlink` DMs you both lobby-open link DMs (linked + unlinked) and the opt-in test DM, so every
         DM string can be reviewed in a real inbox without a live lobby. `unlink` clears your own Arena
         handle so the unlinked Join Draft nudge can be replayed; re-link with the Link Arena button.
+        `voicelink [url]` posts the voice offer, with the bot's own guest invite or the link you pass, so
+        the same URL can be compared side by side with one you post yourself.
         `linkpicker` posts the Link Players picker on its own — pick a seat, the member dropdown and
         Confirm button appear below it, and the link commits only on Confirm.
         `settings` posts the no-op Settings panel directly, so it works in a channel already bound to a
@@ -1641,13 +1648,14 @@ async def setup(bot: commands.Bot) -> None:
             return
 
         if state == "voicelink":
-            channel = discord.utils.get(
-                ctx.guild.voice_channels, name=settings.pod_draft_voice_channel_name,
-            ) if ctx.guild else None
+            if extra:
+                await ctx.send(VOICE_OFFER_TEMPLATE.format(url=extra))
+                return
+            channel = pod_voice_channel(ctx.guild)
             if channel is None:
                 await ctx.send(f"(no '{settings.pod_draft_voice_channel_name}' voice channel in this server)")
                 return
-            await ctx.send(channel.jump_url)
+            await ctx.send(await build_voice_offer_message(channel))
             return
 
         if state == "review":

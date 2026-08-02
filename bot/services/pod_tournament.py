@@ -2684,14 +2684,6 @@ def build_draft_review_message(voice_url: str | None) -> str:
     return f"{REVIEW_REACT_PROMPT} and join {voice_url}"
 
 
-def pod_voice_channel_url(guild: discord.Guild | None) -> str | None:
-    """Bare jump URL for the pod voice channel. None when the channel is absent."""
-    if guild is None:
-        return None
-    channel = discord.utils.get(guild.voice_channels, name=settings.pod_draft_voice_channel_name)
-    return channel.jump_url if channel is not None else None
-
-
 def _load_review_roster_sync(event_id: str) -> list[dict]:
     with SessionLocal() as session:
         rows = session.execute(

@@ -70,6 +70,8 @@ None of this is binding. It is there so you can see whether the pod is going to 
 
 About 10 minutes before the start time, the bot opens the draft lobby on Draftmancer and posts the link in the thread. It can also send you the link by direct message. Open the link, set your name, and wait for the draft to begin.
 
+Once half the table is sitting in the lobby, the bot posts a link to the pod voice channel. The card under it shows who is already in there. Voice is optional and listening is fine.
+
 When enough players are ready the bot runs a quick ready check, then starts the draft. A full table of 8 starts as soon as everyone is ready.
 
 ## Asking for the last players

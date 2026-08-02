@@ -79,7 +79,6 @@ from bot.services.pod_tournament import (
     build_draft_review_embed,
     build_draft_review_message,
     build_live_submit_deck_button,
-    pod_voice_channel_url,
     build_replays_link_button,
     build_standings_embed_for_event,
     build_thread_link_button,
@@ -90,6 +89,7 @@ from bot.services.pod_tournament import (
     round_picker_options,
 )
 from bot.services.pod_team_showcase import build_team_championship_view_for_event
+from bot.services.pod_voice import pod_voice_channel_url
 
 
 log = logging.getLogger(__name__)
