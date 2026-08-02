@@ -43,14 +43,14 @@ FORMATS_BY_DAY: dict[date | tuple[date, str], tuple[str, ...]] = {
     date(2026, 7, 31): (LATEST, "EOE"),
     date(2026, 8, 1): (LATEST, "PEASANT"),
     (date(2026, 8, 1), LANE_EARLY): CLOSED,
-    date(2026, 8, 2): (LATEST, "SAMP"),
+    date(2026, 8, 2): (LATEST, "PEASANT"),
     date(2026, 8, 3): (LATEST, "STX"),
     date(2026, 8, 4): (LATEST, "DMU"),
     date(2026, 8, 5): (LATEST, "MOM"),
     date(2026, 8, 6): (LATEST, "DOM"),
     date(2026, 8, 7): (LATEST, "ELD"),
     date(2026, 8, 8): (LATEST, "PEASANT"),
-    date(2026, 8, 9): (LATEST, "SAMP"),
+    date(2026, 8, 9): (LATEST, "PEASANT"),
     date(2026, 8, 10): (LATEST, "BRO"),
 }
 
