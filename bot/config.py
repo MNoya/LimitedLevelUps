@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     pod_draft_min_ready_players: int = 6
     pod_table_open_threshold: int = 6
     pod_draft_pick_timer: int = 60
+    pod_draft_picks_per_pack: int = 1
     pod_draft_bots: int = 0
     pod_draft_fallback_tz: str = "America/New_York"
     pod_draft_skip_reminder_wait: bool = False

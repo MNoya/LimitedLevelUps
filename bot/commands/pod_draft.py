@@ -29,6 +29,7 @@ from bot.services.pod_draft_manager import (
     set_event_max_players,
     set_event_pairing_mode,
     set_event_pick_timer,
+    set_event_picks_per_pack,
     set_event_seating,
     set_event_seating_mode,
     set_card_refresh_hook,
@@ -711,7 +712,7 @@ async def delete_stale_seeding_messages(
 async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodSettingsView:
     """Settings panel wired for `event_id`. Shared by /pod-settings and the lobby Settings button.
     Link Players appears once a Draftmancer session is live and stays through the draft so an unlinked
-    seat can be fixed mid-draft; the format/pairing/seats/pick-timer controls and Kick Player are
+    seat can be fixed mid-draft; the format/pairing/seats/pick-options controls and Kick Player are
     pre-draft only and drop away once drafting starts. Cancel Draft is bot-owner only.
 
     A mock draft plays no matches and opens its draft logs to everyone the moment the draft ends, so
@@ -748,6 +749,9 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
     async def on_timer(inter: discord.Interaction, value: str) -> str | None:
         return await set_event_pick_timer(event_id, int(value))
 
+    async def on_picks_per_pack(inter: discord.Interaction, value: str) -> str | None:
+        return await set_event_picks_per_pack(event_id, int(value))
+
     async def on_max_players(inter: discord.Interaction, value: str) -> str | None:
         return await set_event_max_players(event_id, int(value))
 
@@ -762,6 +766,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
     kick_targets_provider = None
     on_kick = None
     current_timer = None
+    current_picks_per_pack = None
     current_max_players = None
     link_targets_provider = None
     on_link = None
@@ -773,6 +778,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
 
         if not drafting:
             current_timer = manager.pick_timer
+            current_picks_per_pack = manager.picks_per_pack
             current_max_players = manager.max_players
             seat_order_provider = manager.seating_lobby_order
             kick_targets_provider = manager.kick_targets
@@ -810,6 +816,8 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
         on_seating=on_seating, seat_order_provider=seat_order_provider,
         on_seating_table=None if drafting else on_seating_table, on_seated=on_seated,
         on_timer=on_timer if current_timer is not None else None, current_timer=current_timer,
+        on_picks_per_pack=on_picks_per_pack if current_picks_per_pack is not None else None,
+        current_picks_per_pack=current_picks_per_pack,
         on_max_players=on_max_players if current_max_players is not None else None,
         current_max_players=current_max_players,
         kick_targets_provider=kick_targets_provider, on_kick=on_kick,

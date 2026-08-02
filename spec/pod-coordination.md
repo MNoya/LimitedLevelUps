@@ -119,6 +119,8 @@ Beyond the daily launcher, you can schedule a pod at any time with the `/draft` 
 
 Which formats a day offers is a table in the bot's code, so ask for a change ahead of time. A pod that already exists can change format from its lobby Settings panel.
 
+Pick Options on the Settings panel holds the two Draftmancer pick controls: seconds per pick, and how many cards each player takes from a pack before passing it. Picks per pack is 1 for a normal draft; set it to 2 for a Pick 2 pod. Both are locked once the draft starts.
+
 The pod Settings panel also carries a Closed Decklist toggle: turn it on to hide that pod's decklists on the website until it finishes. Set Championship pods start with it on.
 
 A scheduled pod's Settings panel has a Description button. Whatever you write there takes the place of the "Please RSVP" line on the signup card, so you can say what the pod is about. Leave it empty to bring the RSVP line back. The card drops the note once the draft starts.

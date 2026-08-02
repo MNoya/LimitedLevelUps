@@ -337,6 +337,7 @@ class PodDraftManager:
         self.pairing_mode = "swiss"              # 'swiss', 'bracket', 'random', or 'team'; resolved in start_tournament
         self.seating_mode = "random"             # 'random', 'manual', or 'leaderboard'; hydrated on connect
         self.pick_timer = settings.pod_draft_pick_timer
+        self.picks_per_pack = settings.pod_draft_picks_per_pack
         self.max_players = settings.pod_draft_max_players
         self.team_map: dict[str, str] | None = None  # draftmancer_name -> 'A'/'B' for team drafts
         self.team_board_messages: list["discord.Message"] = []
@@ -592,6 +593,7 @@ class PodDraftManager:
         await self.sio.emit("setOwnerIsPlayer", False)
         await self.sio.emit("setMaxPlayers", self.max_players)
         await self.sio.emit("setPickTimer", self.pick_timer)
+        await self.sio.emit("setPickedCardsPerRound", self.picks_per_pack)
         await self.sio.emit("setBots", settings.pod_draft_bots)
         await self.sio.emit("setColorBalance", True)
         await self.sio.emit("setPersonalLogs", True)
@@ -601,6 +603,7 @@ class PodDraftManager:
         log.info(
             f"[LIFECYCLE] session_settings_applied event={self.event_id} set={self.set_code} "
             f"max_players={self.max_players} pick_timer={self.pick_timer} "
+            f"picks_per_pack={self.picks_per_pack} "
             f"bots={settings.pod_draft_bots} log_recipients={self._draft_log_recipients} team_draft={team_draft}"
         )
 
@@ -727,6 +730,23 @@ class PodDraftManager:
             log.exception(f"[TIMER] emit_failed event={self.event_id} seconds={seconds}")
             return "Could not update the pick timer."
         log.info(f"[TIMER] pick_timer_set event={self.event_id} seconds={seconds}")
+        return None
+
+    async def apply_picks_per_pack(self, n: int) -> str | None:
+        """Set how many cards each player takes from a pack before passing it. Pre-draft only, since
+        Draftmancer bakes the pick count into the boosters it builds at draft start. Re-emits to the
+        live session. Returns an error string or None."""
+        if self.drafting or self.draft_complete:
+            return "Picks per pack are locked once the draft has started."
+        if not self.sio.connected:
+            return "Draftmancer session is not connected."
+        self.picks_per_pack = n
+        try:
+            await self.sio.emit("setPickedCardsPerRound", n)
+        except Exception:
+            log.exception(f"[TIMER] picks_per_pack_emit_failed event={self.event_id} picks={n}")
+            return "Could not update the picks per pack."
+        log.info(f"[TIMER] picks_per_pack_set event={self.event_id} picks={n}")
         return None
 
     async def apply_max_players(self, n: int) -> str | None:
@@ -2823,6 +2843,15 @@ async def set_event_pick_timer(event_id: str, seconds: int) -> str | None:
     if manager is None:
         return "Start the Draftmancer session before setting the pick timer."
     return await manager.apply_pick_timer(seconds)
+
+
+async def set_event_picks_per_pack(event_id: str, n: int) -> str | None:
+    """Set how many cards a pod takes from each pack, by event id. Live-only — the value is not
+    persisted, so it only applies while a session is connected. Returns an error string or None."""
+    manager = ACTIVE_POD_MANAGERS.get(event_id)
+    if manager is None:
+        return "Start the Draftmancer session before setting the picks per pack."
+    return await manager.apply_picks_per_pack(n)
 
 
 async def set_event_max_players(event_id: str, n: int) -> str | None:

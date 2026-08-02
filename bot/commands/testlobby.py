@@ -1096,7 +1096,7 @@ _VALID_STATES = (
     "format", "seeding", "trophyhype", "champ", "round1", "round2", "round3", "voicelink", "review",
     "table",
     "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote",
-    "formatpoll", "linkpicker",
+    "formatpoll", "linkpicker", "settings",
 )
 
 _LIVE_POD_MODES = {
@@ -1284,6 +1284,7 @@ def _settings_preview_view() -> PodSettingsView:
         on_seating=_settings_preview_seating_noop, seat_order_provider=_settings_preview_seat_order,
         on_seated=_settings_preview_on_seated,
         on_timer=_settings_preview_noop, current_timer=60,
+        on_picks_per_pack=_settings_preview_noop, current_picks_per_pack=1,
         on_max_players=_settings_preview_noop, current_max_players=8,
         on_closed_decklist=_settings_preview_noop, current_closed_decklist=False,
         on_description=_settings_preview_description_noop,
@@ -1302,7 +1303,8 @@ async def setup(bot: commands.Bot) -> None:
 
         `state` ∈ empty | partial | linked | unlinked | ready | notready | cancelled | left | superseded |
         readyunlinked | drafting | complete | submit | lobbyopen | podbracket | podswiss | podrandom | podteam |
-        podlobby | format | seeding | trophyhype | champ | round1 | round2 | round3 | voicelink | linkpicker.
+        podlobby | format | seeding | trophyhype | champ | round1 | round2 | round3 | voicelink | linkpicker |
+        settings.
         `lobbyopen` posts the real lobby-open message and its Join Draft button — click it to get the
         ephemeral link with your Arena name pre-filled, or the Link Arena nudge when unlinked.
         `dmlink` DMs you both lobby-open link DMs (linked + unlinked) and the opt-in test DM, so every
@@ -1310,6 +1312,8 @@ async def setup(bot: commands.Bot) -> None:
         handle so the unlinked Join Draft nudge can be replayed; re-link with the Link Arena button.
         `linkpicker` posts the Link Players picker on its own — pick a seat, the member dropdown and
         Confirm button appear below it, and the link commits only on Confirm.
+        `settings` posts the no-op Settings panel directly, so it works in a channel already bound to a
+        pod event, where the lobby card's Settings button would open that pod's real panel instead.
         `podteam [6|8|10]` seeds a real team draft at that player count (default 6; seat 1 = you,
         Green Team) — posts the team summary embed + live board with working report buttons and
         opens the two private team threads off this channel.
@@ -1420,6 +1424,10 @@ async def setup(bot: commands.Bot) -> None:
 
         if state == "linkpicker":
             await _post_link_picker_preview(ctx)
+            return
+
+        if state == "settings":
+            await ctx.send(view=_settings_preview_view())
             return
 
         if state == "submit":

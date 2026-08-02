@@ -121,6 +121,40 @@ def test_pick_timer_rejected_when_disconnected():
     assert mgr.sio.emitted == []
 
 
+def test_picks_per_pack_sets_value_and_emits_pre_draft():
+    mgr = _manager()
+
+    err = asyncio.run(mgr.apply_picks_per_pack(2))
+
+    assert err is None
+    assert mgr.picks_per_pack == 2
+    assert mgr.sio.emitted == ["setPickedCardsPerRound"]
+
+
+def test_picks_per_pack_rejected_once_drafting():
+    mgr = _manager()
+    mgr.drafting = True
+    before = mgr.picks_per_pack
+
+    err = asyncio.run(mgr.apply_picks_per_pack(2))
+
+    assert err is not None
+    assert mgr.picks_per_pack == before
+    assert mgr.sio.emitted == []
+
+
+def test_picks_per_pack_rejected_when_disconnected():
+    mgr = _manager()
+    mgr.sio.connected = False
+    before = mgr.picks_per_pack
+
+    err = asyncio.run(mgr.apply_picks_per_pack(2))
+
+    assert err is not None
+    assert mgr.picks_per_pack == before
+    assert mgr.sio.emitted == []
+
+
 def test_max_players_sets_value_pre_draft():
     mgr = _manager()
 
