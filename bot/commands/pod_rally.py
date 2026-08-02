@@ -2,8 +2,8 @@
 
 Inside a pod thread it moves the lobby card back to the bottom, for a lobby that chat has buried. Anywhere
 else it posts one line per live pod: how many seats are missing, how many players are already sitting in
-Draftmancer, and where to join. Open to everyone and nothing is pinged. The invocation is deleted so the
-channel keeps only the answer, which is the point of the command.
+Draftmancer, and where to join. Open to everyone and nothing is pinged. The message is left up, since
+anything a player writes after `!pod` is their own words and the answer posts under it either way.
 """
 from __future__ import annotations
 
@@ -27,7 +27,6 @@ from bot.services.pod_schedule import build_underfill_fired_message
 log = logging.getLogger(__name__)
 
 MSG_POD_USE_MOCK = "This is a mock draft. Use `!mock` to repost its card."
-MSG_POD_NO_CARD = "No lobby card to move in this thread."
 MSG_POD_ALREADY_FULL = "That pod already has a full table."
 
 NOTICE_LIFETIME_S = 15
@@ -51,22 +50,23 @@ async def setup(bot: commands.Bot) -> None:
         """Bump the lobby card in a pod thread, or rally for the live pod anywhere else."""
         channel_id = ctx.channel.id if ctx.channel else None
         manager = active_manager_for_channel(channel_id)
-        if manager is not None:
-            await _bump_lobby_card(ctx, manager)
+        if manager is not None and await _answer_from_pod_channel(ctx, manager):
             return
         await _rally(ctx)
 
 
-async def _bump_lobby_card(ctx: commands.Context, manager) -> None:
+async def _answer_from_pod_channel(ctx: commands.Context, manager) -> bool:
+    """Whether the pod bound to this channel answered on its own. A pod with no card up has nothing to move,
+    so it says nothing and lets the rally answer instead: a lobby that is drafting, finished, or left over
+    from a test still leaves someone asking a real question about the pods that are live now."""
     if manager.kind == "mock":
         await ctx.send(MSG_POD_USE_MOCK, delete_after=NOTICE_LIFETIME_S)
-        return
+        return True
     if not await manager.bump_lobby_card():
-        await ctx.send(MSG_POD_NO_CARD, delete_after=NOTICE_LIFETIME_S)
-        return
-    await _delete_invocation(ctx)
+        return False
     audit.event("pod_card_bump", user_id=str(ctx.author.id), event_id=manager.event_id)
     log.info(f"pod: {ctx.author} bumped the lobby card for event {manager.event_id}")
+    return True
 
 
 async def _rally(ctx: commands.Context) -> None:
@@ -79,14 +79,12 @@ async def _rally(ctx: commands.Context) -> None:
     await _retire_previous_rally(ctx.channel)
     if target is None:
         await ctx.send(await _no_pod_message(guild_id), suppress_embeds=True)
-        await _delete_invocation(ctx)
         return
     posted = await ctx.send(
         pod_rally.build_rally_line(target), view=_join_view(target), suppress_embeds=True,
         allowed_mentions=discord.AllowedMentions.none(),
     )
     _LAST_RALLY[ctx.channel.id] = PostedRally(target.event_id, target.name, posted)
-    await _delete_invocation(ctx)
     audit.event("pod_rally", user_id=str(ctx.author.id), channel_id=str(ctx.channel.id), kind=target.kind)
     log.info(f"pod: {ctx.author} rallied {target.kind} pod '{target.name}' in channel {ctx.channel.id}")
 
@@ -141,12 +139,3 @@ def _guild(ctx: commands.Context) -> discord.Guild | None:
     if ctx.guild is not None:
         return ctx.guild
     return ctx.bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
-
-
-async def _delete_invocation(ctx: commands.Context) -> None:
-    """Remove the `!pod` message once the answer is up. The point of the command is to leave the pod at the
-    bottom of the channel, which the invocation sitting under it would undo."""
-    if ctx.guild is None:
-        return
-    with contextlib.suppress(discord.HTTPException):
-        await ctx.message.delete()

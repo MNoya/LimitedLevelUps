@@ -74,15 +74,15 @@ When enough players are ready the bot runs a quick ready check, then starts the 
 
 ## Asking for the last players
 
-A lobby that is one or two players short is the most common way a pod fails to fire. Anyone can write `!pod` in any channel to ask for them. It counts anywhere in the message, not only at the start, so it fits at the end of a sentence you were writing anyway. Your message stays up and the bot posts one line under it: which pod is open, how many players it still needs, how many are already sitting in the Draftmancer lobby, and a link to the thread. The line carries a Join Draft button that hands back a Draftmancer link with your Arena name already filled in, so you arrive matched to your leaderboard profile.
+A lobby that is one or two players short is the most common way a pod fails to fire. Anyone can write `!pod` in any channel to ask for them. Start the message with it and the rest is yours to write, so `!pod anyone free tonight` works. Your message stays up and the bot posts one line under it: which pod is open, how many players it still needs, how many are already sitting in the Draftmancer lobby, and a link to the thread. The line carries a Join Draft button that hands back a Draftmancer link with your Arena name already filled in, so you arrive matched to your leaderboard profile.
 
 Pressing Join Draft also puts you in the pod's thread. So does walking into the Draftmancer lobby on your own, as soon as the bot recognizes your name, so the people drafting and the people talking are the same list either way.
 
 Once a lobby is open the count is read from Draftmancer itself, so it is who is actually there and not who said yes earlier. Before a lobby opens there is nothing to read, so `!pod` reports the signup counts instead and links the signup card. When no pod is gathering at all it points at the day's launcher.
 
-It only ever names one pod, the one closest to a full table, so the message asks you to fill a seat instead of to pick between pods. A pod that already has a full table gets no message: the bot tells you so and posts nothing. A second `!pod` replaces the rally the channel already has, and a channel answers at most once a minute, so several people asking together still produce one line. Once the draft starts the rally rewrites itself into a record of the pod firing, so it can never keep asking for players who are no longer needed.
+It only ever names one pod, the one closest to a full table, so the message asks you to fill a seat instead of to pick between pods. A pod that already has a full table gets no message: the bot tells you so and posts nothing. A second `!pod` replaces the rally the channel already has, so a channel never holds two of them reading different numbers. Once the draft starts the rally rewrites itself into a record of the pod firing, so it can never keep asking for players who are no longer needed.
 
-Written inside a pod's own thread, `!pod` does something else: it moves the lobby card back to the bottom of the thread, for a lobby that conversation has buried. For a mock draft use `!mock` instead: it posts the mock card again at the bottom of the channel, with a Thread button on it, since a reposted card has no thread of its own.
+Written inside a pod's own thread, `!pod` does something else: it moves the lobby card back to the bottom of the thread, for a lobby that conversation has buried. A pod with no card up, because it is already drafting or already done, has nothing to move, so there you get the normal rally. For a mock draft use `!mock` instead: it posts the mock card again at the bottom of the channel, with a Thread button on it, since a reposted card has no thread of its own.
 
 ## Table shapes
 
