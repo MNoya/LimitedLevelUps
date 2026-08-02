@@ -5,7 +5,7 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from bot.database import SessionLocal
-from bot.discord_helpers import extract_avatar_hash, resolve_display_name
+from bot.discord_helpers import extract_avatar_hash, is_deleted_account_name, resolve_display_name
 from bot.models import Player
 
 
@@ -44,6 +44,11 @@ class ProfileSyncListener(commands.Cog):
         await self._persist(after.id, display_name=after.display_name)
 
     async def _persist(self, discord_id: int, **fields: object) -> None:
+        fields = {
+            name: value for name, value in fields.items() if not is_deleted_account_name(value)
+        }
+        if not fields:
+            return
         with SessionLocal() as session:
             player = session.execute(
                 select(Player).where(Player.discord_id == str(discord_id))

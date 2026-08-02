@@ -156,7 +156,8 @@ async def refresh_player_profiles(
     The reactive listeners in profile_sync_listener keep these fresh in real time; this sweep is
     the weekly backstop for changes made while the bot was offline. It prefers `get_user` so a
     full pass costs almost no REST calls. Players without a `discord_id` are skipped; players we
-    can't resolve (deleted account, banned) keep their last-known values.
+    can't resolve (banned, or an id Discord no longer knows) keep their last-known values, and so does a
+    deleted account, which does resolve but only under a placeholder name.
     """
     summary = {"checked": 0, "updated": 0, "skipped": 0, "errors": 0}
     for player in players:
@@ -169,6 +170,9 @@ async def refresh_player_profiles(
         except Exception:  # noqa: BLE001 - Discord can throw a wide variety
             logger.warning(f"profile refresh: could not fetch user {player.discord_id}", exc_info=True)
             summary["errors"] += 1
+            continue
+        if is_deleted_account_name(str(user)):
+            summary["skipped"] += 1
             continue
         changed = False
         new_hash = extract_avatar_hash(user)
@@ -234,6 +238,18 @@ async def fetch_dm_user(bot: "commands.Bot", discord_id: str | None) -> "discord
         return None
     user_id = int(discord_id)
     return bot.get_user(user_id) or await bot.fetch_user(user_id)
+
+
+DELETED_ACCOUNT_RE = re.compile(r"^deleted_user_[0-9a-f]+$", re.IGNORECASE)
+
+
+def is_deleted_account_name(value: object) -> bool:
+    """Whether Discord handed back the placeholder it gives an account that no longer exists.
+
+    A deleted account keeps resolving through the API as `deleted_user_<hash>` with no avatar, so a sync
+    that trusts the response replaces a real name with the placeholder and every board carrying that
+    player's results shows it from then on. Their own results stay valid, so the name is kept instead."""
+    return isinstance(value, str) and bool(DELETED_ACCOUNT_RE.match(value))
 
 
 async def resolve_display_name(bot: "commands.Bot", user: "discord.User") -> str:
