@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from dotenv import dotenv_values
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
@@ -17,8 +18,9 @@ from bot.models import Base  # noqa: E402
 @pytest.fixture(scope="session")
 def postgres_url():
     """TEST_DATABASE_URL reuses an already-running Postgres and skips the container start, which otherwise costs every
-    run about 1.6s."""
-    configured = os.environ.get("TEST_DATABASE_URL")
+    run about 1.6s. Reading .env by value keeps the rest of it out of os.environ, so local runs match CI."""
+    env_file = dotenv_values(REPO_ROOT / ".env")
+    configured = os.environ.get("TEST_DATABASE_URL") or env_file.get("TEST_DATABASE_URL")
     if configured:
         os.environ["DATABASE_URL"] = verified_test_database(configured)
         yield configured
