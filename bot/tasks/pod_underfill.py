@@ -90,8 +90,10 @@ def _arm_underfill_beats(
     beat was missed to downtime, not that the pod was created short-notice. A short-notice pod born after
     T-3h simply skips the silent step it was never around for and picks up its first future beat.
 
-    The catch-up carries the most recent missed beat's offset, so it inherits that beat's behaviour — a
-    caught-up T-1h resurfaces and can ping, an earlier caught-up beat stays silent.
+    The catch-up carries the most recent missed beat's offset, so it inherits that beat's ping behaviour,
+    but it never resurfaces: a restart cannot tell a beat missed to downtime from one that already ran, and
+    reposting on every deploy puts a fresh unread status in pod chat for a pod nobody's status changed on.
+    It edits the standing message instead, and only posts, and can ping, when no message is up.
     """
     check_hours = settings.pod_underfill_check_hours_tuple
     now = datetime.now(timezone.utc)
@@ -121,7 +123,7 @@ def _arm_underfill_beats(
             fire,
             "date",
             run_date=now + timedelta(seconds=CATCH_UP_DELAY_S),
-            args=[key, catch_up_hours, catch_up_hours == resurface_hours],
+            args=[key, catch_up_hours, False],
             id=f"{id_prefix}-catchup-{key}",
             replace_existing=True,
         )

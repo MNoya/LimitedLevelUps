@@ -43,7 +43,7 @@ The core recommendation from the discussion holds and is now more clearly the ri
 
 **Where special cases pile up:**
 
-- `_arm_underfill_beats` — downtime catch-up: `run_at <= now` plus `created_at <= run_at` gating, with the catch-up beat inheriting the missed beat's resurface/ping behavior. Subtlest scheduling code in the subsystem.
+- `_arm_underfill_beats` — downtime catch-up: `run_at <= now` plus `created_at <= run_at` gating, with the catch-up beat inheriting the missed beat's ping behavior but never its resurface, so a redeploy inside the last hour edits the standing message instead of reposting it. Subtlest scheduling code in the subsystem.
 - `_nudge_ping_role` / `_claimed_ping_role` — ping fires only on beats in `ping_hours` AND within `ping_close_gap` of the aim AND when the bucket role resolves, layered over an atomic once-per-signal claim, layered over resurface-vs-edit mention re-carrying.
 - `_find_nudge` marker disambiguation — launcher slots share one signup URL, so the living-message lookup depends on the bolded pod name rendering identically. Fragile coupling of message-finding to copy formatting.
 - Team-vote size fan-out — five eligibility rules for one card: prelobby (==6), auto (==6), armed-at-fill (even and <=6), manual (>=4), and `adopt_existing_team_vote`'s `(needed-1)*2` back-computation.

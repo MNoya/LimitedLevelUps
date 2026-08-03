@@ -131,7 +131,7 @@ def test_arm_underfill_beats_marks_only_the_min_offset_as_resurface(monkeypatch)
     assert resurface_by_hours == {3: False, 2: False, 1: True}
 
 
-def test_arm_underfill_beats_catch_up_inherits_the_missed_beats_resurface(monkeypatch):
+def test_arm_underfill_beats_catch_up_carries_the_missed_offset_without_resurfacing(monkeypatch):
     monkeypatch.setattr(settings, "pod_underfill_check_hours", "3,2,1")
     scheduler = _FakeScheduler()
     now = datetime.now(timezone.utc)
@@ -144,7 +144,7 @@ def test_arm_underfill_beats_catch_up_inherits_the_missed_beats_resurface(monkey
     (catch_up,) = scheduler.jobs
     assert "catchup" in catch_up["id"]
     assert catch_up["args"][1] == 1
-    assert catch_up["args"][2] is True
+    assert catch_up["args"][2] is False
 
 
 def test_arm_underfill_beats_never_catches_up_a_past_event(monkeypatch):
