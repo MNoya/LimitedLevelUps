@@ -584,7 +584,7 @@ def joinable_signals_sync(guild_id: str, *, now: datetime, within: timedelta) ->
 
 def create_scheduled_signal_sync(
     *, guild_id: str, channel_id: str, message_id: str, event_time: datetime,
-    pick_timer: int | None = None, format_locked: bool = True,
+    pick_timer: int | None = None, format_locked: bool = True, opened_by: str | None = None,
 ) -> str:
     """A scheduled pod's signal is born fired with the caller linking its event right after: RSVPs
     stay open forever for over-signups and expiry never applies. Pairing and seating live on the
@@ -592,7 +592,10 @@ def create_scheduled_signal_sync(
 
     `format_locked` is the default: a /draft card, a championship, or a mock draft each carry a set the
     organizer chose, so the Latest/Flashback preference system never applies. Only a graduated launcher
-    slot opts out, since it is the flex surface that resolves its format from the roster's preferences."""
+    slot opts out, since it is the flex surface that resolves its format from the roster's preferences.
+
+    `opened_by` is only set for a pod someone scheduled by hand with /draft, which is what lets the card
+    credit an organizer that no schedule chose."""
     with SessionLocal() as session:
         signal = PodSignal(
             kind=pod_signals.KIND_SCHEDULED,
@@ -605,6 +608,7 @@ def create_scheduled_signal_sync(
             status=pod_signals.STATUS_FIRED,
             pick_timer=pick_timer,
             format_locked=format_locked,
+            opened_by=opened_by,
         )
         session.add(signal)
         session.commit()
@@ -1660,6 +1664,18 @@ def scheduled_card_ref_sync(event_id: str) -> tuple[str, str, str, datetime | No
             )
         ).first()
     return (row[0], row[1], row[2], row[3]) if row else None
+
+
+def scheduled_card_opener_sync(event_id: str) -> str | None:
+    """The discord user id of whoever scheduled this pod with /draft, so a full card re-render keeps
+    crediting them. None for every pod the launcher or a job created."""
+    with SessionLocal() as session:
+        row = session.execute(
+            select(PodSignal.opened_by).where(
+                PodSignal.event_id == event_id, PodSignal.kind == pod_signals.KIND_SCHEDULED
+            )
+        ).first()
+    return row[0] if row else None
 
 
 def pod_card_ref_sync(event_id: str) -> tuple[str, str, datetime | None] | None:

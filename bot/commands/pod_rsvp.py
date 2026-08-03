@@ -108,6 +108,7 @@ MULTIPOD_NOTICE = "🔥 Keep signing up to fire a second table"
 CARD_STATUS_DRAFTING = "🎉 **Draft started!**"
 CARD_STATUS_PLAYING = "⚔️ **Matches In Progress**"
 CARD_STATUS_LOBBY_OPEN = "{emoji} **Lobby is open**"
+CARD_CREATED_BY = "Created by {name}"
 TIME_LABEL = "Time"
 NATIVE_EVENT_SIGNUP = "**Event Details and Signup Link: {jump_url}**"
 RSVP_LABELS = {RSVP_YES: "Sign Up", RSVP_MAYBE: "Maybe", RSVP_NO: "Can't"}
@@ -309,6 +310,7 @@ def build_rsvp_embed(
     locked_roster: list[DraftedPlayer] | None = None, draft_complete: bool = False,
     team_rosters: dict[str, list[TeamBoardMember]] | None = None,
     championship_roster: ChampionshipRoster | None = None,
+    created_by: str | None = None,
 ) -> discord.Embed:
     """The RSVP surface. Time and the roster columns are embed fields so sesh's vertical breathing
     room comes for free. `role_time` keys the slot emoji; it defaults to `event_time` and callers
@@ -329,7 +331,9 @@ def build_rsvp_embed(
     members carry each player's record and deck colors, which the column then shows beside the name.
     `championship_roster` replaces the RSVP columns with the seeded Top 8, Alternates, and declined
     columns, and unlike every other roster surface it survives the locked phases, so the seeding record
-    stays on the card once the pod is over."""
+    stays on the card once the pod is over.
+    `created_by` credits whoever opened an out-of-schedule pod with `/draft`, on the footer of every card
+    state. A card the launcher or a job posted has no one to credit and leaves the footer off."""
     unix = int(event_time.timestamp())
     symbol = emojis.get(set_code.lower()) if set_code else ""
     suffix = f"{NBSP}{symbol}" if symbol else ""
@@ -340,7 +344,7 @@ def build_rsvp_embed(
         embed = discord.Embed(description=header, color=discord.Color.green())
         _add_team_columns(embed, team_rosters)
         embed.add_field(name=NBSP, value=f"<t:{unix}:R>", inline=False)
-        return embed
+        return _with_created_by(embed, created_by)
     if locked_roster is not None:
         header = f"{title}\n{status_line}" if status_line else title
         roster_text = _locked_roster_text(locked_roster, draft_complete)
@@ -350,7 +354,7 @@ def build_rsvp_embed(
         )
         if championship_roster is not None:
             add_championship_roster_fields(embed, championship_roster)
-        return embed
+        return _with_created_by(embed, created_by)
     calendar_url = google_calendar_url(name, event_time)
     if status_line is not None:
         middle = status_line
@@ -366,6 +370,13 @@ def build_rsvp_embed(
         add_championship_roster_fields(embed, championship_roster)
     else:
         add_roster_fields(embed, rosters, roster_interests, championship=announcement is not None)
+    return _with_created_by(embed, created_by)
+
+
+def _with_created_by(embed: discord.Embed, created_by: str | None) -> discord.Embed:
+    """Footers carry no markdown and no mention pills, so the credit is a plain display name."""
+    if created_by:
+        embed.set_footer(text=CARD_CREATED_BY.format(name=created_by))
     return embed
 
 
@@ -632,7 +643,7 @@ async def post_scheduled_card(
     notify_role_name: str | None = None, description: str | None = None,
     pairing_mode: str | None = None, seating_mode: str | None = None, pick_timer: int | None = None,
     content_override: str | None = None, card_body: str | None = None, native_body: str | None = None,
-    format_locked: bool = True,
+    format_locked: bool = True, opener: discord.abc.User | None = None,
 ) -> str | None:
     """Create a scheduled pod end to end and return its event id, or None when the thread or the
     card could not be posted. The signal is born fired, so the RSVP buttons never close.
@@ -652,7 +663,10 @@ async def post_scheduled_card(
     `content_override` replaces the card's content ping outright — a fired launcher slot's creation
     announcement, carrying its own role mention. `card_body` is a fixed announcement rendered inside
     the embed in place of the RSVP intro, for a championship card that never fires a second table, and
-    `native_body` is its counterpart on the native event, above the tally."""
+    `native_body` is its counterpart on the native event, above the tally.
+
+    `opener` is the player who ran `/draft`. It lands on the signal and on the card footer, so an
+    out-of-schedule pod shows who organized it. A card a job or the launcher posts leaves it None."""
     preseed_yes = preseed_yes or []
     rosters = {state: [] for state in RSVP_STATES}
     rosters[RSVP_YES] = [display for _, display in preseed_yes]
@@ -668,6 +682,7 @@ async def post_scheduled_card(
                 name, event_time, rosters, description=description, set_code=set_code,
                 team_draft=pairing_mode == "team", announcement=card_body,
                 championship_roster=championship_card_roster,
+                created_by=opener.display_name if opener is not None else None,
             ),
             view=PodRsvpView(),
             allowed_mentions=discord.AllowedMentions(roles=True),
@@ -681,6 +696,7 @@ async def post_scheduled_card(
         pod_launch.create_scheduled_signal_sync,
         guild_id=str(guild.id), channel_id=str(channel.id), message_id=str(message.id),
         event_time=event_time, pick_timer=pick_timer, format_locked=format_locked,
+        opened_by=str(opener.id) if opener is not None else None,
     )
     if preseed_yes:
         await asyncio.to_thread(pod_launch.seed_yes_members_sync, signal_id, preseed_yes)
@@ -1245,15 +1261,18 @@ async def _edit_scheduled_card(bot: commands.Bot, event_id: str, name: str, even
     locked_roster, draft_complete = await _solo_card_roster(event_id, pairing_mode, status_line)
     if own_card and locked_roster is None and team_rosters is None:
         locked_roster = await asyncio.to_thread(_own_card_lobby_roster_sync, event_id)
+    guild = getattr(channel, "guild", None)
+    opener_id = await asyncio.to_thread(pod_launch.scheduled_card_opener_sync, event_id)
     try:
         message = await channel.fetch_message(int(message_id))
         await message.edit(embed=build_rsvp_embed(
             name, event_time, rosters, slot_time, description, set_code=set_code,
-            announcement=_championship_announcement(getattr(channel, "guild", None), set_code, name),
+            announcement=_championship_announcement(guild, set_code, name),
             team_draft=pairing_mode == "team", status_line=status_line,
             roster_interests=roster_interests, team_rosters=team_rosters,
             locked_roster=locked_roster, draft_complete=draft_complete,
-            championship_roster=await resolve_championship_card_roster(event_id, rosters)))
+            championship_roster=await resolve_championship_card_roster(event_id, rosters),
+            created_by=_opener_display_name(guild, opener_id)))
     except discord.HTTPException:
         log.warning(f"could not edit scheduled card {message_id}", exc_info=True)
 
@@ -1567,14 +1586,19 @@ def _reschedule_mentions(
 
 
 def _actor_display_name(guild: discord.Guild | None, actor_id: str) -> str:
-    if guild is not None:
-        try:
-            member = guild.get_member(int(actor_id))
-        except ValueError:
-            member = None
-        if member is not None:
-            return member.display_name
-    return "an Organizer"
+    return _opener_display_name(guild, actor_id) or "an Organizer"
+
+
+def _opener_display_name(guild: discord.Guild | None, user_id: str | None) -> str | None:
+    """The member's current display name, so a re-rendered card follows a nickname change. None when
+    there is nobody to credit, which is what keeps the footer off a launcher-created card."""
+    if guild is None or user_id is None:
+        return None
+    try:
+        member = guild.get_member(int(user_id))
+    except ValueError:
+        return None
+    return member.display_name if member is not None else None
 
 
 def parse_new_time(raw: str, current: datetime, now: datetime) -> datetime | None:

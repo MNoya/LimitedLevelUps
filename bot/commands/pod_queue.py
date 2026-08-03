@@ -25,7 +25,7 @@ from bot.commands import descriptions as desc
 from bot.commands.messages import MSG_LOBBY_GATHERING, MSG_PLAYERS_JOINED
 from bot.commands.pod_rsvp import parse_new_time, post_scheduled_card
 from bot.config import settings
-from bot.discord_helpers import NBSP
+from bot.discord_helpers import NBSP, resolve_pod_chat_channel
 from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
 from bot.services.pod_draft_manager import (
@@ -93,6 +93,10 @@ LAUNCHER_JOIN_HINT = "Join an existing pod instead of starting a new one:"
 LAUNCHER_QUEUE_NAME = "{set_code} Pod Draft Queue"
 LAUNCHER_JOINABLE_LINE = "⚡ **[{name}]({url})**{emoji} {count} waiting"
 LAUNCHER_MORE_LINE = "And {count} more."
+CHAT_ANNOUNCE_SCHEDULED = "{mention} used `/draft`: **{name}** <t:{unix}:R> {manat} [**Sign up here**]({url})"
+CHAT_ANNOUNCE_QUEUE = "{mention} used `/draft`: **{name}** {manat} [**Join here**]({url})"
+LAUNCHER_OPENING = "⏳ Opening the queue..."
+LAUNCHER_SCHEDULING = "⏳ Creating the pod..."
 LAUNCHER_SCHEDULED = "Scheduled for {when}. RSVP card posted: {url}"
 LAUNCHER_SCHEDULE_FAILED = "The scheduled pod card could not be posted. Try again."
 LAUNCHER_SCHEDULE_NO_CHANNEL = "The pod coordination channel could not be reached."
@@ -426,11 +430,16 @@ class DraftLauncherView(discord.ui.View):
     choice so every control shows the current selection, like the lobby Settings panel. The chosen set
     rides into the pod name and Draftmancer session when the queue fires; the default is the active
     set. Notify is a plain on/off bell; the ping role follows the pod's time via derived_notify_role,
-    so a slot always reaches the people who subscribed to it."""
+    so a slot always reaches the people who subscribed to it.
+
+    The bell starts off. /draft is open to every player, so a default-on ping lets someone who does not
+    know the slot roles wake a few hundred people at a bad hour on their first try. Turning it on is one
+    click for whoever means it, and a quiet pod still reaches the channel through the one-short nudge and
+    the underfill reminder once it needs players."""
 
     def __init__(self, *, set_code: str | None = None, pairing_mode: str | None = None,
                  pick_timer: int | None = None, scheduled_time: datetime | None = None,
-                 notify: bool = True, description: str | None = None) -> None:
+                 notify: bool = False, description: str | None = None) -> None:
         super().__init__(timeout=300)
         self.set_code = set_code
         self.pairing_mode = pairing_mode
@@ -663,8 +672,15 @@ class _LauncherStartButton(discord.ui.Button):
         super().__init__(label=label, emoji=emoji, style=discord.ButtonStyle.success, row=row)
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        """Strip the panel down to a progress line before the work starts. Creating a pod takes several
+        seconds of card, thread, and native-event calls, and a plain defer leaves every control live and
+        unchanged for all of it, so the press reads as a button that did nothing and invites a second
+        one."""
         view: DraftLauncherView = self.view
-        if view.scheduled_time is not None:
+        scheduled = view.scheduled_time is not None
+        await interaction.response.edit_message(
+            content=LAUNCHER_SCHEDULING if scheduled else LAUNCHER_OPENING, view=None)
+        if scheduled:
             await _schedule_pod(
                 interaction, view.set_code, view.pairing_mode, view.pick_timer,
                 view.scheduled_time, view.notify, view.description,
@@ -682,7 +698,6 @@ async def _open_queue(
 ) -> None:
     """Post the public queue card from the launcher and wire its signal, carrying the chosen set and
     presets. Dismisses the ephemeral launcher and runs the opener's own join through the normal path."""
-    await interaction.response.defer()
     role = derived_notify_role(None, notify)
     mention = role_mention_for(interaction.guild, role)
     message = await interaction.channel.send(
@@ -701,6 +716,12 @@ async def _open_queue(
         notify_role=role, description=description,
     )
     await _open_discussion_thread(message, set_code, description, interaction.user, signal_id)
+    queue_name = LAUNCHER_QUEUE_NAME.format(
+        set_code=format_display((set_code or active_set_code()).upper()))
+    await _announce_pod(interaction, message.channel.id, CHAT_ANNOUNCE_QUEUE.format(
+        mention=interaction.user.mention, name=queue_name,
+        manat=emojis.get("manat"), url=message.jump_url,
+    ))
     result = await asyncio.to_thread(
         pod_launch.set_membership_sync,
         str(message.id), QUEUE_BUCKET, str(interaction.user.id), interaction.user.display_name, "join",
@@ -796,7 +817,6 @@ async def _schedule_pod(
     """Post a scheduled RSVP card in the coordination channel for a future pod, carrying the launcher's
     set and presets, with the opener seeded as the first Yes. The bell picks the slot's ping role off
     the pod's time; Notify off silences the card."""
-    await interaction.response.defer()
     channel = interaction.client.get_channel(settings.pod_draft_channel_id)
     if not isinstance(channel, discord.TextChannel):
         await interaction.edit_original_response(content=LAUNCHER_SCHEDULE_NO_CHANNEL, view=None)
@@ -809,15 +829,54 @@ async def _schedule_pod(
         interaction.client, channel, set_code=resolved_set, event_time=when, name=name,
         preseed_yes=opener, ping_role=False, notify_role_name=role, description=description,
         pairing_mode=pairing_mode, pick_timer=pick_timer, format_locked=True,
+        opener=interaction.user,
     )
     if event_id is None:
         await interaction.edit_original_response(content=LAUNCHER_SCHEDULE_FAILED, view=None)
         return
     ref = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
-    url = f"https://discord.com/channels/{interaction.guild_id}/{ref[1]}/{ref[2]}" if ref else channel.mention
-    when_tag = f"<t:{int(when.timestamp())}:F>"
+    card_url = f"https://discord.com/channels/{interaction.guild_id}/{ref[1]}/{ref[2]}" if ref else None
     log.info(f"scheduled pod {name} for {when.isoformat()} (event {event_id})")
-    await interaction.edit_original_response(content=LAUNCHER_SCHEDULED.format(when=when_tag, url=url), view=None)
+    announced = card_url is not None and await _announce_pod(
+        interaction, channel.id, CHAT_ANNOUNCE_SCHEDULED.format(
+            mention=interaction.user.mention, name=name, unix=int(when.timestamp()),
+            manat=emojis.get("manat"), url=card_url))
+    if announced:
+        await interaction.delete_original_response()
+        return
+    when_tag = f"<t:{int(when.timestamp())}:F>"
+    await interaction.edit_original_response(
+        content=LAUNCHER_SCHEDULED.format(when=when_tag, url=card_url or channel.mention), view=None)
+
+
+async def _announce_pod(
+    interaction: discord.Interaction, card_channel_id: int, content: str,
+) -> bool:
+    """Say publicly that someone started a pod, and whether any channel took it.
+
+    A scheduled pod's own confirmation, so it lands where the player ran /draft and the people around
+    them see both the pod and the command that made it. An ephemeral reply cannot be turned public, so
+    the caller deletes it once this succeeds.
+
+    pod-draft-chat is announced too whenever /draft ran somewhere else, since that is the channel
+    watching for pods. The card's own channel is left out: a line beside the card only repeats it, which
+    is why a queue opened in the channel it posts to announces only in pod-draft-chat.
+
+    Nothing is pinged. The announcement is a heads-up and the bell on the card owns the ping.
+    """
+    posted = False
+    seen = {card_channel_id}
+    for destination in (interaction.channel, resolve_pod_chat_channel(interaction.client)):
+        channel_id = getattr(destination, "id", None)
+        if destination is None or channel_id in seen:
+            continue
+        seen.add(channel_id)
+        try:
+            await destination.send(content, allowed_mentions=discord.AllowedMentions.none())
+            posted = True
+        except discord.HTTPException:
+            log.warning(f"could not announce the /draft pod in {channel_id}", exc_info=True)
+    return posted
 
 
 def _joinable_line(guild: discord.Guild, signal) -> str:

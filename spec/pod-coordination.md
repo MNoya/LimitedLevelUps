@@ -133,7 +133,9 @@ While a pod is closed, sign in with Discord on the website to see your own deck 
 
 ## For mods
 
-Beyond the daily launcher, you can schedule a pod at any time with the `/draft` command. Pick "Right now" to open a live lobby immediately, or pick a time to post a scheduled signup card. You can preset the set, pairing style, pick timer, and which role gets notified. The signup buttons and thread work the same as a launcher pod.
+Beyond the daily launcher, you can schedule a pod at any time with the `/draft` command. Pick "Right now" to open a live lobby immediately, or pick a time to post a scheduled signup card. You can preset the set, pairing style, and pick timer. The signup buttons and thread work the same as a launcher pod.
+
+Notify starts off, so the pod pings nobody until you turn it on. Anyone can run `/draft`, and a pod that nobody asked for should not wake a role at a bad hour. A quiet pod still reaches the channel on its own once it is short of players. Either way the bot posts one line where you ran the command, naming the pod and linking its card, and a scheduled card carries your name in its footer so players can see who organized it.
 
 Which formats a day offers is a table in the bot's code, so ask for a change ahead of time. A pod that already exists can change format from its lobby Settings panel.
 
