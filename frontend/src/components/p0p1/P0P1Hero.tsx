@@ -55,7 +55,7 @@ export function P0P1Hero({
         <p className="self-center max-w-[580px] text-center text-subtle text-[14px] leading-[1.55]">
           <P0P1IntroText setName={featured.name} votingDeadline={featured.votingDeadline} scoringDate={featured.scoringDate} phase={phase} dateRange={dateRange} multiline />
         </p>
-        <div className="text-subtle text-[14px]">
+        <div className="w-full flex justify-center text-subtle text-[14px]">
           {phase === "final" ? <NextContestOpens next={featured.next} /> : belowIntro}
         </div>
       </div>
