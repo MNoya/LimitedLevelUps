@@ -343,6 +343,21 @@ def test_the_morning_post_leaves_a_fired_pod_alone_and_opens_a_fresh_one(session
     assert fired.id not in [signal_id for signal_id, _slot_time in bound]
 
 
+def test_a_slot_that_already_closed_unfired_is_not_reopened_on_a_second_board(session, latest_only):
+    early = bucket_for_lane(FRIDAY, LANE_EARLY).key
+    closed = _seed_signal(session, early, FRIDAY, message_id="morning", status=STATUS_EXPIRED)
+
+    bound = create_poll_signals(
+        session, guild_id="g", channel_id="c", message_id="evening", signal_date=FRIDAY,
+    )
+
+    rows = session.execute(
+        select(PodSignal).where(PodSignal.bucket == named_bucket_key(early, LATEST))
+    ).scalars().all()
+    assert [row.id for row in rows] == [closed.id]
+    assert closed.id not in [signal_id for signal_id, _slot_time in bound]
+
+
 def test_a_pod_that_exists_is_skipped_and_the_other_format_still_opens(session, latest_and_peasant):
     early = bucket_for_lane(FRIDAY, LANE_EARLY).key
     _seed_pod(session, slot_event_time(FRIDAY, early), set_code=LATEST)
@@ -654,6 +669,38 @@ def test_reposting_a_board_carries_the_column_that_already_rolled_to_tomorrow(
     assert [(entry.bucket_key, entry.count) for entry in resurfaced if entry.signal_id] == [
         (named_bucket_key(early, LATEST), 0), (named_bucket_key(late, LATEST), 1),
     ]
+
+
+def test_reposting_a_board_leaves_behind_a_row_the_new_one_already_carries(
+    session, monkeypatch, latest_only,
+):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    early = bucket_for_lane(FRIDAY, LANE_EARLY).key
+    late = bucket_for_lane(FRIDAY, LANE_LATE).key
+    duplicate = _seed_signal(session, early, FRIDAY, message_id="today", status=STATUS_EXPIRED)
+    _seed_signal(session, early, FRIDAY, message_id="resurfaced", status=STATUS_EXPIRED)
+    tomorrow = _seed_signal(session, late, SATURDAY, message_id="today")
+    session.commit()
+
+    moved = pod_launch.rebind_launcher_rows_sync("today", "resurfaced")
+
+    session.refresh(duplicate)
+    session.refresh(tomorrow)
+    assert moved == 1
+    assert duplicate.message_id == "today"
+    assert tomorrow.message_id == "resurfaced"
+
+
+def test_a_day_left_holding_two_boards_retires_both(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    early = bucket_for_lane(FRIDAY, LANE_EARLY).key
+    _seed_signal(session, early, FRIDAY, message_id="morning", status=STATUS_EXPIRED)
+    _seed_signal(session, early, FRIDAY, message_id="evening", status=STATUS_EXPIRED, set_code="PEASANT")
+    session.commit()
+
+    boards = pod_launch.past_launcher_boards_sync(SATURDAY, FRIDAY - timedelta(days=3))
+
+    assert {message_id for _channel_id, message_id, _day in boards} == {"morning", "evening"}
 
 
 # --- leaving ---

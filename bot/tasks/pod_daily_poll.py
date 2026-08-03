@@ -1999,19 +1999,24 @@ async def close_recent_launchers(bot: commands.Bot, today: date) -> None:
     short window and idempotent, so each daily post re-touches only a handful and an already-closed one
     is left untouched."""
     since = today - timedelta(days=LAUNCHER_CLOSE_LOOKBACK_DAYS)
-    dates = await asyncio.to_thread(pod_launch.past_launcher_dates_sync, today, since)
-    for signal_date in dates:
-        await close_launcher_for_date(bot, signal_date)
+    boards = await asyncio.to_thread(pod_launch.past_launcher_boards_sync, today, since)
+    for channel_id, message_id, signal_date in boards:
+        await _close_launcher_message(bot, channel_id, message_id, signal_date)
 
 
 async def close_launcher_for_date(bot: commands.Bot, signal_date: date) -> None:
-    """Edit the day's launcher into its terminal state: signups closed, no buttons, no role ping (which
-    also clears the gold mention tint), greyed. No-op when no launcher was posted or it is already
-    closed."""
+    """Retire the day's live launcher. No-op when no launcher was posted for it."""
     ref = await asyncio.to_thread(pod_launch.launcher_ref_for_date_sync, signal_date)
     if ref is None:
         return
-    channel_id, message_id = ref
+    await _close_launcher_message(bot, ref[0], ref[1], signal_date)
+
+
+async def _close_launcher_message(
+    bot: commands.Bot, channel_id: str, message_id: str, signal_date: date,
+) -> None:
+    """Edit one launcher into its terminal state: signups closed, no buttons, no role ping (which also
+    clears the gold mention tint), greyed. No-op when it is already closed."""
     channel = bot.get_channel(int(channel_id))
     if channel is None:
         try:

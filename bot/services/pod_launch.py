@@ -208,7 +208,9 @@ def create_poll_signals(
     A row a rolled column already opened for this day is adopted, not duplicated: it keeps the signups it
     gathered overnight and moves to the fresh message. A format whose pod already exists at that slot time
     gets no signal — the launcher reflects that pod's card instead of doubling it — while the other formats
-    there still open."""
+    there still open. A slot that already closed unfired gets none either: its window is over, so a second
+    row records nothing the closed one does not and only collides once a repost sweeps the earlier board's
+    rows onto this message."""
     bound: list[tuple[str, datetime]] = []
     for bucket in pod_signals.poll_buckets_for(signal_date):
         slot_time = slot_event_time(signal_date, bucket.key)
@@ -218,6 +220,8 @@ def create_poll_signals(
                 continue
             signal = _open_poll_signal_for_slot(session, bucket.key, set_code, signal_date)
             if signal is None:
+                if _expired_poll_signal_exists(session, bucket.key, set_code, signal_date):
+                    continue
                 signal = PodSignal(
                     kind=pod_signals.KIND_POLL,
                     bucket=pod_signals.named_bucket_key(bucket.key, set_code),
@@ -253,18 +257,38 @@ def rebind_launcher_rows_sync(old_message_id: str, new_message_id: str) -> int:
 
     `create_poll_signals` adopts by day, which covers the board's own slots and misses a column already
     gathering for tomorrow: a lane rolls forward the moment its pod finishes, and the row it opens is bound
-    to the message that was live then. A board reposted mid-day would render without that column."""
+    to the message that was live then. A board reposted mid-day would render without that column.
+
+    A row the target already carries for the same slot and day stays where it is. One (message, bucket, day)
+    is unique, so moving it raised mid-repost and left the day holding two boards: the fresh one posted, and
+    the one it was meant to replace still up and still signable."""
     with SessionLocal() as session:
+        taken = {
+            (bucket, signal_date) for bucket, signal_date in session.execute(
+                select(PodSignal.bucket, PodSignal.signal_date).where(
+                    PodSignal.kind == pod_signals.KIND_POLL,
+                    PodSignal.message_id == new_message_id,
+                )
+            ).all()
+        }
         rows = session.execute(
             select(PodSignal).where(
                 PodSignal.kind == pod_signals.KIND_POLL,
                 PodSignal.message_id == old_message_id,
             )
         ).scalars().all()
+        moved = 0
         for signal in rows:
+            if (signal.bucket, signal.signal_date) in taken:
+                log.warning(
+                    f"launcher row {signal.id} stays on {old_message_id}: "
+                    f"{signal.bucket} on {signal.signal_date} is already on {new_message_id}"
+                )
+                continue
             signal.message_id = new_message_id
+            moved += 1
         session.commit()
-        return len(rows)
+        return moved
 
 
 def _open_poll_signal_for_slot(
@@ -294,6 +318,21 @@ def _open_poll_signal_for_slot(
                 signal.set_code = set_code
                 return signal
     return None
+
+
+def _expired_poll_signal_exists(
+    session: Session, time_key: str, set_code: str, signal_date: date,
+) -> bool:
+    """Whether this format of this slot already closed unfired on that day, on whichever message it hangs.
+    A fired row is not this: its pod can be canceled, and the slot then re-opens on a fresh row."""
+    return session.execute(
+        select(PodSignal.id).where(
+            PodSignal.kind == pod_signals.KIND_POLL,
+            PodSignal.bucket == pod_signals.named_bucket_key(time_key, set_code),
+            PodSignal.signal_date == signal_date,
+            PodSignal.status == pod_signals.STATUS_EXPIRED,
+        ).limit(1)
+    ).scalar_one_or_none() is not None
 
 
 def roll_slot_forward_sync(
@@ -1088,12 +1127,14 @@ def launcher_message_id_for_date_sync(signal_date: date) -> str | None:
     return board[1] if board else None
 
 
-def past_launcher_dates_sync(before_date: date, since_date: date) -> list[date]:
-    """Launcher posting days in [since_date, before_date) — the recently-posted launchers a new day's
-    post closes out. Bounded to a short window so each daily post re-touches only a handful, never the
-    full history."""
-    days = [day for _channel, _message, day in _launcher_boards() if since_date <= day < before_date]
-    return sorted(set(days))
+def past_launcher_boards_sync(before_date: date, since_date: date) -> list[tuple[str, str, date]]:
+    """(channel_id, message_id, posting day) per launcher board posted in [since_date, before_date) — the
+    recently-posted launchers a new day's post closes out. Bounded to a short window so each daily post
+    re-touches only a handful, never the full history.
+
+    Every board of a day, not the newest of each: a day that ended up holding two boards must not leave the
+    older one live with working buttons, which nothing else would ever come back for."""
+    return [board for board in _launcher_boards() if since_date <= board[2] < before_date]
 
 
 def launcher_ref_for_date_sync(signal_date: date) -> tuple[str, str] | None:
