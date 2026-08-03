@@ -138,7 +138,7 @@ Session ids (`pod_drafts.py`): on-demand sessions are `LLU-<Mon>-<Day>-<rand4>` 
 | `pod_underfill_check_hours` | "3,2,1" | underfill nudge beats before start |
 | `pod_underfill_ping_hours` | "1" | which beat may ping the slot role |
 | `pod_underfill_ping_close_gap` | 2 | only ping when within this many of the aim |
-| `pod_draft_pick_timer` | 60 | default Draftmancer pick timer (75 for older sets) |
+| `pod_draft_pick_timer` | 60 | default Draftmancer pick timer; older sets and cubes override it in `pod_format.py` |
 | `pod_draft_channel_id` | — | coordination channel (must be Text, not Announcement) |
 
 Slot post hours and bucket times live in `pod_signals.py`; lead times (`REMINDER_LEAD_MIN` = 10, `ROSTER_REMINDER_LEAD_MIN` = 60) live beside the tasks that use them.

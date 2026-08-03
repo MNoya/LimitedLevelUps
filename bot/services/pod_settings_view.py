@@ -286,9 +286,8 @@ class PodSettingsView(ui.View):
         await self._render(interaction, notices)
 
     async def _couple_pick_timer(self, interaction: discord.Interaction) -> tuple[str, str] | None:
-        """Move the pick timer to the switched-to format's default (75s for an older set, the standard
-        clock for the latest set or a cube), so both controls track the format together. No-op when the
-        timer control is absent or already at the target."""
+        """Move the pick timer to the switched-to format's default, so both controls track the format
+        together. No-op when the timer control is absent or already at the target."""
         if self.on_timer is None:
             return None
         target = default_pick_timer_for(self.current_code, standard=settings.pod_draft_pick_timer)

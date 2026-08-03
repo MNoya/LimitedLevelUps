@@ -91,12 +91,11 @@ def is_custom(code: str | None) -> bool:
     return bool(code) and code.upper() in CUSTOM_FORMATS
 
 
-def is_latest_or_cube(code: str | None) -> bool:
-    """Whether `code` is the latest set or a registered cube — the formats players draft most often."""
+def is_latest_set(code: str | None) -> bool:
+    """Whether `code` is the set currently on rotation. An absent code means a pod on the default set."""
     if not code:
         return True
-    upper = code.upper()
-    return upper == active_set_code().upper() or is_custom(upper)
+    return code.upper() == active_set_code().upper()
 
 
 def cube_id_for(code: str) -> str | None:
@@ -201,11 +200,14 @@ def pick_2_offered_for(code: str | None) -> bool:
 
 
 OLDER_SET_PICK_TIMER = 75
+CUBE_PICK_TIMER = 75
 
 
 def default_pick_timer_for(code: str | None, *, standard: int | None = None) -> int | None:
-    """Pick timer a pod defaults to when it switches to `code`: an older real set gets a longer 75s
-    clock since players are rustier on it; the latest set and cubes fall back to `standard`."""
-    if is_latest_or_cube(code):
+    """Pick timer a pod defaults to when it switches to `code`: only the latest set uses `standard`.
+    Older sets and cubes each carry their own longer default, so they can move apart later."""
+    if is_latest_set(code):
         return standard
+    if is_custom(code):
+        return CUBE_PICK_TIMER
     return OLDER_SET_PICK_TIMER
