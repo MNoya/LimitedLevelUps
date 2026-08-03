@@ -43,7 +43,7 @@ from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
 from bot.services import championship, pod_format, pod_launch
-from bot.services.pod_active import ACTIVE_POD_MANAGERS
+from bot.services.pod_active import ACTIVE_POD_MANAGERS, ACTIVE_TABLE_VIEWS
 from bot.services.pod_roles import grant_pod_drafters
 from bot.services.pod_draft_manager import (
     discord_ids_for_names_sync,
@@ -64,8 +64,6 @@ from bot.services.pod_slot import pod_display_name
 
 
 log = logging.getLogger(__name__)
-
-ACTIVE_TABLE_VIEWS: dict[str, "TableClaimView"] = {}
 
 MSG_FORMAT_TABLE_OFFER = "🔥 **{format}** has enough votes for a second table. Click Join to fire it."
 MSG_TABLE_FORMAT_BUTTON = "Join {format} Table"

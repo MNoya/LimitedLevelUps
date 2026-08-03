@@ -2,7 +2,8 @@
 
 Answers one question: which pod is happening now, and which number is real for it. A pod whose Draftmancer
 lobby is open is counted off the live socket, because the RSVP list stopped being true the moment the lobby
-opened and only the people who actually opened the tab can fill the table. A pod still gathering has no
+opened and only the people who actually opened the tab can fill the table. A second table collecting claims
+is counted off its card, which is the only place it exists until it fires. A pod still gathering has no
 session to read, so it falls back to its RSVP counts and reuses the line the scheduled nudge already posts.
 
 Discord belongs to the command module; everything here reads state and returns strings.
@@ -20,9 +21,9 @@ from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
 from bot.services import pod_launch
-from bot.services.pod_active import ACTIVE_POD_MANAGERS
+from bot.services.pod_active import ACTIVE_POD_MANAGERS, ACTIVE_TABLE_VIEWS
 from bot.services.pod_drafts import draftmancer_url_for
-from bot.services.pod_reminder_copy import RALLY_LOBBY, RALLY_LOBBY_WAITING, RALLY_QUEUE
+from bot.services.pod_reminder_copy import RALLY_LOBBY, RALLY_LOBBY_WAITING, RALLY_QUEUE, RALLY_TABLE
 from bot.services.pod_schedule import (
     SCHEDULE_TZ,
     build_recruiting_message,
@@ -37,6 +38,7 @@ KIND_LOBBY = "lobby"
 KIND_STARTED = "started"
 KIND_GATHERING = "gathering"
 KIND_QUEUE_SIGNAL = "queue"
+KIND_TABLE = "table"
 
 GATHERING_WINDOW = timedelta(hours=6)
 LATE_GRACE = timedelta(minutes=30)
@@ -46,8 +48,9 @@ PENDING_STATUSES = ("pending", "reminded")
 @dataclass(frozen=True)
 class RallyTarget:
     """One pod the rally reports. `seated` is live Draftmancer occupancy and is meaningful only for an open
-    lobby; `yes` and `maybe` are RSVP counts and are meaningful only before one exists. `event_id` is what
-    lets a posted rally be found again when its pod starts drafting."""
+    lobby; `yes` and `maybe` count RSVPs, or claims on a second table's card, and are meaningful only before
+    one exists. `event_id` is what lets a posted rally be found again when its pod starts drafting, and a
+    second table has none until its card fires."""
     kind: str
     name: str
     url: str
@@ -61,13 +64,19 @@ class RallyTarget:
 
 async def resolve_target(guild_id: str) -> RallyTarget | None:
     """The one pod `!pod` reports. Naming two asks the reader to choose instead of to fill a seat, so only
-    the most recruitable is posted: an open lobby over a pod gathering for later, and among lobbies the one
-    closest to a full table, which is the one a reader arriving now can still rescue."""
+    the most recruitable is posted: an open lobby with seats left, then a second table collecting claims,
+    then a pod gathering for later. A full lobby and a draft already running come last, so the pod that
+    filled up never hides the table its leftovers are trying to fire."""
     live = live_lobby_targets(guild_id)
-    if live:
+    if live and live[0].kind == KIND_LOBBY and not lobby_is_full(live[0]):
         return live[0]
+    tables = forming_table_targets()
+    if tables:
+        return tables[0]
     gathering = await asyncio.to_thread(gathering_targets_sync, guild_id)
-    return gathering[0] if gathering else None
+    if gathering:
+        return gathering[0]
+    return live[0] if live else None
 
 
 def live_lobby_targets(guild_id: str) -> list[RallyTarget]:
@@ -89,6 +98,20 @@ def live_lobby_targets(guild_id: str) -> list[RallyTarget]:
             event_id=manager.event_id,
         ))
     targets.sort(key=_recruitable_first)
+    return targets
+
+
+def forming_table_targets() -> list[RallyTarget]:
+    """Every second table still collecting claims on its join card, closest to firing first. A claim card
+    lives only in memory until it fires, so no DB-backed lookup here can see one."""
+    targets = []
+    for view in ACTIVE_TABLE_VIEWS.values():
+        if view.materialized or view.superseded or view.claim_message is None:
+            continue
+        targets.append(RallyTarget(
+            KIND_TABLE, view.table_name, view.claim_message.jump_url, yes=len(view.claims),
+        ))
+    targets.sort(key=_most_claims_first)
     return targets
 
 
@@ -115,6 +138,13 @@ def build_rally_line(target: RallyTarget) -> str:
     if target.kind == KIND_QUEUE_SIGNAL:
         needed = max(1, floor - target.yes)
         return RALLY_QUEUE.format(
+            hello=emojis.prefix("chordoHello"), name=target.name, needed=needed,
+            plural=_plural(needed), seated=target.yes,
+            manat=emojis.get("manat"), jump_url=target.url,
+        )
+    if target.kind == KIND_TABLE:
+        needed = max(1, settings.pod_table_open_threshold - target.yes)
+        return RALLY_TABLE.format(
             hello=emojis.prefix("chordoHello"), name=target.name, needed=needed,
             plural=_plural(needed), seated=target.yes,
             manat=emojis.get("manat"), jump_url=target.url,
@@ -164,6 +194,10 @@ def _recruitable_first(target: RallyTarget) -> tuple[int, int]:
     if needed <= 0:
         return (1, -target.seated)
     return (0, needed)
+
+
+def _most_claims_first(target: RallyTarget) -> int:
+    return -target.yes
 
 
 def _soonest_first(target: RallyTarget) -> tuple[int, float]:

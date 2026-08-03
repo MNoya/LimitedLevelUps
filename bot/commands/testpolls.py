@@ -36,7 +36,7 @@ from bot.commands.pod_rsvp import (
     purge_native_events,
     refresh_scheduled_card,
 )
-from bot.commands.pod_table import ACTIVE_TABLE_VIEWS, offer_second_table
+from bot.commands.pod_table import offer_second_table
 from bot.commands.test_group import HALL_OF_FAME, test_group
 from sqlalchemy import delete, select
 
@@ -47,6 +47,7 @@ from bot.services import pod_format_interest as fi
 from bot.services import pod_format_schedule
 from bot.services import pod_gathering
 from bot.services import pod_launch
+from bot.services.pod_active import ACTIVE_TABLE_VIEWS
 from bot.services.pod_deck_color import format_deck_color_emojis
 from bot.services import pod_team
 from bot.services.pod_team_board import TeamBoardMember

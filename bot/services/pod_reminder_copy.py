@@ -62,6 +62,11 @@ RALLY_QUEUE = (
     "{manat} [**Sign up here**]({jump_url})"
 )
 
+RALLY_TABLE = (
+    "{hello}**{name}** needs **{needed} more player{plural}** to fire, {seated} waiting "
+    "{manat} [**Join here**]({jump_url})"
+)
+
 RALLY_NO_POD = (
     "{hello}No pod is gathering right now {manat} [**Today's Launcher**]({launcher_url})\n"
     "Use `/draft` to open one."

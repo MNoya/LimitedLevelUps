@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from bot.commands.pod_table import ACTIVE_TABLE_VIEWS, TableClaimView, _format_offer_handoff
+from bot.commands.pod_table import TableClaimView, _format_offer_handoff
+from bot.services.pod_active import ACTIVE_TABLE_VIEWS
 from bot.models import MagicSet, PodDraftEvent
 from bot.services.pod_drafts import (
     next_table_index,

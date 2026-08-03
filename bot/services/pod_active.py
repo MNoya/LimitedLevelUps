@@ -1,14 +1,19 @@
-"""Registry of active PodDraftManagers keyed by event_id.
+"""Registries of live pod state that exists only in memory, keyed by event_id.
 
-Lives in its own module so pod_draft_manager and pod_tournament can both import it without a circular dependency.
-The card-phase hook sits here for the same reason: draft start, draft done, and the champion post all re-render
-the scheduled card, and those call sites span both modules.
+Lives in its own module so pod_draft_manager and pod_tournament can both import it without a circular
+dependency. The card-phase hook sits here for the same reason: draft start, draft done, and the champion
+post all re-render the scheduled card, and those call sites span both modules.
+
+ACTIVE_TABLE_VIEWS holds the live second-table claim card per source event, keyed the same way. It sits
+next to the managers because a forming table has no event row yet, so a reader outside the command layer
+has nowhere else to find one.
 """
 from __future__ import annotations
 
 import asyncio
 
 ACTIVE_POD_MANAGERS = {}
+ACTIVE_TABLE_VIEWS = {}
 
 _CARD_PHASE_HOOK = None
 _POD_COMPLETE_HOOK = None

@@ -462,8 +462,9 @@ def render(
 def _command_lines(mock: bool) -> list[str]:
     lines = [command_line("/pod-ready", desc.POD_READY), command_line("/pod-start", desc.POD_START)]
     if mock:
-        return lines
+        return [command_line("!mock", desc.MOCK_REPOST), *lines]
     return [
+        command_line("!pod", desc.POD_RALLY),
         command_line("/link-arena", desc.LINK_ARENA_LOBBY),
         *lines,
         command_line("/report-results", desc.REPORT_RESULTS_LOBBY),

@@ -207,6 +207,8 @@ def _rally_states(thread_url: str) -> list[tuple[str, pod_rally.RallyTarget]]:
         pod_rally.KIND_GATHERING, name, thread_url, yes=6, maybe=2, event_time=slot)))
     states.append(("Open queue, no start time", pod_rally.RallyTarget(
         pod_rally.KIND_QUEUE_SIGNAL, "MSH Aug 1 Pod Draft Queue", thread_url, yes=3)))
+    states.append(("Second table collecting claims", pod_rally.RallyTarget(
+        pod_rally.KIND_TABLE, f"{name} - Table 2", thread_url, yes=2)))
     states.append(("Draft already running", pod_rally.RallyTarget(
         pod_rally.KIND_STARTED, name, thread_url, seated=8)))
     return states

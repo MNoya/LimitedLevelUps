@@ -1,9 +1,10 @@
 """`!pod` — put the pod in front of whoever is reading, in whatever form the channel needs.
 
-Inside a pod thread it moves the lobby card back to the bottom, for a lobby that chat has buried. Anywhere
-else it posts one line per live pod: how many seats are missing, how many players are already sitting in
-Draftmancer, and where to join. Open to everyone and nothing is pinged. The message is left up, since
-anything a player writes after `!pod` is their own words and the answer posts under it either way.
+Inside a pod thread, a mock's included, it moves the lobby card back to the bottom, for a lobby that chat has
+buried. Anywhere else it posts one line per live pod: how many seats are missing, how many players are
+already sitting in Draftmancer, and where to join. Open to everyone and nothing is pinged. The message is
+left up, since anything a player writes after `!pod` is their own words and the answer posts under it either
+way.
 """
 from __future__ import annotations
 
@@ -26,7 +27,6 @@ from bot.services.pod_schedule import build_underfill_fired_message
 
 log = logging.getLogger(__name__)
 
-MSG_POD_USE_MOCK = "This is a mock draft. Use `!mock` to repost its card."
 MSG_POD_ALREADY_FULL = "That pod already has a full table."
 
 NOTICE_LIFETIME_S = 15
@@ -58,10 +58,10 @@ async def setup(bot: commands.Bot) -> None:
 async def _answer_from_pod_channel(ctx: commands.Context, manager) -> bool:
     """Whether the pod bound to this channel answered on its own. A pod with no card up has nothing to move,
     so it says nothing and lets the rally answer instead: a lobby that is drafting, finished, or left over
-    from a test still leaves someone asking a real question about the pods that are live now."""
-    if manager.kind == "mock":
-        await ctx.send(MSG_POD_USE_MOCK, delete_after=NOTICE_LIFETIME_S)
-        return True
+    from a test still leaves someone asking a real question about the pods that are live now.
+
+    A mock's thread card bumps like any other. Its channel card is what `!mock` moves, and moving both off
+    one command would put a card in front of two audiences the caller can only see one of."""
     if not await manager.bump_lobby_card():
         return False
     audit.event("pod_card_bump", user_id=str(ctx.author.id), event_id=manager.event_id)
