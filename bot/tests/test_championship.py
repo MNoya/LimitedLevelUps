@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 
+from bot.commands.pod_schedule import marked_days_line
 from bot.commands.test_group import HALL_OF_FAME
 from bot.models import DraftEvent, MagicSet, Player, PlayerStats, PodChampionshipSeed, PodDraftEvent
 from bot.services import championship
@@ -10,6 +11,7 @@ from bot.services.championship import (
     plan_for,
 )
 from bot.services.player_stats import FrozenSeed, rank_ordered_names, seed_attendees
+from bot.services.pod_format_schedule import calendar_days
 from bot.sets import RELEASE_TZ
 
 
@@ -100,6 +102,17 @@ def test_plan_for_active_set_anchors_to_its_successor():
     assert plan.event_at.astimezone(RELEASE_TZ).date() == date(2026, 8, 1)
     assert plan.event_at.astimezone(RELEASE_TZ).hour == 14
     assert plan.create_on == date(2026, 8, 1) - timedelta(days=CREATION_LEAD_DAYS)
+
+
+def test_schedule_caption_drops_the_championship_once_it_has_been_played():
+    event_at = datetime(2026, 8, 1, 14, 0, tzinfo=RELEASE_TZ)
+    week = calendar_days(date(2026, 7, 31), 1)
+
+    before = marked_days_line(None, week, datetime(2026, 7, 31, 12, 0, tzinfo=RELEASE_TZ), event_at)
+    after = marked_days_line(None, week, datetime(2026, 8, 2, 12, 0, tzinfo=RELEASE_TZ), event_at)
+
+    assert before != ""
+    assert after == ""
 
 
 def test_plan_is_none_without_a_registered_successor():

@@ -83,7 +83,7 @@ def build_schedule_view(guild: discord.Guild | None, now: datetime, weeks: int,
     if extras:
         container.add_item(discord.ui.TextDisplay(extras))
     container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=IMAGE_URL)))
-    marked = marked_days_line(guild, days, championship_at)
+    marked = marked_days_line(guild, days, now, championship_at)
     if marked:
         container.add_item(discord.ui.TextDisplay(marked))
     view = discord.ui.LayoutView()
@@ -150,12 +150,14 @@ def _days_label(weekends: set[bool]) -> str:
     return ""
 
 
-def marked_days_line(guild: discord.Guild | None, days: list[date], championship_at: datetime | None) -> str:
+def marked_days_line(guild: discord.Guild | None, days: list[date], now: datetime,
+                     championship_at: datetime | None) -> str:
     """Caption for the days the calendar flags, soonest first, in the same two columns the rows above the
     image use. These items run longer, so they take a narrower gap to land under the same column. Empty in
-    an ordinary span, where every day is the daily set plus whatever its cell shows."""
+    an ordinary span, where every day is the daily set plus whatever its cell shows. A played championship
+    keeps its calendar crown but leaves the caption, where its relative timestamp would read as upcoming."""
     lines = []
-    if championship_at is not None and championship_at.date() in days:
+    if championship_at is not None and championship_at > now and championship_at.date() in days:
         lines.append(MSG_CHAMPIONSHIP.format(
             role=role_mention(guild, SET_CHAMPION_ROLE_NAME), unix=int(championship_at.timestamp()),
         ))
