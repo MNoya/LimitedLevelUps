@@ -5,6 +5,9 @@ localize stays text. An embed rather than Components V2: mobile Pins, search res
 render content and embeds only, so a V2 layout shows as an empty message everywhere it is previewed. The
 cost is the set-release note, which an embed can only place above the calendar it annotates.
 
+The heading opens the description instead of filling `title`, which takes no markdown: only the body can
+carry a heading level, and only there does the link stop exactly where its text does.
+
 The slot line reads off the poll buckets and answers with each slot's next start, so a call after midnight
 names today's pods without the reader converting anything out of ET.
 """
@@ -33,7 +36,7 @@ from bot.services.pod_schedule_image import render_calendar_png
 from bot.services.pod_signals import WEEKDAY_BUCKETS, is_weekend, next_lane_start
 from bot.sets import active_set_code, release_instant, set_name_for
 
-MSG_TITLE = "🗓️ Pod Format Schedule"
+MSG_HEADING = "## 🗓️ [Pod Draft Format Schedule]({url}) 🚀"
 MSG_SLOT = "{emoji} {role} **<t:{unix}:t>**"
 MSG_DAILY_SET = "{symbol} {role} **every day**"
 MSG_EXTRA_FORMAT = "{symbol} {role} **{days}**"
@@ -87,15 +90,15 @@ def build_schedule_embed(guild: discord.Guild | None, now: datetime, weeks: int,
     championship = championship_line(guild, days, now, championship_at)
     if championship:
         lines.append(championship)
-    embed = discord.Embed(title=MSG_TITLE, url=coordination_url(guild), description=LINE_GAP.join(lines),
-                          color=discord.Color.green())
+    heading = MSG_HEADING.format(url=coordination_url(guild))
+    embed = discord.Embed(description=f"{heading}\n{LINE_GAP.join(lines)}", color=discord.Color.green())
     embed.set_image(url=IMAGE_URL)
     return embed
 
 
 def coordination_url(guild: discord.Guild | None) -> str:
-    """The title links to the channel the pods actually run in, which is the one route out of the schedule
-    that survives a pin preview — those render the embed but drop any button under it. A DM carries no guild
+    """The heading links to the channel the pods actually run in, which is the one route out of the schedule
+    that survives a pin preview: those render the embed but drop any button under it. A DM carries no guild
     of its own, so it lands on the production server."""
     guild_id = guild.id if guild is not None else PRODUCTION_GUILD_ID
     return CHANNEL_URL.format(guild_id=guild_id, channel_id=settings.pod_draft_channel_id)
