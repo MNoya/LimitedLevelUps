@@ -3,7 +3,8 @@ announcement the draft posts back into the channel.
 
 Renders through the real `build_mock_card`, so the copy, colors, and button sets are the ones a live
 mock draft posts. Render-only: no event row, no Draftmancer session, no thread. The `!mock` repost is
-previewed as an open card with its Thread button pointed at the channel it posts in.
+previewed as an open card with its Thread button pointed at the channel it posts in. Cancellation shows
+both closers: a player pressing Cancel Draft, and the inactivity sweep standing a quiet lobby down.
 """
 from __future__ import annotations
 
@@ -43,24 +44,25 @@ async def setup(bot: commands.Bot) -> None:
         early = [*seated[:2], ("unlinked_seat", None)]
         repost_thread = ctx.channel.jump_url
         cases = (
-            (STATE_OPENING, [], None, None),
-            (STATE_OPEN, [], None, None),
-            (STATE_OPEN, early, None, None),
-            (STATE_OPEN, early, None, repost_thread),
-            (STATE_OPEN, [*seated, ("chapin", "Chapin")], None, None),
-            (STATE_DRAFTING, [*seated, ("chapin", "Chapin")], None, None),
-            (STATE_COMPLETE, [*seated, ("chapin", "Chapin")], None, None),
-            (STATE_CANCELED, early, HALL_OF_FAME[0], None),
+            (STATE_OPENING, [], None, False, None),
+            (STATE_OPEN, [], None, False, None),
+            (STATE_OPEN, early, None, False, None),
+            (STATE_OPEN, early, None, False, repost_thread),
+            (STATE_OPEN, [*seated, ("chapin", "Chapin")], None, False, None),
+            (STATE_DRAFTING, [*seated, ("chapin", "Chapin")], None, False, None),
+            (STATE_COMPLETE, [*seated, ("chapin", "Chapin")], None, False, None),
+            (STATE_CANCELED, early, HALL_OF_FAME[0], False, None),
+            (STATE_CANCELED, [], None, True, None),
         )
         session_url = draftmancer_url_for(SESSION_ID)
         mention = role_mention(ctx.guild, MOCK_DRAFT_ROLE_NAME)
-        for state, roster, canceled_by, thread_url in cases:
+        for state, roster, canceled_by, canceled_idle, thread_url in cases:
             content, embed, view = build_mock_card(
                 event_name=event_name, set_code=code, session_id=SESSION_ID, session_url=session_url,
                 site_url=pod_page_url(event_name), roster=roster,
                 max_players=settings.pod_draft_max_players, state=state, role_mention=mention,
                 spectate_url=f"{session_url}&spectate=preview", canceled_by=canceled_by,
-                thread_url=thread_url,
+                canceled_idle=canceled_idle, thread_url=thread_url,
             )
             await ctx.send(content=content, embed=embed, view=view, allowed_mentions=MOCK_CARD_QUIET)
         await ctx.send(

@@ -47,6 +47,12 @@ DescriptionApply = Callable[[discord.Interaction, str | None], Awaitable[None]]
 
 LINK_SEAT_PROMPT = "Pick the unlinked Draftmancer seat to assign:"
 
+CANCEL_PROMPT = (
+    "This permanently deletes **{name}** — participants, matches, replays, and the leaderboard page. "
+    "This can't be undone."
+)
+CANCEL_PROMPT_MOCK = "This closes **{name}** and deletes its draft page"
+
 TIMER_MIN = 10
 TIMER_MAX = 600
 
@@ -134,7 +140,7 @@ class PodSettingsView(ui.View):
                  on_reschedule: Apply | None = None,
                  on_description: DescriptionApply | None = None, current_description: str | None = None,
                  on_closed_decklist: Apply | None = None, current_closed_decklist: bool = False,
-                 event_name: str | None = None,
+                 event_name: str | None = None, mock: bool = False,
                  notice_channel: discord.abc.Messageable | None = None) -> None:
         super().__init__(timeout=300)
         self.notice_channel = notice_channel
@@ -166,6 +172,7 @@ class PodSettingsView(ui.View):
         self.on_closed_decklist = on_closed_decklist
         self.current_closed_decklist = current_closed_decklist
         self.event_name = event_name
+        self.mock = mock
         if on_format is not None:
             self.add_item(_FormatSetting(current_code))
         if on_pairing is not None:
@@ -243,7 +250,7 @@ class PodSettingsView(ui.View):
             on_description=self.on_description, current_description=self.current_description,
             on_closed_decklist=self.on_closed_decklist,
             current_closed_decklist=self.current_closed_decklist,
-            event_name=self.event_name,
+            event_name=self.event_name, mock=self.mock,
             notice_channel=self.notice_channel,
         ))
         channel = self.notice_channel or interaction.channel
@@ -693,9 +700,9 @@ class _CancelDraftButton(ui.Button):
     async def callback(self, interaction: discord.Interaction) -> None:
         view: PodSettingsView = self.view
         event_name = view.event_name or "this pod draft"
+        prompt = CANCEL_PROMPT_MOCK if view.mock else CANCEL_PROMPT
         await interaction.response.send_message(
-            f"This permanently deletes **{event_name}** — participants, matches, replays, and the "
-            "leaderboard page. This can't be undone.",
+            prompt.format(name=event_name),
             view=_CancelConfirmView(view.on_cancel, event_name, view.notice_channel),
             ephemeral=True,
         )

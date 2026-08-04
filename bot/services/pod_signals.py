@@ -181,3 +181,10 @@ def should_fire(member_count: int, threshold: int) -> bool:
 
 def teardown_at(last_activity: datetime, minutes: int) -> datetime:
     return last_activity + timedelta(minutes=minutes)
+
+
+def inactivity_window_text(minutes: int) -> str:
+    if minutes % 60 == 0:
+        hours = minutes // 60
+        return f"{hours} hour" if hours == 1 else f"{hours} hours"
+    return f"{minutes} minutes"

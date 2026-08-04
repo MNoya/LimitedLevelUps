@@ -1,3 +1,4 @@
+import asyncio
 import re
 from datetime import date, datetime, timezone
 from uuid import uuid4
@@ -5,6 +6,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
+from bot.commands.pod_draft import build_pod_settings_view
 from bot.config import settings
 from bot.models import MagicSet, Player, PodDraftEvent, PodDraftParticipant
 from bot.services.pod_drafts import (
@@ -25,6 +27,24 @@ from bot.sets import (
 
 
 MOCK_SESSION_RE = re.compile(r"LLU-([A-Z]+)-Mock-(\d+)-[a-z]{4}")
+
+
+class _StubBot:
+    """Enough bot for the Settings panel: it resolves the pod's thread as the notice channel."""
+
+    def get_channel(self, channel_id: int) -> object:
+        return object()
+
+
+def _session_factory(session):
+    class _Ctx:
+        def __enter__(self):
+            return session
+
+        def __exit__(self, *exc):
+            return False
+
+    return lambda: _Ctx()
 
 
 def _seed_player(session, discord_id="901", username="cap", display_name="Cap"):
@@ -170,6 +190,36 @@ def test_manager_imports_finalize_mock_event():
     from bot.services import pod_draft_manager, pod_drafts
 
     assert pod_draft_manager.finalize_mock_event is pod_drafts.finalize_mock_event
+
+
+@pytest.mark.parametrize(
+    "kind, socket_status, is_owner, offers_cancel",
+    [
+        ("mock", "connected", False, True),
+        ("mock", "connected", True, True),
+        ("mock", "complete", False, False),
+        ("mock", "complete", True, True),
+        ("tournament", "connected", False, False),
+        ("tournament", "connected", True, True),
+    ],
+    ids=["mock-anyone", "mock-owner", "drafted-anyone", "drafted-owner", "pod-anyone", "pod-owner"],
+)
+def test_cancel_is_open_to_everyone_on_a_mock_lobby_until_the_draft_finishes(
+    session, monkeypatch, kind, socket_status, is_owner, offers_cancel,
+):
+    event = PodDraftEvent(
+        event_date=date(2026, 6, 23), event_time=datetime(2026, 6, 23, tzinfo=timezone.utc),
+        set_code="MSH", name="MSH Mock Draft 1", draftmancer_session="LLU-MSH-Mock-1",
+        discord_thread_id="55501", socket_status=socket_status, kind=kind, current_round=None,
+    )
+    session.add(event)
+    session.commit()
+    for module in ("pod_drafts", "pod_launch", "pod_tournament"):
+        monkeypatch.setattr(f"bot.services.{module}.SessionLocal", _session_factory(session))
+
+    view = asyncio.run(build_pod_settings_view(_StubBot(), event.id, is_owner=is_owner))
+
+    assert (view.on_cancel is not None) == offers_cancel
 
 
 @pytest.mark.parametrize(

@@ -7,6 +7,10 @@ required, no matches are paired. Anyone can run it; any registered set (includin
 like MSH) can be drafted.
 
 `!mock` reposts the open lobby's card at the bottom of the channel, for when chat buries it.
+
+A lobby is closed by anyone from the pod Settings panel, or by the manager's own inactivity timer once
+nobody has entered or left the Draftmancer session for `pod_mock_inactivity_minutes`. Both delete the
+event, so a channel never accumulates lobbies that were never drafted.
 """
 from __future__ import annotations
 

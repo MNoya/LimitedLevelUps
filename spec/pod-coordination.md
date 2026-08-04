@@ -117,6 +117,10 @@ Once 8 players are in the lobby, the bot offers a ready check in the thread. Unl
 
 When the draft ends, the decks and the draft log are saved to the website. Nothing is paired, nothing is reported, and no pod points are earned.
 
+A lobby nobody joins does not sit there. Anyone can close a mock draft from the pod Settings panel, and the bot closes one on its own after an hour with nobody entering or leaving the Draftmancer lobby. The card in the channel says which of the two closed it, and a lobby that timed out says so in its thread and archives it. Start a new one with `/mock-draft` whenever you want.
+
+A draft under way is never closed by the timer, and once the draft ends the button is gone: the decks and the draft log on the website stay put.
+
 ## Closed decklists
 
 Some pods hide their decklists and draft log on the website until the pod finishes, so nobody can scout an opponent's cards mid-tournament. Standings, pairings, and round results stay visible the whole time. Set Championship pods start closed; a mod can turn Closed Decklist on or off for any pod from the pod Settings panel.

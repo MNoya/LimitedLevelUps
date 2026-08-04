@@ -916,6 +916,16 @@ def load_event_kind_sync(event_id: str) -> str:
         ).scalar_one_or_none() or "tournament"
 
 
+def load_event_drafted_sync(event_id: str) -> bool:
+    """Whether the picks are done, read from the row because it outlives the manager: the bot leaves the
+    Draftmancer session as soon as a mock draft is finalized, so its in-memory flags are already gone."""
+    with SessionLocal() as session:
+        status = session.execute(
+            select(PodDraftEvent.socket_status).where(PodDraftEvent.id == event_id)
+        ).scalar_one_or_none()
+    return status in FINALIZED_STATUSES
+
+
 def load_event_closed_decklist_sync(event_id: str) -> bool:
     """Whether the pod hides its decklists and draft log on the website until it finishes."""
     with SessionLocal() as session:

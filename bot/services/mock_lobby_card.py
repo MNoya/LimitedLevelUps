@@ -22,7 +22,9 @@ import discord
 from bot import emojis
 from bot.commands.messages import (
     MSG_MOCK_CARD_CANCELED,
+    MSG_MOCK_CARD_CANCELED_IDLE,
     MSG_MOCK_CARD_CANCELED_NO_ACTOR,
+    MSG_MOCK_CARD_CLOSES,
     MSG_MOCK_CARD_COMPLETE,
     MSG_MOCK_CARD_CONTENT,
     MSG_MOCK_CARD_DISCORD_NAME,
@@ -45,6 +47,7 @@ from bot.discord_helpers import quote_block
 from bot.services.lobby_embed import event_title
 from bot.services.pod_format import is_custom
 from bot.services.pod_join_button import build_mock_join_view
+from bot.services.pod_signals import inactivity_window_text
 from bot.sets import is_cube_board_code
 
 
@@ -81,12 +84,13 @@ def build_mock_card(
     state: str = STATE_OPEN,
     spectate_url: str | None = None,
     canceled_by: str | None = None,
+    canceled_idle: bool = False,
     thread_url: str | None = None,
 ) -> tuple[str, discord.Embed, discord.ui.View | None]:
     """The card as (content, embed, view). `roster` is Draftmancer session users as (arena_name,
     linked_display_name_or_None), the same shape the in-thread lobby card renders. A canceled card drops
     the seat list and the site link: nobody drafted, and cancelling deletes the event row, which takes
-    its page with it.
+    its page with it. `canceled_idle` names the inactivity sweep as the closer, since no player did it.
 
     `thread_url` adds a button into the draft thread, and is passed by the `!mock` repost only: the
     anchor has its thread hanging off it, while a repost is a plain message with no way in.
@@ -95,7 +99,7 @@ def build_mock_card(
     empty session first its owner, so a player reaching the lobby before the bot would take it."""
     embed = discord.Embed(
         title=event_title(set_code, card_name(event_name)),
-        description=_description(state, session_url, canceled_by),
+        description=_description(state, session_url, canceled_by, canceled_idle),
         color=_COLORS.get(state, discord.Color.green()),
     )
     thumbnail = set_symbol_url(set_code)
@@ -112,7 +116,7 @@ def build_mock_card(
             inline=False,
         )
     if state in (STATE_OPENING, STATE_OPEN):
-        embed.set_footer(text=MSG_MOCK_CARD_DISCORD_NAME)
+        embed.set_footer(text=f"{MSG_MOCK_CARD_DISCORD_NAME}\n{_closes_line()}")
     content = _content(state, role_mention, seated=len(roster), max_players=max_players)
     return content, embed, _view(state, session_id, site_url, spectate_url, thread_url)
 
@@ -149,12 +153,17 @@ def _seat_label(state: str) -> str:
     return MSG_MOCK_CARD_DRAFTERS
 
 
-def _description(state: str, session_url: str, canceled_by: str | None) -> str:
+def _closes_line() -> str:
+    """The window an open lobby stands down after, so a card nobody answers reads as temporary."""
+    return MSG_MOCK_CARD_CLOSES.format(window=inactivity_window_text(settings.pod_mock_inactivity_minutes))
+
+
+def _description(state: str, session_url: str, canceled_by: str | None, canceled_idle: bool) -> str:
     """The card's own line about where the lobby is. An open lobby shows the link instead: the content
     line above already asks for drafters, and the link is the only thing left to act on."""
     if state == STATE_OPEN:
         return session_url
-    phase = _phase_line(state, canceled_by)
+    phase = _phase_line(state, canceled_by, canceled_idle)
     return f"### {phase[:1].upper()}{phase[1:]}"
 
 
@@ -167,14 +176,14 @@ def _content(state: str, role_mention: str, *, seated: int, max_players: int) ->
     return MSG_MOCK_CARD_CONTENT.format(role=role_mention, state=_open_line(seated, max_players))
 
 
-def _phase_line(state: str, canceled_by: str | None) -> str:
+def _phase_line(state: str, canceled_by: str | None, canceled_idle: bool) -> str:
     """Where a lobby that is not taking drafters stands. Written lowercase because its other home is
     mid-sentence, after the role tag on the content line; the card heading capitalizes it."""
     return {
         STATE_OPENING: MSG_MOCK_CARD_OPENING,
         STATE_DRAFTING: MSG_MOCK_CARD_DRAFTING,
         STATE_COMPLETE: MSG_MOCK_CARD_COMPLETE,
-        STATE_CANCELED: _canceled_line(canceled_by),
+        STATE_CANCELED: _canceled_line(canceled_by, canceled_idle),
     }[state]
 
 
@@ -191,7 +200,10 @@ def _open_line(seated: int, max_players: int) -> str:
     return MSG_MOCK_CARD_NEEDS.format(count=missing)
 
 
-def _canceled_line(canceled_by: str | None) -> str:
+def _canceled_line(canceled_by: str | None, canceled_idle: bool) -> str:
+    if canceled_idle:
+        window = inactivity_window_text(settings.pod_mock_inactivity_minutes)
+        return MSG_MOCK_CARD_CANCELED_IDLE.format(window=window)
     if canceled_by is None:
         return MSG_MOCK_CARD_CANCELED_NO_ACTOR
     return MSG_MOCK_CARD_CANCELED.format(actor=canceled_by)

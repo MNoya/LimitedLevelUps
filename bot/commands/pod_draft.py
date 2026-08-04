@@ -40,6 +40,7 @@ from bot.services.pod_drafts import (
     is_championship,
     load_event_closed_decklist_sync,
     load_event_description_sync,
+    load_event_drafted_sync,
     load_event_id_by_name_sync,
     load_event_id_by_thread_sync,
     load_event_kind_sync,
@@ -702,7 +703,12 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
     """Settings panel wired for `event_id`. Shared by /pod-settings and the lobby Settings button.
     Link Players appears once a Draftmancer session is live and stays through the draft so an unlinked
     seat can be fixed mid-draft; the format/pairing/seats/pick-options controls and Kick Player are
-    pre-draft only and drop away once drafting starts. Cancel Draft is bot-owner only.
+    pre-draft only and drop away once drafting starts.
+
+    Cancel Draft is bot-owner only on a tournament pod, whose signups and matches belong to the people who
+    organized it. A mock draft opens it to everyone until the picks are done: anyone can open a lobby, so
+    anyone can close one, but a finished draft has decks and logs on the site that nobody else's click
+    should take down.
 
     A mock draft plays no matches and opens its draft logs to everyone the moment the draft ends, so
     Pairings and Closed Decklist are left off its panel."""
@@ -711,6 +717,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
     current_seating = await asyncio.to_thread(load_event_seating_mode_sync, event_id)
     event_name = await asyncio.to_thread(load_event_name_sync, event_id)
     mock = await asyncio.to_thread(load_event_kind_sync, event_id) == "mock"
+    drafted = await asyncio.to_thread(load_event_drafted_sync, event_id)
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     drafting = manager is not None and (manager.drafting or manager.draft_complete)
     scheduled = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id) is not None
@@ -784,7 +791,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
             await open_manage_rounds(inter, event_id)
 
     on_cancel = None
-    if is_owner:
+    if is_owner or (mock and not drafted):
         async def on_cancel(inter: discord.Interaction) -> str | None:
             return await cancel_pod_event(event_id, actor=actor_label(inter))
 
@@ -821,7 +828,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
         on_description=on_description, current_description=current_description,
         on_closed_decklist=None if mock else on_closed_decklist,
         current_closed_decklist=current_closed_decklist,
-        event_name=event_name,
+        event_name=event_name, mock=mock,
         notice_channel=notice_channel,
     )
 

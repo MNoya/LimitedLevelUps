@@ -52,6 +52,7 @@ from bot.services.pod_signals import (
     SCHEDULE_TZ,
     STATUS_FIRED,
     bucket_for_lane,
+    inactivity_window_text,
     next_lane_start,
     should_fire,
     slot_role_name_for_event_time,
@@ -224,13 +225,6 @@ def _queue_title(role_mention: str | None, set_code: str | None) -> str:
     role is itself named "Pod Draft Queue", so its mention doubles as the label and the ping."""
     code = (set_code or active_set_code()).upper()
     return f"{format_display(code)} {role_mention or QUEUE_TITLE} {fi.format_emoji(code)}"
-
-
-def inactivity_window_text(minutes: int) -> str:
-    if minutes % 60 == 0:
-        hours = minutes // 60
-        return f"{hours} hour" if hours == 1 else f"{hours} hours"
-    return f"{minutes} minutes"
 
 
 def queue_inactivity_close_reason() -> str:

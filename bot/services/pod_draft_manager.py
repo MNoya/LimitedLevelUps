@@ -26,6 +26,7 @@ from bot import emojis
 from bot.commands.messages import (
     MSG_BOT_RECONNECTED,
     MSG_LOBBY_FULL_PROMPT,
+    MSG_MOCK_CLOSED_IDLE,
     MSG_MOCK_COMPLETE,
     MSG_MOCK_COMPLETE_CHANNEL,
 )
@@ -102,6 +103,7 @@ from bot.services.pod_drafts import (
     seed_event_participants,
     update_event_format,
 )
+from bot.services.pod_signals import inactivity_window_text
 from bot.services.pod_slot import team_aware_pod_name
 from bot.services.pod_team_flow import assign_teams_at_draft_start, load_teams_sync
 from bot.services.pod_tournament import (
@@ -264,17 +266,23 @@ def notify_seeding_repost(bot, event_id: str) -> None:
         asyncio.create_task(_SEEDING_REPOST_HOOK(bot, event_id))
 
 
-async def cancel_pod_event(event_id: str, *, actor: str) -> str | None:
+async def cancel_pod_event(event_id: str, *, actor: str | None = None, idle: bool = False) -> str | None:
     """Tear down a pod draft entirely: cancel pending tournament tasks, disconnect the manager, and
     delete the event row — the cascade drops participants, matches, replays, and DM trackers, which
-    also removes the leaderboard pod page."""
-    log.warning(f"pod-cancel: {actor} deleting event {event_id}")
+    also removes the leaderboard pod page.
+
+    `idle` is the inactivity sweep closing a mock lobby nobody answered: no actor pressed anything, so
+    the card names the window instead and the thread stands down with it."""
+    log.warning(f"pod-cancel: {actor or 'inactivity'} deleting event {event_id}")
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     if manager is not None:
         for task in (manager.grace_task, manager.championship_task):
             if task is not None and not task.done():
                 task.cancel()
-        await manager.mark_canceled(actor)
+        if idle:
+            await manager.stand_down_idle_lobby()
+        else:
+            await manager.mark_canceled(actor)
         await manager.disconnect_safely()
     if _POD_CANCEL_HOOK is not None:
         await _POD_CANCEL_HOOK(event_id)
@@ -309,6 +317,9 @@ class PodDraftManager:
         self._mock_anchor_message: "discord.Message | None" = None
         self._mock_repost_message: "discord.Message | None" = None
         self.canceled_by: str | None = None
+        self.canceled_idle = False
+        self._mock_idle_task: asyncio.Task | None = None
+        self._mock_lobby_signature: tuple[str, ...] | None = None
         self._thread_added_ids: set[str] = set()
         self.rsvps_yes: list[str] = list(rsvps_yes or [])
         self.rsvps_maybe: list[str] = list(rsvps_maybe or [])
@@ -446,6 +457,7 @@ class PodDraftManager:
         )
         self._closed = True
         self._cancel_end_watchdog()
+        self._cancel_mock_idle_timer()
         try:
             if self.sio.connected:
                 await self.sio.disconnect()
@@ -501,6 +513,8 @@ class PodDraftManager:
                     break
         if self.bot_user_id is not None and not self.is_owner and not self.drafting:
             asyncio.create_task(self._claim_ownership_and_apply_settings())
+
+        self._note_mock_lobby_activity()
 
         await self._refresh_lobby_status()
 
@@ -1332,7 +1346,8 @@ class PodDraftManager:
             session_url=self.draftmancer_url, site_url=pod_page_url(self.event_name),
             roster=roster, max_players=self.max_players, state=self._mock_card_state(),
             role_mention=role_mention(guild, MOCK_DRAFT_ROLE_NAME),
-            spectate_url=self.spectate_url, canceled_by=self.canceled_by, thread_url=thread_url,
+            spectate_url=self.spectate_url, canceled_by=self.canceled_by,
+            canceled_idle=self.canceled_idle, thread_url=thread_url,
         )
 
     async def _mock_cards(self) -> list[tuple["discord.Message", discord.AllowedMentions, str | None]]:
@@ -1369,6 +1384,7 @@ class PodDraftManager:
             log.warning(f"[MOCK] repost_send_failed event={self.event_id}", exc_info=True)
             return None
         self._mock_repost_message = repost
+        self._arm_mock_idle_timer()
         await asyncio.to_thread(
             record_mock_repost_sync, self.event_id, str(repost.channel.id), str(repost.id),
         )
@@ -1404,10 +1420,76 @@ class PodDraftManager:
         except discord.HTTPException:
             log.info(f"[MOCK] repost_delete_failed event={self.event_id}", exc_info=True)
 
+    def _note_mock_lobby_activity(self) -> None:
+        """Restart the inactivity clock when the Draftmancer roster actually changes. Every sessionUsers
+        broadcast lands here, so the seat signature is what decides: Draftmancer re-broadcasts the roster
+        for collection uploads and ready flags too, and those are not somebody turning up."""
+        if self.kind != "mock":
+            return
+        signature = tuple(sorted(self.non_bot_session_names()))
+        if signature == self._mock_lobby_signature:
+            return
+        self._mock_lobby_signature = signature
+        self._arm_mock_idle_timer()
+
+    def _arm_mock_idle_timer(self) -> None:
+        """Start the window over. A draft under way, a finished draft, and a closed lobby all have nothing
+        left to expire, so they hold no timer.
+
+        The deadline lives in this task rather than a scheduled job because the activity that resets it is
+        in memory too. A restart reconnects the lobby and arms a fresh window off the first roster
+        broadcast, which is the forgiving side to err on: the lobby outlives the bot going down."""
+        if self.kind != "mock":
+            return
+        self._cancel_mock_idle_timer()
+        if self._closed or self.drafting or self.draft_complete or self._mock_lobby_closed():
+            return
+        self._mock_idle_task = asyncio.create_task(self._close_mock_lobby_when_idle())
+
+    def _cancel_mock_idle_timer(self) -> None:
+        if self._mock_idle_task is not None and not self._mock_idle_task.done():
+            self._mock_idle_task.cancel()
+        self._mock_idle_task = None
+
+    async def _close_mock_lobby_when_idle(self) -> None:
+        """Sleeps out the window, then deletes the event. Drops its own handle first: the teardown disarms
+        the timer on its way through, and this task is the timer, so a held handle would cancel the close
+        half-done."""
+        await asyncio.sleep(settings.pod_mock_inactivity_minutes * 60)
+        if self._closed or self.drafting or self.draft_complete or self._mock_lobby_closed():
+            return
+        self._mock_idle_task = None
+        log.info(
+            f"[MOCK] idle_close event={self.event_id} "
+            f"minutes={settings.pod_mock_inactivity_minutes} seated={len(self.non_bot_session_names())}"
+        )
+        await cancel_pod_event(self.event_id, idle=True)
+
+    def _mock_lobby_closed(self) -> bool:
+        return self.canceled_by is not None or self.canceled_idle
+
+    async def stand_down_idle_lobby(self) -> None:
+        """Retire a mock lobby that went quiet: the card names the window that closed it, the thread says
+        so, then archives so a lobby nobody answered leaves the sidebar. Archiving is reversible, so a
+        later reply reopens the thread; the event row is deleted by the caller either way."""
+        await self.mark_canceled(idle=True)
+        thread = await self._fetch_thread()
+        if thread is None:
+            return
+        window = inactivity_window_text(settings.pod_mock_inactivity_minutes)
+        try:
+            await thread.send(MSG_MOCK_CLOSED_IDLE.format(window=window))
+        except discord.HTTPException:
+            log.info(f"[MOCK] idle_notice_failed event={self.event_id}", exc_info=True)
+        try:
+            await thread.edit(archived=True, reason="Mock draft lobby closed after inactivity")
+        except discord.HTTPException:
+            log.info(f"[MOCK] idle_archive_failed event={self.event_id}", exc_info=True)
+
     def _mock_card_state(self) -> str:
         """A lobby the bot does not hold reads as opening, not open: the card's link and Join button are
         what send players into the session, and until ownership lands the first arrival takes it."""
-        if self.canceled_by is not None:
+        if self._mock_lobby_closed():
             return STATE_CANCELED
         if self.draft_complete:
             return STATE_COMPLETE
@@ -1434,12 +1516,14 @@ class PodDraftManager:
             return None
         return self._mock_anchor_message
 
-    async def mark_canceled(self, actor: str) -> None:
+    async def mark_canceled(self, actor: str | None = None, *, idle: bool = False) -> None:
         """Flip a mock draft's anchor card to canceled before the event row goes away. Tournament pods
         retire their RSVP card through the cancel hook instead, so this is mock-only."""
         if self.kind != "mock":
             return
         self.canceled_by = actor
+        self.canceled_idle = idle
+        self._cancel_mock_idle_timer()
         roster = await self.classified_session_users()
         await self._update_mock_anchor(roster)
 
@@ -1744,6 +1828,7 @@ class PodDraftManager:
             return "Could not stop the draft — see logs."
         await asyncio.sleep(_RESTART_SETTLE_S)
         self.draft_logs = {}
+        self._arm_mock_idle_timer()
         await self._mark_socket_status("connected")
         notify_card_phase(self.bot, self.event_id)
         await self.refresh_lobby_now()
@@ -1789,6 +1874,7 @@ class PodDraftManager:
         self.drafting = True
         self.draft_cancelled = False
         self.draft_paused = False
+        self._cancel_mock_idle_timer()
         log.info(f"[DRAFT] started event={self.event_id} session_users={len(self.session_users)}")
         self._schedule_end_watchdog()
         await self._retire_lobby_full_prompt()

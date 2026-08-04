@@ -21,6 +21,9 @@ MSG_MOCK_NONE_RUNNING = "No mock draft is open right now. Start one with `/mock-
 MSG_MOCK_REPOST_FAILED = "Could not repost the mock draft card. Check that the bot can post in this channel."
 MSG_MOCK_COMPLETE = "✅ **{event_name} complete!** [**Draft Recap here**](<{url}>) {manat}"
 MSG_MOCK_COMPLETE_CHANNEL = "✅ **{event_name} complete!**"
+MSG_MOCK_CLOSED_IDLE = (
+    "🕒 **Lobby closed** after {window} of inactivity. Start a new one with `/mock-draft`"
+)
 MSG_MOCK_CARD_CONTENT = "{role} {state}"
 MSG_MOCK_CARD_OPENING = "opening the lobby..."
 MSG_MOCK_CARD_OPEN = "looking for drafters"
@@ -31,6 +34,8 @@ MSG_MOCK_CARD_DRAFTING = "drafting now"
 MSG_MOCK_CARD_COMPLETE = "draft finished"
 MSG_MOCK_CARD_CANCELED = "lobby closed by {actor}"
 MSG_MOCK_CARD_CANCELED_NO_ACTOR = "lobby closed"
+MSG_MOCK_CARD_CANCELED_IDLE = "lobby closed after {window} of inactivity"
+MSG_MOCK_CARD_CLOSES = "Closes after {window} of inactivity"
 MSG_MOCK_CARD_DRAFTERS = "✅ In Draftmancer ({count})"
 MSG_MOCK_CARD_PLAYERS = "Players ({count})"
 MSG_MOCK_CARD_EMPTY_TABLE = "-"
