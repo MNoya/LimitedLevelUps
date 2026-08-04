@@ -37,7 +37,7 @@ export function EpisodeCard({
       <PlayableThumbnail
         episode={episode}
         thumbnailPending={thumbnailPending}
-        aspect={expanded ? "aspect-video sm:aspect-auto sm:flex-1 sm:min-h-0" : "aspect-video"}
+        aspect={expanded ? "aspect-video sm:grow" : "aspect-video"}
         audioMode={audioMode}
         playing={expanded}
         onPlayingChange={onPlayingChange}
