@@ -20,6 +20,7 @@ MSG_MOCK_UNKNOWN_SET = "Unknown set `{code}`. Pick one from the suggestions, or 
 MSG_MOCK_NONE_RUNNING = "No mock draft is open right now. Start one with `/mock-draft`."
 MSG_MOCK_REPOST_FAILED = "Could not repost the mock draft card. Check that the bot can post in this channel."
 MSG_MOCK_COMPLETE = "✅ **{event_name} complete!** [**Draft Recap here**](<{url}>) {manat}"
+MSG_MOCK_COMPLETE_CHANNEL = "✅ **{event_name} complete!**"
 MSG_MOCK_CARD_CONTENT = "{role} {state}"
 MSG_MOCK_CARD_OPENING = "opening the lobby..."
 MSG_MOCK_CARD_OPEN = "looking for drafters"

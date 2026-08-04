@@ -1,4 +1,5 @@
-"""Owner-only `!test mockcard` — preview the /mock-draft anchor card in every state.
+"""Owner-only `!test mockcard` — preview the /mock-draft anchor card in every state, then the finish
+announcement the draft posts back into the channel.
 
 Renders through the real `build_mock_card`, so the copy, colors, and button sets are the ones a live
 mock draft posts. Render-only: no event row, no Draftmancer session, no thread. The `!mock` repost is
@@ -8,6 +9,7 @@ from __future__ import annotations
 
 from discord.ext import commands
 
+from bot.commands.messages import MSG_MOCK_COMPLETE_CHANNEL
 from bot.commands.test_group import HALL_OF_FAME, test_group
 from bot.config import settings
 from bot.services.mock_lobby_card import (
@@ -18,6 +20,7 @@ from bot.services.mock_lobby_card import (
     STATE_OPEN,
     STATE_OPENING,
     build_mock_card,
+    build_mock_complete_view,
 )
 from bot.services.pod_drafts import draftmancer_url_for, pod_page_url
 from bot.services.pod_roles import role_mention
@@ -60,3 +63,8 @@ async def setup(bot: commands.Bot) -> None:
                 thread_url=thread_url,
             )
             await ctx.send(content=content, embed=embed, view=view, allowed_mentions=MOCK_CARD_QUIET)
+        await ctx.send(
+            MSG_MOCK_COMPLETE_CHANNEL.format(event_name=event_name),
+            view=build_mock_complete_view(pod_page_url(event_name), repost_thread),
+            allowed_mentions=MOCK_CARD_QUIET,
+        )

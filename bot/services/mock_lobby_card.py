@@ -135,6 +135,12 @@ def set_symbol_url(set_code: str) -> str | None:
     return f"{base}/set-symbols/{name}.png" if base else None
 
 
+def build_mock_complete_view(site_url: str, thread_url: str) -> discord.ui.View:
+    """Recap + Thread buttons for the channel-level finish announcement, built from the same pair the
+    anchor card carries once it flips to complete."""
+    return _view(STATE_COMPLETE, "", site_url, None, thread_url)
+
+
 def _seat_label(state: str) -> str:
     """The check mark answers the question a gathering lobby is asking, which is who has actually turned
     up in Draftmancer. Once the draft is under way they are simply the players at the table."""

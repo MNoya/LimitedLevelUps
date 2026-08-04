@@ -27,6 +27,7 @@ from bot.commands.messages import (
     MSG_BOT_RECONNECTED,
     MSG_LOBBY_FULL_PROMPT,
     MSG_MOCK_COMPLETE,
+    MSG_MOCK_COMPLETE_CHANNEL,
 )
 from bot.config import settings
 from bot.database import SessionLocal
@@ -52,6 +53,7 @@ from bot.services.mock_lobby_card import (
     STATE_OPEN,
     STATE_OPENING,
     build_mock_card,
+    build_mock_complete_view,
 )
 from bot.services import pod_format
 from bot.services.ping_roles import grant_mock_draft_role
@@ -1270,7 +1272,25 @@ class PodDraftManager:
                 ))
             except Exception:
                 log.warning(f"[DRAFT] mock_finalize.thread_post_error event={self.event_id}", exc_info=True)
+            await self._announce_mock_complete(thread, event_url)
         await self.disconnect_safely()
+
+    async def _announce_mock_complete(self, thread, event_url: str) -> None:
+        """Say the draft finished in the channel the thread hangs off, with the way into both the recap
+        and the thread. The anchor card up in that channel also flips to complete, but by then it sits
+        above a draft's worth of conversation, so the finish needs its own message at the bottom."""
+        channel = thread.parent or self.bot.get_channel(thread.parent_id)
+        if channel is None:
+            log.info(f"[DRAFT] mock_finalize.no_parent_channel event={self.event_id}")
+            return
+        try:
+            await channel.send(
+                MSG_MOCK_COMPLETE_CHANNEL.format(event_name=self.event_name),
+                view=build_mock_complete_view(event_url, thread.jump_url),
+                allowed_mentions=MOCK_CARD_QUIET,
+            )
+        except discord.HTTPException:
+            log.warning(f"[DRAFT] mock_finalize.channel_post_error event={self.event_id}", exc_info=True)
 
     def _mark_mock_finalized(self) -> None:
         with SessionLocal() as session:
