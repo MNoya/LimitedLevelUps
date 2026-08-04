@@ -21,6 +21,7 @@ import { mtgoSetName } from "../frontend/src/data/mtgoSets";
 import { resolveContestByCode, resolveFeaturedContest } from "../frontend/src/data/p0p1Slots";
 import { categoryFromSlug } from "../frontend/src/data/episodes";
 import { cubeVariantForBoard } from "../frontend/src/data/cubeVariants";
+import { skeletonsFor } from "../frontend/src/data/skeletons";
 
 const EPISODE_CATEGORY_DESCRIPTIONS: Record<string, string> = {
   "Set Review": "Card-by-card set reviews and first impressions for MTG limited.",
@@ -205,13 +206,20 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
     if (rest[0]) {
       const setCode = rest[0].toUpperCase();
       const setName = await fetchSetName(setCode);
+      if (rest[1] === "archetypes" && skeletonsFor(setCode).length > 0) {
+        return page(
+          `${setCode} Archetype Skeletons`,
+          `Check the cards at the core of every color pair in ${setName}`,
+          { kind: "setSymbol", code: setCode },
+        );
+      }
       return page(
         `${setCode} Tier List`,
-        `Check updated Set Review grades for ${setName}.`,
+        `Check updated Set Review grades for ${setName}`,
         { kind: "setSymbol", code: setCode },
       );
     }
-    return page("Tier List", "Check updated Set Review grades for every set.");
+    return page("Tier List", "Check updated Set Review grades for every set");
   }
 
   if (section === "pods") {

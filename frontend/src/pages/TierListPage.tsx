@@ -7,6 +7,9 @@ import { TierFilterBar } from "../components/TierFilterBar";
 import { TierGrid } from "../components/TierGrid";
 import { GradeGuideIcon, GradeGuideProvider, GradeGuideTrigger } from "../components/TierGuide";
 import { TierSetDropdown } from "../components/TierSetDropdown";
+import { Tooltip } from "../components/Tooltip";
+import { SkeletonsModal } from "../components/SkeletonsModal";
+import { skeletonsFor } from "../data/skeletons";
 import { useSets } from "../data/hooks";
 import { relativeTime } from "../data/utils";
 import { cn } from "../lib/utils";
@@ -23,7 +26,7 @@ import {
   type TierFilters,
 } from "../data/tierList";
 
-export function TierListPage() {
+export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolean }) {
   const { data: sets } = useSets();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -48,6 +51,7 @@ export function TierListPage() {
   const setMeta = tierListSets.find((s) => s.code === current);
   const { uid, graders, comparison, effectiveUid } = resolveTierList(current);
   const glyphCode = setMeta ? setGlyphCode(setMeta) : current;
+  const skeletons = useMemo(() => skeletonsFor(current), [current]);
 
   const { data: tierData, lastUpdated } = useTierList(effectiveUid);
   const filterOptions = useMemo(
@@ -77,7 +81,7 @@ export function TierListPage() {
           <div ref={headerRef} className="sticky top-0 z-20 bg-bg py-2 md:py-3">
             {isMobile ? (
               <>
-                <div className="flex items-center gap-x-5 gap-y-2">
+                <div className="flex items-center gap-2">
                   <h1 className="font-display tracking-[0.12em] flex flex-1 items-center gap-2 leading-none min-w-0">
                     <TierSetDropdown
                       sets={tierListSets}
@@ -87,17 +91,21 @@ export function TierListPage() {
                       isMobile
                       loading={!sets}
                       onChange={pickSet}
+                      triggerClassName="h-10 px-2.5"
                     />
                   </h1>
+
+                  {skeletons.length > 0 && <SkeletonsButton onClick={() => navigate(`/tier-list/${current}/archetypes`)} />}
 
                   {effectiveUid && (
                     <button
                       type="button"
                       onClick={() => setFiltersOpen((open) => !open)}
                       aria-expanded={filtersOpen}
+                      aria-label="Filters"
                       disabled={!filtersReady}
                       className={cn(
-                        "flex h-9 shrink-0 items-center gap-1.5 rounded border px-2.5 text-[12px] transition-colors",
+                        "flex h-10 shrink-0 items-center gap-1.5 rounded border px-2 text-[12px] transition-colors",
                         filtersOpen || hasActiveFilters(filters)
                           ? "border-green text-text"
                           : "border-border2 text-muted",
@@ -105,8 +113,8 @@ export function TierListPage() {
                       )}
                     >
                       <svg
-                        width="13"
-                        height="13"
+                        width="17"
+                        height="17"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -117,7 +125,7 @@ export function TierListPage() {
                           strokeLinejoin="round"
                         />
                       </svg>
-                      Filters
+                      <span className={cn(skeletons.length > 0 && "hidden min-[400px]:inline")}>Filters</span>
                       {activeFilterCount > 0 && (
                         <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-green px-1 text-[10px] font-bold text-bg">
                           {activeFilterCount}
@@ -137,7 +145,6 @@ export function TierListPage() {
 
                 <ListMeta
                   lastUpdated={lastUpdated}
-                  indent
                   className="mt-1.5 whitespace-nowrap text-[clamp(8px,2.8vw,11px)]"
                 />
 
@@ -168,6 +175,9 @@ export function TierListPage() {
                       loading={!sets}
                       onChange={pickSet}
                     />
+                    {skeletons.length > 0 && (
+                      <SkeletonsButton onClick={() => navigate(`/tier-list/${current}/archetypes`)} />
+                    )}
                   </h1>
                   <ListMeta lastUpdated={lastUpdated} className="mt-1 pl-[2px] text-[11px]" />
                 </div>
@@ -221,7 +231,9 @@ export function TierListPage() {
               )}
               {uid && (
                 <div className="flex items-center gap-x-2">
-                  <span className="mono text-[10px] md:text-[12px] text-muted">Live:</span>
+                  <span className="mono text-[10px] md:text-[12px] text-muted">
+                    {graders.length > 0 ? "Live:" : "Set Review List:"}
+                  </span>
                   <SourceLink uid={uid} label="LLU" />
                 </div>
               )}
@@ -236,40 +248,61 @@ export function TierListPage() {
             </a>
           </div>
         </main>
+
+        {skeletonsOpen && skeletons.length > 0 && (
+          <SkeletonsModal
+            skeletons={skeletons}
+            setCode={current}
+            onClose={() => navigate(`/tier-list/${current}`)}
+          />
+        )}
       </div>
     </GradeGuideProvider>
   );
 }
 
+function SkeletonsButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative flex h-10 shrink-0 items-center rounded border border-border2 px-2 font-display text-[14px] leading-none tracking-[0.14em] text-text transition-colors hover:border-green hover:text-green md:h-9 md:px-2.5"
+    >
+      <span className="-translate-y-px">ARCHETYPES</span>
+      <span className="absolute -right-1.5 -top-2.5 z-10 rounded-full border border-green bg-green px-1.5 py-0.5 font-sans text-[9px] font-bold leading-none tracking-wide text-bg">
+        NEW
+      </span>
+    </button>
+  );
+}
+
 function SourceLink({ uid, label }: { uid: string; label: string }) {
   return (
-    <a
-      href={`https://www.17lands.com/tier_list/${uid}`}
-      target="_blank"
-      rel="noreferrer"
-      className="mono flex items-center gap-1 text-[10px] md:text-[12px] text-muted hover:text-green transition-colors no-underline"
-    >
-      {label}
-      <ExternalLink size={11} />
-    </a>
+    <Tooltip label="View on 17Lands" side="top">
+      <a
+        href={`https://www.17lands.com/tier_list/${uid}`}
+        target="_blank"
+        rel="noreferrer"
+        className="mono flex items-center gap-1 text-[10px] md:text-[12px] text-muted hover:text-green transition-colors no-underline"
+      >
+        {label}
+        <ExternalLink size={11} />
+      </a>
+    </Tooltip>
   );
 }
 
 function ListMeta({
   lastUpdated,
   className,
-  indent = false,
 }: {
   lastUpdated: string | null;
   className?: string;
-  indent?: boolean;
 }) {
   const updated = lastUpdated ? lastUpdatedLabel(lastUpdated) : null;
   return (
     <div className={cn("mono flex w-full items-center justify-between gap-x-4 text-muted", className)}>
-      <GradeGuideTrigger
-        className={cn("tracking-[0.16em]", indent && "pl-[calc(0.75rem+26px+0.5rem)]")}
-      >
+      <GradeGuideTrigger className="tracking-[0.16em]">
         SET REVIEW GRADES
         <GradeGuideIcon className="ml-1.5" />
       </GradeGuideTrigger>

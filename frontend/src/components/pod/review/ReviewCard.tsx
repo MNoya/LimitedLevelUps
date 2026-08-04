@@ -74,6 +74,7 @@ export function StackColumn({
   cardClassName,
   glowIndexes = [],
   cardAt,
+  tapToPreview = false,
   renderCard,
 }: {
   count: number;
@@ -83,6 +84,7 @@ export function StackColumn({
   cardClassName?: string;
   glowIndexes?: number[];
   cardAt?: (i: number) => ArtifactCard | undefined;
+  tapToPreview?: boolean;
   renderCard: (i: number) => React.ReactNode;
 }) {
   const openPreview = useContext(CardPreviewContext);
@@ -91,7 +93,7 @@ export function StackColumn({
     return null;
   }
   const style = width != null ? { width } : undefined;
-  const onContextMenu = (i: number) => (e: React.MouseEvent) => {
+  const preview = (i: number) => (e: React.MouseEvent) => {
     const card = cardAt?.(i);
     if (card && openPreview) {
       e.preventDefault();
@@ -107,13 +109,14 @@ export function StackColumn({
         const hover = {
           onMouseEnter: () => setRaised(i),
           onMouseLeave: () => setRaised((r) => (r === i ? null : r)),
-          onContextMenu: onContextMenu(i),
+          onContextMenu: preview(i),
+          onClick: tapToPreview ? preview(i) : undefined,
         };
         if (isLast) {
           return (
             <div
               key={i}
-              className={cn("group relative", cardClassName, isGlow && "review-last-pick")}
+              className={cn("group relative", tapToPreview && "cursor-pointer", cardClassName, isGlow && "review-last-pick")}
               style={{ marginTop: (count - 1) * reveal, zIndex: z }}
               {...hover}
             >
@@ -124,7 +127,7 @@ export function StackColumn({
         return (
           <div
             key={i}
-            className="group absolute inset-x-0"
+            className={cn("group absolute inset-x-0", tapToPreview && "cursor-pointer")}
             style={{ top: i * reveal, height: reveal, zIndex: z }}
             {...hover}
           >
@@ -197,7 +200,7 @@ function useReviewGrades(setCode: string): Map<string, TierCard> {
 function CardPreviewOverlay({ card, grade }: { card: ArtifactCard; grade: TierCard | undefined }) {
   const { src, onError } = useFallbackImage(useCardImageSources(card));
   return (
-    <div className="pointer-events-none fixed right-10 top-1/2 z-[70] -translate-y-1/2">
+    <div className="pointer-events-none fixed inset-x-0 top-1/2 z-[70] flex -translate-y-1/2 justify-center md:inset-x-auto md:right-10 md:block">
       <div className="relative" style={{ animation: "card-preview-in-right 180ms ease-out" }}>
         {src ? (
           <img

@@ -19,6 +19,7 @@ export const IDENTITY_VIEWS = ["public_player", "public_self_reported_events", "
 // 17Lands tier-list ids per set, taken from a tier list's share link
 // (https://www.17lands.com/tier_list/<uid>). Add one as each set rotates in.
 export const TIER_LIST_UIDS: Record<string, string> = {
+  HOB: "528d1c45d1f04b59abac2a897a8928c8",
   MSH: "1c86af8656f7432c83d9f9bb9c92f9df",
   SOS: "e195401b1eaa48e3b5d6670e0ae338e9",
   TMT: "fd5499ae88854ca0ac1bc2ad95ade9b2",
@@ -108,6 +109,7 @@ export const TIER_LIST_PREVIEW_SETS: Record<
   string,
   { name: string; startDate: string }
 > = {
+  HOB: { name: "The Hobbit", startDate: "2026-08-11" },
   MSH: { name: "Marvel Super Heroes", startDate: "2026-06-23" },
   MH3: { name: "Modern Horizons 3", startDate: "2024-06-11" },
   MOM: { name: "March of the Machine", startDate: "2023-04-18" },

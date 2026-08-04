@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { usePlayerProfile, useSets } from "../data/hooks";
 import { categoryFromSlug } from "../data/episodes";
 import { cubeVariantForBoard } from "../data/cubeVariants";
+import { skeletonsFor } from "../data/skeletons";
 import { ACTIVE_SET_CODE, SITE_NAME, TITLE_SEPARATOR } from "../data/constants";
 
 // Mirrors functions/_middleware.ts so the in-app tab title matches the crawler/unfurl title.
@@ -91,7 +92,14 @@ const resolvePageTitle = (
   }
 
   if (section === "tier-list") {
-    return rest[0] ? `${rest[0].toUpperCase()} Tier List` : "Tier List";
+    if (!rest[0]) {
+      return "Tier List";
+    }
+    const setCode = rest[0].toUpperCase();
+    if (rest[1] === "archetypes" && skeletonsFor(setCode).length > 0) {
+      return `${setCode} Archetype Skeletons`;
+    }
+    return `${setCode} Tier List`;
   }
   if (section === "pods") {
     return rest[0] ? titleCaseSlug(rest[0], setCodes) : "Pod Drafts";
