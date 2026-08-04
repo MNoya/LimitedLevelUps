@@ -117,6 +117,7 @@ from bot.tasks.championship_post import init_championship_schedule
 from bot.tasks.p0p1_reminder_post import init_p0p1_reminder
 from bot.tasks.pod_underfill import init_underfill
 from bot.tasks.pod_thread_cleanup import init_thread_cleanup
+from bot.tasks.gateway_watchdog import init_gateway_watchdog
 
 
 log = logging.getLogger("bot.main")
@@ -220,6 +221,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         init_launch(bot)
         init_daily_poll(bot)
         init_thread_cleanup(bot)
+        init_gateway_watchdog(bot)
 
         # Load cogs into memory and mirror to the guild tree so dispatch works.
         # Discord-side sync is handled by the owner-only `!sync` text command, not on startup.
