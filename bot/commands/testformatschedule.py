@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from discord.ext import commands
 
-from bot.commands.event_scribe import build_schedule_view
+from bot.commands.event_scribe import build_schedule_payload
 from bot.commands.test_group import test_group
 from bot.services import mtgscribe
 from bot.services.format_schedule import (
@@ -40,7 +40,7 @@ async def setup(bot: commands.Bot) -> None:
             await ctx.send(f"__**{heading}**__")
             if pin.maintain_pin:
                 in_progress, upcoming, scope = select_pin(events, pin)
-                await ctx.send(view=build_schedule_view(in_progress, upcoming, emojis, scope))
+                await ctx.send(**build_schedule_payload(in_progress, upcoming, emojis, scope))
             if pin.announce == ANNOUNCE_NONE:
                 continue
             groups = announce_groups(events, pin)

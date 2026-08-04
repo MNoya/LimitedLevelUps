@@ -1,8 +1,9 @@
 """`/pod-schedule` — the calendar of which formats the pods draft over the weeks ahead.
 
 The grid ships as a rendered PNG (`pod_schedule_image`); everything a reader might want to select, click or
-localize stays text. Components V2 rather than an embed, because an embed pins its image to the bottom and
-the set-release note reads as a caption under the calendar it annotates.
+localize stays text. An embed rather than Components V2: mobile Pins, search results and reply previews
+render content and embeds only, so a V2 layout shows as an empty message everywhere it is previewed. The
+cost is the set-release note, which an embed can only place above the calendar it annotates.
 
 The slot line reads off the poll buckets and answers with each slot's next start, so a call after midnight
 names today's pods without the reader converting anything out of ET.
@@ -19,7 +20,8 @@ from discord.ext import commands
 
 from bot import audit
 from bot.commands import descriptions as desc
-from bot.discord_helpers import EM_SPACE, NBSP, posts_publicly
+from bot.config import PRODUCTION_GUILD_ID, settings
+from bot.discord_helpers import EM_SPACE, posts_publicly
 from bot.services import championship
 from bot.services import pod_format_interest as fi
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
@@ -31,7 +33,7 @@ from bot.services.pod_schedule_image import render_calendar_png
 from bot.services.pod_signals import WEEKDAY_BUCKETS, is_weekend, next_lane_start
 from bot.sets import active_set_code, release_instant, set_name_for
 
-MSG_TITLE = "### 🗓️ Pod Format Schedule"
+MSG_TITLE = "🗓️ Pod Format Schedule"
 MSG_SLOT = "{emoji} {role} **<t:{unix}:t>**"
 MSG_DAILY_SET = "{symbol} {role} **every day**"
 MSG_EXTRA_FORMAT = "{symbol} {role} **{days}**"
@@ -41,11 +43,14 @@ DAYS_WEEKEND = "Weekends"
 MSG_CHAMPIONSHIP = "👑 {role} <t:{unix}:R>"
 MSG_ARRIVAL = "{symbol} **{name}** <t:{unix}:R>"
 
+CHANNEL_URL = "https://discord.com/channels/{guild_id}/{channel_id}"
+
 IMAGE_FILENAME = "pod-schedule.png"
 IMAGE_URL = f"attachment://{IMAGE_FILENAME}"
 DEFAULT_WEEKS = 4
 COLUMN_GAP = EM_SPACE * 2
-CAPTION_GAP = NBSP * 2
+SET_COLUMN_GAP = EM_SPACE
+LINE_GAP = "\n\n"
 
 
 class PodSchedule(commands.Cog):
@@ -65,30 +70,35 @@ class PodSchedule(commands.Cog):
         crown = plan.event_at if plan is not None else None
         png = await asyncio.to_thread(render_calendar_png, now.date(), weeks, crown.date() if crown else None)
         await interaction.response.send_message(
-            view=build_schedule_view(interaction.guild, now, weeks, crown),
+            embed=build_schedule_embed(interaction.guild, now, weeks, crown),
             file=discord.File(io.BytesIO(png), IMAGE_FILENAME),
             allowed_mentions=discord.AllowedMentions.none(),
             ephemeral=not posts_publicly(interaction),
         )
 
 
-def build_schedule_view(guild: discord.Guild | None, now: datetime, weeks: int,
-                        championship_at: datetime | None) -> discord.ui.LayoutView:
+def build_schedule_embed(guild: discord.Guild | None, now: datetime, weeks: int,
+                         championship_at: datetime | None) -> discord.Embed:
     days = calendar_days(now.date(), weeks)
-    container = discord.ui.Container(accent_color=discord.Color.green())
-    container.add_item(discord.ui.TextDisplay(MSG_TITLE))
-    container.add_item(discord.ui.TextDisplay(slot_line(guild, now)))
-    container.add_item(discord.ui.TextDisplay(daily_set_line(guild)))
+    lines = [slot_line(guild, now), set_line(guild, days)]
     extras = extras_line(guild, days, now.date())
     if extras:
-        container.add_item(discord.ui.TextDisplay(extras))
-    container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=IMAGE_URL)))
-    marked = marked_days_line(guild, days, now, championship_at)
-    if marked:
-        container.add_item(discord.ui.TextDisplay(marked))
-    view = discord.ui.LayoutView()
-    view.add_item(container)
-    return view
+        lines.append(extras)
+    championship = championship_line(guild, days, now, championship_at)
+    if championship:
+        lines.append(championship)
+    embed = discord.Embed(title=MSG_TITLE, url=coordination_url(guild), description=LINE_GAP.join(lines),
+                          color=discord.Color.green())
+    embed.set_image(url=IMAGE_URL)
+    return embed
+
+
+def coordination_url(guild: discord.Guild | None) -> str:
+    """The title links to the channel the pods actually run in, which is the one route out of the schedule
+    that survives a pin preview — those render the embed but drop any button under it. A DM carries no guild
+    of its own, so it lands on the production server."""
+    guild_id = guild.id if guild is not None else PRODUCTION_GUILD_ID
+    return CHANNEL_URL.format(guild_id=guild_id, channel_id=settings.pod_draft_channel_id)
 
 
 def slot_line(guild: discord.Guild | None, now: datetime) -> str:
@@ -105,11 +115,25 @@ def slot_line(guild: discord.Guild | None, now: datetime) -> str:
     return COLUMN_GAP.join(slots)
 
 
-def daily_set_line(guild: discord.Guild | None) -> str:
-    """The set every pod drafts, named by its ping role rather than by code, which keeps the line true across
-    a rotation and lets the days after one stay blank on the calendar."""
+def set_line(guild: discord.Guild | None, days: list[date]) -> str:
+    """The set every pod drafts, and beside it the set arriving inside the rendered span, so both sets a
+    reader has to care about sit on one row. The daily set is named by its ping role rather than by code,
+    which keeps the line true across a rotation and lets the days after one stay blank on the calendar.
+
+    Its first column runs wider than the rows around it, so it takes a narrower gap to bring its second
+    column back under theirs."""
     code = active_set_code()
-    return MSG_DAILY_SET.format(symbol=fi.format_emoji(code), role=role_mention(guild, fi.LATEST_SET_ROLE_NAME))
+    columns = [MSG_DAILY_SET.format(
+        symbol=fi.format_emoji(code), role=role_mention(guild, fi.LATEST_SET_ROLE_NAME),
+    )]
+    arrival = rotation_in(days)
+    if arrival is not None:
+        incoming = latest_on(arrival)
+        columns.append(MSG_ARRIVAL.format(
+            symbol=fi.format_emoji(incoming), name=set_name_for(incoming),
+            unix=int(release_instant(arrival).timestamp()),
+        ))
+    return SET_COLUMN_GAP.join(columns)
 
 
 def extras_line(guild: discord.Guild | None, days: list[date], today: date) -> str:
@@ -150,26 +174,15 @@ def _days_label(weekends: set[bool]) -> str:
     return ""
 
 
-def marked_days_line(guild: discord.Guild | None, days: list[date], now: datetime,
-                     championship_at: datetime | None) -> str:
-    """Caption for the days the calendar flags, soonest first, in the same two columns the rows above the
-    image use. These items run longer, so they take a narrower gap to land under the same column. Empty in
-    an ordinary span, where every day is the daily set plus whatever its cell shows. A played championship
-    keeps its calendar crown but leaves the caption, where its relative timestamp would read as upcoming."""
-    lines = []
-    if championship_at is not None and championship_at > now and championship_at.date() in days:
-        lines.append(MSG_CHAMPIONSHIP.format(
-            role=role_mention(guild, SET_CHAMPION_ROLE_NAME), unix=int(championship_at.timestamp()),
-        ))
-    arrival = rotation_in(days)
-    if arrival is not None:
-        code = latest_on(arrival)
-        lines.append(MSG_ARRIVAL.format(
-            symbol=fi.format_emoji(code),
-            name=set_name_for(code),
-            unix=int(release_instant(arrival).timestamp()),
-        ))
-    return CAPTION_GAP.join(lines)
+def championship_line(guild: discord.Guild | None, days: list[date], now: datetime,
+                      championship_at: datetime | None) -> str:
+    """Empty in a span with no championship in it. A played one keeps its calendar crown but leaves this
+    line, where its relative timestamp would read as upcoming."""
+    if championship_at is None or championship_at <= now or championship_at.date() not in days:
+        return ""
+    return MSG_CHAMPIONSHIP.format(
+        role=role_mention(guild, SET_CHAMPION_ROLE_NAME), unix=int(championship_at.timestamp()),
+    )
 
 
 async def setup(bot: commands.Bot) -> None:

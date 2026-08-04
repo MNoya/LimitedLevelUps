@@ -20,7 +20,7 @@ from sqlalchemy import func, select
 from bot.commands.event_scribe import (
     build_announcement,
     build_competitive_reminder,
-    build_schedule_view,
+    build_schedule_payload,
     schedule_title_marker,
     select_groups,
 )
@@ -266,24 +266,23 @@ async def _refresh_pin(channel: discord.TextChannel, scope: str, in_progress: li
     several. Pins are human-seeded (the owner pins a filtered /event-scribe post) and a channel without
     a matching pin is left alone. ``create_if_missing`` would post and pin the schedule itself instead;
     no pin enables it today, reserved for when the bot should seed a channel's pin."""
-    view = build_schedule_view(in_progress, upcoming, emojis, scope)
+    payload = build_schedule_payload(in_progress, upcoming, emojis, scope)
     message = await _pinned_schedule(channel, schedule_title_marker(scope))
     if message is None:
         if create_if_missing:
-            await _create_pinned_schedule(channel, scope, view)
+            await _create_pinned_schedule(channel, scope, payload)
         return
     try:
-        await message.edit(view=view)
+        await message.edit(**payload)
     except discord.HTTPException:
         log.warning(f"format-schedule: could not edit the '{scope}' pin in #{channel.name}", exc_info=True)
 
 
-async def _create_pinned_schedule(channel: discord.TextChannel, scope: str,
-                                  view: discord.ui.LayoutView) -> None:
+async def _create_pinned_schedule(channel: discord.TextChannel, scope: str, payload: dict) -> None:
     """Post and pin a fresh schedule. ``_pinned_schedule`` only finds pinned posts, so an unpinned one
     would be re-created every tick — if the pin fails, the post is removed so creation stays atomic."""
     try:
-        message = await channel.send(view=view)
+        message = await channel.send(**payload)
     except discord.HTTPException:
         log.warning(f"format-schedule: could not post the '{scope}' pin in #{channel.name}", exc_info=True)
         return

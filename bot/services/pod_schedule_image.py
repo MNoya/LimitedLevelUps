@@ -1,13 +1,17 @@
 """The pod format calendar grid, rendered to PNG for the `/pod-schedule` embed.
 
 The grid answers one question: what does a day add on top of the set every pod already drafts? That set is
-named once in the message, so a cell carries only its own flashback or cube and most cells stay empty on
-purpose. Two days break the pattern and each gets a filled date band instead of a code: the day a new set
-arrives, and the Set Championship.
+named once in the message, so a cell carries only its own flashback or cube, and a day that adds nothing
+falls back to the daily set's own symbol in `FAINT` — enough to read as a drafting day without repeating a
+code the message already gives. Two days break the pattern and each gets a filled date band instead of a
+code: the day a new set arrives, and the Set Championship.
 
 Discord displays an embed image 400px wide, so the layout is sized in logical pixels well under that and
 drawn at `SCALE`: a narrower logical grid is shown larger, which is the only lever the image has over how
 big its labels land on screen.
+
+`ACCENT` is the embed's green saturated up: the flagged band is a small patch of colour on a grey grid, and
+the embed's own green washes out at that size.
 
 Type matches the site — Bebas Neue for dates and format codes, tracked Space Grotesk for the weekday row.
 Set symbols are the white-on-transparent PNGs `bot/scripts/generate_set_symbols.py` writes for the site;
@@ -50,6 +54,10 @@ GRID_W = 1
 WEEKDAY_NAMES = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 CHAMPIONSHIP_LABEL = "CHAMPS"
 
+RGB = tuple[int, int, int]
+
+ACCENT = (25, 225, 108)
+
 BACKGROUND = (43, 45, 49)
 CELL = (49, 51, 56)
 CELL_PAST = (45, 47, 51)
@@ -59,10 +67,11 @@ GRID = (78, 82, 90)
 TEXT = (219, 222, 225)
 MUTED = (160, 167, 176)
 DIM = (138, 144, 153)
-ARRIVAL = (108, 178, 132)
+FAINT = (96, 101, 110)
+ARRIVAL = ACCENT
 CHAMPIONSHIP = (201, 156, 84)
 ON_FLAG = (30, 32, 35)
-TODAY = (126, 190, 149)
+TODAY = ACCENT
 
 
 def render_calendar_png(today: date, weeks: int, championship: date | None = None) -> bytes:
@@ -102,7 +111,7 @@ def _draw_day(draw: ImageDraw.ImageDraw, day: date, index: int, *, today: date, 
               championship: date | None) -> None:
     x, y = _cell_origin(index)
     past = day < today
-    flag = ARRIVAL if day == arrival else (CHAMPIONSHIP if day == championship else None)
+    flag = _flag_fill(day, arrival=arrival, championship=championship)
 
     draw.rectangle([x, y, x + _px(CELL_W), y + _px(CELL_H)], fill=CELL_PAST if past else CELL)
     draw.rectangle([x, y, x + _px(CELL_W), y + _px(BAND_H)], fill=flag or (BAND_PAST if past else BAND))
@@ -118,30 +127,40 @@ def _draw_day(draw: ImageDraw.ImageDraw, day: date, index: int, *, today: date, 
         _draw_row(draw, x, top, label, color, symbol=symbol, crown=symbol is None)
 
 
+def _flag_fill(day: date, *, arrival: date | None, championship: date | None) -> RGB | None:
+    if day == arrival:
+        return ARRIVAL
+    if day == championship:
+        return CHAMPIONSHIP
+    return None
+
+
 def _rows_for(day: date, *, past: bool, arrival: date | None,
-              championship: date | None) -> list[tuple[str, tuple[int, int, int], str | None]]:
+              championship: date | None) -> list[tuple[str, RGB, str | None]]:
     """What a cell lists, as (label, colour, symbol) with no symbol meaning the crown. The championship day
     shows the crown alone: its other pod is still on the schedule and still opens, but the day is read as one
     thing.
 
-    Only the arrival itself names the incoming set. The days after it stay blank like any other day on the
-    daily set, which the message names by role rather than by code, so the calendar never has to repeat a
-    set that a rotation is about to change."""
+    Only the arrival itself names the incoming set. The days after it fall back to its symbol alone, since
+    the message names the daily set by role rather than by code and the calendar never has to repeat a set
+    that a rotation is about to change."""
     if day == championship:
         return [(CHAMPIONSHIP_LABEL, CHAMPIONSHIP, None)]
     ink = DIM if past else TEXT
     rows = [(latest_on(day), ARRIVAL, latest_on(day))] if day == arrival else []
     rows.extend((code, ink, code) for code in extras_on(day))
+    if not rows:
+        rows.append(("", FAINT, latest_on(day)))
     return rows
 
 
-def _draw_row(draw: ImageDraw.ImageDraw, cell_x: int, top: int, label: str, color: tuple[int, int, int], *,
+def _draw_row(draw: ImageDraw.ImageDraw, cell_x: int, top: int, label: str, color: RGB, *,
               symbol: str | None = None, crown: bool = False) -> None:
     """One centred symbol-and-code row. Centring the pair rather than left-aligning it keeps a one-row cell
     reading as a calendar entry instead of a list of one."""
     font = _font(FONT_DISPLAY, CODE_SIZE)
     mark = _crown() if crown else (_symbol(symbol) if symbol else None)
-    mark_w = _px(SYMBOL_PX) + _px(SYMBOL_GAP) if mark is not None else 0
+    mark_w = _px(SYMBOL_PX) + (_px(SYMBOL_GAP) if label else 0) if mark is not None else 0
     x = cell_x + (_px(CELL_W) - mark_w - font.getlength(label)) / 2
     if mark is not None:
         draw.bitmap((round(x), top), mark, fill=color)
@@ -173,7 +192,7 @@ def _cell_origin(index: int) -> tuple[int, int]:
     return _px(PAD + column * CELL_W), _px(PAD + WEEKDAY_H + row * CELL_H)
 
 
-def _draw_tracked(draw: ImageDraw.ImageDraw, text: str, center_x: int, y: int, color: tuple[int, int, int]) -> None:
+def _draw_tracked(draw: ImageDraw.ImageDraw, text: str, center_x: int, y: int, color: RGB) -> None:
     """Letter-spaced small caps, drawn glyph by glyph because Pillow has no tracking. Mirrors the site's
     `tracking-[0.2em]` header treatment, which is most of why those labels read as headers at all."""
     font = _label_font(WEEKDAY_SIZE)

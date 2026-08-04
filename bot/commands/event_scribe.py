@@ -152,24 +152,44 @@ def _in_scope(event: mtgscribe.ScribeEvent, selected: str | None) -> bool:
 
 
 def build_schedule_payload(in_progress: list, upcoming: list, emojis: dict, scope: str = "Limited") -> dict:
-    return {"view": build_schedule_view(in_progress, upcoming, emojis, scope)}
+    return {
+        "embed": build_schedule_embed(in_progress, upcoming, emojis, scope),
+        "view": build_scribe_view(emojis),
+    }
 
 
-def build_schedule_view(in_progress: list, upcoming: list, emojis: dict,
-                        scope: str = "Limited") -> discord.ui.LayoutView:
-    """A Components V2 layout: a divider underlines the title before the schedule body."""
-    container = discord.ui.Container(accent_color=discord.Color.green())
-    container.add_item(discord.ui.TextDisplay(_title_text(emojis, scope)))
-    container.add_item(discord.ui.Separator(visible=True))
-    container.add_item(discord.ui.TextDisplay(_schedule_body(in_progress, upcoming, emojis)))
-    view = discord.ui.LayoutView()
-    view.add_item(container)
-    view.add_item(discord.ui.ActionRow(discord.ui.Button(
+def build_schedule_embed(in_progress: list, upcoming: list, emojis: dict,
+                         scope: str = "Limited") -> discord.Embed:
+    """An embed rather than Components V2: mobile Pins, search results and reply previews render content
+    and embeds only, so a V2 layout shows as an empty message everywhere it is previewed. The heading opens
+    the description instead of filling `title`, which resolves custom emoji but runs no markdown, so a
+    heading level only survives in the body. No thumbnail either — the tree lines are tuned to
+    `LINE_MAX_WIDTH`, which a thumbnail would narrow out from under them."""
+    body = _schedule_body(in_progress, upcoming, emojis)
+    return discord.Embed(
+        description=f"{_title_text(emojis, scope)}\n{body}",
+        color=discord.Color.green(),
+    )
+
+
+def _title_text(emojis: dict, scope: str) -> str:
+    """One level above the body's own `###` sections. The marker keeps its text intact between the two
+    emoji, so pin matching still finds it in the description."""
+    mtga = emojis.get(MTGA_EMOJI_NAME)
+    scribe = emojis.get(SCRIBE_EMOJI_NAME)
+    lead = f"{mtga} " if mtga else ""
+    mark = f" {scribe}" if scribe else ""
+    return f"## {lead}{schedule_title_marker(scope)}{mark}"
+
+
+def build_scribe_view(emojis: dict) -> discord.ui.View:
+    view = discord.ui.View(timeout=None)
+    view.add_item(discord.ui.Button(
         style=discord.ButtonStyle.link,
         label="View on MTG Scribe",
         url=SCRIBE_URL,
         emoji=emojis.get(SCRIBE_EMOJI_NAME),
-    )))
+    ))
     return view
 
 
@@ -259,14 +279,6 @@ def _competitive_heading_type(event_type: str, emojis: dict) -> str:
 def schedule_title_marker(scope: str) -> str:
     """The stable text inside a schedule title, used to recognise an already-pinned schedule on edit."""
     return f"{scope} Event Schedule"
-
-
-def _title_text(emojis: dict, scope: str) -> str:
-    mtga = emojis.get(MTGA_EMOJI_NAME)
-    scribe = emojis.get(SCRIBE_EMOJI_NAME)
-    lead = f"{mtga} " if mtga else ""
-    mark = f" {scribe}" if scribe else ""
-    return f"## {lead}{schedule_title_marker(scope)}{mark}"
 
 
 def _schedule_body(in_progress: list, upcoming: list, emojis: dict) -> str:
