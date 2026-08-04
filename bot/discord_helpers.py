@@ -198,6 +198,10 @@ def display_width(s: str) -> int:
     return sum(2 if unicodedata.east_asian_width(ch) == "W" else 1 for ch in s)
 
 
+def plural(count: int) -> str:
+    return "" if count == 1 else "s"
+
+
 def quote_block(lines: list[str], *, trailing: str = "") -> str:
     """`> `-prefix each line so Discord renders the blockquote vertical bar; a ZWSP when empty."""
     if not lines:

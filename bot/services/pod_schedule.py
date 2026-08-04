@@ -11,6 +11,7 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from bot import emojis
+from bot.discord_helpers import plural
 from bot.services.pod_reminder_copy import (
     DRAFT_STARTED,
     RECRUITING_BELOW_FLOOR,
@@ -140,17 +141,13 @@ def build_recruiting_message(
     }
     if count < floor:
         needed = floor - count
-        return RECRUITING_BELOW_FLOOR.format(to_floor=needed, plural=_plural(needed), **shared).rstrip()
+        return RECRUITING_BELOW_FLOOR.format(to_floor=needed, plural=plural(needed), **shared).rstrip()
     if count < aim:
         needed = aim - count
-        return RECRUITING_SHORT.format(to_aim=needed, plural=_plural(needed), **shared).rstrip()
+        return RECRUITING_SHORT.format(to_aim=needed, plural=plural(needed), **shared).rstrip()
     maybe = RECRUITING_MAYBE.format(maybe=maybe_count) if maybe_count else ""
     tail = RECRUITING_SECOND_TABLE if count + maybe_count >= 2 * aim else ""
     return RECRUITING_READY.format(yes=count, maybe=maybe, tail=tail, **shared).rstrip()
-
-
-def _plural(count: int) -> str:
-    return "" if count == 1 else "s"
 
 
 def build_underfill_fired_message(name: str, player_count: int, thread_url: str) -> str:

@@ -19,6 +19,7 @@ from sqlalchemy import select
 from bot import emojis
 from bot.config import settings
 from bot.database import SessionLocal
+from bot.discord_helpers import plural
 from bot.models import PodDraftEvent
 from bot.services import pod_launch
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, ACTIVE_TABLE_VIEWS
@@ -139,14 +140,14 @@ def build_rally_line(target: RallyTarget) -> str:
         needed = max(1, floor - target.yes)
         return RALLY_QUEUE.format(
             hello=emojis.prefix("chordoHello"), name=target.name, needed=needed,
-            plural=_plural(needed), seated=target.yes,
+            plural=plural(needed), seated=target.yes,
             manat=emojis.get("manat"), jump_url=target.url,
         )
     if target.kind == KIND_TABLE:
         needed = max(1, settings.pod_table_open_threshold - target.yes)
         return RALLY_TABLE.format(
             hello=emojis.prefix("chordoHello"), name=target.name, needed=needed,
-            plural=_plural(needed), seated=target.yes,
+            plural=plural(needed), seated=target.yes,
             manat=emojis.get("manat"), jump_url=target.url,
         )
     return _lobby_line(target, aim)
@@ -175,14 +176,10 @@ def _lobby_line(target: RallyTarget, aim: int) -> str:
         thread_url=target.url,
         waiting=waiting,
         needed=needed,
-        plural=_plural(needed),
+        plural=plural(needed),
         manat=emojis.get("manat"),
         session_url=draftmancer_url_for(target.session_id or ""),
     )
-
-
-def _plural(count: int) -> str:
-    return "" if count == 1 else "s"
 
 
 def _recruitable_first(target: RallyTarget) -> tuple[int, int]:

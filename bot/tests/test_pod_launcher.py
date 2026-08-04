@@ -5,6 +5,7 @@ import discord
 import pytest
 
 from bot.commands.pod_queue import _when_clock, _when_options
+from bot.commands.test_group import HALL_OF_FAME
 from bot.services.pod_format_select import WRITE_IN_VALUE
 from bot.services import pod_launch
 from bot.services.pod_launch import LauncherSlot, _lazy_status
@@ -19,10 +20,14 @@ from bot.services.pod_signals import (
     next_lane_start,
 )
 from bot.sets import active_set_code
+from bot.services.pod_launcher_copy import FINISHED_MARK
 from bot.tasks.pod_daily_poll import (
     BOARD_LEAVE_ID,
+    FIELD_VALUE_LIMIT,
+    PLAYED_ROWS_KEPT,
     PodPollView,
     _cards_holding_user,
+    _clamped_value,
     _column_value,
     _committed_card_link,
     _early_transition_is_live,
@@ -280,6 +285,49 @@ def test_seed_options_from_rankings_respects_the_option_cap():
 
     assert len(options) == pod_format_poll.MAX_ROWED_OPTIONS
     assert "NEW1" not in options
+
+
+def _played(index):
+    return replace(
+        _committed("EARLY", f"11{index}", f"22{index}"), finished=True, locked=True,
+        winner=HALL_OF_FAME[index], thread_name=f"Peasant Cube Aug {index + 1} Early Pod",
+        slot_time=BEFORE_EARLY, card_message_id=f"33{index}", card_channel_id="444",
+    )
+
+
+def _gathering_with_roster(size):
+    return replace(
+        _lazy("EARLY", STATUS_OPEN), count=size, slot_time=BEFORE_EARLY + timedelta(days=1),
+        names=list(HALL_OF_FAME[:size]),
+    )
+
+
+@pytest.mark.parametrize("played_pods,rostered", [(1, 4), (3, 8), (12, 16), (30, 30)])
+def test_a_column_stays_inside_an_embed_field(played_pods, rostered):
+    """A day of played pods, each carrying a thread link and a winner seat link, plus a committed pod for
+    tomorrow, ran past the field limit and Discord refused the whole board edit."""
+    column = [_played(index) for index in range(played_pods)] + [_gathering_with_roster(rostered)]
+
+    value = _column_value(column, guild=None)
+
+    assert len(value) <= FIELD_VALUE_LIMIT
+
+
+def test_the_played_rows_past_the_cap_collapse_into_one_count_line():
+    column = [_played(index) for index in range(6)] + [_gathering_with_roster(8)]
+
+    value = _column_value(column, guild=None)
+
+    assert value.count(FINISHED_MARK) == PLAYED_ROWS_KEPT
+    assert all(_played(index).winner in value for index in (4, 5))
+    assert "https://" in value
+
+
+def test_a_value_past_the_field_limit_is_cut_on_a_line_boundary():
+    value = _clamped_value("\n".join(["x" * 100] * 20))
+
+    assert len(value) <= FIELD_VALUE_LIMIT
+    assert value.endswith("x" * 100)
 
 
 def _committed_championship(thread_id="555", card_message_id="900"):

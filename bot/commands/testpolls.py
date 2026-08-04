@@ -335,12 +335,15 @@ async def setup(bot: commands.Bot) -> None:
 
     @test_group.command(name="widths")
     @commands.is_owner()
-    async def test_widths(ctx: commands.Context) -> None:
+    async def test_widths(ctx: commands.Context, crowded_pods: int = _WIDTH_CROWDED_PODS) -> None:
         """Owner-only. Post the Played row at the widths that decide whether it wraps: a short set code with
         short names, the long cube label, a second table, and a winner name past what a column fits. Every
         board pairs a short name against a long one, which is the pair that pushed the two columns out of
         level, so the check is whether both Next headers still sit on the same line. Fixtures through the
-        production embed builder, no signals."""
+        production embed builder, no signals.
+
+        The last board stacks `crowded_pods` played pods in one column, which is what used to push the field
+        past its limit: whatever the count, the column shows the last few in full over a count line."""
         guild = ctx.guild
         channel_id = str(ctx.channel.id)
         today, tomorrow, early, late, early_next, late_next = _rolling_lanes()
@@ -362,6 +365,13 @@ async def setup(bot: commands.Bot) -> None:
             slots += [gathering(early_next, 3), gathering(late_next, 9)]
             await ctx.send(f"**{label}**")
             await ctx.send(embed=build_poll_embed(slots, guild))
+        crowded = [
+            played(early, pod_format.PEASANT_CODE, _handle(index), index, table=index + 1 if index else None)
+            for index in range(min(crowded_pods, len(HALL_OF_FAME)))
+        ]
+        crowded += [played(late, None, _handle(20), 20), gathering(early_next, 3), gathering(late_next, 9)]
+        await ctx.send(f"**{_WIDTH_CROWDED_LABEL}**")
+        await ctx.send(embed=build_poll_embed(crowded, guild))
 
     @test_group.command(name="launcher")
     @commands.is_owner()
@@ -764,6 +774,9 @@ _WIDTH_CASES = (
     ("D. Winner name past what a column fits: the name is cut once the date is already gone",
      pod_format.PEASANT_CODE, _handle(1), _handle(12, 13, 14), True),
 )
+
+_WIDTH_CROWDED_PODS = 6
+_WIDTH_CROWDED_LABEL = "E. A column that played all day: the last drafts in full, then a count line"
 
 
 def _rolling_lanes():

@@ -50,7 +50,7 @@ from bot.commands.pod_rsvp import (
     register_launcher_refresh,
 )
 from bot.config import settings
-from bot.discord_helpers import NBSP, ZWSP, run_detached
+from bot.discord_helpers import NBSP, ZWSP, plural, run_detached
 from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_format_poll
@@ -87,6 +87,7 @@ from bot.services.pod_launcher_copy import (
     PLAY_AGAIN_INTRO,
     PLAY_AGAIN_LOVE_EMOJI,
     PLAY_AGAIN_SIGNED_UP,
+    PLAYED_FOLDED,
     POLL_FORMAT_SEVERAL,
     POLL_INTRO_TIME_AND_FORMAT,
     POLL_INTRO_TIME_ONLY,
@@ -153,6 +154,8 @@ CHAMPIONSHIP_POINTER_TOP = 8
 
 FAR_FUTURE = datetime.max.replace(tzinfo=timezone.utc)
 
+FIELD_VALUE_LIMIT = 1024
+PLAYED_ROWS_KEPT = 2
 COLUMN_FIT_BUDGET = 35
 EMOJI_UNITS = 3
 WINNER_GAP_UNITS = 2 + EMOJI_UNITS
@@ -345,7 +348,7 @@ def build_poll_embed(
     columns = [_lane_slots(slots, lane) for lane in _lane_order(slots)]
     pad = _finished_pad(columns)
     for column in columns:
-        value = _column_value(column, guild, pad)
+        value = _clamped_value(_column_value(column, guild, pad))
         if value:
             embed.add_field(name=ZWSP, value=value, inline=True)
     embed.add_field(name=ZWSP, value=_mechanics_note(several), inline=False)
@@ -372,8 +375,14 @@ def _finished_pad(columns: list[list[pod_launch.LauncherSlot]]) -> int:
         played = sum(1 for slot in column if slot.locked)
         gathering = any(not slot.locked for slot in column)
         if played and gathering:
-            pad = max(pad, played)
+            pad = max(pad, _played_line_count(played))
     return pad
+
+
+def _played_line_count(played: int) -> int:
+    """How many lines a Played section renders, which is not how many pods it holds: the rows past the cap
+    collapse into one count line, and padding to the pod count instead would open a column of blanks."""
+    return min(played, PLAYED_ROWS_KEPT) + (1 if played > PLAYED_ROWS_KEPT else 0)
 
 
 def _offered_formats(slots: list[pod_launch.LauncherSlot]) -> list[str]:
@@ -472,6 +481,17 @@ def _time_groups(
     return [groups[slot_time] for slot_time in sorted(groups)]
 
 
+def _clamped_value(value: str) -> str:
+    """A column that still runs past what an embed field holds, cut on a line boundary so it renders as
+    markdown instead of a severed link. Discord refuses the whole edit over one long field, which froze a
+    live board for a night and stopped it tracking every signup on it. The Played cap keeps a column far
+    inside the limit, so this only ever catches a Next section carrying enormous rosters."""
+    if len(value) <= FIELD_VALUE_LIMIT:
+        return value
+    kept = value[:FIELD_VALUE_LIMIT].rsplit("\n", 1)[0]
+    return kept or value[:FIELD_VALUE_LIMIT]
+
+
 def _column_value(
     bucket_slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None, pad_finished: int = 0,
 ) -> str:
@@ -508,7 +528,7 @@ def _pod_blocks(
             if block:
                 blocks.append(block)
         return blocks
-    played_lines = [_finished_column_line(slot, guild) for slot in played]
+    played_lines = _played_lines(played, guild)
     blanks = [NBSP] * max(0, pad_finished - len(played_lines))
     sections = ["\n".join(played_lines + blanks)]
     sections += [_gathering_section(group, guild) for group in gathering]
@@ -517,6 +537,23 @@ def _pod_blocks(
         start = _slot_start_time(played[0])
         header = f"{header}{NBSP}{NBSP}{start}" if start else header
     return [f"{header}\n" + f"\n{NBSP}\n".join(sections)]
+
+
+def _played_lines(
+    played: list[pod_launch.LauncherSlot], guild: discord.Guild | None,
+) -> list[str]:
+    """The column's Played rows: the last few pods in full, then a count line for the rest.
+
+    A lane that plays all day stacks a row per pod, each carrying two links, which grows the column past the
+    field limit and leaves the board unable to render at all. The cap is what a reader wants anyway: the pods
+    that just played, credited to their winners, over a count of the day behind them. The full day keeps its
+    history on the retired board."""
+    kept = played[-PLAYED_ROWS_KEPT:]
+    rows = [_finished_column_line(slot, guild) for slot in kept]
+    behind = len(played) - len(kept)
+    if not behind:
+        return rows
+    return rows + [PLAYED_FOLDED.format(count=behind, plural=plural(behind))]
 
 
 def _column_sections(
