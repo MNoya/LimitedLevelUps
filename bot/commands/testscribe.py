@@ -29,37 +29,45 @@ async def setup(bot: commands.Bot) -> None:
 
 def _fixture_events(now: datetime) -> list:
     in_progress = [
-        _scribe_event("Premier Draft", now, -30, 26 / 24),
-        _scribe_event("Pick Two", now, -30, 26 / 24),
-        _scribe_event("Traditional Draft", now, -30, 26 / 24),
-        _scribe_event("Sealed", now, -10, 5),
-        _scribe_event("Quick Draft", now, -5, 2),
-        _arena_direct("Play Booster Boxes", "play-boosters", now, -2, 4),
+        _scribe_event("Premier Draft", "premier-draft", now, -30, 26 / 24),
+        _scribe_event("Pick-Two Draft", "pick-2-draft", now, -30, 26 / 24),
+        _scribe_event("Traditional Draft", "traditional-draft", now, -30, 26 / 24),
+        _scribe_event("Jump In", "jump-in", now, -30, 26 / 24),
+        _scribe_event("Sealed", "sealed", now, -10, 5),
+        _scribe_event("Quick Draft", "quick-draft", now, -5, 2),
+        _arena_direct("Play Boosters", "play-boosters", now, -2, 4),
+        _formatless_cube("Planar Cube Draft", now, -12, 9),
     ]
     coming_up = [
-        _scribe_event("Premier Draft", now, 33, 40),
-        _scribe_event("Pick Two", now, 33, 40),
-        _scribe_event("Traditional Draft", now, 33, 40),
-        _scribe_event("Premier Draft", now, 9, 16),
-        _arena_direct("Play Booster Boxes", "play-boosters", now, 3, 6),
-        _arena_direct("Play Booster Boxes", "play-boosters", now, 10, 13),
-        _arena_direct("Collector Booster Boxes", "collector-booster", now, 5, 8),
-        _arena_direct("Collector Booster Boxes", "collector-booster", now, 17, 20),
+        _scribe_event("Premier Draft", "premier-draft", now, 33, 40),
+        _scribe_event("Pick-Two Draft", "pick-2-draft", now, 33, 40),
+        _scribe_event("Traditional Draft", "traditional-draft", now, 33, 40),
+        _scribe_event("Premier Draft", "premier-draft", now, 9, 16),
+        _arena_direct("Play Boosters", "play-boosters", now, 3, 6),
+        _arena_direct("Play Boosters", "play-boosters", now, 10, 13),
+        _arena_direct("Collector Boosters", "collector-booster", now, 5, 8),
+        _arena_direct("Collector Boosters", "collector-booster", now, 17, 20),
         _flashback("Aetherdrift", now, 14, 21),
         _flashback("Duskmourn", now, 21, 28),
         _flashback("Bloomburrow", now, 28, 35),
-        _quick_draft("Wilds of Eldraine", now, 4, 11),
-        _quick_draft("Outlaws of Thunder Junction", now, 11, 18),
-        _quick_draft("The Lost Caverns of Ixalan", now, 43, 49),
+        _quick_draft("Wilds of Eldraine", "quick-draft", now, 4, 11),
+        _quick_draft("Outlaws of Thunder Junction", "quck-draft", now, 11, 18),
+        _quick_draft("The Lost Caverns of Ixalan", "premier-draft", now, 43, 49),
         _midweek("Secrets of Strixhaven Phantom Sealed", "Phantom Sealed", ("sealed",), now, 6, 8),
         _cube("Some Kind of new Cube", now, 13, 16),
+        _arena_open(now, 19, 21),
+        _acq("Play-In", "Bo1", now, 20, 21),
+        _acq("Play-In", "Bo3", now, 26, 27),
+        _acq("Weekend", "", now, 27, 29),
     ]
     return in_progress + coming_up
 
 
-def _scribe_event(fmt: str, now: datetime, start_offset_days: int, end_offset_days: int) -> mtgscribe.ScribeEvent:
+def _scribe_event(fmt: str, format_tag: str, now: datetime,
+                  start_offset_days: float, end_offset_days: float) -> mtgscribe.ScribeEvent:
     return _event(f"{fmt}: Secrets of Strixhaven", fmt, "Secrets of Strixhaven",
-                  ("arena", "limited"), now, start_offset_days, end_offset_days)
+                  ("arena", "limited", format_tag, "secrets-of-strixhaven"),
+                  now, start_offset_days, end_offset_days)
 
 
 def _arena_direct(product: str, booster_slug: str, now: datetime,
@@ -75,9 +83,12 @@ def _flashback(set_name: str, now: datetime, start_off: int, end_off: int) -> mt
                   ("arena", "limited", "flashback", "premier-draft"), now, start_off, end_off)
 
 
-def _quick_draft(set_name: str, now: datetime, start_off: int, end_off: int) -> mtgscribe.ScribeEvent:
+def _quick_draft(set_name: str, format_tag: str, now: datetime,
+                 start_off: int, end_off: int) -> mtgscribe.ScribeEvent:
+    """``format_tag`` varies on purpose: Scribe mistags Quick Draft often (a ``quck-draft`` typo, or
+    ``premier-draft``), and the Quick filter keys on the title format so it survives that."""
     return _event(f"Quick Draft: {set_name}", "Quick Draft", set_name,
-                  ("arena", "limited", "quick-draft"), now, start_off, end_off)
+                  ("arena", "limited", format_tag), now, start_off, end_off)
 
 
 def _midweek(label: str, fmt: str, extra_tags: tuple, now: datetime,
@@ -89,6 +100,24 @@ def _midweek(label: str, fmt: str, extra_tags: tuple, now: datetime,
 def _cube(set_name: str, now: datetime, start_off: int, end_off: int) -> mtgscribe.ScribeEvent:
     return _event(f"Premier Draft: {set_name}", "Premier Draft", set_name,
                   ("arena", "limited", "premier-draft", "cube"), now, start_off, end_off)
+
+
+def _formatless_cube(name: str, now: datetime, start_off: int, end_off: int) -> mtgscribe.ScribeEvent:
+    """Scribe titles some cube queues with no ``"<format>: "`` prefix, leaving the group no format at all."""
+    return _event(name, "", name, ("arena", "cube", "limited", "planar-cube"), now, start_off, end_off)
+
+
+def _arena_open(now: datetime, start_off: int, end_off: int) -> mtgscribe.ScribeEvent:
+    return _event("Arena Open: Secrets of Strixhaven", "Arena Open", "Secrets of Strixhaven",
+                  ("arena", "arena-open", "draft", "limited", "secrets-of-strixhaven"),
+                  now, start_off, end_off)
+
+
+def _acq(label: str, best_of: str, now: datetime, start_off: int, end_off: int) -> mtgscribe.ScribeEvent:
+    tail = f"{best_of} Secrets of Strixhaven Sealed".strip()
+    return _event(f"ACQ {label}: {tail}", f"ACQ {label}", tail,
+                  ("arena", "limited", "play-in", "qualifier", "sealed", "secrets-of-strixhaven"),
+                  now, start_off, end_off)
 
 
 def _event(title: str, format_label: str, group_label: str, tag_slugs: tuple,

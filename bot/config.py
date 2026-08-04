@@ -36,7 +36,6 @@ class Settings(BaseSettings):
     def player_base_url(self) -> str:
         return f"{self.public_site_url.rstrip('/')}/player"
 
-    scribe_cache_bust: bool = False
     format_schedule_enabled: bool = True
 
     pod_draft_channel_id: int = 1028072146645295125

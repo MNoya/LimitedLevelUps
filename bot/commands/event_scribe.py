@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 from dataclasses import replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 import discord
 from discord import app_commands
@@ -20,7 +19,6 @@ from bot.sets import ALL_SETS
 
 logger = logging.getLogger(__name__)
 
-LOOKBACK = timedelta(days=90)
 UPCOMING_HORIZON = timedelta(days=45)
 
 IN_PROGRESS_EMOJI = "⚡"
@@ -45,8 +43,10 @@ PREMIER_FORMATS = ("Premier Draft", "Contender Draft")
 BOOSTER_LABELS = {"play-boosters": "Play", "collector-booster": "Collector"}
 PACKAGE_EMOJI = "📦"
 COLLECTOR_EMOJI_NAME = "8000gems"
-ARENA_CHAMP_TEXT = "Arena Championship"
+ARENA_CHAMP_EXPANSIONS = {"Arena Championship": "", "ACQ": "Qualifier"}
 ARENA_CHAMP_EMOJI_NAME = "arenachamp"
+MSG_EVENT_LIVE = "is live!"
+MSG_QUALIFIER_OPEN = "is now open"
 
 SCRIBE_EMOJI_NAME = "scribe"
 SCRIBE_URL = "https://mtgscribe.com/events/"
@@ -73,12 +73,11 @@ class EventScribe(commands.Cog):
                            format: app_commands.Choice[str] | None = None,
                            set: str | None = None) -> None:
         await interaction.response.defer(ephemeral=not posts_publicly(interaction))
-        start_date = date.today() - LOOKBACK
         selected = format.value if format else None
         try:
-            events = await asyncio.to_thread(mtgscribe.fetch_events, start_date)
+            events = mtgscribe.load_events()
         except Exception:
-            logger.exception(f"event-scribe fetch failed for start_date={start_date}")
+            logger.exception("event-scribe could not read the bundled MTG Scribe calendar")
             await interaction.followup.send("MTG Scribe events are unavailable right now. Try again later.")
             return
         in_progress, upcoming = process_events(events, selected, set)
@@ -110,17 +109,33 @@ def select_groups(events: list, filters: list | None, set_query: str | None = No
     when ``filters`` is falsy: normalize → scope → filter → group → partition. ``apply_horizon`` drops
     upcoming groups past ``UPCOMING_HORIZON`` — the command keeps everything an explicit filter matches,
     the daily schedule tick always trims."""
-    normalized = [normalize_event(event) for event in events]
-    kept = [event for event in normalized
-            if _scope_matches(event, filters) and _format_matches(event, filters)
-            and _passes_set(event, set_query)]
-    groups = mtgscribe.group_events(kept)
+    groups = _selected_groups(events, filters, set_query)
     now = datetime.now(timezone.utc)
     in_progress, upcoming = mtgscribe.partition_by_now(groups, now)
     if apply_horizon:
         horizon = now + UPCOMING_HORIZON
         upcoming = [group for group in upcoming if group.start <= horizon]
     return in_progress, upcoming
+
+
+def select_season_groups(events: list, set_query: str) -> list:
+    """Every queue a set ran or will run, in start order, finished ones included.
+
+    The archival board's selection. ``partition_by_now`` drops a queue once it closes, which is right
+    for a live schedule and wrong for a record of the season — an Arena Direct or a qualifier that
+    already came and went is exactly what the record is for. Rendered as one flat list, since archival
+    mode gives running and upcoming queues the same date range anyway.
+    """
+    groups = _selected_groups(events, None, set_query)
+    return sorted(groups, key=lambda group: group.start)
+
+
+def _selected_groups(events: list, filters: list | None, set_query: str | None) -> list:
+    normalized = [normalize_event(event) for event in events]
+    kept = [event for event in normalized
+            if _scope_matches(event, filters) and _format_matches(event, filters)
+            and _passes_set(event, set_query)]
+    return mtgscribe.group_events(kept)
 
 
 def process_events(events: list, selected: str | None = None, set_query: str | None = None) -> tuple[list, list]:
@@ -151,21 +166,26 @@ def _in_scope(event: mtgscribe.ScribeEvent, selected: str | None) -> bool:
     return "limited" in event.tag_slugs
 
 
-def build_schedule_payload(in_progress: list, upcoming: list, emojis: dict, scope: str = "Limited") -> dict:
+def build_schedule_payload(in_progress: list, upcoming: list, emojis: dict, scope: str = "Limited",
+                           *, archival: bool = False) -> dict:
     return {
-        "embed": build_schedule_embed(in_progress, upcoming, emojis, scope),
+        "embed": build_schedule_embed(in_progress, upcoming, emojis, scope, archival=archival),
         "view": build_scribe_view(emojis),
     }
 
 
-def build_schedule_embed(in_progress: list, upcoming: list, emojis: dict,
-                         scope: str = "Limited") -> discord.Embed:
+def build_schedule_embed(in_progress: list, upcoming: list, emojis: dict, scope: str = "Limited",
+                         *, archival: bool = False) -> discord.Embed:
     """An embed rather than Components V2: mobile Pins, search results and reply previews render content
     and embeds only, so a V2 layout shows as an empty message everywhere it is previewed. The heading opens
     the description instead of filling `title`, which resolves custom emoji but runs no markdown, so a
     heading level only survives in the body. No thumbnail either — the tree lines are tuned to
-    `LINE_MAX_WIDTH`, which a thumbnail would narrow out from under them."""
-    body = _schedule_body(in_progress, upcoming, emojis)
+    `LINE_MAX_WIDTH`, which a thumbnail would narrow out from under them.
+
+    ``archival`` renders a board meant to be read long after it stops being refreshed: each queue's full
+    date range instead of a relative countdown, and no In Progress / Coming Up headers, since both go
+    from accurate to false the moment the schedule stops moving."""
+    body = _schedule_body(in_progress, upcoming, emojis, archival=archival)
     return discord.Embed(
         description=f"{_title_text(emojis, scope)}\n{body}",
         color=discord.Color.green(),
@@ -201,7 +221,7 @@ def build_announcement(group: mtgscribe.EventGroup, emojis: dict, *, format_word
     ``next_group`` is set, a "Next Up" line previews the rotation already scheduled after this one."""
     suffix = f" {format_word}" if format_word else ""
     lines = [
-        f"### **{group.label}**{suffix} is live!",
+        f"### **{group.label}**{suffix} {MSG_EVENT_LIVE}",
         f"Ends {group.end_local:%B %-d} ({format_dt(group.end, 'R')})",
     ]
     if next_group is not None:
@@ -232,17 +252,19 @@ def _cube_list_url(group: mtgscribe.EventGroup) -> str | None:
 
 
 def build_competitive_reminder(group: mtgscribe.EventGroup, emojis: dict) -> discord.Embed:
-    """A reminder for a competitive event (Qualifier Play-In, ACQ, Arena Championship), distinct from
-    the rotation announcements: the event type heads it, the full Sealed/Bo format and closing date
-    follow. Limited-scoped competitive events are Sealed (the Constructed ones fall out of scope)."""
+    """A reminder for a competitive event (Qualifier Play-In, ACQ, Arena Open, Arena Championship),
+    distinct from the rotation announcements: the event type heads it, the full Sealed/Bo format and
+    closing date follow. Most Limited-scoped competitive events are Sealed, but an Arena Open or a
+    Limited ACQ can be Draft, so the format comes off the tags with Sealed as the fallback."""
     event_type, best_of = _competitive_parts(group)
     heading_type = _competitive_heading_type(event_type, emojis)
     best_of_suffix = f" {best_of}" if best_of else ""
     seed = _seed_for_label(group.label)
     set_code = seed.code if seed else group.label
+    limited_format = group.limited_format or "Sealed"
     lines = [
-        f"### {heading_type} is now open",
-        f"Format: **{set_code} Sealed{best_of_suffix}**",
+        f"### {heading_type} {_competitive_opening(event_type)}",
+        f"Format: **{set_code} {limited_format}{best_of_suffix}**",
         f"\nEnds {group.end_local:%B %-d} ({format_dt(group.end, 'R')})",
     ]
     embed = discord.Embed(description="\n".join(lines), color=discord.Color.green())
@@ -266,11 +288,24 @@ def _competitive_parts(group: mtgscribe.EventGroup) -> tuple[str, str]:
     return event_type or "Competitive event", "/".join(best_ofs)
 
 
+def _competitive_opening(event_type: str) -> str:
+    """A qualifier opens for entry, so it reads "is now open". Anything else takes the rotation
+    callout's wording — an Arena Open carries "Open" in its own name and would otherwise announce
+    itself as "Arena Open is now open"."""
+    if _is_arena_champ(event_type):
+        return MSG_QUALIFIER_OPEN
+    return MSG_EVENT_LIVE
+
+
+def _is_arena_champ(event_type: str) -> bool:
+    return any(text in event_type for text in ARENA_CHAMP_EXPANSIONS)
+
+
 def _competitive_heading_type(event_type: str, emojis: dict) -> str:
     """The event type as it leads the reminder heading. An Arena Championship event swaps the literal
     "Arena Championship" for its :arenachamp: emoji and drops the generic mtga lead; everything else
     keeps the mtga lead."""
-    if ARENA_CHAMP_TEXT in event_type:
+    if _is_arena_champ(event_type):
         return _decorate_arena_champ(event_type, emojis)
     mtga = emojis.get(MTGA_EMOJI_NAME)
     return f"{mtga} {event_type}" if mtga else event_type
@@ -281,20 +316,22 @@ def schedule_title_marker(scope: str) -> str:
     return f"{scope} Event Schedule"
 
 
-def _schedule_body(in_progress: list, upcoming: list, emojis: dict) -> str:
+def _schedule_body(in_progress: list, upcoming: list, emojis: dict, *, archival: bool = False) -> str:
     sections: list[str] = []
     if in_progress:
-        sections.append(f"### {IN_PROGRESS_EMOJI} In Progress")
-        sections.extend(_section_blocks(in_progress, emojis, upcoming=False))
+        if not archival:
+            sections.append(f"### {IN_PROGRESS_EMOJI} In Progress")
+        sections.extend(_section_blocks(in_progress, emojis, upcoming=False, archival=archival))
     if upcoming:
-        sections.append(f"### {COMING_UP_EMOJI} Coming Up")
-        sections.extend(_section_blocks(upcoming, emojis, upcoming=True))
+        if not archival:
+            sections.append(f"### {COMING_UP_EMOJI} Coming Up")
+        sections.extend(_section_blocks(upcoming, emojis, upcoming=True, archival=archival))
     if not sections:
         return "No Limited events right now."
     return "\n".join(sections)
 
 
-def _section_blocks(groups: list, emojis: dict, *, upcoming: bool) -> list:
+def _section_blocks(groups: list, emojis: dict, *, upcoming: bool, archival: bool = False) -> list:
     """One block per set, plus a collapsed roster for formats that rotate one-set-per-window —
     Flashback reruns and (upcoming only) Quick Draft. Those would otherwise scatter a header per set,
     so they fold into a single "<format>" block listing each set."""
@@ -306,9 +343,9 @@ def _section_blocks(groups: list, emojis: dict, *, upcoming: bool) -> list:
             rosters.setdefault(heading, []).append(group)
         else:
             standalone.append(group)
-    blocks = [_set_block(label, windows, emojis, upcoming=upcoming)
+    blocks = [_set_block(label, windows, emojis, upcoming=upcoming, archival=archival)
               for label, windows in _by_set(standalone).items()]
-    blocks.extend(_roster_block(heading, members, emojis, upcoming=upcoming)
+    blocks.extend(_roster_block(heading, members, emojis, upcoming=upcoming, archival=archival)
                   for heading, members in rosters.items())
     return blocks
 
@@ -329,20 +366,23 @@ def _by_set(groups: list) -> dict:
     return ordered
 
 
-def _roster_block(heading: str, members: list, emojis: dict, *, upcoming: bool) -> str:
+def _roster_block(heading: str, members: list, emojis: dict, *, upcoming: bool,
+                  archival: bool = False) -> str:
     members = sorted(members, key=lambda group: group.start)
     lines = [f"**{heading}**"]
     for index, group in enumerate(members):
         corner = "└" if index == len(members) - 1 else "├"
-        lines.append(f"{NBSP}{corner}{NBSP}{NBSP}{_roster_line(group, emojis, upcoming=upcoming)}")
+        lines.append(f"{NBSP}{corner}{NBSP}{NBSP}"
+                     f"{_roster_line(group, emojis, upcoming=upcoming, archival=archival)}")
     return "\n".join(lines)
 
 
-def _roster_line(group: mtgscribe.EventGroup, emojis: dict, *, upcoming: bool) -> str:
+def _roster_line(group: mtgscribe.EventGroup, emojis: dict, *, upcoming: bool,
+                 archival: bool = False) -> str:
     prefix = _set_emoji_prefix(group, emojis)
     name = _fit_set_name(group, prefix, _timing(group, upcoming=upcoming, compact=True))
     lead = f"{prefix}{name} · "
-    return f"{lead}{_fit_timing(group, _estimate_cols(lead), upcoming=upcoming)}"
+    return f"{lead}{_fit_timing(group, _estimate_cols(lead), upcoming=upcoming, archival=archival)}"
 
 
 def _fit_set_name(group: mtgscribe.EventGroup, emoji_prefix: str, timing: str) -> str:
@@ -404,8 +444,10 @@ def _estimate_cols(text: str) -> int:
     return TREE_PREFIX_WIDTH + _text_cols(text)
 
 
-def _set_block(label: str, windows: list, emojis: dict, *, upcoming: bool) -> str:
-    items = [_format_line(group, emojis, upcoming=upcoming) for group in _by_format(windows)]
+def _set_block(label: str, windows: list, emojis: dict, *, upcoming: bool,
+               archival: bool = False) -> str:
+    items = [_format_line(group, emojis, upcoming=upcoming, archival=archival)
+             for group in _by_format(windows)]
     lines = [f"{_set_emoji_prefix(windows[0], emojis)}**{label}**"]
     for index, item in enumerate(items):
         corner = "└" if index == len(items) - 1 else "├"
@@ -421,7 +463,7 @@ def _by_format(windows: list) -> list:
     return list(grouped.values())
 
 
-def _format_line(windows: list, emojis: dict, *, upcoming: bool) -> str:
+def _format_line(windows: list, emojis: dict, *, upcoming: bool, archival: bool = False) -> str:
     """Render one format's line content. When a format recurs across several windows, only the
     soonest is shown, with its countdown. The Arena Direct product word is dropped in favour of its
     booster emoji, and an overflowing Midweek line shortens its prefix to ``MWM``."""
@@ -433,7 +475,7 @@ def _format_line(windows: list, emojis: dict, *, upcoming: bool) -> str:
     if label.startswith("Midweek") and _midweek_overflows(label, first, upcoming=upcoming):
         label = label.replace("Midweek", "MWM", 1)
     lead = _lead(label, suffix)
-    return f"{lead}{_fit_timing(first, _estimate_cols(lead), upcoming=upcoming)}"
+    return f"{lead}{_fit_timing(first, _estimate_cols(lead), upcoming=upcoming, archival=archival)}"
 
 
 def _lead(label: str, suffix: str) -> str:
@@ -449,7 +491,10 @@ def _midweek_overflows(label: str, group: mtgscribe.EventGroup, *, upcoming: boo
     return _estimate_cols(f"{label} · ") + _text_cols(compact) > LINE_MAX_WIDTH
 
 
-def _timing(group: mtgscribe.EventGroup, *, upcoming: bool, compact: bool = False) -> str:
+def _timing(group: mtgscribe.EventGroup, *, upcoming: bool, compact: bool = False,
+            archival: bool = False) -> str:
+    if archival:
+        return _date_range(group.start_local, group.end_local)
     if upcoming:
         window = _date_range(group.start_local, group.end_local)
         countdown = format_dt(group.start, "R")
@@ -462,11 +507,19 @@ def _timing(group: mtgscribe.EventGroup, *, upcoming: bool, compact: bool = Fals
     return f"ends {group.end_local:%B %-d} {countdown}"
 
 
-def _fit_timing(group: mtgscribe.EventGroup, lead_cols: int, *, upcoming: bool) -> str:
+def _fit_timing(group: mtgscribe.EventGroup, lead_cols: int, *, upcoming: bool,
+                archival: bool = False) -> str:
     """The timing tail for an event line, trimmed to fit. Upcoming: keep ``starts`` only while the
     whole line stays well clear of the wrap point, then drop it, then drop the date range. Competitive
     events invert that — their short window is the point, so the range is kept and the countdown is
-    dropped instead. In progress: drop the explicit end date (keeping ``ends {countdown}``) on overflow."""
+    dropped instead. In progress: drop the explicit end date (keeping ``ends {countdown}``) on overflow.
+
+    An archival tail needs no fitting: dropping the countdown frees more room than the range takes back.
+    It reads the same for a running and an upcoming queue, the distinction having stopped meaning
+    anything once the board is frozen.
+    """
+    if archival:
+        return _timing(group, upcoming=upcoming, archival=True)
     if upcoming:
         with_range = _timing(group, upcoming=True, compact=True)
         if group.competitive:
@@ -486,8 +539,19 @@ def _fit_timing(group: mtgscribe.EventGroup, lead_cols: int, *, upcoming: bool) 
 
 
 def _decorate_arena_champ(formats: str, emojis: dict) -> str:
+    """Scribe writes the qualifier family both long ("Arena Championship Qualifier Weekend") and
+    abbreviated ("ACQ Weekend"), and both should read the same once decorated.
+
+    The emoji stands for "Arena Championship" alone, so the abbreviation has to give "Qualifier" back —
+    swapping the whole of "ACQ" for the emoji would drop the word and leave a bare "Weekend".
+    """
     emoji = emojis.get(ARENA_CHAMP_EMOJI_NAME)
-    return formats.replace(ARENA_CHAMP_TEXT, str(emoji)) if emoji else formats
+    if emoji is None:
+        return formats
+    for text, kept in ARENA_CHAMP_EXPANSIONS.items():
+        replacement = f"{emoji} {kept}" if kept else str(emoji)
+        formats = formats.replace(text, replacement)
+    return formats
 
 
 def _booster_emoji_suffix(group: mtgscribe.EventGroup, emojis: dict) -> str:
@@ -500,7 +564,9 @@ def _booster_emoji_suffix(group: mtgscribe.EventGroup, emojis: dict) -> str:
     return ""
 
 
-FORMAT_PRIORITY = {"Premier Draft": 0, "Traditional Draft": 1, "Pick Two": 2, "Pick 2 Draft": 2, "Quick Draft": 3}
+DRAFT_FORMATS = ("Premier Draft", "Traditional Draft", "Pick Two", "Pick 2 Draft", "Pick-Two Draft",
+                 "Quick Draft")
+FORMAT_PRIORITY = {label: rank for rank, label in enumerate(DRAFT_FORMATS)}
 
 
 def _format_label(group: mtgscribe.EventGroup) -> str:
@@ -516,8 +582,12 @@ def _format_label(group: mtgscribe.EventGroup) -> str:
 
 
 def _join_formats(formats: list) -> str:
+    """Draft queues share one trailing "Draft" ("Premier, Trad" → "Premier, Trad Draft"). A Sealed or
+    competitive group carries its own complete names, so it takes no suffix."""
     joined = ", ".join(short_format(label) for label in formats)
-    return joined if "Draft" in joined else f"{joined} Draft"
+    if "Draft" in joined or any(label not in DRAFT_FORMATS for label in formats):
+        return joined
+    return f"{joined} Draft"
 
 
 def _date_range(start: datetime, end: datetime) -> str:
@@ -553,13 +623,20 @@ def _clean_set_label(label: str) -> str:
 def _seed_for_label(label: str):
     """Match either way: a queue label may carry the full set name ("Secrets of Strixhaven") or, on
     flashback/quick reruns, just the short name Arena uses ("Duskmourn" for "Duskmourn: House of
-    Horror"), which is a substring of the seed name rather than a superstring of it."""
+    Horror"), which is a substring of the seed name rather than a superstring of it.
+
+    The longest matching name wins, so "Dominaria United" resolves to DMU and not to the older
+    Dominaria whose name it contains.
+    """
     lowered = label.lower()
+    best = None
     for seed in ALL_SETS:
         name = seed.name.lower()
-        if name in lowered or lowered in name:
-            return seed
-    return None
+        if name not in lowered and lowered not in name:
+            continue
+        if best is None or len(name) > len(best.name):
+            best = seed
+    return best
 
 
 def _passes_format(event: mtgscribe.ScribeEvent, selected: str | None) -> bool:

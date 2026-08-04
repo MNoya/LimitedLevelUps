@@ -144,6 +144,7 @@ const COLLECTOR_BOOSTER_WINDOWS: ReadonlyArray<{ setCode: string; startDate: str
   { setCode: "TMT", startDate: "2026-03-13", endDate: "2026-03-15" },
   { setCode: "SOS", startDate: "2026-04-30", endDate: "2026-05-04" },
   { setCode: "MSH", startDate: "2026-06-30", endDate: "2026-07-06" },
+  { setCode: "HOB", startDate: "2026-08-14", endDate: "2026-08-23" },
 ];
 
 const COLLECTOR_WINDOW_SLACK_DAYS = 1;

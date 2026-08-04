@@ -1,6 +1,6 @@
 """Scribe-driven format-schedule tick — fires at the few daily windows when MTGA queues open.
 
-Each tick pulls the MTG Scribe calendar once and, per channel, (1) re-renders the pinned /event-scribe
+Each tick reads the bundled MTG Scribe calendar once and, per channel, (1) re-renders the pinned /event-scribe
 in place so it never goes stale across a rotation, and (2) announces events that went live since the
 previous window. Windows are Pacific (MTGA's clock), so an announcement lands right as the queue opens
 and tracks DST. A channel can hold more than one pin (Quick Draft and Flashback share one), so a pin is
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import discord
 from discord.ext import commands
@@ -23,6 +23,7 @@ from bot.commands.event_scribe import (
     build_schedule_payload,
     schedule_title_marker,
     select_groups,
+    select_season_groups,
 )
 from bot.commands.guide import SYNC_CURRENT, sync_channel, sync_set_tracking_todo
 from bot.commands.leaderboard import build_set_send_off_embeds
@@ -40,21 +41,22 @@ from bot.services.format_schedule import (
     OPEN_TZ,
     SCHEDULE_PINS,
     SchedulePin,
+    active_set_seed,
     already_announced,
     announcement_format,
     archive_candidates,
     latest_channel_in_category,
-    newest_set,
     newly_opened,
     next_rotation,
     previous_window_start,
+    set_pin_frozen,
     set_seed_for_channel,
 )
 from bot.services.server_guide import OVERVIEW_PAGE, stripped_channel_name
 from bot.sets import RELEASE_TIME, RELEASE_TZ
 
-LOOKBACK_DAYS = 90
 HISTORY_SCAN_LIMIT = 100
+RELATIVE_TIMESTAMP = "<t:"
 
 log = logging.getLogger(__name__)
 
@@ -117,8 +119,7 @@ async def fire_window() -> None:
 
     now = datetime.now(timezone.utc)
     since = previous_window_start(now)
-    start_date = (now - timedelta(days=LOOKBACK_DAYS)).date()
-    events = await asyncio.to_thread(mtgscribe.fetch_events, start_date)
+    events = mtgscribe.load_events()
     emojis = {emoji.name: emoji for emoji in await _bot.fetch_application_emojis()}
 
     for pin in SCHEDULE_PINS:
@@ -127,7 +128,12 @@ async def fire_window() -> None:
             continue
         if pin.maintain_pin:
             in_progress, upcoming, scope = select_pin(events, pin)
-            await _refresh_pin(channel, scope, in_progress, upcoming, emojis, create_if_missing=pin.auto_pin)
+            archival = _archives_set_pin(pin, now)
+            if archival:
+                in_progress, upcoming = select_season_groups(events, scope), []
+            if not (archival and await _pin_already_archival(channel, scope)):
+                await _refresh_pin(channel, scope, in_progress, upcoming, emojis,
+                                   create_if_missing=pin.auto_pin, archival=archival)
         if pin.announce != ANNOUNCE_NONE:
             scheduled = announce_groups(events, pin)
             fresh = newly_opened(scheduled, since, now)
@@ -233,13 +239,41 @@ def _alphabetical_neighbor(archive: discord.CategoryChannel,
 def select_pin(events: list, pin: SchedulePin) -> tuple[list, list, str]:
     """The pinned schedule's groups and its title scope: a format-filtered view, or the whole active
     set when the pin carries no format filter (the set channel). Untrimmed, to match what
-    /event-scribe renders for an explicit filter or set."""
+    /event-scribe renders for an explicit filter or set.
+
+    The scope is the date-derived active set, the same source the leaderboard rotates on. It also names
+    the pin ``_refresh_pin`` searches for, so a scope naming any other set silently matches no pin.
+    """
     if pin.pin_filters:
         in_progress, upcoming = select_groups(events, list(pin.pin_filters), apply_horizon=False)
         return in_progress, upcoming, pin.scope_label
-    set_name = newest_set().name
+    set_name = active_set_seed().name
     in_progress, upcoming = select_groups(events, None, set_name, apply_horizon=False)
     return in_progress, upcoming, set_name
+
+
+def _archives_set_pin(pin: SchedulePin, now: datetime) -> bool:
+    """Whether the set channel's pin should be written in its final, archival form.
+
+    True inside the active set's last week. The pin is written once more with absolute dates and no
+    section headers, then left alone — refreshing to the end would leave it holding a board whose every
+    queue had expired, and the channel is archived days later with that pin as the season's record.
+    Format pins (Quick, Flashback, Sealed) are not tied to a set and never archive.
+    """
+    return not pin.pin_filters and set_pin_frozen(now)
+
+
+async def _pin_already_archival(channel: discord.TextChannel, scope: str) -> bool:
+    """Whether the archival write has already happened, read off the pin instead of tracked state: an
+    archival board carries no ``<t:`` relative timestamp, a live one always does. Keeps the final write
+    to exactly once without a table, and survives a restart."""
+    message = await _pinned_schedule(channel, schedule_title_marker(scope))
+    if message is None:
+        return False
+    if RELATIVE_TIMESTAMP in message_text(message):
+        return False
+    log.info(f"format-schedule: the {scope} pin is already archival; leaving it frozen")
+    return True
 
 
 def announce_groups(events: list, pin: SchedulePin) -> list:
@@ -261,12 +295,13 @@ def _resolve_channel(guild: discord.Guild, pin: SchedulePin) -> discord.TextChan
 
 
 async def _refresh_pin(channel: discord.TextChannel, scope: str, in_progress: list,
-                       upcoming: list, emojis: dict, *, create_if_missing: bool = False) -> None:
+                       upcoming: list, emojis: dict, *, create_if_missing: bool = False,
+                       archival: bool = False) -> None:
     """Edit the pin in place, matching on the title so the right pin is edited when a channel holds
     several. Pins are human-seeded (the owner pins a filtered /event-scribe post) and a channel without
     a matching pin is left alone. ``create_if_missing`` would post and pin the schedule itself instead;
     no pin enables it today, reserved for when the bot should seed a channel's pin."""
-    payload = build_schedule_payload(in_progress, upcoming, emojis, scope)
+    payload = build_schedule_payload(in_progress, upcoming, emojis, scope, archival=archival)
     message = await _pinned_schedule(channel, schedule_title_marker(scope))
     if message is None:
         if create_if_missing:

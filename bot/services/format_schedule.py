@@ -23,6 +23,7 @@ OPEN_TZ = ZoneInfo("America/Los_Angeles")
 EVENT_DAY_TZ = ZoneInfo("America/New_York")
 ANNOUNCE_WINDOWS: tuple[time, ...] = (time(6, 0), time(8, 0), time(14, 0))
 DEDUP_LOOKBACK = timedelta(hours=24)
+SET_PIN_FREEZE_LEAD = timedelta(days=7)
 
 PERMANENT_CUBE_CODE = "CUBE"
 LATEST_SET_CATEGORY = "MTG Strategy"
@@ -175,6 +176,20 @@ def set_before(seed: SetSeed) -> SetSeed | None:
         if previous is None or candidate.start_date > previous.start_date:
             previous = candidate
     return previous
+
+
+def set_pin_frozen(when: datetime | None = None) -> bool:
+    """Whether the set channel's pinned schedule should be left alone from here on.
+
+    True inside the final week of the active set's window. Refreshing right up to rotation would leave
+    the pin holding an emptied board, every queue ended — and the channel is archived days later, so
+    that pin becomes the season's record. Freezing early keeps it a full picture instead.
+    """
+    seed = active_set_seed(when)
+    if seed.end_date is None:
+        return False
+    now = when or datetime.now(timezone.utc)
+    return seed.end_date - now.astimezone(EVENT_DAY_TZ).date() <= SET_PIN_FREEZE_LEAD
 
 
 def awards_eve_set(when: datetime | None = None) -> SetSeed | None:

@@ -1,0 +1,1826 @@
+[
+  {
+    "title": "Marvel Super Heroes Prerelease Weekend",
+    "tags": [
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "prerelease"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-06-19 04:00:00",
+    "utc_end_date": "2026-06-22 03:59:59",
+    "start_date": "2026-06-19 00:00:00",
+    "end_date": "2026-06-21 23:59:59"
+  },
+  {
+    "title": "Marvel Super Heroes Digital Release",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "digital-release"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "mtgo"
+      }
+    ],
+    "utc_start_date": "2026-06-23 04:00:00",
+    "utc_end_date": "2026-06-24 03:59:59",
+    "start_date": "2026-06-23 00:00:00",
+    "end_date": "2026-06-23 23:59:59"
+  },
+  {
+    "title": "Jump In: Marvel Super Heroes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "jump-in"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      }
+    ],
+    "utc_start_date": "2026-06-23 14:00:00",
+    "utc_end_date": "2026-08-11 15:00:00",
+    "start_date": "2026-06-23 10:00:00",
+    "end_date": "2026-08-11 11:00:00"
+  },
+  {
+    "title": "Premier Draft: Marvel Super Heroes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "premier-draft"
+      }
+    ],
+    "utc_start_date": "2026-06-23 15:00:00",
+    "utc_end_date": "2026-08-11 15:00:00",
+    "start_date": "2026-06-23 11:00:00",
+    "end_date": "2026-08-11 11:00:00"
+  },
+  {
+    "title": "Bo1 Sealed: Marvel Super Heroes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "best-of-one"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-06-23 15:00:00",
+    "utc_end_date": "2026-07-21 15:00:00",
+    "start_date": "2026-06-23 11:00:00",
+    "end_date": "2026-07-21 11:00:00"
+  },
+  {
+    "title": "Traditional Draft: Marvel Super Heroes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "traditional-draft"
+      }
+    ],
+    "utc_start_date": "2026-06-23 15:00:00",
+    "utc_end_date": "2026-08-11 15:00:00",
+    "start_date": "2026-06-23 11:00:00",
+    "end_date": "2026-08-11 11:00:00"
+  },
+  {
+    "title": "Traditional Sealed: Marvel Super Heroes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "traditional-sealed"
+      }
+    ],
+    "utc_start_date": "2026-06-23 15:00:00",
+    "utc_end_date": "2026-08-07 15:00:00",
+    "start_date": "2026-06-23 11:00:00",
+    "end_date": "2026-08-07 11:00:00"
+  },
+  {
+    "title": "Pick 2 Draft: Marvel Super Heroes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "pick-2-draft"
+      }
+    ],
+    "utc_start_date": "2026-06-23 15:00:00",
+    "utc_end_date": "2026-08-11 15:00:00",
+    "start_date": "2026-06-23 11:00:00",
+    "end_date": "2026-08-11 11:00:00"
+  },
+  {
+    "title": "Arena Direct: Marvel Super Heroes Collector Boxes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-direct"
+      },
+      {
+        "slug": "collector-booster"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-06-30 15:00:00",
+    "utc_end_date": "2026-07-06 15:00:00",
+    "start_date": "2026-06-30 11:00:00",
+    "end_date": "2026-07-06 11:00:00"
+  },
+  {
+    "title": "Quick Draft: Marvel Super Heroes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "quick-draft"
+      }
+    ],
+    "utc_start_date": "2026-07-02 15:00:00",
+    "utc_end_date": "2026-07-12 15:00:00",
+    "start_date": "2026-07-02 11:00:00",
+    "end_date": "2026-07-12 11:00:00"
+  },
+  {
+    "title": "ACQ Play-In: Marvel Super Heroes Sealed Bo1",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "play-in"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-07-04 13:00:00",
+    "utc_end_date": "2026-07-05 15:00:00",
+    "start_date": "2026-07-04 09:00:00",
+    "end_date": "2026-07-05 11:00:00"
+  },
+  {
+    "title": "Contender Draft: Marvel Super Heroes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "contender-draft"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      }
+    ],
+    "utc_start_date": "2026-07-07 15:00:00",
+    "utc_end_date": "2026-07-14 15:00:00",
+    "start_date": "2026-07-07 11:00:00",
+    "end_date": "2026-07-14 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: FDN + MSH Constructed",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "foundations"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "midweek-magic"
+      }
+    ],
+    "utc_start_date": "2026-07-07 21:00:00",
+    "utc_end_date": "2026-07-09 21:00:00",
+    "start_date": "2026-07-07 17:00:00",
+    "end_date": "2026-07-09 17:00:00"
+  },
+  {
+    "title": "ACQ Play-In: Sealed Marvel Super Heroes Bo3",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "play-in"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-07-10 13:00:00",
+    "utc_end_date": "2026-07-11 10:00:00",
+    "start_date": "2026-07-10 09:00:00",
+    "end_date": "2026-07-11 06:00:00"
+  },
+  {
+    "title": "Arena Championship Qualifier Weekend: Sealed Marvel Super Heroes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "qualifier"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-07-11 04:00:00",
+    "utc_end_date": "2026-07-13 03:59:59",
+    "start_date": "2026-07-11 00:00:00",
+    "end_date": "2026-07-12 23:59:59"
+  },
+  {
+    "title": "Pro Tour Marvel Super Heroes: Modern And Top 8 Draft",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "draft"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "pro-tour"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-07-17 04:00:00",
+    "utc_end_date": "2026-07-20 03:59:59",
+    "start_date": "2026-07-17 00:00:00",
+    "end_date": "2026-07-19 23:59:59"
+  },
+  {
+    "title": "Arena Direct: Marvel Super Heroes Play Booster Box",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-direct"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "play-boosters"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-07-17 15:00:00",
+    "utc_end_date": "2026-07-27 15:00:00",
+    "start_date": "2026-07-17 11:00:00",
+    "end_date": "2026-07-27 11:00:00"
+  },
+  {
+    "title": "Planar Cube Draft",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "cube"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "planar-cube"
+      }
+    ],
+    "utc_start_date": "2026-07-21 15:00:00",
+    "utc_end_date": "2026-08-11 15:00:00",
+    "start_date": "2026-07-21 11:00:00",
+    "end_date": "2026-08-11 11:00:00"
+  },
+  {
+    "title": "Spotlight Series Brussels: Team Limited",
+    "tags": [
+      {
+        "slug": "fanfinity"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "magic-spotlight-series"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "tabletop"
+      },
+      {
+        "slug": "team-limited"
+      }
+    ],
+    "utc_start_date": "2026-07-24 04:00:00",
+    "utc_end_date": "2026-07-27 03:59:59",
+    "start_date": "2026-07-24 00:00:00",
+    "end_date": "2026-07-26 23:59:59"
+  },
+  {
+    "title": "Premier Draft: Edge of Eternities",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "edge-of-eternities"
+      },
+      {
+        "slug": "flashback"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
+      }
+    ],
+    "utc_start_date": "2026-07-28 15:00:00",
+    "utc_end_date": "2026-08-04 15:00:00",
+    "start_date": "2026-07-28 11:00:00",
+    "end_date": "2026-08-04 11:00:00"
+  },
+  {
+    "title": "Quick Draft: Marvel Super Heroes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "quick-draft"
+      }
+    ],
+    "utc_start_date": "2026-07-31 15:00:00",
+    "utc_end_date": "2026-08-11 15:00:00",
+    "start_date": "2026-07-31 11:00:00",
+    "end_date": "2026-08-11 11:00:00"
+  },
+  {
+    "title": "Premier Draft: War of the Spark",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "flashback"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
+      },
+      {
+        "slug": "war-of-the-spark"
+      }
+    ],
+    "utc_start_date": "2026-08-04 15:00:00",
+    "utc_end_date": "2026-08-11 15:00:00",
+    "start_date": "2026-08-04 11:00:00",
+    "end_date": "2026-08-11 11:00:00"
+  },
+  {
+    "title": "Contender Draft: Marvel Super Heroes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "contender-draft"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      }
+    ],
+    "utc_start_date": "2026-08-04 15:00:00",
+    "utc_end_date": "2026-08-10 15:00:00",
+    "start_date": "2026-08-04 11:00:00",
+    "end_date": "2026-08-10 11:00:00"
+  },
+  {
+    "title": "Arena Direct: Powered Cube Draft (SPM &#038; MSH Play Booster Prizes)",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-direct"
+      },
+      {
+        "slug": "arena-powered-cube"
+      },
+      {
+        "slug": "draft"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "play-boosters"
+      }
+    ],
+    "utc_start_date": "2026-08-04 15:00:00",
+    "utc_end_date": "2026-08-08 15:00:00",
+    "start_date": "2026-08-04 11:00:00",
+    "end_date": "2026-08-08 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: Marvel Super Heroes Quick Draft",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "marvel-super-heroes"
+      },
+      {
+        "slug": "midweek-magic"
+      },
+      {
+        "slug": "quick-draft"
+      }
+    ],
+    "utc_start_date": "2026-08-04 21:00:00",
+    "utc_end_date": "2026-08-06 21:00:00",
+    "start_date": "2026-08-04 17:00:00",
+    "end_date": "2026-08-06 17:00:00"
+  },
+  {
+    "title": "The Hobbit Prerelease Weekend",
+    "tags": [
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "prerelease"
+      },
+      {
+        "slug": "sealed"
+      },
+      {
+        "slug": "tabletop"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-08-07 04:00:00",
+    "utc_end_date": "2026-08-10 03:59:59",
+    "start_date": "2026-08-07 00:00:00",
+    "end_date": "2026-08-09 23:59:59"
+  },
+  {
+    "title": "The Hobbit Digital Release",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "digital-release"
+      },
+      {
+        "slug": "mtgo"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-08-11 04:00:00",
+    "utc_end_date": "2026-08-12 03:59:59",
+    "start_date": "2026-08-11 00:00:00",
+    "end_date": "2026-08-11 23:59:59"
+  },
+  {
+    "title": "Premier Draft: The Hobbit",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-08-11 15:00:00",
+    "utc_end_date": "2026-09-29 15:00:00",
+    "start_date": "2026-08-11 11:00:00",
+    "end_date": "2026-09-29 11:00:00"
+  },
+  {
+    "title": "Pick-Two Draft: The Hobbit",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "pick-2-draft"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-08-11 15:00:00",
+    "utc_end_date": "2026-09-29 15:00:00",
+    "start_date": "2026-08-11 11:00:00",
+    "end_date": "2026-09-29 11:00:00"
+  },
+  {
+    "title": "Traditional Draft: The Hobbit",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "the-hobbit"
+      },
+      {
+        "slug": "traditional-draft"
+      }
+    ],
+    "utc_start_date": "2026-08-11 15:00:00",
+    "utc_end_date": "2026-09-29 15:00:00",
+    "start_date": "2026-08-11 11:00:00",
+    "end_date": "2026-09-29 11:00:00"
+  },
+  {
+    "title": "Quick Draft: Duskmourn",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "duskmourn-house-of-horror"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "quck-draft"
+      }
+    ],
+    "utc_start_date": "2026-08-11 15:00:00",
+    "utc_end_date": "2026-08-19 15:00:00",
+    "start_date": "2026-08-11 11:00:00",
+    "end_date": "2026-08-19 11:00:00"
+  },
+  {
+    "title": "Sealed: The Hobbit",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "sealed"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-08-11 15:00:00",
+    "utc_end_date": "2026-09-08 15:00:00",
+    "start_date": "2026-08-11 11:00:00",
+    "end_date": "2026-09-08 11:00:00"
+  },
+  {
+    "title": "Traditional Sealed: The Hobbit",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "the-hobbit"
+      },
+      {
+        "slug": "traditional-sealed"
+      }
+    ],
+    "utc_start_date": "2026-08-11 15:00:00",
+    "utc_end_date": "2026-08-25 15:00:00",
+    "start_date": "2026-08-11 11:00:00",
+    "end_date": "2026-08-25 11:00:00"
+  },
+  {
+    "title": "The Hobbit Welcome Deck Duels",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "the-hobbit"
+      },
+      {
+        "slug": "welcome-decks"
+      }
+    ],
+    "utc_start_date": "2026-08-11 15:00:00",
+    "utc_end_date": "2026-09-29 15:00:00",
+    "start_date": "2026-08-11 11:00:00",
+    "end_date": "2026-09-29 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: Brawl",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "brawl"
+      },
+      {
+        "slug": "midweek-magic"
+      }
+    ],
+    "utc_start_date": "2026-08-11 21:00:00",
+    "utc_end_date": "2026-08-13 21:00:00",
+    "start_date": "2026-08-11 17:00:00",
+    "end_date": "2026-08-13 17:00:00"
+  },
+  {
+    "title": "Arena Direct: The Hobbit Collector Boosters",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-direct"
+      },
+      {
+        "slug": "collector-booster"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-08-14 15:00:00",
+    "utc_end_date": "2026-08-23 15:00:00",
+    "start_date": "2026-08-14 11:00:00",
+    "end_date": "2026-08-23 11:00:00"
+  },
+  {
+    "title": "Timeless Metagame Challenge",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "metagame-challenge"
+      },
+      {
+        "slug": "timeless"
+      }
+    ],
+    "utc_start_date": "2026-08-14 15:00:00",
+    "utc_end_date": "2026-08-17 15:00:00",
+    "start_date": "2026-08-14 11:00:00",
+    "end_date": "2026-08-17 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: Historic Pauper",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "historic"
+      },
+      {
+        "slug": "midweek-magic"
+      },
+      {
+        "slug": "pauper"
+      }
+    ],
+    "utc_start_date": "2026-08-18 21:00:00",
+    "utc_end_date": "2026-08-20 21:00:00",
+    "start_date": "2026-08-18 17:00:00",
+    "end_date": "2026-08-20 17:00:00"
+  },
+  {
+    "title": "Quick Draft: The Hobbit",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-08-20 15:00:00",
+    "utc_end_date": "2026-08-30 15:00:00",
+    "start_date": "2026-08-20 11:00:00",
+    "end_date": "2026-08-30 11:00:00"
+  },
+  {
+    "title": "ACQ Play-In: Timeless Bo1",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "best-of-one"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "play-in"
+      },
+      {
+        "slug": "timeless"
+      }
+    ],
+    "utc_start_date": "2026-08-22 13:00:00",
+    "utc_end_date": "2026-08-23 10:00:00",
+    "start_date": "2026-08-22 09:00:00",
+    "end_date": "2026-08-23 06:00:00"
+  },
+  {
+    "title": "Contender Draft: The Hobbit",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "contender-draft"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-08-24 15:00:00",
+    "utc_end_date": "2026-09-29 15:00:00",
+    "start_date": "2026-08-24 11:00:00",
+    "end_date": "2026-09-29 11:00:00"
+  },
+  {
+    "title": "Premier Draft: Lord of the Rings",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "lord-of-the-rings"
+      },
+      {
+        "slug": "premier-draft"
+      }
+    ],
+    "utc_start_date": "2026-08-25 15:00:00",
+    "utc_end_date": "2026-09-08 15:00:00",
+    "start_date": "2026-08-25 11:00:00",
+    "end_date": "2026-09-08 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: Brawl Builder Challenge",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "brawl"
+      },
+      {
+        "slug": "builder-challenge"
+      },
+      {
+        "slug": "midweek-magic"
+      }
+    ],
+    "utc_start_date": "2026-08-25 21:00:00",
+    "utc_end_date": "2026-08-27 21:00:00",
+    "start_date": "2026-08-25 17:00:00",
+    "end_date": "2026-08-27 17:00:00"
+  },
+  {
+    "title": "Spotlight Series Brisbane: Modern",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "lets-play-games"
+      },
+      {
+        "slug": "magic-spotlight-series"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-08-28 04:00:00",
+    "utc_end_date": "2026-08-31 03:59:59",
+    "start_date": "2026-08-28 00:00:00",
+    "end_date": "2026-08-30 23:59:59"
+  },
+  {
+    "title": "ACQ Play-In: Timeless Bo3",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "best-of-three"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "play-in"
+      },
+      {
+        "slug": "timeless"
+      }
+    ],
+    "utc_start_date": "2026-08-28 13:00:00",
+    "utc_end_date": "2026-08-29 10:00:00",
+    "start_date": "2026-08-28 09:00:00",
+    "end_date": "2026-08-29 06:00:00"
+  },
+  {
+    "title": "Sealed: The Lord of the Rings",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "lord-of-the-rings"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-08-28 15:00:00",
+    "utc_end_date": "2026-09-03 15:00:00",
+    "start_date": "2026-08-28 11:00:00",
+    "end_date": "2026-09-03 11:00:00"
+  },
+  {
+    "title": "Arena Direct: The Hobbit Play Boosters",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-direct"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "play-boosters"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-08-28 15:00:00",
+    "utc_end_date": "2026-09-06 15:00:00",
+    "start_date": "2026-08-28 11:00:00",
+    "end_date": "2026-09-06 11:00:00"
+  },
+  {
+    "title": "Standard Metagame Challenge",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "metagame-challenge"
+      },
+      {
+        "slug": "standard"
+      }
+    ],
+    "utc_start_date": "2026-08-28 15:00:00",
+    "utc_end_date": "2026-08-31 15:00:00",
+    "start_date": "2026-08-28 11:00:00",
+    "end_date": "2026-08-31 11:00:00"
+  },
+  {
+    "title": "ACQ Weekend: Timeless",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "qualifier"
+      },
+      {
+        "slug": "timeless"
+      }
+    ],
+    "utc_start_date": "2026-08-29 04:00:00",
+    "utc_end_date": "2026-08-31 03:59:59",
+    "start_date": "2026-08-29 00:00:00",
+    "end_date": "2026-08-30 23:59:59"
+  },
+  {
+    "title": "Quick Draft: Secrets of Strixhaven",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
+      },
+      {
+        "slug": "secrets-of-strixhaven"
+      }
+    ],
+    "utc_start_date": "2026-08-31 15:00:00",
+    "utc_end_date": "2026-09-07 15:00:00",
+    "start_date": "2026-08-31 11:00:00",
+    "end_date": "2026-09-07 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: Foundations Middle-earth",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "foundations"
+      },
+      {
+        "slug": "middle-earth"
+      },
+      {
+        "slug": "midweek-magic"
+      }
+    ],
+    "utc_start_date": "2026-09-01 21:00:00",
+    "utc_end_date": "2026-09-03 21:00:00",
+    "start_date": "2026-09-01 17:00:00",
+    "end_date": "2026-09-03 17:00:00"
+  },
+  {
+    "title": "Yargle Day!",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "yargle"
+      }
+    ],
+    "utc_start_date": "2026-09-03 15:00:00",
+    "utc_end_date": "2026-09-04 15:00:00",
+    "start_date": "2026-09-03 11:00:00",
+    "end_date": "2026-09-04 11:00:00"
+  },
+  {
+    "title": "Spotlight Series Dallas/Fort Worth: Modern",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "magic-spotlight-series"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "star-city-games"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-09-04 04:00:00",
+    "utc_end_date": "2026-09-07 03:59:59",
+    "start_date": "2026-09-04 00:00:00",
+    "end_date": "2026-09-06 23:59:59"
+  },
+  {
+    "title": "Premier Draft: Mixed-Up",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "mixed-up"
+      },
+      {
+        "slug": "premier-draft"
+      }
+    ],
+    "utc_start_date": "2026-09-04 15:00:00",
+    "utc_end_date": "2026-09-18 15:00:00",
+    "start_date": "2026-09-04 11:00:00",
+    "end_date": "2026-09-18 11:00:00"
+  },
+  {
+    "title": "Premier Draft: Modern Horizons 3",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "modern-horizons-3"
+      },
+      {
+        "slug": "premier-draft"
+      }
+    ],
+    "utc_start_date": "2026-09-08 15:00:00",
+    "utc_end_date": "2026-09-15 15:00:00",
+    "start_date": "2026-09-08 11:00:00",
+    "end_date": "2026-09-15 11:00:00"
+  },
+  {
+    "title": "Arena Powered Cube",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-powered-cube"
+      },
+      {
+        "slug": "limited"
+      }
+    ],
+    "utc_start_date": "2026-09-08 15:00:00",
+    "utc_end_date": "2026-09-29 15:00:00",
+    "start_date": "2026-09-08 11:00:00",
+    "end_date": "2026-09-29 11:00:00"
+  },
+  {
+    "title": "US Regional Championship: Baltimore &#8211; Modern",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "regional-championship"
+      },
+      {
+        "slug": "star-city-games"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-09-11 04:00:00",
+    "utc_end_date": "2026-09-14 03:59:59",
+    "start_date": "2026-09-11 00:00:00",
+    "end_date": "2026-09-13 23:59:59"
+  },
+  {
+    "title": "China Regional Championship: Hangzhou &#8211; Modern",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "kadou"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "regional-championship"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-09-11 04:00:00",
+    "utc_end_date": "2026-09-14 03:59:59",
+    "start_date": "2026-09-11 00:00:00",
+    "end_date": "2026-09-13 23:59:59"
+  },
+  {
+    "title": "Arena Open: The Hobbit",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-open"
+      },
+      {
+        "slug": "draft"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-09-11 15:00:00",
+    "utc_end_date": "2026-09-13 15:00:00",
+    "start_date": "2026-09-11 11:00:00",
+    "end_date": "2026-09-13 11:00:00"
+  },
+  {
+    "title": "ACQ Play-In: Bo1 The Hobbit Sealed",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "play-in"
+      },
+      {
+        "slug": "qualifier"
+      },
+      {
+        "slug": "sealed"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-09-12 13:00:00",
+    "utc_end_date": "2026-09-13 10:00:00",
+    "start_date": "2026-09-12 09:00:00",
+    "end_date": "2026-09-13 06:00:00"
+  },
+  {
+    "title": "Premier Draft: Dominaria United",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "dominaria-united"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
+      }
+    ],
+    "utc_start_date": "2026-09-15 15:00:00",
+    "utc_end_date": "2026-09-22 15:00:00",
+    "start_date": "2026-09-15 11:00:00",
+    "end_date": "2026-09-22 11:00:00"
+  },
+  {
+    "title": "Arena Direct: Aetherdrift Play Boosters",
+    "tags": [
+      {
+        "slug": "aetherdrift"
+      },
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-direct"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "play-boosters"
+      }
+    ],
+    "utc_start_date": "2026-09-15 15:00:00",
+    "utc_end_date": "2026-09-20 15:00:00",
+    "start_date": "2026-09-15 11:00:00",
+    "end_date": "2026-09-20 11:00:00"
+  },
+  {
+    "title": "ACQ Play-In: Bo3 The Hobbit Sealed",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "play-in"
+      },
+      {
+        "slug": "qualifier"
+      },
+      {
+        "slug": "sealed"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-09-18 13:00:00",
+    "utc_end_date": "2026-09-19 10:00:00",
+    "start_date": "2026-09-18 09:00:00",
+    "end_date": "2026-09-19 06:00:00"
+  },
+  {
+    "title": "ACQ Weekend: The Hobbit Sealed",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "qualifier"
+      },
+      {
+        "slug": "sealed"
+      },
+      {
+        "slug": "the-hobbit"
+      }
+    ],
+    "utc_start_date": "2026-09-19 04:00:00",
+    "utc_end_date": "2026-09-21 03:59:59",
+    "start_date": "2026-09-19 00:00:00",
+    "end_date": "2026-09-20 23:59:59"
+  },
+  {
+    "title": "Premier Draft: Outlaws of Thunder Junction",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "outlaws-of-thunder-junction"
+      },
+      {
+        "slug": "premier-draft"
+      }
+    ],
+    "utc_start_date": "2026-09-22 15:00:00",
+    "utc_end_date": "2026-09-29 15:00:00",
+    "start_date": "2026-09-22 11:00:00",
+    "end_date": "2026-09-29 11:00:00"
+  },
+  {
+    "title": "Reality Fracture Prerelease Weekend",
+    "tags": [
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "prerelease"
+      },
+      {
+        "slug": "reality-fracture"
+      },
+      {
+        "slug": "sealed"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-09-25 04:00:00",
+    "utc_end_date": "2026-09-28 03:59:59",
+    "start_date": "2026-09-25 00:00:00",
+    "end_date": "2026-09-27 23:59:59"
+  },
+  {
+    "title": "Arena Direct: March of the Machine Set Boosters",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-direct"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "march-of-the-machine"
+      },
+      {
+        "slug": "set-boosters"
+      }
+    ],
+    "utc_start_date": "2026-09-25 15:00:00",
+    "utc_end_date": "2026-09-27 15:00:00",
+    "start_date": "2026-09-25 11:00:00",
+    "end_date": "2026-09-27 11:00:00"
+  },
+  {
+    "title": "Reality Fracture Digital Release",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "digital-release"
+      },
+      {
+        "slug": "mtgo"
+      },
+      {
+        "slug": "reality-fracture"
+      }
+    ],
+    "utc_start_date": "2026-09-29 04:00:00",
+    "utc_end_date": "2026-09-30 03:59:59",
+    "start_date": "2026-09-29 00:00:00",
+    "end_date": "2026-09-29 23:59:59"
+  },
+  {
+    "title": "Canada Regional Championship: Ottawa &#8211; Modern",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "face2face"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "regional-championship"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-10-02 04:00:00",
+    "utc_end_date": "2026-10-05 03:59:59",
+    "start_date": "2026-10-02 00:00:00",
+    "end_date": "2026-10-04 23:59:59"
+  },
+  {
+    "title": "Japan Regional Championship: Yokohama &#8211; Modern",
+    "tags": [
+      {
+        "slug": "big-magic"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "regional-championship"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-10-02 04:00:00",
+    "utc_end_date": "2026-10-05 03:59:59",
+    "start_date": "2026-10-02 00:00:00",
+    "end_date": "2026-10-04 23:59:59"
+  },
+  {
+    "title": "US Regional Championship: Los Angeles &#8211; Modern",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "regional-championship"
+      },
+      {
+        "slug": "star-city-games"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-10-09 04:00:00",
+    "utc_end_date": "2026-10-12 03:59:59",
+    "start_date": "2026-10-09 00:00:00",
+    "end_date": "2026-10-11 23:59:59"
+  },
+  {
+    "title": "EMEA Regional Championship: Ghent &#8211; Modern",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "fanfinity"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "regional-championship"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-10-09 04:00:00",
+    "utc_end_date": "2026-10-12 03:59:59",
+    "start_date": "2026-10-09 00:00:00",
+    "end_date": "2026-10-11 23:59:59"
+  },
+  {
+    "title": "Mexico/Central America/Caribbean Regional Championship: Mexico City &#8211; Modern",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "necrotower"
+      },
+      {
+        "slug": "regional-championship"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-10-11 04:00:00",
+    "utc_end_date": "2026-10-13 03:59:59",
+    "start_date": "2026-10-11 00:00:00",
+    "end_date": "2026-10-12 23:59:59"
+  },
+  {
+    "title": "Spotlight Series Hartford: Standard",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "magic-spotlight-series"
+      },
+      {
+        "slug": "standard"
+      },
+      {
+        "slug": "star-city-games"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-10-23 04:00:00",
+    "utc_end_date": "2026-10-26 03:59:59",
+    "start_date": "2026-10-23 00:00:00",
+    "end_date": "2026-10-25 23:59:59"
+  },
+  {
+    "title": "South America Regional Championship: Buenos Aires &#8211; Modern",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "devir-brasil"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "regional-championship"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-10-23 04:00:00",
+    "utc_end_date": "2026-10-25 03:59:59",
+    "start_date": "2026-10-23 00:00:00",
+    "end_date": "2026-10-24 23:59:59"
+  },
+  {
+    "title": "Australia/New Zealand Regional Championship: Sydney &#8211; Modern",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "lets-play-games"
+      },
+      {
+        "slug": "modern"
+      },
+      {
+        "slug": "regional-championship"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-10-23 04:00:00",
+    "utc_end_date": "2026-10-26 03:59:59",
+    "start_date": "2026-10-23 00:00:00",
+    "end_date": "2026-10-25 23:59:59"
+  },
+  {
+    "title": "Arena Championship 13: Standard",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-championship"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "standard"
+      }
+    ],
+    "utc_start_date": "2026-10-24 04:00:00",
+    "utc_end_date": "2026-10-26 03:59:59",
+    "start_date": "2026-10-24 00:00:00",
+    "end_date": "2026-10-25 23:59:59"
+  },
+  {
+    "title": "Spotlight Series Beijing: Standard",
+    "tags": [
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "kadou"
+      },
+      {
+        "slug": "magic-spotlight-series"
+      },
+      {
+        "slug": "standard"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-11-06 05:00:00",
+    "utc_end_date": "2026-11-09 04:59:59",
+    "start_date": "2026-11-06 00:00:00",
+    "end_date": "2026-11-08 23:59:59"
+  },
+  {
+    "title": "Star Trek Prerelease Weekend",
+    "tags": [
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "prerelease"
+      },
+      {
+        "slug": "sealed"
+      },
+      {
+        "slug": "star-trek"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-11-13 05:00:00",
+    "utc_end_date": "2026-11-16 04:59:59",
+    "start_date": "2026-11-13 00:00:00",
+    "end_date": "2026-11-15 23:59:59"
+  },
+  {
+    "title": "World Championship 32: Format TBA",
+    "tags": [
+      {
+        "slug": "magic-world-championship"
+      },
+      {
+        "slug": "tabletop"
+      }
+    ],
+    "utc_start_date": "2026-11-13 05:00:00",
+    "utc_end_date": "2026-11-16 04:59:59",
+    "start_date": "2026-11-13 00:00:00",
+    "end_date": "2026-11-15 23:59:59"
+  },
+  {
+    "title": "Star Trek Digital Release",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "digital-release"
+      },
+      {
+        "slug": "mtgo"
+      },
+      {
+        "slug": "star-trek"
+      }
+    ],
+    "utc_start_date": "2026-11-17 05:00:00",
+    "utc_end_date": "2026-11-18 04:59:59",
+    "start_date": "2026-11-17 00:00:00",
+    "end_date": "2026-11-17 23:59:59"
+  }
+]

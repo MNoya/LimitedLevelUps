@@ -2,7 +2,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
-from bot.commands.event_scribe import build_announcement, select_groups
+from bot.commands.event_scribe import build_announcement, build_schedule_embed, select_groups
 from bot.services import mtgscribe
 from bot.services.format_schedule import (
     ANNOUNCE_COMPETITIVE,
@@ -15,6 +15,7 @@ from bot.services.format_schedule import (
     effective_start,
     latest_channel_in_category,
     newest_set,
+    set_pin_frozen,
     awards_eve_set,
     channel_for_set,
     newly_opened,
@@ -85,6 +86,45 @@ def test_set_seed_for_channel_resolves_the_outgoing_set():
     assert stale.code == "SOS"
     assert active is None
     assert unmatched is None
+
+
+def test_archival_render_carries_no_relative_timestamp():
+    """The freeze is detected by reading the pin back, so a live board must always carry a `<t:` token
+    and an archival one must never — otherwise the final write repeats or never happens."""
+    now = datetime(2026, 8, 4, 15, tzinfo=timezone.utc)
+    running = _group("Marvel Super Heroes", (), ["Premier Draft"], now - timedelta(days=30), now + timedelta(days=6))
+    soon = _group("The Hobbit", (), ["Premier Draft"], now + timedelta(days=7), now + timedelta(days=50))
+
+    live = build_schedule_embed([running], [soon], {}, "Marvel Super Heroes").description
+    archival = build_schedule_embed([running], [soon], {}, "Marvel Super Heroes", archival=True).description
+
+    assert "<t:" in live
+    assert "<t:" not in archival
+
+
+def test_archival_render_drops_the_section_headers():
+    now = datetime(2026, 8, 4, 15, tzinfo=timezone.utc)
+    running = _group("Marvel Super Heroes", (), ["Premier Draft"], now - timedelta(days=30), now + timedelta(days=6))
+    soon = _group("The Hobbit", (), ["Premier Draft"], now + timedelta(days=7), now + timedelta(days=50))
+
+    live = build_schedule_embed([running], [soon], {}, "Marvel Super Heroes").description
+    archival = build_schedule_embed([running], [soon], {}, "Marvel Super Heroes", archival=True).description
+
+    assert live.count("###") == 2
+    assert archival.count("###") == 0
+
+
+def test_set_pin_freezes_inside_the_final_week():
+    cases = [
+        (datetime(2026, 8, 1, 15, tzinfo=timezone.utc), False),
+        (datetime(2026, 8, 4, 15, tzinfo=timezone.utc), True),
+        (datetime(2026, 8, 10, 15, tzinfo=timezone.utc), True),
+        (datetime(2026, 8, 12, 15, tzinfo=timezone.utc), False),
+    ]
+
+    frozen = [(when, set_pin_frozen(when)) for when, _ in cases]
+
+    assert frozen == cases
 
 
 def test_awards_eve_set_returns_outgoing_on_release_eve():

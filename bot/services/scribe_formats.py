@@ -11,6 +11,7 @@ FORMAT_SHORT_NAMES: dict[str, str] = {
     "Quick Draft": "Quick",
     "Pick Two": "Pick2",
     "Pick 2 Draft": "Pick2",
+    "Pick-Two Draft": "Pick2",
     "Sealed": "Sealed",
     "Midweek Magic": "Midweek",
 }

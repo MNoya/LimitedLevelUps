@@ -7,20 +7,19 @@ both. Run it while adding a set (via the add-set skill) or whenever a set's Aren
 
     .venv/bin/python -m bot.scripts.find_collector_window MSH
 
-Scribe schedules Arena Directs partway into a set's cycle, so a just-released set may have no
-window yet; re-run once it appears.
+Reads the bundled calendar, so run ``snapshot_scribe`` first if the set is newer than it. Scribe
+schedules Arena Directs partway into a set's cycle, so a just-released set may have no window yet;
+re-run once it appears.
 """
 from __future__ import annotations
 
 import sys
-from datetime import date, timedelta
 
 from bot.commands.event_scribe import normalize_event
 from bot.services import mtgscribe
 from bot.sets import active_set_code, is_known_set, set_name_for
 
 COLLECTOR_FORMAT = "Arena Direct Collector"
-LOOKBACK_DAYS = 150
 
 
 def main() -> None:
@@ -30,7 +29,7 @@ def main() -> None:
         raise SystemExit(1)
 
     name = set_name_for(code)
-    events = mtgscribe.fetch_events(date.today() - timedelta(days=LOOKBACK_DAYS))
+    events = mtgscribe.load_events()
     windows = [(e.start_local.date(), e.end_local.date()) for e in map(normalize_event, events)
                if e.format_label == COLLECTOR_FORMAT and e.group_label == name]
     if not windows:
