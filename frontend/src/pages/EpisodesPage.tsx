@@ -473,7 +473,7 @@ export function EpisodesPage() {
                 ))}
               </Grid>
             ) : isError ? (
-              <p className="text-muted text-[14px] py-8">Couldn't reach the podcast feed. Refresh to try again.</p>
+              <p className="text-muted text-[14px] py-8">Could not load episodes. Refresh to try again.</p>
             ) : filtered.length ? (
               <>
                 <Crossfade transitionKey={`${slug ?? "all"}:${activeSet ?? ""}`}>

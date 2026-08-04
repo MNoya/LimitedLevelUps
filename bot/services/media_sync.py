@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
@@ -48,6 +49,14 @@ for _guid, _value in _SEED_RAW.items():
 
 _MATCH_WINDOW_S = 3 * 24 * 60 * 60
 _DURATION_MATCH_RATIO = 0.1
+
+FEED_TIMEOUT_S = 30
+FEED_ATTEMPTS = 3
+FEED_RETRY_DELAY_S = 10
+
+
+class FeedUnavailable(RuntimeError):
+    """Libsyn stalls often enough that a skipped run is the right answer, not an owner alert."""
 
 
 @dataclass
@@ -313,9 +322,7 @@ def _result(items: list[_Item]) -> SyncResult:
 
 
 def _fetch_podcast_items(feed_url: str) -> list[_Item]:
-    resp = requests.get(feed_url, timeout=20)
-    resp.raise_for_status()
-    root = ET.fromstring(resp.content)
+    root = _fetch_feed_root(feed_url)
     ns = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
 
     items: list[_Item] = []
@@ -343,6 +350,21 @@ def _fetch_podcast_items(feed_url: str) -> list[_Item]:
             )
         )
     return items
+
+
+def _fetch_feed_root(feed_url: str) -> ET.Element:
+    failure = ""
+    for attempt in range(FEED_ATTEMPTS):
+        try:
+            resp = requests.get(feed_url, timeout=FEED_TIMEOUT_S)
+            resp.raise_for_status()
+            return ET.fromstring(resp.content)
+        except (requests.RequestException, ET.ParseError) as e:
+            failure = str(e)
+            log.warning(f"media sync: podcast feed unreadable (attempt {attempt + 1}/{FEED_ATTEMPTS}): {e}")
+            if attempt < FEED_ATTEMPTS - 1:
+                time.sleep(FEED_RETRY_DELAY_S)
+    raise FeedUnavailable(failure)
 
 
 def _category_from_playlists(playlists: list[str]) -> str | None:

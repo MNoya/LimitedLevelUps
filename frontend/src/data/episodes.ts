@@ -1,8 +1,6 @@
-// Podcast episodes pulled live from the Libsyn RSS feed (CORS-open, fetched
-// browser-direct like the Supabase reads). Parsed with DOMParser; category is
-// inferred from the title since Libsyn carries no per-episode taxonomy.
-
-export const LIBSYN_FEED_URL = "https://feeds.libsyn.com/limitedlevelups/rss";
+// The shared Episode shape plus the title-based category inference, used by the public_episodes
+// adapter and by the YouTube overlay. Libsyn carries no per-episode taxonomy, so the bot's sync
+// owns categorization and this side only infers for an item it has not classified yet.
 
 export const EPISODE_CATEGORIES = [
   "Set Review",
@@ -69,38 +67,6 @@ export interface Episode {
   isShort: boolean;
 }
 
-export async function fetchEpisodes(): Promise<Episode[]> {
-  const res = await fetch(LIBSYN_FEED_URL);
-  if (!res.ok) {
-    throw new Error(`Libsyn feed responded ${res.status}`);
-  }
-  const xml = new DOMParser().parseFromString(await res.text(), "application/xml");
-  if (xml.querySelector("parsererror")) {
-    throw new Error("Could not parse the Libsyn feed");
-  }
-
-  return Array.from(xml.querySelectorAll("item")).map((item) => {
-    const rawTitle = text(item, "title");
-    const durationSeconds = parseDurationSeconds(tagText(item, "itunes:duration"));
-    const pubDate = text(item, "pubDate");
-    return {
-      id: text(item, "guid") || item.querySelector("enclosure")?.getAttribute("url") || rawTitle,
-      kind: "episode" as const,
-      number: parseEpisodeNumber(rawTitle),
-      title: cleanTitle(rawTitle),
-      link: text(item, "link"),
-      audioUrl: item.querySelector("enclosure")?.getAttribute("url") ?? "",
-      pubDate,
-      publishedLabel: formatPublished(pubDate),
-      durationLabel: formatDuration(durationSeconds),
-      durationSeconds,
-      image: tagHref(item, "itunes:image"),
-      category: inferCategory(rawTitle),
-      isShort: false,
-    };
-  });
-}
-
 const COACHING = /coach/i;
 const GUEST = /\bconversation with\b|\bjoins (?:me|us)\b|\bft\.?\b|featuring|sits down with|\binterview\b/i;
 const RANKINGS = /top \d|top ten|tier ?list|\brank(?:ing|ed)\b|best and worst|props and slops|ranked every|best of \d|worst of/i;
@@ -157,19 +123,6 @@ export function cleanTitle(title: string): string {
   return title.replace(/^(?:llu|limited level-?ups)\s*#?\s*\d+\s*[:\-–]\s*/i, "").trim() || title;
 }
 
-function parseDurationSeconds(raw: string): number {
-  if (!raw) {
-    return 0;
-  }
-  if (!raw.includes(":")) {
-    return Number(raw) || 0;
-  }
-  return raw
-    .split(":")
-    .map(Number)
-    .reduce((acc, part) => acc * 60 + (part || 0), 0);
-}
-
 export function formatDuration(seconds: number): string {
   if (!seconds) {
     return "";
@@ -197,18 +150,6 @@ export function formatPublished(pubDate: string): string {
     return "";
   }
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function text(scope: Element | Document, tag: string): string {
-  return scope.querySelector(tag)?.textContent?.trim() ?? "";
-}
-
-function tagText(item: Element, qualifiedName: string): string {
-  return item.getElementsByTagName(qualifiedName)[0]?.textContent?.trim() ?? "";
-}
-
-function tagHref(item: Element, qualifiedName: string): string {
-  return item.getElementsByTagName(qualifiedName)[0]?.getAttribute("href")?.trim() ?? "";
 }
 
 export interface DbEpisodeRow {

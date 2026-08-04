@@ -84,7 +84,7 @@ from bot.services.pod_tournament import (
     register_persistent_views as register_pod_views,
     rehydrate_active_tournaments,
 )
-from bot.services.media_sync import sync_media, sync_recent, SyncResult
+from bot.services.media_sync import FeedUnavailable, sync_media, sync_recent, SyncResult
 from bot.services.ping_roles import persistent_pod_card_view, reconcile_ping_roles
 from bot.services.active_set import resolve_active_set
 from bot.services.refresh import refresh_active_players
@@ -501,7 +501,11 @@ def build_bot(guild_id: int) -> commands.Bot:
     async def sync_media_cmd(ctx: commands.Context) -> None:
         """Owner-only. Pull the podcast feed + YouTube channel into the episodes table."""
         await _reply_quietly(ctx, "⏳ Syncing episodes…")
-        result = await run_media_sync()
+        try:
+            result = await run_media_sync()
+        except FeedUnavailable as e:
+            await _reply_quietly(ctx, f"⚠️ The podcast feed did not answer. Nothing was synced. ({e})")
+            return
         await _reply_quietly(
             ctx,
             f"✅ Synced {result.total} episodes ({result.matched} matched, {result.videos_only} video-only, "
@@ -513,6 +517,8 @@ def build_bot(guild_id: int) -> commands.Bot:
         try:
             log.info("media-sync: scheduled tick firing")
             await run_media_sync()
+        except FeedUnavailable as e:
+            log.warning(f"media-sync: podcast feed unavailable, skipping this run: {e}")
         except Exception:
             log.exception("media-sync tick failed")
             await _notify_owner(bot, "⚠️ media-sync tick crashed:", traceback.format_exc())
@@ -537,6 +543,8 @@ def build_bot(guild_id: int) -> commands.Bot:
             result = await run_media_freshness()
             if result.total:
                 log.info(f"media-freshness: ingested {result.total} fresh episode(s)")
+        except FeedUnavailable as e:
+            log.warning(f"media-freshness: podcast feed unavailable, skipping this tick: {e}")
         except Exception:
             log.exception("media-freshness tick failed")
             await _notify_owner(bot, "⚠️ media-freshness tick crashed:", traceback.format_exc())

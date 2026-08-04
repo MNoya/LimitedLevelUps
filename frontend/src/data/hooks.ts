@@ -43,9 +43,8 @@ import {
   deleteAllP0P1Picks,
   fetchP0P1Ratings,
 } from "./api";
-import { fetchEpisodes } from "./episodes";
 import { fetchDiscordStats } from "./discord";
-import { fetchYouTubeVideos, mergeMedia, overlayLiveMedia, toVideoEpisode, type YouTubeVideo } from "./youtube";
+import { fetchYouTubeVideos, overlayLiveMedia, toVideoEpisode, type YouTubeVideo } from "./youtube";
 import type { P0P1BallotRow, P0P1Pick, SlotKey } from "../types/p0p1";
 import type { FeaturedContest } from "./p0p1Slots";
 import { resolveContestByCode, resolveFeaturedContest } from "./p0p1Slots";
@@ -55,14 +54,6 @@ import { useNow } from "../lib/countdown";
 const THIRTY_MINUTES = 30 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
 const CONTEST_TICK_MS = 30_000;
-
-export function useEpisodes() {
-  return useQuery({
-    queryKey: ["episodes"],
-    queryFn: fetchEpisodes,
-    staleTime: ONE_HOUR,
-  });
-}
 
 export function useYouTubeVideos(recent = false) {
   return useQuery({
@@ -88,35 +79,26 @@ export function useDbEpisodes() {
   });
 }
 
-// DB rows are the authoritative, categorized base; the live RSS/YouTube feeds overlay any
-// freshly published item the next bot sync hasn't picked up yet, so new drops appear at once.
-// The recent-videos list is folded in alongside the full list: it is the same cache the home
-// page warms, so a fresh drop's thumbnail resolves from cache instead of flashing the podcast
-// cover while the full list refetches cold.
+// DB rows are the authoritative, categorized base; a video the next bot sync has not folded in yet overlays on top
 export function useMediaFeed() {
   const db = useDbEpisodes();
-  const episodes = useEpisodes();
   const videos = useYouTubeVideos();
+  // The recent list is the cache the home page warms, so a fresh drop's thumbnail resolves without a cold refetch
   const recentVideos = useYouTubeVideos(true);
   const mergedVideos = useMemo(
     () => mergeVideoLists(recentVideos.data, videos.data),
     [recentVideos.data, videos.data],
   );
   const data = useMemo(() => {
-    const live = episodes.data ? mergeMedia(episodes.data, mergedVideos) : undefined;
-    if (db.data) {
-      return live ? overlayLiveMedia(db.data, live) : db.data;
-    }
-    if (db.isLoading) {
+    if (!db.data) {
       return undefined;
     }
-    return live;
-  }, [db.data, db.isLoading, episodes.data, mergedVideos]);
+    return overlayLiveMedia(db.data, mergedVideos.map(toVideoEpisode));
+  }, [db.data, mergedVideos]);
   return {
     data,
-    isLoading: db.isLoading && episodes.isLoading,
-    isPending: db.isLoading || episodes.isLoading,
-    isError: db.isError && episodes.isError,
+    isPending: db.isLoading,
+    isError: db.isError,
     thumbnailsPending: videos.isLoading && recentVideos.isLoading && !db.data,
     setsReady: db.data !== undefined,
   };
