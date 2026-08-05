@@ -1,7 +1,6 @@
 """Extraction for /pod-backfill — reconstructing a pod event from its Discord thread.
 
 Pure functions over scraped message snapshots; no Discord client, no DB.
-See spec/pod-backfill-handoff.md for the pipeline this implements.
 """
 from __future__ import annotations
 

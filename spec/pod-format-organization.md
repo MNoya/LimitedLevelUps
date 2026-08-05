@@ -1,6 +1,6 @@
 # Pod Format Organization
 
-Supersedes and absorbs `spec/pod-format-poll.md`. Turns the loose "let players choose formats and flashbacks" idea into three concrete, additive surfaces. Every decision here is reversible: additive DB columns with real `downgrade()`, new modules that no existing flow depends on, and conservative defaults so a pod with no format signal behaves exactly as it does today.
+Turns the loose "let players choose formats and flashbacks" idea into three concrete, additive surfaces. Every decision here is reversible: additive DB columns with real `downgrade()`, new modules that no existing flow depends on, and conservative defaults so a pod with no format signal behaves exactly as it does today.
 
 ## The problem, stated precisely
 

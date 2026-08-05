@@ -1,4 +1,4 @@
-"""Capture 17lands game-history records for pod participants. See spec/pod-draft-replays.md."""
+"""Capture 17lands game-history records for pod participants."""
 from __future__ import annotations
 
 import asyncio

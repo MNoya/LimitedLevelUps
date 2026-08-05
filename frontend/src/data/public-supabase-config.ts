@@ -9,9 +9,9 @@
 //      Per https://supabase.com/docs/guides/api/api-keys it is designed to be
 //      embedded in client bundles. The legacy name was "anon JWT".
 //   3. All data access is gated by Row-Level Security on the underlying tables
-//      and SELECT-only grants on the curated public_* views (frontend-spec.md
-//      → RLS / grants). The publishable key cannot read base tables, write
-//      anything, or escalate to service-role access.
+//      and SELECT-only grants on the curated public_* views. The publishable
+//      key cannot read base tables, write anything, or escalate to
+//      service-role access.
 //
 // To rotate: replace the publishable key in Supabase dashboard → Settings →
 // API → Publishable key, then update the constant below. The previous key

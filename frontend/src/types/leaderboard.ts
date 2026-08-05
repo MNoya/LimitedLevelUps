@@ -1,4 +1,4 @@
-// Mirrors of the curated Postgres views in `frontend-spec.md`.
+// Mirrors of the curated public_* Postgres views.
 // Adapter (data/adapter.ts) converts snake_case rows into these camelCase types.
 // Components only ever see this shape; fixtures match it directly.
 

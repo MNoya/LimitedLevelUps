@@ -1,6 +1,6 @@
 """Slug derivation for `players.slug`.
 
-Rule (frontend-spec.md → Slug generation):
+Rule:
   1. Lowercase the display_name.
   2. Replace runs of any non-[a-z0-9] characters with a single `-`.
   3. Trim leading/trailing `-`.

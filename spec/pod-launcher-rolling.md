@@ -15,7 +15,7 @@ The goal is an **always-living calendar**: at any hour, clicking a slot does som
 
 ## Guardrails (what would be over-engineering)
 
-Pod philosophy is non-binding clicks, self-correction, and the daily cadence as the safety net (`project_pods_always_public`, `feedback_robust_over_admin_recovery`, and the "simplify, don't extend" framing in `spec/pod-handoff.md`). The rolling calendar stays inside that:
+Pod philosophy is non-binding clicks, self-correction, and the daily cadence as the safety net (`project_pods_always_public`, `feedback_robust_over_admin_recovery`, and a standing preference to simplify instead of extend). The rolling calendar stays inside that:
 
 - **One day of lookahead, not N.** A slot is ever only "its current day" or "the next day." No named-day scheduling, no recurring subscriptions, no week view.
 - **Still non-binding.** A tomorrow signup is a click you can drop, same as today.
