@@ -12,6 +12,7 @@ import discord
 from discord import ui
 
 from bot import emojis
+from bot.commands.messages import MSG_RESTART_NOT_ORGANIZER
 from bot.config import settings
 from bot.services.pod_format import (
     default_pick_timer_for, format_change_message, settings_change_message, settings_notice_marker,
@@ -33,7 +34,7 @@ from bot.services.pod_seating_select import (
     seating_mode_change_message,
     seating_mode_options,
 )
-from bot.services.pod_tournament import actor_label
+from bot.services.pod_tournament import actor_label, is_pod_organizer
 from bot.sets import active_set_code
 
 
@@ -53,13 +54,25 @@ CANCEL_PROMPT = (
 )
 CANCEL_PROMPT_MOCK = "This closes **{name}** and deletes its draft page"
 
+RESTART_PROMPT = "This stops the draft and reopens the lobby. Every pick made so far is lost."
+
+TIMER_FIELD = "Seconds Per Pick"
+PACKS_FIELD = "Packs Per Player"
+CARDS_PER_PACK_FIELD = "Cards Per Pack"
+
 TIMER_MIN = 10
 TIMER_MAX = 600
 
 PICKS_PER_PACK_MIN = 1
 PICKS_PER_PACK_MAX = 2
 
-MAX_PLAYERS_OPTIONS = (8, 10)
+PACKS_MIN = 1
+PACKS_MAX = 12
+
+CARDS_PER_PACK_MIN = 1
+CARDS_PER_PACK_MAX = 30
+
+MAX_PLAYERS_OPTIONS = (6, 8, 10)
 
 DESCRIPTION_MAX_LEN = 300
 
@@ -86,6 +99,16 @@ def pick_timer_label(seconds: int | None) -> str:
     return f"Pick Timer: {seconds if seconds is not None else settings.pod_draft_pick_timer}s"
 
 
+def draft_setup_label(seconds: int | None) -> str:
+    return f"Draft Setup: {seconds if seconds is not None else settings.pod_draft_pick_timer}s"
+
+
+def draft_setup_notice(actor: str, changed: list[tuple[str, int]]) -> str:
+    """One notice per submit, however many fields moved, in the order the modal asks for them."""
+    parts = ", ".join(f"**{value}** {label}" for label, value in changed)
+    return f"⚙️ **{actor}** set {parts}"
+
+
 def pick_mode_name(picks: int | None) -> str:
     """How many cards a player takes from each pack, named the way the pod is announced."""
     count = picks if picks is not None else settings.pod_draft_picks_per_pack
@@ -101,7 +124,7 @@ def picks_per_pack_notice(actor: str, picks: int) -> str:
 
 
 def max_players_notice(actor: str, count: int) -> str:
-    return settings_change_message(actor, "Max players", str(count))
+    return settings_change_message(actor, "Max Players", str(count))
 
 
 def closed_decklist_notice(actor: str, closed: bool) -> str:
@@ -129,6 +152,9 @@ class PodSettingsView(ui.View):
                  on_seating_table: Callable[[discord.Interaction], Awaitable[None]] | None = None,
                  on_seated: SeatedNotify | None = None,
                  on_timer: Apply | None = None, current_timer: int | None = None,
+                 on_packs: Apply | None = None, current_packs: int | None = None,
+                 on_cards_per_pack: Apply | None = None, current_cards_per_pack: int | None = None,
+                 cube_format: bool = False,
                  on_picks_per_pack: Apply | None = None, current_picks_per_pack: int | None = None,
                  on_max_players: Apply | None = None, current_max_players: int | None = None,
                  kick_targets_provider: KickTargetsProvider | None = None,
@@ -136,6 +162,7 @@ class PodSettingsView(ui.View):
                  link_targets_provider: LinkTargetsProvider | None = None,
                  on_link: LinkApply | None = None,
                  on_manage_rounds: Callable[[discord.Interaction], Awaitable[None]] | None = None,
+                 on_restart: CancelApply | None = None,
                  on_cancel: CancelApply | None = None,
                  on_reschedule: Apply | None = None,
                  on_description: DescriptionApply | None = None, current_description: str | None = None,
@@ -156,6 +183,11 @@ class PodSettingsView(ui.View):
         self.on_seated = on_seated
         self.on_timer = on_timer
         self.current_timer = current_timer
+        self.on_packs = on_packs
+        self.current_packs = current_packs
+        self.on_cards_per_pack = on_cards_per_pack
+        self.current_cards_per_pack = current_cards_per_pack
+        self.cube_format = cube_format
         self.on_picks_per_pack = on_picks_per_pack
         self.current_picks_per_pack = current_picks_per_pack
         self.on_max_players = on_max_players
@@ -165,6 +197,7 @@ class PodSettingsView(ui.View):
         self.link_targets_provider = link_targets_provider
         self.on_link = on_link
         self.on_manage_rounds = on_manage_rounds
+        self.on_restart = on_restart
         self.on_cancel = on_cancel
         self.on_reschedule = on_reschedule
         self.on_description = on_description
@@ -184,7 +217,7 @@ class PodSettingsView(ui.View):
             self.add_item(SeatOrderButton(
                 seat_order_provider=seat_order_provider, on_seating=on_seating, on_seated=on_seated, row=3))
         if on_timer is not None:
-            self.add_item(_PickTimerButton(current_timer, row=3))
+            self.add_item(_DraftSetupButton(current_timer, row=3))
         if on_max_players is not None:
             self.add_item(_MaxPlayersButton(current_max_players, row=3))
         if link_targets_provider is not None and on_link is not None:
@@ -196,13 +229,21 @@ class PodSettingsView(ui.View):
         if on_manage_rounds is not None:
             self.add_item(_ManageRoundsButton(row=4))
         if on_closed_decklist is not None:
-            self.add_item(_ClosedDecklistButton(current_closed_decklist, row=4))
+            self.add_item(_ClosedDecklistButton(current_closed_decklist, row=self._settings_row))
         if on_description is not None:
             self.add_item(_DescriptionButton(current_description, row=4))
         if on_reschedule is not None:
             self.add_item(_RescheduleButton(row=4))
+        if on_restart is not None:
+            self.add_item(_RestartDraftButton(row=4))
         if on_cancel is not None:
             self.add_item(_CancelDraftButton(row=4))
+
+    @property
+    def _settings_row(self) -> int:
+        """Where a plain setting sits. The pick-options row empties out when the draft starts, so once it
+        does the settings move up to it and leave the last row to the two buttons that end a draft."""
+        return 4 if self.on_timer is not None else 3
 
     @property
     def pick_timer(self) -> int:
@@ -231,7 +272,7 @@ class PodSettingsView(ui.View):
         return True
 
     async def _render(self, interaction: discord.Interaction,
-                      notices: list[tuple[str, str]]) -> None:
+                      notices: list[tuple[str, str | list[str]]]) -> None:
         """Rebuild the panel from the view's current state, post each thread notice, refresh the card."""
         await interaction.edit_original_response(view=PodSettingsView(
             on_format=self.on_format, on_pairing=self.on_pairing,
@@ -240,12 +281,16 @@ class PodSettingsView(ui.View):
             on_seating=self.on_seating, seat_order_provider=self.seat_order_provider,
             on_seating_table=self.on_seating_table, on_seated=self.on_seated,
             on_timer=self.on_timer, current_timer=self.current_timer,
+            on_packs=self.on_packs, current_packs=self.current_packs,
+            on_cards_per_pack=self.on_cards_per_pack,
+            current_cards_per_pack=self.current_cards_per_pack,
+            cube_format=self.cube_format,
             on_picks_per_pack=self.on_picks_per_pack,
             current_picks_per_pack=self.current_picks_per_pack,
             on_max_players=self.on_max_players, current_max_players=self.current_max_players,
             kick_targets_provider=self.kick_targets_provider, on_kick=self.on_kick,
             link_targets_provider=self.link_targets_provider, on_link=self.on_link,
-            on_manage_rounds=self.on_manage_rounds,
+            on_manage_rounds=self.on_manage_rounds, on_restart=self.on_restart,
             on_cancel=self.on_cancel, on_reschedule=self.on_reschedule,
             on_description=self.on_description, current_description=self.current_description,
             on_closed_decklist=self.on_closed_decklist,
@@ -306,17 +351,31 @@ class PodSettingsView(ui.View):
         self.current_timer = target
         return timer_notice(actor_label(interaction), target), settings_notice_marker("Pick timer")
 
-    async def _apply_pick_timer(self, interaction: discord.Interaction, seconds: int) -> None:
+    async def _apply_draft_setup(self, interaction: discord.Interaction, *, seconds: int | None,
+                                 packs: int | None, cards_per_pack: int | None) -> None:
+        """Commit whatever the Draft Setup modal changed. Each setting is pushed on its own so one that
+        Draftmancer refuses leaves the others applied, and the ones that land are reported together on a
+        single line, which retires the earlier notice of every setting it names."""
         await interaction.response.defer()
-        if seconds == self.pick_timer:
+        pending = [
+            (seconds, self.on_timer, "current_timer", TIMER_FIELD),
+            (packs, self.on_packs, "current_packs", PACKS_FIELD),
+            (cards_per_pack, self.on_cards_per_pack, "current_cards_per_pack", CARDS_PER_PACK_FIELD),
+        ]
+        changed: list[tuple[str, int]] = []
+        for value, apply, attr, label in pending:
+            if value is None or apply is None:
+                continue
+            error = await apply(interaction, str(value))
+            if error:
+                await interaction.followup.send(f"⚠️ {error}", ephemeral=True)
+                continue
+            setattr(self, attr, value)
+            changed.append((label, value))
+        if not changed:
             return
-        error = await self.on_timer(interaction, str(seconds))
-        if error:
-            await interaction.followup.send(f"⚠️ {error}", ephemeral=True)
-            return
-        self.current_timer = seconds
-        notice = timer_notice(actor_label(interaction), seconds)
-        await self._render(interaction, [(notice, settings_notice_marker("Pick timer"))])
+        notice = draft_setup_notice(actor_label(interaction), changed)
+        await self._render(interaction, [(notice, [label for label, _ in changed])])
 
     async def _apply_picks_per_pack(self, interaction: discord.Interaction, picks: int) -> None:
         await interaction.response.defer()
@@ -371,36 +430,75 @@ class _SeatingSetting(ui.Select):
             await view.on_seating_table(interaction)
 
 
-class _PickTimerButton(ui.Button):
+class _DraftSetupButton(ui.Button):
     def __init__(self, current_timer: int | None, row: int | None = None) -> None:
-        super().__init__(label=pick_timer_label(current_timer), emoji="⏱️",
+        super().__init__(label=draft_setup_label(current_timer), emoji="🎛️",
                          style=discord.ButtonStyle.grey, row=row)
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_modal(_PickTimerModal(self.view))
+        await interaction.response.send_modal(_DraftSetupModal(self.view))
 
 
-class _PickTimerModal(ui.Modal, title="Pick Timer"):
-    """A timer left at its prefilled value passes even when it sits outside the range, so reopening the
-    modal on a pod configured below the floor does not trap the organizer."""
+def parse_setting_field(raw: str, current: int | None, *, minimum: int, maximum: int,
+                        label: str) -> tuple[int | None, str | None]:
+    """Read one Draft Setup field as (value to apply, error). A blank field and a field left at its
+    prefilled value both apply nothing, the second so a pod already configured outside the range does
+    not trap the organizer in a modal it refuses to submit."""
+    text = raw.strip()
+    if not text:
+        return None, None
+    if not text.isdigit():
+        return None, f"{label} takes a number between {minimum} and {maximum}."
+    value = int(text)
+    if value == current:
+        return None, None
+    if not minimum <= value <= maximum:
+        return None, f"{label} takes a number between {minimum} and {maximum}."
+    return value, None
+
+
+class _DraftSetupModal(ui.Modal, title="Draft Setup"):
+    """Cards Per Pack is a cube-only field: Draftmancer reads it from the custom card list, and a set
+    draft takes its pack from the set's own collation. Both pack fields open blank on a pod nobody has
+    set them on, since the number in force is Draftmancer's and prefilling ours would state a value we
+    don't know."""
 
     def __init__(self, view: PodSettingsView) -> None:
         super().__init__()
         self.view = view
         self.seconds = ui.TextInput(
-            label="Seconds Per Pick", placeholder="e.g. 60", default=str(view.pick_timer),
+            label=TIMER_FIELD, placeholder="e.g. 60", default=str(view.pick_timer),
             min_length=1, max_length=3)
         self.add_item(self.seconds)
+        self.packs = ui.TextInput(
+            label=PACKS_FIELD, placeholder="e.g. 4", required=False, max_length=2,
+            default=str(view.current_packs) if view.current_packs is not None else None)
+        self.add_item(self.packs)
+        self.cards = None
+        if view.cube_format:
+            self.cards = ui.TextInput(
+                label=CARDS_PER_PACK_FIELD, placeholder="e.g. 12", required=False, max_length=2,
+                default=str(view.current_cards_per_pack) if view.current_cards_per_pack is not None else None)
+            self.add_item(self.cards)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        seconds = self.seconds.value.strip()
-        unchanged = seconds.isdigit() and int(seconds) == self.view.pick_timer
-        if not seconds.isdigit() or not (unchanged or TIMER_MIN <= int(seconds) <= TIMER_MAX):
-            await interaction.response.send_message(
-                f"⚠️ Enter a whole number of seconds between {TIMER_MIN} and {TIMER_MAX}.", ephemeral=True,
-            )
+        seconds, timer_error = parse_setting_field(
+            self.seconds.value, self.view.pick_timer,
+            minimum=TIMER_MIN, maximum=TIMER_MAX, label=TIMER_FIELD)
+        packs, packs_error = parse_setting_field(
+            self.packs.value, self.view.current_packs,
+            minimum=PACKS_MIN, maximum=PACKS_MAX, label=PACKS_FIELD)
+        cards, cards_error = (None, None)
+        if self.cards is not None:
+            cards, cards_error = parse_setting_field(
+                self.cards.value, self.view.current_cards_per_pack,
+                minimum=CARDS_PER_PACK_MIN, maximum=CARDS_PER_PACK_MAX, label=CARDS_PER_PACK_FIELD)
+        errors = [error for error in (timer_error, packs_error, cards_error) if error]
+        if errors:
+            await interaction.response.send_message("⚠️ " + "\n".join(errors), ephemeral=True)
             return
-        await self.view._apply_pick_timer(interaction, int(seconds))
+        await self.view._apply_draft_setup(
+            interaction, seconds=seconds, packs=packs, cards_per_pack=cards)
 
 
 class _PicksPerPackButton(ui.Button):
@@ -691,6 +789,44 @@ class _LinkConfirmButton(ui.Button):
                 link_notice(actor_label(interaction), member.mention, arena_name),
                 allowed_mentions=discord.AllowedMentions(users=True),
             )
+
+
+class _RestartDraftButton(ui.Button):
+    """Stop a draft that went wrong and deal the table again. Open to anyone on a mock draft, the same
+    way its Cancel Draft is, and to organizers on a pod whose matches other people are waiting on."""
+
+    def __init__(self, row: int | None = None) -> None:
+        super().__init__(label="Restart Draft", emoji="♻️", style=discord.ButtonStyle.danger, row=row)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: PodSettingsView = self.view
+        if not view.mock and not await is_pod_organizer(interaction.client, interaction.user):
+            await interaction.response.send_message(MSG_RESTART_NOT_ORGANIZER, ephemeral=True)
+            return
+        await interaction.response.send_message(
+            RESTART_PROMPT,
+            view=_RestartConfirmView(view.on_restart, view.notice_channel),
+            ephemeral=True,
+        )
+
+
+class _RestartConfirmView(ui.View):
+    """The restart itself announces the actor in the thread, so the confirm only reports back."""
+
+    def __init__(self, on_restart: CancelApply,
+                 notice_channel: discord.abc.Messageable | None = None) -> None:
+        super().__init__(timeout=60)
+        self.on_restart = on_restart
+        self.notice_channel = notice_channel
+
+    @ui.button(label="Restart Draft", style=discord.ButtonStyle.danger, emoji="♻️")
+    async def confirm(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        await interaction.response.defer()
+        err = await self.on_restart(interaction)
+        if err:
+            await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
+            return
+        await interaction.edit_original_response(content="♻️ Draft stopped. Watch the thread.", view=None)
 
 
 class _CancelDraftButton(ui.Button):

@@ -367,6 +367,15 @@ def team_showcase_keys(standings, teams: dict[str, str]) -> set[str]:
     return keys
 
 
+def team_standings_title(winner: str | None, *, live: bool) -> str:
+    """The team standings heading, so the `!test titles` preview names it from the same place the card does."""
+    if live:
+        return "Team Draft Live Standings ⏳"
+    if winner is None:
+        return "🤝 Team Draft is a Draw!"
+    return f"🏆 {pod_team.team_label(winner)} wins the draft!"
+
+
 def team_scores(standings, teams: dict[str, str]) -> tuple[int, int]:
     """(team_a_wins, team_b_wins) as the sum of each side's individual match wins."""
     normalized = {normalize_player_name(name): team for name, team in teams.items()}
@@ -397,12 +406,7 @@ def build_team_final_embed(standings, teams, *, event_name, displays, pending_co
     a_wins, b_wins = team_scores(standings, teams)
     winner = pod_team.team_winner(a_wins, b_wins)
     live = pending_count > 0
-    if live:
-        title = "Team Draft Live Standings ⏳"
-    elif winner is None:
-        title = "🤝 Team draft ends in a draw!"
-    else:
-        title = f"🏆 {pod_team.team_label(winner)} wins the draft!"
+    title = team_standings_title(winner, live=live)
     a_emoji = pod_team.team_emoji(pod_team.TEAM_A)
     b_emoji = pod_team.team_emoji(pod_team.TEAM_B)
     scoreline = f"## {a_emoji} {a_wins} - {b_wins} {b_emoji}"

@@ -314,3 +314,134 @@ class _FakeSio:
 
     async def emit(self, event: str, *args, **kwargs) -> None:
         self.emitted.append(event)
+
+
+def test_packs_per_player_sets_value_and_emits_pre_draft():
+    mgr = _manager()
+
+    err = asyncio.run(mgr.apply_packs_per_player(4))
+
+    assert err is None
+    assert mgr.packs_per_player == 4
+    assert mgr.sio.emitted == ["boostersPerPlayer"]
+
+
+def test_packs_per_player_rejected_once_drafting():
+    mgr = _manager()
+    mgr.drafting = True
+
+    err = asyncio.run(mgr.apply_packs_per_player(4))
+
+    assert err is not None
+    assert mgr.packs_per_player is None
+    assert mgr.sio.emitted == []
+
+
+def test_cards_per_pack_sets_value_and_emits_on_a_cube():
+    mgr = _manager()
+    mgr.set_code = "PEASANT"
+
+    err = asyncio.run(mgr.apply_cards_per_pack(12))
+
+    assert err is None
+    assert mgr.cards_per_pack == 12
+    assert mgr.sio.emitted == ["cardsPerBooster"]
+
+
+def test_cards_per_pack_refused_on_a_set_draft():
+    mgr = _manager()
+
+    err = asyncio.run(mgr.apply_cards_per_pack(12))
+
+    assert err is not None
+    assert mgr.cards_per_pack is None
+    assert mgr.sio.emitted == []
+
+
+def test_pack_shape_emitted_only_for_the_values_a_pod_set():
+    mgr = _manager()
+    mgr.packs_per_player = 4
+
+    asyncio.run(mgr._emit_pack_shape())
+
+    assert mgr.sio.emitted == ["boostersPerPlayer"]
+
+
+def test_switching_to_a_set_drops_a_cards_per_pack_carried_from_a_cube(monkeypatch):
+    mgr = _manager()
+    mgr.set_code = "PEASANT"
+    asyncio.run(mgr.apply_cards_per_pack(12))
+    monkeypatch.setattr(pod_draft_manager, "_persist_format", lambda event_id, code: mgr.event_name)
+    monkeypatch.setattr(PodDraftManager, "refresh_lobby_now", _noop)
+
+    asyncio.run(mgr.apply_format("SOS"))
+
+    assert mgr.cards_per_pack is None
+
+
+async def _noop(*_args, **_kwargs) -> None:
+    return None
+
+
+def test_disconnect_ignored_before_the_draft_starts():
+    mgr = _manager()
+
+    asyncio.run(mgr._on_user_disconnected({"disconnectedUsers": {"u1": {"userName": "Finkel"}}}))
+
+    assert mgr.disconnected_names == []
+
+
+def test_disconnect_names_the_players_still_missing(monkeypatch):
+    mgr = _drafting_manager(monkeypatch)
+
+    asyncio.run(mgr._on_user_disconnected(
+        {"disconnectedUsers": {"u1": {"userName": "Finkel"}, "u2": {"userName": "LSV"}}}))
+
+    assert mgr.disconnected_names == ["Finkel", "LSV"]
+
+
+def test_a_seat_already_given_to_a_bot_is_not_waited_on_again(monkeypatch):
+    mgr = _drafting_manager(monkeypatch)
+    mgr.bot_filled_names = {"Finkel"}
+
+    asyncio.run(mgr._on_user_disconnected(
+        {"disconnectedUsers": {"u1": {"userName": "Finkel"}, "u2": {"userName": "LSV"}}}))
+
+    assert mgr.disconnected_names == ["LSV"]
+
+
+def test_replacing_the_missing_seats_emits_and_records_them(monkeypatch):
+    mgr = _drafting_manager(monkeypatch)
+    mgr.disconnected_names = ["Finkel"]
+
+    err = asyncio.run(mgr.replace_disconnected_with_bots())
+
+    assert err is None
+    assert mgr.sio.emitted == ["replaceDisconnectedPlayers"]
+    assert mgr.bot_filled_names == {"Finkel"}
+
+
+def test_replacing_refused_when_nobody_is_missing(monkeypatch):
+    mgr = _drafting_manager(monkeypatch)
+
+    err = asyncio.run(mgr.replace_disconnected_with_bots())
+
+    assert err is not None
+    assert mgr.sio.emitted == []
+
+
+def _drafting_manager(monkeypatch) -> PodDraftManager:
+    """A manager mid-draft with the thread posting stubbed out, so a test reads the decisions only."""
+    mgr = _manager()
+    mgr.drafting = True
+    monkeypatch.setattr(PodDraftManager, "_post_disconnect_watch", _noop)
+    monkeypatch.setattr(PodDraftManager, "end_disconnect_stall", _noop)
+    return mgr
+
+
+@pytest.mark.parametrize("max_players,expected", [(6, 6), (8, 8), (10, 8)])
+def test_a_capped_table_is_full_at_its_own_cap(max_players, expected):
+    mgr = _manager()
+    mgr.max_players = max_players
+
+    assert mgr._lobby_full_count == expected

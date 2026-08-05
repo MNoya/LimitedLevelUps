@@ -37,7 +37,10 @@ from bot.services.lobby_embed import (
     roster_hold_hint,
     stopped_reason,
 )
-from bot.commands.messages import MSG_DM_PREF_OFF_TITLE, MSG_DM_PREF_ON_TITLE
+from bot.commands.messages import (
+    MSG_DM_PREF_OFF_TITLE, MSG_DM_PREF_ON_TITLE, MSG_POD_RESTARTING,
+)
+from bot.services import pod_disconnect
 from bot.services.pod_format_poll import FORMAT_POLL_PROMPT
 from bot.services.pod_reminder_copy import ROSTER_REMINDER_TITLE
 from bot.services.pod_registration_embed import CHAMPIONSHIP_TITLE, REGISTERED_TITLE_TEXT
@@ -64,7 +67,7 @@ from bot.commands.messages import MSG_LOBBY_FULL_PROMPT
 from bot.tasks.pod_draft_reminder import build_lobby_open_body
 from bot.commands.pod_draft import build_seeding_image_message_from_names, post_manual_seating_table, post_table
 from bot.commands.pod_table import build_table_view
-from bot.commands.test_group import refused_on_production, register_test_fallback
+from bot.commands.test_group import HALL_OF_FAME, refused_on_production, register_test_fallback
 from bot.services.pod_format_select import FormatSelectView
 from bot.services import pod_format_poll
 from bot.services import pod_round_robin_vote
@@ -72,6 +75,7 @@ from bot.services.pod_settings_view import PodSettingsView
 from bot.services.pod_drafts import normalize_player_name
 from bot.services import pod_team
 from bot.services.pod_swiss import Standing
+from bot.services.pod_team_flow import team_standings_title
 from bot.services.pod_team_board import (
     TeamBoardData,
     build_board_data,
@@ -1219,7 +1223,7 @@ _VALID_STATES = (
     "format", "seeding", "trophyhype", "champ", "round1", "round2", "round3", "voicelink", "review",
     "table",
     "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "p2vote",
-    "formatpoll", "linkpicker", "settings", "reset",
+    "formatpoll", "linkpicker", "settings", "dropped", "reset",
 )
 
 _LIVE_POD_MODES = {
@@ -1362,9 +1366,9 @@ def _every_pod_title() -> list[tuple[str, str]]:
         (round_header(1, True), "a finished round"),
         (f"🟢 {_THREAD_NAME}", "standings, pod live"),
         (f"🏆 {_THREAD_NAME}", "standings, champion known"),
-        ("🤝 Team draft ends in a draw!", "team standings, draw"),
-        (f"🏆 {pod_team.team_label(pod_team.TEAM_A)} wins the draft!", "team standings, winner"),
-        ("Team Draft Live Standings ⏳", "team standings, live"),
+        (team_standings_title(None, live=False), "team standings, draw"),
+        (team_standings_title(pod_team.TEAM_A, live=False), "team standings, winner"),
+        (team_standings_title(None, live=True), "team standings, live"),
         ("Report Your Matches", "the report nudge DM"),
     ]
 
@@ -1377,6 +1381,68 @@ async def _settings_preview_description_noop(
     interaction: discord.Interaction, text: str | None,
 ) -> None:
     return None
+
+
+async def _settings_preview_cancel_noop(interaction: discord.Interaction) -> str | None:
+    return None
+
+
+async def _post_disconnect_preview(ctx: commands.Context, needed: int) -> None:
+    """Every state a mid-draft disconnect can reach, in one place. A live pod only ever shows one of them
+    at a time: the waiting card is deleted as the vote goes up, and a player who reconnects settles
+    whichever card is on screen. The vote is wired to this preview, so clicking a side tallies against the
+    card and a majority flips it to that outcome."""
+    names = [HALL_OF_FAME[5]]
+    dropped_at = int(datetime.now(timezone.utc).timestamp())
+    await ctx.send(embed=pod_disconnect.build_waiting_embed(
+        names, opens_at=dropped_at + _PREVIEW_DISCONNECT_GRACE_S))
+    await ctx.send(
+        embed=pod_disconnect.build_offer_embed(names, dropped_at=dropped_at, needed=needed),
+        view=_PreviewDisconnectVoteView(needed),
+    )
+    await ctx.send(embed=pod_disconnect.build_back_embed())
+    await ctx.send(pod_disconnect.BACK_NOTICE)
+
+
+_PREVIEW_DISCONNECT_GRACE_S = 120
+
+
+class _PreviewDisconnectVoteView(discord.ui.View):
+    """The offer card's two buttons wired to this module, so the vote can be clicked with no pod behind
+    it. The live card uses the persistent pod-keyed buttons, and both draw the card from the same
+    builders. A restart renders a stand-in lobby card where the live one bumps the pod's own."""
+
+    def __init__(self, needed: int) -> None:
+        super().__init__(timeout=None)
+        self.needed = needed
+        for side in (pod_disconnect.SIDE_BOT, pod_disconnect.SIDE_RESTART):
+            button = pod_disconnect.build_side_button(side)
+            button.callback = self._voter(side)
+            self.add_item(button)
+
+    def _voter(self, side: str):
+        async def vote(interaction: discord.Interaction) -> None:
+            await self._tally(interaction, side)
+        return vote
+
+    async def _tally(self, interaction: discord.Interaction, side: str) -> None:
+        embed = interaction.message.embeds[0]
+        mention = interaction.user.mention
+        for_bot = [v for v in pod_disconnect.bot_voters_from_embed(embed) if v != mention]
+        for_restart = [v for v in pod_disconnect.restart_voters_from_embed(embed) if v != mention]
+        (for_bot if side == pod_disconnect.SIDE_BOT else for_restart).append(mention)
+        won = (len(for_bot) >= self.needed) or (len(for_restart) >= self.needed)
+        await interaction.response.edit_message(
+            embed=pod_disconnect.rerender_offer(embed, for_bot, for_restart),
+            view=None if won else self)
+        if not won:
+            return
+        if len(for_bot) >= self.needed:
+            await interaction.followup.send(pod_disconnect.BOT_NOTICE)
+            return
+        await interaction.followup.send(MSG_POD_RESTARTING)
+        embed, view = _build("partial")
+        await interaction.followup.send(embed=embed, view=view)
 
 
 async def _settings_preview_seating_noop(
@@ -1433,12 +1499,27 @@ def _settings_preview_view() -> PodSettingsView:
         on_seating=_settings_preview_seating_noop, seat_order_provider=_settings_preview_seat_order,
         on_seated=_settings_preview_on_seated,
         on_timer=_settings_preview_noop, current_timer=60,
+        on_packs=_settings_preview_noop, on_cards_per_pack=_settings_preview_noop, cube_format=True,
         on_picks_per_pack=_settings_preview_noop, current_picks_per_pack=1,
         on_max_players=_settings_preview_noop, current_max_players=8,
+        on_cancel=_settings_preview_cancel_noop,
         on_closed_decklist=_settings_preview_noop, current_closed_decklist=False,
         on_description=_settings_preview_description_noop,
         link_targets_provider=_settings_preview_link_targets, on_link=_settings_preview_on_link,
         on_manage_rounds=_settings_preview_manage_rounds,
+        event_name="Pod Draft Preview",
+    )
+
+
+def _settings_preview_drafting_view() -> PodSettingsView:
+    """The panel as it stands once the draft is running: the pick options, seats, and kick are all
+    locked away, and Restart Draft is the one control the running draft adds."""
+    return PodSettingsView(
+        current_code=None, current_mode=DEFAULT_PAIRING_MODE, current_seating="random",
+        on_restart=_settings_preview_cancel_noop, on_cancel=_settings_preview_cancel_noop,
+        on_closed_decklist=_settings_preview_noop, current_closed_decklist=False,
+        link_targets_provider=_settings_preview_link_targets, on_link=_settings_preview_on_link,
+        event_name="Pod Draft Preview",
     )
 
 
@@ -1465,7 +1546,14 @@ async def setup(bot: commands.Bot) -> None:
         `linkpicker` posts the Link Players picker on its own — pick a seat, the member dropdown and
         Confirm button appear below it, and the link commits only on Confirm.
         `settings` posts the no-op Settings panel directly, so it works in a channel already bound to a
-        pod event, where the lobby card's Settings button would open that pod's real panel instead.
+        pod event, where the lobby card's Settings button would open that pod's real panel instead. It
+        posts the panel twice, as it stands before the draft and as it stands once the draft is running,
+        since no one pod ever shows both sets of controls.
+        `dropped [votes]` posts every disconnect state at once: the card counting down to the vote, the
+        vote itself, and the two a reconnect ends on. The vote is live and needs 1 vote by default, so one
+        click shows that side's outcome and re-running it shows the other. `dropped 3` needs three, to
+        watch the columns fill and a voter move between sides. A live pod only ever shows one of these at
+        a time.
         `podteam [6|8|10]` seeds a real team draft at that player count (default 6; seat 1 = you,
         Green Team) — posts the team summary embed + live board with working report buttons and
         opens the two private team threads off this channel.
@@ -1607,7 +1695,12 @@ async def setup(bot: commands.Bot) -> None:
             return
 
         if state == "settings":
-            await ctx.send(view=_settings_preview_view())
+            await ctx.send("**Before the draft**", view=_settings_preview_view())
+            await ctx.send("**While drafting**", view=_settings_preview_drafting_view())
+            return
+
+        if state == "dropped":
+            await _post_disconnect_preview(ctx, int(extra) if extra.isdigit() else 1)
             return
 
         if state == "submit":

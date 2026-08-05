@@ -77,8 +77,8 @@ def build_registered_embed(
     if championship:
         reigning_champion = role_holder_mention(guild, SET_CHAMPION_ROLE_NAME)
         body = f"{championship_flavor(set_code, reigning_champion)}\n\n{body}"
-    title = CHAMPIONSHIP_TITLE if championship else f"{emojis.prefix('chordoHello')}{REGISTERED_TITLE_TEXT}"
-    embed = discord.Embed(title=title, description=body, color=discord.Color.green())
+    heading = CHAMPIONSHIP_TITLE if championship else f"{emojis.prefix('chordoHello')}{REGISTERED_TITLE_TEXT}"
+    embed = discord.Embed(description=f"### {heading}\n{body}", color=discord.Color.green())
     embed.add_field(name="Format", value=f"{fi.format_emoji(set_code)} {format_display(set_code)}", inline=True)
     embed.add_field(name="Pairings", value=pairing_label(pairing_mode), inline=True)
     embed.add_field(name="Seats", value=seating_mode_label(seating_mode), inline=True)
@@ -105,7 +105,7 @@ async def update_registered_embed(
     guild = getattr(channel, "guild", None)
     try:
         async for msg in channel.history(limit=HISTORY_SCAN_LIMIT, oldest_first=True):
-            if msg.author.id == client_user.id and msg.embeds and _is_registered_title(msg.embeds[0].title):
+            if msg.author.id == client_user.id and msg.embeds and _is_registered_embed(msg.embeds[0]):
                 existing = msg.embeds[0]
                 rsvp_hint = any(RSVP_HINT_LEAD in (f.value or "") for f in existing.fields)
                 rebuilt = build_registered_embed(
@@ -124,8 +124,9 @@ def closed_registered_embed(embed: discord.Embed) -> discord.Embed:
     """The registration embed once its pod stops taking signups. Format, Pairings, and Seats stay as the
     record of what was drafted; the lines that only hold while signups are open go."""
     unix = _time_token(embed.description)
+    lines = [line for line in (_heading_line(embed), _closed_time_line(unix) if unix else None) if line]
     closed = discord.Embed(
-        title=embed.title, description=_closed_time_line(unix) if unix else None, color=embed.color)
+        title=embed.title, description="\n".join(lines) or None, color=embed.color)
     for field in embed.fields:
         if RSVP_HINT_LEAD not in (field.value or ""):
             closed.add_field(name=field.name, value=field.value, inline=field.inline)
@@ -137,6 +138,12 @@ def embed_event_time(embed: discord.Embed) -> datetime | None:
     having to load the event row."""
     unix = _time_token(embed.description)
     return datetime.fromtimestamp(unix, timezone.utc) if unix else None
+
+
+def _heading_line(embed: discord.Embed) -> str | None:
+    """The card's own `###` heading, which is where its title went when the card stopped having one."""
+    first = (embed.description or "").split("\n", 1)[0]
+    return first if first.startswith("###") else None
 
 
 def _time_token(text: str | None) -> int | None:
@@ -172,11 +179,10 @@ def _card_url_from_thread(channel: discord.abc.Messageable) -> str | None:
     return f"https://discord.com/channels/{guild.id}/{parent_id}/{channel.id}"
 
 
-_MATCHABLE_TITLE_SUFFIXES = (REGISTERED_TITLE_TEXT, CHAMPIONSHIP_TITLE, "Pod Draft registered!")
+_REGISTERED_FIELDS = frozenset({"Format", "Pairings", "Seats"})
 
 
-def _is_registered_title(title: str | None) -> bool:
-    """The registration embed's title carries the set symbol, so match on the stable text suffix.
-    The legacy 'Pod Draft registered!' text is kept so a pod scheduled before this shipped still
-    gets its embed refreshed on a settings change."""
-    return bool(title) and title.endswith(_MATCHABLE_TITLE_SUFFIXES)
+def _is_registered_embed(embed: discord.Embed) -> bool:
+    """The signup card, found by the three fields only it carries. Cards posted while it still had a title
+    match on the same fields, so nothing scheduled earlier stops being refreshable."""
+    return _REGISTERED_FIELDS.issubset({field.name for field in embed.fields})

@@ -13,11 +13,14 @@ from discord.ext import commands
 
 from bot import audit, emojis
 from bot.commands import descriptions as desc
-from bot.commands.messages import MSG_ADMIN_ONLY, MSG_ARENA_BAD_FORMAT, MSG_ARENA_LINKED
+from bot.commands.messages import (
+    MSG_ADMIN_ONLY, MSG_ARENA_BAD_FORMAT, MSG_ARENA_LINKED, MSG_RESTART_NOT_ORGANIZER,
+)
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import extract_avatar_hash
 from bot.services import championship as championship_service
+from bot.services import pod_format
 from bot.services import pod_format_poll
 from bot.services.lobby_embed import guard_ready_check, open_settings_panel
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, set_card_phase_hook, set_pod_card_hook
@@ -25,8 +28,10 @@ from bot.services.pod_draft_manager import (
     TeamVotePoster,
     cancel_pod_event,
     post_format_vote,
+    set_event_cards_per_pack,
     set_event_format,
     set_event_max_players,
+    set_event_packs_per_player,
     set_event_pairing_mode,
     set_event_pick_timer,
     set_event_picks_per_pack,
@@ -103,7 +108,6 @@ MSG_LINK_ARENA_NO_LOBBY_MATCH = (
 )
 MSG_LINK_ARENA_DID_YOU_MEAN = "Did you mean `{suggestion}`? Re-run /link-arena with that exact handle."
 MSG_NO_ACTIVE_POD = "No active pod draft session right now."
-MSG_RESTART_NOT_ORGANIZER = "Only Organizers can restart a draft."
 MSG_READY_CHECK_STARTED = "Ready Check initiated! Press Ready on the card or in Draftmancer"
 
 YES_EMOJI = "✅"
@@ -748,6 +752,12 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
     async def on_picks_per_pack(inter: discord.Interaction, value: str) -> str | None:
         return await set_event_picks_per_pack(event_id, int(value))
 
+    async def on_packs(inter: discord.Interaction, value: str) -> str | None:
+        return await set_event_packs_per_player(event_id, int(value))
+
+    async def on_cards_per_pack(inter: discord.Interaction, value: str) -> str | None:
+        return await set_event_cards_per_pack(event_id, int(value))
+
     async def on_max_players(inter: discord.Interaction, value: str) -> str | None:
         return await set_event_max_players(event_id, int(value))
 
@@ -764,6 +774,8 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
     current_timer = None
     current_picks_per_pack = None
     current_max_players = None
+    current_packs = None
+    current_cards_per_pack = None
     link_targets_provider = None
     on_link = None
     if manager is not None:
@@ -776,6 +788,8 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
             current_timer = manager.pick_timer
             current_picks_per_pack = manager.picks_per_pack
             current_max_players = manager.max_players
+            current_packs = manager.packs_per_player
+            current_cards_per_pack = manager.cards_per_pack
             seat_order_provider = manager.seating_lobby_order
             kick_targets_provider = manager.kick_targets
 
@@ -789,6 +803,12 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
     if await asyncio.to_thread(round_picker_options, event_id):
         async def on_manage_rounds(inter: discord.Interaction) -> None:
             await open_manage_rounds(inter, event_id)
+
+    on_restart = None
+    if manager is not None and manager.drafting and not manager.draft_complete:
+        async def on_restart(inter: discord.Interaction) -> str | None:
+            thread = notice_channel or inter.channel
+            return await manager.restart_draft(thread, initiated_by=actor_label(inter))
 
     on_cancel = None
     if is_owner or (mock and not drafted):
@@ -817,13 +837,17 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
         on_seating=on_seating, seat_order_provider=seat_order_provider,
         on_seating_table=None if drafting else on_seating_table, on_seated=on_seated,
         on_timer=on_timer if current_timer is not None else None, current_timer=current_timer,
+        on_packs=on_packs if current_timer is not None else None, current_packs=current_packs,
+        on_cards_per_pack=on_cards_per_pack if current_timer is not None else None,
+        current_cards_per_pack=current_cards_per_pack,
+        cube_format=pod_format.cube_id_for(current_code) is not None if current_code else False,
         on_picks_per_pack=on_picks_per_pack if current_picks_per_pack is not None else None,
         current_picks_per_pack=current_picks_per_pack,
         on_max_players=on_max_players if current_max_players is not None else None,
         current_max_players=current_max_players,
         kick_targets_provider=kick_targets_provider, on_kick=on_kick,
         link_targets_provider=link_targets_provider, on_link=on_link,
-        on_manage_rounds=on_manage_rounds,
+        on_manage_rounds=on_manage_rounds, on_restart=on_restart,
         on_cancel=on_cancel, on_reschedule=on_reschedule,
         on_description=on_description, current_description=current_description,
         on_closed_decklist=None if mock else on_closed_decklist,

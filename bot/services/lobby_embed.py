@@ -609,13 +609,13 @@ def render(
         banner_state, cancel_reason=cancel_reason, initiated_by=initiated_by,
     )
 
-    header_lines: list[str] = []
+    header_lines: list[str] = [f"### {title}"]
     if draftmancer_url and show_link:
         header_lines.append(f"### {draftmancer_url}")
     header_lines.extend(status_lines)
     description = "\n".join(header_lines) if header_lines else None
 
-    embed = discord.Embed(title=title, description=description, color=color)
+    embed = discord.Embed(description=description, color=color)
     _set_settings_footer(embed, format_label, pairing_label, seating_label)
 
     if in_session:

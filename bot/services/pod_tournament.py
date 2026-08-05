@@ -3035,18 +3035,17 @@ def build_champion_embed(
         for s in standings
     ]
 
-    title = f"🏆 {event_name}" if champion_locked else f"🟢 {event_name}"
+    heading = f"### 🏆 {event_name}" if champion_locked else f"### 🟢 {event_name}"
 
     header = f"**{_standings_header_text(pending_count)}**"
 
-    description = f"{header}\n" + "\n".join(lines)
+    description = f"{heading}\n{header}\n" + "\n".join(lines)
     if pending_count == 0 and match_states:
         tiebreakers = _build_tiebreaker_block(standings, match_states, displays)
         if tiebreakers:
             description += f"\n{tiebreakers}"
 
     return discord.Embed(
-        title=title,
         description=description,
         color=discord.Color.green(),
     )
@@ -4289,7 +4288,8 @@ async def _find_pinned_standings(thread, bot_user, event_name: str) -> discord.M
         if bot_user is not None and msg.author.id != bot_user.id:
             continue
         for pinned_embed in msg.embeds:
-            if (pinned_embed.title or "").endswith(event_name) and "Standings" in (pinned_embed.description or ""):
+            body = pinned_embed.description or ""
+            if event_name in body and "Standings" in body:
                 return msg
     return None
 

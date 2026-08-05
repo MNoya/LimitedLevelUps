@@ -118,3 +118,7 @@ MSG_TABLE_GOTO = "Go to Table {table}"
 MSG_TABLE_LOBBY_STARTER = "{draftmancer_emoji} **{event_name}** created"
 MSG_SECOND_TABLE_OFFER = "🔥 The first pod filled up. Click Join to fire a second table."
 MSG_POD_RALLY_HINT = "Type `!pod` in another channel to call for more players"
+
+MSG_RESTART_NOT_ORGANIZER = "Only Organizers can restart a draft."
+MSG_POD_RESTARTED = "♻️ {actor} restarted the draft"
+MSG_POD_RESTARTING = "♻️ **Restarting the draft...**\nSame Draftmancer lobby - no need to rejoin"

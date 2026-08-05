@@ -441,10 +441,13 @@ def test_closing_the_registered_embed_keeps_the_columns_and_the_time(hours):
     assert embed_event_time(closed) == event_time.replace(microsecond=0)
 
 
-def test_closing_a_registered_embed_without_a_time_drops_the_body():
+def test_closing_a_registered_embed_without_a_time_keeps_only_its_heading():
+    """The card's heading lives in the description now that the card carries no embed title, so closing one
+    keeps that line and drops everything under it."""
     open_embed = build_registered_embed("LTR", "bracket", "random")
 
     closed = closed_registered_embed(open_embed)
 
-    assert closed.description is None
+    assert closed.description == (open_embed.description or "").split("\n", 1)[0]
+    assert closed.description.startswith("###")
     assert len(closed.fields) == len(open_embed.fields)

@@ -29,6 +29,8 @@ from bot.commands.messages import (
     MSG_MOCK_CLOSED_IDLE,
     MSG_MOCK_COMPLETE,
     MSG_MOCK_COMPLETE_CHANNEL,
+    MSG_POD_RESTARTED,
+    MSG_POD_RESTARTING,
 )
 from bot.config import settings
 from bot.database import SessionLocal
@@ -43,7 +45,6 @@ from bot.services.lobby_embed import (
     build_live_lobby_view,
     build_started_lobby_view,
     build_not_ready_view,
-    event_title,
     render as render_lobby_embed,
     render_ready_check_progress,
     roster_hold_detail,
@@ -61,6 +62,7 @@ from bot.services.mock_lobby_card import (
     build_mock_card,
     build_mock_complete_view,
 )
+from bot.services import pod_disconnect
 from bot.services import pod_format
 from bot.services.ping_roles import grant_mock_draft_role
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase, notify_pod_complete
@@ -136,6 +138,7 @@ _LOBBY_HALF_THRESHOLD = _LOBBY_FULL_THRESHOLD // 2
 _LOBBY_FULL_PROMPT_DELAY_S = 10
 _RESTART_SETTLE_S = 2.5
 _RESTART_READY_MIN_PLAYERS = 2
+_DISCONNECT_GRACE_S = 120
 
 _SEEDING_REFRESH_HOOK = None
 _SEEDING_REPOST_HOOK = None
@@ -378,6 +381,14 @@ class PodDraftManager:
         self.pick_timer = settings.pod_draft_pick_timer
         self.picks_per_pack = settings.pod_draft_picks_per_pack
         self.max_players = settings.pod_draft_max_players
+        self.packs_per_player: int | None = None
+        self.cards_per_pack: int | None = None
+        self.disconnected_names: list[str] = []
+        self.bot_filled_names: set[str] = set()
+        self._disconnect_message: "discord.Message | None" = None
+        self._disconnect_offer_message: "discord.Message | None" = None
+        self._disconnect_offer_task: asyncio.Task | None = None
+        self._disconnect_at: int | None = None
         self.team_map: dict[str, str] | None = None  # draftmancer_name -> 'A'/'B' for team drafts
         self.team_board_messages: list["discord.Message"] = []
         self.team_reveal_messages: dict[int, "discord.Message"] = {}  # round -> per-round reveal block
@@ -415,6 +426,8 @@ class PodDraftManager:
         self.sio.on("sessionSpectators", self._on_session_spectators)
         self.sio.on("updateUser", self._on_update_user)
         self.sio.on("setReady", self._on_set_ready)
+        self.sio.on("userDisconnected", self._on_user_disconnected)
+        self.sio.on("resumeOnReconnection", self._on_resume_on_reconnection)
         self.sio.on("endDraft", self._on_end_draft)
         self.sio.on("draftLog", self._on_draft_log)
         self.sio.on("shareDecklist", self._on_share_decklist)
@@ -639,6 +652,7 @@ class PodDraftManager:
         await self.sio.emit("setMaxPlayers", self.max_players)
         await self.sio.emit("setPickTimer", self.pick_timer)
         await self.sio.emit("setPickedCardsPerRound", self.picks_per_pack)
+        await self._emit_pack_shape()
         await self._apply_bot_fill()
         await self.sio.emit("setColorBalance", True)
         await self.sio.emit("setPersonalLogs", True)
@@ -648,9 +662,18 @@ class PodDraftManager:
         log.info(
             f"[LIFECYCLE] session_settings_applied event={self.event_id} set={self.set_code} "
             f"max_players={self.max_players} pick_timer={self.pick_timer} "
-            f"picks_per_pack={self.picks_per_pack} "
+            f"picks_per_pack={self.picks_per_pack} packs={self.packs_per_player} "
+            f"cards_per_pack={self.cards_per_pack} "
             f"bots={self._bots_pushed} log_recipients={self._draft_log_recipients} team_draft={team_draft}"
         )
+
+    async def _emit_pack_shape(self) -> None:
+        """Nothing is emitted for a pod that left the pack counts alone, so a plain set keeps its own
+        collation and an imported cube keeps the numbers its list carries."""
+        if self.packs_per_player is not None:
+            await self.sio.emit("boostersPerPlayer", self.packs_per_player)
+        if self.cards_per_pack is not None:
+            await self.sio.emit("cardsPerBooster", self.cards_per_pack)
 
     def _desired_bot_count(self) -> int:
         """Draftmancer bots padding the empty seats. A community pod drafts the players who turned up; the
@@ -760,10 +783,13 @@ class PodDraftManager:
         if new_name != self.event_name:
             self.event_name = new_name
             await self._rename_thread(team_aware_pod_name(new_name, self.pairing_mode))
+        if pod_format.cube_id_for(code) is None:
+            self.cards_per_pack = None
         if self.sio.connected and self.owner_claimed:
             err = await self._emit_format()
             if err is not None:
                 return err
+            await self._emit_pack_shape()
         await self.refresh_lobby_now()
         return None
 
@@ -810,12 +836,47 @@ class PodDraftManager:
         await self._refresh_lobby_status()
         return None
 
+    async def apply_packs_per_player(self, n: int) -> str | None:
+        """Set how many packs each player opens. Pre-draft only, since Draftmancer builds the boosters at
+        draft start. Re-emits to the live session. Returns an error string or None."""
+        if self.drafting or self.draft_complete:
+            return "Packs are locked once the draft has started."
+        if not self.sio.connected:
+            return "Draftmancer session is not connected."
+        self.packs_per_player = n
+        try:
+            await self.sio.emit("boostersPerPlayer", n)
+        except Exception:
+            log.exception(f"[LOBBY] packs_emit_failed event={self.event_id} packs={n}")
+            return "Could not update the packs per player."
+        log.info(f"[LOBBY] packs_set event={self.event_id} packs={n}")
+        return None
+
+    async def apply_cards_per_pack(self, n: int) -> str | None:
+        """Set how many cards a pack holds. Cube pods only: Draftmancer reads this number off the custom
+        card list, and a set draft builds its packs from the set's own collation. Pre-draft only.
+        Returns an error string or None."""
+        if self.drafting or self.draft_complete:
+            return "Cards Per Pack is locked once the draft has started."
+        if pod_format.cube_id_for(self.set_code) is None:
+            return "Cards Per Pack applies to cube drafts. A set draft opens the set's own packs."
+        if not self.sio.connected:
+            return "Draftmancer session is not connected."
+        self.cards_per_pack = n
+        try:
+            await self.sio.emit("cardsPerBooster", n)
+        except Exception:
+            log.exception(f"[LOBBY] cards_per_pack_emit_failed event={self.event_id} cards={n}")
+            return "Could not update the cards per pack."
+        log.info(f"[LOBBY] cards_per_pack_set event={self.event_id} cards={n}")
+        return None
+
     async def apply_max_players(self, n: int) -> str | None:
         """Set this pod's Draftmancer seat cap. Pre-draft only — Draftmancer locks the count once the
         draft starts. Rejects a cap below the players already seated so a live drop can't strand anyone.
         Re-emits to the live session. Returns an error string or None."""
         if self.drafting or self.draft_complete:
-            return "Max Players are locked once the draft has started."
+            return "Max Players is locked once the draft has started."
         if not self.sio.connected:
             return "Draftmancer session is not connected."
         seated = len(self.player_session_users())
@@ -1260,8 +1321,7 @@ class PodDraftManager:
                     await thread.send(MSG_BOT_RECONNECTED)
                 except Exception:
                     log.warning(f"could not post reconnect notice for {self.session_id}", exc_info=True)
-                adopted = await _find_pinned_lobby_card(
-                    thread, self.bot.user, self.event_name, self.set_code)
+                adopted = await _find_pinned_lobby_card(thread, self.bot.user, self.event_name)
                 if adopted is not None:
                     self.lobby_status_message = adopted
                     log.info(f"[LIFECYCLE] rehydrate_lobby.adopted_card event={self.event_id} msg={adopted.id}")
@@ -1369,6 +1429,7 @@ class PodDraftManager:
         self.drafting = False
         self.draft_complete = True
         self._cancel_end_watchdog()
+        await self.end_disconnect_stall()
         await self._mark_socket_status("draft_done")
         notify_card_close(self.bot, self.event_id)
         self.tournament_roster = self._snapshot_tournament_roster()
@@ -1970,10 +2031,155 @@ class PodDraftManager:
         log.info(f"[DRAFT] resumed event={self.event_id}")
         return None
 
+    async def _on_user_disconnected(self, payload) -> None:
+        """Draftmancer broadcasts the whole disconnected set on every drop and on every partial return, so
+        the payload is the state and not a change. A seat already handed to a bot stays in that set, and
+        is dropped here so the thread only ever names the players still being waited on."""
+        if not self.drafting or self.draft_complete:
+            return
+        entries = (payload or {}).get("disconnectedUsers") or {}
+        waiting = sorted(
+            name for name in (user.get("userName") for user in entries.values())
+            if name and name not in self.bot_filled_names
+        )
+        if waiting == self.disconnected_names:
+            return
+        if not waiting:
+            await self.end_disconnect_stall(
+            card=pod_disconnect.build_back_embed(), notice=pod_disconnect.BACK_NOTICE)
+            return
+        first_drop = not self.disconnected_names
+        self.disconnected_names = waiting
+        log.warning(f"[DRAFT] players_disconnected event={self.event_id} names={waiting}")
+        if first_drop:
+            self._disconnect_at = int(datetime.now(timezone.utc).timestamp())
+        await self._post_disconnect_watch()
+        if self._disconnect_offer_task is None or self._disconnect_offer_task.done():
+            self._disconnect_offer_task = asyncio.create_task(self._offer_disconnect_choices())
+
+    async def _on_resume_on_reconnection(self, *_payload) -> None:
+        """Draftmancer resumes the draft the moment the last missing player returns, and says nothing
+        more about who came back. A replacement resumes it too, and settles the cards before it emits."""
+        if not self.disconnected_names:
+            return
+        await self.end_disconnect_stall(
+            card=pod_disconnect.build_back_embed(), notice=pod_disconnect.BACK_NOTICE)
+
+    async def _post_disconnect_watch(self) -> None:
+        """Edited in place while the reconnect window runs, so a second player dropping into it joins the
+        same card rather than opening a second one."""
+        opens_at = (self._disconnect_at or 0) + _DISCONNECT_GRACE_S
+        embed = pod_disconnect.build_waiting_embed(self.disconnected_names, opens_at=opens_at)
+        try:
+            if self._disconnect_message is None:
+                thread = await self._fetch_thread()
+                if thread is None:
+                    return
+                self._disconnect_message = await thread.send(embed=embed)
+            else:
+                await self._disconnect_message.edit(embed=embed)
+        except discord.HTTPException:
+            log.warning(f"[DRAFT] disconnect_card_failed event={self.event_id}", exc_info=True)
+
+    async def _offer_disconnect_choices(self) -> None:
+        """Once the wait runs out with nobody back, post the vote as its own message so the table gets a
+        fresh ping instead of an edit nobody sees, and drop the waiting card: its countdown has run out and
+        the vote card carries the same name and the same drop time. A return inside the window cancels
+        this, and a player who reconnects is never asked about."""
+        try:
+            await asyncio.sleep(_DISCONNECT_GRACE_S)
+        except asyncio.CancelledError:
+            return
+        if not self.drafting or self.draft_complete or not self.disconnected_names:
+            return
+        thread = await self._fetch_thread()
+        if thread is None:
+            return
+        needed = pod_disconnect.votes_needed(len(self.player_session_users()))
+        try:
+            self._disconnect_offer_message = await thread.send(
+                embed=pod_disconnect.build_offer_embed(
+                    self.disconnected_names, dropped_at=self._disconnect_at or 0, needed=needed),
+                view=pod_disconnect.build_offer_view(self.event_id),
+            )
+        except discord.HTTPException:
+            log.warning(f"[DRAFT] disconnect_offer_failed event={self.event_id}", exc_info=True)
+            return
+        await self._delete_waiting_card()
+        log.info(f"[DRAFT] disconnect_offer_posted event={self.event_id} needed={needed}")
+
+    async def _delete_waiting_card(self) -> None:
+        waiting = self._disconnect_message
+        self._disconnect_message = None
+        if waiting is None:
+            return
+        try:
+            await waiting.delete()
+        except discord.HTTPException:
+            log.info(f"[DRAFT] disconnect_waiting_delete_failed event={self.event_id}", exc_info=True)
+
+    def clear_disconnect_state(self) -> tuple["discord.Message | None", "discord.Message | None"]:
+        """Forget the stall and hand back its two cards, so whoever ends it decides what they say."""
+        task = self._disconnect_offer_task
+        self._disconnect_offer_task = None
+        if task is not None:
+            task.cancel()
+        self.disconnected_names = []
+        self._disconnect_at = None
+        cards = (self._disconnect_message, self._disconnect_offer_message)
+        self._disconnect_message = self._disconnect_offer_message = None
+        return cards
+
+    async def end_disconnect_stall(self, *, card: "discord.Embed | None" = None,
+                                   notice: str | None = None) -> None:
+        """Close out a stall. A vote that was posted keeps its card exactly as the table left it, tally and
+        all, and only loses its buttons, with `notice` posted below it as its own message. A stall that
+        never got that far has its waiting card replaced by `card`, or deleted when there is none."""
+        waiting, offer = self.clear_disconnect_state()
+        try:
+            if offer is not None:
+                await offer.edit(view=None)
+            elif waiting is not None and card is not None:
+                await waiting.edit(embed=card)
+            elif waiting is not None:
+                await waiting.delete()
+        except discord.HTTPException:
+            log.info(f"[DRAFT] disconnect_end_failed event={self.event_id}", exc_info=True)
+        if offer is None or notice is None:
+            return
+        thread = await self._fetch_thread()
+        if thread is None:
+            return
+        try:
+            await thread.send(notice)
+        except discord.HTTPException:
+            log.warning(f"[DRAFT] disconnect_notice_failed event={self.event_id}", exc_info=True)
+
+    async def replace_disconnected_with_bots(self) -> str | None:
+        """Hand every seat still missing to a Draftmancer bot so the draft runs on. Their picks so far
+        stay in the draft, and the bot takes it from there. Returns an error string or None."""
+        if not self.sio.connected:
+            return "Draftmancer session is not connected."
+        if not self.drafting or self.draft_complete:
+            return "No draft in progress."
+        names = self.disconnected_names
+        if not names:
+            return "Nobody is disconnected right now."
+        try:
+            await self.sio.emit("replaceDisconnectedPlayers")
+        except Exception:
+            log.exception(f"[DRAFT] replace_disconnected_failed event={self.event_id}")
+            return "Could not replace the disconnected players — see logs."
+        self.bot_filled_names.update(names)
+        log.warning(f"[DRAFT] disconnected_replaced event={self.event_id} names={names}")
+        return None
+
     async def restart_draft(self, thread, *, initiated_by: str | None = None) -> str | None:
         """Stop the in-flight draft on Draftmancer and reopen the lobby with a fresh ready check on the
         same session. Pick-phase only. `draft_cancelled` swallows the endDraft that stopDraft triggers so
-        the tournament phase never fires. Returns an error string (nothing changed) or None."""
+        the tournament phase never fires. A roster too short or odd to check gets the reopened-lobby card
+        and its Ready Check button instead, which is every restart a dropped player caused. Returns an
+        error string (nothing changed) or None."""
         if not self.sio.connected:
             return "Draftmancer session is not connected."
         if self.draft_complete:
@@ -1981,10 +2187,16 @@ class PodDraftManager:
         if not self.drafting:
             return "No draft in progress to restart."
         log.warning(f"[DRAFT] restart event={self.event_id} by={initiated_by}")
+        if initiated_by:
+            try:
+                await thread.send(MSG_POD_RESTARTED.format(actor=initiated_by))
+            except Exception:
+                log.warning(f"[DRAFT] restart.actor_notice_failed event={self.event_id}", exc_info=True)
         self.draft_cancelled = True
         self.draft_paused = False
         self.drafting = False
         self._cancel_end_watchdog()
+        await self.end_disconnect_stall()
         try:
             await self.sio.emit("stopDraft")
         except Exception:
@@ -2005,11 +2217,10 @@ class PodDraftManager:
         if skip_reason is not None:
             log.info(f"[DRAFT] restart.ready_skipped event={self.event_id} reason={skip_reason!r}")
             try:
-                await thread.send(
-                    "♻️ Draft stopped and the lobby is reopened. Run `/pod-start` once everyone's ready."
-                )
+                await thread.send(MSG_POD_RESTARTING)
             except Exception:
                 log.warning(f"[DRAFT] restart.notice_failed event={self.event_id}", exc_info=True)
+            await self.bump_lobby_card()
         return None
 
     async def _start_draft(self) -> None:
@@ -2218,7 +2429,14 @@ class PodDraftManager:
         pairs no matches and reports no results, so an unrecognized seat is a seat like any other."""
         if self.kind != "mock" and any(display is None for _, display in classified):
             return False
-        return len(classified) >= _LOBBY_FULL_THRESHOLD
+        return len(classified) >= self._lobby_full_count
+
+    @property
+    def _lobby_full_count(self) -> int:
+        """How many players make this lobby worth a Ready Check nudge. A table capped under a full pod is
+        full at its own cap; a wider one still gets asked at a pod's worth, since the eight who turned up
+        should not wait on two more who may not."""
+        return min(self.max_players, _LOBBY_FULL_THRESHOLD)
 
     def _suppress_lobby_full_prompt(self) -> None:
         """Retire the auto-nudge for this lobby once a Ready Check has been initiated, so it can't fire
@@ -2268,7 +2486,7 @@ class PodDraftManager:
             return
         self._lobby_full_prompted = True
         try:
-            prompt = MSG_LOBBY_FULL_PROMPT.format(count=emojis.mana_number(_LOBBY_FULL_THRESHOLD))
+            prompt = MSG_LOBBY_FULL_PROMPT.format(count=emojis.mana_number(self._lobby_full_count))
             self._lobby_full_prompt_message = await thread.send(prompt, view=LobbyReadyButtonView())
         except discord.HTTPException:
             self._lobby_full_prompted = False
@@ -3026,6 +3244,68 @@ async def handle_team_vote_click(interaction: "discord.Interaction", event_id: s
 register_team_vote_click_handler(handle_team_vote_click)
 
 
+_disconnect_vote_click_locks: dict[str, asyncio.Lock] = {}
+
+
+async def handle_disconnect_vote_click(interaction: "discord.Interaction", event_id: str, side: str) -> None:
+    """Move the clicker to their side of the disconnect offer against the card message, which holds the
+    tally, and act the moment one side reaches a majority of the players still at the table. Serialized per
+    pod so two clicks landing together can't both read the card as one short of the decision."""
+    lock = _disconnect_vote_click_locks.setdefault(event_id, asyncio.Lock())
+    async with lock:
+        embed = interaction.message.embeds[0] if interaction.message.embeds else None
+        manager = ACTIVE_POD_MANAGERS.get(event_id)
+        needed = pod_disconnect.needed_from_embed(embed) if embed is not None else None
+        if embed is None or needed is None or manager is None:
+            await interaction.response.defer()
+            return
+        if not manager.drafting or manager.draft_complete or not manager.disconnected_names:
+            await interaction.response.edit_message(view=None)
+            return
+        mention = interaction.user.mention
+        for_bot = [voter for voter in pod_disconnect.bot_voters_from_embed(embed) if voter != mention]
+        for_restart = [voter for voter in pod_disconnect.restart_voters_from_embed(embed) if voter != mention]
+        (for_bot if side == pod_disconnect.SIDE_BOT else for_restart).append(mention)
+        if len(for_bot) >= needed:
+            error = await manager.replace_disconnected_with_bots()
+            if error:
+                await interaction.response.send_message(f"⚠️ {error}", ephemeral=True)
+                return
+            log.info(f"[DROP_VOTE] replaced event={event_id} voters={for_bot}")
+            await _close_disconnect_vote(
+                interaction, manager, for_bot, for_restart, notice=pod_disconnect.BOT_NOTICE)
+            return
+        if len(for_restart) >= needed:
+            log.info(f"[DROP_VOTE] restarting event={event_id} voters={for_restart}")
+            await _close_disconnect_vote(interaction, manager, for_bot, for_restart)
+            thread = await manager._fetch_thread()
+            if thread is not None:
+                await manager.restart_draft(thread)
+            return
+        try:
+            await interaction.response.edit_message(
+                embed=pod_disconnect.rerender_offer(embed, for_bot, for_restart),
+                view=pod_disconnect.build_offer_view(event_id))
+        except discord.HTTPException:
+            log.warning(f"[DROP_VOTE] edit_failed event={event_id}", exc_info=True)
+
+
+async def _close_disconnect_vote(interaction: "discord.Interaction", manager, bot_votes: list[str],
+                                 restart_votes: list[str], *, notice: str | None = None) -> None:
+    """Land the deciding click: the card keeps the tally that decided it and loses only its buttons, and
+    the outcome goes out as its own plain message. A restart passes no notice, since reopening the lobby
+    posts its own card for every path that reaches it."""
+    manager.clear_disconnect_state()
+    await interaction.response.edit_message(
+        embed=pod_disconnect.rerender_offer(interaction.message.embeds[0], bot_votes, restart_votes),
+        view=None)
+    if notice is not None:
+        await interaction.followup.send(notice)
+
+
+pod_disconnect.register_vote_click_handler(handle_disconnect_vote_click)
+
+
 _round_robin_vote_click_locks: dict[str, asyncio.Lock] = {}
 
 
@@ -3290,6 +3570,24 @@ async def set_event_picks_per_pack(event_id: str, n: int) -> str | None:
     return await manager.apply_picks_per_pack(n)
 
 
+async def set_event_packs_per_player(event_id: str, n: int) -> str | None:
+    """Set how many packs each player opens, by event id. Live-only — the value is not persisted, so it
+    only applies while a session is connected. Returns an error string or None."""
+    manager = ACTIVE_POD_MANAGERS.get(event_id)
+    if manager is None:
+        return "Start the Draftmancer session before setting the packs."
+    return await manager.apply_packs_per_player(n)
+
+
+async def set_event_cards_per_pack(event_id: str, n: int) -> str | None:
+    """Set how many cards a pack holds, by event id. Live-only — the value is not persisted, so it only
+    applies while a session is connected. Returns an error string or None."""
+    manager = ACTIVE_POD_MANAGERS.get(event_id)
+    if manager is None:
+        return "Start the Draftmancer session before setting the cards per pack."
+    return await manager.apply_cards_per_pack(n)
+
+
 async def set_event_max_players(event_id: str, n: int) -> str | None:
     """Set a pod's Draftmancer seat cap by event id. Live-only — the value is not persisted, so it
     only applies while a session is connected. Returns an error string or None."""
@@ -3358,7 +3656,7 @@ def _count_participants_sync(event_id: str) -> int:
         ).scalar_one()
 
 
-async def _find_pinned_lobby_card(thread, bot_user, event_name: str, set_code: str | None) -> "discord.Message | None":
+async def _find_pinned_lobby_card(thread, bot_user, event_name: str) -> "discord.Message | None":
     """Rediscover the lobby status card pinned by an earlier manager (pre-restart) so a reconnect
     edits it in place instead of posting and pinning a duplicate. The 🤖 Commands field is unique to
     the lobby card, distinguishing it from a pinned standings or round-pairings embed."""
@@ -3367,13 +3665,10 @@ async def _find_pinned_lobby_card(thread, bot_user, event_name: str, set_code: s
     except discord.HTTPException:
         log.warning(f"could not fetch pins to rediscover lobby card for {event_name}", exc_info=True)
         return None
-    card_title = event_title(set_code, event_name)
     for msg in pins:
         if bot_user is not None and msg.author.id != bot_user.id:
             continue
         for pinned_embed in msg.embeds:
-            if (pinned_embed.title or "") != card_title:
-                continue
             if any("Commands" in (field.name or "") for field in pinned_embed.fields):
                 return msg
     return None
