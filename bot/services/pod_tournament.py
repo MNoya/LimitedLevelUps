@@ -2981,7 +2981,7 @@ def build_champion_announcement_view(
     return view
 
 
-def _round_header(round_num: int, complete: bool, *, seated: bool = True) -> str:
+def round_header(round_num: int, complete: bool, *, seated: bool = True) -> str:
     if complete:
         return f"✅ Round {round_num} complete!"
     if round_num == 1:
@@ -2989,7 +2989,7 @@ def _round_header(round_num: int, complete: bool, *, seated: bool = True) -> str
     return f"⚔️ Round {round_num} Pairings ⚔️"
 
 
-_ROUND_TITLE_RE = re.compile(r"Round (\d+)")  # restart recovery reads the round number back out of _round_header titles
+_ROUND_TITLE_RE = re.compile(r"Round (\d+)")  # restart recovery reads the round number back out of round_header titles
 
 
 def escape_italics(text: str) -> str:
@@ -4627,11 +4627,11 @@ def round_embed(round_num: int, match_states: list[dict]) -> discord.Embed:
     all_done = all(m["winner_name"] for m in match_states)
     if round_num == 1:
         seated = bool(match_states) and all(m.get("a_seat") and m.get("b_seat") for m in match_states)
-        title = _round_header(round_num, all_done, seated=seated)
+        title = round_header(round_num, all_done, seated=seated)
         lines = _round1_lines(match_states, seated)
     else:
         # Rounds 2+ group by record (1-0/0-1, then Trophy/1-1/Last Chance), waiting slots included
-        title = _round_header(round_num, all_done)
+        title = round_header(round_num, all_done)
         lines = _grouped_lines(round_num, match_states)
     lines = lines + _round_notice_lines(round_num, match_states)
     footer = _waiting_footer_line(match_states)

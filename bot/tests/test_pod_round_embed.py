@@ -13,7 +13,7 @@ from bot.services.pod_tournament import (
     _ROUND_TITLE_RE,
     MatchResultSelect,
     RoundResultsView,
-    _round_header,
+    round_header,
     _waiting_footer_line,
     mark_trophy_match,
     round_embed,
@@ -238,7 +238,7 @@ def test_round_header_title_carries_round_number_for_recovery():
     ]
 
     for round_num, complete, seated in cases:
-        title = _round_header(round_num, complete, seated=seated)
+        title = round_header(round_num, complete, seated=seated)
         match = _ROUND_TITLE_RE.search(title)
 
         assert match is not None, f"recovery regex missed title {title!r}"

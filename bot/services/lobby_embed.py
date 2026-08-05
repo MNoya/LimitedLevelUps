@@ -14,9 +14,10 @@ import discord
 
 from bot import emojis
 from bot.commands import descriptions as desc
-from bot.discord_helpers import add_two_column_field, command_line, quote_block
+from bot.discord_helpers import add_two_column_field, command_line, plural, quote_block
 from bot.services import pod_team
 from bot.services.pod_active import active_manager_for_channel
+from bot.services.ping_roles import format_join_line
 from bot.services.pod_drafts import load_event_id_by_thread_sync, normalize_player_name
 from bot.services.pod_team_board import TeamBoardMember, add_team_roster_fields
 from bot.services.pod_tournament import actor_label
@@ -27,21 +28,32 @@ log = logging.getLogger("bot.lobby_embed")
 READY_CHECK_CUSTOM_ID = "pod-draft:ready-check"
 SETTINGS_CUSTOM_ID = "pod-draft:settings"
 FORCE_START_CUSTOM_ID = "pod-draft:force-start"
+READY_NOW_CUSTOM_ID = "pod-draft:ready-now"
+NOT_READY_CUSTOM_ID = "pod-draft:not-ready"
+STOP_CHECK_CUSTOM_ID = "pod-draft:stop-check"
 
 _NO_ACTIVE_POD_MSG = "No active pod-draft session in this thread."
+RESUME_READY_CHECK_LABEL = "Resume Ready Check"
+
+MSG_STOP_CHECK_CONFIRM = "Stop Ready Check?"
+MSG_CLAIM_SEAT_PROMPT = "Nobody in the Draftmancer lobby matches your Discord name. Pick your seat:"
+MSG_NO_SEAT_TO_CLAIM = "You are not in the Draftmancer lobby yet.\n{join_line}"
 
 
 class LobbyReadyButtonView(discord.ui.View):
+    """The lobby card's controls. `live_check` drops the kickoff button, since a running check is managed from
+    its own card, and keeps the players' answers away from Force Start."""
+
     def __init__(
-        self, draftmancer_url: str | None = None, ready_disabled: bool = False,
+        self, draftmancer_url: str | None = None, live_check: bool = False,
         show_force_start: bool = False, spectate_url: str | None = None,
     ) -> None:
         super().__init__(timeout=None)
-        if ready_disabled:
-            self.ready_check.disabled = True
-        self.add_item(SettingsButton())
+        if live_check:
+            self.remove_item(self.ready_check)
         if show_force_start:
             self.add_item(ForceStartButton())
+        self.add_item(SettingsButton())
         if draftmancer_url:
             self.add_item(discord.ui.Button(
                 label="Join Draftmancer",
@@ -64,22 +76,39 @@ class LobbyReadyButtonView(discord.ui.View):
     async def ready_check(
         self, interaction: discord.Interaction, button: discord.ui.Button,
     ) -> None:
-        channel = interaction.channel
-        channel_id = channel.id if channel else None
-        actor = actor_label(interaction)
-        manager = active_manager_for_channel(channel_id)
-        if manager is None:
-            log.info(f"{actor} clicked Ready Check in channel={channel_id} (no active pod)")
-            await interaction.response.send_message(_NO_ACTIVE_POD_MSG, ephemeral=True)
-            return
-        log.info(f"[{manager.event_name}] {actor} clicked Ready Check")
-        await interaction.response.defer(ephemeral=True)
-        thread = await interaction.client.fetch_channel(manager.thread_id)
-        if await guard_ready_check(interaction, manager, thread, initiated_by=actor):
-            return
-        err = await manager.initiate_ready_check(thread, initiated_by=actor)
-        if err:
-            await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
+        await start_ready_check_from_button(interaction)
+
+
+async def start_ready_check_from_button(interaction: discord.Interaction) -> None:
+    """Arm or resume a check from whichever card the presser used. Both are one action, since arming keeps
+    every answer a seated player already gave."""
+    actor = actor_label(interaction)
+    manager = await manager_or_reply(interaction, "Ready Check")
+    if manager is None:
+        return
+    log.info(f"[{manager.event_name}] {actor} clicked Ready Check")
+    await interaction.response.defer(ephemeral=True)
+    thread = await manager._fetch_thread()
+    if thread is None:
+        return
+    if await guard_ready_check(interaction, manager, thread, initiated_by=actor):
+        return
+    err = await manager.initiate_ready_check(thread, initiated_by=actor, initiator=interaction.user)
+    if err:
+        await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
+
+
+class ResumeReadyCheckButton(discord.ui.Button):
+    """On a paused check's card, so the way out sits where the pause is explained."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            label=RESUME_READY_CHECK_LABEL, style=discord.ButtonStyle.primary,
+            custom_id=READY_CHECK_CUSTOM_ID,
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await start_ready_check_from_button(interaction)
 
 
 class SettingsButton(discord.ui.Button):
@@ -93,9 +122,174 @@ class SettingsButton(discord.ui.Button):
         await open_settings_panel(interaction)
 
 
+class ReadyCheckAnswerView(discord.ui.View):
+    """The running check's own card. Force Start stays off it: it ends the check outright, and one row from a
+    button eight players are aiming at is the worst place for it."""
+
+    def __init__(self, paused: bool = False) -> None:
+        super().__init__(timeout=None)
+        self.add_item(ReadyNowButton())
+        self.add_item(NotReadyButton())
+        if paused:
+            self.add_item(ResumeReadyCheckButton())
+        self.add_item(StopCheckButton())
+        self.add_item(SettingsButton(label=None))
+
+
+async def manager_or_reply(interaction: discord.Interaction, label: str):
+    """The pod behind a click, or None once the presser has been told there isn't one. A card outliving its
+    pod is ordinary rather than an error."""
+    actor = actor_label(interaction)
+    manager = active_manager_for_channel(interaction.channel_id)
+    if manager is None:
+        log.info(f"{actor} clicked {label} in channel={interaction.channel_id} (no active pod)")
+        await interaction.response.send_message(_NO_ACTIVE_POD_MSG, ephemeral=True)
+    return manager
+
+
+class SeatAnswerButton(discord.ui.Button):
+    """One player's answer to a running check. Subclasses set `ready` and their own label."""
+
+    ready: bool
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        actor = actor_label(interaction)
+        manager = await manager_or_reply(interaction, self.label)
+        if manager is None:
+            return
+        await interaction.response.defer()
+        seat_id = await manager.seat_id_for_discord_user(interaction.user)
+        if seat_id is None:
+            await _offer_seat_claim(interaction, manager, actor)
+            return
+        log.info(f"[{manager.event_name}] {actor} pressed {self.label}")
+        err = await manager.mark_seat(seat_id, ready=self.ready, actor=actor)
+        if err:
+            await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
+
+
+class ReadyNowButton(SeatAnswerButton):
+    """A player's own readiness. Draftmancer's prompt still fires, but its replies arrive over a socket that
+    reports a stray Not Ready whenever another popup replaces it, so this is the answer the bot trusts."""
+
+    ready = True
+
+    def __init__(self) -> None:
+        super().__init__(
+            label="I'm Ready", style=discord.ButtonStyle.success,
+            custom_id=READY_NOW_CUSTOM_ID, emoji="✅",
+        )
+
+
+class NotReadyButton(SeatAnswerButton):
+    """Say 'wait for me' without killing the check."""
+
+    ready = False
+
+    def __init__(self) -> None:
+        super().__init__(
+            label="Not Ready", style=discord.ButtonStyle.danger,
+            custom_id=NOT_READY_CUSTOM_ID,
+        )
+
+
+class StopCheckButton(discord.ui.Button):
+    """Call the check off, open to anyone in the thread and behind a confirm. Draftmancer exposes no way to
+    withdraw its prompt, so a modal left open there answers into a check that is already gone."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            label="Stop", style=discord.ButtonStyle.grey,
+            custom_id=STOP_CHECK_CUSTOM_ID, emoji="⛔",
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        manager = await manager_or_reply(interaction, "Stop")
+        if manager is None:
+            return
+        await interaction.response.send_message(
+            MSG_STOP_CHECK_CONFIRM, view=StopCheckConfirmView(manager), ephemeral=True,
+        )
+
+
+class StopCheckConfirmView(discord.ui.View):
+    def __init__(self, manager) -> None:
+        super().__init__(timeout=60)
+        self.manager = manager
+
+    @discord.ui.button(label="Stop", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        actor = actor_label(interaction)
+        log.info(f"[{self.manager.event_name}] {actor} stopped the ready check")
+        await interaction.response.defer()
+        err = await self.manager.stop_ready_check(actor=actor)
+        if err:
+            await interaction.edit_original_response(content=f"⚠️ {err}", view=None)
+            return
+        await interaction.delete_original_response()
+
+    @discord.ui.button(label="Keep Waiting", style=discord.ButtonStyle.grey)
+    async def keep(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.defer()
+        await interaction.delete_original_response()
+
+
+async def _offer_seat_claim(interaction, manager, actor: str) -> None:
+    """Nobody matched this presser, so let them name their own seat. Only seats matching no player at all are
+    offered, so nobody claims a seat that is already someone's."""
+    seats = await manager.unrecognized_lobby_names()
+    log.info(f"[{manager.event_name}] {actor} answered the check with no matching seat")
+    if not seats:
+        join_line = format_join_line(
+            manager.session_id, interaction.user.display_name, arena=manager.kind != "mock",
+        )
+        await interaction.followup.send(
+            MSG_NO_SEAT_TO_CLAIM.format(join_line=join_line), ephemeral=True,
+        )
+        return
+    await interaction.followup.send(
+        MSG_CLAIM_SEAT_PROMPT, view=ClaimSeatSelectView(manager, seats), ephemeral=True,
+    )
+
+
+class ClaimSeatSelectView(discord.ui.View):
+    """Ephemeral 'which seat is you' picker: links the chosen seat to the presser, then counts it ready."""
+
+    def __init__(self, manager, seats: list[str]) -> None:
+        super().__init__(timeout=120)
+        self.manager = manager
+        self.add_item(_ClaimSeatSelect(seats))
+
+
+class _ClaimSeatSelect(discord.ui.Select):
+    def __init__(self, seats: list[str]) -> None:
+        super().__init__(
+            placeholder="Your Draftmancer Seat",
+            options=[discord.SelectOption(label=name, value=name) for name in seats[:25]],
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        manager = self.view.manager
+        arena_name = self.values[0]
+        actor = actor_label(interaction)
+        await interaction.response.defer()
+        err = await manager.link_seat(interaction.user, arena_name)
+        if err:
+            await interaction.edit_original_response(content=f"⚠️ {err}", view=None)
+            return
+        log.info(f"[{manager.event_name}] {actor} claimed seat {arena_name!r} from the ready check")
+        seat_id = await manager.seat_id_for_discord_user(interaction.user)
+        ready_err = await manager.mark_seat(seat_id, ready=True, actor=actor) if seat_id else None
+        if ready_err:
+            await interaction.edit_original_response(content=f"⚠️ {ready_err}", view=None)
+            return
+        await interaction.delete_original_response()
+
+
 class ForceStartButton(discord.ui.Button):
-    """On the active ready-check card: an understated escape hatch to skip the remaining ready checks
-    and start the draft, behind a confirmation so a stray click can't launch the pod with players away."""
+    """On the lobby card: an understated escape hatch to skip the remaining answers and start the draft,
+    behind a confirmation so a stray click can't launch the pod with players away. Deliberately not on the
+    ready-check card, which is where players are clicking."""
 
     def __init__(self) -> None:
         super().__init__(
@@ -166,17 +360,18 @@ class ForceStartConfirmView(discord.ui.View):
 READY_CHECK_CONFIRM_PROMPT = "Start the ready check anyway?"
 
 
-def ready_check_confirm_text(seated: int, floor: int, unlinked: list[str]) -> str:
+def ready_check_confirm_text(seated: int, floor: int, unlinked: list[str], *, pairs: bool = True) -> str:
     """Warn-but-allow prompt shown to the initiator when a ready check is unusual but permitted: a roster
     under the floor, an odd roster that cannot pair, unrecognized seats, or any combination. Shared by the
-    live Ready Check button and the `!test` preview so the copy never drifts."""
+    live Ready Check button and the `!test` preview so the copy never drifts. `pairs` is False for a mock,
+    which plays no rounds and drafts happily at seven."""
     lines: list[str] = []
     if seated < floor:
-        lines.append(f"🛑 Only {seated} players in the Draftmancer lobby.")
-    if seated % 2 != 0:
+        lines.append(f"🛑 Only {seated} player{plural(seated)} in the Draftmancer lobby.")
+    if pairs and seated % 2 != 0:
         lines.append(
-            f"⚠️ {seated} players is an odd number. Pairings need an even number, so the draft will be "
-            "refused at start until a player joins or drops."
+            "⚠️ Pairings need an even number, so the draft will be refused at start until a player joins "
+            "or drops."
         )
     if unlinked:
         names = ", ".join(f"`{name}`" for name in unlinked)
@@ -211,9 +406,13 @@ class ReadyCheckConfirmView(discord.ui.View):
         actor = actor_label(interaction)
         log.info(f"[{self.manager.event_name}] {actor} confirmed Ready Check past warnings")
         await interaction.response.defer()
-        err = await self.manager.initiate_ready_check(self.thread, initiated_by=self.initiated_by)
-        message = f"⚠️ {err}" if err else "Ready check started, watch the thread."
-        await interaction.edit_original_response(content=message, view=None)
+        err = await self.manager.initiate_ready_check(
+            self.thread, initiated_by=self.initiated_by, initiator=interaction.user,
+        )
+        if err:
+            await interaction.edit_original_response(content=f"⚠️ {err}", view=None)
+            return
+        await interaction.delete_original_response()
 
     @discord.ui.button(label="Link Players", style=discord.ButtonStyle.primary, emoji="🔗")
     async def link_players(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -256,6 +455,7 @@ async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_p
             interaction,
             content=ready_check_confirm_text(
                 len(manager.player_session_users()), manager.ready_check_floor(min_players), unlinked,
+                pairs=manager.kind != "mock",
             ),
             view=ReadyCheckConfirmView(manager, thread, initiated_by, show_link_players=bool(unlinked)),
         )
@@ -307,12 +507,21 @@ async def open_settings_panel(interaction: discord.Interaction) -> None:
 
 
 def build_not_ready_view() -> discord.ui.View:
-    """Controls on the Not Ready card so the retry doesn't require scrolling back to the pinned lobby
-    card. The resume button carries the persistent Ready Check custom_id, so clicks dispatch through
-    the registered view."""
-    view = LobbyReadyButtonView()
-    view.ready_check.label = "Resume Ready Check"
+    """Controls on a closed card, so the retry doesn't need the pinned lobby card."""
+    view = discord.ui.View(timeout=None)
+    view.add_item(ResumeReadyCheckButton())
+    view.add_item(SettingsButton())
     return view
+
+
+def build_live_lobby_view(
+    draftmancer_url: str | None = None, spectate_url: str | None = None,
+) -> discord.ui.View:
+    """The lobby card while a check runs. The players' answers live on the check's own card."""
+    return LobbyReadyButtonView(
+        draftmancer_url=draftmancer_url, spectate_url=spectate_url,
+        live_check=True, show_force_start=True,
+    )
 
 
 def build_started_lobby_view(spectate_url: str | None) -> discord.ui.View:
@@ -349,7 +558,6 @@ def render(
     state: str,
     set_code: str | None = None,
     draftmancer_url: str | None = None,
-    decliner_name: str | None = None,
     cancel_reason: str | None = None,
     initiated_by: str | None = None,
     display_name_by_mention_id: dict[int, str] | None = None,
@@ -371,6 +579,8 @@ def render(
     separate ready-check progress card, not here. `spectators` lists Draftmancer sessionSpectators
     comma-separated below Maybe whenever any are present, regardless of state.
 
+    A live check gets one status line and no more: the detail lives on the check's own card.
+
     `mock` drops everything a mock draft has no use for: an unrecognized seat is normal there (a
     Discord name is enough, nobody links an Arena handle), and no matches are paired, so the
     Unrecognized bucket, `/link-arena`, and `/report-results` all go."""
@@ -388,18 +598,19 @@ def render(
         if _rsvp_dedup_key(name, mention_map) not in in_session_keys
     ]
     title = event_title(set_code, title)
-    show_pending = state not in ("ready", "drafting", "complete")
+    live_check = state in ("ready", "held")
+    show_pending = not live_check and state not in ("drafting", "complete")
+    show_link = state != "ready"  # a pause is usually waiting on somebody who dropped
 
     banner_state = state
-    if state not in ("ready", "notready", "drafting", "complete") and unrecognized and not mock:
+    if state not in ("ready", "held", "notready", "drafting", "complete") and unrecognized and not mock:
         banner_state = "has_unlinked"
     status_lines, color = ready_status_banner(
-        banner_state, decliner_name=decliner_name, cancel_reason=cancel_reason,
-        initiated_by=initiated_by,
+        banner_state, cancel_reason=cancel_reason, initiated_by=initiated_by,
     )
 
     header_lines: list[str] = []
-    if draftmancer_url and state != "ready":
+    if draftmancer_url and show_link:
         header_lines.append(f"### {draftmancer_url}")
     header_lines.extend(status_lines)
     description = "\n".join(header_lines) if header_lines else None
@@ -497,58 +708,54 @@ def render_ready_check_progress(
     state: str,
     set_code: str | None = None,
     ready_arena_names: set[str] | None = None,
-    decliner_name: str | None = None,
+    not_ready_arena_names: set[str] | None = None,
     cancel_reason: str | None = None,
-    superseded: bool = False,
+    hold_detail: str | None = None,
+    hold_hint: str | None = None,
+    draftmancer_url: str | None = None,
     initiated_by: str | None = None,
     timed_out: bool = False,
-    ready_count: int | None = None,
-    total_count: int | None = None,
     format_label: str | None = None,
     pairing_label: str | None = None,
     seating_label: str | None = None,
     teams: dict[str, str] | None = None,
     mock: bool = False,
 ) -> discord.Embed:
-    """Compact ready-check progress card.
+    """Compact ready-check progress card, one per check, updated in place as players respond. `state` mirrors
+    the lobby state machine: 'ready', 'held', 'notready', 'drafting', 'complete'.
 
-    Posted fresh each ready check and updated in place as players respond, so the active card
-    stays at the bottom of the thread even when the main lobby card has scrolled away.
-    `state` mirrors the lobby state machine: 'ready', 'notready', 'drafting', 'complete', and
-    falls through to a neutral header otherwise.
+    Every state keeps the Ready/Pending split, closed ones included: answers outlive the check that collected
+    them, so the split is live state rather than history, and the pinned lobby card gets buried.
 
-    A declined card ('notready', including the `superseded` stale variant) titles `Ready Check
-    Canceled` with an `❌ <reason>` line + `✅ ready_count/total_count Ready`; the `timed_out` variant
-    titles `Ready Check Timed Out` and drops the reason line. The live declined card carries the
-    Resume Ready Check + Settings view; a superseded card carries none.
-
-    `teams` swaps the flat roster for the two team columns once a team pod is drafting, matching the
-    lobby card, so the card that stays at the bottom of the thread names the sides.
-    """
+    A closed check carries no embed title, because Discord hangs an emoji in a title off the em box and one in
+    the body off the message-content size, so a `###` line sits straight where a title overhangs. Nothing
+    looks this card up by title, unlike the lobby and round cards."""
     title = event_title(set_code, title)
     roster = _seat_rows(in_session, mock=mock)
 
-    declined = state == "notready"
-    resume = declined and not superseded
-    if declined and timed_out:
-        header_lines = _started_subtext(initiated_by, resume=resume)
+    closed = state == "notready"
+    if closed:
+        reason = READY_TIMED_OUT_TITLE if timed_out else (cancel_reason or READY_STOPPED_TITLE)
+        card_title = None
         color = discord.Color.red()
-        card_title = "⚠️ Ready Check Timed Out"
+        header_lines = [f"### {reason}", *_started_subtext(initiated_by, resume=True)]
+    elif state == "held":
+        card_title = None
+        color = discord.Color.orange()
+        header_lines = [f"### {READY_PAUSED_TITLE}", f"### {hold_detail}" if hold_detail else "", hold_hint or ""]
+        if draftmancer_url:
+            header_lines.append(f"[**{REJOIN_LABEL}**]({draftmancer_url})")
+    elif state == "ready":
+        card_title = title
+        color = discord.Color.gold()
+        header_lines = [f"### 🔔 {READY_LIVE_LINE}"]
+        header_lines.extend(_started_subtext(initiated_by, resume=False))
     else:
-        status_lines, color = ready_status_banner(
-            state, decliner_name=decliner_name, cancel_reason=cancel_reason,
-            initiated_by=initiated_by, retry_hint=False if declined else not superseded,
-            resume_hint=resume,
-        )
+        status_lines, color = ready_status_banner(state, initiated_by=initiated_by)
         header_lines = list(status_lines) if status_lines else ["### Ready Check"]
-        card_title = "⚠️ Ready Check Canceled" if declined else title
-    if declined and ready_count is not None and total_count is not None:
-        header_lines.append(f"### ✅ {ready_count}/{total_count} Ready")
-    embed = discord.Embed(title=card_title, description="\n".join(header_lines), color=color)
+        card_title = title
+    embed = discord.Embed(title=card_title, description="\n".join(l for l in header_lines if l), color=color)
     _set_settings_footer(embed, format_label, pairing_label, seating_label)
-
-    if declined or superseded:
-        return embed
 
     if teams and state in ("drafting", "complete"):
         _team_columns(embed, roster, teams)
@@ -559,25 +766,36 @@ def render_ready_check_progress(
         pending_players = []
     elif ready_arena_names is not None:
         ready_players = [(a, dn) for a, dn in roster if a in ready_arena_names]
-        pending_players = [(a, dn) for a, dn in roster if a not in ready_arena_names]
+        pending_players = [
+            (a, _not_ready_label(dn, a, not_ready_arena_names)) for a, dn in roster
+            if a not in ready_arena_names
+        ]
     else:
         ready_players = []
         pending_players = roster
 
     ready_label = "Players" if state == "complete" else "Ready"
-    two_groups = bool(pending_players) or state == "ready"
+    two_groups = bool(pending_players) or state in ("ready", "held")
     _player_columns(embed, f"✅ {ready_label} ({len(ready_players)})", ready_players, spacer=two_groups)
     if two_groups:
         _player_columns(embed, f"⏳ Pending ({len(pending_players)})", pending_players, spacer=True)
     return embed
 
 
-READY_RESUME_HINT = "Resume when all players are present"
+
+READY_LIVE_LINE = "Ready Check initiated - press Ready here or in Draftmancer"
+READY_RUNNING_LINE = "Ready Check in progress"
+READY_STOPPED_TITLE = "🛑 Ready Check Stopped"
+READY_TIMED_OUT_TITLE = "⚠️ Ready Check Timed Out"
+READY_PAUSED_TITLE = "⏸️ Ready Check Paused"
+REJOIN_LABEL = "Rejoin Draftmancer"
+RESUME_WHEN_PRESENT = f"{RESUME_READY_CHECK_LABEL} when all players are present"
+RESUME_ON_RETURN = "Check will resume when they are back"
 
 
 def _started_subtext(initiated_by: str | None, *, resume: bool) -> list[str]:
     """The `-# Started by <name>` subtext, with the resume hint appended on a live declined card."""
-    tail = READY_RESUME_HINT if resume else ""
+    tail = RESUME_WHEN_PRESENT if resume else ""
     if initiated_by and tail:
         return [f"-# Started by {initiated_by}. {tail}"]
     if initiated_by:
@@ -590,37 +808,60 @@ def _started_subtext(initiated_by: str | None, *, resume: bool) -> list[str]:
 def ready_status_banner(
     state: str,
     *,
-    decliner_name: str | None = None,
     cancel_reason: str | None = None,
     initiated_by: str | None = None,
-    retry_hint: bool = True,
-    resume_hint: bool = False,
 ) -> tuple[list[str], discord.Color]:
-    """Status banner lines + color shared by the lobby card and the ready-check progress card so
-    their wording never drifts. `retry_hint` appends the retry tail on a live failed check; pass
-    False on a stale superseded card. `resume_hint` appends the resume line to the Started-by subtext
-    on a live declined card. Returns ([], blurple) for states with no banner."""
+    """The lobby card's status line, plus the two end-of-draft banners the check card shares. A live check
+    gets one line here: the detail belongs on the check's own card. Returns ([], blurple) for no banner."""
     if state == "ready":
-        lines = ["### 🔔 Ready Check initiated! Accept on Draftmancer to start the draft"]
-        if initiated_by:
-            lines.append(f"-# Started by {initiated_by}")
-        return lines, discord.Color.gold()
+        return [f"### 🔔 {READY_RUNNING_LINE}", *_started_subtext(initiated_by, resume=False)], discord.Color.gold()
+    if state == "held":
+        return [f"### {READY_PAUSED_TITLE}"], discord.Color.orange()
     if state == "drafting":
         return ["### 🎉 All players ready! Draft started"], discord.Color.green()
     if state == "complete":
         return [f"### {emojis.get('draftmancer')} Draft complete!"], discord.Color.green()
     if state == "notready":
-        retry = "! Click Start Ready Check to retry" if retry_hint else ""
-        if decliner_name:
-            reason = f"❌ `{decliner_name}` is Not Ready"
-        else:
-            reason = cancel_reason or "❌ Ready Check canceled"
-        lines = [f"### {reason}{retry}"]
-        lines.extend(_started_subtext(initiated_by, resume=resume_hint))
+        lines = [f"### {cancel_reason or READY_STOPPED_TITLE}! Click Start Ready Check to retry"]
+        lines.extend(_started_subtext(initiated_by, resume=False))
         return lines, discord.Color.red()
     if state == "has_unlinked":
         return ["### ⚠️ Some players aren't recognized yet"], discord.Color.orange()
     return [], discord.Color.blurple()
+
+
+def roster_change_detail(names: list[str], verb: str) -> str:
+    """Phrase for who joined or left mid-check, shown on the lobby banner and the thread notice."""
+    icon = "📥" if verb == "joined" else "📤"
+    if len(names) == 1:
+        return f"{icon} `{names[0]}` {verb} the lobby"
+    if names:
+        return f"{icon} {len(names)} players {verb} the lobby"
+    return f"{icon} A player {verb} the lobby"
+
+
+def roster_hold_detail(joined: list[str], left: list[str]) -> str:
+    """Banner phrase for the roster change that parked a check. A player leaving and another arriving in the
+    same broadcast is one event to the pod, so both halves stay on one line."""
+    parts = []
+    if left:
+        parts.append(roster_change_detail(left, "left"))
+    if joined:
+        parts.append(roster_change_detail(joined, "joined"))
+    return ", ".join(parts)
+
+
+def roster_hold_hint(joined: list[str], left: list[str]) -> str:
+    """What to do about a parked check. A seat that left comes back and the check carries on by itself, so
+    one line for both directions said the wrong thing half the time."""
+    if left and not joined:
+        return RESUME_ON_RETURN
+    return RESUME_WHEN_PRESENT
+
+
+def stopped_reason(actor: str | None) -> str:
+    """Heads the stopped card and the lobby banner."""
+    return f"{READY_STOPPED_TITLE} by {actor}" if actor else READY_STOPPED_TITLE
 
 
 _ARENA_SUFFIX_RE = re.compile(r"#[0-9?]+$")
@@ -644,6 +885,14 @@ def _seat_rows(in_session: list[tuple[str, str | None]], *, mock: bool = False) 
             stripped = _ARENA_SUFFIX_RE.sub("", arena) or arena
             rows.append((arena, stripped if mock else f"{stripped} ⚠️"))
     return rows
+
+
+def _not_ready_label(display: str, arena: str, not_ready_arena_names: set[str] | None) -> str:
+    """A pending seat's label, marked ❌ once it has answered Not Ready. Silence and a refusal read the same
+    in a bare Pending list, and only one is worth waiting on."""
+    if not_ready_arena_names and arena in not_ready_arena_names:
+        return f"{display} ❌"
+    return display
 
 
 def _player_columns(

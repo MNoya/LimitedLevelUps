@@ -121,14 +121,22 @@ def test_lobby_card_hides_link_during_ready_check_but_shows_it_otherwise():
     assert url not in (ready.description or "")
 
 
-def test_ready_progress_card_never_shows_the_link():
+def test_the_link_shows_on_a_paused_check_and_not_on_a_running_one():
+    """A running check has its roster locked, so a walk-in would only park it. A paused one is usually waiting
+    on somebody who dropped out of the session, and they are the one who needs the way back."""
     in_session = [(f"P{i}#000{i}", f"Player{i}") for i in range(8)]
+    url = "https://draftmancer.com/?session=X"
 
-    embed = render_ready_check_progress(
-        "Pod Draft", in_session, state="ready", ready_arena_names=set(),
+    running = render_ready_check_progress(
+        "Pod Draft", in_session, state="ready", ready_arena_names=set(), draftmancer_url=url,
+    )
+    paused = render_ready_check_progress(
+        "Pod Draft", in_session, state="held", ready_arena_names=set(),
+        hold_detail="somebody left", draftmancer_url=url,
     )
 
-    assert "draftmancer.com" not in (embed.description or "")
+    assert url not in (running.description or "")
+    assert url in (paused.description or "")
 
 
 def test_ready_progress_drafting_marks_everyone_ready():
@@ -156,44 +164,57 @@ def test_ready_progress_in_progress_splits_ready_and_pending():
     assert _field(embed, "⏳ Pending").name.endswith("(5)")
 
 
-def test_ready_progress_superseded_shows_only_decliner_no_roster():
-    """A superseded card a newer ready check has replaced shows only the decliner header — no roster
-    snapshot at all, so a dead check never repeats the player list."""
+def test_ready_progress_held_keeps_the_answers_already_given():
+    """A roster change parks the check without discarding it, so the card still splits Ready from Pending —
+    the whole point of holding instead of cancelling is that nobody clicks twice."""
     in_session = [(f"P{i}#000{i}", f"Player{i}") for i in range(8)]
+    ready = {arena for arena, _ in in_session[:3]}
+
     embed = render_ready_check_progress(
-        "Pod Draft", in_session, state="notready",
-        decliner_name="Player3#0003", superseded=True,
+        "Pod Draft", in_session, state="held", ready_arena_names=ready, hold_detail="P9 left",
     )
-    assert _field(embed, "✅ In Draftmancer") is None
-    assert _field(embed, "⏳ Pending") is None
-    assert "Player3#0003" in embed.description
-    assert "retry" not in embed.description
+
+    assert _field(embed, "✅ Ready").name.endswith("(3)")
+    assert _field(embed, "⏳ Pending").name.endswith("(5)")
+    assert embed.color == discord.Color.orange()
 
 
-def test_ready_progress_declined_collapses_to_tally():
-    """A declined card collapses to the 'is Not Ready' banner plus an X/N ready tally, dropping the
-    Draftmancer link and the Ready/Pending roster."""
+def test_ready_progress_marks_a_seat_that_answered_not_ready():
+    in_session = [(f"P{i}#000{i}", f"Player{i}") for i in range(4)]
+
+    embed = render_ready_check_progress(
+        "Pod Draft", in_session, state="ready", ready_arena_names=set(),
+        not_ready_arena_names={"P2#0002"},
+    )
+
+    pending = _field(embed, "⏳ Pending").value
+    assert pending.count("❌") == 1
+
+
+def test_a_stopped_card_still_shows_who_is_ready():
+    """Answers outlive the check that collected them, so the split is live state on a closed card and is what
+    says whether resuming is worth it. The pinned lobby card gets buried, so this one has to stand alone."""
     in_session = [(f"P{i}#000{i}", f"Player{i}") for i in range(8)]
+
     embed = render_ready_check_progress(
-        "Pod Draft", in_session, state="notready",
-        decliner_name="Player3#0003", ready_count=3, total_count=8,
+        "Pod Draft", in_session, state="notready", cancel_reason="stopped by Noya",
+        ready_arena_names={arena for arena, _ in in_session[:3]},
     )
-    assert "Player3#0003" in embed.description
-    assert "3/8" in embed.description
-    assert "draftmancer.com" not in embed.description
-    assert _field(embed, "✅ Ready") is None
-    assert _field(embed, "⏳ Pending") is None
+
+    assert _field(embed, "✅ Ready").name.endswith("(3)")
+    assert _field(embed, "⏳ Pending").name.endswith("(5)")
+    assert embed.color == discord.Color.red()
 
 
-def test_ready_progress_carries_initiator_through_decline():
+def test_ready_progress_carries_initiator_through_the_close():
     in_session = [(f"P{i}#000{i}", f"Player{i}") for i in range(8)]
     active = render_ready_check_progress(
         "Pod Draft", in_session, state="ready", ready_arena_names=set(), initiated_by="Noya",
     )
     assert "Noya" in active.description
 
-    declined = render_ready_check_progress(
-        "Pod Draft", in_session, state="notready", decliner_name="x", initiated_by="Noya",
+    stopped = render_ready_check_progress(
+        "Pod Draft", in_session, state="notready", cancel_reason="x", initiated_by="Noya",
     )
 
-    assert "Noya" in (declined.description or "")
+    assert "Noya" in (stopped.description or "")

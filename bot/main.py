@@ -71,7 +71,7 @@ from bot.listeners.pod_screenshots import setup as setup_pod_screenshots
 from bot.listeners.rotate_image import setup as setup_rotate_image
 from bot.models import LeaderboardMessage, Player, PodDraftEvent
 from bot.services.bot_log import BotLog
-from bot.services.lobby_embed import LobbyReadyButtonView
+from bot.services.lobby_embed import LobbyReadyButtonView, ReadyCheckAnswerView
 from bot.services.pod_draft_manager import rehydrate_active_lobbies
 from bot.services.pod_team_board import TeamReportButton, TeamRevealReportButton
 from bot.services.pod_join_button import JoinDraftButton, MockJoinDraftButton
@@ -293,6 +293,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         # messages keep dispatching after a bot restart
         bot.add_view(LeaderboardView())
         bot.add_view(LobbyReadyButtonView(show_force_start=True))
+        bot.add_view(ReadyCheckAnswerView())
         bot.add_view(RolesView())
         bot.add_view(persistent_pod_card_view())
         bot.add_view(PodQueueView())

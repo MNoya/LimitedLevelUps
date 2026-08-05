@@ -54,10 +54,10 @@ When sessionUsers fills to `max(1, expected_attendee_count)`, the bot fires the 
 - `pod_draft_events.event_number` and `pod_draft_config` table removed in commit `d470ec1`. Event identity is now name + `event_date`. `draftmancer_session` is named `{prefix}-{set}-{#N|Month-D}` with `-A`/`-B`/`-C` letter suffixes for same-day collisions.
 - Title-parsed `#N` is preferred for the session name when present; otherwise falls back to `Month-Day`.
 
-### Test conveniences (env-gated, never in prod)
+### Test conveniences (never in prod)
 
 - `POD_DRAFT_SKIP_REMINDER_WAIT=true` — fire T-5 reminder 10s after detection instead of at event_time - 5min.
-- `POD_DRAFT_BOTS=7` — pad seats so a solo human can `startDraft`.
+- Bot fill — off the production guild the bot pads every empty seat up to `max_players`, so a solo human can `startDraft` and run a draft through to the end. A community pod drafts the players who turned up. `_desired_bot_count` decides it, and is the seam to widen for a seat somebody drops mid-draft.
 - `POD_DRAFT_PICK_TIMER=1` — 1-second pick timer so the draft auto-resolves quickly.
 - `AUTO_REFRESH_ENABLED=false` — silences the 17lands auto-refresh tick on the test bot.
 

@@ -39,11 +39,16 @@ from bot.services import bot_log as bot_log_mod
 from bot.services import championship
 from bot.services.lobby_embed import (
     LobbyReadyButtonView,
+    ReadyCheckAnswerView,
+    build_live_lobby_view,
     build_started_lobby_view,
     build_not_ready_view,
     event_title,
     render as render_lobby_embed,
     render_ready_check_progress,
+    roster_hold_detail,
+    roster_hold_hint,
+    stopped_reason,
 )
 from bot.services.mock_lobby_card import (
     MOCK_CARD_PING,
@@ -124,9 +129,8 @@ _BACKOFF_BASE_S = 1.0
 _BACKOFF_MAX_S = 30.0
 _BACKOFF_MAX_RETRIES = 8
 LOBBY_REHYDRATE_WINDOW = timedelta(hours=12)
-_READY_TIMEOUT_S = 90
+_READY_TIMEOUT_S = 120
 _READY_DEBOUNCE_S = 2.0
-_READY_GRACE_S = 5
 _LOBBY_FULL_THRESHOLD = 8
 _LOBBY_HALF_THRESHOLD = _LOBBY_FULL_THRESHOLD // 2
 _LOBBY_FULL_PROMPT_DELAY_S = 10
@@ -338,7 +342,11 @@ class PodDraftManager:
         self._closed = False
         self.ready_check_active = False
         self.ready_check_generation = 0
-        self.ready_users: set[str] = set()
+        self.ready_check_joined_ids: set[str] = set()
+        self.ready_check_left_ids: set[str] = set()
+        self.ready_discord_ids: set[str] = set()
+        self.ready_socket_ids: set[str] = set()
+        self.not_ready_ids: set[str] = set()
         self.expected_user_ids: set[str] = set()
         self.expected_user_names: dict[str, str] = {}
         self._lobby_full_prompt_task: asyncio.Task | None = None
@@ -351,15 +359,13 @@ class PodDraftManager:
         self.ready_check_progress_message: object | None = None
         self._lobby_post_lock = asyncio.Lock()
         self._ready_timeout_task: asyncio.Task | None = None
-        self._ready_grace_task: asyncio.Task | None = None
         self.drafting = False
+        self._draft_start_in_flight = False
         self.draft_paused = False
         self.draft_cancelled = False
         self.draft_complete = False
-        self.last_decliner_name: str | None = None
         self.last_cancel_reason: str | None = None
         self.ready_check_timed_out = False
-        self.last_ready_summary: tuple[int, int] | None = None
         self.initiated_by: str | None = None
         self.draft_logs: dict[str, dict] = {}
         self.current_round = 0
@@ -368,6 +374,7 @@ class PodDraftManager:
         self.tournament_players: list = []       # pod_swiss.Player list, set by pod_tournament.start_tournament
         self.pairing_mode = "swiss"              # resolved in start_tournament; see pod_pairing_select.PAIRING_MODES
         self.seating_mode = "random"             # 'random', 'manual', or 'leaderboard'; hydrated on connect
+        self._bots_pushed: int | None = None
         self.pick_timer = settings.pod_draft_pick_timer
         self.picks_per_pack = settings.pod_draft_picks_per_pack
         self.max_players = settings.pod_draft_max_players
@@ -516,22 +523,21 @@ class PodDraftManager:
 
         self._note_mock_lobby_activity()
 
+        self._sync_ready_check_roster()
+
+        if self.ready_check_active and self.ready_check_joined_ids:
+            await self._adopt_recognized_arrivals()
+
+        if self.is_owner and not self.drafting:
+            await self._apply_bot_fill()
+
         await self._refresh_lobby_status()
 
         self._admit_lobby_arrivals()
 
         self._sync_leaderboard_seeding()
 
-        if self.ready_check_active:
-            present = {u.get("userID") for u in self.player_session_users()}
-            if not present <= self.expected_user_ids:
-                joined = present - self.expected_user_ids
-                await self._invalidate_ready_check("joined", detail=self._joined_detail(joined))
-            elif not self.expected_user_ids <= present:
-                self._arm_ready_grace()
-            else:
-                self._cancel_ready_grace()
-                await self._maybe_complete_ready_check()
+        await self._maybe_complete_ready_check()
 
     async def _on_session_spectators(self, spectators) -> None:
         self.session_spectators = list(spectators) if isinstance(spectators, list) else []
@@ -633,7 +639,7 @@ class PodDraftManager:
         await self.sio.emit("setMaxPlayers", self.max_players)
         await self.sio.emit("setPickTimer", self.pick_timer)
         await self.sio.emit("setPickedCardsPerRound", self.picks_per_pack)
-        await self.sio.emit("setBots", settings.pod_draft_bots)
+        await self._apply_bot_fill()
         await self.sio.emit("setColorBalance", True)
         await self.sio.emit("setPersonalLogs", True)
         await self.sio.emit("setDraftLogRecipients", self._draft_log_recipients)
@@ -643,8 +649,23 @@ class PodDraftManager:
             f"[LIFECYCLE] session_settings_applied event={self.event_id} set={self.set_code} "
             f"max_players={self.max_players} pick_timer={self.pick_timer} "
             f"picks_per_pack={self.picks_per_pack} "
-            f"bots={settings.pod_draft_bots} log_recipients={self._draft_log_recipients} team_draft={team_draft}"
+            f"bots={self._bots_pushed} log_recipients={self._draft_log_recipients} team_draft={team_draft}"
         )
+
+    def _desired_bot_count(self) -> int:
+        """Draftmancer bots padding the empty seats. A community pod drafts the players who turned up; the
+        test bot fills every empty seat, so one browser runs a whole draft."""
+        if settings.is_production:
+            return 0
+        return max(0, self.max_players - len(self.player_session_users()))
+
+    async def _apply_bot_fill(self) -> None:
+        """Match the bot count to the seats still empty, pre-draft and only when the number moves."""
+        target = self._desired_bot_count()
+        if target == self._bots_pushed or self.drafting or self.draft_complete:
+            return
+        await self.sio.emit("setBots", target)
+        self._bots_pushed = target
 
     async def apply_team_draft_setting(self) -> None:
         """Push the teamDraft flag so Draftmancer splits and colors the sides, then re-push the seating
@@ -816,17 +837,21 @@ class PodDraftManager:
                 event.socket_status = status
                 session.commit()
 
+    @property
+    def ready_users(self) -> set[str]:
+        """Seats that are ready, from either surface."""
+        return self.ready_discord_ids | self.ready_socket_ids
+
     def ready_check_blocker(self) -> str | None:
         """The hard guards that stop a ready check outright, shared by the lobby button's pre-check and
         initiate_ready_check so they can't drift. None means the check may run. A roster that is short, odd,
         or holding unrecognized seats does not block here: guard_ready_check confirms those with the
-        initiator, so a pod that needs an unusual start is never left with Force Start as its only way in."""
+        initiator, so a pod that needs an unusual start is never left with Force Start as its only way in.
+        A running check is not a blocker either: pressing it again re-arms, which is how a pause clears."""
         if not self.sio.connected:
             return "Draftmancer session is not connected."
         if self.drafting or self.draft_complete:
             return "The draft has already started."
-        if self.ready_check_active:
-            return "Ready check already in progress."
         if not self.player_session_users():
             return "Nobody in the Draftmancer lobby yet."
         return None
@@ -845,37 +870,45 @@ class PodDraftManager:
         """Whether the roster is unusual enough that the initiator confirms before the check fires. Shared by
         the interactive gate and the draft-restart path, which has nobody to ask and so skips the check."""
         seated = len(self.player_session_users())
-        unrecognized = bool(unlinked) and self.kind != "mock"
-        return seated < self.ready_check_floor(min_players) or seated % 2 != 0 or unrecognized
+        mock = self.kind == "mock"
+        odd = seated % 2 != 0 and not mock
+        return seated < self.ready_check_floor(min_players) or odd or (bool(unlinked) and not mock)
 
-    async def initiate_ready_check(self, thread, initiated_by: str | None = None) -> str | None:
-        """Start a Draftmancer ready check; returns an error string on failure, None on success. Only the hard
-        blockers stop it here; a short, odd, or unrecognized roster is confirmed by the caller beforehand."""
+    async def initiate_ready_check(
+        self, thread, initiated_by: str | None = None, initiator: discord.abc.User | None = None,
+    ) -> str | None:
+        """Start a ready check, or re-arm the running one; returns an error string on failure, None on
+        success. Only the hard blockers stop it here; a short, odd, or unrecognized roster is confirmed by
+        the caller beforehand.
+
+        Arming keeps every answer a seat still in the lobby already gave, so eight players click once.
+        `initiator` answers for itself: asking the table is as clear a statement as answering it."""
         blocker = self.ready_check_blocker()
         if blocker:
             return blocker
         non_bot = self.player_session_users()
-        self._cancel_ready_grace()
+        rearm = self.ready_check_active
         self.expected_user_ids = {u.get("userID") for u in non_bot}
         self.expected_user_names = {u.get("userID"): u.get("userName") for u in non_bot}
-        self.ready_users = set()
+        self.ready_discord_ids &= self.expected_user_ids
+        self.ready_socket_ids &= self.expected_user_ids
+        self.not_ready_ids &= self.expected_user_ids
         self.ready_check_active = True
+        self.ready_check_joined_ids = set()
+        self.ready_check_left_ids = set()
         self.ready_check_generation += 1
         generation = self.ready_check_generation
         self._suppress_lobby_full_prompt()
         self._ready_check_started_at = asyncio.get_running_loop().time()
         self.initiated_by = initiated_by
-        prior_decliner = self.last_decliner_name
-        prior_cancel = self.last_cancel_reason
-        prior_summary = self.last_ready_summary
-        self.last_decliner_name = None
         self.last_cancel_reason = None
-        self.last_ready_summary = None
         self.ready_check_timed_out = False
+        if initiator is not None:
+            await self._mark_initiator_ready(initiator)
         log.info(
-            f"[READY] start event={self.event_id} expected={len(self.expected_user_ids)} "
-            f"team_draft={self.pairing_mode == 'team'} timeout_s={_READY_TIMEOUT_S} "
-            f"expected_ids={self.expected_user_ids}"
+            f"[READY] start event={self.event_id} rearm={rearm} expected={len(self.expected_user_ids)} "
+            f"already_ready={len(self.ready_users)} team_draft={self.pairing_mode == 'team'} "
+            f"timeout_s={_READY_TIMEOUT_S} expected_ids={self.expected_user_ids}"
         )
         ack = await self._emit_with_ack("readyCheck")
         ack_error = _ack_error_text(ack)
@@ -885,6 +918,7 @@ class PodDraftManager:
             return f"Draftmancer rejected the ready check: {ack_error}."
         if ack is None:
             log.warning(f"[READY] no_ack event={self.event_id} — starting timer without confirmation")
+        self._cancel_ready_timeout()
         self._ready_timeout_task = asyncio.create_task(self._ready_timeout(generation))
 
         non_bot_names = [u.get("userName") for u in non_bot if u.get("userName")]
@@ -892,55 +926,54 @@ class PodDraftManager:
         if not self._ready_check_is_live(generation):
             await self._abandon_ready_check_setup(generation)
             return None
+        await self._show_progress_card(thread, classified, rearm=rearm)
+        await self._refresh_lobby_status()
+        await self._maybe_complete_ready_check()
+        return None
 
-        prior_progress = self.ready_check_progress_message
-        if prior_progress is not None:
-            superseded_embed = render_ready_check_progress(
-                title=self.event_name,
-                in_session=classified,
-                state="notready",
-                decliner_name=prior_decliner,
-                cancel_reason=prior_cancel,
-                superseded=True,
-                ready_count=prior_summary[0] if prior_summary else None,
-                total_count=prior_summary[1] if prior_summary else None,
-                **self._settings_labels(),
-            )
-            try:
-                await prior_progress.edit(embed=superseded_embed, view=None)
-            except Exception:
-                log.warning("could not lock prior ready-check progress card", exc_info=True)
+    async def _mark_initiator_ready(self, initiator: discord.abc.User) -> None:
+        """Count the presser as ready when they hold a checked seat. An organizer outside the lobby holds
+        none."""
+        seat_id = await self.seat_id_for_discord_user(initiator)
+        if seat_id is None or seat_id not in self.expected_user_ids:
+            return
+        self.ready_discord_ids.add(seat_id)
+        self.not_ready_ids.discard(seat_id)
+        log.info(f"[READY] initiator_ready event={self.event_id} seat={self.seat_name(seat_id)!r}")
 
-        if not self._ready_check_is_live(generation):
-            await self._abandon_ready_check_setup(generation)
-            return None
-        self.ready_check_progress_message = None
-
-        progress_embed = render_ready_check_progress(
+    async def _show_progress_card(self, thread, classified, *, rearm: bool) -> None:
+        """Put the check's card in front of the pod. A re-arm edits the card players are already looking at,
+        a fresh check retires the old one and posts below the conversation."""
+        embed = render_ready_check_progress(
             title=self.event_name,
             in_session=classified,
             state="ready",
-            ready_arena_names=set(),
+            ready_arena_names=self.ready_arena_names(),
             initiated_by=self.initiated_by,
             **self._settings_labels(),
         )
+        view = ReadyCheckAnswerView()
+        card = self.ready_check_progress_message
+        if rearm and card is not None:
+            try:
+                await card.edit(embed=embed, view=view)
+                return
+            except Exception:
+                log.warning("could not edit ready-check progress card on re-arm", exc_info=True)
+        if card is not None:
+            try:
+                await card.delete()
+            except Exception:
+                log.info(f"[READY] stale_card_delete_failed event={self.event_id}")
+        self.ready_check_progress_message = None
         try:
-            self.ready_check_progress_message = await thread.send(
-                embed=progress_embed,
-                view=LobbyReadyButtonView(
-                    draftmancer_url=self.draftmancer_url, ready_disabled=True, show_force_start=True,
-                    spectate_url=self.spectate_url,
-                ),
-            )
+            self.ready_check_progress_message = await thread.send(embed=embed, view=view)
         except Exception:
             log.warning("could not post ready-check progress card", exc_info=True)
 
-        await self._refresh_lobby_status()
-        return None
-
     def _ready_check_is_live(self, generation: int) -> bool:
-        """Whether `generation` is still the running check. Invalidation clears the active flag without
-        bumping the generation and a restart bumps it without clearing the flag, so both must be checked."""
+        """Whether `generation` is still the running check. Closing a check clears the active flag without
+        bumping the generation and a re-arm bumps it without clearing the flag, so both must be checked."""
         return self.ready_check_active and generation == self.ready_check_generation
 
     async def _abandon_ready_check_setup(self, generation: int) -> None:
@@ -950,6 +983,105 @@ class PodDraftManager:
         Ready button disabled, leaving Force Start as the only live control in the thread."""
         log.info(f"[READY] setup_abandoned event={self.event_id} generation={generation}")
         await self._refresh_lobby_status()
+
+    def seat_name(self, user_id: str) -> str | None:
+        """A seat's Draftmancer handle, live from the session so a rename mid-check still lines up, falling
+        back to the arm-time snapshot for a seat that has left."""
+        for user in self.session_users:
+            if user.get("userID") == user_id:
+                return user.get("userName")
+        return self.expected_user_names.get(user_id)
+
+    def is_ready_check_held(self) -> bool:
+        return bool(self.ready_check_joined_ids or self.ready_check_left_ids)
+
+    def hold_lines(self) -> tuple[str | None, str | None]:
+        """(detail, hint) for a paused check, built fresh each render so a rename mid-pause is picked up."""
+        if not self.is_ready_check_held():
+            return None, None
+        joined = [self.seat_name(uid) or uid for uid in self.ready_check_joined_ids]
+        left = [self.seat_name(uid) or uid for uid in self.ready_check_left_ids]
+        return roster_hold_detail(joined, left), roster_hold_hint(joined, left)
+
+    def ready_arena_names(self) -> set[str]:
+        return self._arena_names(self.ready_users)
+
+    def not_ready_arena_names(self) -> set[str]:
+        return self._arena_names(self.not_ready_ids)
+
+    def _arena_names(self, seat_ids) -> set[str]:
+        return {name for name in (self.seat_name(uid) for uid in seat_ids) if name}
+
+    async def seat_id_for_discord_user(self, user: discord.abc.User) -> str | None:
+        """The lobby seat belonging to a Discord user, by linked Player first and by name match second, so
+        someone whose Draftmancer handle merely resembles their Discord name still answers for themselves."""
+        seats = [
+            (u.get("userID"), u.get("userName")) for u in self.player_session_users() if u.get("userName")
+        ]
+        if not seats:
+            return None
+        id_by_name = await asyncio.to_thread(discord_ids_for_names_sync, [name for _, name in seats])
+        wanted = str(user.id)
+        for user_id, name in seats:
+            if id_by_name.get(name) == wanted:
+                return user_id
+        for matches in (arena_matches_name, arena_matches_token):
+            for user_id, name in seats:
+                if matches(name, user.display_name) or matches(name, user.name):
+                    return user_id
+        return None
+
+    async def mark_seat(self, seat_id: str, *, ready: bool, actor: str | None = None) -> str | None:
+        """Record one seat's answer, adopting it into the check first when it joined after the check was armed.
+        Returns an error string when the click cannot count."""
+        if not self.ready_check_active:
+            return "No Ready Check is running."
+        self._adopt_late_seat(seat_id)
+        if ready:
+            self.ready_discord_ids.add(seat_id)
+            self.not_ready_ids.discard(seat_id)
+        else:
+            self.ready_discord_ids.discard(seat_id)
+            self.ready_socket_ids.discard(seat_id)
+            self.not_ready_ids.add(seat_id)
+        log.info(
+            f"[READY] discord_answer event={self.event_id} seat={self.seat_name(seat_id)!r} ready={ready} "
+            f"actor={actor} ready_count={len(self.ready_users)}/{len(self.expected_user_ids)}"
+        )
+        await self.refresh_lobby_now()
+        if ready:
+            await self._maybe_complete_ready_check()
+        return None
+
+    def _adopt_late_seat(self, seat_id: str) -> None:
+        """Take a seat that joined after the check was armed into it, on that seat's own answer. A pod never
+        drafts a table nobody checked, and a player answering for themselves is that seat being checked."""
+        if seat_id in self.expected_user_ids:
+            return
+        self.expected_user_ids.add(seat_id)
+        name = self.seat_name(seat_id)
+        if name:
+            self.expected_user_names[seat_id] = name
+        log.info(
+            f"[READY] late_seat_adopted event={self.event_id} seat={name!r} "
+            f"expected={len(self.expected_user_ids)}"
+        )
+        self._sync_ready_check_roster()
+        self._restart_ready_timeout()
+
+    def _restart_ready_timeout(self) -> None:
+        self._cancel_ready_timeout()
+        self._ready_check_started_at = asyncio.get_running_loop().time()
+        self._ready_timeout_task = asyncio.create_task(self._ready_timeout(self.ready_check_generation))
+
+    async def stop_ready_check(self, *, actor: str | None = None) -> str | None:
+        """Call off a running check. Draftmancer holds no state of its own, so forgetting it here is the
+        whole cancellation."""
+        if not self.ready_check_active:
+            return "No Ready Check is running."
+        log.info(f"[READY] stopped event={self.event_id} by={actor}")
+        await self._end_ready_check(stopped_reason(actor))
+        return None
 
     async def _classify_users(self, names: list[str]) -> list[tuple[str, str | None]]:
         """Classify Draftmancer usernames against linked players, falling back to guild members
@@ -1077,12 +1209,9 @@ class PodDraftManager:
                 names = self.non_bot_session_names()
             classified = await self._classify_users(names) if names else []
             state = self._compute_state(classified)
-            ready_arena_names: set[str] | None = None
-            if state == "ready":
-                ready_arena_names = {
-                    u.get("userName") for u in self.session_users
-                    if u.get("userID") in self.ready_users and u.get("userName")
-                }
+            live_check = state in ("ready", "held")
+            ready_arena_names = self.ready_arena_names()
+            hold_detail, hold_hint = self.hold_lines()
             teams = None
             if self.pairing_mode == "team" and state in ("drafting", "complete"):
                 teams = self.team_map or await asyncio.to_thread(load_teams_sync, self.event_id)
@@ -1093,7 +1222,6 @@ class PodDraftManager:
                 in_session=classified,
                 state=state,
                 draftmancer_url=self.draftmancer_url,
-                decliner_name=self.last_decliner_name,
                 cancel_reason=self.last_cancel_reason,
                 initiated_by=self.initiated_by,
                 display_name_by_mention_id=await self._resolve_rsvp_mentions(thread.guild),
@@ -1114,10 +1242,11 @@ class PodDraftManager:
                 self.round_robin_vote_offered = False
             if state in ("drafting", "complete"):
                 view = build_started_lobby_view(self.spectate_url if state == "drafting" else None)
+            elif live_check:
+                view = build_live_lobby_view(self.draftmancer_url, self.spectate_url)
             else:
                 view = LobbyReadyButtonView(
                     draftmancer_url=self.draftmancer_url,
-                    ready_disabled=(state == "ready"),
                     show_force_start=(state == "unlinked"),
                     spectate_url=self.spectate_url,
                 )
@@ -1156,19 +1285,20 @@ class PodDraftManager:
             if self.kind == "mock":
                 await self._update_mock_anchor(classified)
 
-        if self.ready_check_progress_message is not None:
-            progress_state = self._progress_card_state(state)
+        progress_state = self._progress_card_state(state)
+        if self.ready_check_progress_message is not None and progress_state is not None:
             progress_embed = render_ready_check_progress(
                 title=self.event_name,
                 in_session=classified,
                 state=progress_state,
                 ready_arena_names=ready_arena_names,
-                decliner_name=self.last_decliner_name,
+                not_ready_arena_names=self.not_ready_arena_names(),
                 cancel_reason=self.last_cancel_reason,
+                hold_detail=hold_detail,
+                hold_hint=hold_hint,
+                draftmancer_url=self.draftmancer_url if self.ready_check_left_ids else None,
                 initiated_by=self.initiated_by,
                 timed_out=self.ready_check_timed_out,
-                ready_count=self.last_ready_summary[0] if self.last_ready_summary else None,
-                total_count=self.last_ready_summary[1] if self.last_ready_summary else None,
                 teams=teams,
                 **self._settings_labels(),
             )
@@ -1179,12 +1309,7 @@ class PodDraftManager:
             elif progress_state == "complete":
                 progress_view = None
             else:
-                progress_view = LobbyReadyButtonView(
-                    draftmancer_url=self.draftmancer_url,
-                    ready_disabled=(progress_state == "ready"),
-                    show_force_start=(progress_state == "ready"),
-                    spectate_url=self.spectate_url,
-                )
+                progress_view = ReadyCheckAnswerView(paused=progress_state == "held")
             try:
                 await self.ready_check_progress_message.edit(embed=progress_embed, view=progress_view)
             except Exception:
@@ -1217,26 +1342,23 @@ class PodDraftManager:
     def _compute_state(self, classified: list[tuple[str, str | None]]) -> str:
         if self.draft_complete:
             return "complete"
-        if self.drafting:
+        if self.drafting or self._draft_start_in_flight:
             return "drafting"
-        if self.last_decliner_name or self.last_cancel_reason:
-            return "notready"
         if self.ready_check_active:
-            return "ready"
+            return "held" if self.is_ready_check_held() else "ready"
+        if self.last_cancel_reason:
+            return "notready"
         if not classified:
             return "empty"
         if any(dn is None for _, dn in classified) and self.kind != "mock":
             return "unlinked"
         return "linked"
 
-    def _progress_card_state(self, state: str) -> str:
-        """The lobby state coerced to one the ready-check card can render. A card only exists once a check
-        has run, so any state that is neither live nor terminal means the check ended without recording a
-        reason; showing it as canceled keeps an enabled Resume button on the card instead of freezing it on
-        the disabled view it was posted with."""
+    def _progress_card_state(self, state: str) -> str | None:
+        """The lobby state coerced to one the check card can render, or None to leave the card alone."""
         if self.ready_check_active or state in ("drafting", "complete", "notready"):
             return state
-        return "notready"
+        return None
 
     async def _on_end_draft(self, *_) -> None:
         if self.draft_cancelled:
@@ -1570,11 +1692,17 @@ class PodDraftManager:
     def _snapshot_tournament_roster(self) -> list[str]:
         """The locked drafter list, frozen at endDraft. Prefers the draft log's seated users — immune
         to players closing their tab at draft end or spectators joining after — and falls back to
-        whoever is in the session right now."""
+        whoever is in the session right now.
+
+        Draftmancer's own bots stay in the artifact, where the replay needs them to reconstruct the passing,
+        but they play no rounds and are dropped here."""
         payload = self._full_draft_log()
         users = payload.get("users") if isinstance(payload, dict) else None
         if isinstance(users, dict):
-            seated = [u.get("userName") for u in users.values() if isinstance(u, dict) and u.get("userName")]
+            seated = [
+                u.get("userName") for u in users.values()
+                if isinstance(u, dict) and u.get("userName") and not u.get("isBot")
+            ]
             if seated:
                 return seated
         return self.non_bot_session_names()
@@ -1703,17 +1831,20 @@ class PodDraftManager:
         return True
 
     async def _on_set_ready(self, user_id, ready_state) -> None:
+        """Draftmancer's answer to the prompt, one input among two. A Not Ready only un-ticks the seat: the
+        prompt is a SweetAlert that fires one whenever another popup replaces it, so it reports refusals
+        nobody made."""
         ready = _is_ready_state(ready_state)
         log.info(
             f"[READY] set_ready event={self.event_id} user={user_id} state={ready_state!r} "
             f"parsed={ready} active={self.ready_check_active} expected={user_id in self.expected_user_ids}"
         )
-        if not self.ready_check_active:
+        if not self.ready_check_active or user_id not in self.expected_user_ids:
             return
         if ready:
-            self.ready_users.add(user_id)
+            self.ready_socket_ids.add(user_id)
+            self.not_ready_ids.discard(user_id)
         else:
-            self.ready_users.discard(user_id)
             elapsed = asyncio.get_running_loop().time() - self._ready_check_started_at
             if elapsed < _READY_DEBOUNCE_S:
                 log.info(
@@ -1721,26 +1852,56 @@ class PodDraftManager:
                     f"elapsed_s={elapsed:.2f}"
                 )
                 return
-            decliner_name = next(
-                (u.get("userName") for u in self.session_users if u.get("userID") == user_id),
-                None,
-            )
-            await self._invalidate_ready_check(
-                "declined", decliner_name=decliner_name, detail=UNNAMED_DECLINE_DETAIL,
-            )
-            return
+            if user_id in self.ready_discord_ids:
+                log.info(f"[READY] socket_notready_overridden event={self.event_id} user={user_id}")
+                return
+            self.ready_socket_ids.discard(user_id)
+            self.not_ready_ids.add(user_id)
         await self.refresh_lobby_now()
         await self._maybe_complete_ready_check()
 
-    async def _maybe_complete_ready_check(self) -> None:
-        """Complete only when every player present at the check's start is still in the lobby and
-        ready. ready_users is pruned to the current lobby first, so a player who readied then left
-        can't satisfy the count — the check holds through the grace window, or the timeout cancels it."""
+    def _sync_ready_check_roster(self) -> None:
+        """Compare the lobby against the roster the check was armed on. The table that was checked is the
+        table that drafts, so any arrival or departure parks the check instead of resizing the pod."""
         if not self.ready_check_active:
             return
         present = {u.get("userID") for u in self.player_session_users()}
-        self.ready_users &= present
-        if self.expected_user_ids <= present and self.ready_users >= self.expected_user_ids:
+        joined = present - self.expected_user_ids
+        left = self.expected_user_ids - present
+        if not joined and not left:
+            if self.is_ready_check_held():
+                log.info(f"[READY] hold_released event={self.event_id}")
+            self.ready_check_joined_ids = set()
+            self.ready_check_left_ids = set()
+            return
+        if (joined, left) != (self.ready_check_joined_ids, self.ready_check_left_ids):
+            log.info(f"[READY] held event={self.event_id} joined={joined} left={left}")
+        self.ready_check_joined_ids = joined
+        self.ready_check_left_ids = left
+
+    async def _adopt_recognized_arrivals(self) -> None:
+        """A player the bot recognizes walking in mid-check joins already ready: turning up is the answer. A
+        seat it cannot place parks the check instead, which is the arrival worth a human looking at. A mock
+        places nobody by Arena handle, so every arrival counts there."""
+        arrivals = [(uid, self.seat_name(uid)) for uid in sorted(self.ready_check_joined_ids)]
+        names = [name for _, name in arrivals if name]
+        if not names:
+            return
+        classified = await self._classify_users(names)
+        recognized = {arena for arena, display in classified if display is not None}
+        for seat_id, name in arrivals:
+            if name is None or not (self.kind == "mock" or name in recognized):
+                continue
+            self._adopt_late_seat(seat_id)
+            self.ready_discord_ids.add(seat_id)
+            log.info(f"[READY] arrival_auto_ready event={self.event_id} seat={name!r}")
+
+    async def _maybe_complete_ready_check(self) -> None:
+        """Start the draft once every seat the check was armed on has answered ready. A paused check never
+        starts."""
+        if not self.ready_check_active or self.is_ready_check_held():
+            return
+        if self.expected_user_ids and self.ready_users >= self.expected_user_ids:
             await self._complete_ready_check()
 
     async def _complete_ready_check(self) -> None:
@@ -1748,9 +1909,16 @@ class PodDraftManager:
             return
         log.info(f"[READY] complete event={self.event_id} ready_count={len(self.ready_users)}")
         self.ready_check_active = False
-        self._cancel_ready_grace()
+        self._clear_ready_answers()
         self._cancel_ready_timeout()
         await self._start_draft()
+
+    def _clear_ready_answers(self) -> None:
+        self.ready_discord_ids = set()
+        self.ready_socket_ids = set()
+        self.not_ready_ids = set()
+        self.ready_check_joined_ids = set()
+        self.ready_check_left_ids = set()
 
     async def force_start(self) -> str | None:
         """Bypass the ready-check and emit startDraft directly. Returns an error string on failure, None on success."""
@@ -1761,10 +1929,8 @@ class PodDraftManager:
         if self.drafting:
             return "Draft is already in progress."
         self._cancel_ready_timeout()
-        self._cancel_ready_grace()
         self.ready_check_active = False
-        self.ready_users = set()
-        self.last_decliner_name = None
+        self._clear_ready_answers()
         self.last_cancel_reason = None
         log.info(f"[READY] force_start event={self.event_id} ready_check_bypassed=True")
         await self._start_draft()
@@ -1847,9 +2013,20 @@ class PodDraftManager:
         return None
 
     async def _start_draft(self) -> None:
-        if settings.pod_draft_bots == 0 and len(self.player_session_users()) % 2 != 0:
+        """Send the table into the draft. `_draft_start_in_flight` covers the second the seating re-push and
+        the startDraft ack take, where the check is closed and `drafting` is not yet set: a lobby broadcast
+        landing there rendered a pod with no check and no draft, which the cards read as a stopped check."""
+        if self._odd_roster_blocks_start():
             await self._refuse_odd_roster_start()
             return
+        self._draft_start_in_flight = True
+        try:
+            await self._start_draft_inner()
+        finally:
+            self._draft_start_in_flight = False
+
+    async def _start_draft_inner(self) -> None:
+        await self._apply_bot_fill()
         await self._reapply_seating_if_set()
         result = await self._emit_with_ack("startDraft")
         log.info(f"[DRAFT] start_ack event={self.event_id} ack={result!r}")
@@ -1902,11 +2079,17 @@ class PodDraftManager:
                     self.bot, self.event_id, player_count=seated, thread_url=thread.jump_url,
                 )
 
+    def _odd_roster_blocks_start(self) -> bool:
+        """Whether an odd roster must stop this draft. A mock plays no rounds, so it drafts happily at seven,
+        and the bench pads its tables with bots."""
+        if self.kind == "mock" or not settings.is_production:
+            return False
+        return len(self.player_session_users()) % 2 != 0
+
     async def _refuse_odd_roster_start(self) -> None:
-        """Block startDraft on an odd roster: every pairing mode needs an even table, and a ready check
-        can complete after someone leaves. Refusing before the emit keeps the lobby open instead of
-        stranding a fully drafted pod at the endDraft pairing error. Skipped when Draftmancer bots fill
-        seats (dev solo drafts) — the endDraft check still guards pairings there."""
+        """Every pairing mode needs an even table, and a ready check can complete after someone leaves.
+        Refusing before the emit keeps the lobby open instead of stranding a fully drafted pod at the endDraft
+        pairing error."""
         count = len(self.player_session_users())
         log.warning(f"[DRAFT] start_refused_odd_roster event={self.event_id} players={count}")
         thread = await self._fetch_thread()
@@ -2563,44 +2746,41 @@ class PodDraftManager:
             fingerprint=f"ready_check_timeout:{self.event_id}",
             tag="READY",
         )
-        await self._invalidate_ready_check("timeout", detail="❌ Timed Out")
+        await self._end_ready_check("❌ Timed Out", timed_out=True)
 
-    async def _invalidate_ready_check(
-        self, kind: str, *, decliner_name: str | None = None, detail: str | None = None,
-    ) -> None:
-        """Call off an in-flight ready check. `kind` ('joined', 'left', 'declined', 'timeout') is
-        logged; `detail` is the phrase shown on the declined card's banner. The timer is cancelled ahead of
-        the active-check guard so an already-cleared check can't leave a timer running into the next one."""
+    async def _end_ready_check(self, detail: str, *, timed_out: bool = False) -> None:
+        """Close a running check, stopped by hand or expired. The timer is cancelled ahead of the active-check
+        guard so an already-cleared check can't leave one running into the next.
+
+        The answers survive: both ways a check closes are about the pod rather than the players, so one that
+        expires waiting on an absent seat asks the other seven for nothing. A seat that leaves the lobby drops
+        its answer at the next arm, and the draft clears the lot."""
         self._cancel_ready_timeout()
         if not self.ready_check_active:
             return
         log.info(
-            f"[READY] invalidated event={self.event_id} kind={kind!r} decliner={decliner_name!r}"
+            f"[READY] ended event={self.event_id} detail={detail!r} timed_out={timed_out} "
+            f"answers_kept={len(self.ready_users)}"
         )
         self.ready_check_active = False
-        self.last_ready_summary = (len(self.ready_users), len(self.expected_user_ids))
-        self.ready_users = set()
-        self.last_decliner_name = decliner_name
-        self.last_cancel_reason = None if decliner_name is not None else detail
-        self.ready_check_timed_out = kind == "timeout"
-        await self._flip_progress_card_to_declined()
+        self.ready_check_joined_ids = set()
+        self.ready_check_left_ids = set()
+        self.last_cancel_reason = detail
+        self.ready_check_timed_out = timed_out
+        await self._flip_progress_card_to_stopped()
         await self.refresh_lobby_now()
 
-    async def _flip_progress_card_to_declined(self) -> None:
-        """Flip the live ready-check card to the Not Ready state in place, keeping the enabled Resume Ready
-        Check button on the message players are already looking at. A timed-out check that instead locked
-        this card and posted a fresh one stranded a dead greyed button on the card the check ran on while
-        the working control sat lower in the thread, so players couldn't restart it themselves."""
+    async def _flip_progress_card_to_stopped(self) -> None:
+        """Flip the live card to its closed state in place, so Resume sits on the message players are already
+        looking at rather than on a fresh card below it."""
         thread = await self._fetch_thread()
         if thread is None:
             return
-        ready_count = self.last_ready_summary[0] if self.last_ready_summary else None
-        total_count = self.last_ready_summary[1] if self.last_ready_summary else None
         embed = render_ready_check_progress(
-            self.event_name, [], state="notready", decliner_name=self.last_decliner_name,
+            self.event_name, await self.classified_session_users(), state="notready",
+            ready_arena_names=self.ready_arena_names(),
             cancel_reason=self.last_cancel_reason, initiated_by=self.initiated_by,
-            timed_out=self.ready_check_timed_out,
-            ready_count=ready_count, total_count=total_count, **self._settings_labels(),
+            timed_out=self.ready_check_timed_out, **self._settings_labels(),
         )
         card = self.ready_check_progress_message
         if card is not None:
@@ -2608,58 +2788,21 @@ class PodDraftManager:
                 await card.edit(embed=embed, view=build_not_ready_view())
                 return
             except Exception:
-                log.warning(f"[READY] declined_card_edit_failed event={self.event_id}", exc_info=True)
+                log.warning(f"[READY] stopped_card_edit_failed event={self.event_id}", exc_info=True)
         try:
             self.ready_check_progress_message = await thread.send(embed=embed, view=build_not_ready_view())
         except Exception:
-            log.warning(f"[READY] declined_card_repost_failed event={self.event_id}", exc_info=True)
-
-    def _arm_ready_grace(self) -> None:
-        if self._ready_grace_task is not None and not self._ready_grace_task.done():
-            return
-        self._ready_grace_task = asyncio.create_task(self._ready_grace_countdown())
-
-    def _cancel_ready_grace(self) -> None:
-        if self._ready_grace_task is not None and not self._ready_grace_task.done():
-            self._ready_grace_task.cancel()
-        self._ready_grace_task = None
+            log.warning(f"[READY] stopped_card_repost_failed event={self.event_id}", exc_info=True)
 
     def _cancel_ready_timeout(self) -> None:
         if self._ready_timeout_task is not None and not self._ready_timeout_task.done():
             self._ready_timeout_task.cancel()
         self._ready_timeout_task = None
 
-    async def _ready_grace_countdown(self) -> None:
-        """A player who leaves mid-check gets _READY_GRACE_S to rejoin before the check aborts, so a
-        brief Draftmancer disconnect doesn't force a restart. Auto-resumes if they return."""
-        try:
-            await asyncio.sleep(_READY_GRACE_S)
-        except asyncio.CancelledError:
-            return
-        try:
-            if not self.ready_check_active:
-                return
-            present = {u.get("userID") for u in self.player_session_users()}
-            if self.expected_user_ids <= present:
-                return
-            await self._invalidate_ready_check("left", detail=self._left_detail(self.expected_user_ids - present))
-        except Exception:
-            log.warning(f"[READY] grace_abort_failed event={self.event_id}", exc_info=True)
-
-    def _joined_detail(self, joined_ids: set[str]) -> str:
-        names = [u.get("userName") for u in self.session_users if u.get("userID") in joined_ids]
-        names = [name for name in names if name]
-        return roster_change_detail(names, "joined")
-
-    def _left_detail(self, left_ids: set[str]) -> str:
-        names = [self.expected_user_names.get(uid) for uid in left_ids]
-        names = [name for name in names if name]
-        return roster_change_detail(names, "left")
-
     def _missing_names(self, missing_ids: set[str]) -> str:
         """Seats that never answered a ready check, for the admin notice. Falls back to the raw Draftmancer
         userID when a name was not captured, so the notice stays traceable instead of dropping the seat."""
-        return ", ".join(self.expected_user_names.get(uid) or uid for uid in sorted(missing_ids))
+        return ", ".join(self.seat_name(uid) or uid for uid in sorted(missing_ids))
 
     def _schedule_end_watchdog(self) -> None:
         self._cancel_end_watchdog()
@@ -2688,19 +2831,6 @@ class PodDraftManager:
             fingerprint=f"end_draft_watchdog:{self.event_id}",
             tag="DRAFT",
         )
-
-
-UNNAMED_DECLINE_DETAIL = "❌ A player is Not Ready"
-
-
-def roster_change_detail(names: list[str], verb: str) -> str:
-    """Phrase for who joined or left mid-check, shown on the lobby banner and the thread notice."""
-    icon = "📥" if verb == "joined" else "📤"
-    if len(names) == 1:
-        return f"{icon} `{names[0]}` {verb} the lobby"
-    if names:
-        return f"{icon} {len(names)} players {verb} the lobby"
-    return f"{icon} A player {verb} the lobby"
 
 
 def _is_ready_state(state) -> bool:
@@ -3269,20 +3399,26 @@ def _leaderboard_seat_order_sync(names: list[str], event_id: str) -> list[str]:
         return leaderboard_seat_order(session, names, championship.rank_override(session, event_id))
 
 
-def _find_guild_member_for_arena(guild: discord.Guild, arena_name: str) -> discord.Member | None:
-    """Match a Draftmancer username to a guild member by display_name or username.
-    Strips the trailing Arena suffix so `MNG#61656` matches a member whose display name is `MNG`.
-    Exact matches win; otherwise falls back to word tokens, so `wonderland#12345` matches
-    a member displayed as `Alice (Wonderland)`."""
+def arena_matches_name(arena_name: str, candidate: str) -> bool:
+    """Whether a Draftmancer handle is this Discord name, ignoring the trailing Arena suffix, so `MNG#61656`
+    matches `MNG`."""
     norm = normalize_player_name(arena_name)
-    if not norm:
-        return None
-    for member in guild.members:
-        if member.display_name.lower() == norm or member.name.lower() == norm:
-            return member
-    for member in guild.members:
-        if name_token_match(norm, member.display_name) or name_token_match(norm, member.name):
-            return member
+    return bool(norm) and norm == candidate.lower()
+
+
+def arena_matches_token(arena_name: str, candidate: str) -> bool:
+    """The looser pass: `wonderland#12345` matches a member displayed as `Alice (Wonderland)`."""
+    norm = normalize_player_name(arena_name)
+    return bool(norm) and name_token_match(norm, candidate)
+
+
+def _find_guild_member_for_arena(guild: discord.Guild, arena_name: str) -> discord.Member | None:
+    """The guild member behind a Draftmancer handle. Exact matches win over token matches across the whole
+    guild, so a nickname that merely contains someone else's handle cannot outrank the real owner."""
+    for matches in (arena_matches_name, arena_matches_token):
+        for member in guild.members:
+            if matches(arena_name, member.display_name) or matches(arena_name, member.name):
+                return member
     return None
 
 

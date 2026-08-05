@@ -21,7 +21,11 @@ from bot.database import SessionLocal
 from bot.models import MagicSet, Player, PodDraftEvent, PodDraftParticipant
 from bot.services.lobby_embed import (
     LobbyReadyButtonView,
+    READY_PAUSED_TITLE,
+    event_title,
     ReadyCheckConfirmView,
+    ReadyCheckAnswerView,
+    build_live_lobby_view,
     build_started_lobby_view,
     build_not_ready_view,
     ready_check_confirm_text,
@@ -29,10 +33,24 @@ from bot.services.lobby_embed import (
     register_settings_preview,
     render as render_lobby_embed,
     render_ready_check_progress,
+    roster_hold_detail,
+    roster_hold_hint,
+    stopped_reason,
 )
+from bot.commands.messages import MSG_DM_PREF_OFF_TITLE, MSG_DM_PREF_ON_TITLE
+from bot.services.pod_format_poll import FORMAT_POLL_PROMPT
+from bot.services.pod_reminder_copy import ROSTER_REMINDER_TITLE
+from bot.services.pod_registration_embed import CHAMPIONSHIP_TITLE, REGISTERED_TITLE_TEXT
+from bot.services.pod_round_robin_vote import ROUND_ROBIN_LOCKED_TITLE, ROUND_ROBIN_PROMPT
+from bot.services.pod_team_vote import (
+    TEAM_VOTE_LOCKED_TITLE,
+    TEAM_VOTE_PROMPT,
+    TEAM_VOTE_WAITED_TITLE,
+)
+from bot.services.pod_tournament import round_header
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_deck_color import SubmitDeckView
-from bot.services.pod_draft_manager import PodDraftManager, roster_change_detail, start_manager
+from bot.services.pod_draft_manager import PodDraftManager, start_manager
 from bot.services.pod_drafts import draftmancer_url_for, player_arena_handle, seed_event_participants
 from bot.services.pod_join_button import build_join_view
 from bot.services.pod_link_dm import build_link_dm, format_thread_ref, send_lobby_link_dms, try_dm
@@ -1194,7 +1212,7 @@ _LINKED_EIGHT: list[tuple[str, str]] = [
     ("Chapin#13000", "Chapin"),
 ]
 _VALID_STATES = (
-    "empty", "partial", "linked", "unlinked", "ready", "notready", "cancelled", "left", "superseded",
+    "empty", "partial", "linked", "unlinked", "ready", "held", "notready", "titles",
     "readyunlinked", "readycancel",
     "drafting", "complete", "submit", "lobby", "lobbyopen", "dmlink", "unlink", "podbracket", "podswiss", "podrandom",
     "podteam", "podlobby", "podteamvote",
@@ -1229,7 +1247,7 @@ async def _delete_last_test_messages(channel) -> None:
             pass
 
 
-_PROGRESS_STATES = ("ready", "notready", "cancelled", "left", "superseded", "drafting", "complete")
+_PROGRESS_STATES = ("ready", "held", "notready", "drafting", "complete")
 
 def _preview_settings_labels() -> dict:
     return dict(
@@ -1240,13 +1258,12 @@ def _preview_settings_labels() -> dict:
     )
 
 
-def _preview_cancel_reason(state: str) -> str | None:
-    """Representative cancel reasons matching the runtime paths: a mid-check join and a mid-check leave."""
-    if state == "cancelled":
-        return roster_change_detail([_UNLINKED_SEAT], "joined")
-    if state == "left":
-        return roster_change_detail([_LINKED_EIGHT[4][0]], "left")
-    return None
+MSG_TITLES_PREVIEW_HEADER = "__**Every pod embed title**__"
+
+_PREVIEW_LEFT_SEAT = _LINKED_EIGHT[4]
+_PREVIEW_HOLD_DETAIL = roster_hold_detail([], [_PREVIEW_LEFT_SEAT[0]])
+_PREVIEW_HOLD_HINT = roster_hold_hint([], [_PREVIEW_LEFT_SEAT[0]])
+_PREVIEW_NOT_READY = {_LINKED_EIGHT[6][0]}
 
 
 def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
@@ -1257,22 +1274,18 @@ def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
         in_session = list(_LINKED_EIGHT[:2])
     elif state == "unlinked":
         in_session = list(_LINKED_EIGHT[:7]) + [(_UNLINKED_SEAT, None)]
+    elif state == "held":
+        in_session = [row for row in _LINKED_EIGHT if row != _PREVIEW_LEFT_SEAT]
     else:
         in_session = list(_LINKED_EIGHT)
 
-    if state in ("cancelled", "left"):
-        render_state = "notready"
-    elif state == "superseded":
-        render_state = "ready"
-    else:
-        render_state = state
-    decliner_name = _LINKED_EIGHT[3][0] if state == "notready" else None
-    cancel_reason = _preview_cancel_reason(state)
-    initiated_by = _LINKED_EIGHT[0][1] if render_state in ("ready", "notready") else None
+    render_state = state
+    initiated_by = _LINKED_EIGHT[0][1] if render_state in ("ready", "held", "notready") else None
     embed = render_lobby_embed(
         _THREAD_NAME, _RSVPS_YES, _RSVPS_MAYBE, in_session,
         state=render_state, draftmancer_url=_DRAFTMANCER_URL,
-        decliner_name=decliner_name, cancel_reason=cancel_reason, initiated_by=initiated_by,
+        cancel_reason=stopped_reason(initiated_by) if state == "notready" else None,
+        initiated_by=initiated_by,
         spectators=_SPECTATORS,
         **_preview_settings_labels(),
     )
@@ -1280,10 +1293,11 @@ def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
     if state in ("drafting", "complete"):
         view: discord.ui.View | None = build_started_lobby_view(
             spectate_url if state == "drafting" else None)
+    elif state in ("ready", "held"):
+        view = build_live_lobby_view(_DRAFTMANCER_URL, spectate_url)
     else:
         view = LobbyReadyButtonView(
             draftmancer_url=_DRAFTMANCER_URL,
-            ready_disabled=(render_state == "ready"),
             show_force_start=(render_state == "unlinked"),
             spectate_url=spectate_url,
         )
@@ -1291,48 +1305,68 @@ def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
 
 
 def _build_ready_progress(state: str) -> list[tuple[discord.Embed, discord.ui.View | None]]:
-    """Preview the ready-check progress card(s) for the states where one is posted in prod. Returns a
-    list: `superseded` mirrors a real retry — the collapsed old receipt plus the fresh active check
-    below it — every other state is a single card. An active check carries the ready-check buttons,
-    a declined card the resume + Settings pair; a superseded receipt carries none."""
+    """Preview the ready-check progress card for the states where one is posted in prod. A live check
+    ('ready', 'held') carries the Ready / Not Ready / Stop Check answers, a stopped card the resume +
+    Settings pair."""
     if state not in _PROGRESS_STATES:
         return []
     in_session = list(_LINKED_EIGHT)
     initiator = _LINKED_EIGHT[0][1]
-    active_view = LobbyReadyButtonView(
-        draftmancer_url=_DRAFTMANCER_URL, ready_disabled=True, show_force_start=True,
-    )
-    if state == "ready":
+    if state in ("ready", "held"):
+        held = state == "held"
+        # the seat the hold names has left, so a live card would no longer classify it into the roster
+        seated = [row for row in in_session if row != _PREVIEW_LEFT_SEAT] if held else in_session
         embed = render_ready_check_progress(
-            _THREAD_NAME, in_session, state="ready",
+            _THREAD_NAME, seated, state=state,
+            ready_arena_names={arena for arena, _ in _LINKED_EIGHT[:3]},
+            not_ready_arena_names=_PREVIEW_NOT_READY,
+            hold_detail=_PREVIEW_HOLD_DETAIL if held else None,
+            hold_hint=_PREVIEW_HOLD_HINT if held else None,
+            draftmancer_url=_DRAFTMANCER_URL if held else None,
+            initiated_by=initiator, **_preview_settings_labels(),
+        )
+        return [(embed, ReadyCheckAnswerView(paused=held))]
+    if state == "notready":
+        embed = render_ready_check_progress(
+            _THREAD_NAME, in_session, state="notready", cancel_reason=stopped_reason(initiator),
             ready_arena_names={arena for arena, _ in _LINKED_EIGHT[:3]},
             initiated_by=initiator, **_preview_settings_labels(),
         )
-        return [(embed, active_view)]
-    if state in ("notready", "cancelled", "left"):
-        decliner = _LINKED_EIGHT[3][0] if state == "notready" else None
-        embed = render_ready_check_progress(
-            _THREAD_NAME, in_session, state="notready",
-            decliner_name=decliner, cancel_reason=_preview_cancel_reason(state),
-            initiated_by=initiator, ready_count=3, total_count=8, **_preview_settings_labels(),
-        )
         return [(embed, build_not_ready_view())]
-    if state == "superseded":
-        collapsed = render_ready_check_progress(
-            _THREAD_NAME, in_session, state="notready",
-            decliner_name=_LINKED_EIGHT[3][0], superseded=True, ready_count=3, total_count=8,
-            **_preview_settings_labels(),
-        )
-        active = render_ready_check_progress(
-            _THREAD_NAME, in_session, state="ready", ready_arena_names=set(),
-            initiated_by=initiator, **_preview_settings_labels(),
-        )
-        return [(collapsed, None), (active, active_view)]
     embed = render_ready_check_progress(
         _THREAD_NAME, in_session, state=state,
         **_preview_settings_labels(),
     )
     return [(embed, None)]
+
+
+def _every_pod_title() -> list[tuple[str, str]]:
+    """(title, where it comes from) for every pod-facing embed title, pulled from the real builders so the
+    preview cannot drift. Discord hangs an emoji in a title off the em box rather than the text's cap height,
+    so the point of seeing them stacked is judging which ones sit straight."""
+    return [
+        (event_title(active_set_code(), _THREAD_NAME), "lobby card, and a running check"),
+        (f"{emojis.prefix('chordoHello')}{REGISTERED_TITLE_TEXT}", "signup card"),
+        (CHAMPIONSHIP_TITLE, "signup card, Set Championship"),
+        (TEAM_VOTE_PROMPT.format(count=emojis.mana_number(6)), "team draft offer"),
+        (TEAM_VOTE_LOCKED_TITLE, "team draft, agreed"),
+        (TEAM_VOTE_WAITED_TITLE.format(wait=emojis.mana_number(8)), "team draft, waiting"),
+        (ROUND_ROBIN_PROMPT.format(count=emojis.mana_number(4)), "round robin offer"),
+        (ROUND_ROBIN_LOCKED_TITLE, "round robin, agreed"),
+        (FORMAT_POLL_PROMPT, "format vote"),
+        (ROSTER_REMINDER_TITLE, "roster reminder, T-60"),
+        (MSG_DM_PREF_ON_TITLE, "draft DMs on"),
+        (MSG_DM_PREF_OFF_TITLE, "draft DMs off"),
+        (round_header(1, False, seated=True), "round 1 pairings"),
+        (round_header(2, False), "round 2 pairings"),
+        (round_header(1, True), "a finished round"),
+        (f"🟢 {_THREAD_NAME}", "standings, pod live"),
+        (f"🏆 {_THREAD_NAME}", "standings, champion known"),
+        ("🤝 Team draft ends in a draw!", "team standings, draw"),
+        (f"🏆 {pod_team.team_label(pod_team.TEAM_A)} wins the draft!", "team standings, winner"),
+        ("Team Draft Live Standings ⏳", "team standings, live"),
+        ("Report Your Matches", "the report nudge DM"),
+    ]
 
 
 async def _settings_preview_noop(interaction: discord.Interaction, value: str) -> str | None:
@@ -1417,7 +1451,7 @@ async def setup(bot: commands.Bot) -> None:
         """Owner-only. The `!test` fallback, so each state below is a top-level word: `!test champ`.
         Renders the pod-draft lobby embed in this channel.
 
-        `state` ∈ empty | partial | linked | unlinked | ready | notready | cancelled | left | superseded |
+        `state` ∈ empty | partial | linked | unlinked | ready | held | notready |
         readyunlinked | drafting | complete | submit | lobbyopen | podbracket | podswiss | podrandom | podteam |
         podlobby | format | seeding | trophyhype | champ | round1 | round2 | round3 | voicelink | linkpicker |
         settings.
@@ -1451,10 +1485,14 @@ async def setup(bot: commands.Bot) -> None:
         as its own reply, with no Draftmancer session needed; re-run `/pod-team` for the re-offer path.
         `formatpoll` shows the flashback format tally with a working button per option and prefilled
         votes — clicks toggle votes on the card, nothing locks.
-        `ready` shows the active ready-check card; clicking its Force Start button previews the ephemeral
-        confirm dialog (no live pod needed). `readycancel` posts each way a check ends — a decline, a
-        roster-change join, and a timeout — as the progress card plus (for the non-decline cases) the
-        thread notice, so the resume surfaces can be compared.
+        `ready` shows the running ready-check card with its Ready / Not Ready / Stop Check answers and
+        one seat already marked Not Ready, plus the lobby card above it holding only its own status line and
+        Force Start; clicking Force Start previews the ephemeral confirm dialog (no live pod needed). `held`
+        is the same pair parked by a player leaving the lobby, where the check card gains Resume Ready Check
+        and a Draftmancer link. `notready` is the stopped card on its own; `readycancel` posts both ways a
+        check closes, stopped and timed out.
+        `titles` stacks every pod embed title, ten to a message and each labelled with the card it heads, so
+        the ones whose emoji hangs off its text can be compared side by side.
         `round1`/`round2`/`round3` are no-DB snapshots of each round
         embed (`round1 random` for the random-pairing header, `round2 10` / `round3 10` for the
         ten-player shape, where one match per round crosses records and round 3 opens two trophies).
@@ -1529,18 +1567,31 @@ async def setup(bot: commands.Bot) -> None:
         if state == "readycancel":
             initiator = _LINKED_EIGHT[0][1]
             scenarios = [
-                ("Decline — player pressed Not Ready", {"decliner_name": _LINKED_EIGHT[3][0]}),
-                ("Roster change — someone joined", {"cancel_reason": _preview_cancel_reason("cancelled")}),
-                ("Roster change — someone left", {"cancel_reason": _preview_cancel_reason("left")}),
+                ("Stopped by a player", {"cancel_reason": stopped_reason(_LINKED_EIGHT[3][1])}),
                 ("Timeout", {"timed_out": True}),
             ]
             for label, banner in scenarios:
-                await ctx.send(f"__**{label}**__")
                 card = render_ready_check_progress(
-                    _THREAD_NAME, [], state="notready", initiated_by=initiator,
-                    ready_count=6, total_count=8, **banner, **_preview_settings_labels(),
+                    _THREAD_NAME, list(_LINKED_EIGHT), state="notready", initiated_by=initiator,
+                    ready_arena_names={arena for arena, _ in _LINKED_EIGHT[:6]},
+                    **banner, **_preview_settings_labels(),
                 )
+                await ctx.send(f"__**{label}**__")
                 await ctx.send(embed=card, view=build_not_ready_view())
+            return
+
+        if state == "titles":
+            titles = _every_pod_title()
+            await ctx.send(MSG_TITLES_PREVIEW_HEADER)
+            for start in range(0, len(titles), 10):
+                await ctx.send(embeds=[
+                    discord.Embed(title=title, description=f"-# {source}", color=discord.Color.blurple())
+                    for title, source in titles[start:start + 10]
+                ])
+            await ctx.send(embed=discord.Embed(
+                description=f"### {READY_PAUSED_TITLE}\n-# a titleless card, for comparison",
+                color=discord.Color.orange(),
+            ))
             return
 
         if state == "table":

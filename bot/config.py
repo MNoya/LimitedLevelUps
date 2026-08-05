@@ -53,7 +53,6 @@ class Settings(BaseSettings):
     pod_round_robin_offer_delay_s: int = 120
     pod_draft_pick_timer: int = 60
     pod_draft_picks_per_pack: int = 1
-    pod_draft_bots: int = 0
     pod_draft_fallback_tz: str = "America/New_York"
     pod_draft_skip_reminder_wait: bool = False
     pod_draft_end_watchdog_minutes: int = 90
@@ -80,6 +79,13 @@ class Settings(BaseSettings):
     libsyn_feed_url: str = "https://feeds.libsyn.com/limitedlevelups/rss"
     media_sync_enabled: bool = True
     profile_sync_enabled: bool = True
+
+
+    @property
+    def is_production(self) -> bool:
+        """Whether this process is the community bot. The test bot runs the same code against its own guild,
+        so behavior that belongs to one of them keys off the guild it is actually in."""
+        return self.discord_guild_id == PRODUCTION_GUILD_ID
 
 
 def _int_csv(raw: str) -> tuple[int, ...]:

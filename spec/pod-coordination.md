@@ -72,7 +72,15 @@ About 10 minutes before the start time, the bot opens the draft lobby on Draftma
 
 Once half the table is sitting in the lobby, the bot posts a link to the pod voice channel. The card under it shows who is already in there. Voice is optional and listening is fine.
 
-When enough players are ready the bot runs a quick ready check, then starts the draft. A full table of 8 starts as soon as everyone is ready.
+When enough players are in the lobby, anyone can start a ready check from the lobby card in the thread. The bot posts a card of its own carrying I'm Ready, Not Ready and Stop, and the Draftmancer prompt pops up at the same time. Answer on whichever is in front of you, it counts either way. The card shows who has answered and who has not, and the draft starts by itself the moment the last seat says I'm Ready. A full table of 8 starts as soon as everyone is ready.
+
+Not Ready is how you say wait for me: it marks your seat on the card and holds the start, and you can press I'm Ready once you are set. Stop calls the whole check off and is open to everyone, not only the organizer. The pinned lobby card keeps Force Start, which drafts without the players who never answered, behind a confirmation naming who gets left behind.
+
+A check runs for the table it was started on, so a pod never drafts with a table nobody checked. If someone joins or drops out while it is running, the check pauses instead of starting.
+
+A player the bot knows walking in mid-check joins it already ready, and the pause clears on its own. Turning up is the answer. A seat the bot cannot place keeps the check paused until they press I'm Ready for themselves, which brings them in the same way. A player who dropped out sets it going again by coming back, and the paused card carries a Draftmancer link so they have the way in. Resume Ready Check is there for the rest: it runs the check again for the lobby as it stands.
+
+Your answer sticks for as long as you are in the Draftmancer lobby. Say you are ready once and you stay ready, through a check somebody stops, through one that runs out of time, and through the next one. Leave the lobby and your answer goes with you.
 
 ## Asking for the last players
 
