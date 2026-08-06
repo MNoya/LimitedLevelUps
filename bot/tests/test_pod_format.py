@@ -79,6 +79,42 @@ def test_emit_format_unloads_cube_before_restricting_to_set():
     assert events.index("setUseCustomCardList") < events.index("setRestriction")
 
 
+def test_emit_format_asserts_color_balance_after_a_cube_import():
+    """A cube import overwrites color balance from the imported list, so the assert has to follow it."""
+    mgr = _manager(PEASANT_CODE)
+
+    asyncio.run(mgr._emit_format())
+
+    events = mgr.sio.events()
+    assert ("setColorBalance", (True,)) in mgr.sio.calls
+    assert events.index("importCube") < events.index("setColorBalance")
+
+
+def test_emit_format_asserts_color_balance_for_a_plain_set():
+    mgr = _manager("SOS")
+
+    asyncio.run(mgr._emit_format())
+
+    assert ("setColorBalance", (True,)) in mgr.sio.calls
+
+
+def test_apply_format_reasserts_color_balance_on_a_live_session(monkeypatch):
+    """The pre-draft format switch re-emits the format, so it has to re-push what the import clobbers."""
+    import bot.services.pod_draft_manager as mod
+    mgr = _manager("SOS")
+    mgr.owner_claimed = True
+    monkeypatch.setattr(mod, "_persist_format", lambda event_id, code: mgr.event_name)
+    monkeypatch.setattr(mgr, "refresh_lobby_now", _noop)
+
+    assert asyncio.run(mgr.apply_format(PEASANT_CODE)) is None
+
+    assert ("setColorBalance", (True,)) in mgr.sio.calls
+
+
+async def _noop(*args, **kwargs):
+    return None
+
+
 # --- name swap on format change ---
 
 def test_renamed_for_format_swaps_token_and_renumbers():

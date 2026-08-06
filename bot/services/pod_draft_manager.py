@@ -330,6 +330,7 @@ class PodDraftManager:
         self._thread_added_ids: set[str] = set()
         self.rsvps_yes: list[str] = list(rsvps_yes or [])
         self.rsvps_maybe: list[str] = list(rsvps_maybe or [])
+        self.claimed_discord_ids: set[str] = set()
         self.session_users: list[dict] = []
         self.session_spectators: list[dict] = []
         self.spectator_user_ids: set[str] = set()
@@ -654,7 +655,6 @@ class PodDraftManager:
         await self.sio.emit("setPickedCardsPerRound", self.picks_per_pack)
         await self._emit_pack_shape()
         await self._apply_bot_fill()
-        await self.sio.emit("setColorBalance", True)
         await self.sio.emit("setPersonalLogs", True)
         await self.sio.emit("setDraftLogRecipients", self._draft_log_recipients)
         team_draft = self.pairing_mode == "team"
@@ -736,21 +736,25 @@ class PodDraftManager:
         A cube import leaves Draftmancer's `useCustomCardList` flag on, and booster generation reads that
         flag before the set restriction, so a switch from a cube to a set has to turn it off or the pod
         drafts the cube it came from.
+
+        An import overwrites color balance from the imported list, so it is re-asserted on every format emit.
         """
         cube_id = pod_format.cube_id_for(self.set_code)
-        if cube_id is None:
+        if cube_id is not None:
+            err = await self._import_cube(cube_id)
+            if err is not None:
+                thread = await self._fetch_thread()
+                if thread is not None:
+                    try:
+                        await thread.send(f"⚠️ {err}")
+                    except Exception:
+                        log.warning(f"[LIFECYCLE] import_cube.thread_post_error event={self.event_id}", exc_info=True)
+                return err
+        else:
             await self.sio.emit("setUseCustomCardList", False)
             await self.sio.emit("setRestriction", [self.set_code.lower()])
-            return None
-        err = await self._import_cube(cube_id)
-        if err is not None:
-            thread = await self._fetch_thread()
-            if thread is not None:
-                try:
-                    await thread.send(f"⚠️ {err}")
-                except Exception:
-                    log.warning(f"[LIFECYCLE] import_cube.thread_post_error event={self.event_id}", exc_info=True)
-        return err
+        await self.sio.emit("setColorBalance", True)
+        return None
 
     async def _import_cube(self, cube_id: str) -> str | None:
         """Load a CubeCobra cube into the session (owner-only). Ported from Amelas/DraftBot."""
