@@ -26,7 +26,6 @@ from bot import audit, emojis
 from bot.commands.messages import (
     MSG_ARENA_ALREADY_LINKED_NOTE,
     MSG_ARENA_BAD_FORMAT,
-    MSG_ARENA_HANDLE_LINE,
     MSG_ARENA_LINK_CTA,
     MSG_ARENA_LINKED,
     MSG_FORMAT_PREFERENCE_BUTTON,
@@ -38,7 +37,7 @@ from bot.commands.messages import (
 from bot.commands.pod_guide import render_pod_guide_embed_body
 from bot.database import SessionLocal
 from bot.discord_helpers import extract_avatar_hash, is_pod_coordination_channel, post_welcome, send_welcome
-from bot.models import Player
+from bot.models import Player, PodDraftParticipant
 from bot.services import pod_format_interest as fi
 from bot.services.pod_active_lobby import active_lobby_link_for
 from bot.services.pod_drafts import (
@@ -283,13 +282,13 @@ def build_grant_view(
 
 
 def _card_body(lead: str, *, arena_name: str | None) -> str:
-    """The card text below its lead, shared by the grant card and the RSVP confirmation card: the linked
-    reader sees their Arena handle, the unlinked reader the link prompt. No format preference line — the
-    saved preference decides nothing about a signup, so quoting it back on a join reads as a promise."""
+    """The card text below its lead, shared by the grant card and the RSVP confirmation card: the unlinked
+    reader gets the link prompt, the linked reader gets nothing further. A linked handle answers a question
+    nobody asked, and the format preference is worse than that — it decides nothing about a signup, so
+    repeating it on a join reads as a promise."""
     if arena_name is None:
         return f"{lead}\n{MSG_ARENA_LINK_CTA}"
-    handle_line = MSG_ARENA_HANDLE_LINE.format(emoji=emojis.get("mtga"), arena_name=arena_name)
-    return f"{lead}\n{handle_line}"
+    return lead
 
 
 def persistent_pod_card_view() -> discord.ui.LayoutView:
@@ -541,17 +540,35 @@ def _arena_handle_sync(discord_id: str) -> str | None:
         return player_arena_handle(session, discord_id)
 
 
-def _link_state_sync(discord_id: str) -> tuple[str | None, bool]:
-    """The Arena handle and whether a 17lands token is on file, off one read of the player row. Both gate
-    the same card, and reading them apart puts a second round trip in front of a click's answer."""
+@dataclass(frozen=True)
+class PodCardState:
+    """Everything the pod card needs to know about its reader, off one session: which link buttons to
+    offer, and whether they have played a pod before. Reading these apart puts extra round trips in front
+    of a click's answer, which is the whole latency budget of a button press."""
+    arena_name: str | None
+    has_token: bool
+    drafted_before: bool
+
+
+async def pod_card_state(discord_id: str) -> PodCardState:
+    return await asyncio.to_thread(_pod_card_state_sync, discord_id)
+
+
+def _pod_card_state_sync(discord_id: str) -> PodCardState:
     with SessionLocal() as session:
         player = session.execute(
             select(Player).where(Player.discord_id == discord_id)
         ).scalar_one_or_none()
         if player is None:
-            return None, False
-        handle = player.arena_name if full_arena_handle(player.arena_name) else None
-        return handle, bool(player.seventeenlands_token)
+            return PodCardState(None, False, False)
+        seated = session.execute(
+            select(PodDraftParticipant.id).where(PodDraftParticipant.player_id == player.id).limit(1)
+        ).scalar_one_or_none()
+        return PodCardState(
+            arena_name=player.arena_name if full_arena_handle(player.arena_name) else None,
+            has_token=bool(player.seventeenlands_token),
+            drafted_before=seated is not None,
+        )
 
 
 _welcomed_member_ids: set[int] = set()
@@ -589,17 +606,22 @@ async def announce_pod_grant(interaction: discord.Interaction, *, first_pod: boo
 
 
 async def send_join_confirmation_card(
-    interaction: discord.Interaction, *, lead: str, accent: discord.Color,
+    interaction: discord.Interaction, *, lead: str, accent: discord.Color, state: PodCardState,
 ) -> None:
     """A join acknowledgement (RSVP Yes/Maybe, launcher slot add, picker Confirm) as a full pod card:
-    the confirmation lead over the same Link Arena / Pod Guide / Notifications / Format Preference row
-    the grant card carries, so every join click offers the self-service controls, not only the click
-    that granted a role."""
-    arena_name, has_token = await asyncio.to_thread(_link_state_sync, str(interaction.user.id))
+    the confirmation lead over the Link Arena / Pod Guide / Notifications row, so every join click offers
+    the self-service controls, not only the click that granted a role.
+
+    The Pod Guide goes to first-time drafters only. It is a long read, and someone who has already played
+    a pod knows how one runs, so on their card it is a button in the way of the confirmation.
+
+    `state` is passed in rather than read here: the caller starts that read alongside its own roster write,
+    so the card costs no round trip of its own."""
     card = _PodButtonCard(
-        _card_body(lead, arena_name=arena_name),
-        accent=accent, show_link_button=arena_name is None,
-        show_link_17lands_button=not has_token,
+        _card_body(lead, arena_name=state.arena_name),
+        accent=accent, show_link_button=state.arena_name is None,
+        show_link_17lands_button=not state.has_token,
+        show_guide_button=not state.drafted_before,
     )
     await interaction.followup.send(view=card, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 

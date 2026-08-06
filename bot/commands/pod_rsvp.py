@@ -57,11 +57,13 @@ from bot.services.pod_draft_manager import notify_seeding_change
 from bot.services.pod_tournament import champion_card_line, load_solo_card_drafters
 from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
+    PodCardState,
     announce_pod_grant,
     auto_grant_spec_for_event,
     champion_role_mention,
     display_emoji,
     grant_pod_roles,
+    pod_card_state,
     send_join_confirmation_card,
     spec_named,
 )
@@ -787,37 +789,45 @@ async def apply_card_rsvp(
 
     The acknowledgement is a thinking one, which puts the pending answer on screen the instant the button
     is pressed. A silent acknowledgement holds the click open just as safely but shows the presser nothing
-    until the confirmation lands, so a slow answer reads as a button that did nothing."""
+    until the confirmation lands, so a slow answer reads as a button that did nothing.
+
+    The card state the answer renders with does not depend on the write, so it is read alongside it and not
+    after. A press used to wait on three database round trips in a row before anything reached the screen."""
     if not interaction.response.is_done():
         await interaction.response.defer(ephemeral=True, thinking=True)
-    result = await asyncio.to_thread(
-        pod_launch.set_rsvp_sync,
-        surface_message_id, str(interaction.user.id), interaction.user.display_name, state,
+    result, card_state = await asyncio.gather(
+        asyncio.to_thread(
+            pod_launch.set_rsvp_sync,
+            surface_message_id, str(interaction.user.id), interaction.user.display_name, state,
+        ),
+        pod_card_state(str(interaction.user.id)),
     )
     if result is None or result.closed:
         await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
         return
 
-    await _answer_presser(interaction, result)
+    await _answer_presser(interaction, result, card_state)
     run_detached(
         _settle_card_rsvp(interaction, surface_message_id, result, refresh_launcher=refresh_launcher),
         f"the RSVP on card {surface_message_id}",
     )
 
 
-async def _answer_presser(interaction: discord.Interaction, result: pod_launch.RsvpResult) -> None:
+async def _answer_presser(
+    interaction: discord.Interaction, result: pod_launch.RsvpResult, card_state: PodCardState,
+) -> None:
     """The presser's private acknowledgement, sent off the roster write alone so it lands before any
     surface re-renders."""
     if result.rsvp == RSVP_YES and not result.joined:
-        name, _event_time = await _pod_identity(result)
+        name, _event_time = _pod_identity(result)
         await interaction.followup.send(embed=pod_already_on_embed(name), ephemeral=True)
     elif result.rsvp in (RSVP_YES, RSVP_MAYBE):
         await send_join_confirmation_card(
-            interaction, lead=await _confirmation_lead_text(result),
-            accent=RSVP_CONFIRM_COLOR[result.rsvp],
+            interaction, lead=_confirmation_lead_text(result),
+            accent=RSVP_CONFIRM_COLOR[result.rsvp], state=card_state,
         )
     else:
-        await interaction.followup.send(embed=await _decline_embed(result), ephemeral=True)
+        await interaction.followup.send(embed=_decline_embed(result), ephemeral=True)
 
 
 async def _settle_card_rsvp(
@@ -879,7 +889,7 @@ async def apply_card_leave(
     )
     if result is None or result.closed:
         return None
-    name, _event_time = await _pod_identity(result)
+    name, _event_time = _pod_identity(result)
     event_id = result.state.event_id
     if event_id is None:
         return name
@@ -949,17 +959,17 @@ def pod_already_on_embed(pod_name: str) -> discord.Embed:
     )
 
 
-async def _decline_embed(result: pod_launch.RsvpResult) -> discord.Embed:
+def _decline_embed(result: pod_launch.RsvpResult) -> discord.Embed:
     """The one-line acknowledgement for No and for a cleared RSVP. Both read as a removal to the player,
     including a championship's No, which the roster keeps as a tracked state. Yes and Maybe answer with
     the full confirmation card through `send_join_confirmation_card`."""
-    name, _event_time = await _pod_identity(result)
+    name, _event_time = _pod_identity(result)
     return pod_removed_embed(name)
 
 
-async def _confirmation_lead_text(result: pod_launch.RsvpResult) -> str:
+def _confirmation_lead_text(result: pod_launch.RsvpResult) -> str:
     """The Yes/Maybe acknowledgement as card text: the pod that was joined over its start time."""
-    name, event_time = await _pod_identity(result)
+    name, event_time = _pod_identity(result)
     lead = f"### {_rsvp_headline(result.rsvp, name)}"
     if event_time is None:
         return lead
@@ -971,13 +981,12 @@ def _rsvp_headline(rsvp: str, pod_name: str) -> str:
     return (MSG_POD_ADDED if rsvp == RSVP_YES else MSG_POD_MAYBE).format(name=pod_name)
 
 
-async def _pod_identity(result: pod_launch.RsvpResult) -> tuple[str, datetime | None]:
-    """(pod name, start time) for an acknowledgement, read off the pod in one query. A signal with no pod on
-    it yet is named for the format and slot it will carry, which is the name the pod takes when it fires."""
-    if result.state.event_id is not None:
-        loaded = await asyncio.to_thread(_load_event, result.state.event_id)
-        if loaded is not None:
-            return loaded[0], loaded[1]
+def _pod_identity(result: pod_launch.RsvpResult) -> tuple[str, datetime | None]:
+    """(pod name, start time) for an acknowledgement, carried out of the roster write itself. A signal with
+    no pod on it yet is named for the format and slot it will carry, which is the name the pod takes when
+    it fires."""
+    if result.event_name is not None:
+        return result.event_name, result.event_time
     return pod_display_name(
         result.state.set_code or active_set_code(), result.state.slot_time or datetime.now(timezone.utc),
     ), result.state.slot_time

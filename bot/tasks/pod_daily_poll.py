@@ -61,6 +61,7 @@ from bot.services.ping_roles import (
     announce_pod_grant,
     grant_pod_roles,
     organizer_mention,
+    pod_card_state,
     register_format_preference_opener,
     send_join_confirmation_card,
 )
@@ -1107,7 +1108,11 @@ def interest_button() -> discord.ui.Button:
 
 async def _launcher_signal_date(message: discord.Message) -> date:
     stored = await asyncio.to_thread(pod_launch.launcher_date_for_message_sync, str(message.id))
-    return stored or message.created_at.astimezone(SCHEDULE_TZ).date()
+    return stored or _message_date(message)
+
+
+def _message_date(message: discord.Message) -> date:
+    return message.created_at.astimezone(SCHEDULE_TZ).date()
 
 
 async def _open_interest_prompt(interaction: discord.Interaction) -> None:
@@ -1492,7 +1497,6 @@ async def _handle_poll_click(interaction: discord.Interaction, bucket_key: str) 
     signup straight back off — which is why adding and leaving are now two buttons and this one only adds."""
     await interaction.response.defer(ephemeral=True, thinking=True)
     launcher_message = interaction.message
-    signal_date = await _launcher_signal_date(launcher_message)
     result = await asyncio.to_thread(
         pod_launch.set_membership_sync,
         str(launcher_message.id), bucket_key, str(interaction.user.id), interaction.user.display_name, "join",
@@ -1506,8 +1510,7 @@ async def _handle_poll_click(interaction: discord.Interaction, bucket_key: str) 
     await _confirm_slot_join(interaction, bucket_key, result)
     run_detached(
         _settle_slot_join(
-            interaction, launcher_message=launcher_message, signal_date=signal_date,
-            bucket_key=bucket_key, result=result,
+            interaction, launcher_message=launcher_message, bucket_key=bucket_key, result=result,
         ),
         f"slot join {bucket_key}",
     )
@@ -1525,21 +1528,29 @@ async def _confirm_slot_join(
             embed=pod_already_on_embed(_gathering_pod_name(bucket_key, slot_time)), ephemeral=True,
         )
         return
-    on_formats = await asyncio.to_thread(
-        pod_launch.joined_formats_at_slot_sync,
-        str(interaction.message.id), slot_time, str(interaction.user.id),
+    on_formats, card_state = await asyncio.gather(
+        asyncio.to_thread(
+            pod_launch.joined_formats_at_slot_sync,
+            str(interaction.message.id), slot_time, str(interaction.user.id),
+        ),
+        pod_card_state(str(interaction.user.id)),
     )
     lead = _slot_effect_lead(bucket_key, slot_time, on_formats)
-    await send_join_confirmation_card(interaction, lead=lead, accent=discord.Color.green())
+    await send_join_confirmation_card(
+        interaction, lead=lead, accent=discord.Color.green(), state=card_state,
+    )
 
 
 async def _settle_slot_join(
-    interaction: discord.Interaction, *, launcher_message: discord.Message, signal_date: date,
-    bucket_key: str, result: pod_launch.ToggleResult,
+    interaction: discord.Interaction, *, launcher_message: discord.Message, bucket_key: str,
+    result: pod_launch.ToggleResult,
 ) -> None:
     """Everything a sign up sets off once the presser has their answer: the fire claim, the board re-render,
     the role grant and whichever notice it earns, and the standing nudge. The fire claim leads because it is
-    the one step two presses can race, and it is settled atomically in the database."""
+    the one step two presses can race, and it is settled atomically in the database.
+
+    The board's day is resolved here and not on the click: only this re-render needs it, and reading it up
+    front put a connection checkout between the press and its confirmation."""
     message_id = str(launcher_message.id)
     fired = (
         result.joined
@@ -1549,7 +1560,9 @@ async def _settle_slot_join(
         and await asyncio.to_thread(pod_launch.claim_slot_fire_sync, result.state.signal_id)
     )
     guild = getattr(launcher_message.channel, "guild", None) or interaction.guild
-    slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, signal_date)
+    _signal_date, slots = await asyncio.to_thread(
+        pod_launch.launcher_snapshot_for_message_sync, message_id, _message_date(launcher_message),
+    )
     try:
         await launcher_message.edit(embed=build_poll_embed(slots, guild), view=PodPollView(slots, guild))
     except discord.HTTPException:
@@ -1578,9 +1591,9 @@ async def _handle_slot_signup_click(interaction: discord.Interaction, bucket_key
     as a press on a pod that has not fired."""
     await interaction.response.defer(ephemeral=True, thinking=True)
     launcher_message = interaction.message
-    signal_date = await _launcher_signal_date(launcher_message)
-    slots = await asyncio.to_thread(
-        pod_launch.launcher_snapshot_sync, str(launcher_message.id), signal_date,
+    signal_date, slots = await asyncio.to_thread(
+        pod_launch.launcher_snapshot_for_message_sync,
+        str(launcher_message.id), _message_date(launcher_message),
     )
     slot = _slot_by_key(slots, bucket_key)
     if slot is None or slot.card_message_id is None:

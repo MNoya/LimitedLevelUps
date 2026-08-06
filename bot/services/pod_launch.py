@@ -146,6 +146,9 @@ LEAVE_GONE = "gone"
 
 @dataclass(frozen=True)
 class RsvpResult:
+    """`event_name` and `event_time` are the pod's identity, read on the write's own session. The presser's
+    acknowledgement names the pod it landed on, and querying that separately put a whole round trip between
+    the click and its answer."""
     state: SignalState
     rosters: dict[str, list[str]]
     rsvp: str | None
@@ -153,6 +156,8 @@ class RsvpResult:
     closed: bool
     yes_changed: bool = False
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None = None
+    event_name: str | None = None
+    event_time: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -643,7 +648,8 @@ def set_rsvp(
             roster_interests=_render_interests(session, signal),
         )
 
-    tracks_no = _signal_is_championship(session, signal)
+    event = session.get(PodDraftEvent, signal.event_id) if signal.event_id is not None else None
+    tracks_no = is_championship(event.name if event is not None else None)
     existing = session.execute(
         select(PodSignalMember).where(
             PodSignalMember.signal_id == signal.id,
@@ -677,6 +683,8 @@ def set_rsvp(
     return RsvpResult(
         _state(signal, yes_count), rosters, rsvp=recorded, joined=joined, closed=False,
         yes_changed=yes_changed, roster_interests=roster_interests,
+        event_name=event.name if event is not None else None,
+        event_time=event.event_time if event is not None else None,
     )
 
 
@@ -687,13 +695,6 @@ def set_rsvp_sync(
         result = set_rsvp(session, message_id, discord_user_id, display_name, rsvp)
         session.commit()
         return result
-
-
-def _signal_is_championship(session: Session, signal: PodSignal) -> bool:
-    if signal.event_id is None:
-        return False
-    event = session.get(PodDraftEvent, signal.event_id)
-    return is_championship(event.name if event else None)
 
 
 def set_membership(
@@ -1303,16 +1304,37 @@ def launcher_snapshot_sync(message_id: str, signal_date: date) -> list[LauncherS
     time are read off the event (the card is the truth; a little render-time staleness is fine).
     Otherwise the slot is lazy — its own poll signal, or an empty open slot before signals exist.
     Committed wins outright, so a lazy slot that fires and posts its card renders as committed next pass."""
+    with SessionLocal() as session:
+        return _board_slots(session, _launcher_signals(session, message_id), signal_date)
+
+
+def launcher_snapshot_for_message_sync(
+    message_id: str, fallback_date: date,
+) -> tuple[date, list[LauncherSlot]]:
+    """The board's day and its slots together, for a click that needs both. The day is the minimum of the
+    signal rows the snapshot already loads, so resolving it here costs nothing where `launcher_date_for_
+    message_sync` costs a second connection checkout in front of the presser's answer. `fallback_date`
+    stands in for a message with no signals on record."""
+    with SessionLocal() as session:
+        signals = _launcher_signals(session, message_id)
+        days = [signal.signal_date for signal in signals]
+        board_date = min(days) if days else fallback_date
+        return board_date, _board_slots(session, signals, board_date)
+
+
+def _launcher_signals(session: Session, message_id: str) -> list[PodSignal]:
+    return list(session.execute(
+        select(PodSignal).where(
+            PodSignal.kind == pod_signals.KIND_POLL, PodSignal.message_id == message_id
+        )
+    ).scalars().all())
+
+
+def _board_slots(session: Session, signals: list[PodSignal], signal_date: date) -> list[LauncherSlot]:
     now = datetime.now(timezone.utc)
     slots: list[LauncherSlot] = []
-    with SessionLocal() as session:
-        signals = session.execute(
-            select(PodSignal).where(
-                PodSignal.kind == pod_signals.KIND_POLL, PodSignal.message_id == message_id
-            )
-        ).scalars().all()
-        for lane in pod_signals.LANE_ORDER:
-            slots.extend(_lane_snapshot(session, signals, lane, signal_date, now))
+    for lane in pod_signals.LANE_ORDER:
+        slots.extend(_lane_snapshot(session, signals, lane, signal_date, now))
     return slots
 
 
