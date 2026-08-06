@@ -618,7 +618,7 @@ class _RescheduleButton(ui.Button):
 
 class _RescheduleModal(ui.Modal, title="Reschedule pod"):
     new_time = ui.TextInput(
-        label="New start (time from now, or ET time)", placeholder="1h, 21:00, or 2026-07-18 21:00")
+        label="New start (ET)", placeholder="+1h, 9 PM, 21:00, tomorrow 8:30pm", max_length=32)
 
     def __init__(self, view: PodSettingsView) -> None:
         super().__init__()

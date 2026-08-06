@@ -387,6 +387,8 @@ REF = datetime(2026, 7, 14, 12, 0, tzinfo=SCHEDULE_TZ)
         ("friday at 20:00", datetime(2026, 7, 17, 20, 0, tzinfo=SCHEDULE_TZ)),
         ("next tuesday 8pm", datetime(2026, 7, 21, 20, 0, tzinfo=SCHEDULE_TZ)),
         ("10pm", datetime(2026, 7, 14, 22, 0, tzinfo=SCHEDULE_TZ)),
+        ("10 PM", datetime(2026, 7, 14, 22, 0, tzinfo=SCHEDULE_TZ)),
+        ("10 p.m.", datetime(2026, 7, 14, 22, 0, tzinfo=SCHEDULE_TZ)),
         ("8am", datetime(2026, 7, 15, 8, 0, tzinfo=SCHEDULE_TZ)),
         ("12pm", datetime(2026, 7, 14, 12, 0, tzinfo=SCHEDULE_TZ) + timedelta(days=1)),
         ("today 8am", None),
@@ -395,6 +397,24 @@ REF = datetime(2026, 7, 14, 12, 0, tzinfo=SCHEDULE_TZ)
 )
 def test_parse_new_time_natural_language(raw, expected):
     assert parse_new_time(raw, REF, REF) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("9pm", datetime(2026, 7, 16, 21, 0, tzinfo=SCHEDULE_TZ)),
+        ("9 PM", datetime(2026, 7, 16, 21, 0, tzinfo=SCHEDULE_TZ)),
+        ("21:00", datetime(2026, 7, 16, 21, 0, tzinfo=SCHEDULE_TZ)),
+        ("11pm", datetime(2026, 7, 15, 23, 0, tzinfo=SCHEDULE_TZ)),
+        ("tomorrow 9pm", datetime(2026, 7, 16, 21, 0, tzinfo=SCHEDULE_TZ)),
+        ("wed 9pm", datetime(2026, 7, 22, 21, 0, tzinfo=SCHEDULE_TZ)),
+    ],
+)
+def test_parse_new_time_resolves_clocks_from_now_when_the_start_already_passed(raw, expected):
+    started = datetime(2026, 7, 11, 20, 0, tzinfo=SCHEDULE_TZ)
+    now = datetime(2026, 7, 15, 22, 30, tzinfo=SCHEDULE_TZ)
+
+    assert parse_new_time(raw, started, now) == expected
 
 
 def test_parse_new_time_accepts_a_pasted_discord_timestamp():

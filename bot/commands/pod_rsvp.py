@@ -118,7 +118,7 @@ RSVP_CONFIRM_COLOR = {
     RSVP_NO: discord.Color.red(),
 }
 MSG_CARD_INACTIVE = "This RSVP card is no longer active."
-MSG_BAD_TIME = "Couldn't read that time. Use `+2h30m`, `21:00` (ET), or `2026-07-18 21:00` (ET), in the future."
+MSG_BAD_TIME = "Enter a future time like +1h, 9 PM, 21:00, or tomorrow 8:30pm."
 THREAD_NOTE_TITLE = "🕐 Pod Draft Rescheduled by {actor}"
 THREAD_NOTE_BODY = "New time: <t:{unix}:F> (<t:{unix}:R>)\n" + MSG_DRAFTMANCER_LINK_LEAD
 
@@ -1605,10 +1605,13 @@ def parse_new_time(raw: str, current: datetime, now: datetime) -> datetime | Non
     """A future event time (ET) from a sesh-style phrase. Understood forms:
     a pasted Discord timestamp token ('<t:1752624000:F>', in the viewer's own zone); an 'NhNm' offset
     from the current time with an optional leading '+'; 'YYYY-MM-DD HH:MM'; a day word ('today',
-    'tonight', 'tomorrow', or a
-    weekday like 'fri') optionally with 'at'/'on'/'ET' filler, followed by a clock ('10pm', '8:30pm',
-    '20:00'); or a bare clock. A bare clock or weekday already past today rolls forward. None when
-    unreadable or not in the future."""
+    'tonight', 'tomorrow', or a weekday like 'fri') optionally with 'at'/'on'/'ET' filler, followed by a
+    clock ('9 PM', '10pm', '8:30pm', '20:00'); or a bare clock. A bare clock or weekday already past today
+    rolls forward. None when unreadable or not in the future.
+
+    Clocks and day words resolve against the later of the pod's start and the present, so a pod whose
+    start already passed still takes 'tomorrow 9pm'. Offsets stay relative to the pod's own start, which
+    is what makes '1h' mean 'one hour later than planned'."""
     raw = raw.strip().lower()
     if not raw:
         return None
@@ -1625,16 +1628,16 @@ def parse_new_time(raw: str, current: datetime, now: datetime) -> datetime | Non
         return parsed if parsed > now else None
     except ValueError:
         pass
-    parsed = _parse_natural_time(raw, current, now)
+    parsed = _parse_natural_time(raw, max(current, now), now)
     return parsed if parsed is not None and parsed > now else None
 
 
-def _parse_natural_time(raw: str, current: datetime, now: datetime) -> datetime | None:
+def _parse_natural_time(raw: str, base: datetime, now: datetime) -> datetime | None:
     tokens = [t for t in raw.replace(",", " ").split() if t not in FILLER_TOKENS and t not in TZ_TOKENS]
     if not tokens:
         return None
 
-    base_date = current.astimezone(SCHEDULE_TZ).date()
+    base_date = base.astimezone(SCHEDULE_TZ).date()
     day = base_date
     day_word, weekday_word = False, False
     next_week = tokens[0] == "next" and len(tokens) > 1
@@ -1659,7 +1662,7 @@ def _parse_natural_time(raw: str, current: datetime, now: datetime) -> datetime 
 
 
 def _parse_clock(token: str) -> dtime | None:
-    match = CLOCK_RE.match(token)
+    match = CLOCK_RE.match(token.replace(".", ""))
     if match is None:
         return None
     hour, minute, meridiem = int(match.group(1)), int(match.group(2) or 0), match.group(3)
