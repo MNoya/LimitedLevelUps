@@ -344,8 +344,8 @@ class _PodButtonCard(discord.ui.LayoutView):
         row.add_item(_ManageRolesButton())
         if show_format_button:
             row.add_item(_FormatPreferenceButton())
-        container.add_item(row)
         self.add_item(container)
+        self.add_item(row)
 
 
 LINK_ARENA_BUTTON_ID = "pod_welcome_link_arena"
@@ -429,7 +429,7 @@ class _PodGuideButton(discord.ui.Button):
 class _ManageRolesButton(discord.ui.Button):
     def __init__(self) -> None:
         super().__init__(
-            label="Notifications", style=discord.ButtonStyle.secondary, emoji="🔔", custom_id=MANAGE_ROLES_BUTTON_ID,
+            label="Notifications", style=discord.ButtonStyle.primary, emoji="🔔", custom_id=MANAGE_ROLES_BUTTON_ID,
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
