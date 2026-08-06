@@ -198,6 +198,52 @@ def test_not_ready_from_discord_drops_the_seat_and_leaves_the_check_running():
     assert completed == [True]
 
 
+def test_a_burst_of_answers_renders_the_card_once(monkeypatch):
+    """Eight seats answering inside a couple of seconds used to be eight renders, which outran what Discord
+    lets the bot edit in a channel and left the card players read seconds behind their own answers."""
+    monkeypatch.setattr(pod_draft_manager, "_LOBBY_REFRESH_DEBOUNCE_S", 0.01)
+    mgr, _ = _ready_manager([str(i) for i in range(8)])
+    mgr.ready_socket_ids = set()
+    renders: list[bool] = []
+
+    async def _record_render():
+        renders.append(True)
+
+    mgr._refresh_lobby_status = _record_render
+
+    async def _everyone_answers():
+        for seat_id in sorted(mgr.expected_user_ids):
+            await mgr.mark_seat(seat_id, ready=True)
+        await asyncio.sleep(0.05)
+
+    asyncio.run(_everyone_answers())
+
+    assert renders == [True]
+
+
+def test_an_answer_after_the_burst_gets_its_own_render(monkeypatch):
+    monkeypatch.setattr(pod_draft_manager, "_LOBBY_REFRESH_DEBOUNCE_S", 0.01)
+    mgr, _ = _ready_manager([str(i) for i in range(8)])
+    mgr.ready_socket_ids = set()
+    renders: list[bool] = []
+
+    async def _record_render():
+        renders.append(True)
+
+    mgr._refresh_lobby_status = _record_render
+
+    async def _two_answers_apart():
+        await mgr.mark_seat("0", ready=True)
+        await mgr.mark_seat("1", ready=True)
+        await asyncio.sleep(0.05)
+        await mgr.mark_seat("2", ready=True)
+        await asyncio.sleep(0.05)
+
+    asyncio.run(_two_answers_apart())
+
+    assert renders == [True, True]
+
+
 def test_stopping_closes_the_check_but_keeps_what_players_answered():
     """A player who said they were ready is still ready. Both ways a check closes are about the pod, not
     about them, so the next check asks nobody to click twice."""

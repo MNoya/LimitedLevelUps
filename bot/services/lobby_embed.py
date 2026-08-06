@@ -35,6 +35,8 @@ STOP_CHECK_CUSTOM_ID = "pod-draft:stop-check"
 _NO_ACTIVE_POD_MSG = "No active pod-draft session in this thread."
 RESUME_READY_CHECK_LABEL = "Resume Ready Check"
 
+MSG_READY_RECORDED = "✅ Ready Check recorded"
+MSG_NOT_READY_RECORDED = "⚠️ Ready Check on hold until you press Ready"
 MSG_STOP_CHECK_CONFIRM = "Stop Ready Check?"
 MSG_CLAIM_SEAT_PROMPT = "Nobody in the Draftmancer lobby matches your Discord name. Pick your seat:"
 MSG_NO_SEAT_TO_CLAIM = "You are not in the Draftmancer lobby yet.\n{join_line}"
@@ -148,9 +150,15 @@ async def manager_or_reply(interaction: discord.Interaction, label: str):
 
 
 class SeatAnswerButton(discord.ui.Button):
-    """One player's answer to a running check. Subclasses set `ready` and their own label."""
+    """One player's answer to a running check. Subclasses set `ready`, their own label, and the line the
+    presser gets back.
+
+    The answer is confirmed back to the presser rather than left to the check card. A component defer shows
+    them nothing, and the card is a shared message the whole pod edits, so under the answer traffic of a full
+    table it can trail the press by long enough that players read it as a button that did not work."""
 
     ready: bool
+    recorded: str
 
     async def callback(self, interaction: discord.Interaction) -> None:
         actor = actor_label(interaction)
@@ -166,6 +174,8 @@ class SeatAnswerButton(discord.ui.Button):
         err = await manager.mark_seat(seat_id, ready=self.ready, actor=actor)
         if err:
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
+            return
+        await interaction.followup.send(self.recorded, ephemeral=True)
 
 
 class ReadyNowButton(SeatAnswerButton):
@@ -173,6 +183,7 @@ class ReadyNowButton(SeatAnswerButton):
     reports a stray Not Ready whenever another popup replaces it, so this is the answer the bot trusts."""
 
     ready = True
+    recorded = MSG_READY_RECORDED
 
     def __init__(self) -> None:
         super().__init__(
@@ -185,6 +196,7 @@ class NotReadyButton(SeatAnswerButton):
     """Say 'wait for me' without killing the check."""
 
     ready = False
+    recorded = MSG_NOT_READY_RECORDED
 
     def __init__(self) -> None:
         super().__init__(
@@ -754,7 +766,8 @@ def render_ready_check_progress(
         status_lines, color = ready_status_banner(state, initiated_by=initiated_by)
         header_lines = list(status_lines) if status_lines else ["### Ready Check"]
         card_title = title
-    embed = discord.Embed(title=card_title, description="\n".join(l for l in header_lines if l), color=color)
+    header = "\n".join(line for line in header_lines if line)
+    embed = discord.Embed(title=card_title, description=header, color=color)
     _set_settings_footer(embed, format_label, pairing_label, seating_label)
 
     if teams and state in ("drafting", "complete"):

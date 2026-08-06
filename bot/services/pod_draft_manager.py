@@ -133,6 +133,7 @@ _BACKOFF_MAX_RETRIES = 8
 LOBBY_REHYDRATE_WINDOW = timedelta(hours=12)
 _READY_TIMEOUT_S = 120
 _READY_DEBOUNCE_S = 2.0
+_LOBBY_REFRESH_DEBOUNCE_S = 1.0
 _LOBBY_FULL_THRESHOLD = 8
 _LOBBY_HALF_THRESHOLD = _LOBBY_FULL_THRESHOLD // 2
 _LOBBY_FULL_PROMPT_DELAY_S = 10
@@ -362,6 +363,8 @@ class PodDraftManager:
         self._repost_lobby_card = False
         self.ready_check_progress_message: object | None = None
         self._lobby_post_lock = asyncio.Lock()
+        self._lobby_refresh_pending = False
+        self._lobby_refresh_task: asyncio.Task | None = None
         self._ready_timeout_task: asyncio.Task | None = None
         self.drafting = False
         self._draft_start_in_flight = False
@@ -479,6 +482,7 @@ class PodDraftManager:
         self._closed = True
         self._cancel_end_watchdog()
         self._cancel_mock_idle_timer()
+        self._cancel_lobby_refresh()
         try:
             if self.sio.connected:
                 await self.sio.disconnect()
@@ -545,7 +549,7 @@ class PodDraftManager:
         if self.is_owner and not self.drafting:
             await self._apply_bot_fill()
 
-        await self._refresh_lobby_status()
+        self._schedule_lobby_refresh()
 
         self._admit_lobby_arrivals()
 
@@ -559,7 +563,7 @@ class PodDraftManager:
         log.info(f"draftmancer sessionSpectators for {self.session_id}: {self.spectator_names}")
         if self.draft_complete:
             return
-        await self._refresh_lobby_status()
+        self._schedule_lobby_refresh()
 
     def _recompute_spectator_state(self) -> None:
         rows = self.session_spectators
@@ -584,7 +588,7 @@ class PodDraftManager:
         if "userName" in updates and (renamed_roster or renamed_spectator):
             log.info(f"draftmancer updateUser rename for {self.session_id}: {user_id} → {updates['userName']}")
             if not self.draft_complete:
-                await self.refresh_lobby_now()
+                self._schedule_lobby_refresh()
                 self._admit_lobby_arrivals()
                 if renamed_roster:
                     self._sync_leaderboard_seeding()
@@ -1113,7 +1117,7 @@ class PodDraftManager:
             f"[READY] discord_answer event={self.event_id} seat={self.seat_name(seat_id)!r} ready={ready} "
             f"actor={actor} ready_count={len(self.ready_users)}/{len(self.expected_user_ids)}"
         )
-        await self.refresh_lobby_now()
+        self._schedule_lobby_refresh()
         if ready:
             await self._maybe_complete_ready_check()
         return None
@@ -1198,6 +1202,32 @@ class PodDraftManager:
         _refresh_lobby_status renders the endDraft snapshot, not whoever is in the session now."""
         await self._refresh_lobby_status()
 
+    def _schedule_lobby_refresh(self) -> None:
+        """Ask for a re-render, coalescing a burst of answers into one pass. A ready check turns eight seats
+        over in a couple of seconds, and one render each outruns what Discord lets the bot edit in a channel:
+        the queue that builds up puts the card players are watching seconds behind the state it is meant to
+        show, which they read as their answer not registering.
+
+        Every surface a check touches comes through here. State changes a player is waiting on, a draft
+        starting or a check closing, render immediately instead."""
+        self._lobby_refresh_pending = True
+        if self._lobby_refresh_task is not None and not self._lobby_refresh_task.done():
+            return
+        self._lobby_refresh_task = asyncio.create_task(self._drain_lobby_refreshes())
+
+    async def _drain_lobby_refreshes(self) -> None:
+        while self._lobby_refresh_pending:
+            await asyncio.sleep(_LOBBY_REFRESH_DEBOUNCE_S)
+            if self._lobby_refresh_pending:
+                self._lobby_refresh_pending = False
+                await self._refresh_lobby_status()
+
+    def _cancel_lobby_refresh(self) -> None:
+        self._lobby_refresh_pending = False
+        if self._lobby_refresh_task is not None and not self._lobby_refresh_task.done():
+            self._lobby_refresh_task.cancel()
+        self._lobby_refresh_task = None
+
     async def bump_lobby_card(self) -> bool:
         """Move the lobby card back to the bottom of its thread, for a lobby that chat has buried, and
         report whether a card is up afterwards. Discord cannot move a message, so the old one is deleted
@@ -1260,10 +1290,11 @@ class PodDraftManager:
         }
 
     async def _refresh_lobby_status(self) -> None:
-        """Re-render the lobby card from the live session. Roster classification and the card edit run
+        """Re-render the lobby card from the live session. Roster classification and both card edits run
         together under _lobby_post_lock so concurrent sessionUsers / sessionSpectators broadcasts can't
         clobber each other — without it, a handler that captured a pre-kick roster before its await
         would edit last and resurrect the removed player."""
+        self._lobby_refresh_pending = False
         thread = await self._fetch_thread()
         if thread is None:
             return
@@ -1349,35 +1380,35 @@ class PodDraftManager:
             if self.kind == "mock":
                 await self._update_mock_anchor(classified)
 
-        progress_state = self._progress_card_state(state)
-        if self.ready_check_progress_message is not None and progress_state is not None:
-            progress_embed = render_ready_check_progress(
-                title=self.event_name,
-                in_session=classified,
-                state=progress_state,
-                ready_arena_names=ready_arena_names,
-                not_ready_arena_names=self.not_ready_arena_names(),
-                cancel_reason=self.last_cancel_reason,
-                hold_detail=hold_detail,
-                hold_hint=hold_hint,
-                draftmancer_url=self.draftmancer_url if self.ready_check_left_ids else None,
-                initiated_by=self.initiated_by,
-                timed_out=self.ready_check_timed_out,
-                teams=teams,
-                **self._settings_labels(),
-            )
-            if progress_state == "drafting":
-                progress_view = build_started_lobby_view(self.spectate_url)
-            elif progress_state == "notready":
-                progress_view = build_not_ready_view()
-            elif progress_state == "complete":
-                progress_view = None
-            else:
-                progress_view = ReadyCheckAnswerView(paused=progress_state == "held")
-            try:
-                await self.ready_check_progress_message.edit(embed=progress_embed, view=progress_view)
-            except Exception:
-                log.warning("could not edit ready-check progress card", exc_info=True)
+            progress_state = self._progress_card_state(state)
+            if self.ready_check_progress_message is not None and progress_state is not None:
+                progress_embed = render_ready_check_progress(
+                    title=self.event_name,
+                    in_session=classified,
+                    state=progress_state,
+                    ready_arena_names=ready_arena_names,
+                    not_ready_arena_names=self.not_ready_arena_names(),
+                    cancel_reason=self.last_cancel_reason,
+                    hold_detail=hold_detail,
+                    hold_hint=hold_hint,
+                    draftmancer_url=self.draftmancer_url if self.ready_check_left_ids else None,
+                    initiated_by=self.initiated_by,
+                    timed_out=self.ready_check_timed_out,
+                    teams=teams,
+                    **self._settings_labels(),
+                )
+                if progress_state == "drafting":
+                    progress_view = build_started_lobby_view(self.spectate_url)
+                elif progress_state == "notready":
+                    progress_view = build_not_ready_view()
+                elif progress_state == "complete":
+                    progress_view = None
+                else:
+                    progress_view = ReadyCheckAnswerView(paused=progress_state == "held")
+                try:
+                    await self.ready_check_progress_message.edit(embed=progress_embed, view=progress_view)
+                except Exception:
+                    log.warning("could not edit ready-check progress card", exc_info=True)
 
         await self._maybe_post_voice_link(classified, thread)
 
@@ -1922,7 +1953,7 @@ class PodDraftManager:
                 return
             self.ready_socket_ids.discard(user_id)
             self.not_ready_ids.add(user_id)
-        await self.refresh_lobby_now()
+        self._schedule_lobby_refresh()
         await self._maybe_complete_ready_check()
 
     def _sync_ready_check_roster(self) -> None:
