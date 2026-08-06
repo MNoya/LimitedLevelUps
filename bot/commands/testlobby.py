@@ -1388,10 +1388,8 @@ async def _settings_preview_cancel_noop(interaction: discord.Interaction) -> str
 
 
 async def _post_disconnect_preview(ctx: commands.Context, needed: int) -> None:
-    """Every state a mid-draft disconnect can reach, in one place. A live pod only ever shows one of them
-    at a time: the waiting card is deleted as the vote goes up, and a player who reconnects settles
-    whichever card is on screen. The vote is wired to this preview, so clicking a side tallies against the
-    card and a majority flips it to that outcome."""
+    """Every message a mid-draft disconnect posts, in the order a live pod posts them. The vote is wired to
+    this preview, so clicking a side tallies against the card and a majority flips it to that outcome."""
     names = [HALL_OF_FAME[5]]
     dropped_at = int(datetime.now(timezone.utc).timestamp())
     await ctx.send(embed=pod_disconnect.build_waiting_embed(
@@ -1400,8 +1398,7 @@ async def _post_disconnect_preview(ctx: commands.Context, needed: int) -> None:
         embed=pod_disconnect.build_offer_embed(names, dropped_at=dropped_at, needed=needed),
         view=_PreviewDisconnectVoteView(needed),
     )
-    await ctx.send(embed=pod_disconnect.build_back_embed())
-    await ctx.send(pod_disconnect.BACK_NOTICE)
+    await ctx.send(embed=pod_disconnect.build_back_embed(names))
 
 
 _PREVIEW_DISCONNECT_GRACE_S = 120

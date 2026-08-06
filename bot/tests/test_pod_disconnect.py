@@ -36,7 +36,7 @@ def test_the_deciding_click_leaves_the_card_saying_who_decided_it():
 @pytest.mark.parametrize("card", [
     pod_disconnect.build_waiting_embed(["Reid"], opens_at=1770000000),
     pod_disconnect.build_offer_embed(["Reid"], dropped_at=1770000000, needed=2),
-    pod_disconnect.build_back_embed(),
+    pod_disconnect.build_back_embed(["Reid"]),
 ])
 def test_every_card_heads_itself_in_the_description(card):
     """An embed title renders no markdown and no timestamp, so no card may use one."""

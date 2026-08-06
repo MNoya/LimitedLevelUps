@@ -1,8 +1,9 @@
 """The cards a pod gets when someone drops mid-draft and Draftmancer holds the table for them.
 
-Two messages. The first says who went and counts down the reconnect window. When that window closes with
-nobody back, a second one asks the table how to continue, shaped like the Team-Draft offer: two columns of
-voters, a button per side, and a majority of the players still at the table decides.
+The first says who went and counts down the reconnect window. When that window closes with nobody back, a
+second one asks the table how to continue, shaped like the Team-Draft offer: two columns of voters, a
+button per side, and a majority of the players still at the table decides. A return posts a third, and
+nothing already up is ever deleted, so the thread keeps the record of the stall.
 
 The card message is the source of truth for the tally, the same way the Team-Draft card is: each voter is
 stored in their column as a mention, so a click reads the columns straight off the message and a stalled
@@ -27,11 +28,11 @@ DROP_WAITING_BODY = "Vote opens {when} if they don't come back"
 OFFER_HEADING = "{emoji} {names} disconnected {when}"
 OFFER_BODY = "Choose how to continue"
 OFFER_FOOTER = "{needed} vote{plural} needed"
-BACK_HEADING = "👋 Everyone is back"
+BACK_EMOJI = "✅"
+BACK_HEADING = "{emoji} {names} {verb} back!"
 BACK_BODY = "Draft continues"
 
 BOT_NOTICE = "🤖 Resuming the draft with a Bot"
-BACK_NOTICE = "👋 Everyone is back. Resuming the draft"
 
 BOT_COLUMN = "🤖 Replace With Bot"
 RESTART_COLUMN = "♻️ Restart Draft"
@@ -78,9 +79,9 @@ def build_offer_embed(names: list[str], *, dropped_at: int, needed: int,
     return embed
 
 
-def build_back_embed() -> discord.Embed:
-    return discord.Embed(
-        color=discord.Color.green(), description=f"### {BACK_HEADING}\n{BACK_BODY}")
+def build_back_embed(names: list[str]) -> discord.Embed:
+    heading = BACK_HEADING.format(emoji=BACK_EMOJI, names=_bold_names(names), verb=_is_are(names))
+    return discord.Embed(color=discord.Color.green(), description=f"### {heading}\n{BACK_BODY}")
 
 
 def rerender_offer(embed: discord.Embed, bot_votes: list[str], restart_votes: list[str]) -> discord.Embed:
@@ -166,3 +167,7 @@ def _set_columns(embed: discord.Embed, bot_votes: list[str], restart_votes: list
 
 def _bold_names(names: list[str]) -> str:
     return ", ".join(f"**{name}**" for name in names)
+
+
+def _is_are(names: list[str]) -> str:
+    return "is" if len(names) == 1 else "are"

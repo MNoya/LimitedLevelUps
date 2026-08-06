@@ -434,7 +434,8 @@ def _drafting_manager(monkeypatch) -> PodDraftManager:
     """A manager mid-draft with the thread posting stubbed out, so a test reads the decisions only."""
     mgr = _manager()
     mgr.drafting = True
-    monkeypatch.setattr(PodDraftManager, "_post_disconnect_watch", _noop)
+    monkeypatch.setattr(PodDraftManager, "_open_disconnect_watch", _noop)
+    monkeypatch.setattr(PodDraftManager, "_refresh_disconnect_watch", _noop)
     monkeypatch.setattr(PodDraftManager, "end_disconnect_stall", _noop)
     return mgr
 

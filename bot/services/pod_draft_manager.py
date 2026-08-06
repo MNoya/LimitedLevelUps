@@ -138,6 +138,7 @@ _LOBBY_FULL_THRESHOLD = 8
 _LOBBY_FULL_PROMPT_DELAY_S = 10
 _RESTART_SETTLE_S = 2.5
 _RESTART_READY_MIN_PLAYERS = 2
+_DISCONNECT_BLIP_S = 5
 _DISCONNECT_GRACE_S = 120
 
 _SEEDING_REFRESH_HOOK = None
@@ -373,9 +374,11 @@ class PodDraftManager:
         self.packs_per_player: int | None = None
         self.cards_per_pack: int | None = None
         self.disconnected_names: list[str] = []
+        self.stall_names: set[str] = set()
         self.bot_filled_names: set[str] = set()
         self._disconnect_message: "discord.Message | None" = None
         self._disconnect_offer_message: "discord.Message | None" = None
+        self._disconnect_watch_task: asyncio.Task | None = None
         self._disconnect_offer_task: asyncio.Task | None = None
         self._disconnect_at: int | None = None
         self.team_map: dict[str, str] | None = None  # draftmancer_name -> 'A'/'B' for team drafts
@@ -2044,15 +2047,17 @@ class PodDraftManager:
         if waiting == self.disconnected_names:
             return
         if not waiting:
-            await self.end_disconnect_stall(
-            card=pod_disconnect.build_back_embed(), notice=pod_disconnect.BACK_NOTICE)
+            await self._end_stall_on_return()
             return
         first_drop = not self.disconnected_names
         self.disconnected_names = waiting
+        self.stall_names.update(waiting)
         log.warning(f"[DRAFT] players_disconnected event={self.event_id} names={waiting}")
         if first_drop:
             self._disconnect_at = int(datetime.now(timezone.utc).timestamp())
-        await self._post_disconnect_watch()
+            self._disconnect_watch_task = asyncio.create_task(self._open_disconnect_watch())
+        else:
+            await self._refresh_disconnect_watch()
         if self._disconnect_offer_task is None or self._disconnect_offer_task.done():
             self._disconnect_offer_task = asyncio.create_task(self._offer_disconnect_choices())
 
@@ -2061,30 +2066,48 @@ class PodDraftManager:
         more about who came back. A replacement resumes it too, and settles the cards before it emits."""
         if not self.disconnected_names:
             return
-        await self.end_disconnect_stall(
-            card=pod_disconnect.build_back_embed(), notice=pod_disconnect.BACK_NOTICE)
+        await self._end_stall_on_return()
 
-    async def _post_disconnect_watch(self) -> None:
-        """Edited in place while the reconnect window runs, so a second player dropping into it joins the
-        same card rather than opening a second one."""
-        opens_at = (self._disconnect_at or 0) + _DISCONNECT_GRACE_S
-        embed = pod_disconnect.build_waiting_embed(self.disconnected_names, opens_at=opens_at)
+    async def _end_stall_on_return(self) -> None:
+        """A stall the thread was never told about ends as quietly as it started. One it was told about
+        names everyone it waited on, a player who came back early included."""
+        announced = self._disconnect_message is not None or self._disconnect_offer_message is not None
+        card = pod_disconnect.build_back_embed(sorted(self.stall_names)) if announced else None
+        await self.end_disconnect_stall(card=card)
+
+    async def _open_disconnect_watch(self) -> None:
+        """Nothing is said for the first seconds, so a drop that resolves at once costs no messages."""
         try:
-            if self._disconnect_message is None:
-                thread = await self._fetch_thread()
-                if thread is None:
-                    return
-                self._disconnect_message = await thread.send(embed=embed)
-            else:
-                await self._disconnect_message.edit(embed=embed)
+            await asyncio.sleep(_DISCONNECT_BLIP_S)
+        except asyncio.CancelledError:
+            return
+        if not self.drafting or self.draft_complete or not self.disconnected_names:
+            return
+        thread = await self._fetch_thread()
+        if thread is None:
+            return
+        try:
+            self._disconnect_message = await thread.send(embed=self._disconnect_watch_embed())
         except discord.HTTPException:
             log.warning(f"[DRAFT] disconnect_card_failed event={self.event_id}", exc_info=True)
 
+    async def _refresh_disconnect_watch(self) -> None:
+        """A second player dropping into a live wait joins the card already up, so one stall is one card."""
+        if self._disconnect_message is None:
+            return
+        try:
+            await self._disconnect_message.edit(embed=self._disconnect_watch_embed())
+        except discord.HTTPException:
+            log.warning(f"[DRAFT] disconnect_card_failed event={self.event_id}", exc_info=True)
+
+    def _disconnect_watch_embed(self) -> "discord.Embed":
+        opens_at = (self._disconnect_at or 0) + _DISCONNECT_GRACE_S
+        return pod_disconnect.build_waiting_embed(self.disconnected_names, opens_at=opens_at)
+
     async def _offer_disconnect_choices(self) -> None:
         """Once the wait runs out with nobody back, post the vote as its own message so the table gets a
-        fresh ping instead of an edit nobody sees, and drop the waiting card: its countdown has run out and
-        the vote card carries the same name and the same drop time. A return inside the window cancels
-        this, and a player who reconnects is never asked about."""
+        fresh ping instead of an edit nobody sees. A return inside the window cancels this, and a player
+        who reconnects is never asked about."""
         try:
             await asyncio.sleep(_DISCONNECT_GRACE_S)
         except asyncio.CancelledError:
@@ -2104,55 +2127,43 @@ class PodDraftManager:
         except discord.HTTPException:
             log.warning(f"[DRAFT] disconnect_offer_failed event={self.event_id}", exc_info=True)
             return
-        await self._delete_waiting_card()
+        self._disconnect_message = None
         log.info(f"[DRAFT] disconnect_offer_posted event={self.event_id} needed={needed}")
 
-    async def _delete_waiting_card(self) -> None:
-        waiting = self._disconnect_message
-        self._disconnect_message = None
-        if waiting is None:
-            return
-        try:
-            await waiting.delete()
-        except discord.HTTPException:
-            log.info(f"[DRAFT] disconnect_waiting_delete_failed event={self.event_id}", exc_info=True)
-
-    def clear_disconnect_state(self) -> tuple["discord.Message | None", "discord.Message | None"]:
-        """Forget the stall and hand back its two cards, so whoever ends it decides what they say."""
-        task = self._disconnect_offer_task
-        self._disconnect_offer_task = None
-        if task is not None:
-            task.cancel()
+    def clear_disconnect_state(self) -> "discord.Message | None":
+        """Forget the stall and hand back its vote card, the one message an ending still has to change."""
+        tasks = (self._disconnect_watch_task, self._disconnect_offer_task)
+        self._disconnect_watch_task = self._disconnect_offer_task = None
+        for task in tasks:
+            if task is not None:
+                task.cancel()
         self.disconnected_names = []
+        self.stall_names = set()
         self._disconnect_at = None
-        cards = (self._disconnect_message, self._disconnect_offer_message)
+        offer = self._disconnect_offer_message
         self._disconnect_message = self._disconnect_offer_message = None
-        return cards
+        return offer
 
-    async def end_disconnect_stall(self, *, card: "discord.Embed | None" = None,
-                                   notice: str | None = None) -> None:
-        """Close out a stall. A vote that was posted keeps its card exactly as the table left it, tally and
-        all, and only loses its buttons, with `notice` posted below it as its own message. A stall that
-        never got that far has its waiting card replaced by `card`, or deleted when there is none."""
-        waiting, offer = self.clear_disconnect_state()
-        try:
-            if offer is not None:
+    async def end_disconnect_stall(self, *, card: "discord.Embed | None" = None) -> None:
+        """Close out a stall. Nothing posted is deleted or rewritten, so the thread keeps the record of who
+        dropped and how the table voted. The vote card loses its buttons, so nobody clicks a decision into
+        a draft that moved on, and `card` posts at the bottom of the thread, where a table that kept
+        talking through the stall will see it."""
+        offer = self.clear_disconnect_state()
+        if offer is not None:
+            try:
                 await offer.edit(view=None)
-            elif waiting is not None and card is not None:
-                await waiting.edit(embed=card)
-            elif waiting is not None:
-                await waiting.delete()
-        except discord.HTTPException:
-            log.info(f"[DRAFT] disconnect_end_failed event={self.event_id}", exc_info=True)
-        if offer is None or notice is None:
+            except discord.HTTPException:
+                log.info(f"[DRAFT] disconnect_end_failed event={self.event_id}", exc_info=True)
+        if card is None:
             return
         thread = await self._fetch_thread()
         if thread is None:
             return
         try:
-            await thread.send(notice)
+            await thread.send(embed=card)
         except discord.HTTPException:
-            log.warning(f"[DRAFT] disconnect_notice_failed event={self.event_id}", exc_info=True)
+            log.warning(f"[DRAFT] disconnect_end_card_failed event={self.event_id}", exc_info=True)
 
     async def replace_disconnected_with_bots(self) -> str | None:
         """Hand every seat still missing to a Draftmancer bot so the draft runs on. Their picks so far
