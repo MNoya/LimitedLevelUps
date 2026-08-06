@@ -950,12 +950,14 @@ async def _ensure_managed_role(guild: discord.Guild, spec: ManagedRole) -> None:
 
 
 def _managed_role_fields(guild: discord.Guild, spec: ManagedRole) -> dict:
+    """Keys are the create/edit kwargs, so the icon rides ``display_icon``, which takes a unicode emoji as
+    a plain string. ``Role.unicode_emoji`` is the read side of the same field and is not writable."""
     fields: dict = {"name": spec.name}
     if spec.color is not None:
         fields["colour"] = discord.Colour.from_str(spec.color)
     icon = _wanted_role_icon(guild, spec)
     if icon is not None:
-        fields["unicode_emoji"] = icon
+        fields["display_icon"] = icon
     return fields
 
 
@@ -967,7 +969,7 @@ def _managed_role_drift(guild: discord.Guild, role: discord.Role, spec: ManagedR
             drift["colour"] = wanted
     icon = _wanted_role_icon(guild, spec)
     if icon is not None and role.unicode_emoji != icon:
-        drift["unicode_emoji"] = icon
+        drift["display_icon"] = icon
     return drift
 
 
