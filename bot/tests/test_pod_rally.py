@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 import pytest
 
@@ -31,6 +32,7 @@ class FakeManager:
     drafting: bool = False
     draft_complete: bool = False
     event_id: str = "event"
+    set_code: str = "MSH"
 
     def player_session_users(self) -> list[dict]:
         return [{"userID": f"u{i}"} for i in range(self.seated)]
@@ -48,6 +50,7 @@ class FakeTableView:
     materialized: bool = False
     superseded: bool = False
     claim_message: FakeClaimMessage | None = field(default_factory=FakeClaimMessage)
+    format_code: str | None = None
 
 
 def claims(count: int) -> dict[int, str]:
@@ -194,3 +197,69 @@ def test_a_full_lobby_is_still_reported_when_nothing_else_is_recruiting(registry
     target = asyncio.run(resolve_target(GUILD_ID))
 
     assert lobby_is_full(target) is True
+
+
+@pytest.mark.parametrize("word,expected", [
+    ("DOM", "DOM"),
+    ("dom", "DOM"),
+    ("peasant", "PEASANT"),
+    ("anyone", None),
+    ("", None),
+])
+def test_set_keyword_reads_only_a_format_in_the_first_word(word, expected):
+    assert pod_rally.set_keyword(f"{word} free tonight?".strip()) == expected
+
+
+@pytest.mark.parametrize("dom_yes,msh_yes,expected", [
+    (4, 1, "DOM Late Pod"),
+    (1, 4, "MSH Late Pod"),
+    (9, 5, "MSH Late Pod"),
+    (8, 5, "MSH Late Pod"),
+])
+def test_gathering_targets_lead_with_the_pod_that_still_needs_players(dom_yes, msh_yes, expected, monkeypatch):
+    start = datetime(2026, 8, 6, 21, 0, tzinfo=timezone.utc)
+    msh = RallyTarget(KIND_GATHERING, "MSH Late Pod", "url", yes=msh_yes, event_time=start, set_code="MSH")
+    dom = RallyTarget(KIND_GATHERING, "DOM Late Pod", "url", yes=dom_yes, event_time=start, set_code="DOM")
+    monkeypatch.setattr(pod_rally, "_pending_pod_targets_sync", lambda guild_id, now: [msh, dom])
+    monkeypatch.setattr(pod_rally.pod_launch, "joinable_signals_sync", lambda guild_id, now, within: [])
+
+    targets = pod_rally.gathering_targets_sync(GUILD_ID)
+
+    assert targets[0].name == expected
+
+
+def test_a_named_set_picks_its_pod_over_a_more_recruitable_one(registry, tables, monkeypatch):
+    msh = RallyTarget(KIND_GATHERING, "MSH Late Pod", "url", yes=6, event_time=None, set_code="MSH")
+    dom = RallyTarget(KIND_GATHERING, "DOM Late Pod", "url", yes=2, event_time=None, set_code="DOM")
+    monkeypatch.setattr(pod_rally, "gathering_targets_sync", lambda guild_id: [msh, dom])
+
+    assert asyncio.run(resolve_target(GUILD_ID, "DOM")) is dom
+    assert asyncio.run(resolve_target(GUILD_ID)) is msh
+
+
+def test_a_named_set_with_no_pod_falls_back_to_whatever_is_live(registry, tables, monkeypatch):
+    msh = RallyTarget(KIND_GATHERING, "MSH Late Pod", "url", yes=6, set_code="MSH")
+    monkeypatch.setattr(pod_rally, "gathering_targets_sync", lambda guild_id: [msh])
+
+    assert asyncio.run(resolve_target(GUILD_ID, "DOM")) is msh
+
+
+def test_a_named_set_picks_its_lobby_over_a_second_table(registry, tables, no_gathering):
+    registry["a"] = FakeManager("MSH Late Pod", 1, "sess-a", seated=6, set_code="MSH")
+    registry["b"] = FakeManager("DOM Late Pod", 2, "sess-b", seated=3, set_code="DOM")
+    tables["a"] = FakeTableView("MSH Late Pod - Table 2", claims(3))
+
+    target = asyncio.run(resolve_target(GUILD_ID, "DOM"))
+
+    assert (target.kind, target.name) == (KIND_LOBBY, "DOM Late Pod")
+
+
+def test_a_second_table_inherits_the_set_of_the_pod_it_split_off(registry, tables):
+    registry["a"] = FakeManager("DOM Late Pod", 1, "sess-a", seated=8, set_code="DOM")
+    tables["a"] = FakeTableView("DOM Late Pod - Table 2", claims(2))
+    tables["b"] = FakeTableView("MSH Table", claims(1), format_code="msh")
+
+    by_name = {target.name: target for target in forming_table_targets()}
+
+    assert by_name["DOM Late Pod - Table 2"].set_code == "DOM"
+    assert by_name["MSH Table"].set_code == "MSH"

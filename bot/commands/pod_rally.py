@@ -1,10 +1,10 @@
 """`!pod` — put the pod in front of whoever is reading, in whatever form the channel needs.
 
 Inside a pod thread, a mock's included, it moves the lobby card back to the bottom, for a lobby that chat has
-buried. Anywhere else it posts one line per live pod: how many seats are missing, how many players are
-already sitting in Draftmancer, and where to join. Open to everyone and nothing is pinged. The message is
-left up, since anything a player writes after `!pod` is their own words and the answer posts under it either
-way.
+buried. Anywhere else it posts one line for the pod most worth filling: how many seats are missing, how many
+players are already sitting in Draftmancer, and where to join. A set or cube code as the first word asks for
+that format instead. Open to everyone and nothing is pinged. The message is left up, since anything a player
+writes after `!pod` is their own words and the answer posts under it either way.
 """
 from __future__ import annotations
 
@@ -46,13 +46,16 @@ async def setup(bot: commands.Bot) -> None:
     set_rally_fired_hook(flip_rally_to_started)
 
     @bot.command(name="pod")
-    async def pod_cmd(ctx: commands.Context) -> None:
-        """Bump the lobby card in a pod thread, or rally for the live pod anywhere else."""
+    async def pod_cmd(ctx: commands.Context, *, note: str = "") -> None:
+        """Bump the lobby card in a pod thread, or rally for the live pod anywhere else. A set or cube code
+        as the first word rallies for that format, and a caller who named one wants the rally even inside a
+        pod thread."""
+        set_code = pod_rally.set_keyword(note)
         channel_id = ctx.channel.id if ctx.channel else None
         manager = active_manager_for_channel(channel_id)
-        if manager is not None and await _answer_from_pod_channel(ctx, manager):
+        if set_code is None and manager is not None and await _answer_from_pod_channel(ctx, manager):
             return
-        await _rally(ctx)
+        await _rally(ctx, set_code)
 
 
 async def _answer_from_pod_channel(ctx: commands.Context, manager) -> bool:
@@ -69,10 +72,10 @@ async def _answer_from_pod_channel(ctx: commands.Context, manager) -> bool:
     return True
 
 
-async def _rally(ctx: commands.Context) -> None:
+async def _rally(ctx: commands.Context, set_code: str | None = None) -> None:
     guild = _guild(ctx)
     guild_id = str(guild.id) if guild is not None else ""
-    target = await pod_rally.resolve_target(guild_id)
+    target = await pod_rally.resolve_target(guild_id, set_code)
     if target is not None and pod_rally.lobby_is_full(target):
         await ctx.send(MSG_POD_ALREADY_FULL, delete_after=NOTICE_LIFETIME_S)
         return

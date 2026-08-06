@@ -21,7 +21,7 @@ from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import plural
 from bot.models import PodDraftEvent
-from bot.services import pod_launch
+from bot.services import pod_format, pod_launch
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, ACTIVE_TABLE_VIEWS
 from bot.services.pod_drafts import draftmancer_url_for
 from bot.services.pod_reminder_copy import RALLY_LOBBY, RALLY_LOBBY_WAITING, RALLY_QUEUE, RALLY_TABLE
@@ -61,23 +61,27 @@ class RallyTarget:
     event_time: datetime | None = None
     session_id: str | None = None
     event_id: str | None = None
+    set_code: str = ""
 
 
-async def resolve_target(guild_id: str) -> RallyTarget | None:
-    """The one pod `!pod` reports. Naming two asks the reader to choose instead of to fill a seat, so only
-    the most recruitable is posted: an open lobby with seats left, then a second table collecting claims,
-    then a pod gathering for later. A full lobby and a draft already running come last, so the pod that
-    filled up never hides the table its leftovers are trying to fire."""
-    live = live_lobby_targets(guild_id)
-    if live and live[0].kind == KIND_LOBBY and not lobby_is_full(live[0]):
-        return live[0]
-    tables = forming_table_targets()
-    if tables:
-        return tables[0]
-    gathering = await asyncio.to_thread(gathering_targets_sync, guild_id)
-    if gathering:
-        return gathering[0]
-    return live[0] if live else None
+async def resolve_target(guild_id: str, set_code: str | None = None) -> RallyTarget | None:
+    """The one pod `!pod` reports, restricted to `set_code` when the caller named a format. A set nobody is
+    drafting right now falls back to the general pick, so a caller who asks for one still learns which pod
+    is live instead of hearing nothing."""
+    if set_code:
+        asked = await _resolve_target(guild_id, set_code)
+        if asked is not None:
+            return asked
+    return await _resolve_target(guild_id, None)
+
+
+def set_keyword(text: str) -> str | None:
+    """The set or cube named in `!pod DOM ...`, or None when the first word is not one. Only the first word
+    is read: everything after it is the caller's own message."""
+    words = text.split()
+    if not words:
+        return None
+    return pod_format.resolve_format_code(words[0])
 
 
 def live_lobby_targets(guild_id: str) -> list[RallyTarget]:
@@ -89,14 +93,16 @@ def live_lobby_targets(guild_id: str) -> list[RallyTarget]:
             continue
         seated = len(manager.player_session_users())
         url = thread_url(guild_id, manager.thread_id)
+        set_code = (manager.set_code or "").upper()
         if manager.drafting:
             targets.append(RallyTarget(
                 KIND_STARTED, manager.event_name, url, seated=seated, event_id=manager.event_id,
+                set_code=set_code,
             ))
             continue
         targets.append(RallyTarget(
             KIND_LOBBY, manager.event_name, url, seated=seated, session_id=manager.session_id,
-            event_id=manager.event_id,
+            event_id=manager.event_id, set_code=set_code,
         ))
     targets.sort(key=_recruitable_first)
     return targets
@@ -106,11 +112,12 @@ def forming_table_targets() -> list[RallyTarget]:
     """Every second table still collecting claims on its join card, closest to firing first. A claim card
     lives only in memory until it fires, so no DB-backed lookup here can see one."""
     targets = []
-    for view in ACTIVE_TABLE_VIEWS.values():
+    for source_event_id, view in ACTIVE_TABLE_VIEWS.items():
         if view.materialized or view.superseded or view.claim_message is None:
             continue
         targets.append(RallyTarget(
             KIND_TABLE, view.table_name, view.claim_message.jump_url, yes=len(view.claims),
+            set_code=_table_set_code(view, source_event_id),
         ))
     targets.sort(key=_most_claims_first)
     return targets
@@ -167,6 +174,29 @@ def message_url(guild_id: str, channel_id: str, message_id: str) -> str:
     return f"https://discord.com/channels/{guild_id}/{channel_id}/{message_id}"
 
 
+async def _resolve_target(guild_id: str, set_code: str | None) -> RallyTarget | None:
+    """Naming two pods asks the reader to choose instead of to fill a seat, so only the most recruitable is
+    posted: an open lobby with seats left, then a second table collecting claims, then a pod gathering for
+    later. A full lobby and a draft already running come last, so the pod that filled up never hides the
+    table its leftovers are trying to fire."""
+    live = _for_set(live_lobby_targets(guild_id), set_code)
+    if live and live[0].kind == KIND_LOBBY and not lobby_is_full(live[0]):
+        return live[0]
+    tables = _for_set(forming_table_targets(), set_code)
+    if tables:
+        return tables[0]
+    gathering = _for_set(await asyncio.to_thread(gathering_targets_sync, guild_id), set_code)
+    if gathering:
+        return gathering[0]
+    return live[0] if live else None
+
+
+def _for_set(targets: list[RallyTarget], set_code: str | None) -> list[RallyTarget]:
+    if not set_code:
+        return targets
+    return [target for target in targets if target.set_code == set_code]
+
+
 def _lobby_line(target: RallyTarget, aim: int) -> str:
     """An empty lobby drops the occupancy clause: `0 waiting` reads as a fault, and the seats needed
     already say the table is empty."""
@@ -197,11 +227,26 @@ def _most_claims_first(target: RallyTarget) -> int:
     return -target.yes
 
 
-def _soonest_first(target: RallyTarget) -> tuple[int, float]:
-    """A dated slot before an open-ended queue, and the earliest start first."""
-    if target.event_time is None:
-        return (1, 0.0)
-    return (0, target.event_time.timestamp())
+def _table_set_code(view, source_event_id: str) -> str:
+    """A second table's format, which it inherits from the pod it split off unless it was opened on another
+    one. A table has no event row until it fires, so the source manager is the only place to read it."""
+    if view.format_code:
+        return view.format_code.upper()
+    source = ACTIVE_POD_MANAGERS.get(source_event_id)
+    if source is None:
+        return ""
+    return (source.set_code or "").upper()
+
+
+def _soonest_first(target: RallyTarget) -> tuple[int, float, int, int]:
+    """A dated slot before an open-ended queue, the earliest start first, then between two pods starting at
+    the same time a pod still short of a table before one that already has one, and among those the fuller.
+    One slot offering two formats is the common case: the pod holding signups is the one a reader can fill,
+    but past a full table it has nothing left to ask for and would hide the pod that does."""
+    dated = 0 if target.event_time is not None else 1
+    start = target.event_time.timestamp() if target.event_time is not None else 0.0
+    short_of_a_table = 0 if target.yes < settings.pod_draft_target_players else 1
+    return (dated, start, short_of_a_table, -target.yes)
 
 
 def _pending_pod_targets_sync(guild_id: str, now: datetime) -> list[RallyTarget]:
@@ -209,7 +254,7 @@ def _pending_pod_targets_sync(guild_id: str, now: datetime) -> list[RallyTarget]
     few minutes late often enough that dropping it would blank the rally exactly when it is wanted."""
     with SessionLocal() as session:
         rows = session.execute(
-            select(PodDraftEvent.id, PodDraftEvent.name, PodDraftEvent.event_time)
+            select(PodDraftEvent.id, PodDraftEvent.name, PodDraftEvent.event_time, PodDraftEvent.set_code)
             .where(
                 PodDraftEvent.socket_status.in_(PENDING_STATUSES),
                 PodDraftEvent.event_time > now - LATE_GRACE,
@@ -217,7 +262,7 @@ def _pending_pod_targets_sync(guild_id: str, now: datetime) -> list[RallyTarget]
             .order_by(PodDraftEvent.event_time)
         ).all()
     targets = []
-    for event_id, name, event_time in rows:
+    for event_id, name, event_time, set_code in rows:
         card = pod_launch.pod_card_ref_sync(event_id)
         if card is None:
             continue
@@ -228,6 +273,7 @@ def _pending_pod_targets_sync(guild_id: str, now: datetime) -> list[RallyTarget]
             maybe=len(pod_launch.maybe_roster_for_event_sync(event_id)),
             event_time=event_time,
             event_id=event_id,
+            set_code=(set_code or "").upper(),
         ))
     return targets
 
@@ -237,8 +283,8 @@ def _signal_target(guild_id: str, signal: pod_launch.JoinableSignal) -> RallyTar
     url = message_url(guild_id, signal.channel_id, signal.message_id)
     if signal.kind == KIND_QUEUE or signal.slot_time is None:
         name = queue_display_name(set_code, datetime.now(SCHEDULE_TZ))
-        return RallyTarget(KIND_QUEUE_SIGNAL, name, url, yes=signal.count)
+        return RallyTarget(KIND_QUEUE_SIGNAL, name, url, yes=signal.count, set_code=set_code)
     return RallyTarget(
         KIND_GATHERING, pod_display_name(set_code, signal.slot_time), url,
-        yes=signal.count, event_time=signal.slot_time,
+        yes=signal.count, event_time=signal.slot_time, set_code=set_code,
     )
