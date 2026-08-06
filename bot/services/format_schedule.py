@@ -5,9 +5,8 @@ bot/tasks/format_schedule_post.py; the rendering builders are reused from bot/co
 
 Each pinned schedule is one filtered /event-scribe view living in a community channel (matched by a
 name substring). A channel can host more than one: the quick-or-flashback channel carries a separate
-Quick Draft pin and Flashback pin. Limited Competitive events route to the latest set's channel — the
-newest-created channel in the MTG Strategy category — which a rotation re-creates as the newest, so
-routing follows the set with no name match or config edit.
+Quick Draft pin and Flashback pin. Limited Competitive events route to the active set's channel, matched
+by name within the MTG Strategy category, so routing follows the rotation with no config edit.
 """
 from __future__ import annotations
 
@@ -43,8 +42,8 @@ class SchedulePin:
     scope (``None`` → the active set's name). ``announce_filters`` selects which start-today events get a
     callout — independent of the pin, so the set channel shows the full set but announces competitive
     only, and an announce-only channel (cube) keeps no pin at all. Routing is by ``channel_name``
-    substring, except the set pin leaves it ``None`` and sets ``category`` to follow the newest-created
-    channel there — the latest set's channel, which a rotation re-creates without a config edit.
+    substring, except the set pin leaves it ``None`` and sets ``category``, which resolves the active
+    set's own channel there so routing follows the rotation without a config edit.
     Pins are human-seeded and the bot only keeps them fresh; ``auto_pin`` would have it post and pin the
     schedule itself when none exists, off for every pin today and reserved for when that's wanted."""
     key: str

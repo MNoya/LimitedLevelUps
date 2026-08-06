@@ -151,6 +151,23 @@ def test_channel_for_set_matches_name_within_strategy_category():
     assert match.name == "secrets-of-strixhaven"
 
 
+def test_channel_for_set_ignores_a_newer_preview_season_channel():
+    """A mod creates the incoming set's channel weeks before it starts, so the newest channel in MTG
+    Strategy belongs to a set that has not released yet, not to the one currently running."""
+    strategy = _StubCategory(LATEST_SET_CATEGORY)
+    msh = next(seed for seed in ALL_SETS if seed.code == "MSH")
+    base = datetime(2026, 6, 8, tzinfo=timezone.utc)
+    channels = [
+        _StubChannel("🦸-marvel-super-heroes", strategy, base),
+        _StubChannel("🏔️-the-hobbit", strategy, base + timedelta(days=53)),
+    ]
+
+    match = channel_for_set(channels, msh, LATEST_SET_CATEGORY)
+
+    assert match.name == "🦸-marvel-super-heroes"
+    assert latest_channel_in_category(channels, LATEST_SET_CATEGORY).name == "🏔️-the-hobbit"
+
+
 class _TodoChannel:
     def __init__(self, channel_id, name):
         self.id = channel_id

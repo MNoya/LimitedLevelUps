@@ -35,7 +35,7 @@ async def setup(bot: commands.Bot) -> None:
         events = mtgscribe.load_events()
         emojis = {emoji.name: emoji for emoji in await ctx.bot.fetch_application_emojis()}
         for pin in SCHEDULE_PINS:
-            heading = f"#{pin.channel_name}" if pin.channel_name else f"newest in “{pin.category}”"
+            heading = f"#{pin.channel_name}" if pin.channel_name else f"active set in “{pin.category}”"
             await ctx.send(f"__**{heading}**__")
             if pin.maintain_pin:
                 in_progress, upcoming, scope = select_pin(events, pin)

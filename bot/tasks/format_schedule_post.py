@@ -45,7 +45,7 @@ from bot.services.format_schedule import (
     already_announced,
     announcement_format,
     archive_candidates,
-    latest_channel_in_category,
+    channel_for_set,
     newly_opened,
     next_rotation,
     previous_window_start,
@@ -282,10 +282,14 @@ def announce_groups(events: list, pin: SchedulePin) -> list:
 
 
 def _resolve_channel(guild: discord.Guild, pin: SchedulePin) -> discord.TextChannel | None:
+    """A category-routed pin follows the active set's own channel by name, never the newest channel in
+    the category: a mod creates the incoming set's channel during preview season, and newest-created
+    would hand the running set's pin and announcements to a set that has not started yet."""
     if pin.category is not None:
-        channel = latest_channel_in_category(guild.text_channels, pin.category)
+        seed = active_set_seed()
+        channel = channel_for_set(guild.text_channels, seed, pin.category)
         if channel is None:
-            log.info(f"format-schedule: no channel in category '{pin.category}' for {pin.key}")
+            log.info(f"format-schedule: no {seed.code} channel in category '{pin.category}' for {pin.key}")
         return channel
     for channel in guild.text_channels:
         if pin.channel_name in channel.name:
