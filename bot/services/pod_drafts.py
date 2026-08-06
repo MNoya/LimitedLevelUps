@@ -42,6 +42,8 @@ DM_KIND_SUBMIT_DECK_FINAL = "submit_deck_final"
 
 FINALIZED_STATUSES = ("draft_done", "complete")
 
+TOTAL_ROUNDS = 3
+
 BOT_USER_NAME = "DisChordBot"
 AI_BOT_NAME_RE = re.compile(r"^Bot #\d+$")
 
@@ -1597,8 +1599,9 @@ def capture_deck_screenshot(
     """Capture (or overwrite) a participant's deck screenshot. Returns event_id on capture.
 
     Gating:
-      - Picks must be done — tournament pods set current_round once pairings begin; mock pods never
-        run rounds, so draft completion (socket_status draft_done/complete) opens the slot instead.
+      - The final round must have started. Decks are asked for at round 3, and the images a thread
+        carries through rounds 1 and 2 are rarely decks. Mock pods never run rounds, so draft
+        completion (socket_status draft_done/complete) opens the slot for them instead.
       - A stored caption that already matches the record-pattern locks the slot; a new image with
         no record-pattern is ignored. A new image WITH a record-pattern overwrites unconditionally
         (latest-record-wins).
@@ -1629,11 +1632,14 @@ def capture_deck_screenshot(
         return None
     participant, event_id, kind, current_round, socket_status, championship_posted_at = row
     if kind == "mock":
-        picks_done = socket_status in ("draft_done", "complete")
+        deck_slot_open = socket_status in FINALIZED_STATUSES
     else:
-        picks_done = current_round is not None
-    if not picks_done:
-        log.info(f"[DECK] screenshot.too_early event={event_id} discord_id={discord_id} caption={caption!r}")
+        deck_slot_open = current_round is not None and current_round >= TOTAL_ROUNDS
+    if not deck_slot_open:
+        log.info(
+            f"[DECK] screenshot.too_early event={event_id} discord_id={discord_id} "
+            f"round={current_round} caption={caption!r}"
+        )
         return None
     new_has_record = caption_has_record_pattern(caption)
     existing_locked = caption_has_record_pattern(participant.deck_screenshot_caption)

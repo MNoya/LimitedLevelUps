@@ -1,6 +1,7 @@
 """Capture images a participant posts in a pod-draft thread → stash on participant row.
 
-Active from the moment Draftmancer picks finish (event.current_round becomes non-null).
+Active from the start of the final round, when the bot asks for decks. Images posted earlier are
+ignored.
 Last-image-wins, except a stored caption matching the record-pattern (e.g. "3-0", "2-1")
 locks the slot — only another record-pattern image can replace it. Once the championship
 has posted, participants with a deck on file are done: their later images are ignored

@@ -62,6 +62,7 @@ from bot.services.pod_drafts import (
     DM_KIND_SUBMIT_DECK_FINAL,
     FinalStanding,
     OwnMatch,
+    TOTAL_ROUNDS,
     has_arena_suffix,
     is_championship,
     normalize_player_name,
@@ -106,7 +107,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-TOTAL_ROUNDS = 3
 SELECT_CUSTOM_PREFIX = "podmatchresult"
 MAX_MATCHES_PER_ROUND = 5  # Discord caps ActionRows at 5; supports pods up to 10 players
 SKIPPED_SENTINEL = "(skipped)"  # winner_name value for "Not played" matches

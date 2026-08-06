@@ -643,6 +643,8 @@ def test_persist_round_entry_artifacts_dispatches_seats_then_decklists_by_round(
     "current_round, championship_posted, existing_url, existing_caption, new_caption, captured",
     [
         (None, False, None, None, None, False),
+        (1, False, None, None, None, False),
+        (2, False, "https://cdn.test/old.png", None, None, False),
         (3, False, None, None, None, True),
         (3, False, "https://cdn.test/old.png", None, None, True),
         (3, False, "https://cdn.test/old.png", "3-0 trophy", None, False),
@@ -652,7 +654,8 @@ def test_persist_round_entry_artifacts_dispatches_seats_then_decklists_by_round(
         (3, True, None, None, None, True),
     ],
     ids=[
-        "too-early", "first-capture", "last-wins", "record-locks-slot", "record-replaces-record",
+        "before-pairings", "round-1-ignored", "round-2-ignored",
+        "first-capture", "last-wins", "record-locks-slot", "record-replaces-record",
         "post-championship-ignored", "post-championship-record-overrides", "post-championship-fills-missing",
     ],
 )
