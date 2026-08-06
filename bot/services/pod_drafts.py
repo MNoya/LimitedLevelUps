@@ -27,7 +27,6 @@ from bot.models import (
 )
 from bot.services import pod_format
 from bot.services import pod_format_interest
-from bot.services import pod_signals
 from bot.services.pod_schedule import NUM_RE, highest_event_number
 from bot.services.pod_slot import next_collision_index, pod_display_name
 from bot.slug import disambiguate_slug, slugify
@@ -485,27 +484,6 @@ def event_member_interests_sync(event_id: str) -> tuple[tuple[str, ...], ...]:
             .order_by(PodSignalMember.created_at)
         ).scalars().all()
         return tuple(tuple(pod_format_interest.normalize(interest)) for interest in rows)
-
-
-def event_signal_crowd_sync(event_id: str) -> list[str]:
-    """Discord ids of everyone gathered on the signal that created this pod — Yes and Maybe alike,
-    since the pre-start window is exactly when a roster member may choose a second table's seat
-    instead. Empty for pods with no signal (sesh pods), which never carry a format tally."""
-    with SessionLocal() as session:
-        signal = session.execute(
-            select(PodSignal).where(PodSignal.event_id == event_id)
-        ).scalar_one_or_none()
-        if signal is None:
-            return []
-        rows = session.execute(
-            select(PodSignalMember.discord_user_id)
-            .where(
-                PodSignalMember.signal_id == signal.id,
-                PodSignalMember.rsvp.in_((pod_signals.RSVP_YES, pod_signals.RSVP_MAYBE)),
-            )
-            .order_by(PodSignalMember.created_at)
-        ).scalars().all()
-        return list(rows)
 
 
 def get_format_interests(session: Session, discord_id: str) -> list[str]:

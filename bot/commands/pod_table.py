@@ -6,11 +6,10 @@ new event, opens a Draftmancer lobby in a fresh thread, pings the claimers in, a
 ordinary tournament path. The claim list lives in memory on the view — a mid-gather restart just
 means re-running the command.
 
-A table can be preset to a different format than its source (`/pod-table format:` or the tally-driven
-offer wired through `set_format_table_hook`): the claim card carries the target set, and the
-materialized event is that format's own pod rather than a ` - Table N` of the source.
+`/pod-table format:` presets a table to a different format than its source: the claim card carries the
+target set, and the materialized event is that format's own pod rather than a ` - Table N` of the source.
 
-`build_table_view` is the single entry point the slash command, the tally offer, and the `!test
+`build_table_view` is the single entry point the slash command, the draft-start offer, and the `!test
 table` preview all call, so the claim card, materialize flow, and lobby copy never diverge.
 """
 from __future__ import annotations
@@ -38,7 +37,7 @@ from bot.commands.messages import (
     MSG_TABLE_SUPERSEDED,
     MSG_TABLE_UNKNOWN_EVENT,
 )
-from bot.commands.pod_rsvp import post_pod_card
+from bot.commands.pod_rsvp import add_members_to_thread, post_pod_card
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
@@ -47,7 +46,6 @@ from bot.services.pod_active import ACTIVE_POD_MANAGERS, ACTIVE_TABLE_VIEWS
 from bot.services.pod_roles import grant_pod_drafters
 from bot.services.pod_draft_manager import (
     discord_ids_for_names_sync,
-    set_format_table_hook,
     set_second_table_hook,
     start_manager,
 )
@@ -65,7 +63,6 @@ from bot.services.pod_slot import pod_display_name
 
 log = logging.getLogger(__name__)
 
-MSG_FORMAT_TABLE_OFFER = "🔥 **{format}** has enough votes for a second table. Click Join to fire it."
 MSG_TABLE_FORMAT_BUTTON = "Join {format} Table"
 MSG_TABLE_FORMAT_GOTO = "Go to {format} Table"
 
@@ -86,13 +83,25 @@ async def materialize_table(
     """Clone the source pod into a live table: new event row, thread, Draftmancer lobby. Pings the
     joiners to pull them into the thread, then starts the ordinary tournament manager, which posts the
     live lobby card with the join link. A `format_code` differing from the source materializes as that
-    format's own pod. Returns the created thread."""
+    format's own pod. Returns the created thread.
+
+    The source pod's whole Yes and Maybe roster joins the new thread, not only the claimers: the table is
+    the other half of the signup they already answered, and a player who has to go looking for the thread
+    is a player who misses the draft. Adding is silent, so it asks nothing of the ones already drafting.
+
+    The claimers are recorded on the manager: a table has no signal roster, so they are the only record
+    of who this pod belongs to until they open Draftmancer, and a follow-up offer off another pod reads
+    them to leave a player already committed here alone."""
     with SessionLocal() as session:
         event = record_table_event(session, source_event_id=source_event_id, format_code=format_code)
         event_id, session_id, event_name, set_code, event_time = (
             event.id, event.draftmancer_session, event.name, event.set_code, event.event_time,
         )
         session.commit()
+
+    source_manager = ACTIVE_POD_MANAGERS.get(source_event_id)
+    if source_manager is not None:
+        source_manager.table_event_ids.add(event_id)
 
     draftmancer_url = draftmancer_url_for(session_id)
     card = await post_pod_card(
@@ -120,9 +129,15 @@ async def materialize_table(
         bot, event_id, session_id, thread.id, set_code, len(claims),
         event_name=event_name, draftmancer_url=draftmancer_url,
     )
-    log.info(f"pod-table: materialized {event_name} event={event_id} session={session_id} joined={len(claims)}")
+    roster = await _signal_roster(source_event_id)
+    await add_members_to_thread(thread, roster)
+    log.info(
+        f"pod-table: materialized {event_name} event={event_id} session={session_id} "
+        f"joined={len(claims)} roster_added={len(roster)}"
+    )
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     if manager is not None:
+        manager.claimed_discord_ids = {str(user_id) for user_id in claims if user_id > 0}
         manager.arm_team_vote_offer(len(claims))
         if format_code:
             timer = pod_format.default_pick_timer_for(set_code)
@@ -282,43 +297,39 @@ async def offer_second_table(
     bot: commands.Bot, source_event_id: str, seated_ids: set[str],
 ) -> discord.Message | None:
     """Draft-start hook: once a pod locks its seats, offer whoever's left from the Yes and Maybe roster
-    a pre-pinged follow-up table. Leftovers are invited, not seated — they must click to claim. Posts
-    nothing unless a full table's worth is left over. Matching is by Discord id: `seated_ids` are the
-    players who made the first pod, so a signup already seated is dropped and never re-pinged.
+    a pre-pinged follow-up table. Leftovers are invited, not seated — they must click to claim. Matching
+    is by Discord id: `seated_ids` are the players who made the first pod.
 
-    A live format-preset offer hands its state over here: the fresh card keeps its set and its unseated
-    claims (the prior card is superseded by `activate`), and it posts regardless of leftover count — a
-    forming table keeps recruiting rather than dying because table 1 seated its crowd."""
-    format_code, carried = _format_offer_handoff(source_event_id, seated_ids)
-    candidates = await _second_table_candidates(source_event_id)
-    if not candidates and format_code is None:
+    Three things have to hold, or the pod says nothing at all. It needs a signup roster to draw from,
+    which a queue or poll pod has none of. It must not already have a table: a `/pod-table` card still
+    gathering is the table, and one that already fired is the table, so a second offer on top of either
+    only splits the players between two cards. And the leftovers, once everyone spoken for elsewhere is
+    taken out, still have to reach the table threshold."""
+    already_open = _existing_table(source_event_id)
+    if already_open is not None:
+        log.info(f"pod-table: no offer off {source_event_id}; {already_open}")
         return None
-    carried_ids = {str(user_id) for user_id, _ in carried}
+    candidates = await _signal_roster(source_event_id)
+    if not candidates:
+        return None
+    busy_ids = await _players_committed_elsewhere(source_event_id)
     leftovers: list[tuple[str, str]] = []
     seen: set[str] = set()
     for user_id, name in candidates:
-        if user_id in seated_ids or user_id in carried_ids or user_id in seen:
+        if user_id in seated_ids or user_id in busy_ids or user_id in seen:
             continue
         seen.add(user_id)
         leftovers.append((user_id, name))
-    if format_code is None and len(leftovers) < settings.pod_table_open_threshold:
+    if len(leftovers) < settings.pod_table_open_threshold:
         return None
     thread = await _source_thread(bot, source_event_id)
     if thread is None or thread.parent is None:
         return None
-    view = await build_table_view(
-        bot, source_event_id, lobby_channel=thread.parent,
-        preseeded_claims=carried, format_code=format_code,
-    )
+    view = await build_table_view(bot, source_event_id, lobby_channel=thread.parent)
     if view is None:
         return None
-    if format_code is not None:
-        offer_line = MSG_FORMAT_TABLE_OFFER.format(format=pod_format.format_display(format_code))
-    else:
-        offer_line = MSG_SECOND_TABLE_OFFER
-    ping = _ping_line(leftovers)
     message = await thread.send(
-        content=f"{ping}\n{offer_line}" if ping else offer_line,
+        content=f"{_ping_line(leftovers)}\n{MSG_SECOND_TABLE_OFFER}",
         embed=view.render_embed(), view=view,
         allowed_mentions=discord.AllowedMentions(users=True),
     )
@@ -326,20 +337,44 @@ async def offer_second_table(
     await view.activate()
     log.info(
         f"pod-table: offered second table off {source_event_id} to {len(leftovers)} leftover(s) "
-        f"format={format_code} carried={len(carried)}"
+        f"busy={len(busy_ids)}"
     )
     return message
 
 
-def _format_offer_handoff(source_event_id: str, seated_ids: set[str]) -> tuple[str | None, list[tuple[int, str]]]:
-    """(format_code, claims worth carrying) from a still-gathering format-preset offer, or (None, [])
-    when no such card is live. Claimers who ended up seated at table 1 are dropped — their claim was a
-    pre-start option they didn't take."""
-    prior = ACTIVE_TABLE_VIEWS.get(source_event_id)
-    if prior is None or prior.format_code is None or prior.materialized or prior.superseded:
-        return None, []
-    carried = [(user_id, name) for user_id, name in prior.claims.items() if str(user_id) not in seated_ids]
-    return prior.format_code, carried
+def _existing_table(source_event_id: str) -> str | None:
+    """Why this pod already has its table, or None when it has none. A table cloned off a source carries
+    no link back to it in the database, so a fired one is known from the source manager, which is alive
+    for as long as the draft-start hook that reads this."""
+    card = ACTIVE_TABLE_VIEWS.get(source_event_id)
+    if card is not None and not card.materialized and not card.superseded:
+        return "a join card is already gathering"
+    manager = ACTIVE_POD_MANAGERS.get(source_event_id)
+    if manager is not None and manager.table_event_ids:
+        return f"{len(manager.table_event_ids)} table(s) already fired off it"
+    return None
+
+
+async def _players_committed_elsewhere(source_event_id: str) -> set[str]:
+    """Discord ids already spoken for by another pod: sitting in its Draftmancer lobby, claimed onto a
+    table that has fired, or holding a seat on a join card still gathering. They answered this pod's
+    signup, but they are playing somewhere else now, so a follow-up table has nothing to ask them. Only
+    they are taken out: a busy pod next door does not stop a genuinely free group getting a table."""
+    seated_names: list[str] = []
+    ids: set[str] = set()
+    for event_id, manager in ACTIVE_POD_MANAGERS.items():
+        if event_id == source_event_id:
+            continue
+        seated_names.extend(manager.non_bot_session_names())
+        ids |= manager.claimed_discord_ids
+    for table_source, view in ACTIVE_TABLE_VIEWS.items():
+        if table_source == source_event_id or view.materialized or view.superseded:
+            continue
+        ids |= {str(user_id) for user_id in view.claims if user_id > 0}
+    if seated_names:
+        name_to_id = await asyncio.to_thread(discord_ids_for_names_sync, seated_names)
+        ids |= {discord_id for discord_id in name_to_id.values() if discord_id}
+    return ids
 
 
 def _ping_line(leftovers: list[tuple[str, str]]) -> str:
@@ -363,9 +398,9 @@ async def _source_thread(bot: commands.Bot, source_event_id: str) -> "discord.Th
     return thread if isinstance(thread, discord.Thread) else None
 
 
-async def _second_table_candidates(event_id: str) -> list[tuple[str, str]]:
-    """(discord_id, display_name) Yes-then-Maybe pool to offer a follow-up table to, off the signal roster."""
-    return await asyncio.to_thread(pod_launch.second_table_candidates_sync, event_id)
+async def _signal_roster(event_id: str) -> list[tuple[str, str]]:
+    """(discord_id, display_name) Yes-then-Maybe roster of the pod's signup card."""
+    return await asyncio.to_thread(pod_launch.yes_maybe_roster_sync, event_id)
 
 
 async def _second_table_hook(bot: commands.Bot, event_id: str) -> None:
@@ -378,28 +413,6 @@ async def _second_table_hook(bot: commands.Bot, event_id: str) -> None:
     name_to_id = await asyncio.to_thread(discord_ids_for_names_sync, manager.non_bot_session_names())
     seated_ids = {discord_id for discord_id in name_to_id.values() if discord_id}
     await offer_second_table(bot, event_id, seated_ids)
-
-
-async def _format_table_hook(bot: commands.Bot, event_id: str, code: str, supporter_ids: list[str]) -> None:
-    """Tally hook: the format vote shows `code` can seat a table without starving the main pod, so post
-    the preset claim card in the pod's thread while both tables still gather, pinging the supporters.
-    Fired at most once per pod — the manager guards re-entry."""
-    thread = await _source_thread(bot, event_id)
-    if thread is None or thread.parent is None:
-        return
-    view = await build_table_view(bot, event_id, lobby_channel=thread.parent, format_code=code)
-    if view is None:
-        return
-    offer_line = MSG_FORMAT_TABLE_OFFER.format(format=pod_format.format_display(code))
-    ping = " ".join(f"<@{user_id}>" if user_id.isdigit() else user_id for user_id in supporter_ids)
-    message = await thread.send(
-        content=f"{ping}\n{offer_line}" if ping else offer_line,
-        embed=view.render_embed(), view=view,
-        allowed_mentions=discord.AllowedMentions(users=True),
-    )
-    view.claim_message = message
-    await view.activate()
-    log.info(f"pod-table: offered format table {code} off {event_id} to {len(supporter_ids)} supporter(s)")
 
 
 class PodTable(commands.Cog):
@@ -487,5 +500,4 @@ class PodTable(commands.Cog):
 
 async def setup(bot: commands.Bot) -> None:
     set_second_table_hook(_second_table_hook)
-    set_format_table_hook(_format_table_hook)
     await bot.add_cog(PodTable(bot))

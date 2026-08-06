@@ -174,37 +174,6 @@ def schedule_team_vote_offer(scheduler, event_id: str, event_time: datetime) -> 
     log.info(f"scheduled team-vote offer for event {event_id} at {event_time.isoformat()}")
 
 
-FORMAT_SPLIT_SETTLE_LEAD_MIN = 5
-
-
-def schedule_format_split_assessment(scheduler, event_id: str, event_time: datetime) -> None:
-    """Arm the one-shot second-table (format split) decision a few minutes before start, so the split is
-    judged on the settled live format votes instead of firing the instant the poll opens at T-10 on stale
-    ranking pre-seeds. A past run time is skipped."""
-    now = datetime.now(timezone.utc)
-    run_at = event_time - timedelta(minutes=FORMAT_SPLIT_SETTLE_LEAD_MIN)
-    job_id = f"pod-formatsplit-{event_id}"
-    if run_at <= now or signal_format_locked_sync(event_id):
-        with contextlib.suppress(Exception):
-            scheduler.remove_job(job_id)
-        return
-    scheduler.add_job(
-        fire_format_split_assessment, "date", run_date=run_at,
-        args=[event_id], id=job_id, replace_existing=True,
-    )
-    log.info(f"scheduled format-split assessment for event {event_id} at {run_at.isoformat()}")
-
-
-async def fire_format_split_assessment(event_id: str) -> None:
-    """At the settle point, let the live manager decide whether the format vote now supports a second table.
-    No-op without a live manager; the assessment itself no-ops without an open poll or once drafting."""
-    manager = ACTIVE_POD_MANAGERS.get(event_id)
-    if manager is None:
-        log.info(f"fire_format_split_assessment: no live manager for {event_id}; skipping")
-        return
-    await manager.assess_format_split()
-
-
 async def fire_team_vote_offer(event_id: str) -> None:
     """At the scheduled start time, offer Team Draft when the lobby settled small and even (four to six
     players). The manager is already live from the T-10 lobby reminder; a full, odd, or empty lobby is

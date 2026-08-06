@@ -68,7 +68,6 @@ from bot.services.pod_slot import COLLISION_INDEX_RE, next_collision_index, pod_
 from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import (
     build_lobby_open_body,
-    schedule_format_split_assessment,
     schedule_roster_reminder,
     schedule_team_vote_offer,
     signal_rsvps_sync,
@@ -1629,10 +1628,10 @@ def seed_yes_members_sync(signal_id: str, members: list[tuple[str, str]]) -> Non
         session.commit()
 
 
-def second_table_candidates_sync(event_id: str) -> list[tuple[str, str]]:
-    """(discord_user_id, display_name) of the Yes then Maybe roster for the scheduled card that
-    created this pod, Yes first and each in join order — the pool to offer a follow-up table to once
-    the first pod locks its seats. Empty for poll/queue pods, which carry no standing roster."""
+def yes_maybe_roster_sync(event_id: str) -> list[tuple[str, str]]:
+    """(discord_user_id, display_name) of the Yes then Maybe roster for the scheduled card that created
+    this pod, Yes first and each in join order. Empty for poll/queue pods and for tables, which carry no
+    standing roster of their own."""
     with SessionLocal() as session:
         signal = session.execute(
             select(PodSignal).where(
@@ -1871,7 +1870,6 @@ async def launch_from_signal(
     else:
         _arm_open(bot, event_id, event_time)
         schedule_team_vote_offer(bot.pod_scheduler, event_id, event_time)
-        schedule_format_split_assessment(bot.pod_scheduler, event_id, event_time)
     return event_id
 
 
@@ -2001,7 +1999,6 @@ def arm_scheduled_pod_jobs(
     checks, and the roster reminder. Creation, /pod-postpone, and the startup sweep all arm here."""
     _arm_open(bot, event_id, event_time)
     schedule_team_vote_offer(bot.pod_scheduler, event_id, event_time)
-    schedule_format_split_assessment(bot.pod_scheduler, event_id, event_time)
     schedule_underfill_checks(bot.pod_scheduler, event_id, event_time, created_at)
     schedule_roster_reminder(bot.pod_scheduler, event_id, event_time)
 
@@ -2288,7 +2285,6 @@ def _rearm_open_if_pending(bot: commands.Bot, event_id: str, with_fill_jobs: boo
     else:
         _arm_open(bot, event_id, event_time)
         schedule_team_vote_offer(bot.pod_scheduler, event_id, event_time)
-        schedule_format_split_assessment(bot.pod_scheduler, event_id, event_time)
     return True
 
 

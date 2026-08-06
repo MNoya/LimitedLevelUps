@@ -1,5 +1,5 @@
-"""The pod voice channel as an offer players can act on: the message a thread posts once the lobby is half
-full, and the channel lookup every surface that names voice goes through.
+"""The pod voice channel as an offer players can act on: the message a thread posts when the draft ends,
+and the channel lookup every surface that names voice goes through.
 
 The link is a discord.gg invite because only an invite makes Discord draw its own join card, the one
 showing the avatars of whoever is already in the channel. It is a guest invite, matching what Discord's

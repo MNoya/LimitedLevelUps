@@ -723,7 +723,7 @@ async def post_scheduled_card(
     except discord.HTTPException:
         log.warning(f"could not post the registered embed in thread {thread.id}", exc_info=True)
 
-    await _add_members_to_thread(thread, preseed_yes)
+    await add_members_to_thread(thread, preseed_yes)
     pod_launch.arm_scheduled_pod_jobs(bot, event_id, event_time, created_at)
     log.info(f"posted scheduled pod card for {name} as message {message.id} (event {event_id})")
     await _refresh_launcher(bot, event_time)
@@ -752,8 +752,9 @@ def _lobby_open_status_line() -> str:
     return CARD_STATUS_LOBBY_OPEN.format(emoji=emojis.get("draftmancer"))
 
 
-async def _add_members_to_thread(thread: discord.Thread, members: list[tuple[str, str]]) -> None:
-    """Pull preseeded Yes players into the thread so coordination reaches them from the start."""
+async def add_members_to_thread(thread: discord.Thread, members: list[tuple[str, str]]) -> None:
+    """Pull a roster into a pod thread so coordination reaches them from the start. Adding is silent, so
+    it costs a member who is busy elsewhere nothing."""
     for user_id, _ in members:
         if not user_id.isdigit():
             continue

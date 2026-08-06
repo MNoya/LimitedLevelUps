@@ -70,8 +70,6 @@ None of this is binding. It is there so you can see whether the pod is going to 
 
 About 10 minutes before the start time, the bot opens the draft lobby on Draftmancer and posts the link in the thread. It can also send you the link by direct message. Open the link, set your name, and wait for the draft to begin.
 
-Once half the table is sitting in the lobby, the bot posts a link to the pod voice channel. The card under it shows who is already in there. Voice is optional and listening is fine.
-
 When enough players are in the lobby, anyone can start a ready check from the lobby card in the thread. The bot posts a card of its own carrying I'm Ready, Not Ready and Stop, and the Draftmancer prompt pops up at the same time. Answer on whichever is in front of you, it counts either way. The card shows who has answered and who has not, and the draft starts by itself the moment the last seat says I'm Ready. A full table of 8 starts as soon as everyone is ready.
 
 Not Ready is how you say wait for me: it marks your seat on the card and holds the start, and you can press I'm Ready once you are set. Stop calls the whole check off and is open to everyone, not only the organizer. The pinned lobby card keeps Force Start, which drafts without the players who never answered, behind a confirmation naming who gets left behind.
@@ -103,9 +101,15 @@ Written inside a pod's own thread, `!pod` does something else: it moves the lobb
 
 On busy nights, once the first table fills, the bot offers a **second table** to the players left over, so more people get to play. A second table plays the same format as the pod it comes from unless a mod picks another. A second table opens with 4 players, not 6, so a small group left over still gets a draft.
 
+The offer only comes when there is nothing there already. If a table is open, whether someone made it with `/pod-table` or it is drafting, the bot stays quiet and the table you already have is the table. Players who are sitting at another table are not counted and not invited, so a pod that fires never asks the people drafting next door to come fill one more seat. Once four free players are left over and nothing else has claimed them, the offer posts and pings exactly them. Anyone can open one more table at any time with `/pod-table`.
+
+When a second table opens, everyone who said Yes or Maybe on the pod it came from is added to its thread. You do not have to go looking for it: it is in your thread list with the draft link already in it.
+
 When a lobby sits at 4 players for a couple of minutes with nobody new arriving, and the pod's start time has already passed, the bot asks that lobby whether to play now as a Pick 2 Round Robin or keep waiting. It only asks on the sets being tried out for it, HOB and MSH to start with, and it never asks before the start time, since more players are still expected until then. All 4 have to agree, so Wait is not a verdict: the card stays open, you can change your vote, and someone who wanted to wait can move to Round Robin once it is clear nobody else is coming. The card also reminds you that `!pod` in another channel calls for more players. Once all 4 agree the pod switches to 2 picks per pack and round robin pairings, both still changeable in Settings. A ready check on a round robin pod does not warn about the short roster, since 4 is the point.
 
 ## After the draft
+
+The moment the draft ends, before the first pairings go up, the bot posts a link to the pod voice channel. The card under it shows who is already in there. Voice is optional and listening is fine.
 
 Report your results in the thread as you play. In an 8-player or 10-player pod each round also DMs you your pairing with the same dropdown. `/report-results` works anywhere, including in a DM with the bot, and pulls up a private card holding every match you still owe, so a missed DM never stops you from reporting. In a team draft all three of your matches are open from the moment the draft ends, so the card lists all three and you report whichever you played. A match whose players are still finishing an earlier round carries an hourglass and the round it waits on, so the board never reads as ready when only part of a round is. Winning games earns pod points on the leaderboard, so a good run in a pod moves you up the standings the same as a strong ladder result. Pod results are always public: you do not need to opt in, and playing pods is enough to appear on the board.
 

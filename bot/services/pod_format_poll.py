@@ -14,14 +14,12 @@ from __future__ import annotations
 
 import re
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from datetime import datetime
 
 import discord
 from discord import ui
 
 from bot import emojis
-from bot.config import settings
 from bot.discord_helpers import NBSP
 from bot.services import pod_format_interest as fi
 from bot.sets import active_set_code, set_name_for
@@ -243,75 +241,6 @@ def toggle_vote(votes: dict[str, list[str]], options: list[str], mention: str, c
         voters.remove(mention)
     else:
         voters.append(mention)
-
-
-@dataclass(frozen=True)
-class SecondTablePick:
-    """A concrete set whose tally support splits the gathered crowd into two viable tables.
-    ``flashback_team`` are the Discord ids to invite; ``latest_team`` is what table 1 keeps."""
-    code: str
-    latest_team: list[str]
-    flashback_team: list[str]
-    explicit_votes: int
-
-
-def voter_ids(votes: dict[str, list[str]]) -> dict[str, list[str]]:
-    """Each option's voters as bare Discord ids, from the mention strings the card tally carries."""
-    ids: dict[str, list[str]] = {}
-    for code, voters in votes.items():
-        ids[code] = [m.group(1) for m in (_MENTION_RE.match(voter) for voter in voters) if m]
-    return ids
-
-
-def pick_second_table(
-    options: list[str], votes: dict[str, list[str]], crowd: list[str], latest_code: str,
-) -> SecondTablePick | None:
-    """The concrete set that has earned a second-table offer right now, or None. Candidates are every
-    non-latest concrete option; the gathered crowd (roster plus every voter) is split per candidate by
-    ``format_teams`` — a vote for the candidate anchors its table, a Latest vote anchors table 1, both
-    reads as flexible, Any Flashback balances the thinner side, and non-voters ride with table 1. A
-    candidate qualifies only when both teams reach the fire threshold, so the offer never cannibalizes
-    table 1. The most explicitly voted qualifier wins, ties going to card order."""
-    ids = voter_ids(votes)
-    members = list(dict.fromkeys([*crowd, *(vid for voters in ids.values() for vid in voters)]))
-    flash_voters = set(ids.get(ANY_FLASHBACK_CODE) or [])
-    latest_voters = set(ids.get(latest_code) or [])
-    threshold = settings.pod_signal_fire_threshold
-    best: SecondTablePick | None = None
-    for code in options:
-        if code == latest_code or code == ANY_FLASHBACK_CODE:
-            continue
-        candidate_voters = set(ids.get(code) or [])
-        if not candidate_voters:
-            continue
-        pairs = [
-            (member, _tally_interests(member, candidate_voters, latest_voters, flash_voters))
-            for member in members
-        ]
-        latest_team, flashback_team = fi.format_teams(pairs)
-        if len(latest_team) < threshold or len(flashback_team) < threshold:
-            continue
-        if best is None or len(candidate_voters) > best.explicit_votes:
-            best = SecondTablePick(code, latest_team, flashback_team, len(candidate_voters))
-    return best
-
-
-def _tally_interests(
-    member: str, candidate_voters: set[str], latest_voters: set[str], flash_voters: set[str],
-) -> list[str]:
-    """One crowd member's votes translated into the format_teams interest vocabulary, relative to the
-    candidate set under evaluation."""
-    voted_candidate = member in candidate_voters
-    voted_latest = member in latest_voters
-    if voted_candidate and voted_latest:
-        return [fi.LATEST, fi.FLASHBACK]
-    if voted_candidate:
-        return [fi.FLASHBACK]
-    if member in flash_voters:
-        return [fi.LATEST, fi.FLASHBACK]
-    if voted_latest:
-        return [fi.LATEST]
-    return []
 
 
 async def find_format_poll_card(channel: discord.abc.Messageable, poll_id: str) -> discord.Message | None:

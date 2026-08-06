@@ -2,70 +2,70 @@ import asyncio
 from types import SimpleNamespace
 
 import discord
+import pytest
 
 from bot.config import settings
 from bot.services.pod_draft_manager import PodDraftManager
 
 
-def test_posts_voice_link_once_at_half_table():
-    mgr = _manager()
-    channel = _Channel(settings.pod_draft_voice_channel_name)
-    thread = _thread([channel])
+def test_posts_voice_link_once():
+    mgr, thread, channel = _manager()
 
-    asyncio.run(mgr._maybe_post_voice_link(_classified(4), thread))
-    asyncio.run(mgr._maybe_post_voice_link(_classified(6), thread))
+    asyncio.run(mgr.post_voice_offer())
+    asyncio.run(mgr.post_voice_offer())
 
     assert len(thread.sent) == 1
     assert channel.invite_url in thread.sent[0]
 
 
-def test_voice_link_falls_back_to_a_plain_invite_without_guest_invites():
-    mgr = _manager()
-    channel = _Channel(settings.pod_draft_voice_channel_name, guest_invites=False)
-    thread = _thread([channel])
+@pytest.mark.parametrize("guest_invites, can_invite, expected_url", [
+    (True, True, "invite_url"),
+    (False, True, "plain_invite_url"),
+    (True, False, "jump_url"),
+])
+def test_voice_link_falls_back_by_invite_permission(guest_invites, can_invite, expected_url):
+    mgr, thread, channel = _manager(guest_invites=guest_invites, can_invite=can_invite)
 
-    asyncio.run(mgr._maybe_post_voice_link(_classified(4), thread))
-
-    assert len(thread.sent) == 1
-    assert channel.plain_invite_url in thread.sent[0]
-
-
-def test_voice_link_falls_back_to_the_jump_url_without_invite_permission():
-    mgr = _manager()
-    channel = _Channel(settings.pod_draft_voice_channel_name, can_invite=False)
-    thread = _thread([channel])
-
-    asyncio.run(mgr._maybe_post_voice_link(_classified(4), thread))
+    asyncio.run(mgr.post_voice_offer())
 
     assert len(thread.sent) == 1
-    assert channel.jump_url in thread.sent[0]
-
-
-def test_no_voice_link_below_half():
-    mgr = _manager()
-    thread = _thread([_Channel(settings.pod_draft_voice_channel_name)])
-
-    asyncio.run(mgr._maybe_post_voice_link(_classified(3), thread))
-
-    assert thread.sent == []
+    assert getattr(channel, expected_url) in thread.sent[0]
 
 
 def test_voice_link_skips_and_latches_when_channel_absent():
-    mgr = _manager()
-    thread = _thread([])
+    mgr, thread, _ = _manager(voice_channel=False)
 
-    asyncio.run(mgr._maybe_post_voice_link(_classified(4), thread))
+    asyncio.run(mgr.post_voice_offer())
 
     assert thread.sent == []
     assert mgr._voice_link_posted is True
 
 
-def _manager() -> PodDraftManager:
-    return PodDraftManager(object(), "evt", "sid", 123, "SOS", 8)
+def test_voice_offer_posts_after_the_draft_ends():
+    mgr, thread, _ = _manager()
+    mgr.drafting = False
+    mgr.draft_complete = True
+
+    asyncio.run(mgr.post_voice_offer())
+
+    assert len(thread.sent) == 1
 
 
-def _classified(n: int) -> list[tuple[str, str]]:
-    return [(f"a{i}", f"d{i}") for i in range(n)]
+def _manager(
+    *, voice_channel: bool = True, can_invite: bool = True, guest_invites: bool = True,
+) -> tuple[PodDraftManager, "_Thread", "_Channel | None"]:
+    channel = (
+        _Channel(settings.pod_draft_voice_channel_name, can_invite=can_invite, guest_invites=guest_invites)
+        if voice_channel else None
+    )
+    thread = _Thread(_Guild([channel] if channel else []))
+    mgr = PodDraftManager(object(), "evt", "sid", 123, "SOS", 8)
+    mgr._fetch_thread = lambda: _resolved(thread)
+    return mgr, thread, channel
+
+
+async def _resolved(value):
+    return value
 
 
 class _Channel:
@@ -103,7 +103,3 @@ class _Thread:
 class _ForbiddenResponse:
     status = 403
     reason = "Forbidden"
-
-
-def _thread(voice_channels: list) -> _Thread:
-    return _Thread(_Guild(voice_channels))
