@@ -30,7 +30,6 @@ from bot.commands.set_awards import (
     build_data,
     build_my_awards_view,
     build_set_awards_view,
-    reveal_set_awards,
 )
 from bot.commands.test_group import test_group
 from bot.services import set_awards as awards_svc
@@ -176,17 +175,9 @@ async def setup(bot: commands.Bot) -> None:
 
     @test_group.command(name="setawards")
     @commands.is_owner()
-    async def test_set_awards(ctx: commands.Context, mode: str = "") -> None:
-        """Owner-only. Post the fixture-backed Set Awards sample in this channel.
-
-        `!test setawards gated` plays the timed one-award-per-edit reveal instead of the full post.
-        """
-        fixture = _set_awards_fixture(ctx.guild)
-        if mode == "gated":
-            ceremony = await ctx.send(view=build_set_awards_view(fixture, reveal=0))
-            await reveal_set_awards(ceremony, fixture)
-            return
-        await ctx.send(view=build_set_awards_view(fixture))
+    async def test_set_awards(ctx: commands.Context) -> None:
+        """Owner-only. Post the fixture-backed Set Awards sample in this channel."""
+        await ctx.send(view=build_set_awards_view(_set_awards_fixture(ctx.guild)))
 
     @test_group.command(name="myset")
     @commands.is_owner()

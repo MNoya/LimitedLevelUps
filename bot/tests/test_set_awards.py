@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
 
-from bot.models import DraftEvent
-from bot.services import set_awards as sa
+import pytest
+
+from bot.commands.test_group import HALL_OF_FAME
+from bot.models import DraftEvent, Player
+from bot.services import ping_roles, set_awards as sa
 
 
 def _event(account_id, start_rank, end_rank, day):
@@ -44,3 +47,45 @@ def test_lower_start_tier_always_outranks_a_faster_higher_start():
     fast_platinum = sa._climb_score(sa.RANK_TIERS.index("Platinum"), 0)
 
     assert slow_gold > fast_platinum
+
+
+def _trophy(fmt, hour, minute=0):
+    when = datetime(2026, 6, 27, hour, minute, tzinfo=timezone.utc)
+    return DraftEvent(format=fmt, is_trophy=True, started_at=when, finished_at=when)
+
+
+def _drafter(name, events):
+    return sa.PlayerCtx(player=Player(discord_id=str(abs(hash(name)) % 10**17), display_name=name), events=events)
+
+
+def test_a_quick_spree_loses_to_a_smaller_premier_run():
+    grinder, sniper = HALL_OF_FAME[0], HALL_OF_FAME[1]
+    ctxs = [
+        _drafter(grinder, [_trophy("PickTwoDraft", 1, m) for m in range(8)]),
+        _drafter(sniper, [_trophy("PremierDraft", 1, m) for m in range(7)]),
+    ]
+
+    ranked = sa.seize_the_day(ctxs)
+
+    assert [c.display_name for c in ranked] == [sniper, grinder]
+
+
+def test_two_quick_trophies_still_qualify_despite_weighing_under_two():
+    ctxs = [_drafter(HALL_OF_FAME[2], [_trophy("QuickDraft", 1), _trophy("QuickDraft", 2)])]
+
+    ranked = sa.seize_the_day(ctxs)
+
+    assert len(ranked) == 1
+
+
+@pytest.mark.parametrize("holders,winner,expected_out,expected_in", [
+    ({}, "111", [], "111"),
+    ({"111": object()}, "111", [], None),
+    ({"222": object(), "333": object()}, "111", ["222", "333"], "111"),
+    ({"222": object()}, None, [], None),
+])
+def test_award_role_swap_plan(holders, winner, expected_out, expected_in):
+    outgoing, incoming = ping_roles.plan_award_role_swap(holders, winner)
+
+    assert outgoing == expected_out
+    assert incoming == expected_in

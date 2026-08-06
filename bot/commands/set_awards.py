@@ -6,7 +6,6 @@ Presentation is decoupled from data: `build_set_awards_view` renders a `SetAward
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -23,7 +22,7 @@ from bot.commands.messages import MSG_ADMIN_ONLY
 from bot.database import SessionLocal
 from bot.discord_helpers import NBSP, ZWSP
 from bot.models import MagicSet, Player
-from bot.services import set_awards as awards_svc
+from bot.services import ping_roles, set_awards as awards_svc
 from bot.sets import ALL_SETS, active_set_code
 
 log = logging.getLogger(__name__)
@@ -40,12 +39,9 @@ MSG_JOINED_NO_EVENTS = (
 GAP = NBSP * 2
 SUBTEXT_START = f"-# {ZWSP}"
 MISS_START = f"{SUBTEXT_START}{GAP}"
-REVEAL_DELAY_SECONDS = 5
-
-SUSPENSE_COUNTING = "Tallying the season…"
-SUSPENSE_UP_NEXT = "Up Next…"
-SUSPENSE_FINAL = "Final Award…"
-
+MODE_LIVE = "live"
+MODE_DRY = "dry"
+MSG_DRY_RUN_POSTED = "🏆 Posted {count} awards as a dry run: nobody was pinged, no roles moved, nothing pinned."
 SITE_LEADERBOARD_URL = "https://limitedlevelups.com/leaderboard"
 LEADERBOARD_NOTE = f"`/join` to enter · [limitedlevelups.com/leaderboard]({SITE_LEADERBOARD_URL})"
 
@@ -94,7 +90,7 @@ AWARD_SPECS: tuple[AwardSpec, ...] = (
     AwardSpec("first_striker", "⚔️", "First Striker", "First trophy of the set",
               connector="", you_verb="trophied",
               miss="No trophy this set"),
-    AwardSpec("seize_the_day", "☀️", "Seize the Day", "Most trophies in 24 hours",
+    AwardSpec("seize_the_day", "🔥", "Seize the Day", "Most trophies in 24 hours",
               connector="claimed", you_verb="claimed",
               miss="No multi-trophy day this set"),
     AwardSpec("climber", "🧗", "The Climber", "Fastest ladder grind in a single month",
@@ -112,9 +108,7 @@ AWARD_SPECS: tuple[AwardSpec, ...] = (
 )
 
 
-def build_set_awards_view(data: SetAwardsData, reveal: int | None = None) -> ui.LayoutView:
-    """Render the ceremony; `reveal=N` shows only the first N awards with a drumroll line,
-    `reveal=None` shows every award as the final post."""
+def build_set_awards_view(data: SetAwardsData) -> ui.LayoutView:
     view = ui.LayoutView(timeout=None)
     container = ui.Container(accent_colour=discord.Color.green())
 
@@ -123,35 +117,17 @@ def build_set_awards_view(data: SetAwardsData, reveal: int | None = None) -> ui.
     ))
     container.add_item(ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
-    shown = data.awards if reveal is None else data.awards[:reveal]
-    for i, award in enumerate(shown):
+    for i, award in enumerate(data.awards):
         container.add_item(ui.Section(
             ui.TextDisplay(_award_text(award)),
             accessory=ui.Thumbnail(media=award.thumbnail_url),
         ))
-        if i < len(shown) - 1:
+        if i < len(data.awards) - 1:
             container.add_item(ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
-
-    if reveal is not None:
-        if shown:
-            container.add_item(ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
-        container.add_item(ui.TextDisplay(f"{SUBTEXT_START}🥁{GAP}{_suspense_line(reveal, len(data.awards))}"))
 
     view.add_item(container)
-    if reveal is None:
-        view.add_item(_my_awards_action_row())
+    view.add_item(_my_awards_action_row())
     return view
-
-
-async def reveal_set_awards(
-    message: discord.Message, data: SetAwardsData, allowed_mentions: discord.AllowedMentions | None = None,
-) -> None:
-    extra = {"allowed_mentions": allowed_mentions} if allowed_mentions is not None else {}
-    for shown in range(1, len(data.awards) + 1):
-        await asyncio.sleep(REVEAL_DELAY_SECONDS)
-        await message.edit(view=build_set_awards_view(data, reveal=shown), **extra)
-    await asyncio.sleep(REVEAL_DELAY_SECONDS)
-    await message.edit(view=build_set_awards_view(data), **extra)
 
 
 def _award_text(award: SetAward) -> str:
@@ -169,14 +145,6 @@ def _award_text(award: SetAward) -> str:
         )
         lines.append(f"{GAP}{runners}")
     return "\n".join(lines)
-
-
-def _suspense_line(reveal: int, total: int) -> str:
-    if reveal == 0:
-        return SUSPENSE_COUNTING
-    if reveal < total:
-        return SUSPENSE_UP_NEXT
-    return SUSPENSE_FINAL
 
 
 def build_my_awards_view(
@@ -320,9 +288,16 @@ class SetAwards(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="set-awards", description=desc.SET_AWARDS)
+    @app_commands.describe(mode=desc.SET_AWARDS_MODE)
+    @app_commands.choices(mode=[
+        app_commands.Choice(name="Dry Run", value=MODE_DRY),
+        app_commands.Choice(name="Live", value=MODE_LIVE),
+    ])
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
-    async def set_awards(self, interaction: discord.Interaction) -> None:
+    async def set_awards(
+        self, interaction: discord.Interaction, mode: app_commands.Choice[str] | None = None,
+    ) -> None:
         if not await self.bot.is_owner(interaction.user):
             await interaction.response.send_message(MSG_ADMIN_ONLY, ephemeral=True)
             return
@@ -332,54 +307,61 @@ class SetAwards(commands.Cog):
             await interaction.response.send_message("There's no active set right now.", ephemeral=True)
             return
 
+        dry = mode is None or mode.value == MODE_DRY
         await interaction.response.defer(ephemeral=True)
-        count = await run_set_awards_ceremony(interaction.channel, interaction.guild, code, seed)
+        count = await run_set_awards_ceremony(interaction.channel, interaction.guild, code, seed, dry=dry)
         if count is None:
             await interaction.followup.send("No awards could be computed for this set.", ephemeral=True)
             return
-        suffix = " (in a thread, pings suppressed)" if isinstance(interaction.channel, discord.Thread) else ""
-        await interaction.followup.send(f"🏆 Posted {count} awards.{suffix}", ephemeral=True)
+        if dry:
+            note = MSG_DRY_RUN_POSTED.format(count=count)
+        else:
+            suffix = " (in a thread, pings suppressed)" if isinstance(interaction.channel, discord.Thread) else ""
+            note = f"🏆 Posted {count} awards.{suffix}"
+        await interaction.followup.send(note, ephemeral=True)
 
 
 async def run_set_awards_ceremony(
-    channel: discord.abc.Messageable, guild: discord.Guild | None, code: str, seed,
+    channel: discord.abc.Messageable, guild: discord.Guild | None, code: str, seed, *, dry: bool,
 ) -> int | None:
-    """Post the ceremony into ``channel``: an empty placeholder while the payload computes, then the
-    timed reveal. Winners are pinged outside a thread, suppressed inside one. Returns the award count,
-    or None when nothing could be computed (the placeholder is removed). Shared by ``/set-awards`` and
-    the scheduled day-before ceremony so both render one way."""
-    in_thread = isinstance(channel, discord.Thread)
-    empty = SetAwardsData(code, _window_label(seed), ())
-    ceremony = await channel.send(
-        view=build_set_awards_view(empty, reveal=0), allowed_mentions=discord.AllowedMentions.none(),
-    )
+    """Post the whole ceremony into ``channel`` in one message. Winners are pinged outside a thread,
+    suppressed inside one; the mentions have to ride the initial send, because Discord raises no
+    notification for a mention introduced by editing a message. Returns the award count, or None when
+    nothing could be computed. Shared by ``/set-awards`` and the scheduled day-before ceremony so both
+    render one way.
 
+    ``dry`` renders the identical card but leaves the world untouched: no ping, no role handover, and no
+    pin, the last because the pin is the marker next set's warning links back to as that set's ceremony.
+    It has no default and is keyword-only on purpose: ``/set-awards`` defaults to a dry run while the
+    scheduled ceremony must always be live, so every caller states which one it wants.
+    """
+    in_thread = isinstance(channel, discord.Thread)
     with SessionLocal() as session:
         mset = session.execute(select(MagicSet).where(MagicSet.code == code)).scalar_one_or_none()
         if mset is None:
-            await ceremony.delete()
             return None
         ranked = awards_svc.compute_db_awards(session, mset, seed)
 
     winners, runners = awards_svc.assign(ranked)
     data = build_data(code, seed, winners, runners, guild, mention=not in_thread)
     if not data.awards:
-        await ceremony.delete()
         return None
 
-    if in_thread:
+    if in_thread or dry:
         allowed = discord.AllowedMentions.none()
     else:
         ping_ids = _ping_ids(winners, runners)
         allowed = discord.AllowedMentions(users=[discord.Object(id=uid) for uid in ping_ids])
-    await reveal_set_awards(ceremony, data, allowed_mentions=allowed)
-    await _pin_ceremony(ceremony)
+    ceremony = await channel.send(view=build_set_awards_view(data), allowed_mentions=allowed)
+    if not dry:
+        await _pin_ceremony(ceremony)
+        await ping_roles.apply_award_roles(guild, {key: cand.discord_id for key, cand in winners.items()})
 
     audit.event(
         "set_awards_posted", set_code=code, awards=len(data.awards),
-        in_thread=in_thread, channel_id=str(channel.id),
+        in_thread=in_thread, dry=dry, channel_id=str(channel.id),
     )
-    log.info(f"set awards posted for {code}: {len(data.awards)} awards (thread={in_thread})")
+    log.info(f"set awards posted for {code}: {len(data.awards)} awards (thread={in_thread}, dry={dry})")
     return len(data.awards)
 
 

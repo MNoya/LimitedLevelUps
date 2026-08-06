@@ -21,7 +21,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bot.models import DraftEvent, MagicSet, Player, PlayerStats, PodDraftEvent, PodDraftParticipant
-from bot.scoring import ARENA_DIRECT_SEALED_FORMAT, boxes_for_event, compute_score_breakdown
+from bot.scoring import (
+    ARENA_DIRECT_SEALED_FORMAT,
+    DEFAULT_QUEUE_GROUPS,
+    boxes_for_event,
+    compute_score_breakdown,
+)
 from bot.sets import SetSeed, release_instant
 
 ET = ZoneInfo("America/New_York")
@@ -29,6 +34,12 @@ RANK_TIERS = ("Bronze", "Silver", "Gold", "Platinum", "Diamond", "Mythic")
 MYTHIC_INDEX = RANK_TIERS.index("Mythic")
 CLIMB_TIER_WEIGHT = 100
 BO1_FORMATS = frozenset({"PremierDraft", "QuickDraft"})
+
+QUICK_GROUP_LABEL = "Quick"
+QUICK_TROPHY_WEIGHT = 0.75
+QUICK_FORMATS = frozenset(
+    fmt for group in DEFAULT_QUEUE_GROUPS if group.label == QUICK_GROUP_LABEL for fmt in group.formats
+)
 
 MIN_ARCHETYPE_GAMES = 20
 MIN_COMMUNITY_GAMES = 40
@@ -345,22 +356,31 @@ def first_striker(ctxs: list[PlayerCtx], seed: SetSeed) -> list[AwardCandidate]:
 
 
 def seize_the_day(ctxs: list[PlayerCtx]) -> list[AwardCandidate]:
+    """Ranked on the weighted 24h run, displayed as the plain trophy count: Quick queues trophy far more
+    often than Premier, so an unweighted count handed the award to whoever ground the most Pick Two."""
     scored = []
     for c in ctxs:
-        times = sorted(e.finished_at for e in c.events if e.is_trophy and e.finished_at is not None)
-        best, when = _max_within_24h(times)
-        if best >= 2:
-            scored.append((best, when, c))
-    scored.sort(key=lambda t: (t[0], _neg(t[2].tiebreak)), reverse=True)
+        trophies = sorted(
+            (e.finished_at, trophy_weight(e.format))
+            for e in c.events if e.is_trophy and e.finished_at is not None
+        )
+        weighted, count, when = _best_24h_window(trophies)
+        if count >= 2:
+            scored.append((weighted, count, when, c))
+    scored.sort(key=lambda t: (t[0], _neg(t[3].tiebreak)), reverse=True)
     result = []
-    for n, when, c in scored:
+    for weighted, count, when, c in scored:
         result.append(c.candidate(
-            seize_detail(n, when),
-            n,
-            ceremony_detail=seize_ceremony_detail(n, when),
+            seize_detail(count, when),
+            weighted,
+            ceremony_detail=seize_ceremony_detail(count, when),
             when=when,
         ))
     return result
+
+
+def trophy_weight(fmt: str | None) -> float:
+    return QUICK_TROPHY_WEIGHT if fmt in QUICK_FORMATS else 1.0
 
 
 def _climb_score(floor_index: int, days: int) -> int:
@@ -455,17 +475,23 @@ def _neg(tiebreak: tuple[float, float, float]) -> tuple[float, float, float]:
     return (-tiebreak[0], -tiebreak[1], -tiebreak[2])
 
 
-def _max_within_24h(times: list[datetime]) -> tuple[int, datetime | None]:
-    best = 0
+def _best_24h_window(trophies: list[tuple[datetime, float]]) -> tuple[float, int, datetime | None]:
+    """Heaviest 24h run over `(finished_at, weight)` pairs sorted by time: its weighted total, how many
+    trophies it holds, and when it opens."""
+    best = 0.0
+    best_count = 0
     best_start = None
-    for i, start in enumerate(times):
+    for i, (start, _) in enumerate(trophies):
         j = i
-        while j < len(times) and times[j] - start <= timedelta(hours=24):
+        total = 0.0
+        while j < len(trophies) and trophies[j][0] - start <= timedelta(hours=24):
+            total += trophies[j][1]
             j += 1
-        if j - i > best:
-            best = j - i
+        if total > best:
+            best = total
+            best_count = j - i
             best_start = start
-    return best, best_start
+    return best, best_count, best_start
 
 
 def _best_mythic_climb(c: PlayerCtx) -> tuple[int, int, str] | None:

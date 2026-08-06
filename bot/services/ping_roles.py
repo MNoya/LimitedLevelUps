@@ -9,6 +9,11 @@ when a name moves to `aliases`. To rename a role, set the new `name` and list th
 `MANAGED_ROLES` are bot-kept roles the same reconcile keeps present and correctly colored, but which
 are never offered in the self-serve menu nor pushed below the Pod Drafters umbrella — their color is
 meant to show on the wearer's name (the Set Champion award).
+
+`AWARD_ROLES` are the six Set Awards, folded into `MANAGED_ROLES` as the one exception to that: they
+carry a unicode icon and deliberately no color, because Discord resolves name color from the highest
+role that sets one and skips colorless roles entirely. That is what lets a winner wear the award glyph
+without losing the color they already had. `apply_award_roles` hands them over each ceremony.
 """
 from __future__ import annotations
 
@@ -130,8 +135,26 @@ PING_ROLES: tuple[PingRole, ...] = (
 @dataclass(frozen=True)
 class ManagedRole:
     name: str
-    color: str
+    color: str | None = None
     aliases: tuple[str, ...] = ()
+    unicode_emoji: str | None = None
+
+
+@dataclass(frozen=True)
+class AwardRole:
+    key: str
+    name: str
+    icon: str
+
+
+AWARD_ROLES: tuple[AwardRole, ...] = (
+    AwardRole("first_striker", "First Striker", "⚔️"),
+    AwardRole("seize_the_day", "Seize the Day", "🔥"),
+    AwardRole("climber", "The Climber", "🧗"),
+    AwardRole("specialist", "The Specialist", "🎯"),
+    AwardRole("revel_in_riches", "Revel in Riches", "💎"),
+    AwardRole("mvp", "Most Valuable Pod-Drafter", "🚀"),
+)
 
 
 SET_CHAMPION_ROLE_NAME = "Set Champion"
@@ -150,7 +173,7 @@ MANAGED_ROLES: tuple[ManagedRole, ...] = (
     ManagedRole(ORGANIZER_ROLE_NAME, "#4CD4A9"),
     ManagedRole(TOP_P0P1_CHALLENGER_ROLE_NAME, P0P1_COLOR),
     ManagedRole(REMINDER_ROLE_NAME, REMINDER_COLOR, aliases=("P0P1 Reminder",)),
-)
+) + tuple(ManagedRole(spec.name, unicode_emoji=spec.icon) for spec in AWARD_ROLES)
 
 
 def organizer_mention(guild: discord.Guild | None) -> str:
@@ -783,6 +806,63 @@ async def _step_down_champion(
         log.warning(f"could not step {member} down from {champion_role.name!r}", exc_info=True)
 
 
+async def apply_award_roles(guild: discord.Guild | None, winners: dict[str, str | None]) -> None:
+    """Hand each Set Awards role to this set's winner and take it from whoever held it before.
+
+    The roles carry an icon and no color, so the winner shows the award glyph and keeps whatever name color
+    they already had. Missing roles are created here rather than waited on, so a ceremony never has to land
+    after a reconcile to hand anything over. A category with no winner is left untouched: the ceremony is
+    re-runnable mid-set, and a category that has not been earned yet must not strip the previous holder.
+    """
+    if guild is None:
+        return
+    for spec in AWARD_ROLES:
+        await _ensure_managed_role(guild, ManagedRole(spec.name, unicode_emoji=spec.icon))
+        role = find_role(guild, spec.name)
+        if role is None:
+            log.warning(f"no {spec.name!r} role in {guild.name}, award not handed over")
+            continue
+        holders = {str(member.id): member for member in role.members}
+        outgoing, incoming = plan_award_role_swap(holders, winners.get(spec.key))
+        for user_id in outgoing:
+            await _drop_award_role(holders[user_id], role)
+        if incoming is None:
+            continue
+        member = guild.get_member(int(incoming))
+        if member is None:
+            log.info(f"award winner {incoming} is not in {guild.name}, {spec.name!r} not granted")
+            continue
+        await _grant_award_role(member, role)
+
+
+def plan_award_role_swap(
+    holders: dict[str, discord.Member], winner_id: str | None,
+) -> tuple[list[str], str | None]:
+    """Who loses the role and who gains it. A winner already holding it produces no edits, so re-running the
+    ceremony is free."""
+    if winner_id is None:
+        return [], None
+    outgoing = sorted(user_id for user_id in holders if user_id != winner_id)
+    incoming = None if winner_id in holders else winner_id
+    return outgoing, incoming
+
+
+async def _grant_award_role(member: discord.Member, role: discord.Role) -> None:
+    try:
+        await member.add_roles(role, reason="set award won")
+        log.info(f"granted {role.name!r} to {member}")
+    except discord.HTTPException:
+        log.warning(f"could not grant {role.name!r} to {member}", exc_info=True)
+
+
+async def _drop_award_role(member: discord.Member, role: discord.Role) -> None:
+    try:
+        await member.remove_roles(role, reason="set award passed to a new winner")
+        log.info(f"removed {role.name!r} from {member}")
+    except discord.HTTPException:
+        log.warning(f"could not remove {role.name!r} from {member}", exc_info=True)
+
+
 async def reconcile_ping_roles(bot: discord.Client) -> None:
     """Make every guild's roles match PING_ROLES — create, rename-via-alias, and recolor as needed."""
     for guild in bot.guilds:
@@ -851,21 +931,52 @@ async def _ensure_role(guild: discord.Guild, spec: PingRole) -> None:
 
 
 async def _ensure_managed_role(guild: discord.Guild, spec: ManagedRole) -> None:
-    wanted = discord.Colour.from_str(spec.color)
     role = discord.utils.get(guild.roles, name=spec.name) or await _adopt_managed_alias(guild, spec)
     if role is None:
         try:
-            await guild.create_role(name=spec.name, colour=wanted, reason="managed-role create")
+            await guild.create_role(reason="managed-role create", **_managed_role_fields(guild, spec))
             log.info(f"created {spec.name!r} in {guild.name}")
         except discord.HTTPException:
             log.warning(f"could not create {spec.name!r} in {guild.name}", exc_info=True)
         return
-    if role.colour != wanted:
-        try:
-            await role.edit(colour=wanted, reason="managed-role recolor")
-            log.info(f"recolored {spec.name!r} in {guild.name}")
-        except discord.HTTPException:
-            log.warning(f"could not recolor {spec.name!r} in {guild.name}", exc_info=True)
+    drift = _managed_role_drift(guild, role, spec)
+    if not drift:
+        return
+    try:
+        await role.edit(reason="managed-role sync", **drift)
+        log.info(f"synced {spec.name!r} in {guild.name}: {', '.join(drift)}")
+    except discord.HTTPException:
+        log.warning(f"could not sync {spec.name!r} in {guild.name}", exc_info=True)
+
+
+def _managed_role_fields(guild: discord.Guild, spec: ManagedRole) -> dict:
+    fields: dict = {"name": spec.name}
+    if spec.color is not None:
+        fields["colour"] = discord.Colour.from_str(spec.color)
+    icon = _wanted_role_icon(guild, spec)
+    if icon is not None:
+        fields["unicode_emoji"] = icon
+    return fields
+
+
+def _managed_role_drift(guild: discord.Guild, role: discord.Role, spec: ManagedRole) -> dict:
+    drift: dict = {}
+    if spec.color is not None:
+        wanted = discord.Colour.from_str(spec.color)
+        if role.colour != wanted:
+            drift["colour"] = wanted
+    icon = _wanted_role_icon(guild, spec)
+    if icon is not None and role.unicode_emoji != icon:
+        drift["unicode_emoji"] = icon
+    return drift
+
+
+def _wanted_role_icon(guild: discord.Guild, spec: ManagedRole) -> str | None:
+    """None below the boost level that unlocks role icons: Discord rejects the whole write when a guild
+    without ROLE_ICONS is sent an icon, which would take any color change down with it."""
+    if spec.unicode_emoji is None or "ROLE_ICONS" not in guild.features:
+        return None
+    return spec.unicode_emoji
 
 
 async def _adopt_managed_alias(guild: discord.Guild, spec: ManagedRole) -> discord.Role | None:

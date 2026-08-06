@@ -100,7 +100,7 @@ async def fire_ceremony() -> None:
     if resolved is None:
         return
     guild, channel, seed = resolved
-    await run_set_awards_ceremony(channel, guild, seed.code, seed)
+    await run_set_awards_ceremony(channel, guild, seed.code, seed, dry=False)
 
 
 def _resolve_eve():
