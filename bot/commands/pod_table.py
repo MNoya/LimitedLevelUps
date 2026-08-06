@@ -46,6 +46,7 @@ from bot.services.pod_active import ACTIVE_POD_MANAGERS, ACTIVE_TABLE_VIEWS
 from bot.services.pod_roles import grant_pod_drafters
 from bot.services.pod_draft_manager import (
     discord_ids_for_names_sync,
+    set_event_pick_timer,
     set_second_table_hook,
     start_manager,
 )
@@ -142,7 +143,7 @@ async def materialize_table(
         if format_code:
             timer = pod_format.default_pick_timer_for(set_code)
             if timer is not None:
-                await manager.apply_pick_timer(timer)
+                await set_event_pick_timer(event_id, timer)
     return thread
 
 

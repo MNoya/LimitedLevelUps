@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from bot.config import PRODUCTION_GUILD_ID, settings
 from bot.database import SessionLocal
 from bot.models import Player, PodDraftEvent, PodDraftMatch, PodDraftParticipant, PodSignal, PodSignalMember
+from bot.services import pod_event_settings
 from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services import pod_team
@@ -1971,9 +1972,18 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
 
     if manager is not None:
         manager.arm_team_vote_offer(len(display_names))
-        pick_timer = await asyncio.to_thread(scheduled_pick_timer_for_event_sync, event_id)
-        if pick_timer is not None:
-            await manager.apply_pick_timer(pick_timer)
+        await _apply_scheduled_pick_timer(event_id, manager)
+
+
+async def _apply_scheduled_pick_timer(event_id: str, manager: PodDraftManager) -> None:
+    """Push the timer the launcher card was created with, unless someone has since set one in Settings.
+    The pod's own value is the later, more specific choice, and the manager already carries it."""
+    stored = await asyncio.to_thread(pod_event_settings.stored_sync, event_id)
+    if pod_event_settings.PICK_TIMER in stored:
+        return
+    pick_timer = await asyncio.to_thread(scheduled_pick_timer_for_event_sync, event_id)
+    if pick_timer is not None:
+        await manager.apply_pick_timer(pick_timer)
 
 
 async def _reseat_on_fresh_session(

@@ -234,6 +234,7 @@ class PodDraftEvent(Base):
     finalized_at        = Column(DateTime(timezone=True), nullable=True)
     championship_posted_at = Column(DateTime(timezone=True), nullable=True)
     closed_decklist     = Column(Boolean, nullable=False, server_default=text("false"))
+    settings            = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
 
     participants = relationship(
         "PodDraftParticipant",

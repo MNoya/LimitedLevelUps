@@ -20,6 +20,7 @@ from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import extract_avatar_hash
 from bot.services import championship as championship_service
+from bot.services import pod_event_settings
 from bot.services import pod_format
 from bot.services import pod_format_poll
 from bot.services.lobby_embed import guard_ready_check, open_settings_panel
@@ -705,9 +706,10 @@ async def delete_stale_seeding_messages(
 
 async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodSettingsView:
     """Settings panel wired for `event_id`. Shared by /pod-settings and the lobby Settings button.
-    Link Players appears once a Draftmancer session is live and stays through the draft so an unlinked
-    seat can be fixed mid-draft; the format/pairing/seats/pick-options controls and Kick Player are
-    pre-draft only and drop away once drafting starts.
+    Link Players and Kick Player need a live Draftmancer session, and Link Players stays through the
+    draft so an unlinked seat can be fixed mid-draft. The format/pairing/seats/pick-options controls are
+    pre-draft only: they read the live table when there is one and the pod's stored setup otherwise, so a
+    scheduled pod can be configured before its lobby opens.
 
     Cancel Draft is bot-owner only on a tournament pod, whose signups and matches belong to the people who
     organized it. A mock draft opens it to everyone until the picks are done: anyone can open a lobby, so
@@ -724,6 +726,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
     drafted = await asyncio.to_thread(load_event_drafted_sync, event_id)
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     drafting = manager is not None and (manager.drafting or manager.draft_complete)
+    setup_open = not drafting and not drafted
     scheduled = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id) is not None
     thread_id = await asyncio.to_thread(load_event_thread_id_sync, event_id)
     notice_channel = await fetch_channel(bot, thread_id) if thread_id else None
@@ -778,6 +781,14 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
     current_cards_per_pack = None
     link_targets_provider = None
     on_link = None
+    if setup_open:
+        setup = pod_event_settings.from_manager(manager) if manager is not None else (
+            await asyncio.to_thread(pod_event_settings.load_sync, event_id))
+        current_timer = setup[pod_event_settings.PICK_TIMER]
+        current_picks_per_pack = setup[pod_event_settings.PICKS_PER_PACK]
+        current_max_players = setup[pod_event_settings.MAX_PLAYERS]
+        current_packs = setup[pod_event_settings.PACKS_PER_PLAYER]
+        current_cards_per_pack = setup[pod_event_settings.CARDS_PER_PACK]
     if manager is not None:
         link_targets_provider = manager.unrecognized_lobby_names
 
@@ -785,11 +796,6 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
             return await manager.link_seat(member, arena_name)
 
         if not drafting:
-            current_timer = manager.pick_timer
-            current_picks_per_pack = manager.picks_per_pack
-            current_max_players = manager.max_players
-            current_packs = manager.packs_per_player
-            current_cards_per_pack = manager.cards_per_pack
             seat_order_provider = manager.seating_lobby_order
             kick_targets_provider = manager.kick_targets
 
@@ -836,14 +842,14 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
         on_seating_mode=None if drafting else on_seating_mode, current_seating=current_seating,
         on_seating=on_seating, seat_order_provider=seat_order_provider,
         on_seating_table=None if drafting else on_seating_table, on_seated=on_seated,
-        on_timer=on_timer if current_timer is not None else None, current_timer=current_timer,
-        on_packs=on_packs if current_timer is not None else None, current_packs=current_packs,
-        on_cards_per_pack=on_cards_per_pack if current_timer is not None else None,
+        on_timer=on_timer if setup_open else None, current_timer=current_timer,
+        on_packs=on_packs if setup_open else None, current_packs=current_packs,
+        on_cards_per_pack=on_cards_per_pack if setup_open else None,
         current_cards_per_pack=current_cards_per_pack,
         cube_format=pod_format.cube_id_for(current_code) is not None if current_code else False,
-        on_picks_per_pack=on_picks_per_pack if current_picks_per_pack is not None else None,
+        on_picks_per_pack=on_picks_per_pack if setup_open else None,
         current_picks_per_pack=current_picks_per_pack,
-        on_max_players=on_max_players if current_max_players is not None else None,
+        on_max_players=on_max_players if setup_open else None,
         current_max_players=current_max_players,
         kick_targets_provider=kick_targets_provider, on_kick=on_kick,
         link_targets_provider=link_targets_provider, on_link=on_link,

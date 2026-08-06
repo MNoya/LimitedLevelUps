@@ -1463,6 +1463,10 @@ async def _settings_preview_link_targets() -> list[str]:
     return [_UNLINKED_SEAT]
 
 
+def _settings_preview_kick_targets() -> list[tuple[str, str]]:
+    return [(arena, display or arena) for arena, display in _LINKED_EIGHT]
+
+
 async def _settings_preview_on_link(
     interaction: discord.Interaction, arena_name: str, member: discord.abc.User,
 ) -> str | None:
@@ -1488,32 +1492,48 @@ async def _settings_preview_manage_rounds(interaction: discord.Interaction) -> N
     )
 
 
-def _settings_preview_view() -> PodSettingsView:
-    """No-op Settings panel so `!test` can preview the format + pairing + seats dropdowns plus the Link
-    Players and Manage Rounds flows with no pod. Defaults to Seats: Random (like a fresh pod); pick
-    Manual in the dropdown to reveal the Seat Order button."""
-    return PodSettingsView(
+def _settings_preview_predraft_kwargs() -> dict:
+    """The controls a pod carries before its draft starts, live Draftmancer session or not. Seats
+    defaults to Random the way a fresh pod does; pick Manual to reveal the Seat Order button on the
+    panels that have a session behind them."""
+    return dict(
         on_format=_settings_preview_noop, on_pairing=_settings_preview_noop,
         current_code=None, current_mode=DEFAULT_PAIRING_MODE,
         on_seating_mode=_settings_preview_noop, current_seating="random",
-        on_seating=_settings_preview_seating_noop, seat_order_provider=_settings_preview_seat_order,
-        on_seated=_settings_preview_on_seated,
         on_timer=_settings_preview_noop, current_timer=60,
         on_packs=_settings_preview_noop, on_cards_per_pack=_settings_preview_noop, cube_format=True,
         on_picks_per_pack=_settings_preview_noop, current_picks_per_pack=1,
         on_max_players=_settings_preview_noop, current_max_players=8,
-        on_cancel=_settings_preview_cancel_noop,
         on_closed_decklist=_settings_preview_noop, current_closed_decklist=False,
         on_description=_settings_preview_description_noop,
-        link_targets_provider=_settings_preview_link_targets, on_link=_settings_preview_on_link,
-        on_manage_rounds=_settings_preview_manage_rounds,
+        on_reschedule=_settings_preview_noop,
+        on_cancel=_settings_preview_cancel_noop,
         event_name="Pod Draft Preview",
     )
 
 
+def _settings_preview_scheduled_view() -> PodSettingsView:
+    """A scheduled pod nobody has launched yet. The setup controls are all here and write to the event,
+    but the ones that address seats in a session (Seat Order, Link Players, Kick Player) are not, because
+    there is no table to address."""
+    return PodSettingsView(**_settings_preview_predraft_kwargs())
+
+
+def _settings_preview_lobby_view() -> PodSettingsView:
+    """The pod with its Draftmancer lobby open and the draft not started, which is every pre-draft
+    control at once."""
+    return PodSettingsView(
+        **_settings_preview_predraft_kwargs(),
+        on_seating=_settings_preview_seating_noop, seat_order_provider=_settings_preview_seat_order,
+        on_seated=_settings_preview_on_seated,
+        kick_targets_provider=_settings_preview_kick_targets, on_kick=_settings_preview_noop,
+        link_targets_provider=_settings_preview_link_targets, on_link=_settings_preview_on_link,
+    )
+
+
 def _settings_preview_drafting_view() -> PodSettingsView:
-    """The panel as it stands once the draft is running: the pick options, seats, and kick are all
-    locked away, and Restart Draft is the one control the running draft adds."""
+    """The panel as it stands once the draft is running: the setup, seats, and kick are all locked away,
+    and Restart Draft is the one control the running draft adds."""
     return PodSettingsView(
         current_code=None, current_mode=DEFAULT_PAIRING_MODE, current_seating="random",
         on_restart=_settings_preview_cancel_noop, on_cancel=_settings_preview_cancel_noop,
@@ -1523,9 +1543,21 @@ def _settings_preview_drafting_view() -> PodSettingsView:
     )
 
 
+def _settings_preview_finished_view() -> PodSettingsView:
+    """Once the picks are done the restart is gone and Manage Rounds is the control the tournament
+    adds, so the panel runs the matches instead of the table."""
+    return PodSettingsView(
+        current_code=None, current_mode=DEFAULT_PAIRING_MODE, current_seating="random",
+        on_manage_rounds=_settings_preview_manage_rounds, on_cancel=_settings_preview_cancel_noop,
+        on_closed_decklist=_settings_preview_noop, current_closed_decklist=False,
+        link_targets_provider=_settings_preview_link_targets, on_link=_settings_preview_on_link,
+        event_name="Pod Draft Preview",
+    )
+
+
 async def setup(bot: commands.Bot) -> None:
     """Wire the lobby states as the `!test` fallback and register the settings preview."""
-    register_settings_preview(_settings_preview_view)
+    register_settings_preview(_settings_preview_lobby_view)
     register_force_start_preview(lambda: (5, 8, ["Bram", "Cara", "Dex"]))
 
     async def test_lobby(ctx: commands.Context, state: str = "", extra: str = "") -> None:
@@ -1547,8 +1579,8 @@ async def setup(bot: commands.Bot) -> None:
         Confirm button appear below it, and the link commits only on Confirm.
         `settings` posts the no-op Settings panel directly, so it works in a channel already bound to a
         pod event, where the lobby card's Settings button would open that pod's real panel instead. It
-        posts the panel twice, as it stands before the draft and as it stands once the draft is running,
-        since no one pod ever shows both sets of controls.
+        posts one panel per stage a pod passes through — scheduled, lobby open, drafting, finished —
+        since no one pod ever shows two of them at once.
         `dropped [votes]` posts every disconnect state at once: the card counting down to the vote, the
         vote itself, and the two a reconnect ends on. The vote is live and needs 1 vote by default, so one
         click shows that side's outcome and re-running it shows the other. `dropped 3` needs three, to
@@ -1695,8 +1727,10 @@ async def setup(bot: commands.Bot) -> None:
             return
 
         if state == "settings":
-            await ctx.send("**Before the draft**", view=_settings_preview_view())
+            await ctx.send("**Scheduled, no lobby yet**", view=_settings_preview_scheduled_view())
+            await ctx.send("**Lobby open**", view=_settings_preview_lobby_view())
             await ctx.send("**While drafting**", view=_settings_preview_drafting_view())
+            await ctx.send("**After the draft**", view=_settings_preview_finished_view())
             return
 
         if state == "dropped":

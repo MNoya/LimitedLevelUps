@@ -63,6 +63,7 @@ from bot.services.mock_lobby_card import (
     build_mock_complete_view,
 )
 from bot.services import pod_disconnect
+from bot.services import pod_event_settings
 from bot.services import pod_format
 from bot.services.ping_roles import grant_mock_draft_role
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase, notify_pod_complete
@@ -776,6 +777,8 @@ class PodDraftManager:
             await self._rename_thread(team_aware_pod_name(new_name, self.pairing_mode))
         if pod_format.cube_id_for(code) is None:
             self.cards_per_pack = None
+            await asyncio.to_thread(
+                pod_event_settings.clear_sync, self.event_id, pod_event_settings.CARDS_PER_PACK)
         if self.sio.connected and self.owner_claimed:
             err = await self._emit_format()
             if err is not None:
@@ -2612,7 +2615,7 @@ class PodDraftManager:
         default way four players draft. Both stay changeable in Settings."""
         self.pairing_mode = "roundrobin"
         await asyncio.to_thread(persist_pairing_mode, self.event_id, "roundrobin")
-        await self.apply_picks_per_pack(2)
+        await set_event_picks_per_pack(self.event_id, 2)
         await self.refresh_lobby_now()
         notify_card_refresh(self.bot, self.event_id)
 
@@ -3108,6 +3111,8 @@ async def start_manager(
     persisted_seating = await asyncio.to_thread(load_event_seating_mode_sync, event_id)
     if persisted_seating:
         manager.seating_mode = persisted_seating
+    stored_setup = await asyncio.to_thread(pod_event_settings.load_sync, event_id)
+    pod_event_settings.apply_to_manager(manager, stored_setup)
     manager.scheduled_start = await asyncio.to_thread(load_event_time_sync, event_id)
     ACTIVE_POD_MANAGERS[event_id] = manager
     log.info(
@@ -3138,6 +3143,9 @@ async def set_event_format(bot: commands.Bot, event_id: str, code: str) -> str |
     new_name = await asyncio.to_thread(_persist_format, event_id, code)
     if new_name is None:
         return pod_format.FORMAT_LOCKED_MSG
+    if pod_format.cube_id_for(code) is None:
+        await asyncio.to_thread(
+            pod_event_settings.clear_sync, event_id, pod_event_settings.CARDS_PER_PACK)
     pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
     await _rename_event_thread(bot, event_id, team_aware_pod_name(new_name, pairing_mode))
     return None
@@ -3534,48 +3542,49 @@ async def set_event_seating(event_id: str, ordered_user_names: list[str]) -> str
 
 
 async def set_event_pick_timer(event_id: str, seconds: int) -> str | None:
-    """Set a pod's Draftmancer pick timer by event id. Live-only — the value is not persisted, so it
-    only applies while a session is connected. Returns an error string or None."""
-    manager = ACTIVE_POD_MANAGERS.get(event_id)
-    if manager is None:
-        return "Start the Draftmancer session before setting the pick timer."
-    return await manager.apply_pick_timer(seconds)
+    return await store_setup_value(
+        event_id, pod_event_settings.PICK_TIMER, seconds,
+        lambda manager, value: manager.apply_pick_timer(value))
 
 
 async def set_event_picks_per_pack(event_id: str, n: int) -> str | None:
-    """Set how many cards a pod takes from each pack, by event id. Live-only — the value is not
-    persisted, so it only applies while a session is connected. Returns an error string or None."""
-    manager = ACTIVE_POD_MANAGERS.get(event_id)
-    if manager is None:
-        return "Start the Draftmancer session before setting the picks per pack."
-    return await manager.apply_picks_per_pack(n)
+    return await store_setup_value(
+        event_id, pod_event_settings.PICKS_PER_PACK, n,
+        lambda manager, value: manager.apply_picks_per_pack(value))
 
 
 async def set_event_packs_per_player(event_id: str, n: int) -> str | None:
-    """Set how many packs each player opens, by event id. Live-only — the value is not persisted, so it
-    only applies while a session is connected. Returns an error string or None."""
-    manager = ACTIVE_POD_MANAGERS.get(event_id)
-    if manager is None:
-        return "Start the Draftmancer session before setting the packs."
-    return await manager.apply_packs_per_player(n)
+    return await store_setup_value(
+        event_id, pod_event_settings.PACKS_PER_PLAYER, n,
+        lambda manager, value: manager.apply_packs_per_player(value))
 
 
 async def set_event_cards_per_pack(event_id: str, n: int) -> str | None:
-    """Set how many cards a pack holds, by event id. Live-only — the value is not persisted, so it only
-    applies while a session is connected. Returns an error string or None."""
-    manager = ACTIVE_POD_MANAGERS.get(event_id)
-    if manager is None:
-        return "Start the Draftmancer session before setting the cards per pack."
-    return await manager.apply_cards_per_pack(n)
+    return await store_setup_value(
+        event_id, pod_event_settings.CARDS_PER_PACK, n,
+        lambda manager, value: manager.apply_cards_per_pack(value))
 
 
 async def set_event_max_players(event_id: str, n: int) -> str | None:
-    """Set a pod's Draftmancer seat cap by event id. Live-only — the value is not persisted, so it
-    only applies while a session is connected. Returns an error string or None."""
+    return await store_setup_value(
+        event_id, pod_event_settings.MAX_PLAYERS, n,
+        lambda manager, value: manager.apply_max_players(value))
+
+
+SetupPush = Callable[["PodDraftManager", int], Awaitable[str | None]]
+
+
+async def store_setup_value(event_id: str, key: str, value: int, push: SetupPush) -> str | None:
+    """Store one Draftmancer setup value on the event, after pushing it to the table when a session is
+    live. A pod configured before its lobby opens carries the value into the session; a value the live
+    table refuses is not stored. Returns an error string or None."""
     manager = ACTIVE_POD_MANAGERS.get(event_id)
-    if manager is None:
-        return "Start the Draftmancer session before setting max players."
-    return await manager.apply_max_players(n)
+    if manager is not None:
+        error = await push(manager, value)
+        if error:
+            return error
+    await asyncio.to_thread(pod_event_settings.store_sync, event_id, **{key: value})
+    return None
 
 
 async def rehydrate_active_lobbies(bot) -> None:

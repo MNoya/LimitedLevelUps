@@ -157,6 +157,8 @@ Which formats a day offers is a table in the bot's code, so ask for a change ahe
 
 Draft Setup on the Settings panel holds the shape of the draft: the seconds each player gets per pick, and how many packs each player opens. On a cube pod it also takes how many cards a pack holds, which a set pod does not offer, since a set draft opens the set's own packs. Leave a field empty to keep what the pod already runs. Next to it, Mode toggles between Pick One and Pick Two, which is how many cards a player takes from a pack before passing it. Pick One is the normal draft and the button sits grey; turn it on for a Pick Two pod and it goes green, and the lobby card footer reads the format as "Pick 2" so everyone sees it. All of them are locked once the draft starts.
 
+Draft Setup, Mode, and Max Players are on the panel from the moment the pod exists, so a scheduled pod can be set up days before anyone opens its lobby. The pod keeps what you pick and the Draftmancer session takes it when the lobby starts.
+
 Max Players sets the table size: 6, 8, or 10 seats. A six-seat table is the one to pick for a 3v3 team draft, and the bot asks that lobby to start as soon as six players are in it. A cap below the players already in the Draftmancer lobby is refused, so shrinking a table that filled up means removing someone first with Kick Player.
 
 If someone loses their connection mid-draft, the draft stops on Draftmancer until they come back. The bot posts a card naming who went and counting down to the vote that opens if they stay gone. A player who comes back inside those two minutes is never asked about: the card flips to "Everyone is back" and the draft carries on.
