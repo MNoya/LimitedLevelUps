@@ -4,7 +4,7 @@ End-of-set awards: an admin-posted ceremony recognizing standout drafters across
 
 ## Files
 
-- **`bot/services/set_awards.py`** — compute logic + wording formatters, no Discord/presentation. Per-award ranking, the greedy assignment, the personal fun-stat computations, and the 24h payload cache. Each award's detail wording lives in a formatter function (`first_striker_detail`/`_ceremony`/`_gap`, `seize_detail`/`_ceremony_detail`, `climber_detail`, `specialist_detail`/`_ceremony_detail`, `revel_detail`, `mvp_detail`/`_ceremony_detail`/`_runner_detail`) so the live command and the `!test` harness share one source and can't drift.
+- **`bot/services/set_awards.py`** — compute logic + wording formatters, no Discord/presentation. Per-award ranking, the greedy assignment, and the personal fun-stat computations. Each award's detail wording lives in a formatter function (`first_striker_detail`/`_ceremony`/`_gap`, `seize_detail`/`_ceremony_detail`, `climber_detail`, `specialist_detail`/`_ceremony_detail`, `revel_detail`, `mvp_detail`) so the live command and the `!test` harness share one source and can't drift.
 - **`bot/commands/set_awards.py`** — the `AWARD_SPECS` catalog (emoji/name/tagline/display-order + per-award `connector`/`you_verb`/`miss`), the Components V2 builders (`build_set_awards_view`, `build_my_awards_view`), `build_data` (winners/runners → `SetAwardsData`), the cog (`/set-awards` + the "How did I do?" button), and presentation helpers.
 - **`bot/commands/testawards.py`** — `!test setawards [gated]` builds sample `AwardCandidate`s through the live `build_data`, so layout, wording, and runner-up logic all exercise the production path. `!test myset [full|off]` previews the personal view. Fictional names.
 - **`bot/commands/descriptions.py`** — `SET_AWARDS`.
@@ -20,7 +20,7 @@ Reveal/display order = `AWARD_SPECS`. Pre-release events are excluded (anything 
 3. **📦 Revel in Riches** — most Arena Direct sealed boxes. "won **{boxes}** boxes in {n} events". Higher win-priority than The Climber (see assignment).
 4. **🧗 The Climber** — fastest rank ascent to Mythic within a single ranked month. **Qualify**: start tier Gold or lower (a 3+ tier climb); trivial high-start hops are excluded. **Score** = `CLIMB_TIER_WEIGHT × tiers_climbed − days` (higher wins); ties break on fewer days, then lower start tier. Each player is represented by their highest-scoring climb. "climbed from {StartTier} to Mythic in **{n} days**".
 5. **🎯 The Specialist** — best win rate vs the community field for an archetype, sample-weighted z-score. Shows the player's **best archetype regardless of whether they beat the field** (the must-beat-field filter was dropped); floors ≥20 player games, ≥40 community games. Ceremony: "**{wr}%** on **{arch}** over {games} games, vs field of {fw}%". Personal: "a **{wr}%** win rate with **{arch}** over {games} games, vs field of {fw}%". A runner-up sharing the winner's archetype drops the field clause (split on `SPECIALIST_FIELD_SEP`).
-6. **📸 Most Valuable Poster** — most image-**attachment** posts in `#trophy-hype` during the set window (1 message = 1 trophy; any **❌** reaction excludes; attachments only, not link embeds). Winner: "**{n}** trophies posted"; runner-up drops the noun: "**{n}** posted". Live channel scan only.
+6. **🚀 Most Valuable Pod-Drafter** — most pod drafts played during the set window. A seat counts once the participant has a record, and the window is matched on the pod's **date**, not its format code, so every pod counts: the active set, flashbacks, cube, Peasant. "played **{n}** pod drafts". Field rule differs from the other five: pods are public, so `load_contexts` keeps **every active player** and only reads 17lands events for opted-in ones. A pod-only or opted-out player can win this award and no other.
 
 ### Assignment
 Greedy in `CEREMONY_ORDER` (win-priority), one award per player; runner-ups exclude winners (except `ALLOW_FEATURED_RUNNERS`); ties surface co-runner-ups; the **Premier > Trad > Quick** tiebreak decides **winners only**.
@@ -31,7 +31,7 @@ Greedy in `CEREMONY_ORDER` (win-priority), one award per player; runner-ups excl
 
 ## Personal view ("How did I do?" button)
 
-There is **no `/my-set-awards` command** — the persistent green button (`custom_id="set_awards:my"`) on the final ceremony frame is the only entry, registered via `bot.add_view()` so it survives restarts. The view shows **every** category: earned ones carry a rank badge (🥇/🥈/🥉 or `- #N`) and a "You …" line; categories the player didn't place in show a muted reason ("No Arena Direct boxes this set", etc.). MVP only appears once a ceremony has folded its `#trophy-hype` scan into the cache. A clicker with **no Player row** gets a `/join` CTA; a **joined** clicker with no events this set gets "on the leaderboard, but no {SET} drafts … contact an admin".
+There is **no `/my-set-awards` command** — the persistent green button (`custom_id="set_awards:my"`) on the final ceremony frame is the only entry, registered via `bot.add_view()` so it survives restarts. The view shows **every** category: earned ones carry a rank badge (🥇/🥈/🥉 or `- #N`) and a "You …" line; categories the player didn't place in show a muted reason ("No Arena Direct boxes this set", etc.). A clicker with **no Player row** gets a `/join` CTA; a **joined** clicker with no events this set gets "on the leaderboard, but no {SET} drafts … contact an admin".
 
 Personal-only fun stats (always shown, earned or not — negative awards use a "Safe!" framing):
 - **🔥 Trophy Streak** (≥2): longest consecutive trophy run. "You scored **{n} trophies** in a row {between … and …}".
@@ -39,12 +39,12 @@ Personal-only fun stats (always shown, earned or not — negative awards use a "
 - **🥀 Heartbreakers** (≥3): total 6-3 finishes in **Premier** (Premier-only), "out of {n} events". Under: "Safe! Only {n} Premier 6-3 finishes total, out of {n} events".
 - **🥶 Cold Run** (≥3): longest consecutive Premier drafts without a 4+ win finish. Under: "Safe! Only {n} Premier drafts in a row without a 4+ win".
 
-Counts are spelled out only when the preceding token is a number (e.g. after "2-1"/"6-3"); fun-stat ranks come from `rank_in` over the cached payload's `FUN_RANKED_STATS`.
+Counts are spelled out only when the preceding token is a number (e.g. after "2-1"/"6-3"); fun-stat ranks come from `rank_in` over the payload's `FUN_RANKED_STATS`.
 
 ## Mechanics
 
-- **Caching**: `build_payload` caches `(ranked, ctx_by_discord, fun_values)` per set with a 24h TTL (`PAYLOAD_TTL_SECONDS`), warmed by `/set-awards`. The MVP channel scan is folded in via `cache_mvp` so the button shows MVP standing without re-scanning. The button reuses the cache (no DB load on a hit).
-- **Avatars**: thumbnails use `avatar_url(discord_id, avatar_hash)`; `avatar_hash` is captured on join/relink/auto-link/pod-link. DB awards use the stored hash (fresh as of the player's last signup/relink); MVP uses the live scan's current avatar.
+- **Loading**: every award is computed from the DB on each call, ceremony and button alike. `load_contexts` pulls the set's draft events, stats rows, and pod-draft counts in three queries; there is no payload cache.
+- **Avatars**: thumbnails use `avatar_url(discord_id, avatar_hash)`; `avatar_hash` is captured on join/relink/auto-link/pod-link, so it is fresh as of the player's last signup/relink.
 - **Reveal**: the drumroll edits a Components V2 message in place. A thread invocation renders bold names (no pings, the live-test path); a real channel mentions members.
 
 ## Testing

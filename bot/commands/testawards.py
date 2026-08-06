@@ -71,9 +71,7 @@ def _set_awards_fixture(guild: discord.Guild | None) -> SetAwardsData:
             "Karn", awards_svc.specialist_detail(0.88, "URG", 24, 0.61), _AVATAR.format(3), 4.1,
             ceremony_detail=awards_svc.specialist_ceremony_detail(0.88, "URG", 24, 0.61), archetype="URG"),
         "revel_in_riches": _cand("Slimefoot", awards_svc.revel_detail(9, 6), _AVATAR.format(5), 9),
-        "mvp": _cand(
-            "Squee", awards_svc.mvp_detail(41), _AVATAR.format(4), 41,
-            ceremony_detail=awards_svc.mvp_ceremony_detail(41)),
+        "mvp": _cand("Squee", awards_svc.mvp_detail(11), _AVATAR.format(4), 11),
     }
     runners = {
         "first_striker": [_cand("Jhoira", awards_svc.first_striker_gap(timedelta(minutes=22)), None, None)],
@@ -83,8 +81,7 @@ def _set_awards_fixture(guild: discord.Guild | None) -> SetAwardsData:
             "Jhoira", awards_svc.specialist_detail(0.83, "URG", 19, 0.61), None, 3.4,
             ceremony_detail=awards_svc.specialist_ceremony_detail(0.83, "URG", 19, 0.61), archetype="URG")],
         "revel_in_riches": [_cand("Tibalt", awards_svc.revel_detail(7, 5), None, 7)],
-        "mvp": [_cand(
-            "Gisa", awards_svc.mvp_detail(33), None, 33, ceremony_detail=awards_svc.mvp_ceremony_detail(33))],
+        "mvp": [_cand("Gisa", awards_svc.mvp_detail(9), None, 9)],
     }
     return build_data(code, seed, winners, runners, guild)
 
@@ -220,7 +217,7 @@ async def setup(bot: commands.Bot) -> None:
                 "specialist": ahead(11, "**80%** on **WR** over 60 games", 3.5)
                 + [mine("a **66%** win rate with **WU** over 41 games, vs field of 60%", 1.2)],
                 "revel_in_riches": ahead(7, "**12** boxes in 8 events", 12) + [mine("**3** boxes in 4 events", 3)],
-                "mvp": ahead(2, "**41** trophies", 41) + [mine("**18** trophies to trophy-hype", 18)],
+                "mvp": ahead(2, "**11** pod drafts", 11) + [mine("**6** pod drafts", 6)],
             }
             extras = {
                 "trophy_streak": 4, "trophy_streak_rank": 2, "trophy_span": span,
@@ -235,7 +232,7 @@ async def setup(bot: commands.Bot) -> None:
                 "climber": ahead(3, "Bronze to Mythic in **5 days**", (0, 5)),
                 "specialist": ahead(3, "**80%** on **WR** over 60 games", 3.5),
                 "revel_in_riches": ahead(3, "**12** boxes in 8 events", 12),
-                "mvp": ahead(3, "**41** trophies", 41),
+                "mvp": ahead(3, "**11** pod drafts", 11),
             }
             extras = {
                 "trophy_streak": 1,
@@ -252,7 +249,7 @@ async def setup(bot: commands.Bot) -> None:
                 + ahead(2, "Silver to Mythic in **9 days**", (1, 9)),
                 "specialist": ahead(4, "**80%** on **WR** over 60 games", 3.5),
                 "revel_in_riches": ahead(3, "**12** boxes in 8 events", 12),
-                "mvp": ahead(4, "**41** trophies", 41) + [mine("**6** trophies to trophy-hype", 6)],
+                "mvp": ahead(4, "**11** pod drafts", 11) + [mine("**2** pod drafts", 2)],
             }
             extras = {
                 "trophy_streak": 4, "trophy_streak_rank": 2, "trophy_span": span,

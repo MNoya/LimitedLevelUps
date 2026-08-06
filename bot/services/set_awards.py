@@ -1,27 +1,26 @@
-"""Compute Set Awards winners and runner-ups from draft_events plus a #trophy-hype tally.
+"""Compute Set Awards winners and runner-ups from draft_events and pod drafts.
 
 Pure logic, no Discord/presentation. The live `/set-awards` command and the
 `set_awards_results` dev script both consume these, so the math lives in one place.
 
 Five awards derive from draft_events (first_striker, seize_the_day, climber, specialist,
-revel_in_riches). Most Valuable Poster is built from a channel scan the caller supplies as
-``PostTally`` rows. Winners are assigned greedily in ceremony order so nobody wins twice;
-runner-ups exclude winners, except awards in ``ALLOW_FEATURED_RUNNERS`` which show all tied.
-The Premier > Trad > Quick tiebreak only ever decides a winner, never a runner-up.
+revel_in_riches); mvp counts pod drafts played inside the set window. Winners are assigned
+greedily in ceremony order so nobody wins twice; runner-ups exclude winners, except awards in
+``ALLOW_FEATURED_RUNNERS`` which show all tied. The Premier > Trad > Quick tiebreak only ever
+decides a winner, never a runner-up.
 """
 from __future__ import annotations
 
 import math
-import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from bot.models import DraftEvent, MagicSet, Player, PlayerStats
+from bot.models import DraftEvent, MagicSet, Player, PlayerStats, PodDraftEvent, PodDraftParticipant
 from bot.scoring import ARENA_DIRECT_SEALED_FORMAT, boxes_for_event, compute_score_breakdown
 from bot.sets import SetSeed, release_instant
 
@@ -51,20 +50,12 @@ class AwardCandidate:
     when: datetime | None = None
 
 
-@dataclass(frozen=True)
-class PostTally:
-    """One #trophy-hype poster's trophy count, supplied by the caller's channel scan."""
-    discord_id: str | None
-    display_name: str
-    avatar_url: str | None
-    count: int
-
-
 @dataclass
 class PlayerCtx:
     player: Player
     events: list[DraftEvent] = field(default_factory=list)
     stats_rows: list[dict] = field(default_factory=list)
+    pod_drafts: int = 0
 
     @property
     def name(self) -> str:
@@ -93,7 +84,7 @@ class PlayerCtx:
 
 
 def compute_db_awards(session: Session, mset: MagicSet, seed: SetSeed) -> dict[str, list[AwardCandidate]]:
-    return rank_db_awards(load_contexts(session, mset, seed.start_date), seed, mset.code)
+    return rank_db_awards(load_contexts(session, mset, seed), seed, mset.code)
 
 
 def rank_db_awards(ctxs: list[PlayerCtx], seed: SetSeed, code: str) -> dict[str, list[AwardCandidate]]:
@@ -103,33 +94,11 @@ def rank_db_awards(ctxs: list[PlayerCtx], seed: SetSeed, code: str) -> dict[str,
         "climber": climber(ctxs),
         "specialist": specialist(ctxs),
         "revel_in_riches": revel_in_riches(ctxs, code),
+        "mvp": mvp(ctxs),
     }
 
 
-PAYLOAD_TTL_SECONDS = 24 * 60 * 60
 FUN_RANKED_STATS = ("trophy_streak", "merchant_streak", "heartbreakers", "cold_run")
-_payload_cache: dict[str, tuple[float, dict, dict, dict, list]] = {}
-
-
-def cached_payload(seed: SetSeed) -> tuple[dict, dict, dict] | None:
-    """Fresh `(ranked, ctx_by_discord_id, fun_values)` for a set if cached, else None.
-
-    Self-stat calls (the ceremony's "How did I do?" button) share this so a burst of clicks
-    re-loads every draft event at most once per TTL rather than once per click.
-    """
-    cached = _payload_cache.get(seed.code)
-    if cached is not None and cached[0] > time.monotonic():
-        return cached[1], cached[2], cached[3]
-    return None
-
-
-def build_payload(session: Session, mset: MagicSet, seed: SetSeed) -> tuple[dict, dict, dict]:
-    ctxs = load_contexts(session, mset, seed.start_date)
-    ranked = rank_db_awards(ctxs, seed, mset.code)
-    by_discord = {c.player.discord_id: c for c in ctxs if c.player.discord_id}
-    fun_values = {key: [_fun_value(c, key) for c in ctxs] for key in FUN_RANKED_STATS}
-    _payload_cache[seed.code] = (time.monotonic() + PAYLOAD_TTL_SECONDS, ranked, by_discord, fun_values, ctxs)
-    return ranked, by_discord, fun_values
 
 
 def personal_payload(
@@ -137,26 +106,19 @@ def personal_payload(
 ) -> tuple[dict, "PlayerCtx", dict] | None:
     """Award standings, the caller's own context, and field-wide fun-stat values for one player.
 
-    Players captured in the cached ceremony snapshot are served from it. A player who joined after
-    the snapshot is scored live against the cached field, minus the MVP award whose #trophy-hype
-    channel scan is too expensive to run per click.
+    None when the caller has nothing in the set: no drafts and no pod seats.
     """
-    if cached_payload(seed) is None:
-        build_payload(session, mset, seed)
-    cached = _payload_cache.get(seed.code)
-    if cached is None:
-        return None
-    _, ranked, by_discord, fun_values, ctxs = cached
-    mine = by_discord.get(discord_id)
-    if mine is not None:
-        return ranked, mine, fun_values
-    mine = load_one_context(session, mset, seed.start_date, discord_id)
+    ctxs = load_contexts(session, mset, seed)
+    mine = None
+    for ctx in ctxs:
+        if ctx.player.discord_id == discord_id:
+            mine = ctx
+            break
     if mine is None:
         return None
-    field = ctxs + [mine]
-    live_ranked = rank_db_awards(field, seed, mset.code)
-    live_fun = {key: [_fun_value(c, key) for c in field] for key in FUN_RANKED_STATS}
-    return live_ranked, mine, live_fun
+    ranked = rank_db_awards(ctxs, seed, mset.code)
+    fun_values = {key: [_fun_value(c, key) for c in ctxs] for key in FUN_RANKED_STATS}
+    return ranked, mine, fun_values
 
 
 def rank_in(values: list[int], value: int) -> int:
@@ -237,25 +199,6 @@ def _cold_run(ctx: PlayerCtx) -> int:
     return best
 
 
-def mvp(tallies: list[PostTally]) -> list[AwardCandidate]:
-    ranked = sorted([t for t in tallies if t.count > 0], key=lambda t: t.count, reverse=True)
-    return [
-        AwardCandidate(
-            t.discord_id, t.display_name, mvp_detail(t.count), t.avatar_url, t.count,
-            ceremony_detail=mvp_ceremony_detail(t.count),
-        )
-        for t in ranked
-    ]
-
-
-def cache_mvp(seed: SetSeed, mvp_candidates: list[AwardCandidate]) -> None:
-    """Fold the ceremony's #trophy-hype scan into the cached payload so the "How did I do?"
-    button can show MVP standing without re-running the live channel scan."""
-    cached = _payload_cache.get(seed.code)
-    if cached is not None:
-        cached[1]["mvp"] = mvp_candidates
-
-
 def assign(
     ranked: dict[str, list[AwardCandidate]],
 ) -> tuple[dict[str, AwardCandidate], dict[str, list[AwardCandidate]]]:
@@ -279,56 +222,51 @@ def assign(
     return winners, runners
 
 
-def load_contexts(session: Session, mset: MagicSet, release_date: date) -> list[PlayerCtx]:
-    players = session.execute(
-        select(Player).where(Player.active.is_(True), Player.leaderboard_opt_in.is_(True))
-    ).scalars().all()
+def load_contexts(session: Session, mset: MagicSet, seed: SetSeed) -> list[PlayerCtx]:
+    """Every active player who did something in the set: a 17lands draft or a pod seat.
+
+    Pod drafts are public for everyone, so a player who opted out of the leaderboard still races for
+    the pod award. Their 17lands events stay unread, which keeps them out of the five draft awards.
+    """
+    players = session.execute(select(Player).where(Player.active.is_(True))).scalars().all()
     by_id = {p.id: PlayerCtx(player=p) for p in players}
+    drafters = {pid: ctx for pid, ctx in by_id.items() if ctx.player.leaderboard_opt_in}
     for event in session.execute(select(DraftEvent).where(DraftEvent.set_id == mset.id)).scalars():
-        if event.started_at is not None and event.started_at.astimezone(ET).date() < release_date:
+        if event.started_at is not None and event.started_at.astimezone(ET).date() < seed.start_date:
             continue
-        ctx = by_id.get(event.player_id)
+        ctx = drafters.get(event.player_id)
         if ctx is not None:
             ctx.events.append(event)
     for stat in session.execute(select(PlayerStats).where(PlayerStats.set_id == mset.id)).scalars():
-        ctx = by_id.get(stat.player_id)
+        ctx = drafters.get(stat.player_id)
         if ctx is not None:
             ctx.stats_rows.append({
                 "format": stat.format, "wins": stat.wins, "losses": stat.losses,
                 "trophies": stat.trophies, "events": stat.events,
             })
-    return [c for c in by_id.values() if c.events]
+    for player_id, count in load_pod_draft_counts(session, seed).items():
+        ctx = by_id.get(player_id)
+        if ctx is not None:
+            ctx.pod_drafts = count
+    return [c for c in by_id.values() if c.events or c.pod_drafts]
 
 
-def load_one_context(
-    session: Session, mset: MagicSet, release_date: date, discord_id: str,
-) -> PlayerCtx | None:
-    player = session.execute(
-        select(Player).where(
-            Player.discord_id == discord_id,
-            Player.active.is_(True),
-            Player.leaderboard_opt_in.is_(True),
+def load_pod_draft_counts(session: Session, seed: SetSeed) -> dict[str, int]:
+    """Pod drafts played per player inside the set window, counted by date and not by format code so
+    a cube or Peasant pod run during the set still counts."""
+    query = (
+        select(PodDraftParticipant.player_id, func.count())
+        .join(PodDraftEvent, PodDraftEvent.id == PodDraftParticipant.event_id)
+        .where(
+            PodDraftParticipant.player_id.is_not(None),
+            PodDraftParticipant.record.is_not(None),
+            PodDraftEvent.event_date >= seed.start_date,
         )
-    ).scalar_one_or_none()
-    if player is None:
-        return None
-    ctx = PlayerCtx(player=player)
-    events = session.execute(
-        select(DraftEvent).where(DraftEvent.set_id == mset.id, DraftEvent.player_id == player.id)
-    ).scalars()
-    for event in events:
-        if event.started_at is not None and event.started_at.astimezone(ET).date() < release_date:
-            continue
-        ctx.events.append(event)
-    stats = session.execute(
-        select(PlayerStats).where(PlayerStats.set_id == mset.id, PlayerStats.player_id == player.id)
-    ).scalars()
-    for stat in stats:
-        ctx.stats_rows.append({
-            "format": stat.format, "wins": stat.wins, "losses": stat.losses,
-            "trophies": stat.trophies, "events": stat.events,
-        })
-    return ctx if ctx.events else None
+        .group_by(PodDraftParticipant.player_id)
+    )
+    if seed.end_date is not None:
+        query = query.where(PodDraftEvent.event_date <= seed.end_date)
+    return {player_id: count for player_id, count in session.execute(query)}
 
 
 SPECIALIST_FIELD_SEP = ", vs field of"
@@ -377,15 +315,7 @@ def revel_detail(boxes: int, events: int) -> str:
 
 
 def mvp_detail(count: int) -> str:
-    return f"**{count}** trophies to trophy-hype"
-
-
-def mvp_ceremony_detail(count: int) -> str:
-    return f"**{count}** trophies posted"
-
-
-def mvp_runner_detail(count: int) -> str:
-    return f"**{count}** trophies"
+    return f"**{count}** pod drafts"
 
 
 def first_striker(ctxs: list[PlayerCtx], seed: SetSeed) -> list[AwardCandidate]:
@@ -506,6 +436,12 @@ def revel_in_riches(ctxs: list[PlayerCtx], code: str) -> list[AwardCandidate]:
         c.candidate(revel_detail(boxes, events), boxes)
         for boxes, events, c in scored
     ]
+
+
+def mvp(ctxs: list[PlayerCtx]) -> list[AwardCandidate]:
+    played = [c for c in ctxs if c.pod_drafts > 0]
+    played.sort(key=lambda c: (c.pod_drafts, c.tiebreak), reverse=True)
+    return [c.candidate(mvp_detail(c.pod_drafts), c.pod_drafts) for c in played]
 
 
 def avatar_url(discord_id: str | None, avatar_hash: str | None) -> str:

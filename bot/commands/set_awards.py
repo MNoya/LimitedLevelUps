@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import discord
@@ -28,7 +28,6 @@ from bot.sets import ALL_SETS, active_set_code
 
 log = logging.getLogger(__name__)
 COMMUNITY_TZ = ZoneInfo("America/New_York")
-CROSS = "❌"
 MSG_NOT_ON_BOARD = (
     "You're not on the leaderboard yet. "
     "Run `/join` to share your stats, then come back and see how you did {love}"
@@ -46,8 +45,6 @@ REVEAL_DELAY_SECONDS = 5
 SUSPENSE_COUNTING = "Tallying the season…"
 SUSPENSE_UP_NEXT = "Up Next…"
 SUSPENSE_FINAL = "Final Award…"
-
-TROPHY_HYPE_FALLBACK = "#🏆-trophy-hype"
 
 SITE_LEADERBOARD_URL = "https://limitedlevelups.com/leaderboard"
 LEADERBOARD_NOTE = f"`/join` to enter · [limitedlevelups.com/leaderboard]({SITE_LEADERBOARD_URL})"
@@ -68,7 +65,6 @@ class AwardSpec:
     name: str
     tagline: str
     custom_emoji: str | None = None
-    channel_match: str | None = None
     connector: str = "with"
     you_verb: str = ""
     miss: str = ""
@@ -92,7 +88,6 @@ class SetAwardsData:
     set_code: str
     window_label: str
     awards: tuple[SetAward, ...]
-    channel_mention: str = TROPHY_HYPE_FALLBACK
 
 
 AWARD_SPECS: tuple[AwardSpec, ...] = (
@@ -111,22 +106,10 @@ AWARD_SPECS: tuple[AwardSpec, ...] = (
     AwardSpec("revel_in_riches", "📦", "Revel in Riches", "Most Arena Direct boxes won",
               custom_emoji="8000gems", you_verb="won",
               miss="No Arena Direct boxes this set"),
-    AwardSpec("mvp", "📸", "Most Valuable Poster", "Most trophies in {channel}",
-              channel_match="trophy-hype", you_verb="posted",
-              miss="No trophy posts this set"),
+    AwardSpec("mvp", "🚀", "Most Valuable Pod-Drafter", "Most pod drafts played",
+              you_verb="played",
+              miss="No pod drafts this set"),
 )
-
-AWARD_SPECS_BY_KEY: dict[str, AwardSpec] = {spec.key: spec for spec in AWARD_SPECS}
-
-
-def trophy_hype_mention(guild: discord.Guild | None) -> str:
-    """Clickable `<#id>` mention for the MVP channel, or the plain fallback when it can't be resolved."""
-    match = AWARD_SPECS_BY_KEY["mvp"].channel_match
-    if guild is not None and match:
-        for channel in guild.text_channels:
-            if match in channel.name:
-                return channel.mention
-    return TROPHY_HYPE_FALLBACK
 
 
 def build_set_awards_view(data: SetAwardsData, reveal: int | None = None) -> ui.LayoutView:
@@ -143,7 +126,7 @@ def build_set_awards_view(data: SetAwardsData, reveal: int | None = None) -> ui.
     shown = data.awards if reveal is None else data.awards[:reveal]
     for i, award in enumerate(shown):
         container.add_item(ui.Section(
-            ui.TextDisplay(_award_text(award, data.channel_mention)),
+            ui.TextDisplay(_award_text(award)),
             accessory=ui.Thumbnail(media=award.thumbnail_url),
         ))
         if i < len(shown) - 1:
@@ -171,13 +154,12 @@ async def reveal_set_awards(
     await message.edit(view=build_set_awards_view(data), **extra)
 
 
-def _award_text(award: SetAward, channel_mention: str) -> str:
+def _award_text(award: SetAward) -> str:
     spec = award.spec
-    tagline = spec.tagline.format(channel=channel_mention) if "{channel}" in spec.tagline else spec.tagline
     sep = f" {spec.connector} " if spec.connector else " "
     lines = [
         f"### {spec.display_emoji()} {spec.name}",
-        f"{GAP}_{tagline}_",
+        f"{GAP}_{spec.tagline}_",
         f"{GAP}🥇 **{award.winner.name}**{sep}{award.winner.detail}",
     ]
     if award.runner_ups:
@@ -200,12 +182,11 @@ def _suspense_line(reveal: int, total: int) -> str:
 def build_my_awards_view(
     set_code: str, ranked: dict, discord_id: str, extras: dict | None = None,
 ) -> ui.LayoutView:
-    """Ephemeral per-player view: where the caller stands in each DB award race (MVP excluded — it
-    needs a full channel scan and is the ceremony reveal), plus personal-only fun streaks.
+    """Ephemeral per-player view: where the caller stands in each award race, plus personal-only
+    fun streaks.
 
     Every category is shown: earned ones carry a rank badge and the detail line, ones the player
     didn't place in get a muted reason so the board reads as a full scorecard, not a filtered one.
-    MVP only appears once a ceremony has folded its #trophy-hype scan into the cached payload.
     """
     view = ui.LayoutView()
     container = ui.Container(accent_colour=discord.Color.green())
@@ -213,8 +194,6 @@ def build_my_awards_view(
     container.add_item(ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
     for spec in AWARD_SPECS:
-        if spec.key == "mvp" and "mvp" not in ranked:
-            continue
         rank, _total, mine = _standing(ranked.get(spec.key, []), discord_id)
         container.add_item(ui.TextDisplay(_my_award_line(spec, rank, mine)))
 
@@ -370,7 +349,7 @@ async def run_set_awards_ceremony(
     or None when nothing could be computed (the placeholder is removed). Shared by ``/set-awards`` and
     the scheduled day-before ceremony so both render one way."""
     in_thread = isinstance(channel, discord.Thread)
-    empty = SetAwardsData(code, _window_label(seed), (), trophy_hype_mention(guild))
+    empty = SetAwardsData(code, _window_label(seed), ())
     ceremony = await channel.send(
         view=build_set_awards_view(empty, reveal=0), allowed_mentions=discord.AllowedMentions.none(),
     )
@@ -380,10 +359,8 @@ async def run_set_awards_ceremony(
         if mset is None:
             await ceremony.delete()
             return None
-        ranked, _, _ = awards_svc.build_payload(session, mset, seed)
+        ranked = awards_svc.compute_db_awards(session, mset, seed)
 
-    ranked["mvp"] = awards_svc.mvp(await _scan_trophy_hype(guild, seed))
-    awards_svc.cache_mvp(seed, ranked["mvp"])
     winners, runners = awards_svc.assign(ranked)
     data = build_data(code, seed, winners, runners, guild, mention=not in_thread)
     if not data.awards:
@@ -435,7 +412,7 @@ def build_data(
             thumbnail_url=winner.avatar_url or awards_svc.avatar_url(None, None),
             runner_ups=tuple(_runner_entrant(spec, r, winner, mention, guild) for r in runners.get(spec.key, [])),
         ))
-    return SetAwardsData(code, _window_label(seed), tuple(awards), trophy_hype_mention(guild))
+    return SetAwardsData(code, _window_label(seed), tuple(awards))
 
 
 def _entrant(cand: "awards_svc.AwardCandidate", mention: bool, guild: discord.Guild | None) -> AwardEntrant:
@@ -460,8 +437,6 @@ def _runner_entrant(
         detail = f"**{cand.tie_key} trophies**, {_relative_day(cand.when, winner.when)}"
     elif spec.key == "specialist" and cand.archetype is not None and cand.archetype == winner.archetype:
         detail = (cand.ceremony_detail or cand.detail).split(awards_svc.SPECIALIST_FIELD_SEP)[0]
-    elif spec.key == "mvp":
-        detail = awards_svc.mvp_runner_detail(cand.tie_key)
     else:
         detail = cand.ceremony_detail or cand.detail
     return AwardEntrant(name=name, detail=detail)
@@ -475,40 +450,6 @@ def _ping_ids(winners: dict, runners: dict) -> list[int]:
             if uid not in ids:
                 ids.append(uid)
     return ids
-
-
-async def _scan_trophy_hype(guild: discord.Guild | None, seed) -> list["awards_svc.PostTally"]:
-    match = AWARD_SPECS_BY_KEY["mvp"].channel_match
-    channels = [c for c in guild.text_channels if match in c.name] if guild and match else []
-    if not channels:
-        return []
-    start = datetime.combine(seed.start_date, time.min, tzinfo=COMMUNITY_TZ)
-    end_date = min(seed.end_date, date.today()) if seed.end_date else date.today()
-    end = datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=COMMUNITY_TZ)
-    counts: dict[str, int] = {}
-    meta: dict[str, tuple[str, str]] = {}
-    for channel in channels:
-        async for message in channel.history(after=start, before=end, limit=None):
-            if message.author.bot or not _has_image_attachment(message) or _has_cross(message):
-                continue
-            author_id = str(message.author.id)
-            counts[author_id] = counts.get(author_id, 0) + 1
-            meta[author_id] = (message.author.display_name, message.author.display_avatar.url)
-    total = sum(counts.values())
-    log.info(f"trophy-hype scan: {total} trophies across {len(counts)} posters in {len(channels)} channels")
-    return [awards_svc.PostTally(aid, meta[aid][0], meta[aid][1], n) for aid, n in counts.items()]
-
-
-def _has_image_attachment(message: discord.Message) -> bool:
-    return any((a.content_type or "").lower().startswith("image/") for a in message.attachments)
-
-
-def _has_cross(message: discord.Message) -> bool:
-    for reaction in message.reactions:
-        name = reaction.emoji if isinstance(reaction.emoji, str) else getattr(reaction.emoji, "name", "")
-        if (name or "").replace("️", "") == CROSS:
-            return True
-    return False
 
 
 MY_AWARDS_BUTTON_ID = "set_awards:my"

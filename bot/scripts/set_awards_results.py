@@ -1,9 +1,9 @@
-"""Print the DB-based Set Awards from DATABASE_URL using the shared service logic. Read-only.
+"""Print the Set Awards from DATABASE_URL using the shared service logic. Read-only.
 
     DATABASE_URL=postgresql://... python -m bot.scripts.set_awards_results [--set CODE]
 
 Runs the same `bot.services.set_awards` math the live `/set-awards` command uses, so the preview
-here matches the ceremony. Most Valuable Poster needs a live #trophy-hype scan and is omitted.
+here matches the ceremony.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ AWARD_NAMES = {
     "climber": "The Climber",
     "specialist": "The Specialist",
     "revel_in_riches": "Revel in Riches",
-    "mvp": "Most Valuable Poster",
+    "mvp": "Most Valuable Pod-Drafter",
 }
 
 
@@ -46,9 +46,6 @@ def main() -> None:
     print(f"\n{'='*78}\n  SET AWARDS — {code} ({seed.name})\n{'='*78}")
     for key in svc.CEREMONY_ORDER:
         print(f"\n  {AWARD_NAMES[key]}")
-        if key == "mvp":
-            print("    📸 needs the live #trophy-hype scan")
-            continue
         winner = winners.get(key)
         print(f"    🥇 {winner.display_name} — {_plain(winner.detail)}" if winner else "    🥇 (no qualifier)")
         for runner in runners.get(key, []):
