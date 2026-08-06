@@ -114,6 +114,20 @@ def test_archival_render_drops_the_section_headers():
     assert archival.count("###") == 0
 
 
+def test_archival_render_keeps_every_window_of_a_repeated_format():
+    """A live board shows a recurring format once, since its later run surfaces after the first ends.
+    A frozen season record has no later render to rely on, so a hidden second run is a queue lost."""
+    now = datetime(2026, 8, 4, 15, tzinfo=timezone.utc)
+    early = _group("Marvel Super Heroes", (), ["Quick Draft"], now - timedelta(days=33), now - timedelta(days=23))
+    late = _group("Marvel Super Heroes", (), ["Quick Draft"], now - timedelta(days=4), now + timedelta(days=7))
+
+    live = build_schedule_embed([early, late], [], {}, "Marvel Super Heroes").description
+    archival = build_schedule_embed([early, late], [], {}, "Marvel Super Heroes", archival=True).description
+
+    assert live.count("Quick Draft") == 1
+    assert archival.count("Quick Draft") == 2
+
+
 def test_set_pin_freezes_inside_the_final_week():
     cases = [
         (datetime(2026, 8, 1, 15, tzinfo=timezone.utc), False),

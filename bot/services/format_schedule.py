@@ -177,6 +177,16 @@ def set_before(seed: SetSeed) -> SetSeed | None:
     return previous
 
 
+def season_archived(seed: SetSeed, when: datetime | None = None) -> bool:
+    """Whether a set's schedule reads as a record instead of a countdown: inside the final week of its
+    window, or past it. A relative countdown is noise once a season stops moving and wrong once it has
+    ended, so the frozen pin and an explicit /event-scribe set query both switch on this."""
+    if seed.end_date is None:
+        return False
+    now = when or datetime.now(timezone.utc)
+    return seed.end_date - now.astimezone(EVENT_DAY_TZ).date() <= SET_PIN_FREEZE_LEAD
+
+
 def set_pin_frozen(when: datetime | None = None) -> bool:
     """Whether the set channel's pinned schedule should be left alone from here on.
 
@@ -184,11 +194,7 @@ def set_pin_frozen(when: datetime | None = None) -> bool:
     the pin holding an emptied board, every queue ended — and the channel is archived days later, so
     that pin becomes the season's record. Freezing early keeps it a full picture instead.
     """
-    seed = active_set_seed(when)
-    if seed.end_date is None:
-        return False
-    now = when or datetime.now(timezone.utc)
-    return seed.end_date - now.astimezone(EVENT_DAY_TZ).date() <= SET_PIN_FREEZE_LEAD
+    return season_archived(active_set_seed(when), when)
 
 
 def awards_eve_set(when: datetime | None = None) -> SetSeed | None:

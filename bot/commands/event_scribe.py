@@ -14,6 +14,7 @@ from bot import audit
 from bot.commands import descriptions as desc
 from bot.discord_helpers import NBSP, posts_publicly
 from bot.services import mtgscribe
+from bot.services.format_schedule import season_archived
 from bot.services.scribe_formats import short_format
 from bot.sets import ALL_SETS
 
@@ -80,18 +81,25 @@ class EventScribe(commands.Cog):
             logger.exception("event-scribe could not read the bundled MTG Scribe calendar")
             await interaction.followup.send("MTG Scribe events are unavailable right now. Try again later.")
             return
-        in_progress, upcoming = process_events(events, selected, set)
+        archival = archives_set_query(set)
+        if archival:
+            in_progress = select_season_groups(events, set, [selected] if selected else None)
+            upcoming = []
+        else:
+            in_progress, upcoming = process_events(events, selected, set)
         emojis = {emoji.name: emoji for emoji in await self.bot.fetch_application_emojis()}
         audit.event(
             "event_scribe_invoked",
             user_id=str(interaction.user.id),
             format=selected or "all",
             set=set or "all",
+            archival=archival,
             in_progress=len(in_progress),
             upcoming=len(upcoming),
         )
         scope = _heading_scope(set, selected)
-        await interaction.followup.send(**build_schedule_payload(in_progress, upcoming, emojis, scope))
+        payload = build_schedule_payload(in_progress, upcoming, emojis, scope, archival=archival)
+        await interaction.followup.send(**payload)
 
     @event_scribe.autocomplete("set")
     async def event_scribe_set_autocomplete(
@@ -118,7 +126,7 @@ def select_groups(events: list, filters: list | None, set_query: str | None = No
     return in_progress, upcoming
 
 
-def select_season_groups(events: list, set_query: str) -> list:
+def select_season_groups(events: list, set_query: str, filters: list | None = None) -> list:
     """Every queue a set ran or will run, in start order, finished ones included.
 
     The archival board's selection. ``partition_by_now`` drops a queue once it closes, which is right
@@ -126,8 +134,18 @@ def select_season_groups(events: list, set_query: str) -> list:
     already came and went is exactly what the record is for. Rendered as one flat list, since archival
     mode gives running and upcoming queues the same date range anyway.
     """
-    groups = _selected_groups(events, None, set_query)
+    groups = _selected_groups(events, filters, set_query)
     return sorted(groups, key=lambda group: group.start)
+
+
+def archives_set_query(set_query: str | None) -> bool:
+    """Whether an explicit ``set:`` renders the archival board. A season in its final week or already
+    over has nothing left to count down to, so it reads as a record: every window the set ran, with
+    absolute dates. Set text matching no seed keeps the live board."""
+    if not set_query:
+        return False
+    seed = _seed_for_label(set_query)
+    return seed is not None and season_archived(seed)
 
 
 def _selected_groups(events: list, filters: list | None, set_query: str | None) -> list:
@@ -446,8 +464,11 @@ def _estimate_cols(text: str) -> int:
 
 def _set_block(label: str, windows: list, emojis: dict, *, upcoming: bool,
                archival: bool = False) -> str:
-    items = [_format_line(group, emojis, upcoming=upcoming, archival=archival)
-             for group in _by_format(windows)]
+    """An archival block gives every window its own line. Collapsing a repeated format to its soonest
+    window keeps a live board short, because the later run surfaces on its own once the first ends, but
+    a frozen season record that hides a second run is simply missing a queue that ran."""
+    grouped = [[window] for window in windows] if archival else _by_format(windows)
+    items = [_format_line(group, emojis, upcoming=upcoming, archival=archival) for group in grouped]
     lines = [f"{_set_emoji_prefix(windows[0], emojis)}**{label}**"]
     for index, item in enumerate(items):
         corner = "└" if index == len(items) - 1 else "├"
