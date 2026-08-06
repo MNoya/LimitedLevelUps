@@ -2,18 +2,18 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+from bot.commands.test_group import HALL_OF_FAME
 from bot.services import pod_tournament
 from bot.services.ping_roles import plan_set_champion_swap
 from bot.services.pod_tournament import (
-    ANNOUNCEMENT_TOP_N,
     CHAMPION_TITLE_GLYPH,
     CHAMPIONSHIP_DECK_HEADER,
     SET_CHAMPION_TITLE_GLYPH,
     _format_champion_title,
     ParticipantDeckData,
+    announced_finishers,
     deck_complete,
-    incomplete_champion_decks,
-    incomplete_top_decks,
+    incomplete_decks,
     normalize_player_name,
     build_deck_ping,
     deck_missing_parts,
@@ -106,31 +106,29 @@ def test_deck_complete_requires_colors_and_screenshot():
     assert not deck_complete(None)
 
 
-def test_championship_clear_when_top_finishers_all_complete():
-    standings = _standings("Aria", "Bryn", "Caedmon", "Doryn", "Esk")
-    deck_data = _complete_decks("Aria", "Bryn", "Caedmon", "Doryn")
-    assert incomplete_top_decks(standings, deck_data) == []
+def test_announced_finishers_covers_every_one_loss_record():
+    standings = _finished_standings(((3, 0),) + ((2, 1),) * 6 + ((0, 3),) * 3)
+
+    finishers = announced_finishers(standings, _POD_NAME)
+
+    assert [s.player_name for s in finishers] == list(HALL_OF_FAME[:7])
 
 
-def test_championship_waits_on_missing_top_finisher():
-    standings = _standings("Aria", "Bryn", "Caedmon", "Doryn")
-    deck_data = _complete_decks("Aria", "Bryn", "Caedmon")
-    deck_data[normalize_player_name("Doryn")] = _deck("WU", None)
-    assert incomplete_top_decks(standings, deck_data) == ["Doryn"]
+def test_announced_finishers_keeps_the_whole_field_for_a_set_championship():
+    standings = _finished_standings(((3, 0), (2, 1), (1, 2), (0, 3)))
+
+    finishers = announced_finishers(standings, "👑 MSH Set Championship")
+
+    assert [s.player_name for s in finishers] == list(HALL_OF_FAME[:4])
 
 
-def test_championship_ignores_players_outside_top_n():
-    extra = "Faron"
-    standings = _standings("Aria", "Bryn", "Caedmon", "Doryn", extra)
-    deck_data = _complete_decks("Aria", "Bryn", "Caedmon", "Doryn")
-    assert incomplete_top_decks(standings, deck_data) == []
+def test_championship_post_waits_on_a_two_one_screenshot():
+    standings = _finished_standings(((3, 0),) + ((2, 1),) * 6 + ((0, 3),) * 3)
+    finishers = announced_finishers(standings, _POD_NAME)
+    deck_data = _complete_decks(*HALL_OF_FAME[:6])
+    deck_data[normalize_player_name(HALL_OF_FAME[6])] = _deck("WU", None)
 
-
-def test_championship_requires_all_when_pod_smaller_than_top_n():
-    standings = _standings("Aria", "Bryn", "Caedmon")
-    assert len(standings) < ANNOUNCEMENT_TOP_N
-    deck_data = _complete_decks("Aria", "Bryn")
-    assert incomplete_top_decks(standings, deck_data) == ["Caedmon"]
+    assert incomplete_decks(finishers, deck_data) == [HALL_OF_FAME[6]]
 
 
 def test_trophy_hype_waits_on_champions_only():
@@ -139,7 +137,7 @@ def test_trophy_hype_waits_on_champions_only():
     deck_data[normalize_player_name("Bryn")] = _deck("WU", None)
     deck_data[normalize_player_name("Caedmon")] = _deck(None, None)
 
-    assert incomplete_champion_decks(champions, deck_data) == ["Bryn"]
+    assert incomplete_decks(champions, deck_data) == ["Bryn"]
 
 
 def test_deck_missing_parts_reports_each_gap():
@@ -217,8 +215,19 @@ def test_round_announcement_prefixes_the_round_label():
     assert linked == "**[__Round 3__](https://discord.com/channels/1/2/3)** Marlo wins 2-0 vs Bob"
 
 
+_POD_NAME = "MSH Jul 21 Late Pod"
+
+
 def _standings(*names: str) -> list:
     return [SimpleNamespace(player_name=n) for n in names]
+
+
+def _finished_standings(records: tuple[tuple[int, int], ...]) -> list:
+    """Standings rows in finishing order, one per (wins, losses) record, named off the hall of fame."""
+    return [
+        SimpleNamespace(player_name=name, wins=wins, losses=losses)
+        for name, (wins, losses) in zip(HALL_OF_FAME, records)
+    ]
 
 
 def _deck(colors: str | None, screenshot: str | None) -> ParticipantDeckData:

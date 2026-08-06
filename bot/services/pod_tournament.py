@@ -150,8 +150,8 @@ POD_REPAIR_FAILED_MSG = (
     "⚠️ Round {round_num} couldn't be re-paired after the edit, so its previous pairings stand. "
     "An Organizer should check the matchups."
 )
-ANNOUNCEMENT_TOP_N = 4  # channel-level announcement shows top performers only; thread keeps full standings
-RUNNER_UP_GALLERY_CAP = 6  # Discord grids three per row; a seventh deck strands one on a row of its own
+ANNOUNCED_MAX_LOSSES = 1  # a 3-0 or 2-1 finish earns an announcement row; the thread keeps full standings
+DECK_GALLERY_CAP = 6  # Discord grids three per row; a seventh deck strands one on a row of its own
 TROPHY_HYPE_HISTORY_LIMIT = 100  # messages scanned for a champion's own trophy post before the bot posts
 CHAMPIONSHIP_DEADLINE_SECONDS = 600  # hard cap from R3 end: post the announcement with whatever decks landed
 CHAMPIONSHIP_RECONCILE_WINDOW = timedelta(hours=24)  # startup sweep only revisits recently-finalized pods
@@ -2884,14 +2884,12 @@ def build_champion_announcement_view(
 ) -> ui.LayoutView:
     """One-shot 'champion crowned' Components V2 layout for the pod-draft channel (not the thread).
 
-    Layout: Container (green accent) holds the headline + localized timestamp, then the top
-    ANNOUNCEMENT_TOP_N standings rows, or the whole pod for a Set Championship, whose full field is the
-    record worth keeping. Every player who finished with zero losses (champion) is
-    rendered with an optional italicized caption line and a full-size deck shot. Everyone else in
-    the top-N collapses into a single compact text block, with their deck screenshots batched
-    into one MediaGallery beneath, capped at RUNNER_UP_GALLERY_CAP so the grid ends on a full row and
-    the last finisher's deck is the one dropped. Full standings stay in the thread embed. Thread-link
-    button sits OUTSIDE the container at LayoutView top level.
+    Layout: Container (green accent) holds the headline + localized timestamp, then the blocks
+    _announcement_blocks splits the announced finishers into (see announced_finishers), each one a compact
+    text run of its rows with an optional italicized caption line, followed by its deck screenshots batched
+    into one MediaGallery, capped at DECK_GALLERY_CAP so the grid ends on a full row and the last
+    finisher's deck is the one dropped. Full standings stay in the thread embed. Thread-link button sits
+    OUTSIDE the container at LayoutView top level.
     """
     displays = displays or {}
     player_colors = player_colors or {}
@@ -2927,48 +2925,32 @@ def build_champion_announcement_view(
     container.add_item(ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
     # Hide rows whose record isn't yet final; the announcement re-edits when later R3 results land
-    depth = announcement_depth(standings, event_name)
     top_standings = [
-        s for s in standings[:depth]
+        s for s in announced_finishers(standings, event_name)
         if s.wins + s.losses >= TOTAL_ROUNDS
     ]
-    pending_lines: list[str] = []
-    runners_up_items: list[discord.MediaGalleryItem] = []
 
-    for s in top_standings:
-        row_text = _build_standings_row(
-            s, displays=displays, player_colors=player_colors,
-            deck_data=deck_data, leaderboard_url=leaderboard_url,
-            event_name=event_name, inline_caption=True,
-        )
-        key = normalize_player_name(s.player_name)
-        data = deck_data.get(key)
-        info = displays.get(key, {})
-        name = info.get("display_name") or s.player_name
-        is_champion = s.rank == 1
-        has_screenshot = data is not None and data.screenshot_url
-
-        if is_champion and has_screenshot:
-            # Champion gets its own TextDisplay so the full image is visually anchored to it.
-            # Flush anything we've accumulated so far (e.g. a co-champion without a screenshot).
-            if pending_lines:
-                container.add_item(ui.TextDisplay("\n".join(pending_lines)))
-                pending_lines = []
-            container.add_item(ui.TextDisplay(row_text))
-            container.add_item(ui.MediaGallery(
-                discord.MediaGalleryItem(media=data.screenshot_url, description=f"{name}'s deck"),
+    for block in _announcement_blocks(top_standings, deck_data, event_name):
+        rows: list[str] = []
+        decks: list[discord.MediaGalleryItem] = []
+        for s in block:
+            rows.append(_build_standings_row(
+                s, displays=displays, player_colors=player_colors,
+                deck_data=deck_data, leaderboard_url=leaderboard_url,
+                event_name=event_name, inline_caption=True,
             ))
-        else:
-            pending_lines.append(row_text)
-            if has_screenshot:
-                runners_up_items.append(
-                    discord.MediaGalleryItem(media=data.screenshot_url, description=f"{name}'s deck"),
-                )
-
-    if pending_lines:
-        container.add_item(ui.TextDisplay("\n".join(pending_lines)))
-    if runners_up_items:
-        container.add_item(ui.MediaGallery(*runners_up_items[:RUNNER_UP_GALLERY_CAP]))
+            key = normalize_player_name(s.player_name)
+            data = deck_data.get(key)
+            if data is None or not data.screenshot_url:
+                continue
+            info = displays.get(key, {})
+            name = info.get("display_name") or s.player_name
+            decks.append(
+                discord.MediaGalleryItem(media=data.screenshot_url, description=f"{name}'s deck"),
+            )
+        container.add_item(ui.TextDisplay("\n".join(rows)))
+        if decks:
+            container.add_item(ui.MediaGallery(*decks[:DECK_GALLERY_CAP]))
 
     view.add_item(container)
 
@@ -2979,6 +2961,26 @@ def build_champion_announcement_view(
     view.add_item(actions)
 
     return view
+
+
+def _announcement_blocks(finishers, deck_data, event_name: str | None) -> list[list[pod_swiss.Standing]]:
+    """The announced rows split into the blocks the card draws, each block one text run plus its own deck
+    gallery. A pod groups by record, so its 3-0s and its 2-1s each get a gallery of their own. A Set
+    Championship keeps the champion alone above their full-size deck, once they have posted one, with the
+    rest of the field in a single block below."""
+    if is_championship(event_name):
+        champion = finishers[0] if finishers else None
+        data = deck_data.get(normalize_player_name(champion.player_name)) if champion else None
+        if data is not None and data.screenshot_url:
+            return [block for block in ([champion], finishers[1:]) if block]
+        return [finishers] if finishers else []
+    blocks: list[list[pod_swiss.Standing]] = []
+    for s in finishers:
+        if blocks and blocks[-1][0].losses == s.losses:
+            blocks[-1].append(s)
+        else:
+            blocks.append([s])
+    return blocks
 
 
 def round_header(round_num: int, complete: bool, *, seated: bool = True) -> str:
@@ -3512,29 +3514,21 @@ def deck_missing_parts(data: "ParticipantDeckData | None") -> list[str]:
     return missing
 
 
-def announcement_depth(standings, event_name: str | None) -> int:
-    """How far down the standings the channel announcement reaches: the top finishers for a normal pod,
-    the whole field for a Set Championship, whose full result is the record worth keeping. The same depth
-    gates the post, so every row it shows has had its deck waited for."""
+def announced_finishers(standings, event_name: str | None) -> list[pod_swiss.Standing]:
+    """How far the channel announcement reaches: every record within ANNOUNCED_MAX_LOSSES for a normal pod,
+    so a ten-player pod posts all of its 2-1s instead of cutting at a fixed four, and the whole field for a
+    Set Championship, whose full result is the record worth keeping. The same set gates the post, so every
+    row it shows has had its deck waited for."""
     if is_championship(event_name):
-        return len(standings)
-    return ANNOUNCEMENT_TOP_N
+        return list(standings)
+    return [s for s in standings if s.losses <= ANNOUNCED_MAX_LOSSES]
 
 
-def incomplete_top_decks(standings, deck_data, *, depth: int = ANNOUNCEMENT_TOP_N) -> list[str]:
-    """Names among the announced finishers (`depth`, or fewer for a smaller pod) still missing colors or
-    a screenshot. Empty list means the championship post is clear to go up."""
+def incomplete_decks(finishers, deck_data) -> list[str]:
+    """Names among `finishers` still missing colors or a screenshot. Empty list means the post they gate
+    is clear to go up."""
     return [
-        s.player_name for s in standings[:depth]
-        if not deck_complete(deck_data.get(normalize_player_name(s.player_name)))
-    ]
-
-
-def incomplete_champion_decks(champions, deck_data) -> list[str]:
-    """Champion (zero-loss) names still missing colors or a screenshot. Empty list clears the
-    #trophy-hype card to post. Unlike incomplete_top_decks, 2-1 finishers never hold it up."""
-    return [
-        s.player_name for s in champions
+        s.player_name for s in finishers
         if not deck_complete(deck_data.get(normalize_player_name(s.player_name)))
     ]
 
@@ -3542,7 +3536,7 @@ def incomplete_champion_decks(champions, deck_data) -> list[str]:
 async def ping_missing_deck_participants(manager, blocking_keys: set[str] | None = None) -> None:
     """At tournament end, post a single deck-chase ping split by audience: the players gating the
     championship post get the urgent block, everyone else the pod-page nudge. The gating set defaults
-    to the top finishers; team pods pass their own (winning side plus losing 3-0s). Skips silently
+    to the announced finishers; team pods pass their own (winning side plus losing 3-0s). Skips silently
     once every participant has both colors and a screenshot on record."""
     event_id = manager.event_id
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
@@ -3583,9 +3577,9 @@ def _missing_deck_mentions(standings, dm_info, deck_data, blocking_keys: set[str
     deck) and everyone else, each as (owes-screenshot, owes-colors) id lists. Standings order first
     so top finishers lead; participants absent from standings fall to the non-blocking audience."""
     if blocking_keys is None:
-        depth = announcement_depth(standings, event_name)
+        finishers = announced_finishers(standings, event_name)
         blocking_keys = {
-            normalize_player_name(n) for n in incomplete_top_decks(standings, deck_data, depth=depth)
+            normalize_player_name(n) for n in incomplete_decks(finishers, deck_data)
         }
     blocking: DeckPingAudience = ([], [])
     other: DeckPingAudience = ([], [])
@@ -3628,8 +3622,8 @@ async def _championship_deadline(manager) -> None:
 
 async def maybe_post_championship(manager, *, force: bool = False) -> None:
     """Post the one-time pod-draft-coordination announcement (ComponentsV2 screenshot gallery) to the
-    thread's parent channel. Fires once the top finishers (ANNOUNCEMENT_TOP_N, or the whole pod if
-    smaller) all have colors and a screenshot, or when forced by the deadline. Posts once, never edits.
+    thread's parent channel. Fires once every announced finisher (3-0 and 2-1, or the whole pod for a
+    Set Championship) has colors and a screenshot, or when forced by the deadline. Posts once, never edits.
 
     The champion-only #trophy-hype card posts separately, once the champions' decks are complete —
     see maybe_post_trophy_hype. Team pods never post either — a team draft has no single champion;
@@ -3664,12 +3658,12 @@ async def maybe_post_championship(manager, *, force: bool = False) -> None:
 
     event_name = await asyncio.to_thread(load_event_name_sync, event_id)
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
-    depth = announcement_depth(standings, event_name)
-    incomplete = incomplete_top_decks(standings, deck_data, depth=depth)
+    finishers = announced_finishers(standings, event_name)
+    incomplete = incomplete_decks(finishers, deck_data)
     if incomplete and not force:
         log.info(
-            f"[FINALIZE] champion.skip event={event_id} reason=awaiting_top{depth} "
-            f"missing={incomplete}"
+            f"[FINALIZE] champion.skip event={event_id} reason=awaiting_finisher_decks "
+            f"announced={len(finishers)} missing={incomplete}"
         )
         return
 
@@ -3743,7 +3737,7 @@ async def maybe_post_trophy_hype(manager, *, force: bool = False) -> None:
     standings, _ = resolved
     champions = [s for s in standings if s.losses == 0] or [standings[0]]
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
-    incomplete = incomplete_champion_decks(champions, deck_data)
+    incomplete = incomplete_decks(champions, deck_data)
     if incomplete and not force:
         log.info(
             f"[FINALIZE] trophy_hype.skip event={event_id} reason=awaiting_champion_decks "

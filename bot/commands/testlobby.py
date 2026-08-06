@@ -1045,7 +1045,7 @@ def _trophy_hype_preview() -> discord.ui.LayoutView:
     key = normalize_player_name(champion.player_name)
     return build_trophy_hype_view(
         [champion],
-        event_name="SOS Pod Draft #6 - Jun 3",
+        event_name=_pod_preview_name(),
         displays={key: {"display_name": "Ava"}},
         player_colors={key: "URg"},
         deck_data={key: ParticipantDeckData(
@@ -1060,13 +1060,14 @@ def _trophy_hype_preview() -> discord.ui.LayoutView:
 
 _CHAMPION_PREVIEW_NAMES = (
     "Thistledown (Maramir)", "u/Longpost_Enjoyer", "SilverbackGorilla⭐-_-💧", "C. Vulgaris",
-    "driftwood", "quickfox", "mo", "yo",
+    "driftwood", "quickfox", "mo", "yo", "Pipsqueak", "Bramblewine",
 )
-_CHAMPION_PREVIEW_RECORDS = ((3, 0), (2, 1), (2, 1), (2, 1), (1, 2), (1, 2), (1, 2), (0, 3))
-_CHAMPION_PREVIEW_COLORS = ("URg", "WB", "RG", "UB", "WU", "BRw", "GW", "WUBRG")
+_POD_PREVIEW_RECORDS = ((3, 0), (3, 0), (2, 1), (2, 1), (2, 1), (2, 1), (1, 2), (0, 3), (0, 3), (0, 3))
+_CHAMPIONSHIP_PREVIEW_RECORDS = ((3, 0), (2, 1), (2, 1), (2, 1), (1, 2), (1, 2), (1, 2), (0, 3))
+_CHAMPION_PREVIEW_COLORS = ("URg", "WB", "RG", "UB", "WU", "BRw", "GW", "WUBRG", "Wb", "BG")
 _CHAMPION_PREVIEW_CAPTIONS = (
     "three bombs and a prayer", "fliers win games", None, "rakdos did rakdos things",
-    None, "never drew the bomb", None, "five colors, zero wins",
+    None, "never drew the bomb", None, "five colors, zero wins", None, "the deck was fine",
 )
 
 
@@ -1080,34 +1081,39 @@ def _championship_preview_name() -> str:
     return f"👑 {active_set_code()} Set Championship"
 
 
-def _champion_preview_parts():
-    """Fixture parts for both championship surfaces. The winner carries a parenthetical alias, so the
-    previews show how an aliased display name reads in each headline."""
+def _pod_preview_name() -> str:
+    return f"{active_set_code()} Pod Draft #6 - Jun 3"
+
+
+def _champion_preview_parts(records: tuple[tuple[int, int], ...]):
+    """Fixture parts for the champion surfaces, one player per record in `records`. The winner carries a
+    parenthetical alias, so the previews show how an aliased display name reads in each headline."""
+    names = _CHAMPION_PREVIEW_NAMES[:len(records)]
     standings = [
         Standing(rank=i + 1, player_id=n, player_name=n, wins=wins, losses=losses,
                  omw_pct=0.0, gw_pct=0.0, ogw_pct=0.0)
-        for i, (n, (wins, losses)) in enumerate(zip(_CHAMPION_PREVIEW_NAMES, _CHAMPION_PREVIEW_RECORDS))
+        for i, (n, (wins, losses)) in enumerate(zip(names, records))
     ]
-    displays = {normalize_player_name(n): {"display_name": n} for n in _CHAMPION_PREVIEW_NAMES}
+    displays = {normalize_player_name(n): {"display_name": n} for n in names}
     player_colors = {
         normalize_player_name(n): colors
-        for n, colors in zip(_CHAMPION_PREVIEW_NAMES, _CHAMPION_PREVIEW_COLORS)
+        for n, colors in zip(names, _CHAMPION_PREVIEW_COLORS)
     }
     deck_data = {
         normalize_player_name(n): ParticipantDeckData(
             colors=colors, screenshot_url=_preview_deck_url(rank), screenshot_caption=caption,
         )
         for rank, (n, colors, caption) in enumerate(zip(
-            _CHAMPION_PREVIEW_NAMES, _CHAMPION_PREVIEW_COLORS, _CHAMPION_PREVIEW_CAPTIONS), start=1)
+            names, _CHAMPION_PREVIEW_COLORS, _CHAMPION_PREVIEW_CAPTIONS), start=1)
     }
     return standings, displays, player_colors, deck_data
 
 
-def _champion_announcement_preview(guild) -> discord.ui.LayoutView:
-    standings, displays, player_colors, deck_data = _champion_preview_parts()
+def _champion_announcement_preview(guild, event_name: str, records) -> discord.ui.LayoutView:
+    standings, displays, player_colors, deck_data = _champion_preview_parts(records)
     return build_champion_announcement_view(
         standings,
-        event_name=_championship_preview_name(),
+        event_name=event_name,
         displays=displays,
         player_colors=player_colors,
         deck_data=deck_data,
@@ -1121,7 +1127,7 @@ def _champion_announcement_preview(guild) -> discord.ui.LayoutView:
 def _champion_hype_preview(guild) -> discord.ui.LayoutView:
     """The #trophy-hype card for the same fixture championship, so its headline can be read beside the
     announcement's."""
-    standings, displays, player_colors, deck_data = _champion_preview_parts()
+    standings, displays, player_colors, deck_data = _champion_preview_parts(_CHAMPIONSHIP_PREVIEW_RECORDS)
     return build_trophy_hype_view(
         standings[:1],
         event_name=_championship_preview_name(),
@@ -1608,6 +1614,8 @@ async def setup(bot: commands.Bot) -> None:
         is the same pair parked by a player leaving the lobby, where the check card gains Resume Ready Check
         and a Draftmancer link. `notready` is the stopped card on its own; `readycancel` posts both ways a
         check closes, stopped and timed out.
+        `champ` posts the channel announcement twice, first a ten-player pod (3-0s and 2-1s only, one
+        gallery per record) then the eight-player Set Championship (whole field), with #trophy-hype below.
         `titles` stacks every pod embed title, ten to a message and each labelled with the card it heads, so
         the ones whose emoji hangs off its text can be compared side by side.
         `round1`/`round2`/`round3` are no-DB snapshots of each round
@@ -1743,14 +1751,14 @@ async def setup(bot: commands.Bot) -> None:
             return
 
         if state == "champ":
-            await ctx.send(
-                view=_champion_announcement_preview(ctx.guild),
-                allowed_mentions=discord.AllowedMentions.none(),
+            previews = (
+                _champion_announcement_preview(ctx.guild, _pod_preview_name(), _POD_PREVIEW_RECORDS),
+                _champion_announcement_preview(
+                    ctx.guild, _championship_preview_name(), _CHAMPIONSHIP_PREVIEW_RECORDS),
+                _champion_hype_preview(ctx.guild),
             )
-            await ctx.send(
-                view=_champion_hype_preview(ctx.guild),
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
+            for preview in previews:
+                await ctx.send(view=preview, allowed_mentions=discord.AllowedMentions.none())
             return
 
         if state == "teamstandings":

@@ -40,7 +40,7 @@ from bot.services.pod_tournament import (
     colors_only,
     deck_complete,
     format_deck_color_emojis,
-    incomplete_champion_decks,
+    incomplete_decks,
     load_dm_info_sync,
     load_event_deck_data_sync,
     load_event_name_sync,
@@ -294,7 +294,7 @@ async def maybe_post_team_trophy_hype(manager: "PodDraftManager", *, force: bool
         manager.trophy_hype_posted = True
         return
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
-    incomplete = incomplete_champion_decks(trophies, deck_data)
+    incomplete = incomplete_decks(trophies, deck_data)
     if incomplete and not force:
         log.info(f"[TEAM] trophy_hype.skip event={event_id} reason=awaiting_decks missing={incomplete}")
         return
