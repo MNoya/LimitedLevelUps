@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 
 import discord
@@ -180,8 +181,8 @@ def init_daily_poll(bot: commands.Bot) -> None:
 
 
 def _poll_channel(bot: commands.Bot) -> "discord.abc.Messageable | None":
-    """The launcher lives in the coordination channel, not pod-draft-chat, so a busy chat can't bury
-    it. Both the post and every re-render resolve through here so they never drift apart."""
+    """The launcher lives in the coordination channel, not pod-draft-chat, so a busy chat can't bury it.
+    Every post resolves through here, and so does a re-render whose board records no channel of its own."""
     return bot.get_channel(settings.pod_draft_channel_id)
 
 
@@ -622,17 +623,30 @@ def _group_header(group: list[pod_launch.LauncherSlot], guild: discord.Guild | N
 def _group_body(group: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> str:
     """The slot's pods in the day's format order, whatever state each is in, so a format holds its place in
     the column from the moment it is offered until it is played."""
-    blocks = [block for block in (_pod_block(slot, guild) for slot in group) if block]
+    shared = _shared_roster_names(group)
+    blocks = [block for block in (_pod_block(slot, guild, shared) for slot in group) if block]
     return f"\n> {NBSP}\n".join(blocks) if blocks else "-"
 
 
-def _pod_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str | None:
+def _shared_roster_names(group: list[pod_launch.LauncherSlot]) -> set[str]:
+    """The players this slot lists on more than one of its pods, gathering or already fired, who each of
+    those rosters marks. Read off the rosters the slot renders, so a pod nobody scheduled and a pod that
+    graduated an hour ago both count without either one saying so."""
+    pods_per_name: Counter[str] = Counter()
+    for slot in group:
+        pods_per_name.update(set(slot.names))
+    return {name for name, pods in pods_per_name.items() if pods > 1}
+
+
+def _pod_block(
+    slot: pod_launch.LauncherSlot, guild: discord.Guild | None, shared: set[str],
+) -> str | None:
     """One pod inside its slot: its format header over its roster, with a fired pod's thread link above it so
     the link reads as belonging to that format. A pod that started renders in the column's Played section
     instead and never reaches here."""
     if slot.set_code is None:
         return None
-    block = _roster_block(slot, guild)
+    block = _roster_block(slot, guild, shared)
     link = _committed_card_link(guild, slot) if slot.committed else None
     return f"{link}\n{block}" if link else block
 
@@ -767,12 +781,12 @@ def _championship_body(slot: pod_launch.LauncherSlot, guild: discord.Guild | Non
     return "\n".join(lines) if lines else "-"
 
 
-def _roster_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
+def _roster_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None, shared: set[str]) -> str:
     """One pod's block: the words its own button carries, over its own roster, so a press lands on a block a
-    reader recognizes. A member who also signed up for another format at this slot carries the flexible
-    marker, so the crowd that will play either reads at a glance. An empty pod still renders its header over
-    a dash, so a slot nobody joined yet keeps advertising every format it offers. A closed slot says so in
-    place of the roster."""
+    reader recognizes. A member the slot lists on another pod too carries the flexible marker and sits at the
+    end of the roster, so the players this pod holds alone read first. An empty pod still renders its header
+    over a dash, so a slot nobody joined yet keeps advertising every format it offers. A closed slot says so
+    in place of the roster."""
     icon = fi.format_emoji(slot.set_code)
     label = f"**{_named_pod_label(slot.bucket_key, slot.set_code)}**"
     closed = _slot_closed(slot)
@@ -780,8 +794,14 @@ def _roster_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) ->
     if closed:
         lines = [f"> {MARKER_CLOSED}"]
     else:
-        lines = [f"> {_marked_name(name, slot.shared_names)}" for name in slot.names] or ["> -"]
+        lines = [f"> {_marked_name(name, shared)}" for name in _marked_last(slot.names, shared)] or ["> -"]
     return "\n".join([f"> {icon} {label}{count}"] + lines)
+
+
+def _marked_last(names: list[str], shared: set[str]) -> list[str]:
+    """The roster with the marked players at the end, each group keeping join order. A pod's own crowd is what
+    a reader counts, so the bodies it shares with the table beside it read last."""
+    return [name for name in names if name not in shared] + [name for name in names if name in shared]
 
 
 def _slot_closed(slot: pod_launch.LauncherSlot) -> bool:
@@ -790,8 +810,8 @@ def _slot_closed(slot: pod_launch.LauncherSlot) -> bool:
     return slot.status == STATUS_EXPIRED and not slot.committed
 
 
-def _marked_name(name: str, shared_names: tuple[str, ...]) -> str:
-    return f"{fi.FLEXIBLE_MARKER} {name}" if name in shared_names else name
+def _marked_name(name: str, shared: set[str]) -> str:
+    return f"{fi.FLEXIBLE_MARKER} {name}" if name in shared else name
 
 
 def _format_role_name(code: str) -> str:
@@ -1704,10 +1724,10 @@ def _organizer_notice(template: str, guild: discord.Guild | None) -> str:
 
 
 def _several_pods_line(bucket_key: str, on_formats: list[str]) -> str:
-    """`You are on both Early Pods: MSH & Peasant Cube`, over the line that says where they end up. The pod
-    that fires first keeps only the shared players it needs and hands the rest to the other format, so the
-    placement is where a table is short and not where the click landed."""
-    names = [pod_format.format_display(code) for code in on_formats]
+    """`You are on both Early Pods: **MSH** & **Peasant Cube**`, over the line that says where they end up.
+    The pod that fires first keeps only the shared players it needs and hands the rest to the other format,
+    so the placement is where a table is short and not where the click landed."""
+    names = [f"**{pod_format.format_display(code)}**" for code in on_formats]
     listed = f"{', '.join(names[:-1])} & {names[-1]}"
     slot = _slot_short_name(time_key_of(bucket_key))
     if len(names) == 2:
@@ -1754,16 +1774,12 @@ async def _launch_slot(bot: commands.Bot, state, message_id: str, announce: bool
     jump-link on the next render and its own nudge is cleared — the card's underfill checks recruit from here.
     Falls back to reopening the pod if the card can't be posted.
 
-    The roster is settled first, so the members it shares with the other formats at this slot go where they
-    are needed; whichever of those the release brings up to a full pod fires right after. Those keep their
-    cards silent (`announce`): the first card already pinged the slot, and two pods graduating a second apart
-    are one crowd, not two."""
+    Everyone who signed up for this pod is in it, including the players who also signed the format beside it.
+    A pod opening does not take those players off the other roster and does not settle where they draft: they
+    land in both threads and pick one, which is theirs to decide and not the bot's."""
     set_code = state.set_code or active_set_code()
     slot_time = state.slot_time
     name = await asyncio.to_thread(pod_launch.ondemand_event_name_sync, set_code, slot_time)
-    kept, released = await asyncio.to_thread(pod_launch.allocate_fire_roster_sync, state.signal_id)
-    if released:
-        log.info(f"slot {state.signal_id} fires with {kept} and released {released} to the other formats")
     signups = await asyncio.to_thread(pod_launch.poll_yes_members_sync, state.signal_id)
     channel = _poll_channel(bot)
     event_id = None
@@ -1779,20 +1795,6 @@ async def _launch_slot(bot: commands.Bot, state, message_id: str, announce: bool
     else:
         await hand_slot_nudge_to_card(bot, state.signal_id, event_id)
     await _rerender_board(bot, message_id, slot_time.astimezone(SCHEDULE_TZ).date())
-    await _launch_ready_siblings(bot, state.signal_id, message_id)
-
-
-async def _launch_ready_siblings(bot: commands.Bot, signal_id: str, message_id: str) -> None:
-    """Fire the other formats at this slot that the release just brought up to a full pod. A sibling that
-    fires runs this again, and an already-fired one never claims, so the pass settles the whole slot."""
-    candidates = await asyncio.to_thread(pod_launch.sibling_fire_candidates_sync, signal_id)
-    for state in candidates:
-        if state.slot_time is None or not slot_can_fire(state.slot_time, datetime.now(timezone.utc)):
-            continue
-        if not await asyncio.to_thread(pod_launch.claim_slot_fire_sync, state.signal_id):
-            continue
-        log.info(f"firing {state.bucket} beside {signal_id} with {state.count} signups")
-        await _launch_slot(bot, state, message_id, announce=False)
 
 
 async def refresh_launcher_for_date(bot: commands.Bot, signal_date: date) -> None:
@@ -2099,7 +2101,7 @@ async def _rerender_poll(
     """Repaint a live board in place, ping line included. Retiring a board drops that line, so a board that
     is retired and rendered live again comes back without its queue mention unless every render restates it.
     Discord notifies on the post, never on an edit, so restating it cannot ping the role a second time."""
-    channel = channel or _poll_channel(bot)
+    channel = channel or await _board_channel(bot, message_id)
     if channel is None:
         return
     guild = getattr(channel, "guild", None)
@@ -2112,3 +2114,11 @@ async def _rerender_poll(
         )
     except discord.HTTPException:
         log.warning(f"could not re-render launcher message {message_id}", exc_info=True)
+
+
+async def _board_channel(bot: commands.Bot, message_id: str) -> "discord.abc.Messageable | None":
+    """The channel one board lives in, off its own rows, falling back to the coordination channel for a
+    message carrying none."""
+    channel_id = await asyncio.to_thread(pod_launch.launcher_channel_for_message_sync, message_id)
+    channel = bot.get_channel(int(channel_id)) if channel_id else None
+    return channel or _poll_channel(bot)

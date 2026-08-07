@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Iterable
 from datetime import date, datetime, timedelta, timezone
 
 import discord
@@ -384,17 +385,24 @@ async def setup(bot: commands.Bot) -> None:
         Args are order-free: a number sets how many Yes RSVPs to seed (default 5), the word `close`
         immediately retires it into the closed state (grey, no buttons, no role ping, committed slot
         shown as its roster) so that surface can be eyeballed, and a set or cube code is offered beside the
-        latest set so any of them can be driven live without waiting for its date."""
+        latest set so any of them can be driven live without waiting for its date. A second code stages a
+        third pod at that same slot the way `/draft` creates one, so the slot carries a pod nobody
+        scheduled beside the two the day offers.
+
+        The first seeded player is put on every pod at the staged slot, so the shared marker renders with no
+        live clicker on either side."""
         fill = 5
         close = False
-        forced_format = None
+        formats = []
         for arg in args:
             if arg.isdigit():
                 fill = int(arg)
             elif arg.lower() == "close":
                 close = True
             else:
-                forced_format = pod_format.resolve_format_code(arg) or forced_format
+                code = pod_format.resolve_format_code(arg)
+                if code:
+                    formats.append(code)
         if not isinstance(ctx.channel, discord.TextChannel):
             await ctx.send("Run `!test launcher` in a server text channel — the pod thread is created there.")
             return
@@ -402,8 +410,8 @@ async def setup(bot: commands.Bot) -> None:
         today = now.date()
         last_today = slot_event_time(today, poll_buckets_for(today)[-1].key)
         target_day = today if last_today > now else today + timedelta(days=1)
-        if forced_format:
-            _force_formats(target_day, (forced_format,))
+        if formats:
+            _force_formats(target_day, (formats[0],))
         reflect = poll_buckets_for(target_day)[-1]
         slot_time = slot_event_time(target_day, reflect.key)
         set_code = active_set_code()
@@ -415,9 +423,20 @@ async def setup(bot: commands.Bot) -> None:
             await ctx.send("Could not stage the reflected scheduled pod. Check the logs.")
             return
         if fill > 0:
-            await _seed_fake_yes(ctx.channel, event_id, slot_time, name, fill)
-        await ctx.send(f"Staged **{name}** at {reflect.name}; posting the live launcher for that day.")
-        await post_launcher(ctx.bot, ctx.channel, target_day)
+            await _seed_fake_yes(ctx.channel, event_id, slot_time, name, range(fill))
+        staged = [name]
+        if len(formats) > 1:
+            organized = await _stage_organized_pod(ctx, formats[1], slot_time, fill)
+            if organized:
+                staged.append(organized)
+        await ctx.send(
+            f"Staged **{'** and **'.join(staged)}** at {reflect.name}; posting the live launcher for that day."
+        )
+        message = await post_launcher(ctx.bot, ctx.channel, target_day)
+        if message is not None:
+            await asyncio.to_thread(_seed_shared_signup_sync, slot_time)
+            slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, str(message.id), target_day)
+            await message.edit(embed=build_poll_embed(slots, ctx.guild), view=PodPollView(slots, ctx.guild))
         if close:
             await close_launcher_for_date(ctx.bot, target_day)
 
@@ -531,7 +550,7 @@ async def setup(bot: commands.Bot) -> None:
             await ctx.send("Could not create the scheduled card. Check the logs.")
             return
         if fill > 0:
-            await _seed_fake_yes(ctx.channel, event_id, event_time, name, fill)
+            await _seed_fake_yes(ctx.channel, event_id, event_time, name, range(fill))
         if team.lower() == "team":
             await set_event_pairing_mode(event_id, "team")
             await refresh_scheduled_card(ctx.bot, event_id)
@@ -670,7 +689,7 @@ async def setup(bot: commands.Bot) -> None:
             await ctx.send("Could not create the scheduled card. Check the logs.")
             return
         if yes > 0:
-            await _seed_fake_yes(ctx.channel, event_id, event_time, name, yes)
+            await _seed_fake_yes(ctx.channel, event_id, event_time, name, range(yes))
         await fire_roster_reminder(event_id)
         if preseed > 0:
             await _preseed_team_votes(ctx.bot, event_id, preseed)
@@ -744,6 +763,8 @@ _POLL_SEED_SHARED = 1
 _POLL_SPLIT_DEDICATED = 5
 _POLL_SPLIT_SHARED = 2
 _POLL_SEED_ID_PREFIX = "polltest-"
+_FILL_SEED_ID_PREFIX = "filltest-"
+_SHARED_FILL_SEAT = 0
 
 _ROLL_COUNT_FULL = 6
 _ROLL_COUNT_SMALL = 3
@@ -791,7 +812,7 @@ def _rolling_lanes():
 def _rolling_slot(
     bucket, slot_time, *, count: int, offset: int = 0, fired: bool = False, finished: bool = False,
     winner: str | None = None, seat: bool = True, channel_id: str = "", set_code: str | None = None,
-    table: int | None = None, shared: tuple[str, ...] = (), closed: bool = False,
+    table: int | None = None, closed: bool = False,
 ):
     """Build one fixture LauncherSlot for the rolling preview. A fired slot carries a pod link and counts as
     locked, so it renders as the compact line; `finished` marks it played, so it takes the trophy instead of
@@ -814,7 +835,7 @@ def _rolling_slot(
         )
     return pod_launch.LauncherSlot(
         bucket_key, committed=False, status=STATUS_EXPIRED if closed else STATUS_OPEN, count=len(names),
-        slot_time=slot_time, names=names, thread_id=None, signal_id="1", set_code=code, shared_names=shared,
+        slot_time=slot_time, names=names, thread_id=None, signal_id="1", set_code=code,
     )
 
 
@@ -1172,18 +1193,20 @@ def _seed_poll_signups_sync(message_id: str, day, split: bool = False) -> None:
 
 
 async def _seed_fake_yes(
-    channel: discord.TextChannel, event_id: str, event_time: datetime, name: str, count: int,
+    channel: discord.TextChannel, event_id: str, event_time: datetime, name: str, seats: Iterable[int],
 ) -> None:
-    """Record `count` fake Yes RSVPs against the just-posted card and re-render it, so the multi-pod
-    notice can be eyeballed solo. Fake members never touch Discord; they only fill the roster."""
+    """Record one fake Yes RSVP per seat against the just-posted card and re-render it, so the multi-pod
+    notice can be eyeballed solo. A seat is one fake player, so two pods given the same seat hold the same
+    person, which is what the shared marker reads. Fake members never touch Discord; they only fill the
+    roster."""
     ref = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
     if ref is None:
         return
     message_id = ref[2]
     rosters = None
-    for i in range(count):
+    for seat in seats:
         result = await asyncio.to_thread(
-            pod_launch.set_rsvp_sync, message_id, f"filltest-{i}", _roster_name(i), RSVP_YES)
+            pod_launch.set_rsvp_sync, message_id, _fill_seed_id(seat), _roster_name(seat), RSVP_YES)
         if result is not None:
             rosters = result.rosters
     if rosters is None:
@@ -1193,6 +1216,47 @@ async def _seed_fake_yes(
         await card.edit(embed=build_rsvp_embed(name, event_time, rosters))
     except discord.HTTPException:
         log.warning(f"could not re-render the fake-fill card {message_id}", exc_info=True)
+
+
+def _fill_seed_id(seat: int) -> str:
+    return f"{_FILL_SEED_ID_PREFIX}{seat}"
+
+
+async def _stage_organized_pod(
+    ctx: commands.Context, set_code: str, slot_time: datetime, fill: int,
+) -> str | None:
+    """A pod at the staged slot created the way `/draft` creates one: a format the day's schedule never
+    offered, credited to whoever ran the command. Its roster is its own crowd apart from the shared seat, so
+    the slot carries three pods and one player on all of them. None when the card could not be posted."""
+    name = await asyncio.to_thread(pod_launch.ondemand_event_name_sync, set_code, slot_time)
+    event_id = await post_scheduled_card(
+        ctx.bot, ctx.channel, set_code=set_code, event_time=slot_time, name=name, ping_role=False,
+        opener=ctx.author,
+    )
+    if event_id is None:
+        return None
+    seats = [_SHARED_FILL_SEAT, *range(fill, fill + max(0, fill - 1))]
+    await _seed_fake_yes(ctx.channel, event_id, slot_time, name, seats)
+    return name
+
+
+def _seed_shared_signup_sync(slot_time: datetime) -> None:
+    """Sign the staged pods' shared seat up for every pod still gathering at that slot, so one player sits on
+    every pod the slot carries and the board renders the shared marker with nobody clicking."""
+    with SessionLocal() as session:
+        signals = session.execute(
+            select(PodSignal).where(PodSignal.slot_time == slot_time, PodSignal.kind == KIND_POLL)
+        ).scalars().all()
+        session.execute(delete(PodSignalMember).where(
+            PodSignalMember.signal_id.in_([signal.id for signal in signals]),
+            PodSignalMember.discord_user_id == _fill_seed_id(_SHARED_FILL_SEAT),
+        ))
+        for signal in signals:
+            session.add(PodSignalMember(
+                signal_id=signal.id, discord_user_id=_fill_seed_id(_SHARED_FILL_SEAT),
+                display_name=_roster_name(_SHARED_FILL_SEAT),
+            ))
+        session.commit()
 
 
 async def _preseed_team_votes(bot: commands.Bot, event_id: str, count: int) -> None:
@@ -1301,11 +1365,10 @@ def _named_slots(bucket, slot_time, other_format):
     """One slot's fixture pods, each with its own roster, so the per-format blocks and their buttons render.
     `other_format` None is the latest-only slot, which carries a single pod. Two of the latest-set signups
     also joined the other format, so the flexible marker shows."""
-    shared = tuple(_roster_name(index) for index in (1, 2)) if other_format else ()
     latest = pod_launch.LauncherSlot(
         named_bucket_key(bucket.key, active_set_code()), committed=False, status=STATUS_OPEN, count=3,
         slot_time=slot_time, names=[_roster_name(i) for i in range(3)], thread_id=None, signal_id="1",
-        set_code=active_set_code(), shared_names=shared,
+        set_code=active_set_code(),
     )
     if not other_format:
         return [latest]
@@ -1313,6 +1376,5 @@ def _named_slots(bucket, slot_time, other_format):
     other = pod_launch.LauncherSlot(
         named_bucket_key(bucket.key, other_format), committed=False, status=STATUS_OPEN, count=len(names),
         slot_time=slot_time, names=names, thread_id=None, signal_id="2", set_code=other_format,
-        shared_names=shared,
     )
     return [latest, other]

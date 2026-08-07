@@ -195,9 +195,6 @@ class LauncherSlot:
     """Whether the draft itself started, the one state that collapses a pod to a single line. Reaching the
     threshold does not lock it and neither does the lobby opening: a pod takes signups until the first pack
     is passed, so it keeps a full joinable block until then."""
-    shared_names: tuple[str, ...] = ()
-    """Members of this pod who also signed up for another format at the same slot time, so the roster can
-    mark them as playing either."""
     created_at: datetime | None = None
     """When the pod's row was written, which orders an extra table after the pod it spun off."""
 
@@ -822,8 +819,8 @@ def claim_fire_sync(signal_id: str) -> bool:
 
 
 def claim_slot_fire_sync(signal_id: str) -> bool:
-    """Claim a launcher slot's fire, but only while it still holds a full pod. A pod firing beside it takes
-    the members they shared with it, so a slot that read full a moment ago can be short by now."""
+    """Claim a launcher slot's fire, but only while it still holds a full pod: signups can leave between the
+    press that filled it and this claim."""
     with SessionLocal() as session:
         signal = session.get(PodSignal, signal_id)
         if signal is None:
@@ -835,114 +832,9 @@ def claim_slot_fire_sync(signal_id: str) -> bool:
         return claimed
 
 
-def allocate_fire_roster_sync(signal_id: str) -> tuple[int, int]:
-    """Settle who plays in a pod that just fired, returning (kept, released).
-
-    A player signed up for two formats at one time can only draft one of them, so every shared member ends up
-    on exactly one roster here. The pod keeps everyone who signed up for it alone, then takes shared members
-    in join order until it seats a full pod. The spare ones go to another format at that slot, but only as
-    many as bring that pod to a full table: releasing a body into a pod that still cannot fill would strand
-    a player who could have drafted here.
-
-    Without this the first pod to reach the threshold takes every shared member with it: five for one format,
-    five for the other and two on both reads seven each, and whichever crossed first leaves the other's own
-    crowd one body short. Needs-based allocation gives two pods of six and makes click order irrelevant."""
-    threshold = settings.pod_signal_fire_threshold
-    with SessionLocal() as session:
-        signal = session.get(PodSignal, signal_id)
-        if signal is None or signal.slot_time is None:
-            return 0, 0
-        sibling_ids = _open_sibling_signal_ids(session, signal)
-        members = _ordered_members(session, signal_id)
-        if not sibling_ids:
-            return len(members), 0
-        shared_ids = set(session.execute(
-            select(PodSignalMember.discord_user_id).where(PodSignalMember.signal_id.in_(sibling_ids))
-        ).scalars().all())
-        dedicated = [member for member in members if member.discord_user_id not in shared_ids]
-        shared = [member for member in members if member.discord_user_id in shared_ids]
-        needed = max(0, threshold - len(dedicated))
-        spare = shared[needed:]
-        released = _released_to_siblings(session, sibling_ids, shared, spare, threshold)
-        for member in released:
-            session.delete(member)
-        kept_shared = [member for member in shared if member not in released]
-        if kept_shared:
-            session.execute(
-                delete(PodSignalMember).where(
-                    PodSignalMember.signal_id.in_(sibling_ids),
-                    PodSignalMember.discord_user_id.in_(
-                        [member.discord_user_id for member in kept_shared]),
-                )
-            )
-        session.commit()
-        return len(dedicated) + len(kept_shared), len(released)
-
-
-def _released_to_siblings(
-    session: Session, sibling_ids: list[str], shared: list[PodSignalMember],
-    spare: list[PodSignalMember], threshold: int,
-) -> list[PodSignalMember]:
-    """The spare shared members handed to the other formats at this slot, one sibling at a time, each taking
-    exactly what fills it. A sibling that cannot reach a full table even with every spare body takes none:
-    those players stay in the pod that is actually happening."""
-    shared_ids = {member.discord_user_id for member in shared}
-    released: list[PodSignalMember] = []
-    for sibling_id in sibling_ids:
-        if not spare:
-            break
-        sibling_ids_on_row = set(session.execute(
-            select(PodSignalMember.discord_user_id).where(PodSignalMember.signal_id == sibling_id)
-        ).scalars().all())
-        gap = threshold - len(sibling_ids_on_row - shared_ids)
-        if 0 < gap <= len(spare):
-            released += spare[:gap]
-            spare = spare[gap:]
-    return released
-
-
-def _ordered_members(session: Session, signal_id: str) -> list[PodSignalMember]:
-    return list(session.execute(
-        select(PodSignalMember)
-        .where(PodSignalMember.signal_id == signal_id)
-        .order_by(PodSignalMember.created_at)
-    ).scalars().all())
-
-
-def sibling_fire_candidates_sync(signal_id: str) -> list[SignalState]:
-    """The other formats at this slot that now hold a full pod, read right after one of them fired and
-    released the members it did not need. Without this pass the released bodies sit on a slot nobody
-    re-checks until the next click."""
-    threshold = settings.pod_signal_fire_threshold
-    candidates: list[SignalState] = []
-    with SessionLocal() as session:
-        signal = session.get(PodSignal, signal_id)
-        if signal is None or signal.slot_time is None:
-            return []
-        for sibling_id in _open_sibling_signal_ids(session, signal):
-            sibling = session.get(PodSignal, sibling_id)
-            count = len(sibling.members)
-            if pod_signals.should_fire(count, threshold):
-                candidates.append(_state(sibling, count))
-    return sorted(candidates, key=_fire_order)
-
-
 def _fire_order(state: SignalState) -> tuple[int, tuple[int, str]]:
     """The order full pods graduate in: the fullest first, then the day's format order."""
     return (-state.count, format_order_key(state.set_code))
-
-
-def _open_sibling_signal_ids(session: Session, signal: PodSignal) -> list[str]:
-    """The other still-gathering pods at this pod's slot time. A fired sibling is left out: it already
-    partitioned the members it shared with this one when it fired."""
-    return list(session.execute(
-        select(PodSignal.id).where(
-            PodSignal.kind == pod_signals.KIND_POLL,
-            PodSignal.status == pod_signals.STATUS_OPEN,
-            PodSignal.slot_time == signal.slot_time,
-            PodSignal.id != signal.id,
-        )
-    ).scalars().all())
 
 
 def release_fire_sync(signal_id: str) -> None:
@@ -1161,6 +1053,18 @@ def launcher_date_for_message_sync(message_id: str) -> date | None:
         ).scalar_one_or_none()
 
 
+def launcher_channel_for_message_sync(message_id: str) -> str | None:
+    """The channel a launcher board was posted in, read off its own rows. A re-render that assumes the
+    coordination channel silently 404s on a board posted anywhere else, which is where `!test launcher`
+    puts one, so the board stops tracking its pods from the first click."""
+    with SessionLocal() as session:
+        return session.execute(
+            select(PodSignal.channel_id)
+            .where(PodSignal.kind == pod_signals.KIND_POLL, PodSignal.message_id == message_id)
+            .limit(1)
+        ).scalar_one_or_none()
+
+
 def latest_launcher_sync() -> tuple[str, date] | None:
     """The newest launcher's (message_id, posting day), for surfaces that open the preference picker
     without a launcher message in hand."""
@@ -1345,11 +1249,6 @@ def _lane_snapshot(
     """One launcher column, earliest day first: the board's own day plus every later day this lane has
     rolled to, and within a day one entry per pod the slot carries.
 
-    A pod that exists covers its own format only. The other formats at that slot time keep gathering, so a
-    locked pod never hides the table beside it. Within a slot time the pods hold the day's format order
-    whatever state they are in, so a format keeps its place in the column and on the button row from the
-    moment it is offered to the moment it is played.
-
     A lane reaches a later day through the signals it opened, so it also always walks tomorrow: a day whose
     slot the format schedule closes opens no signal, and that is exactly the day the Set Championship sits on.
     The loop appends nothing for a day carrying neither a pod nor a signal, so this costs an empty read on an
@@ -1362,19 +1261,10 @@ def _lane_snapshot(
         if bucket is None:
             continue
         slot_time = slot_event_time(day, bucket.key)
-        event_ids = _event_ids_for_slot(session, slot_time)
-        committed = [_committed_slot(session, bucket.key, event_id) for event_id in event_ids]
-        covered = {slot.set_code for slot in committed}
-        day_signals = [
-            signal for signal in lane_signals
-            if signal.signal_date == day
-            and signal.event_id not in event_ids
-            and _signal_format(signal) not in covered
-        ]
-        lane_slots += sorted(
-            committed + _gathering_slots(session, day_signals, now), key=_format_order,
-        )
-        if not committed and not day_signals and day == board_date:
+        day_signals = [signal for signal in lane_signals if signal.signal_date == day]
+        pods = _slot_pods(session, bucket.key, slot_time, day_signals, now)
+        lane_slots += pods
+        if not pods and day == board_date:
             lane_slots.append(LauncherSlot(
                 bucket.key, committed=False,
                 status=_lazy_status(pod_signals.STATUS_OPEN, slot_time, now),
@@ -1383,28 +1273,32 @@ def _lane_snapshot(
     return _without_rolled_past_slots(lane_slots)
 
 
-def _gathering_slots(
-    session: Session, day_signals: list[PodSignal], now: datetime,
+def _slot_pods(
+    session: Session, time_key: str, slot_time: datetime, day_signals: list[PodSignal], now: datetime,
 ) -> list[LauncherSlot]:
-    """One slot per still-offered format, each carrying its own roster. Players on
-    more than one of these ride along as that slot's `shared_names`, the crowd needs-based allocation splits
-    when the first of their pods fires. Matched on the Discord id, not the name: a roster row snapshots the
-    display name it was added under, so the same player can sit on two pods under two names."""
-    rosters = {signal.id: _member_rows(session, signal.id) for signal in day_signals}
-    joined_pods: dict[str, int] = {}
-    for rows in rosters.values():
-        for discord_user_id, _name in rows:
-            joined_pods[discord_user_id] = joined_pods.get(discord_user_id, 0) + 1
-    slots: list[LauncherSlot] = []
-    for signal in day_signals:
-        rows = rosters[signal.id]
-        slots.append(LauncherSlot(
-            signal.bucket, committed=False, status=_gathering_status(signal, now),
-            count=len(rows), slot_time=signal.slot_time, names=[name for _id, name in rows],
-            thread_id=None, signal_id=signal.id, set_code=_signal_format(signal),
-            shared_names=tuple(name for user_id, name in rows if joined_pods[user_id] > 1),
-        ))
-    return slots
+    """Every pod at one slot time in the day's format order: the pods that exist, then one entry per format
+    still gathering. A pod that exists covers its own format only, so the signal it fired on and any other
+    signal on that format drop out here while the rest of the slot keeps gathering, and a locked pod never
+    hides the table beside it. The pods hold the day's format order whatever state each is in, so a format
+    keeps its place in the column and on the button row from the moment it is offered to the moment it is
+    played."""
+    event_ids = _event_ids_for_slot(session, slot_time)
+    committed = [_committed_slot(session, time_key, event_id) for event_id in event_ids]
+    covered = {slot.set_code for slot in committed}
+    gathering = [
+        _gathering_slot(session, signal, now) for signal in day_signals
+        if signal.event_id not in event_ids and _signal_format(signal) not in covered
+    ]
+    return sorted(committed + gathering, key=_format_order)
+
+
+def _gathering_slot(session: Session, signal: PodSignal, now: datetime) -> LauncherSlot:
+    rows = _member_rows(session, signal.id)
+    return LauncherSlot(
+        signal.bucket, committed=False, status=_gathering_status(signal, now),
+        count=len(rows), slot_time=signal.slot_time, names=[name for _id, name in rows],
+        thread_id=None, signal_id=signal.id, set_code=_signal_format(signal),
+    )
 
 
 def _gathering_status(signal: PodSignal, now: datetime) -> str:

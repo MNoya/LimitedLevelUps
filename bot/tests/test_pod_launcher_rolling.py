@@ -38,6 +38,7 @@ from bot.tasks.pod_daily_poll import (
     _lane_slots,
     _played_on_day,
     _row_units,
+    _shared_roster_names,
     _slot_by_key,
     _slot_item,
 )
@@ -526,20 +527,14 @@ def test_a_slot_renders_the_latest_set_first_however_its_rows_come_back(session,
     assert [slot.signal_id for slot in early_column] == [latest.id, peasant.id]
 
 
-def test_a_player_on_both_formats_of_a_slot_is_marked_on_both_rosters(session, monkeypatch, latest_and_peasant):
-    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
-    early = bucket_for_lane(FRIDAY, LANE_EARLY).key
-    latest = _seed_signal(session, early, FRIDAY, message_id="today")
-    peasant = _seed_signal(session, early, FRIDAY, message_id="today", set_code="PEASANT")
-    _fill(session, latest, 1, prefix="own")
-    _join(session, latest, "flex", HALL_OF_FAME[4])
-    _join(session, peasant, "flex", HALL_OF_FAME[5])
-    session.commit()
+def test_the_shared_marker_reads_every_pod_of_a_slot_whatever_state_it_is_in():
+    fired = _marker_slot(LATEST, [HALL_OF_FAME[0], HALL_OF_FAME[1]], committed=True)
+    gathering = _marker_slot("PEASANT", [HALL_OF_FAME[1], HALL_OF_FAME[2]])
+    organized = _marker_slot("NEO", [HALL_OF_FAME[2], HALL_OF_FAME[3]], committed=True)
 
-    slots = pod_launch.launcher_snapshot_sync("today", FRIDAY)
+    shared = _shared_roster_names([fired, gathering, organized])
 
-    marked = {slot.set_code: slot.shared_names for slot in slots if slot.set_code in (LATEST, "PEASANT")}
-    assert marked == {LATEST: (HALL_OF_FAME[4],), "PEASANT": (HALL_OF_FAME[5],)}
+    assert shared == {HALL_OF_FAME[1], HALL_OF_FAME[2]}
 
 
 # --- firing ---
@@ -585,37 +580,7 @@ def test_a_claim_is_refused_once_a_pod_beside_it_took_the_shared_signups(session
     assert pod_launch.claim_slot_fire_sync(signal.id) is False
 
 
-@pytest.mark.parametrize(
-    "dedicated, other_dedicated, shared, expected_kept, expected_released",
-    [
-        (THRESHOLD - 1, THRESHOLD - 1, 2, THRESHOLD, 1),
-        (THRESHOLD, THRESHOLD, 2, THRESHOLD + 2, 0),
-        (THRESHOLD, 0, 2, THRESHOLD + 2, 0),
-        (0, 0, THRESHOLD + 2, THRESHOLD + 2, 0),
-        (THRESHOLD - 3, THRESHOLD - 3, 3, THRESHOLD, 0),
-    ],
-)
-def test_a_firing_pod_takes_only_the_shared_signups_it_needs(
-    session, monkeypatch, latest_and_peasant,
-    dedicated, other_dedicated, shared, expected_kept, expected_released,
-):
-    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
-    firing = _seed_signal(session, "EARLY", FRIDAY, message_id="today")
-    beside = _seed_signal(session, "EARLY", FRIDAY, message_id="today", set_code="PEASANT")
-    _fill(session, firing, dedicated, prefix="own")
-    _fill(session, beside, other_dedicated, prefix="theirs")
-    _fill(session, firing, shared, prefix="both")
-    _fill(session, beside, shared, prefix="both")
-    session.commit()
-
-    kept, released = pod_launch.allocate_fire_roster_sync(firing.id)
-
-    assert (kept, released) == (expected_kept, expected_released)
-    assert len(firing.members) == expected_kept
-    assert len(beside.members) == other_dedicated + expected_released
-
-
-def test_the_pod_beside_a_fire_is_offered_the_release_it_needs_to_fill(
+def test_a_pod_that_fires_leaves_the_roster_of_the_format_beside_it_alone(
     session, monkeypatch, latest_and_peasant,
 ):
     monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
@@ -626,25 +591,11 @@ def test_the_pod_beside_a_fire_is_offered_the_release_it_needs_to_fill(
     _fill(session, firing, 2, prefix="both")
     _fill(session, beside, 2, prefix="both")
     session.commit()
-    pod_launch.allocate_fire_roster_sync(firing.id)
-    pod_launch.claim_fire_sync(firing.id)
 
-    candidates = pod_launch.sibling_fire_candidates_sync(firing.id)
+    pod_launch.claim_slot_fire_sync(firing.id)
 
-    assert [(state.signal_id, state.count) for state in candidates] == [(beside.id, THRESHOLD)]
-
-
-def test_a_fired_pod_is_never_offered_a_second_time(session, monkeypatch, latest_and_peasant):
-    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
-    firing = _seed_signal(session, "EARLY", FRIDAY, message_id="today")
-    beside = _seed_signal(
-        session, "EARLY", FRIDAY, message_id="today", set_code="PEASANT", status=STATUS_FIRED,
-    )
-    _fill(session, firing, THRESHOLD, prefix="own")
-    _fill(session, beside, THRESHOLD, prefix="theirs")
-    session.commit()
-
-    assert pod_launch.sibling_fire_candidates_sync(firing.id) == []
+    assert len(pod_launch.poll_yes_members_sync(firing.id)) == THRESHOLD + 1
+    assert len(beside.members) == THRESHOLD + 1
 
 
 # --- reposting ---
@@ -831,6 +782,14 @@ def _seed_pod(session, slot_time, *, set_code, socket_status="pending", name=Non
     ))
     session.flush()
     return event
+
+
+def _marker_slot(set_code, names, *, committed=False):
+    return LauncherSlot(
+        named_bucket_key("LATE", set_code), committed=committed,
+        status=STATUS_FIRED if committed else STATUS_OPEN, count=len(names),
+        slot_time=FRIDAY_AFTERNOON, names=names, thread_id=None, signal_id=None, set_code=set_code,
+    )
 
 
 def _join(session, signal, discord_user_id, display_name):

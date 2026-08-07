@@ -22,7 +22,7 @@ POLL_MECHANICS = (
     "▫️Draftmancer lobby opens **{lead} minutes before** the start time"
 )
 POLL_FORMAT_SEVERAL = (
-    f"{NBSP}{fi.FLEXIBLE_MARKER}{NBSP}Sign up for more than one pod to play in the first one that fills"
+    f"{NBSP}{fi.FLEXIBLE_MARKER}{NBSP}Sign up for every pod you would play"
 )
 POLL_CLOSED_LABEL = "🔒 Signups Closed"
 ARCHIVE_INTRO = "### On This Day"
@@ -34,7 +34,7 @@ PLAYED_FOLDED = f"{NBSP * 6}and {{count}} more draft{{plural}} played"
 NEXT_EMOJI = "chordoHello"
 MSG_ON_BOTH_PODS = "You are on both {slot} Pods: {formats}"
 MSG_ON_SEVERAL_PODS = "You are on all {count} {slot} Pods: {formats}"
-MSG_POD_THAT_NEEDS_YOU = "You will play the pod that needs you to fill a table"
+MSG_POD_THAT_NEEDS_YOU = "If both tables are created, play in the pod that needs you to fill"
 MSG_POLL_INACTIVE = "This poll is no longer active. If this is a mistake, contact {organizer}"
 MSG_SLOT_CLOSED = "This slot is closed. If this is a mistake, contact {organizer}"
 
