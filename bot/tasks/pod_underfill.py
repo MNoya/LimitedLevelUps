@@ -16,7 +16,8 @@ of a full table.
 The copy asks for one number at a time (`build_recruiting_message`): the floor while the draft is not yet
 on, the aim once it is, and its Yes and Maybe counts once it is full. It is never deleted on a player
 count, so an 8 -> 7 drop flips the text back to asking for one more instead of vanishing. It is deleted
-only when the pod starts (the lobby opens) via `clear_underfill_nudge`, or when a launcher slot expires
+when the draft starts and `mark_underfill_fired` reposts it as a fired record at the bottom of the channel,
+when the pod is canceled via `clear_underfill_nudge`, or when a launcher slot expires
 unfired via `clear_slot_nudge`. An edit re-carries any role mention the message
 already holds so a player pinged at T-1h still sees why when the text later flips; the edit never re-pings.
 The message is located by scanning channel history for the bot's own post carrying the signup link (plus
@@ -269,22 +270,30 @@ async def clear_underfill_nudge(bot: commands.Bot, event_id: str) -> None:
 async def mark_underfill_fired(
     bot: commands.Bot, event_id: str, player_count: int, thread_url: str,
 ) -> None:
-    """Flip the standing recruiting nudge to a fired record at draft start, keeping the recruiting hook
-    alive through the lobby-open window and leaving pod-chat a lightweight record of the pod firing.
-    No-op when no nudge is up."""
+    """Post the fired record at the bottom of pod-chat at draft start, dropping the recruiting nudge it
+    replaces.
+
+    Reposted instead of edited in place for the reason `!pod` reposts: an edit lands wherever the nudge
+    landed, so a pod that recruited for an hour announces its start above an hour of conversation, and the
+    channel asks whether the draft began while the answer sits unread above them.
+
+    Sent with Discord's silent flag: the line is there for a reader, without a notification for a table that
+    is already drafting. Posts even when no nudge is up, so a pod that filled before its first recruiting
+    beat still announces itself."""
     loaded = await asyncio.to_thread(_load_event_by_id_for_nudge, event_id)
-    signup_url = await asyncio.to_thread(_jump_url_for_event, event_id)
-    if loaded is None or signup_url is None:
+    if loaded is None:
         return
     name, _event_time, _status = loaded
     channel = resolve_pod_chat_channel(bot)
     if channel is None:
         return
-    nudge = await _find_nudge(channel, signup_url)
-    if nudge is None:
-        return
+    signup_url = await asyncio.to_thread(_jump_url_for_event, event_id)
+    if signup_url is not None:
+        nudge = await _find_nudge(channel, signup_url)
+        if nudge is not None:
+            await _safe_delete(nudge)
     body = build_underfill_fired_message(name, player_count, thread_url)
-    await _safe_edit(nudge, body)
+    await _safe_post(channel, body, silent=True)
 
 
 async def refresh_slot_nudge(bot: commands.Bot, signal_id: str) -> None:
@@ -499,10 +508,12 @@ def _scheduled_signal_id(event_id: str) -> str | None:
         ).scalar_one_or_none()
 
 
-async def _safe_post(channel: discord.abc.Messageable, body: str, *, mention_role: bool = False) -> None:
+async def _safe_post(
+    channel: discord.abc.Messageable, body: str, *, mention_role: bool = False, silent: bool = False,
+) -> None:
     allowed = discord.AllowedMentions(roles=True) if mention_role else discord.AllowedMentions.none()
     try:
-        await channel.send(body, allowed_mentions=allowed)
+        await channel.send(body, allowed_mentions=allowed, silent=silent)
     except discord.HTTPException:
         log.warning("could not post underfill nudge", exc_info=True)
 

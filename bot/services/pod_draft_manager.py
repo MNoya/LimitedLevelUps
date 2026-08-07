@@ -195,26 +195,26 @@ def set_underfill_fired_hook(callback) -> None:
 
 
 def notify_underfill_fired(bot, event_id: str, player_count: int, thread_url: str) -> None:
-    """Flip the pod-chat recruiting nudge to a fired record (no-op if unset). Fired once the seated
-    roster is locked at draft start, so pod-chat keeps a lightweight record of the pod firing instead of
-    the nudge vanishing."""
+    """Post the fired record in pod-chat, replacing the recruiting nudge (no-op if unset). Fired once the
+    seated roster is locked at draft start, so a reader in pod-chat sees the draft begin at the bottom of the
+    channel instead of the nudge going quiet above the conversation."""
     if _UNDERFILL_FIRED_HOOK is not None:
         asyncio.create_task(_UNDERFILL_FIRED_HOOK(bot, event_id, player_count, thread_url))
 
 
 def set_rally_fired_hook(callback) -> None:
-    """`!pod` registers its rally finalizer here so the manager can rewrite a standing rally at draft start
+    """`!pod` registers its rally finalizer here so the manager can retire a standing rally at draft start
     without importing the command module."""
     global _RALLY_FIRED_HOOK
     _RALLY_FIRED_HOOK = callback
 
 
-def notify_rally_fired(bot, event_id: str, player_count: int, thread_url: str) -> None:
-    """Rewrite any `!pod` rally still asking for players into a fired record (no-op if unset). A rally is a
-    static post in whichever channel it was called from, so without this it would keep sending people to a
-    pod that is already drafting."""
+def notify_rally_fired(bot, event_id: str) -> None:
+    """Delete any `!pod` rally still asking for players (no-op if unset). A rally is a static post in
+    whichever channel it was called from, so without this it would keep sending people to a pod that is
+    already drafting."""
     if _RALLY_FIRED_HOOK is not None:
-        asyncio.create_task(_RALLY_FIRED_HOOK(bot, event_id, player_count, thread_url))
+        asyncio.create_task(_RALLY_FIRED_HOOK(bot, event_id))
 
 
 def set_second_table_hook(callback) -> None:
@@ -2296,9 +2296,7 @@ class PodDraftManager:
                 notify_underfill_fired(
                     self.bot, self.event_id, player_count=seated, thread_url=thread.jump_url,
                 )
-                notify_rally_fired(
-                    self.bot, self.event_id, player_count=seated, thread_url=thread.jump_url,
-                )
+                notify_rally_fired(self.bot, self.event_id)
 
     def _odd_roster_blocks_start(self) -> bool:
         """Whether an odd roster must stop this draft. A mock plays no rounds, so it drafts happily at seven,
