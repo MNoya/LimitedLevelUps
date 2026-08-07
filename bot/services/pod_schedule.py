@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 
 from bot import emojis
 from bot.discord_helpers import plural
+from bot.services import pod_format, pod_format_interest
 from bot.services.pod_reminder_copy import (
     DRAFT_STARTED,
     RECRUITING_BELOW_FLOOR,
@@ -112,6 +113,17 @@ def short_event_name(name: str) -> str:
     return _DATE_SUFFIX_RE.sub("", name)
 
 
+def render_pod_name(name: str) -> str:
+    """The pod's bold name with its format symbol closing it, so a reader spots the format from the glyph
+    before reading the code. A cube, and a set with no uploaded symbol, wears its interest glyph instead; a
+    name whose format cannot be read back stays plain. The symbol carries no space on either side: the
+    emoji's own padding is enough, and the recruiting lines put the start time right behind it."""
+    code, _rest = pod_format.split_format_prefix(name)
+    if code is None:
+        return f"**{name}**"
+    return f"**{name}**{pod_format_interest.format_emoji(code)}"
+
+
 def build_recruiting_message(
     thread_name: str,
     count: int,
@@ -133,7 +145,7 @@ def build_recruiting_message(
 
     Never adds a role mention — pinging is the caller's call; edits keep a mention already in the message so
     a pinged player still sees why."""
-    name = short_event_name(thread_name)
+    name = render_pod_name(short_event_name(thread_name))
     unix = int(event_time.timestamp())
     shared = {
         "hello": emojis.prefix("chordoHello"), "name": name, "count": count, "unix": unix,
@@ -157,7 +169,7 @@ def build_underfill_fired_message(name: str, player_count: int, thread_url: str)
     the copy stays one line for every pod."""
     players = "players" if player_count != 1 else "player"
     return DRAFT_STARTED.format(
-        hello=emojis.prefix("chordoHello"), name=short_event_name(name), count=player_count,
+        hello=emojis.prefix("chordoHello"), name=render_pod_name(short_event_name(name)), count=player_count,
         players=players, thread_url=thread_url, manat=emojis.get("manat"),
     )
 

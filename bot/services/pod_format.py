@@ -138,6 +138,18 @@ def format_display_with_picks(code: str, picks_per_pack: int | None) -> str:
     return label
 
 
+def split_format_prefix(name: str) -> tuple[str | None, str]:
+    """A pod name split into the format it leads with and the rest of the name, inverting the label
+    `format_display` wrote there. `(None, name)` when the name leads with something else."""
+    for fmt in CUSTOM_FORMATS.values():
+        if name.lower().startswith(fmt.label.lower()):
+            return fmt.code, name[len(fmt.label):].lstrip()
+    head, _, rest = name.partition(" ")
+    if not is_known_set(head.upper()):
+        return None, name
+    return head.upper(), rest
+
+
 def format_name(code: str) -> str:
     """The format's own name carrying no kind word: a cube's name, since the @Cube role mention beside it
     already says Cube, or a set's full name. `format_display` stays the short label for footers."""

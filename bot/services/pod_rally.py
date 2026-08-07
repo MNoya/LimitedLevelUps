@@ -29,6 +29,7 @@ from bot.services.pod_schedule import (
     SCHEDULE_TZ,
     build_recruiting_message,
     build_underfill_fired_message,
+    render_pod_name,
 )
 from bot.services.pod_signals import KIND_QUEUE
 from bot.services.pod_slot import pod_display_name, queue_display_name
@@ -146,14 +147,14 @@ def build_rally_line(target: RallyTarget) -> str:
     if target.kind == KIND_QUEUE_SIGNAL:
         needed = max(1, floor - target.yes)
         return RALLY_QUEUE.format(
-            hello=emojis.prefix("chordoHello"), name=target.name, needed=needed,
+            hello=emojis.prefix("chordoHello"), name=render_pod_name(target.name), needed=needed,
             plural=plural(needed), seated=target.yes,
             manat=emojis.get("manat"), jump_url=target.url,
         )
     if target.kind == KIND_TABLE:
         needed = max(1, settings.pod_table_open_threshold - target.yes)
         return RALLY_TABLE.format(
-            hello=emojis.prefix("chordoHello"), name=target.name, needed=needed,
+            hello=emojis.prefix("chordoHello"), name=render_pod_name(target.name), needed=needed,
             plural=plural(needed), seated=target.yes,
             manat=emojis.get("manat"), jump_url=target.url,
         )
