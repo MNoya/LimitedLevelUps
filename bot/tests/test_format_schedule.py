@@ -13,7 +13,7 @@ from bot.services.format_schedule import (
     already_announced,
     announcement_format,
     effective_start,
-    latest_channel_in_category,
+    latest_set_channel,
     newest_set,
     set_pin_frozen,
     awards_eve_set,
@@ -179,7 +179,7 @@ def test_channel_for_set_ignores_a_newer_preview_season_channel():
     match = channel_for_set(channels, msh, LATEST_SET_CATEGORY)
 
     assert match.name == "🦸-marvel-super-heroes"
-    assert latest_channel_in_category(channels, LATEST_SET_CATEGORY).name == "🏔️-the-hobbit"
+    assert latest_set_channel(channels, LATEST_SET_CATEGORY).name == "🏔️-the-hobbit"
 
 
 class _TodoChannel:
@@ -215,21 +215,21 @@ def test_set_pin_routes_by_latest_set_category():
     assert set_pin.category == LATEST_SET_CATEGORY
 
 
-def test_latest_channel_in_category_picks_newest_created():
-    strategy = _StubCategory("MTG Strategy")
+def test_latest_set_channel_picks_the_newest_set_channel_in_the_category():
+    strategy = _StubCategory(LATEST_SET_CATEGORY)
     other = _StubCategory("General")
     base = datetime(2026, 1, 1, tzinfo=timezone.utc)
     channels = [
-        _StubChannel("whats-the-build", strategy, base),
-        _StubChannel("cube-talk", strategy, base + timedelta(days=10)),
-        _StubChannel("marvel-super-heroes", strategy, base + timedelta(days=180)),
-        _StubChannel("newer-elsewhere", other, base + timedelta(days=999)),
-        _StubChannel("uncategorized", None, base + timedelta(days=500)),
+        _StubChannel("marvel-super-heroes", strategy, base),
+        _StubChannel("the-hobbit", strategy, base + timedelta(days=180)),
+        _StubChannel("whats-the-pick", strategy, base + timedelta(days=200)),
+        _StubChannel("star-trek", other, base + timedelta(days=999)),
+        _StubChannel("reality-fracture", None, base + timedelta(days=500)),
     ]
 
-    latest = latest_channel_in_category(channels, "MTG Strategy")
+    latest = latest_set_channel(channels, LATEST_SET_CATEGORY)
 
-    assert latest.name == "marvel-super-heroes"
+    assert latest.name == "the-hobbit"
 
 
 def test_set_pin_renders_whole_set_but_announces_competitive_only():

@@ -23,7 +23,7 @@ from pathlib import Path
 from bot import emojis
 from bot.commands import descriptions
 from bot.config import settings
-from bot.services.format_schedule import LATEST_SET_CATEGORY, latest_channel_in_category
+from bot.services.format_schedule import LATEST_SET_CATEGORY, latest_set_channel
 
 SOURCE_DIR = Path(__file__).resolve().parents[1] / "server_guide"
 
@@ -116,7 +116,7 @@ def render_page(name: str, text_channels, bot_mention: str = "",
     body = EMOJI_PLACEHOLDER.sub(lambda match: emojis.get(match.group(1)) or match.group(0), body)
     body = DESC_PLACEHOLDER.sub(lambda match: getattr(descriptions, match.group(1), match.group(0)), body)
     if "{latest-set-channel}" in body:
-        set_channel = latest_channel_in_category(text_channels, LATEST_SET_CATEGORY)
+        set_channel = latest_set_channel(text_channels, LATEST_SET_CATEGORY)
         mention = set_channel.mention if set_channel is not None else MISSING_SET_CHANNEL
         body = body.replace("{latest-set-channel}", mention)
 

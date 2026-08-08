@@ -25,12 +25,7 @@ from bot import audit
 from bot.commands.authorization import MODERATOR_ROLE_NAME, moderator_authorized
 from bot.commands.pod_guide import GUIDE_MARKER, render_pod_guide_embed_body
 from bot.config import settings
-from bot.services.format_schedule import (
-    LATEST_SET_CATEGORY,
-    active_set_seed,
-    channel_for_set,
-    set_tracking_todo_index,
-)
+from bot.services.format_schedule import LATEST_SET_CATEGORY, latest_set_channel, set_tracking_todo_index
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME
 from bot.services.server_guide import GuideContent, GuidePage, find_channel, pages_by_channel, render_page
 
@@ -91,7 +86,7 @@ async def sync_channel(guild: discord.Guild, channel_name: str,
 
 
 async def sync_set_tracking_todo(guild: discord.Guild, http) -> tuple[str, str]:
-    """Keep the 'See what people are discussing' Server Guide To-Do pointed at the active set's channel:
+    """Keep the 'See what people are discussing' Server Guide To-Do pointed at the newest set channel:
     (status, human-readable result line). Discord blocks bots from editing the Server Guide today, so a
     drift is reported for a mod to fix by hand in Server Settings → Onboarding — the write is still
     attempted first, so the To-Do self-heals if that restriction is ever lifted."""
@@ -104,10 +99,9 @@ async def sync_set_tracking_todo(guild: discord.Guild, http) -> tuple[str, str]:
     index = set_tracking_todo_index(actions, guild.channels)
     if index is None:
         return SYNC_NO_CHANNEL, "⚠️ Latest channel: no set-tracking To-Do found"
-    seed = active_set_seed()
-    target = channel_for_set(guild.channels, seed, LATEST_SET_CATEGORY)
+    target = latest_set_channel(guild.channels, LATEST_SET_CATEGORY)
     if target is None:
-        return SYNC_NO_CHANNEL, f"⚠️ Latest channel: no channel found for the active set {seed.code}"
+        return SYNC_NO_CHANNEL, f"⚠️ Latest channel: no set channel found in {LATEST_SET_CATEGORY}"
     current_id = str(actions[index].get("channel_id"))
     if current_id == str(target.id):
         return SYNC_CURRENT, f"✅ Latest channel points to {target.mention}"
@@ -115,9 +109,9 @@ async def sync_set_tracking_todo(guild: discord.Guild, http) -> tuple[str, str]:
         return SYNC_UPDATED, f"🔄 Latest channel → {target.mention}"
     current = guild.get_channel(int(current_id)) if current_id.isdigit() else None
     current_ref = current.mention if current is not None else f"`{current_id}`"
-    return SYNC_STALE, (f"⚠️ Latest channel still points to {current_ref} but should be {target.mention}\n"
-                        'Update the "See what people are discussing" To-Do under '
-                        "**Server Settings → Onboarding → Server Guide**.")
+    return SYNC_STALE, (f"❌ Latest channel is outdated: {current_ref}\n"
+                        "Update: **Server Settings → Onboarding → Server Guide** "
+                        f"_See what people are discussing_ channel to {target.mention}")
 
 
 async def _repoint_set_tracking_todo(guild: discord.Guild, http, welcome, actions, index, target) -> bool:

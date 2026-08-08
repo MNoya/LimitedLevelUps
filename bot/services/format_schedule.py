@@ -68,21 +68,6 @@ SCHEDULE_PINS: tuple[SchedulePin, ...] = (
 )
 
 
-def latest_channel_in_category(channels, category_name: str):
-    """The most recently created channel in ``category_name`` — the latest set's channel, which a
-    rotation re-creates as the newest there, so routing follows the set with no name match. ``None``
-    when the category holds no channel."""
-    in_category = [channel for channel in channels
-                   if channel.category is not None and channel.category.name == category_name]
-    if not in_category:
-        return None
-    newest = in_category[0]
-    for channel in in_category[1:]:
-        if channel.created_at > newest.created_at:
-            newest = channel
-    return newest
-
-
 def newest_set():
     candidates = [seed for seed in ALL_SETS if seed.code != PERMANENT_CUBE_CODE]
     newest = candidates[0]
@@ -148,6 +133,23 @@ def channel_for_set(channels, seed: SetSeed, category: str | None = LATEST_SET_C
         if channel_matches_set(channel.name, seed.name):
             return channel
     return None
+
+
+def latest_set_channel(channels, category_name: str = LATEST_SET_CATEGORY):
+    """The most recently created set channel in ``category_name`` — during preview season the incoming
+    set's mod-created channel, where discussion moves before the set goes live. The permanent strategy
+    channels sitting in the same category match no set, so a new one of those never wins. ``None`` when
+    the category holds no set channel."""
+    registered = [seed for seed in ALL_SETS if seed.code != PERMANENT_CUBE_CODE]
+    newest = None
+    for channel in channels:
+        if channel.category is None or channel.category.name != category_name:
+            continue
+        if not any(channel_matches_set(channel.name, seed.name) for seed in registered):
+            continue
+        if newest is None or channel.created_at > newest.created_at:
+            newest = channel
+    return newest
 
 
 def set_tracking_todo_index(actions, channels) -> int | None:
