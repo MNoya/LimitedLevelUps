@@ -18,8 +18,8 @@ export function PostVotingStats({
 }) {
   return (
     <div className="flex flex-col gap-3 lg:gap-6">
-      <CommunityGrid pickStats={pickStats} cardsByName={cardsByName} picksBySlot={picksBySlot} setCode={setCode} />
       {yourPicks}
+      <CommunityGrid pickStats={pickStats} cardsByName={cardsByName} picksBySlot={picksBySlot} setCode={setCode} />
       <FullBreakdownList pickStats={pickStats} cardsByName={cardsByName} picksBySlot={picksBySlot} setCode={setCode} />
     </div>
   );
