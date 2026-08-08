@@ -17,10 +17,13 @@ frontend imports and a future bot task can read:
 - Pool complete, no window yet: opens voting immediately, so the contest goes live when this ships.
 - Window already on disk: left alone. This is the mid-spoiler top-up, and it must not reschedule a
   window players may already be voting in.
-- ``--opens`` / ``--deadline``: reschedules explicitly, keeping whichever of the two is not given.
+- ``--opens`` / ``--deadline`` / ``--results``: reschedules explicitly, keeping whichever of the
+  three is not given.
 
-``--deadline`` is the only input that cannot be derived; it defaults to the Arena release instant.
-Bare dates mean noon ET, matching the release clock in ``bot/sets.py``.
+``--deadline`` defaults to the Arena release instant. ``--results`` (when voting closes for
+results) defaults to release + 28 days, independent of the deadline, so an early deadline doesn't
+shorten the 17lands data window. Bare dates mean noon ET, matching the release clock in
+``bot/sets.py``.
 """
 from __future__ import annotations
 
@@ -29,10 +32,12 @@ import json
 import time
 import urllib.parse
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from bot.sets import ALL_SETS, RELEASE_TZ, SetSeed, release_instant
+
+RESULTS_WINDOW = timedelta(days=28)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES_DIR = REPO_ROOT / "frontend/src/data/fixtures"
@@ -144,7 +149,7 @@ def read_contests() -> dict[str, dict[str, str]]:
     return json.loads(CONTESTS_JSON.read_text())
 
 
-def write_contest(seed: SetSeed, opens: str, deadline: str | None) -> None:
+def write_contest(seed: SetSeed, opens: str, deadline: str | None, results: str) -> None:
     """Upsert this set's window, leaving every other contest byte-identical. Newest release first so
     the live contest is the first thing a maintainer sees when opening the file."""
     contests = read_contests()
@@ -155,6 +160,7 @@ def write_contest(seed: SetSeed, opens: str, deadline: str | None) -> None:
     }
     if deadline is not None:
         entry["votingDeadline"] = deadline
+    entry["scoringDate"] = results
     contests[seed.code] = entry
 
     ordered = dict(sorted(contests.items(), key=lambda kv: kv[1]["release"], reverse=True))
@@ -172,6 +178,11 @@ def main() -> None:
     parser.add_argument(
         "--opens",
         help="Schedule voting to open later instead of as soon as this pool ships",
+    )
+    parser.add_argument(
+        "--results",
+        help="When results land: YYYY-MM-DD (noon ET) or a full ISO timestamp. "
+        "Defaults to release + 28 days, independent of --deadline",
     )
     args = parser.parse_args()
 
@@ -222,15 +233,21 @@ def main() -> None:
     if shortfalls:
         print(f"POOL INCOMPLETE: {', '.join(shortfalls)}. Those slots have nothing to pick from.")
 
-    if args.opens or args.deadline:
+    default_results = (release_instant(matched.start_date) + RESULTS_WINDOW).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if args.opens or args.deadline or args.results:
         opens = contest_instant(args.opens) if args.opens else (
             existing["previewsOpen"] if existing else now_instant()
         )
         deadline = contest_instant(args.deadline) if args.deadline else (
             existing.get("votingDeadline") if existing else None
         )
-        write_contest(matched, opens, deadline)
-        print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: opens {opens}, closes {deadline or 'at release'}")
+        results = contest_instant(args.results) if args.results else (
+            existing.get("scoringDate") if existing else default_results
+        )
+        write_contest(matched, opens, deadline, results)
+        print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: opens {opens}, "
+              f"closes {deadline or 'at release'}, results {results}")
     elif existing:
         print(f"Voting already scheduled for {existing['previewsOpen']}, window left as is")
     elif shortfalls:
@@ -238,9 +255,9 @@ def main() -> None:
               f"Re-run this when the Scryfall gallery is complete.")
     else:
         opens = now_instant()
-        write_contest(matched, opens, None)
+        write_contest(matched, opens, None, default_results)
         print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: voting opens at {opens}, "
-              f"so it goes live as soon as this ships.")
+              f"so it goes live as soon as this ships. Results {default_results}")
 
 
 if __name__ == "__main__":

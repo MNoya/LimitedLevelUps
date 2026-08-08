@@ -7,6 +7,7 @@ export const P0P1_CONTESTS: Record<string, ContestConfig> = contestsConfig;
 // --- Featured-contest resolution (Decision 3) ---
 
 const DAY_MS = 86_400_000;
+const SCORING_WINDOW_MS = 28 * DAY_MS;
 
 export interface FeaturedContest {
   code: string;
@@ -14,7 +15,6 @@ export interface FeaturedContest {
   release: Date;
   votingDeadline: Date;
   scoringDate: Date;
-  revealEnd: Date;
   status: "pre" | "voting" | "reveal" | "frozen";
   next?: { code: string; name: string; previewsOpen: Date };
 }
@@ -25,20 +25,23 @@ interface ResolvedContest {
   release: number;
   previewsOpen: number;
   votingDeadline: number;
-  revealEnd: number;
+  scoringDate: number;
 }
 
 function resolveContests(): ResolvedContest[] {
   return Object.entries(P0P1_CONTESTS)
     .map(([code, config]) => {
       const release = new Date(config.release).getTime();
+      const scoringDate = config.scoringDate
+        ? new Date(config.scoringDate).getTime()
+        : release + SCORING_WINDOW_MS;
       return {
         code,
         name: config.name,
         release,
         previewsOpen: new Date(config.previewsOpen).getTime(),
         votingDeadline: config.votingDeadline ? new Date(config.votingDeadline).getTime() : release,
-        revealEnd: release + 28 * DAY_MS,
+        scoringDate,
       };
     })
     .sort((a, b) => b.release - a.release);
@@ -55,12 +58,12 @@ export function resolveFeaturedContest(now: number): FeaturedContest | null {
   // would un-feature a contest for the whole gap between an early deadline and the Arena drop,
   // sending fresh voters back to the previous set's archive.
   if (!featured) {
-    featured = contests.find((c) => now >= c.votingDeadline && now < c.revealEnd);
+    featured = contests.find((c) => now >= c.votingDeadline && now < c.scoringDate);
   }
 
   // 3. Most recently finished
   if (!featured) {
-    featured = contests.find((c) => now >= c.revealEnd);
+    featured = contests.find((c) => now >= c.scoringDate);
   }
 
   // 4. Nothing has opened yet: the earliest contest, which describeContest reports as "pre"
@@ -88,7 +91,7 @@ function describeContest(
     status = "pre";
   } else if (now < contest.votingDeadline) {
     status = "voting";
-  } else if (now < contest.revealEnd) {
+  } else if (now < contest.scoringDate) {
     status = "reveal";
   }
 
@@ -102,8 +105,7 @@ function describeContest(
     name: contest.name,
     release: new Date(contest.release),
     votingDeadline: new Date(contest.votingDeadline),
-    scoringDate: new Date(contest.votingDeadline + 28 * DAY_MS),
-    revealEnd: new Date(contest.revealEnd),
+    scoringDate: new Date(contest.scoringDate),
     status,
     next: next
       ? { code: next.code, name: next.name, previewsOpen: new Date(next.previewsOpen) }
