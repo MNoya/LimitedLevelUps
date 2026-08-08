@@ -1,11 +1,14 @@
 """`!confirm` — say you are coming, in the pod's own thread.
 
-An early, deliberately small version. It records the answer and marks the caller's message, and touches no
-card: the roster surfaces that read these answers are not built yet, so the command collects the signal
-and stays out of the way until they are.
+Two jobs, both of which the roster card alone does badly. A player who knows at four o'clock that they are
+playing at nine has no way to say so until the card posts, and a card that posted an hour ago is wherever
+chat left it. So confirming also puts the card back where people can see it.
 
 Someone who never signed up is recorded as coming rather than refused. Typing `!confirm` an hour before a
 draft is a stronger statement of intent than a button pressed days ago, so it is taken at face value.
+
+The caller's message is left up. Anything a player types around `!confirm` is their own words, and the card
+lands under it either way.
 """
 from __future__ import annotations
 
@@ -23,6 +26,7 @@ from bot.database import SessionLocal
 from bot.models import PodSignal, PodSignalMember
 from bot.services.pod_drafts import load_event_id_by_thread_sync, load_event_socket_status_sync
 from bot.services.pod_signals import RSVP_YES
+from bot.tasks.pod_draft_reminder import refresh_or_repost_roster_reminder
 
 
 MSG_CONFIRM_NOT_A_POD = "Run `!confirm` inside a pod draft thread."
@@ -59,6 +63,7 @@ async def setup(bot: commands.Bot) -> None:
             return
         with contextlib.suppress(discord.HTTPException):
             await ctx.message.add_reaction(CONFIRMED_REACTION)
+        await refresh_or_repost_roster_reminder(event_id)
         audit.event("pod_confirm", user_id=str(ctx.author.id), event_id=event_id)
         log.info(f"confirm: {ctx.author} confirmed for event {event_id}")
 

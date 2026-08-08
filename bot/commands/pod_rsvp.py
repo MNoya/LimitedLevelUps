@@ -32,8 +32,11 @@ from discord.ext import commands
 
 from bot import audit, emojis
 from bot.commands.messages import (
+    MSG_CONFIRM_DONE,
+    MSG_CONFIRM_SIGNUP_BUTTON,
     MSG_DRAFT_STARTS,
     MSG_DRAFTMANCER_LINK_LEAD,
+    MSG_LINK_ARENA_PROMPT,
     MSG_POD_ADDED,
     MSG_POD_ALREADY_ON,
     MSG_POD_ALREADY_ON_HINT,
@@ -53,7 +56,9 @@ from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
 from bot.services.pod_deck_color import format_deck_color_emojis
-from bot.services.pod_draft_manager import notify_seeding_change
+from bot.services.pod_draft_manager import (
+    notify_seeding_change,
+)
 from bot.services.pod_tournament import champion_card_line, load_solo_card_drafters
 from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
@@ -61,13 +66,16 @@ from bot.services.ping_roles import (
     announce_pod_grant,
     auto_grant_spec_for_event,
     champion_role_mention,
+    build_link_arena_view,
     display_emoji,
+    format_join_line,
     grant_pod_roles,
     pod_card_state,
     send_join_confirmation_card,
     spec_named,
 )
 from bot.services.pod_drafts import (
+    arena_handle_for_sync,
     is_championship,
     load_event_description_sync,
     load_event_pairing_mode_sync,
@@ -93,6 +101,7 @@ from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import (
     REMINDER_LEAD_MIN,
     event_rsvps,
+    refresh_or_repost_roster_reminder,
     refresh_roster_reminder_for_event,
 )
 from bot.tasks.pod_underfill import refresh_underfill_nudge_for_event
@@ -113,7 +122,7 @@ CARD_STATUS_LOBBY_OPEN = "{emoji} **Lobby is open**"
 CARD_CREATED_BY = "Created by {name}"
 TIME_LABEL = "Time"
 NATIVE_EVENT_SIGNUP = "**Event Details and Signup Link: {jump_url}**"
-RSVP_LABELS = {RSVP_YES: "Sign Up", RSVP_MAYBE: "Maybe", RSVP_NO: "Can't"}
+RSVP_LABELS = {RSVP_YES: "Sign Up", RSVP_MAYBE: "Maybe", RSVP_NO: "Leave"}
 RSVP_CONFIRM_COLOR = {
     RSVP_YES: discord.Color.green(),
     RSVP_MAYBE: discord.Color.orange(),
@@ -165,9 +174,9 @@ class PodRsvpView(discord.ui.View):
     The Settings gear trails the RSVP row so the channel card carries the same format/reschedule/cancel
     controls as the thread; its custom_id is dispatched by the globally-registered Settings button."""
 
-    def __init__(self) -> None:
+    def __init__(self, maybe: bool = True) -> None:
         super().__init__(timeout=None)
-        for state in RSVP_STATES:
+        for state in offered_rsvp_states(maybe):
             self.add_item(RsvpButton(state))
         self.add_item(SettingsButton(label=None))
 
@@ -178,16 +187,25 @@ class ScheduledRegisteredView(discord.ui.View):
     render dead. The labels make it clear clicking also signs you up. Its custom_ids are already
     registered through PodRsvpView and the global Settings button, so it needs no registration."""
 
-    def __init__(self) -> None:
+    def __init__(self, maybe: bool = True) -> None:
         super().__init__(timeout=None)
-        for state in RSVP_STATES:
+        for state in offered_rsvp_states(maybe):
             self.add_item(RsvpButton(state, row=0, labeled=True))
         settings = SettingsButton()
         settings.row = 0
         self.add_item(settings)
 
 
-async def _apply_surface_rsvp(interaction: discord.Interaction, event_id: str, state: str) -> None:
+def offered_rsvp_states(maybe: bool) -> tuple[str, ...]:
+    """The answers a pod's card takes. A pod past the first was opened because the night is busy, out of
+    players who had already confirmed, so Maybe is not one of them: the question there is which table you
+    are on, and an answer that commits to neither leaves a seat nobody can plan around."""
+    return RSVP_STATES if maybe else (RSVP_YES, RSVP_NO)
+
+
+async def _apply_surface_rsvp(
+    interaction: discord.Interaction, event_id: str, state: str, confirming: bool = False,
+) -> None:
     """Record an RSVP from a non-card surface (championship invite wave, roster reminder) by resolving
     the pod's card from its event id, then routing through the shared card path."""
     await interaction.response.defer(ephemeral=True, thinking=True)
@@ -196,7 +214,7 @@ async def _apply_surface_rsvp(interaction: discord.Interaction, event_id: str, s
         await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
         return
     _, _, card_message_id, _ = card
-    await apply_card_rsvp(interaction, card_message_id, state)
+    await apply_card_rsvp(interaction, card_message_id, state, confirming=confirming)
 
 
 CHAMPIONSHIP_CONFIRM_PREFIX = "podchampconfirm"
@@ -255,6 +273,7 @@ class ChampionshipRsvpButton(
 
 
 REMINDER_RSVP_PREFIX = "podreminderrsvp"
+REMINDER_CONFIRM_STATE = "confirm"
 
 
 class ReminderRsvpButton(
@@ -264,15 +283,22 @@ class ReminderRsvpButton(
     """Sign Up / Can't on the T-60 roster reminder. The reminder lives in the pod thread and is not a
     card surface, so the event id rides in the custom_id: one registration dispatches every reminder, it
     keeps working after a restart, and the click records against the pod's card the same as any non-card
-    surface. The reminder confirms Yes or No only — Maybe belongs to the earlier gathering window."""
+    surface. The reminder confirms Yes or No only — Maybe belongs to the earlier gathering window.
+
+    On an oversubscribed pod the Yes seat carries `confirm` as its state instead. It records the same Yes
+    and additionally stamps the confirmation, so someone already on the roster gets a press that means
+    something. Riding in the custom_id keeps that true across a restart."""
 
     def __init__(self, state: str, event_id: str) -> None:
+        confirming = state == REMINDER_CONFIRM_STATE
+        rsvp = RSVP_YES if confirming else state
         super().__init__(discord.ui.Button(
-            style=discord.ButtonStyle.success if state == RSVP_YES else discord.ButtonStyle.secondary,
-            label=RSVP_LABELS[state], emoji=RSVP_EMOJI[state],
+            style=discord.ButtonStyle.success if rsvp == RSVP_YES else discord.ButtonStyle.secondary,
+            label=MSG_CONFIRM_SIGNUP_BUTTON if confirming else RSVP_LABELS[rsvp], emoji=RSVP_EMOJI[rsvp],
             custom_id=f"{REMINDER_RSVP_PREFIX}:{state}:{event_id}",
         ))
-        self.state = state
+        self.state = rsvp
+        self.confirming = confirming
         self.event_id = event_id
 
     @classmethod
@@ -280,7 +306,7 @@ class ReminderRsvpButton(
         return cls(match["state"], match["event_id"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await _apply_surface_rsvp(interaction, self.event_id, self.state)
+        await _apply_surface_rsvp(interaction, self.event_id, self.state, confirming=self.confirming)
 
 
 def build_championship_wave_view(event_id: str) -> discord.ui.View:
@@ -335,7 +361,8 @@ def build_rsvp_embed(
     columns, and unlike every other roster surface it survives the locked phases, so the seeding record
     stays on the card once the pod is over.
     `created_by` credits whoever opened an out-of-schedule pod with `/draft`, on the footer of every card
-    state. A card the launcher or a job posted has no one to credit and leaves the footer off."""
+    state. A card the launcher or a job posted has no one to credit and leaves the footer off.
+    """
     unix = int(event_time.timestamp())
     symbol = emojis.get(set_code.lower()) if set_code else ""
     suffix = f"{NBSP}{symbol}" if symbol else ""
@@ -772,7 +799,7 @@ async def _handle_rsvp(interaction: discord.Interaction, state: str) -> None:
 
 async def apply_card_rsvp(
     interaction: discord.Interaction, surface_message_id: str, state: str,
-    *, refresh_launcher: bool = True,
+    *, refresh_launcher: bool = True, confirming: bool = False,
 ) -> None:
     """Record an RSVP on the card behind `surface_message_id` and run every follow-on: the grant, the
     confirmation, thread membership, surface re-renders, the native-event tally, and the nudge and
@@ -799,6 +826,7 @@ async def apply_card_rsvp(
         asyncio.to_thread(
             pod_launch.set_rsvp_sync,
             surface_message_id, str(interaction.user.id), interaction.user.display_name, state,
+            confirming,
         ),
         pod_card_state(str(interaction.user.id)),
     )
@@ -806,7 +834,7 @@ async def apply_card_rsvp(
         await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
         return
 
-    await _answer_presser(interaction, result, card_state)
+    await _answer_presser(interaction, result, card_state, confirming=confirming)
     run_detached(
         _settle_card_rsvp(interaction, surface_message_id, result, refresh_launcher=refresh_launcher),
         f"the RSVP on card {surface_message_id}",
@@ -815,9 +843,17 @@ async def apply_card_rsvp(
 
 async def _answer_presser(
     interaction: discord.Interaction, result: pod_launch.RsvpResult, card_state: PodCardState,
+    confirming: bool = False,
 ) -> None:
     """The presser's private acknowledgement, sent off the roster write alone so it lands before any
-    surface re-renders."""
+    surface re-renders.
+
+    A confirmation is never the already-signed-up answer. Confirming is the second press by design, and
+    telling someone their press did nothing is the fastest way to stop them pressing it."""
+    if confirming and result.rsvp == RSVP_YES:
+        answer, view = await _confirm_answer(interaction, result)
+        await interaction.followup.send(answer, view=view, ephemeral=True)
+        return
     if result.rsvp == RSVP_YES and not result.joined:
         name, _event_time = _pod_identity(result)
         await interaction.followup.send(embed=pod_already_on_embed(name), ephemeral=True)
@@ -835,8 +871,11 @@ async def _settle_card_rsvp(
     *, refresh_launcher: bool,
 ) -> None:
     """Everything an RSVP moves once the presser has an answer: the clicked card, the pod roles and the
-    first-pod welcome, thread membership, the other surfaces carrying the roster, the native event tally,
-    the standing nudges, and the launcher board."""
+    first-pod welcome, thread membership, then everything any roster change moves.
+
+    The clicked card is repainted first because it is the one on the presser's screen. A press from the
+    thread's own surfaces renders nothing here, since those carry no roster columns, and the thread's
+    roster card is the first thing `settle_roster_change` touches."""
     (status_line, championship), champ_roster = await asyncio.gather(
         resolve_card_render_state(result.state.event_id),
         resolve_championship_card_roster(result.state.event_id, result.rosters),
@@ -862,19 +901,78 @@ async def _settle_card_rsvp(
         return
     join = result.rsvp in (RSVP_YES, RSVP_MAYBE)
     await _set_thread_membership(interaction, result.state.event_id, join=join)
-    await _sync_other_surfaces(
-        interaction.client, result.state.event_id, str(interaction.message.id),
-        result.rosters, result.roster_interests,
+    await settle_roster_change(
+        interaction.client, result, guild=interaction.guild, clicked_message_id=str(interaction.message.id),
+        surface_message_id=surface_message_id, refresh_launcher=refresh_launcher,
     )
-    await _sync_native_event_tally(interaction.guild, surface_message_id, result.rosters)
-    yes = result.rosters.get(RSVP_YES) or []
-    maybe = result.rosters.get(RSVP_MAYBE) or []
-    await refresh_underfill_nudge_for_event(interaction.client, result.state.event_id, len(yes), len(maybe))
-    await refresh_roster_reminder_for_event(result.state.event_id)
     if championship and result.yes_changed:
         notify_seeding_change(interaction.client, result.state.event_id)
+
+
+async def settle_roster_change(
+    bot: commands.Bot, result: pod_launch.RsvpResult, *, guild: discord.Guild | None = None,
+    clicked_message_id: str = "", surface_message_id: str | None = None,
+    refresh_launcher: bool = True,
+) -> "asyncio.Task | None":
+    """Everything a roster change moves besides whoever pressed.
+
+    Surfaces are rendered in the order the presser can see them. The card they clicked is repainted by
+    the caller, before this; the pod's own thread card comes next and is the only thing awaited here;
+    everything else rides a detached task behind it. A click in the thread used to wait on a channel card
+    nobody in the thread can see, and a card that slow reads as a button that did not work.
+
+    The task is returned for a caller that has to read the settled state. Shared by the RSVP click and by
+    `!test crowd`, so a simulated signup lands exactly where a real one does."""
+    event_id = result.state.event_id
+    if event_id is None:
+        return None
+    await refresh_or_repost_roster_reminder(event_id)
+    return run_detached(
+        _settle_beyond_the_thread(
+            bot, result, event_id, guild=guild, clicked_message_id=clicked_message_id,
+            surface_message_id=surface_message_id, refresh_launcher=refresh_launcher,
+        ),
+        f"the roster change on pod {event_id}",
+    )
+
+
+NATIVE_TALLY_QUIET_MIN = 10
+
+_native_tally_touched: dict[str, datetime] = {}
+
+
+def _native_tally_due(event_id: str) -> bool:
+    """Whether the pod's native event has gone long enough without an edit to be worth another one."""
+    now = datetime.now(timezone.utc)
+    last = _native_tally_touched.get(event_id)
+    if last is not None and now - last < timedelta(minutes=NATIVE_TALLY_QUIET_MIN):
+        return False
+    _native_tally_touched[event_id] = now
+    return True
+
+
+async def _settle_beyond_the_thread(
+    bot: commands.Bot, result: pod_launch.RsvpResult, event_id: str, *,
+    guild: discord.Guild | None, clicked_message_id: str, surface_message_id: str | None,
+    refresh_launcher: bool,
+) -> None:
+    """The rest of what a roster change moves: the channel card, the standing nudges, the lobby's
+    capacity, the next pod, and the launcher board. The board is repainted after staging, since staging
+    may have just created the pod it has to show.
+
+    The native event's tally rides a quiet window rather than every press. Editing a guild scheduled
+    event is one of the slowest and most rate-limited calls Discord has, and the Events tab is a
+    discovery surface nobody watches count up."""
+    await _sync_other_surfaces(
+        bot, event_id, clicked_message_id, result.rosters, result.roster_interests,
+    )
+    if surface_message_id is not None and _native_tally_due(event_id):
+        await _sync_native_event_tally(guild, surface_message_id, result.rosters)
+    yes = result.rosters.get(RSVP_YES) or []
+    maybe = result.rosters.get(RSVP_MAYBE) or []
+    await refresh_underfill_nudge_for_event(bot, event_id, len(yes), len(maybe))
     if result.yes_changed and refresh_launcher:
-        await _refresh_launcher(interaction.client, result.state.slot_time)
+        await _refresh_launcher(bot, result.state.slot_time)
 
 
 async def apply_card_leave(
@@ -895,11 +993,10 @@ async def apply_card_leave(
         return name
     await _render_channel_card(bot, event_id, result.rosters, result.roster_interests)
     await _move_member_thread(bot, event_id, user, join=False)
-    await _sync_native_event_tally(guild, card_message_id, result.rosters)
     yes = result.rosters.get(RSVP_YES) or []
     maybe = result.rosters.get(RSVP_MAYBE) or []
     await refresh_underfill_nudge_for_event(bot, event_id, len(yes), len(maybe))
-    await refresh_roster_reminder_for_event(event_id)
+    await refresh_or_repost_roster_reminder(event_id)
     if result.yes_changed:
         _status_line, championship = await resolve_card_render_state(event_id)
         if championship:
@@ -981,6 +1078,41 @@ def _rsvp_headline(rsvp: str, pod_name: str) -> str:
     return (MSG_POD_ADDED if rsvp == RSVP_YES else MSG_POD_MAYBE).format(name=pod_name)
 
 
+async def _confirm_answer(
+    interaction: discord.Interaction, result: pod_launch.RsvpResult,
+) -> tuple[str, "discord.ui.View | None"]:
+    """The presser's answer to Confirm Seat, which is the one press worth asking anything of.
+
+    Somebody who has just raised their hand an hour before the draft has nothing else competing for their
+    attention, and it is the last moment where a missing Arena handle can still be fixed calmly. So an
+    unlinked confirmation is where the ask goes: linking there hands the link straight back through
+    `active_lobby_link_for`, and it is what turns their name on the lobby card from 🆕 into a live link.
+    Left to the lobby opening, the same ask arrives ten minutes out, in the middle of everyone arriving.
+
+    A linked confirmation gets the link itself, but only once the bot holds the room. The claim runs an hour
+    out for exactly this, and a session it does not own can still be abandoned and reseated, which would
+    invalidate every address already handed out."""
+    name, _event_time = _pod_identity(result)
+    confirmed = MSG_CONFIRM_DONE.format(name=name)
+    handle = await asyncio.to_thread(arena_handle_for_sync, str(interaction.user.id))
+    if handle is None:
+        return f"{confirmed}\n{MSG_LINK_ARENA_PROMPT}", build_link_arena_view()
+    session_id = _owned_lobby_session(result.state.event_id)
+    if session_id is None:
+        return confirmed, None
+    return f"{confirmed}\n{format_join_line(session_id, handle)}", None
+
+
+def _owned_lobby_session(event_id: str | None) -> str | None:
+    """The Draftmancer session of a pod whose room the bot is already holding, else None."""
+    if event_id is None:
+        return None
+    manager = ACTIVE_POD_MANAGERS.get(event_id)
+    if manager is None or not manager.is_owner:
+        return None
+    return manager.session_id
+
+
 def _pod_identity(result: pod_launch.RsvpResult) -> tuple[str, datetime | None]:
     """(pod name, start time) for an acknowledgement, carried out of the roster write itself. A signal with
     no pod on it yet is named for the format and slot it will carry, which is the name the pod takes when
@@ -1060,8 +1192,10 @@ async def _render_channel_card(
     embed = message.embeds[0]
     status_line, championship = await resolve_card_render_state(event_id)
     champ_roster = await resolve_championship_card_roster(event_id, rosters)
-    refresh_roster_fields(embed, rosters, status_line, roster_interests, championship=championship,
-                          championship_roster=champ_roster)
+    refresh_roster_fields(
+        embed, rosters, status_line, roster_interests, championship=championship,
+        championship_roster=champ_roster,
+    )
     try:
         await message.edit(embed=embed)
     except discord.HTTPException:
@@ -1129,13 +1263,16 @@ async def _sync_native_event_tally(
     guild: discord.Guild | None, message_id: str, rosters: dict[str, list[str]],
 ) -> None:
     """Re-render the native event's tally after a click on any RSVP surface. The card stays the
-    canonical roster; this keeps the Events tab's count honest."""
+    canonical roster; this keeps the Events tab's count honest while the tab is still where someone
+    might find the pod. A pod about to open its lobby is past that, and stops paying for the edit."""
     if guild is None:
         return
     ref = await asyncio.to_thread(pod_launch.native_event_ref_by_surface_sync, message_id)
     if ref is None:
         return
-    native_event_id, guild_id, channel_id, card_message_id = ref
+    native_event_id, guild_id, channel_id, card_message_id, event_time = ref
+    if not native_event_still_matters(event_time):
+        return
     jump_url = f"https://discord.com/channels/{guild_id}/{channel_id}/{card_message_id}"
     try:
         event_id_int = int(native_event_id)
@@ -1370,7 +1507,7 @@ async def refresh_scheduled_card(bot: commands.Bot, event_id: str) -> None:
     display_name = team_aware_pod_name(name, pairing_mode)
     await _edit_scheduled_card(bot, event_id, name, event_time)
     await _rename_thread(bot, thread_id, display_name)
-    await _rename_native_event(bot, thread_id, native_event_id, display_name)
+    await _rename_native_event(bot, thread_id, native_event_id, display_name, event_time)
 
 
 async def refresh_card_note(bot: commands.Bot, event_id: str) -> None:
@@ -1494,21 +1631,33 @@ async def reflect_format_change(bot: commands.Bot, event_id: str) -> None:
     pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
     await _edit_scheduled_card(bot, event_id, name, event_time)
     await _refresh_launcher_for_event(bot, event_id)
-    await _rename_native_event(bot, thread_id, native_event_id, team_aware_pod_name(name, pairing_mode))
+    await _rename_native_event(
+        bot, thread_id, native_event_id, team_aware_pod_name(name, pairing_mode), event_time,
+    )
 
 
 async def refresh_event_rsvp_surfaces(bot: commands.Bot, event_id: str) -> None:
     """Re-render a pod's scheduled card and roster reminder so their format-split columns pick up a
     changed signup preference. Each surface reads the roster fresh and edits in place, so an update that
     overlaps another RSVP or preference change converges instead of racing."""
+    await _refresh_rsvp_surfaces(bot, event_id, reminder=True)
+
+
+async def refresh_event_scheduled_card(bot: commands.Bot, event_id: str) -> None:
+    """The card alone, for a caller that is about to repost the reminder itself. Editing a card that is
+    then deleted is a round trip nobody sees."""
+    await _refresh_rsvp_surfaces(bot, event_id, reminder=False)
+
+
+async def _refresh_rsvp_surfaces(bot: commands.Bot, event_id: str, *, reminder: bool) -> None:
     loaded = await asyncio.to_thread(_load_event, event_id)
     if loaded is None:
         return
     name, event_time, _status, _thread_id, _native_event_id, _created_at = loaded
-    await asyncio.gather(
-        _edit_scheduled_card(bot, event_id, name, event_time),
-        refresh_roster_reminder_for_event(event_id),
-    )
+    work = [_edit_scheduled_card(bot, event_id, name, event_time)]
+    if reminder:
+        work.append(refresh_roster_reminder_for_event(event_id))
+    await asyncio.gather(*work)
 
 
 async def _rename_thread(bot: commands.Bot, thread_id: str | None, name: str) -> None:
@@ -1523,10 +1672,24 @@ async def _rename_thread(bot: commands.Bot, thread_id: str | None, name: str) ->
         log.warning(f"could not rename thread {thread_id}", exc_info=True)
 
 
+def native_event_still_matters(event_time: datetime | None) -> bool:
+    """Whether the native event is still worth an edit.
+
+    It is a discovery surface: somebody browsing the Events tab days out, deciding whether to come. Once
+    the lobby is about to open, everyone it could reach is already in the thread, and a guild scheduled
+    event is one of the slowest and most rate-limited things Discord lets a bot touch. Moving the event
+    to a new time is the exception and goes through its own path, since that is the event itself
+    changing rather than a tally on it."""
+    if event_time is None:
+        return False
+    return event_time - datetime.now(timezone.utc) > timedelta(minutes=REMINDER_LEAD_MIN)
+
+
 async def _rename_native_event(
     bot: commands.Bot, thread_id: str | None, native_event_id: str | None, name: str,
+    event_time: datetime | None,
 ) -> None:
-    if native_event_id is None or thread_id is None:
+    if native_event_id is None or thread_id is None or not native_event_still_matters(event_time):
         return
     thread = await fetch_channel(bot, thread_id)
     guild = getattr(thread, "guild", None)

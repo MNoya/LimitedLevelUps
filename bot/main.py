@@ -69,6 +69,7 @@ from bot.commands.testscribe import setup as setup_testscribe
 from bot.listeners.auto_link_listener import setup as setup_auto_link_listener
 from bot.listeners.profile_sync_listener import setup as setup_profile_sync_listener
 from bot.listeners.pod_screenshots import setup as setup_pod_screenshots
+from bot.listeners.pod_thread_activity import setup as setup_pod_thread_activity
 from bot.listeners.rotate_image import setup as setup_rotate_image
 from bot.models import LeaderboardMessage, Player, PodDraftEvent
 from bot.services.bot_log import BotLog
@@ -105,7 +106,6 @@ from bot.tasks.pod_draft_reminder import init_reminder
 from bot.tasks.pod_daily_poll import (
     PlayAgainButton,
     catch_up_daily_poll,
-    ReminderFormatPreferenceButton,
     BoardLeaveButton,
     SlotJoinButton,
     SlotSignUpButton,
@@ -254,6 +254,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_preview_season_awards(bot)
         await setup_set_awards(bot)
         await setup_pod_screenshots(bot)
+        await setup_pod_thread_activity(bot)
         await setup_rotate_image(bot)
         await setup_auto_link_listener(bot)
         await setup_profile_sync_listener(bot)
@@ -285,7 +286,6 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(ChampionshipConfirmButton)
         bot.add_dynamic_items(ChampionshipRsvpButton)
         bot.add_dynamic_items(ReminderRsvpButton)
-        bot.add_dynamic_items(ReminderFormatPreferenceButton)
         bot.add_dynamic_items(SlotJoinButton)
         bot.add_dynamic_items(SlotSignUpButton)
         bot.add_dynamic_items(BoardLeaveButton)

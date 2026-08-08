@@ -33,6 +33,7 @@ from bot.services import pod_event_settings
 from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services import pod_team
+from bot.services.pod_confirm import CONFIRM_WINDOW_MINUTES
 from bot.services.pod_draft_manager import (
     PodDraftManager,
     set_card_close_hook,
@@ -628,6 +629,7 @@ def scheduled_pick_timer_for_event_sync(event_id: str) -> int | None:
 
 def set_rsvp(
     session: Session, message_id: str, discord_user_id: str, display_name: str, rsvp: str,
+    confirming: bool = False,
 ) -> RsvpResult | None:
     """RSVP on a scheduled card: Yes or Maybe move the member there; No removes their signup entirely,
     since No is not a tracked roster. A Set Championship is the exception — it keeps No as a tracked
@@ -655,6 +657,8 @@ def set_rsvp(
         )
     ).scalar_one_or_none()
     was_yes = existing is not None and existing.rsvp == pod_signals.RSVP_YES
+    confirming = confirming or _inside_confirmation_window(event, rsvp)
+    confirmed_at = datetime.now(timezone.utc) if confirming else None
     joined = False
     if rsvp == pod_signals.RSVP_NO and not tracks_no:
         recorded: str | None = None
@@ -665,13 +669,18 @@ def set_rsvp(
         if existing is None:
             session.add(PodSignalMember(
                 signal_id=signal.id, discord_user_id=discord_user_id, display_name=display_name, rsvp=rsvp,
-                format_interest=get_format_interests(session, discord_user_id),
+                format_interest=get_format_interests(session, discord_user_id), confirmed_at=confirmed_at,
             ))
             signal.last_activity_at = datetime.now(timezone.utc)
             joined = rsvp == pod_signals.RSVP_YES
-        elif existing.rsvp != rsvp:
-            joined = rsvp == pod_signals.RSVP_YES
-            existing.rsvp = rsvp
+        else:
+            if existing.rsvp != rsvp:
+                joined = rsvp == pod_signals.RSVP_YES
+                existing.rsvp = rsvp
+            if confirming:
+                existing.confirmed_at = confirmed_at
+            elif rsvp == pod_signals.RSVP_MAYBE:
+                existing.confirmed_at = None
             existing.display_name = display_name
     session.flush()
     rosters = _members_by_rsvp(session, signal.id)
@@ -686,11 +695,23 @@ def set_rsvp(
     )
 
 
+def _inside_confirmation_window(event: PodDraftEvent | None, rsvp: str) -> bool:
+    """Whether saying Yes right now counts as confirming on its own.
+
+    Inside the hour before the draft a fresh Yes is a confirmation by definition: nobody signs up at ten
+    to nine for a pod they are not about to play. Asking those people to press a second button would only
+    catch out the ones who answered latest and are surest."""
+    if rsvp != pod_signals.RSVP_YES or event is None or event.event_time is None:
+        return False
+    remaining = event.event_time - datetime.now(timezone.utc)
+    return timedelta(0) <= remaining <= timedelta(minutes=CONFIRM_WINDOW_MINUTES)
+
+
 def set_rsvp_sync(
-    message_id: str, discord_user_id: str, display_name: str, rsvp: str,
+    message_id: str, discord_user_id: str, display_name: str, rsvp: str, confirming: bool = False,
 ) -> RsvpResult | None:
     with SessionLocal() as session:
-        result = set_rsvp(session, message_id, discord_user_id, display_name, rsvp)
+        result = set_rsvp(session, message_id, discord_user_id, display_name, rsvp, confirming=confirming)
         session.commit()
         return result
 

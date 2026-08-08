@@ -41,6 +41,7 @@ from bot.commands.messages import (
 )
 from bot.commands.pod_queue import queue_role_mention
 from bot.commands.pod_rsvp import (
+    REMINDER_CONFIRM_STATE,
     ReminderRsvpButton,
     apply_card_leave,
     apply_card_rsvp,
@@ -1144,19 +1145,6 @@ async def _open_interest_prompt(interaction: discord.Interaction) -> None:
     await _send_interest_prompt(interaction, launcher_message_id, signal_date)
 
 
-async def open_interest_prompt_from_card(interaction: discord.Interaction) -> None:
-    """The picker opened from a grant card's Format Preference button, resolving the newest launcher so
-    Confirm buttons target its slots. With no launcher on record the picker still saves the standing
-    preference; its Confirm buttons refuse through the normal inactive-poll path."""
-    await interaction.response.defer(ephemeral=True, thinking=True)
-    launcher = await asyncio.to_thread(pod_launch.latest_launcher_sync)
-    if launcher is not None:
-        launcher_message_id, signal_date = launcher
-    else:
-        launcher_message_id, signal_date = "", datetime.now(SCHEDULE_TZ).date()
-    await _send_interest_prompt(interaction, launcher_message_id, signal_date)
-
-
 async def _send_interest_prompt(
     interaction: discord.Interaction, launcher_message_id: str, signal_date: date,
     event_id: str | None = None,
@@ -1171,54 +1159,27 @@ async def _send_interest_prompt(
     await interaction.followup.send(view=view, ephemeral=True)
 
 
-REMINDER_FORMAT_PREFIX = "podremindfmt"
-
-
-class ReminderFormatPreferenceButton(
-    discord.ui.DynamicItem[discord.ui.Button],
-    template=rf"{REMINDER_FORMAT_PREFIX}:(?P<event_id>.+)",
-):
-    """Format Preference on the T-60 roster reminder. Opens the same picker as the launcher, minus the
-    per-slot Confirm buttons, so there is only Save. The event id rides in the custom_id so Save can
-    re-render this pod's card and reminder, and so it keeps working after a restart."""
-
-    def __init__(self, event_id: str) -> None:
-        super().__init__(discord.ui.Button(
-            label=MSG_FORMAT_PREFERENCE_BUTTON, style=discord.ButtonStyle.primary,
-            emoji=fi.FLEXIBLE_EMOJI, custom_id=f"{REMINDER_FORMAT_PREFIX}:{event_id}",
-        ))
-        self.event_id = event_id
-
-    @classmethod
-    async def from_custom_id(cls, interaction, item, match):
-        return cls(match["event_id"])
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await open_interest_prompt_from_reminder(interaction, self.event_id)
-
-
-async def open_interest_prompt_from_reminder(interaction: discord.Interaction, event_id: str) -> None:
-    """The picker opened from a pod's roster reminder: Save only, no per-slot Confirm. Resolves the day's
-    launcher so Save still updates the launcher board and the player's standing preference, and carries
-    the event id so Save re-renders this pod's card and reminder."""
+async def open_interest_prompt_from_card(interaction: discord.Interaction) -> None:
+    """The picker opened from a grant card's Format Preference button, resolving the newest launcher so
+    Confirm buttons target its slots. With no launcher on record the picker still saves the standing
+    preference; its Confirm buttons refuse through the normal inactive-poll path."""
     await interaction.response.defer(ephemeral=True, thinking=True)
     launcher = await asyncio.to_thread(pod_launch.latest_launcher_sync)
     if launcher is not None:
         launcher_message_id, signal_date = launcher
     else:
         launcher_message_id, signal_date = "", datetime.now(SCHEDULE_TZ).date()
-    await _send_interest_prompt(interaction, launcher_message_id, signal_date, event_id=event_id)
+    await _send_interest_prompt(interaction, launcher_message_id, signal_date)
 
 
-def build_reminder_view(event_id: str, format_locked: bool = False) -> discord.ui.View:
-    """The roster reminder's controls: Sign Up / Can't recording against the pod, and Format Preference
-    opening the Save-only picker. All carry the event id so they resolve the pod after a restart. A
-    format-locked pod drops Format Preference, since its set never resolves from the roster."""
+def build_reminder_view(event_id: str, confirming: bool = False) -> discord.ui.View:
+    """The roster reminder's controls, carrying the event id so they resolve the pod after a restart.
+
+    On an oversubscribed pod the seat button becomes Confirm, so the people already on the roster have a
+    press that records something."""
     view = discord.ui.View(timeout=None)
-    view.add_item(ReminderRsvpButton(RSVP_YES, event_id))
+    view.add_item(ReminderRsvpButton(REMINDER_CONFIRM_STATE if confirming else RSVP_YES, event_id))
     view.add_item(ReminderRsvpButton(RSVP_NO, event_id))
-    if not format_locked:
-        view.add_item(ReminderFormatPreferenceButton(event_id))
     return view
 
 

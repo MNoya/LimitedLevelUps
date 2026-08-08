@@ -31,7 +31,6 @@ from bot.tasks.pod_daily_poll import (
     _column_value,
     _committed_card_link,
     _early_transition_is_live,
-    build_reminder_view,
     lane_settled_for_day,
 )
 
@@ -99,20 +98,6 @@ def test_committed_card_link_is_none_without_a_thread_name():
     slot = _committed_named(None, "111", "222")
 
     assert _committed_card_link(None, slot) is None
-
-
-def test_reminder_view_confirms_yes_or_no_and_opens_format_preference():
-    view = build_reminder_view("EVT9")
-
-    custom_ids = [child.custom_id for child in view.children]
-    assert custom_ids == ["podreminderrsvp:yes:EVT9", "podreminderrsvp:no:EVT9", "podremindfmt:EVT9"]
-
-
-def test_format_locked_reminder_view_drops_format_preference():
-    view = build_reminder_view("EVT9", format_locked=True)
-
-    custom_ids = [child.custom_id for child in view.children]
-    assert custom_ids == ["podreminderrsvp:yes:EVT9", "podreminderrsvp:no:EVT9"]
 
 
 def test_a_closed_slot_carries_no_join_button_while_an_open_one_does():

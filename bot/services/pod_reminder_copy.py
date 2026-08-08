@@ -34,6 +34,8 @@ SLOT_FIRE_PING = "{mention} starts <t:{unix}:R>"
 
 ROSTER_REMINDER_TITLE = "🔔 Pod Draft Starting Soon"
 ROSTER_REMINDER_LINE = "**{name}** starts <t:{unix}:R>"
+ROSTER_REMINDER_MARK = "### 🔔"
+ROSTER_REMINDER_HEADLINE = ROSTER_REMINDER_MARK + " **{name}** starts <t:{unix}:R>"
 
 LOBBY_OPEN_HEADLINE = "Lobby opened!"
 LOBBY_ARENA_NAME = (
