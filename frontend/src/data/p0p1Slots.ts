@@ -1,5 +1,5 @@
 import contestsConfig from "../../../p0p1_contests.json";
-import type { Card, ContestConfig, SlotDefinition } from "../types/p0p1";
+import type { Card, ContestConfig, SlotDefinition, SlotKey } from "../types/p0p1";
 
 // The same file bot/scripts writes and a future bot task reads, alongside scoring_buckets.json
 export const P0P1_CONTESTS: Record<string, ContestConfig> = contestsConfig;
@@ -127,30 +127,55 @@ function monoColor(color: string) {
     !picked.has(card.name);
 }
 
-export const SLOTS: SlotDefinition[] = [
-  { key: "white_common", label: "White Common", filter: monoColor("W") },
-  { key: "blue_common", label: "Blue Common", filter: monoColor("U") },
-  { key: "black_common", label: "Black Common", filter: monoColor("B") },
-  { key: "red_common", label: "Red Common", filter: monoColor("R") },
-  { key: "green_common", label: "Green Common", filter: monoColor("G") },
-  {
-    key: "multicolor_uncommon",
-    label: "Multicolor Uncommon",
-    filter: (card, picked) =>
-      card.rarity === "uncommon" &&
-      card.colors.length >= 2 &&
-      !picked.has(card.name),
-  },
-  {
-    key: "wildcard_common",
-    label: "Wildcard Common",
-    filter: (card, picked) =>
-      card.rarity === "common" && !isBasicLand(card) && !picked.has(card.name),
-  },
-  {
-    key: "wildcard_uncommon",
-    label: "Wildcard Uncommon",
-    filter: (card, picked) =>
-      card.rarity === "uncommon" && !picked.has(card.name),
-  },
-];
+function isHybridOf(manaCost: string, color: string): boolean {
+  const re = /\{([WUBRG])\/([WUBRG])\}/g;
+  let m;
+  while ((m = re.exec(manaCost)) !== null) {
+    if (m[1] === color || m[2] === color) return true;
+  }
+  return false;
+}
+
+function monoOrHybridColor(color: string) {
+  return (card: Card, picked: Set<string>) =>
+    card.rarity === "common" &&
+    !picked.has(card.name) &&
+    ((card.colors.length === 1 && card.colors[0] === color) ||
+      isHybridOf(card.manaCost, color));
+}
+
+const COLORS = ["W", "U", "B", "R", "G"] as const;
+const COLOR_LABELS: Record<string, string> = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
+
+export function buildSlots(config?: ContestConfig): SlotDefinition[] {
+  const colorFilter = config?.hybridCommonSlots ? monoOrHybridColor : monoColor;
+  return [
+    ...COLORS.map((c) => ({
+      key: `${COLOR_LABELS[c].toLowerCase()}_common` as SlotKey,
+      label: `${COLOR_LABELS[c]} Common`,
+      filter: colorFilter(c),
+    })),
+    {
+      key: "multicolor_uncommon",
+      label: "Multicolor Uncommon",
+      filter: (card: Card, picked: Set<string>) =>
+        card.rarity === "uncommon" &&
+        card.colors.length >= 2 &&
+        !picked.has(card.name),
+    },
+    {
+      key: "wildcard_common",
+      label: "Wildcard Common",
+      filter: (card: Card, picked: Set<string>) =>
+        card.rarity === "common" && !isBasicLand(card) && !picked.has(card.name),
+    },
+    {
+      key: "wildcard_uncommon",
+      label: "Wildcard Uncommon",
+      filter: (card: Card, picked: Set<string>) =>
+        card.rarity === "uncommon" && !picked.has(card.name),
+    },
+  ];
+}
+
+export const SLOTS: SlotDefinition[] = buildSlots();

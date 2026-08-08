@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -98,7 +99,23 @@ def extract_card(raw: dict) -> dict:
     }
 
 
-def report_pool_coverage(cards: list[dict]) -> list[str]:
+_HYBRID_RE = re.compile(r"\{([WUBRG])/([WUBRG])\}")
+
+
+def _is_hybrid_of(mana_cost: str, color: str) -> bool:
+    return any(color in (m.group(1), m.group(2)) for m in _HYBRID_RE.finditer(mana_cost))
+
+
+def _color_common_count(playable: list[dict], color: str, *, hybrid: bool) -> int:
+    return sum(
+        1
+        for c in playable
+        if c["rarity"] == "common"
+        and (c["colors"] == [color] or (hybrid and _is_hybrid_of(c.get("manaCost", ""), color)))
+    )
+
+
+def report_pool_coverage(cards: list[dict], *, hybrid_common_slots: bool = False) -> list[str]:
     """Print what the 8 slots have to draw from and return the shortfalls. Mid-spoiler a set is
     mostly uncommons, which leaves the mono-color common slots unfillable — the pool has to be
     complete before voting opens, so say so here instead of on the live ballot."""
@@ -107,7 +124,7 @@ def report_pool_coverage(cards: list[dict]) -> list[str]:
 
     print("Slot coverage:")
     for color in ("W", "U", "B", "R", "G"):
-        count = sum(1 for c in playable if c["rarity"] == "common" and c["colors"] == [color])
+        count = _color_common_count(playable, color, hybrid=hybrid_common_slots)
         print(f"  {color} common          {count:4}")
         if count == 0:
             shortfalls.append(f"no {color} commons")
@@ -227,8 +244,9 @@ def main() -> None:
     output.write_text(ts_content)
     print(f"Wrote {len(cards)} cards → {output}")
 
-    shortfalls = report_pool_coverage(cards)
     existing = read_contests().get(set_code)
+    hybrid = bool(existing and existing.get("hybridCommonSlots"))
+    shortfalls = report_pool_coverage(cards, hybrid_common_slots=hybrid)
 
     if shortfalls:
         print(f"POOL INCOMPLETE: {', '.join(shortfalls)}. Those slots have nothing to pick from.")
