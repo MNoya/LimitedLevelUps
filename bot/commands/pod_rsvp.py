@@ -899,8 +899,8 @@ async def _settle_card_rsvp(
 
     if result.state.event_id is None:
         return
-    join = result.rsvp in (RSVP_YES, RSVP_MAYBE)
-    await _set_thread_membership(interaction, result.state.event_id, join=join)
+    if result.rsvp in (RSVP_YES, RSVP_MAYBE):
+        await _add_member_to_thread(interaction.client, result.state.event_id, interaction.user)
     await settle_roster_change(
         interaction.client, result, guild=interaction.guild, clicked_message_id=str(interaction.message.id),
         surface_message_id=surface_message_id, refresh_launcher=refresh_launcher,
@@ -992,7 +992,6 @@ async def apply_card_leave(
     if event_id is None:
         return name
     await _render_channel_card(bot, event_id, result.rosters, result.roster_interests)
-    await _move_member_thread(bot, event_id, user, join=False)
     yes = result.rosters.get(RSVP_YES) or []
     maybe = result.rosters.get(RSVP_MAYBE) or []
     await refresh_underfill_nudge_for_event(bot, event_id, len(yes), len(maybe))
@@ -1124,26 +1123,20 @@ def _pod_identity(result: pod_launch.RsvpResult) -> tuple[str, datetime | None]:
     ), result.state.slot_time
 
 
-async def _set_thread_membership(interaction: discord.Interaction, event_id: str, *, join: bool) -> None:
-    """Thread membership follows the RSVP: Yes and Maybe pull the member in so coordination reaches
-    them, No takes them back out."""
-    await _move_member_thread(interaction.client, event_id, interaction.user, join=join)
+async def _add_member_to_thread(bot: commands.Bot, event_id: str, user: discord.abc.User) -> None:
+    """Pull a member into the pod's thread so coordination reaches them.
 
-
-async def _move_member_thread(
-    bot: commands.Bot, event_id: str, user: discord.abc.User, *, join: bool,
-) -> None:
+    Thread membership only ever grows. Leaving a pod takes the seat back, not the conversation: somebody
+    who dropped out still wants to read whether the pod fired, and may well come back to it. Ejecting them
+    is also the one thing here a player cannot undo for themselves, since a thread they were removed from
+    is harder to find again than one they chose to leave."""
     thread = await _resolve_event_thread(bot, event_id)
     if thread is None:
         return
     try:
-        if join:
-            await thread.add_user(user)
-        else:
-            await thread.remove_user(user)
+        await thread.add_user(user)
     except discord.HTTPException:
-        action = "add" if join else "remove"
-        log.warning(f"could not {action} {user} on thread {thread.id}", exc_info=True)
+        log.warning(f"could not add {user} to thread {thread.id}", exc_info=True)
 
 
 async def _resolve_event_thread(bot: commands.Bot, event_id: str | None) -> discord.Thread | None:
