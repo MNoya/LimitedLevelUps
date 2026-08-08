@@ -34,6 +34,7 @@ from bot.commands.mock_draft import setup as setup_mock_draft
 from bot.commands.pod_draft import setup as setup_pod_draft
 from bot.commands.pod_queue import PodQueueView, setup as setup_pod_queue
 from bot.commands.pod_guide import setup as setup_pod_guide
+from bot.commands.pod_confirm import setup as setup_pod_confirm
 from bot.commands.pod_rally import setup as setup_pod_rally
 from bot.commands.pod_schedule import setup as setup_pod_schedule
 from bot.commands.report_results import setup as setup_report_results
@@ -242,6 +243,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_pod_draft(bot)
         await setup_pod_queue(bot)
         await setup_pod_guide(bot)
+        await setup_pod_confirm(bot)
         await setup_pod_rally(bot)
         await setup_pod_schedule(bot)
         await setup_report_results(bot)
