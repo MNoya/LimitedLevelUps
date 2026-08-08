@@ -80,16 +80,17 @@ def _seed_event(session):
     return event
 
 
-def test_championship_is_the_second_saturday_before_a_tuesday_release():
-    # The Hobbit releases Tue 2026-08-11; prerelease weekend Aug 7-9; championship the Saturday before
-    assert championship_date_before(date(2026, 8, 11)) == date(2026, 8, 1)
+def test_championship_is_the_saturday_before_the_prerelease_weekend():
+    friday_prerelease = date(2026, 8, 7)
+    thursday_prerelease = date(2026, 8, 6)
+
+    assert championship_date_before(friday_prerelease) == date(2026, 8, 1)
+    assert championship_date_before(thursday_prerelease) == date(2026, 8, 1)
 
 
-def test_championship_date_holds_for_other_release_weekdays():
-    assert championship_date_before(date(2026, 9, 29)).weekday() == 5
-    assert championship_date_before(date(2026, 11, 10)).weekday() == 5
-    thursday_release = date(2026, 8, 13)
-    assert championship_date_before(thursday_release) == date(2026, 8, 1)
+def test_championship_date_holds_for_the_upcoming_prerelease_weekends():
+    assert championship_date_before(date(2026, 9, 25)).weekday() == 5
+    assert championship_date_before(date(2026, 11, 6)).weekday() == 5
 
 
 def test_plan_for_active_set_anchors_to_its_successor():

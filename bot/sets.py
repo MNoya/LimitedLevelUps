@@ -32,9 +32,23 @@ def release_instant(d: date) -> datetime:
     return datetime.combine(d, RELEASE_TIME, tzinfo=RELEASE_TZ).astimezone(timezone.utc)
 
 
+FRIDAY = 4
+
+
+def previous_weekday(day: date, weekday: int) -> date:
+    """The latest `weekday` strictly before `day`."""
+    back = (day.weekday() - weekday) % 7 or 7
+    return day - timedelta(days=back)
+
+
 @dataclass(frozen=True)
 class SetSeed:
     """A set on the leaderboard.
+
+    ``prerelease_date`` is the first day of the paper prerelease weekend, days before the Arena
+    release: cards are in players' hands from then, and it anchors the Set Championship date. It is
+    recorded for the sets whose schedule is still live and derived by ``prerelease_date_for`` for the
+    rest, which is also the only sensible answer for the Arena-only sets that never had one.
 
     ``expansion_alias`` is a 17lands expansion string rewritten to ``code`` at ingest, for a set
     17lands files under another name (``MAT`` for MOM). ``expansion_matches`` routes several 17lands
@@ -45,6 +59,7 @@ class SetSeed:
     name: str
     start_date: date
     end_date: date | None
+    prerelease_date: date | None = None
     expansion_alias: str | None = None
     expansion_matches: tuple[str, ...] = ()
 
@@ -121,9 +136,9 @@ ALL_SETS: tuple[SetSeed, ...] = (
     SetSeed("TMT", "Teenage Mutant Ninja Turtles", date(2026, 3, 3), date(2026, 4, 20)),
     SetSeed("SOS", "Secrets of Strixhaven", date(2026, 4, 21), date(2026, 6, 22)),
     SetSeed("MSH", "Marvel Super Heroes", date(2026, 6, 23), date(2026, 8, 10)),
-    SetSeed("HOB", "The Hobbit", date(2026, 8, 11), date(2026, 9, 28)),
-    SetSeed("FRA", "Reality Fracture", date(2026, 9, 29), date(2026, 11, 9)),
-    SetSeed("TRE", "Star Trek", date(2026, 11, 10), date(2027, 1, 4)),
+    SetSeed("HOB", "The Hobbit", date(2026, 8, 11), date(2026, 9, 28), prerelease_date=date(2026, 8, 7)),
+    SetSeed("FRA", "Reality Fracture", date(2026, 9, 29), date(2026, 11, 9), prerelease_date=date(2026, 9, 25)),
+    SetSeed("TRE", "Star Trek", date(2026, 11, 10), date(2027, 1, 4), prerelease_date=date(2026, 11, 6)),
 )
 
 # MTGO-only flashback drafts, never on Arena; kept out of ALL_SETS so they never rotate or score
@@ -181,6 +196,28 @@ def released_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:
     now = when or datetime.now(timezone.utc)
     released = [seed for seed in ALL_SETS if release_instant(seed.start_date) <= now]
     return tuple(reversed(released))
+
+
+def prerelease_date_for(seed: SetSeed) -> date:
+    """First day of a set's paper prerelease weekend, falling back to the Friday before its Arena
+    release for sets that carry no recorded date."""
+    if seed.prerelease_date is not None:
+        return seed.prerelease_date
+    return previous_weekday(seed.start_date, FRIDAY)
+
+
+def prerelease_instant(seed: SetSeed) -> datetime:
+    """Midnight ET on the prerelease date — the moment a set counts as playable, so early prerelease
+    events on the eve are covered."""
+    return datetime.combine(prerelease_date_for(seed), time(0, 0), tzinfo=RELEASE_TZ).astimezone(timezone.utc)
+
+
+def prereleased_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:
+    """Sets whose prerelease weekend has started, newest first — everything a player can hold cards
+    from, which runs days ahead of ``released_sets`` while the newest set is still in prerelease."""
+    now = when or datetime.now(timezone.utc)
+    out = [seed for seed in ALL_SETS if prerelease_instant(seed) <= now]
+    return tuple(reversed(out))
 
 
 def upcoming_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:

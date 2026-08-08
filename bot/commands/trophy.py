@@ -36,7 +36,7 @@ from bot.services.pod_drafts import parse_caption_record
 from bot.services.pod_thread_backfill import parse_caption_colors
 from bot.services.pod_tournament import TROPHY_HYPE_HISTORY_LIMIT
 from bot.services.self_reported_events import get_or_create_player, is_trophy_record, upsert_event
-from bot.sets import active_set_code, parse_caption_set_code, released_sets
+from bot.sets import active_set_code, parse_caption_set_code, prereleased_sets
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +208,7 @@ class TrophyConfirmView(ui.View):
 
 class _SetSelect(ui.Select):
     def __init__(self, draft: TrophyDraft) -> None:
-        recent = released_sets()[:SET_SELECT_LIMIT]
+        recent = prereleased_sets()[:SET_SELECT_LIMIT]
         options: list[discord.SelectOption] = [
             discord.SelectOption(label="Other (write-in)", value=WRITE_IN, emoji=emojis.get_emoji(WRITE_IN_EMOJI))
         ]

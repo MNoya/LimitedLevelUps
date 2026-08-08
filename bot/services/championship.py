@@ -1,9 +1,9 @@
 """Set Championship scheduling and frozen-standings logic — the season-closing 8-player invitational.
 
 Date/plan derivation over `bot.sets` (no Discord), plus the seed snapshot the event freezes at
-creation so seeds lock in. The championship for the active set is held the second Saturday before its
-successor's Arena release (the Saturday before the successor's prerelease weekend) at 2 PM ET, and is
-created `CREATION_LEAD_DAYS` ahead so the standings freeze and the invite waves have runway.
+creation so seeds lock in. The championship for the active set is held the Saturday before its
+successor's prerelease weekend at 2 PM ET, and is created `CREATION_LEAD_DAYS` ahead so the standings
+freeze and the invite waves have runway.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from bot.database import SessionLocal
 from bot.models import MagicSet, PodChampionshipSeed, PodDraftEvent
 from bot.services.player_stats import FrozenSeed, SeededAttendee, rank_players_for_set
 from bot.services.pod_drafts import is_championship
-from bot.sets import ALL_SETS, RELEASE_TZ, active_set_code, release_instant
+from bot.sets import ALL_SETS, RELEASE_TZ, active_set_code, prerelease_date_for, previous_weekday, release_instant
 
 SATURDAY = 5
 CHAMPIONSHIP_TIME = time(14, 0)
@@ -39,15 +39,10 @@ class ChampionshipPlan:
     next_release_at: datetime
 
 
-def _last_saturday_before(day: date) -> date:
-    back = (day.weekday() - SATURDAY) % 7 or 7
-    return day - timedelta(days=back)
-
-
-def championship_date_before(release: date) -> date:
-    """The championship Saturday for a successor releasing on `release`: the Saturday before its
-    prerelease weekend, i.e. the second Saturday before the release."""
-    return _last_saturday_before(release) - timedelta(days=7)
+def championship_date_before(prerelease: date) -> date:
+    """The championship Saturday for a successor whose prerelease weekend opens on `prerelease`: the
+    Saturday before it, whether that weekend starts on the Thursday or the Friday."""
+    return previous_weekday(prerelease, SATURDAY)
 
 
 def plan_for(when: datetime | None = None) -> ChampionshipPlan | None:
@@ -60,7 +55,7 @@ def plan_for(when: datetime | None = None) -> ChampionshipPlan | None:
         return None
     current = ALL_SETS[index]
     successor = ALL_SETS[index + 1]
-    event_date = championship_date_before(successor.start_date)
+    event_date = championship_date_before(prerelease_date_for(successor))
     event_at = datetime.combine(event_date, CHAMPIONSHIP_TIME, tzinfo=RELEASE_TZ)
     return ChampionshipPlan(
         set_code=current.code,

@@ -6,7 +6,7 @@ The whole flow is now **automated and bot-created**. The earlier design in this 
 
 ## Where the code lives
 
-- `bot/services/championship.py` — date derivation over `bot/sets.py` (no Discord), the frozen seed snapshot, invite-wave tiers. The championship is the second Saturday before the successor set's Arena release (the Saturday before its prerelease weekend) at 2 PM ET, created `CREATION_LEAD_DAYS` ahead. `plan_for` returns None when the active set is the newest registered entry, so a missing successor simply skips the season.
+- `bot/services/championship.py` — date derivation over `bot/sets.py` (no Discord), the frozen seed snapshot, invite-wave tiers. The championship is the Saturday before the successor set's prerelease weekend at 2 PM ET, created `CREATION_LEAD_DAYS` ahead; the prerelease date comes from the successor's `SetSeed`, which falls back to the Friday before its Arena release when none is recorded. `plan_for` returns None when the active set is the newest registered entry, so a missing successor simply skips the season.
 - `bot/tasks/championship_post.py` — the daily ET tick that posts the card on its creation day, freezes the standings, posts the thread standings, then arms the invite waves and the Yes-tally seeding table. Idempotent per set: it never posts a second card once one exists.
 - `bot/services/championship_copy.py` — the single source of every user-facing string, so the live flow and `!test championship` render from the same builders.
 - `bot/commands/testchampionship.py` — the owner-only end-to-end preview.

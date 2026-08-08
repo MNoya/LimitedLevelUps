@@ -22,7 +22,7 @@ If no argument is given, ask the user for the code and stop.
 
 ### 2. Look up name and Arena dates
 
-WebSearch for the set's official name and **MTG Arena** release date (not tabletop). Prefer these sources:
+WebSearch for the set's official name, **MTG Arena** release date (not tabletop) and the first day of its **paper prerelease weekend**. Prefer these sources:
 
 - magic.wizards.com
 - mtg.fandom.com (MTG Wiki)
@@ -37,6 +37,7 @@ If the search yields a confident, single answer for everything you need, use it.
 - Set name (full official, e.g. `Secrets of Strixhaven`)
 - MTG Arena release date (`YYYY-MM-DD`)
 - End date (`YYYY-MM-DD`) — only for backfill (old set); for a new set you set an *anticipated* end date yourself (see Mode NEW below)
+- Prerelease date (`YYYY-MM-DD`) — the Thursday or Friday the paper prerelease weekend opens, usually the Friday 4 days before the Arena release. Record it as `prerelease_date=` on the `SetSeed` for a NEW set: it opens the set in the `/trophy` picker days before Arena gets it, and it anchors the Set Championship date for the outgoing set. Omit it for a backfill and for Arena-only sets that never had a paper prerelease; `prerelease_date_for` derives the Friday before the release in that case.
 
 ### 3. Decide mode: NEW vs OLD
 
@@ -54,7 +55,7 @@ Preserve the column-aligned formatting of surrounding rows in `ALL_SETS` (visual
 Rotation is automatic: `active_set_code()` flips to whichever released set holds today's date, so there is no flag to set — the dates do the work. Every set (except the permanent `CUBE`) must carry an `end_date`; `active_set_code()` skips `None`-ended seeds when matching the active window, so a normal set left open-ended would not rotate in cleanly.
 
 1. Locate the current newest entry in `ALL_SETS` (the last one). Change its `end_date` to `(new release date - 1 day)` — it currently holds an *anticipated* rotation date that the real successor now replaces.
-2. Append a new `SetSeed(...)` row immediately after it. Give it an **anticipated** `end_date` (never `None`): the next set's announced Arena release minus a day if known, otherwise roughly 7 weeks after this release. This keeps the new set inside an active window until its own successor arrives.
+2. Append a new `SetSeed(...)` row immediately after it, carrying `prerelease_date=`. Give it an **anticipated** `end_date` (never `None`): the next set's announced Arena release minus a day if known, otherwise roughly 7 weeks after this release. This keeps the new set inside an active window until its own successor arrives.
 3. Bump the frontend fallback `ACTIVE_SET_CODE` in `frontend/src/data/constants.ts` to the new code. This is only a fallback for when the live set feed hasn't loaded — the site reads the real active set from the network — but keep it current.
 
 #### Mode OLD (backfill)
