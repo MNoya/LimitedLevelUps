@@ -93,12 +93,17 @@ async def setup(bot: commands.Bot) -> None:
 
     @test_group.command(name="reminders")
     @commands.is_owner()
-    async def test_reminders(ctx: commands.Context) -> None:
+    async def test_reminders(ctx: commands.Context, set_code: str = "") -> None:
         """Owner-only. Post the whole pod reminder timeline in this channel, in the order a pod hits it,
         each message through its production builder. Reviews the voice across every reminder surface in
-        one place. Each preview carries a small subtext label; none of them ping."""
+        one place. Each preview carries a small subtext label; none of them ping. `set_code` names the
+        pod after another format, so a glyph of any width can be read against the words next to it."""
+        code = pod_format.resolve_format_code(set_code)
+        if code is None:
+            await ctx.send(f"`{set_code}` is not a registered set or cube.")
+            return
         await ctx.send("-# Pod reminder timeline. Constants live in `bot/services/pod_reminder_copy.py`")
-        for label, body, embed in _reminder_timeline(ctx):
+        for label, body, embed in _reminder_timeline(ctx, code):
             await ctx.send(
                 content=f"-# {label}\n{body}" if body else f"-# {label}",
                 embed=embed, allowed_mentions=discord.AllowedMentions.none(),
@@ -224,7 +229,9 @@ def _next_slot() -> datetime:
     return candidates[-1]
 
 
-def _reminder_timeline(ctx: commands.Context) -> list[tuple[str, str | None, discord.Embed | None]]:
+def _reminder_timeline(
+    ctx: commands.Context, set_code: str,
+) -> list[tuple[str, str | None, discord.Embed | None]]:
     """The pod reminder timeline in lifecycle order, each entry built through its production builder with
     sample numbers, as (label, body, embed). The pod's status message across its states, the launcher
     slot fire ping, the roster reminder embed, the lobby-open post, and the fired record. Each label
@@ -234,7 +241,7 @@ def _reminder_timeline(ctx: commands.Context) -> list[tuple[str, str | None, dis
     floor = settings.pod_signal_fire_threshold
     target = settings.pod_draft_target_players
     url = ctx.message.jump_url
-    pod_name = "MSH Late Pod - Jul 21"
+    pod_name = ondemand_event_name_sync(set_code, slot)
 
     role = find_role(ctx.guild, slot_role_name_for_event_time(slot) or "") if ctx.guild else None
     mention = role.mention if role is not None else "@Early Pod"

@@ -116,8 +116,8 @@ def short_event_name(name: str) -> str:
 def render_pod_name(name: str) -> str:
     """The pod's bold name with its format symbol closing it, so a reader spots the format from the glyph
     before reading the code. A cube, and a set with no uploaded symbol, wears its interest glyph instead; a
-    name whose format cannot be read back stays plain. The symbol carries no space on either side: the
-    emoji's own padding is enough, and the recruiting lines put the start time right behind it."""
+    name whose format cannot be read back stays plain. The symbol closes the name with no space before it,
+    and every line using this puts a space after it so the glyph does not touch the next word."""
     code, _rest = pod_format.split_format_prefix(name)
     if code is None:
         return f"**{name}**"

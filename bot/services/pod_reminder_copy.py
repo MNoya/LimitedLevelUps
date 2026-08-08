@@ -3,26 +3,27 @@
 A pod hits these in order: the recruiting nudge across its states, the launcher slot fire ping, the
 roster reminder, the lobby-open post, and the fired record. The inline reminder lines share one shape:
 
-    {hello}{name}<t:{unix}:R> {state} {manat} [**{cta}**]({url})
+    {hello}{name} <t:{unix}:R> {state} {manat} [**{cta}**]({url})
 
 The manat emoji separates the status from the action link. Builders in pod_schedule.py,
 pod_daily_poll.py and pod_draft_reminder.py format these constants; new reminder copy belongs here, next
 to its siblings, not back in those modules. A line naming a pod takes an already bold `{name}` because
-`pod_schedule.render_pod_name` places the format symbol around it.
+`pod_schedule.render_pod_name` places the format symbol around it, and follows it with a space so the
+symbol does not touch the next word.
 """
 
 RECRUITING_BELOW_FLOOR = (
-    "{hello}{name}<t:{unix}:R> needs **{to_floor} more player{plural}** to fire a Team Draft "
+    "{hello}{name} <t:{unix}:R> needs **{to_floor} more player{plural}** to fire a Team Draft "
     "{manat} [**Sign up here**]({jump_url})"
 )
 
 RECRUITING_SHORT = (
-    "{hello}{name}<t:{unix}:R> needs **{to_aim} more player{plural}** for a full Pod Draft "
+    "{hello}{name} <t:{unix}:R> needs **{to_aim} more player{plural}** for a full Pod Draft "
     "{manat} [**Sign up here**]({jump_url})"
 )
 
 RECRUITING_READY = (
-    "{hello}{name}<t:{unix}:R> has ✅ {yes}{maybe}{tail} {manat} "
+    "{hello}{name} <t:{unix}:R> has ✅ {yes}{maybe}{tail} {manat} "
     "[**Sign up here**]({jump_url})"
 )
 
@@ -50,7 +51,7 @@ LOBBY_OPEN = (
 )
 
 DRAFT_STARTED = (
-    "{hello}{name}started with **{count} {players}** {manat} [**Event Thread**]({thread_url})"
+    "{hello}{name} started with **{count} {players}** {manat} [**Event Thread**]({thread_url})"
 )
 
 RALLY_LOBBY = (
