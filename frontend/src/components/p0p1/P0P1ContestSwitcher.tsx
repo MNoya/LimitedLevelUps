@@ -14,7 +14,7 @@ function chipDateLabel(release: number): string {
   const d = new Date(release);
   const month = MONTHS[d.getUTCMonth()];
   const year = String(d.getUTCFullYear()).slice(2);
-  return month ? `${month} ${year}'` : "";
+  return month ? `${month} '${year}` : "";
 }
 
 const MAX_NEWER_CONTEXT = 2;
