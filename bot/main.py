@@ -71,6 +71,7 @@ from bot.listeners.profile_sync_listener import setup as setup_profile_sync_list
 from bot.listeners.pod_screenshots import setup as setup_pod_screenshots
 from bot.listeners.pod_thread_activity import setup as setup_pod_thread_activity
 from bot.listeners.rotate_image import setup as setup_rotate_image
+from bot.listeners.usedta import setup as setup_usedta
 from bot.models import LeaderboardMessage, Player, PodDraftEvent
 from bot.services.bot_log import BotLog
 from bot.services.lobby_embed import LobbyReadyButtonView, ReadyCheckAnswerView
@@ -257,6 +258,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_pod_thread_activity(bot)
         await setup_rotate_image(bot)
         await setup_auto_link_listener(bot)
+        await setup_usedta(bot)
         await setup_profile_sync_listener(bot)
         await setup_test_group(bot)
         await setup_testlobby(bot)
