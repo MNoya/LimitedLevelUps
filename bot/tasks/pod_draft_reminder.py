@@ -155,11 +155,15 @@ def card_is_buried(thread_id: int) -> bool:
 async def refresh_or_repost_roster_reminder(event_id: str) -> None:
     """Put the roster card in front of the pod again, moving it only when it needs moving. A burst of
     confirmations one after another edits one card in place; a card that chat has pushed away gets
-    reposted at the bottom."""
+    reposted at the bottom.
+
+    An edit that found nothing to edit falls through to posting. A pod whose card the bot cannot locate
+    has, as far as anyone reading the thread is concerned, no card at all: that is every pod whose card
+    predates a restart, since the id is what survives one and the buried count is not."""
     thread_id = await asyncio.to_thread(load_event_thread_id_for_roster_sync, event_id)
     if thread_id is not None and not card_is_buried(thread_id):
-        await refresh_roster_reminder_for_event(event_id)
-        return
+        if await refresh_roster_reminder_for_event(event_id):
+            return
     await repost_roster_reminder(event_id)
 
 
@@ -176,7 +180,10 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
     loaded = await asyncio.to_thread(_load_event_for_roster_by_id, event_id)
     if loaded is None:
         return None
-    thread_id, event_time, event_name, _status = loaded
+    thread_id, event_time, event_name, status = loaded
+    if status != "pending":
+        log.info(f"repost_roster_reminder: event {event_id} is {status}; skipping")
+        return None
     thread = await _fetch_thread(thread_id)
     if thread is None:
         log.warning(f"repost_roster_reminder: could not fetch thread {thread_id}")
@@ -227,16 +234,22 @@ async def fire_team_vote_offer(event_id: str) -> None:
     await manager.offer_team_vote_if_eligible()
 
 
-async def refresh_roster_reminder_for_event(event_id: str) -> None:
-    """Re-render the posted roster reminder in place off the current signal roster."""
+async def refresh_roster_reminder_for_event(event_id: str) -> bool:
+    """Re-render the posted roster reminder in place off the current signal roster.
+
+    False when there was nothing to re-render, so a caller that wants the card seen can post one. A pod
+    past gathering answers True: its card is a record rather than a question, and reposting it would put
+    a stale ask under a thread that has moved on."""
     loaded = await asyncio.to_thread(_load_event_for_roster_by_id, event_id)
     if loaded is None:
-        return
+        return True
     thread_id, event_time, event_name, status = loaded
     if status != "pending":
-        return
+        return True
     rosters, roster_interests = await event_rsvp_rosters(event_id)
-    await _edit_roster_reminder(event_id, thread_id, event_name, event_time, rosters, roster_interests)
+    return await _edit_roster_reminder(
+        event_id, thread_id, event_name, event_time, rosters, roster_interests,
+    )
 
 
 def reminder_embed(
@@ -272,13 +285,13 @@ async def _edit_roster_reminder(
     event_id: str, thread_id: int, event_name: str, event_time: datetime,
     rosters: dict[str, list[str]],
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None,
-) -> None:
+) -> bool:
     thread = await _fetch_thread(thread_id)
     if thread is None:
-        return
+        return False
     reminder = await _find_roster_reminder(thread, event_id)
     if reminder is None:
-        return
+        return False
     championship_roster = await asyncio.to_thread(championship_roster_for_event_sync, event_id, rosters)
     embed = reminder_embed(event_name, event_time, rosters, roster_interests, championship_roster)
     view = _build_reminder_view(event_id, championship_roster)
@@ -287,6 +300,8 @@ async def _edit_roster_reminder(
     except discord.HTTPException:
         await asyncio.to_thread(_remember_confirm_card_sync, event_id, None)
         log.warning(f"could not edit roster reminder {reminder.id}", exc_info=True)
+        return False
+    return True
 
 
 def load_event_thread_id_for_roster_sync(event_id: str) -> int | None:

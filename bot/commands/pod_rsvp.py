@@ -1080,7 +1080,7 @@ def _rsvp_headline(rsvp: str, pod_name: str) -> str:
 
 async def _confirm_answer(
     interaction: discord.Interaction, result: pod_launch.RsvpResult,
-) -> tuple[str, "discord.ui.View | None"]:
+) -> tuple[str, "discord.ui.View"]:
     """The presser's answer to Confirm Seat, which is the one press worth asking anything of.
 
     Somebody who has just raised their hand an hour before the draft has nothing else competing for their
@@ -1099,8 +1099,8 @@ async def _confirm_answer(
         return f"{confirmed}\n{MSG_LINK_ARENA_PROMPT}", build_link_arena_view()
     session_id = _owned_lobby_session(result.state.event_id)
     if session_id is None:
-        return confirmed, None
-    return f"{confirmed}\n{format_join_line(session_id, handle)}", None
+        return confirmed, discord.utils.MISSING
+    return f"{confirmed}\n{format_join_line(session_id, handle)}", discord.utils.MISSING
 
 
 def _owned_lobby_session(event_id: str | None) -> str | None:
