@@ -10,7 +10,7 @@ import {
   useUpsertP0P1Pick,
   useDeleteAllP0P1Picks,
 } from "./hooks";
-import { SLOTS } from "./p0p1Slots";
+import { SLOTS, buildSlots, P0P1_CONTESTS } from "./p0p1Slots";
 import type { FeaturedContest } from "./p0p1Slots";
 import { useLocalP0P1Picks, setLocalPick, clearLocalPicks, getLocalPicks } from "./localPicks";
 import { p0p1DevEnabled, p0p1Now, useP0P1DevPreset, type P0P1DevPreset } from "./p0p1DevState";
@@ -75,6 +75,11 @@ export function useP0P1Ballot(overrideSetCode?: string) {
       clearLocalPicks(setCode);
     }
   }, [useServerPicks, clearAll, setCode]);
+
+  const contestSlots = useMemo(
+    () => (setCode ? buildSlots(P0P1_CONTESTS[setCode]) : SLOTS),
+    [setCode],
+  );
 
   const cardsByName = useMemo(() => {
     if (!cards) return new Map<string, Card>();
@@ -160,7 +165,7 @@ export function useP0P1Ballot(overrideSetCode?: string) {
     [picksBySlot],
   );
   const activeSlotKey = editingSlotKey ?? defaultSlotKey;
-  const activeSlot = SLOTS.find((s) => s.key === activeSlotKey)!;
+  const activeSlot = contestSlots.find((s) => s.key === activeSlotKey)!;
 
   const nextUnfilledSlot = useCallback(
     (afterKey: SlotKey) => {
@@ -223,6 +228,7 @@ export function useP0P1Ballot(overrideSetCode?: string) {
     setEditingSlotKey,
     activeSlotKey,
     activeSlot,
+    contestSlots,
     selectAdvance,
     selectAndClose,
   };

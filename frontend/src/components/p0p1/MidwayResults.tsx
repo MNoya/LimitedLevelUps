@@ -5,7 +5,7 @@ import { cn } from "../../lib/utils";
 import { PickGrid } from "./CommunityGrid";
 import { MidwayBreakdownList } from "./MidwayBreakdownList";
 import { useMidwayVersusPager, MidwayVersusModal } from "./MidwayVersusCard";
-import { SLOTS } from "../../data/p0p1Slots";
+import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
 import {
   buildRatingsByName,
   scoreBallot,
@@ -77,15 +77,16 @@ export function MidwayResults({
   hasParticipated: boolean;
 }) {
   const { setCode } = ratingsSnapshot;
+  const contestSlots = useMemo(() => buildSlots(P0P1_CONTESTS[setCode]), [setCode]);
   const ratingsByName = useMemo(() => buildRatingsByName(ratingsSnapshot), [ratingsSnapshot]);
   const bounds = useMemo(() => gihwrBounds(pickStats, ratingsByName), [pickStats, ratingsByName]);
   const crowdTeam = useMemo(
-    () => mostPopularTeam(pickStats, SLOTS, ratingsByName),
-    [pickStats, ratingsByName],
+    () => mostPopularTeam(pickStats, contestSlots, ratingsByName),
+    [pickStats, contestSlots, ratingsByName],
   );
   const bestTeam = useMemo(
-    () => bestPossibleTeam(cards, SLOTS, ratingsByName),
-    [cards, ratingsByName],
+    () => bestPossibleTeam(cards, contestSlots, ratingsByName),
+    [cards, contestSlots, ratingsByName],
   );
 
   const showYourPicks = Boolean(user) && hasParticipated;
@@ -103,8 +104,8 @@ export function MidwayResults({
 
   const versusList = useMemo(
     () =>
-      buildMidwaySlotVersus(SLOTS, picksBySlot, crowdTeam, bestTeam, ratingsByName, cardsByName, showYourPicks),
-    [picksBySlot, crowdTeam, bestTeam, ratingsByName, cardsByName, showYourPicks],
+      buildMidwaySlotVersus(contestSlots, picksBySlot, crowdTeam, bestTeam, ratingsByName, cardsByName, showYourPicks),
+    [contestSlots, picksBySlot, crowdTeam, bestTeam, ratingsByName, cardsByName, showYourPicks],
   );
   const pager = useMidwayVersusPager(versusList);
 

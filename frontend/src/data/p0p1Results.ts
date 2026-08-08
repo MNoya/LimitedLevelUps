@@ -79,9 +79,9 @@ export function scoreBallot(
 }
 
 // Best-possible legal team: max-weight assignment of cards to slots under the
-// uniqueness constraint. Uses most-constrained-first greedy, which is optimal
-// for the MSH slot structure because the 5 color-common slots have disjoint
-// card pools and the wildcard slots are naturally last.
+// uniqueness constraint. Uses most-constrained-first greedy — near-optimal
+// since the color-common slots are mostly disjoint (only hybrid commons can
+// overlap two color slots) and the wildcard slots are naturally last.
 export function bestPossibleTeam(
   cards: Card[],
   slots: SlotDefinition[],
