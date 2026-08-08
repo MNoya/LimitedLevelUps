@@ -158,7 +158,9 @@ export function P0P1Page() {
             <RosterStripSkeleton />
           ))}
 
-        {showMidway ? (
+        {phase === "loading" ? (
+          <ResultsSkeleton />
+        ) : showMidway ? (
           resultsDataReady && ratingsSnapshot && cards && pickStats ? (
             <MidwayResults
               ratingsSnapshot={ratingsSnapshot}

@@ -203,7 +203,9 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
               </div>
             )}
 
-            {showMidway ? (
+            {phase === "loading" ? (
+              <MobileResultsSkeleton />
+            ) : showMidway ? (
               resultsDataReady && ratingsSnapshot && cards && pickStats ? (
                 <MidwayResults
                   ratingsSnapshot={ratingsSnapshot}
@@ -560,6 +562,18 @@ export function SlotsListSkeleton() {
   );
 }
 
+function MobileResultsSkeleton() {
+  return (
+    <div className="flex flex-col gap-3 mt-3">
+      <div className="flex flex-col items-center gap-2">
+        <div className="h-4 w-40 bg-surface2 animate-pulse" />
+        <div className="h-3 w-56 bg-surface2 animate-pulse" />
+      </div>
+      <SlotsListSkeleton />
+    </div>
+  );
+}
+
 function CountdownStacked({
   deadline,
   scoringDate,
@@ -578,6 +592,14 @@ function CountdownStacked({
       <div className="flex flex-col items-end leading-tight whitespace-nowrap shrink-0">
         <span className="text-muted text-[11px] tracking-[0.04em]">Closes in</span>
         <span className="text-green text-[13px]">{formatRemaining(deadlineDiff)}</span>
+      </div>
+    );
+  }
+
+  if (phase === "loading") {
+    return (
+      <div className="flex flex-col items-end leading-tight whitespace-nowrap shrink-0">
+        <span className="inline-block h-[13px] w-24 bg-surface2 animate-pulse" />
       </div>
     );
   }
