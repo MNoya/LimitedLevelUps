@@ -3,12 +3,14 @@
     "name": "The Hobbit",
     "release": "2026-08-11T16:00:00Z",
     "previewsOpen": "2026-07-31T16:00:00Z",
-    "votingDeadline": "2026-08-05T16:00:00Z"
+    "votingDeadline": "2026-08-05T16:00:00Z",
+    "scoringDate": "2026-09-08T16:00:00Z"
   },
   "MSH": {
     "name": "Marvel Super Heroes",
     "release": "2026-06-23T16:00:00Z",
     "previewsOpen": "2026-06-09T00:00:00Z",
-    "votingDeadline": "2026-06-23T15:00:00Z"
+    "votingDeadline": "2026-06-23T15:00:00Z",
+    "scoringDate": "2026-07-21T16:00:00Z"
   }
 }

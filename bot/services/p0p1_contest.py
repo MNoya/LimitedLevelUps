@@ -12,7 +12,6 @@ from pathlib import Path
 CONTESTS_JSON = Path(__file__).resolve().parents[2] / "p0p1_contests.json"
 
 SCORING_WINDOW = timedelta(days=28)
-REVEAL_WINDOW = timedelta(days=28)
 
 PHASE_PRE = "pre"
 PHASE_VOTING = "voting"
@@ -27,14 +26,7 @@ class Contest:
     release: datetime
     previews_open: datetime
     voting_deadline: datetime
-
-    @property
-    def scoring_date(self) -> datetime:
-        return self.voting_deadline + SCORING_WINDOW
-
-    @property
-    def reveal_end(self) -> datetime:
-        return self.release + REVEAL_WINDOW
+    scoring_date: datetime
 
     def phase(self, when: datetime) -> str:
         if when < self.previews_open:
@@ -53,9 +45,11 @@ def all_contests() -> list[Contest]:
     for code, config in raw.items():
         release = _parse(config["release"])
         deadline = _parse(config["votingDeadline"]) if config.get("votingDeadline") else release
+        scoring = _parse(config["scoringDate"]) if config.get("scoringDate") else release + SCORING_WINDOW
         contests.append(Contest(
             code=code, name=config["name"], release=release,
             previews_open=_parse(config["previewsOpen"]), voting_deadline=deadline,
+            scoring_date=scoring,
         ))
     contests.sort(key=_release_key, reverse=True)
     return contests
@@ -77,10 +71,10 @@ def featured_contest(when: datetime) -> Contest | None:
         if contest.previews_open <= when < contest.voting_deadline:
             return contest
     for contest in contests:
-        if contest.voting_deadline <= when < contest.reveal_end:
+        if contest.voting_deadline <= when < contest.scoring_date:
             return contest
     for contest in contests:
-        if when >= contest.reveal_end:
+        if when >= contest.scoring_date:
             return contest
     return contests[-1]
 

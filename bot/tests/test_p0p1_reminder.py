@@ -13,11 +13,13 @@ from bot.tasks.p0p1_reminder_post import REMINDER_LEAD, contest_due
 
 def make_contest(code="HOB", name="The Hobbit", *, opens_days_before=10, deadline_hour=16) -> Contest:
     deadline = datetime(2026, 8, 5, deadline_hour, tzinfo=timezone.utc)
+    release = deadline + timedelta(days=6)
     return Contest(
         code=code, name=name,
-        release=deadline + timedelta(days=6),
+        release=release,
         previews_open=deadline - timedelta(days=opens_days_before),
         voting_deadline=deadline,
+        scoring_date=release + timedelta(days=28),
     )
 
 
@@ -55,6 +57,7 @@ def test_a_contest_shorter_than_the_lead_is_due_from_the_moment_it_opens(monkeyp
         code=short.code, name=short.name, release=short.release,
         previews_open=short.voting_deadline - timedelta(hours=6),
         voting_deadline=short.voting_deadline,
+        scoring_date=short.scoring_date,
     )
     monkeypatch.setattr("bot.tasks.p0p1_reminder_post.p0p1_contest.all_contests", lambda: [short])
 

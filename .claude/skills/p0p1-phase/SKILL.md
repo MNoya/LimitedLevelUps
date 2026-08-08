@@ -23,10 +23,10 @@ If no argument is given, ask the user which one and stop.
 
 ### 1. Read current state
 
-- `frontend/src/data/p0p1Slots.ts`: `P0P1_CONTESTS` registry — find the active contest entry.
-  Use `resolveFeaturedContest` logic: the featured contest's `code`, `votingDeadline`, and
-  `scoringDate` (= voting deadline + 28 days). If `$ARGUMENTS` includes a `--set <CODE>`,
-  use that code instead of the auto-featured one.
+- `p0p1_contests.json`: find the active contest entry. Use `resolveFeaturedContest` logic: the
+  featured contest's `code`, `votingDeadline`, and `scoringDate` (explicit `scoringDate` key if
+  present, else `release + 28 days`, independent of `votingDeadline`). If `$ARGUMENTS` includes
+  a `--set <CODE>`, use that code instead of the auto-featured one.
 - `bot/sets.py`: the matching `SetSeed`'s `start_date` (the set's Arena release date — this
   is also the 17lands query window's start).
 - `frontend/src/data/fixtures/p0p1-ratings-<set_code_lower>.ts`: current `phase`,

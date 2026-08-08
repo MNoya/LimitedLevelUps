@@ -25,6 +25,7 @@ export interface ContestConfig {
   release: string;
   previewsOpen: string;
   votingDeadline?: string;
+  scoringDate?: string;
 }
 
 export type SlotKey =
