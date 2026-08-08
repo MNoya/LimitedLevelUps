@@ -590,6 +590,33 @@ def player_arena_handle(session: Session, discord_id: str) -> str | None:
     return player.arena_name
 
 
+def arena_handle_for_sync(discord_id: str) -> str | None:
+    """One player's stored Arena handle, on its own session, for a caller holding none."""
+    with SessionLocal() as session:
+        return player_arena_handle(session, discord_id)
+
+
+def personal_links_sync(session_id: str, roster: list[tuple[str, str]]) -> dict[str, str]:
+    """Each rostered player's own Draftmancer link, keyed by lowercased display name, in one query.
+
+    Built once when the lobby opens so the card can hand every waiting player their link without a press.
+    A player holding no full Arena handle is absent: pre-filling a bare nickname would seat them under a
+    name pairing cannot resolve, which is worse than sending them through Join Draft."""
+    ids = [discord_id for discord_id, _ in roster]
+    if not ids:
+        return {}
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(Player.discord_id, Player.arena_name).where(Player.discord_id.in_(ids))
+        ).all()
+    handles = {discord_id: arena for discord_id, arena in rows if full_arena_handle(arena)}
+    return {
+        display.lower(): draftmancer_url_for(session_id, handles[discord_id])
+        for discord_id, display in roster
+        if discord_id in handles
+    }
+
+
 def build_mock_session(session: Session, set_code: str) -> tuple[str, int]:
     """`LLU-<SET>-Mock-<N>-<rand4>` with N the next free per-set mock number. The random tail keeps the
     id unguessable and un-reusable: cancelling a mock deletes its event row, which frees N, and without
@@ -966,6 +993,13 @@ def load_event_thread_id_sync(event_id: str) -> str | None:
         ).scalar_one_or_none()
 
 
+def load_event_socket_status_sync(event_id: str) -> str | None:
+    with SessionLocal() as session:
+        return session.execute(
+            select(PodDraftEvent.socket_status).where(PodDraftEvent.id == event_id)
+        ).scalar_one_or_none()
+
+
 def load_event_time_sync(event_id: str) -> datetime | None:
     with SessionLocal() as session:
         return session.execute(
@@ -994,6 +1028,18 @@ def search_event_names_sync(query: str, limit: int = 25) -> list[str]:
         if query:
             stmt = stmt.where(PodDraftEvent.name.ilike(f"%{query}%"))
         return [n for n in session.execute(stmt.limit(limit)).scalars().all() if n]
+
+
+def seated_discord_ids_sync(event_id: str) -> list[str]:
+    """The Discord ids of everyone seated at this pod's draft, off the participant rows written when it
+    started. A guest with no player row yet is absent, which is right: the bot has no account to act on."""
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(Player.discord_id)
+            .join(PodDraftParticipant, PodDraftParticipant.player_id == Player.id)
+            .where(PodDraftParticipant.event_id == event_id)
+        ).scalars().all()
+    return [discord_id for discord_id in rows if discord_id]
 
 
 def seed_event_participants(session: Session, event_id: str, roster: list[str]) -> None:

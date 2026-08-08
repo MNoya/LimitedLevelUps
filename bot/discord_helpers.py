@@ -34,10 +34,11 @@ EM_SPACE = " "  # wide gap between items sharing one line, where a run of spac
 _detached: set["asyncio.Task"] = set()
 
 
-def run_detached(coro: "Coroutine", label: str) -> None:
+def run_detached(coro: "Coroutine", label: str) -> "asyncio.Task":
     """Run follow-on work off the interaction that started it, for a click already answered. A failure
     has no one left to tell and is logged. The task is held until it finishes: the event loop keeps only
-    a weak reference and would otherwise collect it mid-flight."""
+    a weak reference and would otherwise collect it mid-flight. Returned for a caller that has to know
+    when the work landed; a caller that does not can drop it."""
     async def runner() -> None:
         try:
             await coro
@@ -47,6 +48,7 @@ def run_detached(coro: "Coroutine", label: str) -> None:
     task = asyncio.create_task(runner())
     _detached.add(task)
     task.add_done_callback(_detached.discard)
+    return task
 
 
 def command_line(cmd: str, blurb: str) -> str:
@@ -242,6 +244,27 @@ async def fetch_dm_user(bot: "commands.Bot", discord_id: str | None) -> "discord
         return None
     user_id = int(discord_id)
     return bot.get_user(user_id) or await bot.fetch_user(user_id)
+
+
+PIN_NOTICE_SCAN = 5
+
+
+async def pin_quietly(message: "discord.Message", *, reason: str | None = None) -> None:
+    """Pin, then take down the "pinned a message" line Discord posts for it.
+
+    That notice is a real message in the channel, so in a pod thread it lands between two surfaces people
+    are reading and pushes them apart for nothing. Only the notice pointing at this message is removed, and
+    a Discord that sent no reference with it keeps its line rather than risking somebody else's."""
+    await message.pin(reason=reason)
+    try:
+        async for recent in message.channel.history(limit=PIN_NOTICE_SCAN):
+            if recent.type is not discord.MessageType.pins_add:
+                continue
+            if recent.reference is not None and recent.reference.message_id == message.id:
+                await recent.delete()
+                return
+    except discord.HTTPException:
+        logger.warning(f"could not clear the pin notice for message {message.id}", exc_info=True)
 
 
 DELETED_ACCOUNT_RE = re.compile(r"^deleted_user_[0-9a-f]+$", re.IGNORECASE)

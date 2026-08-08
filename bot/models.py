@@ -386,6 +386,7 @@ class PodSignal(Base):
     channel_id       = Column(String, nullable=False)
     message_id       = Column(String, nullable=False)
     thread_message_id = Column(String, nullable=True)
+    confirm_card_message_id = Column(String, nullable=True)
     discussion_thread_id = Column(String, nullable=True)
     signal_date      = Column(Date, nullable=False)
     slot_time        = Column(DateTime(timezone=True), nullable=True)
@@ -427,6 +428,7 @@ class PodSignalMember(Base):
     rsvp            = Column(String, nullable=False, server_default="yes")
     format_interest = Column(ARRAY(String), nullable=False, server_default="{}")
     created_at      = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    confirmed_at    = Column(DateTime(timezone=True), nullable=True)
 
     signal = relationship("PodSignal", back_populates="members")
 
