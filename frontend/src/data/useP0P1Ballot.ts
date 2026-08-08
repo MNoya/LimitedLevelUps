@@ -31,7 +31,7 @@ export function useP0P1Ballot(overrideSetCode?: string) {
   const setCode = featured?.code;
   const scoringDate = featured?.scoringDate;
 
-  const { data: cards } = useP0P1Cards(setCode);
+  const { data: cards, isLoading: cardsLoading } = useP0P1Cards(setCode);
   const { data: serverPicks } = useP0P1Picks(useServerPicks ? setCode : undefined);
   const localPicks = useLocalP0P1Picks(setCode ?? "");
   const upsertPick = useUpsertP0P1Pick(setCode ?? "");
@@ -111,8 +111,8 @@ export function useP0P1Ballot(overrideSetCode?: string) {
   const now = p0p1Now(scoringDate);
   const isPastDeadline = featured ? now > featured.votingDeadline.getTime() : false;
   const isPastScoringDate = featured ? now >= featured.scoringDate.getTime() : false;
-  const { data: pickStats } = useP0P1PickStats(setCode, isPastDeadline);
-  const { data: ratingsSnapshot, error: ratingsError } = useP0P1Ratings(setCode ?? "");
+  const { data: pickStats, isLoading: pickStatsLoading } = useP0P1PickStats(setCode, isPastDeadline);
+  const { data: ratingsSnapshot, error: ratingsError, isLoading: ratingsLoading } = useP0P1Ratings(setCode ?? "");
 
   useEffect(() => {
     if (ratingsError) console.warn("P0P1 ratings fetch failed", ratingsError);
@@ -123,7 +123,8 @@ export function useP0P1Ballot(overrideSetCode?: string) {
   const effectivePicksBySlot = applyDevPicks(picksBySlot, pickStats, devViewPreset);
   const resultsDataReady = Boolean(ratingsSnapshot && cards && pickStats);
   const midwayDataReady = resultsDataReady && ratingsSnapshot?.phase === "midway";
-  const phase = deriveP0P1Phase(isPastDeadline, isPastScoringDate, ratingsSnapshot ?? undefined, resultsDataReady, devViewPreset);
+  const resultsPending = ratingsLoading || cardsLoading || pickStatsLoading;
+  const phase = deriveP0P1Phase(isPastDeadline, isPastScoringDate, ratingsSnapshot ?? undefined, resultsDataReady, resultsPending, devViewPreset);
 
   const devFinal = devActive && phase === "final";
   const { data: fetchedBallots } = useP0P1Ballots(setCode, phase === "final" && !devFinal);
@@ -285,6 +286,7 @@ export function deriveP0P1Phase(
   isPastScoringDate: boolean,
   snapshot: RatingsSnapshot | undefined,
   dataPresent: boolean,
+  resultsPending: boolean,
   devPreset: P0P1DevPreset,
 ): P0P1Phase {
   if (devPreset === "midwayScoring" || devPreset === "midwayDidNotVote") return "midway";
@@ -296,6 +298,8 @@ export function deriveP0P1Phase(
   ) return "postVoting";
 
   if (!isPastDeadline) return "voting";
+
+  if (resultsPending) return "loading";
 
   if (!isPastScoringDate) {
     if (snapshot?.phase && snapshot.phase !== "final" && dataPresent) return snapshot.phase;

@@ -56,6 +56,10 @@ export function P0P1Countdown({
     );
   }
 
+  if (phase === "loading") {
+    return <span className="inline-block h-[1em] w-32 bg-surface2 animate-pulse align-middle" style={{ fontSize: size }} />;
+  }
+
   if (phase === "final") {
     return (
       <span className="text-green" style={{ fontSize: size }}>
