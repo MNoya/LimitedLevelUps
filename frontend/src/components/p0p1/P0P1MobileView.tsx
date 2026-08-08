@@ -8,7 +8,7 @@ import { CardSelectionGrid } from "./CardSelectionGrid";
 import { PostVotingStats } from "./PostVotingStats";
 import { PickGrid } from "./CommunityGrid";
 import { P0P1IntroText } from "./P0P1IntroText";
-import { NextContestOpens } from "./NextContestOpens";
+import { P0P1ContestSwitcherMobile } from "./P0P1ContestSwitcher";
 import { SlotPip, SLOT_ACCENT } from "./slotVisuals";
 import { P0P1ProgressBar } from "./ProgressBar";
 import { P0P1CountdownBar } from "./CountdownBar";
@@ -22,7 +22,7 @@ import { MidwayResults } from "./MidwayResults";
 import { FinalResults } from "./FinalResults";
 import type { useP0P1Ballot } from "../../data/useP0P1Ballot";
 import type { P0P1Phase } from "../../data/p0p1Results";
-import type { FeaturedContest } from "../../data/p0p1Slots";
+import type { ContestChipInfo, FeaturedContest } from "../../data/p0p1Slots";
 import { SLOTS } from "../../data/p0p1Slots";
 import { groupBySlot, findExtremes, classifyYourPick, pickPctLabel } from "../../data/p0p1Stats";
 import { SITE_LINKS } from "../../data/site";
@@ -31,7 +31,15 @@ import type { Card, P0P1PickStat, SlotDefinition, SlotKey } from "../../types/p0
 
 type Ballot = ReturnType<typeof useP0P1Ballot>;
 
-export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
+export function P0P1MobileSelector({
+  ballot,
+  contests,
+  onContestChange,
+}: {
+  ballot: Ballot;
+  contests: ContestChipInfo[];
+  onContestChange: (code: string) => void;
+}) {
   const {
     featured,
     cards,
@@ -72,7 +80,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
 
       <main className={`flex-1 flex flex-col w-full px-3 pt-3 ${loginBarVisible ? "pb-24" : "pb-4"}`}>
-        <MobileIntro featured={featured} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
+        <MobileIntro featured={featured} phase={phase} dateRange={ratingsSnapshot?.dateRange} contests={contests} onContestChange={onContestChange} />
         {dataReady ? (
           <>
             {!isPastDeadline && (
@@ -331,10 +339,14 @@ function MobileIntro({
   featured,
   phase,
   dateRange,
+  contests,
+  onContestChange,
 }: {
   featured: FeaturedContest | undefined;
   phase: P0P1Phase;
   dateRange?: { start: string; end: string } | null;
+  contests?: ContestChipInfo[];
+  onContestChange?: (code: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   const isPastDeadline = phase !== "voting";
@@ -377,10 +389,12 @@ function MobileIntro({
           <P0P1IntroText phase={phase} dateRange={dateRange} setName={featured?.name ?? ""} />
         </p>
       )}
-      {phase === "final" && (
-        <div className="text-subtle text-[13.5px]">
-          <NextContestOpens next={featured?.next} />
-        </div>
+      {contests && contests.length > 1 && onContestChange && (
+        <P0P1ContestSwitcherMobile
+          contests={contests}
+          activeCode={setCode}
+          onSelect={onContestChange}
+        />
       )}
     </section>
   );
