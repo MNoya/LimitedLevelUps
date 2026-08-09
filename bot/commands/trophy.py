@@ -213,10 +213,13 @@ class _SetSelect(ui.Select):
             discord.SelectOption(label="Other (write-in)", value=WRITE_IN, emoji=emojis.get_emoji(WRITE_IN_EMOJI))
         ]
         if draft.set_code not in {s.code for s in recent}:
-            options.append(discord.SelectOption(label=draft.set_code, value=draft.set_code, default=True))
+            options.append(discord.SelectOption(
+                label=draft.set_code, value=draft.set_code, emoji=emojis.set_symbol(draft.set_code), default=True
+            ))
         options.extend(
             discord.SelectOption(
-                label=s.code, description=s.name[:100], value=s.code, default=(draft.set_code == s.code)
+                label=s.code, description=s.name[:100], value=s.code,
+                emoji=emojis.set_symbol(s.code), default=(draft.set_code == s.code),
             )
             for s in recent
         )
