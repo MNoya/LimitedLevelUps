@@ -462,7 +462,7 @@ function MobileIntro({
           </div>
           {isPastDeadline && (
             <div className="w-full">
-              <P0P1CountdownBar from={votingDeadline} to={scoringDate} />
+              <P0P1CountdownBar from={votingDeadline} to={scoringDate} phase={phase} />
             </div>
           )}
         </div>
