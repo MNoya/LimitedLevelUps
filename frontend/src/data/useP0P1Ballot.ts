@@ -156,6 +156,10 @@ export function useP0P1Ballot(overrideSetCode?: string) {
     return [...ballots, ...youRows];
   }, [devActive, phase, ballots, effectivePicksBySlot, user, setCode]);
 
+  const ballotReady =
+    activePicks !== undefined &&
+    (!isPastDeadline || (phase !== "loading" && (phase !== "final" || effectiveBallots !== undefined)));
+
   const scoringFilled = SLOTS.filter((s) => effectivePicksBySlot.has(s.key)).length;
   const isComplete = scoringFilled === SLOTS.length;
   const hasParticipated = isPastDeadline && Boolean(user) && scoringFilled > 0;
@@ -207,6 +211,7 @@ export function useP0P1Ballot(overrideSetCode?: string) {
     dataReady,
     resultsDataReady,
     midwayDataReady,
+    ballotReady,
     user,
     authLoading,
     signIn,

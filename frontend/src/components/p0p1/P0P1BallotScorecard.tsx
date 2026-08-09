@@ -88,6 +88,22 @@ export function P0P1BallotScorecard({
   );
 }
 
+export function BallotScorecardSkeleton() {
+  return (
+    <div className="inline-block" style={{ clipPath: CHAMFER, background: "#3b4458", padding: 1 }}>
+      <div className="bg-surface2 w-[clamp(280px,22vw,340px)] px-5 py-2.5 flex flex-col gap-2" style={{ clipPath: CHAMFER }}>
+        <div className="h-[15px] w-28 bg-surface animate-pulse" />
+        <div className="h-6 w-40 bg-surface animate-pulse" />
+        <div className="flex gap-1 -ml-[5px]" aria-hidden>
+          {Array.from({ length: SLOTS.length }, (_, i) => (
+            <div key={i} className="h-2.5 flex-1 rounded-[1px] bg-surface animate-pulse" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatInline({ n, label, color, className }: { n: number; label: string; color: string; className?: string }) {
   return (
     <span className={`flex items-baseline gap-1.5 ${className ?? ""}`}>
