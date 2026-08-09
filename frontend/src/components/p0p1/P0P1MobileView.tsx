@@ -143,6 +143,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
     isPastDeadline,
     hasParticipated,
     pickStats,
+    ballotReady,
     handleClearAll,
     clearPending,
     activeSlotKey,
@@ -233,7 +234,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
             ) : phase === "postVoting" || phase === "finalizing" ? (
               pickStats && pickStats.length > 0 && (
                 <>
-                  {didNotVote && <MobileDidNotVoteLine />}
+                  {ballotReady && didNotVote && <MobileDidNotVoteLine />}
                   <PostVotingStats
                     pickStats={pickStats}
                     cardsByName={cardsByName}
