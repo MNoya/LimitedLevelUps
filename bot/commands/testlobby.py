@@ -53,7 +53,7 @@ from bot.services.pod_team_vote import (
 from bot.services.pod_tournament import round_header
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_deck_color import SubmitDeckView
-from bot.services.pod_draft_manager import PodDraftManager, start_manager
+from bot.services.pod_draft_manager import PodDraftManager, cancel_manager_tasks, start_manager
 from bot.services.pod_drafts import draftmancer_url_for, player_arena_handle, seed_event_participants
 from bot.services.pod_join_button import build_join_view
 from bot.services.pod_link_dm import build_link_dm, format_thread_ref, send_lobby_link_dms, try_dm
@@ -371,9 +371,7 @@ async def _evict_managers(event_ids: list[str]) -> None:
         manager = ACTIVE_POD_MANAGERS.get(event_id)
         if manager is None:
             continue
-        for task in (manager.grace_task, manager.championship_task):
-            if task is not None and not task.done():
-                task.cancel()
+        cancel_manager_tasks(manager)
         await manager.disconnect_safely()
 
 
@@ -598,9 +596,7 @@ async def _start_test_table(ctx) -> None:
     for old_id, old_thread in purged:
         mgr = ACTIVE_POD_MANAGERS.get(old_id)
         if mgr is not None:
-            for task in (mgr.grace_task, mgr.championship_task):
-                if task is not None and not task.done():
-                    task.cancel()
+            cancel_manager_tasks(mgr)
             await mgr.disconnect_safely()
         if old_thread and old_thread != str(ctx.channel.id):
             thread = ctx.bot.get_channel(int(old_thread))

@@ -17,6 +17,7 @@ from bot.services.pod_tournament import (
     normalize_player_name,
     build_deck_ping,
     deck_missing_parts,
+    finished_player_keys,
     format_reported_result,
     format_round_announcement,
     tally_match_records,
@@ -25,8 +26,8 @@ from bot.services.pod_tournament import (
 
 def test_reconcile_rearms_within_deck_wait_but_forces_once_it_elapses(monkeypatch):
     """A restart still inside the deck-wait must not jump the gate: recently-finalized pods post
-    non-forced (so an incomplete winning set keeps holding) and re-arm the remaining wait, while a pod
-    whose wait already elapsed posts forced."""
+    non-forced (so an incomplete winning set keeps holding), re-arm the remaining wait and the deck-chase
+    ping the dead process was holding, while a pod whose wait already elapsed posts forced."""
     now = datetime.now(timezone.utc)
     within = now - timedelta(seconds=30)
     elapsed = now - timedelta(seconds=pod_tournament.CHAMPIONSHIP_DEADLINE_SECONDS + 300)
@@ -36,6 +37,7 @@ def test_reconcile_rearms_within_deck_wait_but_forces_once_it_elapses(monkeypatc
     )
     posts = []
     rearms = []
+    ping_rearms = []
 
     async def fake_post(bot, event_id, thread_id, *, force=True):
         posts.append((event_id, force))
@@ -44,8 +46,12 @@ def test_reconcile_rearms_within_deck_wait_but_forces_once_it_elapses(monkeypatc
     async def fake_delayed(bot, event_id, thread_id, delay):
         rearms.append(event_id)
 
+    async def fake_ping_rearm(bot, event_id, thread_id, delay):
+        ping_rearms.append((event_id, delay))
+
     monkeypatch.setattr(pod_tournament, "post_championship_for_event", fake_post)
     monkeypatch.setattr(pod_tournament, "_delayed_championship_post", fake_delayed)
+    monkeypatch.setattr(pod_tournament, "_rearm_deck_ping", fake_ping_rearm)
 
     async def run():
         await pod_tournament.reconcile_unannounced_championships(bot=None)
@@ -56,6 +62,7 @@ def test_reconcile_rearms_within_deck_wait_but_forces_once_it_elapses(monkeypatc
     assert ("recent", False) in posts
     assert ("old", True) in posts
     assert rearms == ["recent"]
+    assert [event_id for event_id, _ in ping_rearms] == ["recent"]
 
 
 def test_post_trophy_hype_forwards_format_title_to_view(monkeypatch):
@@ -174,6 +181,20 @@ def test_deck_ping_drops_championship_header_once_post_is_clear():
 
 def test_deck_ping_is_empty_when_nobody_owes_anything():
     assert build_deck_ping(([], []), ([], []), "https://limitedlevelups.com/pods/pod-7") == ""
+
+
+def test_finished_players_exclude_anyone_with_a_match_still_open():
+    participants = [
+        ("Alice#1", "Alice"),
+        ("Bob#2", "Bob"),
+        ("Cara#3", "Cara"),
+        (None, "Dez"),
+    ]
+    open_pairs = [("Cara#3", "Dez")]
+
+    finished = finished_player_keys(participants, open_pairs)
+
+    assert finished == {normalize_player_name("Alice#1"), normalize_player_name("Bob#2")}
 
 
 def test_tally_match_records_shows_partial_wl_before_finalize():

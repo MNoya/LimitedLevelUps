@@ -45,6 +45,7 @@ from bot.services.pod_tournament import (
     format_round_clear_announcement,
     load_participant_displays,
     match_was_played,
+    maybe_arm_deck_nudge,
     name_with_arena,
     result_needs_announcement,
     result_was_corrected,
@@ -891,9 +892,13 @@ def _board_match(data: TeamBoardData, match_id: str) -> dict | None:
 
 
 async def _maybe_finalize(event_id: str, data: TeamBoardData) -> bool:
-    if data.pending > 0 or data.finalized:
+    if data.finalized:
         return False
     manager = ACTIVE_POD_MANAGERS.get(event_id)
+    if data.pending > 0:
+        if manager is not None:
+            await maybe_arm_deck_nudge(manager)
+        return False
     if manager is None:
         log.warning(f"[TEAM] finalize.no_manager event={event_id}")
         return False

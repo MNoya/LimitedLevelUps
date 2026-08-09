@@ -58,6 +58,7 @@ from bot.tasks.pod_daily_poll import PodPollView, build_poll_embed
 from bot.tasks.pod_draft_reminder import build_roster_embed
 from bot.services.pod_swiss import MatchOutcome
 from bot.services.pod_tournament import (
+    DECK_NUDGE_MSG,
     TOTAL_ROUNDS,
     build_champion_embed,
     build_deck_ping,
@@ -198,10 +199,12 @@ async def setup(bot: commands.Bot) -> None:
     @test_group.command(name="deckping")
     @commands.is_owner()
     async def test_deckping(ctx: commands.Context) -> None:
-        """Owner-only. Preview the R3 deck-chase ping: one action line each, trailed by pings."""
+        """Owner-only. Preview both deck-chase messages in order: the gentle screenshot reminder that
+        goes out while the last tables play, then the ping that follows the round."""
         me = ctx.author.id
         view = ui.View(timeout=None)
         view.add_item(build_live_submit_deck_button())
+        await ctx.send(DECK_NUDGE_MSG, allowed_mentions=discord.AllowedMentions.none())
         await ctx.send(
             build_deck_ping(([me, me], [me, me]), ([me], [me, me]), pod_page_url("Sample Pod 7")),
             allowed_mentions=discord.AllowedMentions(users=True),

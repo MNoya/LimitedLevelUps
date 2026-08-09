@@ -154,6 +154,9 @@ ANNOUNCED_MAX_LOSSES = 1  # a 3-0 or 2-1 finish earns an announcement row; the t
 DECK_GALLERY_CAP = 6  # Discord grids three per row; a seventh deck strands one on a row of its own
 TROPHY_HYPE_HISTORY_LIMIT = 100  # messages scanned for a champion's own trophy post before the bot posts
 CHAMPIONSHIP_DEADLINE_SECONDS = 600  # hard cap from R3 end: post the announcement with whatever decks landed
+DECK_PING_DELAY_SECONDS = 300  # wait from R3 end before pinging whoever still owes a deck
+DECK_NUDGE_AFTER_FINISHERS = 4  # players done playing before the gentle screenshot reminder is armed
+DECK_NUDGE_DELAY_SECONDS = 120  # wait after arming, so a pod that posts its screenshots promptly gets no reminder
 CHAMPIONSHIP_RECONCILE_WINDOW = timedelta(hours=24)  # startup sweep only revisits recently-finalized pods
 TOURNAMENT_REHYDRATE_WINDOW = timedelta(hours=24)  # startup sweep only rebuilds managers for recently-scheduled pods
 
@@ -168,6 +171,8 @@ async def is_pod_organizer(bot, user: discord.abc.User) -> bool:
 
 
 CHAMPIONSHIP_DECK_HEADER = "Championship post is waiting on a few decks 🏆"
+
+DECK_NUDGE_MSG = "📸 Don't forget to share your deck screenshot here!"
 
 DeckPingAudience = tuple[list[str], list[str]]  # (owes-screenshot ids, owes-colors ids)
 
@@ -2407,6 +2412,7 @@ async def _advance_locked(manager, event_id: str, round_num: int, is_edit: bool,
 
     pending_remaining = await asyncio.to_thread(_count_pending_in_round, event_id, round_num)
     if pending_remaining > 0:
+        await maybe_arm_deck_nudge(manager)
         log.info(
             f"[FINALIZE] maybe_advance.pending event={event_id} round={round_num} "
             f"pending_remaining={pending_remaining} decision=wait"
@@ -3274,7 +3280,7 @@ async def _grace_expire(manager, round_num: int) -> None:
 
     if round_num >= TOTAL_ROUNDS and not manager.finalized:
         await finalize_tournament(manager)
-        await ping_missing_deck_participants(manager)
+        schedule_deck_ping(manager, delay=DECK_PING_DELAY_SECONDS - GRACE_SECONDS)
         if manager.championship_task is None:
             manager.championship_task = asyncio.create_task(_championship_deadline(manager))
         await maybe_post_championship(manager)
@@ -3531,6 +3537,97 @@ def incomplete_decks(finishers, deck_data) -> list[str]:
         s.player_name for s in finishers
         if not deck_complete(deck_data.get(normalize_player_name(s.player_name)))
     ]
+
+
+async def maybe_arm_deck_nudge(manager) -> None:
+    """Arm the one gentle screenshot reminder once a few players are done playing, so the pod hears the
+    ask while the last tables are still in their match instead of a minute after they report.
+
+    Armed at most once per pod, and only in the final round — earlier than that the deck slot is closed
+    and a screenshot posted in answer would be dropped."""
+    if manager.deck_nudge_task is not None or manager.current_round < TOTAL_ROUNDS:
+        return
+    finished = await asyncio.to_thread(finished_players_sync, manager.event_id)
+    if len(finished) < DECK_NUDGE_AFTER_FINISHERS:
+        return
+    log.info(f"[FINALIZE] deck_nudge.armed event={manager.event_id} finished={len(finished)}")
+    manager.deck_nudge_task = asyncio.create_task(_delayed_deck_nudge(manager))
+
+
+async def _delayed_deck_nudge(manager) -> None:
+    """Post the reminder DECK_NUDGE_DELAY_SECONDS after arming, and only if a player who is done playing
+    still owes a screenshot — a pod that posts its decks on its own gets no reminder at all. Colors are
+    left out of the ask on purpose: the screenshot is what needs the lead time, and the deck-chase ping
+    carries the color button later."""
+    try:
+        await asyncio.sleep(DECK_NUDGE_DELAY_SECONDS)
+    except asyncio.CancelledError:
+        return
+    owing = await finished_players_owing_screenshots(manager.event_id)
+    if not owing:
+        log.info(f"[FINALIZE] deck_nudge.skip event={manager.event_id} reason=nobody_owes")
+        return
+    thread = await manager._fetch_thread()
+    if thread is None:
+        log.info(f"[FINALIZE] deck_nudge.skip event={manager.event_id} reason=no_thread")
+        return
+    try:
+        await thread.send(DECK_NUDGE_MSG, allowed_mentions=discord.AllowedMentions.none())
+        log.info(f"[FINALIZE] deck_nudge.sent event={manager.event_id} owing={len(owing)}")
+    except Exception:
+        log.warning(f"[FINALIZE] deck_nudge.error event={manager.event_id}", exc_info=True)
+
+
+async def finished_players_owing_screenshots(event_id: str) -> list[str]:
+    """Keys of the players with no match left to play whose deck screenshot is still missing."""
+    finished = await asyncio.to_thread(finished_players_sync, event_id)
+    deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
+    return [key for key in finished if not (deck_data.get(key) and deck_data[key].screenshot_url)]
+
+
+def finished_players_sync(event_id: str) -> set[str]:
+    with SessionLocal() as session:
+        open_pairs = session.execute(
+            select(PodDraftMatch.player_a_name, PodDraftMatch.player_b_name)
+            .where(PodDraftMatch.event_id == event_id, PodDraftMatch.winner_name.is_(None))
+        ).all()
+        participants = session.execute(
+            select(PodDraftParticipant.draftmancer_name, PodDraftParticipant.display_name)
+            .where(PodDraftParticipant.event_id == event_id)
+        ).all()
+    return finished_player_keys(participants, open_pairs)
+
+
+def finished_player_keys(participants, open_pairs) -> set[str]:
+    """Keys of the players with no unreported match left, so every mode reads the same "done playing"
+    set: a Swiss seat once its R3 result lands, a bracket seat once it is eliminated or wins the final,
+    a team seat once all three of its ungated rounds are in. A seat is matched on either of its names,
+    since pairings carry the Draftmancer handle while a roster-only seat has just its display name."""
+    still_playing = {normalize_player_name(name) for pair in open_pairs for name in pair if name}
+    finished: set[str] = set()
+    for draftmancer_name, display_name in participants:
+        keys = {normalize_player_name(name) for name in (draftmancer_name, display_name) if name}
+        primary = normalize_player_name(draftmancer_name or display_name or "")
+        if primary and not keys & still_playing:
+            finished.add(primary)
+    return finished
+
+
+def schedule_deck_ping(manager, *, blocking_keys: set[str] | None = None, delay: float) -> None:
+    """Hold the deck-chase ping until `delay` seconds from now. The last table to report shouldn't be
+    pinged for a screenshot while they are still typing their post."""
+    if manager.deck_ping_task is not None and not manager.deck_ping_task.done():
+        return
+    log.info(f"[FINALIZE] deck_ping.scheduled event={manager.event_id} delay_s={delay:.0f}")
+    manager.deck_ping_task = asyncio.create_task(_delayed_deck_ping(manager, blocking_keys, delay))
+
+
+async def _delayed_deck_ping(manager, blocking_keys: set[str] | None, delay: float) -> None:
+    try:
+        await asyncio.sleep(max(0.0, delay))
+    except asyncio.CancelledError:
+        return
+    await ping_missing_deck_participants(manager, blocking_keys)
 
 
 async def ping_missing_deck_participants(manager, blocking_keys: set[str] | None = None) -> None:
@@ -4019,6 +4116,9 @@ class _RecoveryManager:
         self.champion_discord_ids: set[str] = set()
         self.champion_announcement_message = None
         self.championship_task = None
+        self.deck_nudge_task = None
+        self.deck_ping_task = None
+        self.current_round = TOTAL_ROUNDS
         self.standings_message = None
         self._standings_post_lock = asyncio.Lock()
         self.round_messages: dict = {}
@@ -4175,15 +4275,30 @@ async def reconcile_unannounced_championships(bot) -> None:
     now = datetime.now(timezone.utc)
     posted = 0
     for event_id, thread_id, finalized_at in rows:
-        remaining = CHAMPIONSHIP_DEADLINE_SECONDS - (now - finalized_at).total_seconds()
+        elapsed = (now - finalized_at).total_seconds()
+        remaining = CHAMPIONSHIP_DEADLINE_SECONDS - elapsed
         if remaining <= 0:
             if await post_championship_for_event(bot, event_id, thread_id):
                 posted += 1
             continue
         await post_championship_for_event(bot, event_id, thread_id, force=False)
         asyncio.create_task(_delayed_championship_post(bot, event_id, thread_id, remaining))
+        if elapsed < DECK_PING_DELAY_SECONDS:
+            await _rearm_deck_ping(bot, event_id, thread_id, DECK_PING_DELAY_SECONDS - elapsed)
     if posted:
         log.info(f"startup sweep reconciled {posted} unannounced championship(s)")
+
+
+async def _rearm_deck_ping(bot, event_id: str, thread_id: str | int, delay: float) -> None:
+    """A restart inside the deck wait takes the finalize-time ping timer with it, so rebuild a shim and
+    hold the rest of the wait. Team pods are left alone: their ping needs the winning side as its
+    blocking set, which only the live team flow holds."""
+    pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
+    if pairing_mode == "team":
+        return
+    players = await asyncio.to_thread(load_tournament_players_sync, event_id)
+    shim = _RecoveryManager(bot, event_id, int(thread_id), players, pairing_mode)
+    schedule_deck_ping(shim, delay=delay)
 
 
 async def _delayed_championship_post(bot, event_id: str, thread_id: str | int, delay: float) -> None:
@@ -4990,7 +5105,9 @@ async def _bracket_maybe_advance(manager, round_num: int, is_edit: bool = False,
     if round_num >= TOTAL_ROUNDS:
         await _post_or_update_live_standings(manager)
         pending = await asyncio.to_thread(bracket_pending_in_round, event_id, TOTAL_ROUNDS, roster_size)
-        if pending == 0 and not manager.finalized:
+        if pending > 0:
+            await maybe_arm_deck_nudge(manager)
+        elif not manager.finalized:
             await manager.share_draft_log()
             _schedule_grace(manager, round_num)
     elif is_edit:

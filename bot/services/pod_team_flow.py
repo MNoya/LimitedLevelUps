@@ -39,6 +39,7 @@ from bot.services.pod_team_board import (
 )
 from bot.discord_helpers import NBSP, ZWSP, player_url
 from bot.services.pod_tournament import (
+    DECK_PING_DELAY_SECONDS,
     POD_PAIRING_FAILED_MSG,
     TOTAL_ROUNDS,
     alert_thread_and_owner,
@@ -53,8 +54,8 @@ from bot.services.pod_tournament import (
     load_participant_displays,
     load_seat_indexes,
     load_tournament_players_sync,
-    ping_missing_deck_participants,
     roster_in_seat_order,
+    schedule_deck_ping,
     send_submit_deck_dms,
 )
 from bot.services.seventeenlands import SeventeenLandsClient
@@ -325,7 +326,9 @@ async def finalize_team_tournament(manager: "PodDraftManager") -> None:
 
     from bot.services import pod_team_showcase
 
-    await ping_missing_deck_participants(manager, blocking_keys=team_showcase_keys(standings, teams))
+    schedule_deck_ping(
+        manager, blocking_keys=team_showcase_keys(standings, teams), delay=DECK_PING_DELAY_SECONDS,
+    )
     await manager.share_draft_log()
     asyncio.create_task(capture_event_replays(SeventeenLandsClient(), event_id))
     await pod_team_showcase.maybe_post_team_trophy_hype(manager)

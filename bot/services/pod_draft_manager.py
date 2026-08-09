@@ -259,6 +259,15 @@ def notify_seeding_repost(bot, event_id: str) -> None:
         asyncio.create_task(_SEEDING_REPOST_HOOK(bot, event_id))
 
 
+def cancel_manager_tasks(manager: "PodDraftManager") -> None:
+    """Stop every timer a manager can leave running: the round grace window, the championship deadline,
+    and the two deck-chase waits. Every teardown path has to clear all of them."""
+    for task in (manager.grace_task, manager.championship_task, manager.deck_nudge_task,
+                 manager.deck_ping_task):
+        if task is not None and not task.done():
+            task.cancel()
+
+
 async def cancel_pod_event(event_id: str, *, actor: str | None = None, idle: bool = False) -> str | None:
     """Tear down a pod draft entirely: cancel pending tournament tasks, disconnect the manager, and
     delete the event row — the cascade drops participants, matches, replays, and DM trackers, which
@@ -269,9 +278,7 @@ async def cancel_pod_event(event_id: str, *, actor: str | None = None, idle: boo
     log.warning(f"pod-cancel: {actor or 'inactivity'} deleting event {event_id}")
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     if manager is not None:
-        for task in (manager.grace_task, manager.championship_task):
-            if task is not None and not task.done():
-                task.cancel()
+        cancel_manager_tasks(manager)
         if idle:
             await manager.stand_down_idle_lobby()
         else:
@@ -411,6 +418,8 @@ class PodDraftManager:
         self.card_result_url: str | None = None
         self.champion_discord_ids: set[str] = set()
         self.championship_task: asyncio.Task | None = None
+        self.deck_nudge_task: asyncio.Task | None = None
+        self.deck_ping_task: asyncio.Task | None = None
         self._end_watchdog_task: asyncio.Task | None = None
         self.sio = socketio.AsyncClient(reconnection=False, logger=False, engineio_logger=False)
         self.sio.on("connect", self._on_connect)
