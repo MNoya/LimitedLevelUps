@@ -836,7 +836,7 @@ async def apply_card_rsvp(
 
     await _answer_presser(interaction, result, card_state, confirming=confirming)
     run_detached(
-        _settle_card_rsvp(interaction, surface_message_id, result, refresh_launcher=refresh_launcher),
+        _settle_card_rsvp(interaction, result, refresh_launcher=refresh_launcher),
         f"the RSVP on card {surface_message_id}",
     )
 
