@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from bot import emojis
 from bot.database import SessionLocal
-from bot.discord_helpers import BLANK_LINE
+from bot.discord_helpers import BLANK_LINE, EM_SPACE
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
 from bot.services.championship_roster_card import (
     ChampionshipRoster,
@@ -36,8 +36,11 @@ from bot.commands.messages import (
     MSG_CONFIRM_LOCK_IN,
     MSG_CONFIRM_LOCK_IN_TABLE,
     MSG_CONFIRM_SIGNUP_BUTTON,
-    MSG_CONFIRM_SIGNUP_TALLY,
-    MSG_CONFIRM_SIGNUP_TALLY_MAYBE,
+    MSG_CONFIRM_TALLY_CONFIRMED,
+    MSG_CONFIRM_TALLY_LINE,
+    MSG_CONFIRM_TALLY_PENDING,
+    MSG_CONFIRM_TALLY_SIGNUPS,
+    MSG_CONFIRM_TALLY_SIGNUPS_MAYBE,
 )
 from bot.services.pod_confirm import (
     CONFIRMED,
@@ -440,7 +443,14 @@ def signal_rsvp_rosters_sync(
 
 def build_lobby_open_body(draftmancer_url: str, mention_block: str) -> str:
     """The lobby-open post from open_ondemand_lobby. The lobby is joinable the moment the link posts
-    and the start is gated on the ready-check, so the headline is 'Lobby opened', with no countdown."""
+    and the start is gated on the ready-check, so the headline is 'Lobby opened', with no countdown.
+
+    The link is posted rather than held behind Join Draft because a pod that splits gives each table its
+    own thread and its own roster to ping, so this post never reaches more people than the room seats.
+
+    It carries no instruction about Arena names. Someone who joins under a name the bot cannot match is
+    caught downstream, where the lobby card warns and the ready check names them, so explaining it here
+    spends two lines on every pod to pre-empt something one player does occasionally."""
     mentions = f"\n\n{mention_block}" if mention_block else ""
     body = LOBBY_OPEN.format(
         draftmancer=emojis.get("draftmancer"), headline=LOBBY_OPEN_HEADLINE, url=draftmancer_url,
@@ -459,12 +469,25 @@ def attendance_of(rosters: dict[str, list[str]]) -> Attendance:
 
 
 def _signup_tally(attendance: Attendance) -> str:
-    """One line of arithmetic the reader would otherwise do by counting columns. Maybes are named only when
-    there are some, since a nil beside a number reads as a problem rather than an absence."""
-    tally = MSG_CONFIRM_SIGNUP_TALLY.format(yes=attendance.expected)
-    if attendance.maybe:
-        tally += MSG_CONFIRM_SIGNUP_TALLY_MAYBE.format(maybe=len(attendance.maybe))
-    return tally
+    """The counts on a line of their own: who has answered, who has not, and the signups those came from.
+
+    Confirmed and Pending wear the same two marks the seat rows wear, so a number in the header and a mark
+    beside a name can never mean different things. The header used to render expected turnout behind a ✅
+    that meant confirmed one line below, and a pod was started early on the strength of it.
+
+    Maybes are named only when there are some, since a nil beside a number reads as a problem rather than
+    an absence. Empty for a pod nobody has signed up to, where three zeroes say nothing."""
+    if not attendance.signed_up:
+        return ""
+    signups = (
+        MSG_CONFIRM_TALLY_SIGNUPS_MAYBE.format(yes=attendance.expected, maybe=len(attendance.maybe))
+        if attendance.maybe else MSG_CONFIRM_TALLY_SIGNUPS.format(yes=attendance.expected)
+    )
+    return EM_SPACE.join((
+        MSG_CONFIRM_TALLY_CONFIRMED.format(count=len(attendance.confirmed)),
+        MSG_CONFIRM_TALLY_PENDING.format(count=len(attendance.yes)),
+        signups,
+    ))
 
 
 def confirm_ask_line(plan: TablePlan | None = None) -> str:
@@ -482,7 +505,12 @@ def reminder_header(event_name: str, event_time: datetime, attendance: Attendanc
     is the headline itself rather than an embed title, because a title sits in its own row above the body
     and splits one sentence across two lines on a phone."""
     headline = ROSTER_REMINDER_HEADLINE.format(name=event_name, unix=int(event_time.timestamp()))
-    return f"{headline}{_signup_tally(attendance)}\n{confirm_ask_line(plan)}"
+    lines = [headline]
+    tally = _signup_tally(attendance)
+    if tally:
+        lines.append(MSG_CONFIRM_TALLY_LINE.format(counts=tally))
+    lines.append(confirm_ask_line(plan))
+    return "\n".join(lines)
 
 
 def build_table_plan_embed(

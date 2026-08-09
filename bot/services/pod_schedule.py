@@ -20,6 +20,7 @@ from bot.services.pod_reminder_copy import (
     RECRUITING_READY,
     RECRUITING_SECOND_TABLE,
     RECRUITING_SHORT,
+    STAGED_TABLE_SHORT,
 )
 
 
@@ -160,6 +161,25 @@ def build_recruiting_message(
     maybe = RECRUITING_MAYBE.format(maybe=maybe_count) if maybe_count else ""
     tail = RECRUITING_SECOND_TABLE if count + maybe_count >= 2 * aim else ""
     return RECRUITING_READY.format(yes=count, maybe=maybe, tail=tail, **shared).rstrip()
+
+
+def build_staged_table_message(
+    name: str, needed: int, event_time: datetime, thread_url: str,
+) -> str:
+    """The ask a table opens with when the split left it short of a pod.
+
+    A table born ten minutes before the draft has no recruiting beats left to run: they are armed hours
+    out and a pod created after them skips every one. So it asks once, here, and points at its own thread
+    rather than a signup card, because the players it needs join by walking in."""
+    return STAGED_TABLE_SHORT.format(
+        hello=emojis.prefix("chordoHello"),
+        name=render_pod_name(short_event_name(name)),
+        unix=int(event_time.timestamp()),
+        needed=needed,
+        plural=plural(needed),
+        manat=emojis.get("manat"),
+        thread_url=thread_url,
+    )
 
 
 def build_underfill_fired_message(name: str, player_count: int, thread_url: str) -> str:

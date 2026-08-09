@@ -12,6 +12,7 @@ from bot.commands.messages import (
     MSG_TABLE_SEAT_CONFIRMED,
     MSG_TABLE_EMPTY_SEAT,
     MSG_TABLE_MORE_NAMES,
+    MSG_TABLE_WAITING_COLUMN,
 )
 from bot.services import pod_format_interest as fi
 from bot.services.pod_confirm import CONFIRMED, Attendance, Table, TablePlan
@@ -59,9 +60,13 @@ def add_table_plan_fields(embed: discord.Embed, attendance: Attendance, plan: Ta
     """Render the roster as the tables it makes, which is the thing the room is actually deciding.
 
     Columns are the tables. A header says how many are on it and, when it is short, what it needs, so the
-    card carries the shape without a sentence explaining it. Seats are filled confirmed-first, so the
-    people who answered land on the table most likely to run and the marker beside a name says how solid
-    that seat is. A leftover too small to become a table of its own is waiting, not a table.
+    card carries the shape without a sentence explaining it. Seats are filled confirmed-first and the
+    plan orders its tables by which can start soonest, so the people who answered early land on a table
+    that is already whole and the one still needing a player falls to whoever answered last.
+
+    Eleven players is the one count where a table cannot hold everybody, since ten seats is the whole
+    Draftmancer session. Whoever is over gets their own column, because a name the card silently drops is
+    a person nobody knows is there.
     """
     seats = [(name, True) for name in attendance.confirmed] + [(name, False) for name in attendance.yes]
     cursor = 0
@@ -70,6 +75,10 @@ def add_table_plan_fields(embed: discord.Embed, attendance: Attendance, plan: Ta
         _add_seat_field(embed, _table_header(index, table, alone=alone),
                         seats[cursor:cursor + table.seated], open_seats=table.empty_seats)
         cursor += table.seated
+    if plan.waiting:
+        _add_seat_field(embed, MSG_TABLE_WAITING_COLUMN.format(count=plan.waiting),
+                        seats[cursor:cursor + plan.waiting])
+        cursor += plan.waiting
     maybe = list(attendance.maybe)
     if maybe:
         _add_lines_field(embed, f"🤷 Maybe ({len(maybe)})", list(maybe))

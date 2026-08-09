@@ -22,15 +22,13 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from bot import audit
+from bot.commands.messages import MSG_CONFIRM_NOT_A_POD, MSG_CONFIRM_POD_STARTED
 from bot.database import SessionLocal
 from bot.models import PodSignal, PodSignalMember
 from bot.services.pod_drafts import load_event_id_by_thread_sync, load_event_socket_status_sync
 from bot.services.pod_signals import RSVP_YES
 from bot.tasks.pod_draft_reminder import refresh_or_repost_roster_reminder
 
-
-MSG_CONFIRM_NOT_A_POD = "Run `!confirm` inside a pod draft thread."
-MSG_CONFIRM_POD_STARTED = "This pod has already opened its lobby."
 
 NOTICE_LIFETIME_S = 20
 PRE_LOBBY_STATUSES = ("pending", "reminded")

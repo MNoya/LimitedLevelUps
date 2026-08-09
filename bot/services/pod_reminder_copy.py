@@ -31,6 +31,11 @@ RECRUITING_MAYBE = " 🤷 {maybe}"
 
 RECRUITING_SECOND_TABLE = " - join the 2nd table!"
 
+STAGED_TABLE_SHORT = (
+    "{hello}{name} starts <t:{unix}:R> and needs **{needed} more player{plural}** to draft "
+    "{manat} [**Join here**]({thread_url})"
+)
+
 SLOT_FIRE_PING = "{mention} starts <t:{unix}:R>"
 
 ROSTER_REMINDER_TITLE = "🔔 Pod Draft Starting Soon"
@@ -45,9 +50,8 @@ LOBBY_ARENA_NAME = (
 )
 LOBBY_OPEN = (
     "{draftmancer} {headline}\n"
-    "**Join the Draftmancer session:** <{url}>\n\n"
-    + LOBBY_ARENA_NAME
-    + "{mentions}"
+    "➡️ **Join the Draftmancer session:** <{url}>"
+    "{mentions}"
 )
 
 DRAFT_STARTED = (

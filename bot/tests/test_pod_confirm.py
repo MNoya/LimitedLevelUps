@@ -51,33 +51,43 @@ def scheduled_signal(session):
     return signal
 
 
-@pytest.mark.parametrize("players, seating", [
-    (6, ((6, 6),)),
-    (7, ((7, 8),)),
-    (8, ((8, 8),)),
-    (9, ((9, 10),)),
-    (10, ((10, 10),)),
-    (11, ((6, 6), (5, 6))),
-    (12, ((6, 6), (6, 6))),
-    (13, ((8, 8), (5, 6))),
-    (14, ((8, 8), (6, 6))),
-    (15, ((8, 8), (7, 8))),
-    (20, ((8, 8), (6, 6), (6, 6))),
-    (30, ((8, 8), (8, 8), (8, 8), (6, 6))),
+@pytest.mark.parametrize("players, seating, waiting", [
+    (6, ((6, 6),), 0),
+    (7, ((7, 8),), 0),
+    (8, ((8, 8),), 0),
+    (9, ((9, 10),), 0),
+    (10, ((10, 10),), 0),
+    (11, ((10, 10),), 1),
+    (12, ((6, 6), (6, 6)), 0),
+    (13, ((6, 6), (7, 8)), 0),
+    (14, ((8, 8), (6, 6)), 0),
+    (15, ((8, 8), (7, 8)), 0),
+    (16, ((8, 8), (8, 8)), 0),
+    (18, ((8, 8), (10, 10)), 0),
+    (19, ((10, 10), (9, 10)), 0),
+    (20, ((8, 8), (6, 6), (6, 6)), 0),
+    (30, ((8, 8), (8, 8), (8, 8), (6, 6)), 0),
 ])
-def test_plan_seats_players_in_real_pods(players, seating):
+def test_plan_seats_players_in_real_pods(players, seating, waiting):
     plan = plan_tables(players)
 
     assert tuple((t.seated, t.capacity) for t in plan.tables) == seating
+    assert plan.waiting == waiting
 
 
-def test_every_player_gets_a_seat_at_a_real_pod():
+def test_every_player_is_seated_or_waiting_at_a_real_pod():
     for players in range(6, 41):
         plan = plan_tables(players)
 
-        assert plan.seated == players
+        assert plan.seated + plan.waiting == players
+        assert all(t.seated >= 6 for t in plan.tables)
         assert all(t.capacity in (6, 8, 10) for t in plan.tables)
-        assert all(0 < t.seated <= t.capacity for t in plan.tables)
+
+
+def test_only_eleven_leaves_anyone_without_a_table():
+    waiting = [players for players in range(6, 41) if plan_tables(players).waiting]
+
+    assert waiting == [11]
 
 
 def test_expected_counts_an_unanswered_yes_but_not_an_unanswered_maybe():
@@ -159,6 +169,18 @@ def test_confirmed_players_fill_the_first_table_before_anyone_unconfirmed():
     first_table = embed.fields[0].value
     assert all(name in first_table for name in confirmed)
     assert "Unconfirmed" not in embed.fields[0].value.split(confirmed[-1])[0]
+
+
+def test_the_eleventh_player_is_shown_waiting_instead_of_dropped():
+    names = tuple(f"Player{i}" for i in range(11))
+    attendance = Attendance(confirmed=names)
+
+    embed = discord.Embed()
+    add_table_plan_fields(embed, attendance, plan_tables(attendance.expected))
+
+    rendered = " ".join(field.value for field in embed.fields)
+    assert all(name in rendered for name in names)
+    assert names[10] in embed.fields[-1].value
 
 
 @pytest.mark.parametrize("minutes_out, expect_job", [(120, True), (50, True), (8, False)])

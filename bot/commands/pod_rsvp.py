@@ -97,6 +97,7 @@ from bot.services import pod_team
 from bot.services.pod_team_board import TeamBoardMember, load_team_board_data, team_result_headline
 from bot.services.pod_schedule import LATE_POD_ROLE_NAME, SCHEDULE_TZ
 from bot.services.pod_slot import pod_display_name, team_aware_pod_name
+from bot.services.pod_staging import pod_family_sync
 from bot.services.pod_signals import RSVP_EMOJI, RSVP_MAYBE, RSVP_NO, RSVP_STATES, RSVP_YES
 from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import (
@@ -537,6 +538,15 @@ async def resolve_championship_card_roster(
 ) -> ChampionshipRoster | None:
     """The seeded columns for a Set Championship card, off the main thread. None for any other pod."""
     return await asyncio.to_thread(championship_roster_for_event_sync, event_id, rosters)
+
+
+async def render_pod_board(bot: commands.Bot, event_id: str) -> None:
+    """Repaint the card carrying the board of every table, from any pod in the family. A sibling's roster
+    moving changes what the board says, and nothing else would bring the news to it."""
+    family = await asyncio.to_thread(pod_family_sync, event_id)
+    if len(family) < 2:
+        return
+    await _render_channel_card(bot, family[0].event_id, {}, None)
 
 
 def keep_only_time_field(embed: discord.Embed) -> None:
