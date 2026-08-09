@@ -62,7 +62,7 @@ async def setup(bot: commands.Bot) -> None:
                 site_url=pod_page_url(event_name), roster=roster,
                 max_players=settings.pod_draft_max_players, state=state, role_mention=mention,
                 spectate_url=f"{session_url}&spectate=preview", canceled_by=canceled_by,
-                canceled_idle=canceled_idle, thread_url=thread_url,
+                canceled_idle=canceled_idle, thread_url=thread_url, created_by=ctx.author.display_name,
             )
             await ctx.send(content=content, embed=embed, view=view, allowed_mentions=MOCK_CARD_QUIET)
         await ctx.send(

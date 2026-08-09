@@ -32,6 +32,7 @@ from discord.ext import commands
 
 from bot import audit, emojis
 from bot.commands.messages import (
+    MSG_CARD_CREATED_BY,
     MSG_CONFIRM_DONE,
     MSG_CONFIRM_SIGNUP_BUTTON,
     MSG_DRAFT_STARTS,
@@ -119,7 +120,6 @@ MULTIPOD_NOTICE = "🔥 Keep signing up to fire a second table"
 CARD_STATUS_DRAFTING = "🎉 **Draft started!**"
 CARD_STATUS_PLAYING = "⚔️ **Matches In Progress**"
 CARD_STATUS_LOBBY_OPEN = "{emoji} **Lobby is open**"
-CARD_CREATED_BY = "Created by {name}"
 TIME_LABEL = "Time"
 NATIVE_EVENT_SIGNUP = "**Event Details and Signup Link: {jump_url}**"
 RSVP_LABELS = {RSVP_YES: "Sign Up", RSVP_MAYBE: "Maybe", RSVP_NO: "Leave"}
@@ -405,7 +405,7 @@ def build_rsvp_embed(
 def _with_created_by(embed: discord.Embed, created_by: str | None) -> discord.Embed:
     """Footers carry no markdown and no mention pills, so the credit is a plain display name."""
     if created_by:
-        embed.set_footer(text=CARD_CREATED_BY.format(name=created_by))
+        embed.set_footer(text=MSG_CARD_CREATED_BY.format(name=created_by))
     return embed
 
 

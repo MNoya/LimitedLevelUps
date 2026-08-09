@@ -15,6 +15,8 @@ MSG_TOKEN_INVALIDATED = (
 )
 MSG_ADMIN_ONLY = "This command is reserved for the bot Admin."
 
+MSG_CARD_CREATED_BY = "Created by {name}"
+
 MSG_MOCK_NOT_TEXT_CHANNEL = "Run `/mock-draft` in a server text channel — the thread is created there."
 MSG_MOCK_UNKNOWN_SET = "Unknown set `{code}`. Pick one from the suggestions, or use a registered cube format."
 MSG_MOCK_NONE_RUNNING = "No mock draft is open right now. Start one with `/mock-draft`."

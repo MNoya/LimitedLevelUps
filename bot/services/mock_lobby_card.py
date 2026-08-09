@@ -21,6 +21,7 @@ import discord
 
 from bot import emojis
 from bot.commands.messages import (
+    MSG_CARD_CREATED_BY,
     MSG_MOCK_CARD_CANCELED,
     MSG_MOCK_CARD_CANCELED_IDLE,
     MSG_MOCK_CARD_CANCELED_NO_ACTOR,
@@ -86,6 +87,7 @@ def build_mock_card(
     canceled_by: str | None = None,
     canceled_idle: bool = False,
     thread_url: str | None = None,
+    created_by: str | None = None,
 ) -> tuple[str, discord.Embed, discord.ui.View | None]:
     """The card as (content, embed, view). `roster` is Draftmancer session users as (arena_name,
     linked_display_name_or_None), the same shape the in-thread lobby card renders. A canceled card drops
@@ -96,7 +98,10 @@ def build_mock_card(
     anchor has its thread hanging off it, while a repost is a plain message with no way in.
 
     STATE_OPENING withholds the session link and the Join button: Draftmancer makes whoever enters an
-    empty session first its owner, so a player reaching the lobby before the bot would take it."""
+    empty session first its owner, so a player reaching the lobby before the bot would take it.
+
+    `created_by` credits whoever ran `/mock-draft`, the same footer credit an out-of-schedule pod carries.
+    A card rebuilt after a restart has nobody to credit and leaves the name off."""
     embed = discord.Embed(
         title=event_title(set_code, card_name(event_name)),
         description=_description(state, session_url, canceled_by, canceled_idle),
@@ -116,7 +121,7 @@ def build_mock_card(
             inline=False,
         )
     if state in (STATE_OPENING, STATE_OPEN):
-        embed.set_footer(text=f"{MSG_MOCK_CARD_DISCORD_NAME}\n{_closes_line()}")
+        embed.set_footer(text=f"{MSG_MOCK_CARD_DISCORD_NAME}\n{_closes_line(created_by)}")
     content = _content(state, role_mention, seated=len(roster), max_players=max_players)
     return content, embed, _view(state, session_id, site_url, spectate_url, thread_url)
 
@@ -153,9 +158,13 @@ def _seat_label(state: str) -> str:
     return MSG_MOCK_CARD_DRAFTERS
 
 
-def _closes_line() -> str:
-    """The window an open lobby stands down after, so a card nobody answers reads as temporary."""
-    return MSG_MOCK_CARD_CLOSES.format(window=inactivity_window_text(settings.pod_mock_inactivity_minutes))
+def _closes_line(created_by: str | None) -> str:
+    """The window an open lobby stands down after, so a card nobody answers reads as temporary, led by
+    whoever opened it."""
+    closes = MSG_MOCK_CARD_CLOSES.format(window=inactivity_window_text(settings.pod_mock_inactivity_minutes))
+    if not created_by:
+        return closes
+    return f"{MSG_CARD_CREATED_BY.format(name=created_by)} | {closes}"
 
 
 def _description(state: str, session_url: str, canceled_by: str | None, canceled_idle: bool) -> str:

@@ -88,6 +88,7 @@ class MockDraft(commands.Cog):
             session_url=draftmancer_url_for(session_id), site_url=pod_page_url(event_name), roster=[],
             max_players=settings.pod_draft_max_players, state=STATE_OPENING,
             role_mention=role_mention(interaction.guild, MOCK_DRAFT_ROLE_NAME),
+            created_by=interaction.user.display_name,
         )
         starter = await channel.send(
             content=content, embed=embed, view=view, allowed_mentions=MOCK_CARD_PING,
@@ -98,7 +99,10 @@ class MockDraft(commands.Cog):
             session.get(PodDraftEvent, event_id).discord_thread_id = str(thread.id)
             session.commit()
 
-        manager = await _seat_bot_in_lobby(self.bot, event_id, session_id, thread.id, code, event_name)
+        manager = await _seat_bot_in_lobby(
+            self.bot, event_id, session_id, thread.id, code, event_name,
+            created_by=interaction.user.display_name,
+        )
 
         opened_session = manager.session_id if manager is not None else session_id
         log.info(f"mock-draft: {interaction.user} opened {opened_session} (event_id={event_id})")
@@ -146,6 +150,7 @@ def _opened_after(manager: PodDraftManager, other: PodDraftManager) -> bool:
 
 async def _seat_bot_in_lobby(
     bot: commands.Bot, event_id: str, session_id: str, thread_id: int, set_code: str, event_name: str,
+    *, created_by: str,
 ) -> PodDraftManager | None:
     """Connect the bot to the Draftmancer session and hold it until ownership resolves. The card posts
     with no link until that lands, so the bot is always the first one in the lobby and stays its owner.
@@ -154,6 +159,7 @@ async def _seat_bot_in_lobby(
     manager = await start_manager(
         bot, event_id, session_id, thread_id, set_code, 0,
         event_name=event_name, draftmancer_url=draftmancer_url_for(session_id), kind="mock",
+        created_by=created_by,
     )
     if manager is None or await manager.await_ownership():
         return manager
@@ -168,6 +174,7 @@ async def _seat_bot_in_lobby(
     manager = await start_manager(
         bot, event_id, fresh_session_id, thread_id, set_code, 0,
         event_name=event_name, draftmancer_url=draftmancer_url_for(fresh_session_id), kind="mock",
+        created_by=created_by,
     )
     if manager is not None:
         await manager.await_ownership()

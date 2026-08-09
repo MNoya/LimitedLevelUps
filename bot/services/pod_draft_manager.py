@@ -294,7 +294,8 @@ class PodDraftManager:
                  kind: str = "tournament",
                  rsvps_yes: list[str] | None = None,
                  rsvps_maybe: list[str] | None = None,
-                 reconnect: bool = False) -> None:
+                 reconnect: bool = False,
+                 created_by: str | None = None) -> None:
         self.bot = bot
         self.event_id = event_id
         self.session_id = session_id
@@ -309,6 +310,7 @@ class PodDraftManager:
         self._lobby_card_adopt_attempted = False
         self._mock_anchor_message: "discord.Message | None" = None
         self._mock_repost_message: "discord.Message | None" = None
+        self.created_by = created_by
         self.canceled_by: str | None = None
         self.canceled_idle = False
         self._mock_idle_task: asyncio.Task | None = None
@@ -1532,7 +1534,7 @@ class PodDraftManager:
             roster=roster, max_players=self.max_players, state=self._mock_card_state(),
             role_mention=role_mention(guild, MOCK_DRAFT_ROLE_NAME),
             spectate_url=self.spectate_url, canceled_by=self.canceled_by,
-            canceled_idle=self.canceled_idle, thread_url=thread_url,
+            canceled_idle=self.canceled_idle, thread_url=thread_url, created_by=self.created_by,
         )
 
     async def _mock_cards(self) -> list[tuple["discord.Message", discord.AllowedMentions, str | None]]:
@@ -3104,6 +3106,7 @@ async def start_manager(
     rsvps_yes: list[str] | None = None,
     rsvps_maybe: list[str] | None = None,
     reconnect: bool = False,
+    created_by: str | None = None,
 ) -> PodDraftManager | None:
     existing = ACTIVE_POD_MANAGERS.get(event_id)
     if existing is not None:
@@ -3112,7 +3115,7 @@ async def start_manager(
     manager = PodDraftManager(
         bot, event_id, session_id, thread_id, set_code, expected_attendee_count,
         event_name=event_name, draftmancer_url=draftmancer_url, kind=kind,
-        rsvps_yes=rsvps_yes, rsvps_maybe=rsvps_maybe, reconnect=reconnect,
+        rsvps_yes=rsvps_yes, rsvps_maybe=rsvps_maybe, reconnect=reconnect, created_by=created_by,
     )
     persisted_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
     if persisted_mode:
