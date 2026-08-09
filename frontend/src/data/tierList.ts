@@ -180,6 +180,21 @@ export interface TierCard {
   graders?: GraderGrade[];
 }
 
+export interface CardFlag {
+  key: "synergy" | "buildaround";
+  glyph: string;
+  label: string;
+}
+
+export const CARD_FLAGS: CardFlag[] = [
+  { key: "synergy", glyph: "🤝", label: "Synergy" },
+  { key: "buildaround", glyph: "🛠️", label: "Build-Around" },
+];
+
+export function cardFlags(card: TierCard): CardFlag[] {
+  return CARD_FLAGS.filter((flag) => card.flags[flag.key]);
+}
+
 export const TREND_COLOR: Record<"up" | "down", string> = {
   up: "#4ade80",
   down: "#f87171",

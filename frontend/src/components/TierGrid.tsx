@@ -7,6 +7,7 @@ import { cn } from "../lib/utils";
 import { TEXT_OUTLINE } from "../lib/text-styles";
 import { useIsMobile } from "../lib/use-is-mobile";
 import {
+  cardFlags,
   hasActiveFilters,
   inclusionRank,
   isCardFilteredOut,
@@ -476,6 +477,7 @@ export const PREVIEW_RATIO = 1.4;
 export const PREVIEW_GAP = 12;
 export const PREVIEW_EXTRAS_H = 60;
 const PREVIEW_MAT = "#161b26";
+const PREVIEW_TAB = "#232c3d";
 
 export interface PreviewAnchor {
   left: number;
@@ -499,7 +501,7 @@ function CardBar({
   const [anchor, setAnchor] = useState<PreviewAnchor | null>(null);
   const accent = RARITY_ACCENT[card.rarity] ?? RARITY_ACCENT.C;
   const art = card.url.replace("/large/", "/art_crop/");
-  const badges = `${card.comment ? "💬" : ""}${card.flags.synergy ? "🤝" : ""}${card.flags.buildaround ? "🛠️" : ""}`;
+  const badges = `${card.comment ? "💬" : ""}${cardFlags(card).map((flag) => flag.glyph).join("")}`;
   const trendLabel = card.trend
     ? `${TREND_LABEL[card.trend]}${card.trend_from ? ` (${card.trend_from} → ${card.tier})` : ""}`
     : "";
@@ -698,6 +700,29 @@ function GradeCell({
   );
 }
 
+// Tabs clip to the panel's top edge instead of taking a row, so a flagged card's
+// panel is the same height as every other card's.
+function CardFlagTabs({ card }: { card: TierCard }) {
+  const flags = cardFlags(card);
+  if (flags.length === 0) {
+    return null;
+  }
+  return (
+    <div className="absolute -top-[9px] left-1/2 flex -translate-x-1/2 gap-1.5">
+      {flags.map((flag) => (
+        <span
+          key={flag.key}
+          className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/60 py-[3px] pl-2 pr-2.5 text-[10px] font-bold uppercase leading-none tracking-[0.08em] text-white"
+          style={{ backgroundColor: PREVIEW_TAB }}
+        >
+          <span className="text-[11px] leading-none tracking-normal">{flag.glyph}</span>
+          {flag.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function CardPreview({
   card,
   anchor,
@@ -731,9 +756,10 @@ export function CardPreview({
         <path d={triangleInner} fill={PREVIEW_MAT} />
       </svg>
       <div
-        className="flex flex-col rounded-xl border border-white/60 p-[6px] shadow-2xl"
+        className="relative flex flex-col rounded-xl border border-white/60 p-[6px] shadow-2xl"
         style={{ backgroundColor: PREVIEW_MAT }}
       >
+        <CardFlagTabs card={card} />
         <GradesPanel card={card} />
         <img src={card.url} alt="" className="w-full rounded-[10px]" />
         {card.comment && (
@@ -786,10 +812,11 @@ export function CardModal({
     >
       <div className="flex w-full max-w-[320px] flex-col items-center">
         <div
-          className="w-full rounded-xl border border-white/15 p-[6px] shadow-2xl sm:border-white/60"
+          className="relative w-full rounded-xl border border-white/15 p-[6px] shadow-2xl sm:border-white/60"
           style={{ backgroundColor: PREVIEW_MAT }}
           onClick={(e) => e.stopPropagation()}
         >
+          <CardFlagTabs card={card} />
           <GradesPanel card={card} />
           {flippable ? (
             <FlipCardImage front={card.url} back={card.url_back!} name={card.name} flipped={flipped} />
