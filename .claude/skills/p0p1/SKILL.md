@@ -22,6 +22,9 @@ Optional, and rarely needed:
 - `--results YYYY-MM-DD` — when results land. Defaults to `release + 28 days`, independent of
   `--deadline`, so an early voting deadline doesn't shorten the 17lands data window. Pass it to
   hand-pick a results date instead.
+- `--hybrid-common-slots` / `--no-hybrid-common-slots` — whether hybrid cards can fill a
+  mono-color common slot. Defaults on for a brand-new contest; an already-scheduled contest keeps
+  whatever it already has unless you pass the flag explicitly.
 
 Bare dates mean noon ET. A full ISO timestamp pins any other instant.
 
@@ -47,6 +50,7 @@ the window in `p0p1_contests.json` on its own:
 | pool complete, unscheduled | opens voting now, contest goes live when this ships, results at `release + 28d` |
 | already scheduled | leaves the window alone, only the pool is refreshed |
 | `--opens` / `--deadline` / `--results` given | reschedules, keeping whichever values were not passed |
+| `--hybrid-common-slots` given, new or existing contest | writes the flag as passed |
 
 Relay its output: card count, layout breakdown, slot coverage, and which of those it did.
 
@@ -86,6 +90,10 @@ Never run `git commit` or `git push`.
 
 - The card pool is a globbed fixture; the window is a key in the root `p0p1_contests.json`, the same
   shared-config pattern as `scoring_buckets.json`. There is no route to add.
+- `write_contest` rebuilds each contest's entry from scratch on every call, so any per-contest field
+  beyond the window (like `hybridCommonSlots`) must be threaded through and written explicitly there
+  or it silently disappears on the next reschedule. This is the pattern for any future conditional
+  field: the script owns it, hand edits don't survive a re-run.
 - Windows live outside the database, so a contest resolves before its set reaches `public_sets`, and
   a deadline change is a one-line JSON edit with no migration and no query.
 - `/p0p1/<code>` is the historic viewer for any contest and carries no pointer to a later set.

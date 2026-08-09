@@ -24,6 +24,10 @@ frontend imports and a future bot task can read:
 results) defaults to release + 28 days, independent of the deadline, so an early deadline doesn't
 shorten the 17lands data window. Bare dates mean noon ET, matching the release clock in
 ``bot/sets.py``.
+
+``--hybrid-common-slots`` / ``--no-hybrid-common-slots`` lets hybrid cards fill the mono-color
+common slots. Defaults to on for a new contest; an existing contest keeps whatever it already has
+unless the flag is passed explicitly.
 """
 from __future__ import annotations
 
@@ -166,9 +170,14 @@ def read_contests() -> dict[str, dict[str, str]]:
     return json.loads(CONTESTS_JSON.read_text())
 
 
-def write_contest(seed: SetSeed, opens: str, deadline: str | None, results: str) -> None:
+def write_contest(
+    seed: SetSeed, opens: str, deadline: str | None, results: str, hybrid_common_slots: bool
+) -> None:
     """Upsert this set's window, leaving every other contest byte-identical. Newest release first so
-    the live contest is the first thing a maintainer sees when opening the file."""
+    the live contest is the first thing a maintainer sees when opening the file.
+
+    Every conditional field like ``hybridCommonSlots`` must be written here, explicitly, on every
+    call — this rebuilds the entry from scratch, so anything not passed through is dropped."""
     contests = read_contests()
     entry = {
         "name": seed.name,
@@ -178,6 +187,7 @@ def write_contest(seed: SetSeed, opens: str, deadline: str | None, results: str)
     if deadline is not None:
         entry["votingDeadline"] = deadline
     entry["scoringDate"] = results
+    entry["hybridCommonSlots"] = hybrid_common_slots
     contests[seed.code] = entry
 
     ordered = dict(sorted(contests.items(), key=lambda kv: kv[1]["release"], reverse=True))
@@ -200,6 +210,13 @@ def main() -> None:
         "--results",
         help="When results land: YYYY-MM-DD (noon ET) or a full ISO timestamp. "
         "Defaults to release + 28 days, independent of --deadline",
+    )
+    parser.add_argument(
+        "--hybrid-common-slots",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Let hybrid cards fill the mono-color common slots. On by default for a new contest; "
+        "an existing contest keeps whatever it already has",
     )
     args = parser.parse_args()
 
@@ -245,7 +262,12 @@ def main() -> None:
     print(f"Wrote {len(cards)} cards → {output}")
 
     existing = read_contests().get(set_code)
-    hybrid = bool(existing and existing.get("hybridCommonSlots"))
+    if args.hybrid_common_slots is not None:
+        hybrid = args.hybrid_common_slots
+    elif existing is not None and "hybridCommonSlots" in existing:
+        hybrid = existing["hybridCommonSlots"]
+    else:
+        hybrid = True
     shortfalls = report_pool_coverage(cards, hybrid_common_slots=hybrid)
 
     if shortfalls:
@@ -263,7 +285,7 @@ def main() -> None:
         results = contest_instant(args.results) if args.results else (
             existing.get("scoringDate") if existing else default_results
         )
-        write_contest(matched, opens, deadline, results)
+        write_contest(matched, opens, deadline, results, hybrid)
         print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: opens {opens}, "
               f"closes {deadline or 'at release'}, results {results}")
     elif existing:
@@ -273,7 +295,7 @@ def main() -> None:
               f"Re-run this when the Scryfall gallery is complete.")
     else:
         opens = now_instant()
-        write_contest(matched, opens, None, default_results)
+        write_contest(matched, opens, None, default_results, hybrid)
         print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: voting opens at {opens}, "
               f"so it goes live as soon as this ships. Results {default_results}")
 
