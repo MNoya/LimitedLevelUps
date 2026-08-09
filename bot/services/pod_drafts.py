@@ -1518,10 +1518,11 @@ def participant_dm_info(session: Session, event_id: str) -> dict[str, Participan
     guild context, so the opponent line renders this name as text rather than a `<@id>` mention —
     a mention would resolve to the global username instead of the LLU server nickname.
 
-    arena_name sources from PodDraftParticipant.draftmancer_name — the handle the player actually
-    set in the Draftmancer client for THIS session. For multi-account users this can differ from
+    arena_name prefers PodDraftParticipant.draftmancer_name — the handle the player actually set in
+    the Draftmancer client for THIS session. For multi-account users this can differ from
     Player.arena_name (their stored display primary); the opponent DM should report the session-
-    specific name so they look for the right Arena handle.
+    specific name so they look for the right Arena handle. A Draftmancer name carrying no `#NNNNN`
+    discriminator is a nickname, not an Arena handle, so the linked Player.arena_name stands in.
     """
     rows = session.execute(
         select(
@@ -1530,19 +1531,20 @@ def participant_dm_info(session: Session, event_id: str) -> dict[str, Participan
             PodDraftParticipant.display_name,
             Player.display_name,
             Player.discord_id,
+            Player.arena_name,
         )
         .outerjoin(Player, Player.id == PodDraftParticipant.player_id)
         .where(PodDraftParticipant.event_id == event_id)
     ).all()
     info: dict[str, ParticipantDmInfo] = {}
-    for participant_id, dm_name, participant_dn, player_dn, discord_id in rows:
+    for participant_id, dm_name, participant_dn, player_dn, discord_id, player_arena in rows:
         key = normalize_player_name(dm_name) if dm_name else normalize_player_name(participant_dn)
         raw = player_dn or participant_dn
         info[key] = ParticipantDmInfo(
             participant_id=participant_id,
             discord_id=discord_id,
             display_name=strip_arena_suffix(raw) if raw else raw,
-            arena_name=dm_name,
+            arena_name=dm_name if has_arena_suffix(dm_name) else (player_arena or dm_name),
         )
     return info
 
