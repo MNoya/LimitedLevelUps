@@ -1685,20 +1685,6 @@ def scheduled_event_for_message_sync(message_id: str) -> str | None:
         return signal.event_id if signal else None
 
 
-def native_event_ref_by_surface_sync(message_id: str) -> tuple[str, str, str, str] | None:
-    """(native_event_id, guild_id, channel_id, card_message_id) for the native Discord event behind
-    an RSVP surface, so its description tally can be re-synced on a click. None when the signal, its
-    pod event, or the native event id is missing."""
-    with SessionLocal() as session:
-        signal = _scheduled_signal_by_surface(session, message_id)
-        if signal is None or signal.event_id is None:
-            return None
-        event = session.get(PodDraftEvent, signal.event_id)
-        if event is None or event.discord_scheduled_event_id is None:
-            return None
-        return event.discord_scheduled_event_id, signal.guild_id, signal.channel_id, signal.message_id
-
-
 def ondemand_event_name_sync(set_code: str, event_time: datetime) -> str:
     """The `SET Mon Day Slot Pod` name, fixed at creation and never renumbered. The website's `#N`
     milestone is a separate execution-ordered projection in `public_pod_draft_events`, not baked in

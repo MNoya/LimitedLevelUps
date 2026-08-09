@@ -692,7 +692,7 @@ async def post_scheduled_card(
     `content_override` replaces the card's content ping outright — a fired launcher slot's creation
     announcement, carrying its own role mention. `card_body` is a fixed announcement rendered inside
     the embed in place of the RSVP intro, for a championship card that never fires a second table, and
-    `native_body` is its counterpart on the native event, above the tally.
+    `native_body` is its counterpart on the native event, above the signup link.
 
     `opener` is the player who ran `/draft`. It lands on the signal and on the card footer, so an
     out-of-schedule pod shows who organized it. A card a job or the launcher posts leaves it None."""
@@ -730,7 +730,7 @@ async def post_scheduled_card(
     if preseed_yes:
         await asyncio.to_thread(pod_launch.seed_yes_members_sync, signal_id, preseed_yes)
     native_event_id = await _create_native_event(
-        channel, name, event_time, message.jump_url, rosters, native_body)
+        channel, name, event_time, message.jump_url, native_body)
     event_id, created_at, pairing_mode, seating_mode = await asyncio.to_thread(
         _record_scheduled_event, set_code, event_time, name, str(thread.id), native_event_id,
         pairing_mode, seating_mode, description,
@@ -867,8 +867,7 @@ async def _answer_presser(
 
 
 async def _settle_card_rsvp(
-    interaction: discord.Interaction, surface_message_id: str, result: pod_launch.RsvpResult,
-    *, refresh_launcher: bool,
+    interaction: discord.Interaction, result: pod_launch.RsvpResult, *, refresh_launcher: bool,
 ) -> None:
     """Everything an RSVP moves once the presser has an answer: the clicked card, the pod roles and the
     first-pod welcome, thread membership, then everything any roster change moves.
@@ -902,16 +901,15 @@ async def _settle_card_rsvp(
     if result.rsvp in (RSVP_YES, RSVP_MAYBE):
         await _add_member_to_thread(interaction.client, result.state.event_id, interaction.user)
     await settle_roster_change(
-        interaction.client, result, guild=interaction.guild, clicked_message_id=str(interaction.message.id),
-        surface_message_id=surface_message_id, refresh_launcher=refresh_launcher,
+        interaction.client, result, clicked_message_id=str(interaction.message.id),
+        refresh_launcher=refresh_launcher,
     )
     if championship and result.yes_changed:
         notify_seeding_change(interaction.client, result.state.event_id)
 
 
 async def settle_roster_change(
-    bot: commands.Bot, result: pod_launch.RsvpResult, *, guild: discord.Guild | None = None,
-    clicked_message_id: str = "", surface_message_id: str | None = None,
+    bot: commands.Bot, result: pod_launch.RsvpResult, *, clicked_message_id: str = "",
     refresh_launcher: bool = True,
 ) -> "asyncio.Task | None":
     """Everything a roster change moves besides whoever pressed.
@@ -929,45 +927,23 @@ async def settle_roster_change(
     await refresh_or_repost_roster_reminder(event_id)
     return run_detached(
         _settle_beyond_the_thread(
-            bot, result, event_id, guild=guild, clicked_message_id=clicked_message_id,
-            surface_message_id=surface_message_id, refresh_launcher=refresh_launcher,
+            bot, result, event_id, clicked_message_id=clicked_message_id,
+            refresh_launcher=refresh_launcher,
         ),
         f"the roster change on pod {event_id}",
     )
 
 
-NATIVE_TALLY_QUIET_MIN = 10
-
-_native_tally_touched: dict[str, datetime] = {}
-
-
-def _native_tally_due(event_id: str) -> bool:
-    """Whether the pod's native event has gone long enough without an edit to be worth another one."""
-    now = datetime.now(timezone.utc)
-    last = _native_tally_touched.get(event_id)
-    if last is not None and now - last < timedelta(minutes=NATIVE_TALLY_QUIET_MIN):
-        return False
-    _native_tally_touched[event_id] = now
-    return True
-
-
 async def _settle_beyond_the_thread(
     bot: commands.Bot, result: pod_launch.RsvpResult, event_id: str, *,
-    guild: discord.Guild | None, clicked_message_id: str, surface_message_id: str | None,
-    refresh_launcher: bool,
+    clicked_message_id: str, refresh_launcher: bool,
 ) -> None:
     """The rest of what a roster change moves: the channel card, the standing nudges, the lobby's
     capacity, the next pod, and the launcher board. The board is repainted after staging, since staging
-    may have just created the pod it has to show.
-
-    The native event's tally rides a quiet window rather than every press. Editing a guild scheduled
-    event is one of the slowest and most rate-limited calls Discord has, and the Events tab is a
-    discovery surface nobody watches count up."""
+    may have just created the pod it has to show."""
     await _sync_other_surfaces(
         bot, event_id, clicked_message_id, result.rosters, result.roster_interests,
     )
-    if surface_message_id is not None and _native_tally_due(event_id):
-        await _sync_native_event_tally(guild, surface_message_id, result.rosters)
     yes = result.rosters.get(RSVP_YES) or []
     maybe = result.rosters.get(RSVP_MAYBE) or []
     await refresh_underfill_nudge_for_event(bot, event_id, len(yes), len(maybe))
@@ -1205,75 +1181,46 @@ async def fetch_channel(bot: commands.Bot, channel_id: str) -> discord.abc.Messa
         return None
 
 
-def native_event_description(
-    rosters: dict[str, list[str]], jump_url: str, body: str | None = None,
-) -> str:
-    """The native event's body: an optional announcement over a live RSVP tally over the card's link.
-    Discord exposes no read/write interest API for a guild scheduled event, so this text is the only
-    surface that can carry the counts the card holds."""
-    tally = " ".join(
-        f"{RSVP_EMOJI[state]} {len(rosters.get(state) or [])}" for state in (RSVP_YES, RSVP_MAYBE)
-    )
-    sections = [tally, NATIVE_EVENT_SIGNUP.format(jump_url=jump_url)]
+def native_event_description(jump_url: str, body: str | None = None) -> str:
+    """The native event's body: an optional announcement over the card's link. Static by design. Discord
+    exposes no interest API for a guild scheduled event, so a live roster there could only be a tally the
+    bot re-renders, and editing a scheduled event is one of the slowest and most rate-limited calls
+    Discord has. The card holds the roster; the event holds the banner and a way back to the card."""
+    sections = [NATIVE_EVENT_SIGNUP.format(jump_url=jump_url)]
     if body:
         sections.insert(0, body)
     return "\n\n".join(sections)
 
 
-def native_body_from_description(description: str | None) -> str | None:
-    """The announcement a native event already carries, read back off its description so a tally
-    re-render keeps it. The tally and the signup line are the last two blank-line-separated sections,
-    and everything before them is the announcement."""
-    if not description:
-        return None
-    sections = description.split("\n\n")
-    return "\n\n".join(sections[:-2]) or None
+def native_event_window(event_time: datetime) -> tuple[datetime, datetime]:
+    """The native event runs from the pod's confirmation ping to the end of play, so the server's
+    Happening Now banner turns on when players have to be in the thread instead of when the draft is
+    already starting. Never opens in the past, which Discord rejects."""
+    earliest = datetime.now(timezone.utc) + timedelta(minutes=1)
+    start = event_time - timedelta(minutes=REMINDER_LEAD_MIN)
+    return max(start, earliest), event_time + timedelta(hours=EVENT_DURATION_H)
 
 
 async def _create_native_event(
-    channel: discord.TextChannel, name: str, event_time: datetime, jump_url: str,
-    rosters: dict[str, list[str]], body: str | None,
+    channel: discord.TextChannel, name: str, event_time: datetime, jump_url: str, body: str | None,
 ) -> str | None:
     if event_time <= datetime.now(timezone.utc):
         return None
+    start_time, end_time = native_event_window(event_time)
     try:
         native = await channel.guild.create_scheduled_event(
             name=name,
-            start_time=event_time,
-            end_time=event_time + timedelta(hours=EVENT_DURATION_H),
+            start_time=start_time,
+            end_time=end_time,
             entity_type=discord.EntityType.external,
             privacy_level=discord.PrivacyLevel.guild_only,
             location=jump_url,
-            description=native_event_description(rosters, jump_url, body),
+            description=native_event_description(jump_url, body),
         )
     except discord.HTTPException:
         log.warning("could not create the native scheduled event", exc_info=True)
         return None
     return str(native.id)
-
-
-async def _sync_native_event_tally(
-    guild: discord.Guild | None, message_id: str, rosters: dict[str, list[str]],
-) -> None:
-    """Re-render the native event's tally after a click on any RSVP surface. The card stays the
-    canonical roster; this keeps the Events tab's count honest while the tab is still where someone
-    might find the pod. A pod about to open its lobby is past that, and stops paying for the edit."""
-    if guild is None:
-        return
-    ref = await asyncio.to_thread(pod_launch.native_event_ref_by_surface_sync, message_id)
-    if ref is None:
-        return
-    native_event_id, guild_id, channel_id, card_message_id, event_time = ref
-    if not native_event_still_matters(event_time):
-        return
-    jump_url = f"https://discord.com/channels/{guild_id}/{channel_id}/{card_message_id}"
-    try:
-        event_id_int = int(native_event_id)
-        native = guild.get_scheduled_event(event_id_int) or await guild.fetch_scheduled_event(event_id_int)
-        body = native_body_from_description(native.description)
-        await native.edit(description=native_event_description(rosters, jump_url, body))
-    except discord.HTTPException:
-        log.warning(f"could not sync native event tally {native_event_id}", exc_info=True)
 
 
 async def purge_native_events(guild: discord.Guild, bot_user_id: int) -> int:
@@ -1666,13 +1613,11 @@ async def _rename_thread(bot: commands.Bot, thread_id: str | None, name: str) ->
 
 
 def native_event_still_matters(event_time: datetime | None) -> bool:
-    """Whether the native event is still worth an edit.
-
-    It is a discovery surface: somebody browsing the Events tab days out, deciding whether to come. Once
-    the lobby is about to open, everyone it could reach is already in the thread, and a guild scheduled
-    event is one of the slowest and most rate-limited things Discord lets a bot touch. Moving the event
-    to a new time is the exception and goes through its own path, since that is the event itself
-    changing rather than a tally on it."""
+    """Whether the native event has yet to open its window. It is a discovery surface: somebody browsing
+    the Events tab days out, deciding whether to come. Once the banner is up everyone it could reach is
+    already in the thread, and a guild scheduled event is one of the slowest and most rate-limited things
+    Discord lets a bot touch. Moving the event to a new time is the exception and goes through its own
+    path, since that is the event itself changing."""
     if event_time is None:
         return False
     return event_time - datetime.now(timezone.utc) > timedelta(minutes=REMINDER_LEAD_MIN)
@@ -1702,7 +1647,8 @@ async def _update_native_event(
         return
     try:
         native = await guild.fetch_scheduled_event(int(native_event_id))
-        await native.edit(start_time=new_time, end_time=new_time + timedelta(hours=EVENT_DURATION_H))
+        start_time, end_time = native_event_window(new_time)
+        await native.edit(start_time=start_time, end_time=end_time)
     except discord.HTTPException:
         log.warning(f"postpone: could not move native event {native_event_id}", exc_info=True)
 

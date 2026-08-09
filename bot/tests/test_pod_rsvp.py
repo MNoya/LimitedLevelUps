@@ -10,8 +10,6 @@ from bot.commands.pod_rsvp import (
     POD_CAPACITY,
     TIME_LABEL,
     build_rsvp_embed,
-    native_body_from_description,
-    native_event_description,
     parse_new_time,
     refresh_roster_fields,
 )
@@ -432,20 +430,6 @@ def test_parse_new_time_rejects_a_past_discord_timestamp():
 
 
 JUMP_URL = "https://discord.com/channels/1/2/3"
-
-
-@pytest.mark.parametrize(
-    "body",
-    [None, "one paragraph", "two\n\nparagraphs", "a line\nand another\n\nafter a break"],
-)
-def test_a_tally_re_render_keeps_the_announcement(body):
-    posted = native_event_description({RSVP_YES: ["a"]}, JUMP_URL, body)
-
-    carried = native_body_from_description(posted)
-    resynced = native_event_description({RSVP_YES: ["a", "b"]}, JUMP_URL, carried)
-
-    assert carried == body
-    assert native_body_from_description(resynced) == body
 
 
 @pytest.mark.parametrize("hours", [-3, 3])
