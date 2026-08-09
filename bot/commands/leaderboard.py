@@ -25,9 +25,9 @@ from bot.models import DraftEvent, LeaderboardMessage, MagicSet, Player, PlayerS
 from bot.scoring import (
     DEFAULT_QUEUE_GROUPS, QueueGroup, boxes_for_event, compute_score, pod_points, supported_formats,
 )
+from bot.services.active_set import resolve_board_set
 from bot.services.pod_deck_color import PAIR_EMOJI_NAME
 from bot.services.pod_drafts import pod_summary_by_set_for_player
-from bot.services.active_set import resolve_active_set
 from bot.services.pod_format import PEASANT_CODE, PEASANT_LABEL
 from bot.services.self_reported_events import rank_self_reported_events
 from bot.sets import (
@@ -1110,7 +1110,7 @@ class _FilterButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction) -> None:
         user_id = str(interaction.user.id)
         msg_id = str(interaction.message.id)
-        set_code = active_set_code()
+        set_code: str | None = None
         format_value: str | None = None
         color_value: str | None = None
         with SessionLocal() as session:
@@ -1123,6 +1123,9 @@ class _FilterButton(discord.ui.Button):
                     if ms is not None:
                         set_code = ms.code
                 format_value, color_value = decode_filter(tracked.filter_type, tracked.filter_value)
+            if set_code is None:
+                board = resolve_board_set(session)
+                set_code = board.code if board is not None else active_set_code()
             embed = _render_ephemeral_board(session, set_code, format_value, color_value, user_id)
 
         if embed is None:
@@ -1859,6 +1862,7 @@ class Leaderboard(commands.Cog):
         await interaction.response.defer()
 
         with SessionLocal() as session:
+            board_set = _current_set(session)
             if cube_board is not None:
                 magic_set = session.execute(
                     select(MagicSet).where(MagicSet.code == CUBE_CODE)
@@ -1868,7 +1872,7 @@ class Leaderboard(commands.Cog):
                     select(MagicSet).where(func.upper(MagicSet.code) == set.upper())
                 ).scalar_one_or_none()
             else:
-                magic_set = _current_set(session)
+                magic_set = board_set
 
             if magic_set is None:
                 msg = (
@@ -1900,8 +1904,8 @@ class Leaderboard(commands.Cog):
 
         # A specific past set is a post-and-forget snapshot: send it once, no
         # tracking row (so !refresh skips it) and no cycle button (cycling needs
-        # the tracking row). The active set keeps the tracked, refreshable path.
-        if magic_set.code != active_set_code():
+        # the tracking row). The board set keeps the tracked, refreshable path.
+        if board_set is None or magic_set.code != board_set.code:
             await interaction.followup.send(
                 embed=embed,
                 view=render_view(
@@ -1987,7 +1991,7 @@ async def setup(bot: commands.Bot) -> None:
 
 
 def _current_set(session: Session) -> MagicSet | None:
-    return resolve_active_set(session)
+    return resolve_board_set(session)
 
 
 _WUBRG = "WUBRG"

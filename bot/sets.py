@@ -1,10 +1,15 @@
 """Source of truth for Magic set metadata and which set is currently active.
 
-The active leaderboard set is derived from today's date by ``active_set_code`` —
-no constant to flip and no redeploy to rotate. Adding a set to ``ALL_SETS`` with
-its Arena dates and pushing to master is all a rotation takes; the board flips on
-the new set's ``start_date`` on its own. This mirrors the ``public_sets`` view the
-frontend reads, so bot and site agree on the boundary.
+The active set is derived from today's date by ``active_set_code`` — no constant to
+flip and no redeploy to rotate. Adding a set to ``ALL_SETS`` with its Arena dates and
+pushing to master is all a rotation takes; the set turns over on its ``start_date`` on
+its own. This is the set Arena is drafting, which is what pods, the refresh window, the
+championship and the format schedule follow.
+
+The leaderboard board is a separate question and runs ahead of this: players hold cards
+days before the Arena drop, so the board belongs to the set results exist for. That lives
+in ``bot.services.active_set.resolve_board_set`` because it needs the database, and the
+``public_sets`` view computes the same answer for the site.
 
 Dates are MTG Arena release dates (not tabletop). The newest set's ``end_date``
 holds the anticipated rotation date based on the next set's announced launch;
@@ -151,9 +156,9 @@ MTGO_FLASHBACK_SETS: dict[str, str] = {
 
 
 def active_set_code(when: datetime | None = None) -> str:
-    """Leaderboard set code at an instant, mirroring the ``public_sets`` view: a set with an
-    ``end_date`` whose window holds the instant, where the window runs from noon ET on
-    ``start_date`` to noon ET the day after ``end_date`` (i.e. until the successor's release).
+    """Set code Arena is drafting at an instant: a set with an ``end_date`` whose window holds the
+    instant, where the window runs from noon ET on ``start_date`` to noon ET the day after
+    ``end_date`` (i.e. until the successor's release).
     Overlapping historical ranges (alchemy/masters sets nested inside a main set) resolve to the
     latest-started match; if no window holds the instant, the newest set already released wins so
     callers always get a real code."""

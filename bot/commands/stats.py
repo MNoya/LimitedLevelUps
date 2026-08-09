@@ -9,6 +9,7 @@ from discord.ext import commands
 from bot import audit, emojis
 from bot.commands import descriptions as desc
 from bot.database import SessionLocal
+from bot.services.active_set import resolve_board_set
 from bot.services.leaderboard_visibility import set_opt_in
 from bot.services.player_stats import StatsData, process_stats, profile_url, render_embed
 from bot.sets import ALL_SETS, active_set_code
@@ -83,7 +84,7 @@ class Stats(commands.Cog):
         await interaction.response.defer(ephemeral=ephemeral, thinking=True)
         audit.event("stats_invoked", user_id=user_id, player=player, set=set)
 
-        set_code = active_set_code()
+        set_code: str | None = None
         if set is not None:
             seed = SET_CODES.get(set.upper())
             if seed is None:
@@ -91,11 +92,14 @@ class Stats(commands.Cog):
                 return
             set_code = seed.code
 
+        with SessionLocal() as session:
+            if set_code is None:
+                board = resolve_board_set(session)
+                set_code = board.code if board is not None else active_set_code()
+            data = process_stats(session, player_name=player, viewer_discord_id=user_id, set_code=set_code)
+
         target = player or "self"
         logger.info(f"stats: {username} looked up {target!r} for {set_code}")
-
-        with SessionLocal() as session:
-            data = process_stats(session, player_name=player, viewer_discord_id=user_id, set_code=set_code)
 
         if data is None:
             logger.info(f"stats: not found for {target!r}")

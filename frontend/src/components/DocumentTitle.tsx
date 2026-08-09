@@ -17,7 +17,9 @@ export function DocumentTitle() {
 
   const [section, ...rest] = segments;
   const playerSlug = playerSlugFrom(section, rest);
-  const setForProfile = (rest[0] && rest[0] !== "player" ? rest[0].toUpperCase() : undefined) ?? ACTIVE_SET_CODE;
+  const liveSetCode = (sets ?? []).find((s) => s.isActive)?.code;
+  const setForProfile =
+    (rest[0] && rest[0] !== "player" ? rest[0].toUpperCase() : undefined) ?? liveSetCode ?? ACTIVE_SET_CODE;
   const { data: profile } = usePlayerProfile(playerSlug, setForProfile);
 
   const pageTitle = resolvePageTitle(segments, profile?.displayName, setCodes);
