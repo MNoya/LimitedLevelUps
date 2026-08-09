@@ -47,7 +47,7 @@ export function P0P1Hero({
         </div>
         {isPastDeadline && (
           <div className="w-full mt-2">
-            <P0P1CountdownBar from={featured.votingDeadline} to={featured.scoringDate} />
+            <P0P1CountdownBar from={featured.votingDeadline} to={featured.scoringDate} phase={phase} />
           </div>
         )}
       </div>
