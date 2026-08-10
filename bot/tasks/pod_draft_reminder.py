@@ -15,9 +15,8 @@ import discord
 from discord.ext import commands
 from sqlalchemy import select
 
-from bot import emojis
 from bot.database import SessionLocal
-from bot.discord_helpers import BLANK_LINE
+from bot.discord_helpers import BLANK_LINE, EM_SPACE, NBSP
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
 from bot.services.championship_roster_card import (
     ChampionshipRoster,
@@ -26,28 +25,37 @@ from bot.services.championship_roster_card import (
 )
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_reminder_copy import (
+    ATTENDANCE_HOLD,
+    ATTENDANCE_HOLD_MAYBE,
     LOBBY_OPEN,
     LOBBY_OPEN_HEADLINE,
+    LOBBY_OPEN_TABLE,
     ROSTER_REMINDER_HEADLINE,
+    ROSTER_REMINDER_HEADLINE_COUNT,
     ROSTER_REMINDER_MARK,
     ROSTER_REMINDER_TITLE,
 )
 from bot.commands.messages import (
+    MSG_CONFIRM_BUTTON,
     MSG_CONFIRM_LOCK_IN,
-    MSG_CONFIRM_LOCK_IN_TABLE,
-    MSG_CONFIRM_SIGNUP_BUTTON,
-    MSG_CONFIRM_SIGNUP_TALLY,
-    MSG_CONFIRM_SIGNUP_TALLY_MAYBE,
+    MSG_CONFIRM_MORE_TO_ADD,
+    MSG_CONFIRM_MORE_TO_FILL,
+    MSG_CONFIRM_MORE_TO_SPLIT,
+    MSG_CONFIRM_TALLY_ALL,
+    MSG_CONFIRM_TALLY_CONFIRMED,
+    MSG_JOIN_DRAFT_BUTTON,
 )
 from bot.services.pod_confirm import (
     CONFIRMED,
+    MIN_TABLE,
+    card_tables,
     Attendance,
     TablePlan,
-    card_plan,
+    seating_plan,
     plan_tables,
 )
 from bot.services.pod_roster_fields import add_roster_fields, add_table_plan_fields
-from bot.services.pod_signals import RSVP_MAYBE, RSVP_YES
+from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
 
 
 REMINDER_LEAD_MIN = 10
@@ -55,6 +63,7 @@ ROSTER_REMINDER_LEAD_MIN = 60
 ROSTER_SEARCH_LIMIT = 50
 ROSTER_CATCHUP_DELAY_S = 30
 BURIED_AFTER_MESSAGES = 10
+WIDE_GAP = EM_SPACE * 4
 
 _messages_since_card: dict[int, int] = {}
 
@@ -180,7 +189,7 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
     loaded = await asyncio.to_thread(_load_event_for_roster_by_id, event_id)
     if loaded is None:
         return None
-    thread_id, event_time, event_name, status = loaded
+    thread_id, event_time, event_name, status, set_code = loaded
     if status != "pending":
         log.info(f"repost_roster_reminder: event {event_id} is {status}; skipping")
         return None
@@ -190,7 +199,9 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
         return None
     rosters, roster_interests = await event_rsvp_rosters(event_id)
     championship_roster = await asyncio.to_thread(championship_roster_for_event_sync, event_id, rosters)
-    embed = reminder_embed(event_name, event_time, rosters, roster_interests, championship_roster)
+    embed = reminder_embed(
+        event_name, event_time, rosters, roster_interests, championship_roster, set_code,
+    )
     view = _build_reminder_view(event_id, championship_roster)
     existing = await _find_roster_reminder(thread, event_id) or await _scan_for_roster_reminder(thread)
     try:
@@ -243,19 +254,19 @@ async def refresh_roster_reminder_for_event(event_id: str) -> bool:
     loaded = await asyncio.to_thread(_load_event_for_roster_by_id, event_id)
     if loaded is None:
         return True
-    thread_id, event_time, event_name, status = loaded
+    thread_id, event_time, event_name, status, set_code = loaded
     if status != "pending":
         return True
     rosters, roster_interests = await event_rsvp_rosters(event_id)
     return await _edit_roster_reminder(
-        event_id, thread_id, event_name, event_time, rosters, roster_interests,
+        event_id, thread_id, event_name, event_time, rosters, roster_interests, set_code,
     )
 
 
 def reminder_embed(
     event_name: str, event_time: datetime, rosters: dict[str, list[str]],
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None,
-    championship_roster: ChampionshipRoster | None,
+    championship_roster: ChampionshipRoster | None, set_code: str = "",
 ) -> discord.Embed:
     """The roster as the tables it makes, at every size.
 
@@ -266,7 +277,8 @@ def reminder_embed(
     if championship_roster is not None:
         return build_roster_embed(event_name, event_time, rosters, roster_interests, championship_roster)
     attendance = attendance_of(rosters)
-    return build_table_plan_embed(event_name, event_time, attendance, card_plan(attendance))
+    plan, seat_pending = card_tables(attendance)
+    return build_table_plan_embed(event_name, event_time, attendance, plan, seat_pending, set_code)
 
 
 def _build_reminder_view(
@@ -285,6 +297,7 @@ async def _edit_roster_reminder(
     event_id: str, thread_id: int, event_name: str, event_time: datetime,
     rosters: dict[str, list[str]],
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None,
+    set_code: str = "",
 ) -> bool:
     thread = await _fetch_thread(thread_id)
     if thread is None:
@@ -293,7 +306,9 @@ async def _edit_roster_reminder(
     if reminder is None:
         return False
     championship_roster = await asyncio.to_thread(championship_roster_for_event_sync, event_id, rosters)
-    embed = reminder_embed(event_name, event_time, rosters, roster_interests, championship_roster)
+    embed = reminder_embed(
+        event_name, event_time, rosters, roster_interests, championship_roster, set_code,
+    )
     view = _build_reminder_view(event_id, championship_roster)
     try:
         await reminder.edit(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
@@ -309,12 +324,13 @@ def load_event_thread_id_for_roster_sync(event_id: str) -> int | None:
     return loaded[0] if loaded is not None else None
 
 
-def _load_event_for_roster_by_id(event_id: str) -> tuple[int, datetime, str, str] | None:
+def _load_event_for_roster_by_id(event_id: str) -> tuple[int, datetime, str, str, str] | None:
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, event_id)
         if event is None:
             return None
-        return int(event.discord_thread_id), event.event_time, event.name, event.socket_status
+        return (int(event.discord_thread_id), event.event_time, event.name, event.socket_status,
+                event.set_code)
 
 
 def _remember_confirm_card_sync(event_id: str, message_id: str | None) -> None:
@@ -410,10 +426,12 @@ def signal_rsvps_sync(event_id: str) -> tuple[list[str], list[str]] | None:
 def signal_rsvp_rosters_sync(
     event_id: str,
 ) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, tuple[str, ...]]]] | None] | None:
-    """Interest-carrying twin of `signal_rsvps_sync`: Yes / Maybe rosters off the signal that created
+    """Interest-carrying twin of `signal_rsvps_sync`: Yes / Maybe / No rosters off the signal that created
     the pod, each member paired with the format interest they signed up with, so the reminder can group
     by format the same way the card does. The interests are None for a format-locked pod, which renders
-    a plain Yes / Maybe pair; None overall when the pod has no signal."""
+    a plain Yes / Maybe pair; None overall when the pod has no signal.
+
+    A decline outranks any confirmation the row still carries, matching `attendance_for_event_sync`."""
     with SessionLocal() as session:
         signal = session.execute(
             select(PodSignal).where(PodSignal.event_id == event_id)
@@ -429,73 +447,161 @@ def signal_rsvp_rosters_sync(
             .order_by(PodSignalMember.created_at)
         ).all()
         format_locked = signal.format_locked
-    interests: dict[str, list[tuple[str, tuple[str, ...]]]] = {RSVP_YES: [], RSVP_MAYBE: [], CONFIRMED: []}
+    interests: dict[str, list[tuple[str, tuple[str, ...]]]] = {
+        RSVP_YES: [], RSVP_MAYBE: [], RSVP_NO: [], CONFIRMED: [],
+    }
     for state, name, interest, confirmed_at in rows:
-        bucket = CONFIRMED if confirmed_at is not None else state
+        if state == RSVP_NO:
+            bucket = RSVP_NO
+        else:
+            bucket = CONFIRMED if confirmed_at is not None else state
         if bucket in interests:
             interests[bucket].append((name, tuple(interest or ())))
     rosters = {state: [name for name, _ in members] for state, members in interests.items()}
     return rosters, (None if format_locked else interests)
 
 
-def build_lobby_open_body(draftmancer_url: str, mention_block: str) -> str:
-    """The lobby-open post from open_ondemand_lobby. The lobby is joinable the moment the link posts
-    and the start is gated on the ready-check, so the headline is 'Lobby opened', with no countdown."""
+def build_lobby_open_body(draftmancer_url: str, mention_block: str, numbered: bool = False) -> str:
+    """The lobby-open post from open_ondemand_lobby.
+
+    Every table drafts in a thread holding only its own players, so the link is safe to post: nobody
+    reading it belongs at another table. A split pod names the button too, since the two doors differ
+    once there are several rooms — the link opens this table, the button hands back a personal link and
+    routes to whichever table still has a seat.
+
+    Nothing here explains Arena names. That is caught downstream by the lobby card and the ready check,
+    so saying it here would spend two lines on every pod for something one player does occasionally."""
     mentions = f"\n\n{mention_block}" if mention_block else ""
-    body = LOBBY_OPEN.format(
-        draftmancer=emojis.get("draftmancer"), headline=LOBBY_OPEN_HEADLINE, url=draftmancer_url,
-        mentions=mentions,
-    )
+    if numbered:
+        body = LOBBY_OPEN_TABLE.format(
+            headline=LOBBY_OPEN_HEADLINE, url=draftmancer_url,
+            button=MSG_JOIN_DRAFT_BUTTON, mentions=mentions,
+        )
+    else:
+        body = LOBBY_OPEN.format(
+            headline=LOBBY_OPEN_HEADLINE, url=draftmancer_url, mentions=mentions,
+        )
     return f"{body}\n{BLANK_LINE}"
 
 
+MENTIONS_PER_ROW = 8
+
+
+def build_attendance_hold_body(count: int, yes: list[str], maybe: list[str]) -> str:
+    """The message above the roster card when a pod holds at T-10, and the only ping the hold sends.
+
+    Mentions wrap at eight a row, since a line of twenty is a wall nobody finds their own name in. Maybes
+    get rows of their own and are pinged like everyone else: a maybe usually means someone who will play
+    if the room needs them, and this is when the room finds out whether it does."""
+    rows = _mention_rows(yes)
+    rows += [ATTENDANCE_HOLD_MAYBE.format(mentions=row) for row in _mention_rows(maybe)]
+    block = "\n".join(rows)
+    return ATTENDANCE_HOLD.format(
+        count=count, button=MSG_CONFIRM_BUTTON, gap=NBSP * 3,
+        mentions=f"\n\n{block}" if block else "",
+    )
+
+
+def _mention_rows(mentions: list[str]) -> list[str]:
+    return [
+        " ".join(mentions[start:start + MENTIONS_PER_ROW])
+        for start in range(0, len(mentions), MENTIONS_PER_ROW)
+    ]
+
+
 def attendance_of(rosters: dict[str, list[str]]) -> Attendance:
-    """The reminder's roster read as the three answers the confirmation window cares about."""
+    """The reminder's roster read as the four answers the confirmation window cares about."""
     return Attendance(
         confirmed=tuple(rosters.get(CONFIRMED) or ()),
         yes=tuple(rosters.get(RSVP_YES) or ()),
         maybe=tuple(rosters.get(RSVP_MAYBE) or ()),
+        declined=tuple(rosters.get(RSVP_NO) or ()),
     )
 
 
 def _signup_tally(attendance: Attendance) -> str:
-    """One line of arithmetic the reader would otherwise do by counting columns. Maybes are named only when
-    there are some, since a nil beside a number reads as a problem rather than an absence."""
-    tally = MSG_CONFIRM_SIGNUP_TALLY.format(yes=attendance.expected)
-    if attendance.maybe:
-        tally += MSG_CONFIRM_SIGNUP_TALLY_MAYBE.format(maybe=len(attendance.maybe))
-    return tally
+    """How many have confirmed, which is the one number the columns do not already carry.
+
+    It wears the same ✅ the seat rows wear, so a number in the header and a mark beside a name can never
+    mean different things. The header used to render expected turnout behind a ✅ that meant confirmed one
+    line below, and a pod was started early on the strength of it.
+
+    Pending is not counted here. It has a column with its count in the header, so saying it again above
+    is the same number twice on one card. Empty for a pod nobody has signed up to."""
+    if not attendance.signed_up:
+        return ""
+    if not attendance.yes:
+        return MSG_CONFIRM_TALLY_ALL.format(count=len(attendance.confirmed))
+    return MSG_CONFIRM_TALLY_CONFIRMED.format(count=len(attendance.confirmed))
 
 
-def confirm_ask_line(plan: TablePlan | None = None) -> str:
-    """The ask under the headline. It names a table only when there is more than one to be on, since a pod
-    running a single table has no spot to distinguish and the shorter line is the one people read."""
-    template = MSG_CONFIRM_LOCK_IN_TABLE if plan is not None and plan.splits else MSG_CONFIRM_LOCK_IN
-    return template.format(button=MSG_CONFIRM_SIGNUP_BUTTON)
+def confirm_ask_line() -> str:
+    """The ask under the headline, the same on every pod. It used to name a table on a pod running more
+    than one, which the table columns underneath already show better than a sentence can."""
+    return MSG_CONFIRM_LOCK_IN.format(button=MSG_CONFIRM_BUTTON)
 
 
-def reminder_header(event_name: str, event_time: datetime, attendance: Attendance, plan: TablePlan) -> str:
-    """The two lines every roster card opens with, shared by both shapes so the board of tables and the
-    plain roster read as one surface.
+def reminder_header(
+    event_name: str, event_time: datetime, attendance: Attendance, plan: TablePlan,
+    seat_pending: bool = False,
+) -> str:
+    """The lines the roster card opens with. The headline is the body rather than an embed title, which
+    would sit in its own row and split one sentence across two on a phone.
 
-    The first carries the whole state of the pod: which pod, when it starts, and how many are coming. It
-    is the headline itself rather than an embed title, because a title sits in its own row above the body
-    and splits one sentence across two lines on a phone."""
-    headline = ROSTER_REMINDER_HEADLINE.format(name=event_name, unix=int(event_time.timestamp()))
-    return f"{headline}{_signup_tally(attendance)}\n{confirm_ask_line(plan)}"
+    A pod running one table says how many are coming on that headline and nothing else. There is one
+    table and everybody is on it, so a count broken into confirmed and pending, a line naming the shape
+    and a line asking for the next one are three answers to questions nobody has yet. They appear when
+    the pod is big enough to split, which is when they start deciding something."""
+    unix = int(event_time.timestamp())
+    if seat_pending:
+        headline = ROSTER_REMINDER_HEADLINE_COUNT.format(
+            name=event_name, unix=unix, count=attendance.expected,
+        ) if attendance.expected else ROSTER_REMINDER_HEADLINE.format(name=event_name, unix=unix)
+        return f"{headline}\n{confirm_ask_line()}"
+    lines = [ROSTER_REMINDER_HEADLINE.format(name=event_name, unix=unix), confirm_ask_line()]
+    tally = _signup_tally(attendance)
+    ask = _next_table_ask(attendance, plan)
+    if tally and ask:
+        lines.append(f"{tally}{WIDE_GAP}{ask}")
+    elif tally or ask:
+        lines.append(tally or ask)
+    return "\n".join(lines)
+
+
+def _next_table_ask(attendance: Attendance, plan: TablePlan) -> str:
+    """What the outstanding answers would buy the room, as a number somebody can act on. A maybe counts
+    alongside a pending yes, since anyone the pod has not heard a no from can still confirm.
+
+    Silent on a pod with no table yet, where the empty seats under the header are the same ask drawn
+    rather than counted, and silent when even every outstanding answer would not be enough."""
+    seated = [table for table in plan.tables if table.seated >= MIN_TABLE]
+    if not seated:
+        return ""
+    outstanding = attendance.yes + attendance.maybe
+    if len(plan.tables) > 1 and outstanding:
+        for table in plan.tables:
+            if table.empty_seats:
+                return MSG_CONFIRM_MORE_TO_FILL.format(count=table.empty_seats, size=table.capacity)
+    for more in range(1, len(outstanding) + 1):
+        grown = seating_plan(Attendance(confirmed=attendance.confirmed + outstanding[:more]))
+        if len([table for table in grown.tables if table.seated >= MIN_TABLE]) > len(seated):
+            template = MSG_CONFIRM_MORE_TO_SPLIT if len(seated) == 1 else MSG_CONFIRM_MORE_TO_ADD
+            return template.format(count=more)
+    return ""
 
 
 def build_table_plan_embed(
     event_name: str, event_time: datetime, attendance: Attendance, plan: TablePlan,
+    seat_pending: bool = False, set_code: str = "",
 ) -> discord.Embed:
     """The roster card as a board of tables. Nothing in the body explains the shape, because the columns
     are the shape: a reader sees which table they are on and what it still needs without parsing a
     sentence about it."""
     embed = discord.Embed(
-        description=reminder_header(event_name, event_time, attendance, plan),
+        description=reminder_header(event_name, event_time, attendance, plan, seat_pending),
         color=discord.Color.green(),
     )
-    add_table_plan_fields(embed, attendance, plan)
+    add_table_plan_fields(embed, attendance, plan, seat_pending, set_code)
     return embed
 
 

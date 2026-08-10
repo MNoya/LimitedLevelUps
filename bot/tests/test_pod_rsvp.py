@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
 from bot.commands.pod_rsvp import (
     CARD_RSVP_PROMPT,
@@ -15,7 +16,7 @@ from bot.commands.pod_rsvp import (
 )
 from bot.services import pod_team
 from bot.services.pod_team_board import TeamBoardMember
-from bot.models import PodDraftEvent, PodSignal
+from bot.models import PodDraftEvent, PodSignal, PodSignalMember
 from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services.pod_drafts import set_format_interests
@@ -109,15 +110,27 @@ def test_yes_changed_flags_only_yes_membership_transitions(session, scheduled_si
     assert result.yes_changed is expected
 
 
-def test_a_no_click_removes_the_signup_from_every_roster(session, scheduled_signal):
-    set_rsvp(session, MESSAGE_ID, "u1", "Nissa Revane", pod_signals.RSVP_YES)
+def test_a_no_click_declines_without_dropping_the_confirmation(session, scheduled_signal):
+    set_rsvp(session, MESSAGE_ID, "u1", "Nissa Revane", pod_signals.RSVP_YES, confirming=True)
 
     result = set_rsvp(session, MESSAGE_ID, "u1", "Nissa Revane", pod_signals.RSVP_NO)
 
     assert not result.joined
-    assert result.rsvp is None
-    assert all("Nissa Revane" not in names for names in result.rosters.values())
+    assert result.rosters[pod_signals.RSVP_NO] == ["Nissa Revane"]
+    assert result.rosters[pod_signals.RSVP_YES] == []
     assert result.state.count == 0
+    assert _signup(session, "u1").confirmed_at is None
+
+
+def test_signing_up_after_a_decline_keeps_the_original_signup(session, scheduled_signal):
+    set_rsvp(session, MESSAGE_ID, "u1", "Nissa Revane", pod_signals.RSVP_YES)
+    signup_id = _signup(session, "u1").id
+
+    set_rsvp(session, MESSAGE_ID, "u1", "Nissa Revane", pod_signals.RSVP_NO)
+    result = set_rsvp(session, MESSAGE_ID, "u1", "Nissa Revane", pod_signals.RSVP_YES)
+
+    assert result.rosters[pod_signals.RSVP_YES] == ["Nissa Revane"]
+    assert _signup(session, "u1").id == signup_id
 
 
 def test_expired_signal_refuses_without_mutating(session, scheduled_signal):
@@ -455,3 +468,9 @@ def test_closing_a_registered_embed_without_a_time_keeps_only_its_heading():
     assert closed.description == (open_embed.description or "").split("\n", 1)[0]
     assert closed.description.startswith("###")
     assert len(closed.fields) == len(open_embed.fields)
+
+
+def _signup(session, discord_user_id: str) -> PodSignalMember:
+    return session.execute(
+        select(PodSignalMember).where(PodSignalMember.discord_user_id == discord_user_id)
+    ).scalar_one()

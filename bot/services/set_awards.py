@@ -33,8 +33,6 @@ ET = ZoneInfo("America/New_York")
 RANK_TIERS = ("Bronze", "Silver", "Gold", "Platinum", "Diamond", "Mythic")
 MYTHIC_INDEX = RANK_TIERS.index("Mythic")
 CLIMB_TIER_WEIGHT = 100
-BO1_FORMATS = frozenset({"PremierDraft", "QuickDraft"})
-
 QUICK_GROUP_LABEL = "Quick"
 QUICK_TROPHY_WEIGHT = 0.75
 QUICK_FORMATS = frozenset(

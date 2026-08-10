@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections.abc import Sequence
 
 import discord
 from discord import ui
@@ -24,13 +25,17 @@ from bot.commands.messages import (
     MSG_DM_PREF_OFF_TITLE,
     MSG_DM_PREF_ON_BODY,
     MSG_DM_PREF_ON_TITLE,
+    MSG_DM_ON_POD,
+    MSG_DM_OTHER_PODS,
     MSG_DM_RSVP_MAYBE,
+    MSG_DM_TALLY,
     MSG_DM_RSVP_YES,
 )
 from bot.database import SessionLocal
 from bot.discord_helpers import BLANK_LINE, fetch_dm_user
 from bot.services.ping_roles import build_link_arena_modal, format_join_line
 from bot.services.pod_drafts import dm_draft_link_enabled, player_arena_handle
+from bot.services.pod_staging import FamilyPod, pod_numeral
 
 
 log = logging.getLogger(__name__)
@@ -52,27 +57,85 @@ async def try_dm(bot, discord_id: str, body: str, view: discord.ui.View | None =
     except discord.Forbidden:
         log.info(f"[link-dm] DMs closed for {discord_id}")
         return False
+    except discord.NotFound:
+        log.info(f"[link-dm] no such user {discord_id}")
+        return False
     except discord.HTTPException:
         log.warning(f"[link-dm] send failed for {discord_id}", exc_info=True)
         return False
 
 
 def format_thread_ref(thread) -> str:
-    """The event thread as a masked link plus the manat lookup emoji."""
-    emoji = emojis.get("manat")
-    link = f"[**{thread.name}**]({thread.jump_url})"
+    """The event thread as a masked link plus the manat lookup emoji.
+
+    Masked rather than a bare URL: a thread that archives leaves a raw link looking broken, while the
+    name stays readable whatever happens to the thread behind it."""
+    return thread_link(thread.name, thread.jump_url, decorated=True)
+
+
+KEYCAP_RE = re.compile(r"[\u0030-\u0039]\ufe0f\u20e3")
+
+
+def plain_link_text(name: str) -> str:
+    """A thread name safe to put inside a masked link. Discord renders a link whose text carries a keycap
+    emoji as broken, so the numeral is stripped and named beside the link instead."""
+    return KEYCAP_RE.sub("", name).strip()
+
+
+def thread_link(name: str, url: str, *, decorated: bool = False) -> str:
+    """A thread as bold underlined link text carrying its name, with any numeral taken out."""
+    link = f"[**__{plain_link_text(name)}__**]({url})"
+    emoji = emojis.get("manat") if decorated else None
     return f"{link} {emoji}" if emoji else link
+
+
+def pod_thread_link(guild_id: int, pod: FamilyPod) -> str:
+    """One pod of a family as its numeral beside a link to its thread. Built from ids rather than a
+    fetched channel, so a DM naming three pods costs no Discord calls."""
+    url = f"https://discord.com/channels/{guild_id}/{pod.thread_id}"
+    return f"{pod_numeral(pod.index)} {thread_link(pod.name, url)}"
+
+
+def multi_pod_context(thread, family: Sequence[FamilyPod]) -> dict:
+    """The DM's multi-pod lines: how many are playing across the night, which pod this DM is for, and
+    where the others are. Empty for a night that runs one pod, which leaves the DM as it has always been.
+
+    The pod being opened is the one whose thread the DM points at, so a recipient reads their own pod
+    named and the others offered, and nobody has to work out which link is theirs."""
+    if len(family) < 2:
+        return {}
+    guild_id = thread.guild.id
+    current = None
+    others: list[str] = []
+    for pod in family:
+        if pod.thread_id == str(thread.id):
+            current = pod
+        else:
+            others.append(pod_thread_link(guild_id, pod))
+    return {
+        "playing": sum(pod.seated for pod in family),
+        "pods": len(family),
+        "pod_ref": pod_thread_link(guild_id, current) if current else "",
+        "other_pods": others,
+    }
 
 
 def build_link_dm(
     *, session_id: str, thread_ref: str, arena_name: str | None, rsvp: str,
+    playing: int = 0, pods: int = 1, other_pods: list[str] | None = None, pod_ref: str = "",
 ) -> tuple[str, discord.ui.View]:
     """The DM body and its button view for one recipient. A linked recipient gets a personalized inline
     **Your Link:** line, the join CTA, and the notification toggle; an unlinked recipient gets no link at
     all, only a Link Arena button that produces the personal link in place once clicked. `thread_ref` is
     the masked event-thread link from format_thread_ref."""
-    rsvp_template = MSG_DM_RSVP_YES if rsvp == "yes" else MSG_DM_RSVP_MAYBE
-    rsvp_line = rsvp_template.format(thread=thread_ref)
+    template = MSG_DM_RSVP_YES if rsvp == "yes" else MSG_DM_RSVP_MAYBE
+    rsvp_line = template.format(thread=thread_ref)
+    if pods > 1:
+        rsvp_line += "\n" + MSG_DM_TALLY.format(total=playing, pods=pods)
+        if pod_ref:
+            rsvp_line += "\n" + MSG_DM_ON_POD.format(pod=pod_ref)
+        if other_pods:
+            rsvp_line += "\n" + MSG_DM_OTHER_PODS.format(threads=" ".join(other_pods))
     if arena_name:
         link_body = MSG_DM_LOBBY_LINK.format(rsvp=rsvp_line, join_line=format_join_line(session_id, arena_name))
         body = f"{link_body}\n\n{MSG_DM_NOTIFY_HINT}"
@@ -83,19 +146,23 @@ def build_link_dm(
 
 async def send_lobby_link_dms(
     bot, *, session_id: str, thread, recipients: list[tuple[str, str, str]],
+    family: Sequence[FamilyPod] = (),
 ) -> int:
     """DM the personalized link to opted-in Yes/Maybe recipients. `recipients` is (discord_id,
-    display_name, rsvp); rsvp is 'yes' or 'maybe'. Returns the number delivered."""
+    display_name, rsvp); rsvp is 'yes' or 'maybe'. `family` is every pod running at this start time, which
+    a recipient needs to read their own pod off a night that split. Returns the number delivered."""
     resolved = await asyncio.to_thread(_resolve_recipients, recipients)
     if not resolved:
         return 0
     thread_ref = format_thread_ref(thread)
+    context = multi_pod_context(thread, family)
     sent = 0
     for start in range(0, len(resolved), DM_BATCH_SIZE):
         batch = resolved[start:start + DM_BATCH_SIZE]
         for discord_id, arena_name, rsvp in batch:
             body, view = build_link_dm(
                 session_id=session_id, thread_ref=thread_ref, arena_name=arena_name, rsvp=rsvp,
+                **context,
             )
             if await try_dm(bot, discord_id, body, view):
                 sent += 1

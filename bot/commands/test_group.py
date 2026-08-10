@@ -30,7 +30,7 @@ PRODUCTION_SAFE_TESTS = frozenset({
     "ads", "awards", "cardformat", "champcard", "component", "deckping", "firenudge", "formatschedule",
     "lifecycle", "lockroster", "mockcard", "myset", "named", "overflow", "pollnudge", "queueclosed",
     "p2vote", "rally", "reminder", "reminders", "rolegrant", "rolling", "scribe", "sendoff", "setawards",
-    "teamcard",
+    "tables", "teamcard",
     "thread-intro", "tiebreakers", "underfill", "welcome", "widths",
 })
 

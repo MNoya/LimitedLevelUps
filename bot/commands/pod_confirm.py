@@ -22,19 +22,23 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from bot import audit
+from bot.commands.messages import (
+    MSG_CONFIRM_NOT_A_POD,
+    MSG_CONFIRM_POD_STARTED,
+    MSG_CONFIRM_REPLY,
+    MSG_CONFIRM_REPLY_ALL,
+    MSG_CONFIRM_REPLY_CARD,
+)
 from bot.database import SessionLocal
 from bot.models import PodSignal, PodSignalMember
+from bot.services.pod_confirm import attendance_for_event_sync
 from bot.services.pod_drafts import load_event_id_by_thread_sync, load_event_socket_status_sync
 from bot.services.pod_signals import RSVP_YES
 from bot.tasks.pod_draft_reminder import refresh_or_repost_roster_reminder
 
 
-MSG_CONFIRM_NOT_A_POD = "Run `!confirm` inside a pod draft thread."
-MSG_CONFIRM_POD_STARTED = "This pod has already opened its lobby."
-
 NOTICE_LIFETIME_S = 20
 PRE_LOBBY_STATUSES = ("pending", "reminded")
-CONFIRMED_REACTION = "✅"
 
 
 log = logging.getLogger(__name__)
@@ -62,7 +66,7 @@ async def setup(bot: commands.Bot) -> None:
             await ctx.send(MSG_CONFIRM_NOT_A_POD, delete_after=NOTICE_LIFETIME_S)
             return
         with contextlib.suppress(discord.HTTPException):
-            await ctx.message.add_reaction(CONFIRMED_REACTION)
+            await _replace_standing_reply(ctx, event_id)
         await refresh_or_repost_roster_reminder(event_id)
         audit.event("pod_confirm", user_id=str(ctx.author.id), event_id=event_id)
         log.info(f"confirm: {ctx.author} confirmed for event {event_id}")
@@ -97,3 +101,57 @@ def confirm_seat_sync(event_id: str, discord_id: str, display_name: str) -> bool
                 member.confirmed_at = datetime.now(timezone.utc)
         session.commit()
         return True
+
+
+_standing_replies: dict[str, int] = {}
+
+
+async def _replace_standing_reply(ctx: commands.Context, event_id: str) -> None:
+    """One standing reply per pod, addressed to whoever confirmed last. Every confirm answers the same
+    question, so the previous answer is already wrong. The id rather than the message, which would pin a
+    whole Message per pod for the life of the process. Held in memory: a restart costs one duplicate."""
+    previous = _standing_replies.pop(event_id, None)
+    if previous is not None:
+        with contextlib.suppress(discord.HTTPException):
+            await ctx.channel.get_partial_message(previous).delete()
+    reply = await ctx.reply(
+        await _standing_reply(ctx, event_id), suppress_embeds=True,
+        allowed_mentions=discord.AllowedMentions.none(),
+    )
+    _standing_replies[event_id] = reply.id
+
+
+async def _standing_reply(ctx: commands.Context, event_id: str) -> str:
+    """What the room still needs, said back to whoever just confirmed.
+
+    The press used to be answered with a tick on their own message, which said nothing about the pod and
+    invited everyone else to click the same tick expecting it to count them. This names the players still
+    outstanding instead, and points at the card, so the reply does the chasing the tick could not."""
+    attendance = await asyncio.to_thread(attendance_for_event_sync, event_id)
+    if attendance.yes:
+        lead = MSG_CONFIRM_REPLY.format(
+            confirmed=len(attendance.confirmed), pending=len(attendance.yes),
+            names=", ".join(attendance.yes),
+        )
+    else:
+        lead = MSG_CONFIRM_REPLY_ALL.format(confirmed=len(attendance.confirmed))
+    card_url = await asyncio.to_thread(_confirm_card_url_sync, event_id, ctx.guild.id if ctx.guild else 0)
+    if card_url is None:
+        return lead
+    return f"{lead}\n{MSG_CONFIRM_REPLY_CARD.format(url=card_url)}"
+
+
+def _confirm_card_url_sync(event_id: str, guild_id: int) -> str | None:
+    """A jump link to the roster card this pod is confirming against, or None when it has no card to
+    point at, which is every pod whose card predates a restart."""
+    with SessionLocal() as session:
+        signal = session.execute(
+            select(PodSignal.confirm_card_message_id, PodSignal.discussion_thread_id)
+            .where(PodSignal.event_id == event_id)
+        ).first()
+        if signal is None:
+            return None
+        message_id, thread_id = signal
+        if not message_id or not thread_id:
+            return None
+        return f"https://discord.com/channels/{guild_id}/{thread_id}/{message_id}"

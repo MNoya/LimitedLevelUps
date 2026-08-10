@@ -20,24 +20,28 @@ from bot.commands.messages import (
 )
 from bot.database import SessionLocal
 from bot.models import PodSignal, PodSignalMember
-from bot.services.pod_signals import RSVP_MAYBE, RSVP_YES
+from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
 
 
 CONFIRM_TRIGGER_YES = 8
 CONFIRM_WINDOW_MINUTES = 60
 POD_SIZES = (8, 6, 10)
-RECRUITABLE_REMAINDER = 5
+SESSION_SEATS = max(POD_SIZES)
+MIN_TABLE = min(POD_SIZES)
 CONFIRMED = "confirmed"
 
 
 @dataclass(frozen=True)
 class Attendance:
-    """The three answers a signup can be holding an hour out. Saying they cannot make it deletes the
-    signup, so anyone who dropped is absent from all three."""
+    """The answers a signup can be holding an hour out.
+
+    A decline is kept rather than deleted, so someone who pressed Leave by mistake keeps the signup time
+    that orders them into a seat when they press Sign Up again."""
 
     confirmed: tuple[str, ...] = ()
     yes: tuple[str, ...] = ()
     maybe: tuple[str, ...] = ()
+    declined: tuple[str, ...] = ()
 
     @property
     def expected(self) -> int:
@@ -52,6 +56,11 @@ class Attendance:
     @property
     def answered(self) -> bool:
         return bool(self.confirmed)
+
+    def as_if_all_confirmed(self) -> "Attendance":
+        """The same pod with every outstanding Yes answered, which is the shape the card promises the room
+        it could still have."""
+        return Attendance(confirmed=self.confirmed + self.yes, maybe=self.maybe, declined=self.declined)
 
 
 def opens_confirmation(attendance: Attendance) -> bool:
@@ -78,7 +87,11 @@ class Table:
 
 @dataclass(frozen=True)
 class TablePlan:
+    """The tables n players make, in the order they can start. `waiting` is the player no table can hold,
+    which happens only at eleven, where a Draftmancer session's ten seats are the whole ceiling."""
+
     tables: tuple[Table, ...]
+    waiting: int = 0
 
     @property
     def splits(self) -> bool:
@@ -90,48 +103,52 @@ class TablePlan:
 
 
 def plan_tables(n: int) -> TablePlan:
-    """Seat n players in pods of 8, 6, or 10.
+    """Seat n players in tables of 8, 6, or 10.
 
-    Each table takes the largest size it can while leaving behind either nobody or a group close enough to
-    a pod to recruit into one. That one rule produces every shape the room wants: twelve splits 6 and 6
-    because a table of 8 would strand four with nowhere to go, thirteen runs 8 and leaves five who need a
-    single player, and thirty becomes 8 + 8 + 8 + 6 rather than three tens.
+    Set the odd player aside, then take the combination of sizes holding the rest that has the **most
+    tables of eight**, breaking ties on the **fewest tables**. Eight is the seat the room wants, so one
+    eight beside a ten beats three sixes at eighteen, and thirty is 8 + 8 + 8 + 6 rather than three tens.
 
-    A remainder of five is one player short of a draft, which this server can usually find. Four or fewer
-    is not close enough to justify shrinking the table that could be playing now.
+    The odd player joins the last table that is not already a ten, which shows on the card as a table of
+    seven or nine with one seat still open: that table either finds one more or drops one. At eleven every
+    table is a ten and there is nobody to join, so the eleventh waits.
+
+    Tables come back in the order they can start, so the players dealt in first land on a table that is
+    already whole and the odd table falls to whoever answered last.
     """
-    sizes: list[int] = []
-    remaining = n
-    while remaining >= min(POD_SIZES):
-        size = _clean_table(remaining)
-        if size is None:
-            size = _largest_pod_within(remaining)
-            sizes.append(size)
-            remaining -= size
-            break
-        sizes.append(size)
-        remaining -= size
-    tables = [Table(seated=size, capacity=size) for size in sizes]
-    return TablePlan(tuple(_absorb(tables, remaining)))
+    if n < min(POD_SIZES):
+        return TablePlan((Table(seated=n, capacity=min(POD_SIZES)),) if n else ())
+    sizes = _even_sizes(n - n % 2)
+    if n % 2 == 0:
+        return TablePlan(tuple(Table(seated=size, capacity=size) for size in sizes))
+    return _seat_odd_player(sizes)
 
 
 POD_AIM = 8
 
 
-def card_plan(attendance: Attendance) -> TablePlan:
-    """The plan as the roster card draws it, which aims at a table of eight until the room says otherwise.
+def seating_plan(attendance: Attendance) -> TablePlan:
+    """The tables this pod will open and who lands on each. The one answer to that question.
 
-    Eight is what the first Draftmancer table is opened for, so a quiet pod shows eight seats with the
-    empty ones visible rather than shrinking to a table of six nobody has decided on. Once the room is big
-    enough to split, the real plan takes over and the sizes are the ones it will actually run."""
-    plan = plan_tables(attendance.expected)
-    if len(plan.tables) == 1 and plan.tables[0].capacity < POD_AIM:
-        return TablePlan((Table(seated=plan.tables[0].seated, capacity=POD_AIM),))
-    return plan
+    Drawn by the card and built by the release; planned separately they disagreed silently, and a player
+    read one plan while a different one opened.
+
+    Only confirmed players count. Not being planned for is not being turned away — seat routing still
+    finds a walk-in a table with room. Planning around them put thirteen people in a room that holds
+    eight."""
+    shape = plan_tables(len(attendance.confirmed))
+    if not shape.tables:
+        return TablePlan((Table(seated=0, capacity=POD_AIM),)) if attendance.expected else shape
+    if len(shape.tables) == 1 and shape.tables[0].capacity < POD_AIM:
+        return TablePlan((Table(seated=shape.tables[0].seated, capacity=POD_AIM),))
+    return shape
 
 
 def attendance_for_event_sync(event_id: str) -> Attendance:
     """The answers currently held by the pod behind this event.
+
+    A decline outranks any confirmation the row still carries, since it is the later statement and the
+    only one that says the player is not coming.
 
     Empty for a pod with no signup roster, which is what a queue or poll pod is, and is why those never
     hold a lobby up: there is nobody the bot could say it is waiting for."""
@@ -146,13 +163,19 @@ def attendance_for_event_sync(event_id: str) -> Attendance:
             .where(PodSignalMember.signal_id == signal.id)
             .order_by(PodSignalMember.created_at)
         ).all()
-    buckets: dict[str, list[str]] = {CONFIRMED: [], RSVP_YES: [], RSVP_MAYBE: []}
+    buckets: dict[str, list[str]] = {CONFIRMED: [], RSVP_YES: [], RSVP_MAYBE: [], RSVP_NO: []}
     for state, name, confirmed_at in rows:
-        bucket = CONFIRMED if confirmed_at is not None else state
+        if state == RSVP_NO:
+            bucket = RSVP_NO
+        elif confirmed_at is not None:
+            bucket = CONFIRMED
+        else:
+            bucket = state
         if bucket in buckets:
             buckets[bucket].append(name)
     return Attendance(
-        confirmed=tuple(buckets[CONFIRMED]), yes=tuple(buckets[RSVP_YES]), maybe=tuple(buckets[RSVP_MAYBE]),
+        confirmed=tuple(buckets[CONFIRMED]), yes=tuple(buckets[RSVP_YES]),
+        maybe=tuple(buckets[RSVP_MAYBE]), declined=tuple(buckets[RSVP_NO]),
     )
 
 
@@ -187,43 +210,142 @@ def confirm_present_players_sync(event_id: str, discord_ids: Iterable[str]) -> i
         return len(members)
 
 
-def _absorb(tables: list[Table], remaining: int) -> list[Table]:
-    """Seat the players the sizes above could not place, so nobody is ever left outside a table.
+def set_confirmations_sync(
+    event_id: str, confirmed_ids: Iterable[str], asked_about: Iterable[str] | None = None,
+) -> tuple[int, int]:
+    """Make the pod's confirmations exactly this set of players, and say how many are confirmed and how
+    many are still pending afterwards.
 
-    A group large enough to be one player short of a draft opens its own table and shows what it needs. A
-    single player instead widens the last table to the next size up, because one person waiting on five
-    more is not a table, it is somebody going home."""
-    if remaining <= 0:
-        return tables
-    if remaining >= RECRUITABLE_REMAINDER:
-        return tables + [Table(seated=remaining, capacity=min(POD_SIZES))]
-    if tables:
-        last = tables[-1]
-        wider = _next_capacity(last.capacity)
-        if wider is not None:
-            return tables[:-1] + [Table(seated=last.seated + remaining, capacity=wider)]
-    return tables + [Table(seated=remaining, capacity=min(POD_SIZES))]
+    The organizer's answer replaces the roster's, both ways: someone they tick is confirmed even if they
+    never pressed anything, and someone they untick goes back to pending even if they did. A person in
+    the room knows things the buttons cannot, which is the whole reason the control exists. Unticking
+    never records a No, since not being counted and saying you are not coming are different answers and
+    only the player can give the second.
+
+    `asked_about` is who the organizer was actually shown, and nobody outside it is touched. A Discord
+    select holds twenty-five options, so a bigger pod is presented a slice of itself, and reading that
+    slice as the whole answer would unconfirm every player past the twenty-fifth for never appearing in
+    a list they were never in. The counts come back for the whole pod either way."""
+    wanted = set(confirmed_ids)
+    scope = set(asked_about) if asked_about is not None else None
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        signal = session.execute(
+            select(PodSignal).where(PodSignal.event_id == event_id)
+        ).scalar_one_or_none()
+        if signal is None:
+            return 0, 0
+        members = session.execute(
+            select(PodSignalMember).where(
+                PodSignalMember.signal_id == signal.id, PodSignalMember.rsvp == RSVP_YES,
+            )
+        ).scalars().all()
+        for member in members:
+            if scope is not None and member.discord_user_id not in scope:
+                continue
+            if member.discord_user_id in wanted:
+                member.confirmed_at = member.confirmed_at or now
+            else:
+                member.confirmed_at = None
+        session.commit()
+        confirmed = sum(1 for member in members if member.confirmed_at is not None)
+        return confirmed, len(members) - confirmed
 
 
-def _next_capacity(capacity: int) -> int | None:
-    for size in sorted(POD_SIZES):
-        if size > capacity:
-            return size
+def card_tables(attendance: Attendance) -> tuple[TablePlan, bool]:
+    """The tables the card draws, and whether players still pending are drawn sitting at them.
+
+    One table seats everybody: there is nowhere else to put them, so a signup in a seat is a fact. Two
+    tables seat only the confirmed, since placing somebody says which room to walk into and the pod
+    cannot say that about a player it has not heard from.
+
+    One table that cannot hold them all seats only the confirmed as well: the overflow column is a
+    waitlist, and somebody who has not answered is Pending rather than waiting for a seat."""
+    whole = seating_plan(attendance.as_if_all_confirmed())
+    if len(whole.tables) <= 1 and not whole.waiting:
+        return whole, True
+    return seating_plan(attendance), False
+
+
+def decline_players_sync(event_id: str, discord_ids: Iterable[str]) -> int:
+    """Record these players as not coming, and say how many moved.
+
+    The organizer's hand on the answer only a player can normally give. Somebody who says in chat that
+    they cannot make it and never presses Leave otherwise stays on the roster holding a seat nobody can
+    take, and the tables are built one player wrong. The row is kept rather than deleted, exactly as a
+    Leave keeps it, so signing back up returns them to the place their original signup earned."""
+    wanted = set(discord_ids)
+    if not wanted:
+        return 0
+    with SessionLocal() as session:
+        signal = session.execute(
+            select(PodSignal).where(PodSignal.event_id == event_id)
+        ).scalar_one_or_none()
+        if signal is None:
+            return 0
+        members = session.execute(
+            select(PodSignalMember).where(
+                PodSignalMember.signal_id == signal.id,
+                PodSignalMember.discord_user_id.in_(wanted),
+            )
+        ).scalars().all()
+        for member in members:
+            member.rsvp = RSVP_NO
+            member.confirmed_at = None
+        session.commit()
+        return len(members)
+
+
+def _even_sizes(total: int) -> list[int]:
+    """Table sizes holding an even `total`, eights first, then sixes, then tens.
+
+    Eights are taken as far as they go before anything else is tried, so the answer is the one with the
+    most of them. What is left over is closed with the fewest tables it can be closed with, which is why
+    sixteen is 8 + 8 and not 10 + 6."""
+    for eights in range(total // 8, -1, -1):
+        rest = _sixes_and_tens(total - 8 * eights)
+        if rest is not None:
+            return [8] * eights + rest
+    return [min(POD_SIZES)]
+
+
+def _sixes_and_tens(total: int) -> list[int] | None:
+    """Sixes and tens summing to `total` in as few tables as possible, or None when no combination does.
+
+    Tens are tried first because a ten is one table where the same players are two sixes, and this only
+    ever runs on what the eights left behind."""
+    for tens in range(total // 10, -1, -1):
+        rest = total - 10 * tens
+        if rest % 6 == 0:
+            return [6] * (rest // 6) + [10] * tens
     return None
+
+
+def _seat_odd_player(sizes: list[int]) -> TablePlan:
+    """Add the odd player to the last table that can hold one more, and move that table to the end.
+
+    The table gaining them is a seat short of a draft, so it carries an open seat and goes last: it is the
+    one that has to find somebody or drop somebody, and the players dealt in first should not be on it."""
+    for index in range(len(sizes) - 1, -1, -1):
+        if sizes[index] < max(POD_SIZES):
+            odd = sizes.pop(index)
+            whole = [Table(seated=size, capacity=size) for size in sizes]
+            return TablePlan(tuple(whole + [Table(seated=odd + 1, capacity=odd + 2)]))
+    return TablePlan(tuple(Table(seated=size, capacity=size) for size in sizes), waiting=1)
 
 
 def shape_phrase(plan: TablePlan) -> str:
     """The plan as the room would say it out loud: how many tables, of what size, and who is left over.
 
-    A table of six is a 3v3 team draft, which is a different night to a table of eight, so it is named as
+    A table of six is a 3v3 team draft, which plays differently to a table of eight, so it is named as
     one when it sits beside a bigger table. Two sixes are just two tables of six, since nothing there
     needs distinguishing."""
     groups: list[tuple[int, int]] = []
     for table in plan.tables:
-        if groups and groups[-1][0] == table.capacity:
-            groups[-1] = (table.capacity, groups[-1][1] + 1)
+        if groups and groups[-1][0] == table.seated:
+            groups[-1] = (table.seated, groups[-1][1] + 1)
         else:
-            groups.append((table.capacity, 1))
+            groups.append((table.seated, 1))
     parts = [_group_phrase(size, count, mixed=len(groups) > 1) for size, count in groups]
     return MSG_SHAPE_JOIN.join(parts)
 
@@ -236,22 +358,3 @@ def _group_phrase(size: int, count: int, *, mixed: bool) -> str:
     return MSG_SHAPE_TABLE_MANY.format(count=count, size=size)
 
 
-def _clean_table(remaining: int) -> int | None:
-    """The size this table should take, or None when every size strands an awkward remainder. Tries 8
-    first, then 6, and only reaches for 10 when it absorbs everyone left."""
-    for size in POD_SIZES:
-        if size > remaining:
-            continue
-        rest = remaining - size
-        if rest == 0 or rest >= RECRUITABLE_REMAINDER:
-            return size
-    return None
-
-
-def _largest_pod_within(remaining: int) -> int:
-    """The biggest real pod these players can form when no size leaves a tidy remainder. Whoever is over
-    waits for one more player rather than shrinking the table that can start now."""
-    for size in (10, 8, 6):
-        if size <= remaining:
-            return size
-    return min(POD_SIZES)

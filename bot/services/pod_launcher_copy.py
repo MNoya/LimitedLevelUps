@@ -24,7 +24,6 @@ POLL_MECHANICS = (
 POLL_FORMAT_SEVERAL = (
     f"{NBSP}{fi.FLEXIBLE_MARKER}{NBSP}Sign up for every pod you would play"
 )
-POLL_CLOSED_LABEL = "🔒 Signups Closed"
 ARCHIVE_INTRO = "### On This Day"
 MARKER_CLOSED = "Closed"
 FINISHED_MARK = "🏆"

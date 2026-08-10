@@ -5,7 +5,9 @@ import pytest
 from sqlalchemy import select
 
 from bot.commands import pod_confirm
+from bot.services import pod_confirm as pod_confirm_service
 from bot.commands.pod_confirm import confirm_seat_sync
+from bot.services.pod_confirm import set_confirmations_sync
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
 from bot.services import pod_signals
 from bot.services.pod_schedule import SCHEDULE_TZ
@@ -28,6 +30,7 @@ def _session_factory(session):
 @pytest.fixture
 def signal(session, monkeypatch):
     monkeypatch.setattr(pod_confirm, "SessionLocal", _session_factory(session))
+    monkeypatch.setattr(pod_confirm_service, "SessionLocal", _session_factory(session))
     starts_at = datetime.now(timezone.utc) + timedelta(hours=1)
     event = PodDraftEvent(
         id=EVENT_ID, set_code="MSH", name="Smoke Pod", event_time=starts_at,
@@ -65,3 +68,31 @@ def test_confirming_twice_keeps_the_first_answer(session, signal):
 
 def test_a_pod_with_no_signup_roster_is_refused(session, signal):
     assert confirm_seat_sync("no-such-event", "999", "Finkel") is False
+
+
+def test_the_organizer_list_confirms_and_unconfirms_in_one_write(session, signal):
+    confirm_seat_sync(EVENT_ID, "1", "Finkel")
+    confirm_seat_sync(EVENT_ID, "2", "LSV")
+
+    assert set_confirmations_sync(EVENT_ID, {"2", "3"}) == (1, 1)
+
+    session.expire_all()
+    held = {
+        member.discord_user_id: member.confirmed_at is not None
+        for member in session.execute(select(PodSignalMember)).scalars()
+    }
+    assert held == {"1": False, "2": True}
+
+
+def test_the_organizer_list_leaves_players_it_never_showed_alone(session, signal):
+    confirm_seat_sync(EVENT_ID, "1", "Finkel")
+    confirm_seat_sync(EVENT_ID, "2", "LSV")
+
+    assert set_confirmations_sync(EVENT_ID, set(), asked_about={"1"}) == (1, 1)
+
+    session.expire_all()
+    held = {
+        member.discord_user_id: member.confirmed_at is not None
+        for member in session.execute(select(PodSignalMember)).scalars()
+    }
+    assert held == {"1": False, "2": True}

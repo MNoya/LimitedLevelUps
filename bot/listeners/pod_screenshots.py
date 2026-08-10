@@ -21,7 +21,7 @@ import discord
 from discord.ext import commands
 
 from bot.database import SessionLocal
-from bot.discord_helpers import first_image_url
+from bot.discord_helpers import first_image_url, message_caption
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_drafts import (
     active_event_for_discord_user_in_dm,
@@ -57,7 +57,7 @@ class PodScreenshotListener(commands.Cog):
 
         thread_id = str(message.channel.id)
         discord_id = str(message.author.id)
-        caption = (message.clean_content or "").strip() or None
+        caption = message_caption(message)
 
         event_id = await asyncio.to_thread(_capture_sync, thread_id, discord_id, image_url, caption)
         if event_id is None:

@@ -28,8 +28,6 @@ from bot.services.youtube import YouTubeClient, YouTubeVideo
 
 log = logging.getLogger(__name__)
 
-CATEGORIES = ("Set Review", "Draft", "Sealed", "Rankings", "Metagame", "Coaching", "Guest", "Evergreen")
-
 # Per-guid classification seed: a one-time LLM pass over the back catalog plus hand-corrections,
 # consulted before the rules so a resync reproduces it. Each value is a category string, or
 # {"category"?, "set"?} when an episode also needs a manual set the title can't yield.

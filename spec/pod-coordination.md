@@ -22,7 +22,7 @@ The launcher also posts itself again each time a pod finishes, quietly and at th
 
 Every pod on the launcher has its own button, named for the time and the format it plays: **Early MSH**, **Early PEASANT**. Click one to add yourself to that pod. A button only ever adds you, so pressing it twice cannot take you back off: the second press just tells you that you are already on that pod. Clicking is a plan, not a promise: if your day changes you can leave, and if you never show up you just catch the next one.
 
-To leave, press **Leave** at the end of the button row. It takes you off every pod on that board, including one that already opened its thread.
+To leave, press **Leave** at the end of the button row. It takes you off every pod on that board, including one that already opened its thread. Leaving by mistake costs nothing: sign up again and you are back where your first signup put you, ahead of everyone who joined after it. In the hour before a pod starts, its roster card also lists who has left, so the room can see who it is no longer waiting for.
 
 You can join more than one pod, including both formats of one time slot, which tells the room you will play either. The launcher marks you with ◈ on every pod you are on and lists you last on each of their rosters, so everyone can see which bodies two tables are both counting on. Nothing takes you off one pod because another one opened. If both fill, you are in both threads and you pick the one that needs you.
 
@@ -60,9 +60,9 @@ You can also save a **Format Preference** on your welcome card to say what you l
 
 In the hour before a pod, a few things happen in the thread:
 
-- The bot posts a reminder that lists the roster. It carries Sign Up and Can't buttons to confirm whether you are still playing. There is no Maybe at this point: you are confirming a yes or a no.
+- The bot posts a reminder that shows the roster as the tables it makes. It carries Confirm and Leave buttons to say whether you are still playing. There is no Maybe at this point: you are confirming a yes or a no.
 - The pod's status message in pod chat says where it stands: how many players it still needs, and once it has enough, how many said yes and how many said maybe. It is one message from the first signup to the lobby, so the numbers move in place instead of the message coming and going. An hour out it moves to the bottom of the channel, and pings the slot's role if the pod is one or two players short.
-- Reaching 8 does not close the pod. Signups stay open, because people do drop before the start, and extra players get a second table.
+- Reaching 8 does not close the pod. Signups stay open, because people do drop before the start, and extra players get a table of their own when the pod splits.
 
 None of this is binding. It is there so you can see whether the pod is going to fire.
 
@@ -101,11 +101,19 @@ Written inside a pod's own thread, `!pod` does something else: it moves the lobb
 - **6-player team draft** — six players split into two teams of three and draft against each other. This is a different, more social format, so it happens when the group wants it.
 - **4-player round robin** — four players draft and each one plays the other three, one per round. Everyone still finishes with a record like 3-0 or 2-1, worth the same pod points as any other pod.
 
-On busy nights, once the first table fills, the bot offers a **second table** to the players left over, so more people get to play. A second table plays the same format as the pod it comes from unless a mod picks another. A second table opens with 4 players, not 6, so a small group left over still gets a draft.
+On busy nights a pod splits into tables before it opens, not after. A Draftmancer room holds ten, so a pod expecting more than ten waits at its ten minute mark instead of opening one. The roster card moves to the bottom of the thread with everyone mentioned above it, asking for confirmations, and no draft link is posted yet. That wait is the whole point: which tables the pod should run depends on who is actually coming, and opening a room first decides it before anyone knows.
 
-The offer only comes when there is nothing there already. If a table is open, whether someone made it with `/pod-table` or it is drafting, the bot stays quiet and the table you already have is the table. Players who are sitting at another table are not counted and not invited, so a pod that fires never asks the people drafting next door to come fill one more seat. Once four free players are left over and nothing else has claimed them, the offer posts and pings exactly them. Anyone can open one more table at any time with `/pod-table`.
+At the start time the bot builds the tables the confirmed players ask for, opens one for each, and posts a list of them in the thread. Every table plays the format the pod was signed up for.
 
-When a second table opens, everyone who said Yes or Maybe on the pod it came from is added to its thread. You do not have to go looking for it: it is in your thread list with the draft link already in it.
+Each table opens its Draftmancer room at the size it was planned for, so a table of ten holds ten and a table of six holds six, and it offers a ready check as soon as everyone it is expecting has arrived. A table waiting on one more player is waiting on somebody real. If a late player turns up after the tables are built, send them to the last table and widen it from Max Players on that table's Settings panel.
+
+Each table's card carries only the players on it. There are no signup buttons and no start time on it: the draft is beginning, so there is nothing left to answer.
+
+Organizers have two controls on the roster card while it is asking for confirmations. 📋 opens a private list with **Confirmed Players** and **Declined Players**, for recording what somebody said in chat but never pressed, and 🚀 **Open Tables** ends the wait early and deals the tables there and then. Both edits are posted in the thread naming who made them and who they were about, since the room is waiting on those answers. After the split, 📋 **Move Players** sits under the list of tables and moves people between them.
+
+You do not have to go looking for your table. The players a new table is for are named in that table's own thread, and the list in the main thread links to every table. On a pod that split, the lobby post carries no draft link, only the **Join Draft** button, which sends you to the table with a seat for you even when you press it in the wrong thread.
+
+A table that opens short of six asks pod chat for the players it needs, once. Anyone can open one more table at any time with `/pod-table`.
 
 When a lobby sits at 4 players for a couple of minutes with nobody new arriving, and the pod's start time has already passed, the bot asks that lobby whether to play now as a Pick 2 Round Robin or keep waiting. It only asks on the sets being tried out for it, HOB and MSH to start with, and it never asks before the start time, since more players are still expected until then. All 4 have to agree, so Wait is not a verdict: the card stays open, you can change your vote, and someone who wanted to wait can move to Round Robin once it is clear nobody else is coming. The card also reminds you that `!pod` in another channel calls for more players. Once all 4 agree the pod switches to 2 picks per pack and round robin pairings, both still changeable in Settings. A ready check on a round robin pod does not warn about the short roster, since 4 is the point.
 

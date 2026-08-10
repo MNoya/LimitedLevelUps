@@ -10,7 +10,9 @@ from bot.services.pod_confirm import (
     confirm_present_players_sync,
     opens_confirmation,
     plan_tables,
+    seating_plan,
 )
+from bot.services.pod_staging import Signup, deal_into_plan
 from bot.services.pod_roster_fields import FIELD_VALUE_LIMIT, add_table_plan_fields
 from bot.services.pod_launch import set_rsvp
 from bot.tasks import pod_draft_reminder as reminder
@@ -51,33 +53,43 @@ def scheduled_signal(session):
     return signal
 
 
-@pytest.mark.parametrize("players, seating", [
-    (6, ((6, 6),)),
-    (7, ((7, 8),)),
-    (8, ((8, 8),)),
-    (9, ((9, 10),)),
-    (10, ((10, 10),)),
-    (11, ((6, 6), (5, 6))),
-    (12, ((6, 6), (6, 6))),
-    (13, ((8, 8), (5, 6))),
-    (14, ((8, 8), (6, 6))),
-    (15, ((8, 8), (7, 8))),
-    (20, ((8, 8), (6, 6), (6, 6))),
-    (30, ((8, 8), (8, 8), (8, 8), (6, 6))),
+@pytest.mark.parametrize("players, seating, waiting", [
+    (6, ((6, 6),), 0),
+    (7, ((7, 8),), 0),
+    (8, ((8, 8),), 0),
+    (9, ((9, 10),), 0),
+    (10, ((10, 10),), 0),
+    (11, ((10, 10),), 1),
+    (12, ((6, 6), (6, 6)), 0),
+    (13, ((6, 6), (7, 8)), 0),
+    (14, ((8, 8), (6, 6)), 0),
+    (15, ((8, 8), (7, 8)), 0),
+    (16, ((8, 8), (8, 8)), 0),
+    (18, ((8, 8), (10, 10)), 0),
+    (19, ((10, 10), (9, 10)), 0),
+    (20, ((8, 8), (6, 6), (6, 6)), 0),
+    (30, ((8, 8), (8, 8), (8, 8), (6, 6)), 0),
 ])
-def test_plan_seats_players_in_real_pods(players, seating):
+def test_plan_seats_players_in_real_pods(players, seating, waiting):
     plan = plan_tables(players)
 
     assert tuple((t.seated, t.capacity) for t in plan.tables) == seating
+    assert plan.waiting == waiting
 
 
-def test_every_player_gets_a_seat_at_a_real_pod():
+def test_every_player_is_seated_or_waiting_at_a_real_pod():
     for players in range(6, 41):
         plan = plan_tables(players)
 
-        assert plan.seated == players
+        assert plan.seated + plan.waiting == players
+        assert all(t.seated >= 6 for t in plan.tables)
         assert all(t.capacity in (6, 8, 10) for t in plan.tables)
-        assert all(0 < t.seated <= t.capacity for t in plan.tables)
+
+
+def test_only_eleven_leaves_anyone_without_a_table():
+    waiting = [players for players in range(6, 41) if plan_tables(players).waiting]
+
+    assert waiting == [11]
 
 
 def test_expected_counts_an_unanswered_yes_but_not_an_unanswered_maybe():
@@ -118,7 +130,8 @@ def test_confirming_from_maybe_lands_in_confirmed_not_yes(session, scheduled_sig
 def test_reminder_yes_seat_carries_the_confirm_state_when_asked(confirming, state):
     view = build_reminder_view("evt-1", confirming)
 
-    seats = [item.item.custom_id for item in view.children if hasattr(item, "item")]
+    ids = [item.item.custom_id for item in view.children if hasattr(item, "item")]
+    seats = [custom_id for custom_id in ids if custom_id.startswith("podreminderrsvp:")]
     assert seats == [f"podreminderrsvp:{state}:evt-1", "podreminderrsvp:no:evt-1"]
 
 
@@ -159,6 +172,18 @@ def test_confirmed_players_fill_the_first_table_before_anyone_unconfirmed():
     first_table = embed.fields[0].value
     assert all(name in first_table for name in confirmed)
     assert "Unconfirmed" not in embed.fields[0].value.split(confirmed[-1])[0]
+
+
+def test_the_eleventh_player_is_shown_waiting_instead_of_dropped():
+    names = tuple(f"Player{i}" for i in range(11))
+    attendance = Attendance(confirmed=names)
+
+    embed = discord.Embed()
+    add_table_plan_fields(embed, attendance, plan_tables(attendance.expected))
+
+    rendered = " ".join(field.value for field in embed.fields)
+    assert all(name in rendered for name in names)
+    assert names[10] in embed.fields[-1].value
 
 
 @pytest.mark.parametrize("minutes_out, expect_job", [(120, True), (50, True), (8, False)])
@@ -225,3 +250,25 @@ def _pod_starting_in(session, *, minutes: int) -> PodDraftEvent:
     session.add(event)
     session.flush()
     return event
+
+
+@pytest.mark.parametrize("signed, confirmed", [
+    (13, 13), (13, 8), (20, 12), (20, 20), (12, 6), (11, 11), (6, 4), (8, 0),
+])
+def test_the_card_draws_what_the_release_deals(signed, confirmed):
+    """One planner, two surfaces. They read the same TablePlan, so a player counting seats on the card is
+    counting the seats that open."""
+    attendance = Attendance(
+        confirmed=tuple(f"c{i}" for i in range(confirmed)),
+        yes=tuple(f"u{i}" for i in range(signed - confirmed)),
+    )
+    roster = (
+        [Signup(f"c{i}", f"c{i}", True) for i in range(confirmed)]
+        + [Signup(f"u{i}", f"u{i}", False) for i in range(signed - confirmed)]
+    )
+
+    plan = seating_plan(attendance)
+    groups = deal_into_plan([signup for signup in roster if signup.confirmed], plan)
+
+    assert [table.seated for table in plan.tables] == [len(group) for group in groups]
+    assert sum(len(group) for group in groups) + plan.waiting == confirmed

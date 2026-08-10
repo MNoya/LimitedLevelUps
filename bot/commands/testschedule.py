@@ -5,8 +5,9 @@ recruiting nudge across its states, the launcher slot nudge and fire ping, and e
 variant. `underfill`, `pollnudge`, `firenudge` and `overflow` render those same surfaces one at a time
 in the current channel, with arguments for targeted checks. `cardformat` renders the scheduled card
 with a mixed sample roster to eyeball the format split, or any set or cube passed to it.
-`reminder` renders the roster reminder embed. `rally` renders every `!pod` rally state, which the live
-command cannot show without a Draftmancer lobby to stand up.
+`reminder` renders the roster reminder embed and `tables` renders the roster card at each shape its
+columns can take. `rally` renders every `!pod` rally state, which the live command cannot show without a
+Draftmancer lobby to stand up.
 `rolegrant`
 posts the auto-grant announcement embed so its look can be checked. The scheduled RSVP card is
 exercised through `!test rsvp`.
@@ -23,6 +24,7 @@ from bot.commands.test_group import HALL_OF_FAME, test_group
 from bot.config import settings
 from bot.services import pod_rally
 from bot.services.ping_roles import PING_ROLES, build_grant_embed
+from bot.services.pod_confirm import Attendance, card_tables
 from bot.services.pod_join_button import build_join_view
 from bot.services.pod_launch import ondemand_event_name_sync
 from bot.services.pod_reminder_copy import SLOT_FIRE_PING
@@ -41,6 +43,7 @@ from bot.tasks.pod_draft_reminder import (
     ROSTER_REMINDER_LEAD_MIN,
     build_lobby_open_body,
     build_roster_embed,
+    build_table_plan_embed,
 )
 
 
@@ -166,6 +169,18 @@ async def setup(bot: commands.Bot) -> None:
         embed = build_roster_embed(name, starts_at, rosters, roster_interests)
         await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
+    @test_group.command(name="tables")
+    @commands.is_owner()
+    async def test_tables(ctx: commands.Context) -> None:
+        """Owner-only. Post the roster card at the attendance shapes that change its columns — one table,
+        a pod that splits in two, and the eleven that seats ten and leaves a player waiting. Each carries a
+        decline, since that column is the one no plan ever seats. Render-only: no DB, event, or buttons."""
+        starts_at = datetime.now(SCHEDULE_TZ) + timedelta(minutes=ROSTER_REMINDER_LEAD_MIN)
+        for name, attendance in _table_plan_shapes():
+            plan, seat_pending = card_tables(attendance)
+            embed = build_table_plan_embed(name, starts_at, attendance, plan, seat_pending)
+            await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+
     @test_group.command(name="rolegrant")
     @commands.is_owner()
     async def test_rolegrant(ctx: commands.Context) -> None:
@@ -187,6 +202,24 @@ async def setup(bot: commands.Bot) -> None:
             posted += 1
         if posted == 0:
             await ctx.send("No auto-grant roles to preview.")
+
+
+def _table_plan_shapes() -> tuple[tuple[str, Attendance], ...]:
+    """(pod name, attendance) for each layout the roster card can take. Confirmed and Yes fill the table
+    columns, Maybe and No sit on a row of their own below them."""
+    return (
+        ("Quiet Pod", Attendance(
+            confirmed=HALL_OF_FAME[0:4], yes=HALL_OF_FAME[4:6],
+            maybe=HALL_OF_FAME[6:7], declined=HALL_OF_FAME[7:8],
+        )),
+        ("Split Pod", Attendance(
+            confirmed=HALL_OF_FAME[0:9], yes=HALL_OF_FAME[9:13],
+            maybe=HALL_OF_FAME[13:15], declined=HALL_OF_FAME[15:18],
+        )),
+        ("11th Player Pod", Attendance(
+            confirmed=HALL_OF_FAME[0:11], declined=HALL_OF_FAME[11:12],
+        )),
+    )
 
 
 def _rally_states(thread_url: str) -> list[tuple[str, pod_rally.RallyTarget]]:
