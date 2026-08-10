@@ -124,7 +124,7 @@ from bot.services.pod_tournament import (
     refresh_round_pairing_messages,
     start_tournament,
 )
-from bot.services.pod_voice import build_voice_offer_message, pod_voice_channel
+from bot.services.pod_voice import build_voice_offer_message, free_voice_rooms, pod_voice_channel
 from bot.services.player_stats import leaderboard_seat_order
 from bot.slug import disambiguate_slug, slugify
 
@@ -344,6 +344,7 @@ class PodDraftManager:
         self._lobby_full_prompt_message: "discord.Message | None" = None
         self._lobby_full_prompted = False
         self._voice_link_posted = False
+        self.team_voice_rooms: list["discord.VoiceChannel"] = []
         self._ready_check_started_at = 0.0
         self.lobby_status_message: object | None = None
         self._repost_lobby_card = False
@@ -2511,12 +2512,25 @@ class PodDraftManager:
     async def post_voice_offer(self) -> None:
         """The one-time offer of the pod voice channel, posted when the draft ends and the pod turns into
         matches people play against each other. An invite link instead of the channel link, since that is
-        what makes Discord draw its join card with the members already in there."""
+        what makes Discord draw its join card with the members already in there.
+
+        A team draft takes a room per side instead: the two rooms are claimed here, while the pod thread
+        still holds every player, and the team flow posts each one in its own team's private thread. A
+        guild with fewer than two free rooms falls back to the shared channel offered here."""
         if self._voice_link_posted:
             return
         thread = await self._fetch_thread()
         if thread is None:
             return
+        if self.pairing_mode == "team":
+            self.team_voice_rooms = free_voice_rooms(thread.guild, 2)
+            if len(self.team_voice_rooms) == 2:
+                self._voice_link_posted = True
+                names = [room.name for room in self.team_voice_rooms]
+                log.info(f"[VOICE] team_rooms_claimed event={self.event_id} rooms={names}")
+                return
+            log.info(f"[VOICE] team_rooms_unavailable event={self.event_id} free={len(self.team_voice_rooms)}")
+            self.team_voice_rooms = []
         channel = pod_voice_channel(thread.guild)
         self._voice_link_posted = True
         if channel is None:

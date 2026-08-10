@@ -115,7 +115,9 @@ from bot.services.pod_tournament import (
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, champion_role_mention
 from bot.services.pod_voice import (
     VOICE_OFFER_TEMPLATE,
+    build_room_offer_message,
     build_voice_offer_message,
+    free_voice_rooms,
     pod_voice_channel,
     pod_voice_channel_url,
 )
@@ -1857,6 +1859,14 @@ async def setup(bot: commands.Bot) -> None:
             if extra:
                 await ctx.send(VOICE_OFFER_TEMPLATE.format(url=extra))
                 return
+            rooms = free_voice_rooms(ctx.guild, 2)
+            for team, room in zip((pod_team.TEAM_A, pod_team.TEAM_B), rooms):
+                await ctx.send(
+                    f"{pod_team.team_emoji(team)} {pod_team.team_label(team)} would get **{room.name}**:\n"
+                    f"{await build_room_offer_message(room)}"
+                )
+            if len(rooms) < 2:
+                await ctx.send(f"(only {len(rooms)} free numbered voice rooms — a team draft falls back)")
             channel = pod_voice_channel(ctx.guild)
             if channel is None:
                 await ctx.send(f"(no '{settings.pod_draft_voice_channel_name}' voice channel in this server)")

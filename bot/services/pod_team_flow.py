@@ -58,6 +58,7 @@ from bot.services.pod_tournament import (
     schedule_deck_ping,
     send_submit_deck_dms,
 )
+from bot.services.pod_voice import build_room_offer_message
 from bot.services.seventeenlands import SeventeenLandsClient
 
 
@@ -220,7 +221,8 @@ async def _create_team_threads(
 ) -> None:
     """Open a private thread per team off the pod's parent channel, add each side's linked members,
     and post the intro pointing at the board over the opposing roster and the seating ring, so a team
-    scouts who they play without leaving the room — then the bot never posts there again.
+    scouts who they play without leaving the room, then the team's own voice room under it — and after
+    that the bot never posts there again.
 
     Best-effort: a pod without a parent text channel (or lacking the private-thread permission) skips
     the threads rather than failing the tournament. Matches stay reportable on the shared board.
@@ -240,6 +242,7 @@ async def _create_team_threads(
     event_name = await asyncio.to_thread(load_event_name_sync, manager.event_id)
     thread_ids: dict[str, str | None] = {pod_team.TEAM_A: None, pod_team.TEAM_B: None}
     existing_by_name = {t.name: t for t in parent.threads}
+    rooms = dict(zip((pod_team.TEAM_A, pod_team.TEAM_B), manager.team_voice_rooms))
 
     for team in (pod_team.TEAM_A, pod_team.TEAM_B):
         name = f"{pod_team.team_emoji(team)} Team - {event_name}"[:100]
@@ -275,6 +278,13 @@ async def _create_team_threads(
             )
         except discord.HTTPException:
             log.warning(f"[TEAM] thread_intro_failed event={manager.event_id} team={team}", exc_info=True)
+        room = rooms.get(team)
+        if room is None:
+            continue
+        try:
+            await thread.send(await build_room_offer_message(room))
+        except discord.HTTPException:
+            log.warning(f"[TEAM] thread_room_failed event={manager.event_id} team={team}", exc_info=True)
 
     await asyncio.to_thread(
         _persist_team_thread_ids_sync, manager.event_id,

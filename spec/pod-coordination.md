@@ -119,7 +119,7 @@ When a lobby sits at 4 players for a couple of minutes with nobody new arriving,
 
 ## After the draft
 
-The moment the draft ends, before the first pairings go up, the bot posts a link to the pod voice channel. The card under it shows who is already in there. Voice is optional and listening is fine.
+The moment the draft ends, before the first pairings go up, the bot posts a link to the pod voice channel. The card under it shows who is already in there. Voice is optional and listening is fine. A team draft gets one room per side instead: each team's private thread carries its own numbered room, so the two sides talk apart. The bot picks rooms nobody is sitting in, so a second team draft running at the same time is handed the next two down. If it cannot find two free rooms, the pod thread gets the shared voice link like any other pod.
 
 Report your results in the thread as you play. In an 8-player or 10-player pod each round also DMs you your pairing with the same dropdown. `/report-results` works anywhere, including in a DM with the bot, and pulls up a private card holding every match you still owe, so a missed DM never stops you from reporting. In a team draft all three of your matches are open from the moment the draft ends, so the card lists all three and you report whichever you played. A match whose players are still finishing an earlier round carries an hourglass and the round it waits on, so the board never reads as ready when only part of a round is. Winning games earns pod points on the leaderboard, so a good run in a pod moves you up the standings the same as a strong ladder result. Pod results are always public: you do not need to opt in, and playing pods is enough to appear on the board.
 

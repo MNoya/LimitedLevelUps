@@ -1,5 +1,6 @@
 """The pod voice channel as an offer players can act on: the message a thread posts when the draft ends,
-and the channel lookup every surface that names voice goes through.
+and the channel lookup every surface that names voice goes through. A team draft is the exception: its two
+sides talk apart, so each gets its own numbered room, offered in that team's private thread.
 
 The link is a discord.gg invite because only an invite makes Discord draw its own join card, the one
 showing the avatars of whoever is already in the channel. It is a guest invite, matching what Discord's
@@ -14,6 +15,7 @@ offers on the same button.
 from __future__ import annotations
 
 import logging
+import re
 
 import discord
 
@@ -25,6 +27,8 @@ log = logging.getLogger("bot.pod_voice")
 VOICE_INVITE_MAX_AGE = 60 * 60 * 24 * 7
 VOICE_INVITE_REASON = "Pod draft voice chat offer"
 VOICE_OFFER_TEMPLATE = "🔊 [**Voice chat link**]({url})"
+ROOM_OFFER_TEMPLATE = "🔊 [**Your Team's Voice chat link**]({url})"
+VOICE_ROOM_RE = re.compile(r"(?:^|\s)Room\s*(\d+)\s*$")
 
 
 def pod_voice_channel(guild: discord.Guild | None) -> discord.VoiceChannel | None:
@@ -60,3 +64,30 @@ async def voice_invite_url(channel: discord.VoiceChannel) -> str:
 async def build_voice_offer_message(channel: discord.VoiceChannel) -> str:
     """The offer as one masked link."""
     return VOICE_OFFER_TEMPLATE.format(url=await voice_invite_url(channel))
+
+
+async def build_room_offer_message(channel: discord.VoiceChannel) -> str:
+    """The offer for one team's room, posted in that team's own thread. The join card names the room."""
+    return ROOM_OFFER_TEMPLATE.format(url=await voice_invite_url(channel))
+
+
+def numbered_voice_rooms(guild: discord.Guild | None) -> list[discord.VoiceChannel]:
+    """The guild's numbered voice rooms in number order, however the names are decorated: `Room 2` and
+    `🔊 Room 2` both count."""
+    if guild is None:
+        return []
+    numbered = []
+    for channel in guild.voice_channels:
+        match = VOICE_ROOM_RE.search(channel.name)
+        if match:
+            numbered.append((int(match.group(1)), channel))
+    numbered.sort(key=lambda pair: pair[0])
+    return [channel for _, channel in numbered]
+
+
+def free_voice_rooms(guild: discord.Guild | None, count: int) -> list[discord.VoiceChannel]:
+    """The first `count` numbered rooms nobody is sitting in, so a second team draft running at the same
+    time is handed the rooms below the ones already in use. Shorter than `count` when the guild runs out,
+    which is what the caller falls back on."""
+    free = [room for room in numbered_voice_rooms(guild) if not room.members]
+    return free[:count]
