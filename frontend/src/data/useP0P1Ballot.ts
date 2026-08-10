@@ -132,7 +132,7 @@ export function useP0P1Ballot(overrideSetCode?: string) {
   const phase = deriveP0P1Phase(isPastDeadline, isPastScoringDate, ratingsSnapshot ?? undefined, resultsDataReady, resultsPending, devViewPreset);
 
   const devFinal = devActive && phase === "final";
-  const { data: fetchedBallots } = useP0P1Ballots(setCode, phase === "final" && !devFinal);
+  const { data: fetchedBallots, error: ballotsError } = useP0P1Ballots(setCode, phase === "final" && !devFinal);
   const ballots = useMemo<P0P1BallotRow[] | undefined>(() => {
     if (!devFinal) return fetchedBallots;
     return pickStats && setCode ? syntheticBallotsFromStats(pickStats, setCode) : undefined;
@@ -158,7 +158,9 @@ export function useP0P1Ballot(overrideSetCode?: string) {
 
   const ballotReady =
     activePicks !== undefined &&
-    (!isPastDeadline || (phase !== "loading" && (phase !== "final" || effectiveBallots !== undefined)));
+    (!isPastDeadline ||
+      (phase !== "loading" &&
+        (phase !== "final" || effectiveBallots !== undefined || Boolean(ballotsError))));
 
   const scoringFilled = SLOTS.filter((s) => effectivePicksBySlot.has(s.key)).length;
   const isComplete = scoringFilled === SLOTS.length;
