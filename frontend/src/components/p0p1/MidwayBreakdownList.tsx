@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { BreakdownList } from "./BreakdownList";
 import type { BreakdownRow } from "./BreakdownList";
-import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
+import { buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
 import { GIH_SAMPLE_FLOOR } from "../../data/p0p1Results";
 import type { CardRating, GihwrBounds } from "../../data/p0p1Results";
 import type { Card, P0P1PickStat, SlotKey } from "../../types/p0p1";
