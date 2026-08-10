@@ -7,6 +7,7 @@ grace window are left for a later night so a live conversation is never cut off.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
@@ -57,10 +58,25 @@ async def archive_past_threads() -> None:
     log.info(f"pod thread cleanup: archived {archived} of {total} past threads")
 
 
+async def delete_bot_threads_in(channel: discord.TextChannel, bot_user_id: int) -> int:
+    """Delete every thread in this channel the bot owns, archived ones included, and say how many went.
+
+    `!test reset` clears threads it can name from the rows it is deleting, which misses any thread those
+    rows stopped pointing at. A pod that splits is the case: its first table moves onto a thread of its
+    own and the thread everybody gathered in belongs to nothing afterwards, so run after run they stack
+    up in the sidebar. Ownership is the filter, so a thread somebody else opened in the channel is left
+    alone."""
+    threads = list(channel.threads)
+    async for archived in channel.archived_threads(limit=None):
+        threads.append(archived)
+    owned = [thread for thread in threads if thread.owner_id == bot_user_id]
+    return await _delete_all(owned)
+
+
 async def delete_threads(bot: commands.Bot, thread_ids: Iterable[int]) -> int:
     """Delete the given threads outright. Backs `!test reset`, where the rows that owned them are gone
     and an archived draft room would only linger as a dead end."""
-    deleted = 0
+    threads = []
     for thread_id in thread_ids:
         try:
             channel = await bot.fetch_channel(thread_id)
@@ -69,15 +85,26 @@ async def delete_threads(bot: commands.Bot, thread_ids: Iterable[int]) -> int:
         except discord.HTTPException as e:
             log.warning(f"test reset: fetch_channel({thread_id}) failed: {e}")
             continue
-        if not isinstance(channel, discord.Thread):
-            continue
+        if isinstance(channel, discord.Thread):
+            threads.append(channel)
+    return await _delete_all(threads)
+
+
+async def _delete_all(threads: list[discord.Thread]) -> int:
+    """Delete every thread at once and count the ones that went.
+
+    One at a time, a `!test reset` clearing a night of pods spent most of a minute waiting on round trips
+    that have nothing to do with each other."""
+    async def delete(thread: discord.Thread) -> bool:
         try:
-            await channel.delete(reason="!test reset cleanup")
+            await thread.delete(reason="!test reset cleanup")
         except discord.HTTPException as e:
-            log.warning(f"test reset: delete({thread_id}) failed: {e}")
-            continue
-        deleted += 1
-    return deleted
+            log.warning(f"test reset: delete({thread.id}) failed: {e}")
+            return False
+        return True
+
+    results = await asyncio.gather(*(delete(thread) for thread in threads))
+    return sum(results)
 
 
 def _past_event_thread_ids(now: datetime) -> list[int]:

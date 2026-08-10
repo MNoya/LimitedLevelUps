@@ -33,7 +33,7 @@ Decisions taken: confirmation is information and not entitlement, the T-1h Draft
 
 The allocation rule below was rewritten after the 8 Aug Peasant Cube pod, where thirteen players were seated 8 + 5 and the five drafted half an hour after the eight. Thirteen now runs 6 + 7.
 
-One behavioural gap remains: the Ready Check nudge still arms at a fixed eight, so on a 6 + 6 split neither table is nudged and the room starts from the lobby card's own button.
+The deciding moment moved earlier. A pod expecting more players than one Draftmancer session seats no longer opens a room at T-10 and then decides what to do about the overflow: it holds, asks for confirmations, and opens a room per table at the start time. The Ready Check nudge arms at the table's own planned size, so a table of six is nudged at six.
 
 ## Valid pods
 
@@ -149,15 +149,15 @@ Brief, for orientation.
 
 - The reminder card gains a Confirmed section and a confirm action.
 - The Ready Check nudge holds while signed-up players are still expected, then posts with a second-table button beside the start button; pressing start with players outstanding costs the presser one ephemeral confirm.
-- **Not built:** the nudge still arms at a fixed eight (`_LOBBY_FULL_THRESHOLD`, `bot/services/pod_draft_manager.py`). It needs to arm at the shape being aimed at so a table of 6 nudges at 6, which means deriving full/target/floor from the table's planned size. `spec/pod-lobby-size.md` deferred exactly this when it punted a six-player cap. Until then a 6 + 6 split is started from the lobby card rather than from a nudge, which works but says nothing.
-- Second tables already exist. `/pod-table` clones a pod, opens a thread and lobby, and adds the roster. This calls that machinery twice over: once at lobby-open when the answers already show a split, and once from the Ready Check moment when they did not.
-- The draft-start second-table offer (`offer_second_table`) stays as the fallback for pods with no roster to ask, such as queue and poll pods.
+- The nudge arms at the widest table the roster plans, capped at a pod's worth, so a table of 6 is asked at 6 and a roster that has not split yet is still asked at 8.
+- The hold opens the tables itself at the start time, each an ordinary pod with its own card, thread, roster and lobby. `/pod-table` stays as the manual way to open one more.
+- The draft-start second-table offer is gone. It fired after a pod committed to its shape, which is the moment this design exists to move earlier, and it competed with the split for the same leftover players.
 
 ## Open questions
 
 - **Taking back a seat from a no-show.** Someone who said Yes and never appeared still occupies a seat in the plan, so the tables are built around a player who is not there. Nothing currently removes them, and every count downstream inherits the error. Needs a way for the table to drop them, and a decision about whether that is a person doing it, a timeout, or the lobby noticing they never joined Draftmancer.
 
-- **The per-table Ready Check size.** Still open and the one thing that stops a split pod nudging properly. See the status note above.
+- **The organizer's attendance control.** An organizer needs a way to tick someone as coming, untick someone who is not, and end the wait early. All three want the bot to know a pod is holding, and nothing records that today.
 - **All copy.** Every string in this feature is a first draft placed to make the logic runnable, not a decision. The one-more-player line matters most.
 - **The early link**, deferred with the T-1h session. Whether Draftmancer drops a session that sits empty for most of an hour is still unverified and gates it.
 - **Reach.** The T-1h beat already pings the slot role, so this can ride along, but a player with notifications off answers nothing. They are handled when they show up, and the count simply runs low, which the generous-planning rule is designed to absorb.

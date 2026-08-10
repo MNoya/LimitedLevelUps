@@ -3,10 +3,11 @@ confirmation order, its own thread and its own lobby.
 
 Nothing here decides *when* to split. The attendance hold does, at the scheduled time or when an organizer
 locks the count early, because a pod opened before the room is counted locks the shape while nobody knows
-it. This is the machinery it calls. Design in `spec/pod-staging.md`.
+it. This is the machinery it calls. Design in `spec/pod-confirm-signup.md`.
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -16,9 +17,18 @@ from sqlalchemy.orm import Session
 
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
-from bot.services.pod_confirm import POD_SIZES, Attendance, attendance_for_event_sync, plan_tables
+from bot.services.pod_confirm import (
+    POD_SIZES,
+    SESSION_SEATS,
+    Attendance,
+    TablePlan,
+    attendance_for_event_sync,
+    plan_tables,
+)
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_YES
 
+
+log = logging.getLogger(__name__)
 
 MIN_POD_SIZE = min(POD_SIZES)
 POD_INDEX_RE = re.compile(r"\s(\d+)$")
@@ -33,14 +43,23 @@ class Signup:
     confirmed: bool
 
 
-def pods_at_release(attendance: Attendance) -> int:
-    """How many pods to open when the hold releases.
+def deal_into_plan(roster: list[Signup], plan: TablePlan) -> list[list[Signup]]:
+    """Hand the roster out across the plan's tables, in the order the plan seats them.
 
-    Counted off the players who are accounted for, never off everyone who signed up. Opening too few
-    tables is recoverable, since a table grows and another can be opened after it. Opening too many
-    strands people at a table that can never fire, which is the failure this whole design exists to
-    prevent."""
-    return len(plan_tables(len(attendance.confirmed)).tables) or 1
+    The plan already says how many players each table holds, and it was built from this same roster, so
+    the slices land exactly. The seats the plan left waiting stay waiting: eleven players draw a table of
+    ten and one player over, and seating that eleventh anyway would put them in a room that cannot hold
+    them and contradict the card they just read. Anything beyond even that goes on the last table rather
+    than off the end, since a player the card drew and the release dropped is the worst outcome here."""
+    groups: list[list[Signup]] = []
+    cursor = 0
+    for table in plan.tables:
+        groups.append(roster[cursor:cursor + table.seated])
+        cursor += table.seated
+    excess = roster[cursor + plan.waiting:]
+    if excess and groups:
+        groups[-1].extend(excess)
+    return groups
 
 
 @dataclass(frozen=True)
@@ -79,22 +98,6 @@ def family_state_sync(event_id: str) -> FamilyState:
     )
 
 
-def split_for_staging(roster: list[Signup], pods: int) -> list[list[Signup]]:
-    """Deal the roster across `pods` pods in the order the plan seats them, confirmed first.
-
-    The split follows the same table sizes the card is showing, so a player reads their pod off the card
-    and finds themselves on it. A pod past the plan's tables takes whatever is left."""
-    plan = plan_tables(len(roster))
-    groups: list[list[Signup]] = []
-    cursor = 0
-    for table in plan.tables[:pods]:
-        groups.append(roster[cursor:cursor + table.seated])
-        cursor += table.seated
-    if cursor < len(roster) and groups:
-        groups[-1].extend(roster[cursor:])
-    return groups
-
-
 def pod_base_name(name: str) -> str:
     """The pod's name without its number. `Early Pod 2` is `Early Pod`, and a pod that never split keeps
     the name it already has."""
@@ -112,15 +115,6 @@ NUMERAL_EMOJI = ("0\ufe0f\u20e3", "1\ufe0f\u20e3", "2\ufe0f\u20e3", "3\ufe0f\u20
 def pod_numeral(index: int) -> str:
     """A pod's number as the numeral emoji cards and threads wear."""
     return "".join(NUMERAL_EMOJI[int(digit)] for digit in str(index))
-
-
-def display_pod_name(name: str) -> str:
-    """The pod's name as people read it, with its number as a numeral emoji. The stored name stays plain
-    text; only threads and cards wear the glyph."""
-    match = POD_INDEX_RE.search(name or "")
-    if not match:
-        return name
-    return f"{pod_base_name(name)} {pod_numeral(int(match.group(1)))}"
 
 
 def pod_index(name: str) -> int:
@@ -175,6 +169,8 @@ class FamilyPod:
     seated: int
     capacity: int
     member_ids: frozenset[str]
+    member_names: tuple[str, ...] = ()
+    maybe_names: tuple[str, ...] = ()
 
 
 def pod_family_sync(event_id: str) -> list[FamilyPod]:
@@ -197,7 +193,7 @@ def pod_family_sync(event_id: str) -> list[FamilyPod]:
             if pod_base_name(sibling.name) == base
         ]
         rosters = _family_rosters(session, [sibling.id for sibling in events])
-        family = [_family_pod(sibling, rosters.get(sibling.id, frozenset())) for sibling in events]
+        family = [_family_pod(sibling, rosters.get(sibling.id, [])) for sibling in events]
     family.sort(key=lambda pod: pod.index)
     return family
 
@@ -240,16 +236,37 @@ def take_seat_sync(session_id: str, discord_id: str, display_name: str) -> SeatO
 def _first_seat_for(family: list[FamilyPod], discord_id: str) -> FamilyPod:
     """The table holding this player, else the first with room once the plan is asked to seat one
     more. Planning for the extra body is what keeps a table of six from turning anyone away while the plan
-    it belongs to would have made it a table of eight."""
+    it belongs to would have made it a table of eight.
+
+    Every seat handed out is checked against the session as well as the plan. A plan wanting more tables
+    than the family has runs out of sizes to read, and the walk-ins after that all piled onto the last
+    table with nothing counting them: a release at sixteen finished 9 + 11, and eleven cannot draft in a
+    room that holds ten. Once every table is at the size the plan gives it, the seat goes to the first
+    table with a room seat left.
+
+    A family already full at ten on every table has nowhere to put anybody, and there is no answer that
+    seats them. The emptiest table is the least wrong one, and it is said out loud, because what the room
+    actually needs then is another table."""
     for pod in family:
         if discord_id in pod.member_ids:
             return pod
     plan = plan_tables(sum(pod.seated for pod in family) + 1)
     for index, pod in enumerate(family):
-        capacity = plan.tables[index].capacity if index < len(plan.tables) else pod.capacity
-        if pod.seated < capacity:
+        planned = plan.tables[index].capacity if index < len(plan.tables) else pod.capacity
+        if pod.seated < min(planned, SESSION_SEATS):
             return pod
-    return family[-1]
+    for pod in family:
+        if pod.seated < SESSION_SEATS:
+            return pod
+    emptiest = family[0]
+    for pod in family[1:]:
+        if pod.seated < emptiest.seated:
+            emptiest = pod
+    log.warning(
+        f"pod-staging: every table of {emptiest.name} is full at {SESSION_SEATS}; "
+        f"seating {discord_id} on table {emptiest.index} anyway"
+    )
+    return emptiest
 
 
 def confirm_seat_sync(event_id: str, discord_id: str, display_name: str) -> None:
@@ -279,32 +296,91 @@ def confirm_seat_sync(event_id: str, discord_id: str, display_name: str) -> None
         session.commit()
 
 
-def _family_rosters(session: Session, event_ids: list[str]) -> dict[str, frozenset[str]]:
-    """Every pod's Yes roster in one query. A read per sibling turned the family into as many round trips
-    as the family has tables, on a path several things run for every press."""
+def _family_rosters(session: Session, event_ids: list[str]) -> dict[str, list[tuple[str, str, str]]]:
+    """Every pod's roster in one query, as (rsvp, discord_id, display_name) in signup order. A read per
+    sibling turned the family into as many round trips as the family has tables, on a path several things
+    run for every press."""
     rows = session.execute(
-        select(PodSignal.event_id, PodSignalMember.discord_user_id)
+        select(
+            PodSignal.event_id, PodSignalMember.rsvp,
+            PodSignalMember.discord_user_id, PodSignalMember.display_name,
+        )
         .join(PodSignalMember, PodSignalMember.signal_id == PodSignal.id)
-        .where(PodSignal.event_id.in_(event_ids), PodSignalMember.rsvp == RSVP_YES)
+        .where(PodSignal.event_id.in_(event_ids))
+        .order_by(PodSignalMember.created_at)
     ).all()
-    rosters: dict[str, set[str]] = {}
-    for event_id, discord_id in rows:
-        rosters.setdefault(event_id, set()).add(discord_id)
-    return {event_id: frozenset(ids) for event_id, ids in rosters.items()}
+    rosters: dict[str, list[tuple[str, str, str]]] = {}
+    for event_id, rsvp, discord_id, display_name in rows:
+        rosters.setdefault(event_id, []).append((rsvp, discord_id, display_name))
+    return rosters
 
 
-def _family_pod(event: PodDraftEvent, member_ids: frozenset[str]) -> FamilyPod:
-    plan = plan_tables(len(member_ids))
+def _family_pod(event: PodDraftEvent, roster: list[tuple[str, str, str]]) -> FamilyPod:
+    playing = [(discord_id, name) for rsvp, discord_id, name in roster if rsvp == RSVP_YES]
+    maybes = [name for rsvp, _, name in roster if rsvp == RSVP_MAYBE]
+    plan = plan_tables(len(playing))
     return FamilyPod(
         event_id=event.id,
         name=event.name,
         index=pod_index(event.name),
         thread_id=event.discord_thread_id,
         session_id=event.draftmancer_session,
-        seated=len(member_ids),
+        seated=len(playing),
         capacity=plan.tables[0].capacity if plan.tables else MIN_POD_SIZE,
-        member_ids=member_ids,
+        member_ids=frozenset(discord_id for discord_id, _ in playing),
+        member_names=tuple(name for _, name in playing),
+        maybe_names=tuple(maybes),
     )
+
+
+def move_players_sync(family_event_ids: list[str], target_event_id: str, discord_ids: list[str]) -> int:
+    """Put these players on one table of a family and take them off every other, and say how many moved.
+
+    The organizer's answer, not a player's, so it lands as confirmed: they are being placed on a table
+    because somebody in the room knows they are coming to it. Display names are carried across from the
+    row being taken away, so a move never invents a name the pod has not seen."""
+    wanted = set(discord_ids)
+    if not wanted:
+        return 0
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        signals = session.execute(
+            select(PodSignal).where(PodSignal.event_id.in_(family_event_ids))
+        ).scalars().all()
+        target = next((signal for signal in signals if signal.event_id == target_event_id), None)
+        if target is None:
+            return 0
+        moved = 0
+        names: dict[str, str] = {}
+        for signal in signals:
+            members = session.execute(
+                select(PodSignalMember).where(
+                    PodSignalMember.signal_id == signal.id,
+                    PodSignalMember.discord_user_id.in_(wanted),
+                )
+            ).scalars().all()
+            for member in members:
+                names[member.discord_user_id] = member.display_name
+                if signal.id == target.id:
+                    member.rsvp = RSVP_YES
+                    member.confirmed_at = member.confirmed_at or now
+                else:
+                    session.delete(member)
+                    moved += 1
+        session.flush()
+        seated = {
+            row[0] for row in session.execute(
+                select(PodSignalMember.discord_user_id)
+                .where(PodSignalMember.signal_id == target.id)
+            ).all()
+        }
+        for discord_id in wanted - seated:
+            session.add(PodSignalMember(
+                signal_id=target.id, discord_user_id=discord_id,
+                display_name=names.get(discord_id, discord_id), rsvp=RSVP_YES, confirmed_at=now,
+            ))
+        session.commit()
+        return moved
 
 
 def hand_over_members_sync(source_event_id: str, moved: list[Signup]) -> int:

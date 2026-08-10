@@ -39,20 +39,34 @@ STAGED_TABLE_SHORT = (
 SLOT_FIRE_PING = "{mention} starts <t:{unix}:R>"
 
 ROSTER_REMINDER_TITLE = "🔔 Pod Draft Starting Soon"
-ROSTER_REMINDER_LINE = "**{name}** starts <t:{unix}:R>"
 ROSTER_REMINDER_MARK = "### 🔔"
 ROSTER_REMINDER_HEADLINE = ROSTER_REMINDER_MARK + " **{name}** starts <t:{unix}:R>"
+ROSTER_REMINDER_HEADLINE_COUNT = ROSTER_REMINDER_HEADLINE + " ✅ {count}"
 
-LOBBY_OPEN_HEADLINE = "Lobby opened!"
+LOBBY_OPEN_HEADLINE = "**Join the Draftmancer session:**"
 LOBBY_ARENA_NAME = (
     "Set your **Arena name** (like `YourName#12345`) as your Draftmancer name or use **Join Draft** "
     "below for your personal link."
 )
 LOBBY_OPEN = (
-    "{draftmancer} {headline}\n"
-    "➡️ **Join the Draftmancer session:** <{url}>"
+    "➡️ {headline} <{url}>"
     "{mentions}"
 )
+
+LOBBY_OPEN_TABLE = (
+    "➡️ {headline} <{url}>\n"
+    "➡️ or **{button}** below for your personal link"
+    "{mentions}"
+)
+
+STAGED_TABLES_TITLE = "### 🪑 {count} Tables Created"
+STAGED_TABLES_ROW = "### {link}"
+
+ATTENDANCE_HOLD = (
+    "➡️ Please **{button}** if you are coming{gap}👥 **{count} players** signed up"
+    "{mentions}"
+)
+ATTENDANCE_HOLD_MAYBE = "🤷 {mentions}"
 
 DRAFT_STARTED = (
     "{hello}{name} started with **{count} {players}** {manat} [**Event Thread**]({thread_url})"

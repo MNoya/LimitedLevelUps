@@ -14,6 +14,7 @@ can't drift from what players see.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta, timezone
@@ -37,11 +38,12 @@ from bot.commands.pod_rsvp import (
     purge_native_events,
     refresh_scheduled_card,
 )
-from bot.commands.pod_table import offer_second_table
+from bot.config import settings
 from bot.commands.test_group import HALL_OF_FAME, test_group
 from sqlalchemy import delete, select
 
 from bot.database import SessionLocal
+from bot.discord_helpers import channel_matching_name, run_detached
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
 from bot.services import pod_format
 from bot.services import pod_format_interest as fi
@@ -69,6 +71,7 @@ from bot.services.pod_signals import (
     KIND_POLL,
     LANE_EARLY,
     LANE_LATE,
+    RSVP_MAYBE,
     RSVP_YES,
     SCHEDULE_TZ,
     STATUS_EXPIRED,
@@ -93,14 +96,15 @@ from bot.tasks.pod_daily_poll import (
     repost_board_after_the_late_pods,
     resurface_board_after_the_early_pods,
 )
-from bot.tasks.pod_thread_cleanup import delete_threads
 from bot.tasks.pod_draft_reminder import fire_roster_reminder
+from bot.tasks.pod_thread_cleanup import delete_bot_threads_in, delete_threads
 
 
 log = logging.getLogger(__name__)
 
 WEEKDAY_ARGS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 POLL_KEYWORDS = ("am", "split", *WEEKDAY_ARGS)
+PURGE_WINDOW = timedelta(days=3)
 
 
 async def _show_welcome_preview(interaction: discord.Interaction, role_name: str) -> None:
@@ -490,28 +494,24 @@ async def setup(bot: commands.Bot) -> None:
     @commands.is_owner()
     async def test_reset(ctx: commands.Context) -> None:
         """Owner-only. Clear this guild's on-demand pod signals (poll / queue / scheduled) and every pod
-        of the day so the `!test` surfaces start from a clean slate: every slot goes back to lazy, the
-        cards and launcher boards are deleted, the pods' threads are deleted, the bot's scheduled events
-        come off the Events calendar, and the auto-granted pod ping roles are stripped. Unfinalized pods
-        of any day go too; finalized pods from earlier days stay as leaderboard history."""
+        of the day so the `!test` surfaces start from a clean slate: every slot goes back to lazy, both
+        pod channels are emptied of what earlier runs left in them, the pods' threads are deleted, the
+        bot's scheduled events come off the Events calendar, and the auto-granted pod ping roles are
+        stripped. Unfinalized pods of any day go too; finalized pods from earlier days stay as
+        leaderboard history.
+
+        The database side is done before the reply lands, so the next `!test` command can be typed
+        straight away. Discord is swept behind it, bounded to what was already there."""
         if ctx.guild is None:
             await ctx.send("Run `!test reset` in the test server, so the signals it clears are scoped to it.")
             return
         guild_id = str(ctx.guild.id)
         reset = await asyncio.to_thread(pod_launch.reset_ondemand_signals_sync, guild_id)
-        purged = await purge_native_events(ctx.guild, ctx.bot.user.id)
-        threads_deleted = await delete_threads(ctx.bot, reset.thread_ids)
-        cards_deleted = await pod_launch.delete_reset_cards(reset.card_refs)
-        roles_removed = 0
-        if isinstance(ctx.author, discord.Member):
-            roles_removed = await strip_pod_roles(ctx.author)
-            forget_welcome(ctx.author.id)
-        await ctx.send(
+        notice = await ctx.send(
             f"Cleared on-demand pod signals: {reset.signals} signals, {reset.members} members, "
-            f"{reset.events} pods. Deleted {cards_deleted} cards and {threads_deleted} pod threads, "
-            f"removed {purged} scheduled events from the calendar, and stripped {roles_removed} of "
-            f"your pod roles."
+            f"{reset.events} pods. Sweeping Discord."
         )
+        run_detached(_sweep_test_surfaces(ctx, reset, notice), "the !test reset sweep")
 
     @test_group.command(name="welcome")
     @commands.is_owner()
@@ -554,6 +554,37 @@ async def setup(bot: commands.Bot) -> None:
         if team.lower() == "team":
             await set_event_pairing_mode(event_id, "team")
             await refresh_scheduled_card(ctx.bot, event_id)
+
+    @test_group.command(name="hold")
+    @commands.is_owner()
+    async def test_hold(
+        ctx: commands.Context, players: int = 13, maybes: int = 3, minutes: int = 3,
+    ) -> None:
+        """Owner-only. Drive the attendance hold end to end on a real pod, without waiting an hour for it.
+
+        Posts a live scheduled pod `minutes` out, seeds `players` fake Yes signups, then runs the T-10
+        fork by hand. The seeds land inside the confirmation hour so they count as confirmed, which is
+        what the release sizes its tables from. The hold posts its ping above the roster card and opens no
+        lobby; the release fires at the pod's start time, splits the tables and opens a lobby for each.
+
+        Thirteen is the smallest count that splits into two tables. Ten or fewer never holds at all, which
+        is worth seeing too: pass `players` under eleven and the lobby opens the moment the fork runs."""
+        if not isinstance(ctx.channel, discord.TextChannel):
+            await ctx.send("Run `!test hold` in a server text channel — the thread is created there.")
+            return
+        event_time = datetime.now(SCHEDULE_TZ) + timedelta(minutes=minutes)
+        set_code = active_set_code()
+        name = await asyncio.to_thread(pod_launch.ondemand_event_name_sync, set_code, event_time)
+        event_id = await post_scheduled_card(
+            ctx.bot, ctx.channel, set_code=set_code, event_time=event_time, name=name,
+        )
+        if event_id is None:
+            await ctx.send("Could not create the scheduled card. Check the logs.")
+            return
+        _stand_down_armed_open(ctx.bot, event_id)
+        await _seed_fake_yes(ctx.channel, event_id, event_time, name, range(players))
+        await _seed_fake_maybe(event_id, range(players, players + maybes))
+        await pod_launch.open_ondemand_lobby(ctx.bot, event_id)
 
     @test_group.command(name="lockroster")
     @commands.is_owner()
@@ -636,38 +667,6 @@ async def setup(bot: commands.Bot) -> None:
                 team_draft=True, team_rosters=rosters,
             )
             await ctx.send(embed=embed)
-
-    @test_group.command(name="secondtable")
-    @commands.is_owner()
-    async def test_secondtable(
-        ctx: commands.Context, total: int = 14, seated: int = 8, preseed: int | None = None,
-    ) -> None:
-        """Owner-only. Post a scheduled card, seed `total` fake Yes, then simulate the first pod firing
-        with `seated` of them locked in and offer a second table to the rest. No live draft needed —
-        this drives the same offer path `_start_draft` fires. Needs `total - seated` at or above the
-        table threshold to actually post an offer. The offer card comes preseeded to one seat short of
-        its threshold, so your own click fires the table; pass `preseed` to set that count yourself."""
-        if not isinstance(ctx.channel, discord.TextChannel):
-            await ctx.send("Run `!test secondtable` in a server text channel.")
-            return
-        event_time = datetime.now(SCHEDULE_TZ) + timedelta(minutes=60)
-        set_code = active_set_code()
-        name = await asyncio.to_thread(pod_launch.ondemand_event_name_sync, set_code, event_time)
-        event_id = await post_scheduled_card(
-            ctx.bot, ctx.channel, set_code=set_code, event_time=event_time, name=name,
-        )
-        if event_id is None:
-            await ctx.send("Could not create the scheduled card. Check the logs.")
-            return
-        names = [_roster_name(i) for i in range(total)]
-        ref = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
-        for i, display in enumerate(names):
-            await asyncio.to_thread(pod_launch.set_rsvp_sync, ref[2], f"filltest-{i}", display, RSVP_YES)
-        offer = await offer_second_table(ctx.bot, event_id, {f"filltest-{i}" for i in range(seated)})
-        if offer is None:
-            await ctx.send(f"No offer posted: fewer than the table threshold left over from {total} - {seated}.")
-            return
-        await _preseed_table_claims(event_id, first_leftover=seated, count=preseed)
 
     @test_group.command(name="teamoffer")
     @commands.is_owner()
@@ -1190,6 +1189,103 @@ def _seed_poll_signups_sync(message_id: str, day, split: bool = False) -> None:
                         signal_id=signal.id, discord_user_id=discord_user_id, display_name=display_name,
                     ))
         session.commit()
+
+
+async def _sweep_test_surfaces(ctx: commands.Context, reset, notice: discord.Message) -> None:
+    """Everything a test run leaves on Discord, cleared at once and reported back on the notice.
+
+    Sequentially this ran the better part of a minute with the next command waiting behind it. Bounded to
+    what existed when reset was typed, so a pod created during the sweep is never caught in it."""
+    channels = _test_surface_channels(ctx)
+    purged, by_row, by_owner, events, cards = await asyncio.gather(
+        _empty_channels(channels, ctx.message),
+        delete_threads(ctx.bot, reset.thread_ids),
+        _sweep_leftover_threads(ctx, channels),
+        purge_native_events(ctx.guild, ctx.bot.user.id),
+        pod_launch.delete_reset_cards(reset.card_refs),
+    )
+    roles_removed = 0
+    if isinstance(ctx.author, discord.Member):
+        roles_removed = await strip_pod_roles(ctx.author)
+        forget_welcome(ctx.author.id)
+    with contextlib.suppress(discord.HTTPException):
+        await notice.edit(content=(
+            f"{notice.content.removesuffix(' Sweeping Discord.')} Deleted {purged + cards} messages and "
+            f"{by_row + by_owner} pod threads, removed {events} scheduled events from the calendar, and "
+            f"stripped {roles_removed} of your pod roles."
+        ))
+
+
+def _test_surface_channels(ctx: commands.Context) -> list[discord.TextChannel]:
+    """The channels a test run puts things in: pod coordination, pod chat, and wherever reset was typed."""
+    candidates = [ctx.channel, ctx.bot.get_channel(settings.pod_draft_channel_id)]
+    if ctx.guild is not None:
+        candidates.append(channel_matching_name(ctx.guild, settings.pod_draft_chat_channel_name))
+    channels: list[discord.TextChannel] = []
+    seen: set[int] = set()
+    for channel in candidates:
+        if isinstance(channel, discord.TextChannel) and channel.id not in seen:
+            seen.add(channel.id)
+            channels.append(channel)
+    return channels
+
+
+async def _empty_channels(channels: list[discord.TextChannel], before: discord.Message) -> int:
+    """Delete what this testing session left in these channels, so the next run reads against a channel
+    holding only its own output.
+
+    Clearing cards by row left every stray message a run posted around them. Bulk delete takes a hundred
+    at a time. Bounded to PURGE_WINDOW, since unbounded it walked back through weeks of a quiet channel."""
+    cutoff = before.created_at - PURGE_WINDOW
+
+    async def empty(channel: discord.TextChannel) -> int:
+        try:
+            return len(await channel.purge(
+                limit=200, before=before, after=cutoff, reason="!test reset cleanup",
+            ))
+        except discord.HTTPException as e:
+            log.warning(f"test reset: purge({channel.id}) failed: {e}")
+            return 0
+
+    return sum(await asyncio.gather(*(empty(channel) for channel in channels)))
+
+
+async def _sweep_leftover_threads(ctx: commands.Context, channels: list[discord.TextChannel]) -> int:
+    """Every bot thread still standing in the channels a test run leaves them in.
+
+    Clearing by row misses whatever the rows stopped pointing at, and a pod that splits leaves the thread
+    it gathered in behind on purpose. Sweeping by owner catches those, and catches the ones a run that
+    errored halfway never recorded either."""
+    swept = await asyncio.gather(
+        *(delete_bot_threads_in(channel, ctx.bot.user.id) for channel in channels)
+    )
+    return sum(swept)
+
+
+async def _seed_fake_maybe(event_id: str, seats: Iterable[int]) -> None:
+    """Record one fake Maybe per seat. They are the players the hold pings alongside the Yes roster and
+    the plan never seats, so a preview without any cannot show that half of the ask."""
+    ref = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
+    if ref is None:
+        return
+    for seat in seats:
+        await asyncio.to_thread(
+            pod_launch.set_rsvp_sync, ref[2], _fill_seed_id(seat), _roster_name(seat), RSVP_MAYBE,
+        )
+
+
+def _stand_down_armed_open(bot: commands.Bot, event_id: str) -> None:
+    """Cancel the T-10 open a fresh pod arms for itself.
+
+    A pod created minutes from its start time has that job already behind it, so the scheduler runs it
+    seconds later, before the preview has seeded anybody. It would read an empty roster, decide there is
+    nothing to hold for, and open a lobby. The preview fires the same path itself once the roster is
+    there."""
+    scheduler = getattr(bot, "pod_scheduler", None)
+    if scheduler is None:
+        return
+    with contextlib.suppress(Exception):
+        scheduler.remove_job(pod_launch.open_job_id(event_id))
 
 
 async def _seed_fake_yes(

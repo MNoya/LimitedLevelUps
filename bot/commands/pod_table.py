@@ -28,7 +28,6 @@ from bot.commands.messages import (
     MSG_TABLE_BUTTON,
     MSG_TABLE_CREATED,
     MSG_LOBBY_GATHERING,
-    MSG_SECOND_TABLE_OFFER,
     MSG_TABLE_GOTO,
     MSG_TABLE_INTRO,
     MSG_PLAYERS_JOINED,
@@ -41,13 +40,11 @@ from bot.commands.pod_rsvp import add_members_to_thread, post_pod_card
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
-from bot.services import championship, pod_format, pod_launch
+from bot.services import pod_format, pod_launch
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, ACTIVE_TABLE_VIEWS
 from bot.services.pod_roles import grant_pod_drafters
 from bot.services.pod_draft_manager import (
-    discord_ids_for_names_sync,
     set_event_pick_timer,
-    set_second_table_hook,
     start_manager,
 )
 from bot.services.pod_drafts import (
@@ -294,126 +291,9 @@ async def build_table_view(
     )
 
 
-async def offer_second_table(
-    bot: commands.Bot, source_event_id: str, seated_ids: set[str],
-) -> discord.Message | None:
-    """Draft-start hook: once a pod locks its seats, offer whoever's left from the Yes and Maybe roster
-    a pre-pinged follow-up table. Leftovers are invited, not seated — they must click to claim. Matching
-    is by Discord id: `seated_ids` are the players who made the first pod.
-
-    Three things have to hold, or the pod says nothing at all. It needs a signup roster to draw from,
-    which a queue or poll pod has none of. It must not already have a table: a `/pod-table` card still
-    gathering is the table, and one that already fired is the table, so a second offer on top of either
-    only splits the players between two cards. And the leftovers, once everyone spoken for elsewhere is
-    taken out, still have to reach the table threshold."""
-    already_open = _existing_table(source_event_id)
-    if already_open is not None:
-        log.info(f"pod-table: no offer off {source_event_id}; {already_open}")
-        return None
-    candidates = await _signal_roster(source_event_id)
-    if not candidates:
-        return None
-    busy_ids = await _players_committed_elsewhere(source_event_id)
-    leftovers: list[tuple[str, str]] = []
-    seen: set[str] = set()
-    for user_id, name in candidates:
-        if user_id in seated_ids or user_id in busy_ids or user_id in seen:
-            continue
-        seen.add(user_id)
-        leftovers.append((user_id, name))
-    if len(leftovers) < settings.pod_table_open_threshold:
-        return None
-    thread = await _source_thread(bot, source_event_id)
-    if thread is None or thread.parent is None:
-        return None
-    view = await build_table_view(bot, source_event_id, lobby_channel=thread.parent)
-    if view is None:
-        return None
-    message = await thread.send(
-        content=f"{_ping_line(leftovers)}\n{MSG_SECOND_TABLE_OFFER}",
-        embed=view.render_embed(), view=view,
-        allowed_mentions=discord.AllowedMentions(users=True),
-    )
-    view.claim_message = message
-    await view.activate()
-    log.info(
-        f"pod-table: offered second table off {source_event_id} to {len(leftovers)} leftover(s) "
-        f"busy={len(busy_ids)}"
-    )
-    return message
-
-
-def _existing_table(source_event_id: str) -> str | None:
-    """Why this pod already has its table, or None when it has none. A table cloned off a source carries
-    no link back to it in the database, so a fired one is known from the source manager, which is alive
-    for as long as the draft-start hook that reads this."""
-    card = ACTIVE_TABLE_VIEWS.get(source_event_id)
-    if card is not None and not card.materialized and not card.superseded:
-        return "a join card is already gathering"
-    manager = ACTIVE_POD_MANAGERS.get(source_event_id)
-    if manager is not None and manager.table_event_ids:
-        return f"{len(manager.table_event_ids)} table(s) already fired off it"
-    return None
-
-
-async def _players_committed_elsewhere(source_event_id: str) -> set[str]:
-    """Discord ids already spoken for by another pod: sitting in its Draftmancer lobby, claimed onto a
-    table that has fired, or holding a seat on a join card still gathering. They answered this pod's
-    signup, but they are playing somewhere else now, so a follow-up table has nothing to ask them. Only
-    they are taken out: a busy pod next door does not stop a genuinely free group getting a table."""
-    seated_names: list[str] = []
-    ids: set[str] = set()
-    for event_id, manager in ACTIVE_POD_MANAGERS.items():
-        if event_id == source_event_id:
-            continue
-        seated_names.extend(manager.non_bot_session_names())
-        ids |= manager.claimed_discord_ids
-    for table_source, view in ACTIVE_TABLE_VIEWS.items():
-        if table_source == source_event_id or view.materialized or view.superseded:
-            continue
-        ids |= {str(user_id) for user_id in view.claims if user_id > 0}
-    if seated_names:
-        name_to_id = await asyncio.to_thread(discord_ids_for_names_sync, seated_names)
-        ids |= {discord_id for discord_id in name_to_id.values() if discord_id}
-    return ids
-
-
-def _ping_line(leftovers: list[tuple[str, str]]) -> str:
-    """Mentions for leftovers with a real Discord id; fabricated test ids fall back to a plain name."""
-    return " ".join(f"<@{user_id}>" if user_id.isdigit() else name for user_id, name in leftovers)
-
-
-async def _source_thread(bot: commands.Bot, source_event_id: str) -> "discord.Thread | None":
-    """The source pod's thread — where the second-table offer posts, so it reaches the players
-    already gathered there. A new table's own thread hangs off this thread's parent (Discord can't
-    nest threads), which build_table_view takes as its lobby channel."""
-    thread_id = await asyncio.to_thread(load_event_thread_id_sync, source_event_id)
-    if not thread_id or thread_id == "pending":
-        return None
-    thread = bot.get_channel(int(thread_id))
-    if thread is None:
-        try:
-            thread = await bot.fetch_channel(int(thread_id))
-        except discord.HTTPException:
-            return None
-    return thread if isinstance(thread, discord.Thread) else None
-
-
 async def _signal_roster(event_id: str) -> list[tuple[str, str]]:
     """(discord_id, display_name) Yes-then-Maybe roster of the pod's signup card."""
     return await asyncio.to_thread(pod_launch.yes_maybe_roster_sync, event_id)
-
-
-async def _second_table_hook(bot: commands.Bot, event_id: str) -> None:
-    manager = ACTIVE_POD_MANAGERS.get(event_id)
-    if manager is None:
-        return
-    if await asyncio.to_thread(championship.rank_override_sync, event_id) is not None:
-        log.info(f"pod-table: no second table off championship {event_id}")
-        return
-    name_to_id = await asyncio.to_thread(discord_ids_for_names_sync, manager.non_bot_session_names())
-    seated_ids = {discord_id for discord_id in name_to_id.values() if discord_id}
-    await offer_second_table(bot, event_id, seated_ids)
 
 
 class PodTable(commands.Cog):
@@ -500,5 +380,4 @@ class PodTable(commands.Cog):
 
 
 async def setup(bot: commands.Bot) -> None:
-    set_second_table_hook(_second_table_hook)
     await bot.add_cog(PodTable(bot))

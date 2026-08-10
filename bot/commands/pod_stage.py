@@ -2,7 +2,7 @@
 
 Sits above `bot/services/pod_staging.py`, which decides who belongs to each pod. This does the Discord and
 database side: creates the sibling pod, hands its players over, and renumbers the pod they came from.
-Design in `spec/pod-staging.md`.
+Design in `spec/pod-confirm-signup.md`.
 """
 from __future__ import annotations
 
@@ -15,24 +15,32 @@ from discord.ext import commands
 
 from bot import audit
 from bot.commands.messages import MSG_STAGED_POD_SEATS
-from bot.commands.pod_rsvp import post_scheduled_card, render_pod_board
+from bot.commands.pod_rsvp import (
+    move_pod_to_its_own_card,
+    post_scheduled_card,
+    render_pod_overview,
+)
 from bot.database import SessionLocal
 from bot.discord_helpers import resolve_pod_chat_channel
 from bot.models import PodDraftEvent
+from bot.services import pod_event_settings
 from bot.services.pod_drafts import load_event_thread_id_sync
+from bot.services.pod_confirm import seating_plan
+from bot.services.pod_launch import fetch_pod_thread, register_stage_pods, scheduled_card_ref_sync
+from bot.services.pod_hold_view import build_tables_map_items
+from bot.services.pod_link_dm import pod_thread_link
+from bot.services.pod_reminder_copy import STAGED_TABLES_ROW, STAGED_TABLES_TITLE
 from bot.services.pod_schedule import build_staged_table_message
 from bot.services.pod_staging import (
     MIN_POD_SIZE,
     Signup,
     confirmed_first_roster_sync,
-    display_pod_name,
     family_state_sync,
     hand_over_members_sync,
     numbered_pod_name,
     pod_base_name,
-    pod_numeral,
-    pods_at_release,
-    split_for_staging,
+    pod_family_sync,
+    deal_into_plan,
 )
 
 log = logging.getLogger(__name__)
@@ -49,20 +57,41 @@ async def stage_pods(bot: commands.Bot, event_id: str) -> None:
     already handed six players to a sibling does not read as a pod of six. Only the source's own players
     can move, so a release wanting more tables than its roster can fill opens what it can.
 
+    Every handover runs before any card is posted, so table 1 draws its own six rather than all thirteen
+    and then correcting itself. Table 1 takes its card first, so the tables land in the channel in the
+    order they are numbered.
+
     Creating is one-way. A pod that empties out afterwards is cancelled by hand, like any other."""
     source = await asyncio.to_thread(_load_source, event_id)
     if source is None:
         return
+    signup_thread = await _pod_thread(bot, event_id)
+    signup_card = await asyncio.to_thread(scheduled_card_ref_sync, event_id)
     async with _family_lock(source.base_name):
         family = await asyncio.to_thread(family_state_sync, event_id)
         staged = family.staged
-        wanted = pods_at_release(family.attendance)
-        if wanted <= staged:
+        plan = seating_plan(family.attendance)
+        if len(plan.tables) <= staged:
             return
         roster = await asyncio.to_thread(confirmed_first_roster_sync, event_id)
-        groups = split_for_staging(roster, wanted - staged + 1)
+        groups = deal_into_plan([signup for signup in roster if signup.confirmed], plan)
+        if groups:
+            await asyncio.to_thread(_size_the_room, event_id, plan.tables[0].capacity)
+        await asyncio.to_thread(_renumber_source, source)
+        moved = [
+            await asyncio.to_thread(hand_over_members_sync, event_id, members)
+            for members in groups[1:]
+        ]
+        await _give_table_one_its_own_card(bot, source, groups[0] if groups else [])
         for offset, members in enumerate(groups[1:], start=1):
-            await _open_pod(bot, event_id, source, members, staged + offset)
+            index = staged + offset
+            await _open_pod(
+                bot, event_id, source, members, index, plan.tables[index - 1].capacity,
+                moved[offset - 1],
+            )
+    if signup_card is not None:
+        await render_pod_overview(bot, event_id, signup_card[2])
+    await _point_at_the_tables(event_id, signup_thread)
 
 
 _family_locks: dict[str, asyncio.Lock] = {}
@@ -82,18 +111,23 @@ def _family_lock(base_name: str) -> asyncio.Lock:
 
 
 async def _open_pod(
-    bot: commands.Bot, source_event_id: str, source: "_Source", members: list, index: int,
+    bot: commands.Bot, source_event_id: str, source: "_Source", members: list, index: int, seats: int,
+    moved: int,
 ) -> None:
     """Create one sibling pod carrying the source's start time, seeded with the players the plan put on
     it. `post_scheduled_card` builds the whole ordinary pod: event, signal, card, thread, and every timed
-    job including its own T-10 lobby. Nothing here is special-cased afterwards."""
+    job including its own T-10 lobby. Nothing here is special-cased afterwards.
+
+    Every dealt player is seeded, real id or not: the handover has already taken them off the source, so
+    filtering here dropped them off both rosters instead of one. `add_members_to_thread` leaves an id it
+    cannot resolve out of the thread on its own."""
     channel = await _card_channel(bot, source)
     if channel is None:
         log.warning(f"pod-stage: no channel to open pod {index} off {source_event_id}")
         return
-    await _renumber_source(bot, source)
+    await asyncio.to_thread(_renumber_source, source)
     name = numbered_pod_name(source.base_name, index)
-    preseed = [(signup.discord_id, signup.display_name) for signup in members if signup.discord_id.isdigit()]
+    preseed = [(signup.discord_id, signup.display_name) for signup in members]
     new_event_id = await post_scheduled_card(
         bot, channel, set_code=source.set_code, event_time=source.event_time,
         name=name, preseed_yes=preseed, ping_role=False,
@@ -101,10 +135,9 @@ async def _open_pod(
     if new_event_id is None:
         log.warning(f"pod-stage: could not open pod {index} off {source_event_id}")
         return
-    moved = await asyncio.to_thread(hand_over_members_sync, source_event_id, members)
+    await asyncio.to_thread(_size_the_room, new_event_id, seats)
     await _name_the_players_seated_here(bot, new_event_id, index, members)
     await _ask_for_the_missing_players(bot, new_event_id, name, source.event_time, len(members))
-    await render_pod_board(bot, source_event_id)
     audit.event(
         "pod_staged", source_event_id=source_event_id, event_id=new_event_id, index=index, moved=moved,
     )
@@ -112,6 +145,68 @@ async def _open_pod(
         f"pod-stage: opened {name} event={new_event_id} off {source_event_id} "
         f"seeded={len(preseed)} moved={moved}"
     )
+
+
+def _size_the_room(event_id: str, seats: int) -> None:
+    """Open this table's Draftmancer room at the size the plan drew it, since the room otherwise defaults
+    to eight and a planned table of ten could never seat its last two. Written as the pod setting the
+    Settings button offers, so anyone can widen a table that needs it."""
+    pod_event_settings.store_sync(event_id, max_players=seats)
+
+
+async def _give_table_one_its_own_card(
+    bot: commands.Bot, source: "_Source", members: list[Signup],
+) -> None:
+    """Move the first table onto a card and a thread of its own, the pair every other table gets.
+
+    Thread membership never shrinks, so the signup thread holds everyone who was ever on the pod. Left
+    there, table 1 would draft in front of the players now on table 2. What stays behind becomes what it
+    now is: a card showing every table, on the thread everybody is in."""
+    name = numbered_pod_name(source.base_name, 1)
+    thread = await move_pod_to_its_own_card(
+        bot, source.event_id, name, source.event_time, source.set_code,
+    )
+    if thread is None:
+        log.warning(f"pod-stage: could not move table 1 of {source.base_name} onto its own card")
+        return
+    await _name_the_players_seated_here(bot, source.event_id, 1, members)
+
+
+async def _point_at_the_tables(source_event_id: str, thread: "discord.Thread | None") -> None:
+    """Name every table and link to it, once, in the thread the signup gathered in.
+
+    Every table has moved out of that thread by now, which leaves it holding everyone who was ever on the
+    pod and nobody's draft. That is the one place a map belongs. Each table separately names its own
+    players in its own thread, which is the same news addressed to one table.
+
+    Silent on a pod that never split, where there is one table and everyone is already looking at it."""
+    family = await asyncio.to_thread(pod_family_sync, source_event_id)
+    if len(family) < 2 or thread is None or thread.guild is None:
+        return
+    rows = [
+        STAGED_TABLES_ROW.format(link=pod_thread_link(thread.guild.id, pod))
+        for pod in family if pod.thread_id
+    ]
+    embed = discord.Embed(
+        description="\n".join([STAGED_TABLES_TITLE.format(count=len(family))] + rows),
+        color=discord.Color.green(),
+    )
+    view = discord.ui.View(timeout=None)
+    for item in build_tables_map_items(source_event_id):
+        view.add_item(item)
+    try:
+        await thread.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+    except discord.HTTPException:
+        log.warning(f"pod-stage: could not point at the tables off {source_event_id}", exc_info=True)
+
+
+async def _pod_thread(bot: commands.Bot, event_id: str) -> "discord.Thread | None":
+    """Fetched rather than read off the cache, which drops a thread once Discord archives it and made the
+    map of the tables go missing on exactly the pods that had been gathering longest."""
+    thread_id = await asyncio.to_thread(load_event_thread_id_sync, event_id)
+    if not thread_id or thread_id == "pending":
+        return None
+    return await fetch_pod_thread(bot, int(thread_id))
 
 
 async def _name_the_players_seated_here(
@@ -125,15 +220,12 @@ async def _name_the_players_seated_here(
     mentions = " ".join(f"<@{signup.discord_id}>" for signup in members if signup.discord_id.isdigit())
     if not mentions:
         return
-    thread_id = await asyncio.to_thread(load_event_thread_id_sync, event_id)
-    if not thread_id or thread_id == "pending":
-        return
-    thread = bot.get_channel(int(thread_id))
-    if not isinstance(thread, discord.Thread):
+    thread = await _pod_thread(bot, event_id)
+    if thread is None:
         return
     try:
         await thread.send(
-            MSG_STAGED_POD_SEATS.format(numeral=pod_numeral(index), mentions=mentions),
+            MSG_STAGED_POD_SEATS.format(index=index, mentions=mentions),
             allowed_mentions=discord.AllowedMentions(users=True),
         )
     except discord.HTTPException:
@@ -154,42 +246,34 @@ async def _ask_for_the_missing_players(
     needed = MIN_POD_SIZE - seated
     if needed <= 0:
         return
-    thread_id = await asyncio.to_thread(load_event_thread_id_sync, event_id)
-    if not thread_id or thread_id == "pending":
-        return
-    thread = bot.get_channel(int(thread_id))
-    if not isinstance(thread, discord.Thread):
+    thread = await _pod_thread(bot, event_id)
+    if thread is None:
         return
     channel = resolve_pod_chat_channel(bot)
     if channel is None:
         return
-    body = build_staged_table_message(display_pod_name(name), needed, event_time, thread.jump_url)
+    body = build_staged_table_message(name, needed, event_time, thread.jump_url)
     try:
         await channel.send(body, allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:
         log.warning(f"pod-stage: could not ask pod chat for {needed} more on {name}", exc_info=True)
 
 
-async def _renumber_source(bot: commands.Bot, source: "_Source") -> None:
+def _renumber_source(source: "_Source") -> None:
     """Give the original pod its number, the first time a sibling appears. It is born without one and
-    only becomes pod 1 once there is a pod 2 to tell it apart from."""
+    only becomes pod 1 once there is a pod 2 to tell it apart from.
+
+    The thread it is sitting in keeps its own name. Table 1 is about to move into a thread of its own
+    carrying the numbered name, and the one left behind goes back to being the pod everybody signed up
+    to rather than any one table."""
     if source.numbered:
         return
-    numbered = numbered_pod_name(source.base_name, 1)
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, source.event_id)
         if event is not None:
-            event.name = numbered
+            event.name = numbered_pod_name(source.base_name, 1)
             session.commit()
     source.numbered = True
-    thread_id = await asyncio.to_thread(load_event_thread_id_sync, source.event_id)
-    if thread_id and thread_id != "pending":
-        thread = bot.get_channel(int(thread_id))
-        if isinstance(thread, discord.Thread):
-            try:
-                await thread.edit(name=display_pod_name(numbered)[:100])
-            except discord.HTTPException:
-                log.warning(f"pod-stage: could not rename thread {thread_id}", exc_info=True)
 
 
 class _Source:
@@ -223,3 +307,7 @@ async def _card_channel(bot: commands.Bot, source: "_Source") -> "discord.TextCh
     thread = bot.get_channel(int(thread_id))
     parent = getattr(thread, "parent", None)
     return parent if isinstance(parent, discord.TextChannel) else None
+
+
+async def setup(bot: commands.Bot) -> None:
+    register_stage_pods(stage_pods)

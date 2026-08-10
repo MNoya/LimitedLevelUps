@@ -31,7 +31,6 @@ from bot.services.pod_staging import (
     SeatOffer,
     confirm_seat_sync,
     pod_is_numbered,
-    pod_numeral,
     take_seat_sync,
 )
 
@@ -153,11 +152,10 @@ def _join_answer(
     join_line = format_join_line(session_id, handle)
     if offer is None or guild_id is None or offer.pod.index <= 1 and not offer.switched:
         return join_line
-    numeral = pod_numeral(offer.pod.index)
     if offer.switched and offer.pod.index > 1:
-        seated = MSG_TABLE_FULL_SEATED.format(full=pod_numeral(offer.pod.index - 1), numeral=numeral)
+        seated = MSG_TABLE_FULL_SEATED.format(full=offer.pod.index - 1, index=offer.pod.index)
     else:
-        seated = MSG_TABLE_SEATED.format(numeral=numeral)
+        seated = MSG_TABLE_SEATED.format(index=offer.pod.index)
     return f"{seated} {pod_thread_link(guild_id, offer.pod)}\n{join_line}"
 
 

@@ -59,9 +59,6 @@ CUSTOM_FORMATS: dict[str, PodFormat] = {
 
 SELECT_PLACEHOLDER = "Select a format"
 FORMAT_LOCKED_MSG = "The draft has already started — the format can't be changed now."
-EVENT_MISSING_MSG = "Pod-draft event not found."
-
-
 def custom_formats() -> list[PodFormat]:
     return list(CUSTOM_FORMATS.values())
 

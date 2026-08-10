@@ -16,8 +16,9 @@ refuses, enforced here in the DB so a persistent button that outlives it is iner
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
@@ -33,7 +34,8 @@ from bot.services import pod_event_settings
 from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services import pod_team
-from bot.services.pod_confirm import CONFIRM_WINDOW_MINUTES
+from bot.services.pod_confirm import CONFIRM_WINDOW_MINUTES, SESSION_SEATS, attendance_for_event_sync
+from bot.services.pod_staging import pod_is_numbered
 from bot.services.pod_draft_manager import (
     PodDraftManager,
     set_card_close_hook,
@@ -69,7 +71,10 @@ from bot.services.pod_format_schedule import formats_for
 from bot.services.pod_slot import COLLISION_INDEX_RE, next_collision_index, pod_display_name
 from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import (
+    build_attendance_hold_body,
     build_lobby_open_body,
+    refresh_roster_reminder_for_event,
+    repost_roster_reminder,
     schedule_roster_reminder,
     schedule_team_vote_offer,
     signal_rsvps_sync,
@@ -83,6 +88,20 @@ from bot.tasks.pod_underfill import (
 
 
 log = logging.getLogger(__name__)
+
+StagePodsHook = Callable[[commands.Bot, str], Awaitable[None]]
+_stage_pods_hook: StagePodsHook | None = None
+
+_holding: dict[str, bool] = {}
+"""Pods that have held, against whether they are still waiting. Kept in memory rather than on the row.
+
+The hold lasts ten minutes and nothing outside this process asks about it, so a column would be written
+and read by one module inside one window. A restart inside those ten minutes forgets, which costs the
+pod one repeated ping when the re-armed T-10 job lands.
+
+A released pod stays in here as False, which is what lets its card show the organizer controls greyed out
+instead of dropping them: a control that vanishes reads as one that was never there.
+"""
 
 REMINDER_LEAD_MIN = 10
 CARD_CLOSE_WINDOW_H = 48
@@ -406,7 +425,11 @@ def join_slot_signal_sync(
     signal_id: str, discord_user_id: str, display_name: str,
 ) -> bool:
     """Add one player to a pre-opened slot, the write behind the Play Again button. False when the slot is
-    gone or no longer gathering, or the player is already on it."""
+    gone or no longer gathering, or the player is already on it.
+
+    Someone who declined is not on it, so their kept row is put back to Yes instead of refusing them. That
+    row is the whole point of keeping a decline: pressing Leave and signing up again returns the player to
+    the place their original signup time earns them."""
     with SessionLocal() as session:
         signal = session.get(PodSignal, signal_id)
         if signal is None or signal.status != pod_signals.STATUS_OPEN:
@@ -417,12 +440,16 @@ def join_slot_signal_sync(
                 PodSignalMember.discord_user_id == discord_user_id,
             )
         ).scalar_one_or_none()
-        if existing is not None:
+        if existing is not None and existing.rsvp != pod_signals.RSVP_NO:
             return False
-        session.add(PodSignalMember(
-            signal_id=signal_id, discord_user_id=discord_user_id, display_name=display_name,
-            format_interest=get_format_interests(session, discord_user_id),
-        ))
+        if existing is not None:
+            existing.rsvp = pod_signals.RSVP_YES
+            existing.display_name = display_name
+        else:
+            session.add(PodSignalMember(
+                signal_id=signal_id, discord_user_id=discord_user_id, display_name=display_name,
+                format_interest=get_format_interests(session, discord_user_id),
+            ))
         signal.last_activity_at = datetime.now(timezone.utc)
         session.commit()
         return True
@@ -631,12 +658,17 @@ def set_rsvp(
     session: Session, message_id: str, discord_user_id: str, display_name: str, rsvp: str,
     confirming: bool = False,
 ) -> RsvpResult | None:
-    """RSVP on a scheduled card: Yes or Maybe move the member there; No removes their signup entirely,
-    since No is not a tracked roster. A Set Championship is the exception — it keeps No as a tracked
-    state so the card can show who already declined. Clicking the state they already hold is a no-op.
-    `rsvp` in the result is the recorded state, None once removed; `joined` is True only when the member
-    freshly entered Yes. Scheduled signals are born fired and never expire, so only a stray expired row
-    refuses. Does not commit."""
+    """RSVP on a scheduled card: the member moves to whichever state they pressed, including No.
+
+    A decline keeps the row so the signup time survives it. Pressing Leave by mistake and signing up
+    again then costs nothing, where deleting the row sent that player to the back of a queue ordered by
+    `created_at`. It also gives the roster card a decline to show, which is the answer worth the most to
+    the plan. Confirming and then declining clears the confirmation, so a decline never counts toward the
+    players a table is built around.
+
+    Clicking the state they already hold is a no-op. `joined` is True only when the member freshly
+    entered Yes. Scheduled signals are born fired and never expire, so only a stray expired row refuses.
+    Does not commit."""
     signal = _scheduled_signal_by_surface(session, message_id)
     if signal is None:
         return None
@@ -649,7 +681,6 @@ def set_rsvp(
         )
 
     event = session.get(PodDraftEvent, signal.event_id) if signal.event_id is not None else None
-    tracks_no = is_championship(event.name if event is not None else None)
     existing = session.execute(
         select(PodSignalMember).where(
             PodSignalMember.signal_id == signal.id,
@@ -660,35 +691,29 @@ def set_rsvp(
     confirming = confirming or _inside_confirmation_window(event, rsvp)
     confirmed_at = datetime.now(timezone.utc) if confirming else None
     joined = False
-    if rsvp == pod_signals.RSVP_NO and not tracks_no:
-        recorded: str | None = None
-        if existing is not None:
-            session.delete(existing)
-    else:
-        recorded = rsvp
-        if existing is None:
-            session.add(PodSignalMember(
-                signal_id=signal.id, discord_user_id=discord_user_id, display_name=display_name, rsvp=rsvp,
-                format_interest=get_format_interests(session, discord_user_id), confirmed_at=confirmed_at,
-            ))
-            signal.last_activity_at = datetime.now(timezone.utc)
+    if existing is not None:
+        if existing.rsvp != rsvp:
             joined = rsvp == pod_signals.RSVP_YES
-        else:
-            if existing.rsvp != rsvp:
-                joined = rsvp == pod_signals.RSVP_YES
-                existing.rsvp = rsvp
-            if confirming:
-                existing.confirmed_at = confirmed_at
-            elif rsvp == pod_signals.RSVP_MAYBE:
-                existing.confirmed_at = None
-            existing.display_name = display_name
+            existing.rsvp = rsvp
+        if confirming:
+            existing.confirmed_at = confirmed_at
+        elif rsvp in (pod_signals.RSVP_MAYBE, pod_signals.RSVP_NO):
+            existing.confirmed_at = None
+        existing.display_name = display_name
+    elif rsvp != pod_signals.RSVP_NO:
+        session.add(PodSignalMember(
+            signal_id=signal.id, discord_user_id=discord_user_id, display_name=display_name, rsvp=rsvp,
+            format_interest=get_format_interests(session, discord_user_id), confirmed_at=confirmed_at,
+        ))
+        signal.last_activity_at = datetime.now(timezone.utc)
+        joined = rsvp == pod_signals.RSVP_YES
     session.flush()
     rosters = _members_by_rsvp(session, signal.id)
     roster_interests = _render_interests(session, signal)
     yes_count = len(rosters[pod_signals.RSVP_YES])
-    yes_changed = was_yes != (recorded == pod_signals.RSVP_YES)
+    yes_changed = was_yes != (rsvp == pod_signals.RSVP_YES)
     return RsvpResult(
-        _state(signal, yes_count), rosters, rsvp=recorded, joined=joined, closed=False,
+        _state(signal, yes_count), rosters, rsvp=rsvp, joined=joined, closed=False,
         yes_changed=yes_changed, roster_interests=roster_interests,
         event_name=event.name if event is not None else None,
         event_time=event.event_time if event is not None else None,
@@ -724,6 +749,7 @@ def set_membership(
     result (no mutation) when the signal has expired. A fired signal still accepts joins — over-signups
     ride along and are in the roster when the lobby opens. `joined` is True only on a fresh add; `changed`
     is True when the roster actually moved. Bumps last_activity_at on an add so queue teardown resets.
+    A player holding a decline counts as off the bucket, so joining puts their kept row back to Yes.
     Does not commit.
 
     Every surface names the action it takes. A press whose meaning depended on membership the presser could
@@ -743,8 +769,14 @@ def set_membership(
         )
     ).scalar_one_or_none()
     add = action == "join"
+    declined = existing is not None and existing.rsvp == pod_signals.RSVP_NO
     joined = changed = False
-    if add and existing is None:
+    if add and declined:
+        existing.rsvp = pod_signals.RSVP_YES
+        existing.display_name = display_name
+        signal.last_activity_at = datetime.now(timezone.utc)
+        joined = changed = True
+    elif add and existing is None:
         session.add(PodSignalMember(
             signal_id=signal.id, discord_user_id=discord_user_id, display_name=display_name,
             format_interest=get_format_interests(session, discord_user_id),
@@ -1603,6 +1635,24 @@ def scheduled_card_ref_sync(event_id: str) -> tuple[str, str, str, datetime | No
     return (row[0], row[1], row[2], row[3]) if row else None
 
 
+def move_scheduled_card_sync(event_id: str, message_id: str, thread_id: str) -> None:
+    """Point a pod at a new card and a new thread. The signal's message id is what an RSVP press
+    resolves through, so this is what makes the new card the live one."""
+    with SessionLocal() as session:
+        signal = session.execute(
+            select(PodSignal).where(
+                PodSignal.event_id == event_id, PodSignal.kind == pod_signals.KIND_SCHEDULED,
+            )
+        ).scalar_one_or_none()
+        if signal is not None:
+            signal.message_id = message_id
+            signal.thread_message_id = None
+        event = session.get(PodDraftEvent, event_id)
+        if event is not None:
+            event.discord_thread_id = thread_id
+        session.commit()
+
+
 def scheduled_card_opener_sync(event_id: str) -> str | None:
     """The discord user id of whoever scheduled this pod with /draft, so a full card re-render keeps
     crediting them. None for every pod the launcher or a job created."""
@@ -1797,11 +1847,15 @@ async def launch_from_signal(
     return event_id
 
 
-async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
+async def open_ondemand_lobby(bot: commands.Bot, event_id: str, allow_hold: bool = True) -> None:
     """Seat the bot in the Draftmancer session, then post the link and ping the roster. Draftmancer makes
     whoever enters an empty session first its owner, so the bot has to be holding ownership before any
     player can see the link. A session it could not own is abandoned for a fresh one, which makes the
-    announced link always a session the bot controls."""
+    announced link always a session the bot controls.
+
+    A pod expecting more players than one session seats holds instead, since opening a room is what
+    commits the pod to a shape and nobody yet knows which shape the answers make. `allow_hold` is False
+    on the release at the other end of that hold, which is this same path with the question settled."""
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, event_id)
         if event is None:
@@ -1814,9 +1868,14 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
         session_id = event.draftmancer_session
         set_code = event.set_code
         event_name = event.name
+        event_time = event.event_time
 
     roster = await asyncio.to_thread(roster_for_event_sync, event_id)
     single_table = await asyncio.to_thread(championship_seeds.rank_override_sync, event_id) is not None
+    if allow_hold and not single_table and await _hold_for_attendance(
+        bot, event_id, event_time, thread_id, roster,
+    ):
+        return
     if single_table:
         roster = await asyncio.to_thread(championship_seeds.playing_roster_sync, event_id, roster)
     display_names = [name for _, name in roster]
@@ -1847,7 +1906,9 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
             set_code=set_code, draftmancer_url=draftmancer_url, seat_mentions=mentions,
         )
     else:
-        body = build_lobby_open_body(draftmancer_url, " ".join(mentions))
+        body = build_lobby_open_body(
+            draftmancer_url, " ".join(mentions), numbered=pod_is_numbered(event_name),
+        )
     try:
         await thread.send(
             body, view=build_join_view(session_id),
@@ -1874,6 +1935,109 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str) -> None:
     if manager is not None:
         manager.arm_team_vote_offer(len(display_names))
         await _apply_scheduled_pick_timer(event_id, manager)
+
+
+async def _hold_for_attendance(
+    bot: commands.Bot, event_id: str, event_time: datetime, thread_id: int,
+    roster: list[tuple[str, str]],
+) -> bool:
+    """Hold a pod that expects more players than one Draftmancer session seats, and say whether it held.
+
+    Ten seats is the whole session, so at ten or fewer opening the room is itself the attendance check:
+    everyone who arrives has a seat and nothing needs deciding. Above ten the pod has to be split, and
+    which split is right depends on answers it does not have yet. Opening a room first would commit it to
+    a shape while the answers that pick the shape are still outstanding, which is how a pod ends up
+    running eight while four more wanted in.
+
+    So the last ten minutes go on collecting those answers. The thread keeps the one roster card it
+    already has, moved to the bottom and carrying the ask, and the rooms open at the start time against
+    what the pod knows by then. Everyone signed up is mentioned, including Maybe, because a Maybe who
+    confirms is a player the plan seats."""
+    attendance = await asyncio.to_thread(attendance_for_event_sync, event_id)
+    if attendance.expected <= SESSION_SEATS:
+        return False
+    if _holding.get(event_id):
+        log.info(f"attendance hold on {event_id}: already holding; not asking twice")
+        return True
+    _holding[event_id] = True
+    maybe_roster = await asyncio.to_thread(maybe_roster_for_event_sync, event_id)
+    thread = await fetch_pod_thread(bot, thread_id)
+    if thread is not None:
+        with contextlib.suppress(discord.HTTPException):
+            await thread.send(
+                build_attendance_hold_body(
+                    attendance.signed_up,
+                    [f"<@{discord_id}>" for discord_id, _name in roster],
+                    [f"<@{discord_id}>" for discord_id, _name in maybe_roster],
+                ),
+                allowed_mentions=discord.AllowedMentions(users=True),
+            )
+    await repost_roster_reminder(event_id)
+    _arm_release(bot, event_id, event_time)
+    log.info(
+        f"attendance hold on {event_id}: {attendance.expected} expected over {SESSION_SEATS} seats, "
+        f"releasing at {event_time.isoformat()}"
+    )
+    return True
+
+
+def _arm_release(bot: commands.Bot, event_id: str, event_time: datetime) -> None:
+    scheduler = getattr(bot, "pod_scheduler", None)
+    if scheduler is None:
+        log.error(f"_arm_release: pod_scheduler missing; release for {event_id} lost")
+        return
+    now = datetime.now(timezone.utc)
+    run_at = event_time if event_time > now else now + timedelta(seconds=2)
+    scheduler.add_job(
+        release_attendance_hold, "date", run_date=run_at, args=[bot, event_id],
+        id=release_job_id(event_id), replace_existing=True,
+    )
+    log.info(f"armed attendance-hold release for {event_id} at {run_at.isoformat()}")
+
+
+async def release_attendance_hold(bot: commands.Bot, event_id: str) -> None:
+    """End the hold at the pod's start time and open the rooms the answers ask for.
+
+    Staging runs first and to completion, so the room opened here is opened for this table's players
+    rather than for everyone who signed up. The card is repainted before any of it, while the pod is
+    still pending and will still take an edit, which is what greys out the organizer controls."""
+    _holding[event_id] = False
+    await refresh_roster_reminder_for_event(event_id)
+    if _stage_pods_hook is not None:
+        await _stage_pods_hook(bot, event_id)
+    await open_ondemand_lobby(bot, event_id, allow_hold=False)
+
+
+def is_holding(event_id: str) -> bool:
+    """Whether this pod is still waiting out its attendance hold."""
+    return _holding.get(event_id, False)
+
+
+def forget_hold(event_id: str) -> None:
+    """Drop what this process remembers about a pod's hold, for a sandbox starting the sequence over."""
+    _holding.pop(event_id, None)
+
+
+def has_held(event_id: str) -> bool:
+    """Whether this pod ever held, which is what says its card should carry the organizer controls at
+    all. Whether they are live is `is_holding`."""
+    return event_id in _holding
+
+
+def cancel_release(bot: commands.Bot, event_id: str) -> None:
+    """Stand the scheduled release down, for a hold ended by hand before its start time."""
+    scheduler = getattr(bot, "pod_scheduler", None)
+    if scheduler is None:
+        return
+    with contextlib.suppress(Exception):
+        scheduler.remove_job(release_job_id(event_id))
+
+
+def register_stage_pods(hook: StagePodsHook) -> None:
+    """The staging layer registers itself here so the hold can release into it without importing the
+    command module, which imports this one back. Same reason as `set_second_table_hook`."""
+    global _stage_pods_hook
+    _stage_pods_hook = hook
 
 
 async def _apply_scheduled_pick_timer(event_id: str, manager: PodDraftManager) -> None:
@@ -1947,9 +2111,17 @@ def _arm_open(bot: commands.Bot, event_id: str, event_time: datetime) -> None:
         run_at = now + timedelta(seconds=2)
     scheduler.add_job(
         open_ondemand_lobby, "date", run_date=run_at, args=[bot, event_id],
-        id=f"pod-ondemand-open-{event_id}", replace_existing=True,
+        id=open_job_id(event_id), replace_existing=True,
     )
     log.info(f"armed on-demand lobby open for {event_id} at {run_at.isoformat()}")
+
+
+def open_job_id(event_id: str) -> str:
+    return f"pod-ondemand-open-{event_id}"
+
+
+def release_job_id(event_id: str) -> str:
+    return f"pod-hold-release-{event_id}"
 
 
 def arm_slot_expiry(bot: commands.Bot, signal_id: str, slot_time: datetime) -> None:
@@ -2343,11 +2515,18 @@ def _member_names(session: Session, signal_id: str) -> list[str]:
 
 
 def _member_rows(session: Session, signal_id: str) -> list[tuple[str, str]]:
-    """(discord id, display name) per roster row in join order."""
+    """(discord id, display name) per roster row in join order.
+
+    A decline is kept on the signal so the signup time survives a misclick, which makes it the one state
+    that is on the table and off the list. Every count and roster built from here means players who are
+    coming, so it is filtered out at the source."""
     return [
         (row[0], row[1]) for row in session.execute(
             select(PodSignalMember.discord_user_id, PodSignalMember.display_name)
-            .where(PodSignalMember.signal_id == signal_id)
+            .where(
+                PodSignalMember.signal_id == signal_id,
+                PodSignalMember.rsvp != pod_signals.RSVP_NO,
+            )
             .order_by(PodSignalMember.created_at)
         ).all()
     ]

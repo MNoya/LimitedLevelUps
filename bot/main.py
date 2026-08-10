@@ -39,6 +39,7 @@ from bot.commands.pod_rally import setup as setup_pod_rally
 from bot.commands.pod_schedule import setup as setup_pod_schedule
 from bot.commands.report_results import setup as setup_report_results
 from bot.commands.roles import RolesView, setup as setup_roles
+from bot.commands.pod_stage import setup as setup_pod_stage
 from bot.commands.pod_table import setup as setup_pod_table
 from bot.commands.peasant import setup as setup_peasant
 from bot.commands.preview_season_awards import setup as setup_preview_season_awards
@@ -61,6 +62,7 @@ from bot.commands.testchampionship import setup as setup_testchampionship
 from bot.commands.testcomponent import setup as setup_testcomponent
 from bot.commands.testlobby import setup as setup_testlobby
 from bot.commands.testmockcard import setup as setup_testmockcard
+from bot.commands.testsandbox import SandboxButton, setup as setup_testsandbox
 from bot.commands.testschedule import setup as setup_testschedule
 from bot.commands.testthreadintro import setup as setup_testthreadintro
 from bot.commands.testpolls import setup as setup_testpolls
@@ -77,6 +79,7 @@ from bot.services.bot_log import BotLog
 from bot.services.lobby_embed import LobbyReadyButtonView, ReadyCheckAnswerView
 from bot.services.pod_draft_manager import rehydrate_active_lobbies
 from bot.services.pod_team_board import TeamReportButton, TeamRevealReportButton
+from bot.services.pod_hold_view import AttendeesButton, MovePlayersButton, OpenTablesButton
 from bot.services.pod_join_button import JoinDraftButton, MockJoinDraftButton
 from bot.services.pod_link_dm import DmLinkArenaButton
 from bot.services.pod_disconnect import DisconnectVoteButton
@@ -250,6 +253,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_report_results(bot)
         await setup_roles(bot)
         await setup_mock_draft(bot)
+        await setup_pod_stage(bot)
         await setup_pod_table(bot)
         await setup_peasant(bot)
         await setup_preview_season_awards(bot)
@@ -266,6 +270,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testads(bot)
         await setup_testp0p1reminder(bot)
         await setup_testawards(bot)
+        await setup_testsandbox(bot)
         await setup_testschedule(bot)
         await setup_testthreadintro(bot)
         await setup_testpolls(bot)
@@ -283,6 +288,10 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(FormatPollButton)
         bot.add_dynamic_items(AddFormatButton)
         bot.add_dynamic_items(JoinDraftButton)
+        bot.add_dynamic_items(AttendeesButton)
+        bot.add_dynamic_items(OpenTablesButton)
+        bot.add_dynamic_items(MovePlayersButton)
+        bot.add_dynamic_items(SandboxButton)
         bot.add_dynamic_items(MockJoinDraftButton)
         bot.add_dynamic_items(DmLinkArenaButton)
         bot.add_dynamic_items(ChampionshipConfirmButton)
@@ -609,7 +618,9 @@ def build_bot(guild_id: int) -> commands.Bot:
         ))
         if not bot.startup_announced:
             bot.startup_announced = True
-            await bot.bot_log.post_plain(_deploy_announcement())
+            announcement = _deploy_announcement()
+            if announcement:
+                await bot.bot_log.post_plain(announcement)
             await rehydrate_active_tournaments(bot)
             await rehydrate_active_lobbies(bot)
             await heal_finished_cards(bot)
@@ -664,11 +675,12 @@ def _fmt_eta(delta: object) -> str:
     return f"{m}m"
 
 
-def _deploy_announcement() -> str:
-    """Build the startup channel post, enriching with Railway's git env vars if present."""
+def _deploy_announcement() -> str | None:
+    """The startup channel post, built from Railway's git env vars. None off Railway, where a restart is a
+    local run nobody needs told about."""
     sha = os.environ.get("RAILWAY_GIT_COMMIT_SHA") or ""
     if not sha:
-        return "🚀 Bot redeployed"
+        return None
     short = sha[:7]
     link = f"[`{short}`](<https://github.com/MNoya/DischordLeaderboard/commit/{sha}>)"
     raw = (os.environ.get("RAILWAY_GIT_COMMIT_MESSAGE") or "").strip()

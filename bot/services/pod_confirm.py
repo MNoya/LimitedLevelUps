@@ -20,23 +20,28 @@ from bot.commands.messages import (
 )
 from bot.database import SessionLocal
 from bot.models import PodSignal, PodSignalMember
-from bot.services.pod_signals import RSVP_MAYBE, RSVP_YES
+from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
 
 
 CONFIRM_TRIGGER_YES = 8
 CONFIRM_WINDOW_MINUTES = 60
 POD_SIZES = (8, 6, 10)
+SESSION_SEATS = max(POD_SIZES)
+MIN_TABLE = min(POD_SIZES)
 CONFIRMED = "confirmed"
 
 
 @dataclass(frozen=True)
 class Attendance:
-    """The three answers a signup can be holding an hour out. Saying they cannot make it deletes the
-    signup, so anyone who dropped is absent from all three."""
+    """The answers a signup can be holding an hour out.
+
+    A decline is kept rather than deleted, so someone who pressed Leave by mistake keeps the signup time
+    that orders them into a seat when they press Sign Up again."""
 
     confirmed: tuple[str, ...] = ()
     yes: tuple[str, ...] = ()
     maybe: tuple[str, ...] = ()
+    declined: tuple[str, ...] = ()
 
     @property
     def expected(self) -> int:
@@ -51,6 +56,11 @@ class Attendance:
     @property
     def answered(self) -> bool:
         return bool(self.confirmed)
+
+    def as_if_all_confirmed(self) -> "Attendance":
+        """The same pod with every outstanding Yes answered, which is the shape the card promises the room
+        it could still have."""
+        return Attendance(confirmed=self.confirmed + self.yes, maybe=self.maybe, declined=self.declined)
 
 
 def opens_confirmation(attendance: Attendance) -> bool:
@@ -117,20 +127,28 @@ def plan_tables(n: int) -> TablePlan:
 POD_AIM = 8
 
 
-def card_plan(attendance: Attendance) -> TablePlan:
-    """The plan as the roster card draws it, which aims at a table of eight until the room says otherwise.
+def seating_plan(attendance: Attendance) -> TablePlan:
+    """The tables this pod will open and who lands on each. The one answer to that question.
 
-    Eight is what the first Draftmancer table is opened for, so a quiet pod shows eight seats with the
-    empty ones visible rather than shrinking to a table of six nobody has decided on. Once the room is big
-    enough to split, the real plan takes over and the sizes are the ones it will actually run."""
-    plan = plan_tables(attendance.expected)
-    if len(plan.tables) == 1 and plan.tables[0].capacity < POD_AIM:
-        return TablePlan((Table(seated=plan.tables[0].seated, capacity=POD_AIM),))
-    return plan
+    Drawn by the card and built by the release; planned separately they disagreed silently, and a player
+    read one plan while a different one opened.
+
+    Only confirmed players count. Not being planned for is not being turned away — seat routing still
+    finds a walk-in a table with room. Planning around them put thirteen people in a room that holds
+    eight."""
+    shape = plan_tables(len(attendance.confirmed))
+    if not shape.tables:
+        return TablePlan((Table(seated=0, capacity=POD_AIM),)) if attendance.expected else shape
+    if len(shape.tables) == 1 and shape.tables[0].capacity < POD_AIM:
+        return TablePlan((Table(seated=shape.tables[0].seated, capacity=POD_AIM),))
+    return shape
 
 
 def attendance_for_event_sync(event_id: str) -> Attendance:
     """The answers currently held by the pod behind this event.
+
+    A decline outranks any confirmation the row still carries, since it is the later statement and the
+    only one that says the player is not coming.
 
     Empty for a pod with no signup roster, which is what a queue or poll pod is, and is why those never
     hold a lobby up: there is nobody the bot could say it is waiting for."""
@@ -145,13 +163,19 @@ def attendance_for_event_sync(event_id: str) -> Attendance:
             .where(PodSignalMember.signal_id == signal.id)
             .order_by(PodSignalMember.created_at)
         ).all()
-    buckets: dict[str, list[str]] = {CONFIRMED: [], RSVP_YES: [], RSVP_MAYBE: []}
+    buckets: dict[str, list[str]] = {CONFIRMED: [], RSVP_YES: [], RSVP_MAYBE: [], RSVP_NO: []}
     for state, name, confirmed_at in rows:
-        bucket = CONFIRMED if confirmed_at is not None else state
+        if state == RSVP_NO:
+            bucket = RSVP_NO
+        elif confirmed_at is not None:
+            bucket = CONFIRMED
+        else:
+            bucket = state
         if bucket in buckets:
             buckets[bucket].append(name)
     return Attendance(
-        confirmed=tuple(buckets[CONFIRMED]), yes=tuple(buckets[RSVP_YES]), maybe=tuple(buckets[RSVP_MAYBE]),
+        confirmed=tuple(buckets[CONFIRMED]), yes=tuple(buckets[RSVP_YES]),
+        maybe=tuple(buckets[RSVP_MAYBE]), declined=tuple(buckets[RSVP_NO]),
     )
 
 
@@ -182,6 +206,92 @@ def confirm_present_players_sync(event_id: str, discord_ids: Iterable[str]) -> i
         for member in members:
             member.confirmed_at = now
             member.rsvp = RSVP_YES
+        session.commit()
+        return len(members)
+
+
+def set_confirmations_sync(
+    event_id: str, confirmed_ids: Iterable[str], asked_about: Iterable[str] | None = None,
+) -> tuple[int, int]:
+    """Make the pod's confirmations exactly this set of players, and say how many are confirmed and how
+    many are still pending afterwards.
+
+    The organizer's answer replaces the roster's, both ways: someone they tick is confirmed even if they
+    never pressed anything, and someone they untick goes back to pending even if they did. A person in
+    the room knows things the buttons cannot, which is the whole reason the control exists. Unticking
+    never records a No, since not being counted and saying you are not coming are different answers and
+    only the player can give the second.
+
+    `asked_about` is who the organizer was actually shown, and nobody outside it is touched. A Discord
+    select holds twenty-five options, so a bigger pod is presented a slice of itself, and reading that
+    slice as the whole answer would unconfirm every player past the twenty-fifth for never appearing in
+    a list they were never in. The counts come back for the whole pod either way."""
+    wanted = set(confirmed_ids)
+    scope = set(asked_about) if asked_about is not None else None
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        signal = session.execute(
+            select(PodSignal).where(PodSignal.event_id == event_id)
+        ).scalar_one_or_none()
+        if signal is None:
+            return 0, 0
+        members = session.execute(
+            select(PodSignalMember).where(
+                PodSignalMember.signal_id == signal.id, PodSignalMember.rsvp == RSVP_YES,
+            )
+        ).scalars().all()
+        for member in members:
+            if scope is not None and member.discord_user_id not in scope:
+                continue
+            if member.discord_user_id in wanted:
+                member.confirmed_at = member.confirmed_at or now
+            else:
+                member.confirmed_at = None
+        session.commit()
+        confirmed = sum(1 for member in members if member.confirmed_at is not None)
+        return confirmed, len(members) - confirmed
+
+
+def card_tables(attendance: Attendance) -> tuple[TablePlan, bool]:
+    """The tables the card draws, and whether players still pending are drawn sitting at them.
+
+    One table seats everybody: there is nowhere else to put them, so a signup in a seat is a fact. Two
+    tables seat only the confirmed, since placing somebody says which room to walk into and the pod
+    cannot say that about a player it has not heard from.
+
+    One table that cannot hold them all seats only the confirmed as well: the overflow column is a
+    waitlist, and somebody who has not answered is Pending rather than waiting for a seat."""
+    whole = seating_plan(attendance.as_if_all_confirmed())
+    if len(whole.tables) <= 1 and not whole.waiting:
+        return whole, True
+    return seating_plan(attendance), False
+
+
+def decline_players_sync(event_id: str, discord_ids: Iterable[str]) -> int:
+    """Record these players as not coming, and say how many moved.
+
+    The organizer's hand on the answer only a player can normally give. Somebody who says in chat that
+    they cannot make it and never presses Leave otherwise stays on the roster holding a seat nobody can
+    take, and the tables are built one player wrong. The row is kept rather than deleted, exactly as a
+    Leave keeps it, so signing back up returns them to the place their original signup earned."""
+    wanted = set(discord_ids)
+    if not wanted:
+        return 0
+    with SessionLocal() as session:
+        signal = session.execute(
+            select(PodSignal).where(PodSignal.event_id == event_id)
+        ).scalar_one_or_none()
+        if signal is None:
+            return 0
+        members = session.execute(
+            select(PodSignalMember).where(
+                PodSignalMember.signal_id == signal.id,
+                PodSignalMember.discord_user_id.in_(wanted),
+            )
+        ).scalars().all()
+        for member in members:
+            member.rsvp = RSVP_NO
+            member.confirmed_at = None
         session.commit()
         return len(members)
 

@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from bot.commands.pod_table import TableClaimView, _existing_table, _players_committed_elsewhere
-from bot.services.pod_active import ACTIVE_POD_MANAGERS, ACTIVE_TABLE_VIEWS
+from bot.commands.pod_table import TableClaimView
+from bot.services.pod_active import ACTIVE_TABLE_VIEWS
 from bot.models import MagicSet, PodDraftEvent
 from bot.services.pod_drafts import (
     next_table_index,
@@ -197,62 +197,3 @@ def test_materialized_table_deregisters_from_the_table_registry(clean_table_regi
 
     assert materialized.superseded is False
     assert clean_table_registry["src-1"] is fresh
-
-
-@pytest.fixture
-def clean_manager_registry():
-    ACTIVE_POD_MANAGERS.clear()
-    yield ACTIVE_POD_MANAGERS
-    ACTIVE_POD_MANAGERS.clear()
-
-
-def _live_manager(*, claimed_ids=(), table_event_ids=()):
-    manager = MagicMock()
-    manager.non_bot_session_names.return_value = []
-    manager.claimed_discord_ids = set(claimed_ids)
-    manager.table_event_ids = set(table_event_ids)
-    return manager
-
-
-def test_a_gathering_join_card_is_the_pods_table(clean_manager_registry, clean_table_registry):
-    card, _ = _claim_card()
-    asyncio.run(card.activate())
-
-    assert _existing_table("src-1") is not None
-
-
-def test_a_fired_table_is_the_pods_table(clean_manager_registry, clean_table_registry):
-    ACTIVE_POD_MANAGERS["src-1"] = _live_manager(table_event_ids={"table-2"})
-
-    assert _existing_table("src-1") is not None
-
-
-def test_a_pod_with_no_table_of_its_own_is_open_to_an_offer(clean_manager_registry, clean_table_registry):
-    ACTIVE_POD_MANAGERS["src-1"] = _live_manager()
-    settled, _ = _claim_card()
-    settled.materialized = True
-    settled.thread = MagicMock()
-    ACTIVE_TABLE_VIEWS["other-pod"] = settled
-
-    assert _existing_table("src-1") is None
-
-
-def test_players_at_another_table_are_committed_elsewhere(clean_manager_registry, clean_table_registry):
-    ACTIVE_POD_MANAGERS["src-1"] = _live_manager(claimed_ids={"11"})
-    ACTIVE_POD_MANAGERS["table-2"] = _live_manager(claimed_ids={"21", "22"})
-    forming, _ = _claim_card(source_event_id="other-pod")
-    forming.claims = {31: "Cara", -1: "Fixture"}
-    asyncio.run(forming.activate())
-
-    busy = asyncio.run(_players_committed_elsewhere("src-1"))
-
-    assert busy == {"21", "22", "31"}
-
-
-def test_a_settled_join_card_commits_nobody(clean_manager_registry, clean_table_registry):
-    superseded, _ = _claim_card(source_event_id="other-pod")
-    superseded.claims = {41: "Dara"}
-    superseded.superseded = True
-    ACTIVE_TABLE_VIEWS["other-pod"] = superseded
-
-    assert asyncio.run(_players_committed_elsewhere("src-1")) == set()

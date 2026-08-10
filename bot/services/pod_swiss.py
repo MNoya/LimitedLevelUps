@@ -15,9 +15,6 @@ from dataclasses import dataclass
 
 
 _MIN_PCT = 1.0 / 3.0  # MTR floor for OMW% / OGW% per-opponent terms
-_GAMES_TO_WIN_MATCH = 2  # Bo3
-
-
 @dataclass(frozen=True)
 class Player:
     id: str    # stable per-tournament identifier (we use draftmancer_name)

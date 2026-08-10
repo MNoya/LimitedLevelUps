@@ -9,7 +9,7 @@ import asyncio
 import logging
 import re
 import unicodedata
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Iterable
 
 import discord
@@ -32,6 +32,43 @@ EM_SPACE = " "  # wide gap between items sharing one line, where a run of spac
 
 
 _detached: set["asyncio.Task"] = set()
+
+
+class RenderQueue:
+    """Collapse a burst of re-render requests for one key into a single pass.
+
+    A pod's surfaces are shared by everyone answering at once, and one render per press outruns what
+    Discord lets the bot edit a message: the queue that builds up puts the card players are watching
+    seconds behind the state it is meant to show, which they read as their press not registering.
+
+    The render is re-read from the database when it runs, so a coalesced burst renders once off the
+    settled roster rather than replaying whichever press happened to be last."""
+
+    def __init__(self, delay_s: float) -> None:
+        self.delay_s = delay_s
+        self._pending: set[str] = set()
+        self._tasks: dict[str, asyncio.Task] = {}
+
+    def request(self, key: str, render: "Callable[[], Coroutine]") -> None:
+        self._pending.add(key)
+        running = self._tasks.get(key)
+        if running is not None and not running.done():
+            return
+        self._tasks[key] = asyncio.create_task(self._drain(key, render))
+
+    async def _drain(self, key: str, render: "Callable[[], Coroutine]") -> None:
+        try:
+            while key in self._pending:
+                await asyncio.sleep(self.delay_s)
+                if key not in self._pending:
+                    break
+                self._pending.discard(key)
+                try:
+                    await render()
+                except Exception:  # noqa: BLE001 - a queued render must never die silently
+                    logger.warning(f"could not render {key}", exc_info=True)
+        finally:
+            self._tasks.pop(key, None)
 
 
 def run_detached(coro: "Coroutine", label: str) -> "asyncio.Task":
@@ -327,6 +364,16 @@ def first_image_url(message: "discord.Message", include_embeds: bool = False) ->
             if embed.thumbnail.url:
                 return embed.thumbnail.url
     return None
+
+
+CUSTOM_EMOJI_RE = re.compile(r"<(a?):([A-Za-z0-9_]+):(\d+)>")
+
+
+def message_caption(message: "discord.Message") -> str | None:
+    """The text a player wrote under a screenshot, stored as-is and rendered as plain text on the
+    site, so a custom emoji keeps only its ``:name:`` instead of the raw Discord snowflake form."""
+    text = CUSTOM_EMOJI_RE.sub(r":\2:", message.clean_content or "").strip()
+    return text or None
 
 
 def message_text(message: "discord.Message") -> str:

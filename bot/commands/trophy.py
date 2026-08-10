@@ -25,6 +25,7 @@ from bot.database import SessionLocal
 from bot.discord_helpers import (
     extract_avatar_hash,
     first_image_url,
+    message_caption,
     parse_message_link,
     player_deck_url,
     resolve_display_name,
@@ -521,7 +522,7 @@ async def _present_trophy_draft(
     """Parse a resolved post into a TrophyDraft and open the confirm view. Shared by the /trophy
     slash command and the Record Event message context menu."""
     author = message.author
-    caption = (message.clean_content or "").strip() or None
+    caption = message_caption(message)
     record = parse_caption_record(caption) or "3-0"
     draft = TrophyDraft(
         discord_id=str(author.id),

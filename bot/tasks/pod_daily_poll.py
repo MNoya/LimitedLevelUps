@@ -57,6 +57,7 @@ from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_format_poll
 from bot.services import pod_launch
+from bot.services.pod_hold_view import build_hold_items
 from bot.services.pod_active import set_pod_complete_hook
 from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
@@ -1176,10 +1177,16 @@ def build_reminder_view(event_id: str, confirming: bool = False) -> discord.ui.V
     """The roster reminder's controls, carrying the event id so they resolve the pod after a restart.
 
     On an oversubscribed pod the seat button becomes Confirm, so the people already on the roster have a
-    press that records something."""
+    press that records something. A pod waiting out its attendance hold also carries the two organizer
+    controls, which is the only window where either of them means anything."""
     view = discord.ui.View(timeout=None)
     view.add_item(ReminderRsvpButton(REMINDER_CONFIRM_STATE if confirming else RSVP_YES, event_id))
     view.add_item(ReminderRsvpButton(RSVP_NO, event_id))
+    for item in build_hold_items(
+        event_id, confirming=confirming, held=pod_launch.has_held(event_id),
+        holding=pod_launch.is_holding(event_id),
+    ):
+        view.add_item(item)
     return view
 
 

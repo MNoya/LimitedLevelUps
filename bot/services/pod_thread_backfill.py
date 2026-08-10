@@ -132,9 +132,6 @@ def extract_draft_log_attachment(messages: Sequence[ScrapedMessage]) -> tuple[st
 
 
 ROUND_FALLBACK = timedelta(minutes=55)
-PLACEHOLDER_SCORE = "2-1"
-
-
 def fill_reported_ats(matches: Sequence[MatchDraft], event_time: datetime) -> list[MatchDraft]:
     """Give every match a realistic reported_at — replay round-attribution windows derive from these.
     Matches without replay coverage borrow the latest known time in their round; rounds with no

@@ -62,6 +62,7 @@ from bot.services.mock_lobby_card import (
     build_mock_card,
     build_mock_complete_view,
 )
+from bot.services.pod_confirm import plan_tables
 from bot.services import pod_disconnect
 from bot.services import pod_event_settings
 from bot.services import pod_format
@@ -143,7 +144,6 @@ _DISCONNECT_GRACE_S = 120
 
 _SEEDING_REFRESH_HOOK = None
 _SEEDING_REPOST_HOOK = None
-_SECOND_TABLE_HOOK = None
 _CARD_CLOSE_HOOK = None
 _POD_CANCEL_HOOK = None
 _CARD_REFRESH_HOOK = None
@@ -215,20 +215,6 @@ def notify_rally_fired(bot, event_id: str) -> None:
     already drafting."""
     if _RALLY_FIRED_HOOK is not None:
         asyncio.create_task(_RALLY_FIRED_HOOK(bot, event_id))
-
-
-def set_second_table_hook(callback) -> None:
-    """The table layer registers its second-table offer here so the manager can fire it at draft
-    start without importing the command module (which imports the manager)."""
-    global _SECOND_TABLE_HOOK
-    _SECOND_TABLE_HOOK = callback
-
-
-def notify_second_table_offer(bot, event_id: str) -> None:
-    """Fire the registered second-table offer (no-op if unset). Called once the draft starts and the
-    seated roster is locked; the offer itself decides whether enough players are left over to bother."""
-    if _SECOND_TABLE_HOOK is not None:
-        asyncio.create_task(_SECOND_TABLE_HOOK(bot, event_id))
 
 
 def set_seeding_refresh_hook(callback) -> None:
@@ -2291,7 +2277,6 @@ class PodDraftManager:
         await self._retire_round_robin_offer()
         await self._retire_format_poll_offer()
         await asyncio.to_thread(self._seed_participants_at_draft_start)
-        notify_second_table_offer(self.bot, self.event_id)
         notify_card_phase(self.bot, self.event_id)
         if self.pairing_mode == "team":
             await assign_teams_at_draft_start(self)
@@ -2452,10 +2437,15 @@ class PodDraftManager:
 
     @property
     def _lobby_full_count(self) -> int:
-        """How many players make this lobby worth a Ready Check nudge. A table capped under a full pod is
-        full at its own cap; a wider one still gets asked at a pod's worth, since the eight who turned up
-        should not wait on two more who may not."""
-        return min(self.max_players, _LOBBY_FULL_THRESHOLD)
+        """How many players make this lobby worth a Ready Check nudge: the table this roster asks for,
+        capped by the seats the room holds.
+
+        The size the plan gives, not the count on the roster, so nine players are one short of their table
+        of ten rather than full. The widest table the plan holds, not the first, since a roster that has
+        not split yet is still one room."""
+        planned = plan_tables(self.expected_attendee_count).tables
+        widest = max(table.capacity for table in planned) if planned else _LOBBY_FULL_THRESHOLD
+        return min(self.max_players, widest)
 
     def _suppress_lobby_full_prompt(self) -> None:
         """Retire the auto-nudge for this lobby once a Ready Check has been initiated, so it can't fire
