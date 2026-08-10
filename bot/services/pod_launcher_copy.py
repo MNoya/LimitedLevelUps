@@ -15,7 +15,7 @@ from bot.services import pod_format_interest as fi
 
 
 POLL_TITLE = "Daily Pod Launcher"
-POLL_INTRO_TIME_ONLY = "### Choose a time to draft"
+POLL_INTRO_TIME_ONLY = "### Choose a time to draft {format}"
 POLL_INTRO_TIME_AND_FORMAT = "### Choose a time and format to draft"
 POLL_MECHANICS = (
     "▫️Pod event thread opens at **{threshold} players**\n"
@@ -28,8 +28,6 @@ ARCHIVE_INTRO = "### On This Day"
 MARKER_CLOSED = "Closed"
 FINISHED_MARK = "🏆"
 PLAYING_MARK = "⚔️"
-SECTION_NEXT = "**Next**"
-PLAYED_FOLDED = f"{NBSP * 6}and {{count}} more draft{{plural}} played"
 NEXT_EMOJI = "chordoHello"
 MSG_ON_BOTH_PODS = "You are on both {slot} Pods: {formats}"
 MSG_ON_SEVERAL_PODS = "You are on all {count} {slot} Pods: {formats}"

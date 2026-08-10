@@ -238,12 +238,13 @@ async def setup(bot: commands.Bot) -> None:
     @commands.is_owner()
     async def test_rolling(ctx: commands.Context) -> None:
         """Owner-only. Post the rolling launcher render across its situations as static previews from
-        fixtures: a fresh morning board, one slot finished (Played over Next), the full 2x2 with both
-        finished, a multi-table variant, a slot whose sibling format closed unfired, a team draft, and the
-        handoff (retired On This Day history plus the fresh next-day card) — plus the next-day Play Again
-        prompt, whose button is live and joins the soonest open slot of that name. The embeds are fixtures: no
-        signals, threads, or jobs. Reuses the production embed and view builders so the preview can't drift
-        from what players see."""
+        fixtures: a fresh morning board, one lane whose draft started and rolled to tomorrow, both lanes
+        rolled, a slot whose sibling format closed unfired, and the handoff (retired On This Day history plus
+        the fresh next-day card), plus the next-day Play Again prompt, whose button is live and joins the
+        soonest open slot of that name. A pod that started leaves the live board, so the point to check is
+        that each column reads as the slot still open rather than as the day behind it; the winners only
+        surface on the retired card. The embeds are fixtures: no signals, threads, or jobs. Reuses the
+        production embed and view builders so the preview can't drift from what players see."""
         guild = ctx.guild
         channel_id = str(ctx.channel.id)
         set_code = active_set_code()
@@ -269,34 +270,19 @@ async def setup(bot: commands.Bot) -> None:
             view = None if closed else PodPollView(slots, guild)
             await ctx.send(embed=build_poll_embed(slots, guild, closed=closed), view=view)
 
-        await show("A. Fresh morning board — both slots gathering today", [
+        await show("A. Fresh morning board, both slots gathering today", [
             early_today(count=_ROLL_COUNT_FULL),
             late_today(count=_ROLL_COUNT_SMALL),
         ])
 
-        await show("B. Early finished — Played section links the pod, Next section is the upcoming day", [
+        await show("B. Early started its draft, so the column drops it and offers tomorrow's Early slot", [
             early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
             late_today(count=_ROLL_COUNT_SMALL),
             early_tom(count=_ROLL_COUNT_SMALL),
         ])
 
-        await show("B (playing). Early fired but the draft is still running — Playing section, no winner yet", [
-            early_today(count=_ROLL_COUNT_FULL, **playing),
-            late_today(count=_ROLL_COUNT_SMALL),
-            early_tom(count=_ROLL_COUNT_SMALL),
-        ])
-
-        await show("C. Both finished — full 2x2, each column stacks Played over Next", [
+        await show("C. Both lanes started, so the full 2x2 is tomorrow's slots and today is off the board", [
             early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
-            late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
-            early_tom(count=_ROLL_COUNT_SMALL),
-            late_tom(count=_ROLL_COUNT_SMALL),
-        ])
-
-        await show("C (multi-table). Early fired two tables today — the second table joins Played", [
-            early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
-            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=12,
-                          fired=True, channel_id=channel_id, set_code=set_code, winner="LSV", table=2),
             late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
             early_tom(count=_ROLL_COUNT_SMALL),
             late_tom(count=_ROLL_COUNT_SMALL),
@@ -311,14 +297,7 @@ async def setup(bot: commands.Bot) -> None:
             late_today(count=_ROLL_COUNT_SMALL),
         ])
 
-        await show("C (team). Late was a team draft — the winning side is credited and links no seat", [
-            early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
-            late_today(count=_ROLL_COUNT_FULL, winner="Green Team", seat=False, **played),
-            early_tom(count=_ROLL_COUNT_SMALL),
-            late_tom(count=_ROLL_COUNT_SMALL),
-        ])
-
-        await ctx.send("**D. Handoff at 11:00 — the old card retires to a compact On This Day history**")
+        await ctx.send("**D. Handoff at 11:00, the old card retires to a compact On This Day history**")
         await ctx.send(embed=build_poll_embed([
             early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
             late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
@@ -335,48 +314,8 @@ async def setup(bot: commands.Bot) -> None:
         ]
         embed, view = build_play_again_prompt(next_keys, guild)
         await ctx.send(
-            "**E. Play Again prompt — posted in a finished pod's thread, offering tomorrow's formats**")
+            "**E. Play Again prompt, posted in a finished pod's thread, offering tomorrow's formats**")
         await ctx.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
-
-    @test_group.command(name="widths")
-    @commands.is_owner()
-    async def test_widths(ctx: commands.Context, crowded_pods: int = _WIDTH_CROWDED_PODS) -> None:
-        """Owner-only. Post the Played row at the widths that decide whether it wraps: a short set code with
-        short names, the long cube label, a second table, and a winner name past what a column fits. Every
-        board pairs a short name against a long one, which is the pair that pushed the two columns out of
-        level, so the check is whether both Next headers still sit on the same line. Fixtures through the
-        production embed builder, no signals.
-
-        The last board stacks `crowded_pods` played pods in one column, which is what used to push the field
-        past its limit: whatever the count, the column shows the last few in full over a count line."""
-        guild = ctx.guild
-        channel_id = str(ctx.channel.id)
-        today, tomorrow, early, late, early_next, late_next = _rolling_lanes()
-
-        def played(bucket, code, winner, offset, table=None):
-            return _rolling_slot(
-                bucket, slot_event_time(today, bucket.key), count=_ROLL_COUNT_FULL, offset=offset,
-                fired=True, finished=True, channel_id=channel_id, set_code=code, winner=winner, table=table,
-            )
-
-        def gathering(bucket, offset):
-            return _rolling_slot(bucket, slot_event_time(tomorrow, bucket.key), count=_ROLL_COUNT_SMALL,
-                                 offset=offset)
-
-        for label, code, short_winner, long_winner, tables in _WIDTH_CASES:
-            slots = [played(early, code, short_winner, 0), played(late, code, long_winner, 6)]
-            if tables:
-                slots.append(played(early, code, _handle(1), 12, table=2))
-            slots += [gathering(early_next, 3), gathering(late_next, 9)]
-            await ctx.send(f"**{label}**")
-            await ctx.send(embed=build_poll_embed(slots, guild))
-        crowded = [
-            played(early, pod_format.PEASANT_CODE, _handle(index), index, table=index + 1 if index else None)
-            for index in range(min(crowded_pods, len(HALL_OF_FAME)))
-        ]
-        crowded += [played(late, None, _handle(20), 20), gathering(early_next, 3), gathering(late_next, 9)]
-        await ctx.send(f"**{_WIDTH_CROWDED_LABEL}**")
-        await ctx.send(embed=build_poll_embed(crowded, guild))
 
     @test_group.command(name="launcher")
     @commands.is_owner()
@@ -771,12 +710,6 @@ _ROLL_COUNT_SMALL = 3
 _ROSTER_NAMES = HALL_OF_FAME
 
 
-def _handle(*indexes: int) -> str:
-    """A fixture Discord handle of a chosen length, joined out of hall-of-fame names so a width preview
-    never puts an invented community member on the board."""
-    return "_".join(HALL_OF_FAME[index].replace(" ", "") for index in indexes)
-
-
 def _yes_no(value: bool) -> str:
     return "yes" if value else "no"
 
@@ -785,18 +718,6 @@ def _posted_or_skipped(value: bool) -> str:
     return "posted" if value else "skipped"
 
 
-_WIDTH_CASES = (
-    ("A. Short set code, short names: both rows keep their date", None, _handle(0), _handle(4), False),
-    ("B. Long cube label: the row drops the date to keep the winner beside the pod",
-     pod_format.PEASANT_CODE, _handle(0), _handle(12, 13), False),
-    ("C. Second table: the split table reads as an ordinal, so the row keeps its date", None,
-     _handle(0), _handle(12, 13), True),
-    ("D. Winner name past what a column fits: the name is cut once the date is already gone",
-     pod_format.PEASANT_CODE, _handle(1), _handle(12, 13, 14), True),
-)
-
-_WIDTH_CROWDED_PODS = 6
-_WIDTH_CROWDED_LABEL = "E. A column that played all day: the last drafts in full, then a count line"
 
 
 def _rolling_lanes():

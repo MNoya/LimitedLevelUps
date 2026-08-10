@@ -20,11 +20,9 @@ from bot.services.pod_signals import (
     next_lane_start,
 )
 from bot.sets import active_set_code
-from bot.services.pod_launcher_copy import FINISHED_MARK
 from bot.tasks.pod_daily_poll import (
     BOARD_LEAVE_ID,
     FIELD_VALUE_LIMIT,
-    PLAYED_ROWS_KEPT,
     PodPollView,
     _cards_holding_user,
     _clamped_value,
@@ -272,14 +270,6 @@ def test_seed_options_from_rankings_respects_the_option_cap():
     assert "NEW1" not in options
 
 
-def _played(index):
-    return replace(
-        _committed("EARLY", f"11{index}", f"22{index}"), finished=True, locked=True,
-        winner=HALL_OF_FAME[index], thread_name=f"Peasant Cube Aug {index + 1} Early Pod",
-        slot_time=BEFORE_EARLY, card_message_id=f"33{index}", card_channel_id="444",
-    )
-
-
 def _gathering_with_roster(size):
     return replace(
         _lazy("EARLY", STATUS_OPEN), count=size, slot_time=BEFORE_EARLY + timedelta(days=1),
@@ -287,25 +277,12 @@ def _gathering_with_roster(size):
     )
 
 
-@pytest.mark.parametrize("played_pods,rostered", [(1, 4), (3, 8), (12, 16), (30, 30)])
-def test_a_column_stays_inside_an_embed_field(played_pods, rostered):
-    """A day of played pods, each carrying a thread link and a winner seat link, plus a committed pod for
-    tomorrow, ran past the field limit and Discord refused the whole board edit."""
-    column = [_played(index) for index in range(played_pods)] + [_gathering_with_roster(rostered)]
-
-    value = _column_value(column, guild=None)
+@pytest.mark.parametrize("rostered", [4, 16, 30])
+def test_a_column_stays_inside_an_embed_field(rostered):
+    """A column running past the field limit made Discord refuse the whole board edit."""
+    value = _column_value([_gathering_with_roster(rostered)], guild=None)
 
     assert len(value) <= FIELD_VALUE_LIMIT
-
-
-def test_the_played_rows_past_the_cap_collapse_into_one_count_line():
-    column = [_played(index) for index in range(6)] + [_gathering_with_roster(8)]
-
-    value = _column_value(column, guild=None)
-
-    assert value.count(FINISHED_MARK) == PLAYED_ROWS_KEPT
-    assert all(_played(index).winner in value for index in (4, 5))
-    assert "https://" in value
 
 
 def test_a_value_past_the_field_limit_is_cut_on_a_line_boundary():
@@ -333,17 +310,12 @@ def test_championship_slot_is_a_link_not_an_rsvp_toggle():
     assert link_buttons and link_buttons[0].url.endswith("/555/777")
 
 
-def test_a_championship_lane_keeps_the_pods_its_column_already_played():
-    """The eve of a championship, where the column has played its own pods and also points at tomorrow's
-    event: the pointer is a block below them and never a replacement for the column."""
-    played = replace(
-        _committed("EARLY", "111", "222"), finished=True, locked=True, winner="Finkel",
-        thread_name="MSH Jul 31 Early Pod", slot_time=BEFORE_EARLY,
-    )
+def test_a_championship_lane_keeps_the_pod_its_column_still_offers():
+    """The eve of a championship, where the column still offers its own pod and also points at tomorrow's
+    event: the pointer is a block below it and never a replacement for the column."""
+    value = _column_value([_gathering_with_roster(4), _committed_championship()], guild=None)
 
-    value = _column_value([played, _committed_championship()], guild=None)
-
-    assert "/111/222" in value
+    assert HALL_OF_FAME[0] in value
     assert "/555/777" in value
 
 

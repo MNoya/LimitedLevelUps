@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 
@@ -52,7 +51,7 @@ from bot.commands.pod_rsvp import (
     register_launcher_refresh,
 )
 from bot.config import settings
-from bot.discord_helpers import NBSP, ZWSP, plural, run_detached
+from bot.discord_helpers import NBSP, ZWSP, run_detached
 from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_format_poll
@@ -91,7 +90,6 @@ from bot.services.pod_launcher_copy import (
     PLAY_AGAIN_INTRO,
     PLAY_AGAIN_LOVE_EMOJI,
     PLAY_AGAIN_SIGNED_UP,
-    PLAYED_FOLDED,
     POLL_FORMAT_SEVERAL,
     POLL_INTRO_TIME_AND_FORMAT,
     POLL_INTRO_TIME_ONLY,
@@ -108,7 +106,6 @@ from bot.services.pod_launcher_copy import (
     RANK_MODAL_TITLE,
     SAVE_BUTTON_EMOJI,
     SAVE_BUTTON_LABEL,
-    SECTION_NEXT,
 )
 from bot.services.pod_reminder_copy import SLOT_FIRE_PING
 from bot.services.pod_schedule import EARLY_POD_ROLE_NAME, LATE_POD_ROLE_NAME
@@ -159,14 +156,7 @@ CHAMPIONSHIP_POINTER_TOP = 8
 FAR_FUTURE = datetime.max.replace(tzinfo=timezone.utc)
 
 FIELD_VALUE_LIMIT = 1024
-PLAYED_ROWS_KEPT = 2
-COLUMN_FIT_BUDGET = 35
-EMOJI_UNITS = 3
-WINNER_GAP_UNITS = 2 + EMOJI_UNITS
-WINNER_MIN_CHARS = 6
-ELLIPSIS = "…"
 ORDINAL_SUFFIXES = {1: "st", 2: "nd", 3: "rd"}
-NAME_DATE_RE = re.compile(r"\s(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}\b")
 
 
 def init_daily_poll(bot: commands.Bot) -> None:
@@ -345,14 +335,13 @@ def build_poll_embed(
         return _archive_embed(slots, guild, heading, day)
     codes = _offered_formats(slots)
     several = len(codes) > 1
-    intro = POLL_INTRO_TIME_AND_FORMAT if several else POLL_INTRO_TIME_ONLY
-    parts = (heading, intro, _format_legend(codes, guild))
+    intro = POLL_INTRO_TIME_AND_FORMAT if several else _one_format_intro(codes)
+    parts = (heading, intro, _format_legend(codes, guild) if several else "")
     description = "\n".join(part for part in parts if part)
     embed = discord.Embed(description=description, color=discord.Color.green())
     columns = [_lane_slots(slots, lane) for lane in _lane_order(slots)]
-    pad = _finished_pad(columns)
     for column in columns:
-        value = _clamped_value(_column_value(column, guild, pad))
+        value = _clamped_value(_column_value(column, guild))
         if value:
             embed.add_field(name=ZWSP, value=value, inline=True)
     embed.add_field(name=ZWSP, value=_mechanics_note(several), inline=False)
@@ -370,25 +359,6 @@ def _title_day(
     return min(slot_times).astimezone(SCHEDULE_TZ).date()
 
 
-def _finished_pad(columns: list[list[pod_launch.LauncherSlot]]) -> int:
-    """The tallest Played section among columns that also carry a section below it, so shorter columns can
-    pad to it and those sections line up across the two side-by-side columns. Columns that are all played
-    are ignored."""
-    pad = 0
-    for column in columns:
-        played = sum(1 for slot in column if slot.locked)
-        gathering = any(not slot.locked for slot in column)
-        if played and gathering:
-            pad = max(pad, _played_line_count(played))
-    return pad
-
-
-def _played_line_count(played: int) -> int:
-    """How many lines a Played section renders, which is not how many pods it holds: the rows past the cap
-    collapse into one count line, and padding to the pod count instead would open a column of blanks."""
-    return min(played, PLAYED_ROWS_KEPT) + (1 if played > PLAYED_ROWS_KEPT else 0)
-
-
 def _offered_formats(slots: list[pod_launch.LauncherSlot]) -> list[str]:
     """The distinct formats a reader can still join, latest set first then in column order. Per-slot
     schedules can put different formats on one board, so every one is collected."""
@@ -403,9 +373,24 @@ def _offered_formats(slots: list[pod_launch.LauncherSlot]) -> list[str]:
     return codes
 
 
+def _one_format_intro(codes: list[str]) -> str:
+    """The intro of a board whose every pod plays one format, which names that format in place of the legend
+    a board offering a choice carries. A cube keeps its card list linked here, since dropping the legend
+    would otherwise take the only way in to the list."""
+    if not codes:
+        return POLL_INTRO_TIME_ONLY.format(format="").rstrip()
+    code = codes[0]
+    name = pod_format.format_name_link(code)
+    if not pod_format.is_custom(code):
+        name = f"**{name}**"
+    return POLL_INTRO_TIME_ONLY.format(format=f"{fi.format_emoji(code)} {name}")
+
+
 def _format_legend(codes: list[str], guild: discord.Guild | None) -> str:
     """One line per format the board offers: the full name glossing the abbreviated code a column header
-    carries, a cube's CubeCobra link, and the role that gets pinged for it.
+    carries, a cube's CubeCobra link, and the role that gets pinged for it. A board offering one format
+    renders none of it: there is nothing to tell apart, and one line naming the set the whole board already
+    plays is a line between the reader and the slots.
 
     Deliberately not a numbered list of choices: lanes can sit on different days carrying different formats,
     and a numbered slate would then claim a pod is on offer tonight when it is tomorrow's. Which format is
@@ -497,13 +482,13 @@ def _clamped_value(value: str) -> str:
 
 
 def _column_value(
-    bucket_slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None, pad_finished: int = 0,
+    bucket_slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None,
 ) -> str:
     """One lane column: the pods it offers, then the championship it points at. A championship is read-only
     and carries its own header, so it renders as a block below the column's own pods and never replaces
-    them: on the eve of a championship the column still shows the pods it played that day."""
+    them: on the eve of a championship the column still shows the pod it offers that day."""
     pods = [slot for slot in bucket_slots if not slot.championship]
-    blocks = _pod_blocks(pods, guild, pad_finished)
+    blocks = _pod_blocks(pods, guild)
     blocks += [
         block for block in (_championship_block(slot, guild) for slot in bucket_slots if slot.championship)
         if block
@@ -511,86 +496,33 @@ def _column_value(
     return f"\n{NBSP}\n".join(blocks) if blocks else "-"
 
 
-def _pod_blocks(
-    bucket_slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None, pad_finished: int,
-) -> list[str]:
-    """The blocks a column's own pods render as. A plain gathering column is one block per slot time. A column
-    carrying a pod that started is a single block: one slot-name header, then a Played (or Playing) section
-    listing those pods, then a section per remaining start time with its date and rosters, so the slot name
-    and date are never doubled.
+def _pod_blocks(bucket_slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> list[str]:
+    """The blocks a column's own pods render as, one per start time it still takes signups for.
 
-    Played is per pod, not per start time: a pod that started belongs on top whatever the formats beside it
-    are doing, and one still gathering at that time keeps its own joinable block below.
+    A pod whose draft started leaves the board: the card is a signup surface, and a row nobody can act on
+    reads as one more thing to work out before finding the slot that is still open. The day's pods keep
+    their record on the retired On This Day board.
 
-    Reaching the threshold does not hoist a pod up there, and neither does its lobby opening. A pod keeps
-    taking signups until the draft starts, so it stays a full roster block with its thread link until then."""
-    played, gathering = _column_sections(bucket_slots)
-    if not played:
-        blocks = []
-        for index, group in enumerate(gathering):
-            block = _group_block(group, guild, named=index == 0)
-            if block:
-                blocks.append(block)
-        return blocks
-    played_lines = _played_lines(played, guild)
-    blanks = [NBSP] * max(0, pad_finished - len(played_lines))
-    sections = ["\n".join(played_lines + blanks)]
-    sections += [_gathering_section(group, guild) for group in gathering]
-    header = _slot_name_only(gathering[0][0] if gathering else played[0], guild)
-    if not gathering:
-        start = _slot_start_time(played[0])
-        header = f"{header}{NBSP}{NBSP}{start}" if start else header
-    return [f"{header}\n" + f"\n{NBSP}\n".join(sections)]
+    Reaching the threshold does not take a pod off the board, and neither does its lobby opening. A pod
+    keeps taking signups until the draft starts, so it stays a full roster block until then."""
+    groups = _gathering_groups(bucket_slots)
+    if not groups:
+        return [f"{_slot_name_only(bucket_slots[0], guild)}\n-"] if bucket_slots else []
+    blocks = []
+    for index, group in enumerate(groups):
+        block = _group_block(group, guild, named=index == 0)
+        if block:
+            blocks.append(block)
+    return blocks
 
 
-def _played_lines(
-    played: list[pod_launch.LauncherSlot], guild: discord.Guild | None,
-) -> list[str]:
-    """The column's Played rows: the last few pods in full, then a count line for the rest.
-
-    A lane that plays all day stacks a row per pod, each carrying two links, which grows the column past the
-    field limit and leaves the board unable to render at all. The cap is what a reader wants anyway: the pods
-    that just played, credited to their winners, over a count of the day behind them. The full day keeps its
-    history on the retired board."""
-    kept = played[-PLAYED_ROWS_KEPT:]
-    rows = [_finished_column_line(slot, guild) for slot in kept]
-    behind = len(played) - len(kept)
-    if not behind:
-        return rows
-    return rows + [PLAYED_FOLDED.format(count=behind, plural=plural(behind))]
-
-
-def _column_sections(
+def _gathering_groups(
     bucket_slots: list[pod_launch.LauncherSlot],
-) -> tuple[list[pod_launch.LauncherSlot], list[list[pod_launch.LauncherSlot]]]:
-    """A column's pods split into the Played rows and the groups still gathering behind them, each group one
-    start time earliest first. A format still gathering at a time another format is already drafting keeps its
-    own block instead of dragging the drafting pod down with it.
-
-    Played rows run by start time, then by when the pod's row was written: an extra table can only be created
-    after the pod it spun off, so that tiebreak reads the two as one pod and its table whatever start the
-    table ended up carrying."""
-    groups = _time_groups(bucket_slots)
-    played = sorted(
-        (slot for slot in bucket_slots if slot.locked),
-        key=lambda slot: (slot.slot_time or FAR_FUTURE, slot.created_at or FAR_FUTURE),
-    )
-    gathering = [[slot for slot in group if not slot.locked] for group in groups]
-    return played, [group for group in gathering if group]
-
-
-def _gathering_section(group: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> str:
-    """One start time below a column's Played rows: the Next heading and its countdown over the date and the
-    rosters. A time whose every format has closed heads with the date alone, since nothing there is next and
-    a countdown on a slot that already passed reads as a pod about to happen."""
-    lead = group[0]
-    when = _slot_when_line(lead)
-    body = _group_body(group, guild)
-    if all(_slot_closed(slot) for slot in group):
-        return f"{when}\n{body}" if when else body
-    relative = f"<t:{int(lead.slot_time.timestamp())}:R>" if lead.slot_time else ""
-    next_label = " ".join(part for part in (emojis.get(NEXT_EMOJI), SECTION_NEXT, relative) if part)
-    return f"{next_label}\n{when}\n{body}" if when else f"{next_label}\n{body}"
+) -> list[list[pod_launch.LauncherSlot]]:
+    """A column's pods still taking signups, grouped by start time, earliest first. A format still gathering
+    at a time another format is already drafting keeps its own block instead of leaving with it."""
+    groups = [[slot for slot in group if not slot.locked] for group in _time_groups(bucket_slots)]
+    return [group for group in groups if group]
 
 
 def _group_block(
@@ -643,14 +575,11 @@ def _shared_roster_names(group: list[pod_launch.LauncherSlot]) -> set[str]:
 def _pod_block(
     slot: pod_launch.LauncherSlot, guild: discord.Guild | None, shared: set[str],
 ) -> str | None:
-    """One pod inside its slot: its format header over its roster, with a fired pod's thread link above it so
-    the link reads as belonging to that format. A pod that started renders in the column's Played section
-    instead and never reaches here."""
+    """One pod inside its slot: its format header over its roster. A pod that started renders nowhere on the
+    board and never reaches here."""
     if slot.set_code is None:
         return None
-    block = _roster_block(slot, guild, shared)
-    link = _committed_card_link(guild, slot) if slot.committed else None
-    return f"{link}\n{block}" if link else block
+    return _roster_block(slot, guild, shared)
 
 
 def _championship_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str | None:
@@ -682,25 +611,9 @@ def _slot_when_line(slot: pod_launch.LauncherSlot) -> str:
     return f"<t:{int(slot.slot_time.timestamp())}:F>" if slot.slot_time else ""
 
 
-def _slot_start_time(slot: pod_launch.LauncherSlot) -> str:
-    """Clock-only start time for a column whose pods have all started, where no Next section carries the
-    full date and the column would otherwise say nothing about when the pod ran."""
-    return f"<t:{int(slot.slot_time.timestamp())}:t>" if slot.slot_time else ""
-
-
 def _finished_line(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
     """The archive form: a full-width line, so the event name and the winner both run at full length."""
-    return _finished_row(slot, guild, _finished_link_text(slot, full_name=True), slot.winner or "")
-
-
-def _finished_column_line(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
-    """The column form, shrunk to fit a third of the embed width. A row that wraps in one column while its
-    neighbour holds one line pushes every row below it out of level, so the row gives up the date first,
-    which the card title and the Next section both still carry, and cuts the winner's name only when that
-    is not enough. Discord wraps on a pixel width no bot can measure, so the budget is a character
-    estimate calibrated against a live card."""
-    text, winner = _fit_row(_finished_link_text(slot, full_name=False), slot.winner or "")
-    return _finished_row(slot, guild, text, winner)
+    return _finished_row(slot, guild, slot.thread_name or "", slot.winner or "")
 
 
 def _finished_row(
@@ -718,41 +631,6 @@ def _finished_row(
         name = f"[__**{winner}**__]({seat_url})" if seat_url else f"__**{winner}**__"
         parts.append(f"{emojis.prefix('llu')}{name}")
     return f"{NBSP}{NBSP}".join(parts)
-
-
-def _fit_row(text: str, winner: str) -> tuple[str, str]:
-    """The pod name and the winner cut down to the budget: the date goes first, then the winner's name."""
-    if _row_units(text, winner) > COLUMN_FIT_BUDGET:
-        text = _without_date(text)
-    room = COLUMN_FIT_BUDGET - _row_units(text, "") - WINNER_GAP_UNITS
-    return text, _clipped(winner, room) if winner and len(winner) > room else winner
-
-
-def _row_units(text: str, winner: str) -> int:
-    """The row's width in characters, an emoji counting as several since it renders wider than a glyph."""
-    units = EMOJI_UNITS + 1 + len(text)
-    return units + WINNER_GAP_UNITS + len(winner) if winner else units
-
-
-def _without_date(text: str) -> str:
-    return NAME_DATE_RE.sub("", text, count=1)
-
-
-def _clipped(winner: str, room: int) -> str:
-    keep = max(room - len(ELLIPSIS), WINNER_MIN_CHARS)
-    return winner if keep >= len(winner) else f"{winner[:keep].rstrip()}{ELLIPSIS}"
-
-
-def _finished_link_text(slot: pod_launch.LauncherSlot, full_name: bool) -> str:
-    """The archive keeps the full event name to tell Early from Late; a column already carries the slot
-    name in its header, so it drops to set and date, and a split table to its ordinal."""
-    name = slot.thread_name or ""
-    if full_name:
-        return name
-    bucket = bucket_by_key(slot.bucket_key)
-    if bucket:
-        name = name.replace(f" {bucket.name}", "")
-    return TABLE_SUFFIX_RE.sub(lambda match: f" {_ordinal(int(match.group(1)))}", name)
 
 
 def _ordinal(number: int) -> str:
@@ -790,14 +668,26 @@ def _roster_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None, sh
     over a dash, so a slot nobody joined yet keeps advertising every format it offers. A closed slot says so
     in place of the roster."""
     icon = fi.format_emoji(slot.set_code)
-    label = f"**{_named_pod_label(slot.bucket_key, slot.set_code)}**"
+    label = _pod_header_label(slot, guild)
     closed = _slot_closed(slot)
     count = f" **({slot.count})**" if slot.count and not closed else ""
     if closed:
         lines = [f"> {MARKER_CLOSED}"]
     else:
         lines = [f"> {_marked_name(name, shared)}" for name in _marked_last(slot.names, shared)] or ["> -"]
-    return "\n".join([f"> {icon} {label}{count}"] + lines)
+    return "\n".join([f"{icon} {label}{count}"] + lines)
+
+
+def _pod_header_label(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
+    """The words the pod's own button carries, linking to its coordination card once it has one. A pod split
+    into a second table keeps that table's ordinal, which is otherwise the only thing telling two tables of
+    one format at one time apart."""
+    label = _named_pod_label(slot.bucket_key, slot.set_code)
+    match = TABLE_SUFFIX_RE.search(slot.thread_name or "")
+    if match:
+        label = f"{label} {_ordinal(int(match.group(1)))}"
+    card_url = _card_url(guild, slot) if slot.committed else None
+    return f"[__**{label}**__]({card_url})" if card_url else f"**{label}**"
 
 
 def _marked_last(names: list[str], shared: set[str]) -> list[str]:

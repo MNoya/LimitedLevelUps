@@ -12,7 +12,7 @@ The bot posts a Daily Pod Launcher every day in the pod channel. It lists the da
 
 Times are Eastern. Each slot shows its start as a timestamp in your own timezone, so you never have to convert. The community is global, so pick whichever slot fits your day. Mods can also schedule extra pods at other times, which show up as their own signup posts.
 
-Each column moves forward on its own. As soon as a pod finishes, its column shows the result above the next day's slot and starts collecting for that one, so there is always a slot you can join. The other column keeps its own day until its pod plays. A fresh launcher posts every morning at 10 AM ET and carries over everyone who already signed up for that day.
+Each column moves forward on its own. As soon as a pod's draft starts, it leaves the board and its column starts collecting for the next day's slot, so the board only ever lists pods you can still join. The other column keeps its own day until its pod plays. A fresh launcher posts every morning at 10 AM ET and carries over everyone who already signed up for that day.
 
 A slot can be held by an event that is already scheduled, the Set Championship being the standing case. That slot takes no signups: the column points at the event instead, with a link to its post and the players who confirmed so far. The pointer shows up on the board the day before as well, so the launcher still says what is happening next even while the slot itself is closed to signups.
 
@@ -127,7 +127,7 @@ Share your deck in the last round. Post a screenshot of it in the thread, and su
 
 A reported result can be corrected until a later round reports. In a bracket pod, correcting one re-pairs the rounds after it from the fixed result. Only the players whose record moved get a new opponent: every other pairing stays as it was. The thread gets a single note with the correction, the round that moved, and the new matchups, pinging the players who changed opponent, and their pairing DM is rewritten to the new opponent instead of arriving a second time.
 
-Once the pod finishes, its thread gets a **Play Again** button that signs you up for the same time slot and format on the next day, whenever that format is on the next day's schedule. The launcher also keeps the result: the finished pod stays listed with its winner, whose name links to that pod's page on the website.
+Once the pod finishes, its thread gets a **Play Again** button that signs you up for the same time slot and format on the next day, whenever that format is on the next day's schedule. The result goes on that day's retired launcher, an On This Day list of every pod the day played with its winner, whose name links to that pod's page on the website.
 
 Every pod also leaves its final standings in the channel, on the card its thread hangs off. Pods that never gathered signups post a card of their own when they open, so a queue pod and a second table end the night with the same standings card as a scheduled pod.
 

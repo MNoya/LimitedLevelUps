@@ -67,7 +67,7 @@ from bot.services.player_stats import rank_ordered_names
 from bot.services import pod_active
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_signals import SCHEDULE_TZ, slot_event_time
-from bot.services.pod_format_schedule import formats_for
+from bot.services.pod_format_schedule import formats_on, latest_on
 from bot.services.pod_slot import COLLISION_INDEX_RE, next_collision_index, pod_display_name
 from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import (
@@ -236,7 +236,7 @@ def create_poll_signals(
     for bucket in pod_signals.poll_buckets_for(signal_date):
         slot_time = slot_event_time(signal_date, bucket.key)
         covered = _event_formats_for_slot(session, slot_time)
-        for set_code in formats_for(signal_date, bucket.lane):
+        for set_code in formats_on(signal_date, bucket.lane):
             if set_code in covered:
                 continue
             signal = _open_poll_signal_for_slot(session, bucket.key, set_code, signal_date)
@@ -322,7 +322,7 @@ def _open_poll_signal_for_slot(
     A row keyed on the bare time slot is adopted as the latest set's and rewritten to the named key, so the
     signups a board collected before named formats shipped survive the first post that binds them."""
     named_key = pod_signals.named_bucket_key(time_key, set_code)
-    keys = [named_key, time_key] if set_code == active_set_code() else [named_key]
+    keys = [named_key, time_key] if set_code == latest_on(signal_date) else [named_key]
     for key in keys:
         signals = session.execute(
             select(PodSignal)
@@ -372,7 +372,7 @@ def roll_slot_forward_sync(
     rolled: list[tuple[str, str, datetime]] = []
     with SessionLocal() as session:
         covered = _event_formats_for_slot(session, slot_time)
-        for set_code in formats_for(day, lane):
+        for set_code in formats_on(day, lane):
             if set_code in covered:
                 continue
             signal = _open_poll_signal_for_slot(session, bucket.key, set_code, day)

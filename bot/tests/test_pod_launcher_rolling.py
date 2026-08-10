@@ -27,17 +27,12 @@ from bot.services.pod_signals import (
     slot_can_fire,
     slot_event_time,
 )
-from bot.sets import active_set_code
 from bot.tasks.pod_daily_poll import (
-    COLUMN_FIT_BUDGET,
-    SECTION_NEXT,
-    _column_sections,
-    _fit_row,
-    _gathering_section,
     _lane_order,
     _lane_slots,
+    _gathering_groups,
+    _group_block,
     _played_on_day,
-    _row_units,
     _shared_roster_names,
     _slot_by_key,
     _slot_item,
@@ -87,7 +82,8 @@ def test_a_slot_fires_only_once_its_own_day_is_live(slot_day, expected):
 
 # --- rolled columns ---
 
-LATEST = active_set_code()
+LATEST = schedule.latest_on(FRIDAY)
+ROLLED_LATEST = schedule.latest_on(SATURDAY)
 
 
 def _played(bucket_key, day, winner="Finkel"):
@@ -115,17 +111,6 @@ def _committed_card(bucket_key, day, *, card_message_id):
     )
 
 
-def _table(pod, index=2):
-    """A split table carries the start of the pod it came from (`record_table_event` copies it over) and is
-    written while that pod is already seating, minutes before either of them starts."""
-    return LauncherSlot(
-        pod.bucket_key, committed=True, status=STATUS_FIRED, count=0, slot_time=pod.slot_time,
-        set_code=pod.set_code, names=[], thread_id="2", signal_id=None,
-        thread_name=f"{pod.thread_name} - Table {index}", locked=True,
-        created_at=pod.slot_time - timedelta(minutes=6),
-    )
-
-
 def _gathering(bucket_key, day, status=STATUS_OPEN, count=2, set_code=LATEST):
     return LauncherSlot(
         named_bucket_key(bucket_key, set_code), committed=False, status=status, count=count,
@@ -141,24 +126,6 @@ def test_a_rolled_column_stays_one_column_across_the_weekend_boundary():
 
     assert lanes == [LANE_LATE]
     assert [slot.set_code for slot in _lane_slots(slots, LANE_LATE)] == [LATEST, LATEST]
-
-
-LONG_HANDLE = "_".join(HALL_OF_FAME[12:15]).replace(" ", "")
-
-
-@pytest.mark.parametrize("pod, winner, keeps_date, keeps_winner", [
-    ("MSH Jul 25", HALL_OF_FAME[0], True, True),
-    ("MSH Jul 25 2nd", HALL_OF_FAME[1], True, True),
-    ("Peasant Cube Jul 25", "Android5000", False, True),
-    ("Peasant Cube Jul 25 2nd", LONG_HANDLE, False, False),
-    ("Peasant Cube Jul 25", "", True, True),
-])
-def test_a_played_row_gives_up_its_date_before_it_cuts_the_winner(pod, winner, keeps_date, keeps_winner):
-    text, name = _fit_row(pod, winner)
-
-    assert ("Jul 25" in text) is keeps_date
-    assert (name == winner) is keeps_winner
-    assert _row_units(text, name) <= COLUMN_FIT_BUDGET
 
 
 def test_a_press_targets_the_pod_its_own_key_names():
@@ -224,27 +191,16 @@ def test_a_retired_board_keeps_only_the_pods_its_own_day_played(slot, expected):
     assert _played_on_day(slot, FRIDAY) is expected
 
 
-@pytest.mark.parametrize("slots, played_codes, gathering_codes", [
-    ([_played("LATE", FRIDAY), _gathering("LATE", FRIDAY, set_code="PEASANT")], [LATEST], [["PEASANT"]]),
-    ([_played("LATE", FRIDAY), _gathering("EVENING", SATURDAY)], [LATEST], [[LATEST]]),
-    ([_gathering("LATE", FRIDAY), _gathering("LATE", FRIDAY, set_code="PEASANT")], [], [[LATEST, "PEASANT"]]),
-    ([_played("LATE", FRIDAY)], [LATEST], []),
+@pytest.mark.parametrize("slots, gathering_codes", [
+    ([_played("LATE", FRIDAY), _gathering("LATE", FRIDAY, set_code="PEASANT")], [["PEASANT"]]),
+    ([_played("LATE", FRIDAY), _gathering("EVENING", SATURDAY)], [[LATEST]]),
+    ([_gathering("LATE", FRIDAY), _gathering("LATE", FRIDAY, set_code="PEASANT")], [[LATEST, "PEASANT"]]),
+    ([_played("LATE", FRIDAY)], []),
 ])
-def test_a_column_splits_played_pods_off_the_times_still_gathering(slots, played_codes, gathering_codes):
-    played, gathering = _column_sections(slots)
+def test_a_column_offers_only_the_pods_still_taking_signups(slots, gathering_codes):
+    groups = _gathering_groups(slots)
 
-    assert [slot.set_code for slot in played] == played_codes
-    assert [[slot.set_code for slot in group] for group in gathering] == gathering_codes
-
-
-def test_a_second_table_follows_the_pod_it_spun_off():
-    pod = _played("LATE", FRIDAY)
-    slots = [_table(pod), pod]
-
-    played, gathering = _column_sections(slots)
-
-    assert [slot.thread_name for slot in played] == [pod.thread_name, f"{pod.thread_name} - Table 2"]
-    assert gathering == []
+    assert [[slot.set_code for slot in group] for group in groups] == gathering_codes
 
 
 @pytest.mark.parametrize("beside, links_to_pod", [
@@ -275,15 +231,14 @@ def test_two_closed_formats_at_one_time_point_at_their_pod_once():
     assert [link is not None for link in links] == [True, False]
 
 
-@pytest.mark.parametrize("status, heads_as_next", [(STATUS_OPEN, True), (STATUS_EXPIRED, False)])
-def test_only_a_time_still_joinable_heads_as_next(status, heads_as_next):
+@pytest.mark.parametrize("status, counts_down", [(STATUS_OPEN, True), (STATUS_EXPIRED, False)])
+def test_only_a_time_still_joinable_counts_down(status, counts_down):
     group = [_gathering("LATE", FRIDAY, status=status)]
 
-    section = _gathering_section(group, None)
+    block = _group_block(group, None)
 
-    assert (SECTION_NEXT in section) is heads_as_next
-    assert (":R>" in section) is heads_as_next
-    assert ":F>" in section
+    assert (":R>" in block) is counts_down
+    assert ":F>" in block
 
 
 # --- adopt or create ---
@@ -460,7 +415,7 @@ def test_rolling_a_lane_opens_the_next_day_and_is_idempotent(session, monkeypatc
     assert first == second
     signal_id, bucket_key, slot_time = first[0]
     time_key = bucket_for_lane(SATURDAY, LANE_LATE).key
-    assert bucket_key == named_bucket_key(time_key, LATEST)
+    assert bucket_key == named_bucket_key(time_key, ROLLED_LATEST)
     assert slot_time == slot_event_time(SATURDAY, time_key)
     assert _open_signal_count(session, bucket_key, SATURDAY) == 1
 
@@ -474,7 +429,7 @@ def test_rolling_a_lane_opens_every_format_the_next_day_offers(session, monkeypa
 
     time_key = bucket_for_lane(SATURDAY, LANE_LATE).key
     assert [bucket_key for _signal_id, bucket_key, _slot_time in rolled] == [
-        named_bucket_key(time_key, LATEST), named_bucket_key(time_key, "PEASANT"),
+        named_bucket_key(time_key, ROLLED_LATEST), named_bucket_key(time_key, "PEASANT"),
     ]
 
 
