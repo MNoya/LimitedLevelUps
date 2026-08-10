@@ -21,7 +21,10 @@ from bot.services.player_stats import (
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import display_width, player_url
-from bot.models import DraftEvent, LeaderboardMessage, MagicSet, Player, PlayerStats, PodDraftEvent, PodDraftParticipant
+from bot.models import (
+    DraftEvent, LeaderboardMessage, MagicSet, Player, PlayerStats, PodDraftEvent, PodDraftParticipant,
+    SelfReportedEvent,
+)
 from bot.scoring import (
     DEFAULT_QUEUE_GROUPS, QueueGroup, boxes_for_event, compute_score, pod_points, supported_formats,
 )
@@ -658,6 +661,82 @@ def process_leaderboard_for_mtgo(session: Session, set_code: str, top_n: int = 2
         show_score=False,
         trophy_board=True,
     )
+
+
+def process_leaderboard_for_trophies(session: Session, magic_set: MagicSet, top_n: int = 10) -> LeaderboardData:
+    """Trophy count board for a set: every trophy from every source, summed and ranked, no score.
+
+    17lands drafts and pod wins come from the scored board, so a player's count matches the trophy
+    column there. Self-reports are added on top with no opt-in gate: a mobile or paper player with no
+    17lands profile has nothing else to stand on, and a `/trophy` row is already a post they made
+    themselves.
+    """
+    tallies: dict[str, _TrophyTally] = {}
+    for row in rank_players_for_set(session, magic_set.id):
+        if row.trophies > 0:
+            tallies[row.player_id] = _TrophyTally(
+                row.player_id, row.slug, row.display_name, row.discord_id, row.trophies,
+            )
+    for player, self_reported, _deck_count in rank_self_reported_events(session, magic_set.code):
+        if self_reported == 0:
+            continue
+        tally = tallies.get(player.id)
+        if tally is None:
+            tallies[player.id] = _TrophyTally(
+                player.id, player.slug, player.display_name, player.discord_id, self_reported,
+            )
+        else:
+            tally.trophies += self_reported
+
+    ranked = sorted(tallies.values(), key=lambda tally: (-tally.trophies, tally.display_name.lower()))
+    top = [
+        LeaderboardEntry(
+            rank=rank,
+            player_id=tally.discord_id or tally.player_id,
+            slug=tally.slug,
+            display_name=tally.display_name,
+            score=0.0,
+            trophies=tally.trophies,
+        )
+        for rank, tally in enumerate(ranked[:top_n], start=1)
+    ]
+    return LeaderboardData(
+        set_code=magic_set.code.upper(),
+        set_name=magic_set.name,
+        top=top,
+        viewer=None,
+        last_updated=_trophy_board_last_updated(session, magic_set),
+        drafter_count=len(ranked),
+        show_score=False,
+        trophy_board=True,
+    )
+
+
+@dataclass
+class _TrophyTally:
+    player_id: str
+    slug: str
+    display_name: str
+    discord_id: str | None
+    trophies: int
+
+
+def _trophy_board_last_updated(session: Session, magic_set: MagicSet) -> datetime | None:
+    """When the trophy board last moved. Self-reports land whenever a player runs `/trophy`, between
+    17lands refreshes, so the newer of the two stamps is the one the footer can stand behind."""
+    refreshed_at = magic_set.last_refreshed_at
+    if refreshed_at is None:
+        refreshed_at = session.execute(
+            select(func.max(PlayerStats.last_fetched_at))
+            .where(PlayerStats.set_id == magic_set.id)
+        ).scalar()
+    reported_at = session.execute(
+        select(func.max(SelfReportedEvent.reported_at))
+        .where(func.upper(SelfReportedEvent.set_code) == magic_set.code.upper())
+    ).scalar()
+
+    stamps = [stamp for stamp in (refreshed_at, reported_at) if stamp is not None]
+    return max(stamps) if stamps else None
 
 
 def _pod_board(
@@ -1633,13 +1712,19 @@ def render_filtered_data(
 
 
 SEND_OFF_FORMATS: tuple[str | None, ...] = (None, "Premier", "Trad", "Direct", LCQ_FILTER)
+TROPHY_BOARD_LABEL = "Trophies"
 
 
 def build_set_send_off_embeds(session: Session, magic_set: MagicSet) -> list[discord.Embed]:
     """The final standings for a set that just rotated out — the overall board followed by Premier,
-    Traditional, Direct, and LCQ, each rendered through the same path `/leaderboard` uses so they can't
-    drift. A format with no scored players is dropped, so a set that ran no Direct or LCQ simply omits
-    that board. The repeated site call-to-action is suppressed since many boards post at once."""
+    Traditional, Direct and LCQ, each rendered through the same path `/leaderboard` uses so they can't
+    drift, and the trophy count board last. A format with no scored players is dropped, so a set that
+    ran no Direct or LCQ simply omits that board. The repeated site call-to-action is suppressed since
+    many boards post at once.
+
+    The trophy board is built outside the filter loop: it is not a format filter, and giving the embed
+    title a `?format=` the site doesn't serve would link players to an empty board.
+    """
     embeds: list[discord.Embed] = []
     for format_value in SEND_OFF_FORMATS:
         filter_type, filter_value = encode_filter(format_value, None)
@@ -1653,6 +1738,12 @@ def build_set_send_off_embeds(session: Session, magic_set: MagicSet) -> list[dis
         if suffix:
             embed.title = f"{embed.title} {suffix}"
         embeds.append(embed)
+
+    trophy_data = process_leaderboard_for_trophies(session, magic_set)
+    if trophy_data.top:
+        trophy_embed = render_embed(trophy_data, show_note=False)
+        trophy_embed.title = f"{trophy_embed.title} {TROPHY_BOARD_LABEL}"
+        embeds.append(trophy_embed)
     return embeds
 
 

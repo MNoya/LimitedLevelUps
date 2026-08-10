@@ -16,13 +16,16 @@ from bot.commands.leaderboard import (
     process_leaderboard_for_format,
     process_leaderboard_for_lcq,
     process_leaderboard_for_peasant,
+    process_leaderboard_for_trophies,
     process_personal_standings,
     render_filtered_data,
     render_personal_embed,
     render_public_embed,
 )
 from bot.services.player_stats import StatsData, process_stats, render_embed as render_stats_embed
-from bot.models import DraftEvent, MagicSet, Player, PlayerStats, PodDraftEvent, PodDraftParticipant
+from bot.models import (
+    DraftEvent, MagicSet, Player, PlayerStats, PodDraftEvent, PodDraftParticipant, SelfReportedEvent,
+)
 from bot.sets import active_set_code
 from bot.config import settings
 
@@ -695,6 +698,33 @@ def test_peasant_board_filters_to_peasant_pods(session):
     assert data.set_code == "PEASANT"
     assert data.show_score is False
     assert [(e.slug, e.trophies, e.events) for e in data.top] == [(alice.slug, 1, 1)]
+
+
+def _seed_self_report(session, player, set_code, message_id, is_trophy=True):
+    session.add(SelfReportedEvent(
+        player_id=player.id, set_code=set_code, record="3-0" if is_trophy else "2-1", is_trophy=is_trophy,
+        platform="MTGA", source_channel_id="0", source_message_id=message_id, source_url="#",
+    ))
+    session.flush()
+
+
+def test_trophy_board_sums_drafts_pods_and_self_reports(session):
+    s = _seed_set(session)
+    alice = _seed_player(session, "Alice", "1", "a")
+    mobile = _seed_player(session, "Bram", "2", "b", leaderboard_opt_in=False)
+    _seed_stats(session, alice, s, trophies=2, events=4)
+    pod = _seed_pod_event(session, s.code, "SOS Pod 1")
+    session.add(PodDraftParticipant(
+        event_id=pod.id, player_id=alice.id, display_name="Alice", placement=1, record="3-0",
+    ))
+    _seed_self_report(session, alice, s.code, "m1")
+    _seed_self_report(session, mobile, s.code, "m2")
+    _seed_self_report(session, mobile, s.code, "m3", is_trophy=False)
+    session.commit()
+
+    data = process_leaderboard_for_trophies(session, s)
+
+    assert [(e.display_name, e.trophies) for e in data.top] == [("Alice", 4), ("Bram", 1)]
 
 
 @pytest.mark.parametrize(
