@@ -215,6 +215,12 @@ def awards_eve_set(when: datetime | None = None) -> SetSeed | None:
 AWARDS_CEREMONY_TIME = time(8, 0)
 
 
+def ceremony_start(when: datetime | None = None) -> datetime:
+    """The instant today's ceremony posts, for the countdown the warning renders."""
+    today = (when or datetime.now(timezone.utc)).astimezone(OPEN_TZ).date()
+    return datetime.combine(today, AWARDS_CEREMONY_TIME, tzinfo=OPEN_TZ)
+
+
 def set_after(seed: SetSeed) -> SetSeed | None:
     """The set that rotates in just after ``seed`` — the earliest-started set whose start follows it,
     excluding the permanent cube. ``None`` when ``seed`` is the newest registered."""

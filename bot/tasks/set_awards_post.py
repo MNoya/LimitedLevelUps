@@ -5,6 +5,9 @@ ceremony at ``AWARDS_CEREMONY_TIME``, each firing only when a new set releases t
 the outgoing set's channel — the one the noon-ET rotation archives after the flip. The ceremony reuses
 ``run_set_awards_ceremony``, the same path ``/set-awards`` runs. The warning links the prior set's
 ceremony when it can find it in that set's archived channel; otherwise it drops the link.
+
+The warning also posts a pointer back to itself in the incoming set's channel: preview season moves
+discussion there days before the flip, so the send-off runs in the quieter of the two channels.
 """
 from __future__ import annotations
 
@@ -23,18 +26,23 @@ from bot.services.format_schedule import (
     FORMAT_ARCHIVE_CATEGORY,
     OPEN_TZ,
     awards_eve_set,
+    ceremony_start,
     channel_for_set,
+    set_after,
     set_before,
 )
 
 log = logging.getLogger(__name__)
 
 WARNING_TIME = time(7, 45)
-WARNING_LEAD_MINUTES = 15
 AWARDS_MARKER = "Set Awards"
-MSG_CEREMONY_WARNING = "Join us for the Community Set Awards {emoji} **{name} Edition** in ~{minutes} minutes!"
-MSG_CEREMONY_SUBTEXT = "-# Given out every Monday before a new set releases."
-MSG_PREVIOUS_AWARDS = " [Previous Set Awards]({link}) {manat}"
+MSG_CEREMONY_WARNING = "Join us for the Community Set Awards {emoji} **{name} Edition** {when}!"
+MSG_CEREMONY_SUBTEXT = "-# Given out every Monday before a new set releases"
+MSG_PREVIOUS_AWARDS = ". [**Previous Set Awards**]({link}) {manat}"
+MSG_CEREMONY_ELSEWHERE = (
+    "Community Set Awards {emoji} start {when} {link}\n\n"
+    "-# Run `/set-awards` after the announcement to see your own!"
+)
 
 _bot: commands.Bot | None = None
 
@@ -61,17 +69,64 @@ async def fire_warning() -> None:
     if resolved is None:
         return
     guild, channel, seed = resolved
+    await post_ceremony_warning(guild, channel, seed, ceremony_start())
+
+
+async def post_ceremony_warning(guild: discord.Guild, ceremony_channel, seed, starts_at: datetime):
+    """Send the warning into the outgoing set's channel and the pointer to it into the incoming set's.
+    Returns the warning message and the channel the pointer reached, either ``None`` when that send did
+    not happen. Shared with ``!test awardswarning`` so a rehearsal routes exactly like the real run."""
+    try:
+        text = await build_warning_text(guild, seed, starts_at)
+        warning = await ceremony_channel.send(text, suppress_embeds=True)
+    except discord.HTTPException:
+        log.warning(f"set-awards: could not post the warning in #{ceremony_channel.name}", exc_info=True)
+        return None, None
+    target = incoming_set_channel(guild, seed, ceremony_channel)
+    if target is None:
+        return warning, None
+    try:
+        await target.send(build_pointer_text(seed, warning.jump_url, starts_at))
+    except discord.HTTPException:
+        log.warning(f"set-awards: could not post the ceremony pointer in #{target.name}", exc_info=True)
+        return warning, None
+    return warning, target
+
+
+async def build_warning_text(guild: discord.Guild, seed, starts_at: datetime) -> str:
     head = MSG_CEREMONY_WARNING.format(
-        emoji=emojis.get(seed.code.lower()), name=seed.name, minutes=WARNING_LEAD_MINUTES,
+        emoji=emojis.get(seed.code.lower()), name=seed.name, when=discord.utils.format_dt(starts_at, "R"),
     )
     subtext = MSG_CEREMONY_SUBTEXT
     link = await _previous_awards_link(guild, seed)
     if link is not None:
         subtext += MSG_PREVIOUS_AWARDS.format(link=link, manat=emojis.get("manat")).rstrip()
-    try:
-        await channel.send(f"{head}\n\n{subtext}", suppress_embeds=True)
-    except discord.HTTPException:
-        log.warning(f"set-awards: could not post the warning in #{channel.name}", exc_info=True)
+    return f"{head}\n\n{subtext}"
+
+
+def build_pointer_text(seed, link: str, starts_at: datetime) -> str:
+    """The link goes in bare so Discord renders its message preview, which is why this one is sent
+    without ``suppress_embeds``. A markdown link would carry the channel name, and a channel name
+    holding an emoji breaks the ``[]`` label."""
+    return MSG_CEREMONY_ELSEWHERE.format(
+        emoji=emojis.get(seed.code.lower()), when=discord.utils.format_dt(starts_at, "R"), link=link,
+    )
+
+
+def incoming_set_channel(guild: discord.Guild, outgoing_seed, ceremony_channel):
+    """The channel of the set that releases tomorrow, matched in any category so a preview-season one a
+    mod created outside MTG Strategy still resolves. ``None`` when that set is the newest registered, has
+    no channel yet, or shares the channel the ceremony already posts in."""
+    incoming = set_after(outgoing_seed)
+    if incoming is None:
+        return None
+    channel = channel_for_set(guild.text_channels, incoming, category=None)
+    if channel is None:
+        log.info(f"set-awards: no channel for incoming set {incoming.code}; posting no pointer")
+        return None
+    if channel.id == ceremony_channel.id:
+        return None
+    return channel
 
 
 async def _previous_awards_link(guild: discord.Guild, outgoing_seed) -> str | None:

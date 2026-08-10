@@ -34,8 +34,10 @@ from bot.commands.set_awards import (
 )
 from bot.commands.test_group import test_group
 from bot.services import set_awards as awards_svc
+from bot.services.format_schedule import channel_for_set
 from bot.services.set_awards import AwardCandidate
 from bot.sets import ALL_SETS, PREVIEW_WINDOWS, PreviewWindow, active_set_code
+from bot.tasks.set_awards_post import post_ceremony_warning
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +47,11 @@ _SEIZE_WINNER_WHEN = datetime(2026, 5, 16, 18, tzinfo=timezone.utc)
 CEREMONY_LIVE = "live"
 MSG_NO_ACTIVE_SET = "There's no active set right now."
 MSG_NO_AWARDS_COMPUTED = "No awards could be computed for this set."
+MSG_WARNING_POSTED = "⏰ Warning posted in {ceremony}, pointer in {pointer}"
+MSG_WARNING_FAILED = "The warning could not post in {ceremony}"
+MSG_NO_INCOMING_CHANNEL = "no channel for the incoming set, so no pointer posted"
+MSG_NO_SET_CHANNEL = "No channel for {set}, so there is nowhere to post the warning"
+PREVIEW_CEREMONY_LEAD = timedelta(minutes=15)
 MSG_DRY_RUN_POSTED = "🏆 Posted {count} awards as a dry run: nobody was pinged, no roles moved, nothing pinned."
 MSG_LIVE_POSTED = "🏆 Posted {count} awards for real: winners pinged, award roles moved, ceremony pinned."
 
@@ -187,6 +194,31 @@ async def setup(bot: commands.Bot) -> None:
     async def test_set_awards(ctx: commands.Context) -> None:
         """Owner-only. Post the fixture-backed Set Awards sample in this channel."""
         await ctx.send(view=build_set_awards_view(_set_awards_fixture(ctx.guild)))
+
+    @test_group.command(name="awardswarning")
+    @commands.is_owner()
+    async def test_awards_warning(ctx: commands.Context) -> None:
+        """Owner-only. Run the T-15 ceremony warning for real, from wherever it is called: the notice
+        goes to the active set's channel and the pointer to the incoming set's, the same routing the
+        7:45 AM PT job uses. Only the countdown is a fixture, anchored 15 minutes out."""
+        code = active_set_code()
+        seed = next((s for s in ALL_SETS if s.code == code), None)
+        if seed is None or ctx.guild is None:
+            await ctx.send(MSG_NO_ACTIVE_SET)
+            return
+        ceremony_channel = channel_for_set(ctx.guild.text_channels, seed)
+        if ceremony_channel is None:
+            await ctx.send(MSG_NO_SET_CHANNEL.format(set=seed.name))
+            return
+        starts_at = datetime.now(timezone.utc) + PREVIEW_CEREMONY_LEAD
+        warning, pointer_channel = await post_ceremony_warning(ctx.guild, ceremony_channel, seed, starts_at)
+        if warning is None:
+            await ctx.send(MSG_WARNING_FAILED.format(ceremony=ceremony_channel.mention))
+            return
+        await ctx.send(MSG_WARNING_POSTED.format(
+            ceremony=ceremony_channel.mention,
+            pointer=pointer_channel.mention if pointer_channel else MSG_NO_INCOMING_CHANNEL,
+        ))
 
     @test_group.command(name="ceremony")
     @commands.is_owner()

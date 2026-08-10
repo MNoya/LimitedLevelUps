@@ -26,6 +26,7 @@ from bot.services.format_schedule import (
 )
 from bot.sets import ALL_SETS
 from bot.tasks.format_schedule_post import announcement_for
+from bot.tasks.set_awards_post import incoming_set_channel
 
 
 class _StubCategory:
@@ -35,9 +36,15 @@ class _StubCategory:
 
 class _StubChannel:
     def __init__(self, name, category, created_at):
+        self.id = name
         self.name = name
         self.category = category
         self.created_at = created_at
+
+
+class _StubGuild:
+    def __init__(self, channels):
+        self.text_channels = channels
 
 
 def _event(format_label, group_label, tags, now, start_off, end_off):
@@ -180,6 +187,18 @@ def test_channel_for_set_ignores_a_newer_preview_season_channel():
 
     assert match.name == "🦸-marvel-super-heroes"
     assert latest_set_channel(channels, LATEST_SET_CATEGORY).name == "🏔️-the-hobbit"
+
+
+def test_incoming_set_channel_targets_the_channel_of_the_set_releasing_next():
+    strategy = _StubCategory(LATEST_SET_CATEGORY)
+    base = datetime(2026, 6, 8, tzinfo=timezone.utc)
+    hobbit = _StubChannel("🏔️-the-hobbit", strategy, base)
+    fracture = _StubChannel("reality-fracture", None, base + timedelta(days=53))
+    hob = next(seed for seed in ALL_SETS if seed.code == "HOB")
+
+    assert incoming_set_channel(_StubGuild([hobbit, fracture]), hob, hobbit) is fracture
+    assert incoming_set_channel(_StubGuild([hobbit]), hob, hobbit) is None
+    assert incoming_set_channel(_StubGuild([hobbit, fracture]), hob, fracture) is None
 
 
 class _TodoChannel:
