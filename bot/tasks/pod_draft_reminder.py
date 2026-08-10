@@ -47,6 +47,7 @@ from bot.commands.messages import (
 from bot.services.pod_confirm import (
     CONFIRMED,
     MIN_TABLE,
+    attendance_of,
     card_tables,
     Attendance,
     TablePlan,
@@ -478,16 +479,6 @@ def _mention_rows(mentions: list[str]) -> list[str]:
         " ".join(mentions[start:start + MENTIONS_PER_ROW])
         for start in range(0, len(mentions), MENTIONS_PER_ROW)
     ]
-
-
-def attendance_of(rosters: dict[str, list[str]]) -> Attendance:
-    """The reminder's roster read as the four answers the confirmation window cares about."""
-    return Attendance(
-        confirmed=tuple(rosters.get(CONFIRMED) or ()),
-        yes=tuple(rosters.get(RSVP_YES) or ()),
-        maybe=tuple(rosters.get(RSVP_MAYBE) or ()),
-        declined=tuple(rosters.get(RSVP_NO) or ()),
-    )
 
 
 def _signup_tally(attendance: Attendance) -> str:

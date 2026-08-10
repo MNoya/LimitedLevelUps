@@ -3,6 +3,8 @@ surfaces group by format the same way. Once a signup wants flashback the roster 
 and Flashback columns; otherwise it stays a plain Yes / Maybe pair."""
 from __future__ import annotations
 
+from typing import TypeVar
+
 import discord
 
 from bot.commands.messages import (
@@ -18,9 +20,19 @@ from bot.commands.messages import (
 from bot import emojis
 from bot.discord_helpers import ZWSP
 from bot.services import pod_format_interest as fi
-from bot.services.pod_confirm import CONFIRMED, MIN_TABLE, Attendance, Table, TablePlan
+from bot.services.pod_confirm import (
+    CONFIRMED,
+    MIN_TABLE,
+    Attendance,
+    Table,
+    TablePlan,
+    attendance_of,
+    fits_one_table,
+)
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
 
+
+T = TypeVar("T")
 
 _YES_COLUMN = (RSVP_YES, "✅", "Yes")
 _MAYBE_COLUMN = (RSVP_MAYBE, "🤷", "Maybe")
@@ -43,14 +55,19 @@ def add_roster_fields(
     plain otherwise, with a No column from the first Leave. A championship always carries No and skips
     the format split, since it is a single-set event.
 
-    Once the confirmation window has answers, attendance takes the columns back from format: the hour
-    before a busy draft the room needs to read who is coming, not who prefers which set.
+    Attendance only takes the columns back from format once the pod is too big for one table. That is the
+    only point where telling a confirmed player from a pending one changes anything, because it is the only
+    point where the answer decides which room somebody walks into. A pod that fits at one table reads as
+    the plain card it was before anybody pressed Confirm.
 
     `playing_only` is a table already at its start time: one column of the players it holds, confirmed
     and not, since a maybe on a draft about to begin is not an answer anybody is waiting for."""
     if playing_only:
         _add_playing_field(embed, (rosters.get(CONFIRMED) or []) + (rosters.get(RSVP_YES) or []))
         return
+    if fits_one_table(attendance_of(rosters)):
+        rosters = _confirmed_as_yes(rosters)
+        roster_interests = _confirmed_as_yes(roster_interests)
     if championship:
         _add_plain_rsvp_fields(embed, rosters, include_no=True)
         return
@@ -220,8 +237,9 @@ def _add_plain_rsvp_fields(
 def attendance_columns(
     rosters: dict[str, list[str]], include_no: bool = False,
 ) -> tuple[tuple[str, str, str], ...]:
-    """Which attendance columns this roster renders. Once anyone has confirmed, Confirmed leads and Yes
-    steps down to a lighter mark, so the two never read as the same answer.
+    """Which attendance columns this roster renders. Once a roster too big for one table has a
+    confirmation, Confirmed leads and Yes steps down to a lighter mark, so the two never read as the same
+    answer. A roster still holding its confirmations under Yes renders the plain pair.
 
     No appears the moment anybody presses Leave, after the maybes. A pod counting on somebody who has
     already said they are not coming is the shape of every table that opened one player short, and the
@@ -231,6 +249,19 @@ def attendance_columns(
     if rosters.get(CONFIRMED):
         return _ATTENDANCE_CONFIRMING + (_NO_COLUMN,) if declined else _ATTENDANCE_CONFIRMING
     return _ATTENDANCE_WITH_NO if declined else _ATTENDANCE
+
+
+def _confirmed_as_yes(rosters: dict[str, list[T]] | None) -> dict[str, list[T]] | None:
+    """The same roster holding its confirmed players under Yes, ahead of the ones still pending.
+
+    Both roster shapes the card renders from pass through unchanged in kind, plain names and
+    interest-carrying pairs alike, so the format split keeps every player it had."""
+    if not rosters or not rosters.get(CONFIRMED):
+        return rosters
+    folded = dict(rosters)
+    folded[CONFIRMED] = []
+    folded[RSVP_YES] = list(rosters[CONFIRMED]) + list(rosters.get(RSVP_YES) or [])
+    return folded
 
 
 def _add_format_split_fields(

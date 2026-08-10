@@ -144,6 +144,16 @@ def seating_plan(attendance: Attendance) -> TablePlan:
     return shape
 
 
+def attendance_of(rosters: dict[str, list[str]]) -> Attendance:
+    """A rendered roster read as the four answers the confirmation window cares about."""
+    return Attendance(
+        confirmed=tuple(rosters.get(CONFIRMED) or ()),
+        yes=tuple(rosters.get(RSVP_YES) or ()),
+        maybe=tuple(rosters.get(RSVP_MAYBE) or ()),
+        declined=tuple(rosters.get(RSVP_NO) or ()),
+    )
+
+
 def attendance_for_event_sync(event_id: str) -> Attendance:
     """The answers currently held by the pod behind this event.
 
@@ -252,6 +262,16 @@ def set_confirmations_sync(
         return confirmed, len(members) - confirmed
 
 
+def fits_one_table(attendance: Attendance) -> bool:
+    """Whether a single table seats everybody who could still turn up, pending answers included.
+
+    The line between a pod that only has to start and a pod that has to be split. Below it a confirmation
+    changes nothing about who plays, so no surface has a reason to tell a confirmed player apart from a
+    pending one."""
+    whole = seating_plan(attendance.as_if_all_confirmed())
+    return len(whole.tables) <= 1 and not whole.waiting
+
+
 def card_tables(attendance: Attendance) -> tuple[TablePlan, bool]:
     """The tables the card draws, and whether players still pending are drawn sitting at them.
 
@@ -261,9 +281,8 @@ def card_tables(attendance: Attendance) -> tuple[TablePlan, bool]:
 
     One table that cannot hold them all seats only the confirmed as well: the overflow column is a
     waitlist, and somebody who has not answered is Pending rather than waiting for a seat."""
-    whole = seating_plan(attendance.as_if_all_confirmed())
-    if len(whole.tables) <= 1 and not whole.waiting:
-        return whole, True
+    if fits_one_table(attendance):
+        return seating_plan(attendance.as_if_all_confirmed()), True
     return seating_plan(attendance), False
 
 
