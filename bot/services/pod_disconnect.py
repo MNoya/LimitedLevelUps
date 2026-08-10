@@ -2,8 +2,9 @@
 
 The first says who went and counts down the reconnect window. When that window closes with nobody back, a
 second one asks the table how to continue, shaped like the Team-Draft offer: two columns of voters, a
-button per side, and a majority of the players still at the table decides. A return posts a third, and
-nothing already up is ever deleted, so the thread keeps the record of the stall.
+button per side, and a majority of the players still at the table decides. A return posts a third. A stall
+that reached the vote stays in the thread as the record of it; a pair that only came and went is removed
+when the next drop is announced, so a flapping connection never fills the thread with it.
 
 The card message is the source of truth for the tally, the same way the Team-Draft card is: each voter is
 stored in their column as a mention, so a click reads the columns straight off the message and a stalled
@@ -13,6 +14,7 @@ can't drift.
 """
 from __future__ import annotations
 
+import asyncio
 import re
 from collections.abc import Awaitable, Callable
 
@@ -104,6 +106,12 @@ def needed_from_embed(embed: discord.Embed) -> int | None:
     """The vote target parsed back off the card's footer, None once the card carries an outcome."""
     match = _NEEDED_RE.search(embed.footer.text or "")
     return int(match.group(1)) if match else None
+
+
+async def delete_cards(messages: list[discord.Message]) -> bool:
+    """Remove a stall's cards in one round of calls. False if any of them stayed up."""
+    results = await asyncio.gather(*(message.delete() for message in messages), return_exceptions=True)
+    return not any(isinstance(result, Exception) for result in results)
 
 
 def build_side_button(side: str, *, custom_id: str | None = None) -> ui.Button:

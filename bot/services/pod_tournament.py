@@ -2508,8 +2508,6 @@ async def finalize_tournament(manager: "PodDraftManager") -> None:
 
     asyncio.create_task(capture_event_replays(SeventeenLandsClient(), manager.event_id))
 
-    # thread champion callout + disconnect happen alongside the championship post
-
 
 def _load_participant_slugs(event_id: str) -> dict[str, str]:
     """Map normalized draftmancer_name → Player.slug for participants linked to a Player."""
@@ -2793,9 +2791,9 @@ def _stripped_event_title(event_name: str) -> str:
     return event_name.lstrip(f"{SET_CHAMPION_TITLE_GLYPH}{CHAMPION_TITLE_GLYPH} ").strip()
 
 
-def _format_champion_thread_callout(names_with_colors: list[tuple[str, str | None]]) -> str:
-    """Thread-side phrasing of the champion headline — no trophy glyph and no event name, since it
-    posts inside the event's own thread right under the championship post."""
+def _format_champion_result_line(names_with_colors: list[tuple[str, str | None]]) -> str:
+    """Card-side phrasing of the champion headline: no event name, since the card it replaces the status
+    line of is the pod's own, and the glyph is supplied by the caller."""
     if len(names_with_colors) == 1:
         name, color = names_with_colors[0]
         emoji_run = format_deck_color_emojis(color)
@@ -2838,7 +2836,7 @@ async def champion_card_line(event_id: str) -> str | None:
     champions = await asyncio.to_thread(_load_champions_sync, event_id)
     if not champions:
         return None
-    return f"🏆 {_format_champion_thread_callout(champions)}"
+    return f"🏆 {_format_champion_result_line(champions)}"
 
 
 class CardDrafter(NamedTuple):
@@ -3816,7 +3814,7 @@ async def maybe_post_championship(manager, *, force: bool = False) -> None:
         guild = getattr(target, "guild", None)
         await swap_set_champion_role(guild, manager.champion_discord_ids)
         await grant_set_champion_title(guild, manager.set_code, manager.champion_discord_ids)
-    await _send_champion_thread_ping(manager, champions, player_colors)
+    await _set_champion_card_result(manager, champions, player_colors)
     await _react_trophy_on_champion_screenshots(manager, deck_data, dm_info)
     if not force and manager.championship_task is not None and not manager.championship_task.done():
         manager.championship_task.cancel()
@@ -3900,43 +3898,22 @@ async def _react_trophy_on_champion_screenshots(manager, deck_data, dm_info) -> 
         log.warning(f"[FINALIZE] screenshot_backfill.scan_error event={manager.event_id}", exc_info=True)
 
 
-async def _send_champion_thread_ping(manager, champions, player_colors) -> None:
-    """Thread-side champion callout once the championship post is up: the headline in mention form
-    (without notifying anyone) with a jump button to the post."""
-    thread = await manager._fetch_thread()
+async def _set_champion_card_result(manager, champions, player_colors) -> None:
+    """The champion headline and the jump link both card surfaces show once the championship post is up.
+    The thread gets no callout of its own: the post lands there already, followed by the play-again
+    prompt, and the thread's own embed carries the same jump button."""
     announcement = manager.champion_announcement_message
-    if thread is None or announcement is None:
+    if announcement is None:
         return
-    named: list[tuple[str, str | None]] = []
-    carded: list[tuple[str, str | None]] = []
-    for s in champions:
-        color = player_colors.get(normalize_player_name(s.player_name))
-        carded.append((f"**{s.player_name}**", color))
-        mention = await _resolve_discord_mention(manager.event_id, s.player_name)
-        if mention:
-            named.append((mention, color))
+    carded = [
+        (f"**{s.player_name}**", player_colors.get(normalize_player_name(s.player_name)))
+        for s in champions
+    ]
     if not carded:
         return
-    manager.card_result_line = f"🏆 {_format_champion_thread_callout(carded)}"
+    manager.card_result_line = f"🏆 {_format_champion_result_line(carded)}"
     manager.card_result_url = announcement.jump_url
     notify_card_phase(manager.bot, manager.event_id)
-    if not named:
-        return
-    view = ui.View(timeout=None)
-    view.add_item(ui.Button(
-        label="Championship Post",
-        style=discord.ButtonStyle.link,
-        url=announcement.jump_url,
-        emoji="🏆",
-    ))
-    try:
-        await thread.send(
-            content=_format_champion_thread_callout(named),
-            allowed_mentions=discord.AllowedMentions.none(),
-            view=view,
-        )
-    except Exception:
-        log.warning("could not send champion ping", exc_info=True)
 
 
 def build_trophy_hype_view(

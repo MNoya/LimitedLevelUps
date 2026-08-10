@@ -379,6 +379,7 @@ class PodDraftManager:
         self.bot_filled_names: set[str] = set()
         self._disconnect_message: "discord.Message | None" = None
         self._disconnect_offer_message: "discord.Message | None" = None
+        self._flapped_messages: list["discord.Message"] = []
         self._disconnect_watch_task: asyncio.Task | None = None
         self._disconnect_offer_task: asyncio.Task | None = None
         self._disconnect_at: int | None = None
@@ -2075,10 +2076,17 @@ class PodDraftManager:
 
     async def _end_stall_on_return(self) -> None:
         """A stall the thread was never told about ends as quietly as it started. One it was told about
-        names everyone it waited on, a player who came back early included."""
+        names everyone it waited on, a player who came back early included. A stall that never reached the
+        vote leaves its two cards behind as removable, so a flapping connection posts one pair at a time."""
         announced = self._disconnect_message is not None or self._disconnect_offer_message is not None
         card = pod_disconnect.build_back_embed(sorted(self.stall_names)) if announced else None
-        await self.end_disconnect_stall(card=card)
+        watch = self._disconnect_message
+        voted = self._disconnect_offer_message is not None
+        back = await self.end_disconnect_stall(card=card)
+        if voted:
+            self._flapped_messages = []
+        else:
+            self._flapped_messages = [message for message in (watch, back) if message is not None]
 
     async def _open_disconnect_watch(self) -> None:
         """Nothing is said for the first seconds, so a drop that resolves at once costs no messages."""
@@ -2095,6 +2103,7 @@ class PodDraftManager:
             self._disconnect_message = await thread.send(embed=self._disconnect_watch_embed())
         except discord.HTTPException:
             log.warning(f"[DRAFT] disconnect_card_failed event={self.event_id}", exc_info=True)
+        await self._delete_flapped_cards()
 
     async def _refresh_disconnect_watch(self) -> None:
         """A second player dropping into a live wait joins the card already up, so one stall is one card."""
@@ -2149,11 +2158,11 @@ class PodDraftManager:
         self._disconnect_message = self._disconnect_offer_message = None
         return offer
 
-    async def end_disconnect_stall(self, *, card: "discord.Embed | None" = None) -> None:
-        """Close out a stall. Nothing posted is deleted or rewritten, so the thread keeps the record of who
-        dropped and how the table voted. The vote card loses its buttons, so nobody clicks a decision into
-        a draft that moved on, and `card` posts at the bottom of the thread, where a table that kept
-        talking through the stall will see it."""
+    async def end_disconnect_stall(self, *, card: "discord.Embed | None" = None) -> "discord.Message | None":
+        """Close out a stall and hand back the card it posted. Nothing is rewritten, so the thread keeps the
+        record of who dropped and how the table voted. The vote card loses its buttons, so nobody clicks a
+        decision into a draft that moved on, and `card` posts at the bottom of the thread, where a table that
+        kept talking through the stall will see it."""
         offer = self.clear_disconnect_state()
         if offer is not None:
             try:
@@ -2161,14 +2170,25 @@ class PodDraftManager:
             except discord.HTTPException:
                 log.info(f"[DRAFT] disconnect_end_failed event={self.event_id}", exc_info=True)
         if card is None:
-            return
+            return None
         thread = await self._fetch_thread()
         if thread is None:
-            return
+            return None
         try:
-            await thread.send(embed=card)
+            return await thread.send(embed=card)
         except discord.HTTPException:
             log.warning(f"[DRAFT] disconnect_end_card_failed event={self.event_id}", exc_info=True)
+            return None
+
+    async def _delete_flapped_cards(self) -> None:
+        """Clear the previous stall's pair once a new one is announced, so a connection that drops and
+        returns over and over leaves one disconnect card and one return card in the thread."""
+        messages = self._flapped_messages
+        self._flapped_messages = []
+        if not messages:
+            return
+        if not await pod_disconnect.delete_cards(messages):
+            log.info(f"[DRAFT] disconnect_flap_cleanup_failed event={self.event_id}")
 
     async def replace_disconnected_with_bots(self) -> str | None:
         """Hand every seat still missing to a Draftmancer bot so the draft runs on. Their picks so far

@@ -46,6 +46,7 @@ from bot.services.pod_tournament import (
     build_replays_link_button,
     clean_caption,
     colors_only,
+    deck_complete,
     escape_italics,
     format_deck_color_emojis,
     insert_pending_matches,
@@ -378,6 +379,19 @@ def team_showcase_keys(standings, teams: dict[str, str]) -> set[str]:
         if normalized.get(key) == winner or is_trophy:
             keys.add(key)
     return keys
+
+
+def team_showcase_missing(standings, teams: dict[str, str], deck_data) -> list[str]:
+    """Names still owing the colors and screenshot the team card galleries for them, so the post waits on
+    whoever it showcases instead of on a record. The rest of the losing side is reachable through the Draft
+    Recap link, so a deck of theirs never holds the post up."""
+    gallery = team_showcase_keys(standings, teams)
+    missing = []
+    for standing in standings:
+        key = normalize_player_name(standing.player_name)
+        if key in gallery and not deck_complete(deck_data.get(key)):
+            missing.append(standing.player_name)
+    return missing
 
 
 def team_standings_title(winner: str | None, *, live: bool) -> str:

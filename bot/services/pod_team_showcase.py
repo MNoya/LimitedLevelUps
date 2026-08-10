@@ -30,7 +30,7 @@ from bot.services.pod_team_flow import (
     team_record_column,
     team_record_line,
     team_scores,
-    team_showcase_keys,
+    team_showcase_missing,
 )
 from bot.services.pod_tournament import (
     CHAMPIONSHIP_DEADLINE_SECONDS,
@@ -38,7 +38,6 @@ from bot.services.pod_tournament import (
     build_thread_link_button,
     championship_posted_at_sync,
     colors_only,
-    deck_complete,
     format_deck_color_emojis,
     incomplete_decks,
     load_dm_info_sync,
@@ -88,12 +87,7 @@ async def maybe_post_team_championship(manager: "PodDraftManager", *, force: boo
         log.info(f"[TEAM] champion.skip event={event_id} reason=no_standings")
         return
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
-    showcase_keys = team_showcase_keys(standings, teams)
-    incomplete = [
-        s.player_name for s in standings
-        if normalize_player_name(s.player_name) in showcase_keys
-        and not deck_complete(deck_data.get(normalize_player_name(s.player_name)))
-    ]
+    incomplete = team_showcase_missing(standings, teams, deck_data)
     if incomplete and not force:
         log.info(f"[TEAM] champion.skip event={event_id} reason=awaiting_showcase_decks missing={incomplete}")
         return

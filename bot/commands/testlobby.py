@@ -1425,7 +1425,26 @@ async def _post_disconnect_preview(ctx: commands.Context, needed: int) -> None:
     await ctx.send(embed=pod_disconnect.build_back_embed(names))
 
 
+async def _post_disconnect_flap_preview(ctx: commands.Context) -> None:
+    """A connection that drops and returns twice. The second drop clears the first pair, which is what a
+    live pod does so a flapping player leaves one drop and one return in the thread."""
+    names = [HALL_OF_FAME[5]]
+    first_pair = [
+        await ctx.send(embed=pod_disconnect.build_waiting_embed(names, opens_at=_preview_vote_opens_at())),
+        await ctx.send(embed=pod_disconnect.build_back_embed(names)),
+    ]
+    await asyncio.sleep(_PREVIEW_FLAP_PAUSE_S)
+    await ctx.send(embed=pod_disconnect.build_waiting_embed(names, opens_at=_preview_vote_opens_at()))
+    await pod_disconnect.delete_cards(first_pair)
+    await ctx.send(embed=pod_disconnect.build_back_embed(names))
+
+
+def _preview_vote_opens_at() -> int:
+    return int(datetime.now(timezone.utc).timestamp()) + _PREVIEW_DISCONNECT_GRACE_S
+
+
 _PREVIEW_DISCONNECT_GRACE_S = 120
+_PREVIEW_FLAP_PAUSE_S = 3
 
 
 class _PreviewDisconnectVoteView(discord.ui.View):
@@ -1761,7 +1780,10 @@ async def setup(bot: commands.Bot) -> None:
             return
 
         if state == "dropped":
-            await _post_disconnect_preview(ctx, int(extra) if extra.isdigit() else 1)
+            if extra == "flap":
+                await _post_disconnect_flap_preview(ctx)
+            else:
+                await _post_disconnect_preview(ctx, int(extra) if extra.isdigit() else 1)
             return
 
         if state == "submit":
