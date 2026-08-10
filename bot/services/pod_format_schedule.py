@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 
-from bot.services.championship import championship_date_for
+from bot.services.championship_dates import championship_date_for
 from bot.services.pod_format import PEASANT_CODE
 from bot.services.pod_signals import LANE_EARLY, is_weekend
 from bot.sets import active_set_code, release_instant

@@ -26,7 +26,7 @@ from bot.commands import descriptions as desc
 from bot.config import PRODUCTION_GUILD_ID, settings
 from bot.discord_helpers import EM_SPACE, posts_publicly
 from bot.services import pod_format_interest as fi
-from bot.services.championship import championship_on
+from bot.services.championship_dates import championship_on
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
 from bot.services.pod_format import is_custom
 from bot.services.pod_format_schedule import calendar_days, extras_on, latest_on, rotation_in

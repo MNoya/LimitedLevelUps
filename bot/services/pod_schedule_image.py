@@ -28,7 +28,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from bot.services.championship import championship_on
+from bot.services.championship_dates import championship_on
 from bot.services.pod_format import is_custom
 from bot.services.pod_format_schedule import FLASHBACK, calendar_days, extras_on, is_rotation_day, latest_on
 

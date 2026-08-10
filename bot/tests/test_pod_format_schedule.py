@@ -12,8 +12,10 @@ from bot.sets import RELEASE_TZ, active_set_code
 
 def test_every_scheduled_format_resolves_to_a_known_set_or_cube():
     unresolved = {}
-    for key in schedule.FORMATS_BY_DAY:
+    for key, entry in schedule.FORMATS_BY_DAY.items():
         day, lane = key if isinstance(key, tuple) else (key, None)
+        if schedule.FLASHBACK in entry:
+            unresolved[key] = schedule.FLASHBACK
         for code in schedule.formats_for(day, lane):
             if pod_format.resolve_format_code(code) != code:
                 unresolved[key] = code
