@@ -168,7 +168,10 @@ LEAVE_GONE = "gone"
 class RsvpResult:
     """`event_name` and `event_time` are the pod's identity, read on the write's own session. The presser's
     acknowledgement names the pod it landed on, and querying that separately put a whole round trip between
-    the click and its answer."""
+    the click and its answer.
+
+    `confirmed` is whether the write stamped a confirmation, which the caller cannot work out for itself: a
+    Yes inside the last hour confirms without anybody asking it to."""
     state: SignalState
     rosters: dict[str, list[str]]
     rsvp: str | None
@@ -178,6 +181,7 @@ class RsvpResult:
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None = None
     event_name: str | None = None
     event_time: datetime | None = None
+    confirmed: bool = False
 
 
 @dataclass(frozen=True)
@@ -720,6 +724,7 @@ def set_rsvp(
         yes_changed=yes_changed, roster_interests=roster_interests,
         event_name=event.name if event is not None else None,
         event_time=event.event_time if event is not None else None,
+        confirmed=confirming and rsvp == pod_signals.RSVP_YES,
     )
 
 

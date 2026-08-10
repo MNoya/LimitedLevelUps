@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
@@ -19,8 +19,8 @@ from bot.commands.messages import (
     MSG_SHAPE_TEAM_DRAFT,
 )
 from bot.database import SessionLocal
-from bot.models import PodSignal, PodSignalMember
-from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
+from bot.models import PodDraftEvent, PodSignal, PodSignalMember
+from bot.services.pod_signals import KIND_SCHEDULED, RSVP_MAYBE, RSVP_NO, RSVP_YES
 
 
 CONFIRM_TRIGGER_YES = 8
@@ -313,6 +313,55 @@ def decline_players_sync(event_id: str, discord_ids: Iterable[str]) -> int:
             member.confirmed_at = None
         session.commit()
         return len(members)
+
+
+CLASH_WINDOW_MINUTES = 120
+
+
+@dataclass(frozen=True)
+class ClashingSignup:
+    """A pod still counting on a player who has just confirmed somewhere else at the same hour."""
+
+    event_id: str
+    name: str
+    card_message_id: str
+
+
+def clashing_signups_sync(event_id: str, discord_user_id: str) -> list[ClashingSignup]:
+    """The other pods this player holds a Yes on close enough in time to the one they just confirmed that
+    they cannot play both.
+
+    Confirming names the pod a player is playing, and every pod it clashes with is building a table around
+    a Yes that is no longer true. Two hours either side is the span of a draft, so the weekly slots sit far
+    enough apart that answering Wednesday never touches Thursday, and what is left is the real clash: two
+    pods at one slot time.
+
+    Only pods with a scheduled card are found, so an extra table is never read as a rival to the pod it
+    split off: a table carries no card of its own.
+    """
+    with SessionLocal() as session:
+        confirmed_start = session.execute(
+            select(PodDraftEvent.event_time).where(PodDraftEvent.id == event_id)
+        ).scalar_one_or_none()
+        if confirmed_start is None:
+            return []
+        window = timedelta(minutes=CLASH_WINDOW_MINUTES)
+        rows = session.execute(
+            select(PodDraftEvent.id, PodDraftEvent.name, PodSignal.message_id)
+            .join(PodSignal, PodSignal.event_id == PodDraftEvent.id)
+            .join(PodSignalMember, PodSignalMember.signal_id == PodSignal.id)
+            .where(
+                PodSignalMember.discord_user_id == discord_user_id,
+                PodSignalMember.rsvp == RSVP_YES,
+                PodSignal.kind == KIND_SCHEDULED,
+                PodDraftEvent.id != event_id,
+                PodDraftEvent.finalized_at.is_(None),
+                PodDraftEvent.event_time >= confirmed_start - window,
+                PodDraftEvent.event_time <= confirmed_start + window,
+            )
+            .order_by(PodDraftEvent.event_time)
+        ).all()
+    return [ClashingSignup(clashing_id, name, card_message_id) for clashing_id, name, card_message_id in rows]
 
 
 def _even_sizes(total: int) -> list[int]:

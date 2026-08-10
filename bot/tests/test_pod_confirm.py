@@ -240,6 +240,19 @@ def test_turning_up_in_the_lobby_confirms_a_seat(session, scheduled_signal, monk
     assert (stamped, member.confirmed_at is not None) == (1, True)
 
 
+def test_a_confirmation_clashes_only_with_a_pod_at_the_same_hour(session, scheduled_signal, monkeypatch):
+    monkeypatch.setattr(pod_confirm, "SessionLocal", _session_factory(session))
+    confirmed = _pod_starting_in(session, minutes=30)
+    scheduled_signal.event_id = confirmed.id
+    set_rsvp(session, MESSAGE_ID, "u13", "Nassif", pod_signals.RSVP_YES, confirming=True)
+    same_hour = _pod_signed_up_for(session, "u13", minutes=60, message_id="9102")
+    _pod_signed_up_for(session, "u13", minutes=1500, message_id="9103")
+
+    clashing = pod_confirm.clashing_signups_sync(confirmed.id, "u13")
+
+    assert [(pod.event_id, pod.card_message_id) for pod in clashing] == [(same_hour.id, "9102")]
+
+
 def _pod_starting_in(session, *, minutes: int) -> PodDraftEvent:
     event = PodDraftEvent(
         name=f"Pod in {minutes}", set_code="CUBE", discord_thread_id="77",
@@ -248,6 +261,29 @@ def _pod_starting_in(session, *, minutes: int) -> PodDraftEvent:
         event_time=datetime.now(timezone.utc) + timedelta(minutes=minutes),
     )
     session.add(event)
+    session.flush()
+    return event
+
+
+def _pod_signed_up_for(session, discord_user_id: str, *, minutes: int, message_id: str) -> PodDraftEvent:
+    event = _pod_starting_in(session, minutes=minutes)
+    signal = PodSignal(
+        kind=pod_signals.KIND_SCHEDULED,
+        bucket=pod_signals.SCHEDULED_BUCKET,
+        guild_id="1",
+        channel_id="2",
+        message_id=message_id,
+        signal_date=datetime.now(SCHEDULE_TZ).date(),
+        slot_time=event.event_time,
+        status=pod_signals.STATUS_FIRED,
+        event_id=event.id,
+    )
+    session.add(signal)
+    session.flush()
+    session.add(PodSignalMember(
+        signal_id=signal.id, discord_user_id=discord_user_id, display_name="Nassif",
+        rsvp=pod_signals.RSVP_YES,
+    ))
     session.flush()
     return event
 

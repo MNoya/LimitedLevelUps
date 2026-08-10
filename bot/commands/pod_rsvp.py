@@ -58,6 +58,7 @@ from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.models import PodDraftEvent, PodSignal
 from bot.services import championship
 from bot.services import championship_copy as cc
+from bot.services import pod_confirm
 from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
@@ -139,6 +140,7 @@ MSG_CARD_INACTIVE = "This RSVP card is no longer active."
 MSG_BAD_TIME = "Enter a future time like +1h, 9 PM, 21:00, or tomorrow 8:30pm."
 THREAD_NOTE_TITLE = "🕐 Pod Draft Rescheduled by {actor}"
 THREAD_NOTE_BODY = "New time: <t:{unix}:F> (<t:{unix}:R>)\n" + MSG_DRAFTMANCER_LINK_LEAD
+MSG_CLASHING_MAYBE = "🤷 {player} moved to Maybe here after confirming {other}"
 
 LauncherRefresh = Callable[[commands.Bot, date], Awaitable[None]]
 
@@ -982,7 +984,8 @@ async def _settle_card_rsvp(
     interaction: discord.Interaction, result: pod_launch.RsvpResult, *, refresh_launcher: bool,
 ) -> None:
     """Everything an RSVP moves once the presser has an answer: the clicked card, the pod roles and the
-    first-pod welcome, thread membership, then everything any roster change moves.
+    first-pod welcome, thread membership, then everything any roster change moves, and for a confirmation
+    the pods it clashes with.
 
     The clicked card is repainted first because it is the one on the presser's screen. A press from the
     thread's own surfaces renders nothing here, since those carry no roster columns, and the thread's
@@ -1018,6 +1021,14 @@ async def _settle_card_rsvp(
     )
     if championship and result.yes_changed:
         notify_seeding_change(interaction.client, result.state.event_id)
+    if result.confirmed:
+        pod_name, _event_time = _pod_identity(result)
+        run_detached(
+            demote_clashing_signups(
+                interaction.client, interaction.user, result.state.event_id, pod_name,
+            ),
+            f"the pods clashing with {result.state.event_id}",
+        )
 
 
 SHARED_RENDER_DEBOUNCE_S = 1.5
@@ -1070,15 +1081,16 @@ async def _settle_beyond_the_thread(
         _launcher_renders.request(str(day), lambda: _refresh_launcher(bot, slot_time))
 
 
-async def apply_card_leave(
-    bot: commands.Bot, user: discord.abc.User, guild: discord.Guild | None, card_message_id: str,
+async def set_card_rsvp(
+    bot: commands.Bot, user: discord.abc.User, card_message_id: str, state: str,
 ) -> str | None:
-    """Record No on a pod's card for a player leaving from another surface, then re-render everything that
-    carries the roster. The launcher's Leave button drops one player from every pod at once, so the write
-    cannot own the interaction the way `apply_card_rsvp` does and the caller answers for all of them.
+    """Record an RSVP on a pod's card for a press that landed on something else, then re-render everything
+    that carries the roster. The launcher's Leave button drops one player from every pod at once, and a
+    confirmation moves them to Maybe on every pod it clashes with, so the write cannot own the interaction
+    the way `apply_card_rsvp` does and the caller answers for all of them.
     Returns the pod's name, or None when the card is gone or closed."""
     result = await asyncio.to_thread(
-        pod_launch.set_rsvp_sync, card_message_id, str(user.id), user.display_name, RSVP_NO,
+        pod_launch.set_rsvp_sync, card_message_id, str(user.id), user.display_name, state,
     )
     if result is None or result.closed:
         return None
@@ -1096,6 +1108,57 @@ async def apply_card_leave(
         if championship:
             notify_seeding_change(bot, event_id)
     return name
+
+
+async def demote_clashing_signups(
+    bot: commands.Bot, user: discord.abc.User, confirmed_event_id: str, confirmed_name: str,
+) -> None:
+    """Move a player who has just confirmed to Maybe on every pod that clashes with the one they confirmed,
+    and say so in each clashing pod's thread.
+
+    Nothing about a confirmation waits on this. It answers a question about the other pods, which the player
+    who pressed Confirm is not asking, and a night with nothing clashing costs one read to find that out.
+
+    Maybe rather than No: the player has said which pod they are playing, not that they are unavailable, and
+    a clashing pod that ends up not firing should still find them on its roster."""
+    clashing = await asyncio.to_thread(
+        pod_confirm.clashing_signups_sync, confirmed_event_id, str(user.id),
+    )
+    if not clashing:
+        return
+    log.info(f"{user} confirmed {confirmed_name}, demoting {len(clashing)} clashing signups to Maybe")
+    confirmed_link = await _pod_thread_link(bot, confirmed_event_id, confirmed_name)
+    for pod in clashing:
+        await set_card_rsvp(bot, user, pod.card_message_id, RSVP_MAYBE)
+        await _announce_clashing_maybe(bot, pod, user, confirmed_link)
+        await _refresh_launcher_for_event(bot, pod.event_id)
+
+
+async def _announce_clashing_maybe(
+    bot: commands.Bot, pod: pod_confirm.ClashingSignup, user: discord.abc.User, confirmed_link: str,
+) -> None:
+    """Tell the clashing pod's thread who moved and why. The roster columns show the move on their own, but
+    only the thread can say it was a clash and not a change of mind, which is what stops the pod chasing a
+    player who is already sitting at another table.
+
+    By display name, not by mention: the player made this happen and knows it, and the people who need it
+    are the ones planning the table around them."""
+    thread = await _resolve_event_thread(bot, pod.event_id)
+    if thread is None:
+        return
+    try:
+        await thread.send(MSG_CLASHING_MAYBE.format(player=user.display_name, other=confirmed_link))
+    except discord.HTTPException:
+        log.warning(f"could not post the clash notice in thread {thread.id}", exc_info=True)
+
+
+async def _pod_thread_link(bot: commands.Bot, event_id: str, name: str) -> str:
+    """A pod named as a link to its own thread, so the clash notice puts the pod that took the player one
+    click away. Falls back to the bare name for a pod whose thread the bot cannot reach."""
+    thread = await _resolve_event_thread(bot, event_id)
+    if thread is None:
+        return f"**{name}**"
+    return f"[**{name}**]({thread.jump_url})"
 
 
 async def _refresh_launcher(bot: commands.Bot, slot_time: datetime | None) -> None:

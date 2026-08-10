@@ -42,13 +42,13 @@ from bot.commands.pod_queue import queue_role_mention
 from bot.commands.pod_rsvp import (
     REMINDER_CONFIRM_STATE,
     ReminderRsvpButton,
-    apply_card_leave,
     apply_card_rsvp,
     pod_already_on_embed,
     pod_removed_embed,
     post_scheduled_card,
     refresh_event_rsvp_surfaces,
     register_launcher_refresh,
+    set_card_rsvp,
 )
 from bot.config import settings
 from bot.discord_helpers import NBSP, ZWSP, run_detached
@@ -1512,9 +1512,7 @@ async def _settle_board_leave(
     """The Discord side of a Leave: No on each fired pod's card and every surface it feeds, then the board,
     then the standing nudge of each pod the presser left gathering."""
     for slot in cards:
-        await apply_card_leave(
-            interaction.client, interaction.user, interaction.guild, slot.card_message_id,
-        )
+        await set_card_rsvp(interaction.client, interaction.user, slot.card_message_id, RSVP_NO)
     await _rerender_board(interaction.client, str(launcher_message.id), signal_date)
     for slot in left:
         await refresh_slot_nudge(interaction.client, slot.signal_id)

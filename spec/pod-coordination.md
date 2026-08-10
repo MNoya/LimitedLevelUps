@@ -61,6 +61,7 @@ You can also save a **Format Preference** on your welcome card to say what you l
 In the hour before a pod, a few things happen in the thread:
 
 - The bot posts a reminder that shows the roster as the tables it makes. It carries Confirm and Leave buttons to say whether you are still playing. There is no Maybe at this point: you are confirming a yes or a no.
+- Confirming moves you to Maybe on any other pod starting within two hours of the one you confirmed, and says so in that pod's thread. You cannot play two at once, and the pod you are not playing should not build a table around you. A pod further apart than that is untouched.
 - The pod's status message in pod chat says where it stands: how many players it still needs, and once it has enough, how many said yes and how many said maybe. It is one message from the first signup to the lobby, so the numbers move in place instead of the message coming and going. An hour out it moves to the bottom of the channel, and pings the slot's role if the pod is one or two players short.
 - Reaching 8 does not close the pod. Signups stay open, because people do drop before the start, and extra players get a table of their own when the pod splits.
 
