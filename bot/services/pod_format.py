@@ -188,9 +188,17 @@ def settings_notice_marker(setting: str) -> str:
     return f"set {setting} to"
 
 
-def settings_change_message(actor: str, setting: str, value: str, *, subtext: str | None = None) -> str:
-    """Public thread notice for a lobby Settings change; shared by Format and Pairings."""
-    line = f"⚙️ **{actor}** {settings_notice_marker(setting)} **{value}**"
+def settings_notice_markers(setting: str) -> tuple[str, str]:
+    """Both forms a setting's notice takes, so the next one retires the last whoever set it."""
+    return settings_notice_marker(setting), f"Set **{setting}** to"
+
+
+def settings_change_message(actor: str | None, setting: str, value: str,
+                            *, subtext: str | None = None) -> str:
+    """Public thread notice for a lobby Settings change; shared by Format and Pairings. No actor when the
+    pod's own size set it, which reads as the setting moving on its own."""
+    line = (f"⚙️ **{actor}** {settings_notice_marker(setting)} **{value}**" if actor
+            else f"⚙️ Set **{setting}** to **{value}**")
     return f"{line}\n-# {subtext}" if subtext else line
 
 

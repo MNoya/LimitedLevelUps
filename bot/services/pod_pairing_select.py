@@ -28,8 +28,9 @@ def pairing_label(mode: str | None) -> str:
     return next((lbl for code, lbl, _ in PAIRING_MODES if code == cur), cur)
 
 
-def pairing_change_message(actor: str, mode: str) -> str:
-    """Public thread notice when the pairing mode changes, with the mode's description as subtext."""
+def pairing_change_message(actor: str | None, mode: str) -> str:
+    """Public thread notice when the pairing mode changes, with the mode's description as subtext. An
+    actor of None is the pod's size setting its own pairings, which nobody chose."""
     label = next((lbl for code, lbl, _ in PAIRING_MODES if code == mode), mode)
     desc = next((d for code, _, d in PAIRING_MODES if code == mode), "")
     return settings_change_message(actor, "Pairings", label, subtext=desc)

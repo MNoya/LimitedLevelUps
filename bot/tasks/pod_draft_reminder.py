@@ -23,7 +23,6 @@ from bot.services.championship_roster_card import (
     add_championship_roster_fields,
     championship_roster_for_event_sync,
 )
-from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_reminder_copy import (
     ATTENDANCE_HOLD,
     ATTENDANCE_HOLD_MAYBE,
@@ -215,34 +214,6 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
         with contextlib.suppress(discord.HTTPException):
             await existing.delete()
     return posted
-
-
-def schedule_team_vote_offer(scheduler, event_id: str, event_time: datetime) -> None:
-    """Arm the at-start Team-Draft offer check. A past start time is skipped — the offer only makes sense
-    while the lobby is still gathering at o'clock."""
-    now = datetime.now(timezone.utc)
-    job_id = f"pod-teamvote-{event_id}"
-    if event_time <= now:
-        with contextlib.suppress(Exception):
-            scheduler.remove_job(job_id)
-        return
-    scheduler.add_job(
-        fire_team_vote_offer, "date", run_date=event_time,
-        args=[event_id], id=job_id, replace_existing=True,
-    )
-    log.info(f"scheduled team-vote offer for event {event_id} at {event_time.isoformat()}")
-
-
-async def fire_team_vote_offer(event_id: str) -> None:
-    """At the scheduled start time, offer Team Draft when the lobby settled small and even (four to six
-    players). The manager is already live from the T-10 lobby reminder; a full, odd, or empty lobby is
-    left alone until a later join makes it eligible, and offer_team_vote no-ops if the pod already
-    started or is already a team draft."""
-    manager = ACTIVE_POD_MANAGERS.get(event_id)
-    if manager is None:
-        log.info(f"fire_team_vote_offer: no live manager for {event_id}; skipping")
-        return
-    await manager.offer_team_vote_if_eligible()
 
 
 async def refresh_roster_reminder_for_event(event_id: str) -> bool:

@@ -59,7 +59,7 @@ from bot.services.pod_join_button import build_join_view
 from bot.services.pod_link_dm import build_link_dm, format_thread_ref, send_lobby_link_dms, try_dm
 from bot.sets import active_set_code
 from bot.services.pod_format import format_display
-from bot.services.pod_pairing_select import DEFAULT_PAIRING_MODE, pairing_label
+from bot.services.pod_pairing_select import DEFAULT_PAIRING_MODE, pairing_change_message, pairing_label
 from bot.services.pod_seating_select import seating_mode_label
 from bot.services.player_stats import rank_players_for_set
 from bot import emojis
@@ -565,12 +565,11 @@ async def _start_live_test_lobby(ctx) -> None:
     await ctx.send(f"🧪 Connected to Draftmancer `{session_id}`.")
 
 
-async def _arm_pod_team_command(ctx) -> None:
-    """Register a socket-less manager holding a fake six-player lobby for this channel, so `/pod-team`
-    finds a pod and posts its card through the production path with no Draftmancer session open. Local
-    DB only."""
+async def _arm_fake_six_player_lobby(ctx) -> PodDraftManager | None:
+    """Register a socket-less manager holding a fake six-player lobby for this channel, so the pod
+    surfaces run their production path with no Draftmancer session open. Local DB only."""
     if await _refuse_if_prod(ctx):
-        return
+        return None
     await _purge_and_reset_test(ctx)
     channel_id = ctx.channel.id
     roster = [ctx.author.display_name] + _LIVE_TEST_ROSTER[1:6]
@@ -582,8 +581,26 @@ async def _arm_pod_team_command(ctx) -> None:
     )
     manager.session_users = [{"userID": f"testlobby-{name}", "userName": name} for name in roster]
     ACTIVE_POD_MANAGERS[event_id] = manager
-    log.info(f"[testlobby] armed /pod-team event={event_id} channel={channel_id} lobby={len(roster)}")
-    await ctx.send(f"🧪 Fake {len(roster)}-player lobby armed. Run `/pod-team` in this channel.")
+    log.info(f"[testlobby] armed fake lobby event={event_id} channel={channel_id} lobby={len(roster)}")
+    return manager
+
+
+async def _arm_pod_team_command(ctx) -> None:
+    """Arm the fake six-player lobby so `/pod-team` finds a pod and posts its vote card."""
+    manager = await _arm_fake_six_player_lobby(ctx)
+    if manager is None:
+        return
+    await ctx.send(f"🧪 Fake {len(manager.session_users)}-player lobby armed. Run `/pod-team` here.")
+
+
+async def _run_auto_team_pairing(ctx) -> None:
+    """Arm the fake six-player lobby and repaint it, which is what the size rule reacts to: the pod moves
+    itself to Team Draft, posts its thread notice, and the lobby card comes back reading Team Draft."""
+    manager = await _arm_fake_six_player_lobby(ctx)
+    if manager is None:
+        return
+    await manager.refresh_lobby_now()
+    await ctx.send(f"🧪 Repainted a {len(manager.session_users)}-player lobby. Pairings: {manager.pairing_mode}")
 
 
 async def _start_test_table(ctx) -> None:
@@ -1059,6 +1076,7 @@ _CHAMPION_PREVIEW_NAMES = (
     "driftwood", "quickfox", "mo", "yo", "Pipsqueak", "Bramblewine",
 )
 _POD_PREVIEW_RECORDS = ((3, 0), (3, 0), (2, 1), (2, 1), (2, 1), (2, 1), (1, 2), (0, 3), (0, 3), (0, 3))
+_FOUR_POD_PREVIEW_RECORDS = ((3, 0), (2, 1), (1, 2), (0, 3))
 _CHAMPIONSHIP_PREVIEW_RECORDS = ((3, 0), (2, 1), (2, 1), (2, 1), (1, 2), (1, 2), (1, 2), (0, 3))
 _CHAMPION_PREVIEW_COLORS = ("URg", "WB", "RG", "UB", "WU", "BRw", "GW", "WUBRG", "Wb", "BG")
 _CHAMPION_PREVIEW_CAPTIONS = (
@@ -1221,7 +1239,7 @@ _VALID_STATES = (
     "empty", "partial", "linked", "unlinked", "ready", "held", "notready", "titles",
     "readyunlinked", "readycancel",
     "drafting", "complete", "submit", "lobby", "lobbyopen", "dmlink", "unlink", "podbracket", "podswiss", "podrandom",
-    "podteam", "podlobby", "podteamvote",
+    "podteam", "podlobby", "podteamvote", "autoteam",
     "format", "seeding", "trophyhype", "champ", "round1", "round2", "round3", "voicelink", "review",
     "table",
     "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "p2vote",
@@ -1232,7 +1250,9 @@ _LIVE_POD_MODES = {
     "podbracket": "bracket", "podswiss": "swiss", "podrandom": "random", "podteam": "team",
 }
 
-_PRODUCTION_BLOCKED_STATES = frozenset(_LIVE_POD_MODES) | {"podlobby", "podteamvote", "unlink", "reset"}
+_PRODUCTION_BLOCKED_STATES = frozenset(_LIVE_POD_MODES) | {
+    "podlobby", "podteamvote", "autoteam", "unlink", "reset",
+}
 
 _LAST_MESSAGE: dict[int, discord.Message] = {}
 _LAST_PROGRESS_MESSAGES: dict[int, list[discord.Message]] = {}
@@ -1680,6 +1700,10 @@ async def setup(bot: commands.Bot) -> None:
             await _arm_pod_team_command(ctx)
             return
 
+        if state == "autoteam":
+            await _run_auto_team_pairing(ctx)
+            return
+
         if state == "readyunlinked":
             embed, _ = _build("unlinked")
             await ctx.send(embed=embed, view=_ReadyCheckPreviewView())
@@ -1749,6 +1773,7 @@ async def setup(bot: commands.Bot) -> None:
         if state == "champ":
             previews = (
                 _champion_announcement_preview(ctx.guild, _pod_preview_name(), _POD_PREVIEW_RECORDS),
+                _champion_announcement_preview(ctx.guild, _pod_preview_name(), _FOUR_POD_PREVIEW_RECORDS),
                 _champion_announcement_preview(
                     ctx.guild, _championship_preview_name(), _CHAMPIONSHIP_PREVIEW_RECORDS),
                 _champion_hype_preview(ctx.guild),
@@ -1770,6 +1795,8 @@ async def setup(bot: commands.Bot) -> None:
             return
 
         if state == "teamvote":
+            await ctx.send(pairing_change_message(None, "team"))
+            await ctx.send(pairing_change_message(None, "bracket"))
             seeded = list(_team_vote_seed().values())
             embed = build_team_vote_offer_embed(seeded, [], _TEAM_VOTE_POD_SIZE)
             await ctx.send(embed=embed, view=_TeamVotePreviewView())

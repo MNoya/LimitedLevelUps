@@ -76,7 +76,6 @@ from bot.tasks.pod_draft_reminder import (
     refresh_roster_reminder_for_event,
     repost_roster_reminder,
     schedule_roster_reminder,
-    schedule_team_vote_offer,
     signal_rsvps_sync,
 )
 from bot.tasks.pod_underfill import (
@@ -1843,7 +1842,6 @@ async def launch_from_signal(
         await open_ondemand_lobby(bot, event_id)
     else:
         _arm_open(bot, event_id, event_time)
-        schedule_team_vote_offer(bot.pod_scheduler, event_id, event_time)
     return event_id
 
 
@@ -1933,7 +1931,6 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str, allow_hold: bool
     )
 
     if manager is not None:
-        manager.arm_team_vote_offer(len(display_names))
         await _apply_scheduled_pick_timer(event_id, manager)
 
 
@@ -2092,10 +2089,9 @@ def _mint_fresh_session_sync(event_id: str) -> str | None:
 def arm_scheduled_pod_jobs(
     bot: commands.Bot, event_id: str, event_time: datetime, created_at: datetime,
 ) -> None:
-    """Every timed job a scheduled card carries: T-10 lobby open, at-start team vote, underfill
-    checks, and the roster reminder. Creation, /pod-postpone, and the startup sweep all arm here."""
+    """Every timed job a scheduled card carries: T-10 lobby open, underfill checks, and the roster
+    reminder. Creation, /pod-postpone, and the startup sweep all arm here."""
     _arm_open(bot, event_id, event_time)
-    schedule_team_vote_offer(bot.pod_scheduler, event_id, event_time)
     schedule_underfill_checks(bot.pod_scheduler, event_id, event_time, created_at)
     schedule_roster_reminder(bot.pod_scheduler, event_id, event_time)
 
@@ -2389,7 +2385,6 @@ def _rearm_open_if_pending(bot: commands.Bot, event_id: str, with_fill_jobs: boo
         arm_scheduled_pod_jobs(bot, event_id, event_time, created_at)
     else:
         _arm_open(bot, event_id, event_time)
-        schedule_team_vote_offer(bot.pod_scheduler, event_id, event_time)
     return True
 
 

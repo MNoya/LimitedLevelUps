@@ -78,7 +78,7 @@ Firing does **not** open a Draftmancer lobby. It **graduates the pod into a sche
 - creates a new `PodSignal` (kind `scheduled`, born `fired`) and copies the poll signups onto it as Yes,
 - creates the native Discord scheduled event,
 - inserts the `PodDraftEvent` (kind `tournament`),
-- arms the timed jobs (roster reminder, team-vote offers, T-10 lobby open, underfill checks).
+- arms the timed jobs (roster reminder, T-10 lobby open, underfill checks).
 
 **Moving a pod after it fires.** The lobby Settings panel's Reschedule accepts an offset from the pod's current start (`+30m`, `1h30m`) as well as absolute and natural forms (`parse_new_time`). `reschedule_event` re-arms every timed job off the new start, updates the native event, re-renders the card, the live nudge and the roster reminder, notes it in the thread with the roster mentioned, and repaints the launcher. The pod's `PodSignal.slot_time` deliberately stays on the slot it was gathered in: that is the lane it belongs to and the board that carries it, so the column still reflects it and still rolls off it, while the block renders the pod's new start. The other formats at that slot are untouched, since one pod moved and the slot did not. The pod keeps the name it was created with, which carries the original date and slot label — accurate for the ordinary half-hour move, stale only for a move across a slot boundary, and a rename is deliberately avoided against Discord's rate limits.
 
@@ -112,7 +112,7 @@ Target headcount is 8 for scheduled cards (`pod_draft_target_players`), 6 for un
 
 **Roster reminder** (`bot/tasks/pod_draft_reminder.py`) — at T-60 (`ROSTER_REMINDER_LEAD_MIN`), posts the roster into the thread while the socket is still pending, through the shared `pod_roster_fields.add_roster_fields`, plain now that every pod is format-locked. It carries Sign Up / Can't and Format Preference buttons (`ReminderRsvpButton`, `ReminderFormatPreferenceButton`), all keyed by event id: the RSVP buttons record against the pod's card through `_apply_surface_rsvp`, and the picker is Save-only (no per-slot Confirm), acking fast then re-rendering the launcher, card, and reminder in the background (`refresh_event_rsvp_surfaces`). The view builder is injected from `pod_daily_poll` via `register_reminder_view_builder` to avoid the import cycle.
 
-**Team-vote pre-offer** — also at T-60, `maybe_offer_prelobby_team_vote` offers a Team Draft card when the Yes roster is exactly 6. A second team-vote offer fires at the o'clock start time. There is **no separate T-1h "rally repost"** today beyond the underfill resurface and the roster reminder.
+There is **no separate T-1h "rally repost"** today beyond the underfill resurface and the roster reminder.
 
 ### 6. Launch and firing
 
@@ -124,7 +124,7 @@ Session ids (`pod_drafts.py`): on-demand sessions are `LLU-<Mon>-<Day>-<rand4>` 
 
 **Second table** (`bot/commands/pod_table.py`) — at draft start, once seats lock, `offer_second_table` pings the leftover Yes/Maybe roster if a full table's worth (`pod_table_open_threshold` = 6) remains; a format-driven hook does the same at the T-5 settle assessment when the live format vote shows a flashback set can seat its own table without starving the main pod. The 6th distinct joiner materializes the table (clones the source pod, new session/thread/lobby). `/pod-table` opens the same flow manually and can preset a different format.
 
-**Table shapes** (`bot/services/pod_tournament.py`, `pod_bracket.py`, team modules) — default pairing is `bracket`, which requires exactly 8; at any other count it falls back to swiss. Bracket is 3 rounds. The 6-player Team Draft is auto-offered only at exactly 6 (`pod_team_vote.py`, majority = size//2+1); `/pod-team` allows any pod ≥ 4. Team pods write no individual placement — trophies are 3-0 records only. Team championship and trophy-hype showcases live in `pod_team_showcase.py`.
+**Table shapes** (`bot/services/pod_tournament.py`, `pod_bracket.py`, team modules) — default pairing is `bracket`, which requires exactly 8; at any other count it falls back to swiss. Bracket is 3 rounds. The 6-player Team Draft is set by the bot, not voted on: `_sync_auto_pairing` (`pod_draft_manager.py`) holds `pairing_mode` at `team` while the pod reads as 6 and hands it back to the displaced mode at any other size, standing down for good once anything calls `set_event_pairing_mode`. It runs on the lobby repaint and again at the head of `initiate_ready_check`, which reads the lobby alone, so a pod that reaches its check with six present is moved then. `/pod-team` still offers the vote card (`pod_team_vote.py`, majority = size//2+1) for any pod ≥ 4. Team pods write no individual placement — trophies are 3-0 records only. Team championship and trophy-hype showcases live in `pod_team_showcase.py`.
 
 ### Config and thresholds (`bot/config.py`)
 

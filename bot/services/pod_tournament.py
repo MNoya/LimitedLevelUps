@@ -151,6 +151,7 @@ POD_REPAIR_FAILED_MSG = (
     "An Organizer should check the matchups."
 )
 ANNOUNCED_MAX_LOSSES = 1  # a 3-0 or 2-1 finish earns an announcement row; the thread keeps full standings
+FULL_FIELD_POD_SIZE = 4  # at or below this the announcement carries the whole pod, not only its top records
 DECK_GALLERY_CAP = 6  # Discord grids three per row; a seventh deck strands one on a row of its own
 TROPHY_HYPE_HISTORY_LIMIT = 100  # messages scanned for a champion's own trophy post before the bot posts
 CHAMPIONSHIP_DEADLINE_SECONDS = 600  # hard cap from R3 end: post the announcement with whatever decks landed
@@ -3523,9 +3524,10 @@ def deck_missing_parts(data: "ParticipantDeckData | None") -> list[str]:
 def announced_finishers(standings, event_name: str | None) -> list[pod_swiss.Standing]:
     """How far the channel announcement reaches: every record within ANNOUNCED_MAX_LOSSES for a normal pod,
     so a ten-player pod posts all of its 2-1s instead of cutting at a fixed four, and the whole field for a
-    Set Championship, whose full result is the record worth keeping. The same set gates the post, so every
-    row it shows has had its deck waited for."""
-    if is_championship(event_name):
+    Set Championship, whose full result is the record worth keeping. A pod of four goes out whole too: one
+    loss cuts it to two rows, which reads as half a result. The same set gates the post, so every row it
+    shows has had its deck waited for."""
+    if is_championship(event_name) or len(standings) <= FULL_FIELD_POD_SIZE:
         return list(standings)
     return [s for s in standings if s.losses <= ANNOUNCED_MAX_LOSSES]
 

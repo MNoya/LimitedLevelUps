@@ -121,6 +121,14 @@ def test_announced_finishers_covers_every_one_loss_record():
     assert [s.player_name for s in finishers] == list(HALL_OF_FAME[:7])
 
 
+def test_announced_finishers_keeps_the_whole_field_for_a_four_player_pod():
+    standings = _finished_standings(((3, 0), (2, 1), (1, 2), (0, 3)))
+
+    finishers = announced_finishers(standings, _POD_NAME)
+
+    assert [s.player_name for s in finishers] == list(HALL_OF_FAME[:4])
+
+
 def test_announced_finishers_keeps_the_whole_field_for_a_set_championship():
     standings = _finished_standings(((3, 0), (2, 1), (1, 2), (0, 3)))
 

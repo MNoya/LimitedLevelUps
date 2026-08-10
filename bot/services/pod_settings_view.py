@@ -6,6 +6,7 @@ private ephemeral. The Seat Order button is contextual to Manual seats + a live 
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Awaitable, Callable
 
 import discord
@@ -16,6 +17,7 @@ from bot.commands.messages import MSG_RESTART_NOT_ORGANIZER
 from bot.config import settings
 from bot.services.pod_format import (
     default_pick_timer_for, format_change_message, settings_change_message, settings_notice_marker,
+    settings_notice_markers,
 )
 from bot.services.pod_notices import send_settings_notice
 from bot.services.pod_drafts import is_championship
@@ -256,7 +258,7 @@ class PodSettingsView(ui.View):
         return settings.pod_draft_picks_per_pack
 
     async def apply(self, interaction: discord.Interaction, *, on_apply: Apply,
-                    value: str, attr: str, notice: str, marker: str) -> None:
+                    value: str, attr: str, notice: str, marker: str | Sequence[str]) -> None:
         if await self._commit(interaction, on_apply, attr, value):
             await self._render(interaction, [(notice, marker)])
 
@@ -272,7 +274,7 @@ class PodSettingsView(ui.View):
         return True
 
     async def _render(self, interaction: discord.Interaction,
-                      notices: list[tuple[str, str | list[str]]]) -> None:
+                      notices: list[tuple[str, str | Sequence[str]]]) -> None:
         """Rebuild the panel from the view's current state, post each thread notice, refresh the card."""
         await interaction.edit_original_response(view=PodSettingsView(
             on_format=self.on_format, on_pairing=self.on_pairing,
@@ -412,7 +414,7 @@ class _PairingSetting(ui.Select):
         mode = self.values[0]
         await view.apply(interaction, on_apply=view.on_pairing, value=mode, attr="current_mode",
                          notice=pairing_change_message(actor_label(interaction), mode),
-                         marker=settings_notice_marker("Pairings"))
+                         marker=settings_notice_markers("Pairings"))
 
 
 class _SeatingSetting(ui.Select):

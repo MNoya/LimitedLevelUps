@@ -136,7 +136,6 @@ async def materialize_table(
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     if manager is not None:
         manager.claimed_discord_ids = {str(user_id) for user_id in claims if user_id > 0}
-        manager.arm_team_vote_offer(len(claims))
         if format_code:
             timer = pod_format.default_pick_timer_for(set_code)
             if timer is not None:
