@@ -170,6 +170,15 @@ def read_contests() -> dict[str, dict[str, str]]:
     return json.loads(CONTESTS_JSON.read_text())
 
 
+def resolve_hybrid_common_slots(explicit: bool | None, existing: dict | None) -> bool:
+    """Match buildSlots' falsy read of a missing key: only a brand-new contest defaults to on."""
+    if explicit is not None:
+        return explicit
+    if existing is not None:
+        return existing.get("hybridCommonSlots", False)
+    return True
+
+
 def write_contest(
     seed: SetSeed, opens: str, deadline: str | None, results: str, hybrid_common_slots: bool
 ) -> None:
@@ -262,12 +271,7 @@ def main() -> None:
     print(f"Wrote {len(cards)} cards → {output}")
 
     existing = read_contests().get(set_code)
-    if args.hybrid_common_slots is not None:
-        hybrid = args.hybrid_common_slots
-    elif existing is not None and "hybridCommonSlots" in existing:
-        hybrid = existing["hybridCommonSlots"]
-    else:
-        hybrid = True
+    hybrid = resolve_hybrid_common_slots(args.hybrid_common_slots, existing)
     shortfalls = report_pool_coverage(cards, hybrid_common_slots=hybrid)
 
     if shortfalls:
@@ -283,7 +287,7 @@ def main() -> None:
             existing.get("votingDeadline") if existing else None
         )
         results = contest_instant(args.results) if args.results else (
-            existing.get("scoringDate") if existing else default_results
+            (existing.get("scoringDate") if existing else None) or default_results
         )
         write_contest(matched, opens, deadline, results, hybrid)
         print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: opens {opens}, "
