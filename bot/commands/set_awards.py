@@ -315,18 +315,20 @@ class SetAwards(commands.Cog):
 async def run_set_awards_ceremony(
     channel: discord.abc.Messageable, guild: discord.Guild | None, code: str, seed, *, dry: bool,
 ) -> int | None:
-    """Post the whole ceremony into ``channel`` in one message. Winners are pinged outside a thread,
-    suppressed inside one; the mentions have to ride the initial send, because Discord raises no
-    notification for a mention introduced by editing a message. Returns the award count, or None when
-    nothing could be computed. Shared by ``/set-awards`` and the scheduled day-before ceremony so both
-    render one way.
+    """Post the whole ceremony into ``channel`` in one message. Only a live post outside a thread pings
+    its winners, and those mentions have to ride the initial send, because Discord raises no notification
+    for a mention introduced by editing a message. Returns the award count, or None when nothing could be
+    computed. Shared by ``/set-awards`` and the scheduled day-before ceremony so both render one way.
 
-    ``dry`` renders the identical card but leaves the world untouched: no ping, no role handover, and no
-    pin, the last because the pin is the marker next set's warning links back to as that set's ceremony.
-    It has no default and is keyword-only on purpose: ``/set-awards`` defaults to a dry run while the
-    scheduled ceremony must always be live, so every caller states which one it wants.
+    ``dry`` leaves the world untouched: no ping, no role handover, and no pin, the last because the pin is
+    the marker next set's warning links back to as that set's ceremony. It also renders plain names in
+    place of mentions, because a suppressed mention carries no user data and any viewer without that
+    member cached reads ``@unknown-user``. It has no default and is keyword-only on purpose:
+    ``/set-awards`` defaults to a dry run while the scheduled ceremony must always be live, so every
+    caller states which one it wants.
     """
     in_thread = isinstance(channel, discord.Thread)
+    mention = not in_thread and not dry
     with SessionLocal() as session:
         mset = session.execute(select(MagicSet).where(MagicSet.code == code)).scalar_one_or_none()
         if mset is None:
@@ -334,15 +336,15 @@ async def run_set_awards_ceremony(
         ranked = awards_svc.compute_db_awards(session, mset, seed)
 
     winners, runners = awards_svc.assign(ranked)
-    data = build_data(code, seed, winners, runners, guild, mention=not in_thread)
+    data = build_data(code, seed, winners, runners, guild, mention=mention)
     if not data.awards:
         return None
 
-    if in_thread or dry:
-        allowed = discord.AllowedMentions.none()
-    else:
+    if mention:
         ping_ids = _ping_ids(winners, runners)
         allowed = discord.AllowedMentions(users=[discord.Object(id=uid) for uid in ping_ids])
+    else:
+        allowed = discord.AllowedMentions.none()
     ceremony = await channel.send(view=build_set_awards_view(data), allowed_mentions=allowed)
     if not dry:
         await _pin_ceremony(ceremony)
