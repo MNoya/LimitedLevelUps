@@ -198,14 +198,6 @@ export function useP0P1Ballot(overrideSetCode?: string) {
     [persistPick, nextUnfilledSlot],
   );
 
-  const selectAndClose = useCallback(
-    (slot: SlotKey, cardName: string) => {
-      persistPick(slot, cardName);
-      setEditingSlotKey(null);
-    },
-    [persistPick],
-  );
-
   return {
     featured,
     cards,
@@ -237,7 +229,6 @@ export function useP0P1Ballot(overrideSetCode?: string) {
     activeSlot,
     contestSlots,
     selectAdvance,
-    selectAndClose,
   };
 }
 

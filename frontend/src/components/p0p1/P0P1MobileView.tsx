@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AppHeader } from "../AppHeader";
 import { CtaPill } from "../CtaPill";
 import { DiscordIcon } from "../BrandIcons";
 import { SetGlyph } from "../Brand";
 import { SectionLabel } from "../SectionLabel";
-import { SlotCard } from "./SlotCard";
 import { CardSelectionGrid } from "./CardSelectionGrid";
 import { PostVotingStats } from "./PostVotingStats";
 import { PickGrid } from "./CommunityGrid";
@@ -31,98 +30,6 @@ import { p0p1Now } from "../../data/p0p1DevState";
 import type { Card, P0P1PickStat, SlotDefinition, SlotKey } from "../../types/p0p1";
 
 type Ballot = ReturnType<typeof useP0P1Ballot>;
-
-export function P0P1MobileView({ ballot }: { ballot: Ballot }) {
-  const {
-    featured,
-    cards,
-    cardsByName,
-    dataReady,
-    user,
-    authLoading,
-    signIn,
-    picksBySlot,
-    pickedExcept,
-    pickedSlotLabels,
-    scoringFilled,
-    isComplete,
-    isPastDeadline,
-    handleClearAll,
-    clearPending,
-    editingSlotKey,
-    setEditingSlotKey,
-    selectAndClose,
-    phase,
-    ratingsSnapshot,
-  } = ballot;
-
-  const slotCard = (slotKey: SlotKey) => {
-    const slot = SLOTS.find((s) => s.key === slotKey)!;
-    const cardName = picksBySlot.get(slotKey);
-    return (
-      <SlotCard
-        key={slotKey}
-        slot={slot}
-        selectedCard={cardName ? cardsByName.get(cardName) : undefined}
-        locked={isPastDeadline}
-        active={false}
-        onEdit={() => setEditingSlotKey(slotKey)}
-        setCode={featured?.code}
-      />
-    );
-  };
-
-  const loginBarVisible = !authLoading && !user && !isPastDeadline;
-
-  return (
-    <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
-      <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
-
-      <main className={`flex-1 flex flex-col w-full px-4 pt-4 ${loginBarVisible ? "pb-20" : "pb-4"}`}>
-        <MobileIntro featured={featured} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
-        {dataReady ? (
-          <>
-            {!isPastDeadline && (
-              <div className="mb-3">
-                <P0P1ProgressBar filled={scoringFilled} total={SLOTS.length} isComplete={isComplete} />
-              </div>
-            )}
-            <div className="flex-1 min-h-0 flex flex-col gap-1.5">
-              {SLOTS.map((s) => (
-                <div key={s.key} className="flex-1 min-h-[56px]">
-                  {slotCard(s.key)}
-                </div>
-              ))}
-            </div>
-            {!isPastDeadline && (
-              <ClearAll onClear={handleClearAll} clearing={clearPending} visible={scoringFilled > 0} />
-            )}
-          </>
-        ) : (
-          <>
-            <div className="h-3 w-40 bg-surface2 animate-pulse mb-3" />
-            <SlotsListSkeleton />
-          </>
-        )}
-      </main>
-
-      <MobileLoginBar show={loginBarVisible} text={!isPastDeadline ? "LOG IN TO SUBMIT PICKS" : "LOG IN TO VIEW YOUR PICKS"} signIn={signIn} />
-
-      {!isPastDeadline && editingSlotKey && cards && (
-        <MobilePickerSheet
-          slotKey={editingSlotKey}
-          cards={cards}
-          pickedCards={pickedExcept(editingSlotKey)}
-          takenBy={pickedSlotLabels}
-          selectedName={picksBySlot.get(editingSlotKey)}
-          onSelect={(name) => selectAndClose(editingSlotKey, name)}
-          onClose={() => setEditingSlotKey(null)}
-          setCode={featured?.code}
-        />
-      )}
-    </div>
-  );
-}
 
 export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
   const {
@@ -478,69 +385,6 @@ function MobileIntro({
         </div>
       )}
     </section>
-  );
-}
-
-function MobilePickerSheet({
-  slotKey,
-  cards,
-  pickedCards,
-  takenBy,
-  selectedName,
-  onSelect,
-  onClose,
-  setCode,
-}: {
-  slotKey: SlotKey;
-  cards: Card[];
-  pickedCards: Set<string>;
-  takenBy: Map<string, string>;
-  selectedName: string | undefined;
-  onSelect: (name: string) => void;
-  onClose: () => void;
-  setCode?: string;
-}) {
-  const slot = SLOTS.find((s) => s.key === slotKey)!;
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 bg-bg flex flex-col animate-fadeIn">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
-        <SlotPip slotKey={slotKey} size={15} setCode={setCode} />
-        <span className="font-display text-[18px] tracking-[0.06em]">{slot.label}</span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="ml-auto text-muted hover:text-text text-[22px] leading-none bg-transparent border-0 cursor-pointer p-1"
-        >
-          ×
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto themed-scrollbar px-4 py-3">
-        <CardSelectionGrid
-          slot={slot}
-          cards={cards}
-          pickedCards={pickedCards}
-          takenBy={takenBy}
-          selectedName={selectedName}
-          onSelect={onSelect}
-          minColW={200}
-          showLabel={false}
-        />
-      </div>
-    </div>
   );
 }
 
