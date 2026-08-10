@@ -50,6 +50,7 @@ from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
     SYNTHETIC_CHAMPION_TAG,
     champion_role_mention,
+    grant_set_champion_title,
     swap_set_champion_role,
 )
 from bot.services.pod_roles import find_role
@@ -3812,7 +3813,9 @@ async def maybe_post_championship(manager, *, force: bool = False) -> None:
         log.warning(f"[FINALIZE] champion.post_error event={event_id}", exc_info=True)
         return
     if is_championship(event_name):
-        await swap_set_champion_role(getattr(target, "guild", None), manager.champion_discord_ids)
+        guild = getattr(target, "guild", None)
+        await swap_set_champion_role(guild, manager.champion_discord_ids)
+        await grant_set_champion_title(guild, manager.set_code, manager.champion_discord_ids)
     await _send_champion_thread_ping(manager, champions, player_colors)
     await _react_trophy_on_champion_screenshots(manager, deck_data, dm_info)
     if not force and manager.championship_task is not None and not manager.championship_task.done():

@@ -212,6 +212,48 @@ def awards_eve_set(when: datetime | None = None) -> SetSeed | None:
     return None
 
 
+AWARDS_CEREMONY_TIME = time(8, 0)
+
+
+def set_after(seed: SetSeed) -> SetSeed | None:
+    """The set that rotates in just after ``seed`` — the earliest-started set whose start follows it,
+    excluding the permanent cube. ``None`` when ``seed`` is the newest registered."""
+    following: SetSeed | None = None
+    for candidate in ALL_SETS:
+        if candidate.code == PERMANENT_CUBE_CODE or candidate.start_date <= seed.start_date:
+            continue
+        if following is None or candidate.start_date < following.start_date:
+            following = candidate
+    return following
+
+
+def awards_ceremony_instant(seed: SetSeed) -> datetime | None:
+    """When ``seed``'s Set Awards ceremony runs: ``AWARDS_CEREMONY_TIME`` Pacific on the eve of the next
+    set's release. ``None`` while no later set is registered, since the eve is unknown until one is."""
+    following = set_after(seed)
+    if following is None:
+        return None
+    eve = following.start_date - timedelta(days=1)
+    return datetime.combine(eve, AWARDS_CEREMONY_TIME, tzinfo=OPEN_TZ)
+
+
+def awards_posted_set(when: datetime | None = None) -> SetSeed | None:
+    """The set whose Set Awards are the most recent ones already posted, which is the set `/set-awards`
+    answers for. It stays put for the whole of the next set, so the awards a player can look up are always
+    ones that exist. ``None`` before any ceremony has run."""
+    now = when or datetime.now(timezone.utc)
+    posted: SetSeed | None = None
+    for seed in ALL_SETS:
+        if seed.code == PERMANENT_CUBE_CODE:
+            continue
+        instant = awards_ceremony_instant(seed)
+        if instant is None or instant > now:
+            continue
+        if posted is None or seed.start_date > posted.start_date:
+            posted = seed
+    return posted
+
+
 def set_seed_for_channel(channel_name: str, when: datetime | None = None) -> SetSeed | None:
     """The stale set a to-be-archived channel belongs to — the outgoing set whose send-off standings
     the channel should carry before it moves. Matches the same stale seeds ``archive_candidates`` uses,

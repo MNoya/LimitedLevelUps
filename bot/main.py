@@ -75,6 +75,7 @@ from bot.listeners.pod_thread_activity import setup as setup_pod_thread_activity
 from bot.listeners.rotate_image import setup as setup_rotate_image
 from bot.listeners.usedta import setup as setup_usedta
 from bot.models import LeaderboardMessage, Player, PodDraftEvent
+from bot.services import error_alerts
 from bot.services.bot_log import BotLog
 from bot.services.lobby_embed import LobbyReadyButtonView, ReadyCheckAnswerView
 from bot.services.pod_draft_manager import rehydrate_active_lobbies
@@ -211,6 +212,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.owner_id = app_info.owner.id
 
         bot.bot_log = BotLog(bot, settings.discord_botlog_channel_id)
+        error_alerts.install(bot)
 
         await emojis.load(bot)
 

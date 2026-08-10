@@ -20,6 +20,7 @@ from bot.services.ping_roles import (
     auto_grant_spec_for_event,
     blurb_with_time,
     button_custom_id,
+    is_set_champion_title,
     forget_welcome,
     grant_mock_draft_role,
     grant_pod_roles,
@@ -234,3 +235,14 @@ def managed_named(name):
         if spec.name == name:
             return spec
     raise AssertionError(f"{name} is not a managed role")
+
+
+@pytest.mark.parametrize("role_name,expected", [
+    ("The Hobbit Set Champion", True),
+    ("Marvel Set Champion", True),
+    ("Set Champion", False),
+    ("Prior Set Champion", False),
+    ("Pod Drafters", False),
+])
+def test_is_set_champion_title(role_name, expected):
+    assert is_set_champion_title(role_name) is expected

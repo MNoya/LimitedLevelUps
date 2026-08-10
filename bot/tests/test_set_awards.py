@@ -109,14 +109,17 @@ def test_two_quick_trophies_still_qualify_despite_weighing_under_two():
     assert len(ranked) == 1
 
 
-@pytest.mark.parametrize("holders,winner,expected_out,expected_in", [
-    ({}, "111", [], "111"),
-    ({"111": object()}, "111", [], None),
-    ({"222": object(), "333": object()}, "111", ["222", "333"], "111"),
-    ({"222": object()}, None, [], None),
+@pytest.mark.parametrize("holders,awarded,expected_out,expected_in", [
+    ({}, ["111"], [], ["111"]),
+    ({"111": object()}, ["111"], [], []),
+    ({"222": object(), "333": object()}, ["111"], ["222", "333"], ["111"]),
+    ({"222": object()}, [], [], []),
+    ({}, ["111", "222"], [], ["111", "222"]),
+    ({"111": object()}, ["111", "222"], [], ["222"]),
+    ({"111": object(), "999": object()}, ["111", "222"], ["999"], ["222"]),
 ])
-def test_award_role_swap_plan(holders, winner, expected_out, expected_in):
-    outgoing, incoming = ping_roles.plan_award_role_swap(holders, winner)
+def test_award_role_swap_plan(holders, awarded, expected_out, expected_in):
+    outgoing, incoming = ping_roles.plan_award_role_swap(holders, awarded)
 
     assert outgoing == expected_out
     assert incoming == expected_in

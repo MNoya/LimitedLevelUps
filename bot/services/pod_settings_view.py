@@ -685,8 +685,7 @@ class _KickSelect(ui.Select):
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
             return
         await interaction.delete_original_response()
-        if interaction.channel is not None:
-            await interaction.channel.send(kick_notice(actor_label(interaction), name))
+        await interaction.channel.send(kick_notice(actor_label(interaction), name))
 
 
 class _LinkPlayersButton(ui.Button):
@@ -786,11 +785,10 @@ class _LinkConfirmButton(ui.Button):
         await interaction.edit_original_response(
             content=f"🔗 **{member.display_name}** linked as `{arena_name}`.", view=None,
         )
-        if interaction.channel is not None:
-            await interaction.channel.send(
-                link_notice(actor_label(interaction), member.mention, arena_name),
-                allowed_mentions=discord.AllowedMentions(users=True),
-            )
+        await interaction.channel.send(
+            link_notice(actor_label(interaction), member.mention, arena_name),
+            allowed_mentions=discord.AllowedMentions(users=True),
+        )
 
 
 class _RestartDraftButton(ui.Button):

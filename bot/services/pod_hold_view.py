@@ -7,6 +7,9 @@ have run. 📋 on the overview card moves players between the tables the split m
 All three carry the event id in their custom_id, so they keep working after a restart. The hold pair is
 rendered greyed out once the tables open, and a press that slips through the moment before that edit
 lands is acknowledged and dropped.
+
+What a picker records is news the channel sends itself. A followup would post as a reply to the private
+picker, which the room reads as a reply to a deleted message.
 """
 from __future__ import annotations
 
@@ -192,7 +195,7 @@ class _AttendeesSelect(ui.Select):
         )
         if not self.values:
             return
-        await interaction.followup.send(
+        await interaction.channel.send(
             MSG_ATTENDEES_SAVED.format(
                 actor=interaction.user.display_name, players=_named(self.view, self.values),
             ),
@@ -306,13 +309,13 @@ class _MoveApplyButton(ui.Button):
         if not view.chosen_players or view.chosen_table is None:
             await interaction.response.send_message(MSG_MOVE_NOTHING_PICKED, ephemeral=True)
             return
-        await interaction.response.defer(thinking=True)
+        await interaction.response.defer()
         target = next(pod for pod in view.family if pod.event_id == view.chosen_table)
         await asyncio.to_thread(
             move_players_sync, [pod.event_id for pod in view.family], target.event_id,
             view.chosen_players,
         )
-        await interaction.followup.send(
+        await interaction.channel.send(
             MSG_MOVE_DONE.format(
                 actor=interaction.user.display_name, players=_named(view, view.chosen_players),
                 index=target.index,
@@ -368,7 +371,7 @@ class _DeclineSelect(ui.Select):
         await asyncio.to_thread(decline_players_sync, self.event_id, self.values)
         if not self.values:
             return
-        await interaction.followup.send(
+        await interaction.channel.send(
             MSG_DECLINE_DONE.format(
                 actor=interaction.user.display_name, players=_named(self.view, self.values),
             ),

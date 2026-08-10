@@ -6,6 +6,7 @@ Presentation is decoupled from data: `build_set_awards_view` renders a `SetAward
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import date
@@ -18,12 +19,11 @@ from sqlalchemy import select
 
 from bot import audit, emojis
 from bot.commands import descriptions as desc
-from bot.commands.messages import MSG_ADMIN_ONLY
 from bot.database import SessionLocal
 from bot.discord_helpers import NBSP, ZWSP
 from bot.models import MagicSet, Player
 from bot.services import ping_roles, set_awards as awards_svc
-from bot.sets import ALL_SETS, active_set_code
+from bot.services.format_schedule import awards_posted_set
 
 log = logging.getLogger(__name__)
 COMMUNITY_TZ = ZoneInfo("America/New_York")
@@ -39,9 +39,7 @@ MSG_JOINED_NO_EVENTS = (
 GAP = NBSP * 2
 SUBTEXT_START = f"-# {ZWSP}"
 MISS_START = f"{SUBTEXT_START}{GAP}"
-MODE_LIVE = "live"
-MODE_DRY = "dry"
-MSG_DRY_RUN_POSTED = "🏆 Posted {count} awards as a dry run: nobody was pinged, no roles moved, nothing pinned."
+MSG_NO_AWARDS_YET = "No Set Awards have been posted yet. They run the morning before a new set releases."
 SITE_LEADERBOARD_URL = "https://limitedlevelups.com/leaderboard"
 LEADERBOARD_NOTE = f"`/join` to enter · [limitedlevelups.com/leaderboard]({SITE_LEADERBOARD_URL})"
 
@@ -211,13 +209,25 @@ def _merchant_line(extras: dict) -> str:
 
 
 def _heartbreakers_line(extras: dict) -> str:
+    """Ranked on how often a Premier draft ended 6-3, so the floor doubles as the qualifying bar: too few
+    Premier drafts and the rate says nothing, which reads as safe rather than as a miss."""
     count = extras.get("heartbreakers", 0)
-    tail = _out_of_events(extras.get("heartbreakers_events", 0))
-    if count < 3:
-        reason = "No Premier 6-3 finishes" if count == 0 else f"Only {_spell(count)} Premier 6-3 finishes total"
-        return f"### 🥀 Heartbreakers\n{MISS_START}**Safe!** {reason}{tail}"
+    events = extras.get("heartbreakers_events", 0)
+    if events < awards_svc.HEARTBREAKERS_MIN_EVENTS:
+        return f"### 🥀 Heartbreakers\n{MISS_START}**Safe!** {_too_few_premier(events)}"
+    tail = _out_of_events(events)
+    if count == 0:
+        return f"### 🥀 Heartbreakers\n{MISS_START}**Safe!** No Premier 6-3 finishes{tail}"
     badge = _rank_badge(extras.get("heartbreakers_rank", 1))
-    return f"### 🥀 Heartbreakers {badge}\n{GAP}You went 6-3 in Premier **{_spell(count)}** times total{tail}"
+    rate = extras.get("heartbreakers_rate", 0.0)
+    return f"### 🥀 Heartbreakers {badge}\n{GAP}You went 6-3 in Premier **{rate:.0%}** of the time{tail}"
+
+
+def _too_few_premier(events: int) -> str:
+    if events == 0:
+        return "No Premier drafts this set"
+    plural = "" if events == 1 else "s"
+    return f"Only {_spell(events)} Premier draft{plural} this set"
 
 
 def _out_of_events(n: int) -> str:
@@ -279,37 +289,12 @@ class SetAwards(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="set-awards", description=desc.SET_AWARDS)
-    @app_commands.describe(mode=desc.SET_AWARDS_MODE)
-    @app_commands.choices(mode=[
-        app_commands.Choice(name="Dry Run", value=MODE_DRY),
-        app_commands.Choice(name="Live", value=MODE_LIVE),
-    ])
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
-    async def set_awards(
-        self, interaction: discord.Interaction, mode: app_commands.Choice[str] | None = None,
-    ) -> None:
-        if not await self.bot.is_owner(interaction.user):
-            await interaction.response.send_message(MSG_ADMIN_ONLY, ephemeral=True)
-            return
-        code = active_set_code()
-        seed = next((s for s in ALL_SETS if s.code == code), None)
-        if seed is None:
-            await interaction.response.send_message("There's no active set right now.", ephemeral=True)
-            return
-
-        dry = mode is None or mode.value == MODE_DRY
-        await interaction.response.defer(ephemeral=True)
-        count = await run_set_awards_ceremony(interaction.channel, interaction.guild, code, seed, dry=dry)
-        if count is None:
-            await interaction.followup.send("No awards could be computed for this set.", ephemeral=True)
-            return
-        if dry:
-            note = MSG_DRY_RUN_POSTED.format(count=count)
-        else:
-            suffix = " (in a thread, pings suppressed)" if isinstance(interaction.channel, discord.Thread) else ""
-            note = f"🏆 Posted {count} awards.{suffix}"
-        await interaction.followup.send(note, ephemeral=True)
+    async def set_awards(self, interaction: discord.Interaction) -> None:
+        """Everyone's own scorecard for the last set whose ceremony ran, which is the same view the
+        My Awards button gives. Open to every player, so it answers ephemerally and posts nothing."""
+        await _respond_posted_set_awards(interaction)
 
 
 async def run_set_awards_ceremony(
@@ -340,15 +325,15 @@ async def run_set_awards_ceremony(
     if not data.awards:
         return None
 
+    recipients = _award_recipients(winners, runners)
     if mention:
-        ping_ids = _ping_ids(winners, runners)
-        allowed = discord.AllowedMentions(users=[discord.Object(id=uid) for uid in ping_ids])
+        allowed = discord.AllowedMentions(users=[discord.Object(id=uid) for uid in _ping_ids(recipients)])
     else:
         allowed = discord.AllowedMentions.none()
     ceremony = await channel.send(view=build_set_awards_view(data), allowed_mentions=allowed)
     if not dry:
         await _pin_ceremony(ceremony)
-        await ping_roles.apply_award_roles(guild, {key: cand.discord_id for key, cand in winners.items()})
+        await ping_roles.apply_award_roles(guild, recipients)
 
     audit.event(
         "set_awards_posted", set_code=code, awards=len(data.awards),
@@ -415,13 +400,27 @@ def _runner_entrant(
     return AwardEntrant(name=name, detail=detail)
 
 
-def _ping_ids(winners: dict, runners: dict) -> list[int]:
+def _award_recipients(winners: dict, runners: dict) -> dict[str, list[str]]:
+    """Per award, everyone the card names: the winner, then the runner-ups printed beside them. Keyed off
+    ``winners``, which is what makes a category nobody won absent here — `build_data` leaves that award off
+    the card, so its role holders must be left alone rather than stripped for an unearned award."""
+    recipients: dict[str, list[str]] = {}
+    for key, winner in winners.items():
+        ids = []
+        for cand in (winner, *runners.get(key, ())):
+            if cand.discord_id is not None:
+                ids.append(cand.discord_id)
+        recipients[key] = ids
+    return recipients
+
+
+def _ping_ids(recipients: dict[str, list[str]]) -> list[int]:
+    """Every id the card mentions, so the allow list can never fall short of what the text renders."""
     ids: list[int] = []
-    for cand in list(winners.values()) + [r for rs in runners.values() for r in rs]:
-        if cand.discord_id and cand.discord_id.isdigit():
-            uid = int(cand.discord_id)
-            if uid not in ids:
-                ids.append(uid)
+    for user_ids in recipients.values():
+        for user_id in user_ids:
+            if user_id.isdigit() and int(user_id) not in ids:
+                ids.append(int(user_id))
     return ids
 
 
@@ -436,12 +435,19 @@ class MyAwardsButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        code = active_set_code()
-        seed = next((s for s in ALL_SETS if s.code == code), None)
-        if seed is None:
-            await interaction.response.send_message("There's no active set right now.", ephemeral=True)
-            return
-        await _respond_my_awards(interaction, code, seed)
+        await _respond_posted_set_awards(interaction)
+
+
+async def _respond_posted_set_awards(interaction: discord.Interaction) -> None:
+    """The caller's scorecard for the most recently posted ceremony, shared by ``/set-awards`` and the
+    My Awards button so the two always name the same set. Reading the posted set rather than the active one
+    is what keeps a card from answering for a set whose awards have not happened: the button sits on a
+    pinned ceremony that outlives its own set by weeks."""
+    seed = awards_posted_set()
+    if seed is None:
+        await interaction.response.send_message(MSG_NO_AWARDS_YET, ephemeral=True)
+        return
+    await _respond_my_awards(interaction, seed.code, seed)
 
 
 def _my_awards_action_row() -> ui.ActionRow:
@@ -456,36 +462,50 @@ def persistent_my_awards_view() -> ui.LayoutView:
     return view
 
 
+SET_NOT_IN_DATABASE = object()
+
+
 async def _respond_my_awards(interaction: discord.Interaction, code: str, seed) -> None:
     await interaction.response.defer(ephemeral=True)
     discord_id = str(interaction.user.id)
-    with SessionLocal() as session:
-        mset = session.execute(select(MagicSet).where(MagicSet.code == code)).scalar_one_or_none()
-        if mset is None:
-            await interaction.followup.send(f"Set {code} is not in the database.", ephemeral=True)
-            return
-        result = awards_svc.personal_payload(session, mset, seed, discord_id)
+    result = await asyncio.to_thread(_my_awards_payload, code, seed, discord_id)
+    if result is SET_NOT_IN_DATABASE:
+        await interaction.followup.send(f"Set {code} is not in the database.", ephemeral=True)
+        return
     if result is None:
         await _send_no_standing(interaction, code, discord_id)
         return
     ranked, mine, fun_values = result
     extras = awards_svc.personal_extras(mine)
-    for key in awards_svc.FUN_RANKED_STATS:
-        extras[f"{key}_rank"] = awards_svc.rank_in(fun_values[key], extras[key])
+    extras.update(awards_svc.fun_stat_ranks(mine, fun_values))
     view = build_my_awards_view(code, ranked, discord_id, extras)
     await interaction.followup.send(view=view, ephemeral=True)
+
+
+def _my_awards_payload(code: str, seed, discord_id: str):
+    """`SET_NOT_IN_DATABASE` separates a set the ceremony ran for but nothing seeded from a player who
+    simply has no standing in it, which read the same as a bare None."""
+    with SessionLocal() as session:
+        mset = session.execute(select(MagicSet).where(MagicSet.code == code)).scalar_one_or_none()
+        if mset is None:
+            return SET_NOT_IN_DATABASE
+        return awards_svc.personal_payload(session, mset, seed, discord_id)
 
 
 async def _send_no_standing(interaction: discord.Interaction, code: str, discord_id: str) -> None:
     """Distinguish a genuinely unjoined clicker (offer `/join`) from a joined player who simply has
     no draft events for this set (the awards payload drops them, but the `/join` CTA would mislead)."""
-    with SessionLocal() as session:
-        joined = session.execute(select(Player.id).where(Player.discord_id == discord_id)).first() is not None
+    joined = await asyncio.to_thread(_has_player_row, discord_id)
     if joined:
         await interaction.followup.send(MSG_JOINED_NO_EVENTS.format(set=code), ephemeral=True)
         return
     love = emojis.get("chordo_love") or "❤️"
     await interaction.followup.send(MSG_NOT_ON_BOARD.format(love=love), ephemeral=True)
+
+
+def _has_player_row(discord_id: str) -> bool:
+    with SessionLocal() as session:
+        return session.execute(select(Player.id).where(Player.discord_id == discord_id)).first() is not None
 
 
 async def setup(bot: commands.Bot) -> None:

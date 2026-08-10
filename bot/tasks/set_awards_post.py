@@ -1,7 +1,7 @@
 """Set Awards ceremony scheduled the eve of a rotation, with a T-15 warning.
 
 Two APScheduler cron jobs in Pacific (MTGA's release clock): a heads-up at ``WARNING_TIME`` and the
-ceremony at ``CEREMONY_TIME``, each firing only when a new set releases the next day. Both post into
+ceremony at ``AWARDS_CEREMONY_TIME``, each firing only when a new set releases the next day. Both post into
 the outgoing set's channel — the one the noon-ET rotation archives after the flip. The ceremony reuses
 ``run_set_awards_ceremony``, the same path ``/set-awards`` runs. The warning links the prior set's
 ceremony when it can find it in that set's archived channel; otherwise it drops the link.
@@ -19,6 +19,7 @@ from bot.commands.set_awards import run_set_awards_ceremony
 from bot.config import settings
 from bot.discord_helpers import message_text
 from bot.services.format_schedule import (
+    AWARDS_CEREMONY_TIME,
     FORMAT_ARCHIVE_CATEGORY,
     OPEN_TZ,
     awards_eve_set,
@@ -29,7 +30,6 @@ from bot.services.format_schedule import (
 log = logging.getLogger(__name__)
 
 WARNING_TIME = time(7, 45)
-CEREMONY_TIME = time(8, 0)
 WARNING_LEAD_MINUTES = 15
 AWARDS_MARKER = "Set Awards"
 MSG_CEREMONY_WARNING = "Join us for the Community Set Awards {emoji} **{name} Edition** in ~{minutes} minutes!"
@@ -50,10 +50,10 @@ def init_set_awards_schedule(bot: commands.Bot) -> None:
         timezone=OPEN_TZ, id="set-awards-warning", replace_existing=True,
     )
     bot.pod_scheduler.add_job(
-        fire_ceremony, "cron", hour=CEREMONY_TIME.hour, minute=CEREMONY_TIME.minute,
+        fire_ceremony, "cron", hour=AWARDS_CEREMONY_TIME.hour, minute=AWARDS_CEREMONY_TIME.minute,
         timezone=OPEN_TZ, id="set-awards-ceremony", replace_existing=True,
     )
-    log.info(f"set-awards armed: warning {WARNING_TIME:%H:%M}, ceremony {CEREMONY_TIME:%H:%M} {OPEN_TZ.key}")
+    log.info(f"set-awards armed: warning {WARNING_TIME:%H:%M}, ceremony {AWARDS_CEREMONY_TIME:%H:%M} {OPEN_TZ.key}")
 
 
 async def fire_warning() -> None:

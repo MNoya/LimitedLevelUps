@@ -36,6 +36,7 @@ CLIMB_TIER_WEIGHT = 100
 QUICK_GROUP_LABEL = "Quick"
 QUICK_TROPHY_WEIGHT = 0.75
 
+HEARTBREAKERS_MIN_EVENTS = 10
 MIN_ARCHETYPE_GAMES = 20
 MIN_COMMUNITY_GAMES = 40
 
@@ -125,18 +126,27 @@ def personal_payload(
     return ranked, mine, fun_values
 
 
-def rank_in(values: list[int], value: int) -> int:
+def rank_in(values: list[float], value: float) -> int:
     """Competition rank of `value` among `values` (ties share a rank, 1 = best)."""
     return 1 + sum(1 for v in values if v > value)
 
 
-def _fun_value(ctx: PlayerCtx, key: str) -> int:
+def fun_stat_ranks(ctx: PlayerCtx, fun_values: dict[str, list[float]]) -> dict[str, int]:
+    """Where the player places on each fun stat, ranked on the same value the field was measured by.
+
+    Read through ``_fun_value`` rather than off ``personal_extras``, so a stat ranked on something other
+    than the number its copy prints cannot be ranked against the wrong field.
+    """
+    return {f"{key}_rank": rank_in(fun_values[key], _fun_value(ctx, key)) for key in FUN_RANKED_STATS}
+
+
+def _fun_value(ctx: PlayerCtx, key: str) -> float:
     if key == "trophy_streak":
         return _trophy_streak(ctx)[0]
     if key == "merchant_streak":
         return _merchant_streak(ctx)
     if key == "heartbreakers":
-        return _heartbreakers(ctx)
+        return _heartbreakers_rate(ctx)
     if key == "cold_run":
         return _cold_run(ctx)
     return 0
@@ -151,7 +161,8 @@ def personal_extras(ctx: PlayerCtx) -> dict:
         "merchant_streak": _merchant_streak(ctx),
         "merchant_events": sum(1 for e in ctx.events if e.format == "TradDraft"),
         "heartbreakers": _heartbreakers(ctx),
-        "heartbreakers_events": sum(1 for e in ctx.events if e.format == "PremierDraft"),
+        "heartbreakers_rate": _heartbreakers_rate(ctx),
+        "heartbreakers_events": _premier_events(ctx),
         "cold_run": _cold_run(ctx),
     }
 
@@ -188,6 +199,22 @@ def _merchant_streak(ctx: PlayerCtx) -> int:
 def _heartbreakers(ctx: PlayerCtx) -> int:
     """Total 6-3 finishes in Premier — one win short of the trophy."""
     return sum(1 for e in ctx.events if e.format == "PremierDraft" and e.wins == 6 and e.losses == 3)
+
+
+def _heartbreakers_rate(ctx: PlayerCtx) -> float:
+    """How often a Premier draft ended 6-3, which is what the award is about: being unlucky, not being
+    prolific. A grinder collects more heartbreaks simply by drafting more.
+
+    Zero below ``HEARTBREAKERS_MIN_EVENTS``, so one 6-3 in a single draft cannot top the field at 100%.
+    """
+    events = _premier_events(ctx)
+    if events < HEARTBREAKERS_MIN_EVENTS:
+        return 0.0
+    return _heartbreakers(ctx) / events
+
+
+def _premier_events(ctx: PlayerCtx) -> int:
+    return sum(1 for e in ctx.events if e.format == "PremierDraft")
 
 
 def _cold_run(ctx: PlayerCtx) -> int:

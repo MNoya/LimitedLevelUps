@@ -395,7 +395,7 @@ async def _maybe_nudge(interaction: discord.Interaction, state) -> None:
     if not claimed:
         return
     mention = queue_role_mention(interaction.guild)
-    if mention is None or interaction.channel is None:
+    if mention is None:
         return
     try:
         await interaction.channel.send(

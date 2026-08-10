@@ -59,11 +59,17 @@ class SetSeed:
     17lands files under another name (``MAT`` for MOM). ``expansion_matches`` routes several 17lands
     expansions to one set and keeps the raw string on each event, which is how the cube variants
     share the CUBE set while staying separable per board.
+
+    ``short_name`` is the set as a person says it, for surfaces where the full name does not fit —
+    the per-set champion role reads ``Marvel Set Champion``, not ``Marvel Super Heroes Set Champion``.
+    Set it only where the full name is too long; there is no shortening rule worth guessing at, since
+    ``Marvel Super Heroes`` keeps its first word and ``Secrets of Strixhaven`` would keep its last.
     """
     code: str
     name: str
     start_date: date
     end_date: date | None
+    short_name: str | None = None
     prerelease_date: date | None = None
     expansion_alias: str | None = None
     expansion_matches: tuple[str, ...] = ()
@@ -140,7 +146,7 @@ ALL_SETS: tuple[SetSeed, ...] = (
     SetSeed("ECL", "Lorwyn Eclipsed", date(2026, 1, 20), date(2026, 3, 2)),
     SetSeed("TMT", "Teenage Mutant Ninja Turtles", date(2026, 3, 3), date(2026, 4, 20)),
     SetSeed("SOS", "Secrets of Strixhaven", date(2026, 4, 21), date(2026, 6, 22)),
-    SetSeed("MSH", "Marvel Super Heroes", date(2026, 6, 23), date(2026, 8, 10)),
+    SetSeed("MSH", "Marvel Super Heroes", date(2026, 6, 23), date(2026, 8, 10), short_name="Marvel"),
     SetSeed("HOB", "The Hobbit", date(2026, 8, 11), date(2026, 9, 28), prerelease_date=date(2026, 8, 7)),
     SetSeed("FRA", "Reality Fracture", date(2026, 9, 29), date(2026, 11, 9), prerelease_date=date(2026, 9, 25)),
     SetSeed("TRE", "Star Trek", date(2026, 11, 10), date(2027, 1, 4), prerelease_date=date(2026, 11, 6)),
@@ -347,6 +353,16 @@ def set_name_for(code: str) -> str:
         if s.code == upper:
             return s.name
     return MTGO_FLASHBACK_SETS.get(upper, upper)
+
+
+def set_short_name_for(code: str) -> str:
+    """How the set is said out loud (MSH -> "Marvel"), falling back to the full name where no set
+    carries a short one."""
+    upper = code.upper()
+    for s in ALL_SETS:
+        if s.code == upper:
+            return s.short_name or s.name
+    return set_name_for(upper)
 
 
 def cube_variant(slug: str) -> CubeVariant | None:

@@ -38,6 +38,7 @@ If the search yields a confident, single answer for everything you need, use it.
 - MTG Arena release date (`YYYY-MM-DD`)
 - End date (`YYYY-MM-DD`) — only for backfill (old set); for a new set you set an *anticipated* end date yourself (see Mode NEW below)
 - Prerelease date (`YYYY-MM-DD`) — the Thursday or Friday the paper prerelease weekend opens, usually the Friday 4 days before the Arena release. Record it as `prerelease_date=` on the `SetSeed` for a NEW set: it opens the set in the `/trophy` picker days before Arena gets it, and it anchors the Set Championship date for the outgoing set. Omit it for a backfill and for Arena-only sets that never had a paper prerelease; `prerelease_date_for` derives the Friday before the release in that case.
+- Short name — only when the community would not say the full name out loud (`Kamigawa Titanbreach` → `Titanbreach`, `Marvel Super Heroes` → `Marvel`). Record it as `short_name=` on the `SetSeed`. It names the per-set champion role the Set Championship creates, so a long full name would read `Kamigawa Titanbreach Set Champion` instead of `Titanbreach Set Champion`. Ask the user which short name they want instead of picking one: there is no rule to apply, since `Marvel Super Heroes` keeps its first word and `Secrets of Strixhaven` keeps its last. Omit it when the full name is already short (`The Hobbit`, `Star Trek`).
 
 ### 3. Decide mode: NEW vs OLD
 

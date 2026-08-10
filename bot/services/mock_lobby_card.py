@@ -44,7 +44,7 @@ from bot.commands.messages import (
     MSG_MOCK_CARD_THREAD_BUTTON,
 )
 from bot.config import settings
-from bot.discord_helpers import quote_block
+from bot.discord_helpers import NBSP, quote_block
 from bot.services.lobby_embed import event_title
 from bot.services.pod_format import is_custom
 from bot.services.pod_join_button import build_mock_join_view
@@ -164,7 +164,8 @@ def _closes_line(created_by: str | None) -> str:
     closes = MSG_MOCK_CARD_CLOSES.format(window=inactivity_window_text(settings.pod_mock_inactivity_minutes))
     if not created_by:
         return closes
-    return f"{MSG_CARD_CREATED_BY.format(name=created_by)} | {closes}"
+    gap = NBSP * 3
+    return f"{MSG_CARD_CREATED_BY.format(name=created_by)}{gap}|{gap}{closes}"
 
 
 def _description(state: str, session_url: str, canceled_by: str | None, canceled_idle: bool) -> str:

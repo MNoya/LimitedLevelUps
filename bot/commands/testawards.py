@@ -30,6 +30,7 @@ from bot.commands.set_awards import (
     build_data,
     build_my_awards_view,
     build_set_awards_view,
+    run_set_awards_ceremony,
 )
 from bot.commands.test_group import test_group
 from bot.services import set_awards as awards_svc
@@ -40,6 +41,12 @@ log = logging.getLogger(__name__)
 
 _AVATAR = "https://cdn.discordapp.com/embed/avatars/{}.png"
 _SEIZE_WINNER_WHEN = datetime(2026, 5, 16, 18, tzinfo=timezone.utc)
+
+CEREMONY_LIVE = "live"
+MSG_NO_ACTIVE_SET = "There's no active set right now."
+MSG_NO_AWARDS_COMPUTED = "No awards could be computed for this set."
+MSG_DRY_RUN_POSTED = "🏆 Posted {count} awards as a dry run: nobody was pinged, no roles moved, nothing pinned."
+MSG_LIVE_POSTED = "🏆 Posted {count} awards for real: winners pinged, award roles moved, ceremony pinned."
 
 
 def _cand(
@@ -180,6 +187,27 @@ async def setup(bot: commands.Bot) -> None:
     async def test_set_awards(ctx: commands.Context) -> None:
         """Owner-only. Post the fixture-backed Set Awards sample in this channel."""
         await ctx.send(view=build_set_awards_view(_set_awards_fixture(ctx.guild)))
+
+    @test_group.command(name="ceremony")
+    @commands.is_owner()
+    async def test_ceremony(ctx: commands.Context, mode: str = "") -> None:
+        """Owner-only. Post the real Set Awards ceremony for the active set in this channel.
+
+        Default is a dry run: the card renders from live data with names in place of mentions, and nothing
+        else happens. `!test ceremony live` is the recovery hatch for a ceremony the scheduled 8 AM PT run
+        missed, and does the whole thing for real, pinging and moving roles and pinning.
+        """
+        code = active_set_code()
+        seed = next((s for s in ALL_SETS if s.code == code), None)
+        if seed is None:
+            await ctx.send(MSG_NO_ACTIVE_SET)
+            return
+        dry = mode.lower() != CEREMONY_LIVE
+        count = await run_set_awards_ceremony(ctx.channel, ctx.guild, code, seed, dry=dry)
+        if count is None:
+            await ctx.send(MSG_NO_AWARDS_COMPUTED)
+            return
+        await ctx.send(MSG_DRY_RUN_POSTED.format(count=count) if dry else MSG_LIVE_POSTED.format(count=count))
 
     @test_group.command(name="myset")
     @commands.is_owner()

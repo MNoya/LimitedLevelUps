@@ -20,9 +20,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import discord
 from sqlalchemy import select
@@ -76,7 +77,7 @@ from bot.services.pod_signals import (
     slot_role_name_for_event_time,
 )
 from bot.services.token_link_flow import start_link_17lands_flow
-from bot.sets import preview_set_code
+from bot.sets import preview_set_code, set_short_name_for
 
 
 log = logging.getLogger(__name__)
@@ -160,6 +161,8 @@ AWARD_ROLES: tuple[AwardRole, ...] = (
 SET_CHAMPION_ROLE_NAME = "Set Champion"
 SYNTHETIC_CHAMPION_TAG = f"**@{SET_CHAMPION_ROLE_NAME}**"
 PRIOR_SET_CHAMPION_ROLE_NAME = "Prior Set Champion"
+SET_CHAMPION_TITLE_COLOR = "#FFFFFF"
+SET_SYMBOLS_DIR = Path(__file__).resolve().parents[2] / "frontend" / "public" / "set-symbols"
 ORGANIZER_ROLE_NAME = "Organizer"
 TOP_P0P1_CHALLENGER_ROLE_NAME = "Top P0P1 Challenger"
 P0P1_COLOR = "#EFBF04"
@@ -168,8 +171,8 @@ REMINDER_ROLE_NAME = "Reminder"
 REMINDER_COLOR = "#EFBF04"
 
 MANAGED_ROLES: tuple[ManagedRole, ...] = (
-    ManagedRole(SET_CHAMPION_ROLE_NAME, "#82CBFF"),
-    ManagedRole(PRIOR_SET_CHAMPION_ROLE_NAME, "#F1C40F"),
+    ManagedRole(SET_CHAMPION_ROLE_NAME, "#82CBFF", unicode_emoji="👑"),
+    ManagedRole(PRIOR_SET_CHAMPION_ROLE_NAME, "#F1C40F", unicode_emoji="🎖️"),
     ManagedRole(ORGANIZER_ROLE_NAME, "#4CD4A9"),
     ManagedRole(TOP_P0P1_CHALLENGER_ROLE_NAME, P0P1_COLOR),
     ManagedRole(REMINDER_ROLE_NAME, REMINDER_COLOR, aliases=("P0P1 Reminder",)),
@@ -782,6 +785,123 @@ async def swap_set_champion_role(guild: discord.Guild | None, champion_ids: Iter
         await _crown_champion(member, champion_role, prior_role)
 
 
+def set_champion_title_name(set_code: str) -> str:
+    """The permanent per-set champion role, named the way the set is said out loud."""
+    return f"{set_short_name_for(set_code)} {SET_CHAMPION_ROLE_NAME}"
+
+
+def set_symbol_icon(set_code: str) -> bytes | None:
+    """The set's symbol PNG for a role icon, or None when the repo carries no symbol for that code —
+    a set added before its artwork lands still gets its role, just without the glyph."""
+    path = SET_SYMBOLS_DIR / f"{set_code.lower()}.png"
+    return path.read_bytes() if path.is_file() else None
+
+
+async def grant_set_champion_title(
+    guild: discord.Guild | None, set_code: str | None, champion_ids: Iterable[str],
+) -> None:
+    """Give this set's champion the permanent title role, creating it the first time a set is won.
+
+    Handed over the moment the championship finalizes, not when the crown later moves on, so a title never
+    depends on a future ceremony running: a set whose championship never happens costs nobody theirs, and a
+    re-finalize grants nothing twice. Unlike the crown this is never taken away, so these accumulate — white,
+    mentionable and hoisted, wearing the set symbol, and Discord creates each at the bottom of the list where
+    they belong.
+    """
+    champions = {str(user_id) for user_id in champion_ids}
+    if guild is None or set_code is None or not champions:
+        return
+    role = await ensure_set_champion_title(guild, set_code)
+    if role is None:
+        return
+    for user_id in champions:
+        member = guild.get_member(int(user_id))
+        if member is None:
+            log.info(f"champion {user_id} is not a member of {guild.name}, {role.name!r} not granted")
+            continue
+        if role in member.roles:
+            continue
+        try:
+            await member.add_roles(role, reason="set championship won")
+            log.info(f"granted {role.name!r} to {member}")
+        except discord.HTTPException:
+            log.warning(f"could not grant {role.name!r} to {member}", exc_info=True)
+
+
+async def ensure_set_champion_title(guild: discord.Guild | None, set_code: str | None) -> discord.Role | None:
+    """The set's title role, created when missing and holding nobody until the championship finalizes.
+
+    Called when the championship pod is scheduled, so the role is on the server for the whole event rather
+    than appearing the moment it is won, and again at finalize so a hand-made championship still gets one.
+    An existing role is repaired rather than replaced, so one a mod made by hand picks up the mention flag,
+    the hoist and the symbol without losing its holders.
+    """
+    if guild is None or set_code is None:
+        return None
+    name = set_champion_title_name(set_code)
+    icon = set_symbol_icon(set_code) if "ROLE_ICONS" in guild.features else None
+    role = find_role(guild, name)
+    if role is None:
+        fields: dict = {
+            "name": name,
+            "colour": discord.Colour.from_str(SET_CHAMPION_TITLE_COLOR),
+            "mentionable": True,
+            "hoist": True,
+        }
+        if icon is not None:
+            fields["display_icon"] = icon
+        try:
+            created = await guild.create_role(reason="set championship title", **fields)
+            log.info(f"created {name!r} in {guild.name}")
+        except discord.HTTPException:
+            log.warning(f"could not create {name!r} in {guild.name}", exc_info=True)
+            return None
+        await _file_above_earlier_titles(created)
+        return created
+    drift: dict = {}
+    if not role.mentionable:
+        drift["mentionable"] = True
+    if not role.hoist:
+        drift["hoist"] = True
+    if icon is not None and role.icon is None and role.unicode_emoji is None:
+        drift["display_icon"] = icon
+    if drift:
+        try:
+            await role.edit(reason="set championship title sync", **drift)
+            log.info(f"synced {name!r} in {guild.name}: {', '.join(drift)}")
+        except discord.HTTPException:
+            log.warning(f"could not sync {name!r} in {guild.name}", exc_info=True)
+    return role
+
+
+def is_set_champion_title(name: str) -> bool:
+    """A per-set title role rather than one of the two rotating champion roles. Matched on the name, which
+    is what also claims the roles a mod named by hand before the bot created any."""
+    return name.endswith(SET_CHAMPION_ROLE_NAME) and name not in (
+        SET_CHAMPION_ROLE_NAME, PRIOR_SET_CHAMPION_ROLE_NAME,
+    )
+
+
+async def _file_above_earlier_titles(role: discord.Role) -> None:
+    """Sit the newest set's title directly above every earlier one, so the block reads newest first. Only
+    the roles above the insert point shift, and they keep their order among themselves. A guild with no
+    earlier title leaves the role where Discord created it, at the bottom."""
+    earlier = [
+        other for other in role.guild.roles
+        if other.id != role.id and is_set_champion_title(other.name)
+    ]
+    if not earlier:
+        return
+    target = max(other.position for other in earlier) + 1
+    if role.position == target:
+        return
+    try:
+        await role.edit(position=target, reason="set championship title order")
+        log.info(f"filed {role.name!r} at position {target} in {role.guild.name}")
+    except discord.HTTPException:
+        log.warning(f"could not reorder {role.name!r} in {role.guild.name}", exc_info=True)
+
+
 async def _crown_champion(
     member: discord.Member, champion_role: discord.Role, prior_role: discord.Role | None,
 ) -> None:
@@ -806,13 +926,14 @@ async def _step_down_champion(
         log.warning(f"could not step {member} down from {champion_role.name!r}", exc_info=True)
 
 
-async def apply_award_roles(guild: discord.Guild | None, winners: dict[str, str | None]) -> None:
-    """Hand each Set Awards role to this set's winner and take it from whoever held it before.
+async def apply_award_roles(guild: discord.Guild | None, awarded: dict[str, Sequence[str]]) -> None:
+    """Hand each Set Awards role to everyone the ceremony named for it — the winner and the runner-ups
+    printed beside them — and take it from whoever held it before.
 
-    The roles carry an icon and no color, so the winner shows the award glyph and keeps whatever name color
+    The roles carry an icon and no color, so a recipient shows the award glyph and keeps whatever name color
     they already had. Missing roles are created here rather than waited on, so a ceremony never has to land
-    after a reconcile to hand anything over. A category with no winner is left untouched: the ceremony is
-    re-runnable mid-set, and a category that has not been earned yet must not strip the previous holder.
+    after a reconcile to hand anything over. A category nobody was named for is left untouched: the ceremony
+    is re-runnable mid-set, and a category that has not been earned yet must not strip the previous holder.
     """
     if guild is None:
         return
@@ -823,27 +944,28 @@ async def apply_award_roles(guild: discord.Guild | None, winners: dict[str, str 
             log.warning(f"no {spec.name!r} role in {guild.name}, award not handed over")
             continue
         holders = {str(member.id): member for member in role.members}
-        outgoing, incoming = plan_award_role_swap(holders, winners.get(spec.key))
+        outgoing, incoming = plan_award_role_swap(holders, awarded.get(spec.key, ()))
         for user_id in outgoing:
             await _drop_award_role(holders[user_id], role)
-        if incoming is None:
-            continue
-        member = guild.get_member(int(incoming))
-        if member is None:
-            log.info(f"award winner {incoming} is not in {guild.name}, {spec.name!r} not granted")
-            continue
-        await _grant_award_role(member, role)
+        for user_id in incoming:
+            member = guild.get_member(int(user_id))
+            if member is None:
+                log.info(f"award recipient {user_id} is not in {guild.name}, {spec.name!r} not granted")
+                continue
+            await _grant_award_role(member, role)
 
 
 def plan_award_role_swap(
-    holders: dict[str, discord.Member], winner_id: str | None,
-) -> tuple[list[str], str | None]:
-    """Who loses the role and who gains it. A winner already holding it produces no edits, so re-running the
-    ceremony is free."""
-    if winner_id is None:
-        return [], None
-    outgoing = sorted(user_id for user_id in holders if user_id != winner_id)
-    incoming = None if winner_id in holders else winner_id
+    holders: dict[str, discord.Member], awarded_ids: Sequence[str],
+) -> tuple[list[str], list[str]]:
+    """Who loses the role and who gains it, for the whole set of people an award names. Anyone already
+    holding it produces no edits, so re-running the ceremony is free. An empty ``awarded_ids`` means the
+    award went unearned, which leaves every current holder alone."""
+    awarded = set(awarded_ids)
+    if not awarded:
+        return [], []
+    outgoing = sorted(user_id for user_id in holders if user_id not in awarded)
+    incoming = list(dict.fromkeys(user_id for user_id in awarded_ids if user_id not in holders))
     return outgoing, incoming
 
 

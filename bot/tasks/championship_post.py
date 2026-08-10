@@ -22,7 +22,11 @@ from bot.config import settings
 from bot.services import championship
 from bot.services import championship_copy as cc
 from bot.services import pod_launch
-from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, champion_role_mention
+from bot.services.ping_roles import (
+    SET_CHAMPION_ROLE_NAME,
+    champion_role_mention,
+    ensure_set_champion_title,
+)
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
 
@@ -80,6 +84,7 @@ async def create_championship(bot: commands.Bot, plan: championship.Championship
     if event_id is None:
         log.warning(f"championship for {plan.set_code} failed to post its card")
         return None
+    await ensure_set_champion_title(channel.guild, plan.set_code)
     deadline = championship.signup_post_at(plan)
     frozen = await asyncio.to_thread(
         championship.freeze_seeds_sync, event_id, plan.set_code, deadline,
