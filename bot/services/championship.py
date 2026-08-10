@@ -68,6 +68,20 @@ def plan_for(when: datetime | None = None) -> ChampionshipPlan | None:
     )
 
 
+def championship_date_for(day: date) -> date | None:
+    """The championship day of the set live on `day`, or None when that set has no successor to anchor one.
+    Read per day rather than from the plan live as a surface renders, so a span crossing a rotation finds
+    each set's own championship."""
+    plan = plan_for(release_instant(day))
+    return plan.event_at.date() if plan is not None else None
+
+
+def championship_on(day: date) -> datetime | None:
+    """When the championship `day` itself holds starts, or None on every other day."""
+    plan = plan_for(release_instant(day))
+    return plan.event_at if plan is not None and plan.event_at.date() == day else None
+
+
 def signup_post_at(plan: ChampionshipPlan) -> datetime:
     """When the tick posts the signup card."""
     return datetime.combine(plan.create_on, time(CREATION_HOUR_ET), tzinfo=RELEASE_TZ)

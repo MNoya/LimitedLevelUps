@@ -25,8 +25,8 @@ from bot import audit
 from bot.commands import descriptions as desc
 from bot.config import PRODUCTION_GUILD_ID, settings
 from bot.discord_helpers import EM_SPACE, posts_publicly
-from bot.services import championship
 from bot.services import pod_format_interest as fi
+from bot.services.championship import championship_on
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
 from bot.services.pod_format import is_custom
 from bot.services.pod_format_schedule import calendar_days, extras_on, latest_on, rotation_in
@@ -51,6 +51,7 @@ CHANNEL_URL = "https://discord.com/channels/{guild_id}/{channel_id}"
 IMAGE_FILENAME = "pod-schedule.png"
 IMAGE_URL = f"attachment://{IMAGE_FILENAME}"
 DEFAULT_WEEKS = 4
+MAX_WEEKS = 8
 COLUMN_GAP = EM_SPACE * 2
 SET_COLUMN_GAP = EM_SPACE
 LINE_GAP = "\n\n"
@@ -65,29 +66,26 @@ class PodSchedule(commands.Cog):
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
     async def pod_schedule(
-        self, interaction: discord.Interaction, weeks: app_commands.Range[int, 1, 6] = DEFAULT_WEEKS,
+        self, interaction: discord.Interaction, weeks: app_commands.Range[int, 1, MAX_WEEKS] = DEFAULT_WEEKS,
     ) -> None:
         now = datetime.now(SCHEDULE_TZ)
         audit.event("pod_schedule_invoked", user_id=str(interaction.user.id), weeks=weeks)
-        plan = championship.plan_for(now)
-        crown = plan.event_at if plan is not None else None
-        png = await asyncio.to_thread(render_calendar_png, now.date(), weeks, crown.date() if crown else None)
+        png = await asyncio.to_thread(render_calendar_png, now.date(), weeks)
         await interaction.response.send_message(
-            embed=build_schedule_embed(interaction.guild, now, weeks, crown),
+            embed=build_schedule_embed(interaction.guild, now, weeks),
             file=discord.File(io.BytesIO(png), IMAGE_FILENAME),
             allowed_mentions=discord.AllowedMentions.none(),
             ephemeral=not posts_publicly(interaction),
         )
 
 
-def build_schedule_embed(guild: discord.Guild | None, now: datetime, weeks: int,
-                         championship_at: datetime | None) -> discord.Embed:
+def build_schedule_embed(guild: discord.Guild | None, now: datetime, weeks: int) -> discord.Embed:
     days = calendar_days(now.date(), weeks)
-    lines = [slot_line(guild, now), set_line(guild, days)]
+    lines = [slot_line(guild, now), set_line(guild, days, now)]
     extras = extras_line(guild, days, now.date())
     if extras:
         lines.append(extras)
-    championship = championship_line(guild, days, now, championship_at)
+    championship = championship_line(guild, days, now)
     if championship:
         lines.append(championship)
     heading = MSG_HEADING.format(url=coordination_url(guild))
@@ -118,18 +116,21 @@ def slot_line(guild: discord.Guild | None, now: datetime) -> str:
     return COLUMN_GAP.join(slots)
 
 
-def set_line(guild: discord.Guild | None, days: list[date]) -> str:
-    """The set every pod drafts, and beside it the set arriving inside the rendered span, so both sets a
-    reader has to care about sit on one row. The daily set is named by its ping role rather than by code,
-    which keeps the line true across a rotation and lets the days after one stay blank on the calendar.
+def set_line(guild: discord.Guild | None, days: list[date], now: datetime) -> str:
+    """Two columns: the set every pod drafts, and the set arriving inside the span.
 
-    Its first column runs wider than the rows around it, so it takes a narrower gap to bring its second
-    column back under theirs."""
+    The daily set is named by its ping role, not by its code, so the line stays true across a rotation.
+
+    The second column names the next rotation still ahead. A rotation stays in the span for the rest of its
+    week, and a long span can hold a second one, so the one already made is skipped: that set is the daily
+    set the first column names, and its timestamp would read as upcoming.
+
+    The gap is narrower here because the first column runs wider than the rows around it."""
     code = active_set_code()
     columns = [MSG_DAILY_SET.format(
         symbol=fi.format_emoji(code), role=role_mention(guild, fi.LATEST_SET_ROLE_NAME),
     )]
-    arrival = rotation_in(days)
+    arrival = rotation_in(days, now)
     if arrival is not None:
         incoming = latest_on(arrival)
         columns.append(MSG_ARRIVAL.format(
@@ -177,15 +178,16 @@ def _days_label(weekends: set[bool]) -> str:
     return ""
 
 
-def championship_line(guild: discord.Guild | None, days: list[date], now: datetime,
-                      championship_at: datetime | None) -> str:
-    """Empty in a span with no championship in it. A played one keeps its calendar crown but leaves this
-    line, where its relative timestamp would read as upcoming."""
-    if championship_at is None or championship_at <= now or championship_at.date() not in days:
-        return ""
-    return MSG_CHAMPIONSHIP.format(
-        role=role_mention(guild, SET_CHAMPION_ROLE_NAME), unix=int(championship_at.timestamp()),
-    )
+def championship_line(guild: discord.Guild | None, days: list[date], now: datetime) -> str:
+    """The next championship the span holds. Empty in a span with none left: a played one keeps its calendar
+    crown but leaves this line, where its relative timestamp would read as upcoming."""
+    for day in days:
+        starts_at = championship_on(day)
+        if starts_at is not None and starts_at > now:
+            return MSG_CHAMPIONSHIP.format(
+                role=role_mention(guild, SET_CHAMPION_ROLE_NAME), unix=int(starts_at.timestamp()),
+            )
+    return ""
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -1,11 +1,13 @@
-from datetime import date
+from datetime import date, datetime, time, timedelta
 
 import pytest
 
+from bot.commands.pod_schedule import SET_COLUMN_GAP, set_line
 from bot.services import pod_format
 from bot.services import pod_format_schedule as schedule
+from bot.services.pod_format import PEASANT_CODE
 from bot.services.pod_signals import LANE_EARLY, LANE_LATE
-from bot.sets import active_set_code
+from bot.sets import RELEASE_TZ, active_set_code
 
 
 def test_every_scheduled_format_resolves_to_a_known_set_or_cube():
@@ -56,6 +58,27 @@ def test_a_day_carries_the_set_live_on_that_day(day, expected):
     assert schedule.latest_on(day) == expected
 
 
+def test_the_championship_closes_its_own_early_slot():
+    champs = date(2026, 9, 19)
+
+    assert schedule.formats_on(champs, LANE_EARLY) == ()
+    assert schedule.formats_on(champs, LANE_LATE) == ("HOB",)
+
+
+@pytest.mark.parametrize("day, opens, planned", [
+    (date(2026, 9, 18), ("HOB",), ("HOB",)),
+    (date(2026, 9, 19), ("HOB",), ("HOB",)),
+    (date(2026, 9, 20), (PEASANT_CODE,), (PEASANT_CODE,)),
+    (date(2026, 9, 21), (), (schedule.FLASHBACK,)),
+    (date(2026, 9, 26), (PEASANT_CODE,), (PEASANT_CODE,)),
+    (date(2026, 9, 28), (), (schedule.FLASHBACK,)),
+    (date(2026, 9, 29), ("FRA",), ("FRA",)),
+])
+def test_the_days_after_a_championship_drop_the_latest_set(day, opens, planned):
+    assert schedule.formats_on(day) == opens
+    assert schedule.planned_on(day) == planned
+
+
 def test_a_day_past_a_rotation_offers_the_set_it_will_draft(monkeypatch):
     day = date(2026, 3, 3)
     monkeypatch.setitem(schedule.FORMATS_BY_DAY, day, (schedule.LATEST, "NEO"))
@@ -88,6 +111,31 @@ def test_a_closed_slot_offers_nothing_while_the_day_still_offers_the_set(monkeyp
 
 def test_the_rotation_day_is_found_inside_the_rendered_span():
     assert schedule.rotation_in(schedule.calendar_days(date(2026, 3, 5), 1)) == date(2026, 3, 3)
+
+
+def test_the_set_line_drops_the_arrival_once_the_rotation_has_happened():
+    days = schedule.calendar_days(date(2026, 3, 5), 1)
+    noon = datetime.combine(date(2026, 3, 3), time(12, 0), tzinfo=RELEASE_TZ)
+
+    before = set_line(None, days, noon - timedelta(hours=1))
+    after = set_line(None, days, noon + timedelta(hours=1))
+
+    assert SET_COLUMN_GAP in before
+    assert SET_COLUMN_GAP not in after
+
+
+def test_a_span_marks_every_rotation_it_holds():
+    span = schedule.calendar_days(date(2026, 8, 10), 8)
+
+    assert [day for day in span if schedule.is_rotation_day(day)] == [date(2026, 8, 11), date(2026, 9, 29)]
+
+
+def test_a_rotation_already_made_is_not_the_one_still_ahead():
+    span = schedule.calendar_days(date(2026, 8, 10), 8)
+    after_the_first = datetime(2026, 8, 12, 12, 0, tzinfo=RELEASE_TZ)
+
+    assert schedule.rotation_in(span) == date(2026, 8, 11)
+    assert schedule.rotation_in(span, after_the_first) == date(2026, 9, 29)
 
 
 def test_a_span_inside_one_set_has_no_rotation():

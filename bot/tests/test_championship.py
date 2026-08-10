@@ -105,12 +105,20 @@ def test_plan_for_active_set_anchors_to_its_successor():
     assert plan.create_on == date(2026, 8, 1) - timedelta(days=CREATION_LEAD_DAYS)
 
 
+def test_schedule_names_a_championship_the_set_live_today_does_not_hold():
+    span = calendar_days(date(2026, 8, 10), 8)
+    hob_championship = datetime(2026, 9, 19, 14, 0, tzinfo=RELEASE_TZ)
+
+    line = championship_line(None, span, datetime(2026, 8, 10, 12, 0, tzinfo=RELEASE_TZ))
+
+    assert str(int(hob_championship.timestamp())) in line
+
+
 def test_schedule_drops_the_championship_once_it_has_been_played():
-    event_at = datetime(2026, 8, 1, 14, 0, tzinfo=RELEASE_TZ)
     week = calendar_days(date(2026, 7, 31), 1)
 
-    before = championship_line(None, week, datetime(2026, 7, 31, 12, 0, tzinfo=RELEASE_TZ), event_at)
-    after = championship_line(None, week, datetime(2026, 8, 2, 12, 0, tzinfo=RELEASE_TZ), event_at)
+    before = championship_line(None, week, datetime(2026, 7, 31, 12, 0, tzinfo=RELEASE_TZ))
+    after = championship_line(None, week, datetime(2026, 8, 2, 12, 0, tzinfo=RELEASE_TZ))
 
     assert before != ""
     assert after == ""

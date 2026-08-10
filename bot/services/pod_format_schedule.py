@@ -6,26 +6,30 @@ is the whole mechanism: no poll, no derivation, nothing to be decided while play
 An entry is the full list of formats a day offers, in the order the launcher shows them. `LATEST` stands for
 whichever set is current, so a table written months ahead survives a rotation; a day that drops it entirely
 lists only the codes it wants. A plain date sets both of that day's slots, a `(date, lane)` key overrides one
-slot, and a day off the table offers `(LATEST,)` — which is also what a fresh set cycle starts as, so
-flashback comes back when dates get added here, not automatically.
+slot, and a day off the table falls back to `default_formats`.
 
-An empty entry closes that slot: the launcher opens no pod there and nothing rolls into it. That is how a
-slot already spoken for by another event, the Set Championship holding the Early Pod on its Saturday, keeps
-a second pod from opening on top of it.
+An empty entry closes that slot: the launcher opens no pod there and nothing rolls into it. The Set
+Championship closes its own Early Pod without one, since its Saturday is derived, and a slot entry still
+overrides that for a championship day meant to carry a second pod anyway.
 
 Entries are set codes or registered cube codes; `test_pod_format_schedule` fails on one that resolves to
-neither, so a typo here cannot reach a launcher post.
+neither, so a typo here cannot reach a launcher post. `FLASHBACK` is the one code that is neither: it says a
+day is planned as flashback with no set chosen yet, so it renders on the calendar and never reaches the
+launcher.
 """
 from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 
-from bot.services.pod_signals import LANE_EARLY
+from bot.services.championship import championship_date_for
+from bot.services.pod_format import PEASANT_CODE
+from bot.services.pod_signals import LANE_EARLY, is_weekend
 from bot.sets import active_set_code, release_instant
 
 
 LATEST = "LATEST"
+FLASHBACK = "FLASHBACK"
 CLOSED: tuple[str, ...] = ()
 
 FORMATS_BY_DAY: dict[date | tuple[date, str], tuple[str, ...]] = {
@@ -42,7 +46,6 @@ FORMATS_BY_DAY: dict[date | tuple[date, str], tuple[str, ...]] = {
     date(2026, 7, 30): (LATEST, "LTR"),
     date(2026, 7, 31): (LATEST, "EOE"),
     date(2026, 8, 1): (LATEST, "PEASANT"),
-    (date(2026, 8, 1), LANE_EARLY): CLOSED,
     date(2026, 8, 2): (LATEST, "PEASANT"),
     date(2026, 8, 3): (LATEST, "STX"),
     date(2026, 8, 4): (LATEST, "DMU"),
@@ -56,21 +59,13 @@ FORMATS_BY_DAY: dict[date | tuple[date, str], tuple[str, ...]] = {
 
 
 def formats_for(day: date, lane: str | None = None, when: datetime | None = None) -> tuple[str, ...]:
-    """The slot's own override first, then the whole-day entry, so one line covers the common case. `LATEST`
-    resolves to the active set and repeats collapse, so a table entry can never open two pods on one format.
+    """The pods a slot opens. The slot's own override first, then the whole-day entry, so one line covers the
+    common case. `LATEST` resolves to the active set and repeats collapse, so a table entry can never open
+    two pods on one format. A day planned as flashback with no set chosen opens nothing.
 
     `when` is the instant `LATEST` reads the active set at, defaulting to now. A surface rendering days
     ahead passes the day itself through `formats_on`, so a day past a rotation names its own set."""
-    entry = FORMATS_BY_DAY.get((day, lane)) if lane is not None else None
-    if entry is None:
-        entry = FORMATS_BY_DAY.get(day, (LATEST,))
-    latest = active_set_code(when)
-    resolved: list[str] = []
-    for code in entry:
-        format_code = latest if code == LATEST else code
-        if format_code not in resolved:
-            resolved.append(format_code)
-    return tuple(resolved)
+    return tuple(code for code in _resolved(day, lane, active_set_code(when)) if code != FLASHBACK)
 
 
 def formats_on(day: date, lane: str | None = None) -> tuple[str, ...]:
@@ -79,11 +74,27 @@ def formats_on(day: date, lane: str | None = None) -> tuple[str, ...]:
     return formats_for(day, lane, when=release_instant(day))
 
 
+def planned_on(day: date, lane: str | None = None) -> tuple[str, ...]:
+    """`formats_on` plus the formats a day is planned to run that open no pod on their own, which is what
+    the calendar draws: a tail day reads as flashback there while the launcher leaves it for a moderator."""
+    return _resolved(day, lane, latest_on(day))
+
+
+def default_formats(day: date) -> tuple[str, ...]:
+    """A day the table does not name. Inside a set's run every pod drafts that set. From the day after its
+    championship the latest-set pods stop, so the days left before the rotation run cube on the weekend and
+    flashback in the week, where no set is chosen yet."""
+    championship = championship_date_for(day)
+    if championship is None or day <= championship:
+        return (LATEST,)
+    return (PEASANT_CODE,) if is_weekend(day) else (FLASHBACK,)
+
+
 def extras_on(day: date) -> tuple[str, ...]:
     """What a day adds on top of the set every pod already drafts. Empty on a day that offers the set alone,
     which is what a calendar can leave blank instead of repeating the same code in every cell."""
     latest = latest_on(day)
-    return tuple(code for code in formats_on(day) if code != latest)
+    return tuple(code for code in planned_on(day) if code != latest)
 
 
 def latest_on(day: date) -> str:
@@ -98,10 +109,29 @@ def calendar_days(around: date, weeks: int) -> list[date]:
     return [start + timedelta(days=offset) for offset in range(weeks * 7)]
 
 
-def rotation_in(days: Sequence[date]) -> date | None:
-    """The first day in `days` that opens on a different set than the day before it, or None when the whole
-    span sits inside one set."""
+def is_rotation_day(day: date) -> bool:
+    """Whether `day` opens on a different set than the day before it."""
+    return latest_on(day) != latest_on(day - timedelta(days=1))
+
+
+def rotation_in(days: Sequence[date], after: datetime | None = None) -> date | None:
+    """The first rotation in `days`, or None when the span holds none. `after` drops the rotations already
+    made, so a span long enough to carry two still names the one a reader is waiting for."""
     for day in days:
-        if latest_on(day) != latest_on(day - timedelta(days=1)):
+        if is_rotation_day(day) and (after is None or release_instant(day) > after):
             return day
     return None
+
+
+def _resolved(day: date, lane: str | None, latest: str) -> tuple[str, ...]:
+    entry = FORMATS_BY_DAY.get((day, lane)) if lane is not None else None
+    if entry is None and lane == LANE_EARLY and championship_date_for(day) == day:
+        entry = CLOSED
+    if entry is None:
+        entry = FORMATS_BY_DAY.get(day, default_formats(day))
+    resolved: list[str] = []
+    for code in entry:
+        format_code = latest if code == LATEST else code
+        if format_code not in resolved:
+            resolved.append(format_code)
+    return tuple(resolved)

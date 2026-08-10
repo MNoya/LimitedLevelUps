@@ -1313,7 +1313,10 @@ def _lane_snapshot(
     A lane reaches a later day through the signals it opened, so it also always walks tomorrow: a day whose
     slot the format schedule closes opens no signal, and that is exactly the day the Set Championship sits on.
     The loop appends nothing for a day carrying neither a pod nor a signal, so this costs an empty read on an
-    ordinary day and shows a pod committed ahead of time on the eve, which is when players read the board."""
+    ordinary day and shows a pod committed ahead of time on the eve, which is when players read the board.
+    The board's own day carries an empty slot before its signals are bound, which is what the first render of
+    a fresh post draws. A day the schedule offers no format on carries none: nothing is going to bind there,
+    so the column would offer a pod that never opens."""
     lane_signals = [signal for signal in signals if pod_signals.lane_of(signal.bucket) == lane]
     rolled_days = {signal.signal_date for signal in lane_signals if signal.signal_date > board_date}
     lane_slots: list[LauncherSlot] = []
@@ -1325,7 +1328,7 @@ def _lane_snapshot(
         day_signals = [signal for signal in lane_signals if signal.signal_date == day]
         pods = _slot_pods(session, bucket.key, slot_time, day_signals, now)
         lane_slots += pods
-        if not pods and day == board_date:
+        if not pods and day == board_date and formats_on(day, lane):
             lane_slots.append(LauncherSlot(
                 bucket.key, committed=False,
                 status=_lazy_status(pod_signals.STATUS_OPEN, slot_time, now),
@@ -1821,7 +1824,7 @@ async def launch_from_signal(
             )
         else:
             unix = int(event_time.timestamp())
-            anchor = await channel.send(f"🚀 **{name}** is set for <t:{unix}:F> (<t:{unix}:R>).")
+            anchor = await channel.send(f"🚀 **{name}** is set for <t:{unix}:F> (<t:{unix}:R>)")
         if anchor is None:
             thread = await channel.create_thread(name=name[:100], type=discord.ChannelType.public_thread)
         else:

@@ -273,10 +273,16 @@ async def post_launcher(
 
     `ping` and `graduate` are both off for the evening repost, which posts the next day's board hours early:
     the day's one ping belongs to the morning post, and graduating a slot that filled before its day arrived
-    would post its card ten hours ahead of the draft."""
+    would post its card ten hours ahead of the draft.
+
+    A day carrying no slot at all gets no board and no ping: the schedule offers nothing there and no pod was
+    made by hand, so the post would be an empty board over the day's queue ping."""
     guild = getattr(channel, "guild", None)
     guild_id = str(guild.id) if guild else ""
     slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, "", signal_date)
+    if not slots:
+        log.info(f"no pods offered on {signal_date}, skipping the launcher post")
+        return None
     message = await channel.send(
         content=poll_ping_line(guild) if ping else None, embed=build_poll_embed(slots, guild),
         view=PodPollView(slots, guild), allowed_mentions=discord.AllowedMentions(roles=ping),
