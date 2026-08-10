@@ -44,11 +44,11 @@ _SEIZE_WINNER_WHEN = datetime(2026, 5, 16, 18, tzinfo=timezone.utc)
 
 def _cand(
     name: str, detail: str, avatar: str | None, tie: object,
-    ceremony_detail: str | None = None, archetype: str | None = None, when: datetime | None = None,
+    ceremony_detail: str | None = None, archetype: str | None = None,
 ) -> AwardCandidate:
     return AwardCandidate(
         discord_id=None, display_name=name, detail=detail, avatar_url=avatar, tie_key=tie,
-        ceremony_detail=ceremony_detail, archetype=archetype, when=when,
+        ceremony_detail=ceremony_detail, archetype=archetype,
     )
 
 
@@ -64,7 +64,7 @@ def _set_awards_fixture(guild: discord.Guild | None) -> SetAwardsData:
             ceremony_detail=awards_svc.first_striker_ceremony(timedelta(hours=1, minutes=35))),
         "seize_the_day": _cand(
             "Jhoira", awards_svc.seize_detail(7, _SEIZE_WINNER_WHEN), _AVATAR.format(0), 7,
-            ceremony_detail=awards_svc.seize_ceremony_detail(7, _SEIZE_WINNER_WHEN), when=_SEIZE_WINNER_WHEN),
+            ceremony_detail=awards_svc.seize_ceremony_detail(7, _SEIZE_WINNER_WHEN)),
         "climber": _cand("Korvold", awards_svc.climber_detail("Bronze", 4), _AVATAR.format(2), (6, 4, 0)),
         "specialist": _cand(
             "Karn", awards_svc.specialist_detail(0.88, "URG", 24, 0.61), _AVATAR.format(3), 4.1,
@@ -73,8 +73,10 @@ def _set_awards_fixture(guild: discord.Guild | None) -> SetAwardsData:
         "mvp": _cand("Squee", awards_svc.mvp_detail(11), _AVATAR.format(4), 11),
     }
     runners = {
-        "first_striker": [_cand("Jhoira", awards_svc.first_striker_gap(timedelta(minutes=22)), None, None)],
-        "seize_the_day": [_cand("Squee", awards_svc.seize_detail(6, runner_when), None, 6, when=runner_when)],
+        "first_striker": [_cand("Jhoira", awards_svc.first_striker_gap(timedelta(seconds=27)), None, None)],
+        "seize_the_day": [_cand(
+            "Squee", awards_svc.seize_detail(6, runner_when), None, 6,
+            ceremony_detail=awards_svc.seize_ceremony_detail(6, runner_when))],
         "climber": [_cand("Niv", awards_svc.climber_detail("Gold", 1), None, (5, 1, 2))],
         "specialist": [_cand(
             "Jhoira", awards_svc.specialist_detail(0.83, "URG", 19, 0.61), None, 3.4,

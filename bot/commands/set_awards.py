@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from zoneinfo import ZoneInfo
 
 import discord
@@ -246,15 +246,6 @@ def _span_phrase(span: tuple | None) -> str:
     return f" between {start:%b} {start.day} and {end:%b} {end.day}"
 
 
-def _relative_day(when: datetime, anchor: datetime) -> str:
-    diff = (when.astimezone(COMMUNITY_TZ).date() - anchor.astimezone(COMMUNITY_TZ).date()).days
-    if diff == 0:
-        return "the same day"
-    word = "after" if diff > 0 else "before"
-    days = abs(diff)
-    return f"{days} day{'' if days == 1 else 's'} {word}"
-
-
 def _standing(candidates: list, discord_id: str) -> tuple[int | None, int, object]:
     for index, cand in enumerate(candidates):
         if cand.discord_id == discord_id:
@@ -415,9 +406,7 @@ def _runner_entrant(
     mention: bool, guild: discord.Guild | None,
 ) -> AwardEntrant:
     name = _entrant_name(cand, mention, guild)
-    if spec.key == "seize_the_day" and cand.when is not None and winner.when is not None:
-        detail = f"**{cand.tie_key} trophies**, {_relative_day(cand.when, winner.when)}"
-    elif spec.key == "specialist" and cand.archetype is not None and cand.archetype == winner.archetype:
+    if spec.key == "specialist" and cand.archetype is not None and cand.archetype == winner.archetype:
         detail = (cand.ceremony_detail or cand.detail).split(awards_svc.SPECIALIST_FIELD_SEP)[0]
     else:
         detail = cand.ceremony_detail or cand.detail

@@ -54,8 +54,15 @@ def _trophy(fmt, hour, minute=0):
     return DraftEvent(format=fmt, is_trophy=True, started_at=when, finished_at=when)
 
 
-def _drafter(name, events):
-    return sa.PlayerCtx(player=Player(discord_id=str(abs(hash(name)) % 10**17), display_name=name), events=events)
+def _drafter(name, events, stats=None):
+    return sa.PlayerCtx(
+        player=Player(discord_id=str(abs(hash(name)) % 10**17), display_name=name),
+        events=events, stats_rows=stats or [],
+    )
+
+
+def _premier_stats(trophies, events):
+    return {"format": "PremierDraft", "wins": trophies * 7, "losses": events, "trophies": trophies, "events": events}
 
 
 def test_a_quick_spree_loses_to_a_smaller_premier_run():
@@ -68,6 +75,30 @@ def test_a_quick_spree_loses_to_a_smaller_premier_run():
     ranked = sa.seize_the_day(ctxs)
 
     assert [c.display_name for c in ranked] == [sniper, grinder]
+
+
+def test_an_equal_run_goes_to_whoever_reached_it_first():
+    early, late = HALL_OF_FAME[3], HALL_OF_FAME[4]
+    ctxs = [
+        _drafter(late, [_trophy("TradDraft", 10), _trophy("TradDraft", 11)], [_premier_stats(8, 10)]),
+        _drafter(early, [_trophy("TradDraft", 1), _trophy("TradDraft", 2)], [_premier_stats(1, 10)]),
+    ]
+
+    ranked = sa.seize_the_day(ctxs)
+
+    assert [c.display_name for c in ranked] == [early, late]
+
+
+def test_a_same_instant_equal_run_falls_through_to_the_stronger_leaderboard_score():
+    contender, also_ran = HALL_OF_FAME[5], HALL_OF_FAME[6]
+    ctxs = [
+        _drafter(also_ran, [_trophy("TradDraft", 1), _trophy("TradDraft", 2)], [_premier_stats(1, 10)]),
+        _drafter(contender, [_trophy("TradDraft", 1), _trophy("TradDraft", 2)], [_premier_stats(8, 10)]),
+    ]
+
+    ranked = sa.seize_the_day(ctxs)
+
+    assert [c.display_name for c in ranked] == [contender, also_ran]
 
 
 def test_two_quick_trophies_still_qualify_despite_weighing_under_two():

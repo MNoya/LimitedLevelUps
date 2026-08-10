@@ -7,7 +7,7 @@ Five awards derive from draft_events (first_striker, seize_the_day, climber, spe
 revel_in_riches); mvp counts pod drafts played inside the set window. Winners are assigned
 greedily in ceremony order so nobody wins twice; runner-ups exclude winners, except awards in
 ``ALLOW_FEATURED_RUNNERS`` which show all tied. The Premier > Trad > Quick tiebreak only ever
-decides a winner, never a runner-up.
+decides a winner, never a runner-up; ``seize_the_day`` puts the earliest run ahead of it.
 """
 from __future__ import annotations
 
@@ -23,9 +23,9 @@ from sqlalchemy.orm import Session
 from bot.models import DraftEvent, MagicSet, Player, PlayerStats, PodDraftEvent, PodDraftParticipant
 from bot.scoring import (
     ARENA_DIRECT_SEALED_FORMAT,
-    DEFAULT_QUEUE_GROUPS,
     boxes_for_event,
     compute_score_breakdown,
+    group_label_for_format,
 )
 from bot.sets import SetSeed, release_instant
 
@@ -35,9 +35,6 @@ MYTHIC_INDEX = RANK_TIERS.index("Mythic")
 CLIMB_TIER_WEIGHT = 100
 QUICK_GROUP_LABEL = "Quick"
 QUICK_TROPHY_WEIGHT = 0.75
-QUICK_FORMATS = frozenset(
-    fmt for group in DEFAULT_QUEUE_GROUPS if group.label == QUICK_GROUP_LABEL for fmt in group.formats
-)
 
 MIN_ARCHETYPE_GAMES = 20
 MIN_COMMUNITY_GAMES = 40
@@ -56,7 +53,6 @@ class AwardCandidate:
     tiebreak: tuple[float, float, float] = (0.0, 0.0, 0.0)
     ceremony_detail: str | None = None
     archetype: str | None = None
-    when: datetime | None = None
 
 
 @dataclass
@@ -77,7 +73,7 @@ class PlayerCtx:
 
     def candidate(
         self, detail: str, tie_key: object, ceremony_detail: str | None = None,
-        archetype: str | None = None, when: datetime | None = None,
+        archetype: str | None = None,
     ) -> AwardCandidate:
         return AwardCandidate(
             discord_id=self.player.discord_id,
@@ -88,7 +84,6 @@ class PlayerCtx:
             tiebreak=self.tiebreak,
             ceremony_detail=ceremony_detail,
             archetype=archetype,
-            when=when,
         )
 
 
@@ -355,7 +350,9 @@ def first_striker(ctxs: list[PlayerCtx], seed: SetSeed) -> list[AwardCandidate]:
 
 def seize_the_day(ctxs: list[PlayerCtx]) -> list[AwardCandidate]:
     """Ranked on the weighted 24h run, displayed as the plain trophy count: Quick queues trophy far more
-    often than Premier, so an unweighted count handed the award to whoever ground the most Pick Two."""
+    often than Premier, so an unweighted count handed the award to whoever ground the most Pick Two.
+
+    An equal run goes to whoever reached it first, and only a same-instant tie falls through to score."""
     scored = []
     for c in ctxs:
         trophies = sorted(
@@ -365,20 +362,19 @@ def seize_the_day(ctxs: list[PlayerCtx]) -> list[AwardCandidate]:
         weighted, count, when = _best_24h_window(trophies)
         if count >= 2:
             scored.append((weighted, count, when, c))
-    scored.sort(key=lambda t: (t[0], _neg(t[3].tiebreak)), reverse=True)
+    scored.sort(key=lambda t: (-t[0], t[2], _neg(t[3].tiebreak)))
     result = []
     for weighted, count, when, c in scored:
         result.append(c.candidate(
             seize_detail(count, when),
             weighted,
             ceremony_detail=seize_ceremony_detail(count, when),
-            when=when,
         ))
     return result
 
 
 def trophy_weight(fmt: str | None) -> float:
-    return QUICK_TROPHY_WEIGHT if fmt in QUICK_FORMATS else 1.0
+    return QUICK_TROPHY_WEIGHT if group_label_for_format(fmt) == QUICK_GROUP_LABEL else 1.0
 
 
 def _climb_score(floor_index: int, days: int) -> int:
@@ -430,7 +426,7 @@ def specialist(ctxs: list[PlayerCtx]) -> list[AwardCandidate]:
         if pid not in best_per_player or z > best_per_player[pid][0]:
             best_per_player[pid] = (z, arch, player_wr, games, field_wr)
 
-    ranked = sorted(best_per_player.items(), key=lambda kv: (kv[1][0], _neg(by_id[kv[0]].tiebreak)), reverse=True)
+    ranked = sorted(best_per_player.items(), key=lambda kv: (kv[1][0], by_id[kv[0]].tiebreak), reverse=True)
     return [
         by_id[pid].candidate(
             specialist_detail(wr, arch, games, fw),
@@ -449,7 +445,7 @@ def revel_in_riches(ctxs: list[PlayerCtx], code: str) -> list[AwardCandidate]:
         boxes = sum(boxes_for_event(code, e.wins, e.finished_at, e.is_trophy) for e in sealed)
         if boxes > 0:
             scored.append((boxes, len(sealed), c))
-    scored.sort(key=lambda t: (t[0], _neg(t[2].tiebreak)), reverse=True)
+    scored.sort(key=lambda t: (t[0], t[2].tiebreak), reverse=True)
     return [
         c.candidate(revel_detail(boxes, events), boxes)
         for boxes, events, c in scored
@@ -526,31 +522,36 @@ def _best_mythic_climb(c: PlayerCtx) -> tuple[int, int, str] | None:
     return best
 
 
-def _delta_parts(td: timedelta) -> tuple[str, int, int, int]:
+def _delta_parts(td: timedelta) -> tuple[str, int, int, int, int]:
     total = int(td.total_seconds())
     sign = "-" if total < 0 else ""
     total = abs(total)
     days, rem = divmod(total, 86400)
     hours, rem = divmod(rem, 3600)
-    return sign, days, hours, rem // 60
+    minutes, seconds = divmod(rem, 60)
+    return sign, days, hours, minutes, seconds
 
 
 def _fmt_delta(td: timedelta) -> str:
-    sign, days, hours, minutes = _delta_parts(td)
+    sign, days, hours, minutes, seconds = _delta_parts(td)
     if days:
         return f"{sign}{days}d {hours}h"
     if hours:
         return f"{sign}{hours}h {minutes}m"
-    return f"{sign}{minutes}m"
+    if minutes:
+        return f"{sign}{minutes}m"
+    return f"{sign}{seconds}s"
 
 
 def _fmt_delta_coarse(td: timedelta) -> str:
-    sign, days, hours, minutes = _delta_parts(td)
+    sign, days, hours, minutes, seconds = _delta_parts(td)
     if days:
         return f"{sign}{days}d"
     if hours:
         return f"{sign}{hours}h"
-    return f"{sign}{minutes}m"
+    if minutes:
+        return f"{sign}{minutes}m"
+    return f"{sign}{seconds}s"
 
 
 def _rank_tier(rank: str | None) -> str | None:

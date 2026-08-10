@@ -73,6 +73,15 @@ def supported_formats(groups: Iterable[QueueGroup] = DEFAULT_QUEUE_GROUPS) -> tu
     return tuple(fmt for g in groups for fmt in g.formats)
 
 
+def group_label_for_format(fmt: str | None, groups: Iterable[QueueGroup] = DEFAULT_QUEUE_GROUPS) -> str | None:
+    if fmt is None:
+        return None
+    for group in groups:
+        if fmt in group.formats:
+            return group.label
+    return None
+
+
 def confidence_factor(total_trophies: int) -> float:
     """Aggregate shrinkage prior: T/(T+2) over the player's whole trophy count."""
     return total_trophies / (total_trophies + 2) if total_trophies > 0 else 0.0
