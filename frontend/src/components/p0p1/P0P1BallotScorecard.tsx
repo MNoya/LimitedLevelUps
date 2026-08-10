@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { HelpCircle } from "lucide-react";
 import { Tooltip } from "../Tooltip";
 import { groupBySlot, findExtremes, classifyYourPick } from "../../data/p0p1Stats";
-import { SLOTS } from "../../data/p0p1Slots";
+import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
 import {
   buildRatingsByName,
   bestPossibleTeam,
@@ -188,11 +188,12 @@ export function MidwayBallotScorecard({
   picksBySlot: Map<string, string>;
 }) {
   const aligned = useMemo(() => {
+    const slots = buildSlots(P0P1_CONTESTS[ratingsSnapshot.setCode]);
     const ratingsByName = buildRatingsByName(ratingsSnapshot);
-    const best = bestPossibleTeam(cards, SLOTS, ratingsByName);
+    const best = bestPossibleTeam(cards, slots, ratingsByName);
     const bestBySlot = new Map(best.picks.map((p) => [p.slot, p.cardName]));
     let count = 0;
-    for (const slot of SLOTS) {
+    for (const slot of slots) {
       const your = picksBySlot.get(slot.key);
       const bestCard = bestBySlot.get(slot.key as SlotKey);
       if (your && bestCard && your === bestCard) count++;
@@ -260,8 +261,9 @@ export function FinalBallotScorecard({
 }) {
   const selfPlacement = useP0P1DevSelfPlacement();
   const result = useMemo(() => {
+    const slots = buildSlots(P0P1_CONTESTS[ratingsSnapshot.setCode]);
     const ratingsByName = buildRatingsByName(ratingsSnapshot);
-    const bestTeam = bestPossibleTeam(cards, SLOTS, ratingsByName);
+    const bestTeam = bestPossibleTeam(cards, slots, ratingsByName);
     const rankedBallots = applyDevSelfPlacement(
       rankBallots(groupBallotRows(ballots), ratingsByName),
       0,
@@ -270,14 +272,14 @@ export function FinalBallotScorecard({
     );
     const userBallot = findUserBallot(rankedBallots, picksBySlot, discordId);
     const completeScores = rankedBallots
-      .filter((b) => b.picks.size === SLOTS.length)
+      .filter((b) => b.picks.size === slots.length)
       .map((b) => b.score);
     return {
       score: userBallot?.score ?? scoreBallot(picksBySlot as Map<SlotKey, string>, ratingsByName),
       rank: userBallot?.rank ?? null,
       total: rankedBallots.length,
       bestScore: bestTeam.score,
-      crowdScore: mostPopularTeam(pickStats, SLOTS, ratingsByName).score,
+      crowdScore: mostPopularTeam(pickStats, slots, ratingsByName).score,
       floor: completeScores.length > 0 ? Math.min(...completeScores) : 0,
     };
   }, [ratingsSnapshot, pickStats, ballots, cards, picksBySlot, selfPlacement, discordId]);
