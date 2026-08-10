@@ -589,9 +589,11 @@ class JoinableSignal:
     set_code: str | None
 
 
-def joinable_signals_sync(guild_id: str, *, now: datetime, within: timedelta) -> list[JoinableSignal]:
-    """Open queues and soon-to-fire poll slots in the guild — what a /draft caller could join instead
-    of starting a fresh pod. Poll slots past `within` from now are too far off to divert to."""
+def joinable_signals_sync(guild_id: str, *, now: datetime,
+                          within: timedelta | None = None) -> list[JoinableSignal]:
+    """Open queues and still-to-fire poll slots in the guild — what a caller could join instead of starting
+    a fresh pod. `within` bounds how far ahead a slot may start, for a surface offering to divert someone
+    who wants to draft now; no bound reports every slot still open on the board."""
     with SessionLocal() as session:
         signals = session.execute(
             select(PodSignal).where(
@@ -602,7 +604,9 @@ def joinable_signals_sync(guild_id: str, *, now: datetime, within: timedelta) ->
         ).scalars().all()
         joinable: list[JoinableSignal] = []
         for signal in signals:
-            if signal.slot_time is not None and not (now < signal.slot_time <= now + within):
+            if signal.slot_time is not None and signal.slot_time <= now:
+                continue
+            if signal.slot_time is not None and within is not None and signal.slot_time > now + within:
                 continue
             joinable.append(JoinableSignal(
                 signal.kind, signal.channel_id, signal.message_id, signal.slot_time, len(signal.members),

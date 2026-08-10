@@ -199,15 +199,18 @@ def test_a_full_lobby_is_still_reported_when_nothing_else_is_recruiting(registry
     assert lobby_is_full(target) is True
 
 
-@pytest.mark.parametrize("word,expected", [
-    ("DOM", "DOM"),
-    ("dom", "DOM"),
-    ("peasant", "PEASANT"),
-    ("anyone", None),
-    ("", None),
+@pytest.mark.parametrize("note,expected", [
+    ("DOM free tonight?", ["DOM"]),
+    ("dom free tonight?", ["DOM"]),
+    ("any peasant enjoyers?", ["PEASANT"]),
+    ("anyone free tonight?", []),
+    ("one more for peasant?", ["PEASANT"]),
+    ("DOM or dom", ["DOM"]),
+    ("free tonight?", []),
+    ("", []),
 ])
-def test_set_keyword_reads_only_a_format_in_the_first_word(word, expected):
-    assert pod_rally.set_keyword(f"{word} free tonight?".strip()) == expected
+def test_set_keywords_read_every_format_named_in_order(note, expected):
+    assert pod_rally.set_keywords(note) == expected
 
 
 @pytest.mark.parametrize("dom_yes,msh_yes,expected", [
@@ -221,7 +224,7 @@ def test_gathering_targets_lead_with_the_pod_that_still_needs_players(dom_yes, m
     msh = RallyTarget(KIND_GATHERING, "MSH Late Pod", "url", yes=msh_yes, event_time=start, set_code="MSH")
     dom = RallyTarget(KIND_GATHERING, "DOM Late Pod", "url", yes=dom_yes, event_time=start, set_code="DOM")
     monkeypatch.setattr(pod_rally, "_pending_pod_targets_sync", lambda guild_id, now: [msh, dom])
-    monkeypatch.setattr(pod_rally.pod_launch, "joinable_signals_sync", lambda guild_id, now, within: [])
+    monkeypatch.setattr(pod_rally.pod_launch, "joinable_signals_sync", lambda guild_id, now: [])
 
     targets = pod_rally.gathering_targets_sync(GUILD_ID)
 
@@ -233,15 +236,23 @@ def test_a_named_set_picks_its_pod_over_a_more_recruitable_one(registry, tables,
     dom = RallyTarget(KIND_GATHERING, "DOM Late Pod", "url", yes=2, event_time=None, set_code="DOM")
     monkeypatch.setattr(pod_rally, "gathering_targets_sync", lambda guild_id: [msh, dom])
 
-    assert asyncio.run(resolve_target(GUILD_ID, "DOM")) is dom
+    assert asyncio.run(resolve_target(GUILD_ID, ["DOM"])) is dom
     assert asyncio.run(resolve_target(GUILD_ID)) is msh
+
+
+def test_cube_asks_for_whichever_cube_the_day_is_running(registry, tables, monkeypatch):
+    msh = RallyTarget(KIND_GATHERING, "MSH Late Pod", "url", yes=6, set_code="MSH")
+    peasant = RallyTarget(KIND_GATHERING, "Peasant Cube Late Pod", "url", yes=2, set_code="PEASANT")
+    monkeypatch.setattr(pod_rally, "gathering_targets_sync", lambda guild_id: [msh, peasant])
+
+    assert asyncio.run(resolve_target(GUILD_ID, ["CUBE"])) is peasant
 
 
 def test_a_named_set_with_no_pod_falls_back_to_whatever_is_live(registry, tables, monkeypatch):
     msh = RallyTarget(KIND_GATHERING, "MSH Late Pod", "url", yes=6, set_code="MSH")
     monkeypatch.setattr(pod_rally, "gathering_targets_sync", lambda guild_id: [msh])
 
-    assert asyncio.run(resolve_target(GUILD_ID, "DOM")) is msh
+    assert asyncio.run(resolve_target(GUILD_ID, ["DOM"])) is msh
 
 
 def test_a_named_set_picks_its_lobby_over_a_second_table(registry, tables, no_gathering):
@@ -249,7 +260,7 @@ def test_a_named_set_picks_its_lobby_over_a_second_table(registry, tables, no_ga
     registry["b"] = FakeManager("DOM Late Pod", 2, "sess-b", seated=3, set_code="DOM")
     tables["a"] = FakeTableView("MSH Late Pod - Table 2", claims(3))
 
-    target = asyncio.run(resolve_target(GUILD_ID, "DOM"))
+    target = asyncio.run(resolve_target(GUILD_ID, ["DOM"]))
 
     assert (target.kind, target.name) == (KIND_LOBBY, "DOM Late Pod")
 

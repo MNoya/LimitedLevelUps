@@ -286,12 +286,12 @@ class ReminderRsvpButton(
     discord.ui.DynamicItem[discord.ui.Button],
     template=rf"{REMINDER_RSVP_PREFIX}:(?P<state>[a-z]+):(?P<event_id>.+)",
 ):
-    """Sign Up / Leave on the T-60 roster reminder. The reminder lives in the pod thread and is not a
+    """Sign Up / Leave on the roster reminder. The reminder lives in the pod thread and is not a
     card surface, so the event id rides in the custom_id: one registration dispatches every reminder, it
     keeps working after a restart, and the click records against the pod's card the same as any non-card
     surface. The reminder confirms Yes or No only — Maybe belongs to the earlier gathering window.
 
-    On an oversubscribed pod the Yes seat carries `confirm` as its state instead. It records the same Yes
+    On a confirming pod the Yes seat carries `confirm` as its state instead. It records the same Yes
     and additionally stamps the confirmation, so someone already on the roster gets a press that means
     something. Riding in the custom_id keeps that true across a restart."""
 

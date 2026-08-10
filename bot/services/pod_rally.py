@@ -11,6 +11,8 @@ Discord belongs to the command module; everything here reads state and returns s
 from __future__ import annotations
 
 import asyncio
+import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -33,7 +35,7 @@ from bot.services.pod_schedule import (
 )
 from bot.services.pod_signals import KIND_QUEUE
 from bot.services.pod_slot import pod_display_name, queue_display_name
-from bot.sets import active_set_code
+from bot.sets import CUBE_CODE, active_set_code
 
 
 KIND_LOBBY = "lobby"
@@ -42,9 +44,10 @@ KIND_GATHERING = "gathering"
 KIND_QUEUE_SIGNAL = "queue"
 KIND_TABLE = "table"
 
-GATHERING_WINDOW = timedelta(hours=6)
 LATE_GRACE = timedelta(minutes=30)
 PENDING_STATUSES = ("pending", "reminded")
+
+UNREADABLE_CODES = frozenset({"ONE"})
 
 
 @dataclass(frozen=True)
@@ -65,24 +68,31 @@ class RallyTarget:
     set_code: str = ""
 
 
-async def resolve_target(guild_id: str, set_code: str | None = None) -> RallyTarget | None:
-    """The one pod `!pod` reports, restricted to `set_code` when the caller named a format. A set nobody is
-    drafting right now falls back to the general pick, so a caller who asks for one still learns which pod
-    is live instead of hearing nothing."""
-    if set_code:
+async def resolve_target(guild_id: str, set_codes: Sequence[str] = ()) -> RallyTarget | None:
+    """The one pod `!pod` reports, restricted to the formats the caller named. Each is tried in the order it
+    was written, and one nobody is drafting right now falls through to the next, then to the general pick, so
+    a caller who asks for a format still learns which pod is live instead of hearing nothing."""
+    for set_code in set_codes:
         asked = await _resolve_target(guild_id, set_code)
         if asked is not None:
             return asked
     return await _resolve_target(guild_id, None)
 
 
-def set_keyword(text: str) -> str | None:
-    """The set or cube named in `!pod DOM ...`, or None when the first word is not one. Only the first word
-    is read: everything after it is the caller's own message."""
-    words = text.split()
-    if not words:
-        return None
-    return pod_format.resolve_format_code(words[0])
+def set_keywords(text: str) -> list[str]:
+    """Every set or cube named anywhere in `!pod any BRO enjoyers tonight?`, in the order written. The whole
+    message is read because the format is as likely to land mid-sentence as first, and a word that only
+    happens to spell a set code costs nothing: it has no pod, so it falls through to the next name.
+
+    `UNREADABLE_CODES` is the exception, for a code so ordinary a word that reading it as a format is wrong
+    more often than right. Only the rally reads a code out of prose, so the set stays selectable everywhere
+    a player picks one from a list."""
+    codes = []
+    for word in re.findall(r"[A-Za-z0-9]+", text):
+        code = pod_format.resolve_format_code(word)
+        if code is not None and code not in UNREADABLE_CODES and code not in codes:
+            codes.append(code)
+    return codes
 
 
 def live_lobby_targets(guild_id: str) -> list[RallyTarget]:
@@ -125,10 +135,14 @@ def forming_table_targets() -> list[RallyTarget]:
 
 
 def gathering_targets_sync(guild_id: str) -> list[RallyTarget]:
-    """Pods and open slots still collecting signups, soonest first. Read only when no lobby is open."""
+    """Pods and open slots still collecting signups, soonest first. Read only when no lobby is open.
+
+    Every slot still open on the launcher counts, however far off it starts: only one target is ever posted
+    and the soonest wins, so a later slot answers only when nothing nearer exists. A distance bound here hid
+    the day's own Early slot all morning, which is exactly when someone asks for it."""
     now = datetime.now(timezone.utc)
     targets = _pending_pod_targets_sync(guild_id, now)
-    for signal in pod_launch.joinable_signals_sync(guild_id, now=now, within=GATHERING_WINDOW):
+    for signal in pod_launch.joinable_signals_sync(guild_id, now=now):
         targets.append(_signal_target(guild_id, signal))
     targets.sort(key=_soonest_first)
     return targets
@@ -193,8 +207,12 @@ async def _resolve_target(guild_id: str, set_code: str | None) -> RallyTarget | 
 
 
 def _for_set(targets: list[RallyTarget], set_code: str | None) -> list[RallyTarget]:
+    """`CUBE` asks for whichever cube is being drafted, since a pod carries the cube's own code and nobody
+    writing `!pod cube` knows or cares which one the day offers."""
     if not set_code:
         return targets
+    if set_code == CUBE_CODE:
+        return [target for target in targets if pod_format.is_custom(target.set_code)]
     return [target for target in targets if target.set_code == set_code]
 
 
