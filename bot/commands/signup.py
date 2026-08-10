@@ -44,10 +44,10 @@ INSTRUCTIONS = (
 )
 
 MSG_DM_SENT = "📬 Check your DMs to join!"
-MSG_ALREADY_SIGNED_UP = "You're already in! 🎉 Run `/help` to see everything you can do."
-MSG_WELCOME_BACK = "👋 Welcome back! You're on the leaderboard again."
+MSG_ALREADY_SIGNED_UP = "You're already in! 🎉 Run `/help` to see everything you can do"
+MSG_WELCOME_BACK = "👋 Welcome back! You're on the leaderboard again"
 MSG_SYNCING = "⏳ Catching up on your latest 17lands drafts…"
-MSG_TIMEOUT = "⏱️ Timed out. Run `/join` again whenever you're ready."
+MSG_TIMEOUT = "⏱️ Timed out. Run `/join` again whenever you're ready"
 
 
 SignupKind = Literal[

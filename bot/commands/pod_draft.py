@@ -105,10 +105,10 @@ _ARENA_INPUT_RE = re.compile(r"^.+#\d+$")
 
 MSG_LINK_ARENA_NO_LOBBY_MATCH = (
     "⚠️ No one in an active pod lobby is drafting as `{arena_name}`. Check that it matches "
-    "your Draftmancer name exactly."
+    "your Draftmancer name exactly"
 )
-MSG_LINK_ARENA_DID_YOU_MEAN = "Did you mean `{suggestion}`? Re-run /link-arena with that exact handle."
-MSG_NO_ACTIVE_POD = "No active pod draft session right now."
+MSG_LINK_ARENA_DID_YOU_MEAN = "Did you mean `{suggestion}`? Re-run `/link-arena` with that exact handle"
+MSG_NO_ACTIVE_POD = "No active pod draft session right now"
 MSG_READY_CHECK_STARTED = "Ready Check initiated! Press Ready on the card or in Draftmancer"
 
 YES_EMOJI = "✅"
@@ -129,9 +129,9 @@ def seeding_phase_projected() -> str:
     url = f"{settings.leaderboard_url}/{active}"
     return f"{emojis.prefix('llu')}Players ranked by **[{active} Leaderboard]({url})**"
 
-MSG_SEEDING_WAITING = "Waiting for players to confirm attendance."
-MSG_SEEDING_NOT_POD_THREAD = "Run this inside a pod-draft thread."
-MSG_SEEDING_NO_RSVPS = f"No {YES_EMOJI} or {MAYBE_EMOJI} RSVPs on this pod yet."
+MSG_SEEDING_WAITING = "Waiting for players to confirm attendance"
+MSG_SEEDING_NOT_POD_THREAD = "Run this inside a pod-draft thread"
+MSG_SEEDING_NO_RSVPS = f"No {YES_EMOJI} or {MAYBE_EMOJI} RSVPs on this pod yet"
 
 
 
@@ -177,7 +177,7 @@ class PodDraft(commands.Cog):
             log.warning(f"pod-start: failed — {err}")
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
         else:
-            await interaction.followup.send("Force-starting the draft, watch the thread.", ephemeral=True)
+            await interaction.followup.send("Force-starting the draft, watch the thread", ephemeral=True)
 
     @app_commands.command(name="pod-team", description=desc.POD_TEAM)
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
@@ -221,7 +221,7 @@ class PodDraft(commands.Cog):
             return
         log.info(f"pod-pause: {interaction.user} paused draft in thread {interaction.channel_id}")
         await interaction.response.send_message(
-            f"⏸️ {interaction.user.mention} paused the draft. Resume with `/pod-unpause`.",
+            f"⏸️ {interaction.user.mention} paused the draft. Resume with `/pod-unpause`",
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
@@ -239,7 +239,7 @@ class PodDraft(commands.Cog):
             return
         log.info(f"pod-unpause: {interaction.user} resumed draft in thread {interaction.channel_id}")
         await interaction.response.send_message(
-            f"▶️ {interaction.user.mention} resumed the draft.",
+            f"▶️ {interaction.user.mention} resumed the draft",
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
@@ -261,7 +261,7 @@ class PodDraft(commands.Cog):
             log.warning(f"pod-restart: failed — {err}")
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
         else:
-            await interaction.followup.send("Draft stopped, the lobby is reopening — watch the thread.", ephemeral=True)
+            await interaction.followup.send("Draft stopped, the lobby is reopening", ephemeral=True)
 
     @app_commands.command(name="pod-review", description=desc.POD_REVIEW)
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
@@ -270,11 +270,11 @@ class PodDraft(commands.Cog):
         thread_id = str(interaction.channel_id) if interaction.channel_id else None
         event_id = await asyncio.to_thread(load_event_id_by_thread_sync, thread_id) if thread_id else None
         if event_id is None:
-            await interaction.response.send_message("Run this inside a pod-draft thread.", ephemeral=True)
+            await interaction.response.send_message("Run this inside a pod-draft thread", ephemeral=True)
             return
         embed = await build_draft_review_embed(event_id)
         if embed is None:
-            await interaction.response.send_message("No players are on record for this pod yet.", ephemeral=True)
+            await interaction.response.send_message("No players are on record for this pod yet", ephemeral=True)
             return
         log.info(f"pod-review: {interaction.user} started review for event_id={event_id}")
         voice_url = pod_voice_channel_url(interaction.guild)
@@ -296,7 +296,7 @@ class PodDraft(commands.Cog):
         thread_id = str(ctx.channel.id) if ctx.channel else None
         event_id = await asyncio.to_thread(load_event_id_by_thread_sync, thread_id) if thread_id else None
         if event_id is None:
-            await ctx.reply("Run this inside a pod-draft thread.", mention_author=False)
+            await ctx.reply("Run this inside a pod-draft thread", mention_author=False)
             return
         log.info(f"!start: {ctx.author} opening lobby early for event_id={event_id}")
         scheduler = getattr(self.bot, "pod_scheduler", None)
@@ -427,7 +427,7 @@ class PodDraft(commands.Cog):
         if event:
             event_id = await asyncio.to_thread(load_event_id_by_name_sync, event)
             if event_id is None:
-                await interaction.followup.send(f"No pod-draft event named `{event}`.", ephemeral=True)
+                await interaction.followup.send(f"No pod-draft event named `{event}`", ephemeral=True)
                 return
         else:
             channel = interaction.channel
@@ -435,14 +435,14 @@ class PodDraft(commands.Cog):
             event_id = await asyncio.to_thread(load_event_id_by_thread_sync, thread_id) if thread_id else None
             if event_id is None:
                 await interaction.followup.send(
-                    "Run this inside a pod-draft thread, or pass an `event` to publish standings for a specific pod.",
+                    "Run this inside a pod-draft thread, or pass an `event` to publish standings for a specific pod",
                     ephemeral=True,
                 )
                 return
 
         embed = await build_standings_embed_for_event(event_id)
         if embed is None:
-            await interaction.followup.send("No standings yet — this pod hasn't started pairings.", ephemeral=True)
+            await interaction.followup.send("No standings yet", ephemeral=True)
             return
 
         log.info(f"pod-standings: {interaction.user} posted standings for event_id={event_id}")
@@ -482,7 +482,7 @@ class PodDraft(commands.Cog):
         if event:
             event_id = await asyncio.to_thread(load_event_id_by_name_sync, event)
             if event_id is None:
-                await interaction.followup.send(f"No pod-draft event named `{event}`.", ephemeral=True)
+                await interaction.followup.send(f"No pod-draft event named `{event}`", ephemeral=True)
                 return
         else:
             channel = interaction.channel
@@ -490,7 +490,7 @@ class PodDraft(commands.Cog):
             event_id = await asyncio.to_thread(load_event_id_by_thread_sync, thread_id) if thread_id else None
             if event_id is None:
                 await interaction.followup.send(
-                    "Run this inside a pod-draft thread, or pass an `event` to announce a specific pod.",
+                    "Run this inside a pod-draft thread, or pass an `event` to announce a specific pod",
                     ephemeral=True,
                 )
                 return
@@ -503,7 +503,7 @@ class PodDraft(commands.Cog):
                 event_id, guild_id=interaction.guild_id, guild=interaction.guild)
         if view is None:
             await interaction.followup.send(
-                "Champion announcement isn't ready — trophy match has no winner on record yet.",
+                "Champion announcement isn't ready. The trophy match has no winner on record yet",
                 ephemeral=True,
             )
             return
@@ -532,7 +532,7 @@ class PodDraft(commands.Cog):
         if target is None:
             await interaction.response.send_message(
                 "No suitable Draftmancer user found to transfer ownership to. "
-                "Make sure you're in the Draftmancer session before running this.",
+                "Make sure you're in the Draftmancer session before running this",
                 ephemeral=True,
             )
             return
@@ -546,7 +546,7 @@ class PodDraft(commands.Cog):
             await interaction.followup.send(f"⚠️ Takeover failed: {err}", ephemeral=True)
             return
         await interaction.followup.send(
-            f"👑 {interaction.user.mention} is now in control of the Draftmancer session. Bot disconnected."
+            f"👑 {interaction.user.mention} is now in control of the Draftmancer session. Bot disconnected"
         )
 
 

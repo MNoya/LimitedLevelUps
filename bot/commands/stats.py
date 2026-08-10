@@ -88,7 +88,7 @@ class Stats(commands.Cog):
         if set is not None:
             seed = SET_CODES.get(set.upper())
             if seed is None:
-                await interaction.followup.send(f"Unknown set `{set}`.", ephemeral=ephemeral)
+                await interaction.followup.send(f"Unknown set `{set}`", ephemeral=ephemeral)
                 return
             set_code = seed.code
 

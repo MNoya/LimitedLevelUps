@@ -13,7 +13,7 @@ from bot.services.mock_lobby_card import set_symbol_url
 from bot.services.p0p1_contest import Contest, PHASE_LOCKED, PHASE_PRE, PHASE_VOTING
 from bot.services.ping_roles import P0P1_COLOR, TOP_P0P1_CHALLENGER_ROLE_NAME
 
-SAVED_PICKS = "Log in with Discord, your picks save automatically."
+SAVED_PICKS = "Log in with Discord, your picks save automatically"
 CHANGE_PICKS_EARLY_ACCESS = "Update anytime before the Early Access deadline"
 SYNTHETIC_CHALLENGER_TAG = f"**@{TOP_P0P1_CHALLENGER_ROLE_NAME}**"
 P0P1_ACCENT = discord.Color.from_str(P0P1_COLOR)

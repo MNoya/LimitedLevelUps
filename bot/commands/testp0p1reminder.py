@@ -15,8 +15,8 @@ from bot.commands.test_group import test_group
 from bot.services import p0p1_contest
 from bot.tasks.p0p1_reminder_post import contest_due, post_reminder
 
-MSG_NO_CONTEST = "No P0P1 contest in `p0p1_contests.json`."
-MSG_NO_CHANNEL = "No channel found for `{code}`. Create the set channel here first."
+MSG_NO_CONTEST = "No P0P1 contest in `p0p1_contests.json`"
+MSG_NO_CHANNEL = "No channel found for `{code}`. Create the set channel here first"
 
 
 async def setup(bot: commands.Bot) -> None:

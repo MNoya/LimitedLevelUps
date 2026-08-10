@@ -55,16 +55,16 @@ WRITE_IN = "__write_in__"
 SET_SELECT_LIMIT = 23
 SET_CODE_RE = re.compile(r"^[A-Z0-9]{2,5}$")
 
-MSG_NO_CHANNEL = "Run `/trophy` in the channel where you posted your screenshot, or pass `link:` to a post."
+MSG_NO_CHANNEL = "Run `/trophy` in the channel where you posted your screenshot, or pass `link:` to a post"
 MSG_NO_POST = (
     "No trophy screenshot found from you in {channel}. "
     "Post your screenshot here, then run `/trophy` or right-click it → Apps → 🏆 Record Event. "
     "To save one elsewhere, pass `link:`."
 )
-MSG_BAD_LINK = "That doesn't look like a Discord message link. Right-click a message → Copy Message Link."
-MSG_LINK_NOT_FOUND = "Couldn't find that message. Check the link and try again."
-MSG_NOT_YOUR_POST = "You can only save your own trophy posts."
-MSG_NO_IMAGE = "That post has no image. Save the message that shows your trophy screenshot."
+MSG_BAD_LINK = "That doesn't look like a Discord message link. Right-click a message → Copy Message Link"
+MSG_LINK_NOT_FOUND = "Couldn't find that message. Check the link and try again"
+MSG_NOT_YOUR_POST = "You can only save your own trophy posts"
+MSG_NO_IMAGE = "That post has no image. Save the message that shows your trophy screenshot"
 
 
 @dataclass
@@ -413,7 +413,7 @@ class _CancelButton(ui.Button):
         super().__init__(label="Cancel", style=discord.ButtonStyle.secondary)
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.edit_message(content="Canceled.", embed=None, view=None)
+        await interaction.response.edit_message(content="Canceled", embed=None, view=None)
 
 
 class _PlatformWriteInModal(ui.Modal, title="Platform"):
@@ -459,7 +459,7 @@ class _RecordModal(ui.Modal, title="Record"):
         record = self.record.value.strip()
         if not RECORD_RE.match(record):
             await interaction.response.send_message(
-                f"⚠️ `{record}` isn't a valid record — use a W-L like `3-0` or `7-2`.", ephemeral=True
+                f"⚠️ `{record}` isn't a valid record. Use a W-L like `3-0` or `7-2`", ephemeral=True
             )
             return
         self._view.draft.record = record
@@ -484,7 +484,7 @@ class _ColorWriteInModal(ui.Modal, title="Deck colors"):
         colors_raw = self.colors.value.strip()
         if not COLORS_RE.match(colors_raw):
             await interaction.response.send_message(
-                f"⚠️ `{colors_raw}` isn't valid — use only W/U/B/R/G letters, 1–5 chars.", ephemeral=True
+                f"⚠️ `{colors_raw}` isn't valid. Use only W/U/B/R/G letters, 1–5 chars", ephemeral=True
             )
             return
         self._view.draft.colors = normalize_colors(colors_raw)
@@ -503,7 +503,7 @@ class _SetWriteInModal(ui.Modal, title="Set"):
         set_code = self.set_code.value.strip().upper()
         if not SET_CODE_RE.match(set_code):
             await interaction.response.send_message(
-                f"⚠️ `{set_code}` isn't a valid set code — use 2–5 letters or digits like `SOS`.", ephemeral=True
+                f"⚠️ `{set_code}` isn't a valid set code. Use 2–5 letters or digits like `SOS`", ephemeral=True
             )
             return
         self._view.draft.set_code = set_code

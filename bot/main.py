@@ -150,7 +150,7 @@ PUBLISH_WINDOW_END_ET = 1
 PROFILE_SYNC_TIME = dtime(hour=4, minute=0, tzinfo=AUTO_REFRESH_TZ)
 PROFILE_SYNC_WEEKDAY = calendar.MONDAY
 
-MSG_GENERIC_ERROR = "⚠️ Something went wrong handling that command. The bot owner has been notified."
+MSG_GENERIC_ERROR = "⚠️ Something went wrong handling that command. The bot owner has been notified"
 
 
 def main() -> None:

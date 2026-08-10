@@ -46,7 +46,7 @@ ROSTER_REMINDER_HEADLINE_COUNT = ROSTER_REMINDER_HEADLINE + " ✅ {count}"
 LOBBY_OPEN_HEADLINE = "**Join the Draftmancer session:**"
 LOBBY_ARENA_NAME = (
     "Set your **Arena name** (like `YourName#12345`) as your Draftmancer name or use **Join Draft** "
-    "below for your personal link."
+    "below for your personal link"
 )
 LOBBY_OPEN = (
     "➡️ {headline} <{url}>"
@@ -91,7 +91,7 @@ RALLY_TABLE = (
 
 RALLY_NO_POD = (
     "{hello}No pod is gathering right now {manat} [**Today's Launcher**]({launcher_url})\n"
-    "Use `/draft` to open one."
+    "Use `/draft` to open one"
 )
 
-RALLY_NO_POD_NO_LAUNCHER = "{hello}No pod is gathering right now. Use `/draft` to open one."
+RALLY_NO_POD_NO_LAUNCHER = "{hello}No pod is gathering right now. Use `/draft` to open one"

@@ -29,8 +29,8 @@ from bot.sets import active_set_code
 
 log = logging.getLogger(__name__)
 
-MSG_NO_CONTEST = "⚠️ No P0P1 contest to advertise. Add one to `p0p1_contests.json` first."
-MSG_UNKNOWN_CONTEST = "⚠️ No P0P1 contest registered for `{code}`."
+MSG_NO_CONTEST = "⚠️ No P0P1 contest to advertise. Add one to `p0p1_contests.json` first"
+MSG_UNKNOWN_CONTEST = "⚠️ No P0P1 contest registered for `{code}`"
 
 REJECTION_LIFETIME_S = 15
 

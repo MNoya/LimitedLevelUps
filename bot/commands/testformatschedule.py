@@ -42,7 +42,7 @@ async def setup(bot: commands.Bot) -> None:
                 await ctx.send(**build_schedule_payload(in_progress, upcoming, emojis, scope))
                 if not pin.pin_filters:
                     season = select_season_groups(events, scope)
-                    await ctx.send(f"__**{heading} — final week, written once then frozen**__")
+                    await ctx.send(f"__**{heading}, final week, written once then frozen**__")
                     await ctx.send(**build_schedule_payload(season, [], emojis, scope, archival=True))
             if pin.announce == ANNOUNCE_NONE:
                 continue
@@ -63,7 +63,7 @@ async def setup(bot: commands.Bot) -> None:
         code = (set_code or active_set_code()).upper()
         embeds = await asyncio.to_thread(send_off_embeds, code)
         if not embeds:
-            await ctx.send(f"No send-off boards for {code} — set not in the database or no scored players.")
+            await ctx.send(f"No send-off boards for {code}, set not in the database or no scored players")
             return
         for embed in embeds:
             await ctx.send(embed=embed)

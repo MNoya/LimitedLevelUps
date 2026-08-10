@@ -79,7 +79,7 @@ class EventScribe(commands.Cog):
             events = mtgscribe.load_events()
         except Exception:
             logger.exception("event-scribe could not read the bundled MTG Scribe calendar")
-            await interaction.followup.send("MTG Scribe events are unavailable right now. Try again later.")
+            await interaction.followup.send("MTG Scribe events are unavailable right now. Try again later")
             return
         archival = archives_set_query(set)
         if archival:

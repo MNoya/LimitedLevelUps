@@ -25,8 +25,8 @@ MSG_CONFIRM = (
     "⚠️ This will delete all your tracked stats and remove you from the LLU leaderboard. "
     "Your 17lands data is unaffected."
 )
-MSG_DELETED = "You've been removed from the LLU leaderboard. Run `/join` anytime to come back."
-MSG_CANCELLED = "Deletion canceled."
+MSG_DELETED = "You've been removed from the LLU leaderboard. Run `/join` anytime to come back"
+MSG_CANCELLED = "Deletion canceled"
 
 
 DeleteAccountKind = Literal["deleted", "not_registered"]

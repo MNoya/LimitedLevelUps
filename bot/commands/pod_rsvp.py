@@ -136,8 +136,8 @@ RSVP_CONFIRM_COLOR = {
     RSVP_MAYBE: discord.Color.orange(),
     RSVP_NO: discord.Color.red(),
 }
-MSG_CARD_INACTIVE = "This RSVP card is no longer active."
-MSG_BAD_TIME = "Enter a future time like +1h, 9 PM, 21:00, or tomorrow 8:30pm."
+MSG_CARD_INACTIVE = "This RSVP card is no longer active"
+MSG_BAD_TIME = "Enter a future time like +1h, 9 PM, 21:00, or tomorrow 8:30pm"
 THREAD_NOTE_TITLE = "🕐 Pod Draft Rescheduled by {actor}"
 THREAD_NOTE_BODY = "New time: <t:{unix}:F> (<t:{unix}:R>)\n" + MSG_DRAFTMANCER_LINK_LEAD
 MSG_CLASHING_MAYBE = "🤷 {player} moved to Maybe here after confirming {other}"

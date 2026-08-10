@@ -27,7 +27,7 @@ from bot.services.pod_reminder_copy import RALLY_NO_POD, RALLY_NO_POD_NO_LAUNCHE
 
 log = logging.getLogger(__name__)
 
-MSG_POD_ALREADY_FULL = "That pod already has a full table."
+MSG_POD_ALREADY_FULL = "That pod already has a full table"
 
 NOTICE_LIFETIME_S = 15
 

@@ -58,7 +58,7 @@ async def setup(bot: commands.Bot) -> None:
         `players` and `confirmed` pre-fill it, so `!test sandbox 6 4` starts from six signups with four
         of them confirmed. With no arguments the pod starts empty. Clear it with `!test reset`."""
         if not isinstance(ctx.channel, discord.TextChannel):
-            await ctx.send("Run `!test sandbox` in a server text channel — the thread is created there.")
+            await ctx.send("Run `!test sandbox` in a server text channel")
             return
         event_time = datetime.now(SCHEDULE_TZ) + timedelta(minutes=SANDBOX_LEAD_MIN)
         set_code = active_set_code()
@@ -67,7 +67,7 @@ async def setup(bot: commands.Bot) -> None:
             ctx.bot, ctx.channel, set_code=set_code, event_time=event_time, name=name,
         )
         if event_id is None:
-            await ctx.send("Could not create the scheduled card. Check the logs.")
+            await ctx.send("Could not create the scheduled card. Check the logs")
             return
         for seat in range(players):
             await _seat_rsvp(event_id, seat, RSVP_YES)
@@ -78,7 +78,7 @@ async def setup(bot: commands.Bot) -> None:
             )
         thread = await _pod_thread(ctx.bot, event_id)
         if thread is None:
-            await ctx.send("Could not reach the pod thread. Check the logs.")
+            await ctx.send("Could not reach the pod thread. Check the logs")
             return
         await repost_roster_reminder(event_id)
         await thread.send(await _panel_body(event_id), view=build_sandbox_panel(event_id))

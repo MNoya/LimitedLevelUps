@@ -356,7 +356,7 @@ LINK_17LANDS_BUTTON_ID = "pod_welcome_link_17lands"
 POD_GUIDE_BUTTON_ID = "pod_welcome_guide"
 MANAGE_ROLES_BUTTON_ID = "pod_welcome_roles"
 FORMAT_PREFERENCE_BUTTON_ID = "pod_welcome_format"
-MSG_PICKER_UNAVAILABLE = "The preference picker is not available right now."
+MSG_PICKER_UNAVAILABLE = "The preference picker is not available right now"
 _ARENA_HANDLE_RE = re.compile(r"^.+#\d+$")
 
 FormatPreferenceOpener = Callable[[discord.Interaction], Awaitable[None]]

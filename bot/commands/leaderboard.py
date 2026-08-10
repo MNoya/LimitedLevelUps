@@ -1153,7 +1153,7 @@ class _FilterPanel(discord.ui.View):
         with SessionLocal() as session:
             embed = _render_ephemeral_board(session, new_set, new_fmt, new_color, str(interaction.user.id))
         if embed is None:
-            await interaction.followup.send("Could not render that leaderboard.", ephemeral=True)
+            await interaction.followup.send("Could not render that leaderboard", ephemeral=True)
             return
         try:
             await interaction.edit_original_response(
@@ -1209,7 +1209,7 @@ class _FilterButton(discord.ui.Button):
 
         if embed is None:
             await interaction.response.send_message(
-                "Could not render that leaderboard.", ephemeral=True,
+                "Could not render that leaderboard", ephemeral=True,
             )
             return
 
@@ -1546,7 +1546,7 @@ class LeaderboardView(discord.ui.View):
         signup_cog = interaction.client.get_cog("Signup")
         if signup_cog is None:
             await interaction.response.send_message(
-                "Sign-up isn't available right now.", ephemeral=(interaction.guild is not None),
+                "Sign-up isn't available right now", ephemeral=(interaction.guild is not None),
             )
             return
         await signup_cog.signup.callback(signup_cog, interaction)
@@ -1881,12 +1881,12 @@ class Leaderboard(commands.Cog):
             fmt_value = format.value if format is not None else None
             if color is not None:
                 await interaction.response.send_message(
-                    "Lifetime standings support the `format` filter, not `color` yet.", ephemeral=ephemeral,
+                    "Lifetime standings support the `format` filter, not `color` yet", ephemeral=ephemeral,
                 )
                 return
             if fmt_value == "Pod":
                 await interaction.response.send_message(
-                    "Lifetime standings don't cover Pod yet.", ephemeral=ephemeral,
+                    "Lifetime standings don't cover Pod yet", ephemeral=ephemeral,
                 )
                 return
             await interaction.response.defer()
@@ -1905,7 +1905,7 @@ class Leaderboard(commands.Cog):
         if set is not None and set.upper() == PEASANT_CODE:
             if format is not None or color is not None:
                 await interaction.response.send_message(
-                    f"Format and color filters aren't available for `{PEASANT_CODE}`.", ephemeral=ephemeral,
+                    f"Format and color filters aren't available for `{PEASANT_CODE}`", ephemeral=ephemeral,
                 )
                 return
             await interaction.response.defer()
@@ -1921,7 +1921,7 @@ class Leaderboard(commands.Cog):
         if set is not None and is_mtgo_flashback_code(set):
             if format is not None or color is not None:
                 await interaction.response.send_message(
-                    f"Format and color filters aren't available for `{set.upper()}`.", ephemeral=ephemeral,
+                    f"Format and color filters aren't available for `{set.upper()}`", ephemeral=ephemeral,
                 )
                 return
             await interaction.response.defer()
@@ -1937,14 +1937,14 @@ class Leaderboard(commands.Cog):
         color_value = color.value if color is not None else None
         if format_value in SPECIAL_FORMATS and color_value is not None:
             await interaction.response.send_message(
-                f"Color filtering isn't available for `{format_value}` yet.", ephemeral=ephemeral,
+                f"Color filtering isn't available for `{format_value}` yet", ephemeral=ephemeral,
             )
             return
         # set:CUBE takes the cube running now; set:CUBE-PLANAR and set:CUBE-SOS name a board directly
         cube_board = set.upper() if set is not None and is_cube_board_code(set) else None
         if cube_board is not None and (format_value is not None or color_value is not None):
             await interaction.response.send_message(
-                f"Format and color filters aren't available for `{cube_board}`.", ephemeral=ephemeral,
+                f"Format and color filters aren't available for `{cube_board}`", ephemeral=ephemeral,
             )
             return
 
@@ -1985,7 +1985,7 @@ class Leaderboard(commands.Cog):
 
         if data is None:
             await interaction.followup.send(
-                "Could not render that leaderboard.", ephemeral=ephemeral,
+                "Could not render that leaderboard", ephemeral=ephemeral,
             )
             return
 

@@ -434,7 +434,7 @@ async def _open_report_modal(interaction: discord.Interaction, match_id: str) ->
     state = await asyncio.to_thread(load_match_report_state, match_id)
     if state is None:
         await interaction.response.send_message(
-            "This match no longer exists.", ephemeral=(interaction.guild is not None),
+            "This match no longer exists", ephemeral=(interaction.guild is not None),
         )
         return
     await interaction.response.send_modal(TeamReportModal(state, board_message=interaction.message))
@@ -575,7 +575,7 @@ async def handle_team_report(
     try:
         match_id, winner_name, score = value.split("|", 2)
     except ValueError:
-        await interaction.response.send_message("Malformed result option.", ephemeral=True)
+        await interaction.response.send_message("Malformed result option", ephemeral=True)
         return
     try:
         await interaction.response.defer()

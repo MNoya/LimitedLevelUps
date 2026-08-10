@@ -156,7 +156,7 @@ class DisconnectVoteButton(
     async def callback(self, interaction: discord.Interaction) -> None:
         if _click_handler is None:
             await interaction.response.send_message(
-                "This pod is no longer taking votes.", ephemeral=(interaction.guild is not None),
+                "This pod is no longer taking votes", ephemeral=(interaction.guild is not None),
             )
             return
         await _click_handler(interaction, self.event_id, self.side)

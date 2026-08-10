@@ -33,13 +33,13 @@ MSG_NOT_ON_BOARD = (
 )
 MSG_JOINED_NO_EVENTS = (
     "You're on the leaderboard, but no {set} drafts are showing for you this set. "
-    "If this is a mistake, contact an Admin."
+    "If this is a mistake, contact an Admin"
 )
 
 GAP = NBSP * 2
 SUBTEXT_START = f"-# {ZWSP}"
 MISS_START = f"{SUBTEXT_START}{GAP}"
-MSG_NO_AWARDS_YET = "No Set Awards have been posted yet. They run the morning before a new set releases."
+MSG_NO_AWARDS_YET = "No Set Awards have been posted yet. They run the morning before a new set releases"
 SITE_LEADERBOARD_URL = "https://limitedlevelups.com/leaderboard"
 LEADERBOARD_NOTE = f"`/join` to enter · [limitedlevelups.com/leaderboard]({SITE_LEADERBOARD_URL})"
 
@@ -470,7 +470,7 @@ async def _respond_my_awards(interaction: discord.Interaction, code: str, seed) 
     discord_id = str(interaction.user.id)
     result = await asyncio.to_thread(_my_awards_payload, code, seed, discord_id)
     if result is SET_NOT_IN_DATABASE:
-        await interaction.followup.send(f"Set {code} is not in the database.", ephemeral=True)
+        await interaction.followup.send(f"Set {code} is not in the database", ephemeral=True)
         return
     if result is None:
         await _send_no_standing(interaction, code, discord_id)

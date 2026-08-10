@@ -205,7 +205,7 @@ async def _notify_archived(admin_channel: discord.TextChannel | None, channel: d
         log.info("format-schedule: no admin channel found; skipping archive notice")
         return
     try:
-        await admin_channel.send(f"📥 Moved {channel.mention} to **{FORMAT_ARCHIVE_CATEGORY}**.")
+        await admin_channel.send(f"📥 Moved {channel.mention} to **{FORMAT_ARCHIVE_CATEGORY}**")
     except discord.HTTPException:
         log.warning(f"format-schedule: could not post archive notice for #{channel.name}", exc_info=True)
 

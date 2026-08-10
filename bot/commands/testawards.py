@@ -45,15 +45,15 @@ _AVATAR = "https://cdn.discordapp.com/embed/avatars/{}.png"
 _SEIZE_WINNER_WHEN = datetime(2026, 5, 16, 18, tzinfo=timezone.utc)
 
 CEREMONY_LIVE = "live"
-MSG_NO_ACTIVE_SET = "There's no active set right now."
-MSG_NO_AWARDS_COMPUTED = "No awards could be computed for this set."
+MSG_NO_ACTIVE_SET = "There's no active set right now"
+MSG_NO_AWARDS_COMPUTED = "No awards could be computed for this set"
 MSG_WARNING_POSTED = "⏰ Warning posted in {ceremony}, pointer in {pointer}"
 MSG_WARNING_FAILED = "The warning could not post in {ceremony}"
 MSG_NO_INCOMING_CHANNEL = "no channel for the incoming set, so no pointer posted"
 MSG_NO_SET_CHANNEL = "No channel for {set}, so there is nowhere to post the warning"
 PREVIEW_CEREMONY_LEAD = timedelta(minutes=15)
-MSG_DRY_RUN_POSTED = "🏆 Posted {count} awards as a dry run: nobody was pinged, no roles moved, nothing pinned."
-MSG_LIVE_POSTED = "🏆 Posted {count} awards for real: winners pinged, award roles moved, ceremony pinned."
+MSG_DRY_RUN_POSTED = "🏆 Posted {count} awards as a dry run: nobody was pinged, no roles moved, nothing pinned"
+MSG_LIVE_POSTED = "🏆 Posted {count} awards for real: winners pinged, award roles moved, ceremony pinned"
 
 
 def _cand(

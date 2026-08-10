@@ -33,7 +33,7 @@ async def setup(bot: commands.Bot) -> None:
                            allowed_mentions=discord.AllowedMentions.none())
         contest = p0p1_contest.contest_to_advertise(datetime.now(SCHEDULE_TZ))
         if contest is None:
-            await ctx.send("No P0P1 contest in `p0p1_contests.json`.")
+            await ctx.send("No P0P1 contest in `p0p1_contests.json`")
             return
         for title, when in _p0p1_moments(contest):
             featured = p0p1_contest.featured_contest(when)

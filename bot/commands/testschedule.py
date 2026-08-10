@@ -103,7 +103,7 @@ async def setup(bot: commands.Bot) -> None:
         pod after another format, so a glyph of any width can be read against the words next to it."""
         code = pod_format.resolve_format_code(set_code)
         if code is None:
-            await ctx.send(f"`{set_code}` is not a registered set or cube.")
+            await ctx.send(f"`{set_code}` is not a registered set or cube")
             return
         await ctx.send("-# Pod reminder timeline. Constants live in `bot/services/pod_reminder_copy.py`")
         for label, body, embed in _reminder_timeline(ctx, code):
@@ -135,7 +135,7 @@ async def setup(bot: commands.Bot) -> None:
         card: a cube shows the cube-list line and plain roster columns, matching a format-locked pod."""
         code = pod_format.resolve_format_code(set_code)
         if code is None:
-            await ctx.send(f"`{set_code}` is not a registered set or cube.")
+            await ctx.send(f"`{set_code}` is not a registered set or cube")
             return
         event_time = datetime.now(SCHEDULE_TZ) + timedelta(hours=1)
         names = iter(HALL_OF_FAME)
@@ -187,7 +187,7 @@ async def setup(bot: commands.Bot) -> None:
         """Owner-only. Post the auto-grant announcement embed for each auto-granted role, to eyeball it."""
         guild = ctx.guild or ctx.bot.get_guild(settings.discord_guild_id)
         if guild is None:
-            await ctx.send("No guild available to resolve roles.")
+            await ctx.send("No guild available to resolve roles")
             return
         posted = 0
         for spec in PING_ROLES:
@@ -195,13 +195,13 @@ async def setup(bot: commands.Bot) -> None:
                 continue
             role = find_role(guild, spec.name)
             if role is None:
-                await ctx.send(f"No `{spec.name}` role on **{guild.name}** — create it first.")
+                await ctx.send(f"No `{spec.name}` role on **{guild.name}**, create it first")
                 continue
             embed = build_grant_embed(ctx.author.mention, role, spec)
             await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
             posted += 1
         if posted == 0:
-            await ctx.send("No auto-grant roles to preview.")
+            await ctx.send("No auto-grant roles to preview")
 
 
 def _table_plan_shapes() -> tuple[tuple[str, Attendance], ...]:

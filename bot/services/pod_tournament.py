@@ -123,33 +123,33 @@ MIDDLE = "middle"
 LAST_CHANCE = "last_chance"
 UNDECIDED = "undecided"
 GRACE_SECONDS = 60  # window after round completion during which edits regenerate the next round
-BRACKET_EDIT_BLOCKED_MSG = "That result can't be changed now — a later round already reported a result."
+BRACKET_EDIT_BLOCKED_MSG = "That result can't be changed now. A later round already reported a result"
 RESULT_CORRECTED_LEAD = "Result corrected:"
 RESULT_CLEARED_LEAD = "Result cleared:"
 ORGANIZER_CORRECTED_LEAD = "Result corrected by Organizer:"
-POD_RESULT_LOCKED_MSG = "This pod draft is finished. Results can no longer be changed."
+POD_RESULT_LOCKED_MSG = "This pod draft is finished. Results can no longer be changed"
 MANAGE_ROUND_CUSTOM_PREFIX = "podmanageround"
 ORGANIZER_ROLE_NAMES = frozenset({"admin", "moderator", "organizer"})
-MSG_FIX_NOT_ORGANIZER = "Only Organizers can reorganize a round's matches."
-MSG_FIX_NOT_POD_THREAD = "Open this from inside the pod-draft thread."
-MSG_FIX_NO_MATCHES = "This round has no matches to reorganize yet."
-MSG_FIX_PROMPT = "Reorganize Round {round_num} — pick a match, then set its players and result."
-MSG_PICK_ROUND = "Pick the round to reorganize."
+MSG_FIX_NOT_ORGANIZER = "Only Organizers can reorganize a round's matches"
+MSG_FIX_NOT_POD_THREAD = "Open this from inside the pod-draft thread"
+MSG_FIX_NO_MATCHES = "This round has no matches to reorganize yet"
+MSG_FIX_PROMPT = "Reorganize Round {round_num}: pick a match, then set its players and result"
+MSG_PICK_ROUND = "Pick the round to reorganize"
 PICK_ROUND_PLACEHOLDER = "Choose Round"
-MSG_FIX_SAME_PLAYER = "Pick two different players for the match."
-MSG_FIX_MATCH_GONE = "That match no longer exists — reopen the editor to see the current round."
+MSG_FIX_SAME_PLAYER = "Pick two different players for the match"
+MSG_FIX_MATCH_GONE = "That match no longer exists. Reopen the editor to see the current round"
 POD_PAIRING_FAILED_MSG = (
     "⚠️ Round {round_num} pairings couldn't be generated. Reported results are safe, but the next "
     "round won't post on its own. An Organizer needs to start it."
 )
-POD_ROSTER_TOO_SMALL_MSG = "⚠️ Not enough players to start the tournament — at least 2 are needed."
+POD_ROSTER_TOO_SMALL_MSG = "⚠️ At least 2 players are needed to start the tournament"
 POD_ROSTER_ODD_MSG = (
     "⚠️ Pairings need an even number of players, but {count} are in the pod. Pairings can't be "
-    "generated until the roster is evened out."
+    "generated until the roster is evened out"
 )
 POD_REPAIR_FAILED_MSG = (
     "⚠️ Round {round_num} couldn't be re-paired after the edit, so its previous pairings stand. "
-    "An Organizer should check the matchups."
+    "An Organizer should check the matchups"
 )
 ANNOUNCED_MAX_LOSSES = 1  # a 3-0 or 2-1 finish earns an announcement row; the thread keeps full standings
 FULL_FIELD_POD_SIZE = 4  # at or below this the announcement carries the whole pod, not only its top records
@@ -1534,7 +1534,7 @@ class FixPairingView(ui.View):
 
     async def _on_cancel(self, interaction: discord.Interaction) -> None:
         self.stop()
-        await interaction.response.edit_message(content="No changes made.", view=None)
+        await interaction.response.edit_message(content="No changes made", view=None)
 
     async def _on_save(self, interaction: discord.Interaction) -> None:
         if self.selected_match is None:
@@ -1798,12 +1798,12 @@ async def _refresh_round_message_after_edit(
 
 async def _handle_result_submission(interaction: discord.Interaction, value: str) -> None:
     if value == "placeholder":
-        await interaction.response.send_message("This dropdown isn't bound to a match yet.", ephemeral=True)
+        await interaction.response.send_message("This dropdown isn't bound to a match yet", ephemeral=True)
         return
     try:
         match_id, winner_name, score = value.split("|", 2)
     except ValueError:
-        await interaction.response.send_message("Malformed result option.", ephemeral=True)
+        await interaction.response.send_message("Malformed result option", ephemeral=True)
         return
 
     try:

@@ -2289,7 +2289,7 @@ class PodDraftManager:
                 try:
                     await thread.send(
                         f"⚠️ Could not start the draft: {error_text}\n"
-                        f"Use `/pod-takeover` to take control of the Draftmancer session manually."
+                        f"Use `/pod-takeover` to take control of the Draftmancer session manually"
                     )
                 except Exception:
                     log.warning("[DRAFT] start_failed.thread_post_error", exc_info=True)
@@ -2341,7 +2341,7 @@ class PodDraftManager:
         try:
             await thread.send(
                 f"⚠️ Pairings need an even number of players, but {count} are seated. "
-                "The draft won't start until the roster is evened out."
+                "The draft won't start until the roster is evened out"
             )
         except Exception:
             log.warning("[DRAFT] start_refused.thread_post_error", exc_info=True)
@@ -3560,12 +3560,12 @@ async def handle_format_poll_add(
     card. Codes can be comma or space separated. Unparseable input is refused ephemerally."""
     codes = pod_format_poll.normalize_write_ins(raw_code)
     if not codes:
-        await interaction.response.send_message("Enter set codes like DSK FIN MH3.", ephemeral=True)
+        await interaction.response.send_message("Enter set codes like DSK FIN MH3", ephemeral=True)
         return
     lock = _format_poll_click_locks.setdefault(event_id, asyncio.Lock())
     async with lock:
         if not message.embeds:
-            await interaction.response.send_message("This poll is no longer active.", ephemeral=True)
+            await interaction.response.send_message("This poll is no longer active", ephemeral=True)
             return
         new_embed, new_view, applied = _apply_format_poll_write_ins(
             event_id, message.embeds[0], interaction.user.mention, codes, interaction.user.display_name,
@@ -3578,9 +3578,9 @@ async def handle_format_poll_add(
             await message.edit(embed=new_embed, view=new_view)
         except discord.HTTPException:
             log.warning(f"[FORMAT_POLL] add_edit_failed event={event_id}", exc_info=True)
-            await interaction.response.send_message("Could not update the poll.", ephemeral=True)
+            await interaction.response.send_message("Could not update the poll", ephemeral=True)
             return
-        await interaction.response.send_message(f"Voted for {', '.join(applied)}.", ephemeral=True)
+        await interaction.response.send_message(f"Voted for {', '.join(applied)}", ephemeral=True)
 
 
 pod_format_poll.register_format_poll_click_handler(handle_format_poll_click)

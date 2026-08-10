@@ -361,8 +361,8 @@ def _build_live_test_manager(
 async def _refuse_if_prod(ctx) -> bool:
     if _looks_like_prod_db():
         await ctx.send(
-            "⚠️ Refusing — `DATABASE_URL` looks like prod. The live testlobby pod only runs against "
-            "the local dev DB."
+            "⚠️ Refusing, `DATABASE_URL` looks like prod. The live testlobby pod only runs against "
+            "the local dev DB"
         )
         return True
     return False
@@ -408,7 +408,7 @@ async def _reset_live_test_pods(ctx) -> None:
     }
     await _evict_managers(sorted(stale))
     await _delete_last_test_messages(ctx.channel)
-    await ctx.send(f"🧪 Cleared {len(stale)} leftover test pod(s).")
+    await ctx.send(f"🧪 Cleared {len(stale)} leftover test pod(s)")
 
 
 def _top_ranked_names_sync(n: int) -> list[str]:
@@ -430,7 +430,7 @@ async def _post_test_seeding(ctx, count: int = 8) -> None:
     local DB only."""
     ranked = await asyncio.to_thread(_top_ranked_names_sync, count)
     if not ranked:
-        await ctx.send("No ranked players in the local DB — run seed_local_players + refresh_stats first.")
+        await ctx.send("No ranked players in the local DB, run seed_local_players + refresh_stats first")
         return
     yes = ranked[:count]
     yes += [f for f in _SEEDING_FILLERS if f not in yes][: max(0, count - len(yes))]
@@ -477,10 +477,10 @@ async def _preview_link_dms(ctx) -> None:
         note = "" if handle else " (no Arena linked, so the linked DM used a placeholder handle)"
         await ctx.send(f"🧪 Sent {landed}/2 link DMs to your DMs.{note}")
     else:
-        await ctx.send("⚠️ Couldn't DM you — open DMs from server members and try again.")
+        await ctx.send("⚠️ Couldn't DM you, open DMs from server members and try again")
 
 
-_TEST_LOBBY_THREAD_NAME = "Pod Draft — Test"
+_TEST_LOBBY_THREAD_NAME = "Pod Draft Test"
 
 
 async def _preview_full_lobby(ctx) -> None:
@@ -503,9 +503,9 @@ async def _preview_full_lobby(ctx) -> None:
         recipients=[(str(ctx.author.id), ctx.author.display_name, "yes")],
     )
     if sent:
-        await ctx.send(f"🧪 Opened {thread.mention} and sent your lobby DM.")
+        await ctx.send(f"🧪 Opened {thread.mention} and sent your lobby DM")
     else:
-        await ctx.send(f"🧪 Opened {thread.mention}. No DM sent — Draft DMs off or your DMs are closed.")
+        await ctx.send(f"🧪 Opened {thread.mention}. No DM sent, Draft DMs off or your DMs are closed")
 
 
 async def _clear_test_lobby_threads(parent) -> None:
@@ -562,9 +562,9 @@ async def _start_live_test_lobby(ctx) -> None:
         event_name="Testlobby Live Pod", draftmancer_url=url,
     )
     if manager is None:
-        await ctx.send("⚠️ Could not connect to Draftmancer — see logs.")
+        await ctx.send("⚠️ Could not connect to Draftmancer, see logs")
         return
-    await ctx.send(f"🧪 Connected to Draftmancer `{session_id}`.")
+    await ctx.send(f"🧪 Connected to Draftmancer `{session_id}`")
 
 
 async def _arm_fake_six_player_lobby(ctx) -> PodDraftManager | None:
@@ -592,7 +592,7 @@ async def _arm_pod_team_command(ctx) -> None:
     manager = await _arm_fake_six_player_lobby(ctx)
     if manager is None:
         return
-    await ctx.send(f"🧪 Fake {len(manager.session_users)}-player lobby armed. Run `/pod-team` here.")
+    await ctx.send(f"🧪 Fake {len(manager.session_users)}-player lobby armed. Run `/pod-team` here")
 
 
 async def _run_auto_team_pairing(ctx) -> None:
@@ -1021,7 +1021,7 @@ class _AddFormatPreviewModal(discord.ui.Modal, title=pod_format_poll.ADD_MODAL_T
     async def on_submit(self, interaction: discord.Interaction) -> None:
         codes = pod_format_poll.normalize_write_ins(str(self.code.value))
         if not codes:
-            await interaction.response.send_message("Enter set codes like DSK FIN MH3.", ephemeral=True)
+            await interaction.response.send_message("Enter set codes like DSK FIN MH3", ephemeral=True)
             return
         name = interaction.user.display_name
         for code in codes:
@@ -1888,7 +1888,7 @@ async def setup(bot: commands.Bot) -> None:
                     f"{await build_room_offer_message(room)}"
                 )
             if len(rooms) < 2:
-                await ctx.send(f"(only {len(rooms)} free numbered voice rooms — a team draft falls back)")
+                await ctx.send(f"(only {len(rooms)} free numbered voice rooms, a team draft falls back)")
             channel = pod_voice_channel(ctx.guild)
             if channel is None:
                 await ctx.send(f"(no '{settings.pod_draft_voice_channel_name}' voice channel in this server)")

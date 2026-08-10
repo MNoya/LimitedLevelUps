@@ -136,7 +136,7 @@ class FormatWriteInModal(ui.Modal, title="Write in a set code"):
         typed = self.code.value.strip().upper()
         if not typed.isalnum():
             await interaction.response.send_message(
-                f"⚠️ `{self.code.value}` isn't a valid set code — use letters and numbers only.",
+                f"⚠️ `{self.code.value}` isn't a valid set code. Use letters and numbers only",
                 ephemeral=True,
             )
             return

@@ -107,7 +107,7 @@ class SeatOrderModal(ui.Modal, title="Seat Order"):
         self.on_seated = on_seated
         default = "\n".join(labels)
         self.entry = ui.TextInput(
-            label="Seat 1 at the top — one player per line",
+            label="Seat 1 at the top, one player per line",
             style=discord.TextStyle.paragraph,
             default=default,
             required=True,
@@ -126,7 +126,7 @@ class SeatOrderModal(ui.Modal, title="Seat Order"):
             await interaction.followup.send(f"⚠️ {apply_err}", ephemeral=True)
             return
         new_labels = [self.labels[self.current_order.index(name)] for name in reordered]
-        await interaction.followup.send("Seating updated.", ephemeral=True)
+        await interaction.followup.send("Seating updated", ephemeral=True)
         if self.on_seated is not None:
             await self.on_seated(interaction, new_labels)
 
@@ -144,7 +144,7 @@ class SeatOrderButton(ui.Button):
         order = await self.seat_order_provider()
         if len(order) < 2:
             await interaction.response.send_message(
-                "Need at least 2 players in the Draftmancer lobby to set seating.", ephemeral=True)
+                "Need at least 2 players in the Draftmancer lobby to set seating", ephemeral=True)
             return
         current_order = [name for name, _ in order]
         labels = [lbl for _, lbl in order]

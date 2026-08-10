@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 MSG_SIGNED_OUT = (
     "🧎‍♂️ You've retired from the leaderboard. Run `/join` anytime to return. To wipe your data entirely, run `/exile`."
 )
-MSG_ALREADY_INACTIVE = "You're already retired. Run `/join` to return."
+MSG_ALREADY_INACTIVE = "You're already retired. Run `/join` to return"
 
 
 SignoutKind = Literal["signed_out", "not_registered", "already_inactive"]

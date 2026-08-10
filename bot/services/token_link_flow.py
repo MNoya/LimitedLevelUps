@@ -41,13 +41,13 @@ INSTRUCTIONS = (
     + tmsg.TOKEN_PRIVACY_NOTE
 )
 
-MSG_DM_SENT = "📬 Check your DMs to finish linking 17lands."
-MSG_TIMEOUT = "⏱️ Timed out. Run `/link-17lands` whenever you're ready to try again."
+MSG_DM_SENT = "📬 Check your DMs to finish linking 17lands"
+MSG_TIMEOUT = "⏱️ Timed out. Run `/link-17lands` whenever you're ready to try again"
 MSG_LINK_OFF_BOARD = f"17lands linked! Want to join the [live leaderboard](<{LEADERBOARD_URL}>)?"
 MSG_LINK_ON_BOARD = "updated!"
-MSG_LEFT = "👋 You've left the leaderboard. Your games still count for pods — run `/join` anytime to return."
-MSG_STAYED_OFF = "👍 You're off the leaderboard. Your games are still tracked for pods, and you can `/join` anytime."
-MSG_STAYED_ON = "👍 You're still on the leaderboard."
+MSG_LEFT = "👋 You've left the leaderboard. Run `/join` anytime to return"
+MSG_STAYED_OFF = "👍 You're off the leaderboard. Run `/join` anytime"
+MSG_STAYED_ON = "👍 You're still on the leaderboard"
 
 
 async def start_link_17lands_flow(

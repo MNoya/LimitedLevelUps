@@ -378,7 +378,7 @@ async def setup(bot: commands.Bot) -> None:
         """Sync every Server Guide channel and report per-channel results."""
         guild = bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
         if guild is None:
-            await ctx.send("⚠️ Guild unavailable.")
+            await ctx.send("⚠️ Guild unavailable")
             return
         groups = pages_by_channel()
         results = [await sync_channel(guild, channel, pages) for channel, pages in groups]

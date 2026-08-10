@@ -68,11 +68,11 @@ QUEUE_FIRED = "Join {thread}"
 QUEUE_CREATING = "Creating the lobby..."
 QUEUE_CLOSED_INACTIVE = "**Closed** after {window} of inactivity"
 QUEUE_CLOSED_MANUAL = "**Closed** {when}"
-QUEUE_CANCEL_CONFIRM = "Last one in the queue, please confirm."
-QUEUE_CANCEL_KEPT = "Still in the queue."
-QUEUE_CANCEL_LEFT = "Someone else joined, so you left and the queue stays open."
+QUEUE_CANCEL_CONFIRM = "Last one in the queue, please confirm"
+QUEUE_CANCEL_KEPT = "Still in the queue"
+QUEUE_CANCEL_LEFT = "Someone else joined, so you left and the queue stays open"
 QUEUE_INSTRUCTIONS = (
-    "- Hit **Join** if you can draft right now. **Leave** when you no longer can.\n"
+    "- Hit **Join** if you can draft right now. **Leave** when you no longer can\n"
     f"- {MSG_LOBBY_GATHERING}"
 )
 QUEUE_CLOSES = "Closes after {window} of inactivity"
@@ -89,19 +89,19 @@ MAX_JOINABLE_LINES = 3
 SET_PLACEHOLDER = "Choose the set"
 WHEN_PLACEHOLDER = "When to draft"
 LAUNCHER_TITLE = "### Start a Pod Draft"
-LAUNCHER_PROMPT = "Set your options below, then open a queue now or schedule a pod for later."
+LAUNCHER_PROMPT = "Set your options below, then open a queue now or schedule a pod for later"
 LAUNCHER_JOIN_HINT = "Join an existing pod instead of starting a new one:"
 LAUNCHER_QUEUE_NAME = "{set_code} Pod Draft Queue"
 LAUNCHER_JOINABLE_LINE = "⚡ **[{name}]({url})**{emoji} {count} waiting"
-LAUNCHER_MORE_LINE = "And {count} more."
+LAUNCHER_MORE_LINE = "And {count} more"
 CHAT_ANNOUNCE_SCHEDULED = "{mention} used `/draft`: **{name}** <t:{unix}:R> {manat} [**Sign up here**]({url})"
 CHAT_ANNOUNCE_QUEUE = "{mention} used `/draft`: **{name}** {manat} [**Join here**]({url})"
 LAUNCHER_OPENING = "⏳ Opening the queue..."
 LAUNCHER_SCHEDULING = "⏳ Creating the pod..."
 LAUNCHER_SCHEDULED = "Scheduled for {when}. RSVP card posted: {url}"
-LAUNCHER_SCHEDULE_FAILED = "The scheduled pod card could not be posted. Try again."
-LAUNCHER_SCHEDULE_NO_CHANNEL = "The pod coordination channel could not be reached."
-WHEN_MODAL_BAD_TIME = "Enter a future time like Today 7pm, tomorrow 8:30pm, Fri 9pm, or +3h."
+LAUNCHER_SCHEDULE_FAILED = "The scheduled pod card could not be posted. Try again"
+LAUNCHER_SCHEDULE_NO_CHANNEL = "The pod coordination channel could not be reached"
+WHEN_MODAL_BAD_TIME = "Enter a future time like Today 7pm, tomorrow 8:30pm, Fri 9pm, or +3h"
 
 
 class PodQueueActions(discord.ui.ActionRow):
@@ -136,7 +136,7 @@ class _QueueCancelConfirm(discord.ui.View):
             pod_launch.resolve_last_leave_sync, str(self.card.id), str(interaction.user.id),
         )
         if resolution.outcome == pod_launch.LEAVE_GONE:
-            await interaction.response.edit_message(content="This queue already closed.", view=None)
+            await interaction.response.edit_message(content="This queue already closed", view=None)
             return
         mention = role_mention_for(interaction.guild, resolution.notify_role)
         if resolution.outcome == pod_launch.LEAVE_LEFT:
@@ -262,10 +262,10 @@ async def _handle_click(interaction: discord.Interaction, action: str) -> None:
         message_id, QUEUE_BUCKET, str(interaction.user.id), interaction.user.display_name, action,
     )
     if result is None:
-        await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
+        await interaction.response.send_message("This queue is no longer active", ephemeral=True)
         return
     if result.closed:
-        await interaction.response.send_message("This queue already closed.", ephemeral=True)
+        await interaction.response.send_message("This queue already closed", ephemeral=True)
         return
     if not result.changed:
         note = "You're already in the queue." if action == "join" else "You're not in the queue."
@@ -636,7 +636,7 @@ class _LauncherTimerModal(discord.ui.Modal, title="Pick timer"):
         raw = self.seconds.value.strip()
         if not raw.isdigit() or not (TIMER_MIN <= int(raw) <= TIMER_MAX):
             await interaction.response.send_message(
-                f"⚠️ Enter a whole number of seconds between {TIMER_MIN} and {TIMER_MAX}.", ephemeral=True,
+                f"⚠️ Enter a whole number of seconds between {TIMER_MIN} and {TIMER_MAX}", ephemeral=True,
             )
             return
         self.launcher.pick_timer = int(raw)

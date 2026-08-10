@@ -28,9 +28,9 @@ from bot.sets import active_set_code, set_name_for
 FORMAT_POLL_PROMPT = "🗳️ Format Vote!"
 FORMAT_POLL_GATHERING = "Vote for anything you would play"
 FORMAT_POLL_CLOSED = "Voting closed. The tally below is final"
-MSG_VOTE_POSTED = "Format Vote posted."
-MSG_VOTE_ALREADY_UP = "A Format Vote is already up here."
-MSG_VOTE_POST_FAILED = "Could not post the Format Vote. Try again."
+MSG_VOTE_POSTED = "Format Vote posted"
+MSG_VOTE_ALREADY_UP = "A Format Vote is already up here"
+MSG_VOTE_POST_FAILED = "Could not post the Format Vote. Try again"
 CHANNEL_POLL_ID_PREFIX = "channel-"
 ANY_FLASHBACK_CODE = "FLASH"
 ANY_FLASHBACK_LABEL = "Any Flashback"
@@ -330,7 +330,7 @@ class FormatPollButton(
     async def callback(self, interaction: discord.Interaction) -> None:
         if _click_handler is None:
             await interaction.response.send_message(
-                "This pod is no longer taking format votes.", ephemeral=(interaction.guild is not None),
+                "This pod is no longer taking format votes", ephemeral=(interaction.guild is not None),
             )
             return
         await _click_handler(interaction, self.event_id, self.code)
@@ -361,7 +361,7 @@ class AddFormatModal(ui.Modal, title=ADD_MODAL_TITLE):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         if _add_handler is None:
             await interaction.response.send_message(
-                "This pod is no longer taking new formats.", ephemeral=(interaction.guild is not None),
+                "This pod is no longer taking new formats", ephemeral=(interaction.guild is not None),
             )
             return
         await _add_handler(interaction, self.event_id, str(self.code.value), self.message)

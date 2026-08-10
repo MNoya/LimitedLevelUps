@@ -17,10 +17,10 @@ from bot.services.pod_launch import REMINDER_LEAD_MIN
 from bot.sets import active_set_code
 
 
-MSG_GATHERING_INTRO = "Pick your format below. The ready check posts {lead} minutes before start."
-MSG_READY_INTRO = "Press a table to claim your seat. A table locks at {seats} seats."
+MSG_GATHERING_INTRO = "Pick your format below. The ready check posts {lead} minutes before start"
+MSG_READY_INTRO = "Press a table to claim your seat. A table locks at {seats} seats"
 MSG_FLEX_FOOTER = "✨ counts toward either table"
-MSG_NO_TABLE_YET = "No table has {seats} players yet."
+MSG_NO_TABLE_YET = "No table has {seats} players yet"
 
 TIME_FIELD = "Time"
 WAITING_FIELD = "🕐 Not Pressed ({count})"

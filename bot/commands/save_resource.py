@@ -38,10 +38,10 @@ SELECT_OPTION_LIMIT = 25
 CANDIDATE_SCAN_LIMIT = 25
 EXISTING_SCAN_LIMIT = 10
 
-MSG_NO_FORUM = "No resources channel found in this server — expected a forum channel with `-resources` in its name."
+MSG_NO_FORUM = "No resources channel found in this server. Expected a forum channel with `-resources` in its name"
 MSG_ALREADY_SAVED = "This post was already saved to {channel}. Save it again anyway?"
-MSG_SAVED = "📚 Saved [this post]({post}) to {thread}."
-MSG_UPDATED = "📚 Updated {thread} from [this post]({post})."
+MSG_SAVED = "📚 Saved [this post]({post}) to {thread}"
+MSG_UPDATED = "📚 Updated {thread} from [this post]({post})"
 
 
 @app_commands.context_menu(name="📚 Save Resource")
@@ -227,7 +227,7 @@ class _SaveAnywayView(ui.View):
 
     @ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        await interaction.response.edit_message(content="Canceled.", view=None)
+        await interaction.response.edit_message(content="Canceled", view=None)
 
 
 def _build_tag_select(forum: discord.ForumChannel, selected_ids: set[int]) -> ui.Select | None:

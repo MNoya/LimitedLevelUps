@@ -347,7 +347,7 @@ async def setup(bot: commands.Bot) -> None:
                 if code:
                     formats.append(code)
         if not isinstance(ctx.channel, discord.TextChannel):
-            await ctx.send("Run `!test launcher` in a server text channel — the pod thread is created there.")
+            await ctx.send("Run `!test launcher` in a server text channel")
             return
         now = datetime.now(SCHEDULE_TZ)
         today = now.date()
@@ -363,7 +363,7 @@ async def setup(bot: commands.Bot) -> None:
             ctx.bot, ctx.channel, set_code=set_code, event_time=slot_time, name=name, ping_role=False,
         )
         if event_id is None:
-            await ctx.send("Could not stage the reflected scheduled pod. Check the logs.")
+            await ctx.send("Could not stage the reflected scheduled pod. Check the logs")
             return
         if fill > 0:
             await _seed_fake_yes(ctx.channel, event_id, slot_time, name, range(fill))
@@ -373,7 +373,7 @@ async def setup(bot: commands.Bot) -> None:
             if organized:
                 staged.append(organized)
         await ctx.send(
-            f"Staged **{'** and **'.join(staged)}** at {reflect.name}; posting the live launcher for that day."
+            f"Staged **{'** and **'.join(staged)}** at {reflect.name}; posting the live launcher for that day"
         )
         message = await post_launcher(ctx.bot, ctx.channel, target_day)
         if message is not None:
@@ -393,7 +393,7 @@ async def setup(bot: commands.Bot) -> None:
         `force early` the early one, so the cards can be eyeballed side by side."""
         board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
         if board is None:
-            await ctx.send("No launcher board is live. Run `!test poll` first.")
+            await ctx.send("No launcher board is live. Run `!test poll` first")
             return
         _guild_id, _channel_id, message_id, board_day = board
         lowered = {arg.lower() for arg in args}
@@ -417,17 +417,17 @@ async def setup(bot: commands.Bot) -> None:
         if "early" in lowered:
             posted = await resurface_board_after_the_early_pods(ctx.bot, board_day, force=True)
             if not posted:
-                await ctx.send("Could not resurface the board. Check the logs.")
+                await ctx.send("Could not resurface the board. Check the logs")
                 return
-            await ctx.send(f"Forced the early resurface: reposted {board_day} and deleted the old board.")
+            await ctx.send(f"Forced the early resurface: reposted {board_day} and deleted the old board")
             return
         next_day = board_day + timedelta(days=1)
         message = await post_launcher(ctx.bot, ctx.channel, next_day, ping=False, graduate=False)
         if message is None:
-            await ctx.send("Could not post the repost. Check the logs.")
+            await ctx.send("Could not post the repost. Check the logs")
             return
         await close_launcher_for_date(ctx.bot, board_day)
-        await ctx.send(f"Forced the evening repost: posted {next_day} and retired {board_day}.")
+        await ctx.send(f"Forced the evening repost: posted {next_day} and retired {board_day}")
 
     @test_group.command(name="reset")
     @commands.is_owner()
@@ -442,13 +442,13 @@ async def setup(bot: commands.Bot) -> None:
         The database side is done before the reply lands, so the next `!test` command can be typed
         straight away. Discord is swept behind it, bounded to what was already there."""
         if ctx.guild is None:
-            await ctx.send("Run `!test reset` in the test server, so the signals it clears are scoped to it.")
+            await ctx.send("Run `!test reset` in the test server, so the signals it clears are scoped to it")
             return
         guild_id = str(ctx.guild.id)
         reset = await asyncio.to_thread(pod_launch.reset_ondemand_signals_sync, guild_id)
         notice = await ctx.send(
             f"Cleared on-demand pod signals: {reset.signals} signals, {reset.members} members, "
-            f"{reset.events} pods. Sweeping Discord."
+            f"{reset.events} pods. Sweeping Discord"
         )
         run_detached(_sweep_test_surfaces(ctx, reset, notice), "the !test reset sweep")
 
@@ -458,10 +458,10 @@ async def setup(bot: commands.Bot) -> None:
         """Owner-only. Post slot buttons that replay the first-pod welcome and role-grant a new drafter
         sees, addressed to whoever clicks."""
         if ctx.guild is None:
-            await ctx.send("Run `!test welcome` in the server so the role pills resolve.")
+            await ctx.send("Run `!test welcome` in the server so the role pills resolve")
             return
         await ctx.send(
-            "Click a slot to see the first-pod welcome and role-grant a new drafter gets.",
+            "Click a slot to see the first-pod welcome and role-grant a new drafter gets",
             view=WelcomePreviewView(),
         )
 
@@ -477,7 +477,7 @@ async def setup(bot: commands.Bot) -> None:
         Team Draft through the real persist-and-refresh path, so the ` - Team Draft` title marker can
         be eyeballed without a live lobby vote."""
         if not isinstance(ctx.channel, discord.TextChannel):
-            await ctx.send("Run `!test rsvp` in a server text channel — the thread is created there.")
+            await ctx.send("Run `!test rsvp` in a server text channel")
             return
         event_time = datetime.now(SCHEDULE_TZ) + timedelta(minutes=minutes)
         set_code = active_set_code()
@@ -486,7 +486,7 @@ async def setup(bot: commands.Bot) -> None:
             ctx.bot, ctx.channel, set_code=set_code, event_time=event_time, name=name,
         )
         if event_id is None:
-            await ctx.send("Could not create the scheduled card. Check the logs.")
+            await ctx.send("Could not create the scheduled card. Check the logs")
             return
         if fill > 0:
             await _seed_fake_yes(ctx.channel, event_id, event_time, name, range(fill))
@@ -509,7 +509,7 @@ async def setup(bot: commands.Bot) -> None:
         Thirteen is the smallest count that splits into two tables. Ten or fewer never holds at all, which
         is worth seeing too: pass `players` under eleven and the lobby opens the moment the fork runs."""
         if not isinstance(ctx.channel, discord.TextChannel):
-            await ctx.send("Run `!test hold` in a server text channel — the thread is created there.")
+            await ctx.send("Run `!test hold` in a server text channel")
             return
         event_time = datetime.now(SCHEDULE_TZ) + timedelta(minutes=minutes)
         set_code = active_set_code()
@@ -518,7 +518,7 @@ async def setup(bot: commands.Bot) -> None:
             ctx.bot, ctx.channel, set_code=set_code, event_time=event_time, name=name,
         )
         if event_id is None:
-            await ctx.send("Could not create the scheduled card. Check the logs.")
+            await ctx.send("Could not create the scheduled card. Check the logs")
             return
         _stand_down_armed_open(ctx.bot, event_id)
         await _seed_fake_yes(ctx.channel, event_id, event_time, name, range(players))
@@ -615,7 +615,7 @@ async def setup(bot: commands.Bot) -> None:
         path. The offer only appears when `yes` is exactly six. Pass `preseed` to prefill that many votes on
         the card so a single real click locks the pod to Team Draft solo."""
         if not isinstance(ctx.channel, discord.TextChannel):
-            await ctx.send("Run `!test teamoffer` in a server text channel — the thread is created there.")
+            await ctx.send("Run `!test teamoffer` in a server text channel")
             return
         event_time = datetime.now(SCHEDULE_TZ) + timedelta(minutes=60)
         set_code = active_set_code()
@@ -624,7 +624,7 @@ async def setup(bot: commands.Bot) -> None:
             ctx.bot, ctx.channel, set_code=set_code, event_time=event_time, name=name,
         )
         if event_id is None:
-            await ctx.send("Could not create the scheduled card. Check the logs.")
+            await ctx.send("Could not create the scheduled card. Check the logs")
             return
         if yes > 0:
             await _seed_fake_yes(ctx.channel, event_id, event_time, name, range(yes))
@@ -656,7 +656,7 @@ async def setup(bot: commands.Bot) -> None:
         exclusives first so a flexible player's press lands last; the thread renames when the first table
         locks. Scenarios: simple, deadlock, swing, split. No signals or lobbies are created."""
         if not isinstance(ctx.channel, discord.TextChannel):
-            await ctx.send("Run `!test gather` in a server text channel — the preview creates a thread.")
+            await ctx.send("Run `!test gather` in a server text channel")
             return
         key = scenario.lower()
         if key not in _GATHER_SCENARIOS:
@@ -779,7 +779,7 @@ async def _preseed_table_claims(event_id: str, *, first_leftover: int, count: in
 _GATHER_SLOT_LABEL = "Late"
 _ANY = (fi.LATEST, fi.FLASHBACK)
 _BENCH_RANKINGS = (("DSK",), ("FIN", "DSK"), ("MH3", "DSK"))
-MSG_NO_PRESSER = "No eligible player is waiting."
+MSG_NO_PRESSER = "No eligible player is waiting"
 
 _GATHER_SCENARIOS: dict[str, list[tuple[str, tuple[str, ...], tuple[str, ...]]]] = {
     "simple": [
@@ -851,7 +851,7 @@ _GATHER_BLURBS = {
 _GATHER_DIRECTOR_NOTE = (
     "**Simulator controls.** The anchor card's buttons are the player surface: one click there adds one "
     "simulated signup with that pick. Ready Check posts the seat-claim card in this thread, where the "
-    "real T-10 job would. Reset restarts the scenario; earlier ready checks go stale."
+    "real T-10 job would. Reset restarts the scenario; earlier ready checks go stale"
 )
 
 
@@ -996,7 +996,7 @@ class _GatherDirectorView(discord.ui.View):
     async def reset(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         self.state.reset()
         await self.card.edit(embed=self.state.gathering_embed())
-        await interaction.response.send_message("Scenario reset.", ephemeral=True)
+        await interaction.response.send_message("Scenario reset", ephemeral=True)
 
 
 class _GatherReadyView(discord.ui.View):
@@ -1133,7 +1133,7 @@ async def _sweep_test_surfaces(ctx: commands.Context, reset, notice: discord.Mes
         await notice.edit(content=(
             f"{notice.content.removesuffix(' Sweeping Discord.')} Deleted {purged + cards} messages and "
             f"{by_row + by_owner} pod threads, removed {events} scheduled events from the calendar, and "
-            f"stripped {roles_removed} of your pod roles."
+            f"stripped {roles_removed} of your pod roles"
         ))
 
 

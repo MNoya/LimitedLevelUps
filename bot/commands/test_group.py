@@ -37,7 +37,7 @@ PRODUCTION_SAFE_TESTS = frozenset({
 
 MSG_TEST_PRODUCTION_BLOCKED = (
     "`!test {name}` creates real pods, signals, or roles, so it is disabled on the production guild. "
-    "Run it in the test server."
+    "Run it in the test server"
 )
 
 TestFallback = Callable[[commands.Context, str, str], Awaitable[None]]

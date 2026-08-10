@@ -51,12 +51,12 @@ DescriptionApply = Callable[[discord.Interaction, str | None], Awaitable[None]]
 LINK_SEAT_PROMPT = "Pick the unlinked Draftmancer seat to assign:"
 
 CANCEL_PROMPT = (
-    "This permanently deletes **{name}** — participants, matches, replays, and the leaderboard page. "
-    "This can't be undone."
+    "This permanently deletes **{name}**: participants, matches, replays and the leaderboard page. "
+    "This can't be undone"
 )
 CANCEL_PROMPT_MOCK = "This closes **{name}** and deletes its draft page"
 
-RESTART_PROMPT = "This stops the draft and reopens the lobby. Every pick made so far is lost."
+RESTART_PROMPT = "This stops the draft and reopens the lobby. Every pick made so far is lost"
 
 TIMER_FIELD = "Seconds Per Pick"
 PACKS_FIELD = "Packs Per Player"
@@ -654,7 +654,7 @@ class _KickPlayerButton(ui.Button):
         targets = view.kick_targets_provider()
         if not targets:
             await interaction.response.send_message(
-                "No players or spectators in the Draftmancer session.", ephemeral=True,
+                "No players or spectators in the Draftmancer session", ephemeral=True,
             )
             return
         await interaction.response.send_message(
@@ -697,7 +697,7 @@ class _LinkPlayersButton(ui.Button):
         targets = await view.link_targets_provider()
         if not targets:
             await interaction.response.send_message(
-                "Everyone in the Draftmancer session is already linked.", ephemeral=True,
+                "Everyone in the Draftmancer session is already linked", ephemeral=True,
             )
             return
         await interaction.response.send_message(
@@ -772,7 +772,7 @@ class _LinkConfirmButton(ui.Button):
         view: LinkSeatSelectView = self.view
         if view.selected_seat is None or view.selected_member is None:
             await interaction.response.send_message(
-                "Pick a seat and a member first.", ephemeral=True,
+                "Pick a seat and a member first", ephemeral=True,
             )
             return
         member = view.selected_member
@@ -783,7 +783,7 @@ class _LinkConfirmButton(ui.Button):
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
             return
         await interaction.edit_original_response(
-            content=f"🔗 **{member.display_name}** linked as `{arena_name}`.", view=None,
+            content=f"🔗 **{member.display_name}** linked as `{arena_name}`", view=None,
         )
         await interaction.channel.send(
             link_notice(actor_label(interaction), member.mention, arena_name),
@@ -826,7 +826,7 @@ class _RestartConfirmView(ui.View):
         if err:
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
             return
-        await interaction.edit_original_response(content="♻️ Draft stopped. Watch the thread.", view=None)
+        await interaction.edit_original_response(content="♻️ Draft stopped", view=None)
 
 
 class _CancelDraftButton(ui.Button):
@@ -861,7 +861,7 @@ class _CancelConfirmView(ui.View):
         if err:
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
             return
-        await interaction.edit_original_response(content=f"🗑️ **{self.event_name}** deleted.", view=None)
+        await interaction.edit_original_response(content=f"🗑️ **{self.event_name}** deleted", view=None)
         channel = self.notice_channel or interaction.channel
         if channel is not None:
             await channel.send(cancel_notice(actor_label(interaction)))

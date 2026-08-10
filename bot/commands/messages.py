@@ -1,26 +1,26 @@
 """Single source of truth for shared user-facing message strings, used across multiple commands and listeners."""
 
-MSG_JOINED_LEADERBOARD = "🎉 Welcome aboard! Run `/help` to see what you can do."
-MSG_NOT_REGISTERED = "You're not on the leaderboard. Run `/join` to get started."
+MSG_JOINED_LEADERBOARD = "🎉 Welcome aboard! Run `/help` to see what you can do"
+MSG_NOT_REGISTERED = "You're not on the leaderboard. Run `/join` to get started"
 MSG_NOT_ON_BOARD = "You're not on the leaderboard"
 MSG_NOW_HIDDEN = (
     "🕵️ Your rank is now hidden. [Your profile]({profile_url}) and trophies stay visible. "
     "Run `/join` anytime to show your rank again."
 )
-MSG_ALREADY_HIDDEN = "Your rank is already hidden. Run `/join` to show it again."
-MSG_RANKED_AGAIN = "👋 Your rank is back in the standings."
+MSG_ALREADY_HIDDEN = "Your rank is already hidden. Run `/join` to show it again"
+MSG_RANKED_AGAIN = "👋 Your rank is back in the standings"
 MSG_TOKEN_INVALIDATED = (
     "⚠️ Your 17lands token appears to be invalid (possibly regenerated). "
-    "Please use `/link-17lands` to provide your new token."
+    "Please use `/link-17lands` to provide your new token"
 )
 MSG_ADMIN_ONLY = "This command is reserved for the bot Admin"
 
 MSG_CARD_CREATED_BY = "Created by {name}"
 
-MSG_MOCK_NOT_TEXT_CHANNEL = "Run `/mock-draft` in a server text channel — the thread is created there."
-MSG_MOCK_UNKNOWN_SET = "Unknown set `{code}`. Pick one from the suggestions, or use a registered cube format."
-MSG_MOCK_NONE_RUNNING = "No mock draft is open right now. Start one with `/mock-draft`."
-MSG_MOCK_REPOST_FAILED = "Could not repost the mock draft card. Check that the bot can post in this channel."
+MSG_MOCK_NOT_TEXT_CHANNEL = "Run `/mock-draft` in a server text channel"
+MSG_MOCK_UNKNOWN_SET = "Unknown set `{code}`. Pick one from the suggestions, or use a registered cube format"
+MSG_MOCK_NONE_RUNNING = "No mock draft is open right now. Start one with `/mock-draft`"
+MSG_MOCK_REPOST_FAILED = "Could not repost the mock draft card. Check that the bot can post in this channel"
 MSG_MOCK_COMPLETE = "✅ **{event_name} complete!** [**Draft Recap here**](<{url}>) {manat}"
 MSG_MOCK_COMPLETE_CHANNEL = "✅ **{event_name} complete!**"
 MSG_MOCK_CLOSED_IDLE = (
@@ -97,7 +97,7 @@ MSG_SHAPE_TABLE_ONE = "1 table of {size}"
 MSG_SHAPE_TABLE_MANY = "{count} tables of {size}"
 MSG_SHAPE_TEAM_DRAFT = "a 6p team draft"
 MSG_SHAPE_JOIN = " and "
-MSG_BOT_RECONNECTED = "🤖 Bot reconnected — back to managing the lobby."
+MSG_BOT_RECONNECTED = "🤖 Bot reconnected"
 
 MSG_JOIN_DRAFT_BUTTON = "Join Draft"
 MSG_JOIN_LINE = (
@@ -128,8 +128,8 @@ MSG_DM_NOTIFY_HINT = "-# Manage your notifications with `/roles`"
 MSG_DM_PREF_ON_TITLE = "🔔 Draft DMs On"
 MSG_DM_PREF_ON_BODY = "You'll get your Draftmancer link by DM when a Pod Draft is ready"
 MSG_DM_PREF_OFF_TITLE = "🔕 Draft DMs Off"
-MSG_DM_PREF_OFF_BODY = "You won't get your Draftmancer link by DM anymore.\nRun `/roles` to manage your notifications."
-MSG_DRAFTMANCER_LINK_LEAD = "Draftmancer link will be posted {lead} minutes before."
+MSG_DM_PREF_OFF_BODY = "You won't get your Draftmancer link by DM anymore\nRun `/roles` to manage your notifications"
+MSG_DRAFTMANCER_LINK_LEAD = "Draftmancer link will be posted {lead} minutes before"
 
 MSG_POD_WELCOME = (
     "### 👋 Welcome {user} to {pod_drafters}\n\n"
@@ -146,9 +146,9 @@ MSG_ARENA_ALREADY_LINKED_NOTE = "Currently linked as {emoji} **{arena_name}**\nS
 MSG_ARENA_LINK_CTA = "Please link your Arena handle so the bot knows it's you when joining the lobby"
 MSG_POD_ROLE_GRANTED = "{subject} now on {role} and will be notified {ping}"
 MSG_POD_NO_MATCH_TO_REPORT = (
-    "No pod draft match to report right now. Reporting opens when your round's pairings post."
+    "No pod draft match to report right now. Reporting opens when your round's pairings post"
 )
-MSG_POD_RESULT_ALREADY_RECORDED = "Round {round_num} recorded. Nothing else to report right now."
+MSG_POD_RESULT_ALREADY_RECORDED = "Round {round_num} recorded. Nothing else to report right now"
 MSG_FORMAT_PREFERENCE_BUTTON = "Format Preference"
 MSG_DRAFT_STARTS = "Scheduled for <t:{unix}:F> (<t:{unix}:R>)"
 MSG_POD_ADDED = "✅ Added to {name}"
@@ -162,12 +162,12 @@ MSG_YOUR_CUBES_LINE = "**Your Cubes:** {cubes}"
 
 MSG_TABLE_NO_SOURCE = "Run `/pod-table` in a pod-draft thread, or pass an `event` to pick the pod"
 MSG_TABLE_UNKNOWN_EVENT = "No pod-draft event named `{event}`"
-MSG_TABLE_INTRO = "New draft table off this pod."
+MSG_TABLE_INTRO = "New draft table off this pod"
 MSG_LOBBY_GATHERING = "Event thread and Draftmancer lobby will be created once {threshold} players join"
 MSG_TABLE_CREATED = "{name} created"
 MSG_PLAYERS_JOINED = "Players ({count})"
 MSG_TABLE_BUTTON = "Join Table {table}"
-MSG_TABLE_SUPERSEDED = "Reopened further down. Join the newer table card."
+MSG_TABLE_SUPERSEDED = "Reopened further down. Join the newer table card"
 MSG_TABLE_GOTO = "Go to Table {table}"
 MSG_TABLE_LOBBY_STARTER = "{draftmancer_emoji} **{event_name}** created"
 MSG_POD_RALLY_HINT = "Type `!pod` in another channel to call for more players"

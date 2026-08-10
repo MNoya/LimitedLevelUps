@@ -32,14 +32,15 @@ READY_NOW_CUSTOM_ID = "pod-draft:ready-now"
 NOT_READY_CUSTOM_ID = "pod-draft:not-ready"
 STOP_CHECK_CUSTOM_ID = "pod-draft:stop-check"
 
-_NO_ACTIVE_POD_MSG = "No active pod-draft session in this thread."
+_NO_ACTIVE_POD_MSG = "No active pod-draft session in this thread"
 RESUME_READY_CHECK_LABEL = "Resume Ready Check"
 
 MSG_READY_RECORDED = "✅ Ready Check recorded"
 MSG_NOT_READY_RECORDED = "⚠️ Ready Check on hold until you press Ready"
 MSG_STOP_CHECK_CONFIRM = "Stop Ready Check?"
 MSG_CLAIM_SEAT_PROMPT = "Nobody in the Draftmancer lobby matches your Discord name. Pick your seat:"
-MSG_NO_SEAT_TO_CLAIM = "You are not in the Draftmancer lobby yet.\n{join_line}"
+MSG_NO_SEAT_TO_CLAIM = "You are not in the Draftmancer lobby yet\n{join_line}"
+MSG_PREVIEW_ONLY = "Preview only"
 
 
 class LobbyReadyButtonView(discord.ui.View):
@@ -355,7 +356,7 @@ class ForceStartConfirmView(discord.ui.View):
     @discord.ui.button(label="Start Now", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if self.manager is None:
-            await interaction.response.edit_message(content="Preview only — no live pod to start.", view=None)
+            await interaction.response.edit_message(content=MSG_PREVIEW_ONLY, view=None)
             return
         actor = actor_label(interaction)
         log.info(f"[{self.manager.event_name}] {actor} confirmed Force Start")
@@ -366,7 +367,7 @@ class ForceStartConfirmView(discord.ui.View):
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        await interaction.response.edit_message(content="Force start canceled.", view=None)
+        await interaction.response.edit_message(content="Force start canceled", view=None)
 
 
 READY_CHECK_CONFIRM_PROMPT = "Start the ready check anyway?"
@@ -413,7 +414,7 @@ class ReadyCheckConfirmView(discord.ui.View):
     @discord.ui.button(label="Start Anyway", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if self.manager is None:
-            await interaction.response.edit_message(content="Preview only — no live pod to start.", view=None)
+            await interaction.response.edit_message(content=MSG_PREVIEW_ONLY, view=None)
             return
         actor = actor_label(interaction)
         log.info(f"[{self.manager.event_name}] {actor} confirmed Ready Check past warnings")
@@ -430,12 +431,12 @@ class ReadyCheckConfirmView(discord.ui.View):
     async def link_players(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         from bot.services.pod_settings_view import LINK_SEAT_PROMPT, LinkSeatSelectView
         if self.manager is None:
-            await interaction.response.edit_message(content="Preview only — linking needs a live pod.", view=None)
+            await interaction.response.edit_message(content=MSG_PREVIEW_ONLY, view=None)
             return
         targets = await self.manager.unrecognized_lobby_names()
         if not targets:
             await interaction.response.edit_message(
-                content="Everyone's linked now. Press Start Ready Check again.", view=None,
+                content="Everyone's linked now. Press Start Ready Check again", view=None,
             )
             return
         manager = self.manager
@@ -447,7 +448,7 @@ class ReadyCheckConfirmView(discord.ui.View):
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        await interaction.response.edit_message(content="Ready check canceled.", view=None)
+        await interaction.response.edit_message(content="Ready check canceled", view=None)
 
 
 async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_players=None) -> bool:

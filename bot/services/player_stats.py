@@ -133,7 +133,7 @@ def profile_url(data: StatsData) -> str:
 
 def render_embed(data: StatsData) -> discord.Embed:
     embed = discord.Embed(
-        title=f"📊 Stats — {data.player_name} — {data.set_code}",
+        title=f"📊 Stats: {data.player_name}, {data.set_code}",
         url=profile_url(data),
         color=discord.Color.blurple(),
     )

@@ -62,9 +62,9 @@ COUNTING_LABEL = "Counting the Votes…"
 SUSPENSE_UP_NEXT = "Up Next…"
 SUSPENSE_FINAL = "Final Verdict…"
 
-MSG_NO_CHANNELS = "No channels with “preview-season” in the name were found in this server."
-MSG_NO_POSTS = "No image posts found between {start} and {end}, so there is nothing to award."
-MSG_NO_REACTIONS = "Found {count} image posts but no reactions to score."
+MSG_NO_CHANNELS = "No channels with “preview-season” in the name were found in this server"
+MSG_NO_POSTS = "No image posts found between {start} and {end}, so there is nothing to award"
+MSG_NO_REACTIONS = "Found {count} image posts but no reactions to score"
 PREVIEW_SEASON_CHANNEL_ID = 775822803328040961
 PREVIEW_SEASON_CHANNEL_URL = f"https://discord.com/channels/{PRODUCTION_GUILD_ID}/{PREVIEW_SEASON_CHANNEL_ID}"
 MSG_COUNTED = (
