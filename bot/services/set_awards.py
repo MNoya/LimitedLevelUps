@@ -358,7 +358,7 @@ def first_striker(ctxs: list[PlayerCtx], seed: SetSeed) -> list[AwardCandidate]:
     earliest: dict[str, tuple[datetime, PlayerCtx]] = {}
     for c in ctxs:
         for e in c.events:
-            if "Sealed" in e.format:
+            if not first_striker_eligible(e.format):
                 continue
             earned_at = e.finished_at or e.started_at
             if e.is_trophy and earned_at is not None:
@@ -373,6 +373,11 @@ def first_striker(ctxs: list[PlayerCtx], seed: SetSeed) -> list[AwardCandidate]:
         ceremony = first_striker_ceremony(ts - t0) if index == 0 else first_striker_gap(ts - leader_ts)
         result.append(c.candidate(detail, ts, ceremony_detail=ceremony))
     return result
+
+
+def first_striker_eligible(fmt: str) -> bool:
+    """Sealed opens no draft to race, and a Quick trophy comes far cheaper than a Premier one."""
+    return "Sealed" not in fmt and group_label_for_format(fmt) != QUICK_GROUP_LABEL
 
 
 def seize_the_day(ctxs: list[PlayerCtx]) -> list[AwardCandidate]:
