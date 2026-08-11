@@ -15,6 +15,11 @@ MSG_TOKEN_INVALIDATED = (
 )
 MSG_ADMIN_ONLY = "This command is reserved for the bot Admin"
 
+MSG_DRAFTMANCER_SET_NAME = "{names}: set your User Name above"
+MSG_DRAFTMANCER_LINK_ARENA = "{names}: run /link-arena in Discord"
+MSG_DRAFTMANCER_USE_DISCORD_NAME = "{names}: use your exact Discord name"
+MSG_DRAFTMANCER_WELCOME = "Welcome {name}"
+
 MSG_CARD_CREATED_BY = "Created by {name}"
 MSG_COLOR_WRITE_IN_HINT = "Mono, 3-color, splash"
 

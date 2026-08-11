@@ -53,7 +53,12 @@ from bot.services.pod_team_vote import (
 from bot.services.pod_tournament import round_header
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_deck_color import SubmitDeckView
-from bot.services.pod_draft_manager import PodDraftManager, cancel_manager_tasks, start_manager
+from bot.services.pod_draft_manager import (
+    DRAFTMANCER_DEFAULT_NAME,
+    PodDraftManager,
+    cancel_manager_tasks,
+    start_manager,
+)
 from bot.services.pod_drafts import draftmancer_url_for, player_arena_handle, seed_event_participants
 from bot.services.pod_join_button import build_join_view
 from bot.services.pod_link_dm import build_link_dm, format_thread_ref, send_lobby_link_dms, try_dm
@@ -545,11 +550,10 @@ def _unlink_arena(discord_id: str) -> bool:
         return True
 
 
-async def _start_live_test_lobby(ctx) -> None:
-    """Seed a lobby-only event and connect a real manager to a live Draftmancer session, so the real
-    lobby + ready-check flow runs. Local DB only."""
+async def _connect_live_test_lobby(ctx) -> PodDraftManager | None:
+    """Seed a lobby-only event and connect a real manager to a live Draftmancer session. Local DB only."""
     if await _refuse_if_prod(ctx):
-        return
+        return None
     await _purge_and_reset_test(ctx)
     channel_id = ctx.channel.id
     event_id, session_id = await asyncio.to_thread(
@@ -563,8 +567,26 @@ async def _start_live_test_lobby(ctx) -> None:
     )
     if manager is None:
         await ctx.send("⚠️ Could not connect to Draftmancer, see logs")
+    return manager
+
+
+async def _start_live_test_lobby(ctx) -> None:
+    """The `podlobby` path: a live Draftmancer session, so the real lobby + ready-check flow runs."""
+    manager = await _connect_live_test_lobby(ctx)
+    if manager is not None:
+        await ctx.send(f"🧪 Connected to Draftmancer `{manager.session_id}`")
+
+
+async def _start_chat_nudge(ctx) -> None:
+    """The `chat` path: a live Draftmancer session to read the unnamed-player nudge in. The nudge is the
+    production one, so it starts when a seat carries a generated name and stops when it changes."""
+    manager = await _connect_live_test_lobby(ctx)
+    if manager is None:
         return
-    await ctx.send(f"🧪 Connected to Draftmancer `{session_id}`")
+    await ctx.send(
+        f"🧪 {manager.draftmancer_url}&userName={DRAFTMANCER_DEFAULT_NAME}12345\n"
+        f"-# Open in a new tab, the name only takes on a tab that never joined. Rename to end the nudge"
+    )
 
 
 async def _arm_fake_six_player_lobby(ctx) -> PodDraftManager | None:
@@ -1241,7 +1263,7 @@ _VALID_STATES = (
     "empty", "partial", "linked", "unlinked", "ready", "held", "notready", "titles",
     "readyunlinked", "readycancel",
     "drafting", "complete", "submit", "lobby", "lobbyopen", "dmlink", "unlink", "podbracket", "podswiss", "podrandom",
-    "podteam", "podlobby", "podteamvote", "autoteam",
+    "podteam", "podlobby", "podteamvote", "autoteam", "chat",
     "format", "seeding", "trophyhype", "champ", "round1", "round2", "round3", "voicelink", "review",
     "table",
     "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "p2vote",
@@ -1253,7 +1275,7 @@ _LIVE_POD_MODES = {
 }
 
 _PRODUCTION_BLOCKED_STATES = frozenset(_LIVE_POD_MODES) | {
-    "podlobby", "podteamvote", "autoteam", "unlink", "reset",
+    "podlobby", "podteamvote", "autoteam", "unlink", "reset", "chat",
 }
 
 _LAST_MESSAGE: dict[int, discord.Message] = {}
@@ -1664,8 +1686,10 @@ async def setup(bot: commands.Bot) -> None:
         the prod tournament code, so the round embeds + result dropdowns drive the real round-to-round
         flow (these write to the local DB). `round1` (`round1 random` for random pairing) is a no-DB
         snapshot of the Round 1 embed only — to drive rounds, use `podswiss`. `podlobby` connects to a
-        live Draftmancer session for ready-check testing. `reset` deletes every leftover live-test pod in
-        any channel, so no stale manager keeps binding a channel after its card is gone. `seeding [count]`
+        live Draftmancer session for ready-check testing. `chat` connects the same way, to read the
+        nudge the bot sends while a seat carries a name it cannot match. `reset` deletes every
+        leftover live-test pod in any channel, so no stale manager keeps binding a channel after its
+        card is gone. `seeding [count]`
         posts the /pod-seeding embed (table + round-table PNG) for `count` players (default 8; ranked
         padded with fillers), no sesh."""
         if state and state not in _VALID_STATES:
@@ -1715,6 +1739,10 @@ async def setup(bot: commands.Bot) -> None:
 
         if state == "podlobby":
             await _start_live_test_lobby(ctx)
+            return
+
+        if state == "chat":
+            await _start_chat_nudge(ctx)
             return
 
         if state == "podteamvote":

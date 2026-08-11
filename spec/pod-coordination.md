@@ -73,6 +73,8 @@ None of this is binding. It is there so you can see whether the pod is going to 
 
 About 10 minutes before the start time, the bot opens the draft lobby on Draftmancer and posts the link in the thread. It can also send you the link by direct message. Open the link, set your name, and wait for the draft to begin.
 
+The name you use in Draftmancer is how the bot knows which seat is yours, so a seat it cannot place gets called out by name in the session chat, every few seconds, until it is fixed. What it asks for depends on what your name says you were reaching for: a browser that never set one is asked to set it, a handle like `YourName#12345` it has never been told about is sent to `/link-arena`, and anything else is asked for your exact Discord name. Your linked Arena handle and your Discord name both work, so either one ends it, and the bot says hello by name once your seat lands.
+
 When enough players are in the lobby, anyone can start a ready check from the lobby card in the thread. The bot posts a card of its own carrying I'm Ready, Not Ready and Stop, and the Draftmancer prompt pops up at the same time. Answer on whichever is in front of you, it counts either way. The card shows who has answered and who has not, and the draft starts by itself the moment the last seat says I'm Ready. A full table of 8 starts as soon as everyone is ready.
 
 When the draft starts, the pod's status message in pod chat is replaced by a line at the bottom of the channel saying the pod fired, how many players are in it, and linking the thread. It posts quietly, with no ping and no notification, so the channel reads that the draft is under way without calling anyone away from the table.

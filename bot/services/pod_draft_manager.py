@@ -25,6 +25,10 @@ from sqlalchemy import func, select
 from bot import emojis
 from bot.commands.messages import (
     MSG_BOT_RECONNECTED,
+    MSG_DRAFTMANCER_LINK_ARENA,
+    MSG_DRAFTMANCER_SET_NAME,
+    MSG_DRAFTMANCER_USE_DISCORD_NAME,
+    MSG_DRAFTMANCER_WELCOME,
     MSG_LOBBY_FULL_PROMPT,
     MSG_MOCK_CLOSED_IDLE,
     MSG_MOCK_COMPLETE,
@@ -34,7 +38,7 @@ from bot.commands.messages import (
 )
 from bot.config import settings
 from bot.database import SessionLocal
-from bot.discord_helpers import extract_avatar_hash, run_detached
+from bot.discord_helpers import NBSP, extract_avatar_hash, run_detached
 from bot.models import Player, PodDraftEvent, PodDraftParticipant
 from bot.scripts.draftmancer_log import build_compact
 from bot.services import bot_log as bot_log_mod
@@ -146,6 +150,10 @@ _RESTART_SETTLE_S = 2.5
 _RESTART_READY_MIN_PLAYERS = 2
 _DISCONNECT_BLIP_S = 5
 _DISCONNECT_GRACE_S = 120
+DRAFTMANCER_DEFAULT_NAME = "Player_"
+NAME_NUDGE_INTERVAL_S = 5
+WORD_JOINER = "⁠"
+BUBBLE_BREAK_CHARS = "-/"
 
 _SEEDING_REFRESH_HOOK = None
 _SEEDING_REPOST_HOOK = None
@@ -325,6 +333,8 @@ class PodDraftManager:
         self.spectator_targets: list[tuple[str, str]] = []
         self.desired_seating: list[str] | None = None
         self.bot_user_id: str | None = None
+        self._name_nudge_task: asyncio.Task | None = None
+        self._welcomed_user_ids: set[str] = set()
         self.owner_claimed = False
         self.is_owner = False
         self._ownership_claim_in_flight = False
@@ -475,6 +485,7 @@ class PodDraftManager:
         self._cancel_end_watchdog()
         self._cancel_mock_idle_timer()
         self._cancel_lobby_refresh()
+        self._stop_name_nudge()
         try:
             if self.sio.connected:
                 await self.sio.disconnect()
@@ -584,6 +595,10 @@ class PodDraftManager:
                 self._admit_lobby_arrivals()
                 if renamed_roster:
                     self._sync_leaderboard_seeding()
+                    if user_id not in self.spectator_user_ids:
+                        run_detached(
+                            self.welcome_named_seat(user_id, updates["userName"]), "draftmancer welcome",
+                        )
 
     @staticmethod
     def _apply_user_update(rows: list[dict], user_id: str, updates: dict) -> bool:
@@ -1187,6 +1202,42 @@ class PodDraftManager:
     def non_bot_session_names(self) -> list[str]:
         return [u.get("userName") for u in self.player_session_users()]
 
+    def sync_name_nudge(self, classified: list[tuple[str, str | None]]) -> None:
+        """Chase the seats the lobby card just failed to resolve, naming them in session chat until every
+        one lands. Reads the classification the card already ran, so the repeat costs no queries.
+        Pre-draft only, since a rename after the draft starts no longer reaches the roster."""
+        unmatched = [arena for arena, display_name in classified if display_name is None]
+        if self.drafting or self.draft_complete or self._closed or not unmatched:
+            self._stop_name_nudge()
+            return
+        self._name_nudge_text = name_nudge_text(unmatched)
+        self._welcomed_user_ids.difference_update(
+            u.get("userID") for u in self.player_session_users() if u.get("userName") in set(unmatched)
+        )
+        if self._name_nudge_task is None or self._name_nudge_task.done():
+            self._name_nudge_task = asyncio.create_task(self._run_name_nudge())
+
+    async def _run_name_nudge(self) -> None:
+        while self._name_nudge_text:
+            await self.send_chat(self._name_nudge_text)
+            await asyncio.sleep(NAME_NUDGE_INTERVAL_S)
+
+    async def welcome_named_seat(self, user_id: str, arena_name: str) -> None:
+        """Confirm a rename in session chat the first time it resolves to a player the bot can match. A
+        name that matches nobody leaves the seat off the roster, so the chase keeps it instead."""
+        if user_id in self._welcomed_user_ids:
+            return
+        for _, display_name in await self._classify_users([arena_name]):
+            if display_name:
+                self._welcomed_user_ids.add(user_id)
+                await self.send_chat(MSG_DRAFTMANCER_WELCOME.format(name=display_name))
+
+    def _stop_name_nudge(self) -> None:
+        self._name_nudge_text = ""
+        task, self._name_nudge_task = self._name_nudge_task, None
+        if task is not None and not task.done():
+            task.cancel()
+
     async def classified_session_users(self) -> list[tuple[str, str | None]]:
         """Current non-bot session users as (arena_name, linked_display_name_or_None)."""
         names = self.non_bot_session_names()
@@ -1323,6 +1374,7 @@ class PodDraftManager:
                 **self._settings_labels(),
             )
             self._maybe_schedule_lobby_full_prompt(classified)
+            self.sync_name_nudge(classified)
             self._maybe_schedule_round_robin_offer()
             outgrew_vote = len(self.player_session_users()) > max(6, self.team_vote_size)
             if self.team_vote_message is not None and outgrew_vote:
@@ -2297,6 +2349,7 @@ class PodDraftManager:
         self.drafting = True
         self.draft_cancelled = False
         self.draft_paused = False
+        self._stop_name_nudge()
         self._cancel_mock_idle_timer()
         log.info(f"[DRAFT] started event={self.event_id} session_users={len(self.session_users)}")
         self._schedule_end_watchdog()
@@ -2957,6 +3010,21 @@ class PodDraftManager:
             log.exception(f"{event} emit failed for {self.session_id}")
             return None
 
+    async def send_chat(self, text: str) -> None:
+        """Post in the Draftmancer session chat, as the bot. Draftmancer reads `author` as a userID and
+        resolves it to a name client-side, so any other value renders as "(Left)"; the server truncates
+        the text at 255 characters."""
+        if not self.sio.connected or self.bot_user_id is None:
+            return
+        try:
+            await self.sio.emit("chatMessage", {
+                "author": self.bot_user_id,
+                "text": bubble_text(text),
+                "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+            })
+        except Exception:
+            log.warning(f"[CHAT] send_failed event={self.event_id}", exc_info=True)
+
     async def share_draft_log(self) -> bool:
         """Owner-only emit that flips the session's delayed/personal logs to fully public.
 
@@ -3124,6 +3192,40 @@ class PodDraftManager:
             fingerprint=f"end_draft_watchdog:{self.event_id}",
             tag="DRAFT",
         )
+
+
+def name_nudge_text(names: list[str]) -> str:
+    """One line per fix, read off what the name says the player was reaching for: nothing typed yet, an
+    Arena handle the bot was never told about, or a Discord identity that matches no member."""
+    groups: dict[str, list[str]] = {
+        MSG_DRAFTMANCER_SET_NAME: [],
+        MSG_DRAFTMANCER_LINK_ARENA: [],
+        MSG_DRAFTMANCER_USE_DISCORD_NAME: [],
+    }
+    for name in names:
+        if name.startswith(DRAFTMANCER_DEFAULT_NAME):
+            groups[MSG_DRAFTMANCER_SET_NAME].append(name)
+        elif full_arena_handle(name):
+            groups[MSG_DRAFTMANCER_LINK_ARENA].append(name)
+        else:
+            groups[MSG_DRAFTMANCER_USE_DISCORD_NAME].append(name)
+    return "\n".join(
+        message.format(names=", ".join(group)) for message, group in groups.items() if group
+    )
+
+
+def bubble_text(text: str) -> str:
+    """Draftmancer sizes the chat bubble to the session owner's chip, so it shrinks to the narrowest
+    wrap the text allows and a plain sentence comes out one word per line. Non-breaking spaces read as
+    spaces, and a word joiner covers the punctuation a browser also breaks after, so the only break
+    left is one this copy asked for."""
+    lines = []
+    for line in text.splitlines():
+        line = line.replace(" ", NBSP)
+        for char in BUBBLE_BREAK_CHARS:
+            line = line.replace(char, f"{char}{WORD_JOINER}")
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _is_ready_state(state) -> bool:
