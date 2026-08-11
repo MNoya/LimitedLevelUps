@@ -56,7 +56,8 @@ async def sync_channel(guild: discord.Guild, channel_name: str,
         return SYNC_NO_CHANNEL, f"⚠️ `{channel_name}`: no matching channel"
     mod_mention = _moderator_mention(guild)
     pod_drafters_mention = _pod_drafters_mention(guild)
-    rendered = [render_page(page.name, guild.text_channels, _bot_mention(guild), mod_mention, pod_drafters_mention)
+    linkable = guild.text_channels + guild.forums
+    rendered = [render_page(page.name, linkable, _bot_mention(guild), mod_mention, pod_drafters_mention)
                 for page in pages]
     show_titles = len(pages) > 1
     views = [_build_view(content, show_title=show_titles) for content in rendered]

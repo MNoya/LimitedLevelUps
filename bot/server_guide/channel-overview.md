@@ -19,14 +19,11 @@ Talk about the latest Limited formats and improving your game.
 • Set-specific discussion lives here — currently: {latest-set-channel}
 • Quick questions about deckbuilding, picks and gameplay:
     {#whats-the-build} | {#whats-the-pick} | {#whats-the-play}
-
-**Limited Help/Review**
-For more in-depth feedback and analysis.
-• {#draft-log-review} — post your 17Lands draft log for feedback from other players.
-• {#high-stakes-deck-help} — threads for Qualifiers, Directs and other important events.
+• In-depth feedback on a draft or deck:
+    {#draft-log-review} | {#high-stakes-deck-help}
 
 **Odds and Ends**
-Talk other games and more importantly {#pet-pics}
+Talk about other games, old cards, {#sick-brags} and more importantly {#pet-pics}
 
 **LLU Patreon/Stream Sub Exclusive:**
 The area for patrons and subs to get 1 on 1 advice, get help with deck techs, direct contact with Alex, and level-up their game!
