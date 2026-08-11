@@ -47,14 +47,17 @@ def pod_voice_channel_url(guild: discord.Guild | None) -> str | None:
 async def voice_invite_url(channel: discord.VoiceChannel) -> str:
     """An invite link for the channel: a guest invite first, then a plain one, then the jump URL. The guest
     invite is what Discord's own Invite to Voice Chat button creates, and it is what draws the wide join
-    card with the current occupants."""
+    card with the current occupants.
+
+    The failure logs without a traceback: a Community server refuses guest invites outright, so the retry
+    is the ordinary path here, and `error_alerts` promotes any WARNING carrying a traceback to bot-spam."""
     for guest in (True, False):
         try:
             invite = await channel.create_invite(
                 max_age=VOICE_INVITE_MAX_AGE, unique=False, guest=guest, reason=VOICE_INVITE_REASON,
             )
         except discord.HTTPException:
-            log.warning(f"[VOICE] invite_failed guest={guest} channel={channel.name}", exc_info=True)
+            log.warning(f"[VOICE] invite_failed guest={guest} channel={channel.name}")
             continue
         log.info(f"[VOICE] invite code={invite.code} guest={invite.flags.guest}")
         return invite.url
