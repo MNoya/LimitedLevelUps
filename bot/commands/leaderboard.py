@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 
 import discord
@@ -1724,6 +1724,9 @@ def build_set_send_off_embeds(session: Session, magic_set: MagicSet) -> list[dis
 
     The trophy board is built outside the filter loop: it is not a format filter, and giving the embed
     title a `?format=` the site doesn't serve would link players to an empty board.
+
+    "Last updated" carries the post instant instead of the last 17lands fetch. These boards post hours
+    after the final refresh of a set nobody is still drafting, so the real fetch time reads as lost data.
     """
     embeds: list[discord.Embed] = []
     for format_value in SEND_OFF_FORMATS:
@@ -1744,6 +1747,9 @@ def build_set_send_off_embeds(session: Session, magic_set: MagicSet) -> list[dis
         trophy_embed = render_embed(trophy_data, show_note=False)
         trophy_embed.title = f"{trophy_embed.title} {TROPHY_BOARD_LABEL}"
         embeds.append(trophy_embed)
+    posted_at = datetime.now(timezone.utc)
+    for embed in embeds:
+        embed.timestamp = posted_at
     return embeds
 
 
