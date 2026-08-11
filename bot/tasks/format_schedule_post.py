@@ -25,7 +25,6 @@ from bot.commands.event_scribe import (
     select_groups,
     select_season_groups,
 )
-from bot.commands.guide import SYNC_CURRENT, sync_channel, sync_set_tracking_todo
 from bot.commands.leaderboard import build_set_send_off_embeds
 from bot.config import settings
 from bot.database import SessionLocal
@@ -36,6 +35,7 @@ from bot.services.format_schedule import (
     ANNOUNCE_COMPETITIVE,
     ANNOUNCE_NONE,
     ANNOUNCE_WINDOWS,
+    ARCHIVE_TIME,
     DEDUP_LOOKBACK,
     FORMAT_ARCHIVE_CATEGORY,
     OPEN_TZ,
@@ -52,7 +52,7 @@ from bot.services.format_schedule import (
     set_pin_frozen,
     set_seed_for_channel,
 )
-from bot.services.server_guide import OVERVIEW_PAGE, stripped_channel_name
+from bot.services.server_guide import stripped_channel_name
 from bot.sets import RELEASE_TIME, RELEASE_TZ
 
 HISTORY_SCAN_LIMIT = 100
@@ -88,9 +88,19 @@ def init_format_schedule(bot: commands.Bot) -> None:
         id="format-schedule-rotation",
         replace_existing=True,
     )
+    bot.pod_scheduler.add_job(
+        fire_archive,
+        "cron",
+        hour=ARCHIVE_TIME.hour,
+        minute=ARCHIVE_TIME.minute,
+        timezone=RELEASE_TZ,
+        id="format-schedule-archive",
+        replace_existing=True,
+    )
     windows = ", ".join(f"{w.hour:02d}:{w.minute:02d}" for w in ANNOUNCE_WINDOWS)
     log.info(f"format-schedule armed: {windows} {OPEN_TZ.key}; "
-             f"rotation {RELEASE_TIME.hour:02d}:{RELEASE_TIME.minute:02d} {RELEASE_TZ.key}")
+             f"send-off {RELEASE_TIME.hour:02d}:{RELEASE_TIME.minute:02d}, "
+             f"archive {ARCHIVE_TIME.hour:02d}:{ARCHIVE_TIME.minute:02d} {RELEASE_TZ.key}")
 
 
 def _guild() -> discord.Guild | None:
@@ -104,12 +114,22 @@ def _guild() -> discord.Guild | None:
 
 
 async def fire_rotation() -> None:
-    """Channel rotation on its own cron at the noon-ET release instant, so the outgoing set's send-off
-    and archive land right as the new set goes live. The announce tick also calls
-    ``_rotate_set_channels`` as an idempotent fallback should this window be missed."""
+    """The outgoing set's send-off standings, on their own cron at the noon-ET release instant. Archiving
+    is a separate job ``ARCHIVE_DELAY`` later, so the final boards sit in the channel players are already
+    reading for an hour before it moves out of MTG Strategy."""
+    guild = _guild()
+    if guild is None:
+        return
+    for channel in archive_candidates(guild.text_channels):
+        await _post_send_off(channel)
+
+
+async def fire_archive() -> None:
+    """Archive what the rotation left behind, an hour after its send-off. The announce tick re-runs this as
+    an idempotent fallback: an archived channel is no longer a candidate, so a second pass does nothing."""
     guild = _guild()
     if guild is not None:
-        await _rotate_set_channels(guild)
+        await _archive_stale_channels(guild)
 
 
 async def fire_window() -> None:
@@ -139,31 +159,27 @@ async def fire_window() -> None:
             fresh = newly_opened(scheduled, since, now)
             await _announce(channel, pin, fresh, scheduled, emojis)
 
-    await _rotate_set_channels(guild)
+    await _archive_stale_channels(guild)
 
 
-async def _rotate_set_channels(guild: discord.Guild) -> None:
-    """Post-rotation channel upkeep: give each outgoing set channel its send-off standings, move it to
-    the Format Archive, and re-sync the channel-overview guide page so its active-set link follows. The
-    new set's channel is mod-created during preview season and coexists with the outgoing one until the
-    leaderboard rotates — the bot only archives what the rotation left behind, never creates."""
+async def _archive_stale_channels(guild: discord.Guild) -> None:
+    """Move each outgoing set channel to the Format Archive and tell the admin channel. The new set's
+    channel is mod-created during preview season and coexists with the outgoing one until the leaderboard
+    rotates — the bot only archives what the rotation left behind, never creates. No guide page is synced
+    here: channel-overview and the set-tracking To-Do resolve to the newest set channel in MTG Strategy,
+    which the incoming set's already is by the time a rotation runs, so `!guide` when a mod creates that
+    channel is what those pages follow."""
     stale = archive_candidates(guild.text_channels)
-    if stale:
-        archive = discord.utils.get(guild.categories, name=FORMAT_ARCHIVE_CATEGORY)
-        if archive is None:
-            log.warning(f"format-schedule: no '{FORMAT_ARCHIVE_CATEGORY}' category; skipping archiving")
-        else:
-            admin_channel = _admin_channel(guild)
-            for channel in stale:
-                await _post_send_off(channel)
-                if await _archive_channel(channel, archive):
-                    await _notify_archived(admin_channel, channel)
-    status, detail = await sync_channel(guild, OVERVIEW_PAGE.channel, (OVERVIEW_PAGE,))
-    if status != SYNC_CURRENT:
-        log.info(f"format-schedule: channel-overview sync: {detail}")
-    todo_status, todo_line = await sync_set_tracking_todo(guild, _bot.http)
-    if todo_status != SYNC_CURRENT:
-        log.info(f"format-schedule: latest-channel To-Do: {todo_line}")
+    if not stale:
+        return
+    archive = discord.utils.get(guild.categories, name=FORMAT_ARCHIVE_CATEGORY)
+    if archive is None:
+        log.warning(f"format-schedule: no '{FORMAT_ARCHIVE_CATEGORY}' category; skipping archiving")
+        return
+    admin_channel = _admin_channel(guild)
+    for channel in stale:
+        if await _archive_channel(channel, archive):
+            await _notify_archived(admin_channel, channel)
 
 
 def _admin_channel(guild: discord.Guild) -> discord.TextChannel | None:

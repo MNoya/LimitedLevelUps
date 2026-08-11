@@ -2,7 +2,7 @@
 
 Two APScheduler cron jobs in Pacific (MTGA's release clock): a heads-up at ``WARNING_TIME`` and the
 ceremony at ``AWARDS_CEREMONY_TIME``, each firing only when a new set releases the next day. Both post into
-the outgoing set's channel — the one the noon-ET rotation archives after the flip. The ceremony reuses
+the outgoing set's channel — the one the rotation tick archives an hour after the flip. The ceremony reuses
 ``run_set_awards_ceremony``, the same path ``/set-awards`` runs. The warning links the prior set's
 ceremony when it can find it in that set's archived channel; otherwise it drops the link.
 

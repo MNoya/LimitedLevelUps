@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import bot.services.mtgscribe as mtgscribe
-from bot.sets import ALL_SETS, SetSeed, active_set_code
+from bot.sets import ALL_SETS, RELEASE_TIME, SetSeed, active_set_code
 
 OPEN_TZ = ZoneInfo("America/Los_Angeles")
 EVENT_DAY_TZ = ZoneInfo("America/New_York")
@@ -103,6 +103,10 @@ def active_set_seed(when: datetime | None = None) -> SetSeed:
         if seed.code == code:
             return seed
     return ALL_SETS[-1]
+
+
+ARCHIVE_DELAY = timedelta(hours=1)
+ARCHIVE_TIME = (datetime.combine(date.min, RELEASE_TIME) + ARCHIVE_DELAY).time()
 
 
 def archive_candidates(text_channels, when: datetime | None = None) -> list:
