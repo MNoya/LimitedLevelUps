@@ -442,7 +442,7 @@ async def setup(bot: commands.Bot) -> None:
         The database side is done before the reply lands, so the next `!test` command can be typed
         straight away. Discord is swept behind it, bounded to what was already there."""
         if ctx.guild is None:
-            await ctx.send("Run `!test reset` in the test server, so the signals it clears are scoped to it")
+            await ctx.send("Run `!test reset` in the test server")
             return
         guild_id = str(ctx.guild.id)
         reset = await asyncio.to_thread(pod_launch.reset_ondemand_signals_sync, guild_id)

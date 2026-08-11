@@ -18,6 +18,7 @@ import discord
 from discord import ui
 
 from bot import emojis
+from bot.commands.messages import MSG_COLOR_WRITE_IN_HINT
 
 
 class NotInPodError(Exception):
@@ -206,7 +207,7 @@ def _build_color_options(current_value: str | None) -> list[discord.SelectOption
     options = [discord.SelectOption(
         label=f"Other ({current_value})" if is_write_in else "Other (write-in)",
         value=OTHER_VALUE,
-        description="Mono, 3-color, splash, etc.",
+        description=MSG_COLOR_WRITE_IN_HINT,
         emoji=emojis.get_emoji("manax"),
         default=is_write_in,
     )]

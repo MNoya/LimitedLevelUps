@@ -16,6 +16,7 @@ MSG_TOKEN_INVALIDATED = (
 MSG_ADMIN_ONLY = "This command is reserved for the bot Admin"
 
 MSG_CARD_CREATED_BY = "Created by {name}"
+MSG_COLOR_WRITE_IN_HINT = "Mono, 3-color, splash"
 
 MSG_MOCK_NOT_TEXT_CHANNEL = "Run `/mock-draft` in a server text channel"
 MSG_MOCK_UNKNOWN_SET = "Unknown set `{code}`. Pick one from the suggestions, or use a registered cube format"

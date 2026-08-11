@@ -58,7 +58,7 @@ CUSTOM_FORMATS: dict[str, PodFormat] = {
 }
 
 SELECT_PLACEHOLDER = "Select a format"
-FORMAT_LOCKED_MSG = "The draft has already started, so the format can't be changed now"
+FORMAT_LOCKED_MSG = "The format can't be changed once the draft has started"
 def custom_formats() -> list[PodFormat]:
     return list(CUSTOM_FORMATS.values())
 

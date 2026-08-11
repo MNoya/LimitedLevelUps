@@ -21,6 +21,7 @@ from discord.ext import commands
 
 from bot import audit, emojis
 from bot.commands import descriptions as desc
+from bot.commands.messages import MSG_COLOR_WRITE_IN_HINT
 from bot.database import SessionLocal
 from bot.discord_helpers import (
     extract_avatar_hash,
@@ -242,7 +243,7 @@ class _ColorSelect(ui.Select):
         options = [discord.SelectOption(
             label=f"Other ({draft.colors})" if is_write_in else "Other (write-in)",
             value=WRITE_IN,
-            description="Mono, 3-color, splash, etc.",
+            description=MSG_COLOR_WRITE_IN_HINT,
             emoji=emojis.get_emoji(WRITE_IN_EMOJI),
             default=is_write_in,
         )]

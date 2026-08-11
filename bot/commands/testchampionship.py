@@ -68,8 +68,8 @@ from bot.services.pod_tournament import (
 )
 from bot.sets import active_set_code
 
-MSG_NO_SUCCESSOR = "No successor set is registered, so there is no championship date to derive yet"
-MSG_NO_COORDINATION_CHANNEL = "The pod-draft coordination channel is not set up, so nothing was staged"
+MSG_NO_SUCCESSOR = "No successor set is registered to derive a championship date from"
+MSG_NO_COORDINATION_CHANNEL = "The pod-draft coordination channel is not set up and nothing was staged"
 MSG_CARD_FAILED = "Could not post the championship card"
 MSG_THREAD_FAILED = "Could not resolve the championship thread"
 
