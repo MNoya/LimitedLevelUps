@@ -217,15 +217,12 @@ def rank_players_for_set(
     return [p._replace(rank=rank) for rank, p in enumerate(standings, start=1)]
 
 
-CUBE_BURST_GAP_DAYS = 7
-
-
 def latest_cube_board(session: Session) -> tuple[CubeVariant, str | None] | None:
     """The cube board the newest cube activity belongs to: ``(variant, season label or None)``.
 
     Arena runs one cube at a time, so the variant holding the newest draft is the ongoing one (or
-    the last one that ran, between runs). A seasoned variant resolves further to the season of its
-    latest burst; the rest are one flat board. None when no cube drafts exist.
+    the last one that ran, between runs). A seasoned variant resolves further to the season its
+    newest draft falls in; the rest are one flat board. None when no cube drafts exist.
     """
     row = session.execute(
         text("""
@@ -251,16 +248,13 @@ def latest_cube_board(session: Session) -> tuple[CubeVariant, str | None] | None
 
 
 def latest_cube_season(session: Session, variant: CubeVariant) -> str | None:
-    """Season label of a variant's latest burst — the set live when its most recent run *began*.
+    """Season label the variant's newest draft falls in, or None if it falls in no declared run.
 
-    A burst is community cube activity with no gap longer than ``CUBE_BURST_GAP_DAYS``; its whole
-    run inherits the season of the set window holding its first event, so a tail spilling past a set
-    rotation stays with the season it started in rather than minting a phantom next-set season. None
-    if the variant has no drafts. Mirrors the burst-anchored public_cube_seasons view.
+    Mirrors public_cube_seasons, which reads the same declared ranges.
     """
     row = session.execute(
         text(f"{_CUBE_SEASON_BINNING_SQL} SELECT season FROM binned ORDER BY started_at DESC LIMIT 1"),
-        {"expansion": variant.expansion},
+        {"expansion": variant.expansion, "variant": variant.slug},
     ).first()
     return row.season if row is not None else None
 
@@ -284,7 +278,7 @@ def rank_cube_board(
             WHERE (:season IS NULL OR season = :season) AND leaderboard_opt_in = true
             GROUP BY player_id, format
         """),
-        {"expansion": variant.expansion, "season": season},
+        {"expansion": variant.expansion, "variant": variant.slug, "season": season},
     ).all()
 
     by_player: dict[str, list[dict]] = {}
@@ -317,15 +311,7 @@ def rank_cube_board(
 
 
 _CUBE_SEASON_BINNING_SQL = f"""
-WITH seasons AS (
-    SELECT
-        code,
-        start_date,
-        LEAD(start_date) OVER (ORDER BY start_date) AS next_start
-    FROM sets
-    WHERE code <> '{CUBE_CODE}'
-),
-cube_events AS (
+WITH binned AS (
     SELECT
         de.player_id,
         de.format,
@@ -333,46 +319,18 @@ cube_events AS (
         de.wins,
         de.losses,
         de.is_trophy,
-        p.leaderboard_opt_in
+        p.leaderboard_opt_in,
+        cs.set_code AS season
     FROM draft_events de
     JOIN sets s ON s.id = de.set_id
     JOIN players p ON p.id = de.player_id
+    LEFT JOIN cube_seasons cs
+        ON cs.variant = :variant
+       AND de.started_at::date BETWEEN cs.start_date AND cs.end_date
     WHERE s.code = '{CUBE_CODE}'
       AND de.expansion = :expansion
       AND p.active = true
       AND de.started_at IS NOT NULL
-),
-marked AS (
-    SELECT
-        ce.*,
-        CASE
-            WHEN LAG(started_at) OVER w IS NULL
-              OR started_at - LAG(started_at) OVER w > INTERVAL '{CUBE_BURST_GAP_DAYS} days'
-            THEN 1 ELSE 0
-        END AS new_burst
-    FROM cube_events ce
-    WINDOW w AS (ORDER BY started_at)
-),
-bursts AS (
-    SELECT
-        m.*,
-        SUM(new_burst) OVER (ORDER BY started_at ROWS UNBOUNDED PRECEDING) AS burst_id
-    FROM marked m
-),
-anchored AS (
-    SELECT
-        br.*,
-        MIN(started_at) OVER (PARTITION BY burst_id) AS burst_start
-    FROM bursts br
-),
-binned AS (
-    SELECT
-        a.*,
-        seasons.code AS season
-    FROM anchored a
-    LEFT JOIN seasons
-        ON a.burst_start::date >= seasons.start_date
-       AND (seasons.next_start IS NULL OR a.burst_start::date < seasons.next_start)
 )
 """
 

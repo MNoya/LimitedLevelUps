@@ -1,12 +1,20 @@
 {
-  "$schema": "Arena's cube variants, in board-dropdown order. Loaded by bot/sets.py (Python) and frontend/src/data/cubeVariants.ts (JS). Edit here, both sides pick it up. 'expansion' is 17lands' name for the variant, kept verbatim on every draft event so the boards stay separable; the board code is CUBE-<slug>; 'glyph' is a 'keyrune:<glyph>' or 'mana:<glyph>' icon spec, the same form bot/scripts/upload_app_emojis.py takes; 'seasoned' bins the variant's drafts into per-set season boards instead of one flat board; 'soup' false drops the Soup colour chip on that cube's board, for a cube multicolour enough that Soup swallows most of it.",
+  "$schema": "Arena's cube variants, in board-dropdown order. Loaded by bot/sets.py (Python) and frontend/src/data/cubeVariants.ts (JS). Edit here, both sides pick it up. 'expansion' is 17lands' name for the variant, kept verbatim on every draft event so the boards stay separable; the board code is CUBE-<slug>; 'glyph' is a 'keyrune:<glyph>' or 'mana:<glyph>' icon spec, the same form bot/scripts/upload_app_emojis.py takes; 'seasoned' splits the variant's drafts into the per-set season boards declared in 'seasons' instead of one flat board; 'soup' false drops the Soup colour chip on that cube's board, for a cube multicolour enough that Soup swallows most of it.",
+  "$seasons": "One entry per cube run WotC has scheduled, giving the board CUBE-<set>. Declared, never inferred: a run is announced in advance, so its dates are known and the boards must not move when someone drafts early or late. Dates are inclusive and match the run as announced. A run with no entry here gets no season board and its drafts still count on the variant's own board, so leaving one out loses a board and no data. Add the run's entry when you add the set.",
   "variants": [
     {
       "slug": "POWERED",
       "name": "Arena Powered Cube",
       "expansion": "Cube - Powered",
       "glyph": "keyrune:pz1",
-      "seasoned": true
+      "seasoned": true,
+      "seasons": [
+        { "set": "SPM", "start_date": "2025-10-28", "end_date": "2025-11-20" },
+        { "set": "TLA", "start_date": "2026-01-06", "end_date": "2026-01-22" },
+        { "set": "ECL", "start_date": "2026-02-10", "end_date": "2026-03-03" },
+        { "set": "TMT", "start_date": "2026-03-31", "end_date": "2026-04-21" },
+        { "set": "SOS", "start_date": "2026-06-02", "end_date": "2026-06-23" }
+      ]
     },
     {
       "slug": "PLANAR",

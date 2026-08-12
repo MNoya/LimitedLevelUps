@@ -345,7 +345,7 @@ def refresh_active_players(session: Session, client: _DraftClient) -> dict:
     summary = _refresh_active_with_window(session, client, fetch_start)
     active.last_refreshed_at = func.now()
     session.commit()
-    refresh_colors_summary(session)
+    refresh_public_matviews(session, ingested_rows=summary["events"] > 0)
     return summary
 
 
@@ -367,20 +367,35 @@ def refresh_active_players_all_sets(session: Session, client: _DraftClient) -> d
         "WHERE EXISTS (SELECT 1 FROM player_stats ps WHERE ps.set_id = sets.id)"
     ))
     session.commit()
-    refresh_colors_summary(session)
+    refresh_public_matviews(session, ingested_rows=summary["events"] > 0)
     return summary
 
 
-def refresh_colors_summary(session: Session) -> None:
-    """Recompute the materialized per-color tallies the Top Colors sidebar reads on load.
+PUBLIC_MATVIEWS = ("public_cube_seasons", "public_colors_summary")
 
-    CONCURRENTLY keeps the public view readable during the refresh; it needs the unique index the
-    matview migration creates. The guard lets the model-built test schema, which has no public_*
+
+def refresh_public_matviews(session: Session, ingested_rows: bool = True) -> None:
+    """Recompute the matviews the site reads on load, unless the run ingested nothing.
+
+    A REFRESH rebuilds the whole view, so a tick that wrote no events rebuilds tallies that cannot
+    have moved. Most scheduled ticks are that case, and much of what they rebuild is frozen history:
+    the original Arena Cube has not been played since 2025 and still costs a full recompute. Callers
+    that cannot tell pass nothing and keep the unconditional behaviour.
+    """
+    if not ingested_rows:
+        return
+    for name in PUBLIC_MATVIEWS:
+        _refresh_matview(session, name)
+
+
+def _refresh_matview(session: Session, name: str) -> None:
+    """CONCURRENTLY keeps the view readable during the refresh; it needs the unique index the
+    matview's migration creates. The guard lets the model-built test schema, which has no public_*
     objects, run the refresh path as a no-op.
     """
-    if session.execute(text("SELECT to_regclass('public.public_colors_summary')")).scalar() is None:
+    if session.execute(text(f"SELECT to_regclass('public.{name}')")).scalar() is None:
         return
-    session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY public_colors_summary"))
+    session.execute(text(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {name}"))
     session.commit()
 
 
@@ -421,6 +436,7 @@ def _refresh_active_with_window(session: Session, client: _DraftClient, fetch_st
         "updated": 0,
         "invalidated": 0,
         "errors": 0,
+        "events": 0,
         "invalidated_players": [],
         "per_player": [],
         "unknown_formats": {},
@@ -449,6 +465,7 @@ def _refresh_active_with_window(session: Session, client: _DraftClient, fetch_st
         for exp, count in (result.get("unrouted_expansions") or {}).items():
             summary["unrouted_expansions"][exp] = summary["unrouted_expansions"].get(exp, 0) + count
         events_count = result.get("events", 0)
+        summary["events"] += events_count
         extra = "" if status == "updated" else f" ({result.get('error', '')})".rstrip()
         logger.info(
             f"refresh: [{idx}/{n_total}] {player.display_name} "

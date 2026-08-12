@@ -4,7 +4,7 @@ import pytest
 
 from bot.commands.leaderboard import process_cube_board, resolve_cube_board
 from bot.commands.test_group import HALL_OF_FAME
-from bot.models import DraftEvent, MagicSet, Player
+from bot.models import CubeSeasonWindow, DraftEvent, MagicSet, Player
 from bot.services.player_stats import latest_cube_board, rank_cube_board
 from bot.sets import CUBE_CODE, cube_variant
 
@@ -51,6 +51,13 @@ def _seed_draft(session, player, cube, expansion, started_at, trophies=1, event_
     session.flush()
 
 
+def _seed_cube_season(session, set_code, start_date, end_date, variant="POWERED"):
+    session.add(CubeSeasonWindow(
+        variant=variant, set_code=set_code, start_date=start_date, end_date=end_date,
+    ))
+    session.flush()
+
+
 def _at(year, month, day):
     return datetime(year, month, day, 18, 0, tzinfo=timezone.utc)
 
@@ -75,6 +82,7 @@ def test_latest_cube_board_takes_the_variant_with_the_newest_draft(session, cube
 def test_latest_cube_board_resolves_the_seasoned_variant_to_its_newest_season(session, cube):
     _seed_set(session, "SOS", date(2026, 4, 21))
     _seed_set(session, "MSH", date(2026, 6, 23))
+    _seed_cube_season(session, "SOS", date(2026, 4, 21), date(2026, 6, 22))
     lsv = _seed_player(session, HALL_OF_FAME[1])
     _seed_draft(session, lsv, cube, ARENA, _at(2025, 3, 2))
     _seed_draft(session, lsv, cube, POWERED, _at(2026, 5, 2))
@@ -129,9 +137,11 @@ def test_rank_cube_board_scopes_a_variant_board_to_its_own_cube(session, cube):
     assert [r.display_name for r in powered] == [HALL_OF_FAME[4]]
 
 
-def test_rank_cube_board_scopes_a_season_to_its_set_window(session, cube):
+def test_rank_cube_board_scopes_a_season_to_its_declared_range(session, cube):
     _seed_set(session, "SOS", date(2026, 4, 21))
     _seed_set(session, "MSH", date(2026, 6, 23))
+    _seed_cube_season(session, "SOS", date(2026, 4, 21), date(2026, 6, 22))
+    _seed_cube_season(session, "MSH", date(2026, 6, 23), date(2026, 8, 10))
     reid = _seed_player(session, HALL_OF_FAME[5])
     chapin = _seed_player(session, HALL_OF_FAME[6])
     _seed_draft(session, reid, cube, POWERED, _at(2026, 5, 2))
@@ -161,6 +171,7 @@ def test_rank_cube_board_excludes_inactive_and_opted_out_players(session, cube):
 
 def test_process_cube_board_names_the_cube_and_its_season(session, cube):
     _seed_set(session, "SOS", date(2026, 4, 21))
+    _seed_cube_season(session, "SOS", date(2026, 4, 21), date(2026, 6, 22))
     juza = _seed_player(session, HALL_OF_FAME[14])
     _seed_draft(session, juza, cube, POWERED, _at(2026, 5, 2))
     session.commit()

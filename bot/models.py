@@ -95,6 +95,26 @@ class MagicSet(Base):
     stats = relationship("PlayerStats", back_populates="set")
 
 
+class CubeSeasonWindow(Base):
+    """One declared cube run, seeded from ``cube_variants.json`` so SQL can join it.
+
+    The cube views need the run's dates in the database; the registry is the source of truth and
+    ``seed_cube_seasons`` copies it here. Both dates are inclusive.
+    """
+    __tablename__ = "cube_seasons"
+
+    id         = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    variant    = Column(String, nullable=False)
+    set_code   = Column(String, nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date   = Column(Date, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("variant", "set_code", name="uq_cube_season_per_variant"),
+        Index("ix_cube_seasons_variant_dates", "variant", "start_date", "end_date"),
+    )
+
+
 class PlayerStats(Base):
     __tablename__ = "player_stats"
 
@@ -187,6 +207,9 @@ class DraftEvent(Base):
     __table_args__ = (
         UniqueConstraint("player_id", "seventeenlands_event_id",
                          name="uq_draft_event_per_player"),
+        # Postgres does not index a foreign key on its own, so every per-set read scanned the
+        # whole log to find the rows one set's filter wanted
+        Index("ix_draft_events_set_id", "set_id"),
     )
 
 

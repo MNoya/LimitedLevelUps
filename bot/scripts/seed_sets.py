@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from bot.database import SessionLocal
 from bot.models import MagicSet
+from bot.scripts.seed_cube_seasons import sync_cube_seasons
 from bot.services.refresh import claim_orphan_drafts, rebuild_player_stats
 from bot.sets import ALL_SETS, SetSeed
 
@@ -57,6 +58,7 @@ def main() -> None:
     with SessionLocal() as session:
         seeded_sets = [(seed, upsert_set(session, seed)) for seed in ALL_SETS]
         session.commit()
+        sync_cube_seasons(session)
 
         for seed, magic_set in seeded_sets:
             affected_players = claim_orphan_drafts(

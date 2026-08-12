@@ -99,9 +99,19 @@ It resolves the range from the MTG Scribe calendar and prints paste-ready rows.
 - If it prints a window, add the `CollectorBoosterWindow(...)` row to `COLLECTOR_BOOSTER_WINDOWS` in `bot/sets.py` and the matching `{ setCode, startDate, endDate }` row to the `COLLECTOR_BOOSTER_WINDOWS` mirror in `frontend/src/data/scoring.ts`. Keep both lists ordered by date (append for a new set). These two lists reimplement the same rule and must stay in sync.
 - If it prints `no Collector Booster Arena Direct found ... yet`, Scribe hasn't scheduled it. Skip this step and tell the user to re-run `find_collector_window <CODE>` once the Arena Direct appears (usually partway into the set's cycle), then add the rows.
 
+### 4d. Ask whether a cube run is scheduled for this set
+
+The Arena Powered Cube returns every few sets and gets its own board at `CUBE-<CODE>` for the run. Those dates are declared, never inferred from draft activity, so ask:
+
+> Is there an Arena Powered Cube run scheduled during <CODE>? If so, what are its start and end dates?
+
+- If the user gives dates, add a row to `seasons` on the `POWERED` variant in `cube_variants.json`, keeping the list in date order. Both dates are inclusive.
+- If there is no run, or the schedule isn't out yet, skip it. The set simply gets no cube season board, and cube drafts still count on `CUBE-POWERED`. Tell the user they can add the row later and re-run `seed_sets`.
+- Do not guess dates or read them off draft activity. An undeclared run is a missing board, which is easy to spot and fix; a wrong range silently files drafts under the wrong season.
+
 ### 5. Show diff
 
-Run `git diff bot/sets.py frontend/src/data/scoring.ts` and display it to the user.
+Run `git diff bot/sets.py frontend/src/data/scoring.ts cube_variants.json` and display it to the user.
 
 ### 6. Run scripts against the local DATABASE_URL
 
@@ -117,14 +127,14 @@ python -m bot.scripts.seed_sets
 python -m bot.scripts.refresh_stats
 ```
 
-`seed_sets` registers the new set and **claims any orphan `draft_events`** whose expansion already matches it (rebuilds `player_stats` and scores for those players). For OLD-mode backfills this is usually enough on its own. `refresh_stats` then fetches any drafts 17lands has that we haven't ingested yet. If either script fails, stop. Do not commit. Report the error verbatim and let the user fix it.
+`seed_sets` registers the new set, syncs the declared cube seasons from `cube_variants.json` into the `cube_seasons` table the cube views read, and **claims any orphan `draft_events`** whose expansion already matches it (rebuilds `player_stats` and scores for those players). For OLD-mode backfills this is usually enough on its own. `refresh_stats` then fetches any drafts 17lands has that we haven't ingested yet. If either script fails, stop. Do not commit. Report the error verbatim and let the user fix it.
 
 ### 7. Commit (do not push)
 
 After both scripts succeed:
 
 ```
-git add bot/sets.py frontend/public/set-symbols/<code>.png
+git add bot/sets.py cube_variants.json frontend/public/set-symbols/<code>.png
 git commit -m "<subject>"
 ```
 

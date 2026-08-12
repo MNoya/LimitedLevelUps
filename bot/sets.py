@@ -76,16 +76,30 @@ class SetSeed:
 
 
 @dataclass(frozen=True)
+class CubeSeason:
+    """One scheduled run of a cube, giving the board ``CUBE-<set>``.
+
+    Declared in ``cube_variants.json`` rather than inferred from draft activity: WotC announces the
+    run, so the dates are known ahead of the first draft and a board cannot drift because somebody
+    played early or late. Both dates are inclusive.
+    """
+    set_code: str
+    start_date: date
+    end_date: date
+
+
+@dataclass(frozen=True)
 class CubeVariant:
     """One of Arena's cubes. Arena swaps the cube itself every few sets and 17lands files each under
-    its own expansion, so each variant gets its own board at ``CUBE-<slug>``. ``seasoned`` bins the
-    variant's drafts into per-set season boards; the rest stay one flat board.
+    its own expansion, so each variant gets its own board at ``CUBE-<slug>``. ``seasoned`` splits the
+    variant's drafts into the per-set season boards in ``seasons``; the rest stay one flat board.
     """
     slug: str
     name: str
     expansion: str
     glyph: str
     seasoned: bool
+    seasons: tuple[CubeSeason, ...] = ()
 
 
 CUBE_CODE = "CUBE"
@@ -99,11 +113,23 @@ CUBE_VARIANTS: tuple[CubeVariant, ...] = tuple(
         expansion=v["expansion"],
         glyph=v["glyph"],
         seasoned=bool(v["seasoned"]),
+        seasons=tuple(
+            CubeSeason(
+                set_code=s["set"],
+                start_date=date.fromisoformat(s["start_date"]),
+                end_date=date.fromisoformat(s["end_date"]),
+            )
+            for s in v.get("seasons", ())
+        ),
     )
     for v in json.loads(CUBE_VARIANTS_JSON.read_text())["variants"]
 )
 
 CUBE_VARIANT_EXPANSIONS: tuple[str, ...] = tuple(v.expansion for v in CUBE_VARIANTS)
+
+CUBE_SEASONS: tuple[tuple[CubeVariant, CubeSeason], ...] = tuple(
+    (variant, season) for variant in CUBE_VARIANTS for season in variant.seasons
+)
 
 
 ALL_SETS: tuple[SetSeed, ...] = (

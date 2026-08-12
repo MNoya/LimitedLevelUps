@@ -529,6 +529,36 @@ def test_refresh_active_players_summary_counts_mixed_statuses(session):
     assert summary["invalidated_players"] == [p_404.id]
 
 
+def test_refresh_reports_the_events_it_ingested(session):
+    """The matview rebuild is skipped when this count is zero, so a count stuck at zero would serve
+    stale colour tallies and board lists with nothing failing."""
+    _seed_active_set(session)
+    _seed_player(session, name="drafter", token_suffix="a")
+    session.flush()
+
+    class Client:
+        def fetch_drafts(self, token, start_date=None, end_date=None):
+            return [_draft("x", expansion=active_set_code()), _draft("y", expansion=active_set_code())]
+
+    summary = refresh_active_players(session, Client())
+
+    assert summary["events"] == 2
+
+
+def test_refresh_reports_no_events_when_seventeenlands_returns_none(session):
+    _seed_active_set(session)
+    _seed_player(session, name="idle", token_suffix="a")
+    session.flush()
+
+    class EmptyClient:
+        def fetch_drafts(self, token, start_date=None, end_date=None):
+            return []
+
+    summary = refresh_active_players(session, EmptyClient())
+
+    assert summary["events"] == 0
+
+
 def test_refresh_active_players_no_active_set(session):
     _seed_set(session, code="OLD")
     _seed_player(session)
