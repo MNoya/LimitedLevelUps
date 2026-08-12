@@ -113,6 +113,6 @@ If `bot/config.py` or another file also holds unrelated working-tree changes, st
 
 ## Notes
 
-- `spec/event-scribe-handoff.md` is the reference for the tag taxonomy and the known upstream inconsistencies. Update its taxonomy section when a capture teaches something new about how Scribe behaves — not when it merely adds an event.
+- `event-scribe-handoff.md` beside this file is the reference for the tag taxonomy and the known upstream inconsistencies. Update its taxonomy section when a capture teaches something new about how Scribe behaves — not when it merely adds an event.
 - Nothing reaches players until the user pushes. `scribe_calendar.json` is served from the repo, so a correction ships on deploy, not on a tick.
 - `load_events` logs a warning once the calendar runs out within 14 days. If the user reports seeing that in `logs/bot.log`, this skill is the answer.
