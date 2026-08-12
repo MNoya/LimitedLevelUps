@@ -31,6 +31,7 @@ from bot.models import (
     PlayerAccount,
     PlayerStats,
 )
+from bot.scoring import DEFAULT_QUEUE_GROUPS
 from bot.services.active_set import resolve_active_set
 from bot.services.seventeenlands import SUPPORTED_FORMATS, extract_event_row
 from bot.sets import active_set_code, set_code_for_expansion
@@ -274,13 +275,14 @@ def rebuild_player_stats(session: Session, player_id: str, set_id: str) -> int:
     )
     result = session.execute(
         text(
-            """
+            f"""
             INSERT INTO player_stats
                 (id, player_id, set_id, format, expansion, events, wins, losses, games_played,
-                 trophies, last_fetched_at)
+                 trophies, weighted_trophies, last_fetched_at)
             SELECT gen_random_uuid()::text, player_id, set_id, format, expansion,
                    COUNT(*)::int, SUM(wins)::int, SUM(losses)::int, SUM(wins + losses)::int,
                    SUM(CASE WHEN is_trophy THEN 1 ELSE 0 END)::int,
+                   SUM(CASE WHEN is_trophy THEN {trophy_weight_sql()} ELSE 0 END),
                    now()
             FROM draft_events
             WHERE player_id = :pid AND set_id = :sid
@@ -290,6 +292,30 @@ def rebuild_player_stats(session: Session, player_id: str, set_id: str) -> int:
         {"pid": player_id, "sid": set_id},
     )
     return result.rowcount or 0
+
+
+def trophy_weight_sql(format_column: str = "format", rank_column: str = "end_rank") -> str:
+    """SQL for one trophy's rank weight, built from the groups that carry ``rank_points``.
+
+    Generated off ``scoring_buckets.json`` so the weights have one source of truth rather than a
+    copy frozen into a migration. Formats in no weighted group, and events 17lands gave no rank,
+    fall through to 1.0.
+    """
+    branches = []
+    for group in DEFAULT_QUEUE_GROUPS:
+        if not group.rank_points:
+            continue
+        formats = ", ".join(f"'{fmt}'" for fmt in group.formats)
+        tiers = " ".join(
+            f"WHEN '{tier}' THEN {group.trophy_weight(tier)}" for tier in group.rank_points
+        )
+        branches.append(
+            f"WHEN {format_column} IN ({formats}) THEN "
+            f"CASE split_part(COALESCE({rank_column}, ''), '-', 1) {tiers} ELSE 1.0 END"
+        )
+    if not branches:
+        return "1.0"
+    return f"CASE {' '.join(branches)} ELSE 1.0 END"
 
 
 def refresh_one_player_for_all_sets(session: Session, client: _DraftClient, player_id: str) -> dict:

@@ -1,5 +1,5 @@
 import { BUCKET_DEFS, type BucketDef } from "../data/format-buckets";
-import { aggregate } from "../data/scoring";
+import { aggregate, groupTotalsFromBreakdown } from "../data/scoring";
 import type { PlayerFormatBreakdown } from "../types/leaderboard";
 
 export interface BreakdownRow {
@@ -110,15 +110,7 @@ export function computeRows(
   confidenceOverride?: number,
 ): BreakdownResult {
   const queues = breakdown.filter((b) => b.formatLabel !== "Pod");
-  const agg = aggregate(
-    queues.map((b) => ({
-      label: b.formatLabel,
-      events: b.events,
-      wins: b.wins,
-      losses: b.losses,
-      trophies: b.trophies,
-    })),
-  );
+  const agg = aggregate(groupTotalsFromBreakdown(queues));
   const confidence = confidenceOverride ?? agg.confidence;
   // A format-filtered subset would otherwise shrink confidence to its own trophies; rescale the
   // confidence-weighted contributions to the player-wide factor. LCQ Draft 2 carries no confidence.

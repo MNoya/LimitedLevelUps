@@ -68,8 +68,11 @@ function Scoring() {
             <span>WEIGHT</span>
           </div>
           <Leader label="Premier Draft" value="10" />
+          <Leader label="Platinum Trophy" value="11" nested />
+          <Leader label="Diamond Trophy" value="13" nested />
+          <Leader label="Mythic Trophy" value="15" nested />
           <Leader label="Traditional Draft" value="8" />
-          <Leader label="Sealed" note="Includes Arena Direct" value="8" />
+          <Leader label="Sealed" note="Includes Arena Direct" value="10" />
           <Leader label="Quick & Pick Two Draft" value="4" />
           <Leader label="ALCQ Draft 1" value="30" />
           <Leader label="ALCQ Draft 2" note="Per Game Win" value="10" />
@@ -104,10 +107,26 @@ function Scoring() {
   );
 }
 
-function Leader({ label, note, value }: { label: string; note?: string; value: ReactNode }) {
+function Leader({
+  label,
+  note,
+  value,
+  nested,
+}: {
+  label: string;
+  note?: string;
+  value: ReactNode;
+  nested?: boolean;
+}) {
   return (
-    <div className="flex items-baseline gap-2 py-1.5">
-      <span className="font-display text-[13px] md:text-[15px] tracking-[0.04em] text-text shrink-0">
+    <div className={`flex items-baseline gap-2 py-1.5${nested ? " pl-4 md:pl-5" : ""}`}>
+      <span
+        className={
+          nested
+            ? "text-[12px] md:text-[13px] text-muted shrink-0"
+            : "font-display text-[13px] md:text-[15px] tracking-[0.04em] text-text shrink-0"
+        }
+      >
         {label}
       </span>
       {note && (

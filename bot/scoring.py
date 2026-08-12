@@ -1,6 +1,6 @@
 """Format groups and scoring formula for player rating.
 
-    raw_group   = trophies × group_points × trophy_rate
+    raw_group   = weighted_trophies × group_points × trophy_rate
     confidence  = T / (T + 2)        # T = total trophies across all groups
     total       = (Σ raw_group) × confidence
 
@@ -12,6 +12,15 @@ from total trophy count, rather than penalising each queue group on its own
 small sample. Pod-draft points are a separate flat term (see ``pod_points``),
 added to the leaderboard total outside this module.
 
+``weighted_trophies`` counts a trophy by what the player's rank was worth at
+the end of the event, so a group carrying ``rank_points`` pays more for a
+trophy taken at a high rank. Only the numerator is weighted: trophy_rate and
+the confidence total stay on raw counts, so a rank weight moves the multiplier
+and never the rate. Groups without ``rank_points`` weight every trophy at 1.0,
+which leaves ``weighted_trophies`` equal to ``trophies``. A row carrying trophies
+but no weighted count scores unweighted, so a writer that predates the column
+degrades to the old formula instead of to zero.
+
 A ``QueueGroup`` collects raw 17lands ``format`` strings under a single label
 that shares a points weight. The ``Sealed`` group rolls best-of-1 and
 best-of-3 sealed under one entry — sealed is sealed for scoring purposes. LCQ
@@ -20,10 +29,10 @@ groups sit dormant until WOTC actually runs LCQ events for the season.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from bot.sets import (
     SIX_WIN_COLLECTOR_DIRECT_SETS,
@@ -39,6 +48,15 @@ class QueueGroup:
     formats: tuple[str, ...]
     # None = standard formula; "lcq_draft_2" = wins-not-trophies × winrate × points
     rule: str | None = None
+    # Arena rank tier -> what a trophy taken at that tier is worth, in the same points unit
+    rank_points: Mapping[str, int] = field(default_factory=dict)
+
+    def trophy_weight(self, end_rank: str | None) -> float:
+        """Multiplier for one trophy, keyed on the tier of a ``Platinum-3``-shaped rank string."""
+        if not end_rank or not self.rank_points:
+            return 1.0
+        tier = end_rank.split("-")[0]
+        return self.rank_points.get(tier, self.points) / self.points
 
 
 BUCKETS_JSON = Path(__file__).resolve().parents[1] / "scoring_buckets.json"
@@ -50,6 +68,7 @@ DEFAULT_QUEUE_GROUPS: tuple[QueueGroup, ...] = tuple(
         points=int(g["points"]),
         formats=tuple(g["formats"]),
         rule=g.get("rule"),
+        rank_points={tier: int(pts) for tier, pts in g.get("rank_points", {}).items()},
     )
     for g in _BUCKETS["groups"]
 )
@@ -122,7 +141,8 @@ def _aggregate(
         events = sum(r.get("events", 0) for r in rows)
         if trophies == 0 or events == 0:
             continue
-        raw_by_label[g.label] = trophies * g.points * (trophies / events)
+        weighted = sum(r.get("weighted_trophies") or r.get("trophies", 0) for r in rows)
+        raw_by_label[g.label] = weighted * g.points * (trophies / events)
         total_trophies += trophies
 
     confidence = confidence_factor(total_trophies)
@@ -168,7 +188,8 @@ def compute_score(
 ) -> float:
     """Total 17lands score for one player across all their group-rolled stats.
 
-    ``stats_rows`` items are dicts with keys: format, wins, losses, trophies, events.
+    ``stats_rows`` items are dicts with keys: format, wins, losses, trophies, events,
+    and optionally weighted_trophies, which falls back to trophies when absent.
     Rows whose format isn't in any group are ignored. Pod points are added by the
     caller via ``pod_points``.
     """

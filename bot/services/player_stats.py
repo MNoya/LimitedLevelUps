@@ -13,6 +13,7 @@ from bot.discord_helpers import player_url
 from bot.scoring import boxes_for_event, compute_score, compute_score_breakdown, pod_points
 from bot.services.active_set import resolve_active_set
 from bot.services.pod_drafts import PodSetSummary, players_for_names, pod_scoring_counts, pod_summary_by_set_for_player
+from bot.services.refresh import trophy_weight_sql
 from bot.sets import CUBE_CODE, CubeVariant, active_set_code, cube_variant_for_expansion
 
 
@@ -497,6 +498,7 @@ def _stats_by_player(session: Session, set_id: str) -> dict[str, list[dict]]:
         select(
             PlayerStats.player_id, PlayerStats.format, PlayerStats.events,
             PlayerStats.wins, PlayerStats.losses, PlayerStats.trophies,
+            PlayerStats.weighted_trophies,
         )
         .join(Player, Player.id == PlayerStats.player_id)
         .where(
@@ -511,6 +513,7 @@ def _stats_by_player(session: Session, set_id: str) -> dict[str, list[dict]]:
             "format": r.format, "events": int(r.events or 0),
             "wins": int(r.wins or 0), "losses": int(r.losses or 0),
             "trophies": int(r.trophies or 0),
+            "weighted_trophies": float(r.weighted_trophies or 0),
         })
     return by_player
 
@@ -529,6 +532,10 @@ def _stats_by_player_asof(session: Session, set_id: str, cutoff: datetime) -> di
             func.sum(DraftEvent.wins).label("wins"),
             func.sum(DraftEvent.losses).label("losses"),
             func.sum(case((DraftEvent.is_trophy, 1), else_=0)).label("trophies"),
+            func.sum(text(
+                "CASE WHEN draft_events.is_trophy THEN "
+                f"{trophy_weight_sql('draft_events.format', 'draft_events.end_rank')} ELSE 0 END"
+            )).label("weighted_trophies"),
         )
         .join(Player, Player.id == DraftEvent.player_id)
         .where(
@@ -546,6 +553,7 @@ def _stats_by_player_asof(session: Session, set_id: str, cutoff: datetime) -> di
             "format": r.format, "events": int(r.events or 0),
             "wins": int(r.wins or 0), "losses": int(r.losses or 0),
             "trophies": int(r.trophies or 0),
+            "weighted_trophies": float(r.weighted_trophies or 0),
         })
     return by_player
 

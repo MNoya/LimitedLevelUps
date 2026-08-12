@@ -1,6 +1,18 @@
 from datetime import datetime
 
-from bot.scoring import QueueGroup, boxes_for_event, compute_score, compute_score_breakdown, supported_formats
+from bot.scoring import (
+    DEFAULT_QUEUE_GROUPS, QueueGroup, boxes_for_event, compute_score, compute_score_breakdown,
+    supported_formats,
+)
+
+
+def points_for(label: str) -> int:
+    """Group weight straight from scoring_buckets.json, so a weight change doesn't rewrite tests
+    whose subject is which formats land in which group."""
+    for group in DEFAULT_QUEUE_GROUPS:
+        if group.label == label:
+            return group.points
+    raise AssertionError(f"no queue group labelled {label}")
 
 
 def test_boxes_2024_six_win_play_sets_pay_two_at_trophy():
@@ -81,15 +93,43 @@ def test_compute_score_legacy_formula_single_bucket():
 
 
 def test_compute_score_combines_sealed_with_tradsealed():
-    # Both go into Sealed group (points=8). Combined trophies=3, events=6 → trophy_rate=0.5
-    # shrinkage = 3/5 = 0.6
-    # score = 3 × 8 × 0.5 × 0.6 = 7.2
+    # Both go into Sealed group. Combined trophies=3, events=6 → trophy_rate=0.5, shrinkage 3/5
     rows = [
         {"format": "Sealed", "events": 4, "wins": 10, "losses": 8, "trophies": 1},
         {"format": "TradSealed", "events": 2, "wins": 8, "losses": 0, "trophies": 2},
     ]
     score = compute_score(rows)
-    assert score == round(3 * 8 * 0.5 * (3 / 5), 2)
+    assert score == round(3 * points_for("Sealed") * 0.5 * (3 / 5), 2)
+
+
+def test_weighted_trophies_scale_the_numerator_but_not_the_rate():
+    """Rank weight has to move the multiplier only. Same 2 trophies in 8 events either way, so a
+    weighted row differs from an unweighted one by exactly the weight ratio."""
+    unweighted = [{"format": "PremierDraft", "events": 8, "wins": 40, "losses": 20, "trophies": 2}]
+    weighted = [dict(unweighted[0], weighted_trophies=2.6)]
+
+    assert compute_score(weighted) == round(compute_score(unweighted) * (2.6 / 2), 2)
+
+
+def test_weighted_trophies_aggregate_across_one_group():
+    """PremierDraft and ContenderDraft are one queue, so their weighted counts add before scoring."""
+    rows = [
+        {"format": "PremierDraft", "events": 5, "wins": 25, "losses": 10, "trophies": 2,
+         "weighted_trophies": 2.6},
+        {"format": "ContenderDraft", "events": 5, "wins": 20, "losses": 12, "trophies": 1,
+         "weighted_trophies": 1.5},
+    ]
+    trophies = 3
+    expected_raw = 4.1 * points_for("Premier") * (trophies / 10)
+
+    assert compute_score(rows) == round(expected_raw * (trophies / (trophies + 2)), 2)
+
+
+def test_rows_without_weighted_trophies_score_unweighted():
+    """The column is populated by the stats rebuild, so any other writer must not zero the score."""
+    rows = [{"format": "PremierDraft", "events": 4, "wins": 20, "losses": 8, "trophies": 2}]
+
+    assert compute_score(rows) == round(2 * points_for("Premier") * (2 / 4) * (2 / 4), 2)
 
 
 def test_compute_score_sums_across_groups():
@@ -97,8 +137,8 @@ def test_compute_score_sums_across_groups():
         {"format": "PremierDraft", "events": 10, "wins": 50, "losses": 30, "trophies": 4},
         {"format": "Sealed", "events": 6, "wins": 18, "losses": 8, "trophies": 3},
     ]
-    premier_raw = 4 * 10 * (4 / 10)
-    sealed_raw = 3 * 8 * (3 / 6)
+    premier_raw = 4 * points_for("Premier") * (4 / 10)
+    sealed_raw = 3 * points_for("Sealed") * (3 / 6)
     total_trophies = 4 + 3
     aggregate_confidence = total_trophies / (total_trophies + 2)
     assert compute_score(rows) == round((premier_raw + sealed_raw) * aggregate_confidence, 2)
@@ -135,11 +175,11 @@ def test_compute_score_ignores_unknown_formats():
 
 
 def test_compute_score_includes_qualifier_sealed_variants():
-    """Qualifier Weekend and Play-In Trad Sealed map to the Sealed group at 8 pts."""
+    """Qualifier Weekend and Play-In Trad Sealed map to the Sealed group."""
     rows = [
         {"format": "Qualifier_D1_Sealed", "events": 1, "wins": 7, "losses": 1, "trophies": 1},
     ]
-    assert compute_score(rows) == round(1 * 8 * 1 * (1 / 3), 2)
+    assert compute_score(rows) == round(1 * points_for("Sealed") * 1 * (1 / 3), 2)
 
 
 def test_compute_score_lcq_draft_2_special_rule():

@@ -111,6 +111,9 @@ class PlayerStats(Base):
     wins            = Column(Integer, nullable=False, default=0)
     losses          = Column(Integer, nullable=False, default=0)
     trophies        = Column(Integer, nullable=False, default=0)
+    # Trophies counted by what the end-of-event rank was worth; equal to trophies
+    # outside the groups that carry rank weights
+    weighted_trophies = Column(Float, nullable=False, server_default="0", default=0)
     last_fetched_at = Column(DateTime(timezone=True), nullable=True)
 
     player = relationship("Player", back_populates="stats")

@@ -8,6 +8,11 @@
     {
       "label": "Premier",
       "points": 10,
+      "rank_points": {
+        "Platinum": 11,
+        "Diamond": 13,
+        "Mythic": 15
+      },
       "formats": [
         "PremierDraft",
         "ContenderDraft",
@@ -33,7 +38,7 @@
     },
     {
       "label": "Sealed",
-      "points": 8,
+      "points": 10,
       "formats": [
         "Sealed",
         "TradSealed",

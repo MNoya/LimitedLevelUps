@@ -18,6 +18,7 @@ import {
   aggregate,
   boxesForEvent,
   computeScore,
+  groupTotalsFromBreakdown,
   lcqDraft2Earnings,
   podPoints,
   scoreFromGroups,
@@ -183,7 +184,7 @@ export async function fetchLeaderboard(setCode: string): Promise<LeaderboardRow[
       .eq("set_code", setCode),
     client()
       .from("public_player_format_breakdown")
-      .select("slug, format_label, events, wins, losses, trophies")
+      .select("slug, format_label, events, wins, losses, trophies, weighted_trophies")
       .eq("set_code", setCode),
     client()
       .from("public_pod_scoring")
@@ -211,6 +212,7 @@ export async function fetchLeaderboard(setCode: string): Promise<LeaderboardRow[
       wins: (r.wins as number) ?? 0,
       losses: (r.losses as number) ?? 0,
       trophies: (r.trophies as number) ?? 0,
+      weightedTrophies: r.weighted_trophies as number | undefined,
     });
     groupsBySlug.set(slug, list);
   }
@@ -486,7 +488,10 @@ export async function fetchFormatLeaderboard(
     const trophies = (r.trophies as number) ?? 0;
 
     const list = groupsBySlug.get(slug) ?? [];
-    list.push({ label, events, wins, losses, trophies });
+    list.push({
+      label, events, wins, losses, trophies,
+      weightedTrophies: r.weighted_trophies as number | undefined,
+    });
     groupsBySlug.set(slug, list);
 
     if (!labelSet.has(label)) continue;
@@ -895,13 +900,7 @@ async function fetchCubeBoardPlayerProfile(
     trophies: (r.trophies as number) ?? 0,
     scoreContribution: 0,
   }));
-  const agg = aggregate(breakdown.map((b) => ({
-    label: b.formatLabel,
-    events: b.events,
-    wins: b.wins,
-    losses: b.losses,
-    trophies: b.trophies,
-  })));
+  const agg = aggregate(groupTotalsFromBreakdown(breakdown));
   for (const b of breakdown) {
     b.scoreContribution = Math.round((agg.contributionByLabel.get(b.formatLabel) ?? 0) * 100) / 100;
   }
@@ -978,15 +977,7 @@ export async function fetchPlayerProfile(
   );
   // scoreContribution is aggregate-dependent (one confidence over total trophies), so it
   // can't be computed per row — derive each row's share from the full breakdown here.
-  const agg = aggregate(
-    breakdown.map((b) => ({
-      label: b.formatLabel,
-      events: b.events,
-      wins: b.wins,
-      losses: b.losses,
-      trophies: b.trophies,
-    })),
-  );
+  const agg = aggregate(groupTotalsFromBreakdown(breakdown));
   for (const b of breakdown) {
     b.scoreContribution = Math.round((agg.contributionByLabel.get(b.formatLabel) ?? 0) * 100) / 100;
   }

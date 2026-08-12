@@ -1,13 +1,17 @@
 // Formula port of bot/scoring.py — must stay in sync. Buckets, weights, and pod
 // point values come from the shared scoring_buckets.json (same file Python loads).
 //
-//   raw_group  = trophies × weight × trophy_rate
+//   raw_group  = weighted_trophies × weight × trophy_rate
 //   confidence = T / (T + 2)        // T = total trophies across all groups
 //   total      = (Σ raw_group) × confidence
 //
 // Confidence is aggregate (one factor over total trophies), and LCQ Draft 2 keeps
 // its wins×winrate×weight rule, exempt from confidence. Pod points are a separate
 // flat term added by callers via podPoints().
+//
+// weightedTrophies counts a trophy by what the end-of-event rank was worth, and the
+// database supplies it. Only the numerator is weighted: trophy rate and the confidence
+// total stay on raw counts. It falls back to trophies where a caller has no rank data.
 import {
   BUCKET_DEFS,
   formatsForBucket,
@@ -32,6 +36,7 @@ export interface ScoringStatRow {
   wins: number;
   losses: number;
   trophies: number;
+  weightedTrophies?: number;
   events: number;
 }
 
@@ -41,6 +46,7 @@ export interface GroupTotals {
   wins: number;
   losses: number;
   trophies: number;
+  weightedTrophies?: number;
 }
 
 export interface Aggregate {
@@ -73,8 +79,9 @@ export function aggregate(groups: GroupTotals[]): Aggregate {
       cur.wins += g.wins;
       cur.losses += g.losses;
       cur.trophies += g.trophies;
+      cur.weightedTrophies = (cur.weightedTrophies ?? 0) + (g.weightedTrophies || g.trophies);
     } else {
-      byLabel.set(g.label, { ...g });
+      byLabel.set(g.label, { ...g, weightedTrophies: g.weightedTrophies || g.trophies });
     }
   }
 
@@ -92,7 +99,8 @@ export function aggregate(groups: GroupTotals[]): Aggregate {
       continue;
     }
     if (g.trophies === 0 || g.events === 0) continue;
-    rawByLabel.set(def.label, g.trophies * def.points * (g.trophies / g.events));
+    const weighted = g.weightedTrophies || g.trophies;
+    rawByLabel.set(def.label, weighted * def.points * (g.trophies / g.events));
     totalTrophies += g.trophies;
   }
 
@@ -112,14 +120,37 @@ export function groupTotalsFromRows(rows: ScoringStatRow[]): GroupTotals[] {
     const def = DEFAULT_QUEUE_GROUPS.find((g) => g.formats.includes(row.format));
     if (!def) continue;
     const cur =
-      byLabel.get(def.label) ?? { label: def.label, events: 0, wins: 0, losses: 0, trophies: 0 };
+      byLabel.get(def.label) ??
+      { label: def.label, events: 0, wins: 0, losses: 0, trophies: 0, weightedTrophies: 0 };
     cur.events += row.events;
     cur.wins += row.wins;
     cur.losses += row.losses;
     cur.trophies += row.trophies;
+    cur.weightedTrophies = (cur.weightedTrophies ?? 0) + (row.weightedTrophies || row.trophies);
     byLabel.set(def.label, cur);
   }
   return [...byLabel.values()];
+}
+
+// A public_*_breakdown row already carries its group label, so it becomes GroupTotals directly.
+export function groupTotalsFromBreakdown(
+  rows: readonly {
+    formatLabel: string;
+    events: number;
+    wins: number;
+    losses: number;
+    trophies: number;
+    weightedTrophies?: number;
+  }[],
+): GroupTotals[] {
+  return rows.map((r) => ({
+    label: r.formatLabel,
+    events: r.events,
+    wins: r.wins,
+    losses: r.losses,
+    trophies: r.trophies,
+    weightedTrophies: r.weightedTrophies,
+  }));
 }
 
 export function computeScore(rows: ScoringStatRow[]): number {
