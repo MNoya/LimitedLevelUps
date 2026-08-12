@@ -6,7 +6,7 @@ import { PickGrid } from "./CommunityGrid";
 import { CardImagePreview } from "./CardImagePreview";
 import { breakdownStripAccent } from "./slotVisuals";
 import { CHAMFER, MEDAL_COLOR } from "./P0P1BallotScorecard";
-import { SLOTS } from "../../data/p0p1Slots";
+import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
 import {
   buildRatingsByName,
   bestPossibleTeam,
@@ -1297,17 +1297,19 @@ export function FinalResults({
   /** Viewport offset (px) below which the FULL RESULTS floating self-row pins — clears sticky page chrome. */
   stickyTop?: number;
 }) {
+  const { setCode } = ratingsSnapshot;
+  const contestSlots = useMemo(() => buildSlots(P0P1_CONTESTS[setCode]), [setCode]);
   const ratingsByName = useMemo(
     () => buildRatingsByName(ratingsSnapshot),
     [ratingsSnapshot],
   );
   const crowdTeam = useMemo(
-    () => mostPopularTeam(pickStats, SLOTS, ratingsByName),
-    [pickStats, ratingsByName],
+    () => mostPopularTeam(pickStats, contestSlots, ratingsByName),
+    [pickStats, contestSlots, ratingsByName],
   );
   const bestTeam = useMemo(
-    () => bestPossibleTeam(cards, SLOTS, ratingsByName),
-    [cards, ratingsByName],
+    () => bestPossibleTeam(cards, contestSlots, ratingsByName),
+    [cards, contestSlots, ratingsByName],
   );
   const rankedBallots = useMemo(() => {
     const grouped = groupBallotRows(ballots);
@@ -1320,12 +1322,10 @@ export function FinalResults({
     [rankedBallots, bestTeam, selfPlacement],
   );
   const highlights = useMemo(
-    () => highlightsFeed(pickStats, ballots, cards, SLOTS, ratingsByName, HIGHLIGHTS_COUNT),
-    [pickStats, ballots, cards, ratingsByName],
+    () => highlightsFeed(pickStats, ballots, cards, contestSlots, ratingsByName, HIGHLIGHTS_COUNT),
+    [pickStats, ballots, cards, contestSlots, ratingsByName],
   );
   const showYourPicks = Boolean(user) && hasParticipated;
-
-  const { setCode } = ratingsSnapshot;
 
   const userBallot = useMemo(
     () => (showYourPicks ? findUserBallot(rankedForDisplay, picksBySlot, user?.discordId) : null),

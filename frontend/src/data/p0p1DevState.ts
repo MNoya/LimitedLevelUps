@@ -12,9 +12,9 @@ export type P0P1DevPreset =
 
 export const P0P1_DEV_PRESETS: { value: P0P1DevPreset; group: string; label: string }[] = [
   { value: "live", group: "Live", label: "Live" },
-  { value: "closedLoggedOut", group: "Voting", label: "Logged out" },
-  { value: "closedComplete", group: "Voting", label: "Complete entry" },
-  { value: "closedDidNotVote", group: "Voting", label: "Didn't vote" },
+  { value: "closedLoggedOut", group: "Post-voting", label: "Logged out" },
+  { value: "closedComplete", group: "Post-voting", label: "Complete entry" },
+  { value: "closedDidNotVote", group: "Post-voting", label: "Didn't vote" },
   { value: "midwayScoring", group: "Midway", label: "Complete entry" },
   { value: "midwayDidNotVote", group: "Midway", label: "Didn't vote" },
   { value: "finalScoring", group: "Final", label: "Complete entry" },

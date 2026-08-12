@@ -21,7 +21,7 @@ import { P0P1DevPanel } from "../components/p0p1/P0P1DevPanel";
 import { p0p1DevEnabled } from "../data/p0p1DevState";
 import { isP0P1Previewer } from "../data/p0p1Previewers";
 import { useAuth } from "../auth/useAuth";
-import { P0P1BallotScorecard, MidwayBallotScorecard, FinalBallotScorecard, CHAMFER } from "../components/p0p1/P0P1BallotScorecard";
+import { P0P1BallotScorecard, MidwayBallotScorecard, FinalBallotScorecard, BallotScorecardSkeleton, CHAMFER } from "../components/p0p1/P0P1BallotScorecard";
 import { PickGrid } from "../components/p0p1/CommunityGrid";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { useP0P1Ballot } from "../data/useP0P1Ballot";
@@ -52,6 +52,7 @@ export function P0P1Page() {
     isPastDeadline,
     hasParticipated,
     pickStats,
+    ballotReady,
     handleClearAll,
     clearPending,
     setEditingSlotKey,
@@ -124,11 +125,15 @@ export function P0P1Page() {
       )
     ) : null;
   const didNotVoteCard = didNotVote ? <DidNotVoteCard /> : null;
-  const heroCta =
+  const ctaPending = isPastDeadline && (authLoading || (Boolean(user) && !ballotReady));
+  const heroCta = ctaPending ? (
+    <BallotScorecardSkeleton />
+  ) : (
     loginCta ||
     (user && !isPastDeadline ? <AutoSaveBadge complete={isComplete} /> : null) ||
     ballotScorecard ||
-    didNotVoteCard;
+    didNotVoteCard
+  );
 
   const belowIntro = isPastDeadline ? null : (
     <div className="flex items-center gap-3 w-full max-w-[420px]">
@@ -158,7 +163,9 @@ export function P0P1Page() {
             <RosterStripSkeleton />
           ))}
 
-        {showMidway ? (
+        {phase === "loading" ? (
+          <ResultsSkeleton />
+        ) : showMidway ? (
           resultsDataReady && ratingsSnapshot && cards && pickStats ? (
             <MidwayResults
               ratingsSnapshot={ratingsSnapshot}

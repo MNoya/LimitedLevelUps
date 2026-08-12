@@ -28,14 +28,14 @@ const dataLink = (
 
 export function P0P1IntroText({
   setName: setNameProp,
-  votingDeadline,
+  release,
   scoringDate,
   phase,
   dateRange,
   multiline = false,
 }: {
   setName: string;
-  votingDeadline: Date;
+  release: Date;
   scoringDate: Date;
   phase: P0P1Phase;
   dateRange?: { start: string; end: string } | null;
@@ -43,7 +43,7 @@ export function P0P1IntroText({
 }) {
   const setName = <span className="font-semibold text-text">{setNameProp}</span>;
   const cardCount = spellOut(SLOTS.length);
-  const windowText = describeDuration(scoringDate.getTime() - votingDeadline.getTime());
+  const windowText = describeDuration(scoringDate.getTime() - release.getTime());
   const formattedRange = dateRange ? formatDateRange(dateRange.start, dateRange.end) : null;
 
   const sentences: ReactNode[] = buildSentences(phase, setName, cardCount, windowText, formattedRange);
@@ -68,6 +68,11 @@ function buildSentences(
   formattedRange: string | null,
 ): ReactNode[] {
   switch (phase) {
+    case "loading":
+      return [
+        <span className="inline-block h-3.5 w-64 bg-surface2 animate-pulse align-middle" />,
+        <span className="inline-block h-3.5 w-80 bg-surface2 animate-pulse align-middle" />,
+      ];
     case "voting":
       return [
         <>Put together a team of {cardCount} cards from {setName}.</>,

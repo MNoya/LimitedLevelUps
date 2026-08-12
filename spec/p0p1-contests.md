@@ -28,15 +28,21 @@ below but not built.
 - **Frozen contest** — a finished contest, permanently browsable at a stable URL.
 - **Voting window** — `[previewsOpen → votingDeadline)`; picks can be submitted/changed.
   `votingDeadline` defaults to `release` but can be set earlier per contest.
-- **Results window** — `[votingDeadline → release+28d)`; community stats, then midway, then final.
-  Anchored to the deadline rather than `release` so a contest stays featured across the gap when
-  voting closes early, which is otherwise a stretch of days handing `/p0p1` back to the last set.
+- **Results window** — `[votingDeadline → scoringDate)`; community stats, then midway, then final.
+  `scoringDate` defaults to `release+28d`, not anchored to the deadline, so a contest stays
+  featured across the gap when voting closes early — otherwise that's a stretch of days handing
+  `/p0p1` back to the last set. It doubles as the reveal-end boundary — one date drives both when
+  results go final and how long the contest keeps the featured slot.
 - **Slots** — the shared 8-slot skeleton (5 mono-color commons, 1 multicolor uncommon, 2
   wildcards), **set-independent**. Filters by rarity + color only.
 - Dates: every instant lives in the contest fixture. `release` and `name` come from `bot/sets.py`;
   `previewsOpen` is set by the generator when the pool first passes its coverage check, so voting
-  opens as soon as a complete pool ships. Reveal end = `release + 28d`. Only `votingDeadline` is a
-  genuine input, and it defaults to `release`.
+  opens as soon as a complete pool ships. `scoringDate` defaults to `release + 28d`, independent
+  of `votingDeadline`, so an early deadline doesn't shorten the 17lands data window; it can be
+  overridden per contest, and it doubles as the reveal-end boundary (no separate field). If a
+  contest sets `scoringDate` earlier than `release + 28d`, the contest also loses the featured
+  slot that much earlier — the two effects are the same date by design, not two knobs to reason
+  about separately. `votingDeadline` defaults to `release`.
 - **Pre-contest** — a contest whose `previewsOpen` has not arrived. Never featured, and 404s at its
   archive URL, so a pool still being spoiled can be committed early without exposing a ballot.
 
@@ -50,12 +56,12 @@ below but not built.
    1. If any set's **voting** window contains now → feature it (**voting wins** on overlap;
       newest release breaks a multi-match).
    2. Else if any set's **results** window contains now → feature it.
-   3. Else feature the most recently finished contest (max `release+28d ≤ now`).
+   3. Else feature the most recently finished contest (max `scoringDate ≤ now`).
    4. Else (nothing has opened yet) the earliest contest, reported `pre` so no ballot renders.
 4. **Overlap tiebreak = voting wins.** Rationale: voting is time-boxed (miss the release deadline
    and it's gone forever); a reveal is static and stays reachable at its archived URL, so it can
    lose the front slot a few days early at no real cost. Additionally, the setup skill **warns**
-   when a new contest's `previewsOpen` falls before the prior set's `release+28d` (i.e. it's about
+   when a new contest's `previewsOpen` falls before the prior set's `scoringDate` (i.e. it's about
    to create an overlap) — so the overlap is deliberate, not a surprise.
 5. **Finalize-ordering guard.** The setup skill **warns** if the outgoing set's ratings fixture
    isn't `phase: final` before the incoming set could become featured, so an archived contest
@@ -67,8 +73,9 @@ below but not built.
    from the glob map and treated as the existing pre-results kill switch — no placeholder fixture
    needed.
 7. **A contest is self-contained and generated** — one root `p0p1_contests.json`, keyed by set code,
-   each entry carrying `name`, `release`, `previewsOpen` and optional `votingDeadline` (defaults to
-   `release`), all as ISO instants. Same shared-config shape as `scoring_buckets.json`: the frontend
+   each entry carrying `name`, `release`, `previewsOpen`, optional `votingDeadline` (defaults to
+   `release`), and optional `scoringDate` (defaults to `release + 28d`), all as ISO instants. Same
+   shared-config shape as `scoring_buckets.json`: the frontend
    imports it directly and the generator upserts one key at a time, so `python -m json` is the writer
    and there is no TS literal to edit. One file rather than a fixture per contest, so the whole
    schedule is readable at a glance and a deadline edit has one obvious place to go. **Superseded the original
@@ -197,8 +204,9 @@ below but not built.
 - Relay the script's window decision and name the empty slots when the pool is short. A hidden set
   mid-spoiler is the expected outcome, not a failure.
 - Never reschedule an existing window unless asked, since players may be voting in it.
-- Report how many days of Arena play the reveal will cover when `votingDeadline` precedes `release`
-  by more than a day, since `scoringDate` is `votingDeadline + 28d` regardless.
+- Confirm the resolved `scoringDate` is at least `release + 28d`; flag anything shorter (a
+  hand-edited `scoringDate` is the only way this can happen, since the generator's own default
+  always satisfies it).
 - Report a ratings join-check when a ratings fixture exists: for each pool card, did it match a
   rating by normalized name? Flag misses (especially `//` and special-character names). The ratings
   fixture is already filtered to C/U pool cards by `fetch_p0p1_ratings`, so a count gap means

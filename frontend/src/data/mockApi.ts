@@ -473,6 +473,7 @@ export const fetchPodSetCodes = (): Promise<PodSetCode[]> => wait(podSetCodesFix
 import type { RatingsSnapshot } from "./p0p1Results";
 import { GIH_SAMPLE_FLOOR } from "./p0p1Results";
 import { syntheticBallotsFromStats } from "./p0p1DevBallots";
+import { buildSlots, P0P1_CONTESTS } from "./p0p1Slots";
 
 const cardLoaders = import.meta.glob<Card[]>(
   "./fixtures/cards-*.ts",
@@ -541,17 +542,6 @@ export const fetchP0P1PickStats = (setCode: string): Promise<P0P1PickStat[]> =>
 
 const P0P1_COMPLETE_ENTRANTS = 91;
 
-const P0P1_SLOT_FILTERS: Record<SlotKey, (c: Card) => boolean> = {
-  white_common: (c) => c.rarity === "common" && c.colors.length === 1 && c.colors[0] === "W",
-  blue_common: (c) => c.rarity === "common" && c.colors.length === 1 && c.colors[0] === "U",
-  black_common: (c) => c.rarity === "common" && c.colors.length === 1 && c.colors[0] === "B",
-  red_common: (c) => c.rarity === "common" && c.colors.length === 1 && c.colors[0] === "R",
-  green_common: (c) => c.rarity === "common" && c.colors.length === 1 && c.colors[0] === "G",
-  multicolor_uncommon: (c) => c.rarity === "uncommon" && c.colors.length >= 2,
-  wildcard_common: (c) => c.rarity === "common" && !c.typeLine.startsWith("Basic Land"),
-  wildcard_uncommon: (c) => c.rarity === "uncommon",
-};
-
 function shuffleInPlace<T>(items: T[], rng: () => number): T[] {
   for (let i = items.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -577,14 +567,16 @@ function allocateVotes(weights: number[], total: number): number[] {
   return counts;
 }
 
+const NO_PICKS = new Set<string>();
+
 function generateSyntheticPickStats(cards: Card[], setCode: string): P0P1PickStat[] {
   let seed = 42;
   const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
   const N = P0P1_COMPLETE_ENTRANTS;
 
   const stats: P0P1PickStat[] = [];
-  for (const slotKey of P0P1_SLOT_KEYS) {
-    const eligible = shuffleInPlace(cards.filter(P0P1_SLOT_FILTERS[slotKey]), rng);
+  for (const slot of buildSlots(P0P1_CONTESTS[setCode])) {
+    const eligible = shuffleInPlace(cards.filter((c) => slot.filter(c, NO_PICKS)), rng);
     if (eligible.length === 0) continue;
     const skew = 1.1 + rng() * 0.8;
     const weights = eligible.map((_, rank) => 1 / Math.pow(rank + 1, skew));
@@ -592,7 +584,7 @@ function generateSyntheticPickStats(cards: Card[], setCode: string): P0P1PickSta
     const slotStats = eligible
       .map((card, i) => ({
         setCode,
-        slot: slotKey,
+        slot: slot.key,
         cardName: card.name,
         pickCount: counts[i],
         pickPct: Math.round(counts[i] * 1000 / N) / 10,

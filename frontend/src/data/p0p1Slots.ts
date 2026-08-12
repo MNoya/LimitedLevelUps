@@ -1,5 +1,5 @@
 import contestsConfig from "../../../p0p1_contests.json";
-import type { Card, ContestConfig, SlotDefinition } from "../types/p0p1";
+import type { Card, ContestConfig, SlotDefinition, SlotKey } from "../types/p0p1";
 
 // The same file bot/scripts writes and a future bot task reads, alongside scoring_buckets.json
 export const P0P1_CONTESTS: Record<string, ContestConfig> = contestsConfig;
@@ -7,6 +7,7 @@ export const P0P1_CONTESTS: Record<string, ContestConfig> = contestsConfig;
 // --- Featured-contest resolution (Decision 3) ---
 
 const DAY_MS = 86_400_000;
+const SCORING_WINDOW_MS = 28 * DAY_MS;
 
 export interface FeaturedContest {
   code: string;
@@ -14,7 +15,6 @@ export interface FeaturedContest {
   release: Date;
   votingDeadline: Date;
   scoringDate: Date;
-  revealEnd: Date;
   status: "pre" | "voting" | "reveal" | "frozen";
   next?: { code: string; name: string; previewsOpen: Date };
 }
@@ -25,20 +25,23 @@ interface ResolvedContest {
   release: number;
   previewsOpen: number;
   votingDeadline: number;
-  revealEnd: number;
+  scoringDate: number;
 }
 
 function resolveContests(): ResolvedContest[] {
   return Object.entries(P0P1_CONTESTS)
     .map(([code, config]) => {
       const release = new Date(config.release).getTime();
+      const scoringDate = config.scoringDate
+        ? new Date(config.scoringDate).getTime()
+        : release + SCORING_WINDOW_MS;
       return {
         code,
         name: config.name,
         release,
         previewsOpen: new Date(config.previewsOpen).getTime(),
         votingDeadline: config.votingDeadline ? new Date(config.votingDeadline).getTime() : release,
-        revealEnd: release + 28 * DAY_MS,
+        scoringDate,
       };
     })
     .sort((a, b) => b.release - a.release);
@@ -55,12 +58,12 @@ export function resolveFeaturedContest(now: number): FeaturedContest | null {
   // would un-feature a contest for the whole gap between an early deadline and the Arena drop,
   // sending fresh voters back to the previous set's archive.
   if (!featured) {
-    featured = contests.find((c) => now >= c.votingDeadline && now < c.revealEnd);
+    featured = contests.find((c) => now >= c.votingDeadline && now < c.scoringDate);
   }
 
   // 3. Most recently finished
   if (!featured) {
-    featured = contests.find((c) => now >= c.revealEnd);
+    featured = contests.find((c) => now >= c.scoringDate);
   }
 
   // 4. Nothing has opened yet: the earliest contest, which describeContest reports as "pre"
@@ -88,7 +91,7 @@ function describeContest(
     status = "pre";
   } else if (now < contest.votingDeadline) {
     status = "voting";
-  } else if (now < contest.revealEnd) {
+  } else if (now < contest.scoringDate) {
     status = "reveal";
   }
 
@@ -102,8 +105,7 @@ function describeContest(
     name: contest.name,
     release: new Date(contest.release),
     votingDeadline: new Date(contest.votingDeadline),
-    scoringDate: new Date(contest.votingDeadline + 28 * DAY_MS),
-    revealEnd: new Date(contest.revealEnd),
+    scoringDate: new Date(contest.scoringDate),
     status,
     next: next
       ? { code: next.code, name: next.name, previewsOpen: new Date(next.previewsOpen) }
@@ -125,30 +127,55 @@ function monoColor(color: string) {
     !picked.has(card.name);
 }
 
-export const SLOTS: SlotDefinition[] = [
-  { key: "white_common", label: "White Common", filter: monoColor("W") },
-  { key: "blue_common", label: "Blue Common", filter: monoColor("U") },
-  { key: "black_common", label: "Black Common", filter: monoColor("B") },
-  { key: "red_common", label: "Red Common", filter: monoColor("R") },
-  { key: "green_common", label: "Green Common", filter: monoColor("G") },
-  {
-    key: "multicolor_uncommon",
-    label: "Multicolor Uncommon",
-    filter: (card, picked) =>
-      card.rarity === "uncommon" &&
-      card.colors.length >= 2 &&
-      !picked.has(card.name),
-  },
-  {
-    key: "wildcard_common",
-    label: "Wildcard Common",
-    filter: (card, picked) =>
-      card.rarity === "common" && !isBasicLand(card) && !picked.has(card.name),
-  },
-  {
-    key: "wildcard_uncommon",
-    label: "Wildcard Uncommon",
-    filter: (card, picked) =>
-      card.rarity === "uncommon" && !picked.has(card.name),
-  },
-];
+function isHybridOf(manaCost: string, color: string): boolean {
+  const re = /\{([WUBRG])\/([WUBRG])\}/g;
+  let m;
+  while ((m = re.exec(manaCost)) !== null) {
+    if (m[1] === color || m[2] === color) return true;
+  }
+  return false;
+}
+
+function monoOrHybridColor(color: string) {
+  return (card: Card, picked: Set<string>) =>
+    card.rarity === "common" &&
+    !picked.has(card.name) &&
+    ((card.colors.length === 1 && card.colors[0] === color) ||
+      isHybridOf(card.manaCost, color));
+}
+
+const COLORS = ["W", "U", "B", "R", "G"] as const;
+const COLOR_LABELS: Record<string, string> = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
+
+export function buildSlots(config?: ContestConfig): SlotDefinition[] {
+  const colorFilter = config?.hybridCommonSlots ? monoOrHybridColor : monoColor;
+  return [
+    ...COLORS.map((c) => ({
+      key: `${COLOR_LABELS[c].toLowerCase()}_common` as SlotKey,
+      label: `${COLOR_LABELS[c]} Common`,
+      filter: colorFilter(c),
+    })),
+    {
+      key: "multicolor_uncommon",
+      label: "Multicolor Uncommon",
+      filter: (card: Card, picked: Set<string>) =>
+        card.rarity === "uncommon" &&
+        card.colors.length >= 2 &&
+        !picked.has(card.name),
+    },
+    {
+      key: "wildcard_common",
+      label: "Wildcard Common",
+      filter: (card: Card, picked: Set<string>) =>
+        card.rarity === "common" && !isBasicLand(card) && !picked.has(card.name),
+    },
+    {
+      key: "wildcard_uncommon",
+      label: "Wildcard Uncommon",
+      filter: (card: Card, picked: Set<string>) =>
+        card.rarity === "uncommon" && !picked.has(card.name),
+    },
+  ];
+}
+
+export const SLOTS: SlotDefinition[] = buildSlots();

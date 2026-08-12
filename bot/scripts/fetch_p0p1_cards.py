@@ -17,22 +17,32 @@ frontend imports and a future bot task can read:
 - Pool complete, no window yet: opens voting immediately, so the contest goes live when this ships.
 - Window already on disk: left alone. This is the mid-spoiler top-up, and it must not reschedule a
   window players may already be voting in.
-- ``--opens`` / ``--deadline``: reschedules explicitly, keeping whichever of the two is not given.
+- ``--opens`` / ``--deadline`` / ``--results``: reschedules explicitly, keeping whichever of the
+  three is not given.
 
-``--deadline`` is the only input that cannot be derived; it defaults to the Arena release instant.
-Bare dates mean noon ET, matching the release clock in ``bot/sets.py``.
+``--deadline`` defaults to the Arena release instant. ``--results`` (when voting closes for
+results) defaults to release + 28 days, independent of the deadline, so an early deadline doesn't
+shorten the 17lands data window. Bare dates mean noon ET, matching the release clock in
+``bot/sets.py``.
+
+``--hybrid-common-slots`` / ``--no-hybrid-common-slots`` lets hybrid cards fill the mono-color
+common slots. Defaults to on for a new contest; an existing contest keeps whatever it already has
+unless the flag is passed explicitly.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 import urllib.parse
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from bot.sets import ALL_SETS, RELEASE_TZ, SetSeed, release_instant
+
+RESULTS_WINDOW = timedelta(days=28)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES_DIR = REPO_ROOT / "frontend/src/data/fixtures"
@@ -93,7 +103,23 @@ def extract_card(raw: dict) -> dict:
     }
 
 
-def report_pool_coverage(cards: list[dict]) -> list[str]:
+_HYBRID_RE = re.compile(r"\{([WUBRG])/([WUBRG])\}")
+
+
+def _is_hybrid_of(mana_cost: str, color: str) -> bool:
+    return any(color in (m.group(1), m.group(2)) for m in _HYBRID_RE.finditer(mana_cost))
+
+
+def _color_common_count(playable: list[dict], color: str, *, hybrid: bool) -> int:
+    return sum(
+        1
+        for c in playable
+        if c["rarity"] == "common"
+        and (c["colors"] == [color] or (hybrid and _is_hybrid_of(c.get("manaCost", ""), color)))
+    )
+
+
+def report_pool_coverage(cards: list[dict], *, hybrid_common_slots: bool = False) -> list[str]:
     """Print what the 8 slots have to draw from and return the shortfalls. Mid-spoiler a set is
     mostly uncommons, which leaves the mono-color common slots unfillable — the pool has to be
     complete before voting opens, so say so here instead of on the live ballot."""
@@ -102,7 +128,7 @@ def report_pool_coverage(cards: list[dict]) -> list[str]:
 
     print("Slot coverage:")
     for color in ("W", "U", "B", "R", "G"):
-        count = sum(1 for c in playable if c["rarity"] == "common" and c["colors"] == [color])
+        count = _color_common_count(playable, color, hybrid=hybrid_common_slots)
         print(f"  {color} common          {count:4}")
         if count == 0:
             shortfalls.append(f"no {color} commons")
@@ -144,9 +170,23 @@ def read_contests() -> dict[str, dict[str, str]]:
     return json.loads(CONTESTS_JSON.read_text())
 
 
-def write_contest(seed: SetSeed, opens: str, deadline: str | None) -> None:
+def resolve_hybrid_common_slots(explicit: bool | None, existing: dict | None) -> bool:
+    """Match buildSlots' falsy read of a missing key: only a brand-new contest defaults to on."""
+    if explicit is not None:
+        return explicit
+    if existing is not None:
+        return existing.get("hybridCommonSlots", False)
+    return True
+
+
+def write_contest(
+    seed: SetSeed, opens: str, deadline: str | None, results: str, hybrid_common_slots: bool
+) -> None:
     """Upsert this set's window, leaving every other contest byte-identical. Newest release first so
-    the live contest is the first thing a maintainer sees when opening the file."""
+    the live contest is the first thing a maintainer sees when opening the file.
+
+    Every conditional field like ``hybridCommonSlots`` must be written here, explicitly, on every
+    call — this rebuilds the entry from scratch, so anything not passed through is dropped."""
     contests = read_contests()
     entry = {
         "name": seed.name,
@@ -155,6 +195,8 @@ def write_contest(seed: SetSeed, opens: str, deadline: str | None) -> None:
     }
     if deadline is not None:
         entry["votingDeadline"] = deadline
+    entry["scoringDate"] = results
+    entry["hybridCommonSlots"] = hybrid_common_slots
     contests[seed.code] = entry
 
     ordered = dict(sorted(contests.items(), key=lambda kv: kv[1]["release"], reverse=True))
@@ -172,6 +214,18 @@ def main() -> None:
     parser.add_argument(
         "--opens",
         help="Schedule voting to open later instead of as soon as this pool ships",
+    )
+    parser.add_argument(
+        "--results",
+        help="When results land: YYYY-MM-DD (noon ET) or a full ISO timestamp. "
+        "Defaults to release + 28 days, independent of --deadline",
+    )
+    parser.add_argument(
+        "--hybrid-common-slots",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Let hybrid cards fill the mono-color common slots. On by default for a new contest; "
+        "an existing contest keeps whatever it already has",
     )
     args = parser.parse_args()
 
@@ -216,21 +270,28 @@ def main() -> None:
     output.write_text(ts_content)
     print(f"Wrote {len(cards)} cards → {output}")
 
-    shortfalls = report_pool_coverage(cards)
     existing = read_contests().get(set_code)
+    hybrid = resolve_hybrid_common_slots(args.hybrid_common_slots, existing)
+    shortfalls = report_pool_coverage(cards, hybrid_common_slots=hybrid)
 
     if shortfalls:
         print(f"POOL INCOMPLETE: {', '.join(shortfalls)}. Those slots have nothing to pick from.")
 
-    if args.opens or args.deadline:
+    default_results = (release_instant(matched.start_date) + RESULTS_WINDOW).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if args.opens or args.deadline or args.results:
         opens = contest_instant(args.opens) if args.opens else (
             existing["previewsOpen"] if existing else now_instant()
         )
         deadline = contest_instant(args.deadline) if args.deadline else (
             existing.get("votingDeadline") if existing else None
         )
-        write_contest(matched, opens, deadline)
-        print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: opens {opens}, closes {deadline or 'at release'}")
+        results = contest_instant(args.results) if args.results else (
+            (existing.get("scoringDate") if existing else None) or default_results
+        )
+        write_contest(matched, opens, deadline, results, hybrid)
+        print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: opens {opens}, "
+              f"closes {deadline or 'at release'}, results {results}")
     elif existing:
         print(f"Voting already scheduled for {existing['previewsOpen']}, window left as is")
     elif shortfalls:
@@ -238,9 +299,9 @@ def main() -> None:
               f"Re-run this when the Scryfall gallery is complete.")
     else:
         opens = now_instant()
-        write_contest(matched, opens, None)
+        write_contest(matched, opens, None, default_results, hybrid)
         print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: voting opens at {opens}, "
-              f"so it goes live as soon as this ships.")
+              f"so it goes live as soon as this ships. Results {default_results}")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { BreakdownList } from "./BreakdownList";
 import type { BreakdownRow } from "./BreakdownList";
-import { SLOTS } from "../../data/p0p1Slots";
+import { buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
 import { GIH_SAMPLE_FLOOR } from "../../data/p0p1Results";
 import type { CardRating, GihwrBounds } from "../../data/p0p1Results";
 import type { Card, P0P1PickStat, SlotKey } from "../../types/p0p1";
@@ -33,11 +33,13 @@ export function MidwayBreakdownList({
     return map;
   }, [pickStats]);
 
+  const contestSlots = useMemo(() => buildSlots(setCode ? P0P1_CONTESTS[setCode] : undefined), [setCode]);
+
   // Build per-slot rows with raw gihwr for the global scale computation
   const rawBySlot = useMemo(() => {
     const empty = new Set<string>();
     return new Map(
-      SLOTS.map((slot) => {
+      contestSlots.map((slot) => {
         const picked = pickedBySlot.get(slot.key) ?? new Set<string>();
         const eligible = cards.filter((c) => slot.filter(c, empty) && picked.has(c.name));
         const rows = eligible.map((c) => {
@@ -54,7 +56,7 @@ export function MidwayBreakdownList({
         return [slot.key as SlotKey, rows] as const;
       }),
     );
-  }, [cards, ratingsByName, yourCardBySlot, pickedBySlot]);
+  }, [contestSlots, cards, ratingsByName, yourCardBySlot, pickedBySlot]);
 
   const bySlot = useMemo(() => {
     const span = bounds.max - bounds.min;
