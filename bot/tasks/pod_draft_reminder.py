@@ -500,7 +500,7 @@ def _signup_tally(attendance: Attendance) -> str:
 def confirm_ask_line() -> str:
     """The ask under the headline, the same on every pod. It used to name a table on a pod running more
     than one, which the table columns underneath already show better than a sentence can."""
-    return MSG_CONFIRM_LOCK_IN.format(button=MSG_CONFIRM_BUTTON)
+    return MSG_CONFIRM_LOCK_IN
 
 
 def reminder_header(

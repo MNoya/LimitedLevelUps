@@ -162,6 +162,11 @@ def attendance_for_event_sync(event_id: str) -> Attendance:
 
     Empty for a pod with no signup roster, which is what a queue or poll pod is, and is why those never
     hold a lobby up: there is nobody the bot could say it is waiting for."""
+    return roster_attendance_for_event_sync(event_id) or Attendance()
+
+
+def roster_attendance_for_event_sync(event_id: str) -> Attendance | None:
+    """None for a pod carrying no signup roster, not an empty Attendance"""
     with SessionLocal() as session:
         signal = session.execute(
             select(PodSignal).where(PodSignal.event_id == event_id)

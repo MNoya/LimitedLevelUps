@@ -9,6 +9,8 @@ draft is a stronger statement of intent than a button pressed days ago, so it is
 
 The caller's message is left up. Anything a player types around `!confirm` is their own words, and the card
 lands under it either way.
+
+An Organizer gets the roster read back and no seat: for them this is a chasing tool, not a signup.
 """
 from __future__ import annotations
 
@@ -31,9 +33,14 @@ from bot.commands.messages import (
 )
 from bot.database import SessionLocal
 from bot.models import PodSignal, PodSignalMember
-from bot.services.pod_confirm import attendance_for_event_sync
+from bot.services.pod_confirm import (
+    Attendance,
+    attendance_for_event_sync,
+    roster_attendance_for_event_sync,
+)
 from bot.services.pod_drafts import load_event_id_by_thread_sync, load_event_socket_status_sync
 from bot.services.pod_signals import RSVP_YES
+from bot.services.pod_tournament import is_pod_organizer
 from bot.tasks.pod_draft_reminder import refresh_or_repost_roster_reminder
 
 
@@ -58,6 +65,9 @@ async def setup(bot: commands.Bot) -> None:
         status = await asyncio.to_thread(load_event_socket_status_sync, event_id)
         if status not in PRE_LOBBY_STATUSES:
             await ctx.send(MSG_CONFIRM_POD_STARTED, delete_after=NOTICE_LIFETIME_S)
+            return
+        if await is_pod_organizer(ctx.bot, ctx.author):
+            await _organizer_roster_reply(ctx, event_id)
             return
         recorded = await asyncio.to_thread(
             confirm_seat_sync, event_id, str(ctx.author.id), ctx.author.display_name,
@@ -103,10 +113,24 @@ def confirm_seat_sync(event_id: str, discord_id: str, display_name: str) -> bool
         return True
 
 
+async def _organizer_roster_reply(ctx: commands.Context, event_id: str) -> None:
+    """Reads the roster back without seating the caller on it"""
+    attendance = await asyncio.to_thread(roster_attendance_for_event_sync, event_id)
+    if attendance is None:
+        await ctx.send(MSG_CONFIRM_NOT_A_POD, delete_after=NOTICE_LIFETIME_S)
+        return
+    with contextlib.suppress(discord.HTTPException):
+        await _replace_standing_reply(ctx, event_id, attendance)
+    await refresh_or_repost_roster_reminder(event_id)
+    log.info(f"confirm: {ctx.author} read the roster for event {event_id}")
+
+
 _standing_replies: dict[str, int] = {}
 
 
-async def _replace_standing_reply(ctx: commands.Context, event_id: str) -> None:
+async def _replace_standing_reply(
+    ctx: commands.Context, event_id: str, attendance: Attendance | None = None,
+) -> None:
     """One standing reply per pod, addressed to whoever confirmed last. Every confirm answers the same
     question, so the previous answer is already wrong. The id rather than the message, which would pin a
     whole Message per pod for the life of the process. Held in memory: a restart costs one duplicate."""
@@ -115,23 +139,26 @@ async def _replace_standing_reply(ctx: commands.Context, event_id: str) -> None:
         with contextlib.suppress(discord.HTTPException):
             await ctx.channel.get_partial_message(previous).delete()
     reply = await ctx.reply(
-        await _standing_reply(ctx, event_id), suppress_embeds=True,
+        await _standing_reply(ctx, event_id, attendance), suppress_embeds=True,
         allowed_mentions=discord.AllowedMentions.none(),
     )
     _standing_replies[event_id] = reply.id
 
 
-async def _standing_reply(ctx: commands.Context, event_id: str) -> str:
+async def _standing_reply(
+    ctx: commands.Context, event_id: str, attendance: Attendance | None = None,
+) -> str:
     """What the room still needs, said back to whoever just confirmed.
 
     The press used to be answered with a tick on their own message, which said nothing about the pod and
     invited everyone else to click the same tick expecting it to count them. This names the players still
     outstanding instead, and points at the card, so the reply does the chasing the tick could not."""
-    attendance = await asyncio.to_thread(attendance_for_event_sync, event_id)
+    if attendance is None:
+        attendance = await asyncio.to_thread(attendance_for_event_sync, event_id)
     if attendance.yes:
         lead = MSG_CONFIRM_REPLY.format(
             confirmed=len(attendance.confirmed), pending=len(attendance.yes),
-            names=", ".join(attendance.yes),
+            names=", ".join(f"**{name}**" for name in attendance.yes),
         )
     else:
         lead = MSG_CONFIRM_REPLY_ALL.format(confirmed=len(attendance.confirmed))
