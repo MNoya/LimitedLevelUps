@@ -1592,9 +1592,9 @@ def poll_yes_members_sync(signal_id: str) -> list[tuple[str, str]]:
         return [(did, name) for did, name in rows]
 
 
-def seed_yes_members_sync(signal_id: str, members: list[tuple[str, str]]) -> None:
-    """Insert a batch of Yes members onto a fresh signal — poll signups carried onto their RSVP card.
-    Skips anyone already present so a retry is idempotent."""
+def seed_members_sync(signal_id: str, members: list[tuple[str, str]], rsvp: str) -> None:
+    """Insert a batch of members onto a fresh signal at one answer. Skips anyone already present so a retry
+    is idempotent."""
     with SessionLocal() as session:
         present = set(session.execute(
             select(PodSignalMember.discord_user_id).where(PodSignalMember.signal_id == signal_id)
@@ -1604,7 +1604,7 @@ def seed_yes_members_sync(signal_id: str, members: list[tuple[str, str]]) -> Non
                 continue
             session.add(PodSignalMember(
                 signal_id=signal_id, discord_user_id=user_id, display_name=display_name,
-                rsvp=pod_signals.RSVP_YES, format_interest=get_format_interests(session, user_id),
+                rsvp=rsvp, format_interest=get_format_interests(session, user_id),
             ))
         session.commit()
 
@@ -1865,7 +1865,10 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str, allow_hold: bool
 
     A pod expecting more players than one session seats holds instead, since opening a room is what
     commits the pod to a shape and nobody yet knows which shape the answers make. `allow_hold` is False
-    on the release at the other end of that hold, which is this same path with the question settled."""
+    on the release at the other end of that hold, which is this same path with the question settled.
+
+    A table a split staged DMs its confirmed players only. Its maybes were asked to confirm when the pod
+    held and did not, and the link is in the thread they are already in."""
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, event_id)
         if event is None:
@@ -1890,6 +1893,7 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str, allow_hold: bool
         roster = await asyncio.to_thread(championship_seeds.playing_roster_sync, event_id, roster)
     display_names = [name for _, name in roster]
     rsvps = await asyncio.to_thread(signal_rsvps_sync, event_id)
+    split = pod_is_numbered(event_name)
     maybe_names = [] if single_table else (rsvps[1] if rsvps else [])
     draftmancer_url = draftmancer_url_for(session_id)
 
@@ -1933,11 +1937,10 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str, allow_hold: bool
             event.socket_status = "reminded"
             session.commit()
 
-    maybe_roster = [] if single_table else await asyncio.to_thread(maybe_roster_for_event_sync, event_id)
-    recipients = (
-        [(did, name, "yes") for did, name in roster]
-        + [(did, name, "maybe") for did, name in maybe_roster]
-    )
+    recipients = [(did, name, "yes") for did, name in roster]
+    if not single_table and not split:
+        maybe_roster = await asyncio.to_thread(maybe_roster_for_event_sync, event_id)
+        recipients += [(did, name, "maybe") for did, name in maybe_roster]
     await send_lobby_link_dms(
         bot, session_id=session_id, thread=thread, recipients=recipients,
     )
@@ -2072,7 +2075,7 @@ async def _reseat_on_fresh_session(
 
     Returns the live manager (None when the fresh session also failed) and the session id to announce.
     """
-    await stale.disconnect_safely()
+    await stale.abandon_session()
     session_id = await asyncio.to_thread(_mint_fresh_session_sync, event_id)
     if session_id is None:
         return None, stale.session_id

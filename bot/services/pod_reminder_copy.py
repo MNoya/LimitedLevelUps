@@ -40,7 +40,7 @@ SLOT_FIRE_PING = "{mention} starts <t:{unix}:R>"
 
 ROSTER_REMINDER_TITLE = "🔔 Pod Draft Starting Soon"
 ROSTER_REMINDER_MARK = "### 🔔"
-ROSTER_REMINDER_HEADLINE = ROSTER_REMINDER_MARK + " **{name}** starts <t:{unix}:R>"
+ROSTER_REMINDER_HEADLINE = ROSTER_REMINDER_MARK + " **{name}** <t:{unix}:R>"
 ROSTER_REMINDER_HEADLINE_COUNT = ROSTER_REMINDER_HEADLINE + " ✅ {count}"
 
 LOBBY_OPEN_HEADLINE = "**Join the Draftmancer session:**"

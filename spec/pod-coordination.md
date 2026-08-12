@@ -63,6 +63,7 @@ You can also save a **Format Preference** on your welcome card to say what you l
 In the hour before a pod, a few things happen in the thread:
 
 - The bot posts a reminder that shows the roster as the tables it makes. It carries Confirm and Leave buttons to say whether you are still playing. There is no Maybe at this point: you are confirming a yes or a no.
+- Typing `!confirm` in the thread does the same as the button, and answers with who is still outstanding. From an Organizer it only reads that list back: no seat is taken, so it is the way to check the roster without joining the table.
 - Confirming moves you to Maybe on any other pod starting within two hours of the one you confirmed, and says so in that pod's thread. You cannot play two at once, and the pod you are not playing should not build a table around you. A pod further apart than that is untouched.
 - The pod's status message in pod chat says where it stands: how many players it still needs, and once it has enough, how many said yes and how many said maybe. It is one message from the first signup to the lobby, so the numbers move in place instead of the message coming and going. An hour out it moves to the bottom of the channel, and pings the slot's role if the pod is one or two players short.
 - Reaching 8 does not close the pod. Signups stay open, because people do drop before the start, and extra players get a table of their own when the pod splits.
@@ -110,13 +111,15 @@ On busy nights a pod splits into tables before it opens, not after. A Draftmance
 
 At the start time the bot builds the tables the confirmed players ask for, opens one for each, and posts a list of them in the thread. Every table plays the format the pod was signed up for.
 
-Each table opens its Draftmancer room at the size it was planned for, so a table of ten holds ten and a table of six holds six, and it offers a ready check as soon as everyone it is expecting has arrived. A table waiting on one more player is waiting on somebody real. If a late player turns up after the tables are built, send them to the last table and widen it from Max Players on that table's Settings panel.
+Players who said Maybe and never confirmed go to the last table. A maybe is a seat the room might get to use, not a player it plans around: the pod already asked for a confirmation when it held, so nothing asks again. They land on that table as a Maybe, join its thread, and take a seat by pressing Join Draft whenever they want it, which is what a table losing somebody at the last minute can call on. Table 1 is the confirmed players and never carries them.
 
-Each table's card carries only the players on it. There are no signup buttons and no start time on it: the draft is beginning, so there is nothing left to answer.
+Each table opens its Draftmancer room at the size it was planned for, and a table holding maybes opens at eight so one of them can sit down. It offers a ready check as soon as everyone it is expecting has arrived, and a table waiting on one more player is waiting on somebody real. If a late player turns up after the tables are built, send them to the last table and widen it from Max Players on that table's Settings panel.
+
+Each table's card carries the players on it. There are no signup buttons and no start time on it: the draft is beginning, so there is nothing left to answer.
 
 Organizers have two controls on the roster card while it is asking for confirmations. 📋 opens a private list with **Confirmed Players** and **Declined Players**, for recording what somebody said in chat but never pressed, and 🚀 **Open Tables** ends the wait early and deals the tables there and then. Both edits are posted in the thread naming who made them and who they were about, since the room is waiting on those answers. After the split, 📋 **Move Players** sits under the list of tables and moves people between them.
 
-You do not have to go looking for your table. The players a new table is for are named in that table's own thread, and the list in the main thread links to every table. On a pod that split, the lobby post carries no draft link, only the **Join Draft** button, which sends you to the table with a seat for you even when you press it in the wrong thread.
+You do not have to go looking for your table. The players a new table is for are named in that table's own thread, and the list in the main thread links to every table. On a pod that split, each table's lobby post carries that table's own link beside the **Join Draft** button, which hands you a personal link and sends you to the table with a seat for you even when you press it in the wrong thread.
 
 A table that opens short of six asks pod chat for the players it needs, once. Anyone can open one more table at any time with `/pod-table`.
 

@@ -20,9 +20,7 @@ def test_in_session_arena_handle_deduped_from_maybe():
         in_session=[("Suiname#00231", "Maybe Greg")],
         state="linked",
     )
-    maybe = _field(embed, "🤷 Maybe")
-    assert maybe is not None
-    assert maybe.name.endswith("(0)")
+    assert _field(embed, "🤷 Maybe") is None
 
 
 def test_unlinked_seat_counted_in_draftmancer_but_listed_separately():

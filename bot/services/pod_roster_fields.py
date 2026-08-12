@@ -53,10 +53,11 @@ def add_roster_fields(
     A confirmed player reads as a Yes at every size the pod reaches. Confirmation decides seating, and
     the T-60 table plan is where it shows.
 
-    `playing_only` is a table already at its start time: one column of the players it holds, confirmed
-    and not, since a maybe on a draft about to begin is not an answer anybody is waiting for."""
+    `playing_only` is a table already at its start time: the players it holds, confirmed and not, beside
+    the maybes a split handed it, who are the only replacements left to call on."""
     if playing_only:
         _add_playing_field(embed, (rosters.get(CONFIRMED) or []) + (rosters.get(RSVP_YES) or []))
+        _add_maybe_field(embed, rosters.get(RSVP_MAYBE) or [])
         return
     rosters = _confirmed_as_yes(rosters)
     roster_interests = _confirmed_as_yes(roster_interests)
@@ -77,6 +78,13 @@ def add_roster_fields(
 
 def _add_playing_field(embed: discord.Embed, names: list[str]) -> None:
     _add_lines_field(embed, f"{_YES_COLUMN[1]} {_YES_COLUMN[2]} ({len(names)})", names)
+
+
+def _add_maybe_field(embed: discord.Embed, names: list[str]) -> None:
+    """Left off when nobody is a maybe, since an empty column reads as a roster that failed to load."""
+    if not names:
+        return
+    _add_lines_field(embed, f"{_MAYBE_COLUMN[1]} {_MAYBE_COLUMN[2]} ({len(names)})", names)
 
 
 def add_table_plan_fields(

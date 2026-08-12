@@ -208,6 +208,17 @@ def test_await_ownership_returns_false_when_claim_resolved_without_ownership():
     assert result is False
 
 
+def test_abandoning_a_session_takes_its_lobby_card_down():
+    """The card is the only thing still handing out the dead session's link."""
+    mgr = _manager()
+    card = _FakeCard()
+    mgr.lobby_status_message = card
+
+    asyncio.run(mgr.abandon_session())
+
+    assert (mgr.abandoned, card.deleted, mgr.lobby_status_message) == (True, True, None)
+
+
 def test_await_ownership_times_out_when_claim_never_resolves():
     mgr = _manager()
 
@@ -314,6 +325,17 @@ class _FakeSio:
 
     async def emit(self, event: str, *args, **kwargs) -> None:
         self.emitted.append(event)
+
+    async def disconnect(self) -> None:
+        self.connected = False
+
+
+class _FakeCard:
+    def __init__(self) -> None:
+        self.deleted = False
+
+    async def delete(self) -> None:
+        self.deleted = True
 
 
 def test_packs_per_player_sets_value_and_emits_pre_draft():

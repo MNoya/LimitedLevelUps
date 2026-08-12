@@ -388,10 +388,22 @@ def hand_over_members_sync(source_event_id: str, moved: list[Signup]) -> int:
 
     Only the signal roster moves. Thread membership is left alone on purpose: nobody is removed from a
     conversation they were already part of, so a player sits in both threads and picks. Returns how many
-    rows actually moved."""
-    if not moved:
+    rows actually moved. Maybe rows are left alone whatever the deal says, since the plan seats nobody who
+    has not committed."""
+    return _take_off_roster(source_event_id, moved, only_maybes=False)
+
+
+def hand_over_maybes_sync(source_event_id: str, maybes: list[Signup]) -> int:
+    """Take the signup's maybes off it, for the table they are being handed to. They belong to one table at
+    a time, else they read as spare capacity on two."""
+    return _take_off_roster(source_event_id, maybes, only_maybes=True)
+
+
+def _take_off_roster(source_event_id: str, signups: list[Signup], *, only_maybes: bool) -> int:
+    if not signups:
         return 0
-    ids = {signup.discord_id for signup in moved}
+    ids = {signup.discord_id for signup in signups}
+    answer = PodSignalMember.rsvp == RSVP_MAYBE if only_maybes else PodSignalMember.rsvp != RSVP_MAYBE
     with SessionLocal() as session:
         signal = session.execute(
             select(PodSignal).where(PodSignal.event_id == source_event_id)
@@ -402,7 +414,7 @@ def hand_over_members_sync(source_event_id: str, moved: list[Signup]) -> int:
             select(PodSignalMember).where(
                 PodSignalMember.signal_id == signal.id,
                 PodSignalMember.discord_user_id.in_(ids),
-                PodSignalMember.rsvp != RSVP_MAYBE,
+                answer,
             )
         ).scalars().all()
         for member in members:

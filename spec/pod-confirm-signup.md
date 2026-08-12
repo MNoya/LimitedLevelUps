@@ -123,6 +123,12 @@ Players who never confirmed are welcome, at every stage, with no exceptions. Som
 
 Being loose here is a position, not an omission. Rigid rules on a problem this fluid create more edge cases than they prevent, and the room can solve the last few percent by talking to each other.
 
+## Where the maybes go
+
+The plan seats confirmed players only, so a maybe reaching the split is capacity the room did not build on. They go to the last table, whatever shape the split came out as: that is the table a dropped player costs a draft, and a maybe is who it can call on. Never table 1, which is the confirmed players in confirmation order and starts on its own.
+
+The handover is silent. The pod asked for a confirmation when it held, and asking again as the tables open is pressing someone who already answered. So they get a roster row on that table, its thread, and a seat they can take whenever they want it, with nothing addressed to them.
+
 ## A short second table
 
 No plan ever produces a table below six. A table gets there by draining: people drop, or say Yes and never come, and a six becomes a four by nine o'clock. That is normal, not an emergency. It has a thread, a lobby, a link, and a visible count, which is four more things than those players have today. What it needs is to say what it needs, and the existing nudge machinery already knows how to ask. This server usually has people around who are not committed to anything.

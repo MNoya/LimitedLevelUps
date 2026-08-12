@@ -664,11 +664,12 @@ def render(
                 value=quote_block(waiting_yes, trailing=waiting_trailing),
                 inline=True,
             )
-            embed.add_field(
-                name=f"🤷 Maybe ({len(waiting_maybe)})",
-                value=quote_block(waiting_maybe),
-                inline=True,
-            )
+            if waiting_maybe:
+                embed.add_field(
+                    name=f"🤷 Maybe ({len(waiting_maybe)})",
+                    value=quote_block(waiting_maybe),
+                    inline=True,
+                )
             embed.add_field(name="​", value="​", inline=True)
 
     if spectators:

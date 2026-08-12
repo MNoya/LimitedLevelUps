@@ -20,13 +20,19 @@ from bot.commands.pod_rsvp import (
     post_scheduled_card,
     render_pod_overview,
 )
+from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import resolve_pod_chat_channel
 from bot.models import PodDraftEvent
 from bot.services import pod_event_settings
 from bot.services.pod_drafts import load_event_thread_id_sync
 from bot.services.pod_confirm import seating_plan
-from bot.services.pod_launch import fetch_pod_thread, register_stage_pods, scheduled_card_ref_sync
+from bot.services.pod_launch import (
+    fetch_pod_thread,
+    maybe_roster_for_event_sync,
+    register_stage_pods,
+    scheduled_card_ref_sync,
+)
 from bot.services.pod_hold_view import build_tables_map_items
 from bot.services.pod_link_dm import pod_thread_link
 from bot.services.pod_reminder_copy import STAGED_TABLES_ROW, STAGED_TABLES_TITLE
@@ -36,6 +42,7 @@ from bot.services.pod_staging import (
     Signup,
     confirmed_first_roster_sync,
     family_state_sync,
+    hand_over_maybes_sync,
     hand_over_members_sync,
     numbered_pod_name,
     pod_base_name,
@@ -61,6 +68,8 @@ async def stage_pods(bot: commands.Bot, event_id: str) -> None:
     and then correcting itself. Table 1 takes its card first, so the tables land in the channel in the
     order they are numbered.
 
+    The maybes go with the last table, which is where a player dropping out costs a draft.
+
     Creating is one-way. A pod that empties out afterwards is cancelled by hand, like any other."""
     source = await asyncio.to_thread(_load_source, event_id)
     if source is None:
@@ -75,6 +84,7 @@ async def stage_pods(bot: commands.Bot, event_id: str) -> None:
             return
         roster = await asyncio.to_thread(confirmed_first_roster_sync, event_id)
         groups = deal_into_plan([signup for signup in roster if signup.confirmed], plan)
+        maybes = await _maybes_for_the_last_table(event_id, groups)
         if groups:
             await asyncio.to_thread(_size_the_room, event_id, plan.tables[0].capacity)
         await asyncio.to_thread(_renumber_source, source)
@@ -82,16 +92,28 @@ async def stage_pods(bot: commands.Bot, event_id: str) -> None:
             await asyncio.to_thread(hand_over_members_sync, event_id, members)
             for members in groups[1:]
         ]
+        await asyncio.to_thread(hand_over_maybes_sync, event_id, maybes)
         await _give_table_one_its_own_card(bot, source, groups[0] if groups else [])
         for offset, members in enumerate(groups[1:], start=1):
             index = staged + offset
             await _open_pod(
                 bot, event_id, source, members, index, plan.tables[index - 1].capacity,
-                moved[offset - 1],
+                moved[offset - 1], maybes if offset == len(groups) - 1 else [],
             )
     if signup_card is not None:
         await render_pod_overview(bot, event_id, signup_card[2])
     await _point_at_the_tables(event_id, signup_thread)
+
+
+async def _maybes_for_the_last_table(event_id: str, groups: list[list[Signup]]) -> list[Signup]:
+    """The signup's maybes, in signup order, for the last table a split makes.
+
+    They follow that table whatever shape the split came out as, since a full table losing one at five to
+    nine is exactly the table a maybe rescues. Never table 1, which starts on its own."""
+    if len(groups) < 2:
+        return []
+    roster = await asyncio.to_thread(maybe_roster_for_event_sync, event_id)
+    return [Signup(discord_id, display_name, False) for discord_id, display_name in roster]
 
 
 _family_locks: dict[str, asyncio.Lock] = {}
@@ -112,7 +134,7 @@ def _family_lock(base_name: str) -> asyncio.Lock:
 
 async def _open_pod(
     bot: commands.Bot, source_event_id: str, source: "_Source", members: list, index: int, seats: int,
-    moved: int,
+    moved: int, maybes: list[Signup],
 ) -> None:
     """Create one sibling pod carrying the source's start time, seeded with the players the plan put on
     it. `post_scheduled_card` builds the whole ordinary pod: event, signal, card, thread, and every timed
@@ -120,7 +142,7 @@ async def _open_pod(
 
     Every dealt player is seeded, real id or not: the handover has already taken them off the source, so
     filtering here dropped them off both rosters instead of one. `add_members_to_thread` leaves an id it
-    cannot resolve out of the thread on its own."""
+    cannot resolve out of the thread on its own. `maybes` ride along on the last table only."""
     channel = await _card_channel(bot, source)
     if channel is None:
         log.warning(f"pod-stage: no channel to open pod {index} off {source_event_id}")
@@ -129,13 +151,14 @@ async def _open_pod(
     name = numbered_pod_name(source.base_name, index)
     preseed = [(signup.discord_id, signup.display_name) for signup in members]
     new_event_id = await post_scheduled_card(
-        bot, channel, set_code=source.set_code, event_time=source.event_time,
-        name=name, preseed_yes=preseed, ping_role=False,
+        bot, channel, set_code=source.set_code, event_time=source.event_time, name=name,
+        preseed_yes=preseed, preseed_maybe=[(m.discord_id, m.display_name) for m in maybes],
+        ping_role=False,
     )
     if new_event_id is None:
         log.warning(f"pod-stage: could not open pod {index} off {source_event_id}")
         return
-    await asyncio.to_thread(_size_the_room, new_event_id, seats)
+    await asyncio.to_thread(_size_the_room, new_event_id, _room_for(seats, len(maybes)))
     await _name_the_players_seated_here(bot, new_event_id, index, members)
     await _ask_for_the_missing_players(bot, new_event_id, name, source.event_time, len(members))
     audit.event(
@@ -152,6 +175,13 @@ def _size_the_room(event_id: str, seats: int) -> None:
     to eight and a planned table of ten could never seat its last two. Written as the pod setting the
     Settings button offers, so anyone can widen a table that needs it."""
     pod_event_settings.store_sync(event_id, max_players=seats)
+
+
+def _room_for(seats: int, maybes: int) -> int:
+    """The size a table's room opens at once its maybes are counted: any maybe at all opens it to eight,
+    since a six that three maybes could join would rather wait for an eighth than draft as a nine. A table
+    the plan drew wider keeps its own size."""
+    return max(seats, settings.pod_draft_target_players) if maybes else seats
 
 
 async def _give_table_one_its_own_card(

@@ -778,7 +778,8 @@ def _card_ping(
 
 async def post_scheduled_card(
     bot: commands.Bot, channel: discord.TextChannel, *, set_code: str, event_time: datetime, name: str,
-    preseed_yes: list[tuple[str, str]] | None = None, ping_role: bool = True,
+    preseed_yes: list[tuple[str, str]] | None = None,
+    preseed_maybe: list[tuple[str, str]] | None = None, ping_role: bool = True,
     notify_role_name: str | None = None, description: str | None = None,
     pairing_mode: str | None = None, seating_mode: str | None = None, pick_timer: int | None = None,
     content_override: str | None = None, card_body: str | None = None, native_body: str | None = None,
@@ -797,7 +798,10 @@ async def post_scheduled_card(
 
     `preseed_yes` is (user_id, display_name) of players who already committed — daily-poll signups
     graduating to a card. They start in the Yes column, are recorded Yes on the signal, and are
-    pulled into the thread; Maybe and No start empty.
+    pulled into the thread; No always starts empty.
+
+    `preseed_maybe` is the same for the maybes a split hands to its last table. They join the thread too,
+    since the seat they might take is here, and being dealt to a table does not turn Maybe into a Yes.
 
     `content_override` replaces the card's content ping outright — a fired launcher slot's creation
     announcement, carrying its own role mention. `card_body` is a fixed announcement rendered inside
@@ -810,8 +814,10 @@ async def post_scheduled_card(
     A numbered name means a table staged at its own start time, whose card carries the roster with no
     RSVP prompt, no Time and no buttons, since nobody is being asked to sign up."""
     preseed_yes = preseed_yes or []
+    preseed_maybe = preseed_maybe or []
     rosters = {state: [] for state in RSVP_STATES}
     rosters[RSVP_YES] = [display for _, display in preseed_yes]
+    rosters[RSVP_MAYBE] = [display for _, display in preseed_maybe]
     guild = channel.guild
     name = await pod_launch.dedupe_pod_name(channel, name)
     starts_now = pod_is_numbered(name)
@@ -843,7 +849,9 @@ async def post_scheduled_card(
         opened_by=str(opener.id) if opener is not None else None,
     )
     if preseed_yes:
-        await asyncio.to_thread(pod_launch.seed_yes_members_sync, signal_id, preseed_yes)
+        await asyncio.to_thread(pod_launch.seed_members_sync, signal_id, preseed_yes, RSVP_YES)
+    if preseed_maybe:
+        await asyncio.to_thread(pod_launch.seed_members_sync, signal_id, preseed_maybe, RSVP_MAYBE)
     native_event_id = await _create_native_event(
         channel, name, event_time, message.jump_url, native_body)
     event_id, created_at, pairing_mode, seating_mode = await asyncio.to_thread(
@@ -867,7 +875,7 @@ async def post_scheduled_card(
     except discord.HTTPException:
         log.warning(f"could not post the registered embed in thread {thread.id}", exc_info=True)
 
-    await add_members_to_thread(thread, preseed_yes)
+    await add_members_to_thread(thread, preseed_yes + preseed_maybe)
     pod_launch.arm_scheduled_pod_jobs(bot, event_id, event_time, created_at)
     log.info(f"posted scheduled pod card for {name} as message {message.id} (event {event_id})")
     await _refresh_launcher(bot, event_time)

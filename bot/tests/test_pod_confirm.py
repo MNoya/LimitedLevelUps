@@ -12,6 +12,7 @@ from bot.services.pod_confirm import (
     plan_tables,
     seating_plan,
 )
+from bot.services import pod_staging
 from bot.services.pod_staging import Signup, deal_into_plan
 from bot.services.pod_roster_fields import FIELD_VALUE_LIMIT, add_table_plan_fields
 from bot.services.pod_launch import set_rsvp
@@ -226,6 +227,27 @@ def test_dropping_to_maybe_gives_the_confirmation_back(session, scheduled_signal
 
     member = session.query(PodSignalMember).filter_by(discord_user_id="u11").one()
     assert member.confirmed_at is None
+
+
+def test_a_split_hands_over_the_dealt_players_and_the_maybes_separately(
+    session, scheduled_signal, monkeypatch,
+):
+    """A handover that quietly moves nothing leaves a player on two rosters or on none."""
+    monkeypatch.setattr(pod_staging, "SessionLocal", _session_factory(session))
+    scheduled_signal.event_id = _pod_starting_in(session, minutes=10).id
+    dealt, maybe = HALL_OF_FAME[0], HALL_OF_FAME[1]
+    set_rsvp(session, MESSAGE_ID, "u20", dealt, pod_signals.RSVP_YES, confirming=True)
+    set_rsvp(session, MESSAGE_ID, "u21", maybe, pod_signals.RSVP_MAYBE)
+    session.flush()
+    handed = [Signup("u20", dealt, True), Signup("u21", maybe, False)]
+
+    moved = pod_staging.hand_over_members_sync(scheduled_signal.event_id, handed)
+    left_after_deal = [row.display_name for row in session.query(PodSignalMember).all()]
+    filled = pod_staging.hand_over_maybes_sync(scheduled_signal.event_id, handed)
+
+    assert (moved, left_after_deal, filled, session.query(PodSignalMember).count()) == (
+        1, [maybe], 1, 0,
+    )
 
 
 def test_turning_up_in_the_lobby_confirms_a_seat(session, scheduled_signal, monkeypatch):

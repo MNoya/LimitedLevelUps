@@ -341,6 +341,7 @@ class PodDraftManager:
         self._ownership_lost_reported = False
         self.ownership_ready = asyncio.Event()
         self._closed = False
+        self.abandoned = False
         self.ready_check_active = False
         self.ready_check_generation = 0
         self.ready_check_joined_ids: set[str] = set()
@@ -497,6 +498,21 @@ class PodDraftManager:
             f"removed_from_registry={removed} registry_size={len(ACTIVE_POD_MANAGERS)}"
         )
 
+    async def abandon_session(self) -> None:
+        """Give up on this session for good, for a pod reopening on a fresh one.
+
+        An ownership claim in flight lands seconds after the socket closes and posts the card on its way
+        out, so the flag goes up first and any card already posted comes down."""
+        self.abandoned = True
+        await self.disconnect_safely()
+        card, self.lobby_status_message = self.lobby_status_message, None
+        if card is None:
+            return
+        try:
+            await card.delete()
+        except discord.HTTPException:
+            log.warning(f"could not delete the lobby card of abandoned {self.session_id}", exc_info=True)
+
     async def _on_connect(self) -> None:
         log.info(f"[LIFECYCLE] socket_connect event={self.event_id} sid={self.session_id}")
         await self._mark_socket_status("connected")
@@ -612,7 +628,10 @@ class PodDraftManager:
         """Claim Draftmancer ownership, then push the owner-only session settings. Re-attempted on every
         pre-draft roster change while the bot is not owner: Draftmancer seats the first arrival in an
         empty session as owner and rotates ownership when that player leaves, so a lobby that opened
-        under a human recovers by itself once they go."""
+        under a human recovers by itself once they go.
+
+        The answer is published the moment the probe returns. The launch path waits on it and reads a wait
+        that runs out as ownership lost, so anything slower behind it abandons a session the bot owns."""
         if self.bot_user_id is None or self._ownership_claim_in_flight:
             return
         self._ownership_claim_in_flight = True
@@ -621,6 +640,7 @@ class PodDraftManager:
             await self.sio.emit("setSessionOwner", self.bot_user_id)
             await asyncio.sleep(0.3)
             self.is_owner = await self._enable_spectators_and_share_link()
+            self.ownership_ready.set()
             if not self.is_owner:
                 if self._ownership_lost_reported:
                     return
@@ -637,7 +657,13 @@ class PodDraftManager:
             await self._emit_session_settings()
             await self.apply_seating_mode()
             log.info(f"[LIFECYCLE] ownership_applied event={self.event_id} bot_user={self.bot_user_id}")
+            if not self.reconnect and not self.abandoned:
+                await self._refresh_lobby_status()
+                notify_seeding_repost(self.bot, self.event_id)
         except Exception:
+            if self.abandoned:
+                log.info(f"[LIFECYCLE] ownership_dropped_on_abandon event={self.event_id}")
+                return
             log.exception(f"[LIFECYCLE] ownership_failed event={self.event_id}")
             await bot_log_mod.get(self.bot).post(
                 f"Ownership/settings flow failed for event `{self.event_id}` — draft cannot be started.",
@@ -723,7 +749,10 @@ class PodDraftManager:
 
     async def _enable_spectators_and_share_link(self) -> bool:
         """Enable spectators and store the spectate link. Doubles as the ownership probe: the ack carries
-        a spectateKey only when the bot holds the session, so a missing key means ownership was lost."""
+        a spectateKey only when the bot holds the session, so a missing key means ownership was lost.
+
+        Nothing Discord-facing runs here: a card edit inside the probe delays the answer the launch path
+        waits on."""
         result = await self._emit_with_ack("setAllowSpectators", True)
         spectate_key = result.get("spectateKey") if isinstance(result, dict) else None
         if not spectate_key:
@@ -732,11 +761,7 @@ class PodDraftManager:
             return False
         self.is_owner = True
         self.spectate_url = f"{self.draftmancer_url}&spectate={spectate_key}"
-        if self.reconnect:
-            return True
-        await self._refresh_lobby_status()
         log.info(f"[LIFECYCLE] spectators.enabled event={self.event_id}")
-        notify_seeding_repost(self.bot, self.event_id)
         return True
 
     async def _emit_format(self) -> str | None:
@@ -1341,6 +1366,8 @@ class PodDraftManager:
         together under _lobby_post_lock so concurrent sessionUsers / sessionSpectators broadcasts can't
         clobber each other — without it, a handler that captured a pre-kick roster before its await
         would edit last and resurrect the removed player."""
+        if self.abandoned:
+            return
         self._lobby_refresh_pending = False
         thread = await self._fetch_thread()
         if thread is None:
