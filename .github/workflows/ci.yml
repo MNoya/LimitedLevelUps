@@ -50,6 +50,9 @@ jobs:
       - name: Verify models match migrations
         run: alembic check
 
+      - name: Verify public views readable by both site roles
+        run: python -m bot.scripts.check_public_grants
+
       - name: Run pytest
         run: pytest bot/tests/ -v
 

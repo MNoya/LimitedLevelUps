@@ -39,6 +39,16 @@ _FORMAT_LABEL_CASE = """CASE
 END"""
 
 
+def _grant_readers(view: str) -> None:
+    """Both site roles, because dropping a view drops its grants.
+
+    A signed-in visitor queries as ``authenticated`` and everyone else as ``anon``, so granting only
+    ``anon`` leaves a view that works for logged-out users and fails for logged-in ones.
+    """
+    for role in ("anon", "authenticated"):
+        op.execute(f"GRANT SELECT ON public.{view} TO {role};")
+
+
 def _breakdown_view(weighted: bool) -> str:
     weighted_select = (
         ",\n                SUM(ps.weighted_trophies)::float AS weighted_trophies" if weighted else ""
@@ -80,11 +90,11 @@ def upgrade() -> None:
 
     op.execute("DROP VIEW IF EXISTS public_player_format_breakdown;")
     op.execute(_breakdown_view(weighted=True))
-    op.execute("GRANT SELECT ON public_player_format_breakdown TO anon;")
+    _grant_readers("public_player_format_breakdown")
 
 
 def downgrade() -> None:
     op.execute("DROP VIEW IF EXISTS public_player_format_breakdown;")
     op.execute(_breakdown_view(weighted=False))
-    op.execute("GRANT SELECT ON public_player_format_breakdown TO anon;")
+    _grant_readers("public_player_format_breakdown")
     op.drop_column("player_stats", "weighted_trophies")
