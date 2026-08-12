@@ -3,7 +3,7 @@ confirmation order, its own thread and its own lobby.
 
 Nothing here decides *when* to split. The attendance hold does, at the scheduled time or when an organizer
 locks the count early, because a pod opened before the room is counted locks the shape while nobody knows
-it. This is the machinery it calls. Design in `spec/pod-confirm-signup.md`.
+it. This is the machinery it calls.
 """
 from __future__ import annotations
 

@@ -12,7 +12,8 @@ A community leaderboard for an MTG Arena Discord server (**LLU** — Limited Lev
 bot/          Discord bot, 17lands integration, scoring, migrations
 frontend/     React + Vite SPA, deployed to Cloudflare Pages
 functions/    Cloudflare Pages Functions (SPA fallback)
-spec/         Design documents (project, frontend, pod-draft)
+docs/         Player-facing guides
+spec/archive/ Point-in-time design notes, not current behavior
 alembic/      DB migrations
 legacy/       Original spreadsheet-era code, kept for reference
 ```
@@ -56,6 +57,5 @@ Tests use [`testcontainers[postgres]`](https://testcontainers.com/modules/postgr
 ## Further reading
 
 - `CLAUDE.md` — architecture, conventions, operational notes
-- `spec/mtga-leaderboard-spec.md` — original project spec
-- `spec/frontend-spec.md` — frontend contract (data flow, views, URL scheme)
-- `spec/pod-draft-spec.md` — pod-draft tracking design (not yet built)
+- `docs/guide/pod-coordination.md` — how pod drafts work, for players
+- `spec/archive/` — how features were designed at the time they were built; the code is the truth now

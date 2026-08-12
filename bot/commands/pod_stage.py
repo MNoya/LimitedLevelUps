@@ -2,7 +2,6 @@
 
 Sits above `bot/services/pod_staging.py`, which decides who belongs to each pod. This does the Discord and
 database side: creates the sibling pod, hands its players over, and renumbers the pod they came from.
-Design in `spec/pod-confirm-signup.md`.
 """
 from __future__ import annotations
 

@@ -385,7 +385,7 @@ export function findUserBallot(
 
 // ── Highlights feed ─────────────────────────────────────────────────────────
 // Trap / Sleeper awards selected by GIHWR effect size; see
-// spec/p0p1-results.md → Highlights. Sleeper popularity uses team share
+// Sleeper popularity uses team share
 // (fraction of all ballots playing the card in any slot — wildcard slots
 // overlap the color slots); the Trap keeps within-slot share, its cost is slot-local.
 
