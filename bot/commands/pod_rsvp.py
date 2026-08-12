@@ -445,9 +445,10 @@ def _cube_list_line(set_code: str | None) -> str:
 
 
 def _multipod_suffix(rosters: dict[str, list[str]]) -> str:
-    """The multi-pod heads-up only earns a line once one pod's worth of Yes has signed up."""
-    yes = rosters.get(RSVP_YES) or []
-    return f"\n{MULTIPOD_NOTICE}" if len(yes) >= POD_CAPACITY else ""
+    """The multi-pod heads-up only earns a line once one pod's worth has signed up, confirmed players
+    counted with the pending ones."""
+    signed_up = (rosters.get(pod_confirm.CONFIRMED) or []) + (rosters.get(RSVP_YES) or [])
+    return f"\n{MULTIPOD_NOTICE}" if len(signed_up) >= POD_CAPACITY else ""
 
 
 def google_calendar_url(name: str, event_time: datetime) -> str:
