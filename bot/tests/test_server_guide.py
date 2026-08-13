@@ -5,10 +5,13 @@ import pytest
 from bot import emojis
 from bot.config import settings
 from bot.services.format_schedule import (
+    CATEGORY_CHANNEL_LIMIT,
     FORMAT_ARCHIVE_CATEGORY,
     LATEST_SET_CATEGORY,
     archive_candidates,
     channel_matches_set,
+    oldest_set_first,
+    overflow_candidates,
 )
 from bot.services.server_guide import (
     GUIDE_PAGES,
@@ -102,6 +105,41 @@ def test_archive_candidates_keeps_upcoming_set_channel_during_coexistence():
     stale = archive_candidates(channels, SOS_ACTIVE)
 
     assert [channel.name for channel in stale] == ["🐢-teenage-mutant-ninja-turtles"]
+
+
+def _archived_set_channels():
+    return [
+        _StubChannel("🤫-secrets-of-strixhaven", FORMAT_ARCHIVE_CATEGORY),
+        _StubChannel("🐥-final-fantasy", FORMAT_ARCHIVE_CATEGORY),
+        _StubChannel("🐢-teenage-mutant-ninja-turtles", FORMAT_ARCHIVE_CATEGORY),
+        _StubChannel("🌊🌿🔥🌪️-avatar", FORMAT_ARCHIVE_CATEGORY),
+    ]
+
+
+def test_oldest_set_first_orders_by_release_and_trails_unmatched_channels():
+    channels = _archived_set_channels() + [_StubChannel("📚-format-notes", FORMAT_ARCHIVE_CATEGORY)]
+
+    ordered = oldest_set_first(channels, MSH_ACTIVE)
+
+    assert [channel.name for channel in ordered] == [
+        "🐥-final-fantasy", "🌊🌿🔥🌪️-avatar", "🐢-teenage-mutant-ninja-turtles",
+        "🤫-secrets-of-strixhaven", "📚-format-notes",
+    ]
+
+
+@pytest.mark.parametrize("filler, incoming, expected", [
+    (10, 1, []),
+    (CATEGORY_CHANNEL_LIMIT - 6, 1, []),
+    (CATEGORY_CHANNEL_LIMIT - 5, 1, ["🐥-final-fantasy", "🌊🌿🔥🌪️-avatar"]),
+    (CATEGORY_CHANNEL_LIMIT - 4, 2, ["🐥-final-fantasy", "🌊🌿🔥🌪️-avatar", "🐢-teenage-mutant-ninja-turtles"]),
+])
+def test_overflow_candidates_spills_the_oldest_sets_in_batches_before_the_cap(filler, incoming, expected):
+    padding = [_StubChannel(f"📚-notes-{index}", FORMAT_ARCHIVE_CATEGORY) for index in range(filler)]
+    channels = padding + _archived_set_channels()
+
+    spill = overflow_candidates(channels, incoming, MSH_ACTIVE)
+
+    assert [channel.name for channel in spill] == expected
 
 
 def _full_channel_set():

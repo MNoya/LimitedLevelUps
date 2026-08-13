@@ -27,6 +27,10 @@ SET_PIN_FREEZE_LEAD = timedelta(days=7)
 PERMANENT_CUBE_CODE = "CUBE"
 LATEST_SET_CATEGORY = "MTG Strategy"
 FORMAT_ARCHIVE_CATEGORY = "Format Archive"
+DEEP_ARCHIVE_CATEGORY = "Archive"
+CATEGORY_CHANNEL_LIMIT = 50
+ARCHIVE_HEADROOM = 1
+SPILL_BATCH = 2
 SET_NAME_STOPWORDS = frozenset({"a", "an", "and", "at", "in", "of", "the"})
 
 
@@ -278,6 +282,33 @@ def set_seed_for_channel(channel_name: str, when: datetime | None = None) -> Set
         if matched is None or seed.start_date > matched.start_date:
             matched = seed
     return matched
+
+
+def oldest_set_first(channels, when: datetime | None = None) -> list:
+    """``channels`` ordered by the set they belong to, oldest set first. Channels matching no rotated-out
+    set sort last, in the order given."""
+    matched = []
+    unmatched = []
+    for channel in channels:
+        seed = set_seed_for_channel(channel.name, when)
+        if seed is None:
+            unmatched.append(channel)
+        else:
+            matched.append((seed, channel))
+    matched.sort(key=lambda pair: pair[0].start_date)
+    return [channel for _, channel in matched] + unmatched
+
+
+def overflow_candidates(archive_channels, incoming: int = 1, when: datetime | None = None) -> list:
+    """The oldest Format Archive channels to move into the deep archive so ``incoming`` more fit under
+    Discord's cap of 50 channels per category, which refuses the move once the category is full. Spills
+    ``SPILL_BATCH`` at a time and keeps ``ARCHIVE_HEADROOM`` free, so a rotation never lands on a full
+    category. Only channels that resolve to a set move: anything else there is a human's filing."""
+    surplus = len(archive_channels) + incoming + ARCHIVE_HEADROOM - CATEGORY_CHANNEL_LIMIT
+    if surplus <= 0:
+        return []
+    movable = [channel for channel in archive_channels if set_seed_for_channel(channel.name, when)]
+    return oldest_set_first(movable, when)[:max(surplus, SPILL_BATCH)]
 
 
 def previous_window_start(now: datetime) -> datetime:

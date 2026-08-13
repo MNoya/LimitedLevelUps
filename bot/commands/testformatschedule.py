@@ -21,7 +21,13 @@ from bot.commands.test_group import test_group
 from bot.services import mtgscribe
 from bot.services.format_schedule import ANNOUNCE_NONE, SCHEDULE_PINS
 from bot.sets import active_set_code
-from bot.tasks.format_schedule_post import announce_groups, announcement_for, select_pin, send_off_embeds
+from bot.tasks.format_schedule_post import (
+    announce_groups,
+    announcement_for,
+    archive_plan_report,
+    select_pin,
+    send_off_embeds,
+)
 
 PREVIEW_ANNOUNCE_LIMIT = 3
 
@@ -53,6 +59,14 @@ async def setup(bot: commands.Bot) -> None:
             for group in groups[:PREVIEW_ANNOUNCE_LIMIT]:
                 embed, _ = announcement_for(pin, group, groups, emojis)
                 await ctx.send(embed=embed)
+
+    @test_group.command(name="archiveplan")
+    @commands.is_owner()
+    async def test_archive_plan(ctx: commands.Context) -> None:
+        """Owner-only. Report what the archive pass would move, without moving anything: the stale set
+        channels in rotation order, the Format Archive's headroom, and the oldest channels that would
+        spill into the deep archive."""
+        await ctx.send(archive_plan_report(ctx.guild))
 
     @test_group.command(name="sendoff")
     @commands.is_owner()

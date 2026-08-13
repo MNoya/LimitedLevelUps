@@ -36,7 +36,9 @@ from bot.services.format_schedule import (
     ANNOUNCE_NONE,
     ANNOUNCE_WINDOWS,
     ARCHIVE_TIME,
+    CATEGORY_CHANNEL_LIMIT,
     DEDUP_LOOKBACK,
+    DEEP_ARCHIVE_CATEGORY,
     FORMAT_ARCHIVE_CATEGORY,
     OPEN_TZ,
     SCHEDULE_PINS,
@@ -48,15 +50,26 @@ from bot.services.format_schedule import (
     channel_for_set,
     newly_opened,
     next_rotation,
+    oldest_set_first,
+    overflow_candidates,
     previous_window_start,
     set_pin_frozen,
     set_seed_for_channel,
 )
-from bot.services.server_guide import stripped_channel_name
 from bot.sets import RELEASE_TIME, RELEASE_TZ
 
 HISTORY_SCAN_LIMIT = 100
 RELATIVE_TIMESTAMP = "<t:"
+
+MSG_ARCHIVED = f"📥 Moved {{channels}} to the top of **{FORMAT_ARCHIVE_CATEGORY}**"
+MSG_DEEP_ARCHIVED = f"📦 Moved {{channels}} down to **{DEEP_ARCHIVE_CATEGORY}** to make room"
+MSG_ARCHIVE_HELD = (f"**{FORMAT_ARCHIVE_CATEGORY}** now holds {{held}} channels "
+                    f"of the {CATEGORY_CHANNEL_LIMIT} max")
+MSG_ARCHIVE_FULL = (f"⚠️ **{FORMAT_ARCHIVE_CATEGORY}** and **{DEEP_ARCHIVE_CATEGORY}** both hold Discord's limit "
+                    f"of {CATEGORY_CHANNEL_LIMIT} channels\nMove the oldest ones out to make room")
+MSG_NO_DEEP_ARCHIVE = (f"⚠️ **{FORMAT_ARCHIVE_CATEGORY}** holds Discord's limit of {CATEGORY_CHANNEL_LIMIT} "
+                       f"channels and there is no **{DEEP_ARCHIVE_CATEGORY}** category to move the oldest "
+                       f"ones into\nCreate it or move them out by hand")
 
 log = logging.getLogger(__name__)
 
@@ -163,10 +176,11 @@ async def fire_window() -> None:
 
 
 async def _archive_stale_channels(guild: discord.Guild) -> None:
-    """Move each outgoing set channel to the Format Archive and tell the admin channel. The new set's
-    channel is mod-created during preview season and coexists with the outgoing one until the leaderboard
-    rotates — the bot only archives what the rotation left behind, never creates. No guide page is synced
-    here: channel-overview and the set-tracking To-Do resolve to the newest set channel in MTG Strategy,
+    """Move each outgoing set channel to the top of the Format Archive and tell the admin channel, oldest
+    set first so the newest lands highest and the category reads newest format down to oldest. The new
+    set's channel is mod-created during preview season and coexists with the outgoing one until the
+    leaderboard rotates — the bot only archives what the rotation left behind, never creates. No guide page
+    is synced here: channel-overview and the set-tracking To-Do resolve to the newest set channel in MTG Strategy,
     which the incoming set's already is by the time a rotation runs, so `!guide` when a mod creates that
     channel is what those pages follow."""
     stale = archive_candidates(guild.text_channels)
@@ -177,9 +191,105 @@ async def _archive_stale_channels(guild: discord.Guild) -> None:
         log.warning(f"format-schedule: no '{FORMAT_ARCHIVE_CATEGORY}' category; skipping archiving")
         return
     admin_channel = _admin_channel(guild)
-    for channel in stale:
+    held = len(archive.channels)
+    spilled = await _make_archive_room(guild, archive, len(stale), admin_channel)
+    archived = []
+    for channel in oldest_set_first(stale):
         if await _archive_channel(channel, archive):
-            await _notify_archived(admin_channel, channel)
+            archived.append(channel)
+    if archived or spilled:
+        notice = archive_notice(archived, spilled, held - len(spilled) + len(archived))
+        await _notify(admin_channel, notice, FORMAT_ARCHIVE_CATEGORY)
+
+
+async def _make_archive_room(guild: discord.Guild, archive: discord.CategoryChannel, incoming: int,
+                             admin_channel: discord.TextChannel | None) -> list:
+    """The channels moved down to the deep archive, so the rotation's channels fit. Discord caps a category
+    at 50 channels and the server files 6 to 7 sets a year, so Format Archive reaches the cap on its own
+    and every move after that would fail."""
+    spill = overflow_candidates(archive.channels, incoming)
+    if not spill:
+        return []
+    deep = discord.utils.get(guild.categories, name=DEEP_ARCHIVE_CATEGORY)
+    if deep is None:
+        log.warning(f"format-schedule: '{FORMAT_ARCHIVE_CATEGORY}' is full and there is no "
+                    f"'{DEEP_ARCHIVE_CATEGORY}' category to move its {len(spill)} oldest channels into")
+        await _notify(admin_channel, MSG_NO_DEEP_ARCHIVE, FORMAT_ARCHIVE_CATEGORY)
+        return []
+    room = max(CATEGORY_CHANNEL_LIMIT - len(deep.channels), 0)
+    if room < len(spill):
+        log.warning(f"format-schedule: '{DEEP_ARCHIVE_CATEGORY}' has room for {room} of the "
+                    f"{len(spill)} channels leaving '{FORMAT_ARCHIVE_CATEGORY}'")
+        await _notify(admin_channel, MSG_ARCHIVE_FULL, DEEP_ARCHIVE_CATEGORY)
+        spill = spill[:room]
+    moved = []
+    for channel in spill:
+        if await _deep_archive_channel(channel, deep):
+            moved.append(channel)
+    return moved
+
+
+async def _deep_archive_channel(channel: discord.TextChannel, deep: discord.CategoryChannel) -> bool:
+    try:
+        await channel.move(end=True, category=deep)
+    except discord.HTTPException:
+        log.warning(f"format-schedule: could not move #{channel.name} to {DEEP_ARCHIVE_CATEGORY}", exc_info=True)
+        return False
+    log.info(f"format-schedule: moved #{channel.name} to {DEEP_ARCHIVE_CATEGORY}")
+    return True
+
+
+def archive_notice(archived: list, spilled: list, held: int) -> str:
+    """The admin-channel notice for one archive pass, also previewed by `!test archiveplan`. ``held`` is
+    how full Format Archive is left once both moves are done."""
+    lines = []
+    if archived:
+        lines.append(MSG_ARCHIVED.format(channels=_mention_list(archived)))
+    if spilled:
+        lines.append(MSG_DEEP_ARCHIVED.format(channels=_mention_list(spilled)))
+    lines.append(MSG_ARCHIVE_HELD.format(held=held))
+    return "\n".join(lines)
+
+
+def _mention_list(channels: list) -> str:
+    mentions = [channel.mention for channel in channels]
+    if len(mentions) == 1:
+        return mentions[0]
+    return ", ".join(mentions[:-1]) + f" and {mentions[-1]}"
+
+
+def archive_plan_report(guild: discord.Guild) -> str:
+    """What the archive pass would do right now, for `!test archiveplan`. Reads channels only, so it runs
+    on the production guild to check where a rotation's channels would land before the cron moves them."""
+    archive = discord.utils.get(guild.categories, name=FORMAT_ARCHIVE_CATEGORY)
+    deep = discord.utils.get(guild.categories, name=DEEP_ARCHIVE_CATEGORY)
+    lines = [_category_line(FORMAT_ARCHIVE_CATEGORY, archive), _category_line(DEEP_ARCHIVE_CATEGORY, deep)]
+    stale = oldest_set_first(archive_candidates(guild.text_channels))
+    if stale:
+        moving = ", ".join(channel.mention for channel in stale)
+        lines.append(f"Moves to the top of **{FORMAT_ARCHIVE_CATEGORY}**, oldest set first: {moving}")
+    else:
+        lines.append("No stale set channel to archive")
+    if archive is None:
+        return "\n".join(lines)
+    spill = overflow_candidates(archive.channels, max(len(stale), 1))
+    lead = "Spills" if stale else "At the next rotation, spills"
+    if spill:
+        spilling = ", ".join(channel.mention for channel in spill)
+        lines.append(f"{lead} down to **{DEEP_ARCHIVE_CATEGORY}**, oldest set first: {spilling}")
+    else:
+        lines.append(f"{lead} nothing down to **{DEEP_ARCHIVE_CATEGORY}**")
+    if stale:
+        held = len(archive.channels) - len(spill) + len(stale)
+        lines.append("\n__The notice the admin channel would get__")
+        lines.append(archive_notice(stale, spill, held))
+    return "\n".join(lines)
+
+
+def _category_line(name: str, category: discord.CategoryChannel | None) -> str:
+    if category is None:
+        return f"**{name}**: no such category"
+    return f"**{name}**: {len(category.channels)} of {CATEGORY_CHANNEL_LIMIT} channels"
 
 
 def _admin_channel(guild: discord.Guild) -> discord.TextChannel | None:
@@ -216,40 +326,25 @@ def send_off_embeds(set_code: str) -> list[discord.Embed]:
         return build_set_send_off_embeds(session, magic_set)
 
 
-async def _notify_archived(admin_channel: discord.TextChannel | None, channel: discord.TextChannel) -> None:
+async def _notify(admin_channel: discord.TextChannel | None, text: str, subject: str) -> None:
     if admin_channel is None:
-        log.info("format-schedule: no admin channel found; skipping archive notice")
+        log.info(f"format-schedule: no admin channel found; skipping the notice for {subject}")
         return
     try:
-        await admin_channel.send(f"📥 Moved {channel.mention} to **{FORMAT_ARCHIVE_CATEGORY}**")
+        await admin_channel.send(text)
     except discord.HTTPException:
-        log.warning(f"format-schedule: could not post archive notice for #{channel.name}", exc_info=True)
+        log.warning(f"format-schedule: could not post the archive notice for {subject}", exc_info=True)
 
 
 async def _archive_channel(channel: discord.TextChannel, archive: discord.CategoryChannel) -> bool:
-    neighbor = _alphabetical_neighbor(archive, channel)
+    """Callers pass a rotation's channels oldest set first, so the newest of them ends up at the top."""
     try:
-        if neighbor is None:
-            await channel.move(beginning=True, category=archive)
-        else:
-            await channel.move(after=neighbor, category=archive)
-        log.info(f"format-schedule: archived #{channel.name} to {FORMAT_ARCHIVE_CATEGORY}")
-        return True
+        await channel.move(beginning=True, category=archive)
     except discord.HTTPException:
         log.warning(f"format-schedule: could not archive #{channel.name}", exc_info=True)
         return False
-
-
-def _alphabetical_neighbor(archive: discord.CategoryChannel,
-                           channel: discord.TextChannel) -> discord.TextChannel | None:
-    """The archived channel to slot after, keeping the category's emoji-blind alphabetical order.
-    ``None`` sorts the newcomer to the top."""
-    name = stripped_channel_name(channel.name)
-    neighbor = None
-    for existing in archive.text_channels:
-        if stripped_channel_name(existing.name) < name:
-            neighbor = existing
-    return neighbor
+    log.info(f"format-schedule: archived #{channel.name} to {FORMAT_ARCHIVE_CATEGORY}")
+    return True
 
 
 def select_pin(events: list, pin: SchedulePin) -> tuple[list, list, str]:
