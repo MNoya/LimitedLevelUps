@@ -210,6 +210,10 @@ class DraftEvent(Base):
         # Postgres does not index a foreign key on its own, so every per-set read scanned the
         # whole log to find the rows one set's filter wanted
         Index("ix_draft_events_set_id", "set_id"),
+        # Matches public_recent_trophies, which filters to trophies then sorts on finish time, so
+        # the feed reads in order instead of sorting every trophy in the log
+        Index("ix_draft_events_trophy_feed", "set_id", text("finished_at DESC NULLS LAST"),
+              postgresql_where=text("is_trophy")),
     )
 
 
