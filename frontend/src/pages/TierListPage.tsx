@@ -5,6 +5,7 @@ import { ExternalLink } from "../components/Icons";
 import { setGlyphCode } from "../components/Brand";
 import { TierFilterBar } from "../components/TierFilterBar";
 import { TierGrid } from "../components/TierGrid";
+import { TierCardSearch } from "../components/TierCardSearch";
 import { GradeGuideIcon, GradeGuideProvider, GradeGuideTrigger } from "../components/TierGuide";
 import { TierSetDropdown } from "../components/TierSetDropdown";
 import { Tooltip } from "../components/Tooltip";
@@ -35,6 +36,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
   const [filters, setFilters] = useState<TierFilters>(EMPTY_FILTERS);
   const [hideArt, setHideArt] = useHideArt();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerRef = useRef<HTMLDivElement>(null);
 
@@ -159,6 +161,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                       setCode={glyphCode}
                       hideArt={hideArt}
                       setHideArt={setHideArt}
+                      onSearch={() => setSearchOpen(true)}
                       stacked
                     />
                   </div>
@@ -193,6 +196,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                       setCode={glyphCode}
                       hideArt={hideArt}
                       setHideArt={setHideArt}
+                      onSearch={() => setSearchOpen(true)}
                     />
                   </div>
                 ) : (
@@ -250,6 +254,8 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
             </a>
           </div>
         </main>
+
+        {searchOpen && <TierCardSearch cards={tierData ?? []} onClose={() => setSearchOpen(false)} />}
 
         {skeletonsOpen && skeletons.length > 0 && (
           <SkeletonsModal

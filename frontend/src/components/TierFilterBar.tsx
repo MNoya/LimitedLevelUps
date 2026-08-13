@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Search } from "lucide-react";
 import { cn } from "../lib/utils";
 import { keyruneClass } from "./Brand";
 import { columnPipClass } from "./TierGrid";
@@ -20,6 +21,7 @@ export function TierFilterBar({
   setCode,
   hideArt,
   setHideArt,
+  onSearch,
   stacked = false,
 }: {
   filters: TierFilters;
@@ -28,6 +30,7 @@ export function TierFilterBar({
   setCode: string;
   hideArt: boolean;
   setHideArt: (value: boolean) => void;
+  onSearch: () => void;
   stacked?: boolean;
 }) {
   const toggle = (key: keyof TierFilters, value: string) => {
@@ -62,20 +65,30 @@ export function TierFilterBar({
           ? `Show only cards that moved down (${options.trends.down})`
           : "Show all cards";
 
-  const colorGroup = (
-    <FilterGroup label="COLOR" stacked={stacked} joined inline>
-      {options.colors.map((c) => (
-        <IconToggle
-          key={c.value}
-          active={filters.colors.includes(c.value)}
-          onClick={() => pickColor(c.value)}
-          label={`${c.name} (${c.count})`}
-          narrow
-        >
-          <i className={columnPipClass(c.value)} style={{ fontSize: c.value === "M" ? 21 : 15 }} />
-        </IconToggle>
-      ))}
-    </FilterGroup>
+  const colorRow = (
+    <div className="relative flex grow items-center justify-center">
+      <div className="relative flex">
+        <span className={cn(LABEL, "absolute right-full top-1/2 mr-2 -translate-y-1/2")}>COLOR</span>
+        <div className={cn("flex", JOINED)}>
+          {options.colors.map((c) => (
+            <IconToggle
+              key={c.value}
+              active={filters.colors.includes(c.value)}
+              onClick={() => pickColor(c.value)}
+              label={`${c.name} (${c.count})`}
+              narrow
+            >
+              <i className={columnPipClass(c.value)} style={{ fontSize: c.value === "M" ? 21 : 15 }} />
+            </IconToggle>
+          ))}
+        </div>
+      </div>
+      <IconToggle active={false} onClick={onSearch} label="Search" tooltip={false} narrow className="absolute right-0">
+        <span className="flex w-[28px] items-center justify-center">
+          <Search size={17} />
+        </span>
+      </IconToggle>
+    </div>
   );
 
   const rarityGroup = (
@@ -203,6 +216,16 @@ export function TierFilterBar({
     </FilterGroup>
   );
 
+  const searchGroup = (
+    <FilterGroup label="SEARCH" stacked={stacked} joined>
+      <IconToggle active={false} onClick={onSearch} label="Search" tooltip={false} narrow>
+        <span className="flex w-[28px] items-center justify-center">
+          <Search size={17} />
+        </span>
+      </IconToggle>
+    </FilterGroup>
+  );
+
   if (stacked) {
     return (
       <div className="flex w-full flex-col gap-y-3">
@@ -215,7 +238,7 @@ export function TierFilterBar({
           {setGroup}
           {trendGroup}
           {artGroup}
-          {colorGroup}
+          {colorRow}
         </div>
       </div>
     );
@@ -229,6 +252,7 @@ export function TierFilterBar({
       {setGroup}
       {trendGroup}
       {artGroup}
+      {searchGroup}
     </div>
   );
 }
@@ -257,31 +281,18 @@ function FilterGroup({
   children,
   stacked,
   joined = false,
-  inline = false,
   className,
 }: {
   label: string;
   children: ReactNode;
   stacked: boolean;
   joined?: boolean;
-  inline?: boolean;
   className?: string;
 }) {
-  const buttons = <div className={cn("flex", joined ? JOINED : "gap-1.5")}>{children}</div>;
-  if (inline) {
-    return (
-      <div className={cn("flex grow items-center justify-center", className)}>
-        <div className="relative">
-          <span className={cn(LABEL, "absolute right-full top-1/2 mr-2 -translate-y-1/2")}>{label}</span>
-          {buttons}
-        </div>
-      </div>
-    );
-  }
   return (
     <div className={cn("flex flex-col", stacked ? "items-center gap-1" : "gap-0.5", className)}>
       <span className={LABEL}>{label}</span>
-      {buttons}
+      <div className={cn("flex", joined ? JOINED : "gap-1.5")}>{children}</div>
     </div>
   );
 }
@@ -295,6 +306,8 @@ function IconToggle({
   narrow = false,
   compact = false,
   mutedActive = false,
+  className,
+  tooltip = true,
   tooltipOpen,
   onTooltipOpenChange,
 }: {
@@ -306,18 +319,20 @@ function IconToggle({
   narrow?: boolean;
   compact?: boolean;
   mutedActive?: boolean;
+  className?: string;
+  tooltip?: boolean;
   tooltipOpen?: boolean;
   onTooltipOpenChange?: (open: boolean) => void;
 }) {
   const activeClass = mutedActive
     ? "z-10 border-border2 bg-surface2 text-subtle"
     : "z-10 border-green bg-green/10 text-text";
-  return (
-    <Tooltip label={label} open={tooltipOpen} onOpenChange={onTooltipOpenChange}>
-      <button
-        type="button"
-        onClick={onClick}
-        className={cn(
+  const button = (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className={cn(
           "relative flex h-10 items-center justify-center rounded border transition-colors",
           roomy
             ? "min-w-[40px] px-2.5"
@@ -331,10 +346,18 @@ function IconToggle({
           active
             ? activeClass
             : "border-border2 bg-transparent text-muted hover:bg-surface2 hover:text-text",
-        )}
-      >
-        {children}
-      </button>
+        className,
+      )}
+    >
+      {children}
+    </button>
+  );
+  if (!tooltip) {
+    return button;
+  }
+  return (
+    <Tooltip label={label} open={tooltipOpen} onOpenChange={onTooltipOpenChange}>
+      {button}
     </Tooltip>
   );
 }

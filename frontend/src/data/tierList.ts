@@ -316,6 +316,44 @@ export function isCardFilteredOut(card: TierCard, f: TierFilters): boolean {
   return !cardMatchesFilters(card, f);
 }
 
+export interface TierCardMatch {
+  card: TierCard;
+  start: number;
+  end: number;
+}
+
+const SEARCH_LIMIT = 12;
+
+const foldName = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+// Word-start name matches, whole-name matches first; start/end index the raw name
+export function searchTierCards(cards: TierCard[], query: string, limit = SEARCH_LIMIT): TierCardMatch[] {
+  const needle = foldName(query.trim());
+  if (!needle) {
+    return [];
+  }
+  const ranked: Array<TierCardMatch & { rank: number }> = [];
+  for (const card of cards) {
+    const at = wordStartIndexOf(foldName(card.name), needle);
+    if (at === -1) {
+      continue;
+    }
+    ranked.push({ card, start: at, end: at + needle.length, rank: at === 0 ? 0 : 1 });
+  }
+  ranked.sort((a, b) => a.rank - b.rank || a.card.name.localeCompare(b.card.name));
+  return ranked.slice(0, limit).map(({ card, start, end }) => ({ card, start, end }));
+}
+
+const WORD_CHAR = /[\p{L}\p{N}']/u;
+
+function wordStartIndexOf(haystack: string, needle: string): number {
+  let at = haystack.indexOf(needle);
+  while (at > 0 && WORD_CHAR.test(haystack[at - 1])) {
+    at = haystack.indexOf(needle, at + 1);
+  }
+  return at;
+}
+
 export const RARITY_ORDER = ["C", "U", "R", "M"];
 export const RARITY_NAMES: Record<string, string> = {
   C: "Common",
