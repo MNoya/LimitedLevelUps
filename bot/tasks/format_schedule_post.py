@@ -231,7 +231,7 @@ async def _make_archive_room(guild: discord.Guild, archive: discord.CategoryChan
 
 async def _deep_archive_channel(channel: discord.TextChannel, deep: discord.CategoryChannel) -> bool:
     try:
-        await channel.move(end=True, category=deep)
+        await channel.move(end=True, category=deep, sync_permissions=True)
     except discord.HTTPException:
         log.warning(f"format-schedule: could not move #{channel.name} to {DEEP_ARCHIVE_CATEGORY}", exc_info=True)
         return False
@@ -337,9 +337,9 @@ async def _notify(admin_channel: discord.TextChannel | None, text: str, subject:
 
 
 async def _archive_channel(channel: discord.TextChannel, archive: discord.CategoryChannel) -> bool:
-    """Callers pass a rotation's channels oldest set first, so the newest of them ends up at the top."""
+    """Callers pass a rotation's channels oldest set first, so the newest of them ends up at the top"""
     try:
-        await channel.move(beginning=True, category=archive)
+        await channel.move(beginning=True, category=archive, sync_permissions=True)
     except discord.HTTPException:
         log.warning(f"format-schedule: could not archive #{channel.name}", exc_info=True)
         return False
