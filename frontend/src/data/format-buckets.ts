@@ -5,6 +5,7 @@ interface BucketGroup {
   points: number;
   formats: string[];
   rule?: string;
+  rank_points?: Record<string, number>;
 }
 
 const config = bucketsConfig as {
@@ -29,10 +30,13 @@ export interface BucketDef {
   label: string;
   points: number;
   rule?: "lcq_draft_2";
+  // Arena rank tier -> what a trophy taken at that tier is worth, in the same points unit
+  rankPoints?: Record<string, number>;
 }
 
 export const BUCKET_DEFS: readonly BucketDef[] = GROUPS.map((g) => ({
   label: g.label,
   points: g.points,
   rule: g.rule as "lcq_draft_2" | undefined,
+  rankPoints: g.rank_points,
 }));

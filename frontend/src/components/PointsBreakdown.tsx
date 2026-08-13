@@ -3,15 +3,18 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 import { ScoringInfoButton } from "./ScoringInfoButton";
+import { ArenaRankIcon } from "./ArenaRankIcon";
 import { Trophy } from "./Brand";
 import { Record } from "./Record";
 import { FMT_COLORS, FMT_DEFAULT_COLOR } from "../data/format-display";
-import type { PlayerFormatBreakdown } from "../types/leaderboard";
+import type { PlayerDraftEvent, PlayerFormatBreakdown } from "../types/leaderboard";
 import {
   computeRows,
   fullFormatName,
   pct,
+  trophyTierCounts,
   type BreakdownRow,
+  type RankTerm,
 } from "./pointsBreakdownShared";
 
 interface Props {
@@ -21,6 +24,8 @@ interface Props {
   // When the breakdown is a format-filtered subset, the confidence factor stays player-wide rather
   // than recomputing from the subset's trophies. Omit for the full, unfiltered breakdown.
   confidenceOverride?: number;
+  // Source of the per-rank trophy split. Omit to show one flat points term per format
+  events?: readonly PlayerDraftEvent[];
   anchorRef?: React.RefObject<HTMLElement | null>;
 }
 
@@ -48,7 +53,7 @@ function CardsLayout({ rows, confidence = 0 }: { rows: BreakdownRow[]; confidenc
             className="px-4 py-2 border-b border-border last:border-b-0 flex items-center gap-3"
           >
             <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-3 min-w-0">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">
                 <span
                   className="font-display tracking-[0.06em] truncate shrink-0"
                   style={{ color, fontSize: 16, width: 120 }}
@@ -56,8 +61,8 @@ function CardsLayout({ rows, confidence = 0 }: { rows: BreakdownRow[]; confidenc
                   {fullFormatName(r.label)}
                 </span>
                 <span
-                  className="mono text-[10.5px] text-muted tabular-nums whitespace-nowrap shrink-0 text-left"
-                  style={{ width: 68 }}
+                  className="text-[12px] text-subtle tabular-nums whitespace-nowrap shrink-0 text-left"
+                  style={{ width: 78 }}
                 >
                   {r.events} {r.events === 1 ? "event" : "events"}
                 </span>
@@ -65,72 +70,79 @@ function CardsLayout({ rows, confidence = 0 }: { rows: BreakdownRow[]; confidenc
                   mono
                   wins={r.wins}
                   losses={r.losses}
-                  className="mono text-[10.5px] text-muted tabular-nums whitespace-nowrap shrink-0 text-left"
-                  style={{ width: 56 }}
+                  className="text-[12px] text-subtle tabular-nums whitespace-nowrap shrink-0 text-left"
+                  style={{ width: 62 }}
                 />
+                {r.rankTerms.length > 0 && (
+                  <span className="text-[12px] text-subtle tabular-nums flex flex-wrap items-center gap-x-3 gap-y-0.5 min-w-0">
+                    {r.rankTerms.map((t) => (
+                      <RankChip key={t.tier ?? "unranked"} term={t} />
+                    ))}
+                  </span>
+                )}
               </div>
-              <div className="mt-1 text-[10.5px] text-muted tabular-nums tracking-tight flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+              <div className="mt-1 text-[10.5px] text-subtle tabular-nums">
                 {r.isPod ? (
-                  <>
-                    <span className="mono inline-flex items-center gap-1">
-                      {r.count}
-                      <Trophy size={11} color="#ffc63a" />
-                    </span>
-                    <span className="text-green text-[14px] leading-none align-middle">×</span>
-                    <span className="mono">5 pts</span>
+                  <TermLine>
+                    <TrophyTerm count={r.count} />
+                    <Times />
+                    <span>5 pts</span>
                     {r.twoWins > 0 && (
                       <>
-                        <span className="text-green text-[16px] font-bold leading-none align-middle">+</span>
-                        <span className="mono">{r.twoWins} 2-win</span>
-                        <span className="text-green text-[14px] leading-none align-middle">×</span>
-                        <span className="mono">2 pts</span>
+                        <Plus />
+                        <span>{r.twoWins} 2-win</span>
+                        <Times />
+                        <span>2 pts</span>
                       </>
                     )}
                     {r.oneWins > 0 && (
                       <>
-                        <span className="text-green text-[16px] font-bold leading-none align-middle">+</span>
-                        <span className="mono">{r.oneWins} 1-win</span>
-                        <span className="text-green text-[14px] leading-none align-middle">×</span>
-                        <span className="mono">½ pts</span>
+                        <Plus />
+                        <span>{r.oneWins} 1-win</span>
+                        <Times />
+                        <span>½ pts</span>
                       </>
                     )}
-                  </>
+                  </TermLine>
                 ) : isLcqD2 ? (
-                  <>
-                    <span className="mono inline-flex items-center gap-0.5">
+                  <TermLine>
+                    <span className="inline-flex items-center gap-0.5">
                       {r.count}
                       <span className="ml-0.5">wins</span>
                     </span>
                     {earned && (
                       <>
-                        <span className="text-green text-[14px] leading-none align-middle">×</span>
-                        <span className="mono">{pct(r.rate)} win rate</span>
+                        <Times />
+                        <span>{pct(r.rate)} win rate</span>
                       </>
                     )}
-                    <span className="text-green text-[14px] leading-none align-middle">×</span>
-                    <span className="mono">{r.points} pts</span>
-                  </>
+                    <Times />
+                    <span>{r.points} pts</span>
+                  </TermLine>
                 ) : (
-                  <>
-                    <span className="mono inline-flex items-center gap-1">
-                      {r.count}
-                      <Trophy size={11} color="#ffc63a" />
-                    </span>
-                    <span className="text-green text-[14px] leading-none align-middle">×</span>
-                    <span className="mono">{r.points} pts</span>
+                  <TermLine>
+                    <TrophyTerm count={r.count} />
+                    {r.rankWeighted ? (
+                      <span>({fmtPoints(r.weightedPoints)} pts)</span>
+                    ) : (
+                      <>
+                        <Times />
+                        <span>{r.points} pts</span>
+                      </>
+                    )}
                     {earned && (
                       <>
-                        <span className="text-green text-[14px] leading-none align-middle">×</span>
-                        <span className="mono">{pct(r.rate)} trophy rate</span>
+                        <Times />
+                        <span>{pct(r.rate)} trophy rate</span>
                       </>
                     )}
                     {earned && confidence > 0 && (
                       <>
-                        <span className="text-green text-[14px] leading-none align-middle">×</span>
-                        <span className="mono">{pct(confidence)} confidence</span>
+                        <Times />
+                        <span>{pct(confidence)} confidence</span>
                       </>
                     )}
-                  </>
+                  </TermLine>
                 )}
               </div>
             </div>
@@ -144,7 +156,7 @@ function CardsLayout({ rows, confidence = 0 }: { rows: BreakdownRow[]; confidenc
   );
 }
 
-export function PointsBreakdown({ open, onClose, breakdown, confidenceOverride, anchorRef }: Props) {
+export function PointsBreakdown({ open, onClose, breakdown, confidenceOverride, events, anchorRef }: Props) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<AnchorPos | null>(null);
 
@@ -204,7 +216,8 @@ export function PointsBreakdown({ open, onClose, breakdown, confidenceOverride, 
 
   if (!open || !pos) return null;
 
-  const { rows: allRows, confidence } = computeRows(breakdown, confidenceOverride);
+  const tierCounts = events ? trophyTierCounts(events) : undefined;
+  const { rows: allRows, confidence } = computeRows(breakdown, confidenceOverride, tierCounts);
   const sorted = [...allRows].sort((a, b) => b.score - a.score);
   const queueRows = sorted.filter((r) => !r.isPod);
   const podRows = sorted.filter((r) => r.isPod);
@@ -272,4 +285,47 @@ export function PointsBreakdown({ open, onClose, breakdown, confidenceOverride, 
     </div>,
     document.body,
   );
+}
+
+function TermLine({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">{children}</div>;
+}
+
+function TrophyTerm({ count }: { count: number }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {count}
+      <Trophy size={11} color="#ffc63a" />
+    </span>
+  );
+}
+
+// Rank art is per division, so a tier stands for itself with its first division's icon
+function RankChip({ term }: { term: RankTerm }) {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+      {term.count}
+      {term.tier ? (
+        <ArenaRankIcon
+          endRank={term.tier === "Mythic" ? "Mythic" : `${term.tier}-1`}
+          size={15}
+          title={`${term.tier}, ${term.points} pts each`}
+        />
+      ) : (
+        <Trophy size={12} color="#ffc63a" />
+      )}
+    </span>
+  );
+}
+
+function fmtPoints(points: number): string {
+  return String(Math.round(points * 100) / 100);
+}
+
+function Times() {
+  return <span className="text-green text-[14px] leading-none align-middle">×</span>;
+}
+
+function Plus() {
+  return <span className="text-green text-[16px] font-bold leading-none align-middle">+</span>;
 }

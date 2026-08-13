@@ -784,7 +784,7 @@ function Desktop({
         </div>
       </section>
 
-      <div className="grid" style={{ gridTemplateColumns: hasBreakdown ? "440px minmax(0, 1fr)" : "minmax(0, 1fr)" }}>
+      <div className="grid" style={{ gridTemplateColumns: hasBreakdown ? "480px minmax(0, 1fr)" : "minmax(0, 1fr)" }}>
         {hasBreakdown && (
           <BreakdownPanel breakdown={profile.formatBreakdown} totalScore={profile.score} events={events} selfReported={profile.selfReportedEvents} showPoints={ranked} lockedFormats={lockedFormats} />
         )}
@@ -811,6 +811,7 @@ function Desktop({
         onClose={() => setPointsModalOpen(false)}
         breakdown={popoverBreakdown}
         confidenceOverride={formatFilter !== "ALL" ? fullConfidence : undefined}
+        events={events}
         anchorRef={pointsBtnRef}
       />
       {shotTrophy && (
@@ -986,7 +987,7 @@ function StatStrip({
       className="grid border border-border2 bg-bg self-stretch min-w-0 ml-auto"
       style={{
         flex: "0 1 720px",
-        gridTemplateColumns: showPoints ? "1fr 1fr 1.3fr 1fr 0.9fr" : "1fr 1fr 1.3fr 1fr",
+        gridTemplateColumns: showPoints ? "1fr 1fr 1.3fr 1fr 1.05fr" : "1fr 1fr 1.3fr 1fr",
       }}
     >
       {tiles.map((t, i) => {
@@ -1001,7 +1002,7 @@ function StatStrip({
                 {t.label}
                 <span
                   aria-hidden="true"
-                  className="absolute top-1/2 -translate-y-1/2 ml-1.5 leading-none"
+                  className="absolute top-1/2 -translate-y-1/2 ml-[3px] leading-none"
                   style={{ left: "100%" }}
                 >
                   <Info size={14} className="text-muted" />
@@ -1042,6 +1043,8 @@ function StatStrip({
     </div>
   );
 }
+
+const PANEL_TITLE_COLOR = "#e6ecf5";
 
 function BreakdownPanel({
   breakdown,
@@ -1084,7 +1087,7 @@ function BreakdownPanel({
     <section className="py-6 pl-10 pr-8 border-r border-border">
       {showPoints && formatBreakdown.length > 0 && (
         <>
-          <SectionLabel size={13} className="mb-3.5 text-center" style={{ width: 148 }}>POINTS BY FORMAT</SectionLabel>
+          <SectionLabel size={15} letterSpacing="0.18em" color={PANEL_TITLE_COLOR} className="mb-3.5 text-center whitespace-nowrap" style={{ width: 148 }}>POINTS BY FORMAT</SectionLabel>
           <div className="flex items-center gap-5 mb-4">
             <DonutChart
               pieHole={0.5}
@@ -1109,7 +1112,7 @@ function BreakdownPanel({
         </>
       )}
 
-      <SectionLabel size={13} className={cn("mb-3 text-center", showPoints && formatBreakdown.length > 0 && "mt-6")} style={{ width: 148 }}>DECK COLORS</SectionLabel>
+      <SectionLabel size={15} letterSpacing="0.18em" color={PANEL_TITLE_COLOR} className={cn("mb-3 text-center whitespace-nowrap", showPoints && formatBreakdown.length > 0 && "mt-6")} style={{ width: 148 }}>DECK COLORS</SectionLabel>
       <div className="flex items-center gap-5">
         <DonutChart
           pieHole={0.5}
@@ -1140,19 +1143,20 @@ function BreakdownPanel({
                 "grid gap-2 items-center px-1.5 rounded transition-colors cursor-default",
                 deckHover === code && "bg-surface2",
               )}
-              style={{ gridTemplateColumns: "auto 1fr 38px 36px" }}
+              style={{ gridTemplateColumns: "auto 1fr 44px 40px" }}
             >
-              <Pips colors={code} size={12} />
-              <span className="font-display text-[13px] tracking-[0.06em]">
+              <Pips colors={code} size={14} />
+              <span className="font-display text-[15px] tracking-[0.06em]">
                 {colorsDisplayName(code)}
               </span>
               <TrophyCount
                 count={comboTrophies[code] ?? 0}
-                size="sm"
+                size="md"
+                display
                 fixedDigits={2}
-                className="text-muted justify-self-end"
+                className="text-subtle justify-self-end"
               />
-              <span className="mono text-[13px] text-muted text-right">
+              <span className="mono text-[15px] text-subtle text-right">
                 ×{count}
               </span>
             </div>
@@ -1160,7 +1164,7 @@ function BreakdownPanel({
         </div>
       </div>
 
-      <SectionLabel size={13} className="mt-6 mb-3 text-center" style={{ width: 148 }}>COLORS PLAYED</SectionLabel>
+      <SectionLabel size={15} letterSpacing="0.18em" color={PANEL_TITLE_COLOR} className="mt-6 mb-3 text-center whitespace-nowrap" style={{ width: 148 }}>COLORS PLAYED</SectionLabel>
       <div className="flex items-center gap-5">
         <DonutChart
           pieHole={0.5}
@@ -1185,13 +1189,13 @@ function BreakdownPanel({
                   "grid gap-2 items-center px-1.5 -mx-1.5 rounded transition-colors cursor-default",
                   colorHover === c && "bg-surface2",
                 )}
-                style={{ gridTemplateColumns: "auto 1fr 44px" }}
+                style={{ gridTemplateColumns: "auto 1fr 48px" }}
               >
-                <Pip c={c} size={12} />
-                <span className="font-display text-[13px] tracking-[0.06em]">
+                <Pip c={c} size={14} />
+                <span className="font-display text-[15px] tracking-[0.06em]">
                   {COLOR_NAMES[c]}
                 </span>
-                <span className="mono text-[13px] text-muted text-right">
+                <span className="mono text-[15px] text-subtle text-right">
                   {pct.toFixed(0)}%
                 </span>
               </div>
@@ -1229,29 +1233,30 @@ function FormatLegend({
               "grid items-center py-[5px] gap-2.5 px-1.5 -mx-1.5 rounded transition-colors cursor-default",
               isHighlighted(f.formatLabel) && "bg-surface2",
             )}
-            style={{ gridTemplateColumns: "1fr 38px 64px 44px" }}
+            style={{ gridTemplateColumns: "1fr 44px 68px 48px" }}
           >
             <span
-              className="font-display text-[13px] tracking-[0.06em]"
+              className="font-display text-[15px] tracking-[0.06em]"
               style={{ color: FMT_COLORS[f.formatLabel] ?? "#5c8aff" }}
             >
               {shortFormat(f.formatLabel)}
             </span>
             <TrophyCount
               count={f.trophies}
-              size="sm"
+              size="md"
+              display
               fixedDigits={2}
-              className="text-muted justify-self-end"
+              className="text-subtle justify-self-end"
             />
             <Record
               mono
               wins={f.wins}
               losses={f.losses}
-              className="mono text-[11px] text-right text-muted"
+              className="mono text-[13px] text-right text-subtle"
             />
             <span
               className={cn(
-                "font-display text-[14px] text-right",
+                "font-display text-[17px] text-right",
                 pct > 0 ? "text-green" : "text-muted",
               )}
             >
@@ -2112,6 +2117,7 @@ function Mobile({
         onClose={() => setPointsModalOpen(false)}
         breakdown={popoverBreakdown}
         confidenceOverride={formatFilter !== "ALL" ? fullConfidence : undefined}
+        events={events}
         anchorRef={pointsBtnRef}
       />
       {shotTrophy && (
