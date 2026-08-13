@@ -812,6 +812,7 @@ def _card_ping(
 async def post_scheduled_card(
     bot: commands.Bot, channel: discord.TextChannel, *, set_code: str, event_time: datetime, name: str,
     preseed_yes: list[tuple[str, str]] | None = None,
+    preseed_confirmed: list[tuple[str, str]] | None = None,
     preseed_maybe: list[tuple[str, str]] | None = None, ping_role: bool = True,
     notify_role_name: str | None = None, description: str | None = None,
     pairing_mode: str | None = None, seating_mode: str | None = None, pick_timer: int | None = None,
@@ -833,6 +834,10 @@ async def post_scheduled_card(
     graduating to a card. They start in the Yes column, are recorded Yes on the signal, and are
     pulled into the thread; No always starts empty.
 
+    `preseed_confirmed` is the same for players who already confirmed they are coming, the seated roster
+    a split hands to a table. Confirmation has to survive the move: reseeded as a plain Yes they would read
+    as an answer this table is still waiting for.
+
     `preseed_maybe` is the same for the maybes a split hands to its last table. They join the thread too,
     since the seat they might take is here, and being dealt to a table does not turn Maybe into a Yes.
 
@@ -848,8 +853,10 @@ async def post_scheduled_card(
     RSVP prompt, no Time and no buttons, since nobody is being asked to sign up. It opens no native
     scheduled event either: the signup it split from already holds the one the server shows."""
     preseed_yes = preseed_yes or []
+    preseed_confirmed = preseed_confirmed or []
     preseed_maybe = preseed_maybe or []
     rosters = {state: [] for state in RSVP_STATES}
+    rosters[pod_confirm.CONFIRMED] = [display for _, display in preseed_confirmed]
     rosters[RSVP_YES] = [display for _, display in preseed_yes]
     rosters[RSVP_MAYBE] = [display for _, display in preseed_maybe]
     guild = channel.guild
@@ -884,6 +891,9 @@ async def post_scheduled_card(
     )
     if preseed_yes:
         await asyncio.to_thread(pod_launch.seed_members_sync, signal_id, preseed_yes, RSVP_YES)
+    if preseed_confirmed:
+        await asyncio.to_thread(
+            pod_launch.seed_members_sync, signal_id, preseed_confirmed, RSVP_YES, True)
     if preseed_maybe:
         await asyncio.to_thread(pod_launch.seed_members_sync, signal_id, preseed_maybe, RSVP_MAYBE)
     native_event_id = None
@@ -911,7 +921,7 @@ async def post_scheduled_card(
     except discord.HTTPException:
         log.warning(f"could not post the registered embed in thread {thread.id}", exc_info=True)
 
-    await add_members_to_thread(thread, preseed_yes + preseed_maybe)
+    await add_members_to_thread(thread, preseed_confirmed + preseed_yes + preseed_maybe)
     pod_launch.arm_scheduled_pod_jobs(bot, event_id, event_time, created_at)
     log.info(f"posted scheduled pod card for {name} as message {message.id} (event {event_id})")
     await _refresh_launcher(bot, event_time)

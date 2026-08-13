@@ -569,6 +569,7 @@ def render(
     in_session: list[tuple[str, str | None]],
     *,
     state: str,
+    rsvps_unconfirmed: list[str] | None = None,
     set_code: str | None = None,
     draftmancer_url: str | None = None,
     cancel_reason: str | None = None,
@@ -587,8 +588,10 @@ def render(
     check fires so a latecomer can't join mid-check and break the roster.
 
     Buckets: In Draftmancer (counts every session user; lists the linked ones), Unrecognized (in
-    session, no Player row), Waiting on (Yes RSVP not in session), Maybe (Maybe RSVP not in session).
-    Waiting + Maybe are hidden once ready check fires; the live Ready/Pending split lives on the
+    session, no Player row), Waiting on (Yes RSVP not in session), Unconfirmed (asked to confirm at the
+    hold and did not), Maybe (Maybe RSVP not in session). Waiting on carries only the players this table
+    holds a seat for, so the room never reads as short of somebody it is not waiting for. Waiting +
+    Unconfirmed + Maybe are hidden once ready check fires; the live Ready/Pending split lives on the
     separate ready-check progress card, not here. `spectators` lists Draftmancer sessionSpectators
     comma-separated below Maybe whenever any are present, regardless of state.
 
@@ -604,6 +607,10 @@ def render(
     in_session_keys |= {arena.lower() for arena, _ in in_session}
     waiting_yes = [
         name for name in rsvps_yes
+        if _rsvp_dedup_key(name, mention_map) not in in_session_keys
+    ]
+    waiting_unconfirmed = [
+        name for name in (rsvps_unconfirmed or [])
         if _rsvp_dedup_key(name, mention_map) not in in_session_keys
     ]
     waiting_maybe = [
@@ -657,20 +664,21 @@ def render(
                 inline=True,
             )
             embed.add_field(name="​", value="​", inline=True)
-        if rsvps_yes or rsvps_maybe:
-            waiting_trailing = "\n​" if len(waiting_yes) > len(waiting_maybe) else ""
-            embed.add_field(
-                name=f"⌛ Waiting on ({len(waiting_yes)})",
-                value=quote_block(waiting_yes, trailing=waiting_trailing),
-                inline=True,
-            )
+        if rsvps_yes or rsvps_unconfirmed or rsvps_maybe:
+            longest = max(len(waiting_yes), len(waiting_unconfirmed), len(waiting_maybe))
+            columns = [(f"⌛ Waiting on ({len(waiting_yes)})", waiting_yes)]
+            if waiting_unconfirmed:
+                columns.append((f"❓ Unconfirmed ({len(waiting_unconfirmed)})", waiting_unconfirmed))
             if waiting_maybe:
+                columns.append((f"🤷 Maybe ({len(waiting_maybe)})", waiting_maybe))
+            for header, names in columns:
                 embed.add_field(
-                    name=f"🤷 Maybe ({len(waiting_maybe)})",
-                    value=quote_block(waiting_maybe),
+                    name=header,
+                    value=quote_block(names, trailing="\n​" if len(names) == longest else ""),
                     inline=True,
                 )
-            embed.add_field(name="​", value="​", inline=True)
+            for _ in range(-len(columns) % 3):
+                embed.add_field(name="​", value="​", inline=True)
 
     if spectators:
         embed.add_field(

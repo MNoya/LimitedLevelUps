@@ -27,8 +27,12 @@ from bot.services.pod_reminder_copy import (
     ATTENDANCE_HOLD,
     ATTENDANCE_HOLD_MAYBE,
     LOBBY_OPEN,
+    LOBBY_OPEN_CONFIRMED_GROUP,
     LOBBY_OPEN_HEADLINE,
+    LOBBY_OPEN_MAYBE_GROUP,
+    LOBBY_OPEN_SEATED,
     LOBBY_OPEN_TABLE,
+    LOBBY_OPEN_UNCONFIRMED_GROUP,
     ROSTER_REMINDER_HEADLINE,
     ROSTER_REMINDER_HEADLINE_COUNT,
     ROSTER_REMINDER_MARK,
@@ -43,6 +47,7 @@ from bot.commands.messages import (
     MSG_CONFIRM_TALLY_ALL,
     MSG_CONFIRM_TALLY_CONFIRMED,
     MSG_JOIN_DRAFT_BUTTON,
+    MSG_TABLE_SEATED,
 )
 from bot.services.pod_confirm import (
     CONFIRMED,
@@ -457,6 +462,31 @@ def build_lobby_open_body(draftmancer_url: str, mention_block: str, numbered: bo
 
 
 MENTIONS_PER_ROW = 8
+
+
+def build_lobby_open_split_body(
+    draftmancer_url: str, index: int, confirmed: list[str], unconfirmed: list[str], maybe: list[str],
+) -> str:
+    """The lobby-open post for a table a split made, which also has to say whose table it is.
+
+    A split stages its tables and opens their lobbies in the same pass, so a seating notice of its own
+    would land seconds above this one and ping the same people twice. It is one post: which table this
+    is, who is on it under the answer each of them gave, then the two doors in.
+
+    The three groups are pinged together, in one message, since Discord allows one mention rule per
+    message and the unconfirmed and the maybes are exactly who a short table needs to reach."""
+    lines = [LOBBY_OPEN_SEATED.format(seated=MSG_TABLE_SEATED.format(index=index))]
+    lines += [LOBBY_OPEN_CONFIRMED_GROUP.format(mentions=row) for row in _mention_rows(confirmed)]
+    unanswered = (
+        [LOBBY_OPEN_UNCONFIRMED_GROUP.format(mentions=row) for row in _mention_rows(unconfirmed)]
+        + [LOBBY_OPEN_MAYBE_GROUP.format(mentions=row) for row in _mention_rows(maybe)]
+    )
+    if unanswered:
+        lines += [""] + unanswered
+    lines += ["", LOBBY_OPEN_TABLE.format(
+        headline=LOBBY_OPEN_HEADLINE, url=draftmancer_url, button=MSG_JOIN_DRAFT_BUTTON, mentions="",
+    )]
+    return "\n".join(lines) + f"\n{BLANK_LINE}"
 
 
 def build_attendance_hold_body(count: int, yes: list[str], maybe: list[str]) -> str:

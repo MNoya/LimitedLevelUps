@@ -45,6 +45,7 @@ from sqlalchemy import delete, select
 from bot.database import SessionLocal
 from bot.discord_helpers import channel_matching_name, run_detached
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
+from bot.services import pod_confirm
 from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_format_schedule
@@ -497,7 +498,7 @@ async def setup(bot: commands.Bot) -> None:
     @test_group.command(name="hold")
     @commands.is_owner()
     async def test_hold(
-        ctx: commands.Context, players: int = 13, maybes: int = 3, minutes: int = 3,
+        ctx: commands.Context, players: int = 14, maybes: int = 3, unconfirmed: int = 2, minutes: int = 3,
     ) -> None:
         """Owner-only. Drive the attendance hold end to end on a real pod, without waiting an hour for it.
 
@@ -505,6 +506,10 @@ async def setup(bot: commands.Bot) -> None:
         fork by hand. The seeds land inside the confirmation hour so they count as confirmed, which is
         what the release sizes its tables from. The hold posts its ping above the roster card and opens no
         lobby; the release fires at the pod's start time, splits the tables and opens a lobby for each.
+
+        `unconfirmed` seeds that many more who said Yes and never confirmed, and `maybes` that many maybes.
+        Both are dealt to the last table the split makes, so its lobby-open post carries all three groups
+        and its card carries the Unconfirmed column.
 
         Thirteen is the smallest count that splits into two tables. Ten or fewer never holds at all, which
         is worth seeing too: pass `players` under eleven and the lobby opens the moment the fork runs."""
@@ -523,6 +528,8 @@ async def setup(bot: commands.Bot) -> None:
         _stand_down_armed_open(ctx.bot, event_id)
         await _seed_fake_yes(ctx.channel, event_id, event_time, name, range(players))
         await _seed_fake_maybe(event_id, range(players, players + maybes))
+        pending = range(players + maybes, players + maybes + unconfirmed)
+        await _seed_fake_unconfirmed(ctx.channel, event_id, event_time, name, pending)
         await pod_launch.open_ondemand_lobby(ctx.bot, event_id)
 
     @test_group.command(name="lockroster")
@@ -1193,6 +1200,22 @@ async def _seed_fake_maybe(event_id: str, seats: Iterable[int]) -> None:
         await asyncio.to_thread(
             pod_launch.set_rsvp_sync, ref[2], _fill_seed_id(seat), _roster_name(seat), RSVP_MAYBE,
         )
+
+
+async def _seed_fake_unconfirmed(
+    channel: discord.TextChannel, event_id: str, event_time: datetime, name: str, seats: Iterable[int],
+) -> None:
+    """Record one fake Yes per seat and take its confirmation back off, for the players a real pod ends the
+    hold still waiting on.
+
+    A pod seeded minutes from its start time is already inside the confirmation window, so a Yes recorded
+    there arrives confirmed. Unticking them afterwards is the organizer's own path to the same state."""
+    seats = list(seats)
+    if not seats:
+        return
+    await _seed_fake_yes(channel, event_id, event_time, name, seats)
+    ids = [_fill_seed_id(seat) for seat in seats]
+    await asyncio.to_thread(pod_confirm.set_confirmations_sync, event_id, (), ids)
 
 
 def _stand_down_armed_open(bot: commands.Bot, event_id: str) -> None:

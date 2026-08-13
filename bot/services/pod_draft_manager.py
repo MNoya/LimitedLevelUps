@@ -298,6 +298,7 @@ class PodDraftManager:
                  draftmancer_url: str = "",
                  kind: str = "tournament",
                  rsvps_yes: list[str] | None = None,
+                 rsvps_unconfirmed: list[str] | None = None,
                  rsvps_maybe: list[str] | None = None,
                  reconnect: bool = False,
                  created_by: str | None = None) -> None:
@@ -322,6 +323,7 @@ class PodDraftManager:
         self._mock_lobby_signature: tuple[str, ...] | None = None
         self._thread_added_ids: set[str] = set()
         self.rsvps_yes: list[str] = list(rsvps_yes or [])
+        self.rsvps_unconfirmed: list[str] = list(rsvps_unconfirmed or [])
         self.rsvps_maybe: list[str] = list(rsvps_maybe or [])
         self.claimed_discord_ids: set[str] = set()
         self.table_event_ids: set[str] = set()
@@ -1332,7 +1334,7 @@ class PodDraftManager:
         if guild is None:
             return {}
         ids: set[int] = set()
-        for rsvp in (*self.rsvps_yes, *self.rsvps_maybe):
+        for rsvp in (*self.rsvps_yes, *self.rsvps_unconfirmed, *self.rsvps_maybe):
             m = re.match(r"^<@!?(\d+)>$", rsvp.strip())
             if m:
                 ids.add(int(m.group(1)))
@@ -1388,6 +1390,7 @@ class PodDraftManager:
             embed = render_lobby_embed(
                 title=self.event_name,
                 rsvps_yes=self.rsvps_yes,
+                rsvps_unconfirmed=self.rsvps_unconfirmed,
                 rsvps_maybe=self.rsvps_maybe,
                 in_session=classified,
                 state=state,
@@ -3289,6 +3292,7 @@ async def start_manager(
     draftmancer_url: str = "",
     kind: str = "tournament",
     rsvps_yes: list[str] | None = None,
+    rsvps_unconfirmed: list[str] | None = None,
     rsvps_maybe: list[str] | None = None,
     reconnect: bool = False,
     created_by: str | None = None,
@@ -3302,7 +3306,8 @@ async def start_manager(
     manager = PodDraftManager(
         bot, event_id, session_id, thread_id, set_code, expected_attendee_count,
         event_name=event_name, draftmancer_url=draftmancer_url, kind=kind,
-        rsvps_yes=rsvps_yes, rsvps_maybe=rsvps_maybe, reconnect=reconnect, created_by=created_by,
+        rsvps_yes=rsvps_yes, rsvps_unconfirmed=rsvps_unconfirmed, rsvps_maybe=rsvps_maybe,
+        reconnect=reconnect, created_by=created_by,
     )
     persisted_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
     if persisted_mode:
