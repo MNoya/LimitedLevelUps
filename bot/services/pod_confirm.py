@@ -144,6 +144,17 @@ def seating_plan(attendance: Attendance) -> TablePlan:
     return shape
 
 
+def table_capacity_for(seatable: int) -> int:
+    """The seat cap one table opens at to hold this many players, never under the eight the room aims for.
+
+    The single answer to how wide a table is, read by the board that draws it, the seat routing that fills
+    it and the Draftmancer room it opens. Computed three separate ways it disagreed with itself: a table of
+    eight confirmed carrying three unconfirmed drew as a table of ten and opened a room for eight, so the
+    riders raced the roster for the same eight seats."""
+    plan = plan_tables(seatable)
+    return max(plan.tables[0].capacity if plan.tables else MIN_TABLE, POD_AIM)
+
+
 def attendance_of(rosters: dict[str, list[str]]) -> Attendance:
     """A rendered roster read as the four answers the confirmation window cares about."""
     return Attendance(

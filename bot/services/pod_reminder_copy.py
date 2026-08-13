@@ -61,8 +61,6 @@ LOBBY_OPEN_TABLE = (
 
 LOBBY_OPEN_SEATED = "**{seated}**"
 LOBBY_OPEN_CONFIRMED_GROUP = "✅ **Confirmed:** {mentions}"
-LOBBY_OPEN_UNCONFIRMED_GROUP = "❓ **Unconfirmed:** {mentions}"
-LOBBY_OPEN_MAYBE_GROUP = "🤷 **Maybe:** {mentions}"
 
 STAGED_TABLES_TITLE = "### 🪑 {count} Tables Created"
 STAGED_TABLES_ROW = "### {link}"

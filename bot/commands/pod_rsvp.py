@@ -851,7 +851,12 @@ async def post_scheduled_card(
 
     A numbered name means a table staged at its own start time, whose card carries the roster with no
     RSVP prompt, no Time and no buttons, since nobody is being asked to sign up. It opens no native
-    scheduled event either: the signup it split from already holds the one the server shows."""
+    scheduled event either: the signup it split from already holds the one the server shows.
+
+    Such a table also posts no registered embed and pulls nobody into its thread. Both exist to gather a
+    roster over the hour before a pod, and this one is drafting in seconds: its lobby post mentions the
+    players it seated, which is what joins them to the thread, silently and in one message instead of one
+    Discord call and one system line per player."""
     preseed_yes = preseed_yes or []
     preseed_confirmed = preseed_confirmed or []
     preseed_maybe = preseed_maybe or []
@@ -907,21 +912,23 @@ async def post_scheduled_card(
     await asyncio.to_thread(pod_launch.link_event_sync, signal_id, event_id)
 
     try:
-        registered = await thread.send(
-            embed=build_registered_embed(
-                set_code.upper(), pairing_mode, seating_mode,
-                championship=is_championship(name), rsvp_hint=not starts_now,
-                channel_post_url=message.jump_url, guild=guild, event_time=event_time,
-            ),
-            view=ScheduledRegisteredView(),
-        )
-        await asyncio.to_thread(pod_launch.set_thread_message_sync, signal_id, str(registered.id))
+        if not starts_now:
+            registered = await thread.send(
+                embed=build_registered_embed(
+                    set_code.upper(), pairing_mode, seating_mode,
+                    championship=is_championship(name), rsvp_hint=True,
+                    channel_post_url=message.jump_url, guild=guild, event_time=event_time,
+                ),
+                view=ScheduledRegisteredView(),
+            )
+            await asyncio.to_thread(pod_launch.set_thread_message_sync, signal_id, str(registered.id))
         if description:
             await thread.send(description)
     except discord.HTTPException:
         log.warning(f"could not post the registered embed in thread {thread.id}", exc_info=True)
 
-    await add_members_to_thread(thread, preseed_confirmed + preseed_yes + preseed_maybe)
+    if not starts_now:
+        await add_members_to_thread(thread, preseed_confirmed + preseed_yes + preseed_maybe)
     pod_launch.arm_scheduled_pod_jobs(bot, event_id, event_time, created_at)
     log.info(f"posted scheduled pod card for {name} as message {message.id} (event {event_id})")
     await _refresh_launcher(bot, event_time)

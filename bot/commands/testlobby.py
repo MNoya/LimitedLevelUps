@@ -1360,7 +1360,7 @@ def _preview_settings_labels() -> dict:
         set_code=active_set_code(),
         format_label=format_display(active_set_code()),
         pairing_label=pairing_label(DEFAULT_PAIRING_MODE),
-        seating_label=seating_mode_label("random"),
+        seating_label=f"({settings.pod_draft_max_players}) {seating_mode_label('random')}",
     )
 
 

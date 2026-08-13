@@ -53,6 +53,7 @@ MSG_MOCK_CARD_RECAP_BUTTON = "Draft Recap"
 MSG_MOCK_CARD_SPECTATE_BUTTON = "Spectate"
 MSG_MOCK_CARD_THREAD_BUTTON = "Thread"
 MSG_LOBBY_FULL_PROMPT = "{count} Players locked in! Initiate Ready Check?"
+MSG_RIDER_SEATS_OPEN = "➡️ {count} seats open at this table {mentions}\nJoin here: <{url}>"
 
 MSG_CONFIRM_NOT_A_POD = "Run `!confirm` inside a pod draft thread"
 MSG_CONFIRM_POD_STARTED = "This pod has already opened its lobby"

@@ -18,13 +18,12 @@ from bot.commands.pod_rsvp import (
     post_scheduled_card,
     render_pod_overview,
 )
-from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import resolve_pod_chat_channel
 from bot.models import PodDraftEvent
 from bot.services import pod_event_settings
 from bot.services.pod_drafts import load_event_thread_id_sync
-from bot.services.pod_confirm import seating_plan
+from bot.services.pod_confirm import seating_plan, table_capacity_for
 from bot.services.pod_launch import (
     fetch_pod_thread,
     maybe_roster_for_event_sync,
@@ -86,7 +85,7 @@ async def stage_pods(bot: commands.Bot, event_id: str) -> None:
         unconfirmed = [signup for signup in roster if not signup.confirmed] if len(groups) > 1 else []
         maybes = await _maybes_for_the_last_table(event_id, groups)
         if groups:
-            await asyncio.to_thread(_size_the_room, event_id, _room_for(plan.tables[0].capacity))
+            await asyncio.to_thread(_size_the_room, event_id, table_capacity_for(len(groups[0])))
         await asyncio.to_thread(_renumber_source, source)
         moved = [
             await asyncio.to_thread(hand_over_members_sync, event_id, members)
@@ -99,7 +98,7 @@ async def stage_pods(bot: commands.Bot, event_id: str) -> None:
             index = staged + offset
             last = offset == len(groups) - 1
             await _open_pod(
-                bot, event_id, source, members, index, plan.tables[index - 1].capacity,
+                bot, event_id, source, members, index,
                 moved[offset - 1], maybes if last else [], unconfirmed if last else [],
             )
     if signup_card is not None:
@@ -135,7 +134,7 @@ def _family_lock(base_name: str) -> asyncio.Lock:
 
 
 async def _open_pod(
-    bot: commands.Bot, source_event_id: str, source: "_Source", members: list, index: int, seats: int,
+    bot: commands.Bot, source_event_id: str, source: "_Source", members: list, index: int,
     moved: int, maybes: list[Signup], unconfirmed: list[Signup],
 ) -> None:
     """Create one sibling pod carrying the source's start time, seeded with the players the plan put on
@@ -163,7 +162,8 @@ async def _open_pod(
     if new_event_id is None:
         log.warning(f"pod-stage: could not open pod {index} off {source_event_id}")
         return
-    await asyncio.to_thread(_size_the_room, new_event_id, _room_for(seats))
+    seats = table_capacity_for(len(preseed) + len(unconfirmed) + len(maybes))
+    await asyncio.to_thread(_size_the_room, new_event_id, seats)
     await _ask_for_the_missing_players(bot, new_event_id, name, source.event_time, len(members))
     audit.event(
         "pod_staged", source_event_id=source_event_id, event_id=new_event_id, index=index, moved=moved,
@@ -176,16 +176,12 @@ async def _open_pod(
 
 def _size_the_room(event_id: str, seats: int) -> None:
     """Open this table's Draftmancer room at the size the plan drew it, since the room otherwise defaults
-    to eight and a planned table of ten could never seat its last two. Written as the pod setting the
-    Settings button offers, so anyone can widen a table that needs it."""
+    to eight and a planned table of ten could never seat its last two.
+
+    Sized for everyone the table carries, riders included, so a rider who finds the link never takes a seat
+    the confirmed roster needs. Which of those seats survive is settled by the rider window, not here.
+    Written as the pod setting the Settings button offers, so anyone can widen a table that needs it."""
     pod_event_settings.store_sync(event_id, max_players=seats)
-
-
-def _room_for(seats: int) -> int:
-    """The size a table's room opens at: never under eight, whatever the plan drew, so a table of six can
-    still seat the latecomer who walks in. Room size only caps who can enter, it holds no seat open, and a
-    table the plan drew wider keeps its own size."""
-    return max(seats, settings.pod_draft_target_players)
 
 
 async def _give_table_one_its_own_card(bot: commands.Bot, source: "_Source") -> None:

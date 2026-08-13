@@ -1923,8 +1923,16 @@ async def open_ondemand_lobby(
     commits the pod to a shape and nobody yet knows which shape the answers make. `allow_hold` is False
     on the release at the other end of that hold, which is this same path with the question settled.
 
-    A table a split staged DMs its confirmed players only. Its maybes were asked to confirm when the pod
-    held and did not, and the link is in the thread they are already in."""
+    A table a split staged never holds, whatever it is carrying. The hold is the step that made it, so
+    asking its players to confirm again re-opens a question they already answered, and a table wanting to
+    split a second time five minutes out is `/pod-table` by hand.
+
+    A table a split staged DMs the link to the players holding a seat on it, so nobody who left the
+    confirmation unanswered is handed it ahead of the roster the table planned for. Its riders keep the
+    link in the thread and are asked in by the rider window.
+
+    Every other pod DMs its whole Yes roster, confirmed or not. One table short of firing needs every body
+    it can reach, and there is no second table for a late arrival to take a seat away from."""
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, event_id)
         if event is None:
@@ -1941,19 +1949,20 @@ async def open_ondemand_lobby(
 
     roster = await asyncio.to_thread(roster_for_event_sync, event_id)
     single_table = await asyncio.to_thread(championship_seeds.rank_override_sync, event_id) is not None
-    if allow_hold and not single_table and await _hold_for_attendance(
+    split = pod_is_numbered(event_name)
+    if allow_hold and not single_table and not split and await _hold_for_attendance(
         bot, event_id, event_time, thread_id, roster,
     ):
         return
     if single_table:
         roster = await asyncio.to_thread(championship_seeds.playing_roster_sync, event_id, roster)
     rsvps = await asyncio.to_thread(signal_rsvps_sync, event_id)
-    split = pod_is_numbered(event_name)
     maybe_names = [] if single_table else (rsvps[1] if rsvps else [])
     maybe_roster = [] if single_table else await asyncio.to_thread(maybe_roster_for_event_sync, event_id)
     seated, unconfirmed = await _seated_and_unconfirmed(event_id, roster, single_table)
     display_names = [name for _, name in seated]
     unconfirmed_names = [name for _, name in unconfirmed]
+    riders = unconfirmed + maybe_roster if split else []
     draftmancer_url = draftmancer_url_for(session_id)
 
     thread = await fetch_pod_thread(bot, thread_id)
@@ -1961,8 +1970,9 @@ async def open_ondemand_lobby(
         log.warning(f"open_ondemand_lobby: thread {thread_id} unreachable")
         return
 
+    expected = len(display_names) + len(riders)
     manager = await start_manager(
-        bot, event_id, session_id, thread_id, set_code, len(display_names),
+        bot, event_id, session_id, thread_id, set_code, expected,
         event_name=event_name, draftmancer_url=draftmancer_url,
         rsvps_yes=display_names, rsvps_unconfirmed=unconfirmed_names, rsvps_maybe=maybe_names,
         pairing_chosen=pairing_chosen,
@@ -1970,21 +1980,18 @@ async def open_ondemand_lobby(
     if manager is not None and not await manager.await_ownership():
         manager, session_id = await _reseat_on_fresh_session(
             bot, event_id, manager, thread_id=thread_id, set_code=set_code, event_name=event_name,
-            display_names=display_names, maybe_names=maybe_names,
+            expected=expected, display_names=display_names, maybe_names=maybe_names,
             unconfirmed_names=unconfirmed_names,
         )
         draftmancer_url = draftmancer_url_for(session_id)
 
-    mentions = [f"<@{did}>" for did, _ in roster]
+    mentions = _mentions(roster)
     if single_table:
         body = championship_copy.lobby_open_body(
             set_code=set_code, draftmancer_url=draftmancer_url, seat_mentions=mentions,
         )
     elif split:
-        body = build_lobby_open_split_body(
-            draftmancer_url, pod_index(event_name),
-            _mentions(seated), _mentions(unconfirmed), _mentions(maybe_roster),
-        )
+        body = build_lobby_open_split_body(draftmancer_url, pod_index(event_name), _mentions(seated))
     else:
         body = build_lobby_open_body(draftmancer_url, " ".join(mentions))
     try:
@@ -2001,7 +2008,7 @@ async def open_ondemand_lobby(
             event.socket_status = "reminded"
             session.commit()
 
-    recipients = [(did, name, "yes") for did, name in roster]
+    recipients = [(did, name, "yes") for did, name in (seated if split else roster)]
     if not single_table and not split:
         recipients += [(did, name, "maybe") for did, name in maybe_roster]
     await send_lobby_link_dms(
@@ -2009,6 +2016,7 @@ async def open_ondemand_lobby(
     )
 
     if manager is not None:
+        manager.open_rider_window(len(seated), _mentions(riders))
         await _apply_scheduled_pick_timer(event_id, manager)
 
 
@@ -2035,7 +2043,12 @@ async def _seated_and_unconfirmed(
 
 
 def _mentions(roster: list[tuple[str, str]]) -> list[str]:
-    return [f"<@{discord_id}>" for discord_id, _ in roster if discord_id.isdigit()]
+    """Mentions for real players, bold names for the fixture ids a `!test` pod seats, so a preview reads
+    as the roster it built instead of dropping it or rendering a dead mention"""
+    return [
+        f"<@{discord_id}>" if discord_id.isdigit() else f"**{name}**"
+        for discord_id, name in roster
+    ]
 
 
 async def _hold_for_attendance(
@@ -2154,7 +2167,7 @@ async def _apply_scheduled_pick_timer(event_id: str, manager: PodDraftManager) -
 
 async def _reseat_on_fresh_session(
     bot: commands.Bot, event_id: str, stale: PodDraftManager, *,
-    thread_id: int, set_code: str, event_name: str,
+    thread_id: int, set_code: str, event_name: str, expected: int,
     display_names: list[str], maybe_names: list[str], unconfirmed_names: list[str],
 ) -> tuple[PodDraftManager | None, str]:
     """Abandon a Draftmancer session the bot could not own and reopen the pod on a fresh one. The session
@@ -2170,7 +2183,7 @@ async def _reseat_on_fresh_session(
         return None, stale.session_id
     log.warning(f"open_ondemand_lobby: {event_id} lost ownership; reseating on fresh session {session_id}")
     manager = await start_manager(
-        bot, event_id, session_id, thread_id, set_code, len(display_names),
+        bot, event_id, session_id, thread_id, set_code, expected,
         event_name=event_name, draftmancer_url=draftmancer_url_for(session_id),
         rsvps_yes=display_names, rsvps_unconfirmed=unconfirmed_names, rsvps_maybe=maybe_names,
     )

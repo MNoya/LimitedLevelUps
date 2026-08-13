@@ -111,11 +111,17 @@ On busy nights a pod splits into tables before it opens, not after. A Draftmance
 
 At the start time the bot builds the tables the confirmed players ask for, opens one for each, and posts a list of them in the thread. Every table plays the format the pod was signed up for.
 
-Anyone the pod is not counting on goes to the last table: the players who said Maybe, and the players who said Yes at signup and never confirmed when the pod held. Neither is a player the plan seats, and the pod already asked once when it held, so nothing asks again. They land on that table, join its thread, and take a seat by pressing Join Draft whenever they want it, which is what a table losing somebody at the last minute can call on. Table 1 is the confirmed players and never carries them.
+Anyone the pod is not counting on goes to the last table: the players who said Maybe, and the players who said Yes at signup and never confirmed when the pod held. Neither is a player the plan seats, and the pod already asked once when it held, so nothing asks again. Table 1 is the confirmed players and never carries them.
 
-Every table opens its Draftmancer room at eight seats at the least, whatever size it was planned for, so a table of six can still seat whoever walks in late. The room size caps who can enter and holds no seat open, so a table of six still offers its ready check at six. Its card lists the players it is waiting on, and those are the confirmed players only: anyone who never answered is listed apart, under Unconfirmed, because a seat held open for somebody who did not answer is how a table ends up drafting one player short.
+A table made this way never waits for confirmations again. The wait already happened, on the pod it came from, and opening the tables means the threads and the draft links go out now.
 
-Each table's card carries the players on it. There are no signup buttons and no start time on it: the draft is beginning, so there is nothing left to answer.
+Every table opens its Draftmancer room wide enough for everyone it carries, its Maybe and unconfirmed players included, and never under eight, so a table of six can still seat whoever walks in late. That is what keeps the confirmed players from racing anyone for their own seats. The size the room is holding reads on the lobby card, next to how the seats are ordered: `Seats: (10) Random`.
+
+For the first two minutes after the start time those extra seats belong to the confirmed players. The draft link is sent by DM to them alone, and the players who never answered keep the link that is in the thread. Fill the table in that window and it locks to the size it planned for, and the bot asks the table to start its ready check. Come up short and the bot names the Maybe and unconfirmed players in the thread and asks them in, which is what a table losing somebody at the last minute can call on.
+
+Each table's card lists the players it is waiting on, and those are the confirmed players only: anyone who never answered is listed apart, under Unconfirmed, because a seat held open for somebody who did not answer is how a table ends up drafting one player short.
+
+Each table's card carries the players on it. There are no signup buttons and no start time on it: the draft is beginning, so there is nothing left to answer. Its thread opens empty and the lobby post's mentions are what put you in it, so a table costs the thread none of the join lines a gathering pod collects.
 
 Organizers have two controls on the roster card while it is asking for confirmations. 📋 opens a private list with **Confirmed Players** and **Declined Players**, for recording what somebody said in chat but never pressed, and 🚀 **Open Tables** ends the wait early and deals the tables there and then. Both edits are posted in the thread naming who made them and who they were about, since the room is waiting on those answers. After the split, 📋 **Move Players** sits under the list of tables and moves people between them.
 

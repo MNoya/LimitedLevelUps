@@ -24,6 +24,7 @@ from bot.services.pod_confirm import (
     TablePlan,
     attendance_for_event_sync,
     plan_tables,
+    table_capacity_for,
 )
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_YES
 
@@ -318,7 +319,6 @@ def _family_rosters(session: Session, event_ids: list[str]) -> dict[str, list[tu
 def _family_pod(event: PodDraftEvent, roster: list[tuple[str, str, str]]) -> FamilyPod:
     playing = [(discord_id, name) for rsvp, discord_id, name in roster if rsvp == RSVP_YES]
     maybes = [name for rsvp, _, name in roster if rsvp == RSVP_MAYBE]
-    plan = plan_tables(len(playing))
     return FamilyPod(
         event_id=event.id,
         name=event.name,
@@ -326,7 +326,7 @@ def _family_pod(event: PodDraftEvent, roster: list[tuple[str, str, str]]) -> Fam
         thread_id=event.discord_thread_id,
         session_id=event.draftmancer_session,
         seated=len(playing),
-        capacity=plan.tables[0].capacity if plan.tables else MIN_POD_SIZE,
+        capacity=table_capacity_for(len(playing) + len(maybes)),
         member_ids=frozenset(discord_id for discord_id, _ in playing),
         member_names=tuple(name for _, name in playing),
         maybe_names=tuple(maybes),

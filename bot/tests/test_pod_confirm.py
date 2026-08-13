@@ -11,6 +11,7 @@ from bot.services.pod_confirm import (
     opens_confirmation,
     plan_tables,
     seating_plan,
+    table_capacity_for,
 )
 from bot.services import pod_staging
 from bot.services.pod_staging import Signup, deal_into_plan
@@ -85,6 +86,17 @@ def test_every_player_is_seated_or_waiting_at_a_real_pod():
         assert plan.seated + plan.waiting == players
         assert all(t.seated >= 6 for t in plan.tables)
         assert all(t.capacity in (6, 8, 10) for t in plan.tables)
+
+
+@pytest.mark.parametrize("seatable, capacity", [
+    (8, 8),
+    (9, 10),
+    (11, 10),
+    (6, 8),
+    (0, 8),
+])
+def test_a_table_opens_wide_enough_for_everyone_it_carries(seatable, capacity):
+    assert table_capacity_for(seatable) == capacity
 
 
 def test_only_eleven_leaves_anyone_without_a_table():

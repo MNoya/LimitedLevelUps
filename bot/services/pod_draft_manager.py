@@ -35,6 +35,7 @@ from bot.commands.messages import (
     MSG_MOCK_COMPLETE_CHANNEL,
     MSG_POD_RESTARTED,
     MSG_POD_RESTARTING,
+    MSG_RIDER_SEATS_OPEN,
 )
 from bot.config import settings
 from bot.database import SessionLocal
@@ -145,6 +146,7 @@ _LOBBY_REFRESH_DEBOUNCE_S = 1.0
 _LOBBY_FULL_THRESHOLD = 8
 AUTO_TEAM_POD_SIZE = 6  # a pod this size drafts in teams without being asked
 _LOBBY_FULL_PROMPT_DELAY_S = 10
+RIDER_WINDOW_S = 120
 _RESTART_SETTLE_S = 2.5
 _RESTART_READY_MIN_PLAYERS = 2
 _DISCONNECT_BLIP_S = 5
@@ -355,6 +357,9 @@ class PodDraftManager:
         self._lobby_full_prompt_task: asyncio.Task | None = None
         self._lobby_full_prompt_message: "discord.Message | None" = None
         self._lobby_full_prompted = False
+        self.rider_seats_held = 0
+        self.rider_mentions: list[str] = []
+        self._rider_window_task: asyncio.Task | None = None
         self._voice_link_posted = False
         self.team_voice_rooms: list["discord.VoiceChannel"] = []
         self._ready_check_started_at = 0.0
@@ -568,6 +573,8 @@ class PodDraftManager:
 
         if self.is_owner and not self.drafting:
             await self._apply_bot_fill()
+
+        await self._maybe_lock_planned_table()
 
         self._schedule_lobby_refresh()
 
@@ -1352,13 +1359,17 @@ class PodDraftManager:
     def _settings_labels(self) -> dict:
         """Render inputs shared by the lobby + progress cards: the set code that prefixes the title's
         keyrune symbol, the Format / Pairings / Seats footer labels, and the mock flag both cards read to
-        drop tournament machinery. A mock draft pairs no matches, so it carries no Pairings label."""
+        drop tournament machinery. A mock draft pairs no matches, so it carries no Pairings label.
+
+        The Seats label leads with the room's own size, so a table holding ten reads as one at a glance and
+        a rider window closing to eight shows on the card. Composed here rather than in
+        `seating_mode_label`, which the registration embed also renders long before a room exists."""
         mock = self.kind == "mock"
         return {
             "set_code": self.set_code,
             "format_label": pod_format.format_display_with_picks(self.set_code, self.picks_per_pack),
             "pairing_label": None if mock else pairing_label(self.pairing_mode),
-            "seating_label": seating_mode_label(self.seating_mode),
+            "seating_label": f"({self.max_players}) {seating_mode_label(self.seating_mode)}",
             "mock": mock,
         }
 
@@ -2610,6 +2621,73 @@ class PodDraftManager:
         except discord.HTTPException:
             self._lobby_full_prompted = False
             log.warning(f"[LOBBY] full_prompt_send_failed event={self.event_id}", exc_info=True)
+
+    def open_rider_window(self, planned: int, rider_mentions: list[str]) -> None:
+        """Give a staged table's confirmed roster the first two minutes on its own seats.
+
+        The room already opens wide enough for the riders, so none of them can take a seat the roster
+        needs. What is held back is the invitation: a rider is not asked in while the table it was dealt
+        onto can still fill itself. The table reaching its planned size closes the window and locks the
+        room to that size, which is what puts the Ready Check nudge in front of a table of eight instead
+        of leaving it waiting on players nobody is expecting."""
+        if planned <= 0 or not rider_mentions:
+            return
+        self.rider_seats_held = planned
+        self.rider_mentions = list(rider_mentions)
+        self._rider_window_task = asyncio.create_task(self._ask_the_riders_in_after())
+
+    async def _maybe_lock_planned_table(self) -> None:
+        """Close the rider window once the table holds everyone it planned for, and cap it there.
+
+        A room already past the planned size keeps its width: Draftmancer refuses a cap under the players
+        seated, and a table that has outgrown its plan wants the seat that makes it even rather than a
+        cap that forbids it."""
+        if not self.rider_seats_held or self.drafting or self.draft_complete:
+            return
+        seated = len(self.player_session_users())
+        if seated < self.rider_seats_held:
+            return
+        planned = self.rider_seats_held
+        self._close_rider_window()
+        if seated > planned:
+            log.info(f"[LOBBY] rider_window_outgrown event={self.event_id} seated={seated} planned={planned}")
+            return
+        error = await self.apply_max_players(planned)
+        log.info(f"[LOBBY] rider_window_filled event={self.event_id} locked={planned} error={error}")
+
+    async def _ask_the_riders_in_after(self) -> None:
+        """Hand the riders the table two minutes past the start time, when it did not fill on its own."""
+        start = self.scheduled_start or datetime.now(timezone.utc)
+        wait = (start - datetime.now(timezone.utc)).total_seconds() + RIDER_WINDOW_S
+        try:
+            await asyncio.sleep(max(0.0, wait))
+        except asyncio.CancelledError:
+            return
+        if not self.rider_seats_held or self.drafting or self.draft_complete:
+            return
+        mentions = " ".join(self.rider_mentions)
+        short = self.rider_seats_held - len(self.player_session_users())
+        self.rider_seats_held = 0
+        self._rider_window_task = None
+        thread = await self._fetch_thread()
+        if thread is None:
+            return
+        try:
+            await thread.send(
+                MSG_RIDER_SEATS_OPEN.format(
+                    count=emojis.mana_number(max(short, 1)), mentions=mentions,
+                    url=self.draftmancer_url,
+                ),
+                allowed_mentions=discord.AllowedMentions(users=True),
+            )
+        except discord.HTTPException:
+            log.warning(f"[LOBBY] rider_window_send_failed event={self.event_id}", exc_info=True)
+
+    def _close_rider_window(self) -> None:
+        self.rider_seats_held = 0
+        if self._rider_window_task is not None:
+            self._rider_window_task.cancel()
+            self._rider_window_task = None
 
     async def post_voice_offer(self) -> None:
         """The one-time offer of the pod voice channel, posted when the draft ends and the pod turns into
