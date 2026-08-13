@@ -76,7 +76,7 @@ log = logging.getLogger(__name__)
 
 _bot: commands.Bot | None = None
 
-ReminderViewBuilder = Callable[[str, bool], "discord.ui.View"]
+ReminderViewBuilder = Callable[[str, bool, bool], "discord.ui.View"]
 _reminder_view_builder: ReminderViewBuilder | None = None
 
 
@@ -238,6 +238,30 @@ async def refresh_roster_reminder_for_event(event_id: str) -> bool:
     )
 
 
+async def close_roster_reminder(thread: discord.Thread, event_id: str) -> None:
+    """Grey out the seat buttons on the roster card a split leaves behind in the signup thread.
+
+    Every press on that card resolves the pod through its event id, and the pod that kept the signal is
+    table 1 by the time the split is done. Left live, a player sitting at table 2 confirms onto table 1
+    from the thread everybody is still reading. Each table has a card and a thread of its own by then, so
+    what stays here is the record of what the signup came to.
+
+    The card is forgotten as well as greyed: the id belongs to a message in this thread, and the pod it
+    was recorded against now lives in another one."""
+    if _reminder_view_builder is None:
+        return
+    message_id = await asyncio.to_thread(_confirm_card_id_sync, event_id)
+    if message_id is None:
+        return
+    await asyncio.to_thread(_remember_confirm_card_sync, event_id, None)
+    try:
+        await thread.get_partial_message(int(message_id)).edit(
+            view=_reminder_view_builder(event_id, True, True),
+        )
+    except discord.HTTPException:
+        log.warning(f"could not close the roster card {message_id} on {event_id}", exc_info=True)
+
+
 def reminder_embed(
     event_name: str, event_time: datetime, rosters: dict[str, list[str]],
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None,
@@ -265,7 +289,7 @@ def _build_reminder_view(
     never asked to confirm."""
     if _reminder_view_builder is None:
         return None
-    return _reminder_view_builder(event_id, championship_roster is None)
+    return _reminder_view_builder(event_id, championship_roster is None, False)
 
 
 async def _edit_roster_reminder(

@@ -305,13 +305,13 @@ class ReminderRsvpButton(
     and additionally stamps the confirmation, so someone already on the roster gets a press that means
     something. Riding in the custom_id keeps that true across a restart."""
 
-    def __init__(self, state: str, event_id: str) -> None:
+    def __init__(self, state: str, event_id: str, disabled: bool = False) -> None:
         confirming = state == REMINDER_CONFIRM_STATE
         rsvp = RSVP_YES if confirming else state
         super().__init__(discord.ui.Button(
             style=discord.ButtonStyle.success if rsvp == RSVP_YES else discord.ButtonStyle.secondary,
             label=MSG_CONFIRM_BUTTON if confirming else RSVP_LABELS[rsvp], emoji=RSVP_EMOJI[rsvp],
-            custom_id=f"{REMINDER_RSVP_PREFIX}:{state}:{event_id}",
+            disabled=disabled, custom_id=f"{REMINDER_RSVP_PREFIX}:{state}:{event_id}",
         ))
         self.state = rsvp
         self.confirming = confirming

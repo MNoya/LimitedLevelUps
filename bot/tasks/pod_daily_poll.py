@@ -1080,18 +1080,23 @@ async def open_interest_prompt_from_card(interaction: discord.Interaction) -> No
     await _send_interest_prompt(interaction, launcher_message_id, signal_date)
 
 
-def build_reminder_view(event_id: str, confirming: bool = False) -> discord.ui.View:
+def build_reminder_view(
+    event_id: str, confirming: bool = False, closed: bool = False,
+) -> discord.ui.View:
     """The roster reminder's controls, carrying the event id so they resolve the pod after a restart.
 
     A confirming pod turns the seat button into Confirm, so the people already on the roster have a press
     that records something, and carries the organizer tick list for as long as the card stands. Opening
-    the tables ends a hold, so that one appears only once there is a hold to end."""
+    the tables ends a hold, so that one appears only once there is a hold to end.
+
+    `closed` greys the seat pair, for a card whose pod has moved out of the thread it is sitting in."""
     view = discord.ui.View(timeout=None)
-    view.add_item(ReminderRsvpButton(REMINDER_CONFIRM_STATE if confirming else RSVP_YES, event_id))
-    view.add_item(ReminderRsvpButton(RSVP_NO, event_id))
+    seat_state = REMINDER_CONFIRM_STATE if confirming else RSVP_YES
+    view.add_item(ReminderRsvpButton(seat_state, event_id, disabled=closed))
+    view.add_item(ReminderRsvpButton(RSVP_NO, event_id, disabled=closed))
     for item in build_hold_items(
         event_id, confirming=confirming, held=pod_launch.has_held(event_id),
-        holding=pod_launch.is_holding(event_id),
+        holding=pod_launch.is_holding(event_id) and not closed,
     ):
         view.add_item(item)
     return view

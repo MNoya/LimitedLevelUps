@@ -36,6 +36,7 @@ from bot.services.pod_reminder_copy import STAGED_TABLES_ROW, STAGED_TABLES_TITL
 from bot.services.pod_schedule import build_staged_table_message
 from bot.services.pod_staging import (
     MIN_POD_SIZE,
+    FamilyPod,
     Signup,
     confirmed_first_roster_sync,
     family_state_sync,
@@ -46,6 +47,7 @@ from bot.services.pod_staging import (
     pod_family_sync,
     deal_into_plan,
 )
+from bot.tasks.pod_draft_reminder import close_roster_reminder
 
 log = logging.getLogger(__name__)
 
@@ -103,7 +105,11 @@ async def stage_pods(bot: commands.Bot, event_id: str) -> None:
             )
     if signup_card is not None:
         await render_pod_overview(bot, event_id, signup_card[2])
-    await _point_at_the_tables(event_id, signup_thread)
+    family = await asyncio.to_thread(pod_family_sync, event_id)
+    if len(family) < 2 or signup_thread is None:
+        return
+    await _point_at_the_tables(event_id, family, signup_thread)
+    await close_roster_reminder(signup_thread, event_id)
 
 
 async def _maybes_for_the_last_table(event_id: str, groups: list[list[Signup]]) -> list[Signup]:
@@ -198,16 +204,15 @@ async def _give_table_one_its_own_card(bot: commands.Bot, source: "_Source") -> 
         log.warning(f"pod-stage: could not move table 1 of {source.base_name} onto its own card")
 
 
-async def _point_at_the_tables(source_event_id: str, thread: "discord.Thread | None") -> None:
+async def _point_at_the_tables(
+    source_event_id: str, family: list[FamilyPod], thread: discord.Thread,
+) -> None:
     """Name every table and link to it, once, in the thread the signup gathered in.
 
     Every table has moved out of that thread by now, which leaves it holding everyone who was ever on the
     pod and nobody's draft. That is the one place a map belongs. Each table separately names its own
-    players in its own thread, which is the same news addressed to one table.
-
-    Silent on a pod that never split, where there is one table and everyone is already looking at it."""
-    family = await asyncio.to_thread(pod_family_sync, source_event_id)
-    if len(family) < 2 or thread is None or thread.guild is None:
+    players in its own thread, which is the same news addressed to one table."""
+    if thread.guild is None:
         return
     rows = [
         STAGED_TABLES_ROW.format(link=pod_thread_link(thread.guild.id, pod))
