@@ -131,6 +131,7 @@ from bot.services.pod_signals import (
 )
 from bot.services.pod_drafts import TABLE_SUFFIX_RE
 from bot.services.pod_slot import pod_display_name
+from bot.services.pod_staging import pod_index, pod_is_numbered
 from bot.services.pod_tournament import (
     CHAMPIONSHIP_DEADLINE_SECONDS,
     GRACE_SECONDS,
@@ -691,11 +692,21 @@ def _pod_header_label(slot: pod_launch.LauncherSlot, guild: discord.Guild | None
     into a second table keeps that table's ordinal, which is otherwise the only thing telling two tables of
     one format at one time apart."""
     label = _named_pod_label(slot.bucket_key, slot.set_code)
-    match = TABLE_SUFFIX_RE.search(slot.thread_name or "")
-    if match:
-        label = f"{label} {ordinal(int(match.group(1)))}"
+    index = _table_ordinal(slot.thread_name or "")
+    if index:
+        label = f"{label} {ordinal(index)}"
     card_url = _card_url(guild, slot) if slot.committed else None
     return f"[__**{label}**__]({card_url})" if card_url else f"**{label}**"
+
+
+def _table_ordinal(name: str) -> int | None:
+    """The number telling one table of a pod from the next: the ` - Table N` a table opened off a running
+    lobby inherits, or the number a split gave every table it made. A pod running one table has neither,
+    and its header carries no ordinal."""
+    match = TABLE_SUFFIX_RE.search(name)
+    if match:
+        return int(match.group(1))
+    return pod_index(name) if pod_is_numbered(name) else None
 
 
 def _marked_last(names: list[str], shared: set[str]) -> list[str]:
@@ -927,12 +938,43 @@ def _slot_item(
     if slot.locked or slot.set_code is None:
         return None
     if slot.committed:
+        if _later_table_holds_the_button(slot, lane_slots):
+            return _pod_link_button(slot, guild)
         if slot.card_message_id:
-            return SlotSignUpButton(slot.bucket_key)
+            return SlotSignUpButton(slot.bucket_key, _pod_button_label(slot))
         return _pod_link_button(slot, guild)
     if _slot_closed(slot):
         return _closed_slot_link(slot, lane_slots, guild)
     return SlotJoinButton(slot.bucket_key)
+
+
+def _later_table_holds_the_button(
+    slot: pod_launch.LauncherSlot, lane_slots: list[pod_launch.LauncherSlot],
+) -> bool:
+    """Whether a later table of this signup carries the sign up button for the whole family.
+
+    A split's tables share one format at one time, so they share the key the button is addressed by, and two
+    of them on one board would collide on that key and lose the board the edit. The last table wears it: the
+    plan leaves the empty seats there and sends the maybes there, so a press asking for a seat lands where
+    one is. The earlier tables link to their own card, which is what a reader looking for a table already
+    playing wants."""
+    if slot.card_message_id is None:
+        return False
+    for other in lane_slots:
+        same_pod = (
+            other.committed
+            and other.card_message_id is not None
+            and other.slot_time == slot.slot_time
+            and other.bucket_key == slot.bucket_key
+        )
+        if same_pod and _slot_table_index(other) > _slot_table_index(slot):
+            return True
+    return False
+
+
+def _slot_table_index(slot: pod_launch.LauncherSlot) -> int:
+    """Which table of its signup this pod is; a pod that never split is the first one."""
+    return _table_ordinal(slot.thread_name or "") or 1
 
 
 def _closed_slot_link(
@@ -986,8 +1028,16 @@ def _pod_link_button(
         return None
     return discord.ui.Button(
         style=discord.ButtonStyle.link, url=url,
-        label=_named_pod_label(pod.bucket_key, pod.set_code), emoji=_slot_button_emoji(pod.bucket_key),
+        label=_pod_button_label(pod), emoji=_slot_button_emoji(pod.bucket_key),
     )
+
+
+def _pod_button_label(slot: pod_launch.LauncherSlot) -> str:
+    """The words a pod's button carries: its slot and its format, plus the table's ordinal once a split left
+    more than one table sharing both."""
+    label = _named_pod_label(slot.bucket_key, slot.set_code)
+    index = _table_ordinal(slot.thread_name or "")
+    return f"{label} {ordinal(index)}" if index else label
 
 
 def _named_pod_label(bucket_key: str, set_code: str | None = None) -> str:
@@ -1343,9 +1393,9 @@ class SlotSignUpButton(
     """The same sign up for a pod that already fired: it writes Yes on that pod's scheduled card. The key
     names the format, so a slot carrying two pods gets one button each instead of one ambiguous one."""
 
-    def __init__(self, bucket_key: str) -> None:
+    def __init__(self, bucket_key: str, label: str | None = None) -> None:
         super().__init__(discord.ui.Button(
-            label=_named_pod_label(bucket_key), style=discord.ButtonStyle.success,
+            label=label or _named_pod_label(bucket_key), style=discord.ButtonStyle.success,
             custom_id=f"{SLOT_RSVP_PREFIX}:{bucket_key}", emoji=_slot_button_emoji(bucket_key),
         ))
         self.bucket_key = bucket_key
@@ -1573,12 +1623,18 @@ def _slot_by_key(
     slots: list[pod_launch.LauncherSlot], bucket_key: str,
 ) -> pod_launch.LauncherSlot | None:
     """The pod a press acts on, matched on the key the button carries. A rolled column stacks two days of one
-    format on one board, so the soonest still-joinable one wins and a played pod stands in when none is."""
+    format on one board, so the soonest still-joinable one wins and a played pod stands in when none is. A
+    signup that split stacks its tables on that one key too, and there the last table wins: it holds the seats
+    the plan left open, and it is the block the board renders the button under."""
     matches = [slot for slot in slots if slot.bucket_key == bucket_key]
-    for slot in matches:
-        if not slot.locked:
-            return slot
-    return matches[-1] if matches else None
+    joinable = [slot for slot in matches if not slot.locked]
+    if not joinable:
+        return matches[-1] if matches else None
+    pressed = joinable[0]
+    for slot in joinable:
+        if slot.slot_time == pressed.slot_time and _slot_table_index(slot) > _slot_table_index(pressed):
+            pressed = slot
+    return pressed
 
 
 def _slot_effect_lead(

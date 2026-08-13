@@ -37,6 +37,7 @@ from bot.services import pod_team
 from bot.services.pod_confirm import CONFIRM_WINDOW_MINUTES, SESSION_SEATS, attendance_for_event_sync
 from bot.services.pod_staging import (
     confirmed_first_roster_sync,
+    pod_base_name,
     pod_index,
     pod_is_numbered,
     signup_thread_once_family_drafted_sync,
@@ -2655,25 +2656,19 @@ def _event_ids_for_slot(session: Session, slot_time: datetime) -> list[str]:
     """Every pod that exists at this slot, one per format that fired, each followed by the extra tables it
     spun off, so a slot offering two formats renders both and a pod that split renders one line per table. A
     table carries no scheduled card of its own, so it is found by the ` - Table N` name it inherits from the
-    pod it spun off. Newest wins per format, so repeated test runs at one slot leave one pod each."""
+    pod it spun off. Newest wins per format, so repeated test runs at one slot leave one signup each."""
     primaries = session.execute(
-        select(PodSignal.event_id)
-        .join(PodDraftEvent, PodDraftEvent.id == PodSignal.event_id)
+        select(PodDraftEvent)
+        .join(PodSignal, PodSignal.event_id == PodDraftEvent.id)
         .where(
             PodSignal.kind == pod_signals.KIND_SCHEDULED,
             PodSignal.slot_time == slot_time,
         )
         .order_by(PodDraftEvent.created_at)
-    ).scalars().all()
-    newest_by_format: dict[str | None, str] = {}
-    for event_id in primaries:
-        event = session.get(PodDraftEvent, event_id)
-        if event is not None:
-            newest_by_format[event.set_code] = event_id
+    ).scalars().unique().all()
     event_ids: list[str] = []
-    for event_id in newest_by_format.values():
-        event = session.get(PodDraftEvent, event_id)
-        event_ids.append(event_id)
+    for event in _newest_signup_per_format(list(primaries)):
+        event_ids.append(event.id)
         base = table_base_name(event.name)
         tables = session.execute(
             select(PodDraftEvent.id)
@@ -2682,6 +2677,17 @@ def _event_ids_for_slot(session: Session, slot_time: datetime) -> list[str]:
         ).scalars().all()
         event_ids += [table_id for table_id in tables if table_id not in event_ids]
     return event_ids
+
+
+def _newest_signup_per_format(primaries: list[PodDraftEvent]) -> list[PodDraftEvent]:
+    """The pods the format's most recent signup left at this slot, oldest first: every numbered table a
+    split made, and the one pod where nothing split. Keyed on the name the family shares, so the tables of
+    one signup stay together where a key of one pod would keep the last table and drop the pod it came
+    from, while a later signup at the same slot still replaces the earlier one."""
+    newest_family: dict[str | None, str] = {}
+    for event in primaries:
+        newest_family[event.set_code] = pod_base_name(event.name)
+    return [event for event in primaries if pod_base_name(event.name) == newest_family.get(event.set_code)]
 
 
 def _event_formats_for_slot(session: Session, slot_time: datetime) -> set[str]:

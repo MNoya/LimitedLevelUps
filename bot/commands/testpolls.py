@@ -240,11 +240,12 @@ async def setup(bot: commands.Bot) -> None:
     async def test_rolling(ctx: commands.Context) -> None:
         """Owner-only. Post the rolling launcher render across its situations as static previews from
         fixtures: a fresh morning board, one lane whose draft started and rolled to tomorrow, both lanes
-        rolled, a slot whose sibling format closed unfired, and the handoff (retired On This Day history plus
-        the fresh next-day card), plus the next-day Play Again prompt, whose button is live and joins the
-        soonest open slot of that name. A pod that started leaves the live board, so the point to check is
-        that each column reads as the slot still open rather than as the day behind it; the winners only
-        surface on the retired card. The embeds are fixtures: no signals, threads, or jobs. Reuses the
+        rolled, a slot whose sibling format closed unfired, a signup dealt into two tables still taking
+        signups, and the handoff (retired On This Day history plus the fresh next-day card), plus the
+        next-day Play Again prompt, whose button is live and joins the soonest open slot of that name. A pod
+        that started leaves the live board, so the point to check is that each column reads as the slot still
+        open rather than as the day behind it; the winners only surface on the retired card, which lists
+        every table a split made. The embeds are fixtures: no signals, threads, or jobs. Reuses the
         production embed and view builders so the preview can't drift from what players see."""
         guild = ctx.guild
         channel_id = str(ctx.channel.id)
@@ -298,9 +299,20 @@ async def setup(bot: commands.Bot) -> None:
             late_today(count=_ROLL_COUNT_SMALL),
         ])
 
+        await show("C (split). One signup dealt into two tables, both still taking signups", [
+            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_FULL, offset=18,
+                          numbered=1, locked=False, **playing),
+            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=24,
+                          numbered=2, locked=False, **playing),
+            late_today(count=_ROLL_COUNT_SMALL),
+        ])
+
         await ctx.send("**D. Handoff at 11:00, the old card retires to a compact On This Day history**")
         await ctx.send(embed=build_poll_embed([
-            early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
+            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_FULL, offset=18,
+                          numbered=1, winner="Finkel", **played),
+            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=24,
+                          numbered=2, winner="Nassif", **played),
             late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
             early_tom(count=_ROLL_COUNT_FULL, winner="Reid", **played),
         ], guild, closed=True, board_date=today))
@@ -739,25 +751,25 @@ def _rolling_lanes():
 def _rolling_slot(
     bucket, slot_time, *, count: int, offset: int = 0, fired: bool = False, finished: bool = False,
     winner: str | None = None, seat: bool = True, channel_id: str = "", set_code: str | None = None,
-    table: int | None = None, closed: bool = False,
+    table: int | None = None, numbered: int | None = None, locked: bool = True, closed: bool = False,
 ):
     """Build one fixture LauncherSlot for the rolling preview. A fired slot carries a pod link and counts as
     locked, so it renders as the compact line; `finished` marks it played, so it takes the trophy instead of
     the playing mark. A gathering slot carries its own roster, or says Closed when `closed` is its recruiting
-    window running out unfired. `offset` shifts the fixture names so pods on one board don't repeat. `table`
-    marks a second table so the fixture can show more than one pod under a slot. `seat` off is a team draft's
-    winning side, which has no seat on the pod page to link."""
+    window running out unfired. `offset` shifts the fixture names so pods on one board don't repeat. `seat`
+    off is a team draft's winning side, which has no seat on the pod page to link. `table` names a table
+    opened off a running lobby and `numbered` a table a split made, the two ways one slot carries two pods."""
     code = set_code or active_set_code()
     names = [_roster_name(offset + i) for i in range(count)]
     bucket_key = named_bucket_key(bucket.key, code)
     if fired:
-        suffix = f" - Table {table}" if table else ""
+        suffix = f" - Table {table}" if table else (f" {numbered}" if numbered else "")
         title = f"{pod_display_name(code, slot_time)}{suffix}"
         return pod_launch.LauncherSlot(
             bucket_key, committed=True, status=STATUS_FIRED, count=len(names), slot_time=slot_time,
             names=names, thread_id="1", signal_id=None, thread_message_id="1", card_message_id="1",
             card_channel_id=channel_id, thread_name=title, set_code=code,
-            finished=finished, winner=winner, locked=True,
+            finished=finished, winner=winner, locked=locked,
             winner_slug=slugify(winner) if winner and seat else None,
         )
     return pod_launch.LauncherSlot(

@@ -45,6 +45,8 @@ FRIDAY = datetime.now(SCHEDULE_TZ).date() + timedelta(days=DAYS_TO_FRIDAY)
 SATURDAY = FRIDAY + timedelta(days=1)
 FRIDAY_AFTERNOON = datetime.combine(FRIDAY, time(16, 0), tzinfo=SCHEDULE_TZ)
 THRESHOLD = settings.pod_signal_fire_threshold
+EARLIER = datetime(2026, 7, 26, 9, 0, tzinfo=SCHEDULE_TZ)
+LATER = EARLIER + timedelta(hours=5)
 
 
 # --- lanes ---
@@ -350,6 +352,30 @@ def test_a_pod_waiting_in_its_lobby_is_not_locked_yet(session, monkeypatch, late
 
     lobby_open = [slot for slot in slots if slot.set_code == LATEST and slot.committed][0]
     assert lobby_open.locked is False
+
+
+def test_both_tables_of_a_split_pod_reach_the_column(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    slot_time = slot_event_time(FRIDAY, bucket_for_lane(FRIDAY, LANE_EARLY).key)
+    _seed_pod(session, slot_time, set_code=LATEST, name=f"{LATEST} pod 1", created_at=EARLIER)
+    _seed_pod(session, slot_time, set_code=LATEST, name=f"{LATEST} pod 2", created_at=LATER)
+    session.commit()
+
+    slots = pod_launch.launcher_snapshot_sync("today", FRIDAY)
+
+    assert [slot.thread_name for slot in slots if slot.committed] == [f"{LATEST} pod 1", f"{LATEST} pod 2"]
+
+
+def test_a_later_signup_at_one_slot_leaves_the_earlier_pod_off_the_column(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    slot_time = slot_event_time(FRIDAY, bucket_for_lane(FRIDAY, LANE_EARLY).key)
+    _seed_pod(session, slot_time, set_code=LATEST, name=f"{LATEST} pod", created_at=EARLIER)
+    _seed_pod(session, slot_time, set_code=LATEST, name=f"{LATEST} pod #2", created_at=LATER)
+    session.commit()
+
+    slots = pod_launch.launcher_snapshot_sync("today", FRIDAY)
+
+    assert [slot.thread_name for slot in slots if slot.committed] == [f"{LATEST} pod #2"]
 
 
 def test_a_lane_looks_at_tomorrow_for_a_pod_its_closed_slot_can_never_open(session, monkeypatch):
@@ -768,19 +794,24 @@ def _seed_signal(
     return signal
 
 
-def _seed_pod(session, slot_time, *, set_code, socket_status="pending", name=None):
+def _seed_pod(session, slot_time, *, set_code, socket_status="pending", name=None, created_at=None):
     """A scheduled pod at a slot, as a fired signal points at it: the launcher reflects the event, and the
-    card signal carrying the slot_time is what ties it to the column."""
+    card signal carrying the slot_time is what ties it to the column. `created_at` is worth passing when two
+    pods sit at one slot: rows written in one transaction share the server default, and which pod is the
+    newer one is exactly what the launcher reads."""
     event = PodDraftEvent(
         event_date=slot_time.date(), event_time=slot_time, set_code=set_code,
         name=name or f"{set_code} pod", draftmancer_session="s1", discord_thread_id="tid-1",
         socket_status=socket_status,
     )
+    if created_at is not None:
+        event.created_at = created_at
     session.add(event)
     session.flush()
     session.add(PodSignal(
-        kind=KIND_SCHEDULED, bucket=SCHEDULED_BUCKET, guild_id="g", channel_id="c", message_id="card",
-        signal_date=slot_time.date(), slot_time=slot_time, status=STATUS_FIRED, event_id=event.id,
+        kind=KIND_SCHEDULED, bucket=SCHEDULED_BUCKET, guild_id="g", channel_id="c",
+        message_id=f"card-{event.id}", signal_date=slot_time.date(), slot_time=slot_time,
+        status=STATUS_FIRED, event_id=event.id,
     ))
     session.flush()
     return event
