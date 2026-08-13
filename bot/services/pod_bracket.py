@@ -8,8 +8,10 @@ both 2-0 players exist, without waiting for the rest of the round.
 A rematch is never produced. A pod that isn't a power of two carries odd record groups, so someone
 has to play across groups, and pairing every group the instant it can fill would leave the last
 source match's two players facing each other. Two rules prevent that: a group that a past opponent
-could still fall into is held, and the unpaired pool is never taken below `unpaired_floor`. Playing
-across groups is decided once the source round is settled and the whole remainder solves at once.
+could still fall into is held, and the pool of players whose group can still change is never taken
+below `unpaired_floor`. A settled group — one nobody still playing can reach — sits outside that pool
+and pairs on its own account. Playing across groups is decided once the source round is settled and
+the whole remainder solves at once.
 
 Standings and tiebreakers still come from pod_swiss.compute_standings; this module only decides
 pairings. Pure functions — the orchestration layer handles every side effect.
@@ -29,7 +31,7 @@ def supports(roster_size: int) -> bool:
 
 
 def unpaired_floor(expected_prior: int) -> int:
-    """Smallest unpaired pool that is still guaranteed to hold a rematch-free pairing.
+    """Smallest undecided pool that is still guaranteed to hold a rematch-free pairing.
 
     Every player entering the round has met `expected_prior` opponents, so in a pool of
     2*expected_prior+2 each one can still be paired with at least half of it, which is enough for a
@@ -50,7 +52,7 @@ def incremental_pairings(
     """Return the *new* pairings to add to target_round given the completed earlier-round matches.
 
     While players are still finishing the source round only same-record pairs are made, and only from
-    groups that are neither held (see `held_records`) nor would take the unpaired pool below
+    groups that are neither held (see `held_records`) nor would take the undecided pool below
     `unpaired_floor`. Once nobody is left to arrive the whole remainder is paired at once, playing
     players across record groups as little as it takes and never into a rematch. A rematch is paired
     only when the source round is settled and no rematch-free pairing of the remainder exists at all,
@@ -69,7 +71,8 @@ def incremental_pairings(
         return _pair_remainder(ready, records, played, force=source_round_complete)
 
     held = held_records(players, completed, target_round)
-    return _same_record_pairs(ready, len(ready) + len(unready), records, played, held, expected_prior)
+    settled = settled_records(players, completed, target_round)
+    return _same_record_pairs(ready, unready, records, played, held, settled, expected_prior)
 
 
 def player_records(players: list[Player], completed: list[MatchOutcome]) -> dict[str, tuple[int, int]]:
@@ -114,30 +117,30 @@ def held_records(
     and `padding_slots` (which shows it without naming a provisional opponent) so the preview and the
     lock can never disagree — the divergence that let a preview name a pairing the lock then moved."""
     expected_prior = target_round - 1
-    ids = {p.id for p in players}
     records = player_records(players, completed)
-    wins = {pid: records[pid][0] for pid in ids}
-    losses = {pid: records[pid][1] for pid in ids}
     played = {frozenset((m.player_a_id, m.player_b_id)) for m in completed}
-    still_playing = [pid for pid in ids if wins[pid] + losses[pid] < expected_prior]
+    reachable = _reachable_records(records, expected_prior)
 
-    def can_reach(pid: str, record: tuple[int, int]) -> bool:
-        need_w, need_l = record[0] - wins[pid], record[1] - losses[pid]
-        return need_w >= 0 and need_l >= 0 and need_w + need_l == expected_prior - (wins[pid] + losses[pid])
-
-    ready_records = {
-        (wins[pid], losses[pid]) for pid in ids if wins[pid] + losses[pid] == expected_prior
-    }
     held: set[tuple[int, int]] = set()
-    for record in ready_records:
-        may_grow = any(can_reach(pid, record) for pid in still_playing)
+    for record in _ready_records(records, expected_prior):
         rematch = any(
-            can_reach(x, record) and can_reach(y, record)
+            _can_reach(records[x], record, expected_prior) and _can_reach(records[y], record, expected_prior)
             for x, y in (tuple(pair) for pair in played)
         )
-        if may_grow and rematch:
+        if record in reachable and rematch:
             held.add(record)
     return held
+
+
+def settled_records(
+    players: list[Player], completed: list[MatchOutcome], target_round: int,
+) -> set[tuple[int, int]]:
+    """Record groups nobody still playing the source round can reach, so their members can only ever be
+    paired with each other and sit outside the pool `unpaired_floor` guards."""
+    expected_prior = target_round - 1
+    records = player_records(players, completed)
+    reachable = _reachable_records(records, expected_prior)
+    return {record for record in _ready_records(records, expected_prior) if record not in reachable}
 
 
 def projected_slate(
@@ -226,10 +229,11 @@ def _report_order(players: list[Player], completed: list[MatchOutcome]) -> list[
 
 def _same_record_pairs(
     ready: list[str],
-    pool_size: int,
+    unready: list[str],
     records: dict[str, tuple[int, int]],
     played: set[frozenset[str]],
     held: set[tuple[int, int]],
+    settled: set[tuple[int, int]],
     expected_prior: int,
 ) -> list[tuple[str, str]]:
     """Pairs that are safe to make while players are still finishing the source round. Never pairs
@@ -238,21 +242,49 @@ def _same_record_pairs(
     groups: dict[tuple[int, int], list[str]] = {}
     for pid in ready:
         groups.setdefault(records[pid], []).append(pid)
+    undecided = len(unready) + sum(len(q) for record, q in groups.items() if record not in settled)
 
     pairs: list[tuple[str, str]] = []
     for record in sorted(groups, key=lambda r: (-r[0], r[1])):
         if record in held:
             continue
         queue = groups[record]
-        while len(queue) >= 2 and pool_size - 2 >= floor:
+        while len(queue) >= 2:
+            if record not in settled and undecided - 2 < floor:
+                break
             pair = _earliest_rematch_free_pair(queue, played)
             if pair is None:
                 break
             pairs.append(pair)
             queue.remove(pair[0])
             queue.remove(pair[1])
-            pool_size -= 2
+            if record not in settled:
+                undecided -= 2
     return pairs
+
+
+def _ready_records(records: dict[str, tuple[int, int]], expected_prior: int) -> set[tuple[int, int]]:
+    return {record for record in records.values() if sum(record) == expected_prior}
+
+
+def _reachable_records(records: dict[str, tuple[int, int]], expected_prior: int) -> set[tuple[int, int]]:
+    """Every record a player who hasn't finished the source round could still end it at"""
+    reachable: set[tuple[int, int]] = set()
+    for wins, losses in records.values():
+        left = expected_prior - (wins + losses)
+        if left <= 0:
+            continue
+        for extra_wins in range(left + 1):
+            reachable.add((wins + extra_wins, losses + left - extra_wins))
+    return reachable
+
+
+def _can_reach(player_record: tuple[int, int], record: tuple[int, int], expected_prior: int) -> bool:
+    need_wins = record[0] - player_record[0]
+    need_losses = record[1] - player_record[1]
+    if need_wins < 0 or need_losses < 0:
+        return False
+    return need_wins + need_losses == expected_prior - sum(player_record)
 
 
 def _earliest_rematch_free_pair(

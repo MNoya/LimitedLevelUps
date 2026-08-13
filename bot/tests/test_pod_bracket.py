@@ -101,6 +101,27 @@ def test_round3_trophy_opens_before_loser_bracket_finishes():
     assert frozenset({"p0", "p2"}) in pairset(new)
 
 
+def test_round3_trophy_opens_after_the_floor_slack_went_to_a_lower_group():
+    roster = players(8)
+    report_order = [
+        match(1, "p0", "p4", "p0"), match(1, "p1", "p5", "p1"),
+        match(2, "p0", "p1", "p0"), match(2, "p4", "p5", "p4"),
+        match(1, "p2", "p6", "p2"), match(1, "p3", "p7", "p3"),
+        match(2, "p2", "p3", "p2"),
+    ]
+
+    completed: list = []
+    round3: list = []
+    for result in report_order:
+        completed.append(result)
+        round3 += pod_bracket.incremental_pairings(
+            roster, completed, round3, 3, source_round_complete=False,
+        )
+
+    assert frozenset({"p1", "p4"}) in pairset(round3)
+    assert frozenset({"p0", "p2"}) in pairset(round3)
+
+
 def test_a_rematch_only_group_plays_across_records_instead():
     roster = players(4)
     completed = [

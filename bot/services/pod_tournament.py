@@ -4683,16 +4683,32 @@ def round_link_label(round_num: int, pairings_url: str | None = None) -> str:
     return f"**{round_link_target(round_num, pairings_url)}**"
 
 
+def win_completes_trophy(m: dict, round_num: int) -> bool:
+    """Whether this result takes the winner to 3-0, records on a match state being as of round start"""
+    winner = m.get("winner_name")
+    if round_num != TOTAL_ROUNDS or not winner or winner == SKIPPED_SENTINEL:
+        return False
+    if normalize_player_name(winner) == normalize_player_name(m.get("a_name") or ""):
+        record = m.get("a_record")
+    else:
+        record = m.get("b_record")
+    return _parse_wl(record) == (round_num - 1, 0)
+
+
 def format_round_announcement(round_num: int, m: dict, pairings_url: str | None = None,
                               *, corrected: bool = False) -> str:
-    """The per-result thread announcement, round-labelled: '**[__Round 2__]** Marlo wins 2-1 vs Bob'.
+    """The per-result thread announcement, round-labelled: '**[__Round 2__]** Marlo wins 2-1 vs Bob',
+    with a 🏆 in front of a win that completes a 3-0.
 
     A `corrected` result is marked as one, so overwriting a reported match reads as a fix to the round
     rather than as a second match played in it.
     """
+    phrase = format_reported_result(m)
+    if win_completes_trophy(m, round_num):
+        phrase = f"🏆 {phrase}"
     if corrected:
-        return format_round_change(round_num, format_reported_result(m), pairings_url)
-    return f"{round_link_label(round_num, pairings_url)} {format_reported_result(m)}"
+        return format_round_change(round_num, phrase, pairings_url)
+    return f"{round_link_label(round_num, pairings_url)} {phrase}"
 
 
 def format_round_change(round_num: int, phrase: str, pairings_url: str | None = None,
