@@ -51,7 +51,7 @@ from bot.commands.pod_rsvp import (
     set_card_rsvp,
 )
 from bot.config import settings
-from bot.discord_helpers import NBSP, ZWSP, run_detached
+from bot.discord_helpers import NBSP, ZWSP, ordinal, run_detached
 from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_format_poll
@@ -156,7 +156,6 @@ CHAMPIONSHIP_POINTER_TOP = 8
 FAR_FUTURE = datetime.max.replace(tzinfo=timezone.utc)
 
 FIELD_VALUE_LIMIT = 1024
-ORDINAL_SUFFIXES = {1: "st", 2: "nd", 3: "rd"}
 
 
 def init_daily_poll(bot: commands.Bot) -> None:
@@ -639,12 +638,6 @@ def _finished_row(
     return f"{NBSP}{NBSP}".join(parts)
 
 
-def _ordinal(number: int) -> str:
-    if 11 <= number % 100 <= 13:
-        return f"{number}th"
-    return f"{number}{ORDINAL_SUFFIXES.get(number % 10, 'th')}"
-
-
 def _winner_seat_url(slot: pod_launch.LauncherSlot) -> str | None:
     """The winner's seat on the pod's website page, mirroring the frontend's `/pods/<event>/<player>` route
     built from the event name and the winner's player slug. Without a slug it points at the pod page
@@ -691,7 +684,7 @@ def _pod_header_label(slot: pod_launch.LauncherSlot, guild: discord.Guild | None
     label = _named_pod_label(slot.bucket_key, slot.set_code)
     match = TABLE_SUFFIX_RE.search(slot.thread_name or "")
     if match:
-        label = f"{label} {_ordinal(int(match.group(1)))}"
+        label = f"{label} {ordinal(int(match.group(1)))}"
     card_url = _card_url(guild, slot) if slot.committed else None
     return f"[__**{label}**__]({card_url})" if card_url else f"**{label}**"
 

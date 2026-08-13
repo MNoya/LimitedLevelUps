@@ -66,9 +66,7 @@ from bot.commands.pod_rsvp import (
     fetch_channel,
     post_pod_card,
     reflect_format_change,
-    refresh_card_note,
-    refresh_card_phase,
-    refresh_scheduled_card,
+    refresh_card_embed,
     reschedule_event,
 )
 from bot.services import pod_launch
@@ -833,7 +831,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
 
         async def on_description(inter: discord.Interaction, text: str | None) -> None:
             await asyncio.to_thread(set_event_description_sync, event_id, text)
-            await refresh_card_note(bot, event_id)
+            await refresh_card_embed(bot, event_id)
 
     return PodSettingsView(
         on_format=None if drafting else on_format,
@@ -1158,7 +1156,7 @@ def _live_lobby_names() -> list[str]:
 async def setup(bot: commands.Bot) -> None:
     set_seeding_refresh_hook(refresh_seeding_table)
     set_seeding_repost_hook(repost_seeding_table)
-    set_card_refresh_hook(refresh_scheduled_card)
-    set_card_phase_hook(refresh_card_phase)
+    set_card_refresh_hook(refresh_card_embed)
+    set_card_phase_hook(refresh_card_embed)
     set_pod_card_hook(post_pod_card)
     await bot.add_cog(PodDraft(bot))

@@ -241,6 +241,15 @@ def plural(count: int) -> str:
     return "" if count == 1 else "s"
 
 
+ORDINAL_SUFFIXES = {1: "st", 2: "nd", 3: "rd"}
+
+
+def ordinal(number: int) -> str:
+    if 11 <= number % 100 <= 13:
+        return f"{number}th"
+    return f"{number}{ORDINAL_SUFFIXES.get(number % 10, 'th')}"
+
+
 def quote_block(lines: list[str], *, trailing: str = "") -> str:
     """`> `-prefix each line so Discord renders the blockquote vertical bar; a ZWSP when empty."""
     if not lines:

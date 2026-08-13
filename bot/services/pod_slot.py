@@ -17,7 +17,6 @@ from bot.services.pod_schedule import SCHEDULE_TZ
 from bot.services.pod_signals import PollBucket, poll_buckets_for
 
 
-TEAM_DRAFT_TITLE_SUFFIX = " - Team Draft"
 COLLISION_INDEX_RE = re.compile(r"#(\d+)\s*$")
 
 
@@ -41,11 +40,6 @@ def next_collision_index(names: Iterable[str], index_re: re.Pattern[str] = COLLI
         if match:
             highest = max(highest, int(match.group(1)))
     return highest + 1
-
-
-def team_aware_pod_name(name: str, pairing_mode: str | None) -> str:
-    """A pod's base name with the Team-Draft marker appended once it has locked into teams."""
-    return f"{name}{TEAM_DRAFT_TITLE_SUFFIX}" if pairing_mode == "team" else name
 
 
 def pod_slot_label(event_time: datetime) -> str:

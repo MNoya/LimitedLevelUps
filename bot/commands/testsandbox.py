@@ -23,7 +23,7 @@ from discord import ui
 from discord.ext import commands
 from sqlalchemy import delete, select
 
-from bot.commands.pod_rsvp import post_scheduled_card
+from bot.commands.pod_rsvp import post_scheduled_card, refresh_card_embed
 from bot.commands.test_group import HALL_OF_FAME, test_group
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
@@ -80,6 +80,7 @@ async def setup(bot: commands.Bot) -> None:
         if thread is None:
             await ctx.send("Could not reach the pod thread. Check the logs")
             return
+        await refresh_card_embed(ctx.bot, event_id)
         await repost_roster_reminder(event_id)
         await thread.send(await _panel_body(event_id), view=build_sandbox_panel(event_id))
 
@@ -111,6 +112,7 @@ class SandboxButton(
         await interaction.response.defer()
         await lever.run(interaction.client, self.event_id)
         if lever.renders_card:
+            await refresh_card_embed(interaction.client, self.event_id)
             await refresh_or_repost_roster_reminder(self.event_id)
         with contextlib.suppress(discord.HTTPException):
             await interaction.message.edit(

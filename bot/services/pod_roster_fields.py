@@ -26,6 +26,7 @@ from bot.services.pod_confirm import (
     Attendance,
     Table,
     TablePlan,
+    plan_tables,
 )
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
 
@@ -39,6 +40,7 @@ _PENDING_COLUMN = (RSVP_YES, "☑️", "Pending")
 _ATTENDANCE = (_YES_COLUMN, _MAYBE_COLUMN)
 _ATTENDANCE_WITH_NO = _ATTENDANCE + (_NO_COLUMN,)
 _ANSWER_COLUMNS = (_MAYBE_COLUMN, _NO_COLUMN)
+ROSTER_DIVIDER = "⎯⎯⎯⎯⎯⎯"
 
 
 def add_roster_fields(
@@ -224,8 +226,25 @@ def _add_plain_rsvp_fields(
 ) -> None:
     for state, emoji, word in attendance_columns(rosters, include_no=include_no):
         names = rosters.get(state) or []
-        value = "\n".join(f"> {name}" for name in names) if names else "-"
+        lines = _divided_by_table(names) if state == RSVP_YES else list(names)
+        value = _quoted(lines) if lines else "-"
         embed.add_field(name=f"{emoji} {word} ({len(names)})", value=value, inline=True)
+
+
+def _divided_by_table(names: list[str]) -> list[str]:
+    """The Yes column with a rule where each table after the first begins"""
+    plan = plan_tables(len(names))
+    if len(plan.tables) < 2:
+        return list(names)
+    lines: list[str] = []
+    cursor = 0
+    for index, table in enumerate(plan.tables):
+        if index:
+            lines.append(ROSTER_DIVIDER)
+        lines.extend(names[cursor:cursor + table.seated])
+        cursor += table.seated
+    lines.extend(names[cursor:])
+    return lines
 
 
 def attendance_columns(

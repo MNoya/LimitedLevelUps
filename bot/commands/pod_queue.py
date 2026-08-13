@@ -28,11 +28,7 @@ from bot.config import settings
 from bot.discord_helpers import NBSP, resolve_pod_chat_channel
 from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
-from bot.services.pod_draft_manager import (
-    set_event_pairing_mode,
-    set_event_pick_timer,
-    set_event_seating_mode,
-)
+from bot.services.pod_draft_manager import set_event_pick_timer
 from bot.services.pod_format import custom_formats, default_pick_timer_for, format_display
 from bot.services.pod_format_select import WRITE_IN_VALUE, set_select_option, write_in_option
 from bot.services.pod_pairing_select import SELECT_PLACEHOLDER as PAIRING_PLACEHOLDER
@@ -407,13 +403,9 @@ async def _maybe_nudge(interaction: discord.Interaction, state) -> None:
 
 
 async def _apply_queue_presets(event_id: str, presets) -> None:
-    """Apply the pairing / seating / pick-timer chosen in the launcher once the pod fires. Runs after
-    the lobby opens but before anyone starts the draft, so the live session picks them up. The set is
-    already baked into the event at creation, so it isn't re-applied here."""
-    if presets.pairing_mode is not None:
-        await set_event_pairing_mode(event_id, presets.pairing_mode)
-    if presets.seating_mode is not None:
-        await set_event_seating_mode(event_id, presets.seating_mode)
+    """Apply the launcher choice the event row does not already carry. The set, the pairing and the
+    seating are written at creation, so a card never renders one value and then corrects itself; the pick
+    timer is what is left, and no card shows it."""
     if presets.pick_timer is not None:
         await set_event_pick_timer(event_id, presets.pick_timer)
 

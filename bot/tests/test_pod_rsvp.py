@@ -7,7 +7,9 @@ from bot.commands.pod_rsvp import (
     CARD_RSVP_PROMPT,
     CARD_STATUS_DRAFTING,
     CARD_STATUS_PLAYING,
-    MULTIPOD_NOTICE,
+    ROOM_NOTICE,
+    TABLE_GATHERING_NOTICE,
+    TABLE_GATHERING_YES,
     POD_CAPACITY,
     TIME_LABEL,
     build_rsvp_embed,
@@ -273,14 +275,31 @@ def test_format_locked_card_drops_member_interests(session):
     assert result.rosters[pod_signals.RSVP_YES] == ["Latest Player", "Flashback Player"]
 
 
-def test_refresh_never_stacks_the_multipod_notice():
+SECOND_TABLE_GATHERING = TABLE_GATHERING_NOTICE.format(ordinal="2nd")
+THIRD_TABLE_GATHERING = TABLE_GATHERING_NOTICE.format(ordinal="3rd")
+
+
+@pytest.mark.parametrize(
+    "yes_count, notice",
+    [
+        (POD_CAPACITY - 1, None),
+        (POD_CAPACITY, ROOM_NOTICE),
+        (TABLE_GATHERING_YES, SECOND_TABLE_GATHERING),
+        (19, SECOND_TABLE_GATHERING),
+        (20, THIRD_TABLE_GATHERING),
+    ],
+)
+def test_refresh_carries_one_notice_for_the_count(yes_count, notice):
     event_time = datetime(2026, 7, 18, 16, 0, tzinfo=timezone.utc)
     embed = build_rsvp_embed("Early Pod", event_time, {RSVP_YES: []})
 
-    for count in range(1, POD_CAPACITY + 4):
+    for count in range(1, yes_count + 1):
         refresh_roster_fields(embed, {RSVP_YES: [f"p{i}" for i in range(count)]})
 
-    assert embed.description.count(MULTIPOD_NOTICE) == 1
+    intro = embed.description.split("\n")[1]
+    gathering = TABLE_GATHERING_NOTICE.format(ordinal="").strip()
+    assert intro.count(ROOM_NOTICE) + intro.count(gathering) == (1 if notice else 0)
+    assert notice is None or intro.endswith(notice)
 
 
 def test_description_takes_the_rsvp_prompt_line():
@@ -301,7 +320,7 @@ def test_status_line_replaces_the_rsvp_intro_and_notice():
     )
 
     assert CARD_STATUS_DRAFTING in embed.description
-    assert MULTIPOD_NOTICE not in embed.description
+    assert ROOM_NOTICE not in embed.description
     assert CARD_RSVP_PROMPT not in embed.description
     assert "bring snacks" not in embed.description
 
@@ -318,7 +337,7 @@ def test_refresh_swaps_status_across_phases():
     assert embed.description.split("\n")[0] == title_line
     assert CARD_STATUS_DRAFTING not in embed.description
     assert embed.description.count(CARD_STATUS_PLAYING) == 1
-    assert MULTIPOD_NOTICE not in embed.description
+    assert ROOM_NOTICE not in embed.description
     assert "bring snacks" not in embed.description
 
 

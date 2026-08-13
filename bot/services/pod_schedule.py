@@ -185,8 +185,8 @@ def build_staged_table_message(
 def build_underfill_fired_message(name: str, player_count: int, thread_url: str) -> str:
     """The terminal form of the recruiting nudge once the draft starts: a fired record linking the pod
     thread. Carries no signup link, so `clear_underfill_nudge` cannot match it and a later cancel leaves
-    the record standing. A Team Draft shows through the linked thread, which the bot renames on lock, so
-    the copy stays one line for every pod."""
+    the record standing. One line for every pod, pairings included: the thread it links carries those in
+    its registration embed."""
     players = "players" if player_count != 1 else "player"
     return DRAFT_STARTED.format(
         hello=emojis.prefix("chordoHello"), name=render_pod_name(short_event_name(name)), count=player_count,

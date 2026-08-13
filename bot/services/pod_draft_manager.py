@@ -120,7 +120,6 @@ from bot.services.pod_drafts import (
     update_event_format,
 )
 from bot.services.pod_signals import inactivity_window_text
-from bot.services.pod_slot import team_aware_pod_name
 from bot.services.pod_team_flow import assign_teams_at_draft_start, load_teams_sync
 from bot.services.pod_tournament import (
     persist_pairing_mode,
@@ -822,7 +821,7 @@ class PodDraftManager:
         self.set_code = code
         if new_name != self.event_name:
             self.event_name = new_name
-            await self._rename_thread(team_aware_pod_name(new_name, self.pairing_mode))
+            await self._rename_thread(new_name)
         if pod_format.cube_id_for(code) is None:
             self.cards_per_pack = None
             await asyncio.to_thread(
@@ -3293,7 +3292,9 @@ async def start_manager(
     rsvps_maybe: list[str] | None = None,
     reconnect: bool = False,
     created_by: str | None = None,
+    pairing_chosen: bool = False,
 ) -> PodDraftManager | None:
+    """`pairing_chosen` has to arrive here: connect() renders, and that render is what makes a six a team"""
     existing = ACTIVE_POD_MANAGERS.get(event_id)
     if existing is not None:
         log.info(f"[LIFECYCLE] start_manager.already_active event={event_id}")
@@ -3309,6 +3310,7 @@ async def start_manager(
     persisted_seating = await asyncio.to_thread(load_event_seating_mode_sync, event_id)
     if persisted_seating:
         manager.seating_mode = persisted_seating
+    manager.pairing_set_by_user = pairing_chosen
     stored_setup = await asyncio.to_thread(pod_event_settings.load_sync, event_id)
     pod_event_settings.apply_to_manager(manager, stored_setup)
     manager.scheduled_start = await asyncio.to_thread(load_event_time_sync, event_id)
@@ -3344,8 +3346,7 @@ async def set_event_format(bot: commands.Bot, event_id: str, code: str) -> str |
     if pod_format.cube_id_for(code) is None:
         await asyncio.to_thread(
             pod_event_settings.clear_sync, event_id, pod_event_settings.CARDS_PER_PACK)
-    pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
-    await _rename_event_thread(bot, event_id, team_aware_pod_name(new_name, pairing_mode))
+    await _rename_event_thread(bot, event_id, new_name)
     return None
 
 

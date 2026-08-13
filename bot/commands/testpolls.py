@@ -36,7 +36,7 @@ from bot.commands.pod_rsvp import (
     post_pod_card,
     post_scheduled_card,
     purge_native_events,
-    refresh_scheduled_card,
+    refresh_card_embed,
 )
 from bot.config import settings
 from bot.commands.test_group import HALL_OF_FAME, test_group
@@ -474,8 +474,8 @@ async def setup(bot: commands.Bot) -> None:
         path — thread, event, native Discord event, and timed jobs included. `minutes` sets how far
         out the pod starts; `fill` seeds that many fake Yes signups so the '≥8' multi-pod notice can
         be previewed without eight real people. Pass `team` as the third word to flip the card into a
-        Team Draft through the real persist-and-refresh path, so the ` - Team Draft` title marker can
-        be eyeballed without a live lobby vote."""
+        Team Draft through the real persist-and-refresh path, so the title's Team Draft marker can be
+        eyeballed without a live lobby vote."""
         if not isinstance(ctx.channel, discord.TextChannel):
             await ctx.send("Run `!test rsvp` in a server text channel")
             return
@@ -492,7 +492,7 @@ async def setup(bot: commands.Bot) -> None:
             await _seed_fake_yes(ctx.channel, event_id, event_time, name, range(fill))
         if team.lower() == "team":
             await set_event_pairing_mode(event_id, "team")
-            await refresh_scheduled_card(ctx.bot, event_id)
+            await refresh_card_embed(ctx.bot, event_id)
 
     @test_group.command(name="hold")
     @commands.is_owner()

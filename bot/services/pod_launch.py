@@ -1809,7 +1809,10 @@ async def launch_from_signal(
     the live Draftmancer session is authoritative, matching record_mock_event.
 
     An open-now pod anchors its thread on a pod card of its own, so the pod still leaves standings in the
-    channel. A scheduled pod anchors its thread on the message carrying the start time."""
+    channel. A scheduled pod anchors its thread on the message carrying the start time.
+
+    The pairing and seating the opener picked in the launcher are written at insert, so the pod is born
+    with them and every surface reads them on its first render with nothing to correct afterwards."""
     channel = await _fetch_text_channel(bot, settings.pod_draft_channel_id)
     if channel is None:
         log.error(f"launch_from_signal: coordination channel {settings.pod_draft_channel_id} unreachable")
@@ -1833,31 +1836,38 @@ async def launch_from_signal(
         log.warning("launch_from_signal: could not create pod thread", exc_info=True)
         return None
 
-    def _create() -> str:
+    def _create() -> tuple[str, bool]:
         with SessionLocal() as session:
             event = record_ondemand_event(
                 session, set_code=set_code, event_time=event_time, name=name,
                 discord_thread_id=str(thread.id),
             )
             signal = session.get(PodSignal, signal_id)
+            chose_pairing = signal is not None and bool(signal.pairing_mode)
             if signal is not None:
                 event.description = signal.description
+                if signal.pairing_mode:
+                    event.pairing_mode = signal.pairing_mode
+                if signal.seating_mode:
+                    event.seating_mode = signal.seating_mode
             session.commit()
-            return event.id
+            return event.id, chose_pairing
 
-    event_id = await asyncio.to_thread(_create)
+    event_id, chose_pairing = await asyncio.to_thread(_create)
     await asyncio.to_thread(link_event_sync, signal_id, event_id)
     if open_now and anchor is not None:
         await asyncio.to_thread(record_pod_card_sync, event_id, str(channel.id), str(anchor.id))
 
     if open_now:
-        await open_ondemand_lobby(bot, event_id)
+        await open_ondemand_lobby(bot, event_id, pairing_chosen=chose_pairing)
     else:
         _arm_open(bot, event_id, event_time)
     return event_id
 
 
-async def open_ondemand_lobby(bot: commands.Bot, event_id: str, allow_hold: bool = True) -> None:
+async def open_ondemand_lobby(
+    bot: commands.Bot, event_id: str, allow_hold: bool = True, *, pairing_chosen: bool = False,
+) -> None:
     """Seat the bot in the Draftmancer session, then post the link and ping the roster. Draftmancer makes
     whoever enters an empty session first its owner, so the bot has to be holding ownership before any
     player can see the link. A session it could not own is abandoned for a fresh one, which makes the
@@ -1905,7 +1915,7 @@ async def open_ondemand_lobby(bot: commands.Bot, event_id: str, allow_hold: bool
     manager = await start_manager(
         bot, event_id, session_id, thread_id, set_code, len(display_names),
         event_name=event_name, draftmancer_url=draftmancer_url,
-        rsvps_yes=display_names, rsvps_maybe=maybe_names,
+        rsvps_yes=display_names, rsvps_maybe=maybe_names, pairing_chosen=pairing_chosen,
     )
     if manager is not None and not await manager.await_ownership():
         manager, session_id = await _reseat_on_fresh_session(
@@ -2215,10 +2225,11 @@ CARD_CANCELED_MARKER = "🗑️ **Draft canceled**"
 
 async def retire_canceled_pod(event_id: str) -> None:
     """Stand every surface of a canceled pod down: grey its card and stamp it canceled, drop the buttons on
-    the thread mirror, then roll the launcher column it sat in so the board offers the next day instead of a
-    dead slot. Fired from `cancel_pod_event` before the event row is deleted, so each surface still resolves;
-    the card steps are a no-op for pods without a card. The slot row itself needs no write — a fired row with
-    no pod covering it already renders closed."""
+    the thread mirror, close the native scheduled event it put on the server calendar, then roll the launcher
+    column it sat in so the board offers the next day instead of a dead slot. Fired from `cancel_pod_event`
+    before the event row is deleted, so each surface still resolves; the card and calendar steps are a no-op
+    for pods without them. The slot row itself needs no write — a fired row with no pod covering it already
+    renders closed."""
     if _bot is None:
         return
     await clear_underfill_nudge(_bot, event_id)
@@ -2228,9 +2239,46 @@ async def retire_canceled_pod(event_id: str) -> None:
         await _mark_card_canceled(int(channel_id), int(message_id))
         if thread_id and thread_message_id:
             await _retire_registered_message(int(thread_id), int(thread_message_id))
+    await close_native_event(event_id)
     signal_id = await asyncio.to_thread(fired_slot_for_pod_sync, event_id)
     if signal_id is not None:
         await notify_slot_rolled(_bot, signal_id)
+
+
+async def close_native_event(event_id: str) -> None:
+    """Take a canceled pod's native event off the calendar: canceled while upcoming, ended once live"""
+    if _bot is None:
+        return
+    ref = await asyncio.to_thread(native_event_ref_sync, event_id)
+    if ref is None:
+        return
+    native_event_id, thread_id = ref
+    thread = await _resolve_channel(int(thread_id))
+    guild = getattr(thread, "guild", None)
+    if guild is None:
+        return
+    try:
+        native = await guild.fetch_scheduled_event(int(native_event_id))
+        if native.status is discord.EventStatus.scheduled:
+            await native.cancel()
+        elif native.status is discord.EventStatus.active:
+            await native.end()
+    except discord.NotFound:
+        return
+    except discord.HTTPException:
+        log.warning(f"could not close native event {native_event_id} for pod {event_id}", exc_info=True)
+
+
+def native_event_ref_sync(event_id: str) -> tuple[str, str] | None:
+    """(native scheduled event id, thread id) for one pod, or None when it has no native event"""
+    with SessionLocal() as session:
+        row = session.execute(
+            select(PodDraftEvent.discord_scheduled_event_id, PodDraftEvent.discord_thread_id)
+            .where(PodDraftEvent.id == event_id)
+        ).first()
+    if row is None or not row[0] or not row[1] or row[1] == "pending":
+        return None
+    return row[0], row[1]
 
 
 async def _mark_card_canceled(channel_id: int, message_id: int) -> None:

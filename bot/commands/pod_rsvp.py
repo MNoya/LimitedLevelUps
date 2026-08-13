@@ -50,7 +50,7 @@ from bot.commands.messages import (
     MSG_POD_REMOVED,
 )
 from bot.database import SessionLocal
-from bot.discord_helpers import NBSP, RenderQueue, run_detached
+from bot.discord_helpers import NBSP, RenderQueue, ordinal, run_detached
 from bot.services.lobby_embed import SettingsButton
 from sqlalchemy import select
 
@@ -98,11 +98,12 @@ from bot.services.championship_roster_card import (
     championship_roster,
     championship_roster_for_event_sync,
 )
+from bot.services.pod_pairing_select import pairing_label
 from bot.services.pod_roster_fields import add_roster_fields
 from bot.services import pod_team
 from bot.services.pod_team_board import TeamBoardMember, load_team_board_data, team_result_headline
 from bot.services.pod_schedule import LATE_POD_ROLE_NAME, SCHEDULE_TZ
-from bot.services.pod_slot import pod_display_name, team_aware_pod_name
+from bot.services.pod_slot import pod_display_name
 from bot.services.pod_staging import pod_family_sync, pod_is_numbered, pod_numeral
 from bot.services.pod_signals import RSVP_EMOJI, RSVP_MAYBE, RSVP_NO, RSVP_STATES, RSVP_YES
 from bot.sets import active_set_code
@@ -123,8 +124,11 @@ POD_CAPACITY = 8
 
 CARD_INTRO = "{emoji} {note}"
 CARD_CUBE_LIST = "{emoji} Cube List: {link}"
-CARD_RSVP_PROMPT = "Please RSVP"
-MULTIPOD_NOTICE = "🔥 Keep signing up to fire a second table"
+CARD_RSVP_PROMPT = "Sign up for this draft ✅"
+ROOM_NOTICE = "still room at this table 🔥"
+TABLE_GATHERING_NOTICE = "{ordinal} table gathering 🔥"
+TABLE_GATHERING_YES = 11
+NOTICE_GAP = NBSP * 3
 CARD_STATUS_DRAFTING = "🎉 **Draft started!**"
 CARD_STATUS_PLAYING = "⚔️ **Matches In Progress**"
 CARD_STATUS_LOBBY_OPEN = "{emoji} **Lobby is open**"
@@ -355,10 +359,10 @@ def build_rsvp_embed(
     note; it takes the RSVP prompt's line while the pod gathers, and sits quoted under a championship
     announcement, which owns that line itself.
     `set_code` trails the format's keyrune symbol after the name; `team_draft` marks the title once
-    the pod locks into teams. `status_line` replaces the intro line and the multi-pod notice once the
+    the pod locks into teams. `status_line` replaces the intro line and its notice once the
     pod is past gathering, so the card never asks for RSVPs into a draft that already started.
-    `announcement` is a fixed body a championship card carries in place of the RSVP intro and the
-    multi-pod notice, since a championship is not a lazy pod that fires a second table.
+    `announcement` is a fixed body a championship card carries in place of the RSVP intro, since a
+    championship seats a fixed eight.
     `locked_roster` replaces the RSVP columns once the draft starts with the actual drafters, which
     fill in records through to the final standings when `draft_complete`. A locked card drops the
     absolute time and calendar link — those help someone deciding to sign up, not a draft in flight —
@@ -375,10 +379,7 @@ def build_rsvp_embed(
     is nothing to sign up for and nothing to put in a calendar.
     """
     unix = int(event_time.timestamp())
-    symbol = emojis.get(set_code.lower()) if set_code else ""
-    suffix = f"{NBSP}{symbol}" if symbol else ""
-    title_name = team_aware_pod_name(name, "team" if team_draft else None)
-    title = f"### {NBSP * 2}🗓️ {title_name}{suffix}"
+    title = f"### {NBSP * 2}🗓️ {_card_title_name(name, set_code, team_draft)}"
     if team_rosters is not None:
         header = f"{title}\n{status_line}" if status_line else title
         embed = discord.Embed(description=header, color=discord.Color.green())
@@ -404,7 +405,7 @@ def build_rsvp_embed(
         middle = f"{announcement}\n> {description}" if description else announcement
     else:
         intro = _intro_line(role_time or event_time, description)
-        middle = f"{intro}{_cube_list_line(set_code)}{_multipod_suffix(rosters)}"
+        middle = f"{intro}{_multipod_suffix(rosters)}{_cube_list_line(set_code)}"
     header = title if middle is None else f"{title}\n{middle}"
     embed = discord.Embed(description=header, color=discord.Color.green())
     if not starts_now:
@@ -427,6 +428,20 @@ def _with_created_by(embed: discord.Embed, created_by: str | None) -> discord.Em
     return embed
 
 
+def _card_title_name(name: str, set_code: str | None, team_draft: bool) -> str:
+    """The card's headline: the pod name, then the format symbol, which doubles as the separator in
+    front of the Team Draft marker. A set with no uploaded emoji falls back to a dash"""
+    symbol = emojis.get(set_code.lower()) if set_code else ""
+    parts = [name]
+    if symbol:
+        parts.append(symbol)
+    elif team_draft:
+        parts.append("-")
+    if team_draft:
+        parts.append(pairing_label("team"))
+    return NBSP.join(parts)
+
+
 def _intro_line(role_time: datetime, description: str | None = None) -> str:
     """The line under the pod name: the organizer's note when there is one, else the RSVP prompt. The
     slot emoji leads either way, so the card still reads as Early / Late / Weekend at a glance."""
@@ -435,9 +450,7 @@ def _intro_line(role_time: datetime, description: str | None = None) -> str:
 
 
 def _cube_list_line(set_code: str | None) -> str:
-    """The cube a pod drafts, linked to its CubeCobra page so a reader can look at the list before the
-    draft. Empty for a set pod, which has no list to open. Sits above the multi-pod notice, so a roster
-    refresh peeling that notice leaves the line in place."""
+    """Own line below the intro, empty for a set pod"""
     link = pod_format.cube_list_link(set_code)
     if link is None:
         return ""
@@ -445,10 +458,22 @@ def _cube_list_line(set_code: str | None) -> str:
 
 
 def _multipod_suffix(rosters: dict[str, list[str]]) -> str:
-    """The multi-pod heads-up only earns a line once one pod's worth has signed up, confirmed players
-    counted with the pending ones."""
-    signed_up = (rosters.get(pod_confirm.CONFIRMED) or []) + (rosters.get(RSVP_YES) or [])
-    return f"\n{MULTIPOD_NOTICE}" if len(signed_up) >= POD_CAPACITY else ""
+    """Tail on the intro line, empty below one table's worth of signups"""
+    signed_up = len(rosters.get(pod_confirm.CONFIRMED) or []) + len(rosters.get(RSVP_YES) or [])
+    if signed_up >= TABLE_GATHERING_YES:
+        notice = TABLE_GATHERING_NOTICE.format(ordinal=_gathering_ordinal(signed_up))
+    elif signed_up >= POD_CAPACITY:
+        notice = ROOM_NOTICE
+    else:
+        return ""
+    return f"{NOTICE_GAP}{notice}"
+
+
+def _gathering_ordinal(signed_up: int) -> str:
+    """Which table the next signups are filling: the one past the plan, or the last one when it waits"""
+    plan = pod_confirm.plan_tables(signed_up)
+    gathering = len(plan.tables) + 1 if plan.waiting else len(plan.tables)
+    return ordinal(max(gathering, 2))
 
 
 def google_calendar_url(name: str, event_time: datetime) -> str:
@@ -536,10 +561,9 @@ def refresh_roster_fields(
     championship: bool = False, championship_roster: ChampionshipRoster | None = None,
 ) -> None:
     """Swap the roster columns on a fetched surface while keeping its Time field untouched, so a
-    click never needs a DB round trip for the event row. The multi-pod notice toggles with the Yes
-    count on the same click, without touching the header or intro; a `status_line` replaces both
-    once the pod is past gathering. A `championship` card keeps its fixed announcement body across
-    refreshes and never grows the multi-pod notice, since it is not a lazy pod."""
+    click never needs a DB round trip for the event row. The intro's notice tail follows the Yes count on
+    the same click; a `status_line` replaces the whole line once the pod is past gathering. A
+    `championship` card keeps its fixed announcement body across refreshes and takes no notice."""
     keep_only_time_field(embed)
     if championship_roster is not None:
         add_championship_roster_fields(embed, championship_roster)
@@ -548,7 +572,7 @@ def refresh_roster_fields(
     if status_line is not None:
         embed.description = _swap_status_line(embed.description or "", status_line)
     elif not championship:
-        embed.description = _strip_multipod_notice(embed.description or "") + _multipod_suffix(rosters)
+        embed.description = _renoticed(embed.description or "", rosters)
 
 
 async def resolve_championship_card_roster(
@@ -662,17 +686,22 @@ def keep_only_time_field(embed: discord.Embed) -> None:
         embed.add_field(name=TIME_LABEL, value=time_field.value, inline=False)
 
 
-def _strip_multipod_notice(description: str) -> str:
-    """Peel every trailing notice, self-healing cards that stacked copies before the marker matched."""
-    marker = f"\n{MULTIPOD_NOTICE}"
-    while description.endswith(marker):
-        description = description[: -len(marker)]
-    return description
+def _renoticed(description: str, rosters: dict[str, list[str]]) -> str:
+    """Rewrite the intro line to carry the notice this roster earns, peeling every notice already on it"""
+    lines = description.split("\n")
+    if len(lines) < 2:
+        return description
+    lines[1] = _unnoticed(lines[1]) + _multipod_suffix(rosters)
+    return "\n".join(lines)
+
+
+def _unnoticed(intro: str) -> str:
+    return intro.split(NOTICE_GAP)[0]
 
 
 def _swap_status_line(description: str, status_line: str) -> str:
     """Rebuild a fetched card description around the lifecycle status: the title line, the status,
-    then any organizer note — dropping the RSVP intro, the multi-pod notice, and any earlier status."""
+    then any organizer note, dropping the RSVP intro with its notice and any earlier status."""
     lines = description.split("\n")
     notes = [line for line in lines[1:] if line.startswith("> ")]
     return "\n".join([lines[0], status_line, *notes])
@@ -707,7 +736,7 @@ async def resolve_card_status_line(event_id: str | None) -> str | None:
 
 async def resolve_card_render_state(event_id: str | None) -> tuple[str | None, bool]:
     """The card's status line plus whether it is a Set Championship still gathering RSVPs. The
-    championship flag keeps a roster refresh from re-growing the multi-pod notice on the frozen
+    championship flag keeps a roster refresh from growing a notice on the frozen
     announcement body; it only matters while no status line applies, which is exactly the gathering
     window a live manager has not opened yet."""
     if event_id is None:
@@ -812,7 +841,8 @@ async def post_scheduled_card(
     out-of-schedule pod shows who organized it. A card a job or the launcher posts leaves it None.
 
     A numbered name means a table staged at its own start time, whose card carries the roster with no
-    RSVP prompt, no Time and no buttons, since nobody is being asked to sign up."""
+    RSVP prompt, no Time and no buttons, since nobody is being asked to sign up. It opens no native
+    scheduled event either: the signup it split from already holds the one the server shows."""
     preseed_yes = preseed_yes or []
     preseed_maybe = preseed_maybe or []
     rosters = {state: [] for state in RSVP_STATES}
@@ -852,8 +882,10 @@ async def post_scheduled_card(
         await asyncio.to_thread(pod_launch.seed_members_sync, signal_id, preseed_yes, RSVP_YES)
     if preseed_maybe:
         await asyncio.to_thread(pod_launch.seed_members_sync, signal_id, preseed_maybe, RSVP_MAYBE)
-    native_event_id = await _create_native_event(
-        channel, name, event_time, message.jump_url, native_body)
+    native_event_id = None
+    if not starts_now:
+        native_event_id = await _create_native_event(
+            channel, name, event_time, message.jump_url, native_body)
     event_id, created_at, pairing_mode, seating_mode = await asyncio.to_thread(
         _record_scheduled_event, set_code, event_time, name, str(thread.id), native_event_id,
         pairing_mode, seating_mode, description,
@@ -1635,37 +1667,8 @@ async def _solo_card_roster(
     return roster, finalized
 
 
-async def refresh_scheduled_card(bot: commands.Bot, event_id: str) -> None:
-    """Surface a mid-lobby pairing change on every scheduling surface — the channel card title, the
-    thread name, and the native event. Fired when a pod locks into a Team Draft."""
-    loaded = await asyncio.to_thread(_load_event, event_id)
-    if loaded is None:
-        return
-    name, event_time, _status, thread_id, native_event_id, _created_at = loaded
-    pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
-    display_name = team_aware_pod_name(name, pairing_mode)
-    await _edit_scheduled_card(bot, event_id, name, event_time)
-    await _rename_thread(bot, thread_id, display_name)
-    await _rename_native_event(bot, thread_id, native_event_id, display_name, event_time)
-
-
-async def refresh_card_note(bot: commands.Bot, event_id: str) -> None:
-    """Re-render the channel card after an edit to the organizer's note. Embed only: the note rides no
-    other surface, so the thread and the native event are left alone."""
-    loaded = await asyncio.to_thread(_load_event, event_id)
-    if loaded is None:
-        return
-    name, event_time, _status, _thread_id, _native_event_id, _created_at = loaded
-    await _edit_scheduled_card(bot, event_id, name, event_time)
-
-
-async def refresh_card_phase(bot: commands.Bot, event_id: str) -> None:
-    """Re-render the channel card for a lifecycle change — draft start, a restart, draft done, the
-    champion post — picking up the current status line. Embed only: no thread or native-event renames,
-    so frequent transitions never touch Discord's slow rename limits. Once the championship post is
-    known, both card surfaces also gain a jump button to it. The launcher board repaints with it, since draft
-    start is where a pod stops taking signups and its slot has to collapse to one line then rather than
-    whenever the next click happens."""
+async def refresh_card_embed(bot: commands.Bot, event_id: str) -> None:
+    """Re-render the channel card embed in place, leaving the thread and native-event names alone"""
     loaded = await asyncio.to_thread(_load_event, event_id)
     if loaded is None:
         return
@@ -1683,7 +1686,7 @@ async def heal_finished_cards(bot: commands.Bot) -> None:
     intro while their manager was gone pick up the persisted status. No-op for pods without a card."""
     event_ids = await asyncio.to_thread(_recent_finished_event_ids_sync)
     for event_id in event_ids:
-        await refresh_card_phase(bot, event_id)
+        await refresh_card_embed(bot, event_id)
 
 
 def _recent_finished_event_ids_sync() -> list[str]:
@@ -1759,20 +1762,16 @@ async def _edit_message_view(bot: commands.Bot, channel_id: str, message_id: str
 
 async def reflect_format_change(bot: commands.Bot, event_id: str) -> None:
     """Mirror a pre-draft format change onto the surfaces addressed by stored ids: the channel card
-    title (new name + set symbol) and the native scheduled event's name, both carrying the Team-Draft
-    marker when the pod has locked into teams. The thread rename lives in set_event_format; the
-    in-thread registered embed re-renders through the Settings panel. Called after the format persists,
-    so the pod reads as its new format wherever the gear was clicked."""
+    title (new name + set symbol) and the native scheduled event's name. The thread rename lives in
+    set_event_format; the in-thread registered embed re-renders through the Settings panel. Called
+    after the format persists, so the pod reads as its new format wherever the gear was clicked."""
     loaded = await asyncio.to_thread(_load_event, event_id)
     if loaded is None:
         return
     name, event_time, _status, thread_id, native_event_id, _created_at = loaded
-    pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
     await _edit_scheduled_card(bot, event_id, name, event_time)
     await _refresh_launcher_for_event(bot, event_id)
-    await _rename_native_event(
-        bot, thread_id, native_event_id, team_aware_pod_name(name, pairing_mode), event_time,
-    )
+    await _rename_native_event(bot, thread_id, native_event_id, name, event_time)
 
 
 async def refresh_event_rsvp_surfaces(bot: commands.Bot, event_id: str) -> None:
@@ -1797,18 +1796,6 @@ async def _refresh_rsvp_surfaces(bot: commands.Bot, event_id: str, *, reminder: 
     if reminder:
         work.append(refresh_roster_reminder_for_event(event_id))
     await asyncio.gather(*work)
-
-
-async def _rename_thread(bot: commands.Bot, thread_id: str | None, name: str) -> None:
-    if thread_id is None:
-        return
-    thread = await fetch_channel(bot, thread_id)
-    if not isinstance(thread, discord.Thread):
-        return
-    try:
-        await thread.edit(name=name[:100])
-    except discord.HTTPException:
-        log.warning(f"could not rename thread {thread_id}", exc_info=True)
 
 
 def native_event_still_matters(event_time: datetime | None) -> bool:
