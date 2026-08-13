@@ -21,7 +21,7 @@ import discord
 from discord import ui
 
 from bot.services import pod_swiss, pod_team
-from bot.services.pod_active import notify_card_phase
+from bot.services.pod_active import notify_card_phase, notify_podium_posted
 from bot.services.pod_drafts import normalize_player_name
 from bot.services.pod_team_board import load_team_board_data
 from bot.services.pod_team_flow import (
@@ -116,6 +116,7 @@ async def maybe_post_team_championship(manager: "PodDraftManager", *, force: boo
     try:
         posted = await target.send(view=view)
         await asyncio.to_thread(mark_championship_posted_sync, event_id)
+        notify_podium_posted(manager.bot, event_id, posted.jump_url)
         log.info(f"[TEAM] champion.posted event={event_id} forced={force} missing={incomplete}")
     except Exception:
         manager.champion_announced = False

@@ -57,7 +57,7 @@ from bot.services import pod_format_interest as fi
 from bot.services import pod_format_poll
 from bot.services import pod_launch
 from bot.services.pod_hold_view import build_hold_items
-from bot.services.pod_active import set_pod_complete_hook
+from bot.services.pod_active import set_pod_complete_hook, set_podium_posted_hook
 from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
     announce_pod_grant,
@@ -89,6 +89,7 @@ from bot.services.pod_launcher_copy import (
     PLAY_AGAIN_BUTTON,
     PLAY_AGAIN_INTRO,
     PLAY_AGAIN_LOVE_EMOJI,
+    PLAY_AGAIN_NEXT,
     PLAY_AGAIN_SIGNED_UP,
     POLL_FORMAT_SEVERAL,
     POLL_INTRO_TIME_AND_FORMAT,
@@ -130,6 +131,11 @@ from bot.services.pod_signals import (
 )
 from bot.services.pod_drafts import TABLE_SUFFIX_RE
 from bot.services.pod_slot import pod_display_name
+from bot.services.pod_tournament import (
+    CHAMPIONSHIP_DEADLINE_SECONDS,
+    GRACE_SECONDS,
+    build_podium_link_button,
+)
 from bot.sets import active_set_code, set_name_for
 from bot.slug import slugify
 from bot.tasks.pod_draft_reminder import register_reminder_view_builder
@@ -145,9 +151,11 @@ log = logging.getLogger(__name__)
 _bot: commands.Bot | None = None
 
 LAUNCHER_CLOSE_LOOKBACK_DAYS = 3
-PLAY_AGAIN_DELAY_MIN = 5
+PLAY_AGAIN_FLOOR_MIN = 5
+PLAY_AGAIN_FALLBACK_SECONDS = CHAMPIONSHIP_DEADLINE_SECONDS - GRACE_SECONDS + 60
 
 _repost_lock = asyncio.Lock()
+_PLAY_AGAIN_POSTED: set[str] = set()
 
 CHAMPIONSHIP_SLOT_LABEL = "Set Championship"
 CHAMPIONSHIP_CROWN = "👑"
@@ -163,6 +171,7 @@ def init_daily_poll(bot: commands.Bot) -> None:
     _bot = bot
     register_launcher_refresh(refresh_launcher_for_date)
     set_pod_complete_hook(roll_lane_after_pod)
+    set_podium_posted_hook(release_play_again)
     pod_launch.set_slot_roll_hook(roll_lane_after_expired_slot)
     bot.pod_scheduler.add_job(
         fire_daily_poll, "cron", hour=POST_HOUR_ET, minute=0,
@@ -745,21 +754,26 @@ def _committed_card_link(guild: discord.Guild | None, slot: pod_launch.LauncherS
 
 
 def build_play_again_prompt(
-    bucket_keys: list[str], guild: discord.Guild | None = None,
+    bucket_keys: list[str], guild: discord.Guild | None = None, *, jump_url: str | None = None,
 ) -> tuple[discord.Embed, "PlayAgainView"]:
-    """The next-day re-signup prompt posted into a finished pod's thread: a thank-you over one button per pod
+    """The pod's sign-off, posted into its own thread: a thank-you over the podium post and one button per pod
     the same slot offers tomorrow. An embed, so the thank-you carries as a heading and the prompt reads as its
     own card in a thread full of match reports.
+
+    Both halves are optional and the sign-off still posts without them. A pod with no open slot ahead of it
+    offers no button, and a podium post that never landed leaves the thank-you with nothing to link.
 
     The buttons name tomorrow's formats, not the one just played: a group that drafted a cube tonight is still
     the group to invite back when tomorrow's slot runs a past set, and picking one of the formats on offer for
     them would decide something they can decide themselves."""
-    body = PLAY_AGAIN_INTRO.format(
-        love=emojis.get(PLAY_AGAIN_LOVE_EMOJI),
-        next=emojis.get(NEXT_EMOJI),
-        pod=_slot_pod_label(guild, time_key_of(bucket_keys[0])),
-    )
-    return discord.Embed(description=body, color=discord.Color.green()), PlayAgainView(bucket_keys)
+    lines = [PLAY_AGAIN_INTRO.format(love=emojis.get(PLAY_AGAIN_LOVE_EMOJI))]
+    if bucket_keys:
+        lines.append(PLAY_AGAIN_NEXT.format(
+            next=emojis.get(NEXT_EMOJI),
+            pod=_slot_pod_label(guild, time_key_of(bucket_keys[0])),
+        ))
+    embed = discord.Embed(description="\n".join(lines), color=discord.Color.green())
+    return embed, PlayAgainView(bucket_keys, jump_url=jump_url)
 
 
 def _slot_pod_label(guild: discord.Guild | None, bucket_key: str) -> str:
@@ -771,12 +785,16 @@ def _slot_pod_label(guild: discord.Guild | None, bucket_key: str) -> str:
 
 
 class PlayAgainView(discord.ui.View):
-    """One button per pod the slot offers on the next day."""
+    """One button per pod the slot offers on the next day, then the jump to the podium post the pod
+    just earned. The sign-up buttons lead: the link is where the pod ended, the buttons are what to
+    do next."""
 
-    def __init__(self, bucket_keys: list[str]) -> None:
+    def __init__(self, bucket_keys: list[str], *, jump_url: str | None = None) -> None:
         super().__init__(timeout=None)
         for bucket_key in bucket_keys:
             self.add_item(PlayAgainButton(bucket_key))
+        if jump_url:
+            self.add_item(build_podium_link_button(jump_url))
 
 
 PLAY_AGAIN_PREFIX = "pod_play_again"
@@ -1674,19 +1692,18 @@ async def refresh_launcher_for_date(bot: commands.Bot, signal_date: date) -> Non
 
 
 async def roll_lane_after_pod(bot: commands.Bot, event_id: str) -> None:
-    """Move the launcher column a played pod sat in to the next day, then invite that pod's players back a
-    few minutes later. Fired once the pod is finalized, so a column can gather tomorrow while the other
-    still plays today. No-op for an off-grid pod, which no column owns.
+    """Move the launcher column a played pod sat in to the next day, then arm that pod's sign-off. Fired once
+    the pod is finalized, so a column can gather tomorrow while the other still plays today. An off-grid pod
+    rolls no column, and is still signed off and invited back.
 
-    Play Again then offers whatever the slot carries tomorrow, one button per format, so a group that drafted
-    a cube tonight is invited back to the past set running at their time tomorrow."""
+    Play Again then offers whatever the nearest slot carries tomorrow, one button per format, so a group that
+    drafted a cube tonight is invited back to the past set running at their time tomorrow."""
+    _arm_play_again(bot, event_id)
     ref = await asyncio.to_thread(pod_launch.event_lane_ref_sync, event_id)
     if ref is None:
         return
     lane, played_day = ref
-    rolled = await _roll_lane(bot, lane, played_day)
-    if rolled:
-        _schedule_play_again(bot, event_id, [bucket_key for bucket_key, _slot_time in rolled])
+    await _roll_lane(bot, lane, played_day)
     if lane == LANE_LATE:
         await repost_board_after_the_late_pods(bot, played_day)
     else:
@@ -1871,32 +1888,59 @@ async def _roll_lane(
     return opened
 
 
-def _schedule_play_again(bot: commands.Bot, event_id: str, bucket_keys: list[str]) -> None:
-    """Post the next-day prompt a few minutes after the pod's result lands, so it never sits on top of the
-    final game."""
+def _arm_play_again(bot: commands.Bot, event_id: str) -> None:
+    """Hold the pod's sign-off until its podium post is up, and post it anyway once the podium deadline has
+    passed. A pod whose podium post never lands still signs off, without a link to one."""
+    _schedule_play_again(bot, event_id, delay=timedelta(seconds=PLAY_AGAIN_FALLBACK_SECONDS), jump_url=None)
+
+
+async def release_play_again(bot: commands.Bot, event_id: str, jump_url: str | None) -> None:
+    """The podium post is up: sign the pod off with a link to it, no earlier than the floor the fallback was
+    already holding, so the prompt never lands on top of the final game. Replaces the pending fallback, so
+    exactly one prompt goes out either way."""
+    finalized_at = await asyncio.to_thread(pod_launch.event_finalized_at_sync, event_id)
+    floor = timedelta(minutes=PLAY_AGAIN_FLOOR_MIN)
+    if finalized_at is not None:
+        floor -= datetime.now(timezone.utc) - finalized_at
+    _schedule_play_again(bot, event_id, delay=max(floor, timedelta(0)), jump_url=jump_url)
+
+
+def _schedule_play_again(
+    bot: commands.Bot, event_id: str, *, delay: timedelta, jump_url: str | None,
+) -> None:
     scheduler = getattr(bot, "pod_scheduler", None)
     if scheduler is None:
         return
     scheduler.add_job(
         post_play_again_prompt, "date",
-        run_date=datetime.now(timezone.utc) + timedelta(minutes=PLAY_AGAIN_DELAY_MIN),
-        args=[bot, event_id, bucket_keys],
+        run_date=datetime.now(timezone.utc) + delay,
+        args=[bot, event_id, jump_url],
         id=f"pod-play-again-{event_id}", replace_existing=True,
     )
 
 
-async def post_play_again_prompt(bot: commands.Bot, event_id: str, bucket_keys: list[str]) -> None:
+async def post_play_again_prompt(bot: commands.Bot, event_id: str, jump_url: str | None) -> None:
     """Post the Play Again prompt in the finished pod's own thread, where the players who just drafted
-    together already are."""
+    together already are. The slots it offers are read now, not when the pod finished, so a slot opened in
+    between is on it. One prompt per pod: a podium post that lands after the fallback already signed the
+    thread off releases nothing."""
+    if event_id in _PLAY_AGAIN_POSTED:
+        return
+    bucket_keys = await asyncio.to_thread(
+        pod_launch.play_again_slots_sync, event_id, datetime.now(timezone.utc),
+    )
+    if bucket_keys is None:
+        return
     thread_id = await asyncio.to_thread(pod_launch.event_thread_id_sync, event_id)
     if thread_id is None:
         return
     thread = await pod_launch.fetch_pod_thread(bot, int(thread_id))
     if thread is None:
         return
-    embed, view = build_play_again_prompt(bucket_keys, thread.guild)
+    embed, view = build_play_again_prompt(bucket_keys, thread.guild, jump_url=jump_url)
     try:
         await thread.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+        _PLAY_AGAIN_POSTED.add(event_id)
     except discord.HTTPException:
         log.warning(f"could not post the play again prompt in thread {thread_id}", exc_info=True)
 

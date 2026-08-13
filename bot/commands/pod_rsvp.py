@@ -66,7 +66,11 @@ from bot.services.pod_deck_color import format_deck_color_emojis
 from bot.services.pod_draft_manager import (
     notify_seeding_change,
 )
-from bot.services.pod_tournament import champion_card_line, load_solo_card_drafters
+from bot.services.pod_tournament import (
+    build_podium_link_button,
+    champion_card_line,
+    load_solo_card_drafters,
+)
 from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
     PodCardState,
@@ -1723,12 +1727,9 @@ def _pending_format_locked_event_ids_sync() -> list[str]:
     return [row[0] for row in rows]
 
 
-RESULT_LINK_LABEL = "Championship Post"
-
-
 async def _attach_result_link(bot: commands.Bot, event_id: str) -> None:
-    """Put a jump button to the championship post on the channel card and on the registered embed in
-    the event thread, whose own controls dropped at draft_done. No-op until the post exists."""
+    """Put a jump button to the podium post on the channel card and on the registered embed in the event
+    thread, whose own controls dropped at draft_done. No-op until the post exists."""
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     url = manager.card_result_url if manager is not None else None
     if not url:
@@ -1744,9 +1745,7 @@ async def _attach_result_link(bot: commands.Bot, event_id: str) -> None:
 
 def _result_link_view(url: str) -> discord.ui.View:
     view = discord.ui.View(timeout=None)
-    view.add_item(discord.ui.Button(
-        label=RESULT_LINK_LABEL, style=discord.ButtonStyle.link, url=url, emoji="🏆",
-    ))
+    view.add_item(build_podium_link_button(url))
     return view
 
 

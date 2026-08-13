@@ -18,6 +18,7 @@ ACTIVE_TABLE_VIEWS = {}
 _CARD_PHASE_HOOK = None
 _POD_COMPLETE_HOOK = None
 _POD_CARD_HOOK = None
+_PODIUM_POSTED_HOOK = None
 
 
 def set_card_phase_hook(callback) -> None:
@@ -32,6 +33,14 @@ def set_pod_complete_hook(callback) -> None:
     different modules, and none of them may import the launcher task."""
     global _POD_COMPLETE_HOOK
     _POD_COMPLETE_HOOK = callback
+
+
+def set_podium_posted_hook(callback) -> None:
+    """The daily launcher registers the Play Again release here. The podium post carries the jump link the
+    prompt shows, and it is posted from both the solo and the team flow, so the link reaches the prompt in
+    memory and nothing about it is stored."""
+    global _PODIUM_POSTED_HOOK
+    _PODIUM_POSTED_HOOK = callback
 
 
 def set_pod_card_hook(callback) -> None:
@@ -61,6 +70,12 @@ def notify_pod_complete(bot, event_id: str) -> None:
     finalized, never at draft done: a pod mid-rounds still owns its slot."""
     if _POD_COMPLETE_HOOK is not None:
         asyncio.create_task(_POD_COMPLETE_HOOK(bot, event_id))
+
+
+def notify_podium_posted(bot, event_id: str, jump_url: str | None) -> None:
+    """Release the pod's Play Again prompt now that its podium post is up (no-op if unset)."""
+    if _PODIUM_POSTED_HOOK is not None:
+        asyncio.create_task(_PODIUM_POSTED_HOOK(bot, event_id, jump_url))
 
 
 def active_manager_for_channel(channel_id: int | None):

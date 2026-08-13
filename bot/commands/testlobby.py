@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import discord
@@ -18,6 +18,7 @@ from sqlalchemy import any_, delete, select, update
 
 from bot.config import settings
 from bot.database import SessionLocal
+from bot.discord_helpers import resolve_pod_chat_channel
 from bot.models import MagicSet, Player, PodDraftEvent, PodDraftParticipant
 from bot.services.lobby_embed import (
     LobbyReadyButtonView,
@@ -41,6 +42,7 @@ from bot.commands.messages import (
     MSG_DM_PREF_OFF_TITLE, MSG_DM_PREF_ON_TITLE, MSG_POD_RESTARTING,
 )
 from bot.services import pod_disconnect
+from bot.services import pod_format_schedule
 from bot.services.pod_format_poll import FORMAT_POLL_PROMPT
 from bot.services.pod_reminder_copy import ROSTER_REMINDER_TITLE
 from bot.services.pod_registration_embed import CHAMPIONSHIP_TITLE, REGISTERED_TITLE_TEXT
@@ -112,9 +114,12 @@ from bot.services.pod_tournament import (
     ParticipantDeckData,
     actor_label,
     build_champion_announcement_view,
+    build_deck_ping,
     build_draft_review_message,
+    build_live_submit_deck_button,
     build_trophy_hype_view,
     mark_trophy_match,
+    pod_page_url,
     render_draft_review_embed,
     round_embed,
     start_tournament,
@@ -129,7 +134,10 @@ from bot.services.pod_voice import (
     pod_voice_channel_url,
 )
 from bot.services.pod_roles import find_role
+from bot.services.pod_schedule import SCHEDULE_TZ
+from bot.services.pod_signals import LANE_EARLY, bucket_for_lane, named_bucket_key
 from bot.slug import disambiguate_slug, slugify
+from bot.tasks.pod_daily_poll import build_play_again_prompt
 
 
 log = logging.getLogger(__name__)
@@ -1180,6 +1188,40 @@ def _champion_hype_preview(guild) -> discord.ui.LayoutView:
     )
 
 
+async def _post_podium_signoff_preview(ctx) -> None:
+    """The tail of a pod where each half really lands: the deck-chase ping and the sign-off here, standing in
+    for the pod thread, and the podium post in pod-draft-chat, so the sign-off's jump crosses channels the way
+    it does after a real pod. Falls back to this channel when the guild has no pod-draft-chat."""
+    deck_ping_view = discord.ui.View(timeout=None)
+    deck_ping_view.add_item(build_live_submit_deck_button())
+    me = ctx.author.id
+    await ctx.send(
+        build_deck_ping(([me], [me]), ([me], []), pod_page_url(_pod_preview_name())),
+        allowed_mentions=discord.AllowedMentions(users=True),
+        view=deck_ping_view,
+    )
+    chat = resolve_pod_chat_channel(ctx.bot) or ctx.channel
+    podium = await chat.send(
+        view=_champion_announcement_preview(ctx.guild, _pod_preview_name(), _POD_PREVIEW_RECORDS),
+        allowed_mentions=discord.AllowedMentions.none(),
+    )
+    embed, view = build_play_again_prompt(
+        _play_again_preview_keys(), ctx.guild, jump_url=podium.jump_url,
+    )
+    await ctx.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+
+
+def _play_again_preview_keys() -> list[str]:
+    """Tomorrow's early slot, one key per format it opens. Falls back to the bare slot when the day opens
+    no pod, so the prompt still renders a button."""
+    tomorrow = datetime.now(SCHEDULE_TZ).date() + timedelta(days=1)
+    bucket = bucket_for_lane(tomorrow, LANE_EARLY)
+    if bucket is None:
+        return []
+    keys = [named_bucket_key(bucket.key, code) for code in pod_format_schedule.formats_for(tomorrow, LANE_EARLY)]
+    return keys or [bucket.key]
+
+
 def _round1_preview_states(seated: bool) -> list[dict]:
     """In-memory Round-1 match states for the no-DB `round1` snapshot, fed through the prod `round_embed`
     builder so the rendering stays in sync — only the match data is fixtured. Arena handles come from
@@ -1278,7 +1320,7 @@ _VALID_STATES = (
     "readyunlinked", "readycancel",
     "drafting", "complete", "submit", "lobby", "lobbyopen", "dmlink", "unlink", "podbracket", "podswiss", "podrandom",
     "podteam", "podlobby", "podteamvote", "autoteam", "chat",
-    "format", "seeding", "trophyhype", "champ", "round1", "round2", "round3", "voicelink", "review",
+    "format", "seeding", "trophyhype", "champ", "podium", "round1", "round2", "round3", "voicelink", "review",
     "table",
     "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "p2vote",
     "formatpoll", "linkpicker", "settings", "dropped", "reset",
@@ -1289,7 +1331,7 @@ _LIVE_POD_MODES = {
 }
 
 _PRODUCTION_BLOCKED_STATES = frozenset(_LIVE_POD_MODES) | {
-    "podlobby", "podteamvote", "autoteam", "unlink", "reset", "chat",
+    "podlobby", "podteamvote", "autoteam", "unlink", "reset", "chat", "podium",
 }
 
 _LAST_MESSAGE: dict[int, discord.Message] = {}
@@ -1834,6 +1876,10 @@ async def setup(bot: commands.Bot) -> None:
 
         if state == "trophyhype":
             await ctx.send(view=_trophy_hype_preview())
+            return
+
+        if state == "podium":
+            await _post_podium_signoff_preview(ctx)
             return
 
         if state == "champ":

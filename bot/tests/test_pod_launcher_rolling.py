@@ -26,6 +26,7 @@ from bot.services.pod_signals import (
     next_lane_start,
     slot_can_fire,
     slot_event_time,
+    time_key_of,
 )
 from bot.tasks.pod_daily_poll import (
     _lane_order,
@@ -692,6 +693,52 @@ def test_a_canceled_pod_finds_the_slot_it_fired_out_of(
     found = pod_launch.fired_slot_for_pod_sync(event.id)
 
     assert found == (slot.id if expected_match else None)
+
+
+# --- play again ---
+
+@pytest.mark.parametrize("played_lane, expected_lane", [(LANE_EARLY, LANE_EARLY), (LANE_LATE, LANE_LATE)])
+def test_play_again_offers_the_slot_a_day_after_the_pod_played(
+    session, monkeypatch, latest_only, played_lane, expected_lane,
+):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    _seed_signal(session, bucket_for_lane(SATURDAY, LANE_EARLY).key, SATURDAY, message_id="tomorrow")
+    _seed_signal(session, bucket_for_lane(SATURDAY, LANE_LATE).key, SATURDAY, message_id="tomorrow")
+    played_at = slot_event_time(FRIDAY, bucket_for_lane(FRIDAY, played_lane).key)
+    event = _seed_pod(session, played_at, set_code=LATEST)
+    session.commit()
+
+    keys = pod_launch.play_again_slots_sync(event.id, played_at)
+
+    expected = bucket_for_lane(SATURDAY, expected_lane).key
+    assert [time_key_of(key) for key in keys] == [expected]
+
+
+def test_play_again_offers_an_off_grid_pod_the_nearest_slot_a_day_later(
+    session, monkeypatch, latest_only,
+):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    _seed_signal(session, bucket_for_lane(SATURDAY, LANE_EARLY).key, SATURDAY, message_id="tomorrow")
+    _seed_signal(session, bucket_for_lane(SATURDAY, LANE_LATE).key, SATURDAY, message_id="tomorrow")
+    late_start = slot_event_time(FRIDAY, bucket_for_lane(FRIDAY, LANE_LATE).key)
+    played_at = late_start - timedelta(minutes=40)
+    event = _seed_pod(session, played_at, set_code=LATEST)
+    session.commit()
+
+    keys = pod_launch.play_again_slots_sync(event.id, played_at)
+
+    assert [time_key_of(key) for key in keys] == [bucket_for_lane(SATURDAY, LANE_LATE).key]
+
+
+def test_play_again_skips_a_mock_draft(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    _seed_signal(session, bucket_for_lane(SATURDAY, LANE_EARLY).key, SATURDAY, message_id="tomorrow")
+    played_at = slot_event_time(FRIDAY, bucket_for_lane(FRIDAY, LANE_EARLY).key)
+    event = _seed_pod(session, played_at, set_code=LATEST)
+    event.kind = "mock"
+    session.commit()
+
+    assert pod_launch.play_again_slots_sync(event.id, played_at) is None
 
 
 @pytest.fixture

@@ -7,7 +7,7 @@ from bot.services import pod_tournament
 from bot.services.ping_roles import plan_set_champion_swap
 from bot.services.pod_tournament import (
     CHAMPION_TITLE_GLYPH,
-    CHAMPIONSHIP_DECK_HEADER,
+    PODIUM_DECK_HEADER,
     SET_CHAMPION_TITLE_GLYPH,
     _format_champion_title,
     ParticipantDeckData,
@@ -167,7 +167,7 @@ def test_deck_ping_is_action_forward_split_by_audience():
     text = build_deck_ping((["1"], ["1", "2"]), (["3"], ["3"]), "https://limitedlevelups.com/pods/pod-7")
 
     assert text == (
-        "Championship post is waiting on a few decks 🏆\n"
+        f"{PODIUM_DECK_HEADER}\n"
         "Please post your deck screenshot <@1> <@3>\n"
         "Submit your deck colors with the button below <@1> <@2> <@3>\n"
         "\n"
@@ -181,9 +181,9 @@ def test_deck_ping_pod_link_embeds_and_hides_scheme():
     assert "[limitedlevelups.com/pods/pod-7](https://limitedlevelups.com/pods/pod-7)" in text
 
 
-def test_deck_ping_drops_championship_header_once_post_is_clear():
+def test_deck_ping_drops_podium_header_once_post_is_clear():
     text = build_deck_ping(([], []), (["3"], ["3"]), "https://limitedlevelups.com/pods/pod-7")
-    assert CHAMPIONSHIP_DECK_HEADER not in text
+    assert PODIUM_DECK_HEADER not in text
     assert "<@3>" in text
 
 

@@ -41,10 +41,8 @@ MSG_ON_NO_POD = "You are not signed up for a pod"
 MSG_REMOVED_FROM_PODS = "❌ Removed from your pods"
 
 PLAY_AGAIN_LOVE_EMOJI = "chordo_love"
-PLAY_AGAIN_INTRO = (
-    "### {love} Thank you for playing!\n"
-    "{next} Sign up for the next {pod} from here, same time tomorrow"
-)
+PLAY_AGAIN_INTRO = "### {love} Thank you for playing!"
+PLAY_AGAIN_NEXT = "{next} Sign up for the next {pod} from here, same time tomorrow"
 PLAY_AGAIN_BUTTON = "{pod} Tomorrow"
 PLAY_AGAIN_SIGNED_UP = "✅ {player} signed up for the next {pod} Pod"
 

@@ -49,7 +49,6 @@ from bot.services.pod_tournament import (
     name_with_arena,
     result_needs_announcement,
     result_was_corrected,
-    send_final_submit_deck_dms,
 )
 
 
@@ -620,7 +619,6 @@ async def handle_team_report(
         name for name in (result["a_name"], result["b_name"]) if _player_has_no_pending(data, name)
     ]
     if finished:
-        asyncio.create_task(send_final_submit_deck_dms(interaction.client, event_id, finished))
         asyncio.create_task(deck_recovery_scan(interaction.client, event_id, finished))
 
     if await _maybe_finalize(event_id, data):

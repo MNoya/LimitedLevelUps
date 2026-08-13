@@ -35,7 +35,12 @@ from bot.slug import slugify
 from bot.database import SessionLocal
 from bot.models import Player as DbPlayer, PodDraftEvent, PodDraftMatch, PodDraftParticipant
 from bot.services import bot_log as bot_log_mod, championship, pod_bracket, pod_round_robin, pod_swiss
-from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase, notify_pod_complete
+from bot.services.pod_active import (
+    ACTIVE_POD_MANAGERS,
+    notify_card_phase,
+    notify_pod_complete,
+    notify_podium_posted,
+)
 from bot.services.pod_deck_color import (
     SAVED_MSG,
     DeckColorSelectView,
@@ -60,7 +65,6 @@ from bot.services.seventeenlands import SeventeenLandsClient
 from bot.services.pod_drafts import (
     DM_KIND_ROUND,
     DM_KIND_SUBMIT_DECK,
-    DM_KIND_SUBMIT_DECK_FINAL,
     FinalStanding,
     OwnMatch,
     TOTAL_ROUNDS,
@@ -74,10 +78,8 @@ from bot.services.pod_drafts import (
     apply_seat_indexes,
     capture_deck_screenshot,
     caption_has_record_pattern,
-    delete_submit_deck_dm,
     dm_messages_for_match,
     dm_messages_for_round,
-    final_submit_deck_dm_for_participant,
     finalize_champion as finalize_db,
     get_participant_deck_state,
     list_event_participants_sync,
@@ -179,7 +181,7 @@ async def is_pod_organizer(bot, user: discord.abc.User) -> bool:
     return any(role.name.lower() in ORGANIZER_ROLE_NAMES for role in roles)
 
 
-CHAMPIONSHIP_DECK_HEADER = "Championship post is waiting on a few decks 🏆"
+PODIUM_DECK_HEADER = "🏆 Podium is waiting on a few decks!"
 
 DECK_NUDGE_MSG = "📸 Don't forget to share your deck screenshot here!"
 
@@ -189,7 +191,7 @@ DeckPingAudience = tuple[list[str], list[str]]  # (owes-screenshot ids, owes-col
 def build_deck_ping(blocking: DeckPingAudience, other: DeckPingAudience, pod_url: str) -> str:
     """Compose the R3 deck-chase ping action-forward. Everyone who owes a screenshot or colors is
     pinged on one line each — blocking and non-blocking players merged so the ask isn't repeated.
-    The "waiting" header only shows when a top finisher is actually blocking the championship post;
+    The "waiting" header only shows when a top finisher is actually blocking the podium post;
     once it's clear to go up the ping is just the pod-page nudge. Returns "" when nobody owes."""
     block_shots, block_colors = blocking
     other_shots, other_colors = other
@@ -199,7 +201,7 @@ def build_deck_ping(blocking: DeckPingAudience, other: DeckPingAudience, pod_url
         return ""
     lines = []
     if block_shots or block_colors:
-        lines.append(CHAMPIONSHIP_DECK_HEADER)
+        lines.append(PODIUM_DECK_HEADER)
     if screenshot_ids:
         lines.append(f"Please post your deck screenshot {_mention_run(screenshot_ids)}")
     if colors_ids:
@@ -249,6 +251,12 @@ def build_thread_link_button(guild_id: int | str, thread_id: int | str) -> ui.Bu
         url=f"https://discord.com/channels/{guild_id}/{thread_id}",
         emoji=emojis.get_emoji("manat"),
     )
+
+
+def build_podium_link_button(url: str) -> ui.Button:
+    """🏆 Podium link button jumping to the pod's podium post. Shared by the scheduled card, the thread's
+    registered embed and the Play Again sign-off."""
+    return ui.Button(label="Podium", style=discord.ButtonStyle.link, url=url, emoji="🏆")
 
 
 def build_replays_link_button(event_name: str) -> ui.Button:
@@ -862,72 +870,6 @@ async def send_submit_deck_dms(bot_client, event_id: str) -> None:
             )
 
 
-def build_final_submit_deck_dm_embed(deck_colors: str | None) -> discord.Embed:
-    """Embed body for the post-R3 Submit Deck DM. Mirrors `_build_submit_deck_dm_embed` but with a thank-you header."""
-    chordo_love = emojis.get("chordo_love")
-    header = f"{chordo_love} Thank you for playing!"
-    if deck_colors is not None:
-        body = f"{header}\n{SAVED_MSG}"
-    else:
-        body = f"{header}\n🎨 **Please submit your deck colors with the dropdown below**"
-    return discord.Embed(description=body)
-
-
-async def send_final_submit_deck_dms(bot_client, event_id: str, names: list[str]) -> None:
-    """Once a player's last match is reported: re-ask for deck colors only from those who never saved
-    them, deleting their stale Round-1 dropdown DM so a single prompt survives. Players who already
-    picked a color are left alone. Idempotent per participant — a re-report no-ops for already-DMed
-    players."""
-    dm_info = await asyncio.to_thread(load_dm_info_sync, event_id)
-    seat_keys = tuple(normalize_player_name(n) for n in names)
-    for seat_key in seat_keys:
-        info = dm_info.get(seat_key)
-        if info is None or not info.discord_id:
-            continue
-        existing = await asyncio.to_thread(_load_final_submit_deck_dm_sync, info.participant_id)
-        if existing is not None:
-            continue
-        deck_colors = await asyncio.to_thread(
-            _load_participant_deck_state_sync, event_id, info.discord_id,
-        )
-        if deck_colors is not None:
-            continue
-        await _delete_submit_deck_dm(bot_client, info.participant_id)
-        embed = build_final_submit_deck_dm_embed(deck_colors)
-        view = build_live_deck_color_select_view(deck_colors)
-        msg = None
-        try:
-            user = await fetch_dm_user(bot_client, info.discord_id)
-            if user is None:
-                continue
-            msg = await user.send(embed=embed, view=view)
-        except discord.Forbidden:
-            log.info(f"final submit-deck DM blocked for {info.discord_id}")
-            continue
-        except discord.HTTPException:
-            log.warning("final submit-deck DM failed", exc_info=True)
-            continue
-        if msg is not None:
-            await asyncio.to_thread(
-                _persist_dm_message_sync,
-                event_id=event_id,
-                participant_id=info.participant_id,
-                kind=DM_KIND_SUBMIT_DECK_FINAL,
-                round_num=TOTAL_ROUNDS,
-                match_id=None,
-                dm_channel_id=str(msg.channel.id),
-                dm_message_id=str(msg.id),
-            )
-
-
-def _load_final_submit_deck_dm_sync(participant_id: str):
-    with SessionLocal() as session:
-        row = final_submit_deck_dm_for_participant(session, participant_id)
-        if row is not None:
-            session.expunge(row)
-        return row
-
-
 def _load_participants_with_discord_sync(event_id: str) -> list[dict]:
     with SessionLocal() as session:
         return participants_with_discord_for_event(session, event_id)
@@ -955,21 +897,15 @@ def _load_participant_deck_state_sync(event_id: str, discord_id: str) -> str | N
 
 
 async def _refresh_submit_deck_dm(bot_client, event_id: str, discord_id: str) -> None:
-    """Edit the user's Submit Deck DM(s) so the body reflects their current saved state. Updates both
-    the R1 DM and (if present) the post-R3 final DM, so color/review edits sync across both."""
+    """Edit the user's Submit Deck DM so the body reflects their current saved state."""
     participant_id = await asyncio.to_thread(_load_participant_id_sync, event_id, discord_id)
     if participant_id is None:
         return
     deck_colors = await asyncio.to_thread(_load_participant_deck_state_sync, event_id, discord_id)
-    r1_row = await asyncio.to_thread(_load_submit_deck_dm_sync, participant_id)
-    if r1_row is not None:
+    row = await asyncio.to_thread(_load_submit_deck_dm_sync, participant_id)
+    if row is not None:
         await _edit_submit_deck_dm(
-            bot_client, r1_row, _build_submit_deck_dm_embed(deck_colors), deck_colors,
-        )
-    final_row = await asyncio.to_thread(_load_final_submit_deck_dm_sync, participant_id)
-    if final_row is not None:
-        await _edit_submit_deck_dm(
-            bot_client, final_row, build_final_submit_deck_dm_embed(deck_colors), deck_colors,
+            bot_client, row, _build_submit_deck_dm_embed(deck_colors), deck_colors,
         )
 
 
@@ -987,26 +923,6 @@ async def _edit_submit_deck_dm(
         )
     except discord.HTTPException:
         log.warning(f"refresh_submit_deck_dm: could not edit DM {dm_row.dm_message_id}", exc_info=True)
-
-
-async def _delete_submit_deck_dm(bot_client, participant_id: str) -> None:
-    row = await asyncio.to_thread(_load_submit_deck_dm_sync, participant_id)
-    if row is None:
-        return
-    try:
-        channel = bot_client.get_channel(int(row.dm_channel_id)) \
-            or await bot_client.fetch_channel(int(row.dm_channel_id))
-        msg = await channel.fetch_message(int(row.dm_message_id))
-        await msg.delete()
-    except discord.HTTPException:
-        log.warning(f"delete_submit_deck_dm: could not delete DM {row.dm_message_id}", exc_info=True)
-    await asyncio.to_thread(_delete_submit_deck_dm_row_sync, participant_id)
-
-
-def _delete_submit_deck_dm_row_sync(participant_id: str) -> None:
-    with SessionLocal() as session:
-        delete_submit_deck_dm(session, participant_id)
-        session.commit()
 
 
 def _load_participant_id_sync(event_id: str, discord_id: str) -> str | None:
@@ -2054,9 +1970,6 @@ async def _handle_result_submission(interaction: discord.Interaction, value: str
         head=head if regenerating else None,
     )
     if round_num >= TOTAL_ROUNDS:
-        asyncio.create_task(send_final_submit_deck_dms(
-            interaction.client, event_id, [result["a_name"], result["b_name"]],
-        ))
         asyncio.create_task(deck_recovery_scan(
             interaction.client, event_id, [result["a_name"], result["b_name"]],
         ))
@@ -3847,9 +3760,10 @@ async def _championship_deadline(manager) -> None:
 
 
 async def maybe_post_championship(manager, *, force: bool = False) -> None:
-    """Post the one-time pod-draft-coordination announcement (ComponentsV2 screenshot gallery) to the
-    thread's parent channel. Fires once every announced finisher (3-0 and 2-1, or the whole pod for a
-    Set Championship) has colors and a screenshot, or when forced by the deadline. Posts once, never edits.
+    """Post the one-time podium post (ComponentsV2 screenshot gallery) to pod-draft-chat, then release the
+    pod's Play Again sign-off with a link to it. Fires once every announced finisher (3-0 and 2-1, or the
+    whole pod for a Set Championship) has colors and a screenshot, or when forced by the deadline. Posts
+    once, never edits.
 
     The champion-only #trophy-hype card posts separately, once the champions' decks are complete —
     see maybe_post_trophy_hype. Team pods never post either — a team draft has no single champion;
@@ -3930,6 +3844,7 @@ async def maybe_post_championship(manager, *, force: bool = False) -> None:
         manager.champion_announcement_message = await target.send(
             view=view, allowed_mentions=discord.AllowedMentions.none())
         await asyncio.to_thread(mark_championship_posted_sync, event_id)
+        notify_podium_posted(manager.bot, event_id, manager.champion_announcement_message.jump_url)
         log.info(
             f"[FINALIZE] champion.posted event={event_id} rank1={champions[0].player_name!r} "
             f"forced={force} missing={incomplete}"
@@ -4027,9 +3942,9 @@ async def _react_trophy_on_champion_screenshots(manager, deck_data, dm_info) -> 
 
 
 async def _set_champion_card_result(manager, champions, player_colors) -> None:
-    """The champion headline and the jump link both card surfaces show once the championship post is up.
-    The thread gets no callout of its own: the post lands there already, followed by the play-again
-    prompt, and the thread's own embed carries the same jump button."""
+    """The champion headline and the jump link both card surfaces show once the podium post is up. The thread
+    gets no callout of its own: its Play Again sign-off links the same post, and the thread's own embed
+    carries the jump button."""
     announcement = manager.champion_announcement_message
     if announcement is None:
         return

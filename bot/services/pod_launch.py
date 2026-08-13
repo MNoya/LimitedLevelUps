@@ -1218,14 +1218,7 @@ def event_lane_ref_sync(event_id: str) -> tuple[str, date] | None:
     no column owns. Keyed on the slot the launcher reflects, so a postponed pod still rolls the column it was
     gathered in."""
     with SessionLocal() as session:
-        slot_time = session.execute(
-            select(PodSignal.slot_time).where(
-                PodSignal.event_id == event_id, PodSignal.kind == pod_signals.KIND_SCHEDULED
-            )
-        ).scalar_one_or_none()
-        if slot_time is None:
-            event = session.get(PodDraftEvent, event_id)
-            slot_time = event.event_time if event else None
+        slot_time = _pod_slot_time(session, event_id)
     if slot_time is None:
         return None
     local = slot_time.astimezone(SCHEDULE_TZ)
@@ -1233,6 +1226,54 @@ def event_lane_ref_sync(event_id: str) -> tuple[str, date] | None:
         if bucket.start.hour == local.hour and bucket.start.minute == local.minute:
             return bucket.lane, local.date()
     return None
+
+
+def play_again_slots_sync(event_id: str, now: datetime) -> list[str] | None:
+    """Bucket keys the finished pod's Play Again prompt offers: every still-open slot sharing the start time
+    closest to a day after the pod played, so an off-grid pod no column owns is still invited back to the
+    slot nearest its own hour. None for a mock draft, which has no group to invite back and gets no prompt at
+    all; empty when no later slot is open, which signs the thread off without a button."""
+    with SessionLocal() as session:
+        event = session.get(PodDraftEvent, event_id)
+        if event is None or event.kind == "mock":
+            return None
+        played_at = _pod_slot_time(session, event_id)
+        rows = session.execute(
+            select(PodSignal.bucket, PodSignal.slot_time)
+            .where(
+                PodSignal.kind == pod_signals.KIND_POLL,
+                PodSignal.status == pod_signals.STATUS_OPEN,
+                PodSignal.slot_time > now,
+            )
+            .order_by(PodSignal.bucket)
+        ).all()
+    target = played_at + timedelta(days=1)
+    nearest = None
+    for _bucket, slot_time in rows:
+        if nearest is None or abs(slot_time - target) < abs(nearest - target):
+            nearest = slot_time
+    return [bucket for bucket, slot_time in rows if slot_time == nearest]
+
+
+def event_finalized_at_sync(event_id: str) -> datetime | None:
+    with SessionLocal() as session:
+        return session.execute(
+            select(PodDraftEvent.finalized_at).where(PodDraftEvent.id == event_id)
+        ).scalar_one_or_none()
+
+
+def _pod_slot_time(session: Session, event_id: str) -> datetime | None:
+    """When the pod sat: the slot its card signal carries, else the event's own time. A postponed pod keeps
+    the slot it was gathered in, which is what ties it to a launcher column."""
+    slot_time = session.execute(
+        select(PodSignal.slot_time).where(
+            PodSignal.event_id == event_id, PodSignal.kind == pod_signals.KIND_SCHEDULED
+        )
+    ).scalar_one_or_none()
+    if slot_time is not None:
+        return slot_time
+    event = session.get(PodDraftEvent, event_id)
+    return event.event_time if event else None
 
 
 def slot_fire_candidates_sync(message_id: str, signal_date: date) -> list[SignalState]:
