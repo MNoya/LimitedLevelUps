@@ -199,6 +199,39 @@ def pod_family_sync(event_id: str) -> list[FamilyPod]:
     return family
 
 
+DRAFTED_STATUSES = frozenset({"draft_done", "complete"})
+
+
+def signup_thread_once_family_drafted_sync(event_id: str) -> str | None:
+    """The thread a split gathered in, once every table it made has finished drafting.
+
+    None while any table is still going, and None for a pod that never split, which drafts in the thread
+    everybody signed up in and has nothing to stand down. The id sits on the signal of the pod the split
+    came from: moving that pod onto a card of its own is what orphans the thread."""
+    with SessionLocal() as session:
+        event = session.get(PodDraftEvent, event_id)
+        if event is None:
+            return None
+        base = pod_base_name(event.name)
+        rows = session.execute(
+            select(PodDraftEvent.name, PodDraftEvent.socket_status, PodSignal.discussion_thread_id)
+            .join(PodSignal, PodSignal.event_id == PodDraftEvent.id, isouter=True)
+            .where(
+                PodDraftEvent.event_time == event.event_time,
+                or_(PodDraftEvent.name == base, PodDraftEvent.name.ilike(f"{base} %")),
+            )
+        ).all()
+    family = [row for row in rows if pod_base_name(row[0]) == base]
+    if len(family) < 2:
+        return None
+    if any(status not in DRAFTED_STATUSES for _name, status, _thread_id in family):
+        return None
+    for _name, _status, thread_id in family:
+        if thread_id:
+            return thread_id
+    return None
+
+
 @dataclass(frozen=True)
 class SeatOffer:
     """Where a Join Draft press is sent. `switched` is the press landing on a table other than the one it

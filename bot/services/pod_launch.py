@@ -35,7 +35,12 @@ from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services import pod_team
 from bot.services.pod_confirm import CONFIRM_WINDOW_MINUTES, SESSION_SEATS, attendance_for_event_sync
-from bot.services.pod_staging import confirmed_first_roster_sync, pod_index, pod_is_numbered
+from bot.services.pod_staging import (
+    confirmed_first_roster_sync,
+    pod_index,
+    pod_is_numbered,
+    signup_thread_once_family_drafted_sync,
+)
 from bot.services.pod_draft_manager import (
     PodDraftManager,
     set_card_close_hook,
@@ -1694,8 +1699,13 @@ def scheduled_card_ref_sync(event_id: str) -> tuple[str, str, str, datetime | No
 
 def move_scheduled_card_sync(event_id: str, message_id: str, thread_id: str) -> None:
     """Point a pod at a new card and a new thread. The signal's message id is what an RSVP press
-    resolves through, so this is what makes the new card the live one."""
+    resolves through, so this is what makes the new card the live one.
+
+    The thread being left behind is kept on the signal, which is the only row that still knows it once the
+    pointer moves. Nothing named it before, so a split pod's signup thread outlived the nightly cleanup
+    that archives every other pod thread."""
     with SessionLocal() as session:
+        event = session.get(PodDraftEvent, event_id)
         signal = session.execute(
             select(PodSignal).where(
                 PodSignal.event_id == event_id, PodSignal.kind == pod_signals.KIND_SCHEDULED,
@@ -1704,7 +1714,8 @@ def move_scheduled_card_sync(event_id: str, message_id: str, thread_id: str) -> 
         if signal is not None:
             signal.message_id = message_id
             signal.thread_message_id = None
-        event = session.get(PodDraftEvent, event_id)
+            if event is not None and event.discord_thread_id:
+                signal.discussion_thread_id = event.discord_thread_id
         if event is not None:
             event.discord_thread_id = thread_id
         session.commit()
@@ -2300,9 +2311,13 @@ def event_card_surfaces_sync(event_id: str) -> tuple[str, str, str | None, str |
 
 
 async def close_event_card(bot: commands.Bot, event_id: str) -> None:
-    """Drop the RSVP buttons on one pod's card the moment its draft finishes. The card stays live
-    through lobby fill and the ready check — including a restart that reopens the lobby — and closes
-    only at draft_done, the first state a restart can no longer revert. No-op for pods without a card."""
+    """Stand a pod's surfaces down the moment its draft finishes: the RSVP buttons on its card, and the
+    thread a split gathered in once every table that split made is drafting too.
+
+    The card stays live through lobby fill and the ready check — including a restart that reopens the
+    lobby — and closes only at draft_done, the first state a restart can no longer revert. No-op for pods
+    without a card."""
+    await archive_signup_thread_if_drafted(bot, event_id)
     surfaces = await asyncio.to_thread(event_card_surfaces_sync, event_id)
     if surfaces is None or _bot is None:
         return
@@ -2310,6 +2325,26 @@ async def close_event_card(bot: commands.Bot, event_id: str) -> None:
     await _retire_message(int(channel_id), int(message_id))
     if thread_id and thread_message_id:
         await _retire_registered_message(int(thread_id), int(thread_message_id))
+
+
+async def archive_signup_thread_if_drafted(bot: commands.Bot, event_id: str) -> None:
+    """Archive the thread a split gathered in, once every table it made has finished drafting.
+
+    All that thread holds by then is the map of the tables and everyone who ever signed up, and every
+    table has moved out of it, so it is a room with nothing left to say sitting in everybody's sidebar.
+    Archiving is reversible and a reply reopens it, which is what the nightly cleanup already relies on."""
+    thread_id = await asyncio.to_thread(signup_thread_once_family_drafted_sync, event_id)
+    if thread_id is None:
+        return
+    thread = await fetch_pod_thread(bot, int(thread_id))
+    if thread is None or thread.archived:
+        return
+    try:
+        await thread.edit(archived=True, reason="Every table finished drafting")
+    except discord.HTTPException:
+        log.warning(f"could not archive signup thread {thread_id} off {event_id}", exc_info=True)
+        return
+    log.info(f"archived signup thread {thread_id}: every table off {event_id} finished drafting")
 
 
 CARD_CANCELED_MARKER = "🗑️ **Draft canceled**"

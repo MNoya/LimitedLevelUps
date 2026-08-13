@@ -123,6 +123,8 @@ Each table's card lists the players it is waiting on, and those are the confirme
 
 Each table's card carries the players on it. There are no signup buttons and no start time on it: the draft is beginning, so there is nothing left to answer. Its thread opens empty and the lobby post's mentions are what put you in it, so a table costs the thread none of the join lines a gathering pod collects.
 
+The thread everybody signed up in stays behind holding the map of the tables, and it archives itself once every table has finished drafting. By then each table is playing in a thread of its own and the map has nobody left to point anywhere, so it drops out of your sidebar. Posting in it opens it again.
+
 Organizers have two controls on the roster card while it is asking for confirmations. 📋 opens a private list with **Confirmed Players** and **Declined Players**, for recording what somebody said in chat but never pressed, and 🚀 **Open Tables** ends the wait early and deals the tables there and then. Both edits are posted in the thread naming who made them and who they were about, since the room is waiting on those answers. After the split, 📋 **Move Players** sits under the list of tables and moves people between them.
 
 You do not have to go looking for your table. Each table's lobby post opens by naming which table it is and everybody on it, grouped by the answer they gave, and the list in the main thread links to every table. That post carries the table's own link beside the **Join Draft** button, which hands you a personal link and sends you to the table with a seat for you even when you press it in the wrong thread.
