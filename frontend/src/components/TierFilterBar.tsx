@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { cn } from "../lib/utils";
 import { keyruneClass } from "./Brand";
+import { columnPipClass } from "./TierGrid";
 import { Tooltip } from "./Tooltip";
 import {
   MANA_VALUE_BUCKETS,
@@ -35,6 +36,10 @@ export function TierFilterBar({
     setFilters({ ...filters, [key]: next });
   };
 
+  const pickColor = (value: string) => {
+    setFilters({ ...filters, colors: filters.colors.includes(value) ? [] : [value] });
+  };
+
   const [trendTipOpen, setTrendTipOpen] = useState(false);
   const trendMode =
     filters.trends.length === 2
@@ -56,6 +61,22 @@ export function TierFilterBar({
         : trendMode === "up"
           ? `Show only cards that moved down (${options.trends.down})`
           : "Show all cards";
+
+  const colorGroup = (
+    <FilterGroup label="COLOR" stacked={stacked} joined inline>
+      {options.colors.map((c) => (
+        <IconToggle
+          key={c.value}
+          active={filters.colors.includes(c.value)}
+          onClick={() => pickColor(c.value)}
+          label={`${c.name} (${c.count})`}
+          narrow
+        >
+          <i className={columnPipClass(c.value)} style={{ fontSize: c.value === "M" ? 21 : 15 }} />
+        </IconToggle>
+      ))}
+    </FilterGroup>
+  );
 
   const rarityGroup = (
     <FilterGroup label="RARITY" stacked={stacked} joined>
@@ -194,6 +215,7 @@ export function TierFilterBar({
           {setGroup}
           {trendGroup}
           {artGroup}
+          {colorGroup}
         </div>
       </div>
     );
@@ -222,6 +244,8 @@ function ArtIcon({ hidden }: { hidden: boolean }) {
   );
 }
 
+const LABEL = "font-display text-[13px] tracking-[0.2em] text-muted";
+
 const JOINED = cn(
   "[&>button]:rounded-none",
   "[&>button:first-child]:rounded-l-md [&>button:last-child]:rounded-r-md",
@@ -233,18 +257,31 @@ function FilterGroup({
   children,
   stacked,
   joined = false,
+  inline = false,
   className,
 }: {
   label: string;
   children: ReactNode;
   stacked: boolean;
   joined?: boolean;
+  inline?: boolean;
   className?: string;
 }) {
+  const buttons = <div className={cn("flex", joined ? JOINED : "gap-1.5")}>{children}</div>;
+  if (inline) {
+    return (
+      <div className={cn("flex grow items-center justify-center", className)}>
+        <div className="relative">
+          <span className={cn(LABEL, "absolute right-full top-1/2 mr-2 -translate-y-1/2")}>{label}</span>
+          {buttons}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={cn("flex flex-col", stacked ? "items-center gap-1" : "gap-0.5", className)}>
-      <span className="font-display text-[13px] tracking-[0.2em] text-muted">{label}</span>
-      <div className={cn("flex", joined ? JOINED : "gap-1.5")}>{children}</div>
+      <span className={LABEL}>{label}</span>
+      {buttons}
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { ACTIVE_SET_CODE, TIER_LIST_PREVIEW_SETS } from "../data/constants";
 import {
+  activeFilterCount,
   buildTierListSets,
   EMPTY_FILTERS,
   hasActiveFilters,
@@ -37,12 +38,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerRef = useRef<HTMLDivElement>(null);
 
-  const activeFilterCount =
-    filters.sets.length +
-    filters.manaValues.length +
-    filters.rarities.length +
-    filters.cardTypes.length +
-    filters.trends.length;
+  const filterCount = activeFilterCount(filters);
 
   const liveSet = sets?.find((s) => s.isActive)?.code ?? ACTIVE_SET_CODE;
   const tierListSets = useMemo(() => buildTierListSets(sets), [sets]);
@@ -63,6 +59,12 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
   useEffect(() => {
     setFilters(EMPTY_FILTERS);
   }, [effectiveUid]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setFilters((prev) => (prev.colors.length > 0 ? { ...prev, colors: [] } : prev));
+    }
+  }, [isMobile]);
 
   useEffect(() => {
     const header = headerRef.current;
@@ -126,9 +128,9 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                         />
                       </svg>
                       <span className={cn(skeletons.length > 0 && "hidden min-[400px]:inline")}>Filters</span>
-                      {activeFilterCount > 0 && (
+                      {filterCount > 0 && (
                         <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-green px-1 text-[10px] font-bold text-bg">
-                          {activeFilterCount}
+                          {filterCount}
                         </span>
                       )}
                       <span

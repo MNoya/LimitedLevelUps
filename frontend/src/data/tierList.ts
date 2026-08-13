@@ -147,17 +147,19 @@ export const TIER_GUIDE_BLOCKS: string[][] = [
   ["SB"],
 ];
 
-export const COLOR_CODES = ["W", "U", "B", "R", "G", "M", "C", "L"];
-export const COLOR_NAMES = [
-  "White",
-  "Blue",
-  "Black",
-  "Red",
-  "Green",
-  "Multicolor",
-  "Colorless",
-  "Land",
-];
+// Grid columns and the color filter share one axis: lands fold into the colorless column
+export const COLUMN_CODES = ["W", "U", "B", "R", "G", "M", "C"];
+export const COLUMN_NAMES: Record<string, string> = {
+  W: "White",
+  U: "Blue",
+  B: "Black",
+  R: "Red",
+  G: "Green",
+  M: "Multicolor",
+  C: "Colorless",
+};
+
+export const columnOf = (color: string) => (color === "L" ? "C" : color);
 
 export interface TierCard {
   card_id: number;
@@ -258,6 +260,7 @@ export function manaValueBucket(cmc: number): string {
 // Each group is an OR within itself and AND across groups; empty group = no constraint
 export interface TierFilters {
   sets: string[];
+  colors: string[];
   manaValues: string[];
   rarities: string[];
   cardTypes: string[];
@@ -266,25 +269,32 @@ export interface TierFilters {
 
 export const EMPTY_FILTERS: TierFilters = {
   sets: [],
+  colors: [],
   manaValues: [],
   rarities: [],
   cardTypes: [],
   trends: [],
 };
 
-export function hasActiveFilters(f: TierFilters): boolean {
+export function activeFilterCount(f: TierFilters): number {
   return (
-    f.sets.length > 0 ||
-    f.manaValues.length > 0 ||
-    f.rarities.length > 0 ||
-    f.cardTypes.length > 0 ||
-    f.trends.length > 0
+    f.sets.length +
+    f.colors.length +
+    f.manaValues.length +
+    f.rarities.length +
+    f.cardTypes.length +
+    f.trends.length
   );
+}
+
+export function hasActiveFilters(f: TierFilters): boolean {
+  return activeFilterCount(f) > 0;
 }
 
 function cardMatchesFilters(card: TierCard, f: TierFilters): boolean {
   if (f.trends.length > 0 && (!card.trend || !f.trends.includes(card.trend))) return false;
   if (f.sets.length > 0 && !f.sets.includes(card.expansion)) return false;
+  if (f.colors.length > 0 && !f.colors.includes(columnOf(card.color))) return false;
   if (
     f.manaValues.length > 0 &&
     !f.manaValues.includes(manaValueBucket(card.cmc))
@@ -323,6 +333,7 @@ export function inclusionRank(type: string): number {
 
 export interface TierFilterOptions {
   sets: Array<{ value: string; label: string; count: number }>;
+  colors: Array<{ value: string; name: string; count: number }>;
   rarities: Array<{ value: string; name: string; count: number }>;
   types: Array<{ value: string; label: string; ms: string; count: number }>;
   trends: { up: number; down: number };
@@ -330,6 +341,7 @@ export interface TierFilterOptions {
 
 export function tierFilterOptions(cards: TierCard[]): TierFilterOptions {
   const setInfo = new Map<string, { label: string; count: number }>();
+  const colorCounts = new Map<string, number>();
   const rarityCounts = new Map<string, number>();
   const groupCounts = new Map<string, number>();
   const trendCounts = { up: 0, down: 0 };
@@ -343,6 +355,8 @@ export function tierFilterOptions(cards: TierCard[]): TierFilterOptions {
     } else {
       setInfo.set(card.expansion, { label: card.inclusion_type, count: 1 });
     }
+    const column = columnOf(card.color);
+    colorCounts.set(column, (colorCounts.get(column) ?? 0) + 1);
     rarityCounts.set(card.rarity, (rarityCounts.get(card.rarity) ?? 0) + 1);
     const present = new Set(card.types.map((t) => t.toLowerCase()));
     for (const group of TYPE_GROUPS) {
@@ -363,6 +377,11 @@ export function tierFilterOptions(cards: TierCard[]): TierFilterOptions {
     });
   return {
     sets,
+    colors: COLUMN_CODES.filter((c) => colorCounts.has(c)).map((c) => ({
+      value: c,
+      name: COLUMN_NAMES[c],
+      count: colorCounts.get(c)!,
+    })),
     rarities: RARITY_ORDER.filter((r) => rarityCounts.has(r)).map((r) => ({
       value: r,
       name: RARITY_NAMES[r],

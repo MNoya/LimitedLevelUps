@@ -8,6 +8,9 @@ import { TEXT_OUTLINE } from "../lib/text-styles";
 import { useIsMobile } from "../lib/use-is-mobile";
 import {
   cardFlags,
+  columnOf,
+  COLUMN_CODES,
+  COLUMN_NAMES,
   hasActiveFilters,
   inclusionRank,
   isCardFilteredOut,
@@ -29,8 +32,6 @@ const RARITY_ACCENT: Record<string, string> = {
   M: "#bf4427",
 };
 
-// Grid columns: lands fold into the colorless column, so there are seven, not eight.
-const COLUMN_CODES = ["W", "U", "B", "R", "G", "M", "C"];
 const COLUMN_MS: Record<string, string> = {
   W: "w",
   U: "u",
@@ -40,20 +41,9 @@ const COLUMN_MS: Record<string, string> = {
   M: "multicolor",
   C: "c",
 };
-const COLUMN_NAMES: Record<string, string> = {
-  W: "White",
-  U: "Blue",
-  B: "Black",
-  R: "Red",
-  G: "Green",
-  M: "Multicolor",
-  C: "Colorless",
-};
-
-const columnOf = (color: string) => (color === "L" ? "C" : color);
 
 // Multicolor renders as mana-font's gold duotone glyph (no cost disc), matching untapped.gg.
-function columnPipClass(code: string): string {
+export function columnPipClass(code: string): string {
   if (code === "M") return "ms ms-multicolor ms-duo ms-duo-color ms-grad";
   return `ms ms-cost ms-${COLUMN_MS[code]}`;
 }
