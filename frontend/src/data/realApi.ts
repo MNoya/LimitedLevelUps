@@ -188,7 +188,7 @@ export async function fetchLeaderboard(setCode: string): Promise<LeaderboardRow[
       .eq("set_code", setCode),
     client()
       .from("public_pod_scoring")
-      .select("slug, display_name, avatar_url, trophies, wins_2_1, leaderboard_opt_in")
+      .select("slug, display_name, avatar_url, trophies, two_win_finishes, one_win_finishes, leaderboard_opt_in")
       .eq("set_code", setCode),
     client()
       .from("public_self_reported_events")
@@ -242,7 +242,11 @@ export async function fetchLeaderboard(setCode: string): Promise<LeaderboardRow[
     const r = raw as Record<string, unknown>;
     if (r.leaderboard_opt_in === false) continue;
     const podTrophies = (r.trophies as number) ?? 0;
-    const bonus = podPoints(podTrophies, (r.wins_2_1 as number) ?? 0);
+    const bonus = podPoints(
+      podTrophies,
+      (r.two_win_finishes as number) ?? 0,
+      (r.one_win_finishes as number) ?? 0,
+    );
     if (bonus === 0) continue;
     const slug = r.slug as string;
     const existing = bySlug.get(slug);
@@ -428,14 +432,15 @@ export async function fetchFormatLeaderboard(
       .map((raw) => {
         const r = raw as Record<string, unknown>;
         const trophies = (r.trophies as number) ?? 0;
-        const wins21 = (r.wins_2_1 as number) ?? 0;
+        const twoWins = (r.two_win_finishes as number) ?? 0;
+        const oneWins = (r.one_win_finishes as number) ?? 0;
         return {
           setCode,
           slug: r.slug as string,
           displayName: (r.display_name as string) ?? (r.slug as string),
           avatarUrl: (r.avatar_url ?? null) as string | null,
           rank: 0,
-          score: podPoints(trophies, wins21),
+          score: podPoints(trophies, twoWins, oneWins),
           trophies,
           events: (r.events as number) ?? 0,
           wins: (r.wins as number) ?? 0,
@@ -986,8 +991,9 @@ export async function fetchPlayerProfile(
   if (podResp.data) {
     const p = podResp.data as Record<string, unknown>;
     podTrophies = (p.trophies as number) ?? 0;
-    const wins21 = (p.wins_2_1 as number) ?? 0;
-    const pts = podPoints(podTrophies, wins21);
+    const twoWins = (p.two_win_finishes as number) ?? 0;
+    const oneWins = (p.one_win_finishes as number) ?? 0;
+    const pts = podPoints(podTrophies, twoWins, oneWins);
     if (pts > 0) {
       breakdown.push({
         setCode,
@@ -997,7 +1003,8 @@ export async function fetchPlayerProfile(
         wins: (p.wins as number) ?? 0,
         losses: (p.losses as number) ?? 0,
         trophies: podTrophies,
-        wins21,
+        twoWins,
+        oneWins,
         scoreContribution: pts,
       });
     }

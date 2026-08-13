@@ -13,7 +13,8 @@ export interface BreakdownRow {
   rate: number;
   isLcq: boolean;
   isPod: boolean;
-  wins21: number;
+  twoWins: number;
+  oneWins: number;
   score: number;
 }
 
@@ -66,7 +67,8 @@ function rowFor(
       rate: winrate,
       isLcq: true,
       isPod: false,
-      wins21: 0,
+      twoWins: 0,
+    oneWins: 0,
       score,
     };
   }
@@ -83,7 +85,8 @@ function rowFor(
     rate: trophyRate,
     isLcq: false,
     isPod: false,
-    wins21: 0,
+    twoWins: 0,
+    oneWins: 0,
     score,
   };
 }
@@ -100,7 +103,8 @@ function podRow(pod: PlayerFormatBreakdown): BreakdownRow {
     rate: 0,
     isLcq: false,
     isPod: true,
-    wins21: pod.wins21 ?? 0,
+    twoWins: pod.twoWins ?? 0,
+    oneWins: pod.oneWins ?? 0,
     score: pod.scoreContribution,
   };
 }

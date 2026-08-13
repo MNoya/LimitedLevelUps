@@ -2,6 +2,7 @@ import pytest
 
 from bot.services import pod_bracket
 from bot.services.pod_tournament import format_result_change
+from bot.services.pod_swiss import BYE_NAME, BYE_SCORE
 from bot.tests.pod_helpers import match, pairset, players
 
 
@@ -348,3 +349,32 @@ def test_format_result_change_drops_arena_ids_from_both_players():
 
     assert "#48087" not in phrase and "#13488" not in phrase
     assert all(part in phrase for part in ("Arcyl", "Bramblewick", "2-0"))
+
+
+def test_a_forfeited_bye_sinks_the_dropped_player_into_the_losers_group():
+    roster = players(8)
+    completed = [
+        match(1, "p0", "p1", "p0", BYE_SCORE),  # p1 dropped
+        match(1, "p2", "p3", "p2"), match(1, "p4", "p5", "p4"), match(1, "p6", "p7", "p6"),
+    ]
+
+    new = pod_bracket.incremental_pairings(roster, completed, [], 2, source_round_complete=True)
+
+    assert pod_bracket.player_records(roster, completed)["p1"] == (0, 1)
+    dropped_pair = next(set(p) for p in new if "p1" in p)
+    assert dropped_pair <= {"p1", "p3", "p5", "p7"}
+
+
+def test_an_odd_pool_floats_a_bye_to_the_worst_record():
+    roster = players(7)
+    completed = [
+        match(1, "p0", "p1", "p0"), match(1, "p2", "p3", "p2"), match(1, "p4", "p5", "p4"),
+        match(1, "p6", BYE_NAME, "p6", BYE_SCORE),
+    ]
+
+    new = pod_bracket.incremental_pairings(roster, completed, [], 2, source_round_complete=True)
+
+    byes = [p for p in new if BYE_NAME in p]
+    assert len(byes) == 1
+    assert byes[0][0] in {"p1", "p3", "p5"}  # a 0-1, never one of the winners
+    assert len(new) == 4

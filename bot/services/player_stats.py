@@ -82,7 +82,7 @@ def process_stats(
     ]
     breakdown = compute_score_breakdown(stat_dicts)
     pod = pod_summary_by_set_for_player(session, player.id).get(magic_set.code)
-    pod_pts = pod_points(pod.trophies, pod.wins_2_1) if pod else 0
+    pod_pts = pod_points(pod.trophies, pod.two_win_finishes, pod.one_win_finishes) if pod else 0
     total_score = compute_score(stat_dicts) + pod_pts
     draft_trophies = sum(int(r.trophies or 0) for r in stats_rows)
     total_trophies = draft_trophies + (pod.trophies if pod else 0)
@@ -153,7 +153,7 @@ def render_embed(data: StatsData) -> discord.Embed:
         wr = p.wins / games if games else 0.0
         events_word = "event" if p.events == 1 else "events"
         trophy_word = "trophy" if p.trophies == 1 else "trophies"
-        points = pod_points(p.trophies, p.wins_2_1)
+        points = pod_points(p.trophies, p.two_win_finishes, p.one_win_finishes)
         pod_suffix = f" · **+{points:.0f} pts**" if points else ""
         embed.description = (
             f"{embed.description}\n"
@@ -205,11 +205,11 @@ def rank_players_for_set(
     standings: list[RankedPlayer] = []
     for pid, (slug, name, did) in identities.items():
         rows = stats_by_player.get(pid, [])
-        pod_trophies, pod_wins_2_1 = pod_counts.get(pid, (0, 0))
+        pod_trophies, pod_two_wins, pod_one_wins = pod_counts.get(pid, (0, 0, 0))
         standings.append(RankedPlayer(
             rank=0,
             player_id=pid, slug=slug, display_name=name, discord_id=did,
-            score=compute_score(rows) + pod_points(pod_trophies, pod_wins_2_1),
+            score=compute_score(rows) + pod_points(pod_trophies, pod_two_wins, pod_one_wins),
             trophies=sum(r["trophies"] for r in rows) + pod_trophies,
         ))
 

@@ -7,6 +7,8 @@ group — a seeded proximity bracket where the top seed faces the player half th
 the neighbour, keeping top seeds apart until the final. Pairing down to the next group when a group is odd,
 always rematch-free.
 Tiebreakers follow MTR §1.6: per-opponent terms in OMW%/OGW% are floored at 1/3.
+A bye is a match won without playing it, scored as MTR does: a 2-0 win for the player holding it, and
+excluded from every opponent average since there is no opponent to average in.
 """
 from __future__ import annotations
 
@@ -14,7 +16,11 @@ import random
 from dataclasses import dataclass
 
 
+BYE_SCORE = "bye"
+BYE_NAME = "(bye)"
+
 _MIN_PCT = 1.0 / 3.0  # MTR floor for OMW% / OGW% per-opponent terms
+_BYE_GAMES = (2, 0)
 @dataclass(frozen=True)
 class Player:
     id: str    # stable per-tournament identifier (we use draftmancer_name)
@@ -33,6 +39,11 @@ class MatchOutcome:
     @property
     def loser_id(self) -> str:
         return self.player_b_id if self.winner_id == self.player_a_id else self.player_a_id
+
+    @property
+    def is_bye(self) -> bool:
+        """A win awarded without a game: an odd field's floated bye, or an opponent who dropped"""
+        return self.score == BYE_SCORE
 
     def games_for(self, player_id: str) -> tuple[int, int]:
         """Returns (games_won, games_lost) for player_id; score is always 'winner_games-loser_games'."""
@@ -73,6 +84,8 @@ def pair_round(
     standings decide everything and a neighbour rematch from the seating no longer matters.
     Raises ValueError if no rematch-free pairing exists.
     """
+    if len(players) % 2 == 1:
+        return _pair_with_bye(players, prior_matches, round_num, rng=rng, final_round=final_round)
     if len(players) < 2:
         return []
     if round_num == 1:
@@ -95,6 +108,39 @@ def pair_round(
     if result is None:
         raise ValueError(f"no valid pairing for round {round_num}")
     return result
+
+
+def _pair_with_bye(
+    players: list[Player],
+    prior_matches: list[MatchOutcome],
+    round_num: int,
+    *,
+    rng: random.Random | None,
+    final_round: bool,
+) -> list[tuple[str, str]]:
+    """Odd field: one player takes the bye, appended as a pairing against BYE_NAME, and the rest pair
+    normally. Steps to the next candidate when removing one strands the remainder in a rematch."""
+    for candidate in _bye_candidates(players, prior_matches):
+        remaining = [p for p in players if p.id != candidate.id]
+        try:
+            pairings = pair_round(remaining, prior_matches, round_num, rng=rng, final_round=final_round)
+        except ValueError:
+            continue
+        return pairings + [(candidate.id, BYE_NAME)]
+    raise ValueError(f"no valid pairing for round {round_num}")
+
+
+def _bye_candidates(players: list[Player], prior_matches: list[MatchOutcome]) -> list[Player]:
+    """Worst standing first, anyone already holding a bye last, so MTR's bye floats to the bottom.
+    Before any match is reported there is no standing to float on, so the last seat takes it."""
+    if prior_matches:
+        by_id = {p.id: p for p in players}
+        standings = compute_standings(players, prior_matches)
+        ordered = [by_id[s.player_id] for s in reversed(standings) if s.player_id in by_id]
+    else:
+        ordered = sorted(players, key=lambda p: -_seat_key(p))
+    held = {m.winner_id for m in prior_matches if m.is_bye}
+    return [p for p in ordered if p.id not in held] + [p for p in ordered if p.id in held]
 
 
 def _pair_proximity(
@@ -160,6 +206,14 @@ def compute_standings(
 
     for m in matches:
         a, b = m.player_a_id, m.player_b_id
+        if m.is_bye:
+            if m.winner_id in by_id:
+                wins[m.winner_id] += 1
+                games_won[m.winner_id] += _BYE_GAMES[0]
+                games_lost[m.winner_id] += _BYE_GAMES[1]
+            if m.loser_id in by_id:
+                losses[m.loser_id] += 1
+            continue
         if a not in by_id or b not in by_id:
             continue
         if m.winner_id == a:
@@ -211,6 +265,20 @@ def compute_standings(
         )
         for i, p in enumerate(ranked)
     ]
+
+
+def played_record(player_id: str, matches: list[MatchOutcome]) -> tuple[int, int]:
+    """(wins, losses) counting a bye as a win for whoever held it and as nothing for the player who
+    forfeited it, so a drop leaves only the matches they actually played on their record"""
+    wins = losses = 0
+    for m in matches:
+        if player_id not in (m.player_a_id, m.player_b_id):
+            continue
+        if m.winner_id == player_id:
+            wins += 1
+        elif not m.is_bye:
+            losses += 1
+    return wins, losses
 
 
 _UNSEEDED = 1_000_000  # players without a known draft seat sort after every seated player

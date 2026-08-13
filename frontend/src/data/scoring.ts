@@ -16,7 +16,8 @@ import {
   BUCKET_DEFS,
   formatsForBucket,
   POD_TROPHY_POINTS,
-  POD_WIN_2_1_POINTS,
+  POD_TWO_WIN_POINTS,
+  POD_ONE_WIN_POINTS,
 } from "./format-buckets";
 
 interface QueueGroup {
@@ -55,8 +56,11 @@ export interface Aggregate {
   contributionByLabel: Map<string, number>;
 }
 
-export function podPoints(trophies: number, wins21: number): number {
-  return trophies * POD_TROPHY_POINTS + wins21 * POD_WIN_2_1_POINTS;
+// Floored so fractional one-win finishes bank across pods, mirroring bot/scoring.py pod_points().
+export function podPoints(trophies: number, twoWins: number, oneWins: number): number {
+  return Math.floor(
+    trophies * POD_TROPHY_POINTS + twoWins * POD_TWO_WIN_POINTS + oneWins * POD_ONE_WIN_POINTS,
+  );
 }
 
 export function confidenceFactor(totalTrophies: number): number {

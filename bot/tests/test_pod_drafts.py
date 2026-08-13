@@ -347,8 +347,8 @@ def test_pod_summary_by_set_aggregates_per_set(session):
     ])
 
     summary = pod_summary_by_set_for_player(session, player.id)
-    assert summary["SOS"] == (1, 3, 0, 1, 0)   # events, wins, losses, trophies, wins_2_1
-    assert summary["ECL"] == (1, 2, 1, 0, 1)
+    assert summary["SOS"] == (1, 3, 0, 1, 0, 0)   # events, wins, losses, trophies, two-win, one-win
+    assert summary["ECL"] == (1, 2, 1, 0, 1, 0)
 
 
 def test_pod_summary_trophy_from_pod_win_without_3_0(session):
@@ -362,7 +362,7 @@ def test_pod_summary_trophy_from_pod_win_without_3_0(session):
 
     summary = pod_summary_by_set_for_player(session, player.id)
     assert summary["SOS"].trophies == 1   # 2-1 that won the pod counts as a trophy
-    assert summary["SOS"].wins_2_1 == 0   # not also a 2-1 finish
+    assert summary["SOS"].two_win_finishes == 0   # not also a two-win finish
 
 
 def test_pod_summary_team_finishes_score_by_record_only(session):
@@ -381,7 +381,7 @@ def test_pod_summary_team_finishes_score_by_record_only(session):
     summary = pod_summary_by_set_for_player(session, player.id)
     assert summary["SOS"].events == 2      # placement-less finishes still count
     assert summary["SOS"].trophies == 1    # the 3-0, on record alone
-    assert summary["SOS"].wins_2_1 == 1    # a 2-1 without placement stays a 2-1
+    assert summary["SOS"].two_win_finishes == 1    # a 2-1 without placement stays a two-win finish
 
 
 def test_pod_summary_empty_for_unknown_player(session):

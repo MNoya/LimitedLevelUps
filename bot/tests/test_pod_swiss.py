@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from bot.services.pod_swiss import Player, compute_standings, pair_round
+from bot.services.pod_swiss import BYE_NAME, BYE_SCORE, Player, compute_standings, pair_round, played_record
 from bot.tests.pod_helpers import match, pairset, players
 
 
@@ -354,3 +354,63 @@ def test_8_player_round_2_pairs_within_brackets():
     losers = {"p1", "p3", "p5", "p7"}
     # All pairings should be winner-vs-winner or loser-vs-loser
     assert all(p.issubset(winners) or p.issubset(losers) for p in pair_set)
+
+
+def test_bye_counts_as_a_win_and_leaves_the_dropped_player_no_loss_on_record():
+    roster = players(4)
+    matches = [
+        match(1, "p0", "p1", "p0", BYE_SCORE),
+        match(1, "p2", "p3", "p2", "2-1"),
+    ]
+
+    standings = compute_standings(roster, matches)
+
+    by_id = {s.player_id: s for s in standings}
+    assert (by_id["p0"].wins, by_id["p0"].losses) == (1, 0)
+    assert (by_id["p1"].wins, by_id["p1"].losses) == (0, 1)
+    assert played_record("p0", matches) == (1, 0)
+    assert played_record("p1", matches) == (0, 0)
+
+
+def test_bye_is_left_out_of_every_opponent_average():
+    roster = players(4)
+    matches = [
+        match(1, "p0", "p1", "p0", BYE_SCORE),
+        match(1, "p2", "p3", "p2", "2-0"),
+    ]
+
+    standings = compute_standings(roster, matches)
+
+    by_id = {s.player_id: s for s in standings}
+    assert (by_id["p0"].omw_pct, by_id["p0"].ogw_pct) == (0.0, 0.0)
+    assert by_id["p2"].omw_pct > 0.0
+
+
+def test_odd_field_floats_the_bye_to_the_bottom_of_the_standings():
+    roster = players(5)
+    matches = [
+        match(1, "p0", "p1", "p0", "2-0"),
+        match(1, "p2", "p3", "p2", "2-0"),
+    ]
+
+    pairings = pair_round(roster, matches, 2)
+
+    byes = [pair for pair in pairings if BYE_NAME in pair]
+    assert byes == [("p4", BYE_NAME)]
+    assert len(pairings) == 3
+
+
+def test_a_second_bye_skips_whoever_already_held_one():
+    roster = players(5)
+    matches = [
+        match(1, "p0", "p1", "p0", "2-0"),
+        match(1, "p2", "p3", "p2", "2-0"),
+        match(1, "p4", BYE_NAME, "p4", BYE_SCORE),
+        match(2, "p1", "p3", "p1", "2-0"),
+        match(2, "p0", "p2", "p0", "2-0"),
+    ]
+
+    pairings = pair_round(roster, matches, 3)
+
+    byes = [pair for pair in pairings if BYE_NAME in pair]
+    assert byes and byes[0][0] != "p4"

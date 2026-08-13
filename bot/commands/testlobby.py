@@ -104,6 +104,8 @@ from bot.services.pod_team_vote import (
     team_vote_needed,
 )
 from bot.services.pod_tournament import (
+    BYE_NAME,
+    BYE_SCORE,
     MSG_PICK_ROUND,
     REVIEW_EMOJI,
     ManageRoundsPickerView,
@@ -1239,6 +1241,18 @@ def _later_round_preview_states(round_num: int, size: int = 8) -> list[dict]:
     return states
 
 
+def _bye_round_preview_states() -> list[dict]:
+    """Round-2 states covering every line a drop produces, fed through the prod `round_embed` builder:
+    a match forfeited to the opponent, an odd field's floated bye, a played result, and a pending one."""
+    states = _later_round_preview_states(2)
+    states[0]["winner_name"], states[0]["score"] = states[0]["a_name"], BYE_SCORE
+    states[1]["b_name"] = states[1]["b_display"] = BYE_NAME
+    states[1]["b_arena"] = None
+    states[1]["winner_name"], states[1]["score"] = states[1]["a_name"], BYE_SCORE
+    states[2]["winner_name"], states[2]["score"] = states[2]["b_name"], "2-1"
+    return states
+
+
 _THREAD_NAME = "SOS Pod Draft #3 - May 15"
 _DRAFTMANCER_URL = f"{settings.draftmancer_web_url}/?session=LLUT-SOS-May-15-D"
 _UNLINKED_SEAT = "Stranger#12345"
@@ -1897,6 +1911,10 @@ async def setup(bot: commands.Bot) -> None:
 
         if state == "round1":
             await ctx.send(embed=round_embed(1, _round1_preview_states(seated=extra != "random")))
+            return
+
+        if state == "round2" and extra == "bye":
+            await ctx.send(embed=round_embed(2, _bye_round_preview_states()))
             return
 
         if state in ("round2", "round3"):

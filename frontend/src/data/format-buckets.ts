@@ -9,12 +9,13 @@ interface BucketGroup {
 
 const config = bucketsConfig as {
   groups: BucketGroup[];
-  pod?: { trophy_points?: number; win_2_1_points?: number };
+  pod?: { trophy_points?: number; two_win_points?: number; one_win_points?: number };
 };
 const GROUPS: readonly BucketGroup[] = config.groups;
 
 export const POD_TROPHY_POINTS = config.pod?.trophy_points ?? 5;
-export const POD_WIN_2_1_POINTS = config.pod?.win_2_1_points ?? 2;
+export const POD_TWO_WIN_POINTS = config.pod?.two_win_points ?? 2;
+export const POD_ONE_WIN_POINTS = config.pod?.one_win_points ?? 0.5;
 
 export const FORMAT_BUCKETS: Record<string, string> = Object.fromEntries(
   GROUPS.flatMap((g) => g.formats.map((fmt) => [fmt, g.label] as const)),

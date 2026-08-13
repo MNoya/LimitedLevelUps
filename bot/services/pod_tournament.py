@@ -99,7 +99,7 @@ from bot.services.pod_drafts import (
     submit_deck_dm_for_participant,
     upsert_dm_message,
 )
-from bot.services.pod_swiss import MatchOutcome, Player
+from bot.services.pod_swiss import BYE_NAME, BYE_SCORE, MatchOutcome, Player
 
 
 if TYPE_CHECKING:
@@ -113,6 +113,10 @@ MAX_MATCHES_PER_ROUND = 5  # Discord caps ActionRows at 5; supports pods up to 1
 SKIPPED_SENTINEL = "(skipped)"  # winner_name value for "Not played" matches
 CLEAR_SENTINEL = "(clear)"  # transient value from the dropdown; commits NULL winner/score
 RESULT_KEEP = "(keep)"  # reorganize-editor value: leave the recorded result untouched
+
+MSG_DM_BYE = "⏭️ You win this round (bye)"
+MSG_DM_DROPPED = "🏳️ You dropped from the pod"
+MSG_DROPPED_TAG = "dropped"
 
 # Pairing group kinds \u2014 the data model for a round's brackets, independent of how they render
 WINNERS = "winners"
@@ -138,6 +142,9 @@ MSG_PICK_ROUND = "Pick the round to reorganize"
 PICK_ROUND_PLACEHOLDER = "Choose Round"
 MSG_FIX_SAME_PLAYER = "Pick two different players for the match"
 MSG_FIX_MATCH_GONE = "That match no longer exists. Reopen the editor to see the current round"
+MSG_DROP_PROMPT = "Pick the player who left. Every match they have left becomes a bye for their opponent"
+MSG_DROP_NOBODY_LEFT = "Everyone in this pod has already dropped"
+DROP_EMOJI = "🏳️"
 POD_PAIRING_FAILED_MSG = (
     "⚠️ Round {round_num} pairings couldn't be generated. Reported results are safe, but the next "
     "round won't post on its own. An Organizer needs to start it."
@@ -269,6 +276,7 @@ async def _dm_round_pairings(
     dm_info = await asyncio.to_thread(load_dm_info_sync, event_id)
     event_name = await asyncio.to_thread(load_event_name_sync, event_id)
     match_states = await asyncio.to_thread(_load_round_states, event_id, round_num)
+    dropped = await asyncio.to_thread(load_dropped_names, event_id)
     mark_trophy_match(match_states, round_num)
     by_match_id = {m["match_id"]: m for m in match_states}
     for match_id, a_name, b_name in pending_rows:
@@ -276,6 +284,8 @@ async def _dm_round_pairings(
         a_key = normalize_player_name(a_name)
         b_key = normalize_player_name(b_name)
         for recipient_key, opponent_key in ((a_key, b_key), (b_key, a_key)):
+            if recipient_key in dropped:
+                continue
             recipient = dm_info.get(recipient_key)
             reuse = None
             if reuse_dms and recipient is not None:
@@ -443,8 +453,9 @@ def _build_standings_row(
         if inline_caption and data is not None and data.screenshot_caption else ""
     )
     caption_inline = f"  _{escape_italics(caption_cleaned)}_" if caption_cleaned else ""
+    dropped_suffix = f"  _{MSG_DROPPED_TAG}_" if info.get("dropped") else ""
     return (
-        f"{prefix}{rendered}  {s.wins}-{s.losses}"
+        f"{prefix}{rendered}  {s.wins}-{s.losses}{dropped_suffix}"
         f"{caption_inline}{color_suffix}{log_suffix}"
     )
 
@@ -464,8 +475,9 @@ def build_pairing_dm_embed(
 
     `opponent_label` is the pre-formatted opponent string — see `_opponent_dm_label`. When
     `match_state` carries a winner, a status line ('✅ You won 2-1' / '❌ You lost 2-0' /
-    '🚫 Not played') is appended; the line's
+    '🚫 Not played' / the bye line) is appended; the line's
     perspective is set by `viewer_is_a` (True if the recipient is player_a in the match).
+    An odd field's bye has no opponent to name, so that DM carries the bye line alone.
     """
     short = short_event_name(event_name)
     suffix = "Updated" if updated else "Started"
@@ -474,16 +486,21 @@ def build_pairing_dm_embed(
 
     mtga = emojis.get("mtga")
     arena_part = f" {mtga} `{opponent_arena}`" if opponent_arena else ""
-    body_lines = [f"Opponent: {opponent_label}{arena_part}"]
+    no_opponent = bool(match_state) and BYE_NAME in (match_state.get("a_name"), match_state.get("b_name"))
+    body_lines = [] if no_opponent else [f"Opponent: {opponent_label}{arena_part}"]
 
     if match_state and match_state.get("winner_name"):
         winner = match_state["winner_name"]
         score = match_state.get("score") or ""
-        if winner == SKIPPED_SENTINEL:
-            body_lines.append("🚫 Not played")
-        elif viewer_is_a is not None:
+        you_won = None
+        if viewer_is_a is not None:
             winner_is_a = winner.lower() == (match_state.get("a_name") or "").lower()
             you_won = winner_is_a if viewer_is_a else not winner_is_a
+        if winner == SKIPPED_SENTINEL:
+            body_lines.append("🚫 Not played")
+        elif score == BYE_SCORE:
+            body_lines.append(MSG_DM_DROPPED if you_won is False else MSG_DM_BYE)
+        elif you_won is not None:
             body_lines.append(f"✅ You won {score}" if you_won else f"▫️ You lost {score}")
         else:
             body_lines.append(f"Result: {winner} {score}")
@@ -1157,6 +1174,7 @@ async def advance_to_round(manager: "PodDraftManager", round_num: int) -> None:
     standings_by_id = {s.player_id: s for s in pod_swiss.compute_standings(players, prior)}
     displays = await asyncio.to_thread(load_participant_displays, manager.event_id)
     match_states = [_state_for_pending(match_id, a, b, standings_by_id, displays) for match_id, a, b in pending_rows]
+    await asyncio.to_thread(stamp_reported_byes, manager.event_id, round_num, match_states)
     mark_trophy_match(match_states, round_num)
     if manager.pairing_mode == "bracket":
         for m in match_states:
@@ -1178,6 +1196,7 @@ async def advance_to_round(manager: "PodDraftManager", round_num: int) -> None:
         if round_num == 1:
             asyncio.create_task(send_submit_deck_dms(manager.bot, manager.event_id))
         await _attach_round_link(manager, round_num - 1)
+        await settle_auto_forfeits(manager.bot, manager.event_id, [mid for mid, _, _ in pending_rows])
 
 
 async def persist_round_entry_artifacts(manager: "PodDraftManager", round_num: int) -> None:
@@ -1331,7 +1350,7 @@ class RoundResultsView(ui.View):
                 match_states = [m for _, group in round_groups(round_num, match_states) for m in group]
             next_row = 0
             for slot, m in enumerate(match_states):
-                if m.get("locked"):
+                if m.get("locked") or m.get("score") == BYE_SCORE:
                     continue
                 if m.get("placeholder"):
                     trophy = "🏆 " if m.get("is_trophy_match") else ""
@@ -1447,6 +1466,10 @@ class FixPairingView(ui.View):
         ])
         match_select.callback = self._on_match
         self.add_item(match_select)
+        if self.selected_match is None:
+            drop = ui.Button(label="Drop Player", emoji=DROP_EMOJI, style=discord.ButtonStyle.danger, row=1)
+            drop.callback = self._on_drop
+            self.add_item(drop)
         if self.selected_match is not None:
             self.add_item(self._player_select("a", self.selected_a, row=1))
             self.add_item(self._player_select("b", self.selected_b, row=2))
@@ -1535,6 +1558,21 @@ class FixPairingView(ui.View):
     async def _on_cancel(self, interaction: discord.Interaction) -> None:
         self.stop()
         await interaction.response.edit_message(content="No changes made", view=None)
+
+    async def _on_drop(self, interaction: discord.Interaction) -> None:
+        dropped = await asyncio.to_thread(load_dropped_names, self.event_id)
+        remaining = [
+            (name, display) for name, display in self.roster
+            if normalize_player_name(name) not in dropped and name != BYE_NAME
+        ]
+        if not remaining:
+            await interaction.response.send_message(MSG_DROP_NOBODY_LEFT, ephemeral=True)
+            return
+        await interaction.response.send_message(
+            MSG_DROP_PROMPT,
+            view=DropPlayerView(self.event_id, self.round_num, remaining, self.round_message),
+            ephemeral=True,
+        )
 
     async def _on_save(self, interaction: discord.Interaction) -> None:
         if self.selected_match is None:
@@ -1634,6 +1672,94 @@ class FixPairingView(ui.View):
         head = format_round_change(self.round_num, phrase, pairings_url, ORGANIZER_CORRECTED_LEAD)
         await bracket_regenerate_downstream(manager, self.round_num, head)
         return True
+
+
+class DropPlayerView(ui.View):
+    """Ephemeral organizer confirm: pick who left, then commit. A drop can't be undone, so the button
+    only arms once a name is chosen."""
+
+    def __init__(self, event_id: str, round_num: int, roster: list[tuple[str, str]],
+                 round_message: discord.Message | None):
+        super().__init__(timeout=300)
+        self.event_id = event_id
+        self.round_num = round_num
+        self.roster = roster
+        self.round_message = round_message
+        self.selected: str | None = None
+        self._build_items()
+
+    def _build_items(self) -> None:
+        self.clear_items()
+        select = ui.Select(placeholder="Player who dropped…", row=0, options=[
+            discord.SelectOption(label=display[:100], value=name[:100], default=name == self.selected)
+            for name, display in self.roster[:25]
+        ])
+        select.callback = self._on_select
+        self.add_item(select)
+        confirm = ui.Button(label="Confirm Drop", emoji=DROP_EMOJI, style=discord.ButtonStyle.danger,
+                            row=1, disabled=self.selected is None)
+        confirm.callback = self._on_confirm
+        self.add_item(confirm)
+
+    async def _on_select(self, interaction: discord.Interaction) -> None:
+        self.selected = interaction.data["values"][0]
+        self._build_items()
+        await interaction.response.edit_message(view=self)
+
+    async def _on_confirm(self, interaction: discord.Interaction) -> None:
+        if self.selected is None:
+            return
+        await interaction.response.defer()
+        forfeited = await asyncio.to_thread(apply_drop, self.event_id, self.selected, self.round_num)
+        self.stop()
+        display = _roster_display(self.roster, self.selected)
+        try:
+            await interaction.delete_original_response()
+        except discord.HTTPException:
+            log.warning("could not dismiss drop editor", exc_info=True)
+        log.info(
+            f"[{self.event_id}] R{self.round_num} dropped {self.selected} "
+            f"forfeited={len(forfeited)} by {actor_label(interaction)}"
+        )
+        await announce_round_result(
+            interaction.client, self.event_id, format_drop_announcement(self.round_num, display),
+        )
+        await _refresh_round_message_after_edit(
+            interaction.client, self.round_message, self.event_id, self.round_num,
+            forfeited[0] if forfeited else "",
+        )
+        await settle_auto_forfeits(interaction.client, self.event_id, forfeited)
+
+
+def format_drop_announcement(round_num: int, display: str) -> str:
+    return f"{DROP_EMOJI} **{round_link_target(round_num)} Drop:** {display}"
+
+
+def apply_drop(event_id: str, draftmancer_name: str, round_num: int) -> list[str]:
+    """Mark a player out of the pod and forfeit every match of theirs still open, in this round and any
+    later one already paired. Returns the forfeited match ids. Their played results stand; from here
+    each pairing they land in is reported for them, so the pod finishes without them."""
+    with SessionLocal() as session:
+        key = normalize_player_name(draftmancer_name)
+        participants = session.execute(
+            select(PodDraftParticipant).where(PodDraftParticipant.event_id == event_id)
+        ).scalars().all()
+        for participant in participants:
+            if normalize_player_name(participant.draftmancer_name or "") == key:
+                participant.dropped_round = round_num
+        dropped = dropped_names_sync(session, event_id) | {key}
+        open_matches = session.execute(
+            select(PodDraftMatch).where(
+                PodDraftMatch.event_id == event_id,
+                PodDraftMatch.winner_name.is_(None),
+            )
+        ).scalars().all()
+        forfeited = []
+        for match in open_matches:
+            if forfeit_unplayable_match(session, match, dropped) is not None:
+                forfeited.append(match.id)
+        session.commit()
+    return forfeited
 
 
 async def build_round_editor(
@@ -2484,15 +2610,15 @@ async def finalize_tournament(manager: "PodDraftManager") -> None:
     players = manager.tournament_players
     standings = pod_swiss.compute_standings(players, prior)
 
-    final_standings = [
-        FinalStanding(
+    final_standings = []
+    for s in standings:
+        wins, losses = pod_swiss.played_record(s.player_id, prior)
+        final_standings.append(FinalStanding(
             draftmancer_name=s.player_name,
             placement=s.rank,
-            record=f"{s.wins}-{s.losses}",
+            record=f"{wins}-{losses}",
             eliminated_round=None if s.rank == 1 else TOTAL_ROUNDS,
-        )
-        for s in standings
-    ]
+        ))
 
     def _do_write() -> None:
         with SessionLocal() as session:
@@ -2521,7 +2647,7 @@ def _load_participant_slugs(event_id: str) -> dict[str, str]:
 
 
 def load_participant_displays(event_id: str) -> dict[str, dict]:
-    """Map normalized name → {'display_name', 'slug', 'arena', 'discord_id'}.
+    """Map normalized name → {'display_name', 'slug', 'arena', 'discord_id', 'dropped'}.
 
     Indexed by both draftmancer_name and the participant's display_name so pre-draft and post-draft
     participants both resolve. The display_name we *expose* prefers Player.display_name (the Discord
@@ -2538,16 +2664,18 @@ def load_participant_displays(event_id: str) -> dict[str, dict]:
                 DbPlayer.slug,
                 DbPlayer.arena_name,
                 DbPlayer.discord_id,
+                PodDraftParticipant.dropped_round,
             )
             .outerjoin(DbPlayer, DbPlayer.id == PodDraftParticipant.player_id)
             .where(PodDraftParticipant.event_id == event_id)
         ).all()
     out: dict[str, dict] = {}
-    for dm, participant_dn, player_dn, slug, arena, discord_id in rows:
+    for dm, participant_dn, player_dn, slug, arena, discord_id, dropped_round in rows:
         raw = player_dn or participant_dn
         display = strip_arena_suffix(raw) if raw else raw
         arena_ref = arena or _first_arena_handle(dm, participant_dn)
-        info = {"display_name": display, "slug": slug, "arena": arena_ref, "discord_id": discord_id}
+        info = {"display_name": display, "slug": slug, "arena": arena_ref, "discord_id": discord_id,
+                "dropped": dropped_round is not None}
         if dm:
             out[normalize_player_name(dm)] = info
         if participant_dn:
@@ -4524,13 +4652,19 @@ def match_displays(m: dict) -> tuple[str, str]:
 
 
 def format_reported_result(m: dict) -> str:
-    """A reported match as plain text, display names preferred: 'Marlo wins 2-1 vs Bob'. Shared by
-    the round-results list and the live per-result announcement so their wording can't drift."""
+    """A reported match as plain text, display names preferred: 'Marlo wins 2-1 vs Bob'. A match won
+    without playing it reads 'Marlo wins vs Bob (bye)', or 'Marlo wins (bye)' where an odd field left
+    no opponent at all. Shared by the round-results list and the live per-result announcement so their
+    wording can't drift."""
     a_disp, b_disp = match_displays(m)
     if m["winner_name"].lower() == m["a_name"].lower():
         winner_disp, loser_disp = a_disp, b_disp
     else:
         winner_disp, loser_disp = b_disp, a_disp
+    if m["score"] == BYE_SCORE:
+        if m["a_name"] == BYE_NAME or m["b_name"] == BYE_NAME:
+            return f"{winner_disp} wins (bye)"
+        return f"{winner_disp} wins vs {loser_disp} (bye)"
     return f"{winner_disp} wins {m['score']} vs {loser_disp}"
 
 
@@ -4787,11 +4921,16 @@ def insert_pending_matches(
 ) -> list[tuple[str, str, str]]:
     """Insert pending match rows for a round and bump the event's current_round. `start_index` lets
     the bracket pairer append to a round already partly posted without colliding pairing_index;
-    current_round only ever advances so several open bracket rounds don't make it thrash backwards."""
+    current_round only ever advances so several open bracket rounds don't make it thrash backwards.
+
+    A pairing that reaches a dropped player is reported here as it is created, so no round ever opens
+    holding a match nobody can play."""
     out: list[tuple[str, str, str]] = []
     with SessionLocal() as session:
+        dropped = dropped_names_sync(session, event_id)
         for idx, (a_name, b_name) in enumerate(pairings):
             row = add_pairing(session, event_id, round_num, a_name, b_name, pairing_index=start_index + idx)
+            forfeit_unplayable_match(session, row, dropped)
             out.append((row.id, a_name, b_name))
         session.execute(
             update(PodDraftEvent)
@@ -4802,14 +4941,109 @@ def insert_pending_matches(
     return out
 
 
+def load_dropped_names(event_id: str) -> set[str]:
+    with SessionLocal() as session:
+        return dropped_names_sync(session, event_id)
+
+
+def dropped_names_sync(session: Session, event_id: str) -> set[str]:
+    """Normalized draftmancer names of everyone an organizer has dropped from this pod"""
+    rows = session.execute(
+        select(PodDraftParticipant.draftmancer_name).where(
+            PodDraftParticipant.event_id == event_id,
+            PodDraftParticipant.dropped_round.is_not(None),
+        )
+    ).scalars().all()
+    return {normalize_player_name(name) for name in rows if name}
+
+
+def forfeit_unplayable_match(session: Session, match: PodDraftMatch, dropped: set[str]) -> str | None:
+    """Report a match that can't be played: a bye for whoever is still in, or no match at all when both
+    sides are gone. Returns the winner written, or None when the match is playable."""
+    a_gone = normalize_player_name(match.player_a_name) in dropped or match.player_a_name == BYE_NAME
+    b_gone = normalize_player_name(match.player_b_name) in dropped or match.player_b_name == BYE_NAME
+    if not a_gone and not b_gone:
+        return None
+    if a_gone and b_gone:
+        winner, score = SKIPPED_SENTINEL, "0-0"
+    else:
+        winner, score = (match.player_b_name, BYE_SCORE) if a_gone else (match.player_a_name, BYE_SCORE)
+    set_match_result(session, match.id, winner, score)
+    return winner
+
+
+def stamp_reported_byes(event_id: str, round_num: int, match_states: list[dict]) -> None:
+    """Fill winner/score on the states whose row was forfeited as it was inserted, so a round posts
+    showing the bye already reported instead of offering a dropdown for it."""
+    reported = auto_reported_results_sync(event_id, [m["match_id"] for m in match_states if m.get("match_id")])
+    for m in match_states:
+        result = reported.get(m.get("match_id"))
+        if result is not None:
+            m["winner_name"], m["score"] = result
+
+
+def auto_reported_results_sync(event_id: str, match_ids: list[str]) -> dict[str, tuple[str, str]]:
+    """{match_id: (winner_name, score)} for rows that were forfeited as they were created, so they
+    carry a result before anyone has had the chance to report one."""
+    if not match_ids:
+        return {}
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(PodDraftMatch.id, PodDraftMatch.winner_name, PodDraftMatch.score).where(
+                PodDraftMatch.event_id == event_id,
+                PodDraftMatch.id.in_(match_ids),
+                PodDraftMatch.winner_name.is_not(None),
+            )
+        ).all()
+    return {match_id: (winner, score) for match_id, winner, score in rows}
+
+
+def forfeited_rounds_sync(event_id: str, match_ids: list[str]) -> dict[int, list[str]]:
+    """Match ids grouped by the round they sit in, so a drop that reaches several open rounds settles
+    each of them."""
+    if not match_ids:
+        return {}
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(PodDraftMatch.round, PodDraftMatch.id).where(
+                PodDraftMatch.event_id == event_id,
+                PodDraftMatch.id.in_(match_ids),
+            )
+        ).all()
+    by_round: dict[int, list[str]] = {}
+    for round_num, match_id in rows:
+        by_round.setdefault(round_num, []).append(match_id)
+    return by_round
+
+
+async def settle_auto_forfeits(bot_client, event_id: str, match_ids: list[str]) -> None:
+    """Announce each pairing forfeited to a bye as it was created, then re-check its round for
+    advancement — a bye can be the result that completes a round, and nobody clicks to report one."""
+    forfeited = await asyncio.to_thread(auto_reported_results_sync, event_id, match_ids)
+    if not forfeited:
+        return
+    for round_num, round_ids in (await asyncio.to_thread(
+        forfeited_rounds_sync, event_id, list(forfeited),
+    )).items():
+        states = await asyncio.to_thread(_load_round_states, event_id, round_num)
+        pairings_url = await asyncio.to_thread(_resolve_pairings_url, event_id, round_num)
+        for state in states:
+            if state["match_id"] in round_ids and match_was_played(state):
+                await announce_round_result(
+                    bot_client, event_id, format_round_announcement(round_num, state, pairings_url),
+                )
+        asyncio.create_task(_maybe_advance(bot_client, event_id, round_num))
+
+
 def _load_pod_player_names(event_id: str) -> list[str]:
-    """Full roster names, read from round-1 matches where everyone is paired."""
+    """Full roster names, read from round-1 matches where everyone is paired. A bye placeholder is not
+    a player and never joins the roster."""
     with SessionLocal() as session:
         rows = session.execute(
             select(PodDraftMatch.player_a_name, PodDraftMatch.player_b_name)
             .where(PodDraftMatch.event_id == event_id, PodDraftMatch.round == 1)
         ).all()
-    return sorted({n for a, b in rows for n in (a, b)})
+    return sorted({n for a, b in rows for n in (a, b) if n != BYE_NAME})
 
 
 def bracket_placeholder_states(event_id: str, round_num: int, real: list[dict] | None = None) -> list[dict]:
@@ -5035,6 +5269,7 @@ async def bracket_advance(manager, source_round: int, *, announce_fill: bool = T
         await _dm_round_pairings(manager.bot, event_id, target, new_rows, target_msg.jump_url, reuse_dms)
         if was_posted and announce_fill:
             await _announce_bracket_fill(manager, target, new_rows, target_msg.jump_url)
+        await settle_auto_forfeits(manager.bot, event_id, [mid for mid, _, _ in new_rows])
 
 
 async def _round_fully_reported(manager, round_num: int) -> bool:
@@ -5042,7 +5277,7 @@ async def _round_fully_reported(manager, round_num: int) -> bool:
     a group it can't pair cleanly once the source round is settled, so this gates that fallback."""
     states = await asyncio.to_thread(_load_round_states, manager.event_id, round_num)
     return (
-        len(states) == len(manager.tournament_players) // 2
+        len(states) == (len(manager.tournament_players) + 1) // 2
         and all(m["winner_name"] for m in states)
     )
 

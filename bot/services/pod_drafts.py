@@ -1716,22 +1716,26 @@ def get_participant_deck_state(
 
 
 
+POD_TROPHY_WINS = 3
+
+
 class PodSetSummary(NamedTuple):
-    """A player's pod results for one set. ``trophies`` counts a 3-0 record OR a pod win
-    (placement 1) — multiple per large pod, and a small pod's 2-1 winner still earns one.
-    A 2-1 that won the pod is a trophy, not a ``wins_2_1``. Team pods write no placement,
-    so their trophies come from 3-0 records alone."""
+    """A player's pod results for one set, bucketed by match wins. ``trophies`` counts three wins OR a
+    pod win (placement 1) — multiple per large pod, and a small pod's 2-1 winner still earns one. A
+    2-1 that won the pod is a trophy, not a ``two_win_finishes``. Team pods write no placement, so
+    their trophies come from three-win records alone."""
     events: int
     wins: int
     losses: int
     trophies: int
-    wins_2_1: int
+    two_win_finishes: int
+    one_win_finishes: int
 
 
 def pod_scoring_counts(
     session: Session, set_code: str, before: datetime | None = None,
-) -> dict[str, tuple[int, int]]:
-    """Per active player: (trophy count, 2-1 count) for the set, keyed by player_id.
+) -> dict[str, tuple[int, int, int]]:
+    """Per active player: (trophies, two-win finishes, one-win finishes) for the set, keyed by player_id.
     Pods are always public, no opt-in gate. `before` counts only the pods played by that instant, for a
     board rebuilt as it stood at a past deadline."""
     query = (
@@ -1751,7 +1755,7 @@ def pod_scoring_counts(
     for player_id, record, placement in rows:
         by_player.setdefault(player_id, []).append((record, placement))
     summaries = {pid: _summarize_pod_records(finishes) for pid, finishes in by_player.items()}
-    return {pid: (s.trophies, s.wins_2_1) for pid, s in summaries.items()}
+    return {pid: (s.trophies, s.two_win_finishes, s.one_win_finishes) for pid, s in summaries.items()}
 
 
 def pod_summary_by_set_for_player(session: Session, player_id: str) -> dict[str, PodSetSummary]:
@@ -1771,17 +1775,19 @@ def pod_summary_by_set_for_player(session: Session, player_id: str) -> dict[str,
 
 
 def _summarize_pod_records(finishes: list[tuple[str | None, int | None]]) -> PodSetSummary:
-    """A trophy is a 3-0 record or a pod win (placement 1); a 2-1 that won is a trophy, not a 2-1."""
-    wins = losses = trophies = wins_2_1 = 0
+    """Buckets each finish by match wins, so a 2-0 cut short by a drop pays the same as a 2-1"""
+    wins = losses = trophies = two_win_finishes = one_win_finishes = 0
     for record, placement in finishes:
         won, lost = parse_record(record)
         wins += won
         losses += lost
-        if record == "3-0" or placement == 1:
+        if won >= POD_TROPHY_WINS or placement == 1:
             trophies += 1
-        elif record == "2-1":
-            wins_2_1 += 1
-    return PodSetSummary(len(finishes), wins, losses, trophies, wins_2_1)
+        elif won == 2:
+            two_win_finishes += 1
+        elif won == 1:
+            one_win_finishes += 1
+    return PodSetSummary(len(finishes), wins, losses, trophies, two_win_finishes, one_win_finishes)
 
 
 def parse_record(record: str | None) -> tuple[int, int]:

@@ -16,7 +16,7 @@ pairings. Pure functions — the orchestration layer handles every side effect.
 """
 from __future__ import annotations
 
-from bot.services.pod_swiss import MatchOutcome, Player
+from bot.services.pod_swiss import BYE_NAME, MatchOutcome, Player
 
 
 BRACKET_POD_SIZES = (8, 10)
@@ -73,11 +73,22 @@ def incremental_pairings(
 
 
 def player_records(players: list[Player], completed: list[MatchOutcome]) -> dict[str, tuple[int, int]]:
-    """(wins, losses) per player id. Outcomes naming a player outside the roster are ignored."""
+    """(wins, losses) per player id. Outcomes naming a player outside the roster are ignored.
+
+    A forfeited bye counts a loss against the player who dropped, unlike the record that ends up on
+    their profile: pairing is the one place the loss has to land, since it is what sinks them through
+    the record groups so each later bye falls to a lower-standing opponent.
+    """
     ids = {p.id for p in players}
     wins = {pid: 0 for pid in ids}
     losses = {pid: 0 for pid in ids}
     for m in completed:
+        if m.is_bye:
+            if m.winner_id in ids:
+                wins[m.winner_id] += 1
+            if m.loser_id in ids:
+                losses[m.loser_id] += 1
+            continue
         if m.player_a_id not in ids or m.player_b_id not in ids:
             continue
         wins[m.winner_id] += 1
@@ -261,9 +272,13 @@ def _pair_remainder(
     *,
     force: bool,
 ) -> list[tuple[str, str]]:
-    """Pair everyone still waiting, now that nobody else can arrive. Falls back to a pairing that does
-    repeat a match only when `force` and no rematch-free one exists, so a pod can't stall on it."""
+    """Pair everyone still waiting, now that nobody else can arrive. An odd pool sends its worst record
+    to a bye. Falls back to a pairing that does repeat a match only when `force` and no rematch-free
+    one exists, so a pod can't stall on it."""
     ordered = sorted(pool, key=lambda pid: (-records[pid][0], records[pid][1]))
+    if len(ordered) % 2 == 1:
+        floated = ordered.pop()
+        return _pair_remainder(ordered, records, played, force=force) + [(floated, BYE_NAME)]
     best = _best_matching(ordered, records, played)
     if best is not None:
         return best[1]

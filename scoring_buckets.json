@@ -2,7 +2,8 @@
   "$schema": "Single source of truth for queue-group → format mappings + points. Loaded by bot/scoring.py (Python) and frontend/src/data/scoring.ts (JS). Edit here, both sides pick it up.",
   "pod": {
     "trophy_points": 5,
-    "win_2_1_points": 2
+    "two_win_points": 2,
+    "one_win_points": 0.5
   },
   "groups": [
     {

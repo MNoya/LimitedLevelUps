@@ -78,12 +78,20 @@ function CardsLayout({ rows, confidence = 0 }: { rows: BreakdownRow[]; confidenc
                     </span>
                     <span className="text-green text-[14px] leading-none align-middle">×</span>
                     <span className="mono">5 pts</span>
-                    {r.wins21 > 0 && (
+                    {r.twoWins > 0 && (
                       <>
                         <span className="text-green text-[16px] font-bold leading-none align-middle">+</span>
-                        <span className="mono">{r.wins21} two-ones</span>
+                        <span className="mono">{r.twoWins} 2-win</span>
                         <span className="text-green text-[14px] leading-none align-middle">×</span>
                         <span className="mono">2 pts</span>
+                      </>
+                    )}
+                    {r.oneWins > 0 && (
+                      <>
+                        <span className="text-green text-[16px] font-bold leading-none align-middle">+</span>
+                        <span className="mono">{r.oneWins} 1-win</span>
+                        <span className="text-green text-[14px] leading-none align-middle">×</span>
+                        <span className="mono">½ pts</span>
                       </>
                     )}
                   </>

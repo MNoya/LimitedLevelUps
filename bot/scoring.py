@@ -73,19 +73,27 @@ DEFAULT_QUEUE_GROUPS: tuple[QueueGroup, ...] = tuple(
     for g in _BUCKETS["groups"]
 )
 
-POD_TROPHY_POINTS = int(_BUCKETS.get("pod", {}).get("trophy_points", 5))
-POD_WIN_2_1_POINTS = int(_BUCKETS.get("pod", {}).get("win_2_1_points", 2))
+POD_TROPHY_POINTS = float(_BUCKETS.get("pod", {}).get("trophy_points", 5))
+POD_TWO_WIN_POINTS = float(_BUCKETS.get("pod", {}).get("two_win_points", 2))
+POD_ONE_WIN_POINTS = float(_BUCKETS.get("pod", {}).get("one_win_points", 0.5))
 
 ARENA_DIRECT_SEALED_FORMAT = "ArenaDirect_Sealed"
 
 
-def pod_points(trophies_3_0: int, wins_2_1: int) -> int:
-    """Flat pod-draft contribution: a 3-0 record is a trophy, a 2-1 a strong finish.
+def pod_points(trophies: int, two_win_finishes: int, one_win_finishes: int) -> int:
+    """Flat pod-draft contribution, floored so fractional finishes bank across pods.
 
-    Added to the leaderboard total alongside ``compute_score`` — pods are not a
-    17lands queue group and are exempt from trophy_rate / confidence.
+    Paid on match wins, not on the record string: a trophy is a 3-0 or a pod win, and two wins pay the
+    same whether the third match was lost or forfeited by a drop. Added to the leaderboard total
+    alongside ``compute_score`` — pods are not a 17lands queue group and are exempt from
+    trophy_rate / confidence.
     """
-    return trophies_3_0 * POD_TROPHY_POINTS + wins_2_1 * POD_WIN_2_1_POINTS
+    total = (
+        trophies * POD_TROPHY_POINTS
+        + two_win_finishes * POD_TWO_WIN_POINTS
+        + one_win_finishes * POD_ONE_WIN_POINTS
+    )
+    return int(total)
 
 
 def supported_formats(groups: Iterable[QueueGroup] = DEFAULT_QUEUE_GROUPS) -> tuple[str, ...]:

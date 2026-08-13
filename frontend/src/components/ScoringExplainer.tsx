@@ -83,7 +83,9 @@ function Scoring() {
         <div className="flex flex-col gap-2 text-[13px] md:text-[14px] text-muted leading-[1.6]">
           <p>
             <span className="text-text">Pod Drafts</span> score on their own, adding flat points
-            directly to the total with no other factors applied.
+            directly to the total with no other factors applied. Points count match wins, so two wins
+            pay the same whether the third match was lost or forfeited by an opponent who dropped.
+            The pod total rounds down, so half points bank until a second one-win finish.
           </p>
         </div>
 
@@ -93,7 +95,8 @@ function Scoring() {
             <span>POINTS</span>
           </div>
           <Leader label="Trophy" value="5" />
-          <Leader label="2-1 Record" value="2" />
+          <Leader label="2 Wins" value="2" />
+          <Leader label="1 Win" value={<span className="text-[18px] md:text-[20px]">½</span>} />
         </div>
       </div>
 

@@ -58,7 +58,8 @@ export interface PlayerFormatBreakdown {
   // Trophies counted by end-of-event rank; equal to trophies outside rank-weighted groups
   weightedTrophies?: number;
   scoreContribution: number;
-  wins21?: number;
+  twoWins?: number;
+  oneWins?: number;
 }
 
 export interface PlayerDraftEvent {

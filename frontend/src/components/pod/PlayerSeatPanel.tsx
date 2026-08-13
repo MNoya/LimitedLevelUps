@@ -17,6 +17,7 @@ import type { DeckTab } from "./DeckScreenshotModal";
 import type { PodEventMatchRow, PodEventReplayRow, PodSeat } from "../../types/leaderboard";
 
 const SKIPPED_SENTINEL = "(skipped)";
+const BYE_SCORE = "bye";
 
 export type RoundOutcome = "win" | "loss" | "skip" | "pending";
 
@@ -429,29 +430,32 @@ function RoundRow({
 }) {
   const isMobile = useIsCompact();
   const isSkipped = match.winnerName === SKIPPED_SENTINEL;
+  const isBye = match.score === BYE_SCORE;
   const isPending = !isSkipped && match.winnerName == null;
   const won = !isSkipped && !isPending && match.winnerName === podSeatName(participant);
-  const outcome: RoundOutcome = isSkipped ? "skip" : isPending ? "pending" : won ? "win" : "loss";
-  const score = match.score ?? null;
+  // A bye is a win with no games for whoever held it, and the round the other player walked out of.
+  const noGames = isSkipped || isBye;
+  const outcome: RoundOutcome = isSkipped || (isBye && !won) ? "skip" : isPending ? "pending" : won ? "win" : "loss";
+  const score = isBye ? null : match.score ?? null;
   const yourScore = score ? (won ? score.split("-")[0] : score.split("-")[1]) : null;
   const oppScore = score ? (won ? score.split("-")[1] : score.split("-")[0]) : null;
 
   const participantSlug = participant.playerSlug;
   const opponentSlug = opponent?.playerSlug ?? null;
 
-  const playerGames = participantSlug && !isSkipped
+  const playerGames = participantSlug && !noGames
     ? replays
         .filter((r) => r.playerSlug === participantSlug && r.inferredRound === match.round)
         .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
     : [];
 
-  const opponentGames = opponentSlug && !isSkipped
+  const opponentGames = opponentSlug && !noGames
     ? replays
         .filter((r) => r.playerSlug === opponentSlug && r.inferredRound === match.round)
         .sort((a, b) => new Date(a.gameTime).getTime() - new Date(b.gameTime).getTime())
     : [];
 
-  const matchDurationMin = isSkipped
+  const matchDurationMin = noGames
     ? null
     : computeMatchDurationMin(playerGames, opponentGames, match.reportedAt);
   const opponentDisplay = opponent?.discordName ?? stripDiscriminator(opponentName);

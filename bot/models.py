@@ -294,6 +294,7 @@ class PodDraftParticipant(Base):
     placement           = Column(Integer, nullable=True)
     record              = Column(String, nullable=True)
     eliminated_round    = Column(Integer, nullable=True)
+    dropped_round       = Column(Integer, nullable=True)
     deck_colors             = Column(String, nullable=True)
     deck_screenshot_url     = Column(String, nullable=True)
     deck_screenshot_caption = Column(String, nullable=True)
