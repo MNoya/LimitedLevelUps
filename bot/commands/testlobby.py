@@ -96,6 +96,7 @@ from bot.services.pod_team_showcase import build_team_championship_view, format_
 from bot.services.pod_team_vote import (
     SIDE_TEAM,
     SIDE_WAIT,
+    TEAM_VOTE_POD_SIZE,
     TEAM_VOTE_TEAM_EMOJI,
     TEAM_VOTE_TEAM_LABEL,
     TEAM_VOTE_WAIT_EMOJI,
@@ -627,16 +628,6 @@ async def _arm_pod_team_command(ctx) -> None:
     await ctx.send(f"🧪 Fake {len(manager.session_users)}-player lobby armed. Run `/pod-team` here")
 
 
-async def _run_auto_team_pairing(ctx) -> None:
-    """Arm the fake six-player lobby and repaint it, which is what the size rule reacts to: the pod moves
-    itself to Team Draft, posts its thread notice, and the lobby card comes back reading Team Draft."""
-    manager = await _arm_fake_six_player_lobby(ctx)
-    if manager is None:
-        return
-    await manager.refresh_lobby_now()
-    await ctx.send(f"🧪 Repainted a {len(manager.session_users)}-player lobby. Pairings: {manager.pairing_mode}")
-
-
 async def _start_test_table(ctx) -> None:
     """Drive the real `/pod-table` flow: seed a source pod, then post the prod claim card preseeded to
     one below threshold so the invoker's single click materializes the overflow table (real thread +
@@ -848,9 +839,6 @@ def _team_trophy_hype_preview_view() -> discord.ui.LayoutView:
     )
 
 
-_TEAM_VOTE_POD_SIZE = 6
-
-
 def _team_vote_seed() -> dict[str, str]:
     """Three prefilled voters so the previewer's own click is the fourth — the majority that locks it."""
     return {f"seed-{i}": name for i, (_, name) in enumerate(_LINKED_EIGHT[1:4])}
@@ -877,7 +865,7 @@ class _TeamVotePreviewView(discord.ui.View):
         await self._vote(interaction, SIDE_WAIT)
 
     async def _vote(self, interaction: discord.Interaction, side: str) -> None:
-        needed = team_vote_needed(_TEAM_VOTE_POD_SIZE)
+        needed = team_vote_needed(TEAM_VOTE_POD_SIZE)
         name = interaction.user.display_name
         on_side = name in (self.team if side == SIDE_TEAM else self.wait)
         self.team = [voter for voter in self.team if voter != name]
@@ -889,7 +877,7 @@ class _TeamVotePreviewView(discord.ui.View):
                 embed=build_team_vote_locked_embed(self.team, self.wait), view=None,
             )
             await interaction.followup.send(
-                MSG_LOBBY_FULL_PROMPT.format(count=emojis.mana_number(_TEAM_VOTE_POD_SIZE)),
+                MSG_LOBBY_FULL_PROMPT.format(count=emojis.mana_number(TEAM_VOTE_POD_SIZE)),
                 view=LobbyReadyButtonView(draftmancer_url=_DRAFTMANCER_URL),
             )
             return
@@ -898,7 +886,7 @@ class _TeamVotePreviewView(discord.ui.View):
                 embed=build_team_vote_waited_embed(self.team, self.wait), view=None)
             return
         await interaction.response.edit_message(
-            embed=build_team_vote_offer_embed(self.team, self.wait, _TEAM_VOTE_POD_SIZE), view=self)
+            embed=build_team_vote_offer_embed(self.team, self.wait, TEAM_VOTE_POD_SIZE), view=self)
 
 
 _ROUND_ROBIN_POD_SIZE = 4
@@ -1063,19 +1051,25 @@ class _AddFormatPreviewModal(discord.ui.Modal, title=pod_format_poll.ADD_MODAL_T
 
 
 class _ReadyCheckPreviewView(discord.ui.View):
-    """Preview-only Ready Check button for `!test readyunlinked`: drives the real warn-but-allow confirm
-    ephemerally, exactly as the initiator sees it, with no live pod behind it. The seated count is one short
-    of the floor and odd, so the preview carries every warning line at once."""
+    """Preview-only Ready Check button for `!test readyunlinked` and `!test readyteam`: drives the real
+    warn-but-allow confirm ephemerally, exactly as the initiator sees it, with no live pod behind it. The
+    warning preview is seated one short of the floor and odd, so it carries every warning line at once;
+    `team_offer` seats a clean six and asks the Team Draft question instead."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, team_offer: bool = False) -> None:
         super().__init__(timeout=900)
+        self.team_offer = team_offer
 
     @discord.ui.button(label="Start Ready Check", style=discord.ButtonStyle.success)
     async def ready_check(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         floor = settings.pod_draft_min_ready_players
+        seated = TEAM_VOTE_POD_SIZE if self.team_offer else floor - 1
+        unlinked = [] if self.team_offer else [_UNLINKED_SEAT]
         await interaction.response.send_message(
-            ready_check_confirm_text(floor - 1, floor, [_UNLINKED_SEAT]),
-            view=ReadyCheckConfirmView(None, None, None),
+            ready_check_confirm_text(seated, floor, unlinked, team_offer=self.team_offer),
+            view=ReadyCheckConfirmView(
+                None, None, None, show_link_players=bool(unlinked), team_offer=self.team_offer,
+            ),
             ephemeral=True,
         )
 
@@ -1317,9 +1311,9 @@ _LINKED_EIGHT: list[tuple[str, str]] = [
 ]
 _VALID_STATES = (
     "empty", "partial", "linked", "unlinked", "ready", "held", "notready", "titles",
-    "readyunlinked", "readycancel",
+    "readyunlinked", "readyteam", "readycancel",
     "drafting", "complete", "submit", "lobby", "lobbyopen", "dmlink", "unlink", "podbracket", "podswiss", "podrandom",
-    "podteam", "podlobby", "podteamvote", "autoteam", "chat",
+    "podteam", "podlobby", "podteamvote", "chat",
     "format", "seeding", "trophyhype", "champ", "podium", "round1", "round2", "round3", "voicelink", "review",
     "table",
     "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "p2vote",
@@ -1331,7 +1325,7 @@ _LIVE_POD_MODES = {
 }
 
 _PRODUCTION_BLOCKED_STATES = frozenset(_LIVE_POD_MODES) | {
-    "podlobby", "podteamvote", "autoteam", "unlink", "reset", "chat", "podium",
+    "podlobby", "podteamvote", "unlink", "reset", "chat", "podium",
 }
 
 _LAST_MESSAGE: dict[int, discord.Message] = {}
@@ -1382,10 +1376,12 @@ def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
         in_session = list(_LINKED_EIGHT[:7]) + [(_UNLINKED_SEAT, None)]
     elif state == "held":
         in_session = [row for row in _LINKED_EIGHT if row != _PREVIEW_LEFT_SEAT]
+    elif state == "six":
+        in_session = list(_LINKED_EIGHT[:TEAM_VOTE_POD_SIZE])
     else:
         in_session = list(_LINKED_EIGHT)
 
-    render_state = state
+    render_state = "linked" if state == "six" else state
     initiated_by = _LINKED_EIGHT[0][1] if render_state in ("ready", "held", "notready") else None
     embed = render_lobby_embed(
         _THREAD_NAME, _RSVPS_YES, _RSVPS_MAYBE, in_session,
@@ -1683,7 +1679,8 @@ async def setup(bot: commands.Bot) -> None:
         Renders the pod-draft lobby embed in this channel.
 
         `state` ∈ empty | partial | linked | unlinked | ready | held | notready |
-        readyunlinked | drafting | complete | submit | lobbyopen | podbracket | podswiss | podrandom | podteam |
+        readyunlinked | readyteam | drafting | complete | submit | lobbyopen | podbracket | podswiss |
+        podrandom | podteam |
         podlobby | format | seeding | trophyhype | champ | round1 | round2 | round3 | voicelink | linkpicker |
         settings.
         `lobbyopen` posts the real lobby-open message and its Join Draft button — click it to get the
@@ -1728,7 +1725,8 @@ async def setup(bot: commands.Bot) -> None:
         Force Start; clicking Force Start previews the ephemeral confirm dialog (no live pod needed). `held`
         is the same pair parked by a player leaving the lobby, where the check card gains Resume Ready Check
         and a Draftmancer link. `notready` is the stopped card on its own; `readycancel` posts both ways a
-        check closes, stopped and timed out.
+        check closes, stopped and timed out. `readyunlinked` carries every warning line at once;
+        `readyteam` is the six-player lobby, where the confirm asks whether to make it a Team Draft.
         `champ` posts the channel announcement twice, first a ten-player pod (3-0s and 2-1s only, one
         gallery per record) then the eight-player Set Championship (whole field), with #trophy-hype below.
         `titles` stacks every pod embed title, ten to a message and each labelled with the card it heads, so
@@ -1805,13 +1803,14 @@ async def setup(bot: commands.Bot) -> None:
             await _arm_pod_team_command(ctx)
             return
 
-        if state == "autoteam":
-            await _run_auto_team_pairing(ctx)
-            return
-
         if state == "readyunlinked":
             embed, _ = _build("unlinked")
             await ctx.send(embed=embed, view=_ReadyCheckPreviewView())
+            return
+
+        if state == "readyteam":
+            embed, _ = _build("six")
+            await ctx.send(embed=embed, view=_ReadyCheckPreviewView(team_offer=True))
             return
 
         if state == "readycancel":
@@ -1910,7 +1909,7 @@ async def setup(bot: commands.Bot) -> None:
             await ctx.send(pairing_change_message(None, "team"))
             await ctx.send(pairing_change_message(None, "bracket"))
             seeded = list(_team_vote_seed().values())
-            embed = build_team_vote_offer_embed(seeded, [], _TEAM_VOTE_POD_SIZE)
+            embed = build_team_vote_offer_embed(seeded, [], TEAM_VOTE_POD_SIZE)
             await ctx.send(embed=embed, view=_TeamVotePreviewView())
             return
 

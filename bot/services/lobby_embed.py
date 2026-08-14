@@ -371,13 +371,18 @@ class ForceStartConfirmView(discord.ui.View):
 
 
 READY_CHECK_CONFIRM_PROMPT = "Start the ready check anyway?"
+READY_CHECK_TEAM_OFFER = "{count} Players in the Draftmancer lobby, make it a Team Draft?"
+KEEP_PAIRINGS_LABEL = "Keep Pairings"
 
 
-def ready_check_confirm_text(seated: int, floor: int, unlinked: list[str], *, pairs: bool = True) -> str:
+def ready_check_confirm_text(
+    seated: int, floor: int, unlinked: list[str], *, pairs: bool = True, team_offer: bool = False,
+) -> str:
     """Warn-but-allow prompt shown to the initiator when a ready check is unusual but permitted: a roster
     under the floor, an odd roster that cannot pair, unrecognized seats, or any combination. Shared by the
     live Ready Check button and the `!test` preview so the copy never drifts. `pairs` is False for a mock,
-    which plays no rounds and drafts happily at seven."""
+    which plays no rounds and drafts happily at seven. `team_offer` closes on the Team Draft question
+    instead, which the buttons answer, so the initiator is never asked two things at once."""
     lines: list[str] = []
     if seated < floor:
         lines.append(f"🛑 Only {seated} player{plural(seated)} in the Draftmancer lobby.")
@@ -393,16 +398,23 @@ def ready_check_confirm_text(seated: int, floor: int, unlinked: list[str], *, pa
             f"⚠️ {names} {verb} unrecognized. Bot won't be able to send them pairings.\n"
             "Have them run `/link-arena`, or use Link Players below."
         )
-    lines.append(READY_CHECK_CONFIRM_PROMPT)
+    if team_offer:
+        lines.append(READY_CHECK_TEAM_OFFER.format(count=emojis.mana_number(seated)))
+    else:
+        lines.append(READY_CHECK_CONFIRM_PROMPT)
     return "\n\n".join(lines)
 
 
 class ReadyCheckConfirmView(discord.ui.View):
     """Ephemeral warn-but-allow gate shown to the initiator when a ready check is unusual but permitted, so a
-    short or odd roster can still be readied on purpose instead of leaving Force Start as the only way in."""
+    short or odd roster can still be readied on purpose instead of leaving Force Start as the only way in.
+    `team_offer` adds the Team Draft button a six-player lobby is asked about, which sets the pairings and
+    starts the same check; Keep Pairings is the same button as Start Anyway wearing the answer to that
+    question."""
 
     def __init__(
         self, manager, thread, initiated_by: str | None, *, show_link_players: bool = True,
+        team_offer: bool = False,
     ) -> None:
         super().__init__(timeout=60)
         self.manager = manager
@@ -410,6 +422,24 @@ class ReadyCheckConfirmView(discord.ui.View):
         self.initiated_by = initiated_by
         if not show_link_players:
             self.remove_item(self.link_players)
+        if team_offer:
+            self.confirm.label = KEEP_PAIRINGS_LABEL
+        else:
+            self.remove_item(self.team_draft)
+
+    @discord.ui.button(label="Team Draft", style=discord.ButtonStyle.primary, emoji="🤝")
+    async def team_draft(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if self.manager is None:
+            await interaction.response.edit_message(content=MSG_PREVIEW_ONLY, view=None)
+            return
+        actor = actor_label(interaction)
+        log.info(f"[{self.manager.event_name}] {actor} took the Team Draft at the Ready Check")
+        await interaction.response.defer()
+        err = await self.manager.take_team_draft(actor)
+        if err:
+            await interaction.edit_original_response(content=f"⚠️ {err}", view=None)
+            return
+        await self._start_check(interaction)
 
     @discord.ui.button(label="Start Anyway", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -419,13 +449,7 @@ class ReadyCheckConfirmView(discord.ui.View):
         actor = actor_label(interaction)
         log.info(f"[{self.manager.event_name}] {actor} confirmed Ready Check past warnings")
         await interaction.response.defer()
-        err = await self.manager.initiate_ready_check(
-            self.thread, initiated_by=self.initiated_by, initiator=interaction.user,
-        )
-        if err:
-            await interaction.edit_original_response(content=f"⚠️ {err}", view=None)
-            return
-        await interaction.delete_original_response()
+        await self._start_check(interaction)
 
     @discord.ui.button(label="Link Players", style=discord.ButtonStyle.primary, emoji="🔗")
     async def link_players(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -450,12 +474,23 @@ class ReadyCheckConfirmView(discord.ui.View):
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.edit_message(content="Ready check canceled", view=None)
 
+    async def _start_check(self, interaction: discord.Interaction) -> None:
+        """Fire the check the prompt was gating and clear the prompt, on an already-deferred interaction"""
+        err = await self.manager.initiate_ready_check(
+            self.thread, initiated_by=self.initiated_by, initiator=interaction.user,
+        )
+        if err:
+            await interaction.edit_original_response(content=f"⚠️ {err}", view=None)
+            return
+        await interaction.delete_original_response()
+
 
 async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_players=None) -> bool:
     """Shared ready-check kickoff guard for the lobby button and /pod-ready. Runs the hard blockers, then the
-    warn-but-allow confirm covering a short roster, an odd roster and unrecognized seats in one prompt, so
-    confirming never leads straight into a second one. Returns True if the interaction was handled here
-    (blocked or awaiting confirm) and the caller should stop; False if the pod is clear to start now.
+    warn-but-allow confirm covering a short roster, an odd roster, unrecognized seats and the Team Draft a
+    six-player lobby is offered, all in one prompt, so confirming never leads straight into a second one.
+    Returns True if the interaction was handled here (blocked or awaiting confirm) and the caller should
+    stop; False if the pod is clear to start now.
     Runs before /pod-ready acknowledges, so that command can answer publicly once it knows the check will
     actually fire, and every answer from here stays private to the initiator either way."""
     blocker = manager.ready_check_blocker()
@@ -463,14 +498,17 @@ async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_p
         await reply_private(interaction, content=f"⚠️ {blocker}")
         return True
     unlinked = [] if manager.kind == "mock" else await manager.unrecognized_lobby_names()
-    if manager.ready_check_needs_confirm(unlinked, min_players=min_players):
+    team_offer = manager.offers_team_draft()
+    if manager.ready_check_needs_confirm(unlinked, min_players=min_players) or team_offer:
         await reply_private(
             interaction,
             content=ready_check_confirm_text(
                 len(manager.player_session_users()), manager.ready_check_floor(min_players), unlinked,
-                pairs=manager.kind != "mock",
+                pairs=manager.kind != "mock", team_offer=team_offer,
             ),
-            view=ReadyCheckConfirmView(manager, thread, initiated_by, show_link_players=bool(unlinked)),
+            view=ReadyCheckConfirmView(
+                manager, thread, initiated_by, show_link_players=bool(unlinked), team_offer=team_offer,
+            ),
         )
         return True
     return False

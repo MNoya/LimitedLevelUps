@@ -144,7 +144,6 @@ _READY_TIMEOUT_S = 120
 _READY_DEBOUNCE_S = 2.0
 _LOBBY_REFRESH_DEBOUNCE_S = 1.0
 _LOBBY_FULL_THRESHOLD = 8
-AUTO_TEAM_POD_SIZE = 6  # a pod this size drafts in teams without being asked
 _LOBBY_FULL_PROMPT_DELAY_S = 10
 RIDER_WINDOW_S = 120
 _RESTART_SETTLE_S = 2.5
@@ -407,7 +406,6 @@ class PodDraftManager:
         self.team_vote_offered = False
         self.team_vote_size = 0
         self.pairing_set_by_user = False
-        self.auto_team_from: str | None = None
         self.round_robin_vote_message: "discord.Message | None" = None
         self.round_robin_vote_offered = False
         self.round_robin_vote_size = 0
@@ -989,16 +987,14 @@ class PodDraftManager:
         self, thread, initiated_by: str | None = None, initiator: discord.abc.User | None = None,
     ) -> str | None:
         """Start a ready check, or re-arm the running one; returns an error string on failure, None on
-        success. Only the hard blockers stop it here; a short, odd, or unrecognized roster is confirmed by
-        the caller beforehand. Six players in the room at the check are a Team Draft, whatever the pod was
-        drawn for, so the pairings move before the check goes out.
+        success. Only the hard blockers stop it here; a short, odd, or unrecognized roster, and a lobby of
+        six that could play a Team Draft, are confirmed by the caller beforehand.
 
         Arming keeps every answer a seat still in the lobby already gave, so eight players click once.
         `initiator` answers for itself: asking the table is as clear a statement as answering it."""
         blocker = self.ready_check_blocker()
         if blocker:
             return blocker
-        await self._sync_auto_pairing(present_only=True)
         non_bot = self.player_session_users()
         rearm = self.ready_check_active
         self.expected_user_ids = {u.get("userID") for u in non_bot}
@@ -1394,7 +1390,6 @@ class PodDraftManager:
             live_check = state in ("ready", "held")
             ready_arena_names = self.ready_arena_names()
             hold_detail, hold_hint = self.hold_lines()
-            await self._sync_auto_pairing()
             teams = None
             if self.pairing_mode == "team" and state in ("drafting", "complete"):
                 teams = self.team_map or await asyncio.to_thread(load_teams_sync, self.event_id)
@@ -2725,52 +2720,34 @@ class PodDraftManager:
             self._voice_link_posted = False
             log.warning(f"[LOBBY] voice_link_send_failed event={self.event_id}", exc_info=True)
 
-    def _auto_pairing_size(self, *, present_only: bool = False) -> int:
-        """The size to read this pod as: the roster it was drawn for, or the lobby when more players than
-        that turned up, held to the seats the table offers. A pod planned for eight is not a six-player
-        pod while it sits at six, and a table capped at six is one however many signed up.
-
-        `present_only` reads the Draftmancer lobby alone, for the ready check, where the players in the
-        room are the ones about to draft and the roster the pod was drawn for no longer decides anything."""
-        if present_only:
-            return len(self.player_session_users())
-        drawn_for = max(self.expected_attendee_count, len(self.player_session_users()))
-        return min(self.max_players, drawn_for)
-
-    async def _sync_auto_pairing(self, *, present_only: bool = False) -> None:
-        """Hold the pairing mode the pod's size asks for. Six players play a Team Draft, so the bot sets
-        that itself and hands the pod back once it turns out to be another size. Turning it back is the way
-        out: once anyone picks a pairing mode, `pairing_set_by_user` stands and the bot stops touching it."""
+    def offers_team_draft(self) -> bool:
+        """Whether the ready check asks the initiator to make this pod a Team Draft: six players in the
+        Draftmancer lobby and nobody has picked the pairings"""
         if self.kind == "mock" or self.drafting or self.draft_complete or self.pairing_set_by_user:
-            return
-        if self.current_round:
-            return
-        if self._auto_pairing_size(present_only=present_only) == AUTO_TEAM_POD_SIZE:
-            if self.pairing_mode != "team" and self.auto_team_from is None:
-                await self._move_pairing("team", remembering=self.pairing_mode)
-        elif self.auto_team_from is not None:
-            await self._move_pairing(self.auto_team_from, remembering=None)
+            return False
+        if self.current_round or self.pairing_mode == "team":
+            return False
+        return len(self.player_session_users()) == TEAM_VOTE_POD_SIZE
 
-    async def _move_pairing(self, mode: str, *, remembering: str | None) -> None:
-        """Move the pod onto `mode` the way the Settings panel would. `remembering` holds the mode Team
-        Draft displaced, which is both where the pod goes back to and the record that the bot is the one
-        holding it here."""
-        self.pairing_mode = mode
-        self.auto_team_from = remembering
-        await asyncio.to_thread(persist_pairing_mode, self.event_id, mode)
-        await self.apply_team_draft_setting()
-        notify_card_refresh(self.bot, self.event_id)
-        run_detached(self._post_auto_pairing_notice(mode), f"auto_pairing_notice:{self.event_id}")
-        log.info(f"[TEAM] auto_pairing event={self.event_id} mode={mode} seated={len(self.player_session_users())}")
+    async def take_team_draft(self, actor: str | None = None) -> str | None:
+        """Move the pod onto Team Draft as the choice `actor` made, so its size never moves it back.
+        Returns an error string when the pod cannot take it, else None"""
+        error = await set_event_pairing_mode(self.event_id, "team")
+        if error:
+            return error
+        run_detached(self._post_pairing_notice("team", actor), f"pairing_notice:{self.event_id}")
+        log.info(f"[TEAM] took_team_draft event={self.event_id} actor={actor} "
+                 f"seated={len(self.player_session_users())}")
+        return None
 
-    async def _post_auto_pairing_notice(self, mode: str) -> None:
-        """Say in the thread that the pairings moved, in the same shape a player's own change reads, and
-        bring the registration embed along with it."""
+    async def _post_pairing_notice(self, mode: str, actor: str | None) -> None:
+        """Say in the thread that the pairings moved, in the same shape a Settings change reads, and bring
+        the registration embed along with it."""
         thread = await self._fetch_thread()
         if thread is None:
             return
         await send_settings_notice(
-            thread, self.bot.user, pairing_change_message(None, mode),
+            thread, self.bot.user, pairing_change_message(actor, mode),
             marker=settings_notice_markers("Pairings"),
         )
         await update_registered_embed(
@@ -3376,7 +3353,7 @@ async def start_manager(
     created_by: str | None = None,
     pairing_chosen: bool = False,
 ) -> PodDraftManager | None:
-    """`pairing_chosen` has to arrive here: connect() renders, and that render is what makes a six a team"""
+    """`pairing_chosen` marks a launcher that committed a pairing, so the ready check stops offering one"""
     existing = ACTIVE_POD_MANAGERS.get(event_id)
     if existing is not None:
         log.info(f"[LIFECYCLE] start_manager.already_active event={event_id}")
@@ -3457,7 +3434,7 @@ async def _rename_event_thread(bot: commands.Bot, event_id: str, name: str) -> N
 async def set_event_pairing_mode(event_id: str, mode: str) -> str | None:
     """Set a pod's pairing mode by event id; updates the live manager when one exists and persists.
     Locked once the tournament has started. Every caller here is a choice somebody made, through the
-    Settings panel, the launcher, or a vote, so the pod stops taking its pairings from its own size.
+    Settings panel, the launcher, a vote, or the ready check, so the pod keeps it from then on.
     Returns an error string or None."""
     if mode not in ("swiss", "bracket", "random", "team", "roundrobin"):
         return "Unknown pairing mode."
