@@ -166,7 +166,7 @@ function SeatHeader({
   const hasRecord = participant.record != null && wins + losses > 0;
   const hasDeck = participant.deckScreenshotUrl !== null || !!participant.hasDeckList;
 
-  const nameFontSize = isLandscape ? 24 : 32;
+  const nameFontSize = isLandscape ? 24 : isMobile ? 28 : 32;
   const nameLink = profileHref ? (
     <Link
       to={profileHref}
@@ -221,9 +221,14 @@ function SeatHeader({
 
   if (isMobile) {
     return (
-      <header className={cn("shrink-0 flex flex-col px-4 md:px-5 xl:px-8 border-b border-border", isLandscape ? "gap-3 py-4" : "gap-4 py-7")}>
-        <div className="flex items-center gap-4 min-w-0">
-          <AAvatar displayName={participant.discordName} avatarUrl={participant.avatarUrl} size={isLandscape ? 44 : 60} green={isChampion} />
+      <header
+        className={cn(
+          "shrink-0 flex flex-col gap-3 px-4 py-4 md:px-5 md:py-5 border-b border-border",
+          isLandscape && "py-4 md:py-4",
+        )}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <AAvatar displayName={participant.discordName} avatarUrl={participant.avatarUrl} size={isLandscape ? 44 : 52} green={isChampion} />
           <div className="min-w-0 flex-1 flex items-start justify-between gap-3">
             <div className="min-w-0 flex flex-col gap-2">
               {nameLink}
@@ -271,8 +276,8 @@ function SeatHeader({
   }
 
   return (
-    <header className="shrink-0 flex items-center gap-4 px-4 md:px-5 xl:px-8 py-7 border-b border-border">
-      <AAvatar displayName={participant.discordName} avatarUrl={participant.avatarUrl} size={60} green={isChampion} />
+    <header className="shrink-0 flex items-center gap-4 px-4 md:px-5 xl:px-8 py-5 border-b border-border">
+      <AAvatar displayName={participant.discordName} avatarUrl={participant.avatarUrl} size={54} green={isChampion} />
       <div className="min-w-0 flex-1 flex flex-col gap-2">
         {nameLink}
         {metaRow}

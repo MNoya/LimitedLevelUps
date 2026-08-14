@@ -113,7 +113,7 @@ export function PodTable({
 
       <PassDirectionArrows seatCount={sorted.length} />
 
-      {selectedSeat != null && highlightedSeat != null && selectedSeat !== highlightedSeat && (
+      {selectedSeat != null && highlightedSeat != null && highlightedRound != null && selectedSeat !== highlightedSeat && (
         <PairingLine
           fromSeat={selectedSeat}
           toSeat={highlightedSeat}

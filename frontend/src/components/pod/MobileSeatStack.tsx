@@ -7,6 +7,7 @@ import { HeroSection } from "../HeroSection";
 import { type DeckTab } from "./DeckScreenshotModal";
 import { highlightEventLabel } from "./EventLabel";
 import { PlayerSeatPanel } from "./PlayerSeatPanel";
+import { PodStandings, PodStandingsSkeleton, StandingsBackBar, type PodStandingsActions } from "./PodStandings";
 import type { PodEventMatchRow, PodEventReplayRow, PodSeat } from "../../types/leaderboard";
 
 interface Props {
@@ -25,6 +26,9 @@ interface Props {
   hasDraftLog: boolean;
   formatLabel?: string | null;
   isMock?: boolean;
+  standingsAvailable?: boolean;
+  teamDraft?: boolean;
+  standingsActions?: PodStandingsActions;
 }
 
 const GRID_REF_WIDTH = 380;
@@ -32,7 +36,17 @@ const GRID_MAX_WIDTH = 560;
 const REF_TILE = { w: 74, h: 64 };
 const REF_ARROW = 16;
 
-export function MobileSeatStackSkeleton({ seatCount = 8 }: { seatCount?: number }) {
+export function MobileSeatStackSkeleton({
+  seatCount = 8,
+  variant = "standings",
+  finalized = true,
+  teamDraft = false,
+}: {
+  seatCount?: number;
+  variant?: "player" | "standings";
+  finalized?: boolean;
+  teamDraft?: boolean;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   useLayoutEffect(() => {
@@ -77,20 +91,25 @@ export function MobileSeatStackSkeleton({ seatCount = 8 }: { seatCount?: number 
           <SkeletonRow count={bottomCount} tileW={tileW} tileH={tileH} scale={scale} />
         </div>
       </HeroSection>
-      <div className="bg-surface border-b border-border px-4 py-6 flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-[60px] h-[60px] bg-surface2 animate-pulse" />
-          <div className="flex flex-col gap-2 min-w-0 flex-1">
-            <div className="h-6 w-2/3 bg-surface2 animate-pulse" />
-            <div className="h-3 w-1/3 bg-surface2 animate-pulse" />
+      {variant === "standings" ? (
+        <div className="bg-surface">
+          <PodStandingsSkeleton rows={seatCount} finalized={finalized} teamDraft={teamDraft} />
+        </div>
+      ) : (
+        <div className="bg-surface border-b border-border px-4 py-4 flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-[52px] h-[52px] bg-surface2 animate-pulse shrink-0" />
+            <div className="flex flex-col gap-2 min-w-0 flex-1">
+              <div className="h-6 w-2/3 bg-surface2 animate-pulse" />
+              <div className="h-3 w-1/3 bg-surface2 animate-pulse" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-[38px] flex-1 bg-surface2 animate-pulse" />
+            <div className="h-[38px] flex-1 bg-surface2 animate-pulse" />
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <div className="h-10 w-full bg-surface2 animate-pulse" />
-          <div className="h-10 w-full bg-surface2 animate-pulse" />
-          <div className="h-10 w-full bg-surface2 animate-pulse" />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -142,11 +161,15 @@ export function MobileSeatStack({
   hasDraftLog,
   formatLabel,
   isMock = false,
+  standingsAvailable = false,
+  teamDraft = false,
+  standingsActions,
 }: Props) {
   const sorted = [...participants].sort((a, b) => a.seatIndex - b.seatIndex);
   const selected = selectedSeat == null
     ? null
     : participants.find((p) => p.seatIndex === selectedSeat) ?? null;
+  const showStandings = standingsAvailable && !!standingsActions && selected == null;
 
   return (
     <div className="flex flex-col">
@@ -161,13 +184,34 @@ export function MobileSeatStack({
         />
       </HeroSection>
 
+      {standingsAvailable && standingsActions && (
+        <div
+          className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
+          style={{ gridTemplateRows: showStandings ? "1fr" : "0fr" }}
+        >
+          <div className="overflow-hidden">
+            <div className="bg-surface">
+              <PodStandings
+                seats={participants}
+                teamDraft={teamDraft}
+                finalized={podFinalized}
+                selectedSeat={selectedSeat}
+                onSelect={onSelect}
+                actions={standingsActions}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
-        className="grid transition-[grid-template-rows] duration-300 ease-out"
+        className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
         style={{ gridTemplateRows: selected ? "1fr" : "0fr" }}
       >
         <div className="overflow-hidden">
           {selected && (
             <div className="bg-surface">
+              {standingsAvailable && <StandingsBackBar onClick={() => onSelect(null)} />}
               <PlayerSeatPanel
                 key={selected.displayName}
                 participant={selected}

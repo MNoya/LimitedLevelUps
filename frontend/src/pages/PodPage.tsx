@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
@@ -6,11 +6,19 @@ import { DraftReviewMOCS, type ReviewSeatInfo } from "../components/pod/review/D
 import { SectionLabel } from "../components/SectionLabel";
 import { BackButton, MobilePageHeader, PrevNextNav } from "../components/PageNav";
 import { useIsLandscapePhone, useIsMobile } from "../lib/use-is-mobile";
+import { cn } from "../lib/utils";
 import { PodTable, PodTableSkeleton } from "../components/pod/PodTable";
 import { PlayerSeatPanel } from "../components/pod/PlayerSeatPanel";
 import type { RoundOutcome } from "../components/pod/PlayerSeatPanel";
 import { MobileSeatStack, MobileSeatStackSkeleton } from "../components/pod/MobileSeatStack";
 import { DeckScreenshotModal, type DeckTab } from "../components/pod/DeckScreenshotModal";
+import {
+  compareStandings,
+  hasStandings,
+  PodStandings,
+  PodStandingsSkeleton,
+  StandingsBackBar,
+} from "../components/pod/PodStandings";
 import {
   usePodDraftArtifact,
   usePodEventBySlug,
@@ -29,19 +37,13 @@ import type {
 } from "../types/leaderboard";
 
 const TABLE_MAX_WIDE = 720;
-const TABLE_MAX_SHRUNK = 640;
+const TABLE_MAX_SHRUNK = 700;
 const ANIMATION_MS = 500;
-const CHROME_OFFSET = 260;
+const CHROME_OFFSET = 200;
+const RAIL_SLIDE_MS = 220;
 const CHROME_OFFSET_LANDSCAPE = 84;
 const PANEL_MIN_WIDTH = 360;
 const PANEL_MIN_WIDTH_LANDSCAPE = 280;
-
-function compareParticipants(a: PodEventParticipantRow, b: PodEventParticipantRow): number {
-  const ap = a.placement ?? Number.MAX_SAFE_INTEGER;
-  const bp = b.placement ?? Number.MAX_SAFE_INTEGER;
-  if (ap !== bp) return ap - bp;
-  return a.displayName.localeCompare(b.displayName);
-}
 
 function assignSeats(rows: PodEventParticipantRow[]): PodSeat[] {
   const haveRealSeats = rows.some((r) => r.seatIndex != null);
@@ -56,12 +58,22 @@ function assignSeats(rows: PodEventParticipantRow[]): PodSeat[] {
         discordName: podDiscordName(row),
       }));
   }
-  const ordered = rows.slice().sort(compareParticipants);
+  const ordered = rows.slice().sort(compareStandings);
   return ordered.map((row, i) => ({
     ...row,
     seatIndex: i,
     discordName: podDiscordName(row),
   }));
+}
+
+function findSeatByName(seats: PodSeat[], name: string): PodSeat | undefined {
+  const lower = name.toLowerCase();
+  return (
+    seats.find((p) => p.discordName === name) ??
+    seats.find((p) => p.displayName === name) ??
+    seats.find((p) => p.discordName.toLowerCase() === lower) ??
+    seats.find((p) => p.displayName.toLowerCase() === lower)
+  );
 }
 
 export function PodPage() {
@@ -92,7 +104,8 @@ export function PodPage() {
   };
 
   const handleSelectSeat = (seat: number | null) => {
-    if (seat == null && isMobile) return;
+    if (seat == null && isMobile && !standingsAvailable) return;
+    const openingFromStandings = seat != null && selectedSeat == null;
     setSelectedSeat(seat);
     setSearchParams(
       (prev) => {
@@ -106,7 +119,7 @@ export function PodPage() {
         }
         return next;
       },
-      { replace: true },
+      { replace: !openingFromStandings },
     );
   };
 
@@ -154,15 +167,14 @@ export function PodPage() {
       nextSlug: idx < started.length - 1 ? started[idx + 1].slug : null,
     };
   }, [setEvents, event]);
-  const carryQuery = preselectName ? `?player=${encodeURIComponent(preselectName)}` : "";
-  const prevTo = prevSlug ? `/pods/${prevSlug}${carryQuery}` : null;
-  const nextTo = nextSlug ? `/pods/${nextSlug}${carryQuery}` : null;
+  const prevTo = prevSlug ? `/pods/${prevSlug}` : null;
+  const nextTo = nextSlug ? `/pods/${nextSlug}` : null;
 
   const chromeOffset = isLandscapePhone ? CHROME_OFFSET_LANDSCAPE : CHROME_OFFSET;
   const panelMinWidth = isLandscapePhone ? PANEL_MIN_WIDTH_LANDSCAPE : PANEL_MIN_WIDTH;
-  const mainClass = `flex-1 flex flex-col pl-4 pr-4 min-h-0 ${isLandscapePhone ? "pb-2" : "md:pl-10 md:pr-12 lg:pr-14 pb-10"}`;
-  const tableColumnPad = isLandscapePhone ? "py-1" : "py-8 md:py-12";
-  const contentRowPad = isLandscapePhone ? "py-1" : "py-3";
+  const mainClass = `flex-1 flex flex-col px-3 min-h-0 ${isLandscapePhone ? "pb-2" : "md:px-6 pb-5"}`;
+  const tableColumnPad = isLandscapePhone ? "py-1 pr-2" : "py-3 md:py-4 pr-5 md:pr-7";
+  const contentRowPad = isLandscapePhone ? "py-1" : "py-2";
   const pageHeader = isLandscapePhone ? (
     <MobilePageHeader
       backTo="/pods"
@@ -213,6 +225,8 @@ export function PodPage() {
   const selectedParticipant =
     selectedSeat == null ? null : seats.find((p) => p.seatIndex === selectedSeat) ?? null;
 
+  const standingsAvailable = hasStandings(seats);
+
   const [displayParticipant, setDisplayParticipant] = useState<PodSeat | null>(selectedParticipant);
 
   useEffect(() => {
@@ -246,22 +260,27 @@ export function PodPage() {
     }
     let target: PodSeat | undefined;
     if (preselectName) {
-      const lower = preselectName.toLowerCase();
-      target =
-        seats.find((p) => p.discordName === preselectName) ??
-        seats.find((p) => p.displayName === preselectName) ??
-        seats.find((p) => p.discordName.toLowerCase() === lower) ??
-        seats.find((p) => p.displayName.toLowerCase() === lower) ??
-        seats.find((p) => p.placement === 1) ??
-        seats[0];
-    } else if (isMobile) {
+      target = findSeatByName(seats, preselectName);
+    } else if (isMobile && !standingsAvailable) {
       target = seats.find((p) => p.placement === 1) ?? seats[0];
     }
     if (target) setSelectedSeat(target.seatIndex);
     setPreselectChecked(true);
   }, [seats, preselectName, isMobile, preselectChecked, participantRows]);
 
+  // Browser Back and Forward move ?player=, so the open seat follows the URL and not only the click
+  useEffect(() => {
+    if (!preselectChecked || !standingsAvailable) return;
+    if (preselectName == null) {
+      setSelectedSeat(null);
+      return;
+    }
+    const target = findSeatByName(seats, preselectName);
+    if (target) setSelectedSeat(target.seatIndex);
+  }, [preselectName, preselectChecked, standingsAvailable, seats]);
+
   const preselectPending = (!!preselectName || isMobile) && !preselectChecked;
+  const railOpensOnLoad = event ? event.kind !== "mock" : true;
 
   if (eventLoading || (event && participantsLoading) || (event && preselectPending)) {
     if (isMobile) {
@@ -274,7 +293,11 @@ export function PodPage() {
             prevAriaLabel="Previous pod"
             nextAriaLabel="Next pod"
           />
-          <MobileSeatStackSkeleton />
+          <MobileSeatStackSkeleton
+            variant={preselectName ? "player" : "standings"}
+            finalized={event?.isFinalized ?? true}
+            teamDraft={event?.isTeamDraft ?? false}
+          />
         </div>
       );
     }
@@ -287,7 +310,7 @@ export function PodPage() {
               <BackButton to="/pods" label="BACK TO POD DRAFTS" inline />
             </div>
           )}
-          {preselectName ? (
+          {railOpensOnLoad ? (
             <div className={`flex-1 flex items-stretch min-h-0 ${contentRowPad}`}>
               <div className={`flex items-center min-w-0 shrink-0 justify-end ${tableColumnPad}`} style={{ width: "55%" }}>
                 <PodTableSkeleton
@@ -295,7 +318,11 @@ export function PodPage() {
                 />
               </div>
               <div className="min-w-0 shrink-0 self-start max-h-full" style={{ width: "45%" }}>
-                <PodPanelSkeleton minWidth={panelMinWidth} />
+                <PodPanelSkeleton
+                  minWidth={panelMinWidth}
+                  variant={preselectName ? "player" : "standings"}
+                  finalized={event?.isFinalized ?? true}
+                />
               </div>
             </div>
           ) : (
@@ -335,11 +362,18 @@ export function PodPage() {
     draftArtifact && deckTarget && decklistAccess.canViewSeat(deckTarget.avatarUrl)
       ? `/pods/${event.slug}/${deckTarget.playerSlug ?? deckTarget.seatIndex}`
       : null;
-  const open = selectedParticipant !== null;
+  const open = selectedParticipant !== null || standingsAvailable;
+  const detailOpen = selectedParticipant !== null;
   const tableMaxPx = open ? TABLE_MAX_SHRUNK : TABLE_MAX_WIDE;
   const loadedMatches = matches ?? [];
   const loadedReplays = replays ?? [];
   const auxLoading = matchesLoading || replaysLoading;
+  const standingsActions = {
+    eventSlug: event.slug,
+    hasDraftLog: !!draftArtifact,
+    canViewSeat: decklistAccess.canViewSeat,
+    onShowDeck: (seat: PodSeat) => openDeck(seat),
+  };
 
   if (isMobile) {
     return (
@@ -367,6 +401,9 @@ export function PodPage() {
           hasDraftLog={!!draftArtifact}
           formatLabel={event.formatLabel}
           isMock={event.kind === "mock"}
+          standingsAvailable={standingsAvailable}
+          teamDraft={event.isTeamDraft ?? false}
+          standingsActions={standingsActions}
         />
         {deckTarget && (
           <DeckScreenshotModal
@@ -447,29 +484,45 @@ export function PodPage() {
             }}
           >
             <div className="pod-panel-shell bg-surface border border-border flex flex-col min-h-0 flex-1 overflow-hidden">
-              <div className="flex flex-col min-h-0 flex-1" style={{ minWidth: panelMinWidth }}>
-                {displayParticipant && (
-                  <PlayerSeatPanel
-                    key={displayParticipant.displayName}
-                    participant={displayParticipant}
-                    participantsBySeatName={participantsBySeatName}
-                    matches={loadedMatches}
-                    replays={loadedReplays}
-                    setCode={event.setCode}
-                    eventSlug={event.slug}
-                    hasDraftLog={!!draftArtifact}
-                    canViewSeat={decklistAccess.canViewSeat}
-                    podFinalized={event.isFinalized}
-                    onRoundHover={handleRoundHover}
-                    onShowDeck={openDeck}
-                    isMock={event.kind === "mock"}
-                  />
+              <div className="relative flex flex-col min-h-0 flex-1" style={{ minWidth: panelMinWidth }}>
+                {standingsAvailable && (
+                  <RailLayer shown={!detailOpen} hiddenShift="-translate-x-4" className="overflow-y-auto themed-scrollbar">
+                    <PodStandings
+                      seats={seats}
+                      teamDraft={event.isTeamDraft ?? false}
+                      finalized={event.isFinalized}
+                      selectedSeat={selectedSeat}
+                      onSelect={handleSelectSeat}
+                      onHover={(seat) => handleRoundHover(seat, null, null)}
+                      actions={standingsActions}
+                    />
+                  </RailLayer>
                 )}
-                {displayParticipant && auxLoading && (
-                  <div className="px-5 py-2 text-muted text-[12px] font-body">
-                    Loading matches & replays…
-                  </div>
-                )}
+                <RailLayer shown={detailOpen || !standingsAvailable} hiddenShift="translate-x-6">
+                  {standingsAvailable && <StandingsBackBar onClick={() => handleSelectSeat(null)} />}
+                  {displayParticipant && (
+                    <PlayerSeatPanel
+                      key={displayParticipant.displayName}
+                      participant={displayParticipant}
+                      participantsBySeatName={participantsBySeatName}
+                      matches={loadedMatches}
+                      replays={loadedReplays}
+                      setCode={event.setCode}
+                      eventSlug={event.slug}
+                      hasDraftLog={!!draftArtifact}
+                      canViewSeat={decklistAccess.canViewSeat}
+                      podFinalized={event.isFinalized}
+                      onRoundHover={handleRoundHover}
+                      onShowDeck={openDeck}
+                      isMock={event.kind === "mock"}
+                    />
+                  )}
+                  {displayParticipant && auxLoading && (
+                    <div className="px-5 py-2 text-muted text-[12px] font-body">
+                      Loading matches & replays…
+                    </div>
+                  )}
+                </RailLayer>
               </div>
             </div>
           </div>
@@ -586,19 +639,64 @@ function resolveLogSeat(seats: PodSeat[], who: string): number | null {
   return null;
 }
 
-function PodPanelSkeleton({ minWidth = PANEL_MIN_WIDTH }: { minWidth?: number }) {
+function RailLayer({
+  shown,
+  hiddenShift,
+  className,
+  children,
+}: {
+  shown: boolean;
+  hiddenShift: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      aria-hidden={!shown}
+      className={cn(
+        "flex flex-col ease-out motion-reduce:transition-none transition-[transform,opacity]",
+        shown
+          ? "relative flex-1 min-h-0 translate-x-0 opacity-100"
+          : `absolute inset-0 ${hiddenShift} opacity-0 pointer-events-none`,
+        className,
+      )}
+      style={{ transitionDuration: `${RAIL_SLIDE_MS}ms` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function PodPanelSkeleton({
+  minWidth = PANEL_MIN_WIDTH,
+  variant = "player",
+  finalized = true,
+}: {
+  minWidth?: number;
+  variant?: "player" | "standings";
+  finalized?: boolean;
+}) {
+  if (variant === "standings") {
+    return (
+      <div className="pod-panel-shell bg-surface border border-border max-h-full overflow-hidden">
+        <div style={{ minWidth }}>
+          <PodStandingsSkeleton finalized={finalized} />
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="pod-panel-shell bg-surface border border-border max-h-full overflow-hidden">
       <div style={{ minWidth }}>
-        <div className="flex items-center gap-4 px-4 md:px-5 xl:px-8 py-7 border-b border-border">
-          <div className="w-[60px] h-[60px] bg-surface2 animate-pulse shrink-0" />
+        <div className="flex items-center gap-4 px-4 md:px-5 xl:px-8 py-5 border-b border-border">
+          <div className="w-[54px] h-[54px] bg-surface2 animate-pulse shrink-0" />
           <div className="min-w-0 flex-1 flex flex-col gap-2">
             <div className="h-7 w-2/3 bg-surface2 animate-pulse" />
             <div className="h-4 w-1/3 bg-surface2 animate-pulse" />
           </div>
           <div className="flex flex-col gap-2 shrink-0">
-            <div className="h-[34px] w-[140px] bg-surface2 animate-pulse" />
-            <div className="h-[34px] w-[140px] bg-surface2 animate-pulse" />
+            <div className="h-[44px] w-[200px] bg-surface2 animate-pulse" />
+            <div className="h-[44px] w-[200px] bg-surface2 animate-pulse" />
           </div>
         </div>
         {Array.from({ length: 3 }, (_, i) => (

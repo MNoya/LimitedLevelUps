@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import date, datetime
 
 from bot.services.pod_format import format_display
 from bot.services.pod_schedule import SCHEDULE_TZ
@@ -18,6 +18,11 @@ from bot.services.pod_signals import PollBucket, poll_buckets_for
 
 
 COLLISION_INDEX_RE = re.compile(r"#(\d+)\s*$")
+
+
+def pod_event_date(event_time: datetime) -> date:
+    """The calendar day a pod belongs to in Eastern time, never the UTC day a Late Pod rolls into"""
+    return event_time.astimezone(SCHEDULE_TZ).date()
 
 
 def pod_display_name(set_code: str, event_time: datetime) -> str:

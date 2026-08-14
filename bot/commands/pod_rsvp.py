@@ -107,7 +107,7 @@ from bot.services.pod_roster_fields import add_roster_fields
 from bot.services import pod_team
 from bot.services.pod_team_board import TeamBoardMember, load_team_board_data, team_result_headline
 from bot.services.pod_schedule import LATE_POD_ROLE_NAME, SCHEDULE_TZ
-from bot.services.pod_slot import pod_display_name
+from bot.services.pod_slot import pod_display_name, pod_event_date
 from bot.services.pod_staging import pod_family_sync, pod_is_numbered, pod_numeral
 from bot.services.pod_signals import RSVP_EMOJI, RSVP_MAYBE, RSVP_NO, RSVP_STATES, RSVP_YES
 from bot.sets import active_set_code
@@ -2009,5 +2009,5 @@ def _apply_new_time(event_id: str, new_time: datetime) -> None:
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, event_id)
         event.event_time = new_time
-        event.event_date = new_time.astimezone(SCHEDULE_TZ).date()
+        event.event_date = pod_event_date(new_time)
         session.commit()

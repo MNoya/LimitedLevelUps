@@ -2,6 +2,8 @@
 // on the site until it finishes (is finalized). While closed, an organizer sees every seat, and a
 // logged-in player sees only their own seat, matched by the Discord id embedded in the seat avatar.
 
+import { useMemo } from "react";
+
 import { useAuth } from "../auth/useAuth";
 import { isPodOrganizer } from "./podOrganizers";
 import type { PodEventSummary } from "../types/leaderboard";
@@ -30,13 +32,19 @@ export function computePodDecklistAccess(args: {
   return { locked, canViewAll, canViewSeat };
 }
 
+/** Identity is stable across renders, so callers may use it as a useMemo/useEffect dependency */
 export function usePodDecklistAccess(event: PodEventSummary | null | undefined): PodDecklistAccess {
   const { user } = useAuth();
   const discordId = user?.discordId ?? null;
-  return computePodDecklistAccess({
-    closedDecklist: event?.closedDecklist,
-    isFinalized: event?.isFinalized ?? false,
-    isOrganizer: isPodOrganizer(discordId),
-    viewerDiscordId: discordId,
-  });
+  const closedDecklist = event?.closedDecklist;
+  const isFinalized = event?.isFinalized ?? false;
+  return useMemo(
+    () => computePodDecklistAccess({
+      closedDecklist,
+      isFinalized,
+      isOrganizer: isPodOrganizer(discordId),
+      viewerDiscordId: discordId,
+    }),
+    [closedDecklist, isFinalized, discordId],
+  );
 }

@@ -74,7 +74,7 @@ from bot.services import pod_active
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_signals import SCHEDULE_TZ, slot_event_time
 from bot.services.pod_format_schedule import formats_on, latest_on
-from bot.services.pod_slot import COLLISION_INDEX_RE, next_collision_index, pod_display_name
+from bot.services.pod_slot import COLLISION_INDEX_RE, next_collision_index, pod_display_name, pod_event_date
 from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import (
     build_attendance_hold_body,
@@ -2209,7 +2209,7 @@ def _mint_fresh_session_sync(event_id: str) -> str | None:
         event = session.get(PodDraftEvent, event_id)
         if event is None:
             return None
-        session_id = build_ondemand_session(session, event.event_time.date())
+        session_id = build_ondemand_session(session, pod_event_date(event.event_time))
         event.draftmancer_session = session_id
         session.commit()
         return session_id

@@ -28,7 +28,7 @@ from bot.models import (
 from bot.services import pod_format
 from bot.services import pod_format_interest
 from bot.services.pod_schedule import NUM_RE, highest_event_number
-from bot.services.pod_slot import next_collision_index, pod_display_name
+from bot.services.pod_slot import next_collision_index, pod_display_name, pod_event_date
 from bot.slug import disambiguate_slug, slugify
 
 
@@ -645,7 +645,7 @@ def record_mock_event(
     code = set_code.upper()
     session_id, number = build_mock_session(session, code)
     event = PodDraftEvent(
-        event_date=event_time.date(),
+        event_date=pod_event_date(event_time),
         event_time=event_time,
         set_id=_lookup_set_id(session, code),
         set_code=code,
@@ -712,13 +712,13 @@ def record_ondemand_event(
     finalize exactly like a sesh-born tournament."""
     code = set_code.upper()
     event = PodDraftEvent(
-        event_date=event_time.date(),
+        event_date=pod_event_date(event_time),
         event_time=event_time,
         set_id=_lookup_set_id(session, code),
         set_code=code,
         format_label=pod_format.label_for(code),
         name=name,
-        draftmancer_session=build_ondemand_session(session, event_time.date()),
+        draftmancer_session=build_ondemand_session(session, pod_event_date(event_time)),
         discord_thread_id=discord_thread_id,
         socket_status="pending",
         kind="tournament",

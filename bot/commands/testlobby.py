@@ -137,6 +137,7 @@ from bot.services.pod_voice import (
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import SCHEDULE_TZ
 from bot.services.pod_signals import LANE_EARLY, bucket_for_lane, named_bucket_key
+from bot.services.pod_slot import pod_event_date
 from bot.slug import disambiguate_slug, slugify
 from bot.tasks.pod_daily_poll import build_play_again_prompt
 
@@ -237,7 +238,7 @@ def _seed_live_test_event_sync(
     with SessionLocal() as session:
         session.add(PodDraftEvent(
             id=event_id,
-            event_date=now.date(),
+            event_date=pod_event_date(now),
             event_time=now,
             set_code=active_set_code(),
             name="Testlobby Live Pod",
@@ -302,7 +303,7 @@ def _seed_table_source_sync(channel_id: int) -> str:
     with SessionLocal() as session:
         session.add(PodDraftEvent(
             id=event_id,
-            event_date=now.date(),
+            event_date=pod_event_date(now),
             event_time=now,
             set_code=active_set_code(),
             name=_table_test_base_name(),

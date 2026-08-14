@@ -1,5 +1,5 @@
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -29,6 +29,7 @@ from bot.services.pod_drafts import (
     set_participant_deck_colors,
     upsert_participant,
 )
+from bot.services.pod_schedule import SCHEDULE_TZ
 
 
 _SESSION_RE = re.compile(r"^(?P<base>.+)-(?P<suffix>[a-z]{4})$")
@@ -66,7 +67,7 @@ def _make_event(session, set_code="SOS", event_date=date(2026, 5, 13),
                 attendees=("Alice", "Bob", "Carl"), name=None):
     """Create a bot-native pod event plus its roster, linking each name to a Player when one matches —
     the shared factory the pod-draft tests build on."""
-    event_time = datetime(event_date.year, event_date.month, event_date.day, 0, 0, tzinfo=timezone.utc)
+    event_time = datetime.combine(event_date, time(14, 0), tzinfo=SCHEDULE_TZ)
     event = record_ondemand_event(
         session, set_code=set_code, event_time=event_time,
         name=name or f"{set_code} Pod Draft — {event_date:%b %d}",

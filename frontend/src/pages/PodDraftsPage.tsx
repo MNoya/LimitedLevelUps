@@ -11,16 +11,16 @@ import { SetSwitcherDesktop } from "../components/SetSwitcher";
 import { SetFilterDropdown, setFilterOptionsFrom } from "../components/SetFilterDropdown";
 import { BoardWindowSelector, type BoardWindowOption } from "../components/BoardWindowSelector";
 import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
-import { AAvatar, setGlyphCode, SetGlyph, Trophy } from "../components/Brand";
-import { ArrowRight, CalendarRange, GiRoundTable, LuScrollText, TbCards } from "../components/Icons";
+import { setGlyphCode, SetGlyph, Trophy } from "../components/Brand";
+import { ArrowRight, CalendarRange, GiRoundTable, TbCards } from "../components/Icons";
 import { DiscordIcon } from "../components/BrandIcons";
 import { CtaPill } from "../components/CtaPill";
 import { ChamferedButton } from "../components/ChamferedButton";
-import { Tooltip } from "../components/Tooltip";
 import { BREAKDOWN_CAPTION, DeckScreenshotModal } from "../components/pod/DeckScreenshotModal";
 import { highlightEventLabel, PodEventTitle } from "../components/pod/EventLabel";
+import { compareStandings } from "../components/pod/PodStandings";
+import { PodStandingRow, PodStandingRowSkeleton } from "../components/pod/PodStandingRow";
 import { Pips } from "../components/ManaPips";
-import { Record } from "../components/Record";
 import {
   defaultSortFor,
   LeaderboardTable,
@@ -863,10 +863,6 @@ function EventRowMeta({ open, expandable }: { open: boolean; expandable: boolean
   );
 }
 
-const STANDING_COLS_CLASS =
-  "[grid-template-columns:28px_1fr_60px_50px_38px] " +
-  "lg:[grid-template-columns:44px_1fr_80px_70px_150px]";
-
 const STANDINGS_LIMIT = 4;
 
 function EventStandings({ event }: { event: PodEventSummary }) {
@@ -883,7 +879,7 @@ function EventStandings({ event }: { event: PodEventSummary }) {
   );
   const sorted = useMemo(() => {
     if (!rows) return [];
-    return [...rows].sort((a, b) => (a.placement ?? 99) - (b.placement ?? 99));
+    return [...rows].sort(compareStandings);
   }, [rows]);
   const visible = sorted.slice(0, STANDINGS_LIMIT);
   const hiddenCount = sorted.length - visible.length;
@@ -904,12 +900,13 @@ function EventStandings({ event }: { event: PodEventSummary }) {
       <div className="border-t border-dashed border-border2">
         <div className="flex flex-col gap-[1px] pb-[1px] bg-bg">
           {isLoading
-            ? Array.from({ length: STANDINGS_LIMIT }).map((_, i) => <StandingRowSkeleton key={i} />)
-            : visible.map((p) => (
-                <StandingRow
+            ? Array.from({ length: STANDINGS_LIMIT }).map((_, i) => <PodStandingRowSkeleton key={i} />)
+            : visible.map((p, index) => (
+                <PodStandingRow
                   key={`${p.eventId}-${p.displayName}`}
                   p={decklistAccess.canViewSeat(p.avatarUrl) ? p : { ...p, deckColors: null }}
-                  profileHref={p.playerSlug ? playerPath(p.playerSlug, event.setCode) : null}
+                  rank={p.placement ?? index + 1}
+                  nameHref={p.playerSlug ? playerPath(p.playerSlug, event.setCode) : null}
                   logHref={draftArtifact && decklistAccess.canViewSeat(p.avatarUrl) ? `/pods/${event.slug}/${p.playerSlug ?? p.seatIndex}` : null}
                   onShowDeck={p.deckScreenshotUrl && decklistAccess.canViewSeat(p.avatarUrl) ? () => setDeckTarget(p) : undefined}
                 />
@@ -966,132 +963,6 @@ function EventStandings({ event }: { event: PodEventSummary }) {
   );
 }
 
-function StandingRow({
-  p,
-  profileHref,
-  logHref,
-  onShowDeck,
-}: {
-  p: PodEventParticipantRow;
-  profileHref?: string | null;
-  logHref?: string | null;
-  onShowDeck?: () => void;
-}) {
-  const navigate = useNavigate();
-  const wins = p.record ? Number(p.record.split("-")[0] || 0) : 0;
-  const losses = p.record ? Number(p.record.split("-")[1] || 0) : 0;
-  const name = podDiscordName(p);
-  const hasDeck = !!onShowDeck;
-  const draftLog = !hasDeck ? (logHref ?? null) : null;
-  const interactive = hasDeck || !!draftLog;
-  const handleRowClick = () => {
-    if (onShowDeck) onShowDeck();
-    else if (draftLog) navigate(draftLog);
-  };
-  return (
-    <div
-      onClick={interactive ? handleRowClick : undefined}
-      className={cn(
-        "group/row grid items-center gap-x-2 lg:gap-x-3 py-2.5 pl-2 pr-3 lg:pr-5 bg-surface transition-colors",
-        STANDING_COLS_CLASS,
-        interactive && "cursor-pointer hover:bg-surface2",
-      )}
-    >
-      <span className="mono text-[13px] text-muted text-center">{p.placement ?? ""}</span>
-      {profileHref ? (
-        <Tooltip label={`View ${name}'s Profile`} side="top" align="start" delayDuration={0}>
-          <Link
-            to={profileHref}
-            onClick={(e) => e.stopPropagation()}
-            className="group/name peer/name flex items-center gap-2 lg:gap-2.5 min-w-0 max-w-full justify-self-start w-fit no-underline text-text hover:text-green transition-colors"
-          >
-            <AAvatar displayName={name} avatarUrl={p.avatarUrl} size={28} />
-            <span
-              className="font-display leading-none tracking-[0.04em] whitespace-nowrap overflow-hidden text-ellipsis"
-              style={{ fontSize: 16 }}
-            >
-              {name.toUpperCase()}
-            </span>
-          </Link>
-        </Tooltip>
-      ) : (
-        <div className="flex items-center gap-2 lg:gap-2.5 min-w-0">
-          <AAvatar displayName={name} avatarUrl={p.avatarUrl} size={28} />
-          <span
-            className="font-display text-text leading-none tracking-[0.04em] whitespace-nowrap overflow-hidden text-ellipsis"
-            style={{ fontSize: 16 }}
-          >
-            {name.toUpperCase()}
-          </span>
-        </div>
-      )}
-      <div className="flex items-center">
-        {p.deckColors ? (
-          <Pips colors={p.deckColors} size={14} />
-        ) : (
-          <span className="text-dim text-[12px]">—</span>
-        )}
-      </div>
-      <Record className="mono text-center text-[13px]" wins={wins} losses={losses} />
-      {hasDeck ? (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onShowDeck?.();
-          }}
-          className="group/action inline-flex items-center justify-center gap-2 bg-bg border border-border text-text hover:border-green/60 hover:bg-green/10 hover:text-green group-hover/row:border-green/60 group-hover/row:bg-green/10 group-hover/row:text-green peer-hover/name:!border-border peer-hover/name:!bg-bg peer-hover/name:!text-text transition-colors px-1.5 lg:px-3 cursor-pointer whitespace-nowrap"
-          style={{ height: 34 }}
-        >
-          <span
-            className="hidden lg:inline font-display tracking-[0.16em] transition-colors leading-none"
-            style={{ fontSize: 14 }}
-          >
-            VIEW DECK
-          </span>
-          <TbCards size={17} aria-hidden="true" className="transition-colors" />
-        </button>
-      ) : draftLog ? (
-        <Link
-          to={draftLog}
-          onClick={(e) => e.stopPropagation()}
-          className="group/action inline-flex items-center justify-center gap-2 bg-bg border border-border text-text hover:border-green/60 hover:bg-green/10 hover:text-green group-hover/row:border-green/60 group-hover/row:bg-green/10 group-hover/row:text-green peer-hover/name:!border-border peer-hover/name:!bg-bg peer-hover/name:!text-text transition-colors px-1.5 lg:px-3 no-underline whitespace-nowrap"
-          style={{ height: 34 }}
-        >
-          <span
-            className="hidden lg:inline font-display tracking-[0.16em] transition-colors leading-none"
-            style={{ fontSize: 14 }}
-          >
-            DRAFT LOG
-          </span>
-          <LuScrollText size={16} aria-hidden="true" className="transition-colors" />
-        </Link>
-      ) : (
-        <span />
-      )}
-    </div>
-  );
-}
-
-function StandingRowSkeleton() {
-  return (
-    <div
-      className={cn(
-        "grid items-center gap-x-2 lg:gap-x-3 py-2.5 pl-2 pr-3 lg:pr-5 bg-surface",
-        STANDING_COLS_CLASS,
-      )}
-    >
-      <div className="h-3 w-3 bg-surface2 animate-pulse mx-auto" />
-      <div className="flex items-center gap-2.5">
-        <div className="w-7 h-7 bg-surface2" />
-        <div className="h-3.5 w-32 bg-surface2 animate-pulse" />
-      </div>
-      <div className="h-3.5 w-14 bg-surface2 animate-pulse" />
-      <div className="h-3.5 w-10 bg-surface2 animate-pulse ml-auto" />
-      <div className="h-[34px] w-full bg-surface2 animate-pulse" />
-    </div>
-  );
-}
 
 function EventRowSkeleton({ index }: { index: number }) {
   return (
