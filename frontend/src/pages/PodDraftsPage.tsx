@@ -7,9 +7,12 @@ import { PodPage } from "./PodPage";
 import { AppHeader } from "../components/AppHeader";
 import { Footer } from "../components/Footer";
 import { SectionLabel } from "../components/SectionLabel";
-import { SetSwitcherDesktop, SetSwitcherMobile } from "../components/SetSwitcher";
+import { SetSwitcherDesktop } from "../components/SetSwitcher";
+import { SetFilterDropdown, setFilterOptionsFrom } from "../components/SetFilterDropdown";
+import { BoardWindowSelector, type BoardWindowOption } from "../components/BoardWindowSelector";
+import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
 import { AAvatar, setGlyphCode, SetGlyph, Trophy } from "../components/Brand";
-import { ArrowRight, GiRoundTable, LuScrollText, TbCards } from "../components/Icons";
+import { ArrowRight, CalendarRange, GiRoundTable, LuScrollText, TbCards } from "../components/Icons";
 import { DiscordIcon } from "../components/BrandIcons";
 import { CtaPill } from "../components/CtaPill";
 import { ChamferedButton } from "../components/ChamferedButton";
@@ -19,7 +22,7 @@ import { highlightEventLabel, PodEventTitle } from "../components/pod/EventLabel
 import { Pips } from "../components/ManaPips";
 import { Record } from "../components/Record";
 import {
-  DEFAULT_SORT_NOSCORE,
+  defaultSortFor,
   LeaderboardTable,
   sortRows,
   type LeaderboardTableRow,
@@ -29,18 +32,32 @@ import {
 import { formatCountdown, useNow } from "../lib/countdown";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { cn } from "../lib/utils";
-import { cleanPodEventName, fmtRange, playerPath, podDiscordName, stripDiscriminator, weekOfSet } from "../data/utils";
+import { cleanPodEventName, CUBE_BASE, fmtRange, playerPath, podDiscordName, stripDiscriminator, weekOfSet } from "../data/utils";
 import { ACTIVE_SET_CODE } from "../data/constants";
 import { SITE_LINKS } from "../data/site";
 import {
   usePodDraftArtifact,
+  usePodEventDates,
   usePodEventMatches,
   usePodEventParticipants,
   usePodEvents,
-  usePodLeaderboard,
+  usePodResultsForSet,
+  usePodSeasonEvents,
+  usePodSeasonResults,
   usePodSetCodes,
   useSets,
 } from "../data/hooks";
+import {
+  aggregatePodStandings,
+  bucketBySetCode,
+  bucketOf,
+  seasonsPlayed,
+  currentSeason,
+  podSeasons,
+  seasonBuckets,
+  seasonForDate,
+  type PodFormatBucket,
+} from "../data/podSeasons";
 import { resolveDeck } from "../data/draft-artifact";
 import { usePodDecklistAccess } from "../data/podDecklistAccess";
 import type {
@@ -49,6 +66,11 @@ import type {
   PodLeaderboardRow,
   SetSummary,
 } from "../types/leaderboard";
+
+// A format tried once is not a board, so it stays out of the switcher and keeps its pods on the season
+const MIN_BOARD_PODS = 2;
+
+const POD_DESKTOP_WIDTH = 900;
 
 const MONTHS_CAL = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
@@ -88,6 +110,7 @@ function toLeaderboardRow(r: PodLeaderboardRow): LeaderboardTableRow {
     avatarUrl: r.avatarUrl,
     rank: r.rank,
     trophies: r.trophies,
+    score: r.points ?? 0,
     events: r.events,
     wins: r.wins,
     losses: r.losses,
@@ -98,34 +121,88 @@ function toLeaderboardRow(r: PodLeaderboardRow): LeaderboardTableRow {
 export function PodsRoute() {
   const { slug } = useParams<{ slug: string }>();
   const { data: podSetCodes } = usePodSetCodes();
+  const { data: allSets } = useSets();
   if (!slug) return <PodDraftsPage />;
-  if (podSetCodes === undefined) {
+  if (podSetCodes === undefined || allSets === undefined) {
     return (
       <div className="bg-bg text-text min-h-screen flex flex-col">
         <AppHeader subtitle="POD DRAFTS" />
       </div>
     );
   }
+  const season = podSeasons(allSets).find((s) => s.code.toLowerCase() === slug.toLowerCase());
+  if (season) {
+    if (slug !== season.code) return <Navigate to={`/pods/${season.code}`} replace />;
+    return <PodDraftsPage seasonCode={season.code} />;
+  }
   const match = podSetCodes.find((p) => p.code.toLowerCase() === slug.toLowerCase());
-  if (!match) return <PodPage />;
-  if (slug !== match.code) return <Navigate to={`/pods/${match.code}`} replace />;
-  return <PodDraftsPage setCode={match.code} />;
+  if (match) {
+    if (slug !== match.code) return <Navigate to={`/pods/${match.code}`} replace />;
+    return <PodDraftsPage setCode={match.code} />;
+  }
+  const window = boardWindowFromSlug(slug, podSetCodes, allSets);
+  if (window) {
+    const canonical = boardWindowCode(window.board, window.season);
+    if (slug !== canonical) return <Navigate to={`/pods/${canonical}`} replace />;
+    return <PodDraftsPage setCode={window.board} boardSeasonCode={window.season} />;
+  }
+  return <PodPage />;
 }
 
-export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
-  const isMobile = useIsMobile(1024);
+// A board scoped to one season, the way the leaderboard writes CUBE-SOS
+export function boardWindowCode(board: string, season: string): string {
+  return `${board}-${season}`;
+}
+
+function boardWindowFromSlug(
+  slug: string,
+  podSetCodes: { code: string }[],
+  allSets: SetSummary[],
+): { board: string; season: string } | null {
+  const split = slug.lastIndexOf("-");
+  if (split <= 0) return null;
+  const board = podSetCodes.find((p) => p.code.toLowerCase() === slug.slice(0, split).toLowerCase());
+  const season = podSeasons(allSets).find((s) => s.code.toLowerCase() === slug.slice(split + 1).toLowerCase());
+  return board && season ? { board: board.code, season: season.code } : null;
+}
+
+export function PodDraftsPage({
+  setCode,
+  seasonCode,
+  boardSeasonCode,
+}: { setCode?: string; seasonCode?: string; boardSeasonCode?: string } = {}) {
+  // Below the two-column grid's own breakpoint, so a phone asking for the desktop site gets the
+  // desktop chrome stacked in one column instead of the mobile layout
+  const isMobile = useIsMobile(POD_DESKTOP_WIDTH);
   const navigate = useNavigate();
   const { data: allSets } = useSets();
   const { data: podSetCodes } = usePodSetCodes();
+  const { data: podEventDates } = usePodEventDates();
 
-  const availableSets = useMemo<SetSummary[]>(() => {
+  const seasons = useMemo<SetSummary[]>(() => {
+    if (!allSets || !podEventDates) return [];
+    const played = new Set<string>();
+    for (const date of podEventDates) {
+      const season = seasonForDate(allSets, date);
+      if (season) played.add(season.code);
+    }
+    return podSeasons(allSets).filter((s) => played.has(s.code));
+  }, [allSets, podEventDates]);
+
+  const season = useMemo<SetSummary | undefined>(() => {
+    if (setCode) return undefined;
+    if (seasonCode) return seasons.find((s) => s.code === seasonCode);
+    return currentSeason(allSets) ?? seasons[0];
+  }, [setCode, seasonCode, seasons, allSets]);
+
+  const legacySets = useMemo<SetSummary[]>(() => {
     if (!allSets || !podSetCodes) return [];
     const byCode = new Map(allSets.map((s) => [s.code, s]));
     // Real sets first, then pod-only codes with no visible `sets` row. A label marks a cube format
     // (custom → generic glyph); a bare code is a set hidden until release and keeps its own keyrune.
     const real = allSets.filter((s) => podSetCodes.some((p) => p.code === s.code));
     const synthesized = podSetCodes
-      .filter((p) => !byCode.has(p.code))
+      .filter((p) => !byCode.has(p.code) && (p.label == null || p.events >= MIN_BOARD_PODS))
       .map<SetSummary>((p) => ({
         code: p.code,
         name: p.label ?? p.code,
@@ -133,29 +210,122 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
         endDate: "",
         isActive: false,
         custom: p.label != null,
+        shortCode: p.label != null ? CUBE_BASE : undefined,
       }));
     return [...real, ...synthesized];
   }, [allSets, podSetCodes]);
 
   const homeCode = useMemo(() => {
-    if (availableSets.length === 0) return ACTIVE_SET_CODE;
-    const active = availableSets.find((s) => s.isActive);
-    if (active) return active.code;
-    if (availableSets.some((s) => s.code === ACTIVE_SET_CODE)) return ACTIVE_SET_CODE;
-    const realSet = availableSets.find((s) => !s.custom);
-    return (realSet ?? availableSets[0]).code;
-  }, [availableSets]);
+    const current = currentSeason(allSets);
+    if (current && seasons.some((s) => s.code === current.code)) return current.code;
+    return seasons[0]?.code ?? ACTIVE_SET_CODE;
+  }, [allSets, seasons]);
 
-  const activeSet = setCode ?? homeCode;
+  const activeSet = season?.code ?? setCode ?? homeCode;
   const onSelectSet = (code: string) => {
     navigate(code === homeCode ? "/pods" : `/pods/${code}`);
   };
 
-  const { data: events } = usePodEvents(activeSet);
-  const { data: leaderboard } = usePodLeaderboard(activeSet);
-  const setMeta = availableSets.find((s) => s.code === activeSet);
+  // A season board slices by format, held in state; a cube board slices by season, held in the URL
+  const [formatAxis, setFormatAxis] = useState<string | undefined>(undefined);
+  const axis = season ? formatAxis : boardSeasonCode;
+  const seasonEvents = usePodSeasonEvents(season).data;
+  const seasonResults = usePodSeasonResults(season).data;
+  const boardEvents = usePodEvents(season ? undefined : activeSet).data;
+  const boardResults = usePodResultsForSet(season ? undefined : activeSet).data;
 
-  const [sort, setSort] = useState<SortState>(DEFAULT_SORT_NOSCORE);
+  const setMeta = season ?? legacySets.find((s) => s.code === activeSet);
+  const buckets = useMemo(() => seasonBuckets(seasonEvents, activeSet), [seasonEvents, activeSet]);
+  const boardSeasons = useMemo(() => seasonsPlayed(boardEvents, allSets), [boardEvents, allSets]);
+
+  // One control for both axes: a season board picks a format, a cube board picks a season window.
+  // Chips could not survive a season with five buckets at 1200px, so the dropdown carries both.
+  const selectorOptions = useMemo<BoardWindowOption[]>(() => {
+    const calendar = <CalendarRange size={20} className="text-white shrink-0" />;
+    // Which mode we are in comes from the route, not the data, so a cold start never flashes the
+    // wrong control while the sets are still loading
+    if (!setCode) {
+      // The hero already says HOB overhead, so desktop drops the code and keeps the axis word
+      const head = isMobile && season ? `${season.code} SEASON` : "SEASON";
+      return [
+        { value: AXIS_ALL, label: head, icon: calendar },
+        ...buckets.map((b) => ({
+          value: b.key,
+          label: (b.key === "set" ? `${b.label} ONLY` : b.label).toUpperCase(),
+          icon: <ChipIcon bucket={b.key} seasonMeta={season} className="text-white shrink-0" size={20} />,
+        })),
+      ];
+    }
+    return [
+      { value: activeSet, label: "ALL SEASONS", icon: calendar },
+      ...boardSeasons.map(({ season: s }) => ({
+        value: boardWindowCode(activeSet, s.code),
+        label: `${s.code} SEASON`,
+        glyph: setGlyphCode(s),
+      })),
+    ];
+  }, [setCode, season, buckets, boardSeasons, activeSet, isMobile]);
+
+  const selectorValue = !setCode
+    ? axis ?? AXIS_ALL
+    : boardSeasonCode
+    ? boardWindowCode(activeSet, boardSeasonCode)
+    : activeSet;
+
+  const onSelectWindow = (value: string) => {
+    if (!setCode) {
+      setFormatAxis(value === AXIS_ALL ? undefined : value);
+      return;
+    }
+    navigate(`/pods/${value}`);
+  };
+
+  // Mock pods play no rounds, so they never carry results and only their own filter can reach them
+  const bucketCodes = useMemo(() => {
+    if (!season || !axis) return undefined;
+    if (axis === "mock") return new Set<string>();
+    const byCode = bucketBySetCode(seasonEvents?.filter((e) => e.kind !== "mock"), activeSet);
+    return new Set(Array.from(byCode).filter(([, b]) => b === axis).map(([code]) => code));
+  }, [season, axis, seasonEvents, activeSet]);
+
+  const boardWindow = useMemo(
+    () =>
+      season || !boardSeasonCode
+        ? undefined
+        : boardSeasons.find(({ season: s }) => s.code === boardSeasonCode)?.season,
+    [season, boardSeasonCode, boardSeasons],
+  );
+
+  const events = useMemo(() => {
+    if (!season) {
+      if (!boardEvents) return undefined;
+      if (!boardWindow) return boardEvents;
+      return boardEvents.filter(
+        (e) => e.eventDate >= boardWindow.startDate && e.eventDate <= boardWindow.endDate,
+      );
+    }
+    if (!seasonEvents) return undefined;
+    return seasonEvents.filter((e) => (axis ? bucketOf(e, activeSet) === axis : e.kind !== "mock"));
+  }, [season, seasonEvents, boardEvents, boardWindow, axis, activeSet]);
+
+  const leaderboard = useMemo(() => {
+    if (season) return aggregatePodStandings(seasonResults, bucketCodes);
+    if (!boardWindow) return aggregatePodStandings(boardResults);
+    const inWindow = boardResults?.filter(
+      (r) => r.eventTime.slice(0, 10) >= boardWindow.startDate && r.eventTime.slice(0, 10) <= boardWindow.endDate,
+    );
+    return aggregatePodStandings(inWindow);
+  }, [season, seasonResults, bucketCodes, boardResults, boardWindow]);
+
+  // Seasons plus the cube boards, the same way the leaderboard lists CUBE beside its sets. Which
+  // seasons have pods is its own query, so hold the whole list until it lands: a switcher that grows
+  // from one chip to six reads as broken.
+  const switcherSets = useMemo(
+    () => (podEventDates && podSetCodes ? [...seasons, ...legacySets.filter((s) => s.custom)] : []),
+    [podEventDates, podSetCodes, seasons, legacySets],
+  );
+
+  const [sort, setSort] = useState<SortState>(defaultSortFor("pod"));
   const sortedLeaderboard = useMemo(() => {
     if (!leaderboard) return undefined;
     const adapted: LeaderboardTableRow[] = leaderboard.map(toLeaderboardRow);
@@ -191,22 +361,45 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
 
   usePodEventParticipants(played[0]?.eventId);
 
+  // Any season prints the set's own run, so it reads the same whether one pod happened in it or
+  // twenty. Only a whole board, which spans no single set, falls back to the pods it actually holds.
+  const boardRange = useMemo(() => {
+    const window = season ?? boardWindow;
+    if (window) {
+      return fmtRange(window.startDate, window.endDate);
+    }
+    const dates = (events ?? []).filter((e) => e.kind !== "mock").map((e) => e.eventDate).sort();
+    return dates.length > 0 ? fmtRange(dates[0], dates[dates.length - 1]) : null;
+  }, [season, boardWindow, events]);
+
+  const windowSelector = selectorOptions.length > 0 ? (
+    <BoardWindowSelector
+      value={selectorValue}
+      options={selectorOptions}
+      onSelect={onSelectWindow}
+      variant={isMobile ? "mobile" : "hero"}
+    />
+  ) : null;
+
   return (
     <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
       <AppHeader subtitle="POD DRAFTS" />
 
       {isMobile ? (
-        <MobileSetStrip
+        <MobileFilterBar
           activeSet={activeSet}
-          availableSets={availableSets}
+          availableSets={switcherSets}
           onSelectSet={onSelectSet}
+          windowSelector={windowSelector}
         />
       ) : (
         <SetHero
           activeSet={activeSet}
           setMeta={setMeta}
-          sets={availableSets}
+          sets={switcherSets}
           onSelectSet={onSelectSet}
+          range={boardRange}
+          windowSelector={windowSelector}
         />
       )}
 
@@ -311,26 +504,40 @@ function SectionHeading({
     );
   }
   return (
-    <div className="flex items-baseline justify-between py-4 pl-2 pr-5 border-b border-border">
+    <div
+      className={cn(
+        "flex items-baseline justify-between py-4 pl-2 pr-5 border-b border-border gap-4",
+      )}
+    >
       <span
-        className="font-display text-text tracking-[0.18em] leading-none"
+        className="flex-1 basis-0 min-w-0 font-display text-text tracking-[0.18em] leading-none"
         style={{ fontSize: 17 }}
       >
         {label}
       </span>
-      {count === undefined ? (
-        <span className="inline-block h-3.5 w-24 bg-surface2 animate-pulse" />
-      ) : (
-        <span
-          className="font-display tracking-[0.18em] leading-none flex items-baseline gap-1.5"
-          style={{ fontSize: 17 }}
-        >
-          <span className="tabular-nums text-subtle">{count}</span>
-          <span className="text-muted">{unit}</span>
-        </span>
-      )}
+      <div className="flex-1 basis-0 min-w-0 flex justify-end">
+        {count === undefined ? (
+          <span className="inline-block h-3.5 w-24 bg-surface2 animate-pulse" />
+        ) : (
+          <span
+            className="font-display tracking-[0.18em] leading-none flex items-baseline gap-1.5 whitespace-nowrap"
+            style={{ fontSize: 17 }}
+          >
+            <span className="tabular-nums text-subtle">{count}</span>
+            <span className="text-muted">{unit}</span>
+          </span>
+        )}
+      </div>
     </div>
   );
+}
+
+// A row's collapse is the reader's decision, so it outlives the tab switch that unmounts the row
+function useRowDisclosure(defaultOpenId: string | undefined) {
+  const [decisions, setDecisions] = useState<Record<string, boolean>>({});
+  const isOpen = (id: string) => decisions[id] ?? id === defaultOpenId;
+  const toggle = (id: string) => setDecisions((d) => ({ ...d, [id]: !isOpen(id) }));
+  return { isOpen, toggle };
 }
 
 function EventsBlock({
@@ -344,6 +551,7 @@ function EventsBlock({
   nowMs: number;
   defaultOpenFirst?: boolean;
 }) {
+  const disclosure = useRowDisclosure(defaultOpenFirst ? events[0]?.eventId : undefined);
   return (
     <div>
       <SectionHeading
@@ -358,7 +566,8 @@ function EventsBlock({
             event={e}
             index={i}
             nowMs={nowMs}
-            defaultOpen={defaultOpenFirst && i === 0}
+            open={disclosure.isOpen(e.eventId)}
+            onToggle={() => disclosure.toggle(e.eventId)}
           />
         ))}
       </div>
@@ -417,18 +626,20 @@ function EventRow({
   event,
   index,
   nowMs,
-  defaultOpen = false,
+  open: openRequested = false,
+  onToggle,
 }: {
   event: PodEventSummary;
   index: number;
   nowMs: number;
-  defaultOpen?: boolean;
+  open?: boolean;
+  onToggle?: () => void;
 }) {
   const isUpcoming = !event.championDisplayName && new Date(event.eventTime).getTime() > nowMs;
   const expandable = !isUpcoming;
   const joinHref = isUpcoming ? SITE_LINKS.discord : null;
   const isJoinable = isUpcoming && joinHref !== null;
-  const [open, setOpen] = useState(defaultOpen && expandable);
+  const open = openRequested && expandable;
   const headerClass = cn(
     "group w-full min-h-[68px] flex items-stretch text-left bg-transparent border-0 no-underline transition-colors",
     expandable || isJoinable ? "cursor-pointer" : "cursor-default",
@@ -472,7 +683,7 @@ function EventRow({
       ) : expandable ? (
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          onClick={onToggle}
           aria-expanded={open}
           className={headerClass}
         >
@@ -924,6 +1135,7 @@ function MobileEventsBlock({
   nowMs: number;
 }) {
   const [tab, setTab] = useState<EventsTab>("last");
+  const disclosure = useRowDisclosure(played[0]?.eventId);
   const list = useMemo<PodEventSummary[]>(() => {
     if (tab === "last") return played[0] ? [played[0]] : [];
     if (tab === "upcoming") return upcoming;
@@ -954,7 +1166,8 @@ function MobileEventsBlock({
               event={e}
               index={i}
               nowMs={nowMs}
-              defaultOpen={i === 0}
+              open={disclosure.isOpen(e.eventId)}
+              onToggle={() => disclosure.toggle(e.eventId)}
             />
           ))}
         </div>
@@ -995,33 +1208,68 @@ function EmptyHint({ children }: { children: React.ReactNode }) {
   );
 }
 
-function MobileSetStrip({
+// One band holding both filters, so the set and the format never read as separate controls
+function MobileFilterBar({
   activeSet,
   availableSets,
   onSelectSet,
+  windowSelector,
 }: {
   activeSet: string;
   availableSets: SetSummary[];
   onSelectSet: (code: string) => void;
+  windowSelector?: React.ReactNode;
 }) {
+  const options = useMemo(() => setFilterOptionsFrom(availableSets, true), [availableSets]);
+  // The set list is its own query, so hold the band's shape until it lands instead of pushing the
+  // whole page down when it does
+  if (options.length === 0) {
+    return (
+      <div className="px-3 py-2 border-b border-border bg-surface flex items-stretch gap-2">
+        {[0, 1].map((i) => (
+          <div key={i} className="basis-1/2 min-w-0 border border-border2 px-2.5 py-1.5">
+            <div className="h-[21px] bg-surface2 animate-pulse" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  const second = windowSelector;
   return (
-    <div className="px-3 pt-2 pb-1 border-b border-border bg-surface flex items-center gap-3">
-      <div className="pl-1 pr-1">
-        <SetGlyph
-          code={setGlyphCode(availableSets.find((s) => s.code === activeSet) ?? { code: activeSet })}
-          size={32}
+    <div className="px-3 py-2 border-b border-border bg-surface flex items-stretch gap-2">
+      <div className={cn("min-w-0 flex", second ? "basis-1/2" : "flex-1")}>
+        <SetFilterDropdown
+          value={activeSet}
+          options={options}
+          onChange={onSelectSet}
+          variant="mobile"
+          searchable
+          valueLabel="name"
         />
       </div>
-      <span className="font-display text-text tracking-[0.04em]" style={{ fontSize: 28, lineHeight: 1 }}>
-        {activeSet}
-      </span>
-      {availableSets.length > 0 && (
-        <div className="ml-auto basis-[34%] min-w-0">
-          <SetSwitcherMobile sets={availableSets} activeCode={activeSet} onChange={onSelectSet} />
-        </div>
-      )}
+      {second && <div className="basis-1/2 min-w-0 flex">{second}</div>}
     </div>
   );
+}
+
+const AXIS_ALL = "__all__";
+
+function ChipIcon({
+  bucket,
+  seasonMeta,
+  className,
+  size = 16,
+}: {
+  bucket: PodFormatBucket;
+  seasonMeta: SetSummary | undefined;
+  className: string;
+  size?: number;
+}) {
+  if (bucket === "mock") return <TbCards size={size} className={className} />;
+  if (bucket === "set") {
+    return seasonMeta ? <SetGlyph code={setGlyphCode(seasonMeta)} size={size} className={className} /> : null;
+  }
+  return <SetGlyph code={bucket === "cube" ? CUBE_BASE : "FLASHBACK"} size={size} className={className} />;
 }
 
 function SetHero({
@@ -1029,11 +1277,15 @@ function SetHero({
   setMeta,
   sets,
   onSelectSet,
+  windowSelector,
+  range,
 }: {
   activeSet: string;
   setMeta: SetSummary | undefined;
   sets: SetSummary[];
   onSelectSet: (code: string) => void;
+  windowSelector?: React.ReactNode;
+  range?: string | null;
 }) {
   const week = weekOfSet(setMeta);
   const isActive = setMeta?.isActive ?? false;
@@ -1041,7 +1293,7 @@ function SetHero({
     <div className="relative px-10 py-5 border-b border-border bg-surface flex items-center gap-6">
       <SetGlyph code={setMeta ? setGlyphCode(setMeta) : activeSet} size={84} />
       <div>
-        <SectionLabel size={13} className={isActive ? "" : "invisible"}>CURRENT SET</SectionLabel>
+        <SectionLabel size={13} className={cn("text-green", !isActive && "invisible")}>LIVE</SectionLabel>
         <div className="flex items-baseline gap-3.5 mt-0.5">
           <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
             {activeSet}
@@ -1050,10 +1302,21 @@ function SetHero({
             {setMeta?.name?.toUpperCase() ?? ""}
           </span>
         </div>
-        <div className="mono text-[11px] text-muted mt-1 flex justify-between gap-4">
-          {setMeta && <span>{fmtRange(setMeta.startDate, setMeta.endDate)}</span>}
-          {week && <span>{week}</span>}
-        </div>
+        {windowSelector ? (
+          // Same line the cube header uses: the range holds it at text height while the zero-height
+          // wrapper lets the larger selector float over it, so the set code never moves
+          <div className="mono text-[11px] text-muted mt-1 tracking-[0.04em] flex items-center gap-6 h-4">
+            <div className="h-0 shrink-0 flex items-center">{windowSelector}</div>
+            {/* Nudged onto the selector's baseline: the two sit in one line box at 11px and 20px, so
+                box alignment leaves the smaller text riding high. Transform, so the hero keeps its height. */}
+            <span className="whitespace-nowrap ml-auto self-end translate-y-[4px]">{range || " "}</span>
+          </div>
+        ) : (
+          <div className="mono text-[11px] text-muted mt-1 flex items-center justify-between gap-4 h-4">
+            <span>{(setMeta && fmtRange(setMeta.startDate, setMeta.endDate)) || " "}</span>
+            {week && <span>{week}</span>}
+          </div>
+        )}
       </div>
       <div className="flex-1" />
       {sets.length > 0 && (

@@ -27,7 +27,7 @@ log = logging.getLogger("seed_cube_seasons")
 def sync_cube_seasons(session: Session) -> int:
     """Make ``cube_seasons`` match the registry. Returns the row count written."""
     declared = {
-        (variant.slug, season.set_code): season
+        (variant.slug, season.code): season
         for variant, season in CUBE_SEASONS
     }
     existing = {
@@ -40,15 +40,15 @@ def sync_cube_seasons(session: Session) -> int:
         if row is None:
             session.add(CubeSeasonWindow(
                 variant=key[0],
-                set_code=season.set_code,
+                set_code=season.code,
                 start_date=season.start_date,
                 end_date=season.end_date,
             ))
-            log.info(f"seeding cube season CUBE-{season.set_code} ({key[0]})")
+            log.info(f"seeding cube season CUBE-{season.code} ({key[0]})")
         elif row.start_date != season.start_date or row.end_date != season.end_date:
             row.start_date = season.start_date
             row.end_date = season.end_date
-            log.info(f"updating cube season CUBE-{season.set_code} ({key[0]})")
+            log.info(f"updating cube season CUBE-{season.code} ({key[0]})")
 
     for key, row in existing.items():
         if key not in declared:

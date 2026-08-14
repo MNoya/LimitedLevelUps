@@ -286,7 +286,7 @@ export const podLeaderboardFixtureRaw: Omit<PodLeaderboardRow, "rank">[] = [
 ];
 
 export const podSetCodesFixture = [
-  { code: "SOS", label: null },
-  { code: "MSH", label: null },
-  { code: "PEASANT", label: "Peasant Cube" },
+  { code: "SOS", label: null, events: 3 },
+  { code: "MSH", label: null, events: 3 },
+  { code: "PEASANT", label: "Peasant Cube", events: 2 },
 ];

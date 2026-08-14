@@ -16,7 +16,7 @@ import { SetSwitcherDesktop, SetSwitcherMobile } from "../components/SetSwitcher
 import { TrophyLeaderboard } from "../components/TrophyLeaderboard";
 import { MtgoSidebar } from "../components/MtgoSidebar";
 import { FilterDropdown } from "../components/FilterDropdown";
-import { SetFilterDropdown, type SetFilterOption } from "../components/SetFilterDropdown";
+import { SetFilterDropdown, setFilterOptionsFrom, type SetFilterOption } from "../components/SetFilterDropdown";
 import { ColorsSwitcher } from "../components/ColorsSwitcher";
 import { LeaderboardSidebar, LeaderboardInsightsStrip } from "../components/LeaderboardSidebar";
 import { boardModeFor, DEFAULT_SORT, DEFAULT_SORT_NOSCORE, defaultSortFor, LeaderboardColumnHeader, LeaderboardTable, sortRows } from "../components/LeaderboardTable";
@@ -48,9 +48,10 @@ import { isMtgoFlashbackCode, mtgoSetName, withMtgoSets, MTGO_BLOCK_GLYPHS } fro
 import { useAuth } from "../auth/useAuth";
 import { baseSetCode, canonicalSetCode, colorsOf, CUBE_BASE, CUBE_LIFETIME, cubeSeasonLabel, eventDate, fmtRange, fmtShortDate, isCubeCode, isCubeSeasonCode, isSoup, lastUpdated, leaderboardPath, playerPath, profileSearch, prettyFormat, relativeTime, sumEvents, weekOfSet, winPct } from "../data/utils";
 import {
-  cubeBoardCode, cubeVariantForBoard, isCubeBoardLive, ongoingCubeBoard, SEASONED_CUBE_VARIANT,
+  cubeBoardCode, cubeBoardGlyphCode, cubeForBoard, isCubeBoardLive, ongoingCubeBoard,
+  latestWindowFor, SEASONED_CUBE_VARIANT, setsWithCubeBoards,
 } from "../data/cubeVariants";
-import { CubeSeasonSelector } from "../components/CubeSeasonSelector";
+import { CubeSeasonSelector, cubeBoardHasSeasons } from "../components/CubeSeasonSelector";
 import { colorsDisplayName, FORMAT_LABEL_GROUPS, FORMAT_OPTIONS, matchesFormatFilter, MULTI, OTHER } from "../data/filters";
 import { FMT_COLORS, FMT_DEFAULT_COLOR, renderFormatOption, shortFormat } from "../data/format-display";
 import { guildLogoTransform, guildSvgUrl } from "../data/guild-art";
@@ -78,7 +79,11 @@ export function LeaderboardPage() {
     : (routeSet === CUBE_BASE ? cubeEntryBoard : undefined);
   const activeSet = cubeBoard ?? routeSet;
   const setMeta = sets?.find((s) => s.code === baseSetCode(activeSet));
-  const dropdownSets = useMemo(() => withMtgoSets(sets), [sets]);
+  // Every cube is its own entry here; `sets` keeps the real rows for route and metadata lookups
+  const dropdownSets = useMemo(
+    () => withMtgoSets(setsWithCubeBoards(sets, cubeSeasons)),
+    [sets, cubeSeasons],
+  );
   const isMtgo = isMtgoFlashbackCode(activeSet);
   const trophyLb = useTrophyLeaderboard(isMtgo ? activeSet : undefined);
 
@@ -215,6 +220,7 @@ export function LeaderboardPage() {
         loading={trophyLb.isLoading}
         searchParams={searchParams}
         cubeEntryBoard={cubeEntryBoard}
+        cubeSeasons={cubeSeasons}
       />
     );
   }
@@ -296,6 +302,7 @@ function MtgoBoard({
   loading,
   searchParams,
   cubeEntryBoard,
+  cubeSeasons,
 }: {
   activeSet: string;
   sets: SetSummary[] | undefined;
@@ -303,10 +310,11 @@ function MtgoBoard({
   loading: boolean;
   searchParams: URLSearchParams;
   cubeEntryBoard?: string;
+  cubeSeasons?: CubeSeason[];
 }) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const onSelectSet = (c: string) => goToSet(navigate, c, sets, searchParams, cubeEntryBoard);
+  const onSelectSet = (c: string) => goToSet(navigate, c, sets, searchParams, cubeEntryBoard, cubeSeasons);
   const releaseDate = sets?.find((s) => s.code === activeSet)?.startDate;
   const blockGlyphs = MTGO_BLOCK_GLYPHS[activeSet];
   return (
@@ -418,7 +426,7 @@ function Desktop({
         setMeta={setMeta}
         sets={sets}
         cubeSeasons={cubeSeasons}
-        onSelectSet={(c) => goToSet(navigate, c, sets, searchParams, cubeEntryBoard)}
+        onSelectSet={(c) => goToSet(navigate, c, sets, searchParams, cubeEntryBoard, cubeSeasons)}
         onSelectSeason={(c) => navigate({ pathname: leaderboardPath(c), search: searchParams.toString() })}
         onPrefetchSet={prefetchSet}
         format={filters.format}
@@ -513,19 +521,18 @@ function SetHero({
   } else if (!isCube && setMeta) {
     seasonRange = fmtRange(setMeta.startDate, setMeta.endDate);
   }
-  // The live marker shows on the active set; a cube board is live while its cube is still running,
-  // and it reads "LIVE" rather than "CURRENT SET" (a cube run is a window, not the set).
-  const isActive = isCube ? isCubeBoardLive(cubeSeason) : (setMeta?.isActive ?? false);
-  const liveLabel = isCube ? "LIVE" : "CURRENT SET";
+  // One marker across every board: LIVE means the thing you are looking at is the one running now,
+  // the same signal the set list already shows against its live row.
+  const isActive = isCube ? isCubeBoardLive(activeSet) : (setMeta?.isActive ?? false);
   // A cube board is named for the cube it scores, so a season reads as the cube that ran it
   const heroName = isCube
-    ? (cubeVariantForBoard(activeSet) ?? SEASONED_CUBE_VARIANT).name
+    ? (cubeForBoard(activeSet) ?? SEASONED_CUBE_VARIANT).name
     : (setMeta?.name ?? "");
   return (
     <div className="relative px-10 py-5 border-b border-border bg-surface flex items-center gap-6">
       <SetGlyph code={base} size={84} />
       <div>
-        <SectionLabel size={13} className={isActive ? "" : "invisible"}>{liveLabel}</SectionLabel>
+        <SectionLabel size={13} className={cn("text-green", !isActive && "invisible")}>LIVE</SectionLabel>
         <div className="flex items-baseline gap-3.5 mt-0.5">
           <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
             {base}
@@ -535,14 +542,18 @@ function SetHero({
           </span>
         </div>
         {isCube ? (
-          // Height is driven by the same text-[11px] date element a normal set uses, so the hero
-          // matches exactly; the larger selector floats over it and doesn't affect layout height.
+          // Every cube prints its own run here, never the shared CUBE row's open-ended window. Height
+          // comes from the same text-[11px] element a normal set uses, so the hero matches exactly.
           <div className="mono text-[11px] text-muted mt-1 tracking-[0.04em] flex items-center gap-6">
             {/* Zero height holds the hero to a normal set's while the selector keeps its width */}
-            <div className="h-0 shrink-0 flex items-center">
-              <CubeSeasonSelector activeSet={activeSet} seasons={cubeSeasons} onSelect={onSelectSeason} />
-            </div>
-            <span className="whitespace-nowrap ml-auto">{seasonRange || " "}</span>
+            {cubeBoardHasSeasons(activeSet) && (
+              <div className="h-0 shrink-0 flex items-center">
+                <CubeSeasonSelector activeSet={activeSet} seasons={cubeSeasons} onSelect={onSelectSeason} />
+              </div>
+            )}
+            {/* Nudged onto the selector's baseline: the two sit in one line box at 11px and 20px, so
+                box alignment leaves the smaller text riding high. Transform, so the hero keeps its height. */}
+            <span className="whitespace-nowrap ml-auto self-end translate-y-[4px]">{seasonRange || " "}</span>
           </div>
         ) : (
           <div className="mono text-[11px] text-muted mt-1 flex justify-between gap-4">
@@ -555,7 +566,7 @@ function SetHero({
       {sets && (
         <SetSwitcherDesktop
           sets={sets}
-          activeCode={base}
+          activeCode={isCubeCode(activeSet) ? cubeBoardGlyphCode(activeSet) : base}
           onChange={onSelectSet}
           onPrefetch={onPrefetchSet}
           extraHide={filterActive ? (tightHero ? 3 : 2) : 0}
@@ -778,18 +789,18 @@ function Mobile({
           {sets && (
             <div className="basis-1/2 min-w-0 flex">
               <SetFilterDropdown
-                value={profileSet}
+                value={isCubeCode(activeSet) ? cubeBoardGlyphCode(activeSet) : profileSet}
                 options={setOptions}
-                onChange={(code) => goToSet(navigate, code, sets, searchParams, cubeEntryBoard)}
+                onChange={(code) => goToSet(navigate, code, sets, searchParams, cubeEntryBoard, cubeSeasons)}
                 variant="mobile"
                 align="right"
                 searchable
-                subtext={updated ? `UPDATED ${updated}` : undefined}
+                subtext={updated ?? undefined}
               />
             </div>
           )}
         </div>
-        {isCube && (
+        {isCube && cubeBoardHasSeasons(activeSet) && (
           <div className="px-3 py-1.5 border-b border-border bg-surface flex">
             <CubeSeasonSelector
               activeSet={activeSet}
@@ -1338,34 +1349,18 @@ function MobileExpandedRow({
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 // The one CUBE row now covers every cube Arena has run, so its set name reads too narrow in a picker
-const CUBE_OPTION_LABEL = "Arena Cubes";
-
-function setFilterOptionsFrom(sets: SetSummary[]): SetFilterOption[] {
-  const ordered = [...sets].sort((a, b) => setReleaseRank(b).localeCompare(setReleaseRank(a)));
-  return ordered.map((s) => ({
-    value: s.code,
-    label: s.code === CUBE_BASE ? CUBE_OPTION_LABEL : s.name,
-    glyphCode: setGlyphCode(s),
-    meta: s.isActive ? (
-      <span className="mono text-[10px] tracking-[0.18em] text-green shrink-0">LIVE</span>
-    ) : undefined,
-  }));
-}
-
-function setReleaseRank(s: SetSummary): string {
-  return s.startDate || (s.custom ? "" : "9999-99-99");
-}
-
 function goToSet(
   navigate: ReturnType<typeof useNavigate>,
   code: string,
   sets: SetSummary[] | undefined,
   searchParams: URLSearchParams,
   cubeEntryBoard?: string,
+  cubeSeasons?: CubeSeason[],
 ) {
   // The CUBE chip drops into the newest season; LIFETIME (CUBE-ALL) is reached
   // only from the in-header season selector.
   if (code === CUBE_BASE && cubeEntryBoard) code = cubeEntryBoard;
+  code = latestWindowFor(code, cubeSeasons);
   const activeCode = sets?.find((s) => s.isActive)?.code;
   navigate({
     pathname: code === activeCode ? leaderboardPath() : leaderboardPath(code),

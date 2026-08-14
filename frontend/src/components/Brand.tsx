@@ -152,16 +152,25 @@ export function keyruneClass(code: string): string {
 }
 
 // Cube boards borrow icons from both fonts, so each variant declares its own "<font>:<glyph>" spec.
-const CUBE_BOARD_GLYPHS: Record<string, string> = Object.fromEntries(
-  CUBE_VARIANTS.map((v) => [cubeBoardCode(v.slug), v.glyph]),
-);
+// A season board takes the run's own icon: the set it ran under, or the plane a cube week drafted.
+const CUBE_BOARD_GLYPHS: Record<string, string> = Object.fromEntries([
+  ...CUBE_VARIANTS.map((v) => [cubeBoardCode(v.slug), v.glyph]),
+  ...CUBE_VARIANTS.flatMap((v) =>
+    (v.seasons ?? []).map((s) => [cubeBoardCode(s.code), s.glyph ?? `keyrune:${s.code.toLowerCase()}`]),
+  ),
+]);
 
 // Mana icons ink out their whole em box where Keyrune set symbols keep padding, so they render a
 // touch smaller to sit at the same visual weight in the square SetGlyph reserves.
 const MANA_GLYPH_SCALE = 0.82;
 
+// Icons for groupings that are not sets, in the same "<font>:<glyph>" form the cube registry uses
+const NAMED_GLYPHS: Record<string, string> = {
+  FLASHBACK: "mana:flashback",
+};
+
 export function glyphSpec(code: string): { className: string; scale: number } {
-  const spec = CUBE_BOARD_GLYPHS[code];
+  const spec = NAMED_GLYPHS[code] ?? CUBE_BOARD_GLYPHS[code];
   if (spec === undefined) {
     return { className: `ss ss-${keyruneClass(code)}`, scale: 1 };
   }
@@ -173,7 +182,10 @@ export function glyphSpec(code: string): { className: string; scale: number } {
 }
 
 // Custom pod cube formats have no Keyrune glyph of their own; fall back to the generic cube symbol.
-export function setGlyphCode(set: { code: string; custom?: boolean }): string {
+export function setGlyphCode(set: { code: string; custom?: boolean; glyphCode?: string }): string {
+  if (set.glyphCode) {
+    return set.glyphCode;
+  }
   return set.custom ? "CUBE" : set.code;
 }
 

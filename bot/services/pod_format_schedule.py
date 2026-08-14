@@ -39,7 +39,6 @@ FORMATS_BY_DAY: dict[date | tuple[date, str], tuple[str, ...]] = {
     date(2026, 7, 23): (LATEST, "FIN"),
     date(2026, 7, 24): (LATEST, "NEO"),
     date(2026, 7, 25): (LATEST, "PEASANT"),
-    date(2026, 7, 26): (LATEST, "SAMP"),
     date(2026, 7, 27): (LATEST, "SOS"),
     date(2026, 7, 28): (LATEST, "MH3"),
     date(2026, 7, 29): (LATEST, "MID"),

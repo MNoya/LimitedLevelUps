@@ -41,20 +41,11 @@ PEASANT_SESSION_SLUG = "Peasant"
 PEASANT_LINK_TEXT = "Peasant"
 PEASANT_PICK_LABEL = "Daneelius' Peasant"
 
-SAMP_CODE = "SAMP"
-SAMP_LABEL = "samp Cube"
-SAMP_CUBE_ID = "samp"
-SAMP_SESSION_SLUG = "Samp"
-SAMP_LINK_TEXT = "samp"
-SAMP_PICK_LABEL = "Samp's Arena"
-
 # Registered custom (CubeCobra) pod formats, keyed by the code stored in pod_draft_events.set_code.
 CUSTOM_FORMATS: dict[str, PodFormat] = {
     PEASANT_CODE: PodFormat(
         PEASANT_CODE, PEASANT_LABEL, PEASANT_CUBE_ID, PEASANT_SESSION_SLUG, PEASANT_LINK_TEXT,
         PEASANT_PICK_LABEL),
-    SAMP_CODE: PodFormat(
-        SAMP_CODE, SAMP_LABEL, SAMP_CUBE_ID, SAMP_SESSION_SLUG, SAMP_LINK_TEXT, SAMP_PICK_LABEL),
 }
 
 SELECT_PLACEHOLDER = "Select a format"

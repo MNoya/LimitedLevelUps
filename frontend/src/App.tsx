@@ -56,7 +56,8 @@ export function App() {
       <Route path="/about" element={<Navigate to="/leaderboard/about" replace />} />
       <Route path="/players" element={<Navigate to="/leaderboard" replace />} />
 
-      <Route path="/pods" element={<PodDraftsPage />} />
+      {/* Both render PodsRoute so moving between them reconciles instead of remounting the page */}
+      <Route path="/pods" element={<PodsRoute />} />
       <Route path="/pods/:slug" element={<PodsRoute />} />
       <Route path="/pods/:slug/:who" element={<PodDraftLogRoute />} />
       <Route path="/pods/:slug/:who/:pack/:pick" element={<PodDraftLogRoute />} />

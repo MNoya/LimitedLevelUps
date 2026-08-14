@@ -77,22 +77,31 @@ class SetSeed:
 
 @dataclass(frozen=True)
 class CubeSeason:
-    """One scheduled run of a cube, giving the board ``CUBE-<set>``.
+    """One scheduled run of a cube, giving the board ``CUBE-<code>``.
 
     Declared in ``cube_variants.json`` rather than inferred from draft activity: WotC announces the
     run, so the dates are known ahead of the first draft and a board cannot drift because somebody
-    played early or late. Both dates are inclusive.
+    played early or late. Both dates are inclusive. ``code`` names the board alone: a run of the
+    powered cube carries the set it ran under, a planar cube week carries no set at all.
     """
-    set_code: str
+    code: str
     start_date: date
     end_date: date
+    label: str | None = None
+
+    @property
+    def display_label(self) -> str:
+        """How the run names itself in the season picker"""
+        return self.label or f"{self.code} Season"
 
 
 @dataclass(frozen=True)
 class CubeVariant:
     """One of Arena's cubes. Arena swaps the cube itself every few sets and 17lands files each under
     its own expansion, so each variant gets its own board at ``CUBE-<slug>``. ``seasoned`` splits the
-    variant's drafts into the per-set season boards in ``seasons``; the rest stay one flat board.
+    variant's drafts into the season boards in ``seasons``; the rest stay one flat board.
+    ``opens_latest_season`` sends a click on the cube to its newest season, off for a cube that ran
+    once and reads as one board.
     """
     slug: str
     name: str
@@ -100,6 +109,7 @@ class CubeVariant:
     glyph: str
     seasoned: bool
     seasons: tuple[CubeSeason, ...] = ()
+    opens_latest_season: bool = True
 
 
 CUBE_CODE = "CUBE"
@@ -115,12 +125,14 @@ CUBE_VARIANTS: tuple[CubeVariant, ...] = tuple(
         seasoned=bool(v["seasoned"]),
         seasons=tuple(
             CubeSeason(
-                set_code=s["set"],
+                code=s["code"],
                 start_date=date.fromisoformat(s["start_date"]),
                 end_date=date.fromisoformat(s["end_date"]),
+                label=s.get("label"),
             )
             for s in v.get("seasons", ())
         ),
+        opens_latest_season=v.get("opens", "season") == "season",
     )
     for v in json.loads(CUBE_VARIANTS_JSON.read_text())["variants"]
 )
@@ -407,12 +419,20 @@ def cube_variant_for_expansion(expansion: str) -> CubeVariant | None:
 
 
 def seasoned_cube_variant() -> CubeVariant:
-    """The cube whose drafts split into per-set season boards. It is the family's flagship, so a
-    season code with no cube named (``CUBE-SOS``) belongs to it."""
+    """The family's flagship cube, which the retired ``CUBE-ALL`` board lands on."""
     for variant in CUBE_VARIANTS:
         if variant.seasoned:
             return variant
     return CUBE_VARIANTS[0]
+
+
+def cube_season_for_code(code: str) -> tuple[CubeVariant, CubeSeason] | None:
+    """The cube and run a season code names: ``PLANAR-ZEN`` -> (Planar Cube, Zendikar Week)"""
+    upper = code.upper()
+    for variant, season in CUBE_SEASONS:
+        if season.code == upper:
+            return variant, season
+    return None
 
 
 def cube_board_code(slug: str) -> str:
@@ -421,7 +441,7 @@ def cube_board_code(slug: str) -> str:
 
 def is_cube_board_code(code: str) -> bool:
     """Whether a set code names a cube board: bare ``CUBE``, a whole cube (``CUBE-PLANAR``) or one
-    of the seasoned cube's per-set seasons (``CUBE-SOS``)."""
+    declared run of a cube (``CUBE-SOS``, ``CUBE-PLANAR-ZEN``)."""
     upper = code.upper()
     return upper == CUBE_CODE or upper.startswith(f"{CUBE_CODE}-")
 

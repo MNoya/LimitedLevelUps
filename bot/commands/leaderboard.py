@@ -42,10 +42,10 @@ from bot.sets import (
     active_set_code,
     cube_board_code,
     cube_list_name,
+    cube_season_for_code,
     cube_variant,
     cube_variant_for_board,
     is_cube_board_code,
-    is_known_set,
     is_mtgo_flashback_code,
     seasoned_cube_variant,
     set_name_for,
@@ -198,8 +198,8 @@ def process_leaderboard(
 def process_cube_board(
     session: Session, viewer_discord_id: str | None, top_n: int = 10, board: str | None = None,
 ) -> LeaderboardData | None:
-    """One cube board: a variant in full (``CUBE-PLANAR``) or one of the powered cube's per-set
-    seasons (``CUBE-SOS``). ``board`` of None takes the ongoing cube, or the last one that ran.
+    """One cube board: a variant in full (``CUBE-PLANAR``) or one declared run of it (``CUBE-SOS``,
+    ``CUBE-PLANAR-ZEN``). ``board`` of None takes the ongoing cube, or the last one that ran.
 
     set_code is the virtual board code so the embed title and site link land on that board's page.
     No pod points (cube boards are 17lands-cube only).
@@ -236,9 +236,10 @@ def process_cube_board(
         .where(MagicSet.code == CUBE_CODE)
     ).scalar()
 
+    run = cube_season_for_code(season) if season else None
     return LeaderboardData(
         set_code=cube_board_code(season or variant.slug),
-        set_name=f"{variant.name} — {season} Season" if season else variant.name,
+        set_name=f"{variant.name} — {run[1].display_label}" if run else variant.name,
         top=top,
         viewer=viewer_entry,
         last_updated=last_updated,
@@ -247,12 +248,13 @@ def process_cube_board(
 
 
 def resolve_cube_board(session: Session, board: str | None) -> tuple[CubeVariant, str | None] | None:
-    """Which cube board a ``/leaderboard set:`` value names, as ``(variant, season label or None)``.
+    """Which cube board a ``/leaderboard set:`` value names, as ``(variant, season code or None)``.
 
-    ``CUBE`` takes the board of the cube running now, or of the last one that ran.
-    ``CUBE-<VARIANT>`` is that cube in full and ``CUBE-<SET>`` a season of the seasoned cube, whose
-    own board the retired ``CUBE-ALL`` lands on. None when the value names no cube board, or when no
-    cube has been drafted at all.
+    ``CUBE`` takes the board of the cube running now, or of the last one that ran. ``CUBE-<VARIANT>``
+    is that cube in full and ``CUBE-<CODE>`` one declared run of it, the powered cube's ``CUBE-SOS``
+    season or the planar cube's ``CUBE-PLANAR-ZEN`` week. The retired ``CUBE-ALL`` lands on the
+    flagship cube's own board. None when the value names no cube board, or when no cube has been
+    drafted at all.
     """
     slug = "" if board is None else board.upper().removeprefix(f"{CUBE_CODE}-")
     if slug == LIFETIME_SET:
@@ -262,8 +264,9 @@ def resolve_cube_board(session: Session, board: str | None) -> tuple[CubeVariant
     variant = cube_variant(slug)
     if variant is not None:
         return variant, None
-    if is_known_set(slug):
-        return seasoned_cube_variant(), slug
+    season = cube_season_for_code(slug)
+    if season is not None:
+        return season[0], season[1].code
     return None
 
 

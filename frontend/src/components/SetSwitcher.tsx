@@ -34,6 +34,7 @@ function partitionSets(sets: SetSummary[], selectedCode: string, cap: number) {
   leadPins.push(...early);
   if (live) leadPins.push(live);
   if (cube && cube.code !== live?.code) leadPins.push(cube);
+  leadPins.push(...sets.filter((s) => s.custom));
 
   const pinnedCodes = new Set(leadPins.map((s) => s.code));
   const history = sets.filter((s) => !pinnedCodes.has(s.code)).sort(byDateDesc);
@@ -134,7 +135,7 @@ function SetChip({
             style={{ fontSize: 22, color: active ? "#0a0c10" : "#e6ecf5", lineHeight: 1 }}
             aria-hidden="true"
           />
-          <span className="text-[20px] tracking-[0.06em] leading-none">{set.code}</span>
+          <span className="text-[20px] tracking-[0.06em] leading-none">{set.shortCode ?? set.code}</span>
         </span>
       </button>
       {set.early ? (
@@ -274,7 +275,7 @@ export function SetSwitcherMobile({
               )}
             >
               <SetGlyph code={setGlyphCode(s)} size={16} />
-              <span>{s.code}</span>
+              <span>{s.shortCode ?? s.code}</span>
               <span className="text-muted text-[10px] tracking-[0.06em] flex-1">{s.name}</span>
             </button>
           ))}

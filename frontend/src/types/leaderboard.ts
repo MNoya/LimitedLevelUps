@@ -9,13 +9,19 @@ export interface SetSummary {
   endDate: string;
   isActive: boolean;
   early?: boolean; // shown before release_date when early-access data already exists
-  custom?: boolean; // synthesized for pod-only cube formats with no row in `sets`
+  custom?: boolean;
+  // Short display code where the full one is too long for a switcher chip; falls back to `code`
+  shortCode?: string;
+  // Overrides the symbol derived from `code`, for a board that should read as its family
+  glyphCode?: string;
   lastRefreshedAt?: string | null; // when the full active-player refresh last completed for this set
 }
 
 export interface PodSetCode {
   code: string;
   label: string | null; // format_label — non-null only for custom cube formats
+  // Pods played under this code, so a format tried once does not earn a board
+  events: number;
 }
 
 export interface CubeSeason {
@@ -252,6 +258,19 @@ export interface PodEventReplayRow {
   inferredRound: number | null;
 }
 
+// One player's finish in one pod, carrying the pod's own format so a season can be sliced by it
+export interface PodSeasonResultRow {
+  eventId: string;
+  setCode: string;
+  eventTime: string;
+  slug: string;
+  displayName: string;
+  avatarUrl: string | null;
+  placement: number | null;
+  wins: number;
+  losses: number;
+}
+
 export interface PodLeaderboardRow {
   setCode: string;
   rank: number;
@@ -262,6 +281,7 @@ export interface PodLeaderboardRow {
   wins: number;
   losses: number;
   trophies: number;
+  points?: number;
   lastFinishedAt: string | null;
 }
 

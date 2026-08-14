@@ -51,7 +51,6 @@ export const DEFAULT_SORT_NOSCORE: SortState = { key: "trophies", dir: "desc" };
 export const DEFAULT_SORT_DIRECT: SortState = { key: "boxes", dir: "desc" };
 
 export function defaultSortFor(mode: BoardMode): SortState {
-  if (mode === "pod") return DEFAULT_SORT_NOSCORE;
   if (mode === "direct") return DEFAULT_SORT_DIRECT;
   return DEFAULT_SORT;
 }
@@ -87,7 +86,7 @@ export function sortRows<T extends LeaderboardTableRow>(
 const COLS_DESKTOP: Record<BoardMode, string> = {
   points: "44px 1fr 70px 100px 110px 90px 90px",
   lcq: "44px 1fr 44px 70px 100px 110px 90px 90px",
-  pod: "44px 1fr 70px 100px 110px 90px",
+  pod: "44px 1fr 70px 100px 110px 90px 90px",
   direct: "44px 1fr 70px 100px 110px 90px 90px",
 };
 const COLS_MOBILE: Record<BoardMode, string> = {
@@ -333,7 +332,7 @@ export function LeaderboardColumnHeader({
       <SortHeader label="EVENTS" sortKey="events" sort={sort} onSort={onSort} />
       <SortHeader label="RECORD" sortKey="record" sort={sort} onSort={onSort} />
       <SortHeader label="WIN %" sortKey="winPct" sort={sort} onSort={onSort} />
-      {(mode === "points" || mode === "lcq") && (
+      {(mode === "points" || mode === "lcq" || mode === "pod") && (
         <ScoringSortHeader label="POINTS" sort={sort} onSort={onSort} />
       )}
       {mode === "direct" && <SortHeader label="BOXES" sortKey="boxes" sort={sort} onSort={onSort} />}
@@ -444,7 +443,7 @@ function DesktopRow({
       ) : (
         <EmptyStat />
       )}
-      {(mode === "points" || mode === "lcq") && (
+      {(mode === "points" || mode === "lcq" || mode === "pod") && (
         <ScoreCell score={row.score ?? 0} large unranked={row.rank === 0} />
       )}
       {mode === "direct" && <BoxesCell boxes={row.boxes ?? 0} large />}

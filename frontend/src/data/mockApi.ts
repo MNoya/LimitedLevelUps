@@ -26,6 +26,7 @@ import type {
   PodEventReplayRow,
   PodEventSummary,
   PodLeaderboardRow,
+  PodSeasonResultRow,
   PodSetCode,
   RecentTrophy,
   SetSummary,
@@ -421,6 +422,53 @@ export const fetchPodEvents = (setCode: string): Promise<PodEventSummary[]> => {
   return wait(withPodOrdinals(podEventsFixture).filter((e) => e.setCode === setCode));
 };
 
+export const fetchPodSeasonEvents = (
+  startDate: string,
+  endDate: string,
+  seasonCode: string,
+): Promise<PodEventSummary[]> => {
+  return wait(
+    withPodOrdinals(podEventsFixture).filter((e) =>
+      e.kind === "mock"
+        ? e.setCode === seasonCode
+        : e.eventDate >= startDate && e.eventDate <= endDate,
+    ),
+  );
+};
+
+export const fetchPodSeasonResults = (
+  startDate: string,
+  endDate: string,
+): Promise<PodSeasonResultRow[]> =>
+  podResultsFor((e) => e.eventDate >= startDate && e.eventDate <= endDate);
+
+export const fetchPodResultsForSet = (setCode: string): Promise<PodSeasonResultRow[]> =>
+  podResultsFor((e) => e.setCode === setCode);
+
+const podResultsFor = (match: (e: PodEventSummary) => boolean): Promise<PodSeasonResultRow[]> => {
+  const inSeason = new Map(
+    podEventsFixture.filter((e) => e.kind !== "mock" && match(e)).map((e) => [e.eventId, e]),
+  );
+  const rows: PodSeasonResultRow[] = [];
+  for (const p of podEventParticipantsFixture) {
+    const event = inSeason.get(p.eventId);
+    if (!event || !p.playerSlug || p.record == null) continue;
+    const [w, l] = p.record.split("-");
+    rows.push({
+      eventId: p.eventId,
+      setCode: event.setCode,
+      eventTime: event.eventTime,
+      slug: p.playerSlug,
+      displayName: p.playerDisplayName ?? p.playerSlug,
+      avatarUrl: p.avatarUrl,
+      placement: p.placement,
+      wins: parseInt(w || "0", 10) || 0,
+      losses: parseInt(l || "0", 10) || 0,
+    });
+  }
+  return wait(rows);
+};
+
 export const fetchPodEventParticipants = (
   eventId: string,
 ): Promise<PodEventParticipantRow[]> => {
@@ -465,6 +513,9 @@ export const fetchPodLeaderboard = (setCode: string): Promise<PodLeaderboardRow[
     .map((r, i) => ({ ...r, rank: i + 1 }));
   return wait(rows);
 };
+
+export const fetchPodEventDates = (): Promise<string[]> =>
+  wait(podEventsFixture.map((e) => e.eventDate));
 
 export const fetchPodSetCodes = (): Promise<PodSetCode[]> => wait(podSetCodesFixture);
 

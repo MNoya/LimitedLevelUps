@@ -221,8 +221,9 @@ def latest_cube_board(session: Session) -> tuple[CubeVariant, str | None] | None
     """The cube board the newest cube activity belongs to: ``(variant, season label or None)``.
 
     Arena runs one cube at a time, so the variant holding the newest draft is the ongoing one (or
-    the last one that ran, between runs). A seasoned variant resolves further to the season its
-    newest draft falls in; the rest are one flat board. None when no cube drafts exist.
+    the last one that ran, between runs). A variant that opens on its newest season resolves further
+    to the season its newest draft falls in; the rest land on their own board. None when no cube
+    drafts exist.
     """
     row = session.execute(
         text("""
@@ -242,7 +243,7 @@ def latest_cube_board(session: Session) -> tuple[CubeVariant, str | None] | None
     variant = cube_variant_for_expansion(row.expansion)
     if variant is None:
         return None
-    if not variant.seasoned:
+    if not variant.opens_latest_season:
         return variant, None
     return variant, latest_cube_season(session, variant)
 

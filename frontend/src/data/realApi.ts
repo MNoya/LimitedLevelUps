@@ -45,6 +45,7 @@ import type {
   PodEventReplayRow,
   PodEventSummary,
   PodLeaderboardRow,
+  PodSeasonResultRow,
   PodSetCode,
   RecentTrophy,
   SetSummary,
@@ -1270,6 +1271,32 @@ export async function fetchPodEvents(setCode: string): Promise<PodEventSummary[]
   return (data ?? []).map((r) => adaptPodEvent(r as Record<string, unknown>));
 }
 
+// A mock belongs to the season of the set it drafted, not the one it was practised in, so spoiler
+// season mocks sit with their own set. Every other pod belongs to the window it was played in.
+export async function fetchPodSeasonEvents(
+  startDate: string,
+  endDate: string,
+  seasonCode: string,
+): Promise<PodEventSummary[]> {
+  const played = client()
+    .from("public_pod_draft_events")
+    .select("*")
+    .neq("kind", "mock")
+    .gte("event_date", startDate)
+    .lte("event_date", endDate);
+  const mocks = client()
+    .from("public_pod_draft_events")
+    .select("*")
+    .eq("kind", "mock")
+    .eq("set_code", seasonCode);
+  const [playedResp, mocksResp] = await Promise.all([played, mocks]);
+  if (playedResp.error) throw playedResp.error;
+  if (mocksResp.error) throw mocksResp.error;
+  return [...(playedResp.data ?? []), ...(mocksResp.data ?? [])]
+    .map((r) => adaptPodEvent(r as Record<string, unknown>))
+    .sort((a, b) => (a.eventTime < b.eventTime ? 1 : a.eventTime > b.eventTime ? -1 : 0));
+}
+
 export async function fetchPodEventParticipants(
   eventId: string,
 ): Promise<PodEventParticipantRow[]> {
@@ -1473,19 +1500,86 @@ export async function fetchPodLeaderboard(setCode: string): Promise<PodLeaderboa
     .map((r, i) => ({ ...r, rank: i + 1 }));
 }
 
+export async function fetchPodSeasonResults(
+  startDate: string,
+  endDate: string,
+): Promise<PodSeasonResultRow[]> {
+  const { data, error } = await client()
+    .from("public_pod_draft_events")
+    .select("event_id, set_code, event_time, kind")
+    .gte("event_date", startDate)
+    .lte("event_date", endDate);
+  if (error) throw error;
+  return podResultsForEvents(data ?? []);
+}
+
+export async function fetchPodResultsForSet(setCode: string): Promise<PodSeasonResultRow[]> {
+  const { data, error } = await client()
+    .from("public_pod_draft_events")
+    .select("event_id, set_code, event_time, kind")
+    .eq("set_code", setCode);
+  if (error) throw error;
+  return podResultsForEvents(data ?? []);
+}
+
+// Mock drafts are dropped: they play no rounds, so they carry no record to rank or score
+async function podResultsForEvents(rows: unknown[]): Promise<PodSeasonResultRow[]> {
+  const eventById = new Map<string, { setCode: string; eventTime: string }>();
+  for (const raw of rows) {
+    const row = raw as { event_id: string; set_code: string; event_time: string; kind: string };
+    if (row.kind === "mock") continue;
+    eventById.set(row.event_id, { setCode: row.set_code, eventTime: row.event_time });
+  }
+  if (eventById.size === 0) return [];
+
+  const partsResp = await client()
+    .from("public_pod_draft_event_participants")
+    .select("event_id, player_slug, player_display_name, avatar_url, record, placement")
+    .in("event_id", Array.from(eventById.keys()));
+  if (partsResp.error) throw partsResp.error;
+
+  const results: PodSeasonResultRow[] = [];
+  for (const raw of partsResp.data ?? []) {
+    const r = raw as Record<string, unknown>;
+    const slug = (r.player_slug as string | null) ?? null;
+    const event = eventById.get(r.event_id as string);
+    if (!slug || !event || r.record == null) continue;
+    results.push({
+      eventId: r.event_id as string,
+      setCode: event.setCode,
+      eventTime: event.eventTime,
+      slug,
+      displayName: (r.player_display_name as string | null) ?? slug,
+      avatarUrl: (r.avatar_url as string | null) ?? null,
+      placement: (r.placement as number | null) ?? null,
+      ...parseRecord(r.record as string | null),
+    });
+  }
+  return results;
+}
+
+export async function fetchPodEventDates(): Promise<string[]> {
+  const { data, error } = await client()
+    .from("public_pod_draft_events")
+    .select("event_date");
+  if (error) throw error;
+  return (data ?? []).map((r) => (r as { event_date: string }).event_date);
+}
+
 export async function fetchPodSetCodes(): Promise<PodSetCode[]> {
   const { data, error } = await client()
     .from("public_pod_draft_events")
-    .select("set_code, format_label");
+    .select("set_code, format_label, kind");
   if (error) throw error;
-  const byCode = new Map<string, string | null>();
+  const byCode = new Map<string, { label: string | null; events: number }>();
   for (const r of data ?? []) {
-    const row = r as { set_code: string; format_label: string | null };
-    if (!byCode.has(row.set_code) || byCode.get(row.set_code) == null) {
-      byCode.set(row.set_code, row.format_label ?? null);
-    }
+    const row = r as { set_code: string; format_label: string | null; kind: string };
+    const entry = byCode.get(row.set_code) ?? { label: null, events: 0 };
+    entry.label = entry.label ?? row.format_label ?? null;
+    if (row.kind !== "mock") entry.events += 1;
+    byCode.set(row.set_code, entry);
   }
-  return Array.from(byCode, ([code, label]) => ({ code, label }));
+  return Array.from(byCode, ([code, entry]) => ({ code, ...entry }));
 }
 
 function adaptPodEvent(row: Record<string, unknown>): PodEventSummary {
