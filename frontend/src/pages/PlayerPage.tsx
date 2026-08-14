@@ -200,7 +200,7 @@ export function PlayerPage() {
 
   if (error) {
     return (
-      <div className="bg-bg text-text min-h-screen animate-fadeIn">
+      <div className="bg-bg text-text min-h-screen page-fade">
         {isMobile ? (
           <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={topQs} />
         ) : (
@@ -213,7 +213,7 @@ export function PlayerPage() {
 
   if (isLoading) {
     return (
-      <div className="bg-bg text-text min-h-screen animate-fadeIn">
+      <div className="bg-bg text-text min-h-screen page-fade">
         {isMobile ? (
           <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={topQs} />
         ) : (
@@ -361,7 +361,7 @@ function NoSetData({
     <span className="text-[22px]">{setCode}</span>
   );
   return (
-    <div className="bg-bg text-text min-h-screen animate-fadeIn">
+    <div className="bg-bg text-text min-h-screen page-fade">
       {isMobile ? (
         <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={qs} />
       ) : (
@@ -739,7 +739,7 @@ function Desktop({
   const pointsBtnRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div className="bg-bg text-text min-h-screen animate-fadeIn">
+    <div className="bg-bg text-text min-h-screen page-fade">
       <AppHeader subtitle="PLAYER PROFILE" />
 
       <section
@@ -1981,7 +1981,7 @@ function Mobile({
     eventLogRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
-    <div className="bg-bg text-text min-h-screen animate-fadeIn">
+    <div className="bg-bg text-text min-h-screen page-fade">
       <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={qs} />
 
       <section

@@ -79,6 +79,26 @@ button {
   display: none;
 }
 
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* A page body fades in on mount while its chrome paints at once, so routing never blinks the navbar */
+.page-fade > *:not(header):not(.page-chrome) {
+  animation: pageFadeIn 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-fade > * {
+    animation: none;
+  }
+}
+
 .themed-scrollbar {
   scrollbar-width: auto;
   scrollbar-color: #3b4458 #14181f;

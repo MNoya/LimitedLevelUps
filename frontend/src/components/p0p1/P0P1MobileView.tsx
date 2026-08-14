@@ -75,7 +75,7 @@ export function P0P1MobileView({ ballot }: { ballot: Ballot }) {
   const loginBarVisible = !authLoading && !user && !isPastDeadline;
 
   return (
-    <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
+    <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
 
       <main className={`flex-1 flex flex-col w-full px-4 pt-4 ${loginBarVisible ? "pb-20" : "pb-4"}`}>
@@ -161,7 +161,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
   const showMidway = phase === "midway" || (phase === "finalizing" && midwayDataReady);
 
   return (
-    <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
+    <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
 
       <main className={`flex-1 flex flex-col w-full px-3 pt-3 ${loginBarVisible ? "pb-24" : "pb-4"}`}>

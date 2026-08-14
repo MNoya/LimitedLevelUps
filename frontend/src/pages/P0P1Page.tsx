@@ -140,7 +140,7 @@ export function P0P1Page() {
   );
 
   return (
-    <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
+    <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
       {featured && <P0P1Hero featured={featured} innerRef={heroRef} cta={heroCta} belowIntro={belowIntro} phase={phase} dateRange={ratingsSnapshot?.dateRange} />}
 

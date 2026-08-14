@@ -318,7 +318,7 @@ function MtgoBoard({
   const releaseDate = sets?.find((s) => s.code === activeSet)?.startDate;
   const blockGlyphs = MTGO_BLOCK_GLYPHS[activeSet];
   return (
-    <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
+    <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
       <AppHeader subtitle="LEADERBOARD" />
       <div className="relative px-5 md:px-10 py-5 border-b border-border bg-surface flex items-center gap-3 md:gap-4">
         {blockGlyphs ? (
@@ -419,7 +419,7 @@ function Desktop({
   const { prefetchSet, prefetchPlayer } = usePrefetchers();
   const profileSet = baseSetCode(activeSet);
   return (
-    <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
+    <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
       <AppHeader subtitle="LEADERBOARD" />
       <SetHero
         activeSet={activeSet}
@@ -770,8 +770,8 @@ function Mobile({
   }, []);
 
   return (
-    <div className="bg-bg text-text min-h-screen flex flex-col overflow-x-clip animate-fadeIn">
-      <div ref={chromeRef} className="sticky top-0 z-10 bg-bg">
+    <div className="bg-bg text-text min-h-screen flex flex-col overflow-x-clip page-fade">
+      <div ref={chromeRef} className="page-chrome sticky top-0 z-10 bg-bg">
         <AppHeader subtitle="LEADERBOARD" />
 
         <div className="px-3 py-2 border-b border-border bg-surface flex items-stretch gap-2">

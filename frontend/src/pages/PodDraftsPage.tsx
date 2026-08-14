@@ -382,7 +382,7 @@ export function PodDraftsPage({
   ) : null;
 
   return (
-    <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
+    <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
       <AppHeader subtitle="POD DRAFTS" />
 
       {isMobile ? (

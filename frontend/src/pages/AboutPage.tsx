@@ -8,7 +8,7 @@ const FEEDBACK_CHANNEL_URL = "https://discord.com/channels/775371722065051658/15
 
 export function AboutPage() {
   return (
-    <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
+    <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
       <AppHeader subtitle="ABOUT" />
       <main className="flex-1 flex flex-col mx-auto w-full max-w-[1040px] px-5 md:px-10 pt-5 md:pt-10 pb-5 md:pb-5 md:relative">
         <Intro />

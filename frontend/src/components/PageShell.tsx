@@ -43,7 +43,7 @@ export function PageShell({
   return (
     <div
       className={cn(
-        "bg-bg text-text flex flex-col animate-fadeIn min-h-screen",
+        "bg-bg text-text flex flex-col page-fade min-h-screen",
         fill && "lg:h-screen lg:min-h-0 lg:overflow-hidden",
       )}
     >

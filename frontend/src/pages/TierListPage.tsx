@@ -79,7 +79,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
 
   return (
     <GradeGuideProvider>
-      <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
+      <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
         <AppHeader subtitle="TIER LIST" />
         <main className="flex flex-col w-full px-2 md:px-[15px] pb-4 overflow-x-clip">
           <div ref={headerRef} className="sticky top-0 z-20 bg-bg py-2 md:py-3">

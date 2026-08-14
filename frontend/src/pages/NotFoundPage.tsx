@@ -5,7 +5,7 @@ import { CtaPill } from "../components/CtaPill";
 
 export function NotFoundPage() {
   return (
-    <div className="bg-bg text-text min-h-screen flex flex-col animate-fadeIn">
+    <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
       <AppHeader subtitle="" />
       <main className="flex-1 flex flex-col items-center justify-center text-center px-5 gap-6 md:gap-7">
         <div className="flex flex-col gap-3">
