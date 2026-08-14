@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronDown, LogOut, User } from "lucide-react";
+import { GiCardPick, GiRoundTable, House, MdVideoLibrary, Rocket, TbListNumbers, Trophy } from "./Icons";
 import { DiscordIcon } from "./BrandIcons";
-import { ALogo, AWordmark } from "./Brand";
+import { ALogo, AWordmark, SetGlyph } from "./Brand";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { useAuth } from "../auth/useAuth";
@@ -15,18 +16,23 @@ import type { P0P1Phase } from "../data/p0p1Results";
 // Top-of-page chrome shared across the whole community site. The brand mark is
 // the Home link; each section is a nav tab.
 
-const NAV: Array<{ label: string; badge?: (props: { active: boolean }) => JSX.Element | null; to: string; match: (path: string) => boolean }> = [
-  { label: "P0 P1", badge: P0P1Badge, to: "/p0p1", match: (p) => p.startsWith("/p0p1") },
-  { label: "EPISODES", to: "/episodes", match: (p) => p.startsWith("/episodes") },
-  { label: "TIER LIST", to: "/tier-list", match: (p) => p.startsWith("/tier-list") },
-  { label: "LEADERBOARD", to: "/leaderboard", match: (p) => p === "/leaderboard" || p.startsWith("/leaderboard/") || p.startsWith("/player/") },
-  { label: "POD DRAFTS", to: "/pods", match: (p) => p.startsWith("/pods") },
-  { label: "COMMUNITY", to: "/community", match: (p) => p.startsWith("/community") },
+type NavIcon = ComponentType<{ size?: number | string; className?: string }>;
+
+const NAV: Array<{ label: string; icon: NavIcon; iconSize?: number; badge?: (props: { active: boolean }) => JSX.Element | null; to: string; match: (path: string) => boolean }> = [
+  { label: "P0 P1", icon: GiCardPick, iconSize: 21, badge: P0P1Badge, to: "/p0p1", match: (p) => p.startsWith("/p0p1") },
+  { label: "EPISODES", icon: MdVideoLibrary, to: "/episodes", match: (p) => p.startsWith("/episodes") },
+  { label: "TIER LIST", icon: TbListNumbers, to: "/tier-list", match: (p) => p.startsWith("/tier-list") },
+  { label: "LEADERBOARD", icon: Trophy, to: "/leaderboard", match: (p) => p === "/leaderboard" || p.startsWith("/leaderboard/") || p.startsWith("/player/") },
+  { label: "POD DRAFTS", icon: GiRoundTable, iconSize: 23, to: "/pods", match: (p) => p.startsWith("/pods") },
+  { label: "COMMUNITY", icon: Rocket, to: "/community", match: (p) => p.startsWith("/community") },
 ];
 
-const HOME_ITEM: (typeof NAV)[number] = { label: "HOME", to: "/", match: (p) => p === "/" };
+const HOME_ITEM: (typeof NAV)[number] = { label: "HOME", icon: House, to: "/", match: (p) => p === "/" };
 
 const NAV_ITEM_CLASS = "h-12 px-5 inline-flex items-center no-underline border transition-colors whitespace-nowrap";
+
+const MENU_ROW_CLASS =
+  "flex items-center gap-4 min-h-[54px] px-5 font-display text-[17px] tracking-[0.14em] border-b border-border transition-colors";
 
 export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = false }: { subtitle?: string; subtitleShort?: string; fill?: boolean }) {
   const loc = useLocation();
@@ -326,14 +332,14 @@ function MobileMenu({
               to={`/player/${profileSlug}`}
               onClick={onClose}
               role="menuitem"
-              className="flex items-center gap-3 px-5 min-h-[54px] no-underline font-display text-[17px] tracking-[0.14em] border-b border-border transition-colors text-text bg-transparent hover:bg-surface"
+              className={cn(MENU_ROW_CLASS, "no-underline text-text bg-transparent hover:bg-surface")}
             >
-              {avatarEl}
+              <MenuIconSlot>{avatarEl}</MenuIconSlot>
               MY PROFILE
             </Link>
           ) : (
-            <div className="flex items-center gap-3 px-5 min-h-[54px] border-b border-border">
-              {avatarEl}
+            <div className={cn(MENU_ROW_CLASS, "font-sans tracking-normal")}>
+              <MenuIconSlot>{avatarEl}</MenuIconSlot>
               <span className="text-text text-sm truncate">{user.username}</span>
             </div>
           )
@@ -346,10 +352,14 @@ function MobileMenu({
               to={n.to}
               role="menuitem"
               className={cn(
-                "flex items-center min-h-[54px] px-5 no-underline font-display text-[17px] tracking-[0.14em] border-b border-border transition-colors",
+                MENU_ROW_CLASS,
+                "no-underline",
                 active ? "bg-green text-bg" : "text-text bg-transparent hover:bg-surface",
               )}
             >
+              <MenuIconSlot>
+                <n.icon size={n.iconSize ?? 19} className={active ? "text-bg" : "text-muted"} />
+              </MenuIconSlot>
               {n.label}
               {n.badge && <MobileBadgeSlot active={active} />}
             </Link>
@@ -360,9 +370,11 @@ function MobileMenu({
             type="button"
             onClick={() => { signIn(); onClose(); }}
             role="menuitem"
-            className="flex items-center gap-3 min-h-[54px] px-5 font-display text-[17px] tracking-[0.14em] border-b border-border transition-colors text-text bg-transparent hover:bg-surface cursor-pointer border-x-0 border-t-0"
+            className={cn(MENU_ROW_CLASS, "text-text bg-transparent hover:bg-surface cursor-pointer border-x-0 border-t-0")}
           >
-            <DiscordIcon size={18} />
+            <MenuIconSlot>
+              <DiscordIcon size={19} />
+            </MenuIconSlot>
             LOG IN
           </button>
         )}
@@ -371,14 +383,25 @@ function MobileMenu({
             type="button"
             onClick={() => { signOut(); onClose(); }}
             role="menuitem"
-            className="flex items-center gap-3 min-h-[54px] px-5 font-display text-[17px] tracking-[0.14em] border-b border-border transition-colors text-text bg-transparent hover:bg-surface cursor-pointer border-x-0 border-t-0"
+            className={cn(MENU_ROW_CLASS, "text-text bg-transparent hover:bg-surface cursor-pointer border-x-0 border-t-0")}
           >
-            <LogOut size={18} />
+            <MenuIconSlot>
+              <LogOut size={19} className="text-muted" />
+            </MenuIconSlot>
             LOG OUT
           </button>
         )}
       </nav>
     </>
+  );
+}
+
+function MenuIconSlot({ children }: { children: ReactNode }) {
+  if (!children) return null;
+  return (
+    <span aria-hidden="true" className="w-6 flex items-center justify-center shrink-0 -translate-y-px">
+      {children}
+    </span>
   );
 }
 
@@ -401,7 +424,7 @@ function useP0P1BadgeState() {
     devActive ? devPreset : "live",
   );
   const filled = user ? (picks?.length ?? 0) : 0;
-  return { user, phase, filled, total: SLOTS.length };
+  return { user, phase, filled, total: SLOTS.length, setCode };
 }
 
 // Phase-driven label for post-deadline states, centered and non-corner like
@@ -427,23 +450,27 @@ function P0P1Badge({ active }: { active: boolean }) {
       <span className={cn(pill, "left-1/2 -translate-x-1/2 whitespace-nowrap")}>{label}</span>
     );
   }
-  const corner = cn(pill, "-right-1.5");
-  if (!user || filled === 0) return <span className={corner}>OPEN</span>;
-  if (filled === total) return <span className={corner}>VOTED!</span>;
-  return <span className={corner}>{filled}/{total}</span>;
+  return <span className={cn(pill, "-right-1.5")}>{p0p1VotingLabel(Boolean(user), filled, total)}</span>;
+}
+
+function p0p1VotingLabel(signedIn: boolean, filled: number, total: number): string {
+  if (!signedIn || filled === 0) return "OPEN";
+  if (filled === total) return "VOTED!";
+  return `${filled}/${total}`;
 }
 
 function MobileBadgeSlot({ active }: { active: boolean }) {
-  const { user, phase, filled, total } = useP0P1BadgeState();
+  const { user, phase, filled, total, setCode } = useP0P1BadgeState();
 
   const wrap = cn(
     "ml-3 inline-flex items-center gap-2 text-[14px] font-semibold font-sans tracking-[0.08em]",
     active ? "text-bg" : "text-green",
   );
 
-  const label = p0p1BadgeLabel(phase);
-  if (label) return <span className={wrap}>{label}</span>;
-  if (!user || filled === 0) return <span className={wrap}>OPEN</span>;
-  if (filled === total) return <span className={wrap}>VOTED!</span>;
-  return <span className={wrap}>{filled}/{total}</span>;
+  return (
+    <span className={wrap}>
+      {p0p1BadgeLabel(phase) ?? p0p1VotingLabel(Boolean(user), filled, total)}
+      {setCode && <SetGlyph code={setCode} size={16} className={active ? "text-bg" : "text-green"} />}
+    </span>
+  );
 }

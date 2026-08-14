@@ -10,17 +10,20 @@ import {
   ExternalLink as LR_ExternalLink,
   Globe as LR_Globe,
   Headphones as LR_Headphones,
+  House as LR_House,
   Image as LR_Image,
   Info as LR_Info,
   Lock as LR_Lock,
   Music as LR_Music,
   RefreshCw as LR_RefreshCw,
+  Rocket as LR_Rocket,
+  CalendarRange as LR_CalendarRange,
   Trophy as LR_Trophy,
 } from "lucide-react";
-import { MdPause as R_MdPause } from "react-icons/md";
-import { TbCards as R_TbCards } from "react-icons/tb";
+import { MdPause as R_MdPause, MdVideoLibrary as R_MdVideoLibrary } from "react-icons/md";
+import { TbCards as R_TbCards, TbListNumbers as R_TbListNumbers } from "react-icons/tb";
 import { LuScrollText as R_LuScrollText } from "react-icons/lu";
-import { GiRoundTable as R_GiRoundTable } from "react-icons/gi";
+import { GiCardPick as R_GiCardPick, GiRoundTable as R_GiRoundTable } from "react-icons/gi";
 import { GoSidebarCollapse as R_GoSidebarCollapse } from "react-icons/go";
 import {
   BsAsterisk as R_BsAsterisk,
@@ -58,11 +61,14 @@ export const Lock = withShrink(LR_Lock);
 export const ExternalLink = withShrink(LR_ExternalLink);
 export const Globe = withShrink(LR_Globe);
 export const Headphones = withShrink(LR_Headphones);
+export const House = withShrink(LR_House);
 export const ImageIcon = withShrink(LR_Image);
 export const Info = withShrink(LR_Info);
 export const Music = withShrink(LR_Music);
 export const RefreshCw = withShrink(LR_RefreshCw);
+export const Rocket = withShrink(LR_Rocket);
 export const Trophy = withShrink(LR_Trophy);
+export const CalendarRange = withShrink(LR_CalendarRange);
 export const Pause = withShrink(R_MdPause);
 export function Play({ size = 24, className, ...rest }: { size?: number } & React.SVGProps<SVGSVGElement>) {
   return (
@@ -79,8 +85,11 @@ export function Play({ size = 24, className, ...rest }: { size?: number } & Reac
     </svg>
   );
 }
+export const MdVideoLibrary = withShrink(R_MdVideoLibrary);
 export const TbCards = withShrink(R_TbCards);
+export const TbListNumbers = withShrink(R_TbListNumbers);
 export const LuScrollText = withShrink(R_LuScrollText);
+export const GiCardPick = withShrink(R_GiCardPick);
 export const GiRoundTable = withShrink(R_GiRoundTable);
 export const GoSidebarCollapse = withShrink(R_GoSidebarCollapse);
 export const BsAsterisk = withShrink(R_BsAsterisk);
