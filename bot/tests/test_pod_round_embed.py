@@ -164,20 +164,14 @@ def test_reported_and_skipped_lines_drop_the_pending_marker():
     assert "⚔️" not in skipped
 
 
-def test_report_notice_is_round_one_only_and_drops_when_complete():
+def test_round_notices_are_round_one_only_and_stay_when_complete():
     pending = [_ms("Aria", "Caedmon")]
     done = [_ms("Aria", "Caedmon", winner_name="Aria", score="2-0")]
 
-    assert REPORT_NOTICE in round_embed(1, pending).description
-    assert REPORT_NOTICE not in round_embed(1, done).description
-    assert REPORT_NOTICE not in round_embed(2, pending).description
-
-
-def test_deck_image_notice_is_round_one_only():
-    states = [_ms("Aria", "Bryn")]
-
-    assert DECK_IMAGE_NOTICE in round_embed(1, states).description
-    assert DECK_IMAGE_NOTICE not in round_embed(2, states).description
+    for notice in (REPORT_NOTICE, DECK_IMAGE_NOTICE):
+        assert notice in round_embed(1, pending).description
+        assert notice in round_embed(1, done).description
+        assert notice not in round_embed(2, pending).description
 
 
 def _waiting_placeholder(pending: int = 1, prev_round: int = 1, url: str | None = None) -> dict:

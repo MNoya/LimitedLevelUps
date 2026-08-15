@@ -4678,12 +4678,9 @@ REPORT_NOTICE = f"🎯{NBSP}{NBSP}Opponent DM'd. Use `/report-results` or the me
 DECK_IMAGE_NOTICE = f"🚨{NBSP}{NBSP}Change your MTGA deck image before you play, or it leaks your P1P1"
 
 
-def _round_notice_lines(round_num: int, match_states: list[dict]) -> list[str]:
-    """Report prompt + P1P1 deck-image warning, round 1 only, while a real match is still unreported."""
+def _round_notice_lines(round_num: int) -> list[str]:
+    """Report prompt + P1P1 deck-image warning, on the whole of round 1 whatever is already reported"""
     if round_num != 1:
-        return []
-    reportable = any(not m.get("placeholder") and not m.get("winner_name") for m in match_states)
-    if not reportable:
         return []
     return ["", REPORT_NOTICE, DECK_IMAGE_NOTICE]
 
@@ -4789,7 +4786,7 @@ def round_embed(round_num: int, match_states: list[dict]) -> discord.Embed:
         # Rounds 2+ group by record (1-0/0-1, then Trophy/1-1/Last Chance), waiting slots included
         title = round_header(round_num, all_done)
         lines = _grouped_lines(round_num, match_states)
-    lines = lines + _round_notice_lines(round_num, match_states)
+    lines = lines + _round_notice_lines(round_num)
     footer = _waiting_footer_line(match_states)
     if footer is not None:
         lines = lines + ["", footer]
