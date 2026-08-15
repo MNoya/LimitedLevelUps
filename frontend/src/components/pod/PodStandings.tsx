@@ -11,6 +11,7 @@ import {
   STANDING_COLS_CLASS,
   STANDING_ROW_PAD_X,
   TEAM_STANDING_COLS_CLASS,
+  TEAM_TONE,
 } from "./PodStandingRow";
 import type { PodEventParticipantRow, PodSeat } from "../../types/leaderboard";
 
@@ -183,18 +184,27 @@ function HeadingLabel({ children, className }: { children: ReactNode; className?
   );
 }
 
-interface TeamSide {
+export interface TeamSide<T extends TeamSeat> {
   team: string;
-  members: PodSeat[];
+  members: T[];
   wins: number;
   won: boolean;
 }
 
+// A seat can only take a side if it has an index, so the seated subtype is the contract
+export type TeamSeat = PodEventParticipantRow & { seatIndex: number };
+
+/** Draft-seat parity, the one place either surface decides which side a seat belongs to */
+export function seatSide(seatIndex: number | null): "A" | "B" | null {
+  if (seatIndex == null) return null;
+  return seatIndex % 2 === 0 ? "A" : "B";
+}
+
 /** Green/Blue sides by draft-seat parity, the same split Draftmancer's team mode seats */
-function teamSides(seats: PodSeat[]): TeamSide[] {
+export function teamSides<T extends TeamSeat>(seats: T[]): TeamSide<T>[] {
   const sides = ["A", "B"].map((team) => {
     const members = seats
-      .filter((s) => (s.seatIndex % 2 === 0 ? "A" : "B") === team)
+      .filter((s) => seatSide(s.seatIndex) === team)
       .sort(compareStandings);
     const wins = members.reduce((sum, s) => sum + recordParts(s.record).wins, 0);
     return { team, members, wins, won: false };
@@ -204,7 +214,7 @@ function teamSides(seats: PodSeat[]): TeamSide[] {
 }
 
 function TeamHeading({ team, wins, won }: { team: string; wins: number; won: boolean }) {
-  const tone = team === "A" ? "text-green" : "text-blue";
+  const tone = TEAM_TONE[team === "A" ? "A" : "B"].text;
   return (
     <div
       className={cn(

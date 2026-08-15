@@ -62,6 +62,26 @@ export function colorsOf(colors: string | null | undefined): string {
   return wubrgSort(mainColors(colors));
 }
 
+// Mains then splashes, each WUBRG-sorted. 17lands writes them in pick order (`WubrG` is WG splashing UBR)
+export function orderedDeckColors(colors: string | null | undefined): string {
+  if (!colors) return "";
+  const mains = new Set<string>();
+  const splashes = new Set<string>();
+  for (const c of colors) {
+    const upper = c.toUpperCase();
+    if (!"WUBRG".includes(upper)) continue;
+    if (c === upper) {
+      mains.add(upper);
+    } else {
+      splashes.add(upper);
+    }
+  }
+  for (const main of mains) {
+    splashes.delete(main);
+  }
+  return wubrgSort([...mains].join("")) + wubrgSort([...splashes].join("")).toLowerCase();
+}
+
 // Distinct colors played (main + splash deduped)
 export function effectiveColorCount(colors: string | null | undefined): number {
   if (!colors) return 0;
@@ -293,20 +313,22 @@ export function cleanPodEventName(name: string, setCode: string): string {
 }
 
 // The slot phrase alone (`Early Pod`, `Late Pod`), stripped of set code, date, baked number, and any
-// Table suffix. Legacy pods with no slot in the name fall back to `Pod Draft`. The date lives in the
-// row's date box and the Table suffix renders separately, so neither belongs here.
+// Table suffix. The date lives in the row's date box and the Table suffix renders separately, so
+// neither belongs here.
 export function podSlotName(name: string, setCode: string): string {
   const escaped = setCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const slot = name
+  return name
     .replace(/\s*[-–]?\s*Table\s+\d+\s*$/i, "")
     .replace(/#\d+/g, "")
-    .replace(/\s+[-–]\s+[A-Z][a-z]+\.?\s+\d{1,2}\s*$/, "")
     .replace(new RegExp(`\\b${escaped}\\b`, "gi"), "")
-    .replace(/^\s*[A-Z][a-z]+\.?\s+\d{1,2}\s+/, "")
+    .replace(POD_NAME_DATE_RE, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
-  return /\bpod$/i.test(slot) ? `${slot} Draft` : slot;
 }
+
+// Unanchored: a format word can lead the date (`Peasant Cube Aug 14 Early Pod`)
+const POD_NAME_DATE_RE =
+  /\s*[-–]?\s*\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}\b/gi;
 
 // Plain-string title (medallions, aria): `#15 Early Pod - Table 2` once run, the slot alone upcoming.
 // PodEventTitle renders the styled version. Number is the execution-ordered ordinal, not any baked #N.

@@ -434,7 +434,7 @@ function Desktop({
       />
       <FilterRow {...filters} />
 
-      <div className="px-5 grid gap-6" style={{ gridTemplateColumns: "1fr 320px" }}>
+      <div className="pl-5 pr-8 grid gap-6" style={{ gridTemplateColumns: "1fr 320px" }}>
         <LeaderboardTable
           rows={rows}
           variant="desktop"

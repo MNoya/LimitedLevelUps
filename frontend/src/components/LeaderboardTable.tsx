@@ -83,11 +83,17 @@ export function sortRows<T extends LeaderboardTableRow>(
   });
 }
 
+// A metric track holds a short number under a long heading, so its width is mostly padding. Both
+// bounds are given so a narrow desktop spends that padding first and the name keeps its floor.
+const NAME_COL = "minmax(175px, 1fr)";
+const METRIC_COLS =
+  "minmax(62px, 70px) minmax(44px, 100px) minmax(52px, 110px) minmax(44px, 90px) minmax(44px, 90px)";
+
 const COLS_DESKTOP: Record<BoardMode, string> = {
-  points: "44px 1fr 70px 100px 110px 90px 90px",
-  lcq: "44px 1fr 44px 70px 100px 110px 90px 90px",
-  pod: "44px 1fr 70px 100px 110px 90px 90px",
-  direct: "44px 1fr 70px 100px 110px 90px 90px",
+  points: `44px ${NAME_COL} ${METRIC_COLS}`,
+  lcq: `44px ${NAME_COL} 44px ${METRIC_COLS}`,
+  pod: `44px ${NAME_COL} ${METRIC_COLS}`,
+  direct: `44px ${NAME_COL} ${METRIC_COLS}`,
 };
 const COLS_MOBILE: Record<BoardMode, string> = {
   points: "20px 1fr 44px 50px",

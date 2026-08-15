@@ -44,6 +44,7 @@ import {
   podSetCodesFixture,
 } from "./fixtures/pod-events";
 
+import { ACTIVE_SET_CODE } from "./constants";
 import { setsFixture } from "./fixtures/sets";
 import { leaderboardSosFixture } from "./fixtures/leaderboard-sos";
 import { selfReportedTrophiesSosFixture } from "./fixtures/self-reported-sos";

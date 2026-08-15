@@ -4,6 +4,8 @@
 
 export const SITE_LINKS = {
   discord: "https://discord.com/invite/XWNVT9mxvU",
+  // Never-expiring invite onto the pod coordination channel, granting Pod Drafters and Pod Draft Queue
+  discordPods: "https://discord.gg/p53m9RVn6R",
   patreon: "https://patreon.com/limitedlevelups",
   github: "https://github.com/mnoya/DischordLeaderboard",
   seventeenLands: "https://www.17lands.com",

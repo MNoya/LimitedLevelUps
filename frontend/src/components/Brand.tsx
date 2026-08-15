@@ -56,6 +56,9 @@ export function AWordmark({
   );
 }
 
+// Top-left / bottom-right chamfer, shared by anything drawn concentric with an avatar
+export const AVATAR_CLIP = "polygon(8% 0, 100% 0, 100% 92%, 92% 100%, 0 100%, 0 8%)";
+
 // Avatar with chamfered corners. When `avatarUrl` is null (the default at launch
 // per spec §"Avatar plumbing"), falls back to two-letter initials.
 export function AAvatar({
@@ -77,7 +80,6 @@ export function AAvatar({
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const clip = "polygon(8% 0, 100% 0, 100% 92%, 92% 100%, 0 100%, 0 8%)";
   if (avatarUrl && !failed) {
     return (
       <img
@@ -87,7 +89,7 @@ export function AAvatar({
         height={size}
         onError={() => setFailed(true)}
         className="block shrink-0 object-cover"
-        style={{ clipPath: clip }}
+        style={{ clipPath: AVATAR_CLIP }}
       />
     );
   }
@@ -101,7 +103,7 @@ export function AAvatar({
         width: size,
         height: size,
         fontSize: size * 0.45,
-        clipPath: clip,
+        clipPath: AVATAR_CLIP,
       }}
     >
       {initials}

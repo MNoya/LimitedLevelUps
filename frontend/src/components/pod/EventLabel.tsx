@@ -6,9 +6,15 @@ import type { PodEventSummary } from "../../types/leaderboard";
 const SPLIT_RE = /(#\d+|\bmock\b)/gi;
 
 // Green execution-ordered `#N` (absent until the pod runs), the slot phrase, then a muted qualifier
-export function PodEventTitle({ event }: { event: PodEventSummary }): ReactNode {
+export function PodEventTitle({
+  event,
+  omitQualifier = false,
+}: {
+  event: PodEventSummary;
+  omitQualifier?: boolean;
+}): ReactNode {
   const slot = podSlotName(event.name, event.setCode).toUpperCase();
-  const qualifier = podEventQualifier(event).toUpperCase();
+  const qualifier = omitQualifier ? "" : podEventQualifier(event).toUpperCase();
   return (
     <>
       {event.ordinal != null && <span className="text-green">#{event.ordinal} </span>}

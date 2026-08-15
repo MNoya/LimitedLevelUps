@@ -13,7 +13,7 @@ import { useIsMobile } from "../../lib/use-is-mobile";
 import { useResolvedDeckUrl } from "../../data/refresh-deck-url";
 import type { Mainboard } from "../../types/leaderboard";
 
-export const BREAKDOWN_CAPTION = "Seats, logs & replays";
+const BREAKDOWN_CAPTION = "Seats, logs & replays";
 
 export interface DeckLike {
   eventId?: string;
