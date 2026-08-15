@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+from collections.abc import Iterable
 from typing import Any
 
 from aiohttp import web
@@ -50,10 +51,11 @@ def _json_default(value: Any) -> Any:
     raise TypeError(f"cannot serialize {type(value).__name__}")
 
 
-def _build_where(query: dict[str, str]) -> tuple[str, dict[str, Any]]:
+def _build_where(query: Iterable[tuple[str, str]]) -> tuple[str, dict[str, Any]]:
+    """Every pair is ANDed, so a column filtered twice (a date range) keeps both bounds"""
     clauses: list[str] = []
     params: dict[str, Any] = {}
-    for key, raw in query.items():
+    for key, raw in query:
         if key in {"select", "order", "limit", "offset"}:
             continue
         m = _OP_PATTERN.match(raw)
@@ -89,7 +91,7 @@ async def _handle_view(request: web.Request) -> web.Response:
 
     engine = request.app["engine"]
     cols = request.query.get("select", "*")
-    where_sql, params = _build_where(dict(request.query))
+    where_sql, params = _build_where(request.query.items())
     order = request.query.get("order")
 
     sql = f'SELECT {cols} FROM {view}'

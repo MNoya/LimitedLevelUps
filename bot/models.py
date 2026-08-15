@@ -309,6 +309,8 @@ class PodDraftParticipant(Base):
             unique=True,
             postgresql_where=text("player_id IS NOT NULL"),
         ),
+        # The partial index above cannot serve a plain event_id lookup
+        Index("ix_pod_draft_participants_event", "event_id"),
     )
 
 
@@ -326,6 +328,10 @@ class PodDraftMatch(Base):
     reported_at    = Column(DateTime(timezone=True), nullable=True)
 
     event = relationship("PodDraftEvent", back_populates="matches")
+
+    __table_args__ = (
+        Index("ix_pod_draft_matches_event", "event_id"),
+    )
 
 
 class PodDraftDmMessage(Base):

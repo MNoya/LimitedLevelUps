@@ -419,10 +419,12 @@ export function usePodSeasonEvents(
   });
 }
 
-export function usePodSeasonResults(season: { startDate: string; endDate: string } | undefined) {
+export function usePodSeasonResults(
+  season: { code: string; startDate: string; endDate: string } | undefined,
+) {
   return useQuery({
-    queryKey: ["pod-season-results", season?.startDate, season?.endDate],
-    queryFn: () => fetchPodSeasonResults(season!.startDate, season!.endDate),
+    queryKey: ["pod-season-results", season?.code, season?.startDate, season?.endDate],
+    queryFn: () => fetchPodSeasonResults(season!.startDate, season!.endDate, season!.code),
     enabled: !!season,
     staleTime: THIRTY_MINUTES,
   });

@@ -428,20 +428,18 @@ export const fetchPodSeasonEvents = (
   endDate: string,
   seasonCode: string,
 ): Promise<PodEventSummary[]> => {
-  return wait(
-    withPodOrdinals(podEventsFixture).filter((e) =>
-      e.kind === "mock"
-        ? e.setCode === seasonCode
-        : e.eventDate >= startDate && e.eventDate <= endDate,
-    ),
-  );
+  return wait(withPodOrdinals(podEventsFixture).filter((e) => inPodSeason(e, startDate, endDate, seasonCode)));
 };
 
 export const fetchPodSeasonResults = (
   startDate: string,
   endDate: string,
+  seasonCode: string,
 ): Promise<PodSeasonResultRow[]> =>
-  podResultsFor((e) => e.eventDate >= startDate && e.eventDate <= endDate);
+  podResultsFor((e) => inPodSeason(e, startDate, endDate, seasonCode));
+
+const inPodSeason = (e: PodEventSummary, startDate: string, endDate: string, seasonCode: string): boolean =>
+  e.setCode === seasonCode || (e.kind !== "mock" && e.eventDate >= startDate && e.eventDate <= endDate);
 
 export const fetchPodResultsForSet = (setCode: string): Promise<PodSeasonResultRow[]> =>
   podResultsFor((e) => e.setCode === setCode);

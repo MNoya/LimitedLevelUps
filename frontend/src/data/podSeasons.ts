@@ -2,13 +2,13 @@ import type { PodLeaderboardRow, PodSeasonResultRow, SetSummary } from "../types
 import { POD_TROPHY_WINS, podPoints } from "./scoring";
 import { isCubeCode } from "./utils";
 
-// A pod season is a set's Arena rotation window. Every pod played inside it belongs to that season,
-// whatever format it drafted, so flashback and cube nights sit with the set they were played during.
+// A pod season is a set's Arena rotation window, holding every pod played inside it whatever it drafted
+const POD_SEASON_START = "2026-04-21";
 
 export function podSeasons(sets: SetSummary[] | undefined): SetSummary[] {
   if (!sets) return [];
   return sets
-    .filter((s) => s.startDate && s.endDate)
+    .filter((s) => s.startDate >= POD_SEASON_START && s.endDate)
     .slice()
     .sort((a, b) => (a.startDate < b.startDate ? 1 : a.startDate > b.startDate ? -1 : 0));
 }
@@ -24,6 +24,10 @@ export function seasonForDate(sets: SetSummary[] | undefined, date: string): Set
 
 export function currentSeason(sets: SetSummary[] | undefined): SetSummary | undefined {
   return seasonForDate(sets, todayIso());
+}
+
+export function inSeasonWindow(season: SetSummary, date: string): boolean {
+  return date >= season.startDate && date <= season.endDate;
 }
 
 // Trophy and finish counts mirror public_pod_scoring, so the points match the board's own term

@@ -1272,28 +1272,14 @@ export async function fetchPodEvents(setCode: string): Promise<PodEventSummary[]
   return (data ?? []).map((r) => adaptPodEvent(r as Record<string, unknown>));
 }
 
-// A mock belongs to the season of the set it drafted, not the one it was practised in, so spoiler
-// season mocks sit with their own set. Every other pod belongs to the window it was played in.
+// The window it was played in, plus every pod that drafted the season's own set whenever it happened
 export async function fetchPodSeasonEvents(
   startDate: string,
   endDate: string,
   seasonCode: string,
 ): Promise<PodEventSummary[]> {
-  const played = client()
-    .from("public_pod_draft_events")
-    .select("*")
-    .neq("kind", "mock")
-    .gte("event_date", startDate)
-    .lte("event_date", endDate);
-  const mocks = client()
-    .from("public_pod_draft_events")
-    .select("*")
-    .eq("kind", "mock")
-    .eq("set_code", seasonCode);
-  const [playedResp, mocksResp] = await Promise.all([played, mocks]);
-  if (playedResp.error) throw playedResp.error;
-  if (mocksResp.error) throw mocksResp.error;
-  return [...(playedResp.data ?? []), ...(mocksResp.data ?? [])]
+  const rows = await podSeasonRows(startDate, endDate, seasonCode, "*");
+  return rows
     .map((r) => adaptPodEvent(r as Record<string, unknown>))
     .sort((a, b) => (a.eventTime < b.eventTime ? 1 : a.eventTime > b.eventTime ? -1 : 0));
 }
@@ -1504,14 +1490,10 @@ export async function fetchPodLeaderboard(setCode: string): Promise<PodLeaderboa
 export async function fetchPodSeasonResults(
   startDate: string,
   endDate: string,
+  seasonCode: string,
 ): Promise<PodSeasonResultRow[]> {
-  const { data, error } = await client()
-    .from("public_pod_draft_events")
-    .select("event_id, set_code, event_time, kind")
-    .gte("event_date", startDate)
-    .lte("event_date", endDate);
-  if (error) throw error;
-  return podResultsForEvents(data ?? []);
+  const rows = await podSeasonRows(startDate, endDate, seasonCode, "event_id, set_code, event_time, kind");
+  return podResultsForEvents(rows);
 }
 
 export async function fetchPodResultsForSet(setCode: string): Promise<PodSeasonResultRow[]> {
@@ -1521,6 +1503,30 @@ export async function fetchPodResultsForSet(setCode: string): Promise<PodSeasonR
     .eq("set_code", setCode);
   if (error) throw error;
   return podResultsForEvents(data ?? []);
+}
+
+// The window and the season's own set are separate scans, so a pod in both is returned once
+async function podSeasonRows(
+  startDate: string,
+  endDate: string,
+  seasonCode: string,
+  columns: string,
+): Promise<unknown[]> {
+  const windowed = client()
+    .from("public_pod_draft_events")
+    .select(columns)
+    .neq("kind", "mock")
+    .gte("event_date", startDate)
+    .lte("event_date", endDate);
+  const ownSet = client().from("public_pod_draft_events").select(columns).eq("set_code", seasonCode);
+  const [windowedResp, ownSetResp] = await Promise.all([windowed, ownSet]);
+  if (windowedResp.error) throw windowedResp.error;
+  if (ownSetResp.error) throw ownSetResp.error;
+  const byId = new Map<string, unknown>();
+  for (const row of [...(windowedResp.data ?? []), ...(ownSetResp.data ?? [])] as unknown[]) {
+    byId.set((row as { event_id: string }).event_id, row);
+  }
+  return Array.from(byId.values());
 }
 
 // Mock drafts are dropped: they play no rounds, so they carry no record to rank or score

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 
 import { PodPage } from "./PodPage";
@@ -69,6 +69,7 @@ import {
   aggregatePodStandings,
   bucketBySetCode,
   bucketOf,
+  inSeasonWindow,
   seasonsPlayed,
   currentSeason,
   podSeasons,
@@ -87,6 +88,15 @@ import type {
 
 // A format tried once is not a board, so it stays out of the switcher and keeps its pods on the season
 const MIN_BOARD_PODS = 2;
+
+// A board that ran in one season has nothing to pick between, so it shows no season selector
+const MIN_BOARD_SEASONS = 2;
+
+const AXIS_ALL = "__all__";
+const AXIS_PARAM_FORMAT = "format";
+const AXIS_PARAM_SEASON = "season";
+
+const FORMAT_BUCKETS: PodFormatBucket[] = ["set", "flashback", "cube", "mock"];
 
 const POD_DESKTOP_WIDTH = 900;
 
@@ -144,16 +154,9 @@ export function PodsRoute() {
   }
   const window = boardWindowFromSlug(slug, podSetCodes, allSets);
   if (window) {
-    const canonical = boardWindowCode(window.board, window.season);
-    if (slug !== canonical) return <Navigate to={`/pods/${canonical}`} replace />;
-    return <PodDraftsPage setCode={window.board} boardSeasonCode={window.season} />;
+    return <Navigate to={`/pods/${window.board}?${AXIS_PARAM_SEASON}=${window.season}`} replace />;
   }
   return <PodPage />;
-}
-
-// A board scoped to one season, the way the leaderboard writes CUBE-SOS
-export function boardWindowCode(board: string, season: string): string {
-  return `${board}-${season}`;
 }
 
 function boardWindowFromSlug(
@@ -171,25 +174,26 @@ function boardWindowFromSlug(
 export function PodDraftsPage({
   setCode,
   seasonCode,
-  boardSeasonCode,
-}: { setCode?: string; seasonCode?: string; boardSeasonCode?: string } = {}) {
+}: { setCode?: string; seasonCode?: string } = {}) {
   // Below the two-column grid's own breakpoint, so a phone asking for the desktop site gets the
   // desktop chrome stacked in one column instead of the mobile layout
   const isMobile = useIsMobile(POD_DESKTOP_WIDTH);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: allSets } = useSets();
   const { data: podSetCodes } = usePodSetCodes();
   const { data: podEventDates } = usePodEventDates();
 
+  // A season lists once it holds a pod, inside its window or drafting its own set
   const seasons = useMemo<SetSummary[]>(() => {
-    if (!allSets || !podEventDates) return [];
-    const played = new Set<string>();
+    if (!allSets || !podEventDates || !podSetCodes) return [];
+    const played = new Set(podSetCodes.map((p) => p.code));
     for (const date of podEventDates) {
       const season = seasonForDate(allSets, date);
       if (season) played.add(season.code);
     }
     return podSeasons(allSets).filter((s) => played.has(s.code));
-  }, [allSets, podEventDates]);
+  }, [allSets, podEventDates, podSetCodes]);
 
   const season = useMemo<SetSummary | undefined>(() => {
     if (setCode) return undefined;
@@ -228,9 +232,12 @@ export function PodDraftsPage({
     navigate(code === homeCode ? "/pods" : `/pods/${code}`);
   };
 
-  // A season board slices by format, held in state; a cube board slices by season, held in the URL
-  const [formatAxis, setFormatAxis] = useState<string | undefined>(undefined);
-  const axis = season ? formatAxis : boardSeasonCode;
+  const axisParam = season ? AXIS_PARAM_FORMAT : AXIS_PARAM_SEASON;
+  const rawAxis = searchParams.get(axisParam);
+  const axis = season
+    ? FORMAT_BUCKETS.find((bucket) => bucket === rawAxis)
+    : podSeasons(allSets).find((s) => s.code === rawAxis)?.code;
+
   const seasonEvents = usePodSeasonEvents(season).data;
   const seasonResults = usePodSeasonResults(season).data;
   const boardEvents = usePodEvents(season ? undefined : activeSet).data;
@@ -258,28 +265,27 @@ export function PodDraftsPage({
         })),
       ];
     }
+    if (boardSeasons.length < MIN_BOARD_SEASONS) return [];
     return [
-      { value: activeSet, label: "ALL SEASONS", icon: calendar },
+      { value: AXIS_ALL, label: "ALL SEASONS", icon: calendar },
       ...boardSeasons.map(({ season: s }) => ({
-        value: boardWindowCode(activeSet, s.code),
+        value: s.code,
         label: `${s.code} SEASON`,
         glyph: setGlyphCode(s),
       })),
     ];
-  }, [setCode, season, buckets, boardSeasons, activeSet, isMobile]);
+  }, [setCode, season, buckets, boardSeasons, isMobile]);
 
-  const selectorValue = !setCode
-    ? axis ?? AXIS_ALL
-    : boardSeasonCode
-    ? boardWindowCode(activeSet, boardSeasonCode)
-    : activeSet;
+  const selectorValue = axis ?? AXIS_ALL;
 
   const onSelectWindow = (value: string) => {
-    if (!setCode) {
-      setFormatAxis(value === AXIS_ALL ? undefined : value);
-      return;
+    const next = new URLSearchParams(searchParams);
+    if (value === AXIS_ALL) {
+      next.delete(axisParam);
+    } else {
+      next.set(axisParam, value);
     }
-    navigate(`/pods/${value}`);
+    setSearchParams(next);
   };
 
   // Mock pods play no rounds, so they never carry results and only their own filter can reach them
@@ -291,41 +297,45 @@ export function PodDraftsPage({
   }, [season, axis, seasonEvents, activeSet]);
 
   const boardWindow = useMemo(
-    () =>
-      season || !boardSeasonCode
-        ? undefined
-        : boardSeasons.find(({ season: s }) => s.code === boardSeasonCode)?.season,
-    [season, boardSeasonCode, boardSeasons],
+    () => (season ? undefined : boardSeasons.find(({ season: s }) => s.code === axis)?.season),
+    [season, axis, boardSeasons],
   );
 
   const events = useMemo(() => {
     if (!season) {
       if (!boardEvents) return undefined;
       if (!boardWindow) return boardEvents;
-      return boardEvents.filter(
-        (e) => e.eventDate >= boardWindow.startDate && e.eventDate <= boardWindow.endDate,
-      );
+      return boardEvents.filter((e) => inSeasonWindow(boardWindow, e.eventDate));
     }
     if (!seasonEvents) return undefined;
-    return seasonEvents.filter((e) => (axis ? bucketOf(e, activeSet) === axis : e.kind !== "mock"));
+    if (axis) return seasonEvents.filter((e) => bucketOf(e, activeSet) === axis);
+    return seasonEvents.filter((e) => e.kind !== "mock" && inSeasonWindow(season, e.eventDate));
   }, [season, seasonEvents, boardEvents, boardWindow, axis, activeSet]);
 
-  const leaderboard = useMemo(() => {
-    if (season) return aggregatePodStandings(seasonResults, bucketCodes);
-    if (!boardWindow) return aggregatePodStandings(boardResults);
-    const inWindow = boardResults?.filter(
-      (r) => r.eventTime.slice(0, 10) >= boardWindow.startDate && r.eventTime.slice(0, 10) <= boardWindow.endDate,
-    );
-    return aggregatePodStandings(inWindow);
-  }, [season, seasonResults, bucketCodes, boardResults, boardWindow]);
+  // Scoped by event id, since `event_time` is UTC and a late pod crosses a boundary its ET date does not
+  const windowEventIds = useMemo(() => {
+    const bounds = season ?? boardWindow;
+    const scoped = season ? seasonEvents : boardEvents;
+    if (!bounds || !scoped) return undefined;
+    return new Set(scoped.filter((e) => inSeasonWindow(bounds, e.eventDate)).map((e) => e.eventId));
+  }, [season, boardWindow, seasonEvents, boardEvents]);
 
-  // Seasons plus the cube boards, the same way the leaderboard lists CUBE beside its sets. Which
-  // seasons have pods is its own query, so hold the whole list until it lands: a switcher that grows
-  // from one chip to six reads as broken.
-  const switcherSets = useMemo(
-    () => (podEventDates && podSetCodes ? [...seasons, ...legacySets.filter((s) => s.custom)] : []),
-    [podEventDates, podSetCodes, seasons, legacySets],
-  );
+  // The set's own chip carries every pod that drafted it, reaching past the season it sits in
+  const unwindowed = axis === "set" || (!season && !boardWindow);
+
+  const leaderboard = useMemo(() => {
+    const results = season ? seasonResults : boardResults;
+    if (unwindowed) return aggregatePodStandings(results, bucketCodes);
+    if (!windowEventIds) return undefined;
+    return aggregatePodStandings(results?.filter((r) => windowEventIds.has(r.eventId)), bucketCodes);
+  }, [season, unwindowed, seasonResults, boardResults, bucketCodes, windowEventIds]);
+
+  // Held whole until the query lands: a switcher that grows from one chip to six reads as broken
+  const switcherSets = useMemo(() => {
+    if (!podEventDates || !podSetCodes) return [];
+    const seasonCodes = new Set(seasons.map((s) => s.code));
+    return [...seasons, ...legacySets.filter((s) => !seasonCodes.has(s.code))];
+  }, [podEventDates, podSetCodes, seasons, legacySets]);
 
   const [sort, setSort] = useState<SortState>(defaultSortFor("pod"));
   const sortedLeaderboard = useMemo(() => {
@@ -406,6 +416,7 @@ export function PodDraftsPage({
             sets={switcherSets}
             onSelectSet={onSelectSet}
             range={boardRange}
+            isSeason={!!season}
             windowSelector={windowSelector}
           />
         </>
@@ -1350,8 +1361,6 @@ function MobileFilterBar({
   );
 }
 
-const AXIS_ALL = "__all__";
-
 function ChipIcon({
   bucket,
   seasonMeta,
@@ -1377,6 +1386,7 @@ function SetHero({
   onSelectSet,
   windowSelector,
   range,
+  isSeason,
 }: {
   activeSet: string;
   setMeta: SetSummary | undefined;
@@ -1384,8 +1394,9 @@ function SetHero({
   onSelectSet: (code: string) => void;
   windowSelector?: React.ReactNode;
   range?: string | null;
+  isSeason: boolean;
 }) {
-  const week = weekOfSet(setMeta);
+  const week = isSeason ? weekOfSet(setMeta) : null;
   const isActive = setMeta?.isActive ?? false;
   return (
     <div className="relative px-10 py-5 border-b border-border bg-surface flex items-center gap-6">
@@ -1411,7 +1422,7 @@ function SetHero({
           </div>
         ) : (
           <div className="mono text-[11px] text-muted mt-1 flex items-center justify-between gap-4 h-4">
-            <span>{(setMeta && fmtRange(setMeta.startDate, setMeta.endDate)) || " "}</span>
+            <span>{range || " "}</span>
             {week && <span>{week}</span>}
           </div>
         )}
