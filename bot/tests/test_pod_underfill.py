@@ -10,7 +10,6 @@ from bot.tasks.pod_underfill import _arm_underfill_beats, _nudge_ping_role
 ET = ZoneInfo("America/New_York")
 WEDNESDAY_LATE = datetime(2026, 6, 24, 20, 0, tzinfo=ET)
 WEDNESDAY_OFF_GRID = datetime(2026, 6, 24, 9, 0, tzinfo=ET)
-SUNDAY_LATE = datetime(2026, 6, 28, 20, 0, tzinfo=ET)
 FLOOR = 6
 AIM = 8
 
@@ -58,15 +57,6 @@ def test_nudge_ping_role_pings_only_close_to_the_number_the_pod_is_chasing(monke
     role = _nudge_ping_role(_channel("Late Pod"), WEDNESDAY_LATE, count, FLOOR, AIM, hours_before=1)
 
     assert (role is not None) is pings
-
-
-def test_nudge_ping_role_resolves_weekend_bucket_roles(monkeypatch):
-    monkeypatch.setattr(settings, "pod_underfill_ping_hours", "1")
-    monkeypatch.setattr(settings, "pod_underfill_ping_close_gap", 2)
-
-    role = _nudge_ping_role(_channel("Weekend Late Pod"), SUNDAY_LATE, 7, FLOOR, AIM, hours_before=1)
-
-    assert role is not None and role.name == "Weekend Late Pod"
 
 
 def test_nudge_ping_role_silent_for_an_off_grid_event(monkeypatch):

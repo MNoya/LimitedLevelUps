@@ -109,7 +109,6 @@ from bot.services.pod_launcher_copy import (
     SAVE_BUTTON_LABEL,
 )
 from bot.services.pod_reminder_copy import SLOT_FIRE_PING
-from bot.services.pod_schedule import EARLY_POD_ROLE_NAME, LATE_POD_ROLE_NAME
 from bot.services.pod_roles import find_role, role_mention
 from bot.services.pod_signals import (
     LANE_EARLY,
@@ -613,8 +612,7 @@ def _championship_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | No
 
 def _slot_name_only(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
     """The lane header wears its ping role, so the colored pill both names the column and shows the role a
-    player joins to be pinged for it. Weekend lanes keep their own `Weekend` roles: the day a pod runs on is
-    worth spelling out, and they carry their weekday counterpart's color so early and late stay one hue."""
+    player joins to be pinged for it."""
     bucket = bucket_by_key(slot.bucket_key)
     slot_emoji = emojis.resolve(bucket.emoji) if bucket else None
     role = find_role(guild, bucket_role_name(slot.bucket_key) or "")
@@ -788,11 +786,8 @@ def build_play_again_prompt(
 
 
 def _slot_pod_label(guild: discord.Guild | None, bucket_key: str) -> str:
-    """The slot named as its weekday ping role, mentioned for the color it carries. The weekend roles are
-    named Weekend Early Pod, which would read as a different pod than the one the buttons offer."""
-    if lane_of(bucket_key) == LANE_LATE:
-        return role_mention(guild, LATE_POD_ROLE_NAME)
-    return role_mention(guild, EARLY_POD_ROLE_NAME)
+    """The slot named as its ping role, mentioned for the color it carries."""
+    return role_mention(guild, bucket_role_name(bucket_key) or "")
 
 
 class PlayAgainView(discord.ui.View):

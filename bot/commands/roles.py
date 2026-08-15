@@ -39,13 +39,7 @@ from bot.services.pod_roles import (
     grant_role,
     toggle_role,
 )
-from bot.services.pod_schedule import (
-    EARLY_POD_ROLE_NAME,
-    LATE_POD_ROLE_NAME,
-    POD_DRAFTERS_ROLE_NAME,
-    WEEKEND_EARLY_POD_ROLE_NAME,
-    WEEKEND_LATE_POD_ROLE_NAME,
-)
+from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME
 
 
 log = logging.getLogger(__name__)
@@ -276,38 +270,4 @@ async def setup(bot: commands.Bot) -> None:
                 f"{guild.name}: granted {umbrella.name} to {len(newly_granted)} of {len(holders)} "
                 f"pod-role members{breakdown}"
             )
-        await ctx.send("\n".join(reports) if reports else "No guilds.")
-
-    @bot.command(name="migrate-weekend-roles")
-    @commands.is_owner()
-    async def migrate_weekend_roles(ctx: commands.Context) -> None:
-        """Owner-only, idempotent: split the retired Weekend Pod role by each holder's weekday
-        preference. A member on both Weekend Pod and Early Pod gains Weekend Early Pod; on Weekend Pod
-        and Late Pod, Weekend Late Pod. Weekend-only and weekday-only members are untouched. Delete the
-        Weekend Pod role by hand once the report looks right."""
-        legacy_name = "Weekend Pod"
-        mapping = (
-            (EARLY_POD_ROLE_NAME, WEEKEND_EARLY_POD_ROLE_NAME),
-            (LATE_POD_ROLE_NAME, WEEKEND_LATE_POD_ROLE_NAME),
-        )
-        reports = []
-        for guild in bot.guilds:
-            legacy = find_role(guild, legacy_name)
-            if legacy is None:
-                reports.append(f"{guild.name}: no {legacy_name} role, nothing to migrate")
-                continue
-            legacy_holders = set(legacy.members)
-            counts = []
-            for weekday_name, weekend_name in mapping:
-                weekday_role = find_role(guild, weekday_name)
-                weekend_role = find_role(guild, weekend_name)
-                if weekday_role is None or weekend_role is None:
-                    counts.append(f"{weekend_name} missing")
-                    continue
-                granted = 0
-                for member in legacy_holders & set(weekday_role.members):
-                    if await grant_role(member, weekend_role):
-                        granted += 1
-                counts.append(f"{weekend_name} {granted}")
-            reports.append(f"{guild.name}: {len(legacy_holders)} {legacy_name} holders, granted {', '.join(counts)}")
         await ctx.send("\n".join(reports) if reports else "No guilds.")

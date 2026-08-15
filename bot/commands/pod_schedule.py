@@ -103,8 +103,7 @@ def coordination_url(guild: discord.Guild | None) -> str:
 
 
 def slot_line(guild: discord.Guild | None, now: datetime) -> str:
-    """Both slots on one row, each naming the role to hold and when it next drafts. The weekday roles carry
-    the line: a reader wants the role to pick up, and the weekend variants are the launcher's bookkeeping."""
+    """Both slots on one row, each naming the role to hold and when it next drafts."""
     slots = []
     for bucket in WEEKDAY_BUCKETS:
         start = next_lane_start(bucket.lane, now)

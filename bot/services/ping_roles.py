@@ -1,7 +1,7 @@
 """Self-assignable ping roles — the single registry every guild reconciles against.
 
-`PING_ROLES` is the source of truth: name, color, the toggle-menu blurb, and an optional slot the
-role is tied to (for showing its local time and auto-granting on RSVP). `reconcile_ping_roles`
+`PING_ROLES` is the source of truth: name, color, the toggle-menu blurb, and an optional lane the
+role is tied to (for showing its local times and auto-granting on RSVP). `reconcile_ping_roles`
 makes every guild match this list — creating missing roles, recoloring drift, and renaming in place
 when a name moves to `aliases`. To rename a role, set the new `name` and list the old name in
 `aliases`; the reconcile finds the existing role by the alias and renames it instead of orphaning it.
@@ -22,7 +22,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 import discord
@@ -61,13 +61,7 @@ from bot.services.pod_schedule import (
     MOCK_DRAFT_ROLE_NAME,
     POD_DRAFTERS_ROLE_NAME,
     POD_QUEUE_ROLE_NAME,
-    SATURDAY,
-    THURSDAY,
-    WEDNESDAY,
-    WEEKEND_EARLY_POD_ROLE_NAME,
-    WEEKEND_LATE_POD_ROLE_NAME,
-    next_slot_datetime,
-    slot_by_weekday,
+    SCHEDULE_TZ,
 )
 from bot.services.pod_signals import (
     LANE_EARLY,
@@ -93,10 +87,9 @@ class PingRole:
     blurb: str
     color: str | None = None
     aliases: tuple[str, ...] = ()
-    slot_weekday: int | None = None
+    lane: str | None = None
     auto_grant: bool = False
     grant_when: str = "at this time of day"
-    weekend_lane: str | None = None
 
 
 EARLY_POD_COLOR = "#5CA8E0"
@@ -105,22 +98,12 @@ LATE_POD_COLOR = "#9B8AE6"
 PING_ROLES: tuple[PingRole, ...] = (
     PingRole("drafters", POD_DRAFTERS_ROLE_NAME, "llu", "Server-Wide Pod Announcements", color="#C0C0C0"),
     PingRole(
-        "early", EARLY_POD_ROLE_NAME, "💫", "Weekdays", color=EARLY_POD_COLOR,
-        aliases=("Early Pods", "Early Pod Drafters", "Euro Pod Drafters"), slot_weekday=THURSDAY, auto_grant=True,
+        "early", EARLY_POD_ROLE_NAME, "💫", "every day", color=EARLY_POD_COLOR,
+        aliases=("Early Pods", "Early Pod Drafters", "Euro Pod Drafters"), lane=LANE_EARLY, auto_grant=True,
     ),
     PingRole(
-        "late", LATE_POD_ROLE_NAME, "☄️", "Weekdays", color=LATE_POD_COLOR,
-        aliases=("Late Pods", "Late Pod Drafters"), slot_weekday=WEDNESDAY, auto_grant=True,
-    ),
-    PingRole(
-        "wknd_early", WEEKEND_EARLY_POD_ROLE_NAME, "🌅", "", color=EARLY_POD_COLOR,
-        aliases=("Weekend Early Pods",), slot_weekday=SATURDAY, auto_grant=True,
-        grant_when="on weekends", weekend_lane=LANE_EARLY,
-    ),
-    PingRole(
-        "wknd_late", WEEKEND_LATE_POD_ROLE_NAME, "🎆", "", color=LATE_POD_COLOR,
-        aliases=("Weekend Late Pods",), slot_weekday=SATURDAY, auto_grant=True,
-        grant_when="on weekends", weekend_lane=LANE_LATE,
+        "late", LATE_POD_ROLE_NAME, "☄️", "every day", color=LATE_POD_COLOR,
+        aliases=("Late Pods", "Late Pod Drafters"), lane=LANE_LATE, auto_grant=True,
     ),
     PingRole("queue", POD_QUEUE_ROLE_NAME, "⚡", "Daily Draft Sign-Ups", color="#FFAC33"),
     PingRole(
@@ -197,33 +180,29 @@ def button_custom_id(spec: PingRole) -> str:
 
 
 def blurb_with_time(spec: PingRole) -> str:
-    """A slot role pairs its blurb with its recurring local times: one for a weekday slot, and for a weekend
-    role every hour its lane runs at across the two days. Roles with no slot show their blurb alone."""
-    if spec.slot_weekday is None:
+    """A lane role pairs its blurb with every hour its lane starts at across a week. Roles with no lane
+    show their blurb alone."""
+    if spec.lane is None:
         return spec.blurb
-    slot = slot_by_weekday(spec.slot_weekday)
-    if slot is None:
+    stamps = _lane_stamps(spec.lane)
+    if not stamps:
         return spec.blurb
-    if spec.weekend_lane is not None:
-        stamps = _weekend_lane_stamps(spec.weekend_lane, next_slot_datetime(slot).date())
-    else:
-        stamps = [next_slot_datetime(slot)]
     times = ", ".join(f"<t:{int(stamp.timestamp())}:t>" for stamp in stamps)
     return f"{spec.blurb} at {times}" if spec.blurb else f"at {times}"
 
 
-def _weekend_lane_stamps(lane: str, saturday: date) -> list[datetime]:
-    """One stamp per distinct start the lane runs at over a weekend, Saturday first: a lane holding the same
-    hour both days names it once, and one that shifts on Saturday names both hours."""
-    stamps = []
-    starts = set()
-    for day in (saturday, saturday + timedelta(days=1)):
+def _lane_stamps(lane: str, *, today: date | None = None) -> list[datetime]:
+    """One stamp per distinct start the lane runs at over the coming week, earliest hour first: a lane
+    holding one hour every day names it once, and one that shifts on Saturday names both hours."""
+    today = today or datetime.now(SCHEDULE_TZ).date()
+    by_start: dict[time, datetime] = {}
+    for offset in range(7):
+        day = today + timedelta(days=offset)
         bucket = bucket_for_lane(day, lane)
-        if bucket is None or bucket.start in starts:
+        if bucket is None or bucket.start in by_start:
             continue
-        starts.add(bucket.start)
-        stamps.append(slot_event_time(day, bucket.key))
-    return stamps
+        by_start[bucket.start] = slot_event_time(day, bucket.key)
+    return [by_start[start] for start in sorted(by_start)]
 
 
 def display_emoji(spec: PingRole) -> str | None:

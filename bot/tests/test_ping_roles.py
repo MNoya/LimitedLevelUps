@@ -13,8 +13,6 @@ from bot.services.ping_roles import (
     MOCK_DRAFT_ROLE_NAME,
     PING_ROLES,
     LATE_POD_ROLE_NAME,
-    WEEKEND_EARLY_POD_ROLE_NAME,
-    WEEKEND_LATE_POD_ROLE_NAME,
     _ensure_managed_role,
     _first_welcome_for,
     auto_grant_spec_for_event,
@@ -29,41 +27,27 @@ from bot.services.pod_roles import consume_bot_umbrella_grant, grant_role
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
 
 
-def test_auto_grant_maps_timed_weekday_slots_to_their_roles():
-    thursday = datetime(2026, 6, 11, 14, 0, tzinfo=SCHEDULE_TZ)
-    wednesday = datetime(2026, 6, 10, 20, 0, tzinfo=SCHEDULE_TZ)
-    off_grid = datetime(2026, 6, 9, 11, 0, tzinfo=SCHEDULE_TZ)
+@pytest.mark.parametrize("event_time, expected", [
+    (datetime(2026, 6, 11, 14, 0, tzinfo=SCHEDULE_TZ), EARLY_POD_ROLE_NAME),
+    (datetime(2026, 6, 10, 20, 0, tzinfo=SCHEDULE_TZ), LATE_POD_ROLE_NAME),
+    (datetime(2026, 6, 13, 14, 0, tzinfo=SCHEDULE_TZ), EARLY_POD_ROLE_NAME),
+    (datetime(2026, 6, 13, 21, 0, tzinfo=SCHEDULE_TZ), LATE_POD_ROLE_NAME),
+    (datetime(2026, 6, 9, 11, 0, tzinfo=SCHEDULE_TZ), None),
+    (datetime(2026, 6, 13, 20, 0, tzinfo=SCHEDULE_TZ), None),
+])
+def test_auto_grant_maps_a_slot_time_to_its_role(event_time, expected):
+    spec = auto_grant_spec_for_event(event_time)
 
-    assert auto_grant_spec_for_event(thursday).name == EARLY_POD_ROLE_NAME
-    assert auto_grant_spec_for_event(wednesday).name == LATE_POD_ROLE_NAME
-    assert auto_grant_spec_for_event(off_grid) is None
-
-
-def test_auto_grant_splits_weekend_daytime_from_evening():
-    saturday_early = datetime(2026, 6, 13, 14, 0, tzinfo=SCHEDULE_TZ)
-    saturday_evening = datetime(2026, 6, 13, 21, 0, tzinfo=SCHEDULE_TZ)
-    sunday_evening = datetime(2026, 6, 14, 20, 0, tzinfo=SCHEDULE_TZ)
-    saturday_off_grid = datetime(2026, 6, 13, 20, 0, tzinfo=SCHEDULE_TZ)
-
-    assert auto_grant_spec_for_event(saturday_early).name == WEEKEND_EARLY_POD_ROLE_NAME
-    assert auto_grant_spec_for_event(saturday_evening).name == WEEKEND_LATE_POD_ROLE_NAME
-    assert auto_grant_spec_for_event(sunday_evening).name == WEEKEND_LATE_POD_ROLE_NAME
-    assert auto_grant_spec_for_event(saturday_off_grid) is None
+    assert (spec.name if spec else None) == expected
 
 
 def test_button_custom_id_is_a_stable_slug():
     assert button_custom_id(_spec_named(POD_DRAFTERS_ROLE_NAME)) == "role-toggle-pod-drafters"
 
 
-def test_blurb_with_time_pairs_a_weekday_slot_with_its_local_time():
-    blurb = blurb_with_time(_spec_named(EARLY_POD_ROLE_NAME))
-
-    assert "<t:" in blurb and ":t>" in blurb
-
-
-def test_blurb_with_time_lists_every_hour_the_weekend_lane_runs_at():
-    early = blurb_with_time(_spec_named(WEEKEND_EARLY_POD_ROLE_NAME))
-    late = blurb_with_time(_spec_named(WEEKEND_LATE_POD_ROLE_NAME))
+def test_blurb_with_time_lists_every_hour_a_lane_runs_at():
+    early = blurb_with_time(_spec_named(EARLY_POD_ROLE_NAME))
+    late = blurb_with_time(_spec_named(LATE_POD_ROLE_NAME))
 
     assert early.count("<t:") == 1
     assert late.count("<t:") == 2

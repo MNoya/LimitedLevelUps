@@ -66,13 +66,13 @@ def test_a_slot_rolls_to_tomorrow_once_todays_start_has_passed(lane, called_at, 
     assert start == expected_start.replace(tzinfo=SCHEDULE_TZ)
 
 
-def test_weekday_and_weekend_buckets_of_one_time_share_a_lane():
+def test_buckets_of_one_time_share_a_lane_across_the_week():
     friday_late = bucket_for_lane(FRIDAY, LANE_LATE)
     saturday_late = bucket_for_lane(SATURDAY, LANE_LATE)
 
     assert friday_late.key != saturday_late.key
     assert lane_of(friday_late.key) == lane_of(saturday_late.key) == LANE_LATE
-    assert friday_late.role_name != saturday_late.role_name
+    assert friday_late.role_name == saturday_late.role_name
 
 
 @pytest.mark.parametrize(

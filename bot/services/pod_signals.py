@@ -9,13 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from bot.services.pod_schedule import (
-    EARLY_POD_ROLE_NAME,
-    LATE_POD_ROLE_NAME,
-    SCHEDULE_TZ,
-    WEEKEND_EARLY_POD_ROLE_NAME,
-    WEEKEND_LATE_POD_ROLE_NAME,
-)
+from bot.services.pod_schedule import EARLY_POD_ROLE_NAME, LATE_POD_ROLE_NAME, SCHEDULE_TZ
 
 
 SATURDAY = 5
@@ -49,7 +43,7 @@ LANE_ORDER = (LANE_EARLY, LANE_LATE)
 class PollBucket:
     """One slot of one day. `lane` is the launcher column the slot belongs to for life: the weekday and
     weekend buckets of a time of day are two keys for one column, so a slot rolling from Friday to
-    Saturday stays in its column and picks up the weekend ping role."""
+    Saturday stays in its column."""
     key: str
     name: str
     emoji: str
@@ -59,11 +53,11 @@ class PollBucket:
 
 
 WEEKEND_EARLY_BUCKET = PollBucket(
-    "AFTERNOON", "Early Pod", "💫", time(14, 0), WEEKEND_EARLY_POD_ROLE_NAME, LANE_EARLY)
+    "AFTERNOON", "Early Pod", "💫", time(14, 0), EARLY_POD_ROLE_NAME, LANE_EARLY)
 WEEKEND_LATE_BUCKET = PollBucket(
-    "EVENING", "Late Pod", "☄️", time(20, 0), WEEKEND_LATE_POD_ROLE_NAME, LANE_LATE)
+    "EVENING", "Late Pod", "☄️", time(20, 0), LATE_POD_ROLE_NAME, LANE_LATE)
 SATURDAY_LATE_BUCKET = PollBucket(
-    "SATURDAY_EVENING", "Late Pod", "☄️", time(21, 0), WEEKEND_LATE_POD_ROLE_NAME, LANE_LATE)
+    "SATURDAY_EVENING", "Late Pod", "☄️", time(21, 0), LATE_POD_ROLE_NAME, LANE_LATE)
 
 WEEKDAY_BUCKETS: tuple[PollBucket, ...] = (
     PollBucket("EARLY", "Early Pod", "💫", time(14, 0), EARLY_POD_ROLE_NAME, LANE_EARLY),
