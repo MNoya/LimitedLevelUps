@@ -2,6 +2,7 @@
 // Anything stateless that previously got inlined or duplicated lives here.
 
 import type { LeaderboardRow, SetSummary } from "../types/leaderboard";
+import { POD_TROPHY_WINS } from "./scoring";
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
 
@@ -261,6 +262,12 @@ export function podDiscordName(p: {
   displayName: string;
 }): string {
   return stripDiscriminator(p.playerDisplayName ?? p.displayName);
+}
+
+// A pod trophy is three match wins. A small pod's 2-1 winner takes 1st place without one, and a big
+// pod can crown two 3-0s where only one of them carries placement 1.
+export function isPodTrophyRecord(record: string | null | undefined): boolean {
+  return Number((record ?? "").split("-")[0] || 0) >= POD_TROPHY_WINS;
 }
 
 export function podSeatName(p: { draftmancerName: string | null; displayName: string }): string {

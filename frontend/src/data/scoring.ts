@@ -56,6 +56,10 @@ export interface Aggregate {
   contributionByLabel: Map<string, number>;
 }
 
+// A pod trophy is three match wins, never a pod win by placement — mirrors POD_TROPHY_WINS in
+// bot/services/pod_drafts.py, so a small pod's 2-1 winner buckets as a two-win finish.
+export const POD_TROPHY_WINS = 3;
+
 // Floored so fractional one-win finishes bank across pods, mirroring bot/scoring.py pod_points().
 export function podPoints(trophies: number, twoWins: number, oneWins: number): number {
   return Math.floor(

@@ -11,7 +11,8 @@ import { Pips } from "../ManaPips";
 import { Record } from "../Record";
 import { cn } from "../../lib/utils";
 import { useIsCompact, useIsLandscapePhone } from "../../lib/use-is-mobile";
-import { playerPath, podSeatName, stripDiscriminator } from "../../data/utils";
+import { isPodTrophyRecord, playerPath, podSeatName, stripDiscriminator } from "../../data/utils";
+import { recordParts } from "./PodStandingRow";
 import { useResolvedDeckUrl } from "../../data/refresh-deck-url";
 import type { DeckTab } from "./DeckScreenshotModal";
 import type { PodEventMatchRow, PodEventReplayRow, PodSeat } from "../../types/leaderboard";
@@ -160,10 +161,9 @@ function SeatHeader({
 }) {
   const isMobile = useIsCompact();
   const isLandscape = useIsLandscapePhone();
-  const isChampion = participant.placement === 1;
-  const wins = Number((participant.record ?? "").split("-")[0] || 0);
-  const losses = Number((participant.record ?? "").split("-")[1] || 0);
-  const hasRecord = participant.record != null && wins + losses > 0;
+  const { wins, losses, played: hasRecord } = recordParts(participant.record);
+  const isTrophy = isPodTrophyRecord(participant.record);
+  const isWinner = isTrophy || participant.placement === 1;
   const hasDeck = participant.deckScreenshotUrl !== null || !!participant.hasDeckList;
 
   const nameFontSize = isLandscape ? 24 : isMobile ? 28 : 32;
@@ -186,7 +186,7 @@ function SeatHeader({
     </span>
   );
 
-  const placementLabel = isChampion
+  const placementLabel = isTrophy
     ? "Champion"
     : participant.placement != null
       ? `${ordinalLabel(participant.placement)} place`
@@ -210,7 +210,7 @@ function SeatHeader({
         <span
           className={cn(
             "font-display tracking-[0.16em] uppercase whitespace-nowrap",
-            isChampion ? "text-green" : "text-muted",
+            isWinner ? "text-green" : "text-muted",
           )}
         >
           {placementLabel}
@@ -228,7 +228,7 @@ function SeatHeader({
         )}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <AAvatar displayName={participant.discordName} avatarUrl={participant.avatarUrl} size={isLandscape ? 44 : 52} green={isChampion} />
+          <AAvatar displayName={participant.discordName} avatarUrl={participant.avatarUrl} size={isLandscape ? 44 : 52} green={isWinner} />
           <div className="min-w-0 flex-1 flex items-start justify-between gap-3">
             <div className="min-w-0 flex flex-col gap-2">
               {nameLink}
@@ -277,7 +277,7 @@ function SeatHeader({
 
   return (
     <header className="shrink-0 flex items-center gap-4 px-4 md:px-5 xl:px-8 py-5 border-b border-border">
-      <AAvatar displayName={participant.discordName} avatarUrl={participant.avatarUrl} size={54} green={isChampion} />
+      <AAvatar displayName={participant.discordName} avatarUrl={participant.avatarUrl} size={54} green={isWinner} />
       <div className="min-w-0 flex-1 flex flex-col gap-2">
         {nameLink}
         {metaRow}

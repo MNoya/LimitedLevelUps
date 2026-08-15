@@ -3,6 +3,8 @@ import { Pips } from "../ManaPips";
 import { useIsLandscapePhone } from "../../lib/use-is-mobile";
 import { Record } from "../Record";
 import { cn } from "../../lib/utils";
+import { isPodTrophyRecord } from "../../data/utils";
+import { recordParts } from "./PodStandingRow";
 import type { PodSeat } from "../../types/leaderboard";
 import type { RoundOutcome } from "./PlayerSeatPanel";
 
@@ -102,10 +104,8 @@ interface Props {
 const REF = { w: 118, h: 144, nameMax: 17, nameMin: 10, pip: 13, rec: 20 };
 
 export function PlayerShield({ participant, selected, highlighted = false, highlightedOutcome = null, onClick, scale = 1 }: Props) {
-  const isChampion = participant.placement === 1;
-  const wins = Number((participant.record ?? "").split("-")[0] || 0);
-  const losses = Number((participant.record ?? "").split("-")[1] || 0);
-  const hasRecord = participant.record != null && wins + losses > 0;
+  const { wins, losses, played: hasRecord } = recordParts(participant.record);
+  const isWinner = isPodTrophyRecord(participant.record) || participant.placement === 1;
   const raiseForName = useIsLandscapePhone();
   const dims = {
     w: REF.w * scale,
@@ -116,7 +116,7 @@ export function PlayerShield({ participant, selected, highlighted = false, highl
     rec: REF.rec * scale,
   };
 
-  const metal = isChampion ? GOLD : SILVER;
+  const metal = isWinner ? GOLD : SILVER;
   const isHighlight = highlighted && !selected;
   const ring =
     (selected || isHighlight) && highlightedOutcome != null

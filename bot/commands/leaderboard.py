@@ -8,7 +8,7 @@ from typing import Callable
 import discord
 from discord import app_commands
 from discord.ext import commands
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from bot import audit, emojis
@@ -30,7 +30,7 @@ from bot.scoring import (
 )
 from bot.services.active_set import resolve_board_set
 from bot.services.pod_deck_color import PAIR_EMOJI_NAME
-from bot.services.pod_drafts import pod_summary_by_set_for_player
+from bot.services.pod_drafts import POD_TROPHY_WINS, pod_record_wins, pod_summary_by_set_for_player
 from bot.services.pod_format import PEASANT_CODE, PEASANT_LABEL
 from bot.services.self_reported_events import rank_self_reported_events
 from bot.sets import (
@@ -745,8 +745,7 @@ def _trophy_board_last_updated(session: Session, magic_set: MagicSet) -> datetim
 def _pod_board(
     session: Session, viewer_discord_id: str | None, top_n: int, set_code: str, set_name: str,
 ) -> LeaderboardData:
-    is_trophy = or_(PodDraftParticipant.record == "3-0", PodDraftParticipant.placement == 1)
-    trophy_expr = func.coalesce(func.sum(case((is_trophy, 1), else_=0)), 0)
+    trophy_expr = func.coalesce(func.sum(case((pod_record_wins() >= POD_TROPHY_WINS, 1), else_=0)), 0)
     events_expr = func.count(PodDraftParticipant.id)
 
     rows = session.execute(

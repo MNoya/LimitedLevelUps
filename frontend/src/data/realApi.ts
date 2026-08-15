@@ -20,6 +20,7 @@ import {
   computeScore,
   groupTotalsFromBreakdown,
   lcqDraft2Earnings,
+  POD_TROPHY_WINS,
   podPoints,
   scoreFromGroups,
   type GroupTotals,
@@ -1403,7 +1404,7 @@ async function fetchPodParticipantsForSet(setCode: string): Promise<PodParticipa
 async function fetchPodRecentTrophies(setCode: string): Promise<RecentTrophy[]> {
   const parts = await fetchPodParticipantsForSet(setCode);
   return parts
-    .filter((p) => p.placement === 1 && p.slug)
+    .filter((p) => p.wins >= POD_TROPHY_WINS && p.slug)
     .map((p) => ({
       setCode,
       slug: p.slug!,
@@ -1457,7 +1458,7 @@ async function fetchPodColorsLeaderboard(
     agg.events += 1;
     agg.wins += p.wins;
     agg.losses += p.losses;
-    if (p.placement === 1) agg.trophies += 1;
+    if (p.wins >= POD_TROPHY_WINS) agg.trophies += 1;
     if (p.finishedAt > agg.lastFinishedAt) agg.lastFinishedAt = p.finishedAt;
   }
 

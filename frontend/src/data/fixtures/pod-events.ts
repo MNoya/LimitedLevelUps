@@ -6,6 +6,7 @@ import type {
   PodEventSummary,
   PodLeaderboardRow,
 } from "../../types/leaderboard";
+import { POD_TROPHY_WINS } from "../scoring";
 import { podSos3Fixture, type PodParticipant } from "./pod-sos-3";
 
 function participantToRow(p: PodParticipant): PodEventParticipantRow {
@@ -274,7 +275,7 @@ function leaderboardRowsForSet(setCode: string): Omit<PodLeaderboardRow, "rank">
       events: 1,
       wins,
       losses,
-      trophies: p.placement === 1 ? 1 : 0,
+      trophies: wins >= POD_TROPHY_WINS ? 1 : 0,
       lastFinishedAt: `${podSos3Fixture.date}T22:00:00Z`,
     };
   });

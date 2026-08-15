@@ -7,7 +7,8 @@ import { HeroSection } from "../HeroSection";
 import { type DeckTab } from "./DeckScreenshotModal";
 import { highlightEventLabel } from "./EventLabel";
 import { PlayerSeatPanel } from "./PlayerSeatPanel";
-import { PodStandings, PodStandingsSkeleton, StandingsBackBar, type PodStandingsActions } from "./PodStandings";
+import { PodStandings, PodStandingsSkeleton, recordParts, StandingsBackBar, type PodStandingsActions } from "./PodStandings";
+import { isPodTrophyRecord } from "../../data/utils";
 import type { PodEventMatchRow, PodEventReplayRow, PodSeat } from "../../types/leaderboard";
 
 interface Props {
@@ -396,10 +397,8 @@ function PlayerTile({
   onClick: () => void;
   scale: number;
 }) {
-  const isChampion = participant.placement === 1;
-  const wins = Number((participant.record ?? "").split("-")[0] || 0);
-  const losses = Number((participant.record ?? "").split("-")[1] || 0);
-  const hasRecord = participant.record != null && wins + losses > 0;
+  const { wins, losses, played: hasRecord } = recordParts(participant.record);
+  const isWinner = isPodTrophyRecord(participant.record) || participant.placement === 1;
   const w = REF_TILE.w * scale;
   const h = REF_TILE.h * scale;
 
@@ -413,7 +412,7 @@ function PlayerTile({
         "block p-0 m-0 bg-surface border transition-colors text-left",
         selected
           ? "border-green bg-surface2"
-          : isChampion
+          : isWinner
             ? "border-border2"
             : "border-border hover:border-border2",
       )}
@@ -432,7 +431,7 @@ function PlayerTile({
         <div
           className="flex items-center justify-center gap-1 w-full px-1 min-w-0"
         >
-          {isChampion && (
+          {isWinner && (
             <Trophy
               size={Math.round(10 * scale)}
               color="#ffc63a"

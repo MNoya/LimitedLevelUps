@@ -1,5 +1,5 @@
 import type { PodLeaderboardRow, PodSeasonResultRow, SetSummary } from "../types/leaderboard";
-import { podPoints } from "./scoring";
+import { POD_TROPHY_WINS, podPoints } from "./scoring";
 import { isCubeCode } from "./utils";
 
 // A pod season is a set's Arena rotation window. Every pod played inside it belongs to that season,
@@ -58,7 +58,7 @@ export function aggregatePodStandings(
     row.events += 1;
     row.wins += r.wins;
     row.losses += r.losses;
-    if (r.wins >= 3 || r.placement === 1) {
+    if (r.wins >= POD_TROPHY_WINS) {
       row.trophies += 1;
     } else if (r.wins === 2) {
       finish.twoWins += 1;

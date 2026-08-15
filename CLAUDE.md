@@ -121,7 +121,7 @@ total     = (Σ raw_group) × T/(T+2) + pod_points            (T = total trophie
 ```
 - **Confidence `T/(T+2)` is aggregate** — one shrinkage from total trophy count scales the summed raw, not a per-group penalty. `compute_score` / `compute_score_breakdown` both derive from one `_aggregate()`; breakdown contributions are `raw_group × T/(T+2)` so they sum to the total.
 - LCQ Draft 2 is a special case: `wins × winrate × points` (exempt from confidence).
-- **Pod points** are a separate flat term: 5 per trophy (a 3-0 record OR a pod win by placement), 2 per 2-1; added to the leaderboard total outside `compute_score`. Pods are always public (active-only, never opt-in gated) — pod-only players enter the board on pod points alone.
+- **Pod points** are a separate flat term added to the leaderboard total outside `compute_score`, bucketed by match wins in `pod_scoring_counts`. Pods are always public (active-only, never opt-in gated) — pod-only players enter the board on pod points alone.
 
 `DEFAULT_QUEUE_GROUPS` + pod point values are built from `scoring_buckets.json`. The formula is implemented twice — bot (`bot/scoring.py`) and frontend (`frontend/src/data/scoring.ts`) — plus the frontend reads pod aggregates from the `public_pod_scoring` view. Keep both in sync when either changes.
 

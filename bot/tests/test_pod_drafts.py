@@ -352,7 +352,7 @@ def test_pod_summary_by_set_aggregates_per_set(session):
     assert summary["ECL"] == (1, 2, 1, 0, 1, 0)
 
 
-def test_pod_summary_trophy_from_pod_win_without_3_0(session):
+def test_pod_win_without_three_wins_is_not_a_trophy(session):
     _seed_set(session, "SOS")
     player = _seed_player(session, discord_id="778", username="smallpod", display_name="SmallPod")
 
@@ -362,8 +362,8 @@ def test_pod_summary_trophy_from_pod_win_without_3_0(session):
     ])
 
     summary = pod_summary_by_set_for_player(session, player.id)
-    assert summary["SOS"].trophies == 1   # 2-1 that won the pod counts as a trophy
-    assert summary["SOS"].two_win_finishes == 0   # not also a two-win finish
+    assert summary["SOS"].trophies == 0
+    assert summary["SOS"].two_win_finishes == 1
 
 
 def test_pod_summary_team_finishes_score_by_record_only(session):
