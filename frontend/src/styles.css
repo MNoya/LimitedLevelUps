@@ -88,9 +88,8 @@ button {
   }
 }
 
-/* A page body fades in on mount while its chrome paints at once, so routing never blinks the navbar */
 .page-fade > *:not(header):not(.page-chrome) {
-  animation: pageFadeIn 220ms ease-out both;
+  animation: pageFadeIn 220ms ease-out backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
