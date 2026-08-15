@@ -2,6 +2,7 @@ import React from "react";
 import { SetGlyph, setGlyphCode } from "./Brand";
 import { ChevronDown, ChevronRight } from "./Icons";
 import { cn } from "../lib/utils";
+import { useWheelTrap } from "../lib/use-wheel-trap";
 import type { SetSummary } from "../types/leaderboard";
 
 export function TierSetDropdown({
@@ -33,6 +34,7 @@ export function TierSetDropdown({
   const [locked, setLocked] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const ref = React.useRef<HTMLDivElement>(null);
+  const menuRef = useWheelTrap<HTMLDivElement>(open);
   const today = new Date().toISOString().slice(0, 10);
   const glyphSize = compact ? 20 : isMobile ? 26 : 38;
   const labelSize = compact ? "text-[18px]" : "text-[17px] md:text-[30px]";
@@ -129,6 +131,7 @@ export function TierSetDropdown({
 
       {open && (
         <div
+          ref={menuRef}
           className={cn(
             "absolute z-30 flex max-h-[min(60vh,400px)] w-max max-w-[80vw] flex-col overflow-hidden border border-border2 bg-surface shadow-xl",
             menuAlign === "side-right"

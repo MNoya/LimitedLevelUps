@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "../lib/utils";
+import { useWheelTrap } from "../lib/use-wheel-trap";
 import { ChevronDown } from "./Icons";
 
 // Custom click-to-open dropdown — same family as SetSwitcherMobile so styled
@@ -58,6 +59,7 @@ export function FilterDropdown({
   const [menuTop, setMenuTop] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useWheelTrap<HTMLDivElement>(open);
 
   const showSearch = searchable ?? options.length > SEARCH_THRESHOLD;
   const toggle = () => setOpen((o) => !o);
@@ -134,6 +136,7 @@ export function FilterDropdown({
 
       {open && (
         <div
+          ref={menuRef}
           className={cn(
             "absolute top-[calc(100%+4px)] min-w-full w-max max-w-[calc(100vw-24px)] flex max-h-[min(60vh,420px)] flex-col bg-surface border border-border2 z-20 shadow-lg",
             align === "right" ? "right-0" : "left-0",

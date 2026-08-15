@@ -124,6 +124,7 @@ button {
 .menu-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: #3b4458 transparent;
+  overscroll-behavior: contain;
 }
 .menu-scrollbar::-webkit-scrollbar {
   width: 8px;
