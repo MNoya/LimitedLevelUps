@@ -2001,6 +2001,8 @@ async def open_ondemand_lobby(
         return
 
     expected = len(display_names) + len(riders)
+    seatable = len(seated) + len(unconfirmed) + len(maybe_roster)
+    await asyncio.to_thread(pod_event_settings.size_room_sync, event_id, seatable)
     manager = await start_manager(
         bot, event_id, session_id, thread_id, set_code, expected,
         event_name=event_name, draftmancer_url=draftmancer_url,

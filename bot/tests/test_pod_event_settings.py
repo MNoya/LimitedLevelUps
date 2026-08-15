@@ -49,3 +49,11 @@ def test_settings_survive_the_round_trip_and_leave_the_keys_they_do_not_name(eve
     assert stored[pod_event_settings.MAX_PLAYERS] == 6
     assert stored[pod_event_settings.CARDS_PER_PACK] is None
     assert stored[pod_event_settings.PICK_TIMER] == settings.pod_draft_pick_timer
+
+
+def test_a_pod_of_nine_opens_its_room_at_ten(event):
+    pod_event_settings.size_room_sync(event.id, 9)
+
+    stored = pod_event_settings.load_sync(event.id)
+
+    assert stored[pod_event_settings.MAX_PLAYERS] == 10

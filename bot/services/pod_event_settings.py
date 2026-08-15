@@ -14,6 +14,7 @@ from sqlalchemy import select
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
+from bot.services.pod_confirm import table_capacity_for
 
 
 PICK_TIMER = "pick_timer"
@@ -60,6 +61,13 @@ def store_sync(event_id: str, **values: int | None) -> None:
             return
         row.settings = {**(row.settings or {}), **values}
         session.commit()
+
+
+def size_room_sync(event_id: str, seatable: int) -> None:
+    """Open this pod's room at the table its roster plans, leaving a size somebody already chose alone"""
+    if MAX_PLAYERS in stored_sync(event_id):
+        return
+    store_sync(event_id, max_players=table_capacity_for(seatable))
 
 
 def clear_sync(event_id: str, *keys: str) -> None:
