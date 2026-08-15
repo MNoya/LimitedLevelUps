@@ -47,7 +47,6 @@ from bot.services.pod_staging import (
     pod_family_sync,
     deal_into_plan,
 )
-from bot.tasks.pod_draft_reminder import close_roster_reminder
 
 log = logging.getLogger(__name__)
 
@@ -109,7 +108,6 @@ async def stage_pods(bot: commands.Bot, event_id: str) -> None:
     if len(family) < 2 or signup_thread is None:
         return
     await _point_at_the_tables(event_id, family, signup_thread)
-    await close_roster_reminder(signup_thread, event_id)
 
 
 async def _maybes_for_the_last_table(event_id: str, groups: list[list[Signup]]) -> list[Signup]:

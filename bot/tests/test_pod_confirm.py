@@ -139,6 +139,18 @@ def test_confirming_from_maybe_lands_in_confirmed_not_yes(session, scheduled_sig
     assert member.rsvp == pod_signals.RSVP_YES
 
 
+@pytest.mark.parametrize("minutes, stamped", [(90, True), (-1, False)])
+def test_a_confirmation_is_refused_once_the_pod_has_started(session, scheduled_signal, minutes, stamped):
+    scheduled_signal.event_id = _pod_starting_in(session, minutes=minutes).id
+    set_rsvp(session, MESSAGE_ID, "u1", "Finkel", pod_signals.RSVP_YES)
+
+    result = set_rsvp(session, MESSAGE_ID, "u1", "Finkel", pod_signals.RSVP_YES, confirming=True)
+
+    member = session.query(PodSignalMember).filter_by(discord_user_id="u1").one()
+    assert (member.confirmed_at is not None) is stamped
+    assert result.started is (not stamped)
+
+
 @pytest.mark.parametrize("confirming, state", [(False, pod_signals.RSVP_YES), (True, "confirm")])
 def test_reminder_yes_seat_carries_the_confirm_state_when_asked(confirming, state):
     view = build_reminder_view("evt-1", confirming)
@@ -146,6 +158,17 @@ def test_reminder_yes_seat_carries_the_confirm_state_when_asked(confirming, stat
     ids = [item.item.custom_id for item in view.children if hasattr(item, "item")]
     seats = [custom_id for custom_id in ids if custom_id.startswith("podreminderrsvp:")]
     assert seats == [f"podreminderrsvp:{state}:evt-1", "podreminderrsvp:no:evt-1"]
+
+
+@pytest.mark.parametrize("minutes_out, closed", [(5, False), (-5, True)])
+def test_the_roster_card_closes_its_seats_at_the_start_time(minutes_out, closed):
+    event_time = datetime.now(timezone.utc) + timedelta(minutes=minutes_out)
+
+    view = reminder._build_reminder_view("evt-1", None, event_time)
+
+    buttons = [item.item for item in view.children if hasattr(item, "item")]
+    seats = [button for button in buttons if button.custom_id.startswith("podreminderrsvp:")]
+    assert [seat.disabled for seat in seats] == [closed, closed]
 
 
 @pytest.mark.parametrize("messages, buried", [(0, False), (9, False), (10, True), (25, True)])

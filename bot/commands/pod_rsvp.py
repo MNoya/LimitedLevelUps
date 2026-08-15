@@ -35,6 +35,7 @@ from bot.commands.messages import (
     MSG_CARD_CREATED_BY,
     MSG_CONFIRM_BUTTON,
     MSG_CONFIRM_DONE,
+    MSG_CONFIRM_POD_STARTED,
     MSG_DRAFT_STARTS,
     MSG_DRAFTMANCER_LINK_LEAD,
     MSG_LINK_ARENA_PROMPT,
@@ -1008,6 +1009,9 @@ async def apply_card_rsvp(
     )
     if result is None or result.closed:
         await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
+        return
+    if result.started:
+        await interaction.followup.send(MSG_CONFIRM_POD_STARTED, ephemeral=True)
         return
 
     await _answer_presser(interaction, result, card_state, confirming=confirming)

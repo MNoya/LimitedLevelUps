@@ -1139,7 +1139,7 @@ def build_reminder_view(
     that records something, and carries the organizer tick list for as long as the card stands. Opening
     the tables ends a hold, so that one appears only once there is a hold to end.
 
-    `closed` greys the seat pair, for a card whose pod has moved out of the thread it is sitting in."""
+    `closed` greys the seat pair, for a card whose pod has started."""
     view = discord.ui.View(timeout=None)
     seat_state = REMINDER_CONFIRM_STATE if confirming else RSVP_YES
     view.add_item(ReminderRsvpButton(seat_state, event_id, disabled=closed))

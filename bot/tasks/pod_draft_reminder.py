@@ -164,6 +164,11 @@ def card_is_buried(thread_id: int) -> bool:
     return _messages_since_card.get(thread_id, 0) >= BURIED_AFTER_MESSAGES
 
 
+def gathering_is_over(event_time: datetime) -> bool:
+    """Whether the pod has reached its start time, which is when it stops asking for answers"""
+    return event_time <= datetime.now(timezone.utc)
+
+
 async def refresh_or_repost_roster_reminder(event_id: str) -> None:
     """Put the roster card in front of the pod again, moving it only when it needs moving. A burst of
     confirmations one after another edits one card in place; a card that chat has pushed away gets
@@ -185,6 +190,9 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
     Delete-then-post rather than an in-place edit, because the point of this card is to be seen: one
     edited in place stays wherever chat buried it. The new card goes up before the old one comes down, so
     a failed send leaves the thread with the card it already had.
+
+    Nothing is posted once the pod has started. The card is an ask, the ask closes at the start time, and
+    a repost is the one path that could hand a closed pod a live one.
     """
     if _bot is None:
         log.error(f"repost_roster_reminder for {event_id}: bot reference is not initialised")
@@ -196,6 +204,9 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
     if status != "pending":
         log.info(f"repost_roster_reminder: event {event_id} is {status}; skipping")
         return None
+    if gathering_is_over(event_time):
+        log.info(f"repost_roster_reminder: event {event_id} has started; skipping")
+        return None
     thread = await _fetch_thread(thread_id)
     if thread is None:
         log.warning(f"repost_roster_reminder: could not fetch thread {thread_id}")
@@ -205,7 +216,7 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
     embed = reminder_embed(
         event_name, event_time, rosters, roster_interests, championship_roster, set_code,
     )
-    view = _build_reminder_view(event_id, championship_roster)
+    view = _build_reminder_view(event_id, championship_roster, event_time)
     existing = await _find_roster_reminder(thread, event_id) or await _scan_for_roster_reminder(thread)
     try:
         posted = await thread.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
@@ -238,30 +249,6 @@ async def refresh_roster_reminder_for_event(event_id: str) -> bool:
     )
 
 
-async def close_roster_reminder(thread: discord.Thread, event_id: str) -> None:
-    """Grey out the seat buttons on the roster card a split leaves behind in the signup thread.
-
-    Every press on that card resolves the pod through its event id, and the pod that kept the signal is
-    table 1 by the time the split is done. Left live, a player sitting at table 2 confirms onto table 1
-    from the thread everybody is still reading. Each table has a card and a thread of its own by then, so
-    what stays here is the record of what the signup came to.
-
-    The card is forgotten as well as greyed: the id belongs to a message in this thread, and the pod it
-    was recorded against now lives in another one."""
-    if _reminder_view_builder is None:
-        return
-    message_id = await asyncio.to_thread(_confirm_card_id_sync, event_id)
-    if message_id is None:
-        return
-    await asyncio.to_thread(_remember_confirm_card_sync, event_id, None)
-    try:
-        await thread.get_partial_message(int(message_id)).edit(
-            view=_reminder_view_builder(event_id, True, True),
-        )
-    except discord.HTTPException:
-        log.warning(f"could not close the roster card {message_id} on {event_id}", exc_info=True)
-
-
 def reminder_embed(
     event_name: str, event_time: datetime, rosters: dict[str, list[str]],
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None,
@@ -281,15 +268,20 @@ def reminder_embed(
 
 
 def _build_reminder_view(
-    event_id: str, championship_roster: ChampionshipRoster | None,
+    event_id: str, championship_roster: ChampionshipRoster | None, event_time: datetime,
 ) -> "discord.ui.View | None":
     """The reminder's buttons. The seat button is Confirm on every pod that has a roster to confirm, busy
     or not: the ask is what turns a signup from days ago into a seat somebody has answered for, and a pod
     of six needs that answer as much as a pod of thirteen. A championship runs its own invite wave and is
-    never asked to confirm."""
+    never asked to confirm.
+
+    A pod past its start time renders the pair greyed. Nothing is scheduled to grey them: the card is
+    left as whatever render last touched it, and the press itself is refused."""
     if _reminder_view_builder is None:
         return None
-    return _reminder_view_builder(event_id, championship_roster is None, False)
+    return _reminder_view_builder(
+        event_id, championship_roster is None, gathering_is_over(event_time),
+    )
 
 
 async def _edit_roster_reminder(
@@ -308,7 +300,7 @@ async def _edit_roster_reminder(
     embed = reminder_embed(
         event_name, event_time, rosters, roster_interests, championship_roster, set_code,
     )
-    view = _build_reminder_view(event_id, championship_roster)
+    view = _build_reminder_view(event_id, championship_roster, event_time)
     try:
         await reminder.edit(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:

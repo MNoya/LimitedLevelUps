@@ -1,7 +1,7 @@
 """`!test sandbox` — one pod you drive by hand, from empty thread to open tables.
 
 Every other `!test` surface seeds a fixed shape and shows you the result. This one hands you the levers
-instead: add a player, confirm one, take one back, move the pod to its hold, release it. The roster card
+instead: add a player, confirm one, take one back, move the pod to its hold, release it, start it. The roster card
 re-renders after every press, so what a given roster makes the card say is answered by watching rather
 than by running the command again with different numbers.
 
@@ -53,7 +53,8 @@ async def setup(bot: commands.Bot) -> None:
         Opens a real pod ninety minutes out, so it starts outside the confirmation hour and a fresh
         signup lands unconfirmed until you confirm it. Posts the roster card and a panel of controls
         under it: add a player or a maybe, confirm one or all, take a confirmation back, decline
-        somebody, then move the pod to its hold and open the tables.
+        somebody, then move the pod to its hold, open the tables, or put it on its start time and press
+        Confirm to see the refusal.
 
         `players` and `confirmed` pre-fill it, so `!test sandbox 6 4` starts from six signups with four
         of them confirmed. With no arguments the pod starts empty. Clear it with `!test reset`."""
@@ -196,6 +197,10 @@ async def _open_tables(bot: commands.Bot, event_id: str) -> None:
     await pod_launch.release_attendance_hold(bot, event_id)
 
 
+async def _start_now(_bot: commands.Bot, event_id: str) -> None:
+    await asyncio.to_thread(_start_now_sync, event_id)
+
+
 async def _restart(bot: commands.Bot, event_id: str) -> None:
     pod_launch.cancel_release(bot, event_id)
     await asyncio.to_thread(_wipe_roster_sync, event_id)
@@ -211,6 +216,7 @@ LEVERS: dict[str, Lever] = {
     "unconfirm": Lever("Take One Back", "\u2611\ufe0f", discord.ButtonStyle.secondary, 1, _take_one_back),
     "hold": Lever("Hold Now", "\u23f1\ufe0f", discord.ButtonStyle.primary, 2, _hold_now, False),
     "release": Lever("Open Tables", "\U0001f680", discord.ButtonStyle.primary, 2, _open_tables, False),
+    "start": Lever("Start Now", "\u23f0", discord.ButtonStyle.primary, 2, _start_now, False),
     "restart": Lever("Restart", "\U0001f504", discord.ButtonStyle.danger, 2, _restart),
 }
 
@@ -287,6 +293,15 @@ def _wipe_roster_sync(event_id: str) -> None:
             event.socket_status = "pending"
         session.commit()
     pod_launch.forget_hold(event_id)
+
+
+def _start_now_sync(event_id: str) -> None:
+    """Put the pod on its start time, which is the clock a confirmation is refused against."""
+    with SessionLocal() as session:
+        event = session.get(PodDraftEvent, event_id)
+        if event is not None:
+            event.event_time = datetime.now(timezone.utc)
+            session.commit()
 
 
 def _bring_forward_sync(event_id: str) -> None:

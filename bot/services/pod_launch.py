@@ -178,7 +178,9 @@ class RsvpResult:
     the click and its answer.
 
     `confirmed` is whether the write stamped a confirmation, which the caller cannot work out for itself: a
-    Yes inside the last hour confirms without anybody asking it to."""
+    Yes inside the last hour confirms without anybody asking it to.
+
+    `started` is a confirmation the pod is past taking, which wrote nothing."""
     state: SignalState
     rosters: dict[str, list[str]]
     rsvp: str | None
@@ -189,6 +191,7 @@ class RsvpResult:
     event_name: str | None = None
     event_time: datetime | None = None
     confirmed: bool = False
+    started: bool = False
 
 
 @dataclass(frozen=True)
@@ -682,7 +685,13 @@ def set_rsvp(
 
     Clicking the state they already hold is a no-op. `joined` is True only when the member freshly
     entered Yes. Scheduled signals are born fired and never expire, so only a stray expired row refuses.
-    Does not commit."""
+    Does not commit.
+
+    A confirmation the pod is already past writes nothing. The tables were dealt at the start time and the
+    room opened against the answers held then, so a later one moves nothing except the player's own place
+    on the pods it clashes with. The card it was pressed on may be minutes stale in a client that never
+    took the render greying it, which is why the refusal lives here and not on the button. Signing up is
+    untouched: a pod one player short takes a walk-in at any point, and Leave stays open to the end."""
     signal = _scheduled_signal_by_surface(session, message_id)
     if signal is None:
         return None
@@ -695,6 +704,14 @@ def set_rsvp(
         )
 
     event = session.get(PodDraftEvent, signal.event_id) if signal.event_id is not None else None
+    if confirming and event is not None and event.event_time <= datetime.now(timezone.utc):
+        rosters = _members_by_rsvp(session, signal.id)
+        yes_count = len(rosters[pod_signals.RSVP_YES])
+        return RsvpResult(
+            _state(signal, yes_count), rosters, rsvp=None, joined=False, closed=False, started=True,
+            roster_interests=_render_interests(session, signal),
+            event_name=event.name, event_time=event.event_time,
+        )
     existing = session.execute(
         select(PodSignalMember).where(
             PodSignalMember.signal_id == signal.id,
