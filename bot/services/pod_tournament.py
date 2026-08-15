@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Awaitable, Callable, NamedTuple, Sequence
 
 import discord
 from discord import ui
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from bot import emojis
@@ -148,6 +148,7 @@ MSG_FIX_MATCH_GONE = "That match no longer exists. Reopen the editor to see the 
 MSG_DROP_PROMPT = "Pick the player who left. Every match they have left becomes a bye for their opponent"
 MSG_DROP_NOBODY_LEFT = "Everyone in this pod has already dropped"
 DROP_EMOJI = "🏳️"
+BYE_EMOJI = "🏳️"
 POD_PAIRING_FAILED_MSG = (
     "⚠️ Round {round_num} pairings couldn't be generated. Reported results are safe, but the next "
     "round won't post on its own. An Organizer needs to start it."
@@ -225,6 +226,11 @@ def match_was_played(match: dict) -> bool:
     """True when a match has a real reported result — a "No Match Played" drop doesn't count."""
     winner = match.get("winner_name")
     return bool(winner) and winner != SKIPPED_SENTINEL
+
+
+def unplayed_match_filter():
+    """SQL twin of `match_was_played`: rows a drop may still forfeit, never reported or No Match Played"""
+    return or_(PodDraftMatch.winner_name.is_(None), PodDraftMatch.winner_name == SKIPPED_SENTINEL)
 
 
 def actor_label(interaction: discord.Interaction) -> str:
@@ -1653,9 +1659,10 @@ def format_drop_announcement(round_num: int, display: str) -> str:
 
 
 def apply_drop(event_id: str, draftmancer_name: str, round_num: int) -> list[str]:
-    """Mark a player out of the pod and forfeit every match of theirs still open, in this round and any
-    later one already paired. Returns the forfeited match ids. Their played results stand; from here
-    each pairing they land in is reported for them, so the pod finishes without them."""
+    """Mark a player out of the pod and forfeit every match of theirs nobody played, in this round and
+    any later one already paired. Returns the forfeited match ids. Their played results stand, while a
+    match left as No Match Played becomes the bye it would have been had the drop landed first; from
+    here each pairing they land in is reported for them, so the pod finishes without them."""
     with SessionLocal() as session:
         key = normalize_player_name(draftmancer_name)
         participants = session.execute(
@@ -1668,7 +1675,7 @@ def apply_drop(event_id: str, draftmancer_name: str, round_num: int) -> list[str
         open_matches = session.execute(
             select(PodDraftMatch).where(
                 PodDraftMatch.event_id == event_id,
-                PodDraftMatch.winner_name.is_(None),
+                unplayed_match_filter(),
             )
         ).scalars().all()
         forfeited = []
@@ -4567,10 +4574,8 @@ def match_displays(m: dict) -> tuple[str, str]:
 
 
 def format_reported_result(m: dict) -> str:
-    """A reported match as plain text, display names preferred: 'Marlo wins 2-1 vs Bob'. A match won
-    without playing it reads 'Marlo wins vs Bob (bye)', or 'Marlo wins (bye)' where an odd field left
-    no opponent at all. Shared by the round-results list and the live per-result announcement so their
-    wording can't drift."""
+    """A reported match as plain text, display names preferred: 'Marlo wins 2-1 vs Bob', a win taken
+    without playing it flagged 'Marlo wins vs Bob 🏳️'"""
     a_disp, b_disp = match_displays(m)
     if m["winner_name"].lower() == m["a_name"].lower():
         winner_disp, loser_disp = a_disp, b_disp
@@ -4578,8 +4583,8 @@ def format_reported_result(m: dict) -> str:
         winner_disp, loser_disp = b_disp, a_disp
     if m["score"] == BYE_SCORE:
         if m["a_name"] == BYE_NAME or m["b_name"] == BYE_NAME:
-            return f"{winner_disp} wins (bye)"
-        return f"{winner_disp} wins vs {loser_disp} (bye)"
+            return f"{winner_disp} wins {BYE_EMOJI}"
+        return f"{winner_disp} wins vs {loser_disp} {BYE_EMOJI}"
     return f"{winner_disp} wins {m['score']} vs {loser_disp}"
 
 

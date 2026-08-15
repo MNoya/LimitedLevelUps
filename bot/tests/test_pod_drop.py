@@ -5,9 +5,10 @@ import pytest
 from bot.models import PodDraftMatch, PodDraftParticipant
 from bot.services import pod_swiss
 from bot.services import pod_tournament
-from bot.services.pod_drafts import add_pairing, record_ondemand_event
+from bot.services.pod_drafts import add_pairing, record_ondemand_event, set_match_result
 from bot.services.pod_tournament import (
     BYE_SCORE,
+    SKIPPED_SENTINEL,
     apply_drop,
     insert_pending_matches,
     load_dropped_names,
@@ -60,6 +61,21 @@ def test_drop_forfeits_the_open_match_to_a_bye(session):
     assert (bye.winner_name, bye.score) == ("Finkel", BYE_SCORE)
     assert rows[("Reid", "Nassif")].winner_name is None
     assert load_dropped_names(event.id) == {"lsv"}
+
+
+def test_a_drop_turns_no_match_played_into_a_bye_and_leaves_a_played_result_alone(session):
+    event = _event(session)
+    played = add_pairing(session, event.id, 2, "Reid", "LSV", pairing_index=0)
+    skipped = add_pairing(session, event.id, 3, "Finkel", "LSV", pairing_index=0)
+    set_match_result(session, played.id, "Reid", "2-1")
+    set_match_result(session, skipped.id, SKIPPED_SENTINEL, "0-0")
+    session.commit()
+
+    forfeited = apply_drop(event.id, "LSV", 3)
+
+    assert forfeited == [skipped.id]
+    assert (skipped.winner_name, skipped.score) == ("Finkel", BYE_SCORE)
+    assert (played.winner_name, played.score) == ("Reid", "2-1")
 
 
 def test_a_later_pairing_into_the_dropped_player_is_reported_on_creation(session):
