@@ -362,8 +362,10 @@ class ForceStartConfirmView(discord.ui.View):
         log.info(f"[{self.manager.event_name}] {actor} confirmed Force Start")
         await interaction.response.defer()
         err = await self.manager.force_start()
-        message = f"⚠️ {err}" if err else "Force-starting the draft, watch the thread."
-        await interaction.edit_original_response(content=message, view=None)
+        if err:
+            await interaction.edit_original_response(content=f"⚠️ {err}", view=None)
+            return
+        await interaction.delete_original_response()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -492,10 +494,10 @@ async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_p
     Returns True if the interaction was handled here (blocked or awaiting confirm) and the caller should
     stop; False if the pod is clear to start now.
     Runs before /pod-ready acknowledges, so that command can answer publicly once it knows the check will
-    actually fire, and every answer from here stays private to the initiator either way."""
+    actually fire."""
     blocker = manager.ready_check_blocker()
     if blocker:
-        await reply_private(interaction, content=f"⚠️ {blocker}")
+        await reply_public(interaction, content=f"⚠️ {blocker}")
         return True
     unlinked = [] if manager.kind == "mock" else await manager.unrecognized_lobby_names()
     team_offer = manager.offers_team_draft()
@@ -512,6 +514,13 @@ async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_p
         )
         return True
     return False
+
+
+async def reply_public(interaction: discord.Interaction, **kwargs) -> None:
+    if interaction.response.is_done():
+        await interaction.followup.send(**kwargs)
+    else:
+        await interaction.response.send_message(**kwargs)
 
 
 async def reply_private(interaction: discord.Interaction, **kwargs) -> None:

@@ -28,7 +28,6 @@ from bot.sets import active_set_code, set_name_for
 FORMAT_POLL_PROMPT = "🗳️ Format Vote!"
 FORMAT_POLL_GATHERING = "Vote for anything you would play"
 FORMAT_POLL_CLOSED = "Voting closed. The tally below is final"
-MSG_VOTE_POSTED = "Format Vote posted"
 MSG_VOTE_ALREADY_UP = "A Format Vote is already up here"
 MSG_VOTE_POST_FAILED = "Could not post the Format Vote. Try again"
 CHANNEL_POLL_ID_PREFIX = "channel-"

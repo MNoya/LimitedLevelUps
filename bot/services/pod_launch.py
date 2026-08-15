@@ -28,6 +28,7 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from bot.config import PRODUCTION_GUILD_ID, settings
+from bot.discord_helpers import snowflake_or_none
 from bot.database import SessionLocal
 from bot.models import Player, PodDraftEvent, PodDraftMatch, PodDraftParticipant, PodSignal, PodSignalMember
 from bot.services import pod_event_settings
@@ -1076,9 +1077,9 @@ def _reset_thread_ids(signals: list[PodSignal], events: list[PodDraftEvent]) -> 
     ordered: list[int] = []
     seen: set[int] = set()
     for raw in raw_ids:
-        if raw is None:
+        thread_id = snowflake_or_none(raw)
+        if thread_id is None:
             continue
-        thread_id = int(raw)
         if thread_id not in seen:
             seen.add(thread_id)
             ordered.append(thread_id)

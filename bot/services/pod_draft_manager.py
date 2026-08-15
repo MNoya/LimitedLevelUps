@@ -289,7 +289,7 @@ async def cancel_pod_event(event_id: str, *, actor: str | None = None, idle: boo
     return None
 
 
-TeamVotePoster = Callable[..., Awaitable[discord.Message]]
+CardPoster = Callable[..., Awaitable[discord.Message]]
 
 
 class PodDraftManager:
@@ -854,15 +854,15 @@ class PodDraftManager:
         """Set this pod's Draftmancer pick timer. Pre-draft only — Draftmancer locks the timer once the
         draft starts. Re-emits to the live session. Returns an error string or None."""
         if self.drafting or self.draft_complete:
-            return "Pick timer is locked once the draft has started."
+            return "Pick timer is locked once the draft has started"
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         self.pick_timer = seconds
         try:
             await self.sio.emit("setPickTimer", seconds)
         except Exception:
             log.exception(f"[TIMER] emit_failed event={self.event_id} seconds={seconds}")
-            return "Could not update the pick timer."
+            return "Could not update the pick timer"
         log.info(f"[TIMER] pick_timer_set event={self.event_id} seconds={seconds}")
         return None
 
@@ -871,15 +871,15 @@ class PodDraftManager:
         Draftmancer bakes the pick count into the boosters it builds at draft start. Re-emits to the
         live session. Returns an error string or None."""
         if self.drafting or self.draft_complete:
-            return "Picks per pack are locked once the draft has started."
+            return "Picks per pack are locked once the draft has started"
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         self.picks_per_pack = n
         try:
             await self.sio.emit("setPickedCardsPerRound", n)
         except Exception:
             log.exception(f"[TIMER] picks_per_pack_emit_failed event={self.event_id} picks={n}")
-            return "Could not update the picks per pack."
+            return "Could not update the picks per pack"
         log.info(f"[TIMER] picks_per_pack_set event={self.event_id} picks={n}")
         await self._refresh_lobby_status()
         return None
@@ -888,15 +888,15 @@ class PodDraftManager:
         """Set how many packs each player opens. Pre-draft only, since Draftmancer builds the boosters at
         draft start. Re-emits to the live session. Returns an error string or None."""
         if self.drafting or self.draft_complete:
-            return "Packs are locked once the draft has started."
+            return "Packs are locked once the draft has started"
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         self.packs_per_player = n
         try:
             await self.sio.emit("boostersPerPlayer", n)
         except Exception:
             log.exception(f"[LOBBY] packs_emit_failed event={self.event_id} packs={n}")
-            return "Could not update the packs per player."
+            return "Could not update the packs per player"
         log.info(f"[LOBBY] packs_set event={self.event_id} packs={n}")
         return None
 
@@ -905,17 +905,17 @@ class PodDraftManager:
         card list, and a set draft builds its packs from the set's own collation. Pre-draft only.
         Returns an error string or None."""
         if self.drafting or self.draft_complete:
-            return "Cards Per Pack is locked once the draft has started."
+            return "Cards Per Pack is locked once the draft has started"
         if pod_format.cube_id_for(self.set_code) is None:
-            return "Cards Per Pack applies to cube drafts. A set draft opens the set's own packs."
+            return "Cards Per Pack applies to cube drafts. A set draft opens the set's own packs"
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         self.cards_per_pack = n
         try:
             await self.sio.emit("cardsPerBooster", n)
         except Exception:
             log.exception(f"[LOBBY] cards_per_pack_emit_failed event={self.event_id} cards={n}")
-            return "Could not update the cards per pack."
+            return "Could not update the cards per pack"
         log.info(f"[LOBBY] cards_per_pack_set event={self.event_id} cards={n}")
         return None
 
@@ -924,9 +924,9 @@ class PodDraftManager:
         draft starts. Rejects a cap below the players already seated so a live drop can't strand anyone.
         Re-emits to the live session. Returns an error string or None."""
         if self.drafting or self.draft_complete:
-            return "Max Players is locked once the draft has started."
+            return "Max Players is locked once the draft has started"
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         seated = len(self.player_session_users())
         if n < seated:
             return f"{seated} players are already in the lobby."
@@ -935,7 +935,7 @@ class PodDraftManager:
             await self.sio.emit("setMaxPlayers", n)
         except Exception:
             log.exception(f"[LOBBY] max_players_emit_failed event={self.event_id} n={n}")
-            return "Could not update max players."
+            return "Could not update max players"
         log.info(f"[LOBBY] max_players_set event={self.event_id} n={n}")
         return None
 
@@ -958,11 +958,11 @@ class PodDraftManager:
         initiator, so a pod that needs an unusual start is never left with Force Start as its only way in.
         A running check is not a blocker either: pressing it again re-arms, which is how a pause clears."""
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         if self.drafting or self.draft_complete:
-            return "The draft has already started."
+            return "The draft has already started"
         if not self.player_session_users():
-            return "Nobody in the Draftmancer lobby yet."
+            return "Nobody in the Draftmancer lobby yet"
         return None
 
     def ready_check_floor(self, min_players: int | None = None) -> int:
@@ -985,6 +985,7 @@ class PodDraftManager:
 
     async def initiate_ready_check(
         self, thread, initiated_by: str | None = None, initiator: discord.abc.User | None = None,
+        post: CardPoster | None = None,
     ) -> str | None:
         """Start a ready check, or re-arm the running one; returns an error string on failure, None on
         success. Only the hard blockers stop it here; a short, odd, or unrecognized roster, and a lobby of
@@ -1035,7 +1036,7 @@ class PodDraftManager:
         if not self._ready_check_is_live(generation):
             await self._abandon_ready_check_setup(generation)
             return None
-        await self._show_progress_card(thread, classified, rearm=rearm)
+        await self._show_progress_card(thread, classified, rearm=rearm, post=post)
         await self._refresh_lobby_status()
         await self._maybe_complete_ready_check()
         return None
@@ -1050,9 +1051,12 @@ class PodDraftManager:
         self.not_ready_ids.discard(seat_id)
         log.info(f"[READY] initiator_ready event={self.event_id} seat={self.seat_name(seat_id)!r}")
 
-    async def _show_progress_card(self, thread, classified, *, rearm: bool) -> None:
+    async def _show_progress_card(
+        self, thread, classified, *, rearm: bool, post: CardPoster | None = None,
+    ) -> None:
         """Put the check's card in front of the pod. A re-arm edits the card players are already looking at,
-        a fresh check retires the old one and posts below the conversation."""
+        a fresh check retires the old one and posts below the conversation. `post` swaps in another way to
+        place a fresh card, so /pod-ready can make it the command's own reply."""
         embed = render_ready_check_progress(
             title=self.event_name,
             in_session=classified,
@@ -1076,7 +1080,7 @@ class PodDraftManager:
                 log.info(f"[READY] stale_card_delete_failed event={self.event_id}")
         self.ready_check_progress_message = None
         try:
-            self.ready_check_progress_message = await thread.send(embed=embed, view=view)
+            self.ready_check_progress_message = await (post or thread.send)(embed=embed, view=view)
         except Exception:
             log.warning("could not post ready-check progress card", exc_info=True)
 
@@ -1144,7 +1148,7 @@ class PodDraftManager:
         """Record one seat's answer, adopting it into the check first when it joined after the check was armed.
         Returns an error string when the click cannot count."""
         if not self.ready_check_active:
-            return "No Ready Check is running."
+            return "No Ready Check is running"
         self._adopt_late_seat(seat_id)
         if ready:
             self.ready_discord_ids.add(seat_id)
@@ -1187,7 +1191,7 @@ class PodDraftManager:
         """Call off a running check. Draftmancer holds no state of its own, so forgetting it here is the
         whole cancellation."""
         if not self.ready_check_active:
-            return "No Ready Check is running."
+            return "No Ready Check is running"
         log.info(f"[READY] stopped event={self.event_id} by={actor}")
         await self._end_ready_check(stopped_reason(actor))
         return None
@@ -2076,35 +2080,35 @@ class PodDraftManager:
         self.ready_check_joined_ids = set()
         self.ready_check_left_ids = set()
 
-    async def force_start(self) -> str | None:
+    async def force_start(self, *, post: CardPoster | None = None) -> str | None:
         """Bypass the ready-check and emit startDraft directly. Returns an error string on failure, None on success."""
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         if self.draft_complete:
-            return "Draft is already complete."
+            return "Draft is already complete"
         if self.drafting:
-            return "Draft is already in progress."
+            return "Draft is already in progress"
         self._cancel_ready_timeout()
         self.ready_check_active = False
         self._clear_ready_answers()
         self.last_cancel_reason = None
         log.info(f"[READY] force_start event={self.event_id} ready_check_bypassed=True")
-        await self._start_draft()
+        await self._start_draft(post=post)
         return None
 
     async def pause_draft(self) -> str | None:
         """Emit pauseDraft to Draftmancer. Pick-phase only. Returns an error string or None."""
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         if not self.drafting or self.draft_complete:
-            return "No draft in progress to pause."
+            return "No draft in progress to pause"
         if self.draft_paused:
-            return "The draft is already paused."
+            return "The draft is already paused"
         try:
             await self.sio.emit("pauseDraft")
         except Exception:
             log.exception(f"[DRAFT] pause_failed event={self.event_id}")
-            return "Could not pause the draft — see logs."
+            return "Could not pause the draft, see logs"
         self.draft_paused = True
         log.info(f"[DRAFT] paused event={self.event_id}")
         return None
@@ -2112,16 +2116,16 @@ class PodDraftManager:
     async def resume_draft(self) -> str | None:
         """Emit resumeDraft to Draftmancer. Returns an error string or None."""
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         if not self.drafting or self.draft_complete:
-            return "No draft in progress to resume."
+            return "No draft in progress to resume"
         if not self.draft_paused:
-            return "The draft isn't paused."
+            return "The draft isn't paused"
         try:
             await self.sio.emit("resumeDraft")
         except Exception:
             log.exception(f"[DRAFT] resume_failed event={self.event_id}")
-            return "Could not resume the draft — see logs."
+            return "Could not resume the draft, see logs"
         self.draft_paused = False
         log.info(f"[DRAFT] resumed event={self.event_id}")
         return None
@@ -2281,37 +2285,39 @@ class PodDraftManager:
         """Hand every seat still missing to a Draftmancer bot so the draft runs on. Their picks so far
         stay in the draft, and the bot takes it from there. Returns an error string or None."""
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         if not self.drafting or self.draft_complete:
-            return "No draft in progress."
+            return "No draft in progress"
         names = self.disconnected_names
         if not names:
-            return "Nobody is disconnected right now."
+            return "Nobody is disconnected right now"
         try:
             await self.sio.emit("replaceDisconnectedPlayers")
         except Exception:
             log.exception(f"[DRAFT] replace_disconnected_failed event={self.event_id}")
-            return "Could not replace the disconnected players — see logs."
+            return "Could not replace the disconnected players, see logs"
         self.bot_filled_names.update(names)
         log.warning(f"[DRAFT] disconnected_replaced event={self.event_id} names={names}")
         return None
 
-    async def restart_draft(self, thread, *, initiated_by: str | None = None) -> str | None:
+    async def restart_draft(
+        self, thread, *, initiated_by: str | None = None, post: CardPoster | None = None,
+    ) -> str | None:
         """Stop the in-flight draft on Draftmancer and reopen the lobby with a fresh ready check on the
         same session. Pick-phase only. `draft_cancelled` swallows the endDraft that stopDraft triggers so
         the tournament phase never fires. A roster too short or odd to check gets the reopened-lobby card
         and its Ready Check button instead, which is every restart a dropped player caused. Returns an
         error string (nothing changed) or None."""
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         if self.draft_complete:
-            return "The draft is already complete — nothing to restart."
+            return "The draft is already complete, nothing to restart"
         if not self.drafting:
-            return "No draft in progress to restart."
+            return "No draft in progress to restart"
         log.warning(f"[DRAFT] restart event={self.event_id} by={initiated_by}")
         if initiated_by:
             try:
-                await thread.send(MSG_POD_RESTARTED.format(actor=initiated_by))
+                await (post or thread.send)(content=MSG_POD_RESTARTED.format(actor=initiated_by))
             except Exception:
                 log.warning(f"[DRAFT] restart.actor_notice_failed event={self.event_id}", exc_info=True)
         self.draft_cancelled = True
@@ -2325,7 +2331,7 @@ class PodDraftManager:
             self.draft_cancelled = False
             self.drafting = True
             log.exception(f"[DRAFT] restart.stop_failed event={self.event_id}")
-            return "Could not stop the draft — see logs."
+            return "Could not stop the draft, see logs"
         await asyncio.sleep(_RESTART_SETTLE_S)
         self.draft_logs = {}
         self._arm_mock_idle_timer()
@@ -2345,20 +2351,20 @@ class PodDraftManager:
             await self.bump_lobby_card()
         return None
 
-    async def _start_draft(self) -> None:
+    async def _start_draft(self, *, post: CardPoster | None = None) -> None:
         """Send the table into the draft. `_draft_start_in_flight` covers the second the seating re-push and
         the startDraft ack take, where the check is closed and `drafting` is not yet set: a lobby broadcast
         landing there rendered a pod with no check and no draft, which the cards read as a stopped check."""
         if self._odd_roster_blocks_start():
-            await self._refuse_odd_roster_start()
+            await self._refuse_odd_roster_start(post=post)
             return
         self._draft_start_in_flight = True
         try:
-            await self._start_draft_inner()
+            await self._start_draft_inner(post=post)
         finally:
             self._draft_start_in_flight = False
 
-    async def _start_draft_inner(self) -> None:
+    async def _start_draft_inner(self, *, post: CardPoster | None = None) -> None:
         await self._apply_bot_fill()
         await self._reapply_seating_if_set()
         result = await self._emit_with_ack("startDraft")
@@ -2374,9 +2380,9 @@ class PodDraftManager:
             thread = await self._fetch_thread()
             if thread is not None:
                 try:
-                    await thread.send(
-                        f"⚠️ Could not start the draft: {error_text}\n"
-                        f"Use `/pod-takeover` to take control of the Draftmancer session manually"
+                    await (post or thread.send)(
+                        content=f"⚠️ Could not start the draft: {error_text}\n"
+                                f"Use `/pod-takeover` to take control of the Draftmancer session manually"
                     )
                 except Exception:
                     log.warning("[DRAFT] start_failed.thread_post_error", exc_info=True)
@@ -2400,7 +2406,7 @@ class PodDraftManager:
         thread = await self._fetch_thread()
         if thread is not None:
             try:
-                await thread.send(content="**🎉 Draft started!**")
+                await (post or thread.send)(content="**🎉 Draft started!**")
             except Exception:
                 log.warning("[DRAFT] started.thread_post_error", exc_info=True)
             if self.kind != "mock":
@@ -2417,7 +2423,7 @@ class PodDraftManager:
             return False
         return len(self.player_session_users()) % 2 != 0
 
-    async def _refuse_odd_roster_start(self) -> None:
+    async def _refuse_odd_roster_start(self, *, post: CardPoster | None = None) -> None:
         """Every pairing mode needs an even table, and a ready check can complete after someone leaves.
         Refusing before the emit keeps the lobby open instead of stranding a fully drafted pod at the endDraft
         pairing error."""
@@ -2427,9 +2433,9 @@ class PodDraftManager:
         if thread is None:
             return
         try:
-            await thread.send(
-                f"⚠️ Pairings need an even number of players, but {count} are seated. "
-                "The draft won't start until the roster is evened out"
+            await (post or thread.send)(
+                content=f"⚠️ Pairings need an even number of players, but {count} are seated. "
+                        "The draft won't start until the roster is evened out"
             )
         except Exception:
             log.warning("[DRAFT] start_refused.thread_post_error", exc_info=True)
@@ -2459,23 +2465,23 @@ class PodDraftManager:
     async def set_seating_order(self, ordered_user_names: list[str]) -> str | None:
         """Force the Draftmancer table order (owner-only, pre-draft). Returns an error string or None."""
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         if self.drafting or self.draft_complete:
-            return "Seating can't be changed once the draft has started."
+            return "Seating can't be changed once the draft has started"
         name_to_id = {
             u.get("userName"): u.get("userID")
             for u in self.player_session_users()
             if u.get("userID")
         }
         if set(ordered_user_names) != set(name_to_id):
-            return "Lobby changed since the panel opened — reopen Settings and set the seating again."
+            return "Lobby changed since the panel opened. Reopen Settings and set the seating again"
         user_id_order = [name_to_id[name] for name in ordered_user_names]
         try:
             await self.sio.emit("setRandomizeSeatingOrder", False)
             await self.sio.emit("setSeating", user_id_order)
         except Exception:
             log.exception(f"[SEATING] emit_failed event={self.event_id}")
-            return "Could not update the seating order."
+            return "Could not update the seating order"
         self.desired_seating = list(ordered_user_names)
         log.info(f"[SEATING] applied event={self.event_id} order={ordered_user_names}")
         return None
@@ -2494,14 +2500,14 @@ class PodDraftManager:
         """Remove a user from the Draftmancer session (owner-only socket action; Draftmancer parks
         the removed user in a fresh session). Pre-draft only. Returns an error string or None."""
         if not self.sio.connected:
-            return "Draftmancer session is not connected."
+            return "Draftmancer session is not connected"
         if self.drafting or self.draft_complete:
-            return "Players can't be removed once the draft has started."
+            return "Players can't be removed once the draft has started"
         try:
             await self.sio.emit("removePlayer", user_id)
         except Exception:
             log.exception(f"[KICK] emit_failed event={self.event_id} user_id={user_id}")
-            return "Could not remove the player."
+            return "Could not remove the player"
         log.info(f"[KICK] removed event={self.event_id} user_id={user_id}")
         return None
 
@@ -2841,24 +2847,24 @@ class PodDraftManager:
         await self.refresh_lobby_now()
         notify_card_refresh(self.bot, self.event_id)
 
-    async def offer_team_vote_manual(self, *, post: TeamVotePoster | None = None) -> str | None:
+    async def offer_team_vote_manual(self, *, post: CardPoster | None = None) -> str | None:
         """Post the Team-Draft vote on demand from /pod-team. A proposal, not a commitment, so it takes
         any pod of at least four and leaves the parity to settle before start — unlike the auto nudge,
         which waits for an even lobby. Re-running with a vote already up deletes that card and re-posts it
         at the bottom of the thread, carrying its votes over. Returns an error string when the pod can't
         take a vote right now, else None."""
         if self.kind == "mock":
-            return "A mock draft plays no matches, so it cannot be a Team Draft."
+            return "A mock draft plays no matches, so it cannot be a Team Draft"
         if self.pairing_mode == "team":
-            return "This pod is already a Team Draft."
+            return "This pod is already a Team Draft"
         if self.drafting or self.draft_complete:
-            return "The draft has already started."
+            return "The draft has already started"
         count = len(self.player_session_users())
         if count < 4:
-            return "Team Draft needs at least four players in the Draftmancer lobby."
+            return "Team Draft needs at least four players in the Draftmancer lobby"
         thread = await self._fetch_thread()
         if thread is None:
-            return "Could not reach the pod thread. Try again."
+            return "Could not reach the pod thread. Try again"
         team, wait = await self._clear_existing_team_vote(thread)
         self.team_vote_offered = False
         self.team_vote_message = None
@@ -2885,7 +2891,7 @@ class PodDraftManager:
 
     async def offer_team_vote(
         self, pod_size: int, *, team: list[str] | None = None, wait: list[str] | None = None,
-        post: TeamVotePoster | None = None,
+        post: CardPoster | None = None,
     ) -> None:
         """Post the one-time Team-Draft vote offer for a settled small pod. The caller decides the pod is
         eligible (even, at most six); `pod_size` fixes the majority the vote needs to lock. `team`/`wait`
@@ -2941,18 +2947,19 @@ class PodDraftManager:
         except discord.HTTPException:
             log.info(f"[TEAM_VOTE] offer_delete_failed event={self.event_id}", exc_info=True)
 
-    async def offer_format_poll(self) -> str | None:
+    async def offer_format_poll(self, *, post: CardPoster | None = None) -> str | None:
         """Post the one-time format tally in the pod's thread. The present players' standing flashback
         rankings seed the option buttons so the likely sets are one click away, but no vote is pre-cast — the
-        split gate counts only live clicks, so the tally reads as a real attendance signal. Returns an error
-        string when this pod already holds a card, else None."""
+        split gate counts only live clicks, so the tally reads as a real attendance signal. `post` swaps in
+        another way to place the card, so /vote-format can make it the command's own visible reply. Returns
+        an error string when this pod already holds a card, else None."""
         if self.format_poll_offered:
             return pod_format_poll.MSG_VOTE_ALREADY_UP
         thread = await self._fetch_thread()
         if thread is None:
             return pod_format_poll.MSG_VOTE_POST_FAILED
         self.format_poll_offered = True
-        message = await send_format_poll_card(thread, self.event_id)
+        message = await send_format_poll_card(thread, self.event_id, post=post)
         if message is None:
             self.format_poll_offered = False
             return pod_format_poll.MSG_VOTE_POST_FAILED
@@ -3437,11 +3444,11 @@ async def set_event_pairing_mode(event_id: str, mode: str) -> str | None:
     Settings panel, the launcher, a vote, or the ready check, so the pod keeps it from then on.
     Returns an error string or None."""
     if mode not in ("swiss", "bracket", "random", "team", "roundrobin"):
-        return "Unknown pairing mode."
+        return "Unknown pairing mode"
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     if manager is not None:
         if manager.current_round and manager.current_round > 0:
-            return "Pairing mode is locked once the tournament has started."
+            return "Pairing mode is locked once the tournament has started"
         manager.pairing_mode = mode
         manager.pairing_set_by_user = True
         await manager.apply_team_draft_setting()
@@ -3653,14 +3660,17 @@ def _seed_options_from_rankings(
             options.append(code)
 
 
-async def post_format_vote(channel: "discord.abc.Messageable", event_id: str | None) -> str | None:
+async def post_format_vote(
+    channel: "discord.abc.Messageable", event_id: str | None, *, post: CardPoster | None = None,
+) -> str | None:
     """Post a Format Vote card wherever it is asked for. It goes through the pod's live manager while that
     pod can still act on the result, so the card closes at draft start and feeds the second-table gate;
     everywhere else it stands alone, keyed to the channel. The card message is the tally, so its buttons work
-    with no pod behind them. Returns an error string, or None once the card is up."""
+    with no pod behind them. `post` swaps in another way to place the card. Returns an error string, or None
+    once the card is up."""
     manager = ACTIVE_POD_MANAGERS.get(event_id) if event_id else None
     if manager is not None and not manager.drafting and not manager.draft_complete:
-        return await manager.offer_format_poll()
+        return await manager.offer_format_poll(post=post)
     if event_id and manager is None:
         poll_id = event_id
     else:
@@ -3668,12 +3678,14 @@ async def post_format_vote(channel: "discord.abc.Messageable", event_id: str | N
     existing = await pod_format_poll.find_format_poll_card(channel, poll_id)
     if existing is not None:
         return pod_format_poll.MSG_VOTE_ALREADY_UP
-    if await send_format_poll_card(channel, poll_id) is None:
+    if await send_format_poll_card(channel, poll_id, post=post) is None:
         return pod_format_poll.MSG_VOTE_POST_FAILED
     return None
 
 
-async def send_format_poll_card(channel: "discord.abc.Messageable", poll_id: str) -> "discord.Message | None":
+async def send_format_poll_card(
+    channel: "discord.abc.Messageable", poll_id: str, *, post: CardPoster | None = None,
+) -> "discord.Message | None":
     """Post one format tally card, its options seeded from the standing flashback rankings of whoever signed
     up for ``poll_id`` when that is a pod event. None when Discord refused the post."""
     options = pod_format_poll.build_options()
@@ -3681,7 +3693,7 @@ async def send_format_poll_card(channel: "discord.abc.Messageable", poll_id: str
     _seed_options_from_rankings(options, rankings)
     options = pod_format_poll.order_options(options, {})
     try:
-        return await channel.send(
+        return await (post or channel.send)(
             embed=pod_format_poll.build_format_poll_embed(options, {}),
             view=pod_format_poll.build_format_poll_view(poll_id, options),
         )
@@ -3781,11 +3793,11 @@ async def set_event_seating_mode(event_id: str, mode: str) -> str | None:
     """Set a pod's seating mode by event id; updates the live manager when one exists and persists.
     Locked once the draft is underway. Returns an error string or None."""
     if mode not in ("random", "manual", "leaderboard"):
-        return "Unknown seating mode."
+        return "Unknown seating mode"
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     if manager is not None:
         if manager.drafting or manager.draft_complete:
-            return "Seating mode is locked once the draft has started."
+            return "Seating mode is locked once the draft has started"
         manager.seating_mode = mode
     await asyncio.to_thread(persist_seating_mode, event_id, mode)
     if manager is not None:
@@ -3799,7 +3811,7 @@ async def set_event_seating(event_id: str, ordered_user_names: list[str]) -> str
     Returns an error string or None."""
     manager = ACTIVE_POD_MANAGERS.get(event_id)
     if manager is None:
-        return "No active Draftmancer session for this pod."
+        return "No active Draftmancer session for this pod"
     return await manager.set_seating_order(ordered_user_names)
 
 

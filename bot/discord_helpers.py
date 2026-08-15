@@ -352,6 +352,14 @@ _MESSAGE_LINK_RE = re.compile(
 )
 
 
+def snowflake_or_none(raw: "str | int | None") -> int | None:
+    """A stored Discord id as an int, None when it holds a placeholder like `pending` or a seeded slug"""
+    if raw is None:
+        return None
+    text = str(raw)
+    return int(text) if text.isdigit() else None
+
+
 def parse_message_link(url: str) -> tuple[int, int, int] | None:
     """(guild_id, channel_id, message_id) from a Discord message jump URL, or None."""
     if not url:

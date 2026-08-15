@@ -30,6 +30,7 @@ from bot.discord_helpers import (
     fetch_dm_user,
     first_image_url,
     player_url,
+    snowflake_or_none,
 )
 from bot.slug import slugify
 from bot.database import SessionLocal
@@ -4160,22 +4161,21 @@ class _RecoveryManager:
 
 
 def _load_unannounced_finalized_sync() -> list[tuple[str, str, datetime]]:
+    """Rows a restart sweep can still announce in, so a pod filed against a placeholder thread id is left out"""
     cutoff = datetime.now(timezone.utc) - CHAMPIONSHIP_RECONCILE_WINDOW
     with SessionLocal() as session:
-        return [
-            (row[0], row[1], row[2])
-            for row in session.execute(
-                select(
-                    PodDraftEvent.id,
-                    PodDraftEvent.discord_thread_id,
-                    PodDraftEvent.finalized_at,
-                ).where(
-                    PodDraftEvent.finalized_at.is_not(None),
-                    PodDraftEvent.championship_posted_at.is_(None),
-                    PodDraftEvent.finalized_at >= cutoff,
-                )
-            ).all()
-        ]
+        rows = session.execute(
+            select(
+                PodDraftEvent.id,
+                PodDraftEvent.discord_thread_id,
+                PodDraftEvent.finalized_at,
+            ).where(
+                PodDraftEvent.finalized_at.is_not(None),
+                PodDraftEvent.championship_posted_at.is_(None),
+                PodDraftEvent.finalized_at >= cutoff,
+            )
+        ).all()
+        return [(row[0], row[1], row[2]) for row in rows if snowflake_or_none(row[1]) is not None]
 
 
 def _load_in_progress_tournaments_sync() -> list[dict]:

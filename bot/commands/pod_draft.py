@@ -22,11 +22,9 @@ from bot.discord_helpers import extract_avatar_hash
 from bot.services import championship as championship_service
 from bot.services import pod_event_settings
 from bot.services import pod_format
-from bot.services import pod_format_poll
 from bot.services.lobby_embed import guard_ready_check, open_settings_panel
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, set_card_phase_hook, set_pod_card_hook
 from bot.services.pod_draft_manager import (
-    TeamVotePoster,
     cancel_pod_event,
     post_format_vote,
     set_event_cards_per_pack,
@@ -107,7 +105,6 @@ MSG_LINK_ARENA_NO_LOBBY_MATCH = (
 )
 MSG_LINK_ARENA_DID_YOU_MEAN = "Did you mean `{suggestion}`? Re-run `/link-arena` with that exact handle"
 MSG_NO_ACTIVE_POD = "No active pod draft session right now"
-MSG_READY_CHECK_STARTED = "Ready Check initiated! Press Ready on the card or in Draftmancer"
 
 YES_EMOJI = "✅"
 MAYBE_EMOJI = "🤷"
@@ -153,12 +150,15 @@ class PodDraft(commands.Cog):
         ):
             return
         await interaction.response.defer(thinking=False)
-        err = await manager.initiate_ready_check(thread, initiated_by=actor, initiator=interaction.user)
+        poster = ReplyPoster(interaction)
+        err = await manager.initiate_ready_check(
+            thread, initiated_by=actor, initiator=interaction.user, post=poster,
+        )
         if err is not None:
             log.warning(f"ready-check: failed — {err}")
             await interaction.followup.send(f"⚠️ {err}")
-        else:
-            await interaction.followup.send(MSG_READY_CHECK_STARTED)
+            return
+        await poster.clear_if_unused()
 
     @app_commands.command(name="pod-start", description=desc.POD_START)
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
@@ -169,13 +169,14 @@ class PodDraft(commands.Cog):
             await interaction.response.send_message(MSG_NO_ACTIVE_POD, ephemeral=True)
             return
         log.info(f"pod-start: {interaction.user} force-starting in thread {interaction.channel_id}")
-        await interaction.response.defer(ephemeral=True, thinking=False)
-        err = await manager.force_start()
+        await interaction.response.defer(thinking=False)
+        poster = ReplyPoster(interaction)
+        err = await manager.force_start(post=poster)
         if err is not None:
             log.warning(f"pod-start: failed — {err}")
-            await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
-        else:
-            await interaction.followup.send("Force-starting the draft, watch the thread", ephemeral=True)
+            await interaction.followup.send(f"⚠️ {err}")
+            return
+        await poster.clear_if_unused()
 
     @app_commands.command(name="pod-team", description=desc.POD_TEAM)
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
@@ -186,24 +187,28 @@ class PodDraft(commands.Cog):
             await interaction.response.send_message(MSG_NO_ACTIVE_POD, ephemeral=True)
             return
         log.info(f"pod-team: {interaction.user} offering team vote in thread {interaction.channel_id}")
-        await interaction.response.defer(ephemeral=False, thinking=False)
-        err = await manager.offer_team_vote_manual(post=_reply_poster(interaction))
+        await interaction.response.defer(thinking=False)
+        poster = ReplyPoster(interaction)
+        err = await manager.offer_team_vote_manual(post=poster)
         if err is not None:
             await interaction.followup.send(f"⚠️ {err}")
+            return
+        await poster.clear_if_unused()
 
     @app_commands.command(name="vote-format", description=desc.VOTE_FORMAT)
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
     async def vote_format(self, interaction: discord.Interaction) -> None:
         log.info(f"vote-format: {interaction.user} posting format vote in channel {interaction.channel_id}")
-        await interaction.response.defer(ephemeral=True, thinking=False)
+        await interaction.response.defer(thinking=False)
         thread_id = str(interaction.channel_id) if interaction.channel_id else None
         event_id = await asyncio.to_thread(load_event_id_by_thread_sync, thread_id) if thread_id else None
-        err = await post_format_vote(interaction.channel, event_id)
+        poster = ReplyPoster(interaction)
+        err = await post_format_vote(interaction.channel, event_id, post=poster)
         if err is not None:
-            await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
-        else:
-            await interaction.followup.send(pod_format_poll.MSG_VOTE_POSTED, ephemeral=True)
+            await interaction.followup.send(f"⚠️ {err}")
+            return
+        await poster.clear_if_unused()
 
     @app_commands.command(name="pod-pause", description=desc.POD_PAUSE)
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
@@ -253,13 +258,16 @@ class PodDraft(commands.Cog):
             await interaction.response.send_message(MSG_NO_ACTIVE_POD, ephemeral=True)
             return
         log.warning(f"pod-restart: {interaction.user} restarting draft in thread {interaction.channel_id}")
-        await interaction.response.defer(ephemeral=True, thinking=False)
-        err = await manager.restart_draft(interaction.channel, initiated_by=actor_label(interaction))
+        await interaction.response.defer(thinking=False)
+        poster = ReplyPoster(interaction)
+        err = await manager.restart_draft(
+            interaction.channel, initiated_by=actor_label(interaction), post=poster,
+        )
         if err is not None:
             log.warning(f"pod-restart: failed — {err}")
-            await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
-        else:
-            await interaction.followup.send("Draft stopped, the lobby is reopening", ephemeral=True)
+            await interaction.followup.send(f"⚠️ {err}")
+            return
+        await poster.clear_if_unused()
 
     @app_commands.command(name="pod-review", description=desc.POD_REVIEW)
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
@@ -390,14 +398,14 @@ class PodDraft(commands.Cog):
         if seating_mode == "leaderboard":
             file, embed = await seating_message_for_event(self.bot, event_id)
             if embed is None:
-                await interaction.followup.send(MSG_SEEDING_NO_RSVPS, ephemeral=True)
+                await interaction.followup.send(MSG_SEEDING_NO_RSVPS)
                 return
         else:
             yes, maybe = await event_rsvps(event_id)
             seen = {n.casefold() for n in yes}
             maybe = [n for n in maybe if n.casefold() not in seen]
             if not yes and not maybe:
-                await interaction.followup.send(MSG_SEEDING_NO_RSVPS, ephemeral=True)
+                await interaction.followup.send(MSG_SEEDING_NO_RSVPS)
                 return
 
             live = ACTIVE_POD_MANAGERS.get(event_id)
@@ -425,7 +433,7 @@ class PodDraft(commands.Cog):
         if event:
             event_id = await asyncio.to_thread(load_event_id_by_name_sync, event)
             if event_id is None:
-                await interaction.followup.send(f"No pod-draft event named `{event}`", ephemeral=True)
+                await interaction.followup.send(f"No pod-draft event named `{event}`")
                 return
         else:
             channel = interaction.channel
@@ -434,13 +442,12 @@ class PodDraft(commands.Cog):
             if event_id is None:
                 await interaction.followup.send(
                     "Run this inside a pod-draft thread, or pass an `event` to publish standings for a specific pod",
-                    ephemeral=True,
                 )
                 return
 
         embed = await build_standings_embed_for_event(event_id)
         if embed is None:
-            await interaction.followup.send("No standings yet", ephemeral=True)
+            await interaction.followup.send("No standings yet")
             return
 
         log.info(f"pod-standings: {interaction.user} posted standings for event_id={event_id}")
@@ -480,7 +487,7 @@ class PodDraft(commands.Cog):
         if event:
             event_id = await asyncio.to_thread(load_event_id_by_name_sync, event)
             if event_id is None:
-                await interaction.followup.send(f"No pod-draft event named `{event}`", ephemeral=True)
+                await interaction.followup.send(f"No pod-draft event named `{event}`")
                 return
         else:
             channel = interaction.channel
@@ -489,7 +496,6 @@ class PodDraft(commands.Cog):
             if event_id is None:
                 await interaction.followup.send(
                     "Run this inside a pod-draft thread, or pass an `event` to announce a specific pod",
-                    ephemeral=True,
                 )
                 return
 
@@ -502,7 +508,6 @@ class PodDraft(commands.Cog):
         if view is None:
             await interaction.followup.send(
                 "Champion announcement isn't ready. The trophy match has no winner on record yet",
-                ephemeral=True,
             )
             return
 
@@ -537,26 +542,37 @@ class PodDraft(commands.Cog):
         target_user_id, target_user_name = target
 
         log.info(f"pod-takeover: {interaction.user} → {target_user_name}")
-        await interaction.response.defer(ephemeral=False, thinking=False)
+        await interaction.response.defer(thinking=False)
         ok, err = await manager.takeover(target_user_id)
         if not ok:
             log.warning(f"pod-takeover: failed — {err}")
-            await interaction.followup.send(f"⚠️ Takeover failed: {err}", ephemeral=True)
+            await interaction.followup.send(f"⚠️ Takeover failed: {err}")
             return
         await interaction.followup.send(
             f"👑 {interaction.user.mention} is now in control of the Draftmancer session. Bot disconnected"
         )
 
 
-def _reply_poster(interaction: discord.Interaction) -> TeamVotePoster:
-    """Place a card as the command's own reply, then hand back the channel's copy of it. The webhook handle
-    a followup returns can only be edited or deleted while the interaction token lives, and these cards
-    outlive that by hours."""
-    async def post(**kwargs) -> discord.Message:
-        sent = await interaction.followup.send(**kwargs, wait=True)
-        return await interaction.channel.fetch_message(sent.id)
+class ReplyPoster:
+    """The command's own reply as the place a card lands, so Discord heads it with who ran the command"""
 
-    return post
+    def __init__(self, interaction: discord.Interaction) -> None:
+        self.interaction = interaction
+        self.used = False
+
+    async def __call__(self, **kwargs) -> discord.Message:
+        sent = await self.interaction.followup.send(**kwargs, wait=True)
+        self.used = True
+        return await self.interaction.channel.fetch_message(sent.id)
+
+    async def clear_if_unused(self) -> None:
+        """Drop the pending reply when nothing took it, so no empty placeholder is left behind"""
+        if self.used:
+            return
+        try:
+            await self.interaction.delete_original_response()
+        except discord.HTTPException:
+            log.info("could not clear an unused command reply", exc_info=True)
 
 
 def _seed_rsvps(
