@@ -28,7 +28,7 @@ export const COMPACT_STANDING_COLS_CLASS =
   "lg:[grid-template-columns:34px_1fr_74px_62px_40px]";
 
 export const TEAM_TONE = {
-  A: { bg: "bg-green", text: "text-green" },
+  A: { bg: "bg-[#4ade80]", text: "text-[#4ade80]" },
   B: { bg: "bg-[#5aa9e6]", text: "text-[#5aa9e6]" },
 } as const;
 
