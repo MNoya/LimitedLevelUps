@@ -4,7 +4,7 @@ import { ChevronDown } from "./Icons";
 import { FilterDropdown, type FilterOption } from "./FilterDropdown";
 import { cn } from "../lib/utils";
 import { useSetVisibleCap } from "../lib/use-is-mobile";
-import { CUBE_BASE } from "../data/utils";
+import { CUBE_BASE, isCubeCode } from "../data/utils";
 import { isMtgoFlashbackCode } from "../data/mtgoSets";
 import type { SetSummary } from "../types/leaderboard";
 
@@ -92,7 +92,7 @@ const CHAMFER = "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)";
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 function chipDateLabel(set: SetSummary): string {
-  if (set.isActive || set.code === CUBE_BASE || !set.startDate) return "";
+  if (set.isActive || isCubeCode(set.code) || !set.startDate) return "";
   const [year, month] = set.startDate.split("-");
   const name = MONTHS[Number(month) - 1];
   return name ? `${name} ${year.slice(2)}'` : "";
@@ -168,11 +168,14 @@ function SetOverflow({
   }));
   const renderOption = (option: FilterOption) => {
     const set = sets.find((s) => s.code === option.value);
+    const named = isCubeCode(option.value);
     return (
       <span className="flex w-full min-w-0 items-center gap-3">
         <SetGlyph code={set ? setGlyphCode(set) : option.value} size={22} />
-        <span className="text-[20px] leading-none">{option.value}</span>
-        <span className="text-muted text-[13px] tracking-[0.06em] truncate">{option.label}</span>
+        <span className="text-[20px] leading-none truncate">{named ? option.label : option.value}</span>
+        {!named && (
+          <span className="text-muted text-[13px] tracking-[0.06em] truncate">{option.label}</span>
+        )}
       </span>
     );
   };
@@ -248,7 +251,7 @@ export function SetSwitcherMobile({
         className="w-full py-1.5 px-2.5 flex items-center gap-2 bg-transparent border border-border2 text-text font-display text-[13px] tracking-[0.12em] cursor-pointer"
       >
         <SetGlyph code={setGlyphCode(active)} size={16} />
-        <span>{active.code}</span>
+        <span>{isCubeCode(active.code) ? active.name : active.code}</span>
         {active.isActive && (
           <span className="text-muted text-[10px] tracking-[0.18em]">· LIVE</span>
         )}
@@ -275,8 +278,10 @@ export function SetSwitcherMobile({
               )}
             >
               <SetGlyph code={setGlyphCode(s)} size={16} />
-              <span>{s.shortCode ?? s.code}</span>
-              <span className="text-muted text-[10px] tracking-[0.06em] flex-1">{s.name}</span>
+              <span>{isCubeCode(s.code) ? s.name : s.shortCode ?? s.code}</span>
+              {!isCubeCode(s.code) && (
+                <span className="text-muted text-[10px] tracking-[0.06em] flex-1">{s.name}</span>
+              )}
             </button>
           ))}
         </div>
