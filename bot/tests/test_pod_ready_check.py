@@ -92,6 +92,22 @@ def test_an_arrival_holds_the_check_rather_than_resizing_the_pod():
     assert "8" not in mgr.expected_user_ids
 
 
+def test_an_arrival_that_leaves_again_mid_classification_is_not_adopted():
+    mgr, _ = _ready_manager([str(i) for i in range(8)])
+    _stub_lobby_io(mgr)
+
+    async def _classify_then_leave(names):
+        mgr.session_users = [{"userID": str(i), "userName": str(i)} for i in range(8)]
+        return [(name, name) for name in names]
+
+    mgr._classify_users = _classify_then_leave
+
+    asyncio.run(mgr._on_session_users([{"userID": str(i), "userName": str(i)} for i in range(9)]))
+
+    assert "8" not in mgr.expected_user_ids
+    assert "8" not in mgr.ready_users
+
+
 def test_the_hold_releases_and_starts_when_the_player_comes_back():
     mgr, completed = _ready_manager([str(i) for i in range(8)])
     _stub_lobby_io(mgr)
@@ -424,44 +440,49 @@ def test_setup_abandoned_when_the_check_dies_mid_classification():
     assert mgr.last_cancel_reason == "stopped"
 
 
-def test_stale_timeout_leaves_the_next_check_alone(monkeypatch):
+def _overdue_manager(monkeypatch, user_ids: list[str]) -> PodDraftManager:
     monkeypatch.setattr(pod_draft_manager, "_READY_TIMEOUT_S", 0)
-    mgr = _setup_manager([str(i) for i in range(8)])
-    ended: list[str] = []
-
-    async def _record(detail, *, timed_out=False):
-        ended.append(detail)
-
-    mgr._end_ready_check = _record
-    mgr.ready_check_active = True
-    mgr.ready_check_generation = 4
-
-    asyncio.run(mgr._ready_timeout(3))
-
-    assert ended == []
-
-
-def test_timeout_fires_for_its_own_generation(monkeypatch):
-    monkeypatch.setattr(pod_draft_manager, "_READY_TIMEOUT_S", 0)
-    mgr = _setup_manager([str(i) for i in range(8)])
-    ended: list[bool] = []
-
-    async def _record(detail, *, timed_out=False):
-        ended.append(timed_out)
-
-    async def _no_post(*args, **kwargs):
-        return None
-
-    mgr._end_ready_check = _record
+    mgr = _setup_manager(user_ids)
     mgr.bot = type("_Bot", (), {})()
+    mgr._announce_overdue_check = _async_noop
     mgr._missing_names = lambda ids: ""
     mgr.ready_check_active = True
     mgr.ready_check_generation = 4
-    pod_draft_manager.bot_log_mod.get = lambda bot: type("_Log", (), {"post": _no_post})()
+    monkeypatch.setattr(
+        pod_draft_manager.bot_log_mod, "get",
+        lambda bot: type("_Log", (), {"post": _async_noop})(),
+    )
+    return mgr
+
+
+def test_stale_timeout_leaves_the_next_check_alone(monkeypatch):
+    mgr = _overdue_manager(monkeypatch, [str(i) for i in range(8)])
+
+    asyncio.run(mgr._ready_timeout(3))
+
+    assert mgr.ready_check_overdue is False
+
+
+def test_an_overdue_check_stays_open_and_still_takes_answers(monkeypatch):
+    mgr = _overdue_manager(monkeypatch, [str(i) for i in range(8)])
+    _stub_lobby_io(mgr)
+    mgr.ready_socket_ids = {str(i) for i in range(7)}
+    completed: list[bool] = []
+
+    async def _record_complete():
+        completed.append(True)
+        mgr.ready_check_active = False
+
+    mgr._complete_ready_check = _record_complete
 
     asyncio.run(mgr._ready_timeout(4))
 
-    assert ended == [True]
+    assert mgr.ready_check_overdue is True
+    assert mgr.ready_check_active is True
+
+    asyncio.run(mgr._on_set_ready("7", "Ready"))
+
+    assert completed == [True]
 
 
 def test_the_stopped_banner_survives_a_session_users_broadcast():

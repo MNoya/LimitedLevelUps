@@ -30,6 +30,7 @@ from bot.services.lobby_embed import (
     build_started_lobby_view,
     build_not_ready_view,
     ready_check_confirm_text,
+    ready_check_overdue_text,
     register_force_start_preview,
     register_settings_preview,
     render as render_lobby_embed,
@@ -1348,7 +1349,15 @@ async def _delete_last_test_messages(channel) -> None:
             pass
 
 
-_PROGRESS_STATES = ("ready", "held", "notready", "drafting", "complete")
+_PROGRESS_STATES = ("ready", "held", "overdue", "notready", "drafting", "complete")
+_READY_LIFECYCLE = (
+    ("Armed", "ready"),
+    ("Paused, a player left the lobby", "held"),
+    ("Overdue, three minutes with a seat unanswered", "overdue"),
+    ("Stopped by a player", "notready"),
+    ("Every seat ready, draft started", "drafting"),
+    ("Draft complete", "complete"),
+)
 
 def _preview_settings_labels() -> dict:
     return dict(
@@ -1409,19 +1418,20 @@ def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
 
 def _build_ready_progress(state: str) -> list[tuple[discord.Embed, discord.ui.View | None]]:
     """Preview the ready-check progress card for the states where one is posted in prod. A live check
-    ('ready', 'held') carries the Ready / Not Ready / Stop Check answers, a stopped card the resume +
-    Settings pair."""
+    ('ready', 'held', 'overdue') carries the Ready / Not Ready / Stop Check answers, a stopped card the
+    resume + Settings pair."""
     if state not in _PROGRESS_STATES:
         return []
     in_session = list(_LINKED_EIGHT)
     initiator = _LINKED_EIGHT[0][1]
-    if state in ("ready", "held"):
+    if state in ("ready", "held", "overdue"):
         held = state == "held"
         # the seat the hold names has left, so a live card would no longer classify it into the roster
         seated = [row for row in in_session if row != _PREVIEW_LEFT_SEAT] if held else in_session
+        answered = _LINKED_EIGHT[:7] if state == "overdue" else _LINKED_EIGHT[:3]
         embed = render_ready_check_progress(
             _THREAD_NAME, seated, state=state,
-            ready_arena_names={arena for arena, _ in _LINKED_EIGHT[:3]},
+            ready_arena_names={arena for arena, _ in answered},
             not_ready_arena_names=_PREVIEW_NOT_READY,
             hold_detail=_PREVIEW_HOLD_DETAIL if held else None,
             hold_hint=_PREVIEW_HOLD_HINT if held else None,
@@ -1433,6 +1443,7 @@ def _build_ready_progress(state: str) -> list[tuple[discord.Embed, discord.ui.Vi
         embed = render_ready_check_progress(
             _THREAD_NAME, in_session, state="notready", cancel_reason=stopped_reason(initiator),
             ready_arena_names={arena for arena, _ in _LINKED_EIGHT[:3]},
+            not_ready_arena_names=_PREVIEW_NOT_READY,
             initiated_by=initiator, **_preview_settings_labels(),
         )
         return [(embed, build_not_ready_view())]
@@ -1725,8 +1736,9 @@ async def setup(bot: commands.Bot) -> None:
         one seat already marked Not Ready, plus the lobby card above it holding only its own status line and
         Force Start; clicking Force Start previews the ephemeral confirm dialog (no live pod needed). `held`
         is the same pair parked by a player leaving the lobby, where the check card gains Resume Ready Check
-        and a Draftmancer link. `notready` is the stopped card on its own; `readycancel` posts both ways a
-        check closes, stopped and timed out. `readyunlinked` carries every warning line at once;
+        and a Draftmancer link. `notready` is the stopped card on its own; `readycancel` walks the whole
+        check card lifecycle in order, armed through paused, overdue, stopped, drafting and complete, with
+        the thread notice the overdue step posts. `readyunlinked` carries every warning line at once;
         `readyteam` is the six-player lobby, where the confirm asks whether to make it a Team Draft.
         `champ` posts the channel announcement twice, first a ten-player pod (3-0s and 2-1s only, one
         gallery per record) then the eight-player Set Championship (whole field), with #trophy-hype below.
@@ -1815,19 +1827,12 @@ async def setup(bot: commands.Bot) -> None:
             return
 
         if state == "readycancel":
-            initiator = _LINKED_EIGHT[0][1]
-            scenarios = [
-                ("Stopped by a player", {"cancel_reason": stopped_reason(_LINKED_EIGHT[3][1])}),
-                ("Timeout", {"timed_out": True}),
-            ]
-            for label, banner in scenarios:
-                card = render_ready_check_progress(
-                    _THREAD_NAME, list(_LINKED_EIGHT), state="notready", initiated_by=initiator,
-                    ready_arena_names={arena for arena, _ in _LINKED_EIGHT[:6]},
-                    **banner, **_preview_settings_labels(),
-                )
+            for label, card_state in _READY_LIFECYCLE:
                 await ctx.send(f"__**{label}**__")
-                await ctx.send(embed=card, view=build_not_ready_view())
+                for embed, view in _build_ready_progress(card_state):
+                    await ctx.send(embed=embed, view=view)
+                if card_state == "overdue":
+                    await ctx.send(ready_check_overdue_text([name for _, name in _LINKED_EIGHT[7:]]))
             return
 
         if state == "titles":

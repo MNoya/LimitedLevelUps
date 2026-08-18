@@ -86,9 +86,11 @@ Not Ready is how you say wait for me: it marks your seat on the card and holds t
 
 A check runs for the table it was started on, so a pod never drafts with a table nobody checked. If someone joins or drops out while it is running, the check pauses instead of starting.
 
+A check that is still short after three minutes stays open. It says so in the thread, naming the players it is waiting on, and its card turns amber to say the check is still open, with those names under Pending. Answers keep counting for as long as it is open, so the draft starts by itself when the last one lands, however late it is. Force Start and Stop are both there for a table that would rather not wait.
+
 A player the bot knows walking in mid-check joins it already ready, and the pause clears on its own. Turning up is the answer. A seat the bot cannot place keeps the check paused until they press I'm Ready for themselves, which brings them in the same way. A player who dropped out sets it going again by coming back, and the paused card carries a Draftmancer link so they have the way in. Resume Ready Check is there for the rest: it runs the check again for the lobby as it stands.
 
-Your answer sticks for as long as you are in the Draftmancer lobby. Say you are ready once and you stay ready, through a check somebody stops, through one that runs out of time, and through the next one. Leave the lobby and your answer goes with you.
+Your answer sticks for as long as you are in the Draftmancer lobby. Say you are ready once and you stay ready, through a check somebody stops and through the next one. Leave the lobby and your answer goes with you.
 
 ## Asking for the last players
 

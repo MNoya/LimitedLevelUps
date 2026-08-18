@@ -670,12 +670,12 @@ def render(
         if _rsvp_dedup_key(name, mention_map) not in in_session_keys
     ]
     title = event_title(set_code, title)
-    live_check = state in ("ready", "held")
+    live_check = state in ("ready", "held", "overdue")
     show_pending = not live_check and state not in ("drafting", "complete")
     show_link = state != "ready"  # a pause is usually waiting on somebody who dropped
 
     banner_state = state
-    if state not in ("ready", "held", "notready", "drafting", "complete") and unrecognized and not mock:
+    if state not in ("ready", "held", "overdue", "notready", "drafting", "complete") and unrecognized and not mock:
         banner_state = "has_unlinked"
     status_lines, color = ready_status_banner(
         banner_state, cancel_reason=cancel_reason, initiated_by=initiated_by,
@@ -793,7 +793,6 @@ def render_ready_check_progress(
     hold_hint: str | None = None,
     draftmancer_url: str | None = None,
     initiated_by: str | None = None,
-    timed_out: bool = False,
     format_label: str | None = None,
     pairing_label: str | None = None,
     seating_label: str | None = None,
@@ -814,7 +813,7 @@ def render_ready_check_progress(
 
     closed = state == "notready"
     if closed:
-        reason = READY_TIMED_OUT_TITLE if timed_out else (cancel_reason or READY_STOPPED_TITLE)
+        reason = cancel_reason or READY_STOPPED_TITLE
         card_title = None
         color = discord.Color.red()
         header_lines = [f"### {reason}", *_started_subtext(initiated_by, resume=True)]
@@ -824,6 +823,11 @@ def render_ready_check_progress(
         header_lines = [f"### {READY_PAUSED_TITLE}", f"### {hold_detail}" if hold_detail else "", hold_hint or ""]
         if draftmancer_url:
             header_lines.append(f"[**{REJOIN_LABEL}**]({draftmancer_url})")
+    elif state == "overdue":
+        card_title = title
+        color = discord.Color.orange()
+        header_lines = [f"### ⏳ {READY_OVERDUE_LINE}"]
+        header_lines.extend(_started_subtext(initiated_by, resume=False))
     elif state == "ready":
         card_title = title
         color = discord.Color.gold()
@@ -855,7 +859,7 @@ def render_ready_check_progress(
         pending_players = roster
 
     ready_label = "Players" if state == "complete" else "Ready"
-    two_groups = bool(pending_players) or state in ("ready", "held")
+    two_groups = bool(pending_players) or state in ("ready", "held", "overdue")
     _player_columns(embed, f"✅ {ready_label} ({len(ready_players)})", ready_players, spacer=two_groups)
     if two_groups:
         _player_columns(embed, f"⏳ Pending ({len(pending_players)})", pending_players, spacer=True)
@@ -866,8 +870,9 @@ def render_ready_check_progress(
 READY_LIVE_LINE = "Ready Check initiated - press Ready here or in Draftmancer"
 READY_RUNNING_LINE = "Ready Check in progress"
 READY_STOPPED_TITLE = "🛑 Ready Check Stopped"
-READY_TIMED_OUT_TITLE = "⚠️ Ready Check Timed Out"
 READY_PAUSED_TITLE = "⏸️ Ready Check Paused"
+READY_OVERDUE_TITLE = "⏳ Ready Check Still Open"
+READY_OVERDUE_LINE = "Ready Check still open - press Ready here or in Draftmancer"
 REJOIN_LABEL = "Rejoin Draftmancer"
 RESUME_WHEN_PRESENT = f"{RESUME_READY_CHECK_LABEL} when all players are present"
 RESUME_ON_RETURN = "Check will resume when they are back"
@@ -897,6 +902,8 @@ def ready_status_banner(
         return [f"### 🔔 {READY_RUNNING_LINE}", *_started_subtext(initiated_by, resume=False)], discord.Color.gold()
     if state == "held":
         return [f"### {READY_PAUSED_TITLE}"], discord.Color.orange()
+    if state == "overdue":
+        return [f"### {READY_OVERDUE_TITLE}"], discord.Color.orange()
     if state == "drafting":
         return ["### 🎉 All players ready! Draft started"], discord.Color.green()
     if state == "complete":
@@ -937,6 +944,14 @@ def roster_hold_hint(joined: list[str], left: list[str]) -> str:
     if left and not joined:
         return RESUME_ON_RETURN
     return RESUME_WHEN_PRESENT
+
+
+def ready_check_overdue_text(mentions: list[str]) -> str:
+    if len(mentions) > 1:
+        waiting_on = f"{', '.join(mentions[:-1])} and {mentions[-1]}"
+    else:
+        waiting_on = mentions[0]
+    return f"{waiting_on}, the pod is waiting on your Ready Check"
 
 
 def stopped_reason(actor: str | None) -> str:

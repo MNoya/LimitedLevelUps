@@ -50,6 +50,7 @@ from bot.services.lobby_embed import (
     build_live_lobby_view,
     build_started_lobby_view,
     build_not_ready_view,
+    ready_check_overdue_text,
     render as render_lobby_embed,
     render_ready_check_progress,
     roster_hold_detail,
@@ -140,7 +141,7 @@ _BACKOFF_BASE_S = 1.0
 _BACKOFF_MAX_S = 30.0
 _BACKOFF_MAX_RETRIES = 8
 LOBBY_REHYDRATE_WINDOW = timedelta(hours=12)
-_READY_TIMEOUT_S = 120
+_READY_TIMEOUT_S = 180
 _READY_DEBOUNCE_S = 2.0
 _LOBBY_REFRESH_DEBOUNCE_S = 1.0
 _LOBBY_FULL_THRESHOLD = 8
@@ -376,7 +377,7 @@ class PodDraftManager:
         self.draft_cancelled = False
         self.draft_complete = False
         self.last_cancel_reason: str | None = None
-        self.ready_check_timed_out = False
+        self.ready_check_overdue = False
         self.initiated_by: str | None = None
         self.draft_logs: dict[str, dict] = {}
         self.current_round = 0
@@ -1013,7 +1014,7 @@ class PodDraftManager:
         self._ready_check_started_at = asyncio.get_running_loop().time()
         self.initiated_by = initiated_by
         self.last_cancel_reason = None
-        self.ready_check_timed_out = False
+        self.ready_check_overdue = False
         if initiator is not None:
             await self._mark_initiator_ready(initiator)
         log.info(
@@ -1398,7 +1399,7 @@ class PodDraftManager:
                 names = self.non_bot_session_names()
             classified = await self._classify_users(names) if names else []
             state = self._compute_state(classified)
-            live_check = state in ("ready", "held")
+            live_check = state in ("ready", "held", "overdue")
             ready_arena_names = self.ready_arena_names()
             hold_detail, hold_hint = self.hold_lines()
             teams = None
@@ -1487,7 +1488,6 @@ class PodDraftManager:
                     hold_hint=hold_hint,
                     draftmancer_url=self.draftmancer_url if self.ready_check_left_ids else None,
                     initiated_by=self.initiated_by,
-                    timed_out=self.ready_check_timed_out,
                     teams=teams,
                     **self._settings_labels(),
                 )
@@ -1510,7 +1510,9 @@ class PodDraftManager:
         if self.drafting or self._draft_start_in_flight:
             return "drafting"
         if self.ready_check_active:
-            return "held" if self.is_ready_check_held() else "ready"
+            if self.is_ready_check_held():
+                return "held"
+            return "overdue" if self.ready_check_overdue else "ready"
         if self.last_cancel_reason:
             return "notready"
         if not classified:
@@ -2057,7 +2059,11 @@ class PodDraftManager:
             return
         classified = await self._classify_users(names)
         recognized = {arena for arena, display in classified if display is not None}
+        still_seated = {u.get("userID") for u in self.player_session_users()}
         for seat_id, name in arrivals:
+            if seat_id not in still_seated:
+                log.info(f"[READY] arrival_left_before_adoption event={self.event_id} seat={name!r}")
+                continue
             if name is None or not (self.kind == "mock" or name in recognized):
                 continue
             self._adopt_late_seat(seat_id)
@@ -2087,6 +2093,7 @@ class PodDraftManager:
         self.not_ready_ids = set()
         self.ready_check_joined_ids = set()
         self.ready_check_left_ids = set()
+        self.ready_check_overdue = False
 
     async def force_start(self, *, post: CardPoster | None = None) -> str | None:
         """Bypass the ready-check and emit startDraft directly. Returns an error string on failure, None on success."""
@@ -3196,37 +3203,55 @@ class PodDraftManager:
             return
         missing_ids = self.expected_user_ids - self.ready_users
         log.warning(
-            f"[READY] timeout event={self.event_id} timeout_s={_READY_TIMEOUT_S} "
+            f"[READY] overdue event={self.event_id} timeout_s={_READY_TIMEOUT_S} "
             f"ready={len(self.ready_users)}/{len(self.expected_user_ids)} missing={missing_ids}"
         )
+        self.ready_check_overdue = True
         tally = f"{len(self.ready_users)}/{len(self.expected_user_ids)} ready"
         cause = f"waiting on {self._missing_names(missing_ids)}" if missing_ids else "the lobby roster changed"
         await bot_log_mod.get(self.bot).post(
-            f"Ready check expired for event `{self.event_id}`. {tally}, {cause}.",
-            fingerprint=f"ready_check_timeout:{self.event_id}",
+            f"Ready check overdue for event `{self.event_id}`. {tally}, {cause}.",
+            fingerprint=f"ready_check_overdue:{self.event_id}",
             tag="READY",
         )
-        await self._end_ready_check("❌ Timed Out", timed_out=True)
+        await self._announce_overdue_check(missing_ids)
+        await self.refresh_lobby_now()
 
-    async def _end_ready_check(self, detail: str, *, timed_out: bool = False) -> None:
-        """Close a running check, stopped by hand or expired. The timer is cancelled ahead of the active-check
-        guard so an already-cleared check can't leave one running into the next.
+    async def _announce_overdue_check(self, missing_ids: set[str]) -> None:
+        thread = await self._fetch_thread()
+        if thread is None or not missing_ids:
+            return
+        try:
+            await thread.send(ready_check_overdue_text(await self._missing_mentions(missing_ids)))
+        except Exception:
+            log.warning(f"[READY] overdue_notice_failed event={self.event_id}", exc_info=True)
 
-        The answers survive: both ways a check closes are about the pod rather than the players, so one that
-        expires waiting on an absent seat asks the other seven for nothing. A seat that leaves the lobby drops
-        its answer at the next arm, and the draft clears the lot."""
+    async def _missing_mentions(self, missing_ids: set[str]) -> list[str]:
+        """Seats that still owe an answer, as pings where the player is known and as their handle where not"""
+        names = [name for name in (self.seat_name(uid) for uid in sorted(missing_ids)) if name]
+        if not names:
+            return []
+        discord_id_by_name = await asyncio.to_thread(discord_ids_for_names_sync, names)
+        mentions = []
+        for name in names:
+            discord_id = discord_id_by_name.get(name)
+            mentions.append(f"<@{discord_id}>" if discord_id else name)
+        return mentions
+
+    async def _end_ready_check(self, detail: str) -> None:
+        """Close a running check, which only a human stopping it does. The answers survive to the next arm"""
         self._cancel_ready_timeout()
         if not self.ready_check_active:
             return
         log.info(
-            f"[READY] ended event={self.event_id} detail={detail!r} timed_out={timed_out} "
+            f"[READY] ended event={self.event_id} detail={detail!r} "
             f"answers_kept={len(self.ready_users)}"
         )
         self.ready_check_active = False
         self.ready_check_joined_ids = set()
         self.ready_check_left_ids = set()
+        self.ready_check_overdue = False
         self.last_cancel_reason = detail
-        self.ready_check_timed_out = timed_out
         await self._flip_progress_card_to_stopped()
         await self.refresh_lobby_now()
 
@@ -3239,8 +3264,9 @@ class PodDraftManager:
         embed = render_ready_check_progress(
             self.event_name, await self.classified_session_users(), state="notready",
             ready_arena_names=self.ready_arena_names(),
+            not_ready_arena_names=self.not_ready_arena_names(),
             cancel_reason=self.last_cancel_reason, initiated_by=self.initiated_by,
-            timed_out=self.ready_check_timed_out, **self._settings_labels(),
+            **self._settings_labels(),
         )
         card = self.ready_check_progress_message
         if card is not None:
