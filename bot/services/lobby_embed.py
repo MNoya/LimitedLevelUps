@@ -21,7 +21,7 @@ from bot.services.ping_roles import format_join_line
 from bot.services.pod_drafts import load_event_id_by_thread_sync, normalize_player_name
 from bot.services.pod_roster_fields import marked_new
 from bot.services.pod_team_board import TeamBoardMember, add_team_roster_fields
-from bot.services.pod_tournament import actor_label
+from bot.services.pod_tournament import actor_label, is_pod_organizer
 
 
 log = logging.getLogger("bot.lobby_embed")
@@ -560,9 +560,9 @@ async def open_settings_panel(interaction: discord.Interaction) -> None:
         await interaction.followup.send(_NO_ACTIVE_POD_MSG, ephemeral=True)
         return
     log.info(f"{actor} opened Settings for event {event_id}")
-    is_owner = await interaction.client.is_owner(interaction.user)
+    is_organizer = await is_pod_organizer(interaction.client, interaction.user)
     await interaction.followup.send(
-        view=await build_pod_settings_view(interaction.client, event_id, is_owner=is_owner),
+        view=await build_pod_settings_view(interaction.client, event_id, is_organizer=is_organizer),
         ephemeral=True,
     )
 

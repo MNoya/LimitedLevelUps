@@ -193,7 +193,7 @@ def test_manager_imports_finalize_mock_event():
 
 
 @pytest.mark.parametrize(
-    "kind, socket_status, is_owner, offers_cancel",
+    "kind, socket_status, is_organizer, offers_cancel",
     [
         ("mock", "connected", False, True),
         ("mock", "connected", True, True),
@@ -202,10 +202,11 @@ def test_manager_imports_finalize_mock_event():
         ("tournament", "connected", False, False),
         ("tournament", "connected", True, True),
     ],
-    ids=["mock-anyone", "mock-owner", "drafted-anyone", "drafted-owner", "pod-anyone", "pod-owner"],
+    ids=["mock-anyone", "mock-organizer", "drafted-anyone", "drafted-organizer",
+         "pod-anyone", "pod-organizer"],
 )
 def test_cancel_is_open_to_everyone_on_a_mock_lobby_until_the_draft_finishes(
-    session, monkeypatch, kind, socket_status, is_owner, offers_cancel,
+    session, monkeypatch, kind, socket_status, is_organizer, offers_cancel,
 ):
     event = PodDraftEvent(
         event_date=date(2026, 6, 23), event_time=datetime(2026, 6, 23, tzinfo=timezone.utc),
@@ -217,7 +218,7 @@ def test_cancel_is_open_to_everyone_on_a_mock_lobby_until_the_draft_finishes(
     for module in ("pod_drafts", "pod_launch", "pod_tournament"):
         monkeypatch.setattr(f"bot.services.{module}.SessionLocal", _session_factory(session))
 
-    view = asyncio.run(build_pod_settings_view(_StubBot(), event.id, is_owner=is_owner))
+    view = asyncio.run(build_pod_settings_view(_StubBot(), event.id, is_organizer=is_organizer))
 
     assert (view.on_cancel is not None) == offers_cancel
 

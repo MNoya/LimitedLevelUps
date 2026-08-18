@@ -718,14 +718,14 @@ async def delete_stale_seeding_messages(
         log.warning(f"pod-seeding: could not purge stale seeding messages: {exc}")
 
 
-async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodSettingsView:
+async def build_pod_settings_view(bot, event_id: str, *, is_organizer: bool) -> PodSettingsView:
     """Settings panel wired for `event_id`. Shared by /pod-settings and the lobby Settings button.
     Link Players and Kick Player need a live Draftmancer session, and Link Players stays through the
     draft so an unlinked seat can be fixed mid-draft. The format/pairing/seats/pick-options controls are
     pre-draft only: they read the live table when there is one and the pod's stored setup otherwise, so a
     scheduled pod can be configured before its lobby opens.
 
-    Cancel Draft is bot-owner only on a tournament pod, whose signups and matches belong to the people who
+    Cancel Draft is Organizer-only on a tournament pod, whose signups and matches belong to the people who
     organized it. A mock draft opens it to everyone until the picks are done: anyone can open a lobby, so
     anyone can close one, but a finished draft has decks and logs on the site that nobody else's click
     should take down.
@@ -831,7 +831,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_owner: bool) -> PodS
             return await manager.restart_draft(thread, initiated_by=actor_label(inter))
 
     on_cancel = None
-    if is_owner or (mock and not drafted):
+    if is_organizer or (mock and not drafted):
         async def on_cancel(inter: discord.Interaction) -> str | None:
             return await cancel_pod_event(event_id, actor=actor_label(inter))
 
