@@ -119,6 +119,21 @@ def test_the_hold_releases_and_starts_when_the_player_comes_back():
     assert completed == [True]
 
 
+def test_a_reconnect_retires_the_seat_it_left_behind_and_starts_the_draft():
+    mgr, completed = _ready_manager([str(i) for i in range(8)])
+    _stub_lobby_io(mgr)
+    mgr._classify_users = _classify_as_linked
+    asyncio.run(mgr._on_session_users([{"userID": str(i), "userName": str(i)} for i in range(7)]))
+
+    reconnected = [{"userID": str(i), "userName": str(i)} for i in range(7)]
+    reconnected.append({"userID": "7-again", "userName": "7"})
+    asyncio.run(mgr._on_session_users(reconnected))
+
+    assert "7" not in mgr.expected_user_ids
+    assert mgr.is_ready_check_held() is False
+    assert completed == [True]
+
+
 def test_re_arming_keeps_the_answers_of_seats_still_in_the_lobby():
     mgr = _setup_manager([str(i) for i in range(8)])
     mgr.ready_check_active = True

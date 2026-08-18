@@ -1189,6 +1189,25 @@ class PodDraftManager:
         self._sync_ready_check_roster()
         self._restart_ready_timeout()
 
+    def _replace_departed_seat(self, name: str) -> None:
+        """Retire the seat a reconnecting player left behind, so the check stops waiting on a client that is gone"""
+        departed = [
+            seat_id for seat_id in self.ready_check_left_ids
+            if self.expected_user_names.get(seat_id) == name
+        ]
+        if not departed:
+            return
+        for seat_id in departed:
+            self.expected_user_ids.discard(seat_id)
+            self.expected_user_names.pop(seat_id, None)
+            self.ready_discord_ids.discard(seat_id)
+            self.ready_socket_ids.discard(seat_id)
+            self.not_ready_ids.discard(seat_id)
+            log.info(
+                f"[READY] reconnect_replaced_seat event={self.event_id} seat={name!r} old={seat_id}"
+            )
+        self._sync_ready_check_roster()
+
     def _restart_ready_timeout(self) -> None:
         self._cancel_ready_timeout()
         self._ready_check_started_at = asyncio.get_running_loop().time()
@@ -2071,6 +2090,7 @@ class PodDraftManager:
                 continue
             if name is None or not (self.kind == "mock" or name in recognized):
                 continue
+            self._replace_departed_seat(name)
             self._adopt_late_seat(seat_id)
             self.ready_discord_ids.add(seat_id)
             log.info(f"[READY] arrival_auto_ready event={self.event_id} seat={name!r}")
