@@ -357,6 +357,7 @@ def build_rsvp_embed(
     championship_roster: ChampionshipRoster | None = None,
     created_by: str | None = None,
     starts_now: bool = False,
+    new_drafters: frozenset[str] = frozenset(),
 ) -> discord.Embed:
     """The RSVP surface. Time and the roster columns are embed fields so sesh's vertical breathing
     room comes for free. `role_time` keys the slot emoji; it defaults to `event_time` and callers
@@ -382,6 +383,8 @@ def build_rsvp_embed(
     state. A card the launcher or a job posted has no one to credit and leaves the footer off.
     `starts_now` drops the RSVP prompt and the Time field, for a table staged at its own start time: there
     is nothing to sign up for and nothing to put in a calendar.
+    `new_drafters` marks the signups still on their way to a first finished pod, so the room can see who
+    to look after. It has nothing to say about a locked or team roster, whose columns are the drafters.
     """
     unix = int(event_time.timestamp())
     title = f"### {NBSP * 2}🗓️ {_card_title_name(name, set_code, team_draft)}"
@@ -421,7 +424,7 @@ def build_rsvp_embed(
     else:
         add_roster_fields(
             embed, rosters, roster_interests, championship=announcement is not None,
-            playing_only=starts_now,
+            playing_only=starts_now, new_drafters=new_drafters,
         )
     return _with_created_by(embed, created_by)
 
@@ -564,6 +567,7 @@ def refresh_roster_fields(
     embed: discord.Embed, rosters: dict[str, list[str]], status_line: str | None = None,
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None = None,
     championship: bool = False, championship_roster: ChampionshipRoster | None = None,
+    new_drafters: frozenset[str] = frozenset(),
 ) -> None:
     """Swap the roster columns on a fetched surface while keeping its Time field untouched, so a
     click never needs a DB round trip for the event row. The intro's notice tail follows the Yes count on
@@ -573,7 +577,9 @@ def refresh_roster_fields(
     if championship_roster is not None:
         add_championship_roster_fields(embed, championship_roster)
     else:
-        add_roster_fields(embed, rosters, roster_interests, championship=championship)
+        add_roster_fields(
+            embed, rosters, roster_interests, championship=championship, new_drafters=new_drafters,
+        )
     if status_line is not None:
         embed.description = _swap_status_line(embed.description or "", status_line)
     elif not championship:
@@ -605,13 +611,13 @@ async def move_pod_to_its_own_card(
     channel = await fetch_channel(bot, card[1])
     if not isinstance(channel, discord.TextChannel):
         return None
-    rosters, roster_interests = await event_rsvp_rosters(event_id)
+    rosters, roster_interests, new_drafters = await event_rsvp_rosters(event_id)
     starts_now = pod_is_numbered(name)
     try:
         message = await channel.send(
             embed=build_rsvp_embed(
                 name, event_time, rosters, set_code=set_code, roster_interests=roster_interests,
-                starts_now=starts_now,
+                starts_now=starts_now, new_drafters=new_drafters,
             ),
             view=discord.utils.MISSING if starts_now else PodRsvpView(),
         )
@@ -1064,7 +1070,7 @@ async def _settle_card_rsvp(
         embed = interaction.message.embeds[0]
         refresh_roster_fields(
             embed, result.rosters, status_line, result.roster_interests, championship=championship,
-            championship_roster=champ_roster,
+            championship_roster=champ_roster, new_drafters=result.new_drafters,
         )
         try:
             await interaction.message.edit(embed=embed)
@@ -1376,29 +1382,14 @@ async def _resolve_event_thread(bot: commands.Bot, event_id: str | None) -> disc
 async def _render_channel_card_fresh(bot: commands.Bot, event_id: str) -> None:
     """The channel card off the roster it holds now. The queued render runs after the press that asked
     for it, so it reads the roster rather than carrying that press's copy of it."""
-    rosters, roster_interests = await event_rsvp_rosters(event_id)
-    await _render_channel_card(bot, event_id, rosters, roster_interests)
-
-
-async def _sync_other_surfaces(
-    bot: commands.Bot, event_id: str, clicked_message_id: str, rosters: dict[str, list[str]],
-    roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None = None,
-) -> None:
-    """Re-render the channel card when a thread-side button was clicked. The card is the thread
-    starter, so editing it updates the thread view too; the registered embed carries no card fields
-    and needs no roster sync."""
-    card = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
-    if card is None:
-        return
-    _, _, message_id, _ = card
-    if message_id == clicked_message_id:
-        return
-    await _render_channel_card(bot, event_id, rosters, roster_interests)
+    rosters, roster_interests, new_drafters = await event_rsvp_rosters(event_id)
+    await _render_channel_card(bot, event_id, rosters, roster_interests, new_drafters)
 
 
 async def _render_channel_card(
     bot: commands.Bot, event_id: str, rosters: dict[str, list[str]],
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None = None,
+    new_drafters: frozenset[str] = frozenset(),
 ) -> None:
     card = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
     if card is None:
@@ -1418,7 +1409,7 @@ async def _render_channel_card(
     champ_roster = await resolve_championship_card_roster(event_id, rosters)
     refresh_roster_fields(
         embed, rosters, status_line, roster_interests, championship=championship,
-        championship_roster=champ_roster,
+        championship_roster=champ_roster, new_drafters=new_drafters,
     )
     try:
         await message.edit(embed=embed)

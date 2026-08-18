@@ -56,6 +56,7 @@ from bot.services.pod_drafts import (
     get_flashback_ranking,
     get_format_interests,
     is_championship,
+    new_drafter_column,
     normalize_player_name,
     record_ondemand_event,
     set_cube_choices,
@@ -193,6 +194,7 @@ class RsvpResult:
     event_time: datetime | None = None
     confirmed: bool = False
     started: bool = False
+    new_drafters: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -697,20 +699,20 @@ def set_rsvp(
     if signal is None:
         return None
     if signal.status == pod_signals.STATUS_EXPIRED:
-        rosters = _members_by_rsvp(session, signal.id)
+        rosters, new_drafters = _members_by_rsvp(session, signal.id)
         yes_count = len(rosters[pod_signals.RSVP_YES])
         return RsvpResult(
             _state(signal, yes_count), rosters, rsvp=None, joined=False, closed=True,
-            roster_interests=_render_interests(session, signal),
+            roster_interests=_render_interests(session, signal), new_drafters=new_drafters,
         )
 
     event = session.get(PodDraftEvent, signal.event_id) if signal.event_id is not None else None
     if confirming and event is not None and event.event_time <= datetime.now(timezone.utc):
-        rosters = _members_by_rsvp(session, signal.id)
+        rosters, new_drafters = _members_by_rsvp(session, signal.id)
         yes_count = len(rosters[pod_signals.RSVP_YES])
         return RsvpResult(
             _state(signal, yes_count), rosters, rsvp=None, joined=False, closed=False, started=True,
-            roster_interests=_render_interests(session, signal),
+            roster_interests=_render_interests(session, signal), new_drafters=new_drafters,
             event_name=event.name, event_time=event.event_time,
         )
     existing = session.execute(
@@ -740,13 +742,13 @@ def set_rsvp(
         signal.last_activity_at = datetime.now(timezone.utc)
         joined = rsvp == pod_signals.RSVP_YES
     session.flush()
-    rosters = _members_by_rsvp(session, signal.id)
+    rosters, new_drafters = _members_by_rsvp(session, signal.id)
     roster_interests = _render_interests(session, signal)
     yes_count = len(rosters[pod_signals.RSVP_YES])
     yes_changed = was_yes != (rsvp == pod_signals.RSVP_YES)
     return RsvpResult(
         _state(signal, yes_count), rosters, rsvp=rsvp, joined=joined, closed=False,
-        yes_changed=yes_changed, roster_interests=roster_interests,
+        yes_changed=yes_changed, roster_interests=roster_interests, new_drafters=new_drafters,
         event_name=event.name if event is not None else None,
         event_time=event.event_time if event is not None else None,
         confirmed=confirming and rsvp == pod_signals.RSVP_YES,
@@ -1793,21 +1795,11 @@ def set_thread_message_sync(signal_id: str, thread_message_id: str) -> None:
         session.commit()
 
 
-def rsvp_rosters_sync(message_id: str) -> dict[str, list[str]] | None:
-    """Display names per RSVP state for a scheduled card or its mirror, in join order; None when
-    no surface matches."""
-    with SessionLocal() as session:
-        signal = _scheduled_signal_by_surface(session, message_id)
-        if signal is None:
-            return None
-        return _members_by_rsvp(session, signal.id)
-
-
 def rsvp_rosters_with_interest_sync(
     message_id: str,
 ) -> dict[str, list[tuple[str, tuple[str, ...]]]] | None:
-    """Interest-carrying twin of `rsvp_rosters_sync` for the card render, so the roster can group by
-    format. None when no surface matches."""
+    """Each member's (display name, format-interest codes) per RSVP state for a scheduled card or its
+    mirror, so the card render can group the roster by format. None when no surface matches."""
     with SessionLocal() as session:
         signal = _scheduled_signal_by_surface(session, message_id)
         if signal is None:
@@ -2821,16 +2813,24 @@ def _launcher_day_signal_ids(session: Session, message_id: str, signal_date: dat
     return ids
 
 
-def _members_by_rsvp(session: Session, signal_id: str) -> dict[str, list[str]]:
+def _members_by_rsvp(session: Session, signal_id: str) -> tuple[dict[str, list[str]], frozenset[str]]:
+    """Display names per RSVP state, plus the names among them who have never finished a pod.
+
+    The marker rides the roster load rather than a lookup of its own: one outer join on the unique index
+    over players.discord_id, so a card repaint costs exactly the statement it already cost."""
     rows = session.execute(
-        select(PodSignalMember.rsvp, PodSignalMember.display_name)
+        select(PodSignalMember.rsvp, PodSignalMember.display_name, new_drafter_column())
+        .outerjoin(Player, Player.discord_id == PodSignalMember.discord_user_id)
         .where(PodSignalMember.signal_id == signal_id)
         .order_by(PodSignalMember.created_at)
     ).all()
     rosters: dict[str, list[str]] = {state: [] for state in pod_signals.RSVP_STATES}
-    for state, name in rows:
+    new_drafters: set[str] = set()
+    for state, name, new_drafter in rows:
         rosters.setdefault(state, []).append(name)
-    return rosters
+        if new_drafter:
+            new_drafters.add(name)
+    return rosters, frozenset(new_drafters)
 
 
 def _members_by_rsvp_with_interest(

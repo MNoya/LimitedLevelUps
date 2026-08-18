@@ -73,6 +73,8 @@ class Player(Base):
     flashback_ranking    = Column(ARRAY(String), nullable=False, server_default="{}")
     cube_choices         = Column(ARRAY(String), nullable=False, server_default="{}")
     declined_pod_roles   = Column(ARRAY(String), nullable=False, server_default="{}")
+    # Null until their first pod finalizes with a record; the one read behind every new-drafter marker
+    first_pod_at         = Column(DateTime(timezone=True), nullable=True)
 
     stats = relationship(
         "PlayerStats",

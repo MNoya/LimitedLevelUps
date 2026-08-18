@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Iterable, NamedTuple, Sequence
 from urllib.parse import quote
 
-from sqlalchemy import Integer, any_, cast, delete, func, select, update
+from sqlalchemy import Integer, any_, cast, delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from bot.config import settings
@@ -198,13 +198,22 @@ def _normalized_column(col):
     return func.regexp_replace(func.lower(col), _ARENA_ID_SQL, "")
 
 
-def classify_lobby_names(session: Session, names: Sequence[str]) -> list[tuple[str, str | None]]:
-    """For each Draftmancer userName, return (arena_name, display_name) if linked else (arena_name, None)."""
-    result = []
+def classify_lobby_names(
+    session: Session, names: Sequence[str],
+) -> tuple[list[tuple[str, str | None]], frozenset[str]]:
+    """For each Draftmancer userName, (arena_name, display_name) if linked else (arena_name, None), plus
+    the display names among them who have never finished a pod.
+
+    The marker costs nothing here: resolving a seat already loads its whole player row, so a lobby repaint
+    reads first_pod_at off rows it was going to fetch anyway."""
+    classified: list[tuple[str, str | None]] = []
+    new_drafters: set[str] = set()
     for n in names:
         player = player_for_name(session, n)
-        result.append((n, player.display_name if player else None))
-    return result
+        classified.append((n, player.display_name if player else None))
+        if player is not None and player.first_pod_at is None:
+            new_drafters.add(player.display_name)
+    return classified, frozenset(new_drafters)
 
 
 def players_for_names(session: Session, names: Sequence[str]) -> list[tuple[str, Player | None]]:
@@ -1258,7 +1267,38 @@ def finalize_champion(
     if event.finalized_at is None:
         event.finalized_at = datetime.now(timezone.utc)
     session.flush()
+    mark_first_pod(session, event_id)
     return event
+
+
+def mark_first_pod(session: Session, event_id: str) -> int:
+    """Stamp first_pod_at on everyone this pod is the first finished one for; returns how many moved.
+
+    The one write behind every new-drafter marker, so reading the marker is a single column on players
+    and never a scan of the participant log. Called from the finalize path and from manual result
+    repair, the only two places a record lands. A mock writes no records, so it never clears the mark."""
+    played = select(PodDraftParticipant.player_id).where(
+        PodDraftParticipant.event_id == event_id,
+        PodDraftParticipant.player_id.is_not(None),
+        PodDraftParticipant.record.is_not(None),
+    )
+    moved = session.execute(
+        update(Player)
+        .where(Player.id.in_(played), Player.first_pod_at.is_(None))
+        .values(first_pod_at=func.now())
+    ).rowcount or 0
+    if moved:
+        log.info(f"first finished pod recorded for {moved} player(s) on {event_id}")
+    return moved
+
+
+def new_drafter_column():
+    """The marker's read half: true for somebody with no finished pod, for a select already outer-joining
+    `Player`. A signup with no player row at all reads new, which is what they are.
+
+    An expression instead of its own query so a roster load stays the one statement it already was —
+    every seat resolves through the unique index on players.discord_id and nothing scans the pod log."""
+    return or_(Player.id.is_(None), Player.first_pod_at.is_(None)).label("new_drafter")
 
 
 def finalize_mock_event(session: Session, event_id: str) -> PodDraftEvent | None:

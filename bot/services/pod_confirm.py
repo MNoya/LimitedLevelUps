@@ -19,7 +19,8 @@ from bot.commands.messages import (
     MSG_SHAPE_TEAM_DRAFT,
 )
 from bot.database import SessionLocal
-from bot.models import PodDraftEvent, PodSignal, PodSignalMember
+from bot.models import Player, PodDraftEvent, PodSignal, PodSignalMember
+from bot.services.pod_drafts import new_drafter_column
 from bot.services.pod_signals import KIND_SCHEDULED, RSVP_MAYBE, RSVP_NO, RSVP_YES
 
 
@@ -42,6 +43,7 @@ class Attendance:
     yes: tuple[str, ...] = ()
     maybe: tuple[str, ...] = ()
     declined: tuple[str, ...] = ()
+    new_drafters: frozenset[str] = frozenset()
 
     @property
     def expected(self) -> int:
@@ -60,7 +62,10 @@ class Attendance:
     def as_if_all_confirmed(self) -> "Attendance":
         """The same pod with every outstanding Yes answered, which is the shape the card promises the room
         it could still have."""
-        return Attendance(confirmed=self.confirmed + self.yes, maybe=self.maybe, declined=self.declined)
+        return Attendance(
+            confirmed=self.confirmed + self.yes, maybe=self.maybe, declined=self.declined,
+            new_drafters=self.new_drafters,
+        )
 
 
 def opens_confirmation(attendance: Attendance) -> bool:
@@ -155,13 +160,16 @@ def table_capacity_for(seatable: int) -> int:
     return max(plan.tables[0].capacity if plan.tables else MIN_TABLE, POD_AIM)
 
 
-def attendance_of(rosters: dict[str, list[str]]) -> Attendance:
+def attendance_of(
+    rosters: dict[str, list[str]], new_drafters: frozenset[str] = frozenset(),
+) -> Attendance:
     """A rendered roster read as the four answers the confirmation window cares about."""
     return Attendance(
         confirmed=tuple(rosters.get(CONFIRMED) or ()),
         yes=tuple(rosters.get(RSVP_YES) or ()),
         maybe=tuple(rosters.get(RSVP_MAYBE) or ()),
         declined=tuple(rosters.get(RSVP_NO) or ()),
+        new_drafters=new_drafters,
     )
 
 
@@ -185,12 +193,17 @@ def roster_attendance_for_event_sync(event_id: str) -> Attendance | None:
         if signal is None:
             return Attendance()
         rows = session.execute(
-            select(PodSignalMember.rsvp, PodSignalMember.display_name, PodSignalMember.confirmed_at)
+            select(
+                PodSignalMember.rsvp, PodSignalMember.display_name, PodSignalMember.confirmed_at,
+                new_drafter_column(),
+            )
+            .outerjoin(Player, Player.discord_id == PodSignalMember.discord_user_id)
             .where(PodSignalMember.signal_id == signal.id)
             .order_by(PodSignalMember.created_at)
         ).all()
     buckets: dict[str, list[str]] = {CONFIRMED: [], RSVP_YES: [], RSVP_MAYBE: [], RSVP_NO: []}
-    for state, name, confirmed_at in rows:
+    new_drafters: set[str] = set()
+    for state, name, confirmed_at, new_drafter in rows:
         if state == RSVP_NO:
             bucket = RSVP_NO
         elif confirmed_at is not None:
@@ -199,9 +212,12 @@ def roster_attendance_for_event_sync(event_id: str) -> Attendance | None:
             bucket = state
         if bucket in buckets:
             buckets[bucket].append(name)
+        if new_drafter:
+            new_drafters.add(name)
     return Attendance(
         confirmed=tuple(buckets[CONFIRMED]), yes=tuple(buckets[RSVP_YES]),
         maybe=tuple(buckets[RSVP_MAYBE]), declined=tuple(buckets[RSVP_NO]),
+        new_drafters=frozenset(new_drafters),
     )
 
 

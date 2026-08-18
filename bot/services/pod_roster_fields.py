@@ -8,6 +8,7 @@ from typing import TypeVar
 import discord
 
 from bot.commands.messages import (
+    MSG_NEW_DRAFTER_SEAT,
     MSG_TABLE_COLUMN,
     MSG_TABLE_COLUMN_ONLY,
     MSG_TABLE_SEAT,
@@ -47,6 +48,7 @@ def add_roster_fields(
     embed: discord.Embed, rosters: dict[str, list[str]],
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None,
     championship: bool = False, playing_only: bool = False,
+    new_drafters: frozenset[str] = frozenset(),
 ) -> None:
     """Yes / Maybe columns while the pod gathers, grouped by format once a signup wants flashback,
     plain otherwise, with a No column from the first Leave. A championship always carries No and skips
@@ -56,37 +58,62 @@ def add_roster_fields(
     the T-60 table plan is where it shows.
 
     `playing_only` is a table already at its start time: the players it holds, confirmed and not, beside
-    the maybes a split handed it, who are the only replacements left to call on."""
+    the maybes a split handed it, who are the only replacements left to call on.
+
+    `new_drafters` are the display names on their way to a first finished pod, marked so the room can see
+    who to look after before the draft starts."""
     if playing_only:
-        _add_playing_field(embed, (rosters.get(CONFIRMED) or []) + (rosters.get(RSVP_YES) or []))
-        _add_maybe_field(embed, rosters.get(RSVP_MAYBE) or [])
+        _add_playing_field(
+            embed, (rosters.get(CONFIRMED) or []) + (rosters.get(RSVP_YES) or []), new_drafters,
+        )
+        _add_maybe_field(embed, rosters.get(RSVP_MAYBE) or [], new_drafters)
         return
     rosters = _confirmed_as_yes(rosters)
     roster_interests = _confirmed_as_yes(roster_interests)
     if championship:
-        _add_plain_rsvp_fields(embed, rosters, include_no=True)
+        _add_plain_rsvp_fields(embed, rosters, include_no=True, new_drafters=new_drafters)
         return
     if roster_interests is None:
-        _add_plain_rsvp_fields(embed, rosters)
+        _add_plain_rsvp_fields(embed, rosters, new_drafters=new_drafters)
         return
     yes = roster_interests.get(RSVP_YES) or []
     maybe = roster_interests.get(RSVP_MAYBE) or []
     comp = fi.composition([codes for _, codes in yes] + [codes for _, codes in maybe])
     if comp.flashback_only > 0:
-        _add_format_split_fields(embed, yes, maybe)
+        _add_format_split_fields(embed, yes, maybe, new_drafters)
     else:
-        _add_plain_rsvp_fields(embed, rosters)
+        _add_plain_rsvp_fields(embed, rosters, new_drafters=new_drafters)
 
 
-def _add_playing_field(embed: discord.Embed, names: list[str]) -> None:
-    _add_lines_field(embed, f"{_YES_COLUMN[1]} {_YES_COLUMN[2]} ({len(names)})", names)
+def marked_new(name: str, new_drafters: frozenset[str]) -> str:
+    """`name` carrying the new-drafter marker when they have never finished a pod, plain otherwise.
+
+    Applied at render only. The same display names key seating, pairing and Draftmancer matching, so a
+    marker baked into the stored string would follow a player into every one of them."""
+    if name in new_drafters:
+        return MSG_NEW_DRAFTER_SEAT.format(name=name)
+    return name
 
 
-def _add_maybe_field(embed: discord.Embed, names: list[str]) -> None:
+def _add_playing_field(
+    embed: discord.Embed, names: list[str], new_drafters: frozenset[str] = frozenset(),
+) -> None:
+    _add_lines_field(
+        embed, f"{_YES_COLUMN[1]} {_YES_COLUMN[2]} ({len(names)})",
+        [marked_new(name, new_drafters) for name in names],
+    )
+
+
+def _add_maybe_field(
+    embed: discord.Embed, names: list[str], new_drafters: frozenset[str] = frozenset(),
+) -> None:
     """Left off when nobody is a maybe, since an empty column reads as a roster that failed to load."""
     if not names:
         return
-    _add_lines_field(embed, f"{_MAYBE_COLUMN[1]} {_MAYBE_COLUMN[2]} ({len(names)})", names)
+    _add_lines_field(
+        embed, f"{_MAYBE_COLUMN[1]} {_MAYBE_COLUMN[2]} ({len(names)})",
+        [marked_new(name, new_drafters) for name in names],
+    )
 
 
 def add_table_plan_fields(
@@ -116,30 +143,32 @@ def add_table_plan_fields(
     seats = [(name, True) for name in attendance.confirmed]
     if seat_pending:
         seats += [(name, False) for name in attendance.yes]
+    new_drafters = attendance.new_drafters
     cursor = 0
     alone = len(plan.tables) == 1
     columns = 0
     for index, table in enumerate(plan.tables, start=1):
         _add_seat_field(embed, _table_header(index, table, alone=alone, set_code=set_code),
                         seats[cursor:cursor + table.seated], open_seats=table.empty_seats,
-                        marks_odd_one_out=True)
+                        marks_odd_one_out=True, new_drafters=new_drafters)
         cursor += table.seated
         columns += 1
     if columns > 1:
         _end_row(embed, columns)
         columns = 0
     if attendance.yes and not seat_pending:
-        _add_answer_field(embed, _PENDING_COLUMN, list(attendance.yes))
+        _add_answer_field(embed, _PENDING_COLUMN, list(attendance.yes), new_drafters)
         columns += 1
     if plan.waiting:
-        _add_seat_field(embed, MSG_TABLE_WAITING_COLUMN, seats[cursor:cursor + plan.waiting])
+        _add_seat_field(embed, MSG_TABLE_WAITING_COLUMN, seats[cursor:cursor + plan.waiting],
+                        new_drafters=new_drafters)
         columns += 1
     answered = {RSVP_MAYBE: list(attendance.maybe), RSVP_NO: list(attendance.declined)}
     answers = [(column, answered[column[0]]) for column in _ANSWER_COLUMNS if answered[column[0]]]
     if answers:
         _end_row(embed, columns)
         for column, names in answers:
-            _add_answer_field(embed, column, names)
+            _add_answer_field(embed, column, names, new_drafters)
 
 
 TABLE_NUMERALS = ("1\ufe0f\u20e3", "2\ufe0f\u20e3", "3\ufe0f\u20e3", "4\ufe0f\u20e3", "5\ufe0f\u20e3")
@@ -162,7 +191,7 @@ def _table_header(index: int, table: Table, *, alone: bool, set_code: str = "") 
 
 def _add_seat_field(
     embed: discord.Embed, header: str, seats: list[tuple[str, bool]], open_seats: int = 0,
-    marks_odd_one_out: bool = False,
+    marks_odd_one_out: bool = False, new_drafters: frozenset[str] = frozenset(),
 ) -> None:
     """One row per seat: who holds it and how firmly, then a row for each seat still to fill. An empty row
     is the ask made concrete, so a reader counts gaps instead of subtracting numbers in a header.
@@ -171,7 +200,8 @@ def _add_seat_field(
     verdict. Odd is counted off the confirmed alone, so a pending player cannot clear the mark, and only
     once the table could actually fire: five confirmed is a pod nobody drops from, it is one short."""
     lines = [
-        (MSG_TABLE_SEAT_CONFIRMED if confirmed else MSG_TABLE_SEAT).format(name=name)
+        (MSG_TABLE_SEAT_CONFIRMED if confirmed else MSG_TABLE_SEAT)
+        .format(name=marked_new(name, new_drafters))
         for name, confirmed in seats
     ]
     held = [index for index, (_, confirmed) in enumerate(seats) if confirmed]
@@ -185,8 +215,14 @@ def _add_seat_field(
 FIELD_VALUE_LIMIT = 1024
 
 
-def _add_answer_field(embed: discord.Embed, column: tuple[str, str, str], names: list[str]) -> None:
-    _add_lines_field(embed, f"{column[1]} {column[2]} ({len(names)})", names)
+def _add_answer_field(
+    embed: discord.Embed, column: tuple[str, str, str], names: list[str],
+    new_drafters: frozenset[str] = frozenset(),
+) -> None:
+    _add_lines_field(
+        embed, f"{column[1]} {column[2]} ({len(names)})",
+        [marked_new(name, new_drafters) for name in names],
+    )
 
 
 def _add_lines_field(embed: discord.Embed, header: str, lines: list[str]) -> None:
@@ -223,11 +259,13 @@ def _quoted(lines: list[str]) -> str:
 
 def _add_plain_rsvp_fields(
     embed: discord.Embed, rosters: dict[str, list[str]], include_no: bool = False,
+    new_drafters: frozenset[str] = frozenset(),
 ) -> None:
     for state, emoji, word in attendance_columns(rosters, include_no=include_no):
         names = rosters.get(state) or []
         lines = _divided_by_table(names) if state == RSVP_YES else list(names)
-        value = _quoted(lines) if lines else "-"
+        marked = [line if line == ROSTER_DIVIDER else marked_new(line, new_drafters) for line in lines]
+        value = _quoted(marked) if marked else "-"
         embed.add_field(name=f"{emoji} {word} ({len(names)})", value=value, inline=True)
 
 
@@ -272,6 +310,7 @@ def _confirmed_as_yes(rosters: dict[str, list[T]] | None) -> dict[str, list[T]] 
 
 def _add_format_split_fields(
     embed: discord.Embed, yes: list[tuple[str, tuple[str, ...]]], maybe: list[tuple[str, tuple[str, ...]]],
+    new_drafters: frozenset[str] = frozenset(),
 ) -> None:
     """Latest Set / Flashback columns, each sub-grouped into Yes then Maybe with counts. Flexible
     players carry the flexible marker and fill whichever team needs bodies, same as the launcher board."""
@@ -286,7 +325,8 @@ def _add_format_split_fields(
             members = [(name, codes) for (name, st, codes) in team if st == state]
             if members:
                 lines = "\n".join(
-                    f"> {fi.FLEXIBLE_MARKER + ' ' if fi.is_flexible(codes) else ''}{name}"
+                    f"> {fi.FLEXIBLE_MARKER + ' ' if fi.is_flexible(codes) else ''}"
+                    f"{marked_new(name, new_drafters)}"
                     for name, codes in members
                 )
                 blocks.append(f"{status_emoji} {word} ({len(members)})\n{lines}")

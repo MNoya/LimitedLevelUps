@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from bot.models import PodDraftEvent, PodDraftParticipant
+from bot.services.pod_drafts import mark_first_pod
 
 
 WUBRG_ORDER = "WUBRG"
@@ -100,5 +101,9 @@ def apply_seat(
         if participant.deck_screenshot_url != stripped:
             changed.append("screenshot updated")
             participant.deck_screenshot_url = stripped
+
+    if record is not None:
+        session.flush()
+        mark_first_pod(session, event_id)
 
     return SeatResult(True, changed)

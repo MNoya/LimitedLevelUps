@@ -328,6 +328,7 @@ class PodDraftManager:
         self.rsvps_maybe: list[str] = list(rsvps_maybe or [])
         self.claimed_discord_ids: set[str] = set()
         self.table_event_ids: set[str] = set()
+        self.new_drafters: frozenset[str] = frozenset()
         self.session_users: list[dict] = []
         self.session_spectators: list[dict] = []
         self.spectator_user_ids: set[str] = set()
@@ -1200,8 +1201,11 @@ class PodDraftManager:
         """Classify Draftmancer usernames against linked players, falling back to guild members
         whose Discord display_name (or username) matches the Draftmancer name's prefix.
         For guild-member matches without a Player row, lazily create one so the participant is
-        recorded toward the pod leaderboard at draft completion."""
-        classified = await asyncio.to_thread(_classify_names_sync, names)
+        recorded toward the pod leaderboard at draft completion.
+
+        Leaves `self.new_drafters` holding the seats yet to finish a pod, which the lobby card marks. A
+        seat resolved through the guild fallback is one of them: it had no player row a moment ago."""
+        classified, self.new_drafters = await asyncio.to_thread(_classify_names_sync, names)
         if not any(dn is None for _, dn in classified):
             return classified
         thread = await self._fetch_thread()
@@ -1210,6 +1214,7 @@ class PodDraftManager:
             return classified
         unresolved: list[tuple[str, discord.Member]] = []
         out: list[tuple[str, str | None]] = []
+        fresh: set[str] = set(self.new_drafters)
         for arena, dn in classified:
             if dn is not None:
                 out.append((arena, dn))
@@ -1220,8 +1225,10 @@ class PodDraftManager:
                 continue
             unresolved.append((arena, member))
             out.append((arena, member.display_name))
+            fresh.add(member.display_name)
         if unresolved:
             await asyncio.to_thread(_ensure_players_for_members_sync, unresolved)
+        self.new_drafters = frozenset(fresh)
         return out
 
     def player_session_users(self) -> list[dict]:
@@ -1410,6 +1417,7 @@ class PodDraftManager:
                 display_name_by_mention_id=await self._resolve_rsvp_mentions(thread.guild),
                 spectators=self.spectator_names,
                 teams=teams,
+                new_drafters=self.new_drafters,
                 **self._settings_labels(),
             )
             self._maybe_schedule_lobby_full_prompt(classified)

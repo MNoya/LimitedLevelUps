@@ -19,6 +19,7 @@ from bot.services import pod_team
 from bot.services.pod_active import active_manager_for_channel
 from bot.services.ping_roles import format_join_line
 from bot.services.pod_drafts import load_event_id_by_thread_sync, normalize_player_name
+from bot.services.pod_roster_fields import marked_new
 from bot.services.pod_team_board import TeamBoardMember, add_team_roster_fields
 from bot.services.pod_tournament import actor_label
 
@@ -628,6 +629,7 @@ def render(
     seating_label: str | None = None,
     teams: dict[str, str] | None = None,
     mock: bool = False,
+    new_drafters: frozenset[str] = frozenset(),
 ) -> discord.Embed:
     """Lobby embed. `title` is the thread/event name; `rsvps_yes` / `rsvps_maybe` are sesh display
     names by RSVP type; `in_session` is Draftmancer sessionUsers as (arena_name,
@@ -646,7 +648,10 @@ def render(
 
     `mock` drops everything a mock draft has no use for: an unrecognized seat is normal there (a
     Discord name is enough, nobody links an Arena handle), and no matches are paired, so the
-    Unrecognized bucket, `/link-arena`, and `/report-results` all go."""
+    Unrecognized bucket, `/link-arena`, and `/report-results` all go.
+
+    `new_drafters` marks the seats yet to finish a pod, so the room knows who to walk through it. Seats
+    only: somebody the pod is still waiting on is not in front of anybody to help yet."""
     in_draftmancer = [(arena, dn) for arena, dn in in_session if dn is not None]
     unrecognized = [arena for arena, dn in in_session if dn is None]
     mention_map = display_name_by_mention_id or {}
@@ -689,13 +694,18 @@ def render(
         in_drft_label = "Players" if state == "complete" else "In Draftmancer"
         seat_label = f"✅ {in_drft_label} ({len(in_session)})"
         if teams and state in ("drafting", "complete"):
-            _team_columns(embed, in_draftmancer, teams)
+            _team_columns(embed, in_draftmancer, teams, new_drafters)
         elif mock:
-            embed.add_field(name=seat_label, value=quote_block(_mock_seat_labels(in_session)), inline=False)
+            embed.add_field(
+                name=seat_label,
+                value=quote_block(_mock_seat_labels(in_session, new_drafters)),
+                inline=False,
+            )
         else:
             _player_columns(
                 embed, seat_label, in_draftmancer,
                 trailing="\n​" if show_pending else "", spacer=show_pending,
+                new_drafters=new_drafters,
             )
 
     if show_pending:
@@ -937,10 +947,12 @@ def stopped_reason(actor: str | None) -> str:
 _ARENA_SUFFIX_RE = re.compile(r"#[0-9?]+$")
 
 
-def _mock_seat_labels(in_session: list[tuple[str, str | None]]) -> list[str]:
+def _mock_seat_labels(
+    in_session: list[tuple[str, str | None]], new_drafters: frozenset[str] = frozenset(),
+) -> list[str]:
     """One name per mock-draft seat: the linked player when known, else the Draftmancer name itself.
     A mock never links Arena handles, so an unmatched seat is ordinary and needs no marker or column."""
-    return [dn or arena for arena, dn in in_session]
+    return [marked_new(dn or arena, new_drafters) for arena, dn in in_session]
 
 
 def _seat_rows(in_session: list[tuple[str, str | None]], *, mock: bool = False) -> list[tuple[str, str]]:
@@ -967,13 +979,13 @@ def _not_ready_label(display: str, arena: str, not_ready_arena_names: set[str] |
 
 def _player_columns(
     embed: discord.Embed, label: str, players: list[tuple[str, str]], *,
-    trailing: str = "", spacer: bool = False,
+    trailing: str = "", spacer: bool = False, new_drafters: frozenset[str] = frozenset(),
 ) -> None:
     """Two columns from `players` (arena_name, display_name): blockquoted names | code Arena
     handles. `spacer` closes the inline row when another group follows."""
     add_two_column_field(
         embed, label,
-        [dn for _, dn in players],
+        [marked_new(dn, new_drafters) for _, dn in players],
         [f"`{arena}`" for arena, _ in players],
         trailing=trailing, spacer=spacer,
     )
@@ -981,6 +993,7 @@ def _player_columns(
 
 def _team_columns(
     embed: discord.Embed, in_draftmancer: list[tuple[str, str]], teams: dict[str, str],
+    new_drafters: frozenset[str] = frozenset(),
 ) -> None:
     """Two side-by-side team fields for a team-draft lobby, replacing the flat player list once teams
     are assigned. Delegates to add_team_roster_fields so the columns match the board's roster header."""
@@ -989,7 +1002,7 @@ def _team_columns(
     for arena, dn in in_draftmancer:
         team = normalized.get(normalize_player_name(arena))
         if team in rosters:
-            rosters[team].append(TeamBoardMember(display=dn, arena=arena))
+            rosters[team].append(TeamBoardMember(display=marked_new(dn, new_drafters), arena=arena))
     add_team_roster_fields(embed, rosters)
 
 

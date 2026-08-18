@@ -28,6 +28,8 @@ You can join more than one pod, including both formats of one time slot, which t
 
 Every click answers you privately with the pod you are on, its start time, and any ping role you just picked up. Sign up for two formats at one time and it names both, and tells you to play the pod that needs you to fill a table if both are created. The first time you ever join a pod, the channel also gets a public welcome.
 
+Anyone who has not finished a pod yet carries 🆕 beside their name, on the roster and in the lobby. It stays there through their first pod and comes off once that pod is over, so the table can see who to walk through the parts nobody explains twice.
+
 When a pod reaches 6 people, it opens for real. The bot posts a signup card with its own thread, and everyone who clicked that pod is carried over as a Yes. The other formats at that time keep collecting behind their own buttons. A pod for a later day waits: it collects signups overnight and opens on the morning of its own day, so nothing starts hours early.
 
 A pod keeps taking signups after it opens, right up to the moment the draft starts. Until then it still shows its full list on the launcher with a link to its thread.

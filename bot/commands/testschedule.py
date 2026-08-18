@@ -47,6 +47,9 @@ from bot.tasks.pod_draft_reminder import (
 )
 
 
+PREVIEW_NEW_DRAFTERS = frozenset({HALL_OF_FAME[2], HALL_OF_FAME[5], HALL_OF_FAME[13]})
+
+
 async def setup(bot: commands.Bot) -> None:
     @test_group.command(name="underfill")
     @commands.is_owner()
@@ -149,6 +152,7 @@ async def setup(bot: commands.Bot) -> None:
         embed = build_rsvp_embed(
             ondemand_event_name_sync(code, event_time), event_time, rosters, set_code=code,
             roster_interests=None if pod_format.is_custom(code) else roster_interests,
+            new_drafters=PREVIEW_NEW_DRAFTERS,
         )
         await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
@@ -166,7 +170,9 @@ async def setup(bot: commands.Bot) -> None:
             RSVP_MAYBE: [(next(names), codes) for codes in maybe_interests],
         }
         rosters = {state: [name for name, _ in members] for state, members in roster_interests.items()}
-        embed = build_roster_embed(name, starts_at, rosters, roster_interests)
+        embed = build_roster_embed(
+            name, starts_at, rosters, roster_interests, new_drafters=PREVIEW_NEW_DRAFTERS,
+        )
         await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
     @test_group.command(name="tables")
@@ -206,18 +212,23 @@ async def setup(bot: commands.Bot) -> None:
 
 def _table_plan_shapes() -> tuple[tuple[str, Attendance], ...]:
     """(pod name, attendance) for each layout the roster card can take. Confirmed and Yes fill the table
-    columns, Maybe and No sit on a row of their own below them."""
+    columns, Maybe and No sit on a row of their own below them.
+
+    Every shape carries a couple of new drafters so the marker shows in a seat, in Pending and in Maybe."""
     return (
         ("Quiet Pod", Attendance(
             confirmed=HALL_OF_FAME[0:4], yes=HALL_OF_FAME[4:6],
             maybe=HALL_OF_FAME[6:7], declined=HALL_OF_FAME[7:8],
+            new_drafters=PREVIEW_NEW_DRAFTERS,
         )),
         ("Split Pod", Attendance(
             confirmed=HALL_OF_FAME[0:9], yes=HALL_OF_FAME[9:13],
             maybe=HALL_OF_FAME[13:15], declined=HALL_OF_FAME[15:18],
+            new_drafters=PREVIEW_NEW_DRAFTERS,
         )),
         ("11th Player Pod", Attendance(
             confirmed=HALL_OF_FAME[0:11], declined=HALL_OF_FAME[11:12],
+            new_drafters=PREVIEW_NEW_DRAFTERS,
         )),
     )
 

@@ -43,7 +43,7 @@ from bot.commands.messages import (
 from bot.commands.pod_guide import render_pod_guide_embed_body
 from bot.database import SessionLocal
 from bot.discord_helpers import extract_avatar_hash, is_pod_coordination_channel, post_welcome, send_welcome
-from bot.models import Player, PodDraftParticipant
+from bot.models import Player
 from bot.services import pod_format_interest as fi
 from bot.services.pod_active_lobby import active_lobby_link_for
 from bot.services.pod_drafts import (
@@ -547,9 +547,9 @@ def _arena_handle_sync(discord_id: str) -> str | None:
 
 @dataclass(frozen=True)
 class PodCardState:
-    """Everything the pod card needs to know about its reader, off one session: which link buttons to
-    offer, and whether they have played a pod before. Reading these apart puts extra round trips in front
-    of a click's answer, which is the whole latency budget of a button press."""
+    """Everything the pod card needs to know about its reader, off one row of one session: which link
+    buttons to offer, and whether they have finished a pod before. Reading these apart puts extra round
+    trips in front of a click's answer, which is the whole latency budget of a button press."""
     arena_name: str | None
     has_token: bool
     drafted_before: bool
@@ -566,13 +566,10 @@ def _pod_card_state_sync(discord_id: str) -> PodCardState:
         ).scalar_one_or_none()
         if player is None:
             return PodCardState(None, False, False)
-        seated = session.execute(
-            select(PodDraftParticipant.id).where(PodDraftParticipant.player_id == player.id).limit(1)
-        ).scalar_one_or_none()
         return PodCardState(
             arena_name=player.arena_name if full_arena_handle(player.arena_name) else None,
             has_token=bool(player.seventeenlands_token),
-            drafted_before=seated is not None,
+            drafted_before=player.first_pod_at is not None,
         )
 
 

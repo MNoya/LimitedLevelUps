@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -334,7 +335,9 @@ def test_attach_creates_player_without_arena_name_for_bare_nickname(session):
 def test_classify_returns_display_name_for_recognized_names(session):
     _seed_player(session, discord_id="10", username="known", display_name="Known")
 
-    result = dict(classify_lobby_names(session, ["Known", "Unknown#9999"]))
+    classified, _ = classify_lobby_names(session, ["Known", "Unknown#9999"])
+
+    result = dict(classified)
     assert result["Known"] == "Known"
     assert result["Unknown#9999"] is None
 
@@ -342,8 +345,9 @@ def test_classify_returns_display_name_for_recognized_names(session):
 def test_classify_resolves_name_with_arena_suffix_via_display_name(session):
     _seed_player(session, discord_id="11", username="noya", display_name="Noya")
 
-    result = dict(classify_lobby_names(session, ["Noya#12345"]))
-    assert result["Noya#12345"] == "Noya"
+    classified, _ = classify_lobby_names(session, ["Noya#12345"])
+
+    assert dict(classified)["Noya#12345"] == "Noya"
 
 
 def test_classify_resolves_via_stored_arena_name(session):
@@ -352,13 +356,15 @@ def test_classify_resolves_via_stored_arena_name(session):
         arena_name="MartinTheGreat#5432",
     )
 
-    result = dict(classify_lobby_names(session, ["MartinTheGreat#5432", "Noya#0001"]))
+    classified, _ = classify_lobby_names(session, ["MartinTheGreat#5432", "Noya#0001"])
+
+    result = dict(classified)
     assert result["MartinTheGreat#5432"] == "Noya"
     assert result["Noya#0001"] == "Noya"
 
 
 def test_classify_empty_list(session):
-    assert classify_lobby_names(session, []) == []
+    assert classify_lobby_names(session, []) == ([], frozenset())
 
 
 def test_classify_preserves_order(session):
@@ -366,9 +372,21 @@ def test_classify_preserves_order(session):
     _seed_player(session, discord_id="14", username="three", display_name="Three")
 
     names = ["One", "Two#0", "Three", "Four#0"]
-    result = classify_lobby_names(session, names)
-    assert [n for n, _ in result] == names
-    assert [dn for _, dn in result] == ["One", None, "Three", None]
+    classified, _ = classify_lobby_names(session, names)
+
+    assert [n for n, _ in classified] == names
+    assert [dn for _, dn in classified] == ["One", None, "Three", None]
+
+
+def test_classify_marks_a_player_with_no_finished_pod_and_leaves_a_veteran_plain(session):
+    _seed_player(session, discord_id="15", username="rookie", display_name="Rookie")
+    veteran = _seed_player(session, discord_id="16", username="finkel", display_name="Jon Finkel")
+    veteran.first_pod_at = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    session.flush()
+
+    _, new_drafters = classify_lobby_names(session, ["Rookie", "Jon Finkel"])
+
+    assert new_drafters == frozenset({"Rookie"})
 
 
 # --- lobby did-you-mean fuzzy suggestion ---

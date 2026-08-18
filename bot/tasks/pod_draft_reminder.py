@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from bot.database import SessionLocal
 from bot.discord_helpers import BLANK_LINE, EM_SPACE, NBSP
-from bot.models import PodDraftEvent, PodSignal, PodSignalMember
+from bot.models import Player, PodDraftEvent, PodSignal, PodSignalMember
 from bot.services.championship_roster_card import (
     ChampionshipRoster,
     add_championship_roster_fields,
@@ -57,6 +57,7 @@ from bot.services.pod_confirm import (
     seating_plan,
     plan_tables,
 )
+from bot.services.pod_drafts import new_drafter_column
 from bot.services.pod_roster_fields import add_roster_fields, add_table_plan_fields
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
 
@@ -211,10 +212,10 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
     if thread is None:
         log.warning(f"repost_roster_reminder: could not fetch thread {thread_id}")
         return None
-    rosters, roster_interests = await event_rsvp_rosters(event_id)
+    rosters, roster_interests, new_drafters = await event_rsvp_rosters(event_id)
     championship_roster = await asyncio.to_thread(championship_roster_for_event_sync, event_id, rosters)
     embed = reminder_embed(
-        event_name, event_time, rosters, roster_interests, championship_roster, set_code,
+        event_name, event_time, rosters, roster_interests, championship_roster, set_code, new_drafters,
     )
     view = _build_reminder_view(event_id, championship_roster, event_time)
     existing = await _find_roster_reminder(thread, event_id) or await _scan_for_roster_reminder(thread)
@@ -243,9 +244,9 @@ async def refresh_roster_reminder_for_event(event_id: str) -> bool:
     thread_id, event_time, event_name, status, set_code = loaded
     if status != "pending":
         return True
-    rosters, roster_interests = await event_rsvp_rosters(event_id)
+    rosters, roster_interests, new_drafters = await event_rsvp_rosters(event_id)
     return await _edit_roster_reminder(
-        event_id, thread_id, event_name, event_time, rosters, roster_interests, set_code,
+        event_id, thread_id, event_name, event_time, rosters, roster_interests, set_code, new_drafters,
     )
 
 
@@ -253,6 +254,7 @@ def reminder_embed(
     event_name: str, event_time: datetime, rosters: dict[str, list[str]],
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None,
     championship_roster: ChampionshipRoster | None, set_code: str = "",
+    new_drafters: frozenset[str] = frozenset(),
 ) -> discord.Embed:
     """The roster as the tables it makes, at every size.
 
@@ -262,7 +264,7 @@ def reminder_embed(
     queue for eight seats rather than a roster to seat."""
     if championship_roster is not None:
         return build_roster_embed(event_name, event_time, rosters, roster_interests, championship_roster)
-    attendance = attendance_of(rosters)
+    attendance = attendance_of(rosters, new_drafters)
     plan, seat_pending = card_tables(attendance)
     return build_table_plan_embed(event_name, event_time, attendance, plan, seat_pending, set_code)
 
@@ -289,6 +291,7 @@ async def _edit_roster_reminder(
     rosters: dict[str, list[str]],
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None,
     set_code: str = "",
+    new_drafters: frozenset[str] = frozenset(),
 ) -> bool:
     thread = await _fetch_thread(thread_id)
     if thread is None:
@@ -298,7 +301,7 @@ async def _edit_roster_reminder(
         return False
     championship_roster = await asyncio.to_thread(championship_roster_for_event_sync, event_id, rosters)
     embed = reminder_embed(
-        event_name, event_time, rosters, roster_interests, championship_roster, set_code,
+        event_name, event_time, rosters, roster_interests, championship_roster, set_code, new_drafters,
     )
     view = _build_reminder_view(event_id, championship_roster, event_time)
     try:
@@ -390,13 +393,13 @@ async def event_rsvps(event_id: str) -> tuple[list[str], list[str]]:
 
 async def event_rsvp_rosters(
     event_id: str,
-) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, tuple[str, ...]]]] | None]:
+) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, tuple[str, ...]]]] | None, frozenset[str]]:
     """The reminder's roster in the shape the shared field renderer wants: (names-only rosters,
-    interest-carrying rosters). The interests are None when the pod has no signal, which renders a
-    plain Yes / Maybe pair instead of a format split."""
+    interest-carrying rosters, names who have never finished a pod). The interests are None when the pod
+    has no signal, which renders a plain Yes / Maybe pair instead of a format split."""
     loaded = await asyncio.to_thread(signal_rsvp_rosters_sync, event_id)
     if loaded is None:
-        return {RSVP_YES: [], RSVP_MAYBE: []}, None
+        return {RSVP_YES: [], RSVP_MAYBE: []}, None, frozenset()
     return loaded
 
 
@@ -410,17 +413,18 @@ def signal_rsvps_sync(event_id: str) -> tuple[list[str], list[str]] | None:
     loaded = signal_rsvp_rosters_sync(event_id)
     if loaded is None:
         return None
-    rosters, _ = loaded
+    rosters, _, _ = loaded
     return rosters[CONFIRMED] + rosters[RSVP_YES], rosters[RSVP_MAYBE]
 
 
 def signal_rsvp_rosters_sync(
     event_id: str,
-) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, tuple[str, ...]]]] | None] | None:
+) -> tuple[dict[str, list[str]], dict[str, list[tuple[str, tuple[str, ...]]]] | None, frozenset[str]] | None:
     """Interest-carrying twin of `signal_rsvps_sync`: Yes / Maybe / No rosters off the signal that created
     the pod, each member paired with the format interest they signed up with, so the reminder can group
-    by format the same way the card does. The interests are None for a format-locked pod, which renders
-    a plain Yes / Maybe pair; None overall when the pod has no signal.
+    by format the same way the card does, plus the names who have never finished a pod. The interests are
+    None for a format-locked pod, which renders a plain Yes / Maybe pair; None overall when the pod has
+    no signal.
 
     A decline outranks any confirmation the row still carries, matching `attendance_for_event_sync`."""
     with SessionLocal() as session:
@@ -432,8 +436,9 @@ def signal_rsvp_rosters_sync(
         rows = session.execute(
             select(
                 PodSignalMember.rsvp, PodSignalMember.display_name, PodSignalMember.format_interest,
-                PodSignalMember.confirmed_at,
+                PodSignalMember.confirmed_at, new_drafter_column(),
             )
+            .outerjoin(Player, Player.discord_id == PodSignalMember.discord_user_id)
             .where(PodSignalMember.signal_id == signal.id)
             .order_by(PodSignalMember.created_at)
         ).all()
@@ -441,15 +446,18 @@ def signal_rsvp_rosters_sync(
     interests: dict[str, list[tuple[str, tuple[str, ...]]]] = {
         RSVP_YES: [], RSVP_MAYBE: [], RSVP_NO: [], CONFIRMED: [],
     }
-    for state, name, interest, confirmed_at in rows:
+    new_drafters: set[str] = set()
+    for state, name, interest, confirmed_at, new_drafter in rows:
         if state == RSVP_NO:
             bucket = RSVP_NO
         else:
             bucket = CONFIRMED if confirmed_at is not None else state
         if bucket in interests:
             interests[bucket].append((name, tuple(interest or ())))
+        if new_drafter:
+            new_drafters.add(name)
     rosters = {state: [name for name, _ in members] for state, members in interests.items()}
-    return rosters, (None if format_locked else interests)
+    return rosters, (None if format_locked else interests), frozenset(new_drafters)
 
 
 def build_lobby_open_body(draftmancer_url: str, mention_block: str, numbered: bool = False) -> str:
@@ -608,6 +616,7 @@ def build_roster_embed(
     event_name: str, event_time: datetime, rosters: dict[str, list[str]],
     roster_interests: dict[str, list[tuple[str, tuple[str, ...]]]] | None = None,
     championship_roster: ChampionshipRoster | None = None,
+    new_drafters: frozenset[str] = frozenset(),
 ) -> discord.Embed:
     """Same roster columns the scheduled card renders, so the T-60 reminder mirrors the card: a plain
     Yes / Maybe pair until a signup wants flashback, then a Latest Set / Flashback split.
@@ -623,10 +632,10 @@ def build_roster_embed(
         )
         add_championship_roster_fields(embed, championship_roster)
         return embed
-    attendance = attendance_of(rosters)
+    attendance = attendance_of(rosters, new_drafters)
     embed = discord.Embed(
         description=reminder_header(event_name, event_time, attendance, plan_tables(attendance.expected)),
         color=discord.Color.green(),
     )
-    add_roster_fields(embed, rosters, roster_interests)
+    add_roster_fields(embed, rosters, roster_interests, new_drafters=new_drafters)
     return embed
