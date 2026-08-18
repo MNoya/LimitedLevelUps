@@ -53,18 +53,6 @@ def _lazy(bucket_key, status, set_code=None):
     )
 
 
-def test_committed_slot_deep_links_to_its_thread_card():
-    view = PodPollView([_committed("EARLY", "555", "777")], guild=None)
-
-    assert view.children[0].url.endswith("/555/777")
-
-
-def test_committed_slot_without_a_card_links_to_the_thread_itself():
-    view = PodPollView([_committed("EARLY", "555", None)], guild=None)
-
-    assert view.children[0].url.endswith("/555")
-
-
 def _committed_named(thread_name, card_channel_id, card_message_id, thread_id="555", thread_message_id="777"):
     return LauncherSlot(
         named_bucket_key("EARLY", LATEST), committed=True, status=STATUS_FIRED, count=1, slot_time=None,

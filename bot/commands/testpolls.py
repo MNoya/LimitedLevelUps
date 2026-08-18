@@ -291,12 +291,13 @@ async def setup(bot: commands.Bot) -> None:
             late_tom(count=_ROLL_COUNT_SMALL),
         ])
 
-        await show("C (sibling closed). Early drafted two tables while the format beside them closed unfired", [
+        await show("C (sibling closed). Early is drafting and the format beside it closed unfired", [
             early_today(count=_ROLL_COUNT_FULL, **playing),
             _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=12,
                           fired=True, channel_id=channel_id, set_code=set_code, table=2),
             _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=15,
                           set_code=pod_format.PEASANT_CODE, closed=True),
+            early_tom(count=_ROLL_COUNT_SMALL),
             late_today(count=_ROLL_COUNT_SMALL),
         ])
 

@@ -74,7 +74,12 @@ from bot.services import pod_event_settings
 from bot.services import pod_format
 from bot.services.pod_format import settings_notice_markers
 from bot.services.ping_roles import grant_mock_draft_role
-from bot.services.pod_active import ACTIVE_POD_MANAGERS, notify_card_phase, notify_pod_complete
+from bot.services.pod_active import (
+    ACTIVE_POD_MANAGERS,
+    notify_card_phase,
+    notify_pod_complete,
+    notify_pod_drafting,
+)
 from bot.services.pod_roles import grant_pod_drafters, role_mention
 from bot.services.pod_schedule import MOCK_DRAFT_ROLE_NAME
 from bot.services.pod_notices import send_settings_notice
@@ -2415,6 +2420,7 @@ class PodDraftManager:
         await self._retire_format_poll_offer()
         await asyncio.to_thread(self._seed_participants_at_draft_start)
         notify_card_phase(self.bot, self.event_id)
+        notify_pod_drafting(self.bot, self.event_id)
         if self.pairing_mode == "team":
             await assign_teams_at_draft_start(self)
         await self.refresh_lobby_now()

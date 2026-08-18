@@ -6,11 +6,11 @@ each with its own button naming the format it joins. A pod fires once it reaches
 into a scheduled RSVP card on its own format. Nothing here reads a stored player preference: a press says
 which pod it joins, so no format is ever inferred.
 
-Each column rolls on its own clock: the moment its pod is played, the column opens the next day's pods and
-stacks the played one above them, so the board never offers a slot that already happened and interest never
-resets overnight. A slot whose start passes unfired rolls the same way. Overnight signups are held, not
-fired — a pod graduates only once its own day is the live one, which the morning post re-checks. The morning
-post adopts the pods a rolled column already opened, so the fresh board carries what accumulated instead of
+Each column rolls on its own clock: the moment its pod's draft starts, the column drops it and opens the
+next day's pods, so the board never offers a slot that already happened and interest never resets
+overnight. A slot whose start passes unfired rolls the same way. Overnight signups are held, not fired — a
+pod graduates only once its own day is the live one, which the morning post re-checks. The morning post
+adopts the pods a rolled column already opened, so the fresh board carries what accumulated instead of
 starting at zero, and the old message retires to its On This Day history.
 
 A format whose pod already exists is reflected, not reopened: its button writes a Yes to that pod's
@@ -57,7 +57,7 @@ from bot.services import pod_format_interest as fi
 from bot.services import pod_format_poll
 from bot.services import pod_launch
 from bot.services.pod_hold_view import build_hold_items
-from bot.services.pod_active import set_pod_complete_hook, set_podium_posted_hook
+from bot.services.pod_active import set_pod_complete_hook, set_pod_drafting_hook, set_podium_posted_hook
 from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
     announce_pod_grant,
@@ -75,7 +75,6 @@ from bot.services.pod_launcher_copy import (
     INTEREST_DESC_CUBE,
     INTEREST_DESC_FLASHBACK,
     INTEREST_PLACEHOLDER,
-    MARKER_CLOSED,
     MSG_INTEREST_PROMPT,
     MSG_INTEREST_SAVED,
     MSG_POD_THAT_NEEDS_YOU,
@@ -170,6 +169,7 @@ def init_daily_poll(bot: commands.Bot) -> None:
     global _bot
     _bot = bot
     register_launcher_refresh(refresh_launcher_for_date)
+    set_pod_drafting_hook(roll_lane_after_draft_start)
     set_pod_complete_hook(roll_lane_after_pod)
     set_podium_posted_hook(release_play_again)
     pod_launch.set_slot_roll_hook(roll_lane_after_expired_slot)
@@ -534,8 +534,14 @@ def _gathering_groups(
     bucket_slots: list[pod_launch.LauncherSlot],
 ) -> list[list[pod_launch.LauncherSlot]]:
     """A column's pods still taking signups, grouped by start time, earliest first. A format still gathering
-    at a time another format is already drafting keeps its own block instead of leaving with it."""
-    groups = [[slot for slot in group if not slot.locked] for group in _time_groups(bucket_slots)]
+    at a time another format is already drafting keeps its own block instead of leaving with it.
+
+    A pod that started and a slot that closed unfired both leave: neither can be pressed, and a column says
+    more by offering the next slot it opened than by listing what is over."""
+    groups = [
+        [slot for slot in group if not slot.locked and not _slot_closed(slot)]
+        for group in _time_groups(bucket_slots)
+    ]
     return [group for group in groups if group]
 
 
@@ -558,12 +564,11 @@ def _group_block(
 
 
 def _group_header(group: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> str:
-    """The lane header with its countdown beside it. A column with no Played rows renders no Next section, so
-    without this the block carries a date and nothing about how soon the pod starts. A time whose every
-    format has closed drops the countdown, which would otherwise read as a pod about to happen."""
+    """The lane header with its countdown beside it. Without this the block carries a date and nothing about
+    how soon the pod starts."""
     lead = group[0]
     name = _slot_name_only(lead, guild)
-    if lead.slot_time is None or all(_slot_closed(slot) for slot in group):
+    if lead.slot_time is None:
         return name
     return f"{name}{NBSP}{NBSP}<t:{int(lead.slot_time.timestamp())}:R>"
 
@@ -672,16 +677,11 @@ def _roster_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None, sh
     """One pod's block: the words its own button carries, over its own roster, so a press lands on a block a
     reader recognizes. A member the slot lists on another pod too carries the flexible marker and sits at the
     end of the roster, so the players this pod holds alone read first. An empty pod still renders its header
-    over a dash, so a slot nobody joined yet keeps advertising every format it offers. A closed slot says so
-    in place of the roster."""
+    over a dash, so a slot nobody joined yet keeps advertising every format it offers."""
     icon = fi.format_emoji(slot.set_code)
     label = _pod_header_label(slot, guild)
-    closed = _slot_closed(slot)
-    count = f" **({slot.count})**" if slot.count and not closed else ""
-    if closed:
-        lines = [f"> {MARKER_CLOSED}"]
-    else:
-        lines = [f"> {_marked_name(name, shared)}" for name in _marked_last(slot.names, shared)] or ["> -"]
+    count = f" **({slot.count})**" if slot.count else ""
+    lines = [f"> {_marked_name(name, shared)}" for name in _marked_last(slot.names, shared)] or ["> -"]
     return "\n".join([f"{icon} {label}{count}"] + lines)
 
 
@@ -875,10 +875,13 @@ async def _announce_play_again_signup(interaction: discord.Interaction, bucket_k
 
 class PodPollView(discord.ui.View):
     """The day's surface, one button per pod plus the board's own Leave: a gathering pod and a pod that fired
-    both render a green button that only ever adds you, and a pod whose draft started renders nothing — its
-    own line already links to it. Each button names the format it joins, so the press itself says which pod
-    it commits to and no stored preference is consulted. A closed slot renders no button at all, and hands its
-    place on the row to a link to the pod drafting at its time.
+    both render a green button that only ever adds you. Each button names the format it joins, so the press
+    itself says which pod it commits to and no stored preference is consulted.
+
+    Every button here signs you up, and the row carries no link. A pod whose draft started, a closed slot and
+    an earlier table of a split all render nothing: their block already links to their card, and a late seat
+    is asked for in the pod's own thread. The championship lane is the one pointer, since its column takes no
+    signups at all.
 
     Adding and leaving are two buttons on purpose. One button that toggled meant a press whose meaning
     depended on state the player could not see, and a second press given to a slow first one signed them
@@ -933,13 +936,11 @@ def _slot_item(
     if slot.locked or slot.set_code is None:
         return None
     if slot.committed:
-        if _later_table_holds_the_button(slot, lane_slots):
-            return _pod_link_button(slot, guild)
-        if slot.card_message_id:
-            return SlotSignUpButton(slot.bucket_key, _pod_button_label(slot))
-        return _pod_link_button(slot, guild)
+        if not slot.card_message_id or _later_table_holds_the_button(slot, lane_slots):
+            return None
+        return SlotSignUpButton(slot.bucket_key, _named_pod_label(slot.bucket_key, slot.set_code))
     if _slot_closed(slot):
-        return _closed_slot_link(slot, lane_slots, guild)
+        return None
     return SlotJoinButton(slot.bucket_key)
 
 
@@ -951,8 +952,8 @@ def _later_table_holds_the_button(
     A split's tables share one format at one time, so they share the key the button is addressed by, and two
     of them on one board would collide on that key and lose the board the edit. The last table wears it: the
     plan leaves the empty seats there and sends the maybes there, so a press asking for a seat lands where
-    one is. The earlier tables link to their own card, which is what a reader looking for a table already
-    playing wants."""
+    one is. The earlier tables carry no button: their block already links to their card, and a seat on a
+    table the plan filled is asked for in its thread."""
     if slot.card_message_id is None:
         return False
     for other in lane_slots:
@@ -970,69 +971,6 @@ def _later_table_holds_the_button(
 def _slot_table_index(slot: pod_launch.LauncherSlot) -> int:
     """Which table of its signup this pod is; a pod that never split is the first one."""
     return _table_ordinal(slot.thread_name or "") or 1
-
-
-def _closed_slot_link(
-    slot: pod_launch.LauncherSlot, lane_slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None,
-) -> "discord.ui.Item | None":
-    """A closed slot gives its seat on the row to the pod drafting at its start time: the players who wanted
-    this format are the ones left with nothing to press, and that pod's thread is where a late seat gets
-    asked for.
-
-    Nothing once that pod is finished, since there is no seat left to ask for and a button on a played pod
-    reads as a pod still on offer. Nothing either when its time drafted no pod, when a slot with a button of
-    its own already wears that label (a lane that rolled offers the same slot and format tomorrow, and two
-    buttons reading alike would hide which of them joins), or when an earlier closed format at this time is
-    already pointing there."""
-    pod = None
-    for other in lane_slots:
-        if other.committed and other.locked and not other.finished and other.slot_time == slot.slot_time:
-            pod = other
-            break
-    if pod is None:
-        return None
-    label = _named_pod_label(pod.bucket_key, pod.set_code)
-    for other in lane_slots:
-        if other is slot:
-            break
-        if _slot_closed(other) and other.slot_time == slot.slot_time:
-            return None
-    for other in lane_slots:
-        if _carries_own_button(other) and _named_pod_label(other.bucket_key, other.set_code) == label:
-            return None
-    return _pod_link_button(pod, guild)
-
-
-def _carries_own_button(slot: pod_launch.LauncherSlot) -> bool:
-    """Whether the slot puts a button on the row for itself, which makes that button's label its own. Mirrors
-    the branches of `_slot_item` that decide from the slot alone."""
-    if bucket_by_key(slot.bucket_key) is None or slot.set_code is None:
-        return False
-    if slot.championship:
-        return bool(slot.thread_id)
-    return not slot.locked and (slot.committed or not _slot_closed(slot))
-
-
-def _pod_link_button(
-    pod: pod_launch.LauncherSlot, guild: discord.Guild | None,
-) -> "discord.ui.Item | None":
-    """A press that lands on a pod instead of joining one: its thread, where the lobby link and the match talk
-    are, falling back to its card when the pod has no thread to reach."""
-    url = _jump_url(guild, pod.thread_id, pod.thread_message_id) if pod.thread_id else _card_url(guild, pod)
-    if url is None:
-        return None
-    return discord.ui.Button(
-        style=discord.ButtonStyle.link, url=url,
-        label=_pod_button_label(pod), emoji=_slot_button_emoji(pod.bucket_key),
-    )
-
-
-def _pod_button_label(slot: pod_launch.LauncherSlot) -> str:
-    """The words a pod's button carries: its slot and its format, plus the table's ordinal once a split left
-    more than one table sharing both."""
-    label = _named_pod_label(slot.bucket_key, slot.set_code)
-    index = _table_ordinal(slot.thread_name or "")
-    return f"{label} {ordinal(index)}" if index else label
 
 
 def _named_pod_label(bucket_key: str, set_code: str | None = None) -> str:
@@ -1747,6 +1685,14 @@ async def refresh_launcher_for_date(bot: commands.Bot, signal_date: date) -> Non
     await _rerender_poll(bot, message_id, board_date)
 
 
+async def roll_lane_after_draft_start(bot: commands.Bot, event_id: str) -> None:
+    """Move the launcher column a pod now drafting sat in to the next day. The board stops offering a pod the
+    moment its first pack is passed, so a column whose only pod just started would otherwise hold an empty
+    slot for the hours between the draft and the pod being finalized. The roll is idempotent, so the
+    completion roll still runs and re-uses the rows opened here."""
+    await _roll_lane_for_event(bot, event_id)
+
+
 async def roll_lane_after_pod(bot: commands.Bot, event_id: str) -> None:
     """Move the launcher column a played pod sat in to the next day, then arm that pod's sign-off. Fired once
     the pod is finalized, so a column can gather tomorrow while the other still plays today. An off-grid pod
@@ -1755,15 +1701,24 @@ async def roll_lane_after_pod(bot: commands.Bot, event_id: str) -> None:
     Play Again then offers whatever the nearest slot carries tomorrow, one button per format, so a group that
     drafted a cube tonight is invited back to the past set running at their time tomorrow."""
     _arm_play_again(bot, event_id)
-    ref = await asyncio.to_thread(pod_launch.event_lane_ref_sync, event_id)
+    ref = await _roll_lane_for_event(bot, event_id)
     if ref is None:
         return
     lane, played_day = ref
-    await _roll_lane(bot, lane, played_day)
     if lane == LANE_LATE:
         await repost_board_after_the_late_pods(bot, played_day)
     else:
         await resurface_board_after_the_early_pods(bot, played_day)
+
+
+async def _roll_lane_for_event(bot: commands.Bot, event_id: str) -> tuple[str, date] | None:
+    """Roll the column one pod sits in, returning its (lane, day) or None for a pod on no launcher slot"""
+    ref = await asyncio.to_thread(pod_launch.event_lane_ref_sync, event_id)
+    if ref is None:
+        return None
+    lane, slot_day = ref
+    await _roll_lane(bot, lane, slot_day)
+    return ref
 
 
 async def repost_board_after_the_late_pods(bot: commands.Bot, played_day: date) -> bool:

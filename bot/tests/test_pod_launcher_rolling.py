@@ -105,12 +105,12 @@ def _drafting(bucket_key, day):
     return replace(_played(bucket_key, day), finished=False, winner=None, winner_slug=None)
 
 
-def _committed_card(bucket_key, day, *, card_message_id):
+def _committed_card(bucket_key, day, *, card_message_id, thread_name="MSH Jul 24 Late Pod"):
     return LauncherSlot(
         named_bucket_key(bucket_key, LATEST), committed=True, status=STATUS_FIRED, count=4,
         slot_time=slot_event_time(day, bucket_key), set_code=LATEST,
         names=list(HALL_OF_FAME[:4]), thread_id="1", signal_id=None, card_message_id=card_message_id,
-        card_channel_id="2", thread_name="MSH Jul 24 Late Pod",
+        card_channel_id="2", thread_name=thread_name,
     )
 
 
@@ -195,6 +195,9 @@ def test_a_retired_board_keeps_only_the_pods_its_own_day_played(slot, expected):
 
 
 @pytest.mark.parametrize("slots, gathering_codes", [
+    ([_gathering("LATE", FRIDAY, status=STATUS_EXPIRED), _gathering("LATE", FRIDAY, set_code="PEASANT")],
+     [["PEASANT"]]),
+    ([_gathering("LATE", FRIDAY, status=STATUS_EXPIRED)], []),
     ([_played("LATE", FRIDAY), _gathering("LATE", FRIDAY, set_code="PEASANT")], [["PEASANT"]]),
     ([_played("LATE", FRIDAY), _gathering("EVENING", SATURDAY)], [[LATEST]]),
     ([_gathering("LATE", FRIDAY), _gathering("LATE", FRIDAY, set_code="PEASANT")], [[LATEST, "PEASANT"]]),
@@ -206,41 +209,35 @@ def test_a_column_offers_only_the_pods_still_taking_signups(slots, gathering_cod
     assert [[slot.set_code for slot in group] for group in groups] == gathering_codes
 
 
-@pytest.mark.parametrize("beside, links_to_pod", [
-    ([_drafting("LATE", FRIDAY)], True),
-    ([_played("LATE", FRIDAY)], False),
-    ([_committed_card("LATE", FRIDAY, card_message_id="1")], False),
-    ([_gathering("LATE", FRIDAY)], False),
-    ([_drafting("LATE", FRIDAY), _gathering("EVENING", SATURDAY)], False),
-    ([], False),
+@pytest.mark.parametrize("slot, beside, carries_a_button", [
+    (_gathering("LATE", FRIDAY, status=STATUS_EXPIRED), [_drafting("LATE", FRIDAY)], False),
+    (_drafting("LATE", FRIDAY), [], False),
+    (_played("LATE", FRIDAY), [], False),
+    (_committed_card("LATE", FRIDAY, card_message_id="1"), [], True),
+    (_gathering("LATE", FRIDAY), [], True),
 ])
-def test_a_closed_slot_gives_its_button_to_the_pod_drafting_at_its_time(beside, links_to_pod):
-    closed = _gathering("LATE", FRIDAY, status=STATUS_EXPIRED, set_code="PEASANT")
+def test_only_a_pod_you_can_still_sign_up_for_carries_a_button(slot, beside, carries_a_button):
+    item = _slot_item(slot, None, beside + [slot])
 
-    item = _slot_item(closed, None, beside + [closed])
-
-    assert (item is not None and item.url is not None) is links_to_pod
-    assert item is None or not item.disabled
+    assert (item is not None) is carries_a_button
 
 
-def test_two_closed_formats_at_one_time_point_at_their_pod_once():
-    pod = _drafting("LATE", FRIDAY)
-    first = _gathering("LATE", FRIDAY, status=STATUS_EXPIRED, set_code="PEASANT")
-    second = _gathering("LATE", FRIDAY, status=STATUS_EXPIRED, set_code="CUBE")
-    lane_slots = [pod, first, second]
+def test_only_the_last_table_of_a_split_carries_the_signup_button():
+    first = _committed_card("LATE", FRIDAY, card_message_id="1", thread_name="LATE Aug 14 Pod 1")
+    second = _committed_card("LATE", FRIDAY, card_message_id="2", thread_name="LATE Aug 14 Pod 2")
+    lane_slots = [first, second]
 
-    links = [_slot_item(slot, None, lane_slots) for slot in (first, second)]
+    items = [_slot_item(slot, None, lane_slots) for slot in lane_slots]
 
-    assert [link is not None for link in links] == [True, False]
+    assert [item is not None for item in items] == [False, True]
 
 
-@pytest.mark.parametrize("status, counts_down", [(STATUS_OPEN, True), (STATUS_EXPIRED, False)])
-def test_only_a_time_still_joinable_counts_down(status, counts_down):
-    group = [_gathering("LATE", FRIDAY, status=status)]
+def test_a_time_still_joinable_counts_down():
+    group = [_gathering("LATE", FRIDAY)]
 
     block = _group_block(group, None)
 
-    assert (":R>" in block) is counts_down
+    assert ":R>" in block
     assert ":F>" in block
 
 

@@ -16,6 +16,7 @@ ACTIVE_POD_MANAGERS = {}
 ACTIVE_TABLE_VIEWS = {}
 
 _CARD_PHASE_HOOK = None
+_POD_DRAFTING_HOOK = None
 _POD_COMPLETE_HOOK = None
 _POD_CARD_HOOK = None
 _PODIUM_POSTED_HOOK = None
@@ -26,6 +27,13 @@ def set_card_phase_hook(callback) -> None:
     card's status line without the service layer importing the command module."""
     global _CARD_PHASE_HOOK
     _CARD_PHASE_HOOK = callback
+
+
+def set_pod_drafting_hook(callback) -> None:
+    """The daily launcher registers the draft-start column roll here, next to the completion one and for the
+    same reason: the modules that start a draft may not import the launcher task."""
+    global _POD_DRAFTING_HOOK
+    _POD_DRAFTING_HOOK = callback
 
 
 def set_pod_complete_hook(callback) -> None:
@@ -63,6 +71,13 @@ def notify_card_phase(bot, event_id: str) -> None:
     line from the live manager."""
     if _CARD_PHASE_HOOK is not None:
         asyncio.create_task(_CARD_PHASE_HOOK(bot, event_id))
+
+
+def notify_pod_drafting(bot, event_id: str) -> None:
+    """Roll the launcher column this pod plays in to the next day (no-op if unset). Fired once the first pack
+    is passed, the point the board stops offering the pod, so the column never sits empty while it drafts."""
+    if _POD_DRAFTING_HOOK is not None:
+        asyncio.create_task(_POD_DRAFTING_HOOK(bot, event_id))
 
 
 def notify_pod_complete(bot, event_id: str) -> None:

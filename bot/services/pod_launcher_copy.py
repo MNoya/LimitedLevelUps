@@ -25,7 +25,6 @@ POLL_FORMAT_SEVERAL = (
     f"{NBSP}{fi.FLEXIBLE_MARKER}{NBSP}Sign up for every pod you would play"
 )
 ARCHIVE_INTRO = "### On This Day"
-MARKER_CLOSED = "Closed"
 FINISHED_MARK = "🏆"
 PLAYING_MARK = "⚔️"
 NEXT_EMOJI = "chordoHello"
