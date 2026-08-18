@@ -63,6 +63,7 @@ from bot.services.ping_roles import (
     build_grant_view,
     build_welcome_view,
     forget_welcome,
+    post_welcome_card,
     slot_grant_ping,
     spec_named,
     strip_pod_roles,
@@ -477,6 +478,21 @@ async def setup(bot: commands.Bot) -> None:
             "Click a slot to see the first-pod welcome and role-grant a new drafter gets",
             view=WelcomePreviewView(),
         )
+
+    @test_group.command(name="welcomes")
+    @commands.is_owner()
+    async def test_welcomes(ctx: commands.Context, count: int = 3) -> None:
+        """Owner-only. Post `count` first-pod welcomes in this channel through the production path, one per
+        Hall of Fame name with the last addressed to you, so a run of joiners can be eyeballed: every card
+        before the newest holds its greeting line alone."""
+        if ctx.guild is None:
+            await ctx.send("Run `!test welcomes` in the server so the role pills resolve")
+            return
+        joiners = max(1, min(count, 8))
+        newcomers = [f"**{name}**" for name in HALL_OF_FAME[: joiners - 1]]
+        for mention in [*newcomers, ctx.author.mention]:
+            card = build_welcome_view(ctx.guild, mention, show_link_17lands=True)
+            await post_welcome_card(ctx.channel, card, mentions=discord.AllowedMentions.none())
 
     @test_group.command(name="rsvp")
     @commands.is_owner()

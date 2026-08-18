@@ -139,8 +139,9 @@ MSG_DM_PREF_OFF_TITLE = "🔕 Draft DMs Off"
 MSG_DM_PREF_OFF_BODY = "You won't get your Draftmancer link by DM anymore\nRun `/roles` to manage your notifications"
 MSG_DRAFTMANCER_LINK_LEAD = "Draftmancer link will be posted {lead} minutes before"
 
+MSG_POD_WELCOME_LEAD = "### 👋 Welcome {user} to {pod_drafters}"
 MSG_POD_WELCOME = (
-    "### 👋 Welcome {user} to {pod_drafters}\n\n"
+    MSG_POD_WELCOME_LEAD + "\n\n"
     "Use the buttons below to link your Arena handle, read the Pod Guide and manage Notifications"
 )
 MSG_MOCK_WELCOME = (

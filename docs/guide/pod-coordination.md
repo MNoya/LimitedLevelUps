@@ -20,13 +20,13 @@ The launcher also posts itself again each time a pod finishes, quietly and at th
 
 ## How to join
 
-Every pod on the launcher has its own button, named for the time and the format it plays: **Early MSH**, **Early PEASANT**. Click one to add yourself to that pod. A button only ever adds you, so pressing it twice cannot take you back off: the second press just tells you that you are already on that pod. Clicking is a plan, not a promise: if your day changes you can leave, and if you never show up you just catch the next one.
+Every pod you can still sign up for has its own button on the launcher, named for the time and the format it plays: **Early MSH**, **Early PEASANT**. Click one to add yourself to that pod. A button only ever adds you, so pressing it twice cannot take you back off: the second press just tells you that you are already on that pod. Clicking is a plan, not a promise: if your day changes you can leave, and if you never show up you just catch the next one.
 
 To leave, press **Leave** at the end of the button row. It takes you off every pod on that board, including one that already opened its thread. Leaving by mistake costs nothing: sign up again and you are back where your first signup put you, ahead of everyone who joined after it. In the hour before a pod starts, its roster card also lists who has left, so the room can see who it is no longer waiting for.
 
 You can join more than one pod, including both formats of one time slot, which tells the room you will play either. The launcher marks you with ◈ on every pod you are on and lists you last on each of their rosters, so everyone can see which bodies two tables are both counting on. Nothing takes you off one pod because another one opened. If both fill, you are in both threads and you pick the one that needs you.
 
-Every click answers you privately with the pod you are on, its start time, and any ping role you just picked up. Sign up for two formats at one time and it names both, and tells you to play the pod that needs you to fill a table if both are created. The first time you ever join a pod, the channel also gets a public welcome.
+Every click answers you privately with the pod you are on, its start time, and any ping role you just picked up. Sign up for two formats at one time and it names both, and tells you to play the pod that needs you to fill a table if both are created. The first time you ever join a pod, the channel also gets a public welcome. Its buttons move to the newest welcome each time someone new joins, so the channel carries one set of them and not one per person.
 
 Anyone who has not finished a pod yet carries 🆕 beside their name, on the roster and in the lobby. It stays there through their first pod and comes off once that pod is over, so the table can see who to walk through the parts nobody explains twice.
 

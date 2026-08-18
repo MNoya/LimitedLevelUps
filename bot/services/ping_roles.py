@@ -26,6 +26,7 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 import discord
+from discord.components import Button, TextDisplay
 from sqlalchemy import select
 
 from bot import audit, emojis
@@ -42,7 +43,7 @@ from bot.commands.messages import (
 )
 from bot.commands.pod_guide import render_pod_guide_embed_body
 from bot.database import SessionLocal
-from bot.discord_helpers import extract_avatar_hash, is_pod_coordination_channel, post_welcome, send_welcome
+from bot.discord_helpers import extract_avatar_hash, is_pod_coordination_channel, resolve_pod_chat_channel
 from bot.models import Player
 from bot.services import pod_format_interest as fi
 from bot.services.pod_active_lobby import active_lobby_link_for
@@ -261,6 +262,13 @@ def build_welcome_view(
     pod_drafters = umbrella.mention if umbrella is not None else POD_DRAFTERS_ROLE_NAME
     message = MSG_POD_WELCOME.format(user=user_mention, pod_drafters=pod_drafters).rstrip()
     return _PodButtonCard(message, show_link_17lands_button=show_link_17lands)
+
+
+def build_demoted_welcome_view(greeting: str) -> discord.ui.LayoutView:
+    """A welcome once a newer one supersedes it: the greeting as plain text, no card and no buttons"""
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.TextDisplay(greeting))
+    return view
 
 
 def build_grant_view(
@@ -573,6 +581,9 @@ def _pod_card_state_sync(discord_id: str) -> PodCardState:
         )
 
 
+WELCOME_SCAN_LIMIT = 50
+HEADING_PREFIX = re.compile(r"^#{1,3}\s+")
+
 _welcomed_member_ids: set[int] = set()
 
 
@@ -589,6 +600,79 @@ def _first_welcome_for(member_id: int) -> bool:
 def forget_welcome(member_id: int) -> None:
     """Drop a member's welcomed mark so `!test reset` can replay the first-pod welcome for the tester."""
     _welcomed_member_ids.discard(member_id)
+
+
+async def send_welcome(
+    client: discord.Client, member: discord.abc.User, view: discord.ui.LayoutView,
+) -> discord.Message | None:
+    """Post the welcome in pod-draft-chat, pinging the newcomer; None when it can't be sent"""
+    channel = resolve_pod_chat_channel(client)
+    if channel is None:
+        return None
+    mentions = discord.AllowedMentions(users=[member], roles=False, everyone=False)
+    return await post_welcome_card(channel, view, mentions=mentions)
+
+
+async def post_welcome(interaction: discord.Interaction, view: discord.ui.LayoutView) -> None:
+    """The interaction-path welcome, ephemeral when pod-draft-chat can't be resolved"""
+    if await send_welcome(interaction.client, interaction.user, view) is None:
+        await interaction.followup.send(view=view, ephemeral=True)
+
+
+async def post_welcome_card(
+    channel: discord.abc.Messageable, view: discord.ui.LayoutView, *, mentions: discord.AllowedMentions,
+) -> discord.Message | None:
+    """Post a welcome card and demote the ones already standing; None when the send fails"""
+    try:
+        posted = await channel.send(view=view, allowed_mentions=mentions)
+    except discord.HTTPException:
+        log.warning("could not post the pod welcome", exc_info=True)
+        return None
+    await demote_older_welcomes(channel, newest=posted.id)
+    return posted
+
+
+async def demote_older_welcomes(channel: discord.abc.Messageable, *, newest: int) -> int:
+    """Strip the buttons off every welcome card older than `newest`, returning how many were demoted"""
+    guild = getattr(channel, "guild", None)
+    bot_id = guild.me.id if guild is not None else None
+    demoted = 0
+    async for message in channel.history(limit=WELCOME_SCAN_LIMIT):
+        if message.id >= newest or (bot_id is not None and message.author.id != bot_id):
+            continue
+        greeting = welcome_card_greeting(message)
+        if greeting is None:
+            continue
+        try:
+            await message.edit(
+                view=build_demoted_welcome_view(greeting),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            demoted += 1
+        except discord.HTTPException:
+            log.warning(f"could not demote welcome {message.id}", exc_info=True)
+    return demoted
+
+
+def welcome_card_greeting(message: discord.Message) -> str | None:
+    """The greeting off a welcome card that still carries its buttons, heading markdown stripped; None for
+    anything else"""
+    components = list(_flat_components(message))
+    carries_buttons = any(
+        isinstance(item, Button) and item.custom_id == MANAGE_ROLES_BUTTON_ID for item in components
+    )
+    if not carries_buttons:
+        return None
+    for item in components:
+        if isinstance(item, TextDisplay) and item.content.strip():
+            return HEADING_PREFIX.sub("", item.content.splitlines()[0])
+    return None
+
+
+def _flat_components(message: discord.Message) -> Iterable[discord.Component]:
+    for component in message.components:
+        yield component
+        yield from getattr(component, "children", ())
 
 
 async def announce_pod_grant(interaction: discord.Interaction, *, first_pod: bool) -> None:

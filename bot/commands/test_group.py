@@ -32,7 +32,7 @@ PRODUCTION_SAFE_TESTS = frozenset({
     "lifecycle", "lockroster", "mockcard", "myset", "named", "overflow", "pollnudge", "queueclosed",
     "p2vote", "rally", "reminder", "reminders", "rolegrant", "rolling", "scribe", "sendoff", "setawards",
     "tables", "teamcard",
-    "thread-intro", "tiebreakers", "underfill", "welcome",
+    "thread-intro", "tiebreakers", "underfill", "welcome", "welcomes",
 })
 
 MSG_TEST_PRODUCTION_BLOCKED = (
