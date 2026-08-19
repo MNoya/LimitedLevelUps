@@ -63,10 +63,14 @@ async def _answer_from_pod_channel(ctx: commands.Context, manager) -> bool:
     so it says nothing and lets the rally answer instead: a lobby that is drafting, finished, or left over
     from a test still leaves someone asking a real question about the pods that are live now.
 
+    A choice the pod is being asked about follows the lobby card down, so a table reading the bottom of the
+    thread finds the lobby and the question about it together.
+
     A mock's thread card bumps like any other. Its channel card is what `!mock` moves, and moving both off
     one command would put a card in front of two audiences the caller can only see one of."""
     if not await manager.bump_lobby_card():
         return False
+    await manager.bump_offer_card()
     audit.event("pod_card_bump", user_id=str(ctx.author.id), event_id=manager.event_id)
     log.info(f"pod: {ctx.author} bumped the lobby card for event {manager.event_id}")
     return True

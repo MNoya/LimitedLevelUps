@@ -52,7 +52,7 @@ MSG_MOCK_CARD_DISCORD_NAME = "Use your Discord name in Draftmancer so the bot ca
 MSG_MOCK_CARD_RECAP_BUTTON = "Draft Recap"
 MSG_MOCK_CARD_SPECTATE_BUTTON = "Spectate"
 MSG_MOCK_CARD_THREAD_BUTTON = "Thread"
-MSG_LOBBY_FULL_PROMPT = "{count} Players locked in! Initiate Ready Check?"
+MSG_LOBBY_FULL_PROMPT = "{count} Players in Draftmancer! Initiate Ready Check?"
 MSG_RIDER_SEATS_OPEN = "➡️ {count} seats open at this table {mentions}\nJoin here: <{url}>"
 
 MSG_CONFIRM_NOT_A_POD = "Run `!confirm` inside a pod draft thread"

@@ -47,12 +47,6 @@ from bot.services import pod_format_schedule
 from bot.services.pod_format_poll import FORMAT_POLL_PROMPT
 from bot.services.pod_reminder_copy import ROSTER_REMINDER_TITLE
 from bot.services.pod_registration_embed import CHAMPIONSHIP_TITLE, REGISTERED_TITLE_TEXT
-from bot.services.pod_round_robin_vote import ROUND_ROBIN_LOCKED_TITLE, ROUND_ROBIN_PROMPT
-from bot.services.pod_team_vote import (
-    TEAM_VOTE_LOCKED_TITLE,
-    TEAM_VOTE_PROMPT,
-    TEAM_VOTE_WAITED_TITLE,
-)
 from bot.services.pod_tournament import round_header
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_deck_color import SubmitDeckView
@@ -79,6 +73,8 @@ from bot.commands.test_group import HALL_OF_FAME, refused_on_production, registe
 from bot.services.pod_format_select import FormatSelectView
 from bot.services import pod_format_poll
 from bot.services import pod_round_robin_vote
+from bot.services.pod_table_organizer import SETTLED_MINUTES, name_list
+from bot.tasks.pod_organizer import MSG_WAITING_ON
 from bot.services.pod_settings_view import PodSettingsView
 from bot.services.pod_drafts import normalize_player_name
 from bot.services import pod_team
@@ -602,14 +598,14 @@ async def _start_chat_nudge(ctx) -> None:
     )
 
 
-async def _arm_fake_six_player_lobby(ctx) -> PodDraftManager | None:
-    """Register a socket-less manager holding a fake six-player lobby for this channel, so the pod
+async def _arm_fake_lobby(ctx, count: int = 6) -> PodDraftManager | None:
+    """Register a socket-less manager holding a fake lobby of `count` for this channel, so the pod
     surfaces run their production path with no Draftmancer session open. Local DB only."""
     if await _refuse_if_prod(ctx):
         return None
     await _purge_and_reset_test(ctx)
     channel_id = ctx.channel.id
-    roster = [ctx.author.display_name] + _LIVE_TEST_ROSTER[1:6]
+    roster = [ctx.author.display_name] + _LIVE_TEST_ROSTER[1:count]
     event_id, session_id = await asyncio.to_thread(
         _seed_live_test_event_sync, channel_id, DEFAULT_PAIRING_MODE,
     )
@@ -622,9 +618,21 @@ async def _arm_fake_six_player_lobby(ctx) -> PodDraftManager | None:
     return manager
 
 
+async def _arm_organizer_lobby(ctx, count: int) -> None:
+    """Arm a fake lobby whose start time has already passed, so the table organizer asks it about its shape
+    on its own. Nothing is posted here: the offer that follows is the real tick's, on the real path."""
+    manager = await _arm_fake_lobby(ctx, count)
+    if manager is None:
+        return
+    manager.scheduled_start = datetime.now(timezone.utc) - timedelta(minutes=1)
+    await ctx.send(
+        f"🧪 Lobby of {count} armed past its start time, the organizer asks within {SETTLED_MINUTES} minutes"
+    )
+
+
 async def _arm_pod_team_command(ctx) -> None:
     """Arm the fake six-player lobby so `/pod-team` finds a pod and posts its vote card."""
-    manager = await _arm_fake_six_player_lobby(ctx)
+    manager = await _arm_fake_lobby(ctx)
     if manager is None:
         return
     await ctx.send(f"🧪 Fake {len(manager.session_users)}-player lobby armed. Run `/pod-team` here")
@@ -902,12 +910,16 @@ def _round_robin_vote_seed() -> list[str]:
 class _RoundRobinVotePreviewView(discord.ui.View):
     """Interactible preview of the Pick 2 offer a lobby stalled at four gets. Three votes are prefilled on the
     Pick 2 side, so the previewer's click is the fourth — the unanimous vote that locks Pick 2 Round Robin.
-    Clicking Wait instead leaves the card open, since waiting is not a verdict. No live pod behind it."""
+    Clicking Wait instead leaves the card open, since waiting is not a verdict. No live pod behind it.
 
-    def __init__(self) -> None:
+    `from_signups` previews the same card asked of a roster that can only make four, which the organizer puts
+    up before those four have arrived."""
+
+    def __init__(self, from_signups: bool = False) -> None:
         super().__init__(timeout=900)
         self.round_robin = _round_robin_vote_seed()
         self.wait: list[str] = []
+        self.from_signups = from_signups
 
     @discord.ui.button(
         emoji=pod_round_robin_vote.ROUND_ROBIN_EMOJI, label=pod_round_robin_vote.ROUND_ROBIN_LABEL,
@@ -935,7 +947,7 @@ class _RoundRobinVotePreviewView(discord.ui.View):
             return
         await interaction.response.edit_message(
             embed=pod_round_robin_vote.build_offer_embed(
-                self.round_robin, self.wait, _ROUND_ROBIN_POD_SIZE),
+                self.round_robin, self.wait, _ROUND_ROBIN_POD_SIZE, from_signups=self.from_signups),
             view=self,
         )
 
@@ -1319,15 +1331,17 @@ _VALID_STATES = (
     "format", "seeding", "trophyhype", "champ", "podium", "round1", "round2", "round3", "voicelink", "review",
     "table",
     "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "p2vote",
-    "formatpoll", "linkpicker", "settings", "dropped", "reset",
+    "formatpoll", "linkpicker", "settings", "dropped", "organizer", "reset",
 )
+
+_ORGANIZER_LOBBY_SIZES = ("4", "6")
 
 _LIVE_POD_MODES = {
     "podbracket": "bracket", "podswiss": "swiss", "podrandom": "random", "podteam": "team",
 }
 
 _PRODUCTION_BLOCKED_STATES = frozenset(_LIVE_POD_MODES) | {
-    "podlobby", "podteamvote", "unlink", "reset", "chat", "podium",
+    "podlobby", "podteamvote", "organizer", "unlink", "reset", "chat", "podium",
 }
 
 _LAST_MESSAGE: dict[int, discord.Message] = {}
@@ -1462,11 +1476,6 @@ def _every_pod_title() -> list[tuple[str, str]]:
         (event_title(active_set_code(), _THREAD_NAME), "lobby card, and a running check"),
         (f"{emojis.prefix('chordoHello')}{REGISTERED_TITLE_TEXT}", "signup card"),
         (CHAMPIONSHIP_TITLE, "signup card, Set Championship"),
-        (TEAM_VOTE_PROMPT.format(count=emojis.mana_number(6)), "team draft offer"),
-        (TEAM_VOTE_LOCKED_TITLE, "team draft, agreed"),
-        (TEAM_VOTE_WAITED_TITLE.format(wait=emojis.mana_number(8)), "team draft, waiting"),
-        (ROUND_ROBIN_PROMPT.format(count=emojis.mana_number(4)), "round robin offer"),
-        (ROUND_ROBIN_LOCKED_TITLE, "round robin, agreed"),
         (FORMAT_POLL_PROMPT, "format vote"),
         (ROSTER_REMINDER_TITLE, "roster reminder, T-60"),
         (MSG_DM_PREF_ON_TITLE, "draft DMs on"),
@@ -1728,6 +1737,8 @@ async def setup(bot: commands.Bot) -> None:
         `p2vote` shows the Pick 2 offer card a lobby stalled at four gets, with working buttons and three
         votes prefilled — your click is the fourth, the unanimous vote that locks Pick 2 Round Robin. Click
         Wait instead and the card stays open, since waiting is not a verdict.
+        `organizer` `[4|6]` arms a fake lobby past its start time and lets the table organizer offer it
+        Pick 2 or Team Draft on its own.
         `podteamvote` arms a fake six-player lobby on this channel so `/pod-team` posts the real card
         as its own reply, with no Draftmancer session needed; re-run `/pod-team` for the re-offer path.
         `formatpoll` shows the flashback format tally with a working button per option and prefilled
@@ -1810,6 +1821,13 @@ async def setup(bot: commands.Bot) -> None:
 
         if state == "chat":
             await _start_chat_nudge(ctx)
+            return
+
+        if state == "organizer":
+            if extra and extra not in _ORGANIZER_LOBBY_SIZES:
+                await ctx.send(f"lobby size must be one of: {', '.join(_ORGANIZER_LOBBY_SIZES)}")
+                return
+            await _arm_organizer_lobby(ctx, int(extra) if extra else 4)
             return
 
         if state == "podteamvote":
@@ -1920,12 +1938,15 @@ async def setup(bot: commands.Bot) -> None:
             return
 
         if state == "p2vote":
-            preview = _RoundRobinVotePreviewView()
-            await ctx.send(
-                embed=pod_round_robin_vote.build_offer_embed(
-                    preview.round_robin, preview.wait, _ROUND_ROBIN_POD_SIZE),
-                view=preview,
-            )
+            await ctx.send(MSG_WAITING_ON.format(names=name_list([name for _, name in _LINKED_EIGHT[4:6]])))
+            for from_signups in (True, False):
+                preview = _RoundRobinVotePreviewView(from_signups)
+                await ctx.send(
+                    embed=pod_round_robin_vote.build_offer_embed(
+                        preview.round_robin, preview.wait, _ROUND_ROBIN_POD_SIZE,
+                        from_signups=from_signups),
+                    view=preview,
+                )
             return
 
         if state == "formatpoll":

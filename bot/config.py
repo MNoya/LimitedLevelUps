@@ -50,7 +50,6 @@ class Settings(BaseSettings):
     pod_draft_min_ready_players: int = 6
     pod_table_open_threshold: int = 4
     pod_round_robin_size: int = 4
-    pod_round_robin_offer_delay_s: int = 120
     pod_draft_pick_timer: int = 60
     pod_draft_picks_per_pack: int = 1
     pod_draft_fallback_tz: str = "America/New_York"

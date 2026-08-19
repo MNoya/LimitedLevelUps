@@ -1,5 +1,5 @@
 from bot.services.pod_team_vote import (
-    TEAM_VOTE_LOCKED_TITLE,
+    TEAM_VOTE_LOCKED_HEADING,
     TEAM_VOTE_TEAM_COLUMN,
     TEAM_VOTE_WAIT_COLUMN,
     TEAM_VOTE_SETTINGS_HINT,
@@ -46,11 +46,11 @@ def test_voter_read_dedupes_and_normalizes_nickname_mentions():
     assert team_voters_from_embed(embed) == ["<@111>", "<@222>"]
 
 
-def test_locked_card_flips_title_keeps_columns_and_notes_settings():
+def test_locked_card_flips_heading_keeps_columns_and_notes_settings():
     locked = build_team_vote_locked_embed(["<@111>", "<@222>"], ["<@333>"])
 
-    assert locked.title == TEAM_VOTE_LOCKED_TITLE
-    assert locked.description == TEAM_VOTE_SETTINGS_HINT
+    assert TEAM_VOTE_LOCKED_HEADING in locked.description
+    assert TEAM_VOTE_SETTINGS_HINT in locked.description
     assert team_voters_from_embed(locked) == ["<@111>", "<@222>"]
     assert wait_voters_from_embed(locked) == ["<@333>"]
 
@@ -58,16 +58,16 @@ def test_locked_card_flips_title_keeps_columns_and_notes_settings():
 def test_waited_card_notes_settings_and_keeps_the_record():
     waited = build_team_vote_waited_embed(["<@111>"], ["<@222>", "<@333>"])
 
-    assert waited.description == TEAM_VOTE_SETTINGS_HINT
+    assert TEAM_VOTE_SETTINGS_HINT in waited.description
     assert wait_voters_from_embed(waited) == ["<@222>", "<@333>"]
 
 
-def test_rerender_preserves_title_and_target_while_swapping_columns():
+def test_rerender_preserves_the_prompt_and_target_while_swapping_columns():
     original = build_team_vote_offer_embed(["<@111>"], [], pod_size=6)
 
     updated = rerender_gathering(original, ["<@111>", "<@222>"], ["<@333>"])
 
-    assert updated.title == original.title
+    assert updated.description == original.description
     assert needed_from_embed(updated) == 4
     assert team_voters_from_embed(updated) == ["<@111>", "<@222>"]
     assert wait_voters_from_embed(updated) == ["<@333>"]

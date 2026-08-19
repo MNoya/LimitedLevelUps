@@ -30,6 +30,8 @@ Every click answers you privately with the pod you are on, its start time, and a
 
 Anyone who has not finished a pod yet carries 🆕 beside their name, on the roster and in the lobby. It stays there through their first pod and comes off once that pod is over, so the table can see who to walk through the parts nobody explains twice.
 
+A pod on a set that plays Pick 2 opens at 4 in the hour before it starts, since four players draft those sets fine and a pod with no thread has nowhere to work out whether it wants to. Every other pod opens at 6.
+
 When a pod reaches 6 people, it opens for real. The bot posts a signup card with its own thread, and everyone who clicked that pod is carried over as a Yes. The other formats at that time keep collecting behind their own buttons. A pod for a later day waits: it collects signups overnight and opens on the morning of its own day, so nothing starts hours early.
 
 A pod keeps taking signups after it opens, right up to the moment the draft starts. Until then it still shows its full list on the launcher with a link to its thread.
@@ -69,6 +71,7 @@ In the hour before a pod, a few things happen in the thread:
 - Confirming moves you to Maybe on any other pod starting within two hours of the one you confirmed, and says so in that pod's thread. You cannot play two at once, and the pod you are not playing should not build a table around you. A pod further apart than that is untouched.
 - The pod's status message in pod chat says where it stands: how many players it still needs, and once it has enough, how many said yes and how many said maybe. It is one message from the first signup to the lobby, so the numbers move in place instead of the message coming and going. An hour out it moves to the bottom of the channel, and pings the slot's role if the pod is one or two players short.
 - Reaching 8 does not close the pod. Signups stay open, because people do drop before the start, and extra players get a table of their own when the pod splits.
+- Five minutes before the start, anyone who said yes and is not in the Draftmancer lobby yet is named in the thread. They are named once, and there is no second call.
 
 None of this is binding. It is there so you can see whether the pod is going to fire.
 
@@ -108,7 +111,7 @@ Written inside a pod's own thread, `!pod` does something else: it moves the lobb
 
 - **8-player pod** — a full table drafts, then plays 3 rounds. Winners play winners and losers play losers, so nobody is knocked out: everyone plays all three rounds and finishes with a record like 3-0 or 2-1. The two unbeaten players meet in a Trophy Match as soon as they both reach 2-0.
 - **10-player pod** — the same 3 rounds, and pairings still go up as soon as two players reach the same record. Ten does not split evenly, so one match per round puts a player against someone on a different record. Those show under a Pair Up heading, so an uneven match always reads as one. Round 3 can open with three unbeaten players, which makes two Trophy Matches, and two players can finish 3-0.
-- **6-player team draft** — six players split into two teams of three and draft against each other. Six players is what this format is for, so a pod is asked about it once, at the moment it matters: press Start Ready Check with exactly six players in the Draftmancer lobby and the bot asks you, privately, whether to make it a Team Draft. Team Draft sets the pairings and starts the check, Keep Pairings starts the check as it is. Nothing is set behind your back while the lobby is still filling, since most pods are after eight. A note in the thread says the pairings moved, and from then on the pod keeps what was picked. A pod that chose its pairings in `/draft` is never asked, and Pairings in Settings changes it at any point.
+- **6-player team draft** — six players split into two teams of three and draft against each other. Six players is what this format is for, so a pod is asked about it once, at the moment it matters. A room that settles at six past the start time is asked in the thread, and pressing Start Ready Check with exactly six players in the Draftmancer lobby asks you privately, whichever comes first. Team Draft sets the pairings and starts the check, Keep Pairings starts the check as it is. Nothing is set behind your back while the lobby is still filling, since most pods are after eight. A note in the thread says the pairings moved, and from then on the pod keeps what was picked. A pod that chose its pairings in `/draft` is never asked, and Pairings in Settings changes it at any point.
 - **4-player round robin** — four players draft and each one plays the other three, one per round. Everyone still finishes with a record like 3-0 or 2-1, worth the same pod points as any other pod.
 
 On busy nights a pod splits into tables before it opens, not after. A Draftmancer room holds ten, so a pod expecting more than ten waits at its ten minute mark instead of opening one. The roster card moves to the bottom of the thread with everyone mentioned above it, asking for confirmations, and no draft link is posted yet. That wait is the whole point: which tables the pod should run depends on who is actually coming, and opening a room first decides it before anyone knows.
@@ -135,7 +138,13 @@ You do not have to go looking for your table. Each table's lobby post opens by n
 
 A table that opens short of six asks pod chat for the players it needs, once. Anyone can open one more table at any time with `/pod-table`.
 
-When a lobby sits at 4 players for a couple of minutes with nobody new arriving, and the pod's start time has already passed, the bot asks that lobby whether to play now as a Pick 2 Round Robin or keep waiting. It only asks on the sets being tried out for it, HOB and MSH to start with, and it never asks before the start time, since more players are still expected until then. All 4 have to agree, so Wait is not a verdict: the card stays open, you can change your vote, and someone who wanted to wait can move to Round Robin once it is clear nobody else is coming. The card also reminds you that `!pod` in another channel calls for more players. Once all 4 agree the pod switches to 2 picks per pack and round robin pairings, both still changeable in Settings. A ready check on a round robin pod does not warn about the short roster, since 4 is the point.
+From the moment the lobby opens, the bot reads the room every minute and asks the table about the shape it can actually play. It only ever asks. Nothing about a pod changes until the players say so, and everything it says it says once.
+
+A pod whose signups can only ever make 4 is asked as soon as two of them are in the Draftmancer lobby, since waiting cannot make that roster bigger. Every other pod is asked after its start time has passed and the lobby has sat still for two minutes: at 6 the question is Team Draft, at 4 it is Pick 2. Five players are asked nothing, because five is odd and there is no shape to offer. Eight are asked nothing either, since the only thing left is the ready check.
+
+Pick 2 is offered on the sets being tried out for it, HOB and MSH to start with. All 4 have to agree, so Wait is not a verdict: the card stays open, you can change your vote, and someone who wanted to wait can move to Pick 2 once it is clear nobody else is coming. The card also reminds you that `!pod` in another channel calls for more players. Once all 4 agree the pod switches to 2 picks per pack and round robin pairings, both still changeable in Settings. A ready check on a round robin pod does not warn about the short roster, since 4 is the point.
+
+`!pod` inside the thread moves the question to the bottom along with the lobby card, for a choice that conversation has buried.
 
 ## After the draft
 

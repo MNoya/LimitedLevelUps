@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
+from bot.services.pod_format import pick_2_offered_for
 from bot.services.pod_schedule import EARLY_POD_ROLE_NAME, LATE_POD_ROLE_NAME, SCHEDULE_TZ
 
 
@@ -171,6 +172,22 @@ def slot_event_time(signal_date: date, bucket_key: str) -> datetime | None:
 
 def should_fire(member_count: int, threshold: int) -> bool:
     return member_count >= threshold
+
+
+SHORT_FIRE_THRESHOLD = 4
+SHORT_FIRE_WINDOW = timedelta(minutes=60)
+
+
+def fire_threshold_for(slot_time: datetime | None, set_code: str | None, now: datetime, default: int) -> int:
+    """Signups a slot needs to graduate into a pod, which drops to four in the last hour of a pick-2 set.
+
+    Four players draft a pick-2 set fine, and a pod that never opens a thread has nowhere to say so. The
+    hour is what keeps a lazy four-signup slot from opening its thread at noon for an evening pod."""
+    if slot_time is None or not pick_2_offered_for(set_code):
+        return default
+    if not now < slot_time <= now + SHORT_FIRE_WINDOW:
+        return default
+    return min(SHORT_FIRE_THRESHOLD, default)
 
 
 def teardown_at(last_activity: datetime, minutes: int) -> datetime:

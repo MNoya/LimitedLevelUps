@@ -655,20 +655,9 @@ def render(
     in_draftmancer = [(arena, dn) for arena, dn in in_session if dn is not None]
     unrecognized = [arena for arena, dn in in_session if dn is None]
     mention_map = display_name_by_mention_id or {}
-    in_session_keys = {dn.lower() for _, dn in in_session if dn}
-    in_session_keys |= {arena.lower() for arena, _ in in_session}
-    waiting_yes = [
-        name for name in rsvps_yes
-        if _rsvp_dedup_key(name, mention_map) not in in_session_keys
-    ]
-    waiting_unconfirmed = [
-        name for name in (rsvps_unconfirmed or [])
-        if _rsvp_dedup_key(name, mention_map) not in in_session_keys
-    ]
-    waiting_maybe = [
-        name for name in rsvps_maybe
-        if _rsvp_dedup_key(name, mention_map) not in in_session_keys
-    ]
+    waiting_yes = waiting_roster(rsvps_yes, in_session, mention_map)
+    waiting_unconfirmed = waiting_roster(rsvps_unconfirmed or [], in_session, mention_map)
+    waiting_maybe = waiting_roster(rsvps_maybe, in_session, mention_map)
     title = event_title(set_code, title)
     live_check = state in ("ready", "held", "overdue")
     show_pending = not live_check and state not in ("drafting", "complete")
@@ -1019,6 +1008,20 @@ def _team_columns(
         if team in rosters:
             rosters[team].append(TeamBoardMember(display=marked_new(dn, new_drafters), arena=arena))
     add_team_roster_fields(embed, rosters)
+
+
+def waiting_roster(
+    rsvps: list[str], in_session: list[tuple[str, str | None]],
+    display_name_by_mention_id: dict[int, str] | None = None,
+) -> list[str]:
+    """The roster entries with nobody in the Draftmancer session matching them, in roster order.
+
+    A seat matches on either the Draftmancer name or the display name it resolved to, so a player who set
+    their Arena handle and a player who set their Discord name both come off the list."""
+    mention_map = display_name_by_mention_id or {}
+    seated = {dn.lower() for _, dn in in_session if dn}
+    seated |= {arena.lower() for arena, _ in in_session}
+    return [name for name in rsvps if _rsvp_dedup_key(name, mention_map) not in seated]
 
 
 def _rsvp_dedup_key(rsvp: str, display_name_by_mention_id: dict[int, str]) -> str:

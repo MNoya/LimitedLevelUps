@@ -8,10 +8,11 @@ pings the slot role when the pod is close to the number it is chasing — see `_
 other post stays silent. Each check re-reads the Yes list off the pod's signal at fire time.
 
 Unfired launcher slots run the same beats through `fire_slot_underfill`, linking to the launcher, which is
-the slot's signup surface until it fires. On fire the message is not deleted: `hand_slot_nudge_to_card`
-rewrites it against the new card, so one message carries a pod from its first signup to its lobby. That is
-the moment the pod most needs a status up, since reaching the floor means the draft is on and still short
-of a full table.
+the slot's signup surface until it fires. The T-1h beat first asks the launcher whether the slot can open a
+pod on the short threshold, since a slot that has sat at four all afternoon has nobody left to press it in.
+On fire the message is not deleted: `hand_slot_nudge_to_card` rewrites it against the new card, so one
+message carries a pod from its first signup to its lobby. That is the moment the pod most needs a status
+up, since reaching the floor means the draft is on and still short of a full table.
 
 The copy asks for one number at a time (`build_recruiting_message`): the floor while the draft is not yet
 on, the aim once it is, and its Yes and Maybe counts once it is full. It is never deleted on a player
@@ -32,6 +33,7 @@ import asyncio
 import contextlib
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -63,6 +65,17 @@ CATCH_UP_DELAY_S = 5
 log = logging.getLogger(__name__)
 
 _bot: commands.Bot | None = None
+
+ShortFire = Callable[[str], Awaitable[bool]]
+_short_fire: ShortFire | None = None
+
+
+def register_short_fire_hook(hook: ShortFire) -> None:
+    """Wire the launcher's short-threshold fire. The beat runs at the hour a thin pick-2 slot may open its
+    thread, and the launcher task owns that graduation; registering it keeps this module clear of the
+    import cycle between the two."""
+    global _short_fire
+    _short_fire = hook
 
 
 def init_underfill(bot: commands.Bot) -> None:
@@ -201,6 +214,8 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
         log.info(f"fire_slot_underfill: slot {signal_id} is {slot.status}; skipping")
         return
     if slot.slot_time <= datetime.now(timezone.utc):
+        return
+    if _short_fire is not None and await _short_fire(signal_id):
         return
     floor = settings.pod_signal_fire_threshold
     aim = settings.pod_draft_target_players

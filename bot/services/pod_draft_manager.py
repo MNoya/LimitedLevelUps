@@ -56,6 +56,7 @@ from bot.services.lobby_embed import (
     roster_hold_detail,
     roster_hold_hint,
     stopped_reason,
+    waiting_roster,
 )
 from bot.services.mock_lobby_card import (
     MOCK_CARD_PING,
@@ -416,7 +417,7 @@ class PodDraftManager:
         self.round_robin_vote_message: "discord.Message | None" = None
         self.round_robin_vote_offered = False
         self.round_robin_vote_size = 0
-        self._round_robin_offer_task: asyncio.Task | None = None
+        self.round_robin_vote_from_signups = False
         self.format_poll_message: "discord.Message | None" = None
         self.format_poll_offered = False
         self.scheduled_start: datetime | None = None
@@ -1447,12 +1448,12 @@ class PodDraftManager:
             )
             self._maybe_schedule_lobby_full_prompt(classified)
             self.sync_name_nudge(classified)
-            self._maybe_schedule_round_robin_offer()
             outgrew_vote = len(self.player_session_users()) > max(6, self.team_vote_size)
             if self.team_vote_message is not None and outgrew_vote:
                 await self._retire_team_vote_offer()
             round_robin_lobby_moved = len(self.player_session_users()) != self.round_robin_vote_size
-            if self.round_robin_vote_message is not None and round_robin_lobby_moved:
+            if (self.round_robin_vote_message is not None and round_robin_lobby_moved
+                    and not self.round_robin_vote_from_signups):
                 await self._retire_round_robin_offer()
                 self.round_robin_vote_offered = False
             if state in ("drafting", "complete"):
@@ -2803,72 +2804,105 @@ class PodDraftManager:
             championship=is_championship(self.event_name),
         )
 
-    def _maybe_schedule_round_robin_offer(self) -> None:
-        """Arm the Round Robin offer while the lobby sits at exactly four players. The delayed task
-        re-validates before posting, so a fifth player arriving inside the window just cancels it — four
-        players who keep waiting are the only ones asked."""
-        if not self._round_robin_offer_eligible():
-            if self._round_robin_offer_task is not None and not self._round_robin_offer_task.done():
-                self._round_robin_offer_task.cancel()
-                self._round_robin_offer_task = None
-            return
-        if self._round_robin_offer_task is not None and not self._round_robin_offer_task.done():
-            return
-        self._round_robin_offer_task = asyncio.create_task(self._offer_round_robin_after_delay())
-
-    def _round_robin_offer_eligible(self) -> bool:
-        """Whether the lobby is one a four-player pod should be proposed to. Never before the pod's own
-        start time: until then more players are still expected, and a lobby resting at four is normal.
-        Limited to the sets on `pod_format.PICK_2_SETS` while the format is being tried out."""
-        if self.kind == "mock" or self.round_robin_vote_offered:
-            return False
-        if self.drafting or self.draft_complete or self.ready_check_active:
-            return False
-        if self.pairing_mode == "roundrobin":
-            return False
-        if not pod_format.pick_2_offered_for(self.set_code):
-            return False
-        if self.scheduled_start is not None and datetime.now(timezone.utc) < self.scheduled_start:
-            return False
-        return len(self.player_session_users()) == settings.pod_round_robin_size
-
-    async def _offer_round_robin_after_delay(self) -> None:
-        """Post the offer once the lobby has held at four for the quiet window. Re-validates first, so a
-        lobby that grew, shrank, or started a check in the meantime is left alone."""
-        try:
-            await asyncio.sleep(settings.pod_round_robin_offer_delay_s)
-        except asyncio.CancelledError:
-            return
-        if not self._round_robin_offer_eligible():
-            return
-        await self.offer_round_robin_vote()
-
-    async def offer_round_robin_vote(self) -> None:
-        """Post the one-time Round Robin offer card. No-op once offered or the draft is under way."""
+    async def offer_round_robin_vote(self, *, pod_size: int | None = None, from_signups: bool = False) -> None:
+        """Post the one-time Pick 2 offer card. The organizer decides when a pod is asked; this places the
+        card and fixes the votes it needs. `pod_size` sizes the vote off a roster that can only make four,
+        where the lobby is not the number to count. No-op once offered or the draft is under way."""
         if self.round_robin_vote_offered or self.drafting or self.draft_complete:
             return
         thread = await self._fetch_thread()
         if thread is None:
             return
         self.round_robin_vote_offered = True
-        size = len(self.player_session_users()) or settings.pod_round_robin_size
+        size = pod_size or len(self.player_session_users()) or settings.pod_round_robin_size
         self.round_robin_vote_size = size
+        self.round_robin_vote_from_signups = from_signups
         try:
             self.round_robin_vote_message = await thread.send(
-                embed=pod_round_robin_vote.build_offer_embed([], [], size),
+                embed=pod_round_robin_vote.build_offer_embed([], [], size, from_signups=from_signups),
                 view=pod_round_robin_vote.build_vote_view(self.event_id),
             )
         except discord.HTTPException:
             self.round_robin_vote_offered = False
             log.warning(f"[RR_VOTE] offer_post_failed event={self.event_id}", exc_info=True)
 
+    async def waiting_on_mentions(self) -> list[str]:
+        """Roster mentions with nobody matching them in the Draftmancer lobby, Yes and unconfirmed only.
+
+        A maybe is never a player the room waits on, so a pod short of a table is never told to chase one."""
+        thread = await self._fetch_thread()
+        guild = thread.guild if thread is not None else None
+        classified = await self._classify_users(self.non_bot_session_names())
+        mention_map = await self._resolve_rsvp_mentions(guild)
+        return waiting_roster(list(self.rsvps_yes) + list(self.rsvps_unconfirmed), classified, mention_map)
+
+    async def bump_offer_card(self) -> None:
+        """Move a live Pick 2 or Team Draft card to the bottom of the thread, carrying its tally, for a
+        choice that conversation has buried. Called by `!pod` in the thread, right after the lobby card, so
+        the question the table is being asked ends up under the lobby it is about."""
+        if self.drafting or self.draft_complete:
+            return
+        thread = await self._fetch_thread()
+        if thread is None:
+            return
+        if self.team_vote_message is not None:
+            team, wait = await self._clear_existing_team_vote(thread)
+            self.team_vote_offered = False
+            self.team_vote_message = None
+            await self.offer_team_vote(self.team_vote_size or TEAM_VOTE_POD_SIZE, team=team, wait=wait)
+            return
+        message = await self._fresh_round_robin_card()
+        if message is None or not message.embeds:
+            return
+        card = message.embeds[0]
+        round_robin = pod_round_robin_vote.round_robin_voters_from_embed(card)
+        wait = pod_round_robin_vote.wait_voters_from_embed(card)
+        from_signups = pod_round_robin_vote.asks_about_signups(card)
+        await self._retire_round_robin_offer()
+        self.round_robin_vote_offered = False
+        await self.offer_round_robin_vote(pod_size=self.round_robin_vote_size, from_signups=from_signups)
+        moved = self.round_robin_vote_message
+        if moved is not None and (round_robin or wait):
+            try:
+                await moved.edit(embed=pod_round_robin_vote.rerender_gathering(
+                    moved.embeds[0], round_robin, wait))
+            except discord.HTTPException:
+                log.info(f"[RR_VOTE] bump_tally_failed event={self.event_id}", exc_info=True)
+
+    async def promote_round_robin_offer(self) -> None:
+        """Re-title a signups card once its four are all in the Draftmancer lobby, so the card counts the
+        room it can now see. The votes already on the message are carried over untouched."""
+        if not self.round_robin_vote_from_signups or self.round_robin_vote_message is None:
+            return
+        if len(self.player_session_users()) < self.round_robin_vote_size:
+            return
+        message = await self._fresh_round_robin_card()
+        if message is None or not message.embeds:
+            return
+        self.round_robin_vote_from_signups = False
+        try:
+            await message.edit(embed=pod_round_robin_vote.promoted_from_signups(
+                message.embeds[0], self.round_robin_vote_size))
+        except discord.HTTPException:
+            log.info(f"[RR_VOTE] promote_failed event={self.event_id}", exc_info=True)
+
+    async def _fresh_round_robin_card(self) -> "discord.Message | None":
+        """The Pick 2 card re-read off Discord. A click edits the message itself, so the handle held here
+        still carries the embed as it was first posted, votes and all missing."""
+        message = self.round_robin_vote_message
+        if message is None:
+            return None
+        try:
+            return await message.channel.fetch_message(message.id)
+        except discord.HTTPException:
+            log.info(f"[RR_VOTE] card_refetch_failed event={self.event_id}", exc_info=True)
+            return None
+
     async def _retire_round_robin_offer(self) -> None:
         """Delete the offer card so its buttons can't outlive the offer. A card pulled because the lobby
         changed size leaves `round_robin_vote_offered` cleared by the caller, so a lobby that returns to
         four and stalls again gets asked again. Best-effort."""
-        if self._round_robin_offer_task is not None and not self._round_robin_offer_task.done():
-            self._round_robin_offer_task.cancel()
-        self._round_robin_offer_task = None
+        self.round_robin_vote_from_signups = False
         message = self.round_robin_vote_message
         self.round_robin_vote_message = None
         if message is None:

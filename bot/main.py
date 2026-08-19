@@ -123,6 +123,7 @@ from bot.tasks.format_schedule_post import init_format_schedule
 from bot.tasks.set_awards_post import init_set_awards_schedule
 from bot.tasks.championship_post import init_championship_schedule
 from bot.tasks.p0p1_reminder_post import init_p0p1_reminder
+from bot.tasks.pod_organizer import init_table_organizer
 from bot.tasks.pod_underfill import init_underfill
 from bot.tasks.pod_thread_cleanup import init_thread_cleanup
 from bot.tasks.gateway_watchdog import init_gateway_watchdog
@@ -229,6 +230,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         init_p0p1_reminder(bot)
         init_launch(bot)
         init_daily_poll(bot)
+        init_table_organizer(bot)
         init_thread_cleanup(bot)
         init_gateway_watchdog(bot)
 

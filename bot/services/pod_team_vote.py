@@ -23,11 +23,11 @@ from bot.services import pod_vote_card
 
 TEAM_VOTE_POD_SIZE = 6
 TEAM_VOTE_WAIT_SIZE = 8
-TEAM_VOTE_PROMPT = "{count} Players locked in! Make it a Team Draft or Wait?"
+TEAM_VOTE_PROMPT = "{count} Players in Draftmancer! Make it a Team Draft or Wait?"
 TEAM_VOTE_GATHERING = "Turns into a Team Draft with {needed} votes"
 TEAM_VOTE_SETTINGS_HINT = "Change it in ⚙️ **Settings** anytime"
-TEAM_VOTE_LOCKED_TITLE = "👥 Team Draft is on!"
-TEAM_VOTE_WAITED_TITLE = "⏳ Waiting for {wait} players"
+TEAM_VOTE_LOCKED_HEADING = "👥 Team Draft is on!"
+TEAM_VOTE_WAITED_HEADING = "⏳ Waiting for {wait} players"
 TEAM_VOTE_TEAM_COLUMN = "🤝 Team Draft"
 TEAM_VOTE_WAIT_COLUMN = "⏳ Wait"
 TEAM_VOTE_TEAM_LABEL = "Team Draft"
@@ -47,24 +47,31 @@ def team_vote_needed(pod_size: int) -> int:
 
 
 def build_team_vote_offer_embed(team: list[str], wait: list[str], pod_size: int) -> discord.Embed:
-    """The gathering-state offer card, shaped like the pod-table card: the description carries the vote
-    target, two side-by-side columns carry the voters. Green, like the other pod cards. Voters are display
-    strings — mentions on the live card so the tally reads back off the message, plain names in previews."""
-    embed = discord.Embed(
-        color=discord.Color.green(),
-        title=TEAM_VOTE_PROMPT.format(count=emojis.mana_number(pod_size)),
-        description=TEAM_VOTE_GATHERING.format(needed=team_vote_needed(pod_size)),
-    )
+    """The gathering-state offer card, shaped like the pod-table card: the description carries the prompt and
+    the vote target, two side-by-side columns carry the voters. Green, like the other pod cards. Voters are
+    display strings — mentions on the live card so the tally reads back off the message, plain names in
+    previews."""
+    embed = discord.Embed(color=discord.Color.green(), description=offer_description(pod_size))
     _set_columns(embed, team, wait)
     pod_vote_card.add_rally_line(embed)
     return embed
 
 
+def offer_description(pod_size: int) -> str:
+    """The prompt and what a majority does, as the card's opening lines.
+
+    The card carries no title. A mana glyph in an embed title hangs off the em box instead of sitting on
+    the text, and the count is the first thing anybody reads here."""
+    return (f"### {TEAM_VOTE_PROMPT.format(count=emojis.mana_number(pod_size))}\n"
+            f"{TEAM_VOTE_GATHERING.format(needed=team_vote_needed(pod_size))}")
+
+
 def build_team_vote_locked_embed(team: list[str], wait: list[str]) -> discord.Embed:
-    """The Team-Draft outcome: the title flips to the "on" line, the columns stay as the record, and the
+    """The Team-Draft outcome: the heading flips to the "on" line, the columns stay as the record, and the
     hint says the pairing is still changeable in Settings."""
     embed = discord.Embed(
-        color=discord.Color.green(), title=TEAM_VOTE_LOCKED_TITLE, description=TEAM_VOTE_SETTINGS_HINT)
+        color=discord.Color.green(),
+        description=f"### {TEAM_VOTE_LOCKED_HEADING}\n{TEAM_VOTE_SETTINGS_HINT}")
     _set_columns(embed, team, wait)
     return embed
 
@@ -72,17 +79,15 @@ def build_team_vote_locked_embed(team: list[str], wait: list[str]) -> discord.Em
 def build_team_vote_waited_embed(team: list[str], wait: list[str]) -> discord.Embed:
     """The wait-for-eight outcome: the pod stays a bracket and keeps filling, the columns stay as the
     record, and the hint says the pairing is still changeable in Settings."""
+    heading = TEAM_VOTE_WAITED_HEADING.format(wait=emojis.mana_number(TEAM_VOTE_WAIT_SIZE))
     embed = discord.Embed(
-        color=discord.Color.green(),
-        title=TEAM_VOTE_WAITED_TITLE.format(wait=emojis.mana_number(TEAM_VOTE_WAIT_SIZE)),
-        description=TEAM_VOTE_SETTINGS_HINT,
-    )
+        color=discord.Color.green(), description=f"### {heading}\n{TEAM_VOTE_SETTINGS_HINT}")
     _set_columns(embed, team, wait)
     return embed
 
 
 def rerender_gathering(embed: discord.Embed, team: list[str], wait: list[str]) -> discord.Embed:
-    """A copy of a gathering card with its two columns refreshed, title and target preserved, so the click
+    """A copy of a gathering card with its two columns refreshed, prompt and target preserved, so the click
     handler re-renders without needing the original pod size."""
     fresh = discord.Embed.from_dict(embed.to_dict())
     _set_columns(fresh, team, wait)

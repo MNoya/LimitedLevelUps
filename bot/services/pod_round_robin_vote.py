@@ -13,6 +13,11 @@ the message, so the vote survives a restart.
 Players read this offer as the Pick 2 one, so the button and the column say Pick 2 even though the pairing
 mode it turns on is Round Robin.
 
+The card asks one of two questions. A roster that can only ever make four is asked about its signups before
+anybody arrives, and a room that settled at four is asked about the players in it. Only players in the
+Draftmancer lobby are ever described as being in Draftmancer, so the first question names signups and the
+card re-titles itself to the second once the four are really there.
+
 The card also points at `!pod` under the columns, since four players sitting in a lobby is exactly when
 someone should be rallying the channel for a fifth and sixth.
 """
@@ -28,10 +33,11 @@ from bot import emojis
 from bot.services import pod_vote_card
 
 
-ROUND_ROBIN_PROMPT = "{count} Players locked in! Make it Pick 2 or Wait?"
-ROUND_ROBIN_GATHERING = "Turns into Pick 2 (Round Robin) with all {needed} votes"
+ROUND_ROBIN_PROMPT = "{count} Players in Draftmancer! Make it Pick 2 or Wait?"
+ROUND_ROBIN_SIGNUP_PROMPT = "Only {count} players signed up. Make it Pick 2 or Wait?"
+ROUND_ROBIN_GATHERING = "Turns into Pick 2 (Round Robin) with {needed} votes"
 ROUND_ROBIN_SETTINGS_HINT = "Change it in ⚙️ **Settings** anytime"
-ROUND_ROBIN_LOCKED_TITLE = "🔄 Pick 2 is on!"
+ROUND_ROBIN_LOCKED_HEADING = "🔄 Pick 2 is on!"
 ROUND_ROBIN_COLUMN = "🔄 Pick 2"
 WAIT_COLUMN = "⏳ Wait"
 ROUND_ROBIN_LABEL = "Pick 2"
@@ -48,24 +54,51 @@ def votes_needed(pod_size: int) -> int:
     return pod_size
 
 
-def build_offer_embed(round_robin: list[str], wait: list[str], pod_size: int) -> discord.Embed:
+def build_offer_embed(
+    round_robin: list[str], wait: list[str], pod_size: int, *, from_signups: bool = False,
+) -> discord.Embed:
     """The open offer card: the bar in the description, the rally hint below it, and the voters in two
     columns. Voters are display strings — mentions on the live card so the tally reads back off the message,
-    plain names in previews."""
+    plain names in previews.
+
+    `from_signups` asks about a roster that can only make four, which is answerable before the four are in
+    the room. Nobody in the Draftmancer lobby is being counted there, so the card says signups instead."""
     embed = discord.Embed(
         color=discord.Color.green(),
-        title=ROUND_ROBIN_PROMPT.format(count=emojis.mana_number(pod_size)),
-        description=ROUND_ROBIN_GATHERING.format(needed=votes_needed(pod_size)),
+        description=offer_description(pod_size, from_signups=from_signups),
     )
     _set_columns(embed, round_robin, wait)
     pod_vote_card.add_rally_line(embed)
     return embed
 
 
+def offer_description(pod_size: int, *, from_signups: bool = False) -> str:
+    """The prompt and what a full tally does, as the card's opening lines.
+
+    The card carries no title, it opens on a heading. A mana glyph in an embed title hangs off the em box
+    instead of sitting on the text, and the count is the first thing anybody reads here."""
+    prompt = ROUND_ROBIN_SIGNUP_PROMPT if from_signups else ROUND_ROBIN_PROMPT
+    return (f"### {prompt.format(count=emojis.mana_number(pod_size))}\n"
+            f"{ROUND_ROBIN_GATHERING.format(needed=votes_needed(pod_size))}")
+
+
+def asks_about_signups(embed: discord.Embed) -> bool:
+    """Whether this card is the one asking about a four-signup roster instead of a full room"""
+    return ROUND_ROBIN_SIGNUP_PROMPT.split("{", 1)[0] in (embed.description or "")
+
+
+def promoted_from_signups(embed: discord.Embed, pod_size: int) -> discord.Embed:
+    """A copy of the signups card asking the room question, for four signups who are all now in the lobby"""
+    fresh = discord.Embed.from_dict(embed.to_dict())
+    fresh.description = offer_description(pod_size)
+    return fresh
+
+
 def build_locked_embed(round_robin: list[str], wait: list[str]) -> discord.Embed:
     """The one outcome: everybody agreed, so the pod plays now and the counts stay as the record."""
     embed = discord.Embed(
-        color=discord.Color.green(), title=ROUND_ROBIN_LOCKED_TITLE, description=ROUND_ROBIN_SETTINGS_HINT)
+        color=discord.Color.green(),
+        description=f"### {ROUND_ROBIN_LOCKED_HEADING}\n{ROUND_ROBIN_SETTINGS_HINT}")
     _set_columns(embed, round_robin, wait)
     return embed
 

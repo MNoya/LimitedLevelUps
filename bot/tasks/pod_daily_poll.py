@@ -120,6 +120,7 @@ from bot.services.pod_signals import (
     POST_HOUR_ET,
     bucket_by_key,
     bucket_role_name,
+    fire_threshold_for,
     format_of,
     lane_of,
     should_fire,
@@ -141,6 +142,7 @@ from bot.tasks.pod_draft_reminder import register_reminder_view_builder
 from bot.tasks.pod_underfill import (
     hand_slot_nudge_to_card,
     refresh_slot_nudge,
+    register_short_fire_hook,
     schedule_slot_underfill_checks,
 )
 
@@ -173,6 +175,7 @@ def init_daily_poll(bot: commands.Bot) -> None:
     set_pod_complete_hook(roll_lane_after_pod)
     set_podium_posted_hook(release_play_again)
     pod_launch.set_slot_roll_hook(roll_lane_after_expired_slot)
+    register_short_fire_hook(fire_short_slot)
     bot.pod_scheduler.add_job(
         fire_daily_poll, "cron", hour=POST_HOUR_ET, minute=0,
         timezone=SCHEDULE_TZ, id="pod-daily-poll", replace_existing=True,
@@ -1435,11 +1438,15 @@ async def _settle_slot_join(
     The board's day is resolved here and not on the click: only this re-render needs it, and reading it up
     front put a connection checkout between the press and its confirmation."""
     message_id = str(launcher_message.id)
+    now = datetime.now(timezone.utc)
+    threshold = fire_threshold_for(
+        result.state.slot_time, result.state.set_code, now, settings.pod_signal_fire_threshold,
+    )
     fired = (
         result.joined
-        and should_fire(result.state.count, settings.pod_signal_fire_threshold)
+        and should_fire(result.state.count, threshold)
         and result.state.slot_time is not None
-        and slot_can_fire(result.state.slot_time, datetime.now(timezone.utc))
+        and slot_can_fire(result.state.slot_time, now)
         and await asyncio.to_thread(pod_launch.claim_slot_fire_sync, result.state.signal_id)
     )
     guild = getattr(launcher_message.channel, "guild", None) or interaction.guild
@@ -1662,6 +1669,32 @@ async def _launch_slot(bot: commands.Bot, state, message_id: str, announce: bool
     else:
         await hand_slot_nudge_to_card(bot, state.signal_id, event_id)
     await _rerender_board(bot, message_id, slot_time.astimezone(SCHEDULE_TZ).date())
+
+
+async def fire_short_slot(signal_id: str) -> bool:
+    """Graduate a slot that reached the short threshold, fired from the launcher slot's own T-1h beat.
+
+    The press path only ever fires on a press, so a slot sitting at four since the afternoon needs someone
+    to run the check as the hour closes. True when the pod was opened, which tells the beat its status
+    message now belongs to the card."""
+    if _bot is None:
+        log.error(f"fire_short_slot for {signal_id}: bot reference is not initialised")
+        return False
+    loaded = await asyncio.to_thread(pod_launch.slot_fire_state_sync, signal_id)
+    if loaded is None:
+        return False
+    state, message_id = loaded
+    now = datetime.now(timezone.utc)
+    threshold = fire_threshold_for(
+        state.slot_time, state.set_code, now, settings.pod_signal_fire_threshold,
+    )
+    if threshold >= settings.pod_signal_fire_threshold or not should_fire(state.count, threshold):
+        return False
+    if not await asyncio.to_thread(pod_launch.claim_slot_fire_sync, signal_id):
+        return False
+    log.info(f"short fire for slot {signal_id}: {state.count} signups inside the last hour")
+    await _launch_slot(_bot, state, message_id)
+    return True
 
 
 async def refresh_launcher_for_date(bot: commands.Bot, signal_date: date) -> None:

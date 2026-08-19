@@ -913,11 +913,23 @@ def claim_slot_fire_sync(signal_id: str) -> bool:
         signal = session.get(PodSignal, signal_id)
         if signal is None:
             return False
-        if not pod_signals.should_fire(len(signal.members), settings.pod_signal_fire_threshold):
+        threshold = pod_signals.fire_threshold_for(
+            signal.slot_time, signal.set_code, datetime.now(timezone.utc), settings.pod_signal_fire_threshold,
+        )
+        if not pod_signals.should_fire(len(signal.members), threshold):
             return False
         claimed = claim_fire(session, signal_id)
         session.commit()
         return claimed
+
+
+def slot_fire_state_sync(signal_id: str) -> tuple[SignalState, str] | None:
+    """An open launcher slot as (state, launcher message id), or None when it is gone or already fired."""
+    with SessionLocal() as session:
+        signal = session.get(PodSignal, signal_id)
+        if signal is None or signal.status != pod_signals.STATUS_OPEN or signal.message_id is None:
+            return None
+        return _state(signal, len(_member_names(session, signal.id))), signal.message_id
 
 
 def _fire_order(state: SignalState) -> tuple[int, tuple[int, str]]:
