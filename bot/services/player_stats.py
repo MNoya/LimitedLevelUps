@@ -44,13 +44,19 @@ class RankedPlayer(NamedTuple):
     trophies: int
 
 
+CHAMPIONSHIP_SEATS = 8
+
+
 class FrozenSeed(NamedTuple):
     """One player's standing at a Set Championship's deadline: the rank it seeds them at and the figures that
     rank came from. They travel together so a seeding table cannot show a frozen rank beside a score or a
-    trophy count from a later day, which reads as a table sorted wrong."""
+    trophy count from a later day, which reads as a table sorted wrong.
+
+    `wildcard` keeps the rank the deadline saw and is seated by `hold_wildcard_seat`."""
     rank: int
     score: float | None
     trophies: int | None = None
+    wildcard: bool = False
 
 
 def process_stats(
@@ -346,10 +352,12 @@ class SeededAttendee:
     rank: int | None
     score: float | None
     trophies: int | None
+    wildcard: bool = False
 
     @property
     def is_ranked(self) -> bool:
         return self.rank is not None
+
 
 
 def seed_attendees(
@@ -383,7 +391,9 @@ def seed_attendees(
             frozen = rank_override.get(player.id) if rank_override else None
             if frozen is not None:
                 trophies = frozen.trophies if frozen.trophies is not None else rp.trophies
-                seeded.append(SeededAttendee(rp.slug, rp.display_name, frozen.rank, frozen.score, trophies))
+                seeded.append(SeededAttendee(
+                    rp.slug, rp.display_name, frozen.rank, frozen.score, trophies, frozen.wildcard,
+                ))
             elif rank_override:
                 seeded.append(SeededAttendee(rp.slug, rp.display_name, None, None, None))
             else:
@@ -394,7 +404,17 @@ def seed_attendees(
             seeded.append(SeededAttendee(slug, display, None, None, None))
 
     seeded.sort(key=lambda a: (a.rank is None, a.rank or 0, a.display_name.lower()))
-    return seeded
+    return hold_wildcard_seat(seeded, is_wildcard=lambda a: a.wildcard)
+
+
+def hold_wildcard_seat(ranked: Sequence, *, is_wildcard, seats: int = CHAMPIONSHIP_SEATS) -> list:
+    """A rank-ordered sequence with any wildcard moved to the last of `seats`, whole sequence returned"""
+    wildcards = [item for item in ranked if is_wildcard(item)]
+    if not wildcards:
+        return list(ranked)
+    rest = [item for item in ranked if not is_wildcard(item)]
+    cut = max(0, seats - len(wildcards))
+    return rest[:cut] + wildcards + rest[cut:]
 
 
 def seated_ring_order(ranked: Sequence) -> list:
@@ -436,7 +456,13 @@ def rank_ordered_names(
         rank = ranks.get(player.id) if player is not None else None
         return (rank is None, rank or 0, name.lower())
 
-    return [name for name, _ in sorted(resolved, key=sort_key)]
+    def is_wildcard(item: tuple[str, Player | None]) -> bool:
+        name, player = item
+        seed = rank_override.get(player.id) if rank_override and player is not None else None
+        return seed is not None and seed.wildcard
+
+    ordered = hold_wildcard_seat(sorted(resolved, key=sort_key), is_wildcard=is_wildcard)
+    return [name for name, _ in ordered]
 
 
 def leaderboard_seat_order(

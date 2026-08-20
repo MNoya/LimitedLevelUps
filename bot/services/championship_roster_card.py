@@ -17,11 +17,12 @@ import discord
 from bot.database import SessionLocal
 from bot.discord_helpers import NBSP
 from bot.services.championship import rank_override
-from bot.services.player_stats import SeededAttendee, seed_attendees
+from bot.services.ping_roles import pod_champion_glyph
+from bot.services.player_stats import CHAMPIONSHIP_SEATS, SeededAttendee, seed_attendees
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
 from bot.services.seeding_table import attendee_rnk
 
-SEAT_COUNT = 8
+SEAT_COUNT = CHAMPIONSHIP_SEATS
 COLUMN_CAP = 8
 FIELD_VALUE_LIMIT = 1024
 
@@ -63,7 +64,7 @@ def championship_roster(
 ) -> ChampionshipRoster:
     """Split a seed-ordered Yes list at the seat count, then merge what is left with Maybe back into rank
     order for the alternates. Callers pass every list already ordered by standing with unranked trailing,
-    which is what `seed_attendees` returns."""
+    which is what `seed_attendees` returns, so the pod wildcard arrives already inside the cut."""
     alternates = [Alternate(a, maybe=False) for a in yes[seats:]]
     alternates += [Alternate(a, maybe=True) for a in maybe]
     alternates.sort(key=_alternate_order)
@@ -117,9 +118,10 @@ def _alternate_order(alternate: Alternate) -> tuple[bool, int, str]:
 def _row(attendee: SeededAttendee, *, maybe: bool = False) -> str:
     """The rank leads the row, so a name too long for the third-of-a-card column wraps its own tail
     instead of pushing the rank onto a line of its own. A Maybe is marked with an escaped asterisk, so a
-    column of them cannot pair up into italics."""
+    column of them cannot pair up into italics, and the pod wildcard carries the crown glyph."""
     marker = MAYBE_MARKER if maybe else ""
-    return f"> **{attendee_rnk(attendee)}** {NBSP}{short_name(attendee.display_name)}{marker}"
+    badge = f"{NBSP}{pod_champion_glyph()}" if attendee.wildcard else ""
+    return f"> **{attendee_rnk(attendee)}** {NBSP}{short_name(attendee.display_name)}{marker}{badge}"
 
 
 def short_name(display_name: str) -> str:

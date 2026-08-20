@@ -297,6 +297,13 @@ def recent_released_sets(limit: int = 8, when: datetime | None = None) -> tuple[
     return tuple(others[:limit])
 
 
+def seed_for_code(code: str) -> SetSeed | None:
+    for seed in ALL_SETS:
+        if seed.code == code.upper():
+            return seed
+    return None
+
+
 def is_known_set(code: str) -> bool:
     return any(s.code == code.upper() for s in ALL_SETS)
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from bot.database import SessionLocal
@@ -27,8 +27,16 @@ from bot.services.championship_dates import (
     plan_for,
     signup_post_at,
 )
-from bot.services.player_stats import FrozenSeed, SeededAttendee, rank_players_for_set
+from bot.services.player_stats import (
+    CHAMPIONSHIP_SEATS,
+    FrozenSeed,
+    SeededAttendee,
+    hold_wildcard_seat,
+    rank_players_for_set,
+)
 from bot.services.pod_drafts import is_championship
+from bot.services.pod_season import PodSeasonStanding, rank_pod_season
+from bot.sets import seed_for_code
 
 __all__ = [
     "CHAMPIONSHIP_TIME",
@@ -48,7 +56,7 @@ __all__ = [
     "signup_post_at",
 ]
 
-SEAT_COUNT = 8
+SEAT_COUNT = CHAMPIONSHIP_SEATS
 INVITE_DEPTH = 32
 INVITE_WAVE_TIERS: tuple[tuple[int, int], ...] = ((0, 10), (10, 20), (20, 32))
 
@@ -60,6 +68,7 @@ class SeedRow:
     discord_id: str | None
     display_name: str
     score: float
+    wildcard: bool = False
 
 
 def freeze_seeds_sync(
@@ -101,16 +110,62 @@ def frozen_seeds_sync(event_id: str) -> list[SeedRow]:
         rows = session.execute(
             select(
                 PodChampionshipSeed.rank, PodChampionshipSeed.player_id, PodChampionshipSeed.discord_id,
-                PodChampionshipSeed.display_name, PodChampionshipSeed.score,
+                PodChampionshipSeed.display_name, PodChampionshipSeed.score, PodChampionshipSeed.wildcard,
             )
             .where(PodChampionshipSeed.event_id == event_id)
             .order_by(PodChampionshipSeed.rank)
         ).all()
     return [
         SeedRow(rank=row.rank, player_id=row.player_id, discord_id=row.discord_id,
-                display_name=row.display_name, score=row.score)
+                display_name=row.display_name, score=row.score, wildcard=row.wildcard)
         for row in rows
     ]
+
+
+def freeze_pod_wildcard_sync(event_id: str, set_code: str, cutoff: datetime | None = None) -> SeedRow | None:
+    """Mark the best pod-season player seeded outside the seat cut as the wildcard, None when there is
+    none. Idempotent: re-running clears the previous mark first, and a player the board never carried is
+    added below the last seed so a row exists to mark."""
+    seed = seed_for_code(set_code)
+    if seed is None:
+        return None
+    with SessionLocal() as session:
+        session.execute(
+            update(PodChampionshipSeed)
+            .where(PodChampionshipSeed.event_id == event_id)
+            .values(wildcard=False)
+        )
+        rows = session.execute(
+            select(PodChampionshipSeed).where(PodChampionshipSeed.event_id == event_id)
+        ).scalars().all()
+        seeded = {row.player_id: row for row in rows if row.player_id is not None}
+        standings = rank_pod_season(session, seed, cutoff)
+        pick = _wildcard_pick(standings, seeded)
+        if pick is None:
+            session.commit()
+            return None
+        row = seeded.get(pick.player_id)
+        if row is None:
+            last_rank = max((r.rank for r in rows), default=0)
+            row = PodChampionshipSeed(
+                event_id=event_id, player_id=pick.player_id, discord_id=pick.discord_id,
+                display_name=pick.display_name, rank=last_rank + 1, score=0.0, trophies=pick.trophies,
+            )
+            session.add(row)
+        row.wildcard = True
+        session.commit()
+        return SeedRow(rank=row.rank, player_id=row.player_id, discord_id=row.discord_id,
+                       display_name=row.display_name, score=row.score, wildcard=True)
+
+
+def _wildcard_pick(
+    standings: list[PodSeasonStanding], seeded: dict[str, PodChampionshipSeed],
+) -> PodSeasonStanding | None:
+    for standing in standings:
+        row = seeded.get(standing.player_id)
+        if row is None or row.rank > SEAT_COUNT:
+            return standing
+    return None
 
 
 def frozen_seeds_by_player(session: Session, event_id: str) -> dict[str, FrozenSeed]:
@@ -119,12 +174,14 @@ def frozen_seeds_by_player(session: Session, event_id: str) -> dict[str, FrozenS
     rows = session.execute(
         select(
             PodChampionshipSeed.player_id, PodChampionshipSeed.rank,
-            PodChampionshipSeed.score, PodChampionshipSeed.trophies,
+            PodChampionshipSeed.score, PodChampionshipSeed.trophies, PodChampionshipSeed.wildcard,
         )
         .where(PodChampionshipSeed.event_id == event_id)
     ).all()
     return {
-        row.player_id: FrozenSeed(rank=row.rank, score=row.score, trophies=row.trophies)
+        row.player_id: FrozenSeed(
+            rank=row.rank, score=row.score, trophies=row.trophies, wildcard=row.wildcard,
+        )
         for row in rows if row.player_id is not None
     }
 
@@ -153,21 +210,24 @@ def playing_roster(
     A championship is one table of eight and nothing else. Every Yes past the cut is an alternate, so the
     lobby ping, the waiting list and the link DMs all narrow through here instead of addressing a roster of
     thirty. Ordering is the frozen seed, which is what makes a seat pass down to the next player when
-    someone above them drops. A player carrying no seed sorts last, keeping a roster that lost its snapshot
-    seatable rather than empty."""
+    someone above them drops, and which holds the last seat for the pod-standings wildcard. A player
+    carrying no seed sorts last, so a roster that lost its snapshot stays seatable."""
     if rank_override(session, event_id) is None:
         return roster
-    ranks = {
-        row.discord_id: row.rank for row in session.execute(
-            select(PodChampionshipSeed.discord_id, PodChampionshipSeed.rank)
+    rows = [
+        row for row in session.execute(
+            select(PodChampionshipSeed.discord_id, PodChampionshipSeed.rank, PodChampionshipSeed.wildcard)
             .where(PodChampionshipSeed.event_id == event_id)
         ).all()
         if row.discord_id is not None
-    }
+    ]
+    ranks = {row.discord_id: row.rank for row in rows}
     if not ranks:
         return roster
+    wildcards = {row.discord_id for row in rows if row.wildcard}
     ordered = sorted(roster, key=lambda pair: ranks.get(pair[0], len(ranks) + 1))
-    return ordered[:SEAT_COUNT]
+    seated = hold_wildcard_seat(ordered, is_wildcard=lambda pair: pair[0] in wildcards, seats=SEAT_COUNT)
+    return seated[:SEAT_COUNT]
 
 
 def playing_roster_sync(event_id: str, roster: list[tuple[str, str]]) -> list[tuple[str, str]]:
@@ -220,9 +280,19 @@ def invites_pending(event_id: str) -> bool:
 def wave_recipients(seeds: list[SeedRow], wave_index: int) -> list[SeedRow]:
     """The seeds to ping for an invite wave: the tier's ranks that carry a Discord id. Pings are
     awareness only, never a gate — every wave fires regardless of how many have already RSVP'd, and
-    anyone may RSVP whether or not they were pinged."""
+    anyone may RSVP whether or not they were pinged.
+
+    The wildcard is left out; `wildcard_recipient` names them on their own line."""
     low, high = INVITE_WAVE_TIERS[wave_index]
-    return [seed for seed in seeds[low:high] if seed.discord_id]
+    return [seed for seed in seeds[low:high] if seed.discord_id and not seed.wildcard]
+
+
+def wildcard_recipient(seeds: list[SeedRow]) -> SeedRow | None:
+    """The wildcard holding the reserved seat, or None when the season named none"""
+    for seed in seeds:
+        if seed.wildcard and seed.discord_id:
+            return seed
+    return None
 
 
 def event_for_set_sync(set_code: str) -> tuple[str, datetime] | None:

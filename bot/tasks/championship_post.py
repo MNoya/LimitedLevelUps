@@ -93,6 +93,11 @@ async def create_championship(bot: commands.Bot, plan: championship.Championship
         f"created {plan.set_code} Set Championship (event {event_id}, froze {frozen} seeds "
         f"as of {deadline:%Y-%m-%d %H:%M %Z})"
     )
+    wildcard = await asyncio.to_thread(
+        championship.freeze_pod_wildcard_sync, event_id, plan.set_code, deadline,
+    )
+    if wildcard is not None:
+        log.info(f"championship {plan.set_code}: pod wildcard seat held for {wildcard.display_name}")
     championship.mark_invites_pending(event_id)
     thread = await _resolve_thread(bot, event_id)
     if thread is not None:
@@ -171,7 +176,8 @@ async def fire_wave(
     fires and anyone may RSVP. The seeding table is left for after signups gather, not printed here."""
     seeds = await asyncio.to_thread(championship.frozen_seeds_sync, event_id)
     tier = championship.wave_recipients(seeds, wave_index)
-    if not tier:
+    wildcard = championship.wildcard_recipient(seeds) if wave_index == 0 else None
+    if not tier and wildcard is None:
         return
     thread = await _resolve_thread(bot, event_id)
     if thread is None:
@@ -190,7 +196,13 @@ async def fire_wave(
     ]
     role = find_role(thread.guild, SET_CHAMPION_ROLE_NAME)
     champion_mention = cc.champion_mention_for_wave(wave_index, role)
-    content = cc.wave_invite_ping(wave_index, set_code, tokens, event_at, post_url, champion_mention)
+    wildcard_token = None if wildcard is None else cc.wave_recipient_line(
+        rsvp_states.get(wildcard.discord_id), mention=f"<@{wildcard.discord_id}>",
+        display_name=wildcard.display_name,
+    )
+    content = cc.wave_invite_ping(
+        wave_index, set_code, tokens, event_at, post_url, champion_mention, wildcard_token,
+    )
     try:
         await thread.send(
             content=content, view=build_championship_wave_view(event_id),

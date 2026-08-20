@@ -20,7 +20,7 @@ from bot.services import championship
 from bot.services import championship_copy as cc
 from bot.services.championship_roster_card import ChampionshipRoster, championship_roster
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME, champion_role_mention
-from bot.services.player_stats import SeededAttendee
+from bot.services.player_stats import SeededAttendee, hold_wildcard_seat
 from bot.services.pod_roles import find_role
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
 
@@ -38,6 +38,7 @@ _YES_STANDINGS = (
     (4, 111, 23), (5, 82, 26), (6, 79, 21), (7, 76, 28), (9, 71, 21), (12, 56, 24), (20, 43, 15),
     (23, 41, 18), (27, 38, 14), (30, 36, 9), (63, 19, 12), (118, 6, 2), (128, 5, 3),
 )
+_WILDCARD_STANDING = (30, 36, 9)
 _UNRANKED_YES = 3
 _MAYBE_STANDINGS = (
     (10, 67, 22), (13, 52, 20), (14, 52, 18), (22, 41, 12), (26, 38, 13), (58, 20, 3), (125, 5, 2),
@@ -104,18 +105,25 @@ def _locked_card(name, event_at, set_code, roster: ChampionshipRoster, variant: 
 
 def _preview_roster(yes_count: int) -> ChampionshipRoster:
     """A championship-sized roster: ranked Yes down past the cut, a few unranked at the bottom of Yes,
-    Maybes that outrank some of those alternates, and a No list with top seeds in it."""
+    Maybes that outrank some of those alternates, and a No list with top seeds in it. One Yes is the pod
+    wildcard, ranked outside the cut."""
     names = iter(HALL_OF_FAME)
-    yes = [_ranked(next(names), standing) for standing in _YES_STANDINGS]
+    yes = [
+        _ranked(next(names), standing, wildcard=standing == _WILDCARD_STANDING)
+        for standing in _YES_STANDINGS
+    ]
     yes += [_unranked(next(names)) for _ in range(_UNRANKED_YES)]
+    yes = hold_wildcard_seat(yes, is_wildcard=lambda attendee: attendee.wildcard)
     maybe = [_ranked(next(names), standing) for standing in _MAYBE_STANDINGS]
     declined = [_ranked(next(names), standing) for standing in _DECLINED_STANDINGS]
     return championship_roster(yes[:yes_count], maybe, declined)
 
 
-def _ranked(name: str, standing: tuple[int, int, int]) -> SeededAttendee:
+def _ranked(name: str, standing: tuple[int, int, int], *, wildcard: bool = False) -> SeededAttendee:
     rank, score, trophies = standing
-    return SeededAttendee(slug=None, display_name=name, rank=rank, score=float(score), trophies=trophies)
+    return SeededAttendee(
+        slug=None, display_name=name, rank=rank, score=float(score), trophies=trophies, wildcard=wildcard,
+    )
 
 
 def _unranked(name: str) -> SeededAttendee:

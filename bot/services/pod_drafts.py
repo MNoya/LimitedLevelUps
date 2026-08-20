@@ -1779,7 +1779,7 @@ def pod_scoring_counts(
     by_player: dict[str, list[str | None]] = {}
     for player_id, record in rows:
         by_player.setdefault(player_id, []).append(record)
-    summaries = {pid: _summarize_pod_records(records) for pid, records in by_player.items()}
+    summaries = {pid: summarize_pod_records(records) for pid, records in by_player.items()}
     return {pid: (s.trophies, s.two_win_finishes, s.one_win_finishes) for pid, s in summaries.items()}
 
 
@@ -1796,10 +1796,10 @@ def pod_summary_by_set_for_player(session: Session, player_id: str) -> dict[str,
     by_set: dict[str, list[str | None]] = {}
     for set_code, record in rows:
         by_set.setdefault(set_code, []).append(record)
-    return {sc: _summarize_pod_records(records) for sc, records in by_set.items()}
+    return {sc: summarize_pod_records(records) for sc, records in by_set.items()}
 
 
-def _summarize_pod_records(records: list[str | None]) -> PodSetSummary:
+def summarize_pod_records(records: list[str | None]) -> PodSetSummary:
     """Buckets each finish by match wins, so a 2-0 cut short by a drop pays the same as a 2-1"""
     wins = losses = trophies = two_win_finishes = one_win_finishes = 0
     for record in records:

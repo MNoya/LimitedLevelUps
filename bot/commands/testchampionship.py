@@ -140,10 +140,11 @@ async def setup(bot: commands.Bot) -> None:
                 cc.wave_recipient_line(preview_rsvps.get(name), mention=f"**@{name}**", display_name=name)
                 for name in tier
             ]
+            wildcard_token = _preview_wildcard_token(names, preview_rsvps) if wave_index == 0 else None
             await thread.send(
                 content=cc.wave_invite_ping(
                     wave_index, plan.set_code, tokens, event_at, post_url,
-                    cc.champion_mention_for_wave(wave_index, champion_role),
+                    cc.champion_mention_for_wave(wave_index, champion_role), wildcard_token,
                 ),
                 view=build_championship_wave_view(event_id),
                 allowed_mentions=discord.AllowedMentions.none(),
@@ -260,6 +261,14 @@ def _preview_rsvp_states(names: list[str]) -> dict[str, str]:
     for name, state in zip(names, (RSVP_YES, RSVP_MAYBE, RSVP_NO)):
         states[name] = state
     return states
+
+
+def _preview_wildcard_token(names: list[str], preview_rsvps: dict[str, str]) -> str | None:
+    """A name from outside the seat cut standing in as the wildcard, for the staged wave's seat line"""
+    if len(names) <= championship.SEAT_COUNT:
+        return None
+    name = names[championship.SEAT_COUNT]
+    return cc.wave_recipient_line(preview_rsvps.get(name), mention=f"**@{name}**", display_name=name)
 
 
 async def _stage(destination, when: str) -> None:

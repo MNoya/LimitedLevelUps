@@ -162,6 +162,14 @@ Once the pod result is up, its thread signs off with a thank-you, a link to that
 
 Every pod also leaves its final standings in the channel, on the card its thread hangs off. Pods that never gathered signups post a card of their own when they open, so a queue pod and a second table end the night with the same standings card as a scheduled pod.
 
+## The pod season
+
+Every pod you play while a set is live counts toward that set's pod season on limitedlevelups.com/pods, whatever it drafted. The latest set, the flashbacks and the cube all land on the same board, and the season runs to the day before the next set arrives.
+
+Whoever is top of that board gets the **Pod Champion** role, handed over at the Set Awards on the morning before the new set releases. One player holds it at a time, and it passes to the next champion at the next ceremony.
+
+The Set Championship holds a seat for the pod board as well. When its invites go out, the best player on the pod board who is not already inside the leaderboard's top eight is invited with a seat of their own. It is the last of the eight seats, so confirming is all they have to do to play.
+
 ## Mock drafts
 
 A mock draft is a draft with no rounds after it, for practising a set before it lands. Run `/mock-draft` and the bot opens a Draftmancer lobby right away, with a card in the channel and a thread of its own. Anyone can start one, and any set can be drafted, including one still in spoiler season.

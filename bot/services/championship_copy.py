@@ -18,7 +18,7 @@ from bot.config import settings
 from bot.services.championship import INVITE_WAVE_TIERS
 from bot.services.containers import build_container
 from bot.services.mock_lobby_card import set_symbol_url
-from bot.services.ping_roles import SYNTHETIC_CHAMPION_TAG
+from bot.services.ping_roles import SYNTHETIC_CHAMPION_TAG, pod_champion_glyph
 from bot.services.pod_reminder_copy import LOBBY_ARENA_NAME
 from bot.services.pod_signals import RSVP_EMOJI
 
@@ -27,6 +27,10 @@ TWITCH_URL = "https://twitch.tv/GatoDelFuego"
 
 def standings_url(set_code: str) -> str:
     return f"{settings.public_site_url.rstrip('/')}/leaderboard/{set_code.upper()}"
+
+
+def pod_standings_url(set_code: str) -> str:
+    return f"{settings.public_site_url.rstrip('/')}/pods/{set_code.upper()}"
 
 
 def champion_mention_for_wave(wave_index: int, role: discord.Role | None) -> str:
@@ -114,15 +118,22 @@ def explainer(
     return build_container(header, set_symbol_url(set_code), "\n".join(lines))
 
 
+MSG_WILDCARD_SEAT = "{token} {glyph} invited by [**Pod Standings**](<{url}>)"
+
+
 def wave_invite_ping(
     wave_index: int, set_code: str, mention_tokens: list[str], event_at: datetime, post_url: str,
-    champion_mention: str,
+    champion_mention: str, wildcard_token: str | None = None,
 ) -> str:
     """One invite wave posted in the thread: the tier headline linking back to the championship card,
     the tier's mentions one per line, and the confirm instructions. The Confirm button beside it
-    records the same Yes as the card."""
+    records the same Yes as the card. `wildcard_token` names the pod seat on its own line."""
     headline = _wave_headline(wave_index, set_code, post_url)
     mentions = "\n".join(mention_tokens)
+    if wildcard_token is not None:
+        mentions += "\n\n" + MSG_WILDCARD_SEAT.format(
+            glyph=pod_champion_glyph(), token=wildcard_token, url=pod_standings_url(set_code),
+        )
     when = f"<t:{int(event_at.timestamp())}:F>"
     return (
         f"{headline}\n\n"

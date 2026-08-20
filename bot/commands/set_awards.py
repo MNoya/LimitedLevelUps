@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from zoneinfo import ZoneInfo
@@ -22,7 +23,8 @@ from bot.commands import descriptions as desc
 from bot.database import SessionLocal
 from bot.discord_helpers import NBSP, ZWSP
 from bot.models import MagicSet, Player
-from bot.services import ping_roles, set_awards as awards_svc
+from bot.services import ping_roles, pod_season, set_awards as awards_svc
+from bot.services.ping_roles import pod_champion_glyph, pod_champion_mention
 from bot.services.format_schedule import awards_posted_set
 
 log = logging.getLogger(__name__)
@@ -40,6 +42,7 @@ GAP = NBSP * 2
 SUBTEXT_START = f"-# {ZWSP}"
 MISS_START = f"{SUBTEXT_START}{GAP}"
 MSG_NO_AWARDS_YET = "No Set Awards have been posted yet. They run the morning before a new set releases"
+MSG_POD_CHAMPION_TAGLINE = "Top of the {set} Pod Standings"
 SITE_LEADERBOARD_URL = "https://limitedlevelups.com/leaderboard"
 LEADERBOARD_NOTE = f"`/join` to enter · [limitedlevelups.com/leaderboard]({SITE_LEADERBOARD_URL})"
 
@@ -78,10 +81,18 @@ class SetAward:
 
 
 @dataclass(frozen=True)
+class PodChampionEntry:
+    entrant: AwardEntrant
+    thumbnail_url: str
+    role_mention: str
+
+
+@dataclass(frozen=True)
 class SetAwardsData:
     set_code: str
     window_label: str
     awards: tuple[SetAward, ...]
+    pod_champion: PodChampionEntry | None = None
 
 
 AWARD_SPECS: tuple[AwardSpec, ...] = (
@@ -123,6 +134,13 @@ def build_set_awards_view(data: SetAwardsData) -> ui.LayoutView:
         if i < len(data.awards) - 1:
             container.add_item(ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small))
 
+    if data.pod_champion is not None:
+        container.add_item(ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+        container.add_item(ui.Section(
+            ui.TextDisplay(_pod_champion_text(data.set_code, data.pod_champion)),
+            accessory=ui.Thumbnail(media=data.pod_champion.thumbnail_url),
+        ))
+
     view.add_item(container)
     view.add_item(_my_awards_action_row())
     return view
@@ -143,6 +161,14 @@ def _award_text(award: SetAward) -> str:
         )
         lines.append(f"{GAP}{runners}")
     return "\n".join(lines)
+
+
+def _pod_champion_text(set_code: str, champion: PodChampionEntry) -> str:
+    return "\n".join([
+        f"### {pod_champion_glyph()} {champion.role_mention}",
+        f"{GAP}_{MSG_POD_CHAMPION_TAGLINE.format(set=set_code)}_",
+        f"{GAP}🥇 **{champion.entrant.name}** with {champion.entrant.detail}",
+    ])
 
 
 def build_my_awards_view(
@@ -319,21 +345,26 @@ async def run_set_awards_ceremony(
         if mset is None:
             return None
         ranked = awards_svc.compute_db_awards(session, mset, seed)
+        standings = pod_season.rank_pod_season(session, seed)
 
+    champion = standings[0] if standings else None
     winners, runners = awards_svc.assign(ranked)
-    data = build_data(code, seed, winners, runners, guild, mention=mention)
+    data = build_data(code, seed, winners, runners, guild, mention=mention, champion=champion)
     if not data.awards:
         return None
 
     recipients = _award_recipients(winners, runners)
+    champion_ids = _champion_ids(champion)
     if mention:
-        allowed = discord.AllowedMentions(users=[discord.Object(id=uid) for uid in _ping_ids(recipients)])
+        ping_ids = _ping_ids(recipients, champion_ids)
+        allowed = discord.AllowedMentions(users=[discord.Object(id=uid) for uid in ping_ids])
     else:
         allowed = discord.AllowedMentions.none()
     ceremony = await channel.send(view=build_set_awards_view(data), allowed_mentions=allowed)
     if not dry:
         await _pin_ceremony(ceremony)
         await ping_roles.apply_award_roles(guild, recipients)
+        await ping_roles.grant_pod_champion(guild, champion_ids)
 
     audit.event(
         "set_awards_posted", set_code=code, awards=len(data.awards),
@@ -360,6 +391,7 @@ def _window_label(seed) -> str:
 
 def build_data(
     code: str, seed, winners: dict, runners: dict, guild: discord.Guild | None, mention: bool = True,
+    champion: "pod_season.PodSeasonStanding | None" = None,
 ) -> SetAwardsData:
     awards = []
     for spec in AWARD_SPECS:
@@ -372,7 +404,28 @@ def build_data(
             thumbnail_url=winner.avatar_url or awards_svc.avatar_url(None, None),
             runner_ups=tuple(_runner_entrant(spec, r, winner, mention, guild) for r in runners.get(spec.key, [])),
         ))
-    return SetAwardsData(code, _window_label(seed), tuple(awards))
+    return SetAwardsData(code, _window_label(seed), tuple(awards), _champion_entry(champion, mention, guild))
+
+
+def _champion_entry(
+    champion: "pod_season.PodSeasonStanding | None", mention: bool, guild: discord.Guild | None,
+) -> PodChampionEntry | None:
+    if champion is None:
+        return None
+    return PodChampionEntry(
+        entrant=AwardEntrant(
+            name=_mention_or_name(champion.discord_id, champion.display_name, mention, guild),
+            detail=pod_champion_detail(champion),
+        ),
+        thumbnail_url=awards_svc.avatar_url(champion.discord_id, champion.avatar_hash),
+        role_mention=pod_champion_mention(guild),
+    )
+
+
+def pod_champion_detail(champion: "pod_season.PodSeasonStanding") -> str:
+    trophies = "trophy" if champion.trophies == 1 else "trophies"
+    drafts = "draft" if champion.events == 1 else "drafts"
+    return f"**{champion.trophies}** {trophies} over {champion.events} {drafts}"
 
 
 def _entrant(cand: "awards_svc.AwardCandidate", mention: bool, guild: discord.Guild | None) -> AwardEntrant:
@@ -380,12 +433,18 @@ def _entrant(cand: "awards_svc.AwardCandidate", mention: bool, guild: discord.Gu
 
 
 def _entrant_name(cand: "awards_svc.AwardCandidate", mention: bool, guild: discord.Guild | None) -> str:
+    return _mention_or_name(cand.discord_id, cand.display_name, mention, guild)
+
+
+def _mention_or_name(
+    discord_id: str | None, display_name: str, mention: bool, guild: discord.Guild | None,
+) -> str:
     """Mention only members of the posting guild; everyone else falls back to their display name so a
     cross-guild winner (or a non-member id) never renders as `@unknown-user`."""
-    if mention and guild is not None and cand.discord_id and cand.discord_id.isdigit():
-        if guild.get_member(int(cand.discord_id)) is not None:
-            return f"<@{cand.discord_id}>"
-    return cand.display_name
+    if mention and guild is not None and discord_id and discord_id.isdigit():
+        if guild.get_member(int(discord_id)) is not None:
+            return f"<@{discord_id}>"
+    return display_name
 
 
 def _runner_entrant(
@@ -414,10 +473,17 @@ def _award_recipients(winners: dict, runners: dict) -> dict[str, list[str]]:
     return recipients
 
 
-def _ping_ids(recipients: dict[str, list[str]]) -> list[int]:
+def _champion_ids(champion: "pod_season.PodSeasonStanding | None") -> list[str]:
+    """The champion as the one-or-none id list the ping allow list and the role handover both take"""
+    if champion is None or champion.discord_id is None:
+        return []
+    return [champion.discord_id]
+
+
+def _ping_ids(recipients: dict[str, list[str]], champion_ids: Sequence[str] = ()) -> list[int]:
     """Every id the card mentions, so the allow list can never fall short of what the text renders."""
     ids: list[int] = []
-    for user_ids in recipients.values():
+    for user_ids in (*recipients.values(), champion_ids):
         for user_id in user_ids:
             if user_id.isdigit() and int(user_id) not in ids:
                 ids.append(int(user_id))

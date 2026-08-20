@@ -2,7 +2,15 @@ from datetime import date, datetime, timedelta, timezone
 
 from bot.commands.pod_schedule import championship_line
 from bot.commands.test_group import HALL_OF_FAME
-from bot.models import DraftEvent, MagicSet, Player, PlayerStats, PodChampionshipSeed, PodDraftEvent
+from bot.models import (
+    DraftEvent,
+    MagicSet,
+    Player,
+    PlayerStats,
+    PodChampionshipSeed,
+    PodDraftEvent,
+    PodDraftParticipant,
+)
 from bot.services import championship
 from bot.services.championship import (
     CREATION_LEAD_DAYS,
@@ -12,7 +20,8 @@ from bot.services.championship import (
 )
 from bot.services.player_stats import FrozenSeed, rank_ordered_names, seed_attendees
 from bot.services.pod_format_schedule import calendar_days
-from bot.sets import RELEASE_TZ
+from bot.services.pod_season import rank_pod_season
+from bot.sets import RELEASE_TZ, SetSeed
 
 
 _ACTIVE_SET: dict = {}
@@ -338,3 +347,100 @@ def test_wave_recipients_drops_seeds_without_a_discord_id():
     seeds = [_seed_row(1, "1"), _seed_row(2, None), _seed_row(3, "3")]
 
     assert [s.rank for s in championship.wave_recipients(seeds, 0)] == [1, 3]
+
+
+def _seed_pod(session, *, event_date, set_code="MSH", kind="tournament", name="Pod"):
+    event = PodDraftEvent(
+        event_date=event_date, event_time=datetime.combine(event_date, datetime.min.time(), timezone.utc),
+        set_code=set_code, name=name, draftmancer_session=f"s-{event_date}-{set_code}-{name}",
+        discord_thread_id=f"t-{event_date}-{set_code}-{name}", socket_status="pending", kind=kind,
+    )
+    session.add(event)
+    session.flush()
+    return event
+
+
+def _seed_pod_result(session, event, player, record):
+    session.add(PodDraftParticipant(
+        event_id=event.id, player_id=player.id, display_name=player.display_name, record=record,
+    ))
+    session.flush()
+
+
+MSH_SEED = SetSeed("MSH", "Marvel Super Heroes", date(2026, 6, 23), date(2026, 8, 10))
+
+
+def test_the_pod_season_counts_every_pod_in_the_window_and_the_set_outside_it(session):
+    """Cube and flashback pods played inside the set's window count, a pod drafting the set outside its
+    window still counts, a pod outside both does not, and a mock carries no record so it never scores."""
+    grinder = _seed_player(session, "Finkel", "1")
+    _seed_pod_result(session, _seed_pod(session, event_date=date(2026, 7, 1), set_code="CUBE"), grinder, "3-0")
+    _seed_pod_result(session, _seed_pod(session, event_date=date(2026, 7, 2), set_code="ECL"), grinder, "2-1")
+    _seed_pod_result(session, _seed_pod(session, event_date=date(2026, 9, 1), set_code="MSH"), grinder, "3-0")
+    _seed_pod_result(session, _seed_pod(session, event_date=date(2026, 9, 2), set_code="SOS"), grinder, "3-0")
+    mock = _seed_pod(session, event_date=date(2026, 7, 3), kind="mock")
+    session.add(PodDraftParticipant(
+        event_id=mock.id, player_id=grinder.id, display_name=grinder.display_name, record=None,
+    ))
+    session.commit()
+
+    standings = rank_pod_season(session, MSH_SEED)
+
+    assert [(s.rank, s.events, s.trophies) for s in standings] == [(1, 3, 2)]
+
+
+def test_the_pod_season_ranks_on_points_then_trophies(session):
+    points_leader = _seed_player(session, "LSV", "1")
+    trophy_leader = _seed_player(session, "Reid", "2")
+    for _ in range(3):
+        _seed_pod_result(session, _seed_pod(session, event_date=date(2026, 7, 1)), points_leader, "3-0")
+    for _ in range(2):
+        _seed_pod_result(session, _seed_pod(session, event_date=date(2026, 7, 2)), trophy_leader, "3-0")
+    session.commit()
+
+    standings = rank_pod_season(session, MSH_SEED)
+
+    assert [s.display_name for s in standings] == ["LSV", "Reid"]
+    assert standings[0].points > standings[1].points
+
+
+def test_the_wildcard_is_the_best_pod_player_outside_the_seat_cut(session, monkeypatch):
+    """The seat cut is the qualification: a pod leader already seeded inside the eight is skipped, and the
+    seat goes to the next name down the pod standings."""
+    monkeypatch.setattr(championship, "SessionLocal", _session_factory(session))
+    monkeypatch.setattr(championship, "seed_for_code", lambda code: MSH_SEED)
+    event = _seed_event(session)
+    qualified = _seed_player(session, "Finkel", "1")
+    outsider = _seed_player(session, "Kibler", "2")
+    session.add(PodChampionshipSeed(
+        event_id=event.id, player_id=qualified.id, discord_id="1", display_name="Finkel",
+        rank=1, score=100.0,
+    ))
+    session.add(PodChampionshipSeed(
+        event_id=event.id, player_id=outsider.id, discord_id="2", display_name="Kibler",
+        rank=12, score=40.0,
+    ))
+    for _ in range(3):
+        _seed_pod_result(session, _seed_pod(session, event_date=date(2026, 7, 1)), qualified, "3-0")
+    _seed_pod_result(session, _seed_pod(session, event_date=date(2026, 7, 2)), outsider, "3-0")
+    session.commit()
+
+    wildcard = championship.freeze_pod_wildcard_sync(event.id, "MSH")
+
+    assert (wildcard.display_name, wildcard.rank, wildcard.wildcard) == ("Kibler", 12, True)
+    assert [s.display_name for s in championship.frozen_seeds_sync(event.id) if s.wildcard] == ["Kibler"]
+
+
+def test_the_wildcard_takes_the_last_seat_and_bumps_the_eighth_seed(session):
+    event = _seed_event(session)
+    for rank, name in enumerate(HALL_OF_FAME[:10], 1):
+        session.add(PodChampionshipSeed(
+            event_id=event.id, player_id=None, discord_id=f"d{rank}", display_name=name,
+            rank=rank, score=100.0 - rank, wildcard=(rank == 10),
+        ))
+    session.commit()
+    roster = [(f"d{rank}", name) for rank, name in enumerate(HALL_OF_FAME[:10], 1)]
+
+    seated = championship.playing_roster(session, event.id, roster)
+
+    assert [name for _, name in seated] == list(HALL_OF_FAME[:7]) + [HALL_OF_FAME[9]]

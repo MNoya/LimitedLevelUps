@@ -147,6 +147,10 @@ SYNTHETIC_CHAMPION_TAG = f"**@{SET_CHAMPION_ROLE_NAME}**"
 PRIOR_SET_CHAMPION_ROLE_NAME = "Prior Set Champion"
 SET_CHAMPION_TITLE_COLOR = "#FFFFFF"
 SET_SYMBOLS_DIR = Path(__file__).resolve().parents[2] / "frontend" / "public" / "set-symbols"
+POD_CHAMPION_ROLE_NAME = "Pod Champion"
+POD_CHAMPION_COLOR = "#E7A855"
+POD_CHAMPION_EMOJI = "fleurdelis"
+SYNTHETIC_POD_CHAMPION_TAG = f"**@{POD_CHAMPION_ROLE_NAME}**"
 ORGANIZER_ROLE_NAME = "Organizer"
 TOP_P0P1_CHALLENGER_ROLE_NAME = "Top P0P1 Challenger"
 P0P1_COLOR = "#EFBF04"
@@ -154,13 +158,28 @@ P0P1_COLOR = "#EFBF04"
 REMINDER_ROLE_NAME = "Reminder"
 REMINDER_COLOR = "#EFBF04"
 
+POD_CHAMPION_ROLE = ManagedRole(POD_CHAMPION_ROLE_NAME, POD_CHAMPION_COLOR)
+
 MANAGED_ROLES: tuple[ManagedRole, ...] = (
     ManagedRole(SET_CHAMPION_ROLE_NAME, "#82CBFF", unicode_emoji="👑"),
     ManagedRole(PRIOR_SET_CHAMPION_ROLE_NAME, "#F1C40F", unicode_emoji="🎖️"),
+    POD_CHAMPION_ROLE,
     ManagedRole(ORGANIZER_ROLE_NAME, "#4CD4A9"),
     ManagedRole(TOP_P0P1_CHALLENGER_ROLE_NAME, P0P1_COLOR),
     ManagedRole(REMINDER_ROLE_NAME, REMINDER_COLOR, aliases=("P0P1 Reminder",)),
 ) + tuple(ManagedRole(spec.name, unicode_emoji=spec.icon) for spec in AWARD_ROLES)
+
+
+def pod_champion_glyph() -> str:
+    """The uploaded fleur-de-lis, falling back to the unicode one until the application emojis load"""
+    return emojis.get(POD_CHAMPION_EMOJI) or "⚜️"
+
+
+def pod_champion_mention(guild: discord.Guild | None) -> str:
+    """The real role tag, which renders the tan pill wherever mentions are suppressed or the surface is
+    an embed. A missing role falls back to the synthetic label."""
+    role = find_role(guild, POD_CHAMPION_ROLE_NAME)
+    return role.mention if role is not None else SYNTHETIC_POD_CHAMPION_TAG
 
 
 def organizer_mention(guild: discord.Guild | None) -> str:
@@ -1003,16 +1022,41 @@ async def apply_award_roles(guild: discord.Guild | None, awarded: dict[str, Sequ
         if role is None:
             log.warning(f"no {spec.name!r} role in {guild.name}, award not handed over")
             continue
-        holders = {str(member.id): member for member in role.members}
-        outgoing, incoming = plan_award_role_swap(holders, awarded.get(spec.key, ()))
-        for user_id in outgoing:
-            await _drop_award_role(holders[user_id], role)
-        for user_id in incoming:
-            member = guild.get_member(int(user_id))
-            if member is None:
-                log.info(f"award recipient {user_id} is not in {guild.name}, {spec.name!r} not granted")
-                continue
-            await _grant_award_role(member, role)
+        await _hand_over_role(
+            guild, role, awarded.get(spec.key, ()),
+            grant_reason="set award won", drop_reason="set award passed to a new winner",
+        )
+
+
+async def grant_pod_champion(guild: discord.Guild | None, champion_ids: Sequence[str]) -> None:
+    """Move the pod crown to the new champion; an empty `champion_ids` leaves the current holder alone"""
+    if guild is None:
+        return
+    await _ensure_managed_role(guild, POD_CHAMPION_ROLE)
+    role = find_role(guild, POD_CHAMPION_ROLE_NAME)
+    if role is None:
+        log.warning(f"no {POD_CHAMPION_ROLE_NAME!r} role in {guild.name}, pod crown not handed over")
+        return
+    await _hand_over_role(
+        guild, role, champion_ids,
+        grant_reason="pod season won", drop_reason="pod season passed to a new champion",
+    )
+
+
+async def _hand_over_role(
+    guild: discord.Guild, role: discord.Role, awarded_ids: Sequence[str], *,
+    grant_reason: str, drop_reason: str,
+) -> None:
+    holders = {str(member.id): member for member in role.members}
+    outgoing, incoming = plan_award_role_swap(holders, awarded_ids)
+    for user_id in outgoing:
+        await _drop_award_role(holders[user_id], role, drop_reason)
+    for user_id in incoming:
+        member = guild.get_member(int(user_id))
+        if member is None:
+            log.info(f"recipient {user_id} is not in {guild.name}, {role.name!r} not granted")
+            continue
+        await _grant_award_role(member, role, grant_reason)
 
 
 def plan_award_role_swap(
@@ -1029,17 +1073,17 @@ def plan_award_role_swap(
     return outgoing, incoming
 
 
-async def _grant_award_role(member: discord.Member, role: discord.Role) -> None:
+async def _grant_award_role(member: discord.Member, role: discord.Role, reason: str) -> None:
     try:
-        await member.add_roles(role, reason="set award won")
+        await member.add_roles(role, reason=reason)
         log.info(f"granted {role.name!r} to {member}")
     except discord.HTTPException:
         log.warning(f"could not grant {role.name!r} to {member}", exc_info=True)
 
 
-async def _drop_award_role(member: discord.Member, role: discord.Role) -> None:
+async def _drop_award_role(member: discord.Member, role: discord.Role, reason: str) -> None:
     try:
-        await member.remove_roles(role, reason="set award passed to a new winner")
+        await member.remove_roles(role, reason=reason)
         log.info(f"removed {role.name!r} from {member}")
     except discord.HTTPException:
         log.warning(f"could not remove {role.name!r} from {member}", exc_info=True)

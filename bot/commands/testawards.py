@@ -33,10 +33,10 @@ from bot.commands.set_awards import (
     run_set_awards_ceremony,
 )
 from bot.commands.test_group import test_group
-from bot.services import set_awards as awards_svc
+from bot.services import pod_season, set_awards as awards_svc
 from bot.services.format_schedule import channel_for_set
 from bot.services.set_awards import AwardCandidate
-from bot.sets import ALL_SETS, PREVIEW_WINDOWS, PreviewWindow, active_set_code
+from bot.sets import PREVIEW_WINDOWS, PreviewWindow, active_set_code, seed_for_code
 from bot.tasks.set_awards_post import post_ceremony_warning
 
 log = logging.getLogger(__name__)
@@ -53,7 +53,9 @@ MSG_NO_INCOMING_CHANNEL = "no channel yet for the incoming set"
 MSG_NO_SET_CHANNEL = "No channel for {set} to post the warning in"
 PREVIEW_CEREMONY_LEAD = timedelta(minutes=15)
 MSG_DRY_RUN_POSTED = "🏆 Posted {count} awards as a dry run: nobody was pinged, no roles moved, nothing pinned"
-MSG_LIVE_POSTED = "🏆 Posted {count} awards for real: winners pinged, award roles moved, ceremony pinned"
+MSG_LIVE_POSTED = (
+    "🏆 Posted {count} awards for real: winners pinged, award roles and the pod crown moved, ceremony pinned"
+)
 
 
 def _cand(
@@ -70,7 +72,7 @@ def _set_awards_fixture(guild: discord.Guild | None) -> SetAwardsData:
     """Build sample winners/runners as AwardCandidates and run them through the live `build_data`
     path, so the preview shares the production wording formatters and runner-up de-dup logic."""
     code = active_set_code()
-    seed = next(s for s in ALL_SETS if s.code == code)
+    seed = seed_for_code(code)
     runner_when = _SEIZE_WINNER_WHEN + timedelta(days=2)
     winners = {
         "first_striker": _cand(
@@ -98,7 +100,11 @@ def _set_awards_fixture(guild: discord.Guild | None) -> SetAwardsData:
         "revel_in_riches": [_cand("Tibalt", awards_svc.revel_detail(7, 5), None, 7)],
         "mvp": [_cand("Gisa", awards_svc.mvp_detail(9), None, 9)],
     }
-    return build_data(code, seed, winners, runners, guild)
+    champion = pod_season.PodSeasonStanding(
+        rank=1, player_id="", discord_id=None, display_name="Gisa", avatar_hash=None,
+        events=14, wins=23, trophies=5, points=32,
+    )
+    return build_data(code, seed, winners, runners, guild, champion=champion)
 
 
 _CDN = "https://cdn.discordapp.com/attachments/1387550143234052156"
@@ -202,7 +208,7 @@ async def setup(bot: commands.Bot) -> None:
         goes to the active set's channel and the pointer to the incoming set's, the same routing the
         7:45 AM PT job uses. Only the countdown is a fixture, anchored 15 minutes out."""
         code = active_set_code()
-        seed = next((s for s in ALL_SETS if s.code == code), None)
+        seed = seed_for_code(code)
         if seed is None or ctx.guild is None:
             await ctx.send(MSG_NO_ACTIVE_SET)
             return
@@ -230,7 +236,7 @@ async def setup(bot: commands.Bot) -> None:
         missed, and does the whole thing for real, pinging and moving roles and pinning.
         """
         code = active_set_code()
-        seed = next((s for s in ALL_SETS if s.code == code), None)
+        seed = seed_for_code(code)
         if seed is None:
             await ctx.send(MSG_NO_ACTIVE_SET)
             return

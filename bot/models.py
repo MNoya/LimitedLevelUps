@@ -381,7 +381,9 @@ class PodChampionshipSeed(Base):
     """Frozen leaderboard standings for a Set Championship, snapshotted at the deadline its invites went out
     on so seeds lock in. One row per ranked player on the whole board; the seat cut, the invite waves, and
     round-1 seeding read off these rows, and every figure a seeding table prints comes from here too, so a
-    frozen rank is never shown beside a score or a trophy count from a later day."""
+    frozen rank is never shown beside a score or a trophy count from a later day.
+
+    `wildcard` marks the pod-season seat, which keeps its board rank and is seated inside the cut."""
 
     __tablename__ = "pod_championship_seeds"
 
@@ -393,6 +395,7 @@ class PodChampionshipSeed(Base):
     rank         = Column(Integer, nullable=False)
     score        = Column(Float, nullable=False)
     trophies     = Column(Integer, nullable=True)
+    wildcard     = Column(Boolean, nullable=False, server_default=text("false"))
     created_at   = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     event  = relationship("PodDraftEvent")
