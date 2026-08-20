@@ -420,9 +420,9 @@ class _Link17LandsButton(discord.ui.Button):
 
 
 class _PodGuideButton(discord.ui.Button):
-    def __init__(self) -> None:
+    def __init__(self, style: discord.ButtonStyle = discord.ButtonStyle.success, row: int | None = None) -> None:
         super().__init__(
-            label="Pod Guide", style=discord.ButtonStyle.success, emoji="📖", custom_id=POD_GUIDE_BUTTON_ID,
+            label="Pod Guide", style=style, emoji="📖", custom_id=POD_GUIDE_BUTTON_ID, row=row,
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
@@ -561,6 +561,13 @@ def build_link_arena_modal(after_link=None) -> discord.ui.Modal:
     successful link in place of the default in-channel announcement — the lobby DM uses it to re-render
     itself with the personalized link."""
     return _LinkArenaModal(after_link=after_link)
+
+
+def build_pod_guide_button(
+    style: discord.ButtonStyle = discord.ButtonStyle.success, row: int | None = None,
+) -> discord.ui.Button:
+    """The registered Pod Guide button; shares the custom_id so clicks dispatch after a restart"""
+    return _PodGuideButton(style=style, row=row)
 
 
 async def _linked_arena_handle(discord_id: str) -> str | None:

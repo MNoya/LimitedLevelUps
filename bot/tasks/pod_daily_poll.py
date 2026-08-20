@@ -61,6 +61,7 @@ from bot.services.pod_active import set_pod_complete_hook, set_pod_drafting_hook
 from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
     announce_pod_grant,
+    build_pod_guide_button,
     grant_pod_roles,
     organizer_mention,
     pod_card_state,
@@ -877,20 +878,11 @@ async def _announce_play_again_signup(interaction: discord.Interaction, bucket_k
 
 
 class PodPollView(discord.ui.View):
-    """The day's surface, one button per pod plus the board's own Leave: a gathering pod and a pod that fired
-    both render a green button that only ever adds you. Each button names the format it joins, so the press
-    itself says which pod it commits to and no stored preference is consulted.
-
-    Every button here signs you up, and the row carries no link. A pod whose draft started, a closed slot and
-    an earlier table of a split all render nothing: their block already links to their card, and a late seat
-    is asked for in the pod's own thread. The championship lane is the one pointer, since its column takes no
-    signups at all.
-
-    Adding and leaving are two buttons on purpose. One button that toggled meant a press whose meaning
-    depended on state the player could not see, and a second press given to a slow first one signed them
-    back off. Every button is a DynamicItem, so a board that outlives a restart keeps working without a
-    fixed set of keys to pre-register. Bucket emoji are application emoji that can't render in label text,
-    so each button gets its glyph in the emoji slot."""
+    """The day's launcher card: a signup button per joinable pod, plus the board Leave and Pod Guide in a
+    footer row. Each pod button names its format and only ever adds you; a slot that can't be joined renders
+    nothing and links to its own card instead. Add and Leave stay separate so a press never depends on hidden
+    state. Pod buttons are DynamicItems so the board survives a restart, and bucket glyphs ride the emoji slot
+    since they can't render in label text."""
 
     def __init__(
         self, slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None = None,
@@ -904,8 +896,10 @@ class PodPollView(discord.ui.View):
                 if item is not None:
                     self.add_item(item)
                     pods += 1
+        footer_row = min(4, pods // BUTTONS_PER_ROW + 1)
         if any(_leavable(slot) for slot in slots):
-            self.add_item(BoardLeaveButton(row=min(4, pods // BUTTONS_PER_ROW + 1)))
+            self.add_item(BoardLeaveButton(row=footer_row))
+        self.add_item(build_pod_guide_button(style=discord.ButtonStyle.secondary, row=footer_row))
 
 
 BUTTONS_PER_ROW = 5

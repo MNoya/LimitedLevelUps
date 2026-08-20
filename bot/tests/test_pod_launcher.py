@@ -6,6 +6,7 @@ import pytest
 
 from bot.commands.pod_queue import _when_clock, _when_options
 from bot.commands.test_group import HALL_OF_FAME
+from bot.services.ping_roles import POD_GUIDE_BUTTON_ID
 from bot.services.pod_format_select import WRITE_IN_VALUE
 from bot.services import pod_launch
 from bot.services.pod_launch import LauncherSlot, _lazy_status
@@ -86,10 +87,13 @@ def test_committed_card_link_is_none_without_a_thread_name():
     assert _committed_card_link(None, slot) is None
 
 
+FOOTER_IDS = {BOARD_LEAVE_ID, POD_GUIDE_BUTTON_ID}
+
+
 def test_a_closed_slot_carries_no_join_button_while_an_open_one_does():
     view = PodPollView([_lazy("EARLY", STATUS_EXPIRED), _lazy("LATE", STATUS_OPEN)])
 
-    pods = [child.custom_id for child in view.children if child.custom_id != BOARD_LEAVE_ID]
+    pods = [child.custom_id for child in view.children if child.custom_id not in FOOTER_IDS]
 
     assert pods == [f"pod_poll:{named_bucket_key('LATE', LATEST)}"]
 
@@ -101,6 +105,7 @@ def test_a_slot_offering_two_formats_carries_one_button_per_pod():
         f"pod_poll:{named_bucket_key('EARLY', LATEST)}",
         f"pod_poll:{named_bucket_key('EARLY', 'PEASANT')}",
         BOARD_LEAVE_ID,
+        POD_GUIDE_BUTTON_ID,
     ]
 
 
@@ -187,7 +192,7 @@ def test_a_pod_that_started_drafting_carries_no_button():
 
     view = PodPollView([drafting])
 
-    assert view.children == []
+    assert [child.custom_id for child in view.children] == [POD_GUIDE_BUTTON_ID]
 
 
 @pytest.mark.parametrize(
