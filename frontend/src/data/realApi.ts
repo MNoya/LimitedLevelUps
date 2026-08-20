@@ -60,6 +60,23 @@ function client() {
   return supabase;
 }
 
+const PAGE_ROWS = 1000;
+
+// Walks the pages of a read wider than Supabase's per-response row cap
+async function pagedRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_ROWS) {
+    const { data, error } = await page(from, from + PAGE_ROWS - 1);
+    if (error) throw error;
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < PAGE_ROWS) break;
+  }
+  return rows;
+}
+
 const ARENA_DIRECT_FORMAT = "ArenaDirect_Sealed";
 const LCQ_DRAFT_2_FORMATS = formatsForBucket("LCQ Draft 2");
 
@@ -1445,6 +1462,17 @@ export async function fetchPodSeasonEvents(
     .sort((a, b) => (a.eventTime < b.eventTime ? 1 : a.eventTime > b.eventTime ? -1 : 0));
 }
 
+export async function fetchAllPodEvents(): Promise<PodEventSummary[]> {
+  const rows = await pagedRows<Record<string, unknown>>((from, to) =>
+    client()
+      .from("public_pod_draft_events")
+      .select("*")
+      .order("event_time", { ascending: false })
+      .range(from, to),
+  );
+  return rows.map((r) => adaptPodEvent(r));
+}
+
 export async function fetchPodEventParticipants(
   eventId: string,
 ): Promise<PodEventParticipantRow[]> {
@@ -1653,17 +1681,26 @@ export async function fetchPodSeasonResults(
   endDate: string,
   seasonCode: string,
 ): Promise<PodSeasonResultRow[]> {
-  const rows = await podSeasonRows(startDate, endDate, seasonCode, "event_id, set_code, event_time, kind");
+  const rows = await podSeasonRows(startDate, endDate, seasonCode, POD_RESULT_EVENT_COLUMNS);
   return podResultsForEvents(rows);
 }
+
+const POD_RESULT_EVENT_COLUMNS = "event_id, set_code, event_time, kind";
 
 export async function fetchPodResultsForSet(setCode: string): Promise<PodSeasonResultRow[]> {
   const { data, error } = await client()
     .from("public_pod_draft_events")
-    .select("event_id, set_code, event_time, kind")
+    .select(POD_RESULT_EVENT_COLUMNS)
     .eq("set_code", setCode);
   if (error) throw error;
   return podResultsForEvents(data ?? []);
+}
+
+export async function fetchAllPodResults(): Promise<PodSeasonResultRow[]> {
+  const rows = await pagedRows<Record<string, unknown>>((from, to) =>
+    client().from("public_pod_draft_events").select(POD_RESULT_EVENT_COLUMNS).range(from, to),
+  );
+  return podResultsForEvents(rows);
 }
 
 // The window and the season's own set are separate scans, so a pod in both is returned once
@@ -1700,15 +1737,10 @@ async function podResultsForEvents(rows: unknown[]): Promise<PodSeasonResultRow[
   }
   if (eventById.size === 0) return [];
 
-  const partsResp = await client()
-    .from("public_pod_draft_event_participants")
-    .select("event_id, player_slug, player_display_name, avatar_url, record, placement")
-    .in("event_id", Array.from(eventById.keys()));
-  if (partsResp.error) throw partsResp.error;
+  const participants = await podParticipantsForEvents(Array.from(eventById.keys()));
 
   const results: PodSeasonResultRow[] = [];
-  for (const raw of partsResp.data ?? []) {
-    const r = raw as Record<string, unknown>;
+  for (const r of participants) {
     const slug = (r.player_slug as string | null) ?? null;
     const event = eventById.get(r.event_id as string);
     if (!slug || !event || r.record == null) continue;
@@ -1724,6 +1756,22 @@ async function podResultsForEvents(rows: unknown[]): Promise<PodSeasonResultRow[
     });
   }
   return results;
+}
+
+// Chunked so a whole-history read stays under the per-response row cap without paging an unordered view
+const PARTICIPANT_EVENT_CHUNK = 50;
+
+async function podParticipantsForEvents(eventIds: string[]): Promise<Record<string, unknown>[]> {
+  const participants: Record<string, unknown>[] = [];
+  for (let i = 0; i < eventIds.length; i += PARTICIPANT_EVENT_CHUNK) {
+    const { data, error } = await client()
+      .from("public_pod_draft_event_participants")
+      .select("event_id, player_slug, player_display_name, avatar_url, record, placement")
+      .in("event_id", eventIds.slice(i, i + PARTICIPANT_EVENT_CHUNK));
+    if (error) throw error;
+    participants.push(...((data ?? []) as Record<string, unknown>[]));
+  }
+  return participants;
 }
 
 export async function fetchPodEventDates(): Promise<string[]> {

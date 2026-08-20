@@ -33,13 +33,11 @@ export function inSeasonWindow(season: SetSummary, date: string): boolean {
 // Trophy and finish counts mirror public_pod_scoring, so the points match the board's own term
 export function aggregatePodStandings(
   results: PodSeasonResultRow[] | undefined,
-  setCodes?: Set<string>,
 ): PodLeaderboardRow[] | undefined {
   if (!results) return undefined;
   const byPlayer = new Map<string, PodLeaderboardRow>();
   const finishes = new Map<string, { twoWins: number; oneWins: number }>();
   for (const r of results) {
-    if (setCodes && !setCodes.has(r.setCode)) continue;
     let row = byPlayer.get(r.slug);
     if (!row) {
       row = {
@@ -100,16 +98,12 @@ export function bucketOf(event: BucketableEvent, seasonCode: string): PodFormatB
   return event.setCode === seasonCode ? "set" : "flashback";
 }
 
-// A set code belongs to exactly one bucket, so results can be sliced without carrying the label
-export function bucketBySetCode(
-  events: BucketableEvent[] | undefined,
-  seasonCode: string,
-): Map<string, PodFormatBucket> {
-  const buckets = new Map<string, PodFormatBucket>();
-  for (const e of events ?? []) {
-    buckets.set(e.setCode, bucketOf(e, seasonCode));
-  }
-  return buckets;
+// Buckets each event against the season it was played in, for a board spanning every season
+export function lifetimeBucketOf(
+  event: BucketableEvent & { eventDate: string },
+  sets: SetSummary[] | undefined,
+): PodFormatBucket {
+  return bucketOf(event, seasonForDate(sets, event.eventDate)?.code ?? "");
 }
 
 // The seasons a board actually played in, newest first, for a board sliced by season
@@ -131,25 +125,20 @@ export function seasonsPlayed(
   return played;
 }
 
-// The chips a season offers, in a fixed order, dropping the ones it never played
-export function seasonBuckets(
-  events: BucketableEvent[] | undefined,
-  seasonCode: string,
-): { key: PodFormatBucket; label: string; count: number }[] {
+// The format buckets a board offers, in a fixed order, dropping the ones it never played
+export function podFormatBuckets<E>(
+  events: E[] | undefined,
+  bucketFor: (event: E) => PodFormatBucket,
+): { key: PodFormatBucket; count: number }[] {
   const counts = new Map<PodFormatBucket, number>();
   for (const e of events ?? []) {
-    const bucket = bucketOf(e, seasonCode);
+    const bucket = bucketFor(e);
     counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
   }
-  const order: { key: PodFormatBucket; label: string }[] = [
-    { key: "set", label: seasonCode },
-    { key: "flashback", label: "Flashback" },
-    { key: "cube", label: "Cube" },
-    { key: "mock", label: "Mock" },
-  ];
+  const order: PodFormatBucket[] = ["set", "flashback", "cube", "mock"];
   return order
-    .filter((entry) => (counts.get(entry.key) ?? 0) > 0)
-    .map((entry) => ({ ...entry, count: counts.get(entry.key)! }));
+    .filter((key) => (counts.get(key) ?? 0) > 0)
+    .map((key) => ({ key, count: counts.get(key)! }));
 }
 
 function todayIso(): string {

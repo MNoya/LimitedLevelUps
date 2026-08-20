@@ -43,6 +43,8 @@ import {
   fetchPodSeasonResults,
   fetchPodResultsForSet,
   fetchPodSetCodes,
+  fetchAllPodEvents,
+  fetchAllPodResults,
   fetchRecentTrophies,
   fetchSets,
   fetchDbEpisodes,
@@ -487,6 +489,24 @@ export function usePodResultsForSet(setCode: string | undefined) {
     queryKey: ["pod-results-for-set", setCode],
     queryFn: () => fetchPodResultsForSet(setCode!),
     enabled: !!setCode,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function useAllPodEvents(enabled: boolean) {
+  return useQuery({
+    queryKey: ["pod-events-all"],
+    queryFn: fetchAllPodEvents,
+    enabled,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function useAllPodResults(enabled: boolean) {
+  return useQuery({
+    queryKey: ["pod-results-all"],
+    queryFn: fetchAllPodResults,
+    enabled,
     staleTime: THIRTY_MINUTES,
   });
 }

@@ -9,10 +9,9 @@ import { Footer } from "../components/Footer";
 import { SectionLabel } from "../components/SectionLabel";
 import { SetSwitcherDesktop } from "../components/SetSwitcher";
 import { SetFilterDropdown, setFilterOptionsFrom } from "../components/SetFilterDropdown";
-import { BoardWindowSelector, type BoardWindowOption } from "../components/BoardWindowSelector";
-import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
+import { InlineFilterSelect, type InlineFilterOption } from "../components/InlineFilterSelect";
 import { AAvatar, setGlyphCode, SetGlyph, Trophy } from "../components/Brand";
-import { ArrowRight, CalendarRange, GiRoundTable, TbCards } from "../components/Icons";
+import { ArrowRight, BsAsterisk, CalendarRange, GiCardPick, GiRoundTable, TbCards } from "../components/Icons";
 import { DiscordIcon } from "../components/BrandIcons";
 import { Tooltip } from "../components/Tooltip";
 import { DeckScreenshotModal } from "../components/pod/DeckScreenshotModal";
@@ -65,16 +64,18 @@ import {
   usePodSeasonResults,
   usePodSetCodes,
   useSets,
+  useAllPodEvents,
+  useAllPodResults,
 } from "../data/hooks";
 import {
   aggregatePodStandings,
-  bucketBySetCode,
   bucketOf,
+  lifetimeBucketOf,
   inSeasonWindow,
   seasonsPlayed,
   currentSeason,
   podSeasons,
-  seasonBuckets,
+  podFormatBuckets,
   seasonForDate,
   type PodFormatBucket,
 } from "../data/podSeasons";
@@ -110,11 +111,20 @@ function synthesizePodSet(p: PodSetCode): SetSummary {
 // A board that ran in one season has nothing to pick between, so it shows no season selector
 const MIN_BOARD_SEASONS = 2;
 
-const AXIS_ALL = "__all__";
+// One format plus the "all" entry is the same board twice, so the format selector stays hidden
+const MIN_BOARD_FORMATS = 2;
+
+const AXIS_ALL = "all";
 const AXIS_PARAM_FORMAT = "format";
 const AXIS_PARAM_SEASON = "season";
 
 const FORMAT_BUCKETS: PodFormatBucket[] = ["set", "flashback", "cube", "mock"];
+
+function formatBucketLabel(bucket: PodFormatBucket, season: SetSummary | undefined): string {
+  if (bucket === "set") return season ? `${season.code} Only` : "Set Drafts";
+  if (bucket === "flashback") return "Flashback";
+  return bucket === "cube" ? "Cube" : "Mock";
+}
 
 const POD_DESKTOP_WIDTH = 900;
 
@@ -207,11 +217,16 @@ export function PodDraftsPage({
     return podSeasons(allSets).filter((s) => played.has(s.code));
   }, [allSets, podEventDates, podSetCodes]);
 
+  const seasonAxis = searchParams.get(AXIS_PARAM_SEASON);
+  // Every season at once, the one window a route cannot name
+  const allSeasons = !setCode && seasonAxis === AXIS_ALL;
+
   const season = useMemo<SetSummary | undefined>(() => {
-    if (setCode) return undefined;
-    if (seasonCode) return seasons.find((s) => s.code === seasonCode);
+    if (setCode || allSeasons) return undefined;
+    const wanted = seasonCode ?? (seasonAxis === AXIS_ALL ? null : seasonAxis);
+    if (wanted) return seasons.find((s) => s.code === wanted) ?? podSeasons(allSets).find((s) => s.code === wanted);
     return currentSeason(allSets) ?? seasons[0];
-  }, [setCode, seasonCode, seasons, allSets]);
+  }, [setCode, allSeasons, seasonCode, seasonAxis, seasons, allSets]);
 
   const legacySets = useMemo<SetSummary[]>(() => {
     if (!allSets || !podSetCodes) return [];
@@ -236,106 +251,90 @@ export function PodDraftsPage({
     navigate(code === homeCode ? "/pods" : `/pods/${code}`);
   };
 
-  const axisParam = season ? AXIS_PARAM_FORMAT : AXIS_PARAM_SEASON;
-  const rawAxis = searchParams.get(axisParam);
-  const axis = season
-    ? FORMAT_BUCKETS.find((bucket) => bucket === rawAxis)
-    : podSeasons(allSets).find((s) => s.code === rawAxis)?.code;
-
   const seasonEvents = usePodSeasonEvents(season).data;
   const seasonResults = usePodSeasonResults(season).data;
-  const boardEvents = usePodEvents(season ? undefined : activeSet).data;
-  const boardResults = usePodResultsForSet(season ? undefined : activeSet).data;
+  const boardEvents = usePodEvents(setCode).data;
+  const boardResults = usePodResultsForSet(setCode).data;
+  const lifetimeEvents = useAllPodEvents(allSeasons).data;
+  const lifetimeResults = useAllPodResults(allSeasons).data;
+
+  const scopeEvents = allSeasons ? lifetimeEvents : setCode ? boardEvents : seasonEvents;
+  const scopeResults = allSeasons ? lifetimeResults : setCode ? boardResults : seasonResults;
 
   // A set below the board threshold still resolves its name when opened directly by code
   const directPod = podSetCodes?.find((p) => p.code === activeSet);
   const setMeta =
     season ?? legacySets.find((s) => s.code === activeSet) ?? (directPod ? synthesizePodSet(directPod) : undefined);
-  const buckets = useMemo(() => seasonBuckets(seasonEvents, activeSet), [seasonEvents, activeSet]);
   const boardSeasons = useMemo(() => seasonsPlayed(boardEvents, allSets), [boardEvents, allSets]);
 
-  // One control for both axes: a season board picks a format, a cube board picks a season window.
-  // Chips could not survive a season with five buckets at 1200px, so the dropdown carries both.
-  const selectorOptions = useMemo<BoardWindowOption[]>(() => {
-    const calendar = <CalendarRange size={20} className="text-white shrink-0" />;
-    // Which mode we are in comes from the route, not the data, so a cold start never flashes the
-    // wrong control while the sets are still loading
-    if (!setCode) {
-      // The hero already says HOB overhead, so desktop drops the code and keeps the axis word
-      const head = isMobile && season ? `${season.code} SEASON` : "SEASON";
-      return [
-        { value: AXIS_ALL, label: head, icon: calendar },
-        ...buckets.map((b) => ({
-          value: b.key,
-          label: (b.key === "set" ? `${b.label} ONLY` : b.label).toUpperCase(),
-          icon: <ChipIcon bucket={b.key} seasonMeta={season} className="text-white shrink-0" size={20} />,
-        })),
-      ];
-    }
-    if (boardSeasons.length < MIN_BOARD_SEASONS) return [];
-    return [
-      { value: AXIS_ALL, label: "ALL SEASONS", icon: calendar },
-      ...boardSeasons.map(({ season: s }) => ({
-        value: s.code,
-        label: `${s.code} SEASON`,
-        glyph: setGlyphCode(s),
-      })),
-    ];
-  }, [setCode, season, buckets, boardSeasons, isMobile]);
+  // A format board is already one format, so only a season board buckets. Across every season an
+  // event is a set draft against the season it was played in, not against the one on screen.
+  const bucketFor = useMemo(() => {
+    if (setCode) return undefined;
+    if (season) return (e: PodEventSummary) => bucketOf(e, season.code);
+    return (e: PodEventSummary) => lifetimeBucketOf(e, allSets);
+  }, [setCode, season, allSets]);
 
-  const selectorValue = axis ?? AXIS_ALL;
+  const formatBuckets = useMemo(
+    () => (bucketFor ? podFormatBuckets(scopeEvents, bucketFor) : []),
+    [scopeEvents, bucketFor],
+  );
 
-  const onSelectWindow = (value: string) => {
+  // Held until the events land, so a format the new season never played does not filter to nothing
+  const requestedFormat = FORMAT_BUCKETS.find((bucket) => bucket === searchParams.get(AXIS_PARAM_FORMAT));
+  const format =
+    !scopeEvents || formatBuckets.some((b) => b.key === requestedFormat) ? requestedFormat : undefined;
+
+  const boardWindow = useMemo(
+    () => (setCode ? boardSeasons.find(({ season: s }) => s.code === seasonAxis)?.season : undefined),
+    [setCode, seasonAxis, boardSeasons],
+  );
+
+  const setAxisParam = (param: string, value: string | null) => {
     const next = new URLSearchParams(searchParams);
-    if (value === AXIS_ALL) {
-      next.delete(axisParam);
-    } else {
-      next.set(axisParam, value);
-    }
+    if (value) next.set(param, value);
+    else next.delete(param);
     setSearchParams(next);
   };
 
-  // Mock pods play no rounds, so they never carry results and only their own filter can reach them
-  const bucketCodes = useMemo(() => {
-    if (!season || !axis) return undefined;
-    if (axis === "mock") return new Set<string>();
-    const byCode = bucketBySetCode(seasonEvents?.filter((e) => e.kind !== "mock"), activeSet);
-    return new Set(Array.from(byCode).filter(([, b]) => b === axis).map(([code]) => code));
-  }, [season, axis, seasonEvents, activeSet]);
+  // A format board keeps its window in the query; a season board is a route, so only "all" is a param
+  const onSelectSeason = (value: string) => {
+    if (setCode) {
+      setAxisParam(AXIS_PARAM_SEASON, value === AXIS_ALL ? null : value);
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    if (value === AXIS_ALL) {
+      next.set(AXIS_PARAM_SEASON, AXIS_ALL);
+      navigate({ pathname: "/pods", search: next.toString() });
+      return;
+    }
+    next.delete(AXIS_PARAM_SEASON);
+    navigate({ pathname: value === homeCode ? "/pods" : `/pods/${value}`, search: next.toString() });
+  };
 
-  const boardWindow = useMemo(
-    () => (season ? undefined : boardSeasons.find(({ season: s }) => s.code === axis)?.season),
-    [season, axis, boardSeasons],
-  );
+  const onSelectFormat = (value: string) => {
+    setAxisParam(AXIS_PARAM_FORMAT, value === AXIS_ALL ? null : value);
+  };
 
   const events = useMemo(() => {
-    if (!season) {
-      if (!boardEvents) return undefined;
-      if (!boardWindow) return boardEvents;
-      return boardEvents.filter((e) => inSeasonWindow(boardWindow, e.eventDate));
+    if (!scopeEvents) return undefined;
+    if (setCode) {
+      return boardWindow ? scopeEvents.filter((e) => inSeasonWindow(boardWindow, e.eventDate)) : scopeEvents;
     }
-    if (!seasonEvents) return undefined;
-    if (axis) return seasonEvents.filter((e) => bucketOf(e, activeSet) === axis);
-    return seasonEvents.filter((e) => e.kind !== "mock" && inSeasonWindow(season, e.eventDate));
-  }, [season, seasonEvents, boardEvents, boardWindow, axis, activeSet]);
+    // A format carries every pod it holds, so the set's own bucket reaches past the season it sits in
+    if (format && bucketFor) return scopeEvents.filter((e) => bucketFor(e) === format);
+    if (season) return scopeEvents.filter((e) => e.kind !== "mock" && inSeasonWindow(season, e.eventDate));
+    return scopeEvents.filter((e) => e.kind !== "mock");
+  }, [scopeEvents, setCode, boardWindow, format, bucketFor, season]);
 
   // Scoped by event id, since `event_time` is UTC and a late pod crosses a boundary its ET date does not
-  const windowEventIds = useMemo(() => {
-    const bounds = season ?? boardWindow;
-    const scoped = season ? seasonEvents : boardEvents;
-    if (!bounds || !scoped) return undefined;
-    return new Set(scoped.filter((e) => inSeasonWindow(bounds, e.eventDate)).map((e) => e.eventId));
-  }, [season, boardWindow, seasonEvents, boardEvents]);
-
-  // The set's own chip carries every pod that drafted it, reaching past the season it sits in
-  const unwindowed = axis === "set" || (!season && !boardWindow);
+  const eventIds = useMemo(() => events && new Set(events.map((e) => e.eventId)), [events]);
 
   const leaderboard = useMemo(() => {
-    const results = season ? seasonResults : boardResults;
-    if (unwindowed) return aggregatePodStandings(results, bucketCodes);
-    if (!windowEventIds) return undefined;
-    return aggregatePodStandings(results?.filter((r) => windowEventIds.has(r.eventId)), bucketCodes);
-  }, [season, unwindowed, seasonResults, boardResults, bucketCodes, windowEventIds]);
+    if (!scopeResults || !eventIds) return undefined;
+    return aggregatePodStandings(scopeResults.filter((r) => eventIds.has(r.eventId)));
+  }, [scopeResults, eventIds]);
 
   // Held whole until the query lands: a switcher that grows from one chip to six reads as broken
   const switcherSets = useMemo(() => {
@@ -372,7 +371,7 @@ export function PodDraftsPage({
 
   usePodEventParticipants(played[0]?.eventId);
 
-  const onSeasonBoard = !!season && !axis;
+  const onSeasonBoard = !!season && !format;
 
   // Any season prints the set's own run, so it reads the same whether one pod happened in it or
   // twenty. Only a whole board, which spans no single set, falls back to the pods it actually holds.
@@ -385,12 +384,58 @@ export function PodDraftsPage({
     return dates.length > 0 ? fmtRange(dates[0], dates[dates.length - 1]) : null;
   }, [season, boardWindow, events]);
 
-  const windowSelector = selectorOptions.length > 0 ? (
-    <BoardWindowSelector
-      value={selectorValue}
-      options={selectorOptions}
-      onSelect={onSelectWindow}
-      variant={isMobile ? "mobile" : "hero"}
+  const liveSeasonCode = currentSeason(allSets)?.code;
+  const iconSize = isMobile ? 16 : 18;
+
+  const seasonOptions = useMemo<InlineFilterOption[]>(() => {
+    const all: InlineFilterOption = {
+      value: AXIS_ALL,
+      label: "All Seasons",
+      icon: <CalendarRange size={iconSize} className="text-white shrink-0" />,
+    };
+    const toOption = (s: SetSummary): InlineFilterOption => ({
+      value: s.code,
+      label: s.code === liveSeasonCode ? "Current Season" : `${s.code} Season`,
+      icon: <SetGlyph code={setGlyphCode(s)} size={iconSize} className="text-white shrink-0" />,
+    });
+    // A board that ran in one season has nothing to pick between
+    if (setCode) {
+      return boardSeasons.length < MIN_BOARD_SEASONS ? [] : [all, ...boardSeasons.map((b) => toOption(b.season))];
+    }
+    return [all, ...seasons.map(toOption)];
+  }, [setCode, boardSeasons, seasons, liveSeasonCode, iconSize]);
+
+  const formatOptions = useMemo<InlineFilterOption[]>(() => {
+    if (!bucketFor || formatBuckets.length < MIN_BOARD_FORMATS) return [];
+    return [
+      {
+        value: AXIS_ALL,
+        label: "All Formats",
+        icon: <BsAsterisk size={iconSize - 3} className="text-white shrink-0" />,
+      },
+      ...formatBuckets.map(({ key }) => ({
+        value: key,
+        label: formatBucketLabel(key, season),
+        icon: <ChipIcon bucket={key} seasonMeta={season} className="text-white shrink-0" size={iconSize} />,
+      })),
+    ];
+  }, [bucketFor, formatBuckets, season, iconSize]);
+
+  const filterVariant = isMobile ? "mobile" : "inline";
+  const seasonSelector = seasonOptions.length > 0 ? (
+    <InlineFilterSelect
+      value={season?.code ?? (setCode ? boardWindow?.code ?? AXIS_ALL : AXIS_ALL)}
+      options={seasonOptions}
+      onChange={onSelectSeason}
+      variant={filterVariant}
+    />
+  ) : null;
+  const formatSelector = formatOptions.length > 0 ? (
+    <InlineFilterSelect
+      value={format ?? AXIS_ALL}
+      options={formatOptions}
+      onChange={onSelectFormat}
+      variant={filterVariant}
     />
   ) : null;
 
@@ -411,7 +456,8 @@ export function PodDraftsPage({
             activeSet={activeSet}
             availableSets={switcherSets}
             onSelectSet={onSelectSet}
-            windowSelector={windowSelector}
+            seasonSelector={seasonSelector}
+            formatSelector={formatSelector}
           />
         </div>
       ) : (
@@ -424,7 +470,7 @@ export function PodDraftsPage({
             onSelectSet={onSelectSet}
             range={boardRange}
             isSeason={!!season}
-            windowSelector={windowSelector}
+            allSeasons={allSeasons}
           />
         </>
       )}
@@ -449,7 +495,9 @@ export function PodDraftsPage({
                 ) : (
                   <div>
                     <SectionHeading label="EVENTS" count={0} unit="EVENTS" />
-                    <EmptyHint>No pod drafts recorded yet for {activeSet}</EmptyHint>
+                    <EmptyHint>
+                      {allSeasons ? "No pod drafts recorded yet" : `No pod drafts recorded yet for ${activeSet}`}
+                    </EmptyHint>
                   </div>
                 )}
                 {mock.length > 0 && <MockDraftsBlock events={mock} />}
@@ -467,7 +515,16 @@ export function PodDraftsPage({
                 )}
               </div>
             ) : (
-              <StandingsHeading leaderboard={leaderboard} events={events} />
+              <StandingsHeading
+                leaderboard={leaderboard}
+                events={events}
+                controls={
+                  <>
+                    {seasonSelector}
+                    {formatSelector}
+                  </>
+                }
+              />
             )}
             <LeaderboardTable
               rows={sortedLeaderboard}
@@ -479,8 +536,8 @@ export function PodDraftsPage({
               onSort={onSort}
               stickyTop={chromeHeight + standingsHeadHeight}
               highlightSlug={mySlug ?? undefined}
-              emptyMessage={`No player stats yet for ${activeSet}.`}
-              playerHref={(row) => playerPath(row.slug, activeSet)}
+              emptyMessage={allSeasons ? "No player stats yet." : `No player stats yet for ${activeSet}.`}
+              playerHref={(row) => playerPath(row.slug, allSeasons ? homeCode : activeSet)}
             />
           </section>
 
@@ -518,10 +575,12 @@ function useMeasuredHeight(ref: React.RefObject<HTMLElement>, remountKey: unknow
 function StandingsHeading({
   leaderboard,
   events,
+  controls,
   compact = false,
 }: {
   leaderboard: PodLeaderboardRow[] | undefined;
   events: PodEventSummary[] | undefined;
+  controls?: React.ReactNode;
   compact?: boolean;
 }) {
   return (
@@ -529,6 +588,7 @@ function StandingsHeading({
       label="STANDINGS"
       count={leaderboard ? leaderboard.length : undefined}
       unit={(leaderboard?.length ?? 0) === 1 ? "PLAYER" : "PLAYERS"}
+      controls={controls}
       compact={compact}
       meta={
         !compact ? undefined : leaderboard && events ? (
@@ -556,12 +616,14 @@ function SectionHeading({
   unit,
   compact,
   meta,
+  controls,
 }: {
   label: string;
   count?: number;
   unit?: string;
   compact?: boolean;
   meta?: React.ReactNode;
+  controls?: React.ReactNode;
 }) {
   if (compact) {
     return (
@@ -579,12 +641,15 @@ function SectionHeading({
   }
   return (
     <div className="relative flex items-baseline justify-between py-4 pl-2 pr-5 border-b border-border gap-4">
-      <span
-        className="flex-1 basis-0 min-w-0 font-display text-text tracking-[0.18em] leading-none"
-        style={{ fontSize: 17 }}
-      >
-        {label}
-      </span>
+      <div className="flex-1 basis-0 min-w-0 flex items-baseline gap-5">
+        <span
+          className="shrink-0 font-display text-text tracking-[0.18em] leading-none"
+          style={{ fontSize: 17 }}
+        >
+          {label}
+        </span>
+        {controls}
+      </div>
       {/* Out of flow, so a meta taller than the label cannot grow the row and shift the label */}
       {meta ? (
         <div className="absolute inset-y-0 right-0 flex items-center">{meta}</div>
@@ -705,6 +770,8 @@ function PodActionRow() {
 // drops the date rail for a date stamp on the title line, so it runs shorter and indents further in.
 const ROW_FRAME = "bg-surface border-b lg:border border-border first:lg:border-t-0 animate-fadeUpIn";
 
+const ROW_TOOLTIP_DELAY = 500;
+
 function rowDelayStyle(index: number): React.CSSProperties {
   return { animationDelay: `${Math.min(index, 6) * 45}ms` };
 }
@@ -818,6 +885,8 @@ function EventRow({
   onToggle?: () => void;
 }) {
   const open = openRequested && !!onToggle;
+  const [titleHovered, setTitleHovered] = useState(false);
+  const titleLinkTo = onToggle && !stacked ? `/pods/${event.slug}` : null;
   const headerClass = cn(
     "group flex-1 min-w-0 flex items-stretch text-left bg-transparent border-0 no-underline transition-colors",
     rowHeightClass(stacked),
@@ -827,7 +896,13 @@ function EventRow({
   const headerContent = (
     <>
       {!stacked && <DateRail date={event.eventDate} highlighted={open} />}
-      <EventRowBody event={event} nowMs={nowMs} stacked={stacked} />
+      <EventRowBody
+        event={event}
+        nowMs={nowMs}
+        stacked={stacked}
+        titleLinkTo={titleLinkTo}
+        onTitleHover={setTitleHovered}
+      />
       <div className="flex items-center pl-2 pr-2.5 shrink-0 self-center">
         <ChevronDown
           size={15}
@@ -846,15 +921,30 @@ function EventRow({
     >
       <div className="flex items-stretch">
         {onToggle ? (
-          <button type="button" onClick={onToggle} aria-expanded={open} className={headerClass}>
-            {headerContent}
-          </button>
+          <div className={cn(headerClass, "relative")}>
+            <Tooltip
+              label={open ? "Hide Standings" : "Show Standings"}
+              side="top"
+              delayDuration={ROW_TOOLTIP_DELAY}
+            >
+              <button
+                type="button"
+                onClick={onToggle}
+                aria-expanded={open}
+                aria-label={open ? "Hide standings" : "Show standings"}
+                className="absolute inset-0 bg-transparent border-0 cursor-pointer"
+              />
+            </Tooltip>
+            <div className="relative flex-1 min-w-0 flex items-stretch pointer-events-none">
+              {headerContent}
+            </div>
+          </div>
         ) : (
           <Link to={`/pods/${event.slug}`} className={headerClass}>
             {headerContent}
           </Link>
         )}
-        {!stacked && <EventDetailsLink slug={event.slug} />}
+        {!stacked && <EventDetailsLink slug={event.slug} highlighted={titleHovered} />}
       </div>
 
       <div
@@ -918,18 +1008,27 @@ function TeamDraftResult({ event, stacked }: { event: PodEventSummary; stacked: 
 
 // Expanding and opening the pod are different intents, so the row carries both. The events column
 // is the narrow one, so the label lives in the tooltip and the row keeps its width for the identity
-function EventDetailsLink({ slug }: { slug: string }) {
+function EventDetailsLink({ slug, highlighted = false }: { slug: string; highlighted?: boolean }) {
   return (
-    <Tooltip label="View Pod Breakdown" side="top" align="end">
+    <Tooltip label="View Pod Breakdown" side="top" align="end" delayDuration={ROW_TOOLTIP_DELAY}>
       <Link
         to={`/pods/${slug}`}
         aria-label="View pod breakdown"
-        className="group/details flex shrink-0 items-center justify-center gap-1.5 self-stretch pl-4 pr-2.5 bg-bg
-          border-l border-border text-subtle no-underline transition-colors
-          hover:border-green/60 hover:bg-green/10 hover:text-green"
+        className={cn(
+          `group/details flex shrink-0 items-center justify-center gap-1.5 self-stretch pl-4 pr-2.5 bg-bg
+            border-l border-border text-subtle no-underline transition-colors
+            hover:border-green/60 hover:bg-green/10 hover:text-green`,
+          highlighted && "border-green/60 bg-green/10 text-green",
+        )}
       >
         <GiRoundTable size={22} className="shrink-0" />
-        <ArrowRight size={13} className="shrink-0 transition-transform group-hover/details:translate-x-0.5" />
+        <ArrowRight
+          size={13}
+          className={cn(
+            "shrink-0 transition-transform group-hover/details:translate-x-0.5",
+            highlighted && "translate-x-0.5",
+          )}
+        />
       </Link>
     </Tooltip>
   );
@@ -993,10 +1092,14 @@ function EventRowBody({
   event,
   nowMs,
   stacked = false,
+  titleLinkTo = null,
+  onTitleHover,
 }: {
   event: PodEventSummary;
   nowMs: number;
   stacked?: boolean;
+  titleLinkTo?: string | null;
+  onTitleHover?: (hovered: boolean) => void;
 }) {
   const inProgress = !event.isFinalized && new Date(event.eventTime).getTime() <= nowMs;
   const { data: matches } = usePodEventMatches(inProgress ? event.eventId : undefined);
@@ -1013,9 +1116,25 @@ function EventRowBody({
     const round = earliestUnreported ?? latest;
     return Math.min(round, event.totalRounds);
   }, [matches, event.totalRounds]);
+  const titleText = <PodEventTitle event={event} />;
   const title = (
     <RowTitle stacked={stacked}>
-      <PodEventTitle event={event} />
+      {titleLinkTo ? (
+        <Tooltip label="View Pod Breakdown" side="top" align="start" delayDuration={ROW_TOOLTIP_DELAY}>
+          <Link
+            to={titleLinkTo}
+            onMouseEnter={() => onTitleHover?.(true)}
+            onMouseLeave={() => onTitleHover?.(false)}
+            onFocus={() => onTitleHover?.(true)}
+            onBlur={() => onTitleHover?.(false)}
+            className="pointer-events-auto no-underline text-inherit transition-colors hover:text-green"
+          >
+            {titleText}
+          </Link>
+        </Tooltip>
+      ) : (
+        titleText
+      )}
     </RowTitle>
   );
   // A pod with no champion is a pod still running, so the row says nothing about being in progress
@@ -1316,12 +1435,14 @@ function MobileFilterBar({
   activeSet,
   availableSets,
   onSelectSet,
-  windowSelector,
+  seasonSelector,
+  formatSelector,
 }: {
   activeSet: string;
   availableSets: SetSummary[];
   onSelectSet: (code: string) => void;
-  windowSelector?: React.ReactNode;
+  seasonSelector?: React.ReactNode;
+  formatSelector?: React.ReactNode;
 }) {
   const options = useMemo(() => setFilterOptionsFrom(availableSets, true), [availableSets]);
   // The set list is its own query, so hold the band's shape until it lands instead of pushing the
@@ -1337,10 +1458,9 @@ function MobileFilterBar({
       </div>
     );
   }
-  const second = windowSelector;
   return (
-    <div className="px-3 py-2 border-b border-border bg-surface flex items-stretch gap-2">
-      <div className={cn("min-w-0 flex", second ? "basis-1/2" : "flex-1")}>
+    <div className="px-3 py-2 border-b border-border bg-surface flex flex-col gap-2">
+      <div className="flex items-stretch gap-2">
         <SetFilterDropdown
           value={activeSet}
           options={options}
@@ -1350,7 +1470,12 @@ function MobileFilterBar({
           valueLabel="name"
         />
       </div>
-      {second && <div className="basis-1/2 min-w-0 flex">{second}</div>}
+      {(seasonSelector || formatSelector) && (
+        <div className="flex items-stretch gap-2">
+          {seasonSelector && <div className="flex-1 min-w-0 flex">{seasonSelector}</div>}
+          {formatSelector && <div className="flex-1 min-w-0 flex">{formatSelector}</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -1368,7 +1493,8 @@ function ChipIcon({
 }) {
   if (bucket === "mock") return <TbCards size={size} className={className} />;
   if (bucket === "set") {
-    return seasonMeta ? <SetGlyph code={setGlyphCode(seasonMeta)} size={size} className={className} /> : null;
+    if (!seasonMeta) return <GiCardPick size={size} className={className} />;
+    return <SetGlyph code={setGlyphCode(seasonMeta)} size={size} className={className} />;
   }
   return <SetGlyph code={bucket === "cube" ? CUBE_BASE : "FLASHBACK"} size={size} className={className} />;
 }
@@ -1378,52 +1504,45 @@ function SetHero({
   setMeta,
   sets,
   onSelectSet,
-  windowSelector,
   range,
   isSeason,
+  allSeasons,
 }: {
   activeSet: string;
   setMeta: SetSummary | undefined;
   sets: SetSummary[];
   onSelectSet: (code: string) => void;
-  windowSelector?: React.ReactNode;
   range?: string | null;
   isSeason: boolean;
+  allSeasons: boolean;
 }) {
-  const week = isSeason ? weekOfSet(setMeta) : null;
-  const isActive = setMeta?.isActive ?? false;
+  const week = isSeason && !allSeasons ? weekOfSet(setMeta) : null;
+  const isActive = !allSeasons && (setMeta?.isActive ?? false);
   return (
     <div className="relative px-10 py-5 border-b border-border bg-surface flex items-center gap-6">
-      <SetGlyph code={setMeta ? setGlyphCode(setMeta) : activeSet} size={84} />
+      {allSeasons ? (
+        <GiRoundTable size={84} className="text-text" />
+      ) : (
+        <SetGlyph code={setMeta ? setGlyphCode(setMeta) : activeSet} size={84} />
+      )}
       <div>
         <SectionLabel size={13} className={cn("text-green", !isActive && "invisible")}>LIVE</SectionLabel>
         <div className="flex items-baseline gap-3.5 mt-0.5">
           <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
-            {activeSet}
+            {allSeasons ? "ALL SEASONS" : activeSet}
           </span>
           <span className="font-display text-[22px] text-muted tracking-[0.06em]">
-            {setMeta?.name?.toUpperCase() ?? ""}
+            {allSeasons ? "EVERY POD DRAFT" : (setMeta?.name?.toUpperCase() ?? "")}
           </span>
         </div>
-        {windowSelector ? (
-          // Same line the cube header uses: the range holds it at text height while the zero-height
-          // wrapper lets the larger selector float over it, so the set code never moves
-          <div className="mono text-[11px] text-muted mt-1 tracking-[0.04em] flex items-center gap-6 h-4">
-            <div className="h-0 shrink-0 flex items-center">{windowSelector}</div>
-            {/* Nudged onto the selector's baseline: the two sit in one line box at 11px and 20px, so
-                box alignment leaves the smaller text riding high. Transform, so the hero keeps its height. */}
-            <span className="whitespace-nowrap ml-auto self-end translate-y-[4px]">{range || " "}</span>
-          </div>
-        ) : (
-          <div className="mono text-[11px] text-muted mt-1 flex items-center justify-between gap-4 h-4">
-            <span>{range || " "}</span>
-            {week && <span>{week}</span>}
-          </div>
-        )}
+        <div className="mono text-[11px] text-muted mt-1 flex items-center justify-between gap-4 h-4">
+          <span>{range || " "}</span>
+          {week && <span>{week}</span>}
+        </div>
       </div>
       <div className="flex-1" />
       {sets.length > 0 && (
-        <SetSwitcherDesktop sets={sets} activeCode={activeSet} onChange={onSelectSet} />
+        <SetSwitcherDesktop sets={sets} activeCode={allSeasons ? "" : activeSet} onChange={onSelectSet} />
       )}
     </div>
   );
