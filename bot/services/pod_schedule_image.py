@@ -164,7 +164,7 @@ def _rows_for(day: date, *, past: bool) -> list[tuple[str, RGB, str]]:
     rows = [(latest_on(day), ARRIVAL, latest_on(day))] if is_rotation_day(day) else []
     rows.extend((_cell_label(code), ink, code) for code in extras_on(day))
     if not rows:
-        rows.append(("", FAINT, latest_on(day)))
+        rows.append(("", FAINT if past else ink, latest_on(day)))
     return rows
 
 
