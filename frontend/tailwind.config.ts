@@ -44,6 +44,7 @@ const config: Config = {
         display: ["'Bebas Neue'", "sans-serif"],
         body: ["'Space Grotesk'", "Inter", "sans-serif"],
         mono: ["'JetBrains Mono'", "monospace"],
+        spectral: ["Spectral", "Georgia", "serif"],
       },
       fontVariantNumeric: {
         tabular: ["tabular-nums"],

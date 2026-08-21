@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     PrimaryKeyConstraint,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -44,6 +46,74 @@ class P0P1Voter(Base):
     user_id    = Column(UUID(as_uuid=True), primary_key=True)
     name       = Column(Text, nullable=False)
     avatar_url = Column(Text, nullable=True)
+
+
+class TrackerDraftNote(Base):
+    """Per-draft annotation for the private tracker. draft_event_id keys the id emitted by
+    public_player_draft_events, which unions two base tables, so it carries no foreign key.
+    """
+    __tablename__ = "tracker_draft_notes"
+
+    user_id        = Column(UUID(as_uuid=True), nullable=False)
+    draft_event_id = Column(Text, nullable=False)
+    note           = Column(Text, nullable=True)
+    deck_label     = Column(Text, nullable=True)
+    rares          = Column(SmallInteger, nullable=True)
+    mythics        = Column(SmallInteger, nullable=True)
+    updated_at     = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "draft_event_id"),
+    )
+
+
+class TrackerMatchNote(Base):
+    __tablename__ = "tracker_match_notes"
+
+    user_id         = Column(UUID(as_uuid=True), nullable=False)
+    draft_event_id  = Column(Text, nullable=False)
+    match_number    = Column(SmallInteger, nullable=False)
+    result          = Column(Text, nullable=True)
+    opponent_colors = Column(Text, nullable=True)
+    note            = Column(Text, nullable=True)
+    updated_at      = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "draft_event_id", "match_number"),
+        CheckConstraint("result IS NULL OR result IN ('W', 'L')", name="tracker_match_result_valid"),
+    )
+
+
+class TrackerSetEconomy(Base):
+    """The pack inputs the spreadsheet's top block carried, one row per set"""
+    __tablename__ = "tracker_set_economy"
+
+    user_id             = Column(UUID(as_uuid=True), nullable=False)
+    set_code            = Column(Text, nullable=False)
+    packs_owned         = Column(SmallInteger, nullable=False, server_default="0")
+    golden_packs        = Column(SmallInteger, nullable=False, server_default="0")
+    mastery_level       = Column(SmallInteger, nullable=False, server_default="0")
+    ranked_season_packs = Column(SmallInteger, nullable=False, server_default="0")
+    updated_at          = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "set_code"),
+    )
+
+
+class TrackerCollection(Base):
+    __tablename__ = "tracker_collection"
+
+    user_id    = Column(UUID(as_uuid=True), nullable=False)
+    set_code   = Column(Text, nullable=False)
+    card_name  = Column(Text, nullable=False)
+    owned      = Column(SmallInteger, nullable=False, server_default="0")
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "set_code", "card_name"),
+        CheckConstraint("owned BETWEEN 0 AND 4", name="tracker_collection_owned_range"),
+    )
 
 
 class Player(Base):
@@ -200,6 +270,14 @@ class DraftEvent(Base):
     start_rank = Column(String, nullable=True)
     end_rank   = Column(String, nullable=True)
     account_id = Column(Integer, ForeignKey("player_accounts.id", ondelete="SET NULL"), nullable=True)
+
+    # Objective 17lands detail, fetched once because a finished draft never changes.
+    # deck_cards holds {"maindeck": [{name, rarity}], "sideboard": [...]}; match_results holds
+    # one entry per match with its result, opponent colors and per-game play/draw
+    pool_rares    = Column(Integer, nullable=True)
+    pool_mythics  = Column(Integer, nullable=True)
+    deck_cards    = Column(JSONB, nullable=True)
+    match_results = Column(JSONB, nullable=True)
 
     started_at  = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)

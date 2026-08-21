@@ -2,12 +2,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useHref, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
+import { useAuth } from "../auth/useAuth";
+import { isTrackerUser } from "../data/trackerUsers";
+import { Collection } from "../components/tracker/Collection";
+import { DraftLog } from "../components/tracker/DraftLog";
+import { TrackerStatsBlock } from "../components/tracker/TrackerStatsBlock";
+import { RefreshButton } from "../components/tracker/RefreshButton";
+import { AccountTabs, useTrackerAccounts } from "../components/tracker/AccountTabs";
+import { TRACKER_HEADER_H } from "../components/tracker/trackerStyles";
+import { useQuery } from "@tanstack/react-query";
+import { fetchMyAccounts, type TrackerAccount } from "../data/trackerApi";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { AAvatar, ALogo, SetGlyph, Trophy, fmtPts } from "../components/Brand";
 import {
   ArrowRight,
-  BsAsterisk,
-  BsPaletteFill,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -34,7 +42,7 @@ import { ArenaRankIcon } from "../components/ArenaRankIcon";
 import { GoToTopButton } from "../components/GoToTopButton";
 import { Tooltip } from "../components/Tooltip";
 
-import { useAvailableFormats, useColorChips, useDraftEvents, useLeaderboard, usePlayerIdentity, usePlayerProfile, useSets } from "../data/hooks";
+import { useAvailableFormats, useColorChips, useDraftEvents, useLeaderboard, usePlayerIdentity, usePlayerProfile, usePlayerSlugByDiscordId, useSets } from "../data/hooks";
 import { withMtgoSets } from "../data/mtgoSets";
 import { aggregate as scoreAggregate, computeScore, type ScoringStatRow } from "../data/scoring";
 import { canonicalSetCode, colorsOf, eventDate, eventDisplayLabel, fmtShortDate, formatTag, isCubeCode, isFlashbackEvent, isSoup, lastUpdated, lcqCashPrize, leaderboardPath, mainColors, PLAYER_BASE, playerPath, prettyFormat, winPct } from "../data/utils";
@@ -50,7 +58,7 @@ import {
   OTHER,
   type FilterOption,
 } from "../data/filters";
-import { FMT_COLORS, renderFormatOption, shortFormat } from "../data/format-display";
+import { FMT_COLORS, renderColorOption, renderFormatOption, shortFormat } from "../data/format-display";
 import { cn } from "../lib/utils";
 import type {
   PlayerDraftEvent,
@@ -89,32 +97,6 @@ function comboColors(combo: string): string[] {
   }
   return out.length > 0 ? out : ["#7a8395"];
 }
-
-const renderColorOption = (opt: FilterOption) => {
-  if (opt.value === "ALL") return <span>{opt.label}</span>;
-  if (opt.value === MULTI) {
-    return (
-      <span className="flex items-center gap-2">
-        <BsPaletteFill size={12} aria-hidden="true" />
-        <span>{opt.label}</span>
-      </span>
-    );
-  }
-  if (opt.value === OTHER) {
-    return (
-      <span className="flex items-center gap-2">
-        <BsAsterisk size={11} aria-hidden="true" />
-        <span>{opt.label}</span>
-      </span>
-    );
-  }
-  return (
-    <span className="flex items-center gap-2">
-      <Pips colors={opt.value} size={12} />
-      <span>{opt.label}</span>
-    </span>
-  );
-};
 
 // ─── Page entry ────────────────────────────────────────────────────────────
 
@@ -735,6 +717,10 @@ function Desktop({
   const wp = winPct(stats.wins, stats.losses);
   const ranked = profile.rank > 0;
   const hasBreakdown = profile.events > 0 || profile.selfReportedEvents.length > 0;
+  const trackerMode = useOwnTrackerProfile(profile.slug);
+  const [leftPane, setLeftPane] = useState<"breakdown" | "collection">("collection");
+  const { accounts: trackerAccounts, accountId: trackerAccount, setAccountId: setTrackerAccount } =
+    useTrackerAccounts(trackerMode);
   const [pointsModalOpen, setPointsModalOpen] = useState(false);
   const pointsBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -769,6 +755,9 @@ function Desktop({
             </div>
           </div>
           <div className="ml-auto flex items-stretch gap-4 min-w-0">
+            {trackerMode && (
+              <TrackerStatsBlock slug={profile.slug} setCode={profile.setCode} accountId={trackerAccount} />
+            )}
             <ManualTrophiesBlock trophies={profile.selfReportedEvents} />
             {profile.linked17lands && profile.events > 0 && (
               <StatStrip
@@ -784,10 +773,40 @@ function Desktop({
         </div>
       </section>
 
-      <div className="grid" style={{ gridTemplateColumns: hasBreakdown ? "480px minmax(0, 1fr)" : "minmax(0, 1fr)" }}>
-        {hasBreakdown && (
+      <div
+        className={cn("grid", trackerMode && "grid-cols-1 min-[1128px]:grid-cols-[480px_minmax(0,1fr)]")}
+        style={trackerMode ? undefined : { gridTemplateColumns: hasBreakdown ? "480px minmax(0, 1fr)" : "minmax(0, 1fr)" }}
+      >
+        {trackerMode ? (
+          <div className="border-b border-border min-[1128px]:border-b-0 min-[1128px]:border-r">
+            <div className={cn("flex items-center gap-2 border-b border-border bg-surface pl-8 pr-4",
+                               TRACKER_HEADER_H)}>
+              <LeftPaneTab active={leftPane === "breakdown"} onClick={() => setLeftPane("breakdown")}>
+                BREAKDOWN
+              </LeftPaneTab>
+              <LeftPaneTab active={leftPane === "collection"} onClick={() => setLeftPane("collection")}>
+                COLLECTION
+              </LeftPaneTab>
+              <AccountTabs
+                accounts={trackerAccounts}
+                active={trackerAccount}
+                onChange={setTrackerAccount}
+                className="ml-auto"
+              />
+              <RefreshButton setCode={profile.setCode} />
+            </div>
+            {leftPane === "collection" ? (
+              <Collection slug={profile.slug} setCode={profile.setCode} accountId={trackerAccount} narrow />
+            ) : (
+              <BreakdownPanel breakdown={profile.formatBreakdown} totalScore={profile.score} events={events} selfReported={profile.selfReportedEvents} showPoints={ranked} lockedFormats={lockedFormats} bordered={false} />
+            )}
+          </div>
+        ) : hasBreakdown && (
           <BreakdownPanel breakdown={profile.formatBreakdown} totalScore={profile.score} events={events} selfReported={profile.selfReportedEvents} showPoints={ranked} lockedFormats={lockedFormats} />
         )}
+        {trackerMode ? (
+          <DraftLog slug={profile.slug} setCode={profile.setCode} accountId={trackerAccount} />
+        ) : (
         <DraftLogDesktop
           events={events}
           filtered={filtered}
@@ -804,6 +823,7 @@ function Desktop({
           playerDisplayName={profile.displayName}
           updated={profile.lastCalculatedAt ? lastUpdated(profile.lastCalculatedAt) : null}
         />
+        )}
       </div>
 
       <PointsBreakdown
@@ -825,6 +845,30 @@ function Desktop({
       )}
     </div>
   );
+}
+
+function LeftPaneTab({
+  active, onClick, children,
+}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "font-display text-[14px] tracking-[0.18em] px-4 h-full inline-flex items-center border-b-2 -mb-px",
+        active ? "text-green border-green" : "text-muted border-transparent hover:text-text",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** The tracker is private, so it only ever opens on the allowlisted user's own profile */
+function useOwnTrackerProfile(slug: string): boolean {
+  const { user } = useAuth();
+  const { data: ownSlug } = usePlayerSlugByDiscordId(user?.discordId);
+  return isTrackerUser(user?.discordId) && ownSlug === slug;
 }
 
 // A self-reported trophy rendered inline in the event log as a synthetic event. Carries the
@@ -1053,6 +1097,7 @@ function BreakdownPanel({
   selfReported,
   showPoints,
   lockedFormats,
+  bordered = true,
 }: {
   breakdown: PlayerFormatBreakdown[];
   totalScore: number;
@@ -1060,6 +1105,7 @@ function BreakdownPanel({
   selfReported: SelfReportedEvent[];
   showPoints: boolean;
   lockedFormats?: string[] | null;
+  bordered?: boolean;
 }) {
   const formatBreakdown = useMemo(
     () => [...breakdown].sort((a, b) => b.scoreContribution - a.scoreContribution),
@@ -1084,7 +1130,7 @@ function BreakdownPanel({
   }, [deckHover]);
 
   return (
-    <section className="py-6 pl-10 pr-8 border-r border-border">
+    <section className={cn("py-6 pl-10 pr-8", bordered && "border-r border-border")}>
       {showPoints && formatBreakdown.length > 0 && (
         <>
           <SectionLabel size={15} letterSpacing="0.18em" color={PANEL_TITLE_COLOR} className="mb-3.5 text-center whitespace-nowrap" style={{ width: 148 }}>POINTS BY FORMAT</SectionLabel>
@@ -1726,11 +1772,7 @@ function EventLogRow({
       );
     }
     if (rowInternal && podLinkTo) {
-      return (
-        <Link to={podLinkTo} className={cls} style={style}>
-          {inner}
-        </Link>
-      );
+      return <Link to={podLinkTo} className={cls} style={style}>{inner}</Link>;
     }
     if (rowExternal) {
       return (
@@ -1973,6 +2015,9 @@ function Mobile({
   const wp = winPct(stats.wins, stats.losses);
   const ranked = profile.rank > 0;
   const hasBreakdown = profile.events > 0 || profile.selfReportedEvents.length > 0;
+  const trackerMode = useOwnTrackerProfile(profile.slug);
+  const { accounts: trackerAccounts, accountId: trackerAccount, setAccountId: setTrackerAccount } =
+    useTrackerAccounts(trackerMode);
   const [pointsModalOpen, setPointsModalOpen] = useState(false);
   const pointsBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -2044,10 +2089,29 @@ function Mobile({
         )}
       </section>
 
-      {hasBreakdown && (
-        <MobileBreakdown breakdown={profile.formatBreakdown} events={events} selfReported={profile.selfReportedEvents} showPoints={ranked} lockedFormats={lockedFormats} />
+      {(hasBreakdown || trackerMode) && (
+        <MobileBreakdown
+          breakdown={profile.formatBreakdown}
+          events={events}
+          selfReported={profile.selfReportedEvents}
+          showPoints={ranked}
+          lockedFormats={lockedFormats}
+          tracker={
+            trackerMode
+              ? {
+                  slug: profile.slug,
+                  setCode: profile.setCode,
+                  updatedAt: profile.lastCalculatedAt ?? null,
+                  accounts: trackerAccounts,
+                  accountId: trackerAccount,
+                  onChangeAccount: setTrackerAccount,
+                }
+              : null
+          }
+        />
       )}
 
+      {!trackerMode && (
       <section ref={eventLogRef} className="py-4 px-[18px]">
         <div className="flex items-center justify-between mb-2.5 gap-2">
           <div className="flex items-baseline gap-2">
@@ -2111,6 +2175,7 @@ function Mobile({
         )}
         <GoToTopButton onClick={scrollToTop} compact />
       </section>
+      )}
 
       <PointsBreakdown
         open={pointsModalOpen}
@@ -2135,12 +2200,21 @@ function Mobile({
 
 // ─── Mobile breakdown (tabbed) ─────────────────────────────────────────────
 
-type BreakdownTab = "format" | "deckColors" | "manaPips";
+type BreakdownTab = "format" | "deckColors" | "manaPips" | "collection" | "games";
 
 const BREAKDOWN_TAB_STORAGE_KEY = "player-breakdown-tab";
 
 function isBreakdownTab(v: unknown): v is BreakdownTab {
-  return v === "format" || v === "deckColors" || v === "manaPips";
+  return v === "format" || v === "deckColors" || v === "manaPips" || v === "collection" || v === "games";
+}
+
+interface MobileTracker {
+  slug: string;
+  setCode: string;
+  updatedAt: string | null;
+  accounts: TrackerAccount[];
+  accountId: number | null;
+  onChangeAccount: (id: number) => void;
 }
 
 function MobileBreakdown({
@@ -2149,12 +2223,15 @@ function MobileBreakdown({
   selfReported,
   showPoints,
   lockedFormats,
+  tracker,
 }: {
   breakdown: PlayerFormatBreakdown[];
   events: PlayerDraftEvent[];
   selfReported: SelfReportedEvent[];
   showPoints: boolean;
   lockedFormats?: string[] | null;
+  /** null on every profile but the tracker owner's own */
+  tracker: MobileTracker | null;
 }) {
   const [tab, setTab] = useState<BreakdownTab>(() => {
     if (typeof window === "undefined") return "deckColors";
@@ -2164,28 +2241,70 @@ function MobileBreakdown({
   useEffect(() => {
     window.localStorage.setItem(BREAKDOWN_TAB_STORAGE_KEY, tab);
   }, [tab]);
-  const activeTab = tab === "format" && !showPoints ? "deckColors" : tab;
+  const offered = (t: BreakdownTab) =>
+    t === "format" ? showPoints : t === "collection" || t === "games" ? !!tracker : true;
+  const activeTab = offered(tab) ? tab : "deckColors";
+  const sectionRef = useRef<HTMLElement>(null);
   return (
-    <section className="border-b border-border">
+    <section ref={sectionRef} className="border-b border-border">
       <div className="flex border-b border-border">
+        {tracker && (
+          <BreakdownTabButton active={activeTab === "collection"} onClick={() => setTab("collection")}>
+            COLLECTION
+          </BreakdownTabButton>
+        )}
+        {tracker && (
+          <BreakdownTabButton active={activeTab === "games"} onClick={() => setTab("games")}>
+            GAMES
+          </BreakdownTabButton>
+        )}
         {showPoints && (
           <BreakdownTabButton active={activeTab === "format"} onClick={() => setTab("format")}>
-            POINTS BY FORMAT
+            {tracker ? "POINTS" : "POINTS BY FORMAT"}
           </BreakdownTabButton>
         )}
         <BreakdownTabButton active={activeTab === "deckColors"} onClick={() => setTab("deckColors")}>
-          DECK COLORS
+          {tracker ? "DECKS" : "DECK COLORS"}
         </BreakdownTabButton>
         <BreakdownTabButton active={activeTab === "manaPips"} onClick={() => setTab("manaPips")}>
-          COLORS PLAYED
+          {tracker ? "COLORS" : "COLORS PLAYED"}
         </BreakdownTabButton>
       </div>
-      <div className="px-[18px] py-4">
-        {activeTab === "format" && <MobileFormatTab breakdown={breakdown} lockedFormats={lockedFormats} />}
-        {activeTab === "deckColors" && <MobileDeckColorsTab events={events} selfReported={selfReported} />}
-        {activeTab === "manaPips" && <MobileManaPipsTab events={events} selfReported={selfReported} />}
-      </div>
+      {activeTab === "collection" && tracker && <MobileCollectionTab tracker={tracker} />}
+      {activeTab !== "collection" && activeTab !== "games" && (
+        <div className="px-[18px] py-4">
+          {activeTab === "format" && <MobileFormatTab breakdown={breakdown} lockedFormats={lockedFormats} />}
+          {activeTab === "deckColors" && <MobileDeckColorsTab events={events} selfReported={selfReported} />}
+          {activeTab === "manaPips" && <MobileManaPipsTab events={events} selfReported={selfReported} />}
+        </div>
+      )}
+      {/* The collection tab is long enough on its own, so the log sits under every other tab */}
+      {tracker && activeTab !== "collection" && (
+        <div className="pt-2 border-t border-border">
+          <DraftLog slug={tracker.slug} setCode={tracker.setCode} accountId={tracker.accountId}
+                    updatedAt={tracker.updatedAt} />
+          <GoToTopButton
+            onClick={() => sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            compact
+          />
+        </div>
+      )}
     </section>
+  );
+}
+
+// Carries the controls the desktop left column puts beside its tabs, where there is no room here
+function MobileCollectionTab({ tracker }: { tracker: MobileTracker }) {
+  const { slug, setCode, accounts, accountId, onChangeAccount } = tracker;
+  return (
+    <>
+      <div className="flex items-center gap-2 px-4 pt-3">
+        <AccountTabs accounts={accounts} active={accountId} onChange={onChangeAccount} />
+        <RefreshButton setCode={setCode} className="ml-auto" />
+      </div>
+      <TrackerStatsBlock slug={slug} setCode={setCode} accountId={accountId} className="mx-4 mt-3" />
+      <Collection slug={slug} setCode={setCode} accountId={accountId} />
+    </>
   );
 }
 

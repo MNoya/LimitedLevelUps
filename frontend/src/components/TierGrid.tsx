@@ -476,6 +476,50 @@ export interface PreviewAnchor {
   arrowTop: number;
 }
 
+
+// Anchors a preview beside the hovered element, flipped to whichever side has room and clamped
+// vertically. Shared so every card hover on the site lands in the same place with the same chrome.
+export function previewAnchorFor(el: HTMLElement, previewH = PREVIEW_W * PREVIEW_RATIO + PREVIEW_EXTRAS_H): PreviewAnchor {
+  const rect = el.getBoundingClientRect();
+  const centerY = rect.top + rect.height / 2;
+  const top = Math.min(
+    Math.max(centerY - previewH / 2, 8),
+    Math.max(window.innerHeight - previewH - 8, 8),
+  );
+  const onRight = rect.right + PREVIEW_GAP + PREVIEW_W <= window.innerWidth - 8;
+  const left = onRight ? rect.right + PREVIEW_GAP : rect.left - PREVIEW_GAP - PREVIEW_W;
+  const arrowTop = Math.min(Math.max(centerY - top, 14), previewH - 14);
+  return { left, top, onRight, arrowTop };
+}
+
+export function PreviewShell({ anchor, children }: { anchor: PreviewAnchor; children: React.ReactNode }) {
+  const g = PREVIEW_GAP;
+  const triangle = anchor.onRight ? `M${g} 0 L0 11 L${g} 22 Z` : `M0 0 L${g} 11 L0 22 Z`;
+  const triangleInner = anchor.onRight
+    ? `M${g} 1.4 L1.6 11 L${g} 20.6 Z`
+    : `M0 1.4 L${g - 1.6} 11 L0 20.6 Z`;
+  return (
+    <div className="pointer-events-none fixed z-[100]" style={{ left: anchor.left, top: anchor.top, width: PREVIEW_W }}>
+      <svg
+        width={g}
+        height="22"
+        viewBox={`0 0 ${g} 22`}
+        className="absolute z-10"
+        style={{ top: anchor.arrowTop - 11, ...(anchor.onRight ? { left: -(g - 1) } : { right: -(g - 1) }) }}
+      >
+        <path d={triangle} fill="#fff" fillOpacity="0.6" />
+        <path d={triangleInner} fill={PREVIEW_MAT} />
+      </svg>
+      <div
+        className="relative flex flex-col rounded-xl border border-white/60 p-[6px] shadow-2xl"
+        style={{ backgroundColor: PREVIEW_MAT }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function CardBar({
   card,
   mobile,
@@ -499,20 +543,7 @@ function CardBar({
   const openPreview = () => {
     const el = ref.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const previewH = PREVIEW_W * PREVIEW_RATIO + PREVIEW_EXTRAS_H;
-    const centerY = rect.top + rect.height / 2;
-    const top = Math.min(
-      Math.max(centerY - previewH / 2, 8),
-      Math.max(window.innerHeight - previewH - 8, 8),
-    );
-    const onRight =
-      rect.right + PREVIEW_GAP + PREVIEW_W <= window.innerWidth - 8;
-    const left = onRight
-      ? rect.right + PREVIEW_GAP
-      : rect.left - PREVIEW_GAP - PREVIEW_W;
-    const arrowTop = Math.min(Math.max(centerY - top, 14), previewH - 14);
-    setAnchor({ left, top, onRight, arrowTop });
+    setAnchor(previewAnchorFor(el));
   };
 
   return (
@@ -720,45 +751,17 @@ export function CardPreview({
   card: TierCard;
   anchor: PreviewAnchor;
 }) {
-  const g = PREVIEW_GAP;
-  const triangle = anchor.onRight
-    ? `M${g} 0 L0 11 L${g} 22 Z`
-    : `M0 0 L${g} 11 L0 22 Z`;
-  const triangleInner = anchor.onRight
-    ? `M${g} 1.4 L1.6 11 L${g} 20.6 Z`
-    : `M0 1.4 L${g - 1.6} 11 L0 20.6 Z`;
   return (
-    <div
-      className="pointer-events-none fixed z-[100]"
-      style={{ left: anchor.left, top: anchor.top, width: PREVIEW_W }}
-    >
-      <svg
-        width={g}
-        height="22"
-        viewBox={`0 0 ${g} 22`}
-        className="absolute z-10"
-        style={{
-          top: anchor.arrowTop - 11,
-          ...(anchor.onRight ? { left: -(g - 1) } : { right: -(g - 1) }),
-        }}
-      >
-        <path d={triangle} fill="#fff" fillOpacity="0.6" />
-        <path d={triangleInner} fill={PREVIEW_MAT} />
-      </svg>
-      <div
-        className="relative flex flex-col rounded-xl border border-white/60 p-[6px] shadow-2xl"
-        style={{ backgroundColor: PREVIEW_MAT }}
-      >
-        <CardFlagTabs card={card} />
-        <GradesPanel card={card} />
-        <img src={card.url} alt="" className="w-full rounded-[10px]" />
-        {card.comment && (
-          <p className="whitespace-pre-line px-3 py-2.5 text-center text-[14px] leading-snug text-text">
-            {card.comment}
-          </p>
-        )}
-      </div>
-    </div>
+    <PreviewShell anchor={anchor}>
+      <CardFlagTabs card={card} />
+      <GradesPanel card={card} />
+      <img src={card.url} alt="" className="w-full rounded-[10px]" />
+      {card.comment && (
+        <p className="whitespace-pre-line px-3 py-2.5 text-center text-[14px] leading-snug text-text">
+          {card.comment}
+        </p>
+      )}
+    </PreviewShell>
   );
 }
 

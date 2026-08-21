@@ -15,12 +15,9 @@ export function DocumentTitle() {
   const { data: sets } = useSets();
   const setCodes = new Set((sets ?? []).map((s) => s.code.toUpperCase()));
 
-  const [section, ...rest] = segments;
-  const playerSlug = playerSlugFrom(section, rest);
+  const { slug: playerSlug, setCode: routeSetCode } = playerRouteFrom(segments);
   const liveSetCode = (sets ?? []).find((s) => s.isActive)?.code;
-  const setForProfile =
-    (rest[0] && rest[0] !== "player" ? rest[0].toUpperCase() : undefined) ?? liveSetCode ?? ACTIVE_SET_CODE;
-  const { data: profile } = usePlayerProfile(playerSlug, setForProfile);
+  const { data: profile } = usePlayerProfile(playerSlug, routeSetCode ?? liveSetCode ?? ACTIVE_SET_CODE);
 
   const pageTitle = resolvePageTitle(segments, profile?.displayName, setCodes);
 
@@ -31,17 +28,22 @@ export function DocumentTitle() {
   return null;
 }
 
-const playerSlugFrom = (section: string | undefined, rest: string[]): string | undefined => {
+/** The live `/player/<slug>[/<set>]` route and the legacy leaderboard-nested ones */
+const playerRouteFrom = (segments: string[]): { slug?: string; setCode?: string } => {
+  const [section, ...rest] = segments;
+  if (section === "player") {
+    return { slug: rest[0]?.toLowerCase(), setCode: rest[1]?.toUpperCase() };
+  }
   if (section !== "leaderboard") {
-    return undefined;
+    return {};
   }
   if (rest[0] === "player") {
-    return rest[1]?.toLowerCase();
+    return { slug: rest[1]?.toLowerCase() };
   }
   if (rest[1] === "player") {
-    return rest[2]?.toLowerCase();
+    return { slug: rest[2]?.toLowerCase(), setCode: rest[0]?.toUpperCase() };
   }
-  return undefined;
+  return {};
 };
 
 const titleCaseSlug = (slug: string, setCodes: Set<string>): string =>
@@ -77,6 +79,9 @@ const resolvePageTitle = (
   }
   const [section, ...rest] = segments;
 
+  if (section === "player" && rest[0]) {
+    return playerName ?? titleCaseSlug(rest[0], setCodes);
+  }
   if (section === "leaderboard") {
     if (rest.length === 0) {
       return "Leaderboard";

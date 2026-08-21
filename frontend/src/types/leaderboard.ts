@@ -89,6 +89,26 @@ export interface PlayerDraftEvent {
   podEventSlug?: string | null;
   // Arena rank when the event finished ("Gold-3", "Mythic-1"). Null for pod rows
   endRank?: string | null;
+  // Opaque player_accounts id, so one Arena account's drafts separate from another's.
+  // Null for pod rows, and absent unless the caller selected it
+  accountId?: number | null;
+  // Fetched once from 17lands and stored beside the event; absent unless selected
+  poolRares?: number | null;
+  poolMythics?: number | null;
+  deckCards?: { maindeck?: TrackedCard[]; sideboard?: TrackedCard[] } | null;
+  matchResults?: TrackedMatch[] | null;
+}
+
+export interface TrackedCard {
+  name: string;
+  rarity: string;
+}
+
+export interface TrackedMatch {
+  match_number: number;
+  won: boolean | null;
+  opponent_colors: string | null;
+  games: Array<{ on_play: boolean | null; won: boolean | null }>;
 }
 
 export interface ColorsLeaderboardRow {

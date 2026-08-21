@@ -1,4 +1,7 @@
 import type { FilterOption } from "./filters";
+import { MULTI, OTHER } from "./filters";
+import { Pips } from "../components/ManaPips";
+import { BsAsterisk, BsPaletteFill } from "../components/Icons";
 
 // Single source of truth for per-format swatch colors. Keep the keys aligned
 // with the backend `format_label` groups so dropdowns, donuts, and legend
@@ -62,6 +65,32 @@ export const renderFormatOption = (opt: FilterOption) => {
   return (
     <span className="flex items-center gap-2">
       <span className="h-2 w-2 shrink-0" style={{ background: color }} />
+      <span>{opt.label}</span>
+    </span>
+  );
+};
+
+export const renderColorOption = (opt: FilterOption) => {
+  if (opt.value === "ALL") return <span>{opt.label}</span>;
+  if (opt.value === MULTI) {
+    return (
+      <span className="flex items-center gap-2">
+        <BsPaletteFill size={12} aria-hidden="true" />
+        <span>{opt.label}</span>
+      </span>
+    );
+  }
+  if (opt.value === OTHER) {
+    return (
+      <span className="flex items-center gap-2">
+        <BsAsterisk size={11} aria-hidden="true" />
+        <span>{opt.label}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-2">
+      <Pips colors={opt.value} size={12} />
       <span>{opt.label}</span>
     </span>
   );

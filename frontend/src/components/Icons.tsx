@@ -6,6 +6,7 @@ import {
   ChevronLeft as LR_ChevronLeft,
   ChevronRight as LR_ChevronRight,
   ChevronsRight as LR_ChevronsRight,
+  ChevronUp as LR_ChevronUp,
   Clock as LR_Clock,
   ExternalLink as LR_ExternalLink,
   Globe as LR_Globe,
@@ -56,6 +57,7 @@ export const ChevronDown = withShrink(LR_ChevronDown);
 export const ChevronLeft = withShrink(LR_ChevronLeft);
 export const ChevronRight = withShrink(LR_ChevronRight);
 export const ChevronsRight = withShrink(LR_ChevronsRight);
+export const ChevronUp = withShrink(LR_ChevronUp);
 export const Clock = withShrink(LR_Clock);
 export const Lock = withShrink(LR_Lock);
 export const ExternalLink = withShrink(LR_ExternalLink);

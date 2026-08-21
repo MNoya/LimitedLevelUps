@@ -1,17 +1,26 @@
 """Dev-only PostgREST-shaped proxy over docker postgres. See spec/pod-draft-replays.md for setup."""
 from __future__ import annotations
 
+import asyncio
 import datetime
 import decimal
 import json
 import logging
 import os
 import re
+import time
 from collections.abc import Iterable
 from typing import Any
 
+import urllib.request
+
 from aiohttp import web
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.orm import sessionmaker
+
+from bot.models import DraftEvent, MagicSet, Player
+from bot.services.refresh import refresh_player
+from bot.services.seventeenlands import SeventeenLandsClient
 
 
 log = logging.getLogger(__name__)
@@ -41,6 +50,28 @@ _ALLOWED_VIEWS = {
 }
 
 _OP_PATTERN = re.compile(r"^(eq|neq|lt|lte|gt|gte|like|ilike|in)\.(.+)$", re.DOTALL)
+
+# Writable tracker tables and their primary keys. Prod scopes these with RLS on auth.uid();
+# there is no auth here, so every row is forced onto one dev user
+_TRACKER_TABLES = {
+    "tracker_draft_notes": ("user_id", "draft_event_id"),
+    "tracker_match_notes": ("user_id", "draft_event_id", "match_number"),
+    "tracker_collection": ("user_id", "set_code", "card_name"),
+    "tracker_set_economy": ("user_id", "set_code"),
+}
+DEV_USER_ID = "00000000-0000-4000-8000-000000000001"
+# public_my_player_accounts scopes itself with auth.jwt(), which does not exist here,
+# so serve the same shape for whichever player the dev identity points at
+DEV_DISCORD_ID = os.environ.get("DEV_DISCORD_ID", "237762740532412416")
+MY_ACCOUNTS_SQL = """
+    SELECT p.slug, pa.id AS account_id, pa.name AS account_name, count(de.id) AS events
+    FROM player_accounts pa
+    JOIN players p ON p.id = pa.player_id
+    LEFT JOIN draft_events de ON de.account_id = pa.id
+    WHERE p.discord_id = :discord_id
+    GROUP BY p.slug, pa.id, pa.name
+    ORDER BY count(de.id) DESC
+"""
 
 
 def _json_default(value: Any) -> Any:
@@ -86,8 +117,17 @@ def _build_where(query: Iterable[tuple[str, str]]) -> tuple[str, dict[str, Any]]
 
 async def _handle_view(request: web.Request) -> web.Response:
     view = request.match_info["view"]
+    if view in _TRACKER_TABLES:
+        return await _handle_tracker(request, view)
+    if view == "public_my_player_accounts":
+        with request.app["engine"].connect() as conn:
+            rows = conn.execute(text(MY_ACCOUNTS_SQL), {"discord_id": DEV_DISCORD_ID}).mappings().all()
+        return web.Response(body=json.dumps([dict(r) for r in rows], default=_json_default),
+                            content_type="application/json")
     if view not in _ALLOWED_VIEWS:
         return web.json_response({"error": f"view {view!r} not allowed"}, status=403)
+    if request.method != "GET":
+        return web.json_response({"error": f"{view!r} is read-only"}, status=405)
 
     engine = request.app["engine"]
     cols = request.query.get("select", "*")
@@ -115,6 +155,188 @@ async def _handle_view(request: web.Request) -> web.Response:
     return web.Response(body=body, content_type="application/json")
 
 
+async def _handle_tracker(request: web.Request, table: str) -> web.Response:
+    engine = request.app["engine"]
+    pk = _TRACKER_TABLES[table]
+
+    if request.method == "GET":
+        where_sql, params = _build_where(request.query.items())
+        sql = f'SELECT {request.query.get("select", "*")} FROM {table} WHERE "user_id" = :dev_user'
+        params["dev_user"] = DEV_USER_ID
+        if where_sql:
+            sql += f" AND {where_sql}"
+        with engine.connect() as conn:
+            rows = conn.execute(text(sql), params).mappings().all()
+        return web.Response(body=json.dumps([dict(r) for r in rows], default=_json_default),
+                            content_type="application/json")
+
+    if request.method == "DELETE":
+        where_sql, params = _build_where(request.query.items())
+        sql = f'DELETE FROM {table} WHERE "user_id" = :dev_user'
+        params["dev_user"] = DEV_USER_ID
+        if where_sql:
+            sql += f" AND {where_sql}"
+        with engine.begin() as conn:
+            conn.execute(text(sql), params)
+        return web.Response(status=204)
+
+    payload = await request.json()
+    rows = payload if isinstance(payload, list) else [payload]
+    if not rows:
+        return web.Response(status=204)
+
+    with engine.begin() as conn:
+        for row in rows:
+            values = {**row, "user_id": DEV_USER_ID}
+            cols = list(values)
+            col_sql = ", ".join(f'"{c}"' for c in cols)
+            bind_sql = ", ".join(f":{c}" for c in cols)
+            updates = [c for c in cols if c not in pk]
+            set_sql = ", ".join(f'"{c}" = EXCLUDED."{c}"' for c in updates)
+            conflict_sql = ", ".join(f'"{c}"' for c in pk)
+            sql = f"INSERT INTO {table} ({col_sql}) VALUES ({bind_sql}) ON CONFLICT ({conflict_sql}) "
+            sql += f"DO UPDATE SET {set_sql}" if updates else "DO NOTHING"
+            conn.execute(text(sql), values)
+    return web.Response(status=204)
+
+
+# 17lands sends no CORS headers on these two, and draft_events is not writable from the browser,
+# so the tracker's per-draft fetch runs here. Two requests per draft, paced apart both within a
+# draft and between drafts: a cold set is 40-odd requests and 17lands is a small site
+SEVENTEENLANDS_PAIR_GAP_S = 1.5
+SEVENTEENLANDS_DRAFT_GAP_S = 5.0
+
+
+def _fetch_17lands(path: str) -> dict | None:
+    request = urllib.request.Request(
+        f"https://www.17lands.com{path}",
+        headers={"Accept": "application/json", "User-Agent": "LLU-tracker/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.load(response)
+    except Exception:
+        log.warning(f"17lands fetch failed for {path}", exc_info=True)
+        return None
+
+
+def _summarise_draft(draft_id: str) -> dict | None:
+    """Rarity counts, decklist and match results for one finished draft"""
+    deck_body = _fetch_17lands(f"/api/deck/draft/?draft_id={draft_id}&deck_index=0")
+    time.sleep(SEVENTEENLANDS_PAIR_GAP_S)
+    details = _fetch_17lands(f"/data/details/?draft_id={draft_id}")
+    deck = (deck_body or {}).get("data") or deck_body or {}
+    cards = deck.get("cards") or {}
+
+    groups: dict[str, list[dict]] = {}
+    rares = mythics = 0
+    for group in deck.get("groups") or []:
+        entries = []
+        for card_id in group.get("cards") or []:
+            card = cards.get(str(card_id)) or {}
+            rarity = card.get("rarity")
+            entries.append({"name": card.get("name"), "rarity": rarity})
+            if rarity == "rare":
+                rares += 1
+            elif rarity == "mythic":
+                mythics += 1
+        groups[str(group.get("name", "")).lower()] = entries
+
+    matches = []
+    for index, match in enumerate((details or {}).get("match_results") or [], start=1):
+        games = match.get("game_results") or []
+        matches.append({
+            "match_number": index,
+            "won": match.get("won"),
+            "opponent_colors": next((g.get("opponent_colors") for g in games if g.get("opponent_colors")), None),
+            "games": [{"on_play": g.get("on_play"), "won": g.get("won")} for g in games],
+        })
+
+    if not groups and not matches:
+        return None
+    return {"pool_rares": rares, "pool_mythics": mythics,
+            "deck_cards": groups or None, "match_results": matches or None}
+
+
+def _ingest_drafts(sessions: sessionmaker, set_code: str | None) -> int:
+    """Pull the dev player's 17lands drafts into draft_events, returning how many rows are new"""
+    with sessions() as session:
+        player = session.execute(
+            select(Player).where(Player.discord_id == DEV_DISCORD_ID)
+        ).scalar_one_or_none()
+        if player is None or not player.seventeenlands_token:
+            return 0
+        window = select(MagicSet.start_date).order_by(MagicSet.start_date.asc())
+        known = (select(func.count()).select_from(DraftEvent)
+                 .join(MagicSet, MagicSet.id == DraftEvent.set_id)
+                 .where(DraftEvent.player_id == player.id))
+        if set_code:
+            window = window.where(MagicSet.code == set_code)
+            known = known.where(MagicSet.code == set_code)
+        before = session.execute(known).scalar_one()
+        refresh_player(session, SeventeenLandsClient(), player,
+                       fetch_start=session.execute(window).scalars().first())
+        session.commit()
+        return session.execute(known).scalar_one() - before
+
+
+async def _handle_refresh(request: web.Request) -> web.Response:
+    engine = request.app["engine"]
+    set_code = request.query.get("set_code")
+    event_id = request.query.get("event_id")
+    force = request.query.get("force") == "1" or event_id is not None
+
+    ingested = 0 if event_id else await asyncio.to_thread(_ingest_drafts, request.app["sessions"], set_code)
+
+    where = "de.seventeenlands_event_id IS NOT NULL"
+    params: dict[str, Any] = {"discord_id": DEV_DISCORD_ID}
+    if event_id:
+        where += " AND de.seventeenlands_event_id = :event_id"
+        params["event_id"] = event_id
+    if set_code:
+        where += " AND s.code = :set_code"
+        params["set_code"] = set_code
+    if not force:
+        # A draft whose deck fetch landed but whose match detail did not is still incomplete
+        where += " AND (de.pool_rares IS NULL OR (de.match_results IS NULL AND de.wins + de.losses > 0))"
+
+    with engine.connect() as conn:
+        pending = conn.execute(text(f"""
+            SELECT de.id, de.seventeenlands_event_id
+            FROM draft_events de
+            JOIN players p ON p.id = de.player_id
+            JOIN sets s ON s.id = de.set_id
+            WHERE p.discord_id = :discord_id AND {where}
+            ORDER BY de.finished_at DESC NULLS LAST
+        """), params).mappings().all()
+
+    filled = missed = 0
+    for index, row in enumerate(pending):
+        if index:
+            await asyncio.sleep(SEVENTEENLANDS_DRAFT_GAP_S)
+        log.info(f"tracker refresh: draft {index + 1} of {len(pending)}")
+        summary = await asyncio.to_thread(_summarise_draft, row["seventeenlands_event_id"])
+        if summary is None:
+            missed += 1
+            continue
+        with engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE draft_events
+                SET pool_rares = :pool_rares, pool_mythics = :pool_mythics,
+                    deck_cards = CAST(:deck_cards AS jsonb), match_results = CAST(:match_results AS jsonb)
+                WHERE id = :id
+            """), {
+                "id": row["id"],
+                "pool_rares": summary["pool_rares"],
+                "pool_mythics": summary["pool_mythics"],
+                "deck_cards": json.dumps(summary["deck_cards"]) if summary["deck_cards"] else None,
+                "match_results": json.dumps(summary["match_results"]) if summary["match_results"] else None,
+            })
+        filled += 1
+
+    return web.json_response({"ingested": ingested, "pending": len(pending), "filled": filled, "missed": missed})
+
+
 @web.middleware
 async def _cors_middleware(request: web.Request, handler):
     if request.method == "OPTIONS":
@@ -124,8 +346,20 @@ async def _cors_middleware(request: web.Request, handler):
     resp.headers["Access-Control-Allow-Origin"] = "*"
     requested = request.headers.get("Access-Control-Request-Headers")
     resp.headers["Access-Control-Allow-Headers"] = requested or "*"
-    resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
     return resp
+
+
+def _ensure_dev_user(engine) -> None:
+    """Satisfy the tracker tables' foreign key when the local database carries a Supabase auth schema"""
+    with engine.begin() as conn:
+        has_auth = conn.execute(text(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = 'auth' AND table_name = 'users')"
+        )).scalar()
+        if has_auth:
+            conn.execute(text("INSERT INTO auth.users (id) VALUES (:id) ON CONFLICT DO NOTHING"),
+                         {"id": DEV_USER_ID})
 
 
 def main() -> None:
@@ -136,7 +370,13 @@ def main() -> None:
 
     app = web.Application(middlewares=[_cors_middleware])
     app["engine"] = create_engine(db_url)
+    app["sessions"] = sessionmaker(bind=app["engine"], autoflush=False, autocommit=False)
+    _ensure_dev_user(app["engine"])
+    app.router.add_post("/tracker/refresh", _handle_refresh)
+    app.router.add_route("OPTIONS", "/tracker/refresh", _handle_refresh)
     app.router.add_get("/rest/v1/{view}", _handle_view)
+    app.router.add_post("/rest/v1/{view}", _handle_view)
+    app.router.add_delete("/rest/v1/{view}", _handle_view)
     app.router.add_route("OPTIONS", "/rest/v1/{view}", _handle_view)
 
     log.info("local supabase proxy → docker postgres, listening on http://0.0.0.0:3001")
