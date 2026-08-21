@@ -2,7 +2,12 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
-from bot.commands.event_scribe import build_announcement, build_schedule_embed, select_groups
+from bot.commands.event_scribe import (
+    build_announcement,
+    build_schedule_embed,
+    scribe_url,
+    select_groups,
+)
 from bot.services import mtgscribe
 from bot.services.format_schedule import (
     ANNOUNCE_COMPETITIVE,
@@ -413,6 +418,15 @@ def test_select_groups_cube_filter_matches_cube_tag():
     _, upcoming = select_groups(events, ["cube"], apply_horizon=True)
 
     assert [group.label for group in upcoming] == ["Arena Powered Cube"]
+
+
+@pytest.mark.parametrize("filters,set_query,expected", [
+    (["sealed"], "The Hobbit", "https://mtgscribe.com/events/list/?tribe-bar-search=Sealed+Hobbit"),
+    (["sealed", "quick"], None, "https://mtgscribe.com/events/"),
+    (None, None, "https://mtgscribe.com/events/"),
+])
+def test_scribe_url_follows_the_selection(filters, set_query, expected):
+    assert scribe_url(filters, set_query) == expected
 
 
 @pytest.mark.parametrize("tags,formats,expected", [

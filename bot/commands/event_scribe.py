@@ -4,6 +4,7 @@ import logging
 import re
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 
 import discord
 from discord import app_commands
@@ -51,6 +52,17 @@ MSG_QUALIFIER_OPEN = "is now open"
 
 SCRIBE_EMOJI_NAME = "scribe"
 SCRIBE_URL = "https://mtgscribe.com/events/"
+SCRIBE_LIST_URL = "https://mtgscribe.com/events/list/"
+SCRIBE_SEARCH_PARAM = "tribe-bar-search"
+SCRIBE_PAST_PARAM = {"eventDisplay": "past"}
+FILTER_SEARCH_TERMS = {
+    "premier": "Premier Draft",
+    "quick": "Quick Draft",
+    "flashback": "Premier Draft",
+    "draft": "Draft",
+    "sealed": "Sealed",
+    "midweek": "Midweek",
+}
 
 
 class EventScribe(commands.Cog):
@@ -98,7 +110,8 @@ class EventScribe(commands.Cog):
             upcoming=len(upcoming),
         )
         scope = _heading_scope(set, selected)
-        payload = build_schedule_payload(in_progress, upcoming, emojis, scope, archival=archival)
+        url = scribe_url([selected] if selected else None, set, past=archival)
+        payload = build_schedule_payload(in_progress, upcoming, emojis, scope, archival=archival, url=url)
         await interaction.followup.send(**payload)
 
     @event_scribe.autocomplete("set")
@@ -185,10 +198,10 @@ def _in_scope(event: mtgscribe.ScribeEvent, selected: str | None) -> bool:
 
 
 def build_schedule_payload(in_progress: list, upcoming: list, emojis: dict, scope: str = "Limited",
-                           *, archival: bool = False) -> dict:
+                           *, archival: bool = False, url: str = SCRIBE_URL) -> dict:
     return {
         "embed": build_schedule_embed(in_progress, upcoming, emojis, scope, archival=archival),
-        "view": build_scribe_view(emojis),
+        "view": build_scribe_view(emojis, url),
     }
 
 
@@ -220,15 +233,36 @@ def _title_text(emojis: dict, scope: str) -> str:
     return f"## {lead}{schedule_title_marker(scope)}{mark}"
 
 
-def build_scribe_view(emojis: dict) -> discord.ui.View:
+def build_scribe_view(emojis: dict, url: str = SCRIBE_URL) -> discord.ui.View:
     view = discord.ui.View(timeout=None)
     view.add_item(discord.ui.Button(
         style=discord.ButtonStyle.link,
         label="View on MTG Scribe",
-        url=SCRIBE_URL,
+        url=url,
         emoji=emojis.get(SCRIBE_EMOJI_NAME),
     ))
     return view
+
+
+def scribe_url(filters: list | None = None, set_query: str | None = None, *, past: bool = False) -> str:
+    """MTG Scribe's own calendar, searched down to what the board shows, or the whole event list when
+    the board carries no single format.
+
+    The search runs over event titles, which always name the format and the set. Scribe's tag archives
+    say the same thing less reliably: a Quick Draft week can carry the ``premier-draft`` tag, and a
+    flashback week carries no ``flashback`` tag at all. Two format filters at once would search for
+    both words in one title and match nothing, so those fall back to the full list.
+    """
+    terms = {FILTER_SEARCH_TERMS[selected] for selected in filters or () if selected in FILTER_SEARCH_TERMS}
+    keywords = list(terms) if len(terms) == 1 else []
+    if set_query:
+        keywords.append(_trim_set_name(set_query))
+    if not keywords:
+        return SCRIBE_URL
+    query = {SCRIBE_SEARCH_PARAM: " ".join(keywords)}
+    if past:
+        query.update(SCRIBE_PAST_PARAM)
+    return f"{SCRIBE_LIST_URL}?{urlencode(query)}"
 
 
 def build_announcement(group: mtgscribe.EventGroup, emojis: dict, *, format_word: str,

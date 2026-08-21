@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from discord.ext import commands
 
-from bot.commands.event_scribe import build_schedule_payload, process_events
+from bot.commands.event_scribe import build_schedule_payload, process_events, scribe_url
 from bot.commands.test_group import test_group
 from bot.services import mtgscribe
 
@@ -24,7 +24,8 @@ async def setup(bot: commands.Bot) -> None:
         """Owner-only. Render the schedule embed from synthetic events through the real pipeline."""
         in_progress, upcoming = process_events(_fixture_events(datetime.now(timezone.utc)))
         emojis = {emoji.name: emoji for emoji in await ctx.bot.fetch_application_emojis()}
-        await ctx.send(**build_schedule_payload(in_progress, upcoming, emojis, scope="Marvel Super Heroes"))
+        await ctx.send(**build_schedule_payload(in_progress, upcoming, emojis, scope="Marvel Super Heroes",
+                                                url=scribe_url(set_query="Marvel Super Heroes")))
 
 
 def _fixture_events(now: datetime) -> list:

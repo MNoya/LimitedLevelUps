@@ -16,7 +16,7 @@ import asyncio
 
 from discord.ext import commands
 
-from bot.commands.event_scribe import build_schedule_payload, select_season_groups
+from bot.commands.event_scribe import build_schedule_payload, scribe_url, select_season_groups
 from bot.commands.test_group import test_group
 from bot.services import mtgscribe
 from bot.services.format_schedule import ANNOUNCE_NONE, SCHEDULE_PINS
@@ -44,12 +44,14 @@ async def setup(bot: commands.Bot) -> None:
             heading = f"#{pin.channel_name}" if pin.channel_name else f"active set in “{pin.category}”"
             await ctx.send(f"__**{heading}**__")
             if pin.maintain_pin:
-                in_progress, upcoming, scope = select_pin(events, pin)
-                await ctx.send(**build_schedule_payload(in_progress, upcoming, emojis, scope))
+                in_progress, upcoming, scope, url = select_pin(events, pin)
+                await ctx.send(**build_schedule_payload(in_progress, upcoming, emojis, scope, url=url))
                 if not pin.pin_filters:
                     season = select_season_groups(events, scope)
+                    archival_url = scribe_url(set_query=scope, past=True)
                     await ctx.send(f"__**{heading}, final week, written once then frozen**__")
-                    await ctx.send(**build_schedule_payload(season, [], emojis, scope, archival=True))
+                    await ctx.send(**build_schedule_payload(season, [], emojis, scope, archival=True,
+                                                            url=archival_url))
             if pin.announce == ANNOUNCE_NONE:
                 continue
             groups = announce_groups(events, pin)

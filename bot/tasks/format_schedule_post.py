@@ -22,6 +22,7 @@ from bot.commands.event_scribe import (
     build_competitive_reminder,
     build_schedule_payload,
     schedule_title_marker,
+    scribe_url,
     select_groups,
     select_season_groups,
 )
@@ -160,12 +161,13 @@ async def fire_window() -> None:
         if channel is None:
             continue
         if pin.maintain_pin:
-            in_progress, upcoming, scope = select_pin(events, pin)
+            in_progress, upcoming, scope, url = select_pin(events, pin)
             archival = _archives_set_pin(pin, now)
             if archival:
                 in_progress, upcoming = select_season_groups(events, scope), []
+                url = scribe_url(set_query=scope, past=True)
             if not (archival and await _pin_already_archival(channel, scope)):
-                await _refresh_pin(channel, scope, in_progress, upcoming, emojis,
+                await _refresh_pin(channel, scope, in_progress, upcoming, emojis, url,
                                    create_if_missing=pin.auto_pin, archival=archival)
         if pin.announce != ANNOUNCE_NONE:
             scheduled = announce_groups(events, pin)
@@ -347,20 +349,21 @@ async def _archive_channel(channel: discord.TextChannel, archive: discord.Catego
     return True
 
 
-def select_pin(events: list, pin: SchedulePin) -> tuple[list, list, str]:
-    """The pinned schedule's groups and its title scope: a format-filtered view, or the whole active
-    set when the pin carries no format filter (the set channel). Untrimmed, to match what
-    /event-scribe renders for an explicit filter or set.
+def select_pin(events: list, pin: SchedulePin) -> tuple[list, list, str, str]:
+    """The pinned schedule's groups, its title scope and the Scribe link for the same selection: a
+    format-filtered view, or the whole active set when the pin carries no format filter (the set
+    channel). Untrimmed, to match what /event-scribe renders for an explicit filter or set.
 
     The scope is the date-derived active set, the same source the leaderboard rotates on. It also names
     the pin ``_refresh_pin`` searches for, so a scope naming any other set silently matches no pin.
     """
     if pin.pin_filters:
-        in_progress, upcoming = select_groups(events, list(pin.pin_filters), apply_horizon=False)
-        return in_progress, upcoming, pin.scope_label
+        filters = list(pin.pin_filters)
+        in_progress, upcoming = select_groups(events, filters, apply_horizon=False)
+        return in_progress, upcoming, pin.scope_label, scribe_url(filters)
     set_name = active_set_seed().name
     in_progress, upcoming = select_groups(events, None, set_name, apply_horizon=False)
-    return in_progress, upcoming, set_name
+    return in_progress, upcoming, set_name, scribe_url(set_query=set_name)
 
 
 def _archives_set_pin(pin: SchedulePin, now: datetime) -> bool:
@@ -410,13 +413,13 @@ def _resolve_channel(guild: discord.Guild, pin: SchedulePin) -> discord.TextChan
 
 
 async def _refresh_pin(channel: discord.TextChannel, scope: str, in_progress: list,
-                       upcoming: list, emojis: dict, *, create_if_missing: bool = False,
+                       upcoming: list, emojis: dict, url: str, *, create_if_missing: bool = False,
                        archival: bool = False) -> None:
     """Edit the pin in place, matching on the title so the right pin is edited when a channel holds
     several. Pins are human-seeded (the owner pins a filtered /event-scribe post) and a channel without
     a matching pin is left alone. ``create_if_missing`` would post and pin the schedule itself instead;
     no pin enables it today, reserved for when the bot should seed a channel's pin."""
-    payload = build_schedule_payload(in_progress, upcoming, emojis, scope, archival=archival)
+    payload = build_schedule_payload(in_progress, upcoming, emojis, scope, archival=archival, url=url)
     message = await _pinned_schedule(channel, schedule_title_marker(scope))
     if message is None:
         if create_if_missing:
