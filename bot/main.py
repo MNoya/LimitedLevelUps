@@ -96,6 +96,7 @@ from bot.services.pod_tournament import (
 from bot.services.media_sync import FeedUnavailable, sync_media, sync_recent, SyncResult
 from bot.services.ping_roles import persistent_pod_card_view, reconcile_ping_roles
 from bot.services.active_set import resolve_active_set
+from bot.http_server import start_tracker_http_server
 from bot.services.refresh import refresh_active_players
 from bot.services.refresh_report import build_refresh_report, format_elapsed
 from bot.services.seventeenlands import MinIntervalLimiter, SeventeenLandsClient
@@ -215,6 +216,8 @@ def build_bot(guild_id: int) -> commands.Bot:
 
         bot.bot_log = BotLog(bot, settings.discord_botlog_channel_id)
         error_alerts.install(bot)
+
+        bot.tracker_http_runner = await start_tracker_http_server()
 
         await emojis.load(bot)
 

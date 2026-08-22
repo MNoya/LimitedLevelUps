@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     feedback_channel_id: int = 1504825374188507156
     public_site_url: str = "https://limitedlevelups.com"
     auto_refresh_enabled: bool = True
+    tracker_discord_ids: str = "237762740532412416"
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+    tracker_http_port: int | None = None
+
+    @property
+    def tracker_discord_ids_set(self) -> frozenset[str]:
+        return frozenset(part.strip() for part in self.tracker_discord_ids.split(",") if part.strip())
 
     @property
     def leaderboard_url(self) -> str:

@@ -25,7 +25,18 @@ import {
   projectCompletion,
   remainingMasteryPacks,
 } from "../../data/collectionProjection";
-import { COLOR_HEX, RARITY_STYLE, SUBLABEL_CLS, type RarityStyle } from "./trackerStyles";
+const SUBLABEL_CLS = "font-display text-[13px] tracking-[0.08em] text-muted";
+
+const COLOR_HEX: Record<string, string> = {
+  W: "#f5efd6", U: "#4aa8ff", B: "#a98eff", R: "#ff5e5e", G: "#2ee85c", M: "#ffc63a", C: "#8a93a5",
+};
+
+const RARITY_STYLE = {
+  rare: { color: "#A58E4A", gradient: "linear-gradient(90deg, #876a3b 0%, #dfbd6b 50%, #876a3b 100%)" },
+  mythic: { color: "#BF4427", gradient: "linear-gradient(90deg, #9E3620 0%, #D2603C 50%, #9E3620 100%)" },
+};
+
+type RarityStyle = (typeof RARITY_STYLE)["rare"];
 
 function frontFace(name: string): string {
   return name.split(" // ")[0].trim();

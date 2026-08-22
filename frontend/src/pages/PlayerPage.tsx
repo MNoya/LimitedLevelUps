@@ -5,11 +5,10 @@ import { AppHeader } from "../components/AppHeader";
 import { useAuth } from "../auth/useAuth";
 import { isTrackerUser } from "../data/trackerUsers";
 import { Collection } from "../components/tracker/Collection";
-import { DraftLog } from "../components/tracker/DraftLog";
+import { DraftLog, TRACKER_HEADER_H } from "../components/tracker/DraftLog";
 import { TrackerStatsBlock } from "../components/tracker/TrackerStatsBlock";
 import { RefreshButton } from "../components/tracker/RefreshButton";
 import { AccountTabs, useTrackerAccounts } from "../components/tracker/AccountTabs";
-import { TRACKER_HEADER_H } from "../components/tracker/trackerStyles";
 import { useQuery } from "@tanstack/react-query";
 import { fetchMyAccounts, type TrackerAccount } from "../data/trackerApi";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -793,7 +792,7 @@ function Desktop({
                 onChange={setTrackerAccount}
                 className="ml-auto"
               />
-              <RefreshButton setCode={profile.setCode} />
+              <RefreshButton setCode={profile.setCode} className="ml-auto" />
             </div>
             {leftPane === "collection" ? (
               <Collection slug={profile.slug} setCode={profile.setCode} accountId={trackerAccount} narrow />

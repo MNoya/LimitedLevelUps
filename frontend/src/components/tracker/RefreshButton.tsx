@@ -5,8 +5,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "../../lib/utils";
 import { Tooltip } from "../Tooltip";
 import { refreshDraftData } from "../../data/trackerApi";
-import { HEADER_CLS } from "./trackerStyles";
 
+const HEADER_CLS = "font-display text-[11px] tracking-[0.2em] text-muted";
 const RESULT_VISIBLE_MS = 10_000;
 
 export function RefreshButton({ setCode, className }: { setCode: string; className?: string }) {

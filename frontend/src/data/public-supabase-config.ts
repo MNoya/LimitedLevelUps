@@ -36,3 +36,7 @@ export const LOCAL_SUPABASE_URL =
   import.meta.env?.VITE_LOCAL_SUPABASE_URL ?? `http://${localProxyHost}:3001`;
 
 export const LOCAL_SUPABASE_PUBLISHABLE_KEY = "dev-anon-key";
+
+// The bot's tracker-refresh endpoint on Railway, empty until its domain exists; local mode uses the proxy
+export const PUBLIC_TRACKER_REFRESH_URL =
+  import.meta.env?.VITE_TRACKER_REFRESH_URL ?? "";

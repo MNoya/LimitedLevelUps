@@ -4,14 +4,12 @@
 import { DEV_AUTH_USER } from "./devAuth";
 import { supabase } from "./supabase";
 import type { PlayerDraftEvent } from "../types/leaderboard";
-import { LOCAL_SUPABASE_URL } from "./public-supabase-config";
+import { LOCAL_SUPABASE_URL, PUBLIC_TRACKER_REFRESH_URL } from "./public-supabase-config";
 
 export interface DraftNote {
   draftEventId: string;
   note: string;
   deckLabel: string;
-  rares: number | null;
-  mythics: number | null;
 }
 
 export interface TrackerAccount {
@@ -116,14 +114,12 @@ export async function fetchMyAccounts(): Promise<TrackerAccount[]> {
 export async function fetchDraftNotes(): Promise<DraftNote[]> {
   const { data, error } = await client()
     .from("tracker_draft_notes")
-    .select("draft_event_id, note, deck_label, rares, mythics");
+    .select("draft_event_id, note, deck_label");
   if (error) throw error;
   return (data ?? []).map((r) => ({
     draftEventId: r.draft_event_id as string,
     note: (r.note ?? "") as string,
     deckLabel: (r.deck_label ?? "") as string,
-    rares: (r.rares ?? null) as number | null,
-    mythics: (r.mythics ?? null) as number | null,
   }));
 }
 
@@ -136,8 +132,6 @@ export async function saveDraftNote(draftEventId: string, patch: Partial<Omit<Dr
         draft_event_id: draftEventId,
         ...(patch.note !== undefined ? { note: patch.note } : {}),
         ...(patch.deckLabel !== undefined ? { deck_label: patch.deckLabel } : {}),
-        ...(patch.rares !== undefined ? { rares: patch.rares } : {}),
-        ...(patch.mythics !== undefined ? { mythics: patch.mythics } : {}),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id,draft_event_id" },
@@ -219,9 +213,25 @@ export async function refreshOneDraft(seventeenlandsEventId: string) {
   return trackerRefresh(`event_id=${encodeURIComponent(seventeenlandsEventId)}`);
 }
 
+// Local dev hits the no-auth proxy; prod hits the bot's endpoint with the Supabase access token
 async function trackerRefresh(query: string): Promise<{ ingested: number; filled: number; missed: number }> {
-  const base = LOCAL_SUPABASE_URL.replace(/\/$/, "");
-  const resp = await fetch(`${base}/tracker/refresh?${query}`, { method: "POST" });
+  const mode = (import.meta.env?.VITE_DATA_MODE ?? "prod").toLowerCase();
+  if (mode === "local") {
+    const base = LOCAL_SUPABASE_URL.replace(/\/$/, "");
+    const resp = await fetch(`${base}/tracker/refresh?${query}`, { method: "POST" });
+    if (!resp.ok) throw new Error(`Refresh failed (${resp.status})`);
+    return resp.json();
+  }
+
+  const base = PUBLIC_TRACKER_REFRESH_URL.replace(/\/$/, "");
+  if (!base) throw new Error("Refresh is not available yet");
+  const { data } = await client().auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+  const resp = await fetch(`${base}/tracker/refresh?${query}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!resp.ok) throw new Error(`Refresh failed (${resp.status})`);
   return resp.json();
 }

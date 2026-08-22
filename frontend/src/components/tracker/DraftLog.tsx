@@ -8,7 +8,7 @@ import { Pips } from "../ManaPips";
 import { SectionLabel } from "../SectionLabel";
 import { FilterDropdown } from "../FilterDropdown";
 import { COLOR_OPTIONS_LONG, FORMAT_OPTIONS, matchesFormatFilter, type FilterOption } from "../../data/filters";
-import { renderColorOption, renderFormatOption } from "../../data/format-display";
+import { renderColorOption, renderFormatOption, shortFormat } from "../../data/format-display";
 import { colorsOf, lastUpdated } from "../../data/utils";
 import type { SortDir } from "../LeaderboardTable";
 import { payoutFor } from "../../data/prizes";
@@ -24,8 +24,12 @@ import {
   type DraftNote,
   type MatchNote,
 } from "../../data/trackerApi";
-import type { PlayerDraftEvent, TrackedMatch } from "../../types/leaderboard";
-import { HEADER_CLS, TRACKER_HEADER_H } from "./trackerStyles";
+import type { PlayerDraftEvent, TrackedCard, TrackedMatch } from "../../types/leaderboard";
+import { cardImageSources, useCardImageMap, type CardImages } from "../../data/cardImages";
+import { useFallbackImage } from "../pod/review/ReviewCard";
+
+// Shared with the left-pane tab strip so the two headers line up
+export const TRACKER_HEADER_H = "h-[40px]";
 
 // Mirrors the spreadsheet's own deck-log columns so the layout reads the way the tab did
 const LOG_COLS_DESKTOP =
@@ -74,11 +78,10 @@ interface NumberedDraft {
 function sortNumberedDrafts(
   drafts: NumberedDraft[],
   { key, dir }: TrackerSort,
-  notesById: Map<string, DraftNote>,
 ): NumberedDraft[] {
   const sign = dir === "desc" ? -1 : 1;
-  const rares = ({ event }: NumberedDraft) => notesById.get(event.eventId)?.rares ?? event.poolRares ?? 0;
-  const mythics = ({ event }: NumberedDraft) => notesById.get(event.eventId)?.mythics ?? event.poolMythics ?? 0;
+  const rares = ({ event }: NumberedDraft) => event.poolRares ?? 0;
+  const mythics = ({ event }: NumberedDraft) => event.poolMythics ?? 0;
 
   return [...drafts].sort((a, b) => {
     if (key === "colors") {
@@ -161,15 +164,21 @@ export function DraftLog({
     const rank = new Map(byDateAsc.map((e, i) => [e.eventId, i + 1]));
     return rows.map((event) => ({ event, index: rank.get(event.eventId) ?? 0 }));
   }, [rows]);
-  const ordered = useMemo(() => sortNumberedDrafts(numbered, sort, notesById), [numbered, sort, notesById]);
+  const ordered = useMemo(() => sortNumberedDrafts(numbered, sort), [numbered, sort]);
+  const poolImageCards = useMemo(
+    () => rows.flatMap((e) => [...poolZone(e.deckCards?.maindeck), ...poolZone(e.deckCards?.sideboard)])
+      .map((c) => ({ name: c.name, set: setCode })),
+    [rows, setCode],
+  );
+  const cardImages = useCardImageMap(poolImageCards);
   const toggleSort = (key: TrackerSortKey) =>
     setSort((s) => ({ key, dir: s.key === key && s.dir === "asc" ? "desc" : "asc" }));
   useEffect(() => {
     window.localStorage.setItem(SORT_STORAGE_KEY, `${sort.key}:${sort.dir}`);
   }, [sort]);
 
-  if (isLoading) return <div className="px-5 md:px-10 py-8 text-muted text-[14px]">Loading drafts</div>;
-  if (!rows.length) return <div className="px-5 md:px-10 py-8 text-muted text-[14px]">No drafts recorded for {setCode}</div>;
+  if (isLoading) return <div className="px-5 md:px-10 py-8 text-muted text-[14px]">Loading events</div>;
+  if (!rows.length) return <div className="px-5 md:px-10 py-8 text-muted text-[14px]">No events recorded for {setCode}</div>;
 
   return (
     <div>
@@ -177,7 +186,7 @@ export function DraftLog({
         <div className="px-[18px]">
           <div className="flex items-center justify-between gap-2 mb-2.5">
             <div className="flex items-baseline gap-2">
-              <SectionLabel size={12}>DRAFTS</SectionLabel>
+              <SectionLabel size={12}>EVENT LOG</SectionLabel>
               <span className="font-display text-[11px] tracking-[0.12em] text-dim">{rows.length} EVENTS</span>
             </div>
             {updatedAt && (
@@ -253,10 +262,10 @@ export function DraftLog({
             index={index}
             event={e}
             isMobile={isMobile}
+            setCode={setCode}
+            cardImages={cardImages}
             note={notesById.get(e.eventId)?.note ?? ""}
             deckLabel={notesById.get(e.eventId)?.deckLabel ?? ""}
-            rares={notesById.get(e.eventId)?.rares ?? null}
-            mythics={notesById.get(e.eventId)?.mythics ?? null}
             matchNotes={(matchNotes ?? []).filter((m) => m.draftEventId === e.eventId)}
             expanded={open === e.eventId}
             onToggle={() => setOpen(open === e.eventId ? null : e.eventId)}
@@ -272,15 +281,15 @@ export function DraftLog({
 }
 
 function DraftRow({
-  index, event, isMobile, note, deckLabel, rares, mythics, matchNotes, expanded, onToggle, onSaved,
+  index, event, isMobile, setCode, cardImages, note, deckLabel, matchNotes, expanded, onToggle, onSaved,
 }: {
   index: number;
   event: PlayerDraftEvent;
   isMobile: boolean;
+  setCode: string;
+  cardImages: CardImages;
   note: string;
   deckLabel: string;
-  rares: number | null;
-  mythics: number | null;
   matchNotes: MatchNote[];
   expanded: boolean;
   onToggle: () => void;
@@ -290,12 +299,23 @@ function DraftRow({
   const date = event.finishedAt
     ? new Date(event.finishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })
     : "";
+  const [rowBox, setRowBox] = useState<{ top: number; bottom: number } | null>(null);
+  const zones = useMemo(
+    () => ({ maindeck: poolZone(event.deckCards?.maindeck), sideboard: poolZone(event.deckCards?.sideboard) }),
+    [event],
+  );
+  const showPool = !isMobile && zones.maindeck.length + zones.sideboard.length > 0;
 
   return (
     <div className={cn(isMobile ? "border-b border-border" : "border-x border-b border-border",
                        expanded ? "bg-surface2" : "bg-surface")}>
       <div
         onClick={onToggle}
+        onMouseEnter={showPool ? (e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setRowBox({ top: r.top, bottom: r.bottom });
+        } : undefined}
+        onMouseLeave={showPool ? () => setRowBox(null) : undefined}
         className={cn(GRID_CLS, "cursor-pointer hover:bg-surface2")}
         style={{ gridTemplateColumns: isMobile ? LOG_COLS_MOBILE : LOG_COLS_DESKTOP }}
       >
@@ -344,17 +364,11 @@ function DraftRow({
             <Cell className={cn("justify-end", GROUP_END)}>
               <span className="font-display tabular-nums text-[17px]">{event.wins}-{event.losses}</span>
             </Cell>
-            <Cell className="p-0">
-              <CountCell
-                value={rares ?? event.poolRares ?? null}
-                onCommit={async (n) => { await saveDraftNote(event.eventId, { rares: n }); onSaved(); }}
-              />
+            <Cell className="justify-center">
+              <span className="font-display tabular-nums text-[16px] text-subtle">{event.poolRares ?? ""}</span>
             </Cell>
-            <Cell className="p-0">
-              <CountCell
-                value={mythics ?? event.poolMythics ?? null}
-                onCommit={async (n) => { await saveDraftNote(event.eventId, { mythics: n }); onSaved(); }}
-              />
+            <Cell className="justify-center">
+              <span className="font-display tabular-nums text-[16px] text-subtle">{event.poolMythics ?? ""}</span>
             </Cell>
             <Cell className="justify-end">
               <span className="font-display tabular-nums text-[16px] text-subtle">{payout ? payout.gems : ""}</span>
@@ -374,36 +388,13 @@ function DraftRow({
         )}
       </div>
 
+      {rowBox && showPool && (
+        <CardGroupOverlay maindeck={zones.maindeck} sideboard={zones.sideboard}
+                          set={setCode} cardImages={cardImages} rowBox={rowBox} />
+      )}
+
       {expanded && (
-        <DraftNotesPanel event={event} note={note} matchNotes={matchNotes} onSaved={onSaved}>
-          {isMobile && (
-            <div className="flex items-center gap-3 px-2 py-2 border-b border-border">
-              <span className="mono text-[13px] text-muted">
-                {formatLabel(event.format)} {date}{payout ? ` ${payout.gems}g ${payout.packs}p` : ""}
-              </span>
-              <span className="ml-auto flex items-center gap-3 font-display text-[13px] tracking-[0.12em] text-muted">
-                <span className="flex items-center gap-1.5">
-                  R
-                  <span className="w-9 h-7 border border-border2 flex">
-                    <CountCell
-                      value={rares ?? event.poolRares ?? null}
-                      onCommit={async (n) => { await saveDraftNote(event.eventId, { rares: n }); onSaved(); }}
-                    />
-                  </span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  M
-                  <span className="w-9 h-7 border border-border2 flex">
-                    <CountCell
-                      value={mythics ?? event.poolMythics ?? null}
-                      onCommit={async (n) => { await saveDraftNote(event.eventId, { mythics: n }); onSaved(); }}
-                    />
-                  </span>
-                </span>
-              </span>
-            </div>
-          )}
-        </DraftNotesPanel>
+        <DraftNotesPanel event={event} note={note} matchNotes={matchNotes} onSaved={onSaved} isMobile={isMobile} />
       )}
     </div>
   );
@@ -411,18 +402,21 @@ function DraftRow({
 
 // One grid for the whole panel, so the score and colour tracks take only the width this draft needs
 // and every note still starts on the same axis
-const MATCH_COLS = "36px auto auto auto minmax(0, 1fr)";
+const MATCH_COLS = "36px auto auto minmax(0, 1fr)";
 const MATCH_ROW_H = "min-h-[42px]";
 
 function DraftNotesPanel({
-  event, note, matchNotes, onSaved, children,
+  event, note, matchNotes, onSaved, isMobile,
 }: {
   event: PlayerDraftEvent;
   note: string;
   matchNotes: MatchNote[];
   onSaved: () => void;
-  children?: ReactNode;
+  isMobile: boolean;
 }) {
+  const shortDate = event.finishedAt
+    ? new Date(event.finishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }).toUpperCase()
+    : "";
   const matches = event.wins + event.losses;
   const divider = "border-t border-border";
   const fetchedFor = (n: number) => (event.matchResults ?? []).find((x) => x.match_number === n) ?? null;
@@ -442,26 +436,31 @@ function DraftNotesPanel({
 
   return (
     <div className="border-t border-border2 bg-bg">
-      {children}
-      <div className="grid" style={{ gridTemplateColumns: MATCH_COLS }}>
-        <Cell className={cn("justify-center p-0", MATCH_ROW_H, GROUP_END)}>
-          {event.seventeenlandsEventId && (
-            <RefetchDraftButton
-              eventId={event.seventeenlandsEventId}
-              onDone={onSaved}
-              className="w-full h-full bg-surface2 hover:bg-surface"
-            />
-          )}
-        </Cell>
-        <div className={cn("col-span-4 flex", MATCH_ROW_H)}>
-          <div className="flex-1 min-w-0">
-            <NoteField
-              initial={note}
-              placeholder="Notes"
-              onSave={async (v) => { await saveDraftNote(event.eventId, { note: v }); onSaved(); }}
-            />
+      <div className={cn("flex items-stretch", MATCH_ROW_H)}>
+        {isMobile && (
+          <div className="flex flex-col items-start justify-center gap-0.5 shrink-0 px-2 border-r border-border">
+            <span className="font-display text-[12px] tracking-[0.1em] text-muted leading-none whitespace-nowrap">
+              {shortFormat(event.format)}
+            </span>
+            <span className="mono text-[11px] text-dim leading-none whitespace-nowrap">{shortDate}</span>
           </div>
+        )}
+        {event.seventeenlandsEventId && (
+          <RefetchDraftButton
+            eventId={event.seventeenlandsEventId}
+            onDone={onSaved}
+            className="shrink-0 border-r border-border px-3 bg-surface2 hover:bg-surface"
+          />
+        )}
+        <div className="flex-1 min-w-0">
+          <NoteField
+            initial={note}
+            placeholder="Notes"
+            onSave={async (v) => { await saveDraftNote(event.eventId, { note: v }); onSaved(); }}
+          />
         </div>
+      </div>
+      <div className="grid" style={{ gridTemplateColumns: MATCH_COLS }}>
         {rows.map(({ matchNumber, score, opponent, note: matchNote }) => (
           <Fragment key={matchNumber}>
             <Cell className={cn("justify-center", MATCH_ROW_H, divider, GROUP_END)}>
@@ -473,11 +472,6 @@ function DraftNotesPanel({
               )}
             </Cell>
             <Cell className={opponentCell}>{opponent && <Pips colors={opponent} size={13} />}</Cell>
-            <Cell className={cn(divider, GROUP_END, score ? "p-0" : "px-1.5")}>
-              {!score && event.seventeenlandsEventId && (
-                <RefetchDraftButton eventId={event.seventeenlandsEventId} onDone={onSaved} />
-              )}
-            </Cell>
             <Cell className={cn("p-0 items-stretch", divider)}>
               <NoteField
                 initial={matchNote}
@@ -491,7 +485,7 @@ function DraftNotesPanel({
   );
 }
 
-/** 17lands details come per draft, so one match with nothing recorded refetches the whole draft */
+/** Owner-only: re-pull this draft's deck and match detail from 17lands, e.g. right after a match */
 function RefetchDraftButton({ eventId, onDone, className }: { eventId: string; onDone: () => void; className?: string }) {
   const qc = useQueryClient();
   const [running, setRunning] = useState(false);
@@ -512,10 +506,10 @@ function RefetchDraftButton({ eventId, onDone, className }: { eventId: string; o
       type="button"
       onClick={run}
       disabled={running}
-      aria-label="Refetch this draft from 17lands"
+      aria-label="Refresh this draft from 17lands"
       className={cn("flex items-center justify-center text-muted hover:text-text disabled:opacity-50", className)}
     >
-      <RefreshCw size={13} className={running ? "animate-spin" : undefined} />
+      <RefreshCw size={14} className={running ? "animate-spin" : undefined} />
     </button>
   );
 }
@@ -568,6 +562,69 @@ function FormatFilterHeaderCell({
 
 function Cell({ className, children }: { className?: string; children?: ReactNode }) {
   return <div className={cn(CELL_CLS, className)}>{children}</div>;
+}
+
+function poolZone(cards: TrackedCard[] | undefined): TrackedCard[] {
+  const list = cards ?? [];
+  return [...list.filter((c) => c.rarity === "rare"), ...list.filter((c) => c.rarity === "mythic")];
+}
+
+const GROUP_CARD_W = 150;
+const GROUP_GAP = 4;
+const GROUP_PAD = 6;
+
+function CardGroupOverlay({ maindeck, sideboard, set, cardImages, rowBox }: {
+  maindeck: TrackedCard[];
+  sideboard: TrackedCard[];
+  set: string;
+  cardImages: CardImages;
+  rowBox: { top: number; bottom: number };
+}) {
+  const both = maindeck.length > 0 && sideboard.length > 0;
+  const sideBySide = maindeck.length === 1 && sideboard.length === 1;
+  const stackClip = both && !sideBySide;
+  const rowCount = sideBySide ? 1 : (maindeck.length ? 1 : 0) + (sideboard.length ? 1 : 0);
+  const height = rowCount * (GROUP_CARD_W * 680 / 488 + 2 * GROUP_PAD);
+  const roomBelow = window.innerHeight - rowBox.bottom - 8;
+  const roomAbove = rowBox.top - 8;
+  const top = height <= roomBelow || roomBelow >= roomAbove ? rowBox.bottom + 8 : rowBox.top - 8 - height;
+  const box = (cards: TrackedCard[], onTop: boolean, square: boolean) => (
+    <div className={cn("flex border border-white/60 shadow-2xl overflow-hidden",
+                       square ? "rounded-none" : "rounded-xl", onTop && "relative z-10")}
+         style={{ backgroundColor: "#161b26", padding: GROUP_PAD, gap: GROUP_GAP, marginBottom: onTop ? -1 : 0 }}>
+      {cards.map((card, i) => (
+        <div key={`${card.name}-${i}`} style={{ width: GROUP_CARD_W }}>
+          <OverlayCard name={card.name} set={set} cardImages={cardImages} />
+        </div>
+      ))}
+    </div>
+  );
+  const mainSquare = stackClip && maindeck.length <= sideboard.length;
+  const sideSquare = stackClip && sideboard.length < maindeck.length;
+  return (
+    <div className={cn("pointer-events-none fixed z-[100] flex items-center", sideBySide ? "flex-row" : "flex-col")}
+         style={{ top, left: "50%", transform: "translateX(-50%)", gap: sideBySide ? GROUP_GAP : 0 }}>
+      {maindeck.length > 0 && box(maindeck, stackClip, mainSquare)}
+      {sideboard.length > 0 && box(sideboard, false, sideSquare)}
+    </div>
+  );
+}
+
+function OverlayCard({ name, set, cardImages }: { name: string; set: string; cardImages: CardImages }) {
+  const { src, onError } = useFallbackImage(cardImageSources(name, set, cardImages));
+  if (!src) return <div className="rounded-[6px] bg-surface2" style={{ aspectRatio: "488 / 680" }} />;
+  return (
+    <img
+      key={src}
+      src={src}
+      alt={name}
+      loading="lazy"
+      draggable={false}
+      onError={onError}
+      className="w-full block rounded-[6px]"
+      style={{ aspectRatio: "488 / 680" }}
+    />
+  );
 }
 
 const SORT_ALIGN = { start: "justify-start", center: "justify-center", end: "justify-end" } as const;
@@ -644,37 +701,6 @@ function DeckNameCell({
       onBlur={() => { if (draft !== value) void onCommit(draft); }}
       className="w-full h-full font-body text-[14px] bg-transparent border border-transparent
                  px-2 text-text placeholder:text-subtle hover:border-border2 focus:border-green focus:bg-bg outline-none"
-    />
-  );
-}
-
-/** Sits inside a row whose click expands it, so every pointer event stops here */
-function CountCell({
-  value, onCommit,
-}: {
-  value: number | null;
-  onCommit: (n: number | null) => Promise<void>;
-}) {
-  const shown = value == null ? "" : String(value);
-  const [draft, setDraft] = useState(shown);
-  useEffect(() => { setDraft(shown); }, [shown]);
-
-  return (
-    <input
-      value={draft}
-      inputMode="numeric"
-      aria-label="cards opened"
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))}
-      onFocus={(e) => e.currentTarget.select()}
-      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-      onBlur={(e) => {
-        const raw = e.target.value.trim();
-        const next = raw === "" ? null : Math.min(99, Number(raw));
-        if (next !== value) void onCommit(next);
-      }}
-      className="font-display tabular-nums text-[16px] w-full h-full text-center text-subtle bg-transparent
-                 border border-transparent hover:border-border2 focus:border-green focus:bg-bg outline-none"
     />
   );
 }
