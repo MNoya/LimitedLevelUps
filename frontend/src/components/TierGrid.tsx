@@ -1,4 +1,4 @@
-import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { RefreshCw } from "./Icons";
 import { GradeLabel } from "./TierGuide";
@@ -457,6 +457,7 @@ function CardPagerModal({ pager }: { pager: ReturnType<typeof useCardPager> }) {
       onPrev={selectedIndex > 0 ? () => stepTo(selectedIndex - 1) : undefined}
       onNext={selectedIndex < visibleCards.length - 1 ? () => stepTo(selectedIndex + 1) : undefined}
       position={`${selectedIndex + 1} / ${visibleCards.length}`}
+      neighborUrls={neighborCardUrls(visibleCards, selectedIndex)}
     />,
     document.body,
   );
@@ -532,7 +533,9 @@ function CardBar({
   onOpen?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const hovering = useRef(false);
   const [anchor, setAnchor] = useState<PreviewAnchor | null>(null);
+  const [artLoaded, setArtLoaded] = useState(false);
   const accent = RARITY_ACCENT[card.rarity] ?? RARITY_ACCENT.C;
   const art = card.url.replace("/large/", "/art_crop/");
   const badges = `${card.comment ? "💬" : ""}${cardFlags(card).map((flag) => flag.glyph).join("")}`;
@@ -540,17 +543,26 @@ function CardBar({
     ? `${TREND_LABEL[card.trend]}${card.trend_from ? ` (${card.trend_from} → ${card.tier})` : ""}`
     : "";
 
-  const openPreview = () => {
-    const el = ref.current;
-    if (!el) return;
-    setAnchor(previewAnchorFor(el));
+  const enterPreview = () => {
+    hovering.current = true;
+    preloadImage(card.url, () => {
+      const el = ref.current;
+      if (hovering.current && el) {
+        setAnchor(previewAnchorFor(el));
+      }
+    });
+  };
+
+  const leavePreview = () => {
+    hovering.current = false;
+    setAnchor(null);
   };
 
   return (
     <div
       ref={ref}
-      onMouseEnter={mobile ? undefined : openPreview}
-      onMouseLeave={mobile ? undefined : () => setAnchor(null)}
+      onMouseEnter={mobile ? undefined : enterPreview}
+      onMouseLeave={mobile ? undefined : leavePreview}
       onClick={() => {
         setAnchor(null);
         onOpen?.();
@@ -558,19 +570,19 @@ function CardBar({
       className="relative min-[450px]:max-w-[300px] cursor-pointer rounded-[5px] border-l-4"
       style={{ borderLeftColor: accent }}
     >
-      <div
-        className={cn(
-          "relative min-h-[28px] overflow-hidden rounded-r-[5px]",
-          hideArt && "bg-surface2",
-        )}
-      >
+      <div className="relative min-h-[28px] overflow-hidden rounded-r-[5px] bg-surface2">
         {!hideArt && (
           <>
             <img
               src={art}
               alt=""
               loading="lazy"
-              className="absolute inset-0 h-full w-full object-cover"
+              decoding="async"
+              onLoad={() => setArtLoaded(true)}
+              className={cn(
+                "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
+                artLoaded ? "opacity-100" : "opacity-0",
+              )}
               style={{ objectPosition: "center 22%" }}
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-black/30" />
@@ -755,7 +767,7 @@ export function CardPreview({
     <PreviewShell anchor={anchor}>
       <CardFlagTabs card={card} />
       <GradesPanel card={card} />
-      <img src={card.url} alt="" className="w-full rounded-[10px]" />
+      <CardImage src={card.url} alt="" />
       {card.comment && (
         <p className="whitespace-pre-line px-3 py-2.5 text-center text-[14px] leading-snug text-text">
           {card.comment}
@@ -765,25 +777,51 @@ export function CardPreview({
   );
 }
 
+export function neighborCardUrls(cards: TierCard[], index: number): string[] {
+  const urls: string[] = [];
+  for (const neighbor of [cards[index - 1], cards[index + 1]]) {
+    if (neighbor) {
+      urls.push(neighbor.url);
+      if (neighbor.url_back) {
+        urls.push(neighbor.url_back);
+      }
+    }
+  }
+  return urls;
+}
+
 export function CardModal({
   card,
   onClose,
   onPrev,
   onNext,
   position,
+  neighborUrls = [],
 }: {
   card: TierCard;
   onClose: () => void;
   onPrev?: () => void;
   onNext?: () => void;
   position?: string;
+  neighborUrls?: string[];
 }) {
   const [flipped, setFlipped] = useState(false);
+  const [displayed, setDisplayed] = useState(card);
   const flippable = Boolean(card.url_back);
 
   useEffect(() => {
     setFlipped(false);
+    if (card.url_back) {
+      setDisplayed(card);
+    }
   }, [card.card_id]);
+
+  const neighborKey = neighborUrls.join("|");
+  useEffect(() => {
+    for (const url of neighborKey ? neighborKey.split("|") : []) {
+      preloadImage(url);
+    }
+  }, [neighborKey]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -809,17 +847,17 @@ export function CardModal({
           style={{ backgroundColor: PREVIEW_MAT }}
           onClick={(e) => e.stopPropagation()}
         >
-          <CardFlagTabs card={card} />
-          <GradesPanel card={card} />
+          <CardFlagTabs card={displayed} />
+          <GradesPanel card={displayed} />
           {flippable ? (
             <FlipCardImage front={card.url} back={card.url_back!} name={card.name} flipped={flipped} />
           ) : (
-            <img src={card.url} alt={card.name} className="w-full rounded-[10px]" />
+            <CardImage src={card.url} alt={card.name} onShown={() => setDisplayed(card)} />
           )}
           <div
             className={cn(
               "flex items-center justify-between px-3 py-3.5",
-              !card.comment && "-mb-[6px]",
+              !displayed.comment && "-mb-[6px]",
             )}
           >
             <ModalNavButton dir="prev" srLabel="Previous card" onClick={onPrev} />
@@ -830,9 +868,9 @@ export function CardModal({
             )}
             <ModalNavButton dir="next" srLabel="Next card" onClick={onNext} />
           </div>
-          {card.comment && (
+          {displayed.comment && (
             <p className="-mx-[6px] -mb-[6px] whitespace-pre-line border-t border-white/15 px-3 py-3.5 text-center text-[14px] leading-snug text-text sm:border-white/60">
-              {card.comment}
+              {displayed.comment}
             </p>
           )}
         </div>
@@ -866,6 +904,8 @@ function FlipCardImage({
   name: string;
   flipped: boolean;
 }) {
+  const { loaded: frontLoaded, instant, onLoad } = useImageReveal(front);
+
   return (
     <div className="w-full [perspective:1200px]">
       <div
@@ -875,18 +915,185 @@ function FlipCardImage({
           transform: flipped ? "rotateY(180deg)" : undefined,
         }}
       >
+        {!frontLoaded && (
+          <div className={cn("absolute inset-0 animate-pulse bg-surface2 [backface-visibility:hidden]", CARD_CORNER)} />
+        )}
         <img
           src={front}
           alt={name}
-          className="absolute inset-0 h-full w-full rounded-[10px] [backface-visibility:hidden] [-webkit-backface-visibility:hidden]"
+          decoding="async"
+          onLoad={onLoad}
+          onError={onLoad}
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover [backface-visibility:hidden] [-webkit-backface-visibility:hidden]",
+            !instant && "transition-opacity duration-300",
+            CARD_CORNER,
+            CARD_EDGE,
+            frontLoaded ? "opacity-100" : "opacity-0",
+          )}
         />
         <img
           src={back}
           alt=""
-          className="absolute inset-0 h-full w-full rounded-[10px] [backface-visibility:hidden] [-webkit-backface-visibility:hidden] [transform:rotateY(180deg)]"
+          decoding="async"
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover [backface-visibility:hidden] [-webkit-backface-visibility:hidden] [transform:rotateY(180deg)]",
+            CARD_CORNER,
+            CARD_EDGE,
+          )}
         />
       </div>
     </div>
+  );
+}
+
+const CARD_CORNER = "rounded-[4.5%/3.2%]";
+const CARD_EDGE = "outline outline-1 -outline-offset-1 outline-white/10";
+
+const loadedImages = new Set<string>();
+
+function preloadImage(url: string, onReady?: () => void) {
+  if (loadedImages.has(url)) {
+    onReady?.();
+    return;
+  }
+  const warm = new Image();
+  const done = () => {
+    loadedImages.add(url);
+    onReady?.();
+  };
+  warm.onload = done;
+  warm.onerror = done;
+  warm.src = url;
+  if (warm.complete && warm.naturalWidth > 0) {
+    done();
+  }
+}
+
+function useImageReveal(src: string) {
+  const [loaded, setLoaded] = useState(false);
+  const [instant, setInstant] = useState(false);
+
+  useLayoutEffect(() => {
+    const cached = loadedImages.has(src);
+    setLoaded(cached);
+    setInstant(cached);
+  }, [src]);
+
+  const onLoad = () => {
+    loadedImages.add(src);
+    setLoaded(true);
+  };
+
+  return { loaded, instant, onLoad };
+}
+
+function CardImage({
+  src,
+  alt,
+  onShown,
+}: {
+  src: string;
+  alt: string;
+  onShown?: () => void;
+}) {
+  const [layers, setLayers] = useState(() => [{ key: 0, src }]);
+  const keyRef = useRef(0);
+
+  useEffect(() => {
+    setLayers((prev) => {
+      if (prev[prev.length - 1].src === src) {
+        return prev;
+      }
+      keyRef.current += 1;
+      return [...prev, { key: keyRef.current, src }];
+    });
+  }, [src]);
+
+  const settle = (key: number, layerSrc: string) => {
+    setLayers((prev) => {
+      const idx = prev.findIndex((layer) => layer.key === key);
+      return idx <= 0 ? prev : prev.slice(idx);
+    });
+    if (layerSrc === src) {
+      onShown?.();
+    }
+  };
+
+  return (
+    <div
+      className={cn("relative w-full overflow-hidden", CARD_CORNER, CARD_EDGE)}
+      style={{ aspectRatio: "488 / 680" }}
+    >
+      {layers.map((layer, i) => (
+        <CardImageLayer
+          key={layer.key}
+          src={layer.src}
+          alt={alt}
+          base={i === 0}
+          onSettled={() => settle(layer.key, layer.src)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function CardImageLayer({
+  src,
+  alt,
+  base,
+  onSettled,
+}: {
+  src: string;
+  alt: string;
+  base: boolean;
+  onSettled: () => void;
+}) {
+  const ref = useRef<HTMLImageElement>(null);
+  const settled = useRef(onSettled);
+  settled.current = onSettled;
+  const [ready, setReady] = useState(false);
+  const [instant, setInstant] = useState(false);
+
+  useLayoutEffect(() => {
+    const cached = loadedImages.has(src);
+    setReady(cached);
+    setInstant(cached);
+    if (cached) {
+      const img = ref.current;
+      const settle = () => settled.current();
+      if (img) {
+        img.decode().then(settle, settle);
+      } else {
+        settle();
+      }
+    }
+  }, [src, base]);
+
+  const reveal = () => {
+    loadedImages.add(src);
+    setReady(true);
+  };
+
+  return (
+    <>
+      {base && !ready && <div className="absolute inset-0 animate-pulse bg-surface2" />}
+      <img
+        ref={ref}
+        src={src}
+        alt={alt}
+        decoding="async"
+        onLoad={reveal}
+        onError={reveal}
+        onAnimationEnd={() => settled.current()}
+        className={cn(
+          "absolute inset-0 h-full w-full object-cover",
+          !ready && "opacity-0",
+          ready && instant && "opacity-100",
+          ready && !instant && "animate-fadeIn",
+        )}
+      />
+    </>
   );
 }
 

@@ -23,6 +23,7 @@ import {
   CardModal,
   CardPreview,
   comparePagerOrder,
+  neighborCardUrls,
   PREVIEW_EXTRAS_H,
   PREVIEW_GAP,
   PREVIEW_RATIO,
@@ -332,6 +333,7 @@ function TierPanel() {
                   : undefined
               }
               position={`${selectedIndex + 1} / ${allCards.length}`}
+              neighborUrls={neighborCardUrls(allCards, selectedIndex)}
             />,
             document.body,
           )

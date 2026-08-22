@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Search, X } from "lucide-react";
-import { CardModal, columnPipClass } from "./TierGrid";
+import { CardModal, columnPipClass, neighborCardUrls } from "./TierGrid";
 import { Tooltip } from "./Tooltip";
 import { cn } from "../lib/utils";
 import { columnOf, searchTierCards, tierColor, type TierCard } from "../data/tierList";
@@ -135,6 +135,7 @@ export function TierCardSearch({ cards, onClose }: { cards: TierCard[]; onClose:
           onPrev={picked > 0 ? () => setPicked(picked - 1) : undefined}
           onNext={picked < matches.length - 1 ? () => setPicked(picked + 1) : undefined}
           position={`${picked + 1} / ${matches.length}`}
+          neighborUrls={neighborCardUrls(matches.map((match) => match.card), picked)}
         />
       )}
     </div>,
