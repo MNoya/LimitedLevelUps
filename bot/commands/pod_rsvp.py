@@ -149,7 +149,8 @@ MSG_CARD_INACTIVE = "This RSVP card is no longer active"
 MSG_BAD_TIME = "Enter a future time like +1h, 9 PM, 21:00, or tomorrow 8:30pm"
 THREAD_NOTE_TITLE = "🕐 Pod Draft Rescheduled by {actor}"
 THREAD_NOTE_BODY = "New time: <t:{unix}:F> (<t:{unix}:R>)\n" + MSG_DRAFTMANCER_LINK_LEAD
-MSG_CLASHING_MAYBE = "🤷 {player} moved to Maybe here after confirming {other}"
+MSG_CLASHING_MAYBE = "🤷 {player} moved to **Maybe** after confirming {other}"
+MSG_CLASHING_SWITCH_BACK = "✅ {player} moved from Maybe to **Confirmed**"
 
 LauncherRefresh = Callable[[commands.Bot, date], Awaitable[None]]
 
@@ -1101,6 +1102,12 @@ async def _settle_card_rsvp(
             ),
             f"the pods clashing with {result.state.event_id}",
         )
+        run_detached(
+            switch_back_clash_notice(
+                interaction.client, interaction.user, result.state.event_id,
+            ),
+            f"the switch-back notice on pod {result.state.event_id}",
+        )
 
 
 SHARED_RENDER_DEBOUNCE_S = 1.5
@@ -1222,6 +1229,23 @@ async def _announce_clashing_maybe(
         await thread.send(MSG_CLASHING_MAYBE.format(player=user.display_name, other=confirmed_link))
     except discord.HTTPException:
         log.warning(f"could not post the clash notice in thread {thread.id}", exc_info=True)
+
+
+async def switch_back_clash_notice(
+    bot: commands.Bot, user: discord.abc.User, event_id: str,
+) -> None:
+    """Best-effort edit of this player's demote-to-Maybe notice into a switch-back when they confirm the pod"""
+    thread = await _resolve_event_thread(bot, event_id)
+    if thread is None or bot.user is None:
+        return
+    marker = MSG_CLASHING_MAYBE.split("{other}", 1)[0].format(player=user.display_name)
+    try:
+        async for message in thread.history(limit=50):
+            if message.author.id == bot.user.id and message.content.startswith(marker):
+                await message.edit(content=MSG_CLASHING_SWITCH_BACK.format(player=user.display_name))
+                return
+    except discord.HTTPException:
+        log.warning(f"could not edit the switch-back notice in thread {thread.id}", exc_info=True)
 
 
 async def _pod_thread_link(bot: commands.Bot, event_id: str, name: str) -> str:
