@@ -7,6 +7,8 @@ DRAFTMANCER_HOST = "draftmancer.com"
 
 PRODUCTION_GUILD_ID = 775371722065051658
 
+OWNER_DISCORD_ID = 237762740532412416
+
 
 class Settings(BaseSettings):
     """Process-wide configuration loaded from env (or .env in repo root).
@@ -27,7 +29,8 @@ class Settings(BaseSettings):
     feedback_channel_id: int = 1504825374188507156
     public_site_url: str = "https://limitedlevelups.com"
     auto_refresh_enabled: bool = True
-    tracker_discord_ids: str = "237762740532412416"
+    tracker_discord_ids: str = str(OWNER_DISCORD_ID)
+    pod_thread_watch_id: int | None = OWNER_DISCORD_ID
     supabase_url: str = ""
     supabase_anon_key: str = ""
     tracker_http_port: int | None = None

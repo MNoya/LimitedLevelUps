@@ -27,6 +27,8 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from sqlalchemy import create_engine, text
 
+from bot.config import OWNER_DISCORD_ID
+
 SPREADSHEET_ID = "1ykMC8ZpbBBRrv83zpzRFe39r4Yr_z2BY5VjtijCfQeU"
 KEY_PATH = os.path.expanduser("~/.config/gcloud/sheets-mcp-key.json")
 LOCAL_TZ = timezone(timedelta(hours=-7))
@@ -189,7 +191,7 @@ def main() -> None:
     ap.add_argument("--set", dest="set_code", required=True)
     ap.add_argument("--tab", help="Spreadsheet tab, defaults to the set code")
     ap.add_argument("--user", required=True, help="auth user uuid the rows belong to")
-    ap.add_argument("--discord-id", default="237762740532412416")
+    ap.add_argument("--discord-id", default=str(OWNER_DISCORD_ID))
     ap.add_argument("--year", type=int, default=2026)
     ap.add_argument("--apply", action="store_true", help="Write. Without it, print the plan only")
     args = ap.parse_args()

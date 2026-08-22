@@ -15,6 +15,8 @@ from aiohttp import web
 from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import sessionmaker
 
+from bot.config import OWNER_DISCORD_ID
+
 from bot.models import DraftEvent, MagicSet, Player
 from bot.services.refresh import refresh_player
 from bot.services.seventeenlands import SeventeenLandsClient
@@ -60,7 +62,7 @@ _TRACKER_TABLES = {
 DEV_USER_ID = "00000000-0000-4000-8000-000000000001"
 # public_my_player_accounts scopes itself with auth.jwt(), which does not exist here,
 # so serve the same shape for whichever player the dev identity points at
-DEV_DISCORD_ID = os.environ.get("DEV_DISCORD_ID", "237762740532412416")
+DEV_DISCORD_ID = os.environ.get("DEV_DISCORD_ID", str(OWNER_DISCORD_ID))
 MY_ACCOUNTS_SQL = """
     SELECT p.slug, pa.id AS account_id, pa.name AS account_name, count(de.id) AS events
     FROM player_accounts pa
