@@ -1071,6 +1071,7 @@ class PodDraftManager:
             state="ready",
             ready_arena_names=self.ready_arena_names(),
             initiated_by=self.initiated_by,
+            new_drafters=self.new_drafters,
             **self._settings_labels(),
         )
         view = ReadyCheckAnswerView()
@@ -1514,6 +1515,7 @@ class PodDraftManager:
                     draftmancer_url=self.draftmancer_url if self.ready_check_left_ids else None,
                     initiated_by=self.initiated_by,
                     teams=teams,
+                    new_drafters=self.new_drafters,
                     **self._settings_labels(),
                 )
                 if progress_state == "drafting":
@@ -3326,6 +3328,7 @@ class PodDraftManager:
             ready_arena_names=self.ready_arena_names(),
             not_ready_arena_names=self.not_ready_arena_names(),
             cancel_reason=self.last_cancel_reason, initiated_by=self.initiated_by,
+            new_drafters=self.new_drafters,
             **self._settings_labels(),
         )
         card = self.ready_check_progress_message

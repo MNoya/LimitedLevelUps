@@ -1312,6 +1312,7 @@ _RSVPS_YES = [
 ]
 _RSVPS_MAYBE = ["Kibler", "Juza", "Levy"]
 _SPECTATORS = ["Nakamura", "Karsten"]
+_NEW_DRAFTERS = frozenset({"Finkel", "LSV", "Huey", "Kibler"})
 # Arena handle, then the Discord display name shown in the announcement
 _LINKED_EIGHT: list[tuple[str, str]] = [
     ("Noya#08011", "Noya"),
@@ -1413,6 +1414,7 @@ def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
         cancel_reason=stopped_reason(initiated_by) if state == "notready" else None,
         initiated_by=initiated_by,
         spectators=_SPECTATORS,
+        new_drafters=_NEW_DRAFTERS,
         **_preview_settings_labels(),
     )
     spectate_url = f"{_DRAFTMANCER_URL}&spectate=preview"
@@ -1450,7 +1452,7 @@ def _build_ready_progress(state: str) -> list[tuple[discord.Embed, discord.ui.Vi
             hold_detail=_PREVIEW_HOLD_DETAIL if held else None,
             hold_hint=_PREVIEW_HOLD_HINT if held else None,
             draftmancer_url=_DRAFTMANCER_URL if held else None,
-            initiated_by=initiator, **_preview_settings_labels(),
+            initiated_by=initiator, new_drafters=_NEW_DRAFTERS, **_preview_settings_labels(),
         )
         return [(embed, ReadyCheckAnswerView(paused=held))]
     if state == "notready":
@@ -1458,12 +1460,12 @@ def _build_ready_progress(state: str) -> list[tuple[discord.Embed, discord.ui.Vi
             _THREAD_NAME, in_session, state="notready", cancel_reason=stopped_reason(initiator),
             ready_arena_names={arena for arena, _ in _LINKED_EIGHT[:3]},
             not_ready_arena_names=_PREVIEW_NOT_READY,
-            initiated_by=initiator, **_preview_settings_labels(),
+            initiated_by=initiator, new_drafters=_NEW_DRAFTERS, **_preview_settings_labels(),
         )
         return [(embed, build_not_ready_view())]
     embed = render_ready_check_progress(
         _THREAD_NAME, in_session, state=state,
-        **_preview_settings_labels(),
+        new_drafters=_NEW_DRAFTERS, **_preview_settings_labels(),
     )
     return [(embed, None)]
 
@@ -1968,7 +1970,7 @@ async def setup(bot: commands.Bot) -> None:
             await ctx.send(embed=render_ready_check_progress(
                 _THREAD_NAME, [(_TEAM_ARENA[name], name) for name in seat_order],
                 state="drafting", teams={_TEAM_ARENA[n]: t for n, t in teams.items()},
-                initiated_by=_INVOKER_SEAT, **labels,
+                initiated_by=_INVOKER_SEAT, new_drafters=_NEW_DRAFTERS, **labels,
             ))
             return
 

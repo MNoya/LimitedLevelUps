@@ -650,8 +650,8 @@ def render(
     Discord name is enough, nobody links an Arena handle), and no matches are paired, so the
     Unrecognized bucket, `/link-arena`, and `/report-results` all go.
 
-    `new_drafters` marks the seats yet to finish a pod, so the room knows who to walk through it. Seats
-    only: somebody the pod is still waiting on is not in front of anybody to help yet."""
+    `new_drafters` marks the seats and the waiting roster for players yet to finish a pod, so the room
+    knows who to walk through it before the draft starts."""
     in_draftmancer = [(arena, dn) for arena, dn in in_session if dn is not None]
     unrecognized = [arena for arena, dn in in_session if dn is None]
     mention_map = display_name_by_mention_id or {}
@@ -718,9 +718,10 @@ def render(
             if waiting_maybe:
                 columns.append((f"🤷 Maybe ({len(waiting_maybe)})", waiting_maybe))
             for header, names in columns:
+                marked = [marked_new(name, new_drafters) for name in names]
                 embed.add_field(
                     name=header,
-                    value=quote_block(names, trailing="\n​" if len(names) == longest else ""),
+                    value=quote_block(marked, trailing="\n​" if len(names) == longest else ""),
                     inline=True,
                 )
             for _ in range(-len(columns) % 3):
@@ -787,6 +788,7 @@ def render_ready_check_progress(
     seating_label: str | None = None,
     teams: dict[str, str] | None = None,
     mock: bool = False,
+    new_drafters: frozenset[str] = frozenset(),
 ) -> discord.Embed:
     """Compact ready-check progress card, one per check, updated in place as players respond. `state` mirrors
     the lobby state machine: 'ready', 'held', 'notready', 'drafting', 'complete'.
@@ -831,7 +833,7 @@ def render_ready_check_progress(
     _set_settings_footer(embed, format_label, pairing_label, seating_label)
 
     if teams and state in ("drafting", "complete"):
-        _team_columns(embed, roster, teams)
+        _team_columns(embed, roster, teams, new_drafters)
         return embed
 
     if state in ("drafting", "complete"):
@@ -849,9 +851,15 @@ def render_ready_check_progress(
 
     ready_label = "Players" if state == "complete" else "Ready"
     two_groups = bool(pending_players) or state in ("ready", "held", "overdue")
-    _player_columns(embed, f"✅ {ready_label} ({len(ready_players)})", ready_players, spacer=two_groups)
+    _player_columns(
+        embed, f"✅ {ready_label} ({len(ready_players)})", ready_players,
+        spacer=two_groups, new_drafters=new_drafters,
+    )
     if two_groups:
-        _player_columns(embed, f"⏳ Pending ({len(pending_players)})", pending_players, spacer=True)
+        _player_columns(
+            embed, f"⏳ Pending ({len(pending_players)})", pending_players,
+            spacer=True, new_drafters=new_drafters,
+        )
     return embed
 
 
