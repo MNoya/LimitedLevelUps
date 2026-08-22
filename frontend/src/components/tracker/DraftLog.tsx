@@ -155,7 +155,12 @@ export function DraftLog({
     return m;
   }, [draftNotes]);
 
-  const numbered = useMemo(() => rows.map((event, i) => ({ event, index: i + 1 })), [rows]);
+  const numbered = useMemo(() => {
+    const time = (e: PlayerDraftEvent) => (e.finishedAt ? Date.parse(e.finishedAt) : 0);
+    const byDateAsc = [...rows].sort((a, b) => time(a) - time(b));
+    const rank = new Map(byDateAsc.map((e, i) => [e.eventId, i + 1]));
+    return rows.map((event) => ({ event, index: rank.get(event.eventId) ?? 0 }));
+  }, [rows]);
   const ordered = useMemo(() => sortNumberedDrafts(numbered, sort, notesById), [numbered, sort, notesById]);
   const toggleSort = (key: TrackerSortKey) =>
     setSort((s) => ({ key, dir: s.key === key && s.dir === "asc" ? "desc" : "asc" }));
@@ -603,7 +608,7 @@ function SortHeaderCell({
 function DraftIndexCell({ index, externalUrl }: { index: number; externalUrl?: string | null }) {
   const digits = "font-display tabular-nums text-[15px] text-subtle";
   if (!externalUrl) {
-    return <Cell className="px-1"><span className={digits}>{index}</span></Cell>;
+    return <Cell className="pl-2"><span className={digits}>{index}</span></Cell>;
   }
 
   return (
@@ -614,7 +619,7 @@ function DraftIndexCell({ index, externalUrl }: { index: number; externalUrl?: s
         rel="noopener noreferrer"
         aria-label={`open draft ${index} on 17lands`}
         onClick={(e) => e.stopPropagation()}
-        className={cn(digits, "flex items-center w-full h-full px-1 hover:text-green hover:bg-surface2")}
+        className={cn(digits, "flex items-center w-full h-full pl-2 hover:text-green hover:bg-surface2")}
       >
         {index}
       </a>
