@@ -1,587 +1,5 @@
 [
   {
-    "title": "Marvel Super Heroes Prerelease Weekend",
-    "tags": [
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "prerelease"
-      },
-      {
-        "slug": "sealed"
-      }
-    ],
-    "utc_start_date": "2026-06-19 04:00:00",
-    "utc_end_date": "2026-06-22 03:59:59",
-    "start_date": "2026-06-19 00:00:00",
-    "end_date": "2026-06-21 23:59:59"
-  },
-  {
-    "title": "Marvel Super Heroes Digital Release",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "digital-release"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "mtgo"
-      }
-    ],
-    "utc_start_date": "2026-06-23 04:00:00",
-    "utc_end_date": "2026-06-24 03:59:59",
-    "start_date": "2026-06-23 00:00:00",
-    "end_date": "2026-06-23 23:59:59"
-  },
-  {
-    "title": "Jump In: Marvel Super Heroes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "jump-in"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      }
-    ],
-    "utc_start_date": "2026-06-23 14:00:00",
-    "utc_end_date": "2026-08-11 15:00:00",
-    "start_date": "2026-06-23 10:00:00",
-    "end_date": "2026-08-11 11:00:00"
-  },
-  {
-    "title": "Premier Draft: Marvel Super Heroes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "premier-draft"
-      }
-    ],
-    "utc_start_date": "2026-06-23 15:00:00",
-    "utc_end_date": "2026-08-11 15:00:00",
-    "start_date": "2026-06-23 11:00:00",
-    "end_date": "2026-08-11 11:00:00"
-  },
-  {
-    "title": "Bo1 Sealed: Marvel Super Heroes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "best-of-one"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "sealed"
-      }
-    ],
-    "utc_start_date": "2026-06-23 15:00:00",
-    "utc_end_date": "2026-07-21 15:00:00",
-    "start_date": "2026-06-23 11:00:00",
-    "end_date": "2026-07-21 11:00:00"
-  },
-  {
-    "title": "Traditional Draft: Marvel Super Heroes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "traditional-draft"
-      }
-    ],
-    "utc_start_date": "2026-06-23 15:00:00",
-    "utc_end_date": "2026-08-11 15:00:00",
-    "start_date": "2026-06-23 11:00:00",
-    "end_date": "2026-08-11 11:00:00"
-  },
-  {
-    "title": "Traditional Sealed: Marvel Super Heroes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "traditional-sealed"
-      }
-    ],
-    "utc_start_date": "2026-06-23 15:00:00",
-    "utc_end_date": "2026-08-07 15:00:00",
-    "start_date": "2026-06-23 11:00:00",
-    "end_date": "2026-08-07 11:00:00"
-  },
-  {
-    "title": "Pick 2 Draft: Marvel Super Heroes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "pick-2-draft"
-      }
-    ],
-    "utc_start_date": "2026-06-23 15:00:00",
-    "utc_end_date": "2026-08-11 15:00:00",
-    "start_date": "2026-06-23 11:00:00",
-    "end_date": "2026-08-11 11:00:00"
-  },
-  {
-    "title": "Arena Direct: Marvel Super Heroes Collector Boxes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "arena-direct"
-      },
-      {
-        "slug": "collector-booster"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "sealed"
-      }
-    ],
-    "utc_start_date": "2026-06-30 15:00:00",
-    "utc_end_date": "2026-07-06 15:00:00",
-    "start_date": "2026-06-30 11:00:00",
-    "end_date": "2026-07-06 11:00:00"
-  },
-  {
-    "title": "Quick Draft: Marvel Super Heroes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "quick-draft"
-      }
-    ],
-    "utc_start_date": "2026-07-02 15:00:00",
-    "utc_end_date": "2026-07-12 15:00:00",
-    "start_date": "2026-07-02 11:00:00",
-    "end_date": "2026-07-12 11:00:00"
-  },
-  {
-    "title": "ACQ Play-In: Marvel Super Heroes Sealed Bo1",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "play-in"
-      },
-      {
-        "slug": "sealed"
-      }
-    ],
-    "utc_start_date": "2026-07-04 13:00:00",
-    "utc_end_date": "2026-07-05 15:00:00",
-    "start_date": "2026-07-04 09:00:00",
-    "end_date": "2026-07-05 11:00:00"
-  },
-  {
-    "title": "Contender Draft: Marvel Super Heroes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "contender-draft"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      }
-    ],
-    "utc_start_date": "2026-07-07 15:00:00",
-    "utc_end_date": "2026-07-14 15:00:00",
-    "start_date": "2026-07-07 11:00:00",
-    "end_date": "2026-07-14 11:00:00"
-  },
-  {
-    "title": "Midweek Magic: FDN + MSH Constructed",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "constructed"
-      },
-      {
-        "slug": "foundations"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "midweek-magic"
-      }
-    ],
-    "utc_start_date": "2026-07-07 21:00:00",
-    "utc_end_date": "2026-07-09 21:00:00",
-    "start_date": "2026-07-07 17:00:00",
-    "end_date": "2026-07-09 17:00:00"
-  },
-  {
-    "title": "ACQ Play-In: Sealed Marvel Super Heroes Bo3",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "play-in"
-      },
-      {
-        "slug": "sealed"
-      }
-    ],
-    "utc_start_date": "2026-07-10 13:00:00",
-    "utc_end_date": "2026-07-11 10:00:00",
-    "start_date": "2026-07-10 09:00:00",
-    "end_date": "2026-07-11 06:00:00"
-  },
-  {
-    "title": "Arena Championship Qualifier Weekend: Sealed Marvel Super Heroes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "qualifier"
-      },
-      {
-        "slug": "sealed"
-      }
-    ],
-    "utc_start_date": "2026-07-11 04:00:00",
-    "utc_end_date": "2026-07-13 03:59:59",
-    "start_date": "2026-07-11 00:00:00",
-    "end_date": "2026-07-12 23:59:59"
-  },
-  {
-    "title": "Pro Tour Marvel Super Heroes: Modern And Top 8 Draft",
-    "tags": [
-      {
-        "slug": "constructed"
-      },
-      {
-        "slug": "draft"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "modern"
-      },
-      {
-        "slug": "pro-tour"
-      },
-      {
-        "slug": "tabletop"
-      }
-    ],
-    "utc_start_date": "2026-07-17 04:00:00",
-    "utc_end_date": "2026-07-20 03:59:59",
-    "start_date": "2026-07-17 00:00:00",
-    "end_date": "2026-07-19 23:59:59"
-  },
-  {
-    "title": "Arena Direct: Marvel Super Heroes Play Booster Box",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "arena-direct"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "play-boosters"
-      },
-      {
-        "slug": "sealed"
-      }
-    ],
-    "utc_start_date": "2026-07-17 15:00:00",
-    "utc_end_date": "2026-07-27 15:00:00",
-    "start_date": "2026-07-17 11:00:00",
-    "end_date": "2026-07-27 11:00:00"
-  },
-  {
-    "title": "Planar Cube Draft",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "cube"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "planar-cube"
-      }
-    ],
-    "utc_start_date": "2026-07-21 15:00:00",
-    "utc_end_date": "2026-08-11 15:00:00",
-    "start_date": "2026-07-21 11:00:00",
-    "end_date": "2026-08-11 11:00:00"
-  },
-  {
-    "title": "Spotlight Series Brussels: Team Limited",
-    "tags": [
-      {
-        "slug": "fanfinity"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "magic-spotlight-series"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "tabletop"
-      },
-      {
-        "slug": "team-limited"
-      }
-    ],
-    "utc_start_date": "2026-07-24 04:00:00",
-    "utc_end_date": "2026-07-27 03:59:59",
-    "start_date": "2026-07-24 00:00:00",
-    "end_date": "2026-07-26 23:59:59"
-  },
-  {
-    "title": "Premier Draft: Edge of Eternities",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "edge-of-eternities"
-      },
-      {
-        "slug": "flashback"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "premier-draft"
-      }
-    ],
-    "utc_start_date": "2026-07-28 15:00:00",
-    "utc_end_date": "2026-08-04 15:00:00",
-    "start_date": "2026-07-28 11:00:00",
-    "end_date": "2026-08-04 11:00:00"
-  },
-  {
-    "title": "Quick Draft: Marvel Super Heroes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "quick-draft"
-      }
-    ],
-    "utc_start_date": "2026-07-31 15:00:00",
-    "utc_end_date": "2026-08-11 15:00:00",
-    "start_date": "2026-07-31 11:00:00",
-    "end_date": "2026-08-11 11:00:00"
-  },
-  {
-    "title": "Premier Draft: War of the Spark",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "flashback"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "premier-draft"
-      },
-      {
-        "slug": "war-of-the-spark"
-      }
-    ],
-    "utc_start_date": "2026-08-04 15:00:00",
-    "utc_end_date": "2026-08-11 15:00:00",
-    "start_date": "2026-08-04 11:00:00",
-    "end_date": "2026-08-11 11:00:00"
-  },
-  {
-    "title": "Contender Draft: Marvel Super Heroes",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "contender-draft"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      }
-    ],
-    "utc_start_date": "2026-08-04 15:00:00",
-    "utc_end_date": "2026-08-10 15:00:00",
-    "start_date": "2026-08-04 11:00:00",
-    "end_date": "2026-08-10 11:00:00"
-  },
-  {
-    "title": "Arena Direct: Powered Cube Draft (SPM &#038; MSH Play Booster Prizes)",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "arena-direct"
-      },
-      {
-        "slug": "arena-powered-cube"
-      },
-      {
-        "slug": "draft"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "play-boosters"
-      }
-    ],
-    "utc_start_date": "2026-08-04 15:00:00",
-    "utc_end_date": "2026-08-08 15:00:00",
-    "start_date": "2026-08-04 11:00:00",
-    "end_date": "2026-08-08 11:00:00"
-  },
-  {
-    "title": "Midweek Magic: Marvel Super Heroes Quick Draft",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "marvel-super-heroes"
-      },
-      {
-        "slug": "midweek-magic"
-      },
-      {
-        "slug": "quick-draft"
-      }
-    ],
-    "utc_start_date": "2026-08-04 21:00:00",
-    "utc_end_date": "2026-08-06 21:00:00",
-    "start_date": "2026-08-04 17:00:00",
-    "end_date": "2026-08-06 17:00:00"
-  },
-  {
     "title": "The Hobbit Prerelease Weekend",
     "tags": [
       {
@@ -690,27 +108,6 @@
     "end_date": "2026-09-29 11:00:00"
   },
   {
-    "title": "Quick Draft: Duskmourn",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "duskmourn-house-of-horror"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "quck-draft"
-      }
-    ],
-    "utc_start_date": "2026-08-11 15:00:00",
-    "utc_end_date": "2026-08-19 15:00:00",
-    "start_date": "2026-08-11 11:00:00",
-    "end_date": "2026-08-19 11:00:00"
-  },
-  {
     "title": "Sealed: The Hobbit",
     "tags": [
       {
@@ -774,24 +171,6 @@
     "end_date": "2026-09-29 11:00:00"
   },
   {
-    "title": "Midweek Magic: Brawl",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "brawl"
-      },
-      {
-        "slug": "midweek-magic"
-      }
-    ],
-    "utc_start_date": "2026-08-11 21:00:00",
-    "utc_end_date": "2026-08-13 21:00:00",
-    "start_date": "2026-08-11 17:00:00",
-    "end_date": "2026-08-13 17:00:00"
-  },
-  {
     "title": "Arena Direct: The Hobbit Collector Boosters",
     "tags": [
       {
@@ -814,48 +193,6 @@
     "utc_end_date": "2026-08-23 15:00:00",
     "start_date": "2026-08-14 11:00:00",
     "end_date": "2026-08-23 11:00:00"
-  },
-  {
-    "title": "Timeless Metagame Challenge",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "constructed"
-      },
-      {
-        "slug": "metagame-challenge"
-      },
-      {
-        "slug": "timeless"
-      }
-    ],
-    "utc_start_date": "2026-08-14 15:00:00",
-    "utc_end_date": "2026-08-17 15:00:00",
-    "start_date": "2026-08-14 11:00:00",
-    "end_date": "2026-08-17 11:00:00"
-  },
-  {
-    "title": "Midweek Magic: Historic Pauper",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "historic"
-      },
-      {
-        "slug": "midweek-magic"
-      },
-      {
-        "slug": "pauper"
-      }
-    ],
-    "utc_start_date": "2026-08-18 21:00:00",
-    "utc_end_date": "2026-08-20 21:00:00",
-    "start_date": "2026-08-18 17:00:00",
-    "end_date": "2026-08-20 17:00:00"
   },
   {
     "title": "Quick Draft: The Hobbit",
@@ -928,6 +265,9 @@
     "tags": [
       {
         "slug": "arena"
+      },
+      {
+        "slug": "flashback"
       },
       {
         "slug": "limited"
@@ -1014,7 +354,7 @@
     "end_date": "2026-08-29 06:00:00"
   },
   {
-    "title": "Sealed: The Lord of the Rings",
+    "title": "Sealed: The Lord of the Rings + The Hobbit",
     "tags": [
       {
         "slug": "arena"
@@ -1027,6 +367,9 @@
       },
       {
         "slug": "sealed"
+      },
+      {
+        "slug": "the-hobbit"
       }
     ],
     "utc_start_date": "2026-08-28 15:00:00",
@@ -1188,6 +531,9 @@
         "slug": "arena"
       },
       {
+        "slug": "flashback"
+      },
+      {
         "slug": "limited"
       },
       {
@@ -1207,6 +553,9 @@
     "tags": [
       {
         "slug": "arena"
+      },
+      {
+        "slug": "flashback"
       },
       {
         "slug": "limited"
@@ -1233,7 +582,13 @@
         "slug": "arena-powered-cube"
       },
       {
+        "slug": "flashback"
+      },
+      {
         "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
       }
     ],
     "utc_start_date": "2026-09-08 15:00:00",
@@ -1350,6 +705,9 @@
         "slug": "dominaria-united"
       },
       {
+        "slug": "flashback"
+      },
+      {
         "slug": "limited"
       },
       {
@@ -1441,6 +799,9 @@
     "tags": [
       {
         "slug": "arena"
+      },
+      {
+        "slug": "flashback"
       },
       {
         "slug": "limited"
