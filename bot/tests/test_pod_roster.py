@@ -71,3 +71,19 @@ def test_player_roster_excludes_spectators():
 
     assert mgr.non_bot_session_names() == ["Ava", "Bram"]
     assert mgr.kick_targets() == [("1", "Ava"), ("2", "Bram"), ("4", "Cyra (spectator)")]
+
+
+def test_player_roster_collapses_same_name_clone_to_live_socket():
+    mgr = _manager(
+        [
+            {"userID": "1", "userName": "Ava"},
+            {"userID": "2", "userName": "Bram"},
+            {"userID": "ghost", "userName": "Ava"},
+        ],
+        None,
+    )
+
+    roster = mgr.player_session_users()
+
+    assert [u["userName"] for u in roster] == ["Ava", "Bram"]
+    assert next(u["userID"] for u in roster if u["userName"] == "Ava") == "ghost"

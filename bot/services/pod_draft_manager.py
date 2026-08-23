@@ -1261,12 +1261,16 @@ class PodDraftManager:
         return out
 
     def player_session_users(self) -> list[dict]:
-        """Session users that count as players: excludes the bot and anyone spectating."""
-        return [
-            u for u in self.session_users
-            if u.get("userName") and u.get("userName") != BOT_USER_NAME
-            and u.get("userID") not in self.spectator_user_ids
-        ]
+        """Session users that count as players: excludes the bot and anyone spectating, and collapses a
+        name that opened more than one tab to a single seat so a ghost socket Draftmancer has not yet
+        evicted can't inflate the count. Keeps the last socket per name, the live tab after a reconnect."""
+        by_name: dict[str, dict] = {}
+        for u in self.session_users:
+            name = u.get("userName")
+            if not name or name == BOT_USER_NAME or u.get("userID") in self.spectator_user_ids:
+                continue
+            by_name[name] = u
+        return list(by_name.values())
 
     def non_bot_session_names(self) -> list[str]:
         return [u.get("userName") for u in self.player_session_users()]
