@@ -75,12 +75,12 @@ function buildSentences(
     case "postVoting":
       return [
         <>Participants have put in their predictions for {setName}</>,
-        <>Check out the most popular picks below, then come back once they're ranked by {winRateLink}, four weeks after voting</>,
+        <>Check out the most popular picks, then come back once they're ranked by {winRateLink}, four weeks after voting</>,
       ];
     case "midway":
       return [
         <>{setName} season is underway</>,
-        <>Check out the <strong>preliminary data</strong> below {formattedRange && <> from {formattedRange}</>}</>,
+        <>Check out the <strong>preliminary data</strong>{formattedRange && <> from {formattedRange}</>}</>,
         <>Final results coming soon</>
       ];
     case "final":
