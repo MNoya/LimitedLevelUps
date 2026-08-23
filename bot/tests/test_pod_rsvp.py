@@ -384,10 +384,12 @@ NOW = datetime(2026, 7, 14, 12, 0, tzinfo=SCHEDULE_TZ)
         ("+2h", CURRENT + timedelta(hours=2)),
         ("+30m", CURRENT + timedelta(minutes=30)),
         ("+2h30m", CURRENT + timedelta(hours=2, minutes=30)),
+        ("-1h", CURRENT - timedelta(hours=1)),
+        ("-30m", CURRENT - timedelta(minutes=30)),
         ("1h", CURRENT + timedelta(hours=1)),
         ("30m", CURRENT + timedelta(minutes=30)),
         ("2h30m", CURRENT + timedelta(hours=2, minutes=30)),
-        ("21:00", datetime(2026, 7, 15, 21, 0, tzinfo=SCHEDULE_TZ)),
+        ("21:00", datetime(2026, 7, 14, 21, 0, tzinfo=SCHEDULE_TZ)),
         ("2026-07-18 21:00", datetime(2026, 7, 18, 21, 0, tzinfo=SCHEDULE_TZ)),
         ("half past nine", None),
         ("+", None),
@@ -402,6 +404,15 @@ def test_parse_new_time_refuses_a_past_result():
     late_now = CURRENT + timedelta(hours=3)
 
     assert parse_new_time("+2h", CURRENT, late_now) is None
+
+
+def test_parse_new_time_moves_a_future_pod_back_to_today():
+    now = datetime(2026, 8, 23, 8, 0, tzinfo=SCHEDULE_TZ)
+    monday_pod = datetime(2026, 8, 24, 20, 0, tzinfo=SCHEDULE_TZ)
+    today_11am = datetime(2026, 8, 23, 11, 0, tzinfo=SCHEDULE_TZ)
+
+    assert parse_new_time("11am", monday_pod, now) == today_11am
+    assert parse_new_time("today 11am", monday_pod, now) == today_11am
 
 
 REF = datetime(2026, 7, 14, 12, 0, tzinfo=SCHEDULE_TZ)
