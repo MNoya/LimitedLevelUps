@@ -1593,7 +1593,7 @@ class PodDraftManager:
         self.drafting = False
         self.draft_complete = True
         self._cancel_end_watchdog()
-        await self.end_disconnect_stall()
+        await self.end_disconnect_stall(delete_watch=True)
         await self._mark_socket_status("draft_done")
         notify_card_close(self.bot, self.event_id)
         self.tournament_roster = self._snapshot_tournament_roster()
@@ -2322,12 +2322,20 @@ class PodDraftManager:
         self._disconnect_message = self._disconnect_offer_message = None
         return offer
 
-    async def end_disconnect_stall(self, *, card: "discord.Embed | None" = None) -> "discord.Message | None":
+    async def end_disconnect_stall(
+        self, *, card: "discord.Embed | None" = None, delete_watch: bool = False,
+    ) -> "discord.Message | None":
         """Close out a stall and hand back the card it posted. Nothing is rewritten, so the thread keeps the
         record of who dropped and how the table voted. The vote card loses its buttons, so nobody clicks a
         decision into a draft that moved on, and `card` posts at the bottom of the thread, where a table that
         kept talking through the stall will see it."""
+        watch = self._disconnect_message
         offer = self.clear_disconnect_state()
+        if delete_watch and watch is not None:
+            try:
+                await watch.delete()
+            except discord.HTTPException:
+                log.info(f"[DRAFT] disconnect_watch_cleanup_failed event={self.event_id}", exc_info=True)
         if offer is not None:
             try:
                 await offer.edit(view=None)
@@ -2397,7 +2405,7 @@ class PodDraftManager:
         self.draft_paused = False
         self.drafting = False
         self._cancel_end_watchdog()
-        await self.end_disconnect_stall()
+        await self.end_disconnect_stall(delete_watch=True)
         try:
             await self.sio.emit("stopDraft")
         except Exception:
