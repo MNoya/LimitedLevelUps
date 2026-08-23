@@ -1635,6 +1635,18 @@ def set_participant_deck_colors_by_id_sync(participant_id: str, deck_colors: str
         return event_id
 
 
+def set_participant_deck_screenshot_by_id_sync(participant_id: str, image_url: str) -> str | None:
+    """Returns the event_id, or None when the participant is gone"""
+    with SessionLocal() as session:
+        participant = session.get(PodDraftParticipant, participant_id)
+        if participant is None:
+            return None
+        participant.deck_screenshot_url = image_url
+        event_id = participant.event_id
+        session.commit()
+        return event_id
+
+
 _RECORD_PATTERN = re.compile(r"\b([0-3])\s*[-:\s]\s*([0-3])\b")
 
 

@@ -43,6 +43,7 @@ from bot.services.pod_active import (
     notify_podium_posted,
 )
 from bot.services.pod_deck_color import (
+    NOT_IN_POD_MSG,
     SAVED_MSG,
     DeckColorSelectView,
     NotInPodError,
@@ -99,6 +100,7 @@ from bot.services.pod_drafts import (
     set_match_result,
     set_participant_deck_colors,
     set_participant_deck_colors_by_id_sync,
+    set_participant_deck_screenshot_by_id_sync,
     submit_deck_dm_for_participant,
     upsert_dm_message,
 )
@@ -812,6 +814,170 @@ def _organizer_color_submit(event_id: str, thread_id: str, participant_id: str):
         await _refresh_standings_after_deck_change(interaction.client, event_id, thread_id)
 
     return _submit
+
+
+CAPTURE_CUSTOM_ID = "poddeckcapture"
+
+MSG_DECK_IMAGE_INVALID = "Enter a valid image URL"
+MSG_DECK_IMAGE_SAVED = "Deck Image saved"
+
+
+ColorSubmitFactory = Callable[[str], SubmitCallback]
+ImageSaveCallback = Callable[[discord.Interaction, str, str], Awaitable[bool]]
+
+
+async def open_organizer_deck_panel(interaction: discord.Interaction) -> bool:
+    """Submit Colors override for organizers on the deck-chase card: a per-player picker that sets deck
+    colors or a deck image URL for any player, so a screenshot someone posted elsewhere can be attached
+    on their behalf. Returns False to fall through to the personal color flow — a non-organizer, a click
+    outside a guild, or one outside a pod thread."""
+    if interaction.guild is None:
+        return False
+    if not await is_pod_organizer(interaction.client, interaction.user):
+        return False
+    event_id, thread_id = await _resolve_event_for_interaction(interaction)
+    if event_id is None or thread_id is None:
+        return False
+    roster = await asyncio.to_thread(list_event_participants_sync, event_id)
+    if not roster:
+        return False
+    await interaction.response.send_message(
+        view=build_organizer_deck_panel(event_id, thread_id, roster), ephemeral=True,
+    )
+    return True
+
+
+def build_organizer_deck_panel(
+    event_id: str, thread_id: str, roster: list[tuple[str, str, str | None]],
+) -> "OrganizerDeckPanel":
+    def color_submit_factory(participant_id: str) -> SubmitCallback:
+        return _organizer_color_submit(event_id, thread_id, participant_id)
+
+    async def image_save(interaction: discord.Interaction, participant_id: str, url: str) -> bool:
+        saved = await asyncio.to_thread(set_participant_deck_screenshot_by_id_sync, participant_id, url)
+        if saved is None:
+            return False
+        log.info(f"[{event_id}] {actor_label(interaction)} set deck image for {participant_id}")
+        await _refresh_standings_after_deck_change(interaction.client, event_id, thread_id)
+        return True
+
+    return OrganizerDeckPanel(roster, color_submit_factory, image_save)
+
+
+class OrganizerDeckPanel(discord.ui.View):
+    """Ephemeral organizer tool: pick a pod player, then set their deck colors or a deck image URL.
+    Persistence is injected so testlobby can drive the same UI against fixtures."""
+
+    def __init__(
+        self,
+        roster: list[tuple[str, str, str | None]],
+        color_submit_factory: ColorSubmitFactory,
+        image_save: ImageSaveCallback,
+    ) -> None:
+        super().__init__(timeout=300)
+        self.add_item(_OrganizerDeckPlayerSelect(roster, color_submit_factory, image_save))
+
+
+class _OrganizerDeckPlayerSelect(discord.ui.Select):
+    PLACEHOLDER = "Choose a Player"
+    NO_COLORS = "No colors yet"
+
+    def __init__(
+        self,
+        roster: list[tuple[str, str, str | None]],
+        color_submit_factory: ColorSubmitFactory,
+        image_save: ImageSaveCallback,
+    ) -> None:
+        self._color_submit_factory = color_submit_factory
+        self._image_save = image_save
+        self._colors = {pid: colors for pid, _, colors in roster}
+        options = [
+            discord.SelectOption(
+                label=name[:100], value=pid, description=(colors or self.NO_COLORS)[:100],
+            )
+            for pid, name, colors in roster
+        ]
+        super().__init__(placeholder=self.PLACEHOLDER, min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        participant_id = self.values[0]
+        await interaction.response.send_message(
+            view=_OrganizerPlayerActions(
+                participant_id, self._colors.get(participant_id),
+                self._color_submit_factory, self._image_save,
+            ),
+            ephemeral=True,
+        )
+
+
+class _OrganizerPlayerActions(discord.ui.View):
+    def __init__(
+        self,
+        participant_id: str,
+        current_color: str | None,
+        color_submit_factory: ColorSubmitFactory,
+        image_save: ImageSaveCallback,
+    ) -> None:
+        super().__init__(timeout=300)
+        self._participant_id = participant_id
+        self._current_color = current_color
+        self._color_submit_factory = color_submit_factory
+        self._image_save = image_save
+
+    @discord.ui.button(label="Set Colors", style=discord.ButtonStyle.primary, emoji="🎨")
+    async def set_colors(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
+        submit = self._color_submit_factory(self._participant_id)
+        await interaction.response.send_message(
+            view=DeckColorSelectView(submit, current_value=self._current_color), ephemeral=True,
+        )
+
+    @discord.ui.button(label="Set Deck Image", style=discord.ButtonStyle.secondary, emoji="🖼️")
+    async def set_deck_image(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
+        await interaction.response.send_modal(
+            _OrganizerDeckImageModal(self._participant_id, self._image_save),
+        )
+
+
+class _OrganizerDeckImageModal(discord.ui.Modal, title="Deck Image"):
+    url = discord.ui.TextInput(
+        label="Deck Image URL",
+        placeholder="https://media.discordapp.net/attachments/...",
+        min_length=1,
+        max_length=500,
+        required=True,
+    )
+
+    def __init__(self, participant_id: str, image_save: ImageSaveCallback) -> None:
+        super().__init__()
+        self._participant_id = participant_id
+        self._image_save = image_save
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        value = self.url.value.strip()
+        if not value.lower().startswith(("http://", "https://")):
+            await interaction.response.send_message(MSG_DECK_IMAGE_INVALID, ephemeral=True)
+            return
+        await interaction.response.defer()
+        saved = await self._image_save(interaction, self._participant_id, value)
+        message = MSG_DECK_IMAGE_SAVED if saved else NOT_IN_POD_MSG
+        await interaction.followup.send(message, ephemeral=True)
+
+
+def build_capture_submit_deck_view() -> SubmitDeckView:
+    return SubmitDeckView(
+        live_deck_color_submit, live_deck_state_lookup, open_organizer_deck_panel,
+        custom_id=CAPTURE_CUSTOM_ID,
+    )
+
+
+def build_capture_submit_deck_button() -> SubmitDeckButton:
+    """The deck-chase card's Submit Colors button. Same personal color flow as the others, but its
+    organizer panel also captures a deck image URL. A distinct custom_id routes it to its own persistent
+    handler so the image capture stays off every other Submit Colors surface."""
+    return SubmitDeckButton(
+        live_deck_color_submit, live_deck_state_lookup, open_organizer_deck_panel,
+        custom_id=CAPTURE_CUSTOM_ID,
+    )
 
 
 def build_live_submit_deck_view() -> SubmitDeckView:
@@ -2657,6 +2823,7 @@ def register_persistent_views(bot) -> None:
     bot.add_view(RoundResultsView())
     bot.add_dynamic_items(ManageRoundButton)
     bot.add_view(build_live_submit_deck_view())
+    bot.add_view(build_capture_submit_deck_view())
     bot.add_view(build_live_deck_color_select_view())
 
 
@@ -3702,7 +3869,7 @@ async def ping_missing_deck_participants(manager, blocking_keys: set[str] | None
         log.info(f"[FINALIZE] deck_ping.skip event={event_id} reason=no_thread")
         return
     view = ui.View(timeout=None)
-    view.add_item(build_live_submit_deck_button())
+    view.add_item(build_capture_submit_deck_button())
     try:
         await thread.send(
             content=content,

@@ -109,12 +109,13 @@ from bot.services.pod_tournament import (
     MSG_PICK_ROUND,
     REVIEW_EMOJI,
     ManageRoundsPickerView,
+    OrganizerDeckPanel,
     ParticipantDeckData,
     actor_label,
+    build_capture_submit_deck_button,
     build_champion_announcement_view,
     build_deck_ping,
     build_draft_review_message,
-    build_live_submit_deck_button,
     build_trophy_hype_view,
     mark_trophy_match,
     pod_page_url,
@@ -683,6 +684,29 @@ def _submit_deck_view() -> SubmitDeckView:
     return SubmitDeckView(_test_submit_deck_color, _test_lookup_deck_state)
 
 
+def _organizer_deck_panel_preview() -> OrganizerDeckPanel:
+    """The organizer override behind the deck-chase card's Submit Colors, on a fixture roster with no DB
+    writes, so the pick-player then set-colors or set-deck-image flow can be clicked through in isolation."""
+    roster = [
+        ("p0", HALL_OF_FAME[0], "WR"),
+        ("p1", HALL_OF_FAME[1], "UB"),
+        ("p2", HALL_OF_FAME[2], None),
+        ("p3", HALL_OF_FAME[3], "BRg"),
+    ]
+
+    def color_submit_factory(participant_id: str):
+        async def _submit(interaction: discord.Interaction, color: str) -> None:
+            log.info(f"testlobby organizer set colors: participant={participant_id} color={color}")
+
+        return _submit
+
+    async def image_save(interaction: discord.Interaction, participant_id: str, url: str) -> bool:
+        log.info(f"testlobby organizer set deck image: participant={participant_id} url={url}")
+        return True
+
+    return OrganizerDeckPanel(roster, color_submit_factory, image_save)
+
+
 def _review_preview_roster() -> list[dict]:
     """Fixture roster for the `!test review` preview — fictional seats with varied colors, records, slugs."""
     colors = ["WU", "BRg", "UG", "R", "WUBRG", "BR", "WGu", "UB"]
@@ -1201,7 +1225,7 @@ async def _post_podium_signoff_preview(ctx) -> None:
     for the pod thread, and the podium post in pod-draft-chat, so the sign-off's jump crosses channels the way
     it does after a real pod. Falls back to this channel when the guild has no pod-draft-chat."""
     deck_ping_view = discord.ui.View(timeout=None)
-    deck_ping_view.add_item(build_live_submit_deck_button())
+    deck_ping_view.add_item(build_capture_submit_deck_button())
     me = ctx.author.id
     await ctx.send(
         build_deck_ping(([me], [me]), ([me], []), pod_page_url(_pod_preview_name())),
@@ -1327,7 +1351,8 @@ _LINKED_EIGHT: list[tuple[str, str]] = [
 _VALID_STATES = (
     "empty", "partial", "linked", "unlinked", "ready", "held", "notready", "titles",
     "readyunlinked", "readyteam", "readycancel",
-    "drafting", "complete", "submit", "lobby", "lobbyopen", "dmlink", "unlink", "podbracket", "podswiss", "podrandom",
+    "drafting", "complete", "submit", "deckpanel", "lobby", "lobbyopen", "dmlink", "unlink",
+    "podbracket", "podswiss", "podrandom",
     "podteam", "podlobby", "podteamvote", "chat",
     "format", "seeding", "trophyhype", "champ", "podium", "round1", "round2", "round3", "voicelink", "review",
     "table",
@@ -1898,6 +1923,10 @@ async def setup(bot: commands.Bot) -> None:
 
         if state == "submit":
             await ctx.send(view=_submit_deck_view())
+            return
+
+        if state == "deckpanel":
+            await ctx.send(view=_organizer_deck_panel_preview())
             return
 
         if state == "trophyhype":

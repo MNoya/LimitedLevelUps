@@ -148,9 +148,10 @@ class SubmitDeckView(ui.View):
         on_submit: SubmitCallback,
         on_lookup: LookupCallback,
         on_organizer: OrganizerCallback | None = None,
+        custom_id: str = "poddecksubmit",
     ) -> None:
         super().__init__(timeout=None)
-        self.add_item(SubmitDeckButton(on_submit, on_lookup, on_organizer))
+        self.add_item(SubmitDeckButton(on_submit, on_lookup, on_organizer, custom_id=custom_id))
 
 
 class SubmitDeckButton(ui.Button):
@@ -159,11 +160,12 @@ class SubmitDeckButton(ui.Button):
         on_submit: SubmitCallback,
         on_lookup: LookupCallback,
         on_organizer: OrganizerCallback | None = None,
+        custom_id: str = "poddecksubmit",
     ) -> None:
         super().__init__(
             label="Submit Colors",
             style=discord.ButtonStyle.primary,
-            custom_id="poddecksubmit",
+            custom_id=custom_id,
             emoji="🎨",
         )
         self._submit = on_submit
