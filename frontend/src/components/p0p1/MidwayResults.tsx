@@ -5,9 +5,7 @@ import { cn } from "../../lib/utils";
 import { PickGrid } from "./CommunityGrid";
 import { MidwayBreakdownList } from "./MidwayBreakdownList";
 import { useMidwayVersusPager, MidwayVersusModal } from "./MidwayVersusCard";
-import { P0P1ContestSwitcherPills } from "./P0P1ContestSwitcher";
 import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
-import type { ContestChipInfo } from "../../data/p0p1Slots";
 import {
   buildRatingsByName,
   scoreBallot,
@@ -69,8 +67,6 @@ export function MidwayResults({
   picksBySlot,
   user,
   hasParticipated,
-  contests,
-  onContestChange,
 }: {
   ratingsSnapshot: RatingsSnapshot;
   pickStats: P0P1PickStat[];
@@ -79,13 +75,8 @@ export function MidwayResults({
   picksBySlot: Map<string, string>;
   user: object | null;
   hasParticipated: boolean;
-  contests?: ContestChipInfo[];
-  onContestChange?: (code: string) => void;
 }) {
   const { setCode } = ratingsSnapshot;
-  const contestSwitcher = contests && onContestChange ? (
-    <P0P1ContestSwitcherPills contests={contests} activeCode={setCode} onSelect={onContestChange} />
-  ) : null;
   const contestSlots = useMemo(() => buildSlots(P0P1_CONTESTS[setCode]), [setCode]);
   const ratingsByName = useMemo(() => buildRatingsByName(ratingsSnapshot), [ratingsSnapshot]);
   const bounds = useMemo(() => gihwrBounds(pickStats, ratingsByName), [pickStats, ratingsByName]);
@@ -141,7 +132,6 @@ export function MidwayResults({
         onTileOpen={onSlotOpen}
         aligned={showYourPicks}
         toggle={showYourPicks ? { viewingYours, onClick: () => setTopView(topView === "yours" ? "crowd" : "yours") } : undefined}
-        right={contestSwitcher}
       />
 
       <TeamRow

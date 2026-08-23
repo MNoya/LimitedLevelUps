@@ -5,7 +5,7 @@ import { P0P1Countdown } from "./Countdown";
 import { P0P1CountdownBar } from "./CountdownBar";
 import { P0P1IntroText } from "./P0P1IntroText";
 import { NextContestOpens } from "./NextContestOpens";
-import { P0P1ContestSwitcherDropdown } from "./P0P1ContestSwitcher";
+import { P0P1ContestDropdown } from "./P0P1ContestDropdown";
 import type { FeaturedContest, ContestChipInfo } from "../../data/p0p1Slots";
 import type { P0P1Phase, RatingsSnapshot } from "../../data/p0p1Results";
 
@@ -37,10 +37,20 @@ export function P0P1Hero({
           <SectionLabel size={13}>PACK 0, PICK 1</SectionLabel>
         </div>
         <div className="flex items-baseline gap-3.5 mt-0.5">
-          <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
-            {featured.code}
-          </span>
-          <span className="font-display text-[22px] text-muted tracking-[0.06em]">{featured.name.toUpperCase()}</span>
+          {contests.length > 1 ? (
+            <P0P1ContestDropdown
+              contests={contests}
+              activeCode={featured.code}
+              onSelect={onContestChange}
+            />
+          ) : (
+            <>
+              <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
+                {featured.code}
+              </span>
+              <span className="font-display text-[22px] text-muted tracking-[0.06em]">{featured.name.toUpperCase()}</span>
+            </>
+          )}
         </div>
         <div className="font-mono text-[11px] mt-1 flex items-center justify-between gap-x-6">
           <P0P1Countdown deadline={featured.votingDeadline} scoringDate={featured.scoringDate} size={11} phase={phase} />
@@ -60,13 +70,6 @@ export function P0P1Hero({
         </div>
       </div>
       <div className="shrink-0 ml-auto flex items-center justify-end gap-x-8 min-w-[280px]">
-        {phase === "voting" && contests.length > 1 && (
-          <P0P1ContestSwitcherDropdown
-            contests={contests}
-            activeCode={featured.code}
-            onSelect={onContestChange}
-          />
-        )}
         {cta}
       </div>
     </div>
