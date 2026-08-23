@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import { SLOTS } from "../../data/p0p1Slots";
 import type { P0P1Phase } from "../../data/p0p1Results";
+import { formatScoringRemaining } from "./Countdown";
 
 const SEVENTEEN_LANDS_URL = "https://www.17lands.com/card_data";
 
@@ -45,8 +46,9 @@ export function P0P1IntroText({
   const cardCount = spellOut(SLOTS.length);
   const windowText = describeDuration(scoringDate.getTime() - release.getTime());
   const formattedRange = dateRange ? formatDateRange(dateRange.start, dateRange.end) : null;
+  const remainingTilScoring = formatScoringRemaining(scoringDate.getTime() - new Date().getTime());
 
-  const sentences: ReactNode[] = buildSentences(phase, setName, cardCount, windowText, formattedRange);
+  const sentences: ReactNode[] = buildSentences(phase, setName, cardCount, windowText, formattedRange, remainingTilScoring);
 
   return (
     <>
@@ -66,6 +68,7 @@ function buildSentences(
   cardCount: string,
   windowText: string,
   formattedRange: string | null,
+  remainingTilScoring?: string
 ): ReactNode[] {
   switch (phase) {
     case "loading":
@@ -81,7 +84,7 @@ function buildSentences(
     case "postVoting":
       return [
         <>Participants have put in their predictions for {setName}.</>,
-        <>Check out the most popular picks below, then come back once they're ranked by {winRateLink}, {windowText} after release.</>,
+        <>Check out the most popular picks below, then come back  in {remainingTilScoring} once they're ranked by {winRateLink}.</>,
       ];
     case "midway":
       return [
