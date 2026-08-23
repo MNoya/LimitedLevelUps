@@ -6,7 +6,9 @@ import { PickVersusModal, usePickVersusPager } from "./PickVersusCard";
 import { SectionLabel } from "../SectionLabel";
 import { ManaCost } from "../ManaPips";
 import { groupBySlot, findExtremes, buildPickVersus, pickPctLabel } from "../../data/p0p1Stats";
+import { P0P1ContestSwitcherPills } from "./P0P1ContestSwitcher";
 import { SLOTS } from "../../data/p0p1Slots";
+import type { ContestChipInfo } from "../../data/p0p1Slots";
 import type { Card, P0P1PickStat, PickVersus, SlotKey } from "../../types/p0p1";
 
 export function CommunityGrid({
@@ -14,13 +16,20 @@ export function CommunityGrid({
   cardsByName,
   picksBySlot,
   setCode,
+  contests,
+  onContestChange,
 }: {
   pickStats: P0P1PickStat[];
   cardsByName: Map<string, Card>;
   picksBySlot?: Map<string, string>;
   setCode?: string;
+  contests?: ContestChipInfo[];
+  onContestChange?: (code: string) => void;
 }) {
   const grouped = groupBySlot(pickStats);
+  const contestSwitcher = setCode && contests && onContestChange ? (
+    <P0P1ContestSwitcherPills contests={contests} activeCode={setCode} onSelect={onContestChange} />
+  ) : null;
 
   return (
     <PickRow
@@ -32,6 +41,7 @@ export function CommunityGrid({
       cardsByName={cardsByName}
       picksBySlot={picksBySlot}
       setCode={setCode}
+      right={contestSwitcher}
     />
   );
 }
@@ -52,19 +62,23 @@ function PickRow({
   cardsByName,
   picksBySlot,
   setCode,
+  right,
 }: {
   title: string;
   entries: PickEntry[];
   cardsByName: Map<string, Card>;
   picksBySlot?: Map<string, string>;
   setCode?: string;
+  right?: React.ReactNode;
 }) {
   return (
     <div>
-      <div className="flex justify-center mb-1.5 lg:mb-2">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 mb-1.5 lg:mb-2">
+        <div />
         <SectionLabel size={22} color={'white'}>
           {title}
         </SectionLabel>
+        <div className="justify-self-end">{right}</div>
       </div>
       <PickGrid entries={entries} cardsByName={cardsByName} picksBySlot={picksBySlot} setCode={setCode} />
     </div>

@@ -191,6 +191,8 @@ export function P0P1Page() {
               picksBySlot={picksBySlot}
               user={user}
               hasParticipated={hasParticipated}
+              contests={visibleContests}
+              onContestChange={handleContestChange}
             />
           ) : (
             <ResultsSkeleton />
@@ -207,6 +209,8 @@ export function P0P1Page() {
               user={user}
               hasParticipated={hasParticipated}
               stickyTop={heroHeight}
+              contests={visibleContests}
+              onContestChange={handleContestChange}
             />
           ) : (
             <ResultsSkeleton />
@@ -218,6 +222,8 @@ export function P0P1Page() {
               cardsByName={cardsByName}
               picksBySlot={picksBySlot}
               setCode={featured?.code}
+              contests={resultsDataReady ? visibleContests : undefined}
+              onContestChange={handleContestChange}
               yourPicks={
                 isCompleteEntrant ? (
                   <div>

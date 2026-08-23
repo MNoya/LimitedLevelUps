@@ -5,7 +5,9 @@ import { cn } from "../../lib/utils";
 import { PickGrid } from "./CommunityGrid";
 import { MidwayBreakdownList } from "./MidwayBreakdownList";
 import { useMidwayVersusPager, MidwayVersusModal } from "./MidwayVersusCard";
+import { P0P1ContestSwitcherPills } from "./P0P1ContestSwitcher";
 import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
+import type { ContestChipInfo } from "../../data/p0p1Slots";
 import {
   buildRatingsByName,
   scoreBallot,
@@ -67,6 +69,8 @@ export function MidwayResults({
   picksBySlot,
   user,
   hasParticipated,
+  contests,
+  onContestChange,
 }: {
   ratingsSnapshot: RatingsSnapshot;
   pickStats: P0P1PickStat[];
@@ -75,8 +79,13 @@ export function MidwayResults({
   picksBySlot: Map<string, string>;
   user: object | null;
   hasParticipated: boolean;
+  contests?: ContestChipInfo[];
+  onContestChange?: (code: string) => void;
 }) {
   const { setCode } = ratingsSnapshot;
+  const contestSwitcher = contests && onContestChange ? (
+    <P0P1ContestSwitcherPills contests={contests} activeCode={setCode} onSelect={onContestChange} />
+  ) : null;
   const contestSlots = useMemo(() => buildSlots(P0P1_CONTESTS[setCode]), [setCode]);
   const ratingsByName = useMemo(() => buildRatingsByName(ratingsSnapshot), [ratingsSnapshot]);
   const bounds = useMemo(() => gihwrBounds(pickStats, ratingsByName), [pickStats, ratingsByName]);
@@ -132,6 +141,7 @@ export function MidwayResults({
         onTileOpen={onSlotOpen}
         aligned={showYourPicks}
         toggle={showYourPicks ? { viewingYours, onClick: () => setTopView(topView === "yours" ? "crowd" : "yours") } : undefined}
+        right={contestSwitcher}
       />
 
       <TeamRow
@@ -183,6 +193,7 @@ function TeamRow({
   onTileOpen,
   toggle,
   aligned = false,
+  right,
 }: {
   label: string;
   labelToggle?: boolean;
@@ -196,6 +207,7 @@ function TeamRow({
   onTileOpen: (slotKey: SlotKey) => void;
   toggle?: Toggle;
   aligned?: boolean;
+  right?: React.ReactNode;
 }) {
   const labelEl = (
     <span
@@ -225,9 +237,12 @@ function TeamRow({
 
       <div className="mb-2 hidden items-baseline lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-5">
         <div className="lg:col-start-2">{labelEl}</div>
-        <div className="flex items-baseline gap-4 lg:col-start-3 lg:justify-self-start">
-          {scoreEl}
-          {toggleEl}
+        <div className="flex items-baseline justify-between gap-4 lg:col-start-3 lg:justify-self-stretch">
+          <div className="flex items-baseline gap-4">
+            {scoreEl}
+            {toggleEl}
+          </div>
+          {right && <div className="self-center">{right}</div>}
         </div>
       </div>
 

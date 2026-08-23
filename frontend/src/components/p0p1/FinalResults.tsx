@@ -7,7 +7,9 @@ import { CardImagePreview } from "./CardImagePreview";
 import { usePreloaded } from "../../lib/imageReveal";
 import { breakdownStripAccent } from "./slotVisuals";
 import { CHAMFER, MEDAL_COLOR } from "./P0P1BallotScorecard";
+import { P0P1ContestSwitcherPills } from "./P0P1ContestSwitcher";
 import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
+import type { ContestChipInfo } from "../../data/p0p1Slots";
 import {
   buildRatingsByName,
   bestPossibleTeam,
@@ -36,11 +38,21 @@ import type { PickEntry } from "./CommunityGrid";
 
 const HIGHLIGHTS_COUNT = 5;
 
-function SectionHeading({ title, children }: { title: string; children?: React.ReactNode }) {
+function SectionHeading({
+  title,
+  children,
+  right,
+}: {
+  title: string;
+  children?: React.ReactNode;
+  right?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col">
-      <div className="flex justify-center">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div />
         <SectionLabel size={22} className="text-white">{title}</SectionLabel>
+        <div className="justify-self-end">{right}</div>
       </div>
       {children && <p className="text-center text-[13.5px] text-subtle mt-1.5">{children}</p>}
     </div>
@@ -1288,6 +1300,8 @@ export function FinalResults({
   user,
   hasParticipated,
   stickyTop = 0,
+  contests,
+  onContestChange,
 }: {
   ratingsSnapshot: RatingsSnapshot;
   pickStats: P0P1PickStat[];
@@ -1299,6 +1313,8 @@ export function FinalResults({
   hasParticipated: boolean;
   /** Viewport offset (px) below which the FULL RESULTS floating self-row pins — clears sticky page chrome. */
   stickyTop?: number;
+  contests?: ContestChipInfo[];
+  onContestChange?: (code: string) => void;
 }) {
   const { setCode } = ratingsSnapshot;
   const contestSlots = useMemo(() => buildSlots(P0P1_CONTESTS[setCode]), [setCode]);
@@ -1337,12 +1353,16 @@ export function FinalResults({
 
   const fullSectionRef = useRef<HTMLDivElement>(null);
 
+  const contestSwitcher = contests && onContestChange ? (
+    <P0P1ContestSwitcherPills contests={contests} activeCode={setCode} onSelect={onContestChange} />
+  ) : null;
+
   return (
     <div className="flex flex-col gap-8">
       {/* Top-3 broadcast */}
       {rankedForDisplay.length > 0 && (
         <div className="flex flex-col gap-3">
-          <SectionHeading title="PODIUM" />
+          <SectionHeading title="PODIUM" right={contestSwitcher} />
           <Leaderboard
             rankedBallots={rankedForDisplay}
             bestTeam={bestTeam}

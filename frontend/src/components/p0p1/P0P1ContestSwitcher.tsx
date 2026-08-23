@@ -3,10 +3,8 @@ import { SetGlyph } from "../Brand";
 import { ChevronDown } from "../Icons";
 import { FilterDropdown, type FilterOption } from "../FilterDropdown";
 import { cn } from "../../lib/utils";
-import { useSetVisibleCap } from "../../lib/use-is-mobile";
+import { CHAMFER } from "./P0P1BallotScorecard";
 import type { ContestChipInfo } from "../../data/p0p1Slots";
-
-const CHAMFER = "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)";
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
@@ -17,38 +15,69 @@ function chipDateLabel(release: number): string {
   return month ? `${month} '${year}` : "";
 }
 
-const MAX_NEWER_CONTEXT = 2;
-
-function partitionContests(
-  contests: ContestChipInfo[],
-  selectedCode: string,
-  cap: number,
-) {
-  const votingPin = contests.find((c) => c.status === "live" && c.code !== selectedCode);
-  const leadPins: ContestChipInfo[] = votingPin ? [votingPin] : [];
-  const pinnedCodes = new Set(leadPins.map((c) => c.code));
-  const history = contests.filter((c) => !pinnedCodes.has(c.code));
-
-  const windowSize = Math.max(1, cap - leadPins.length);
-  if (history.length <= windowSize) {
-    return { visible: [...leadPins, ...history], overflow: [] };
-  }
-
-  const selectedIndex = history.findIndex((c) => c.code === selectedCode);
-  const maxStart = history.length - windowSize;
-  const newerContext = Math.min(MAX_NEWER_CONTEXT, Math.max(0, windowSize - 2));
-  const desiredStart = selectedIndex < 0 ? 0 : selectedIndex - newerContext;
-  const start = Math.max(0, Math.min(desiredStart, maxStart));
-  const window = history.slice(start, start + windowSize);
-
-  const windowCodes = new Set(window.map((c) => c.code));
-  const overflow = history.filter((c) => !windowCodes.has(c.code));
-  return { visible: [...leadPins, ...window], overflow };
+function statusLabel(contest: ContestChipInfo): string {
+  if (contest.status === "live") return "· LIVE";
+  if (contest.status === "results") return "· RESULTS";
+  return "";
 }
 
-// --- Desktop ---
+function statusBadge(contest: ContestChipInfo): { text: string; className: string } {
+  if (contest.status === "live") return { text: "LIVE", className: "text-green" };
+  if (contest.status === "results") return { text: "RESULTS", className: "text-green/70" };
+  return { text: chipDateLabel(contest.release), className: "text-dim" };
+}
 
-export function P0P1ContestSwitcherDesktop({
+function renderContestOption(contests: ContestChipInfo[]) {
+  return (option: FilterOption) => {
+    const contest = contests.find((c) => c.code === option.value);
+    const badge = contest ? statusBadge(contest) : null;
+    return (
+      <span className="flex w-full min-w-0 items-center gap-3">
+        <SetGlyph code={option.value} size={22} />
+        <span className="text-[20px] leading-none">{option.value}</span>
+        <span className="text-muted text-[13px] tracking-[0.06em] truncate">{option.label}</span>
+        {badge && (
+          <span className={cn("ml-auto text-[11px] tracking-[0.04em] mono shrink-0", badge.className)}>
+            {badge.text}
+          </span>
+        )}
+      </span>
+    );
+  };
+}
+
+// P0P1-specific cap. Not useSetVisibleCap: that hook's breakpoint table was sized for the
+// leaderboard banner owning the full page width, a different budget than a results-heading gutter.
+const P0P1_VISIBLE_BREAKPOINTS: Array<[number, number]> = [
+  [1440, 6],
+  [1280, 5],
+  [1152, 4],
+];
+const P0P1_VISIBLE_FLOOR = 3;
+
+function computeP0P1VisibleCap(): number {
+  if (typeof window === "undefined") return P0P1_VISIBLE_FLOOR;
+  for (const [w, cap] of P0P1_VISIBLE_BREAKPOINTS) {
+    if (window.matchMedia(`(min-width: ${w}px)`).matches) return cap;
+  }
+  return P0P1_VISIBLE_FLOOR;
+}
+
+function useP0P1VisibleCap(): number {
+  const [cap, setCap] = useState(computeP0P1VisibleCap);
+  useEffect(() => {
+    const mqls = P0P1_VISIBLE_BREAKPOINTS.map(([w]) => window.matchMedia(`(min-width: ${w}px)`));
+    const update = () => setCap(computeP0P1VisibleCap());
+    mqls.forEach((m) => m.addEventListener("change", update));
+    update();
+    return () => mqls.forEach((m) => m.removeEventListener("change", update));
+  }, []);
+  return cap;
+}
+
+// --- Desktop pills (postVoting / midway / final) ---
+
+export function P0P1ContestSwitcherPills({
   contests,
   activeCode,
   onSelect,
@@ -57,12 +86,16 @@ export function P0P1ContestSwitcherDesktop({
   activeCode: string;
   onSelect: (code: string) => void;
 }) {
-  const cap = useSetVisibleCap(contests.length);
-  const { visible, overflow } = partitionContests(contests, activeCode, cap);
+  const cap = useP0P1VisibleCap();
+  if (contests.length <= 1) return null;
+  const active = contests.find((c) => c.code === activeCode);
+  const ordered = active ? [active, ...contests.filter((c) => c.code !== activeCode)] : contests;
+  const visible = ordered.slice(0, cap);
+  const overflow = ordered.slice(cap);
   return (
-    <div className="flex gap-1.5">
+    <div className="flex items-center gap-1.5">
       {visible.map((c) => (
-        <ContestChip
+        <ContestPill
           key={c.code}
           contest={c}
           active={c.code === activeCode}
@@ -70,13 +103,13 @@ export function P0P1ContestSwitcherDesktop({
         />
       ))}
       {overflow.length > 0 && (
-        <ContestOverflow contests={overflow} activeCode={activeCode} onSelect={onSelect} />
+        <ContestPillsOverflow contests={overflow} activeCode={activeCode} onSelect={onSelect} />
       )}
     </div>
   );
 }
 
-function ContestChip({
+function ContestPill({
   contest,
   active,
   onClick,
@@ -85,55 +118,32 @@ function ContestChip({
   active: boolean;
   onClick: () => void;
 }) {
-  const isLive = contest.status === "live";
-  const isResults = contest.status === "results";
-  const hasGreenBorder = !active && (isLive || isResults);
-
   return (
-    <div className="relative">
-      <button
-        onClick={onClick}
-        className="group block cursor-pointer"
-        style={{
-          clipPath: CHAMFER,
-          background: active ? "#2ee85c" : hasGreenBorder ? "#2ee85c" : "#3b4458",
-          padding: 1,
-          minHeight: 42,
-        }}
-      >
-        <span
-          className={cn(
-            "flex items-center justify-center gap-[7px] w-[98px] px-[17px] font-display h-full",
-            active
-              ? "bg-green text-bg"
-              : "bg-surface text-text group-hover:bg-surface2",
-          )}
-          style={{ clipPath: CHAMFER, minHeight: 40 }}
-        >
-          <SetGlyph
-            code={contest.code}
-            size={22}
-            className={cn(
-              "shrink-0",
-              active ? "text-bg" : hasGreenBorder ? "text-green" : "text-text",
-            )}
-          />
-          <span className="text-[20px] tracking-[0.06em] leading-none">{contest.code}</span>
-        </span>
-      </button>
+    <button
+      type="button"
+      onClick={onClick}
+      className="group block cursor-pointer"
+      style={{ clipPath: CHAMFER, background: active ? "#2ee85c" : "#3b4458", padding: 1 }}
+    >
       <span
         className={cn(
-          "absolute left-0 right-0 top-full mt-1 mono text-center text-[10px] leading-none tracking-[0.06em]",
-          isLive ? "text-green tracking-[0.12em]" : isResults && !active ? "text-green/70 tracking-[0.08em]" : "text-muted",
+          "flex items-center justify-center gap-1.5 px-3 h-[30px] font-display transition-colors",
+          active ? "bg-green text-bg" : "bg-surface text-text group-hover:bg-surface2",
         )}
+        style={{ clipPath: CHAMFER }}
       >
-        {isLive ? "LIVE" : isResults ? "RESULTS" : chipDateLabel(contest.release)}
+        <SetGlyph
+          code={contest.code}
+          size={16}
+          className={cn("shrink-0", active ? "text-bg" : "text-text")}
+        />
+        <span className="text-[15px] tracking-[0.06em] leading-none">{contest.code}</span>
       </span>
-    </div>
+    </button>
   );
 }
 
-function ContestOverflow({
+function ContestPillsOverflow({
   contests,
   activeCode,
   onSelect,
@@ -142,25 +152,7 @@ function ContestOverflow({
   activeCode: string;
   onSelect: (code: string) => void;
 }) {
-  const options: FilterOption[] = contests.map((c) => ({
-    value: c.code,
-    label: c.name,
-  }));
-  const renderOption = (option: FilterOption) => {
-    const contest = contests.find((c) => c.code === option.value);
-    return (
-      <span className="flex w-full min-w-0 items-center gap-3">
-        <SetGlyph code={option.value} size={22} />
-        <span className="text-[20px] leading-none">{option.value}</span>
-        <span className="text-muted text-[13px] tracking-[0.06em] truncate">{option.label}</span>
-        {contest && (
-          <span className="ml-auto text-dim text-[11px] tracking-[0.04em] mono shrink-0">
-            {chipDateLabel(contest.release)}
-          </span>
-        )}
-      </span>
-    );
-  };
+  const options: FilterOption[] = contests.map((c) => ({ value: c.code, label: c.name }));
   return (
     <FilterDropdown
       value={activeCode}
@@ -168,24 +160,22 @@ function ContestOverflow({
       onChange={onSelect}
       align="right"
       searchable
-      renderOption={renderOption}
+      renderOption={renderContestOption(contests)}
       renderTrigger={({ open, toggle }) => (
         <button
           type="button"
           onClick={toggle}
-          className="group block cursor-pointer transition-colors"
-          style={{ clipPath: CHAMFER, background: "#3b4458", padding: 1, minHeight: 42 }}
+          className="group block cursor-pointer"
+          style={{ clipPath: CHAMFER, background: "#3b4458", padding: 1 }}
         >
           <span
-            className="flex items-center gap-2 min-w-[98px] pl-[17px] pr-[21px] font-display transition-colors h-full bg-surface text-text group-hover:bg-surface2"
-            style={{ clipPath: CHAMFER, minHeight: 40 }}
+            className="flex items-center gap-2 h-[30px] px-3 font-display transition-colors bg-surface text-text group-hover:bg-surface2"
+            style={{ clipPath: CHAMFER }}
           >
-            <span className="text-[20px] tracking-[0.06em] leading-none">
-              +{contests.length} MORE
-            </span>
+            <span className="text-[15px] tracking-[0.06em] leading-none">+{contests.length} MORE</span>
             <ChevronDown
               strokeWidth={2.5}
-              className={cn("text-muted h-4 w-4 transition-transform", open && "rotate-180")}
+              className={cn("text-muted h-3.5 w-3.5 transition-transform", open && "rotate-180")}
             />
           </span>
         </button>
@@ -194,19 +184,54 @@ function ContestOverflow({
   );
 }
 
+// --- Desktop dropdown (voting) ---
+
+export function P0P1ContestSwitcherDropdown({
+  contests,
+  activeCode,
+  onSelect,
+}: {
+  contests: ContestChipInfo[];
+  activeCode: string;
+  onSelect: (code: string) => void;
+}) {
+  if (contests.length <= 1) return null;
+  const active = contests.find((c) => c.code === activeCode) ?? contests[0];
+  const options: FilterOption[] = contests.map((c) => ({ value: c.code, label: c.name }));
+  return (
+    <FilterDropdown
+      value={activeCode}
+      options={options}
+      onChange={onSelect}
+      align="right"
+      renderOption={renderContestOption(contests)}
+      renderTrigger={({ open, toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          className="flex items-center gap-2 bg-transparent border border-border2 text-text font-display text-[15px] tracking-[0.12em] cursor-pointer transition-colors hover:bg-surface px-3.5 py-2"
+        >
+          <SetGlyph code={active.code} size={18} />
+          <span>{active.code}</span>
+          <span
+            className={cn(
+              "text-[11px] tracking-[0.18em]",
+              active.status === "live" ? "text-green" : "text-muted",
+            )}
+          >
+            {statusLabel(active)}
+          </span>
+          <ChevronDown
+            strokeWidth={2.5}
+            className={cn("text-muted h-4 w-4 transition-transform", open && "rotate-180")}
+          />
+        </button>
+      )}
+    />
+  );
+}
+
 // --- Mobile ---
-
-function mobileStatusLabel(contest: ContestChipInfo): string {
-  if (contest.status === "live") return "· LIVE";
-  if (contest.status === "results") return "· RESULTS";
-  return "";
-}
-
-function mobileBadge(contest: ContestChipInfo): { text: string; className: string } {
-  if (contest.status === "live") return { text: "LIVE", className: "text-green" };
-  if (contest.status === "results") return { text: "RESULTS", className: "text-green/70" };
-  return { text: chipDateLabel(contest.release), className: "text-dim" };
-}
 
 export function P0P1ContestSwitcherMobile({
   contests,
@@ -252,7 +277,7 @@ export function P0P1ContestSwitcherMobile({
             active.status === "live" ? "text-green" : "text-muted",
           )}
         >
-          {mobileStatusLabel(active)}
+          {statusLabel(active)}
         </span>
         <span className="flex-1" />
         <ChevronDown
@@ -263,7 +288,7 @@ export function P0P1ContestSwitcherMobile({
       {open && (
         <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-surface border border-border2 z-20">
           {contests.map((c) => {
-            const badge = mobileBadge(c);
+            const badge = statusBadge(c);
             return (
               <button
                 key={c.code}
