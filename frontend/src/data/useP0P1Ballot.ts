@@ -32,7 +32,7 @@ export function useP0P1Ballot(overrideSetCode?: string) {
   const scoringDate = featured?.scoringDate;
 
   const { data: cards, isLoading: cardsLoading } = useP0P1Cards(setCode);
-  const { data: serverPicks } = useP0P1Picks(useServerPicks ? setCode : undefined);
+  const { data: serverPicks, isFetched: serverPicksFetched } = useP0P1Picks(useServerPicks ? setCode : undefined);
   const localPicks = useLocalP0P1Picks(setCode ?? "");
   const upsertPick = useUpsertP0P1Pick(setCode ?? "");
   const clearAll = useDeleteAllP0P1Picks(setCode ?? "");
@@ -52,7 +52,8 @@ export function useP0P1Ballot(overrideSetCode?: string) {
     clearLocalPicks(setCode);
   }, [authUser, serverPicks, upsertPick, setCode]);
 
-  const activePicks = authLoading ? undefined : useServerPicks ? serverPicks : localPicks;
+  const settledServerPicks = serverPicks ?? (serverPicksFetched ? [] : undefined);
+  const activePicks = authLoading ? undefined : useServerPicks ? settledServerPicks : localPicks;
   const dataReady = Boolean(featured && cards) && activePicks !== undefined;
 
   const persistPick = useCallback(

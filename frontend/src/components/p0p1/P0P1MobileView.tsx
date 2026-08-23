@@ -342,7 +342,6 @@ function MobileIntro({
   const setCode = featured?.code ?? "";
   const votingDeadline = featured?.votingDeadline ?? new Date();
   const scoringDate = featured?.scoringDate ?? new Date();
-  const release = featured?.release ?? new Date();
 
   return (
     <section className="bg-surface border border-border rounded-xl p-4 mb-3 flex flex-col gap-2.5">
@@ -376,7 +375,7 @@ function MobileIntro({
       </button>
       {open && (
         <p className="text-subtle text-[13.5px] leading-[1.5]">
-          <P0P1IntroText phase={phase} dateRange={dateRange} setName={featured?.name ?? ""} release={release} scoringDate={scoringDate} />
+          <P0P1IntroText phase={phase} dateRange={dateRange} setName={featured?.name ?? ""} />
         </p>
       )}
       {phase === "final" && (
