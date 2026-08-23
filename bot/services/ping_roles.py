@@ -39,7 +39,8 @@ from bot.commands.messages import (
     MSG_JOIN_LINE,
     MSG_POD_ROLE_GRANTED,
     MSG_MOCK_WELCOME,
-    MSG_POD_WELCOME,
+    MSG_POD_WELCOME_BODY,
+    MSG_POD_WELCOME_LEAD,
 )
 from bot.commands.pod_guide import render_pod_guide_embed_body
 from bot.database import SessionLocal
@@ -270,17 +271,25 @@ def build_grant_embed(
     )
 
 
+@dataclass(frozen=True)
+class WelcomeMessage:
+    content: str | None
+    view: discord.ui.View
+    embed: discord.Embed | None = None
+
+
 def build_welcome_view(
     guild: discord.Guild, user_mention: str, *, show_link_17lands: bool = False,
-) -> discord.ui.LayoutView:
-    """First-pod welcome as a Components V2 container: a green accent card whose text block behaves as
-    message content, so the newcomer mention pings where an embed mention would stay silent. This one is
-    public, so it welcomes and points at the buttons and nothing else — which slot role the click granted
-    is between the bot and the clicker, and rides on their ephemeral confirmation instead."""
+) -> WelcomeMessage:
+    """First-pod welcome as a classic message: the greeting heading in content so the mention pings and
+    the (edited) marker stays inline when a newer welcome demotes this to a single line, with the body in
+    a green embed box over the button row. Public, so it welcomes and points at the buttons and nothing
+    else: which slot role the click granted rides on the clicker's ephemeral confirmation."""
     umbrella = discord.utils.get(guild.roles, name=POD_DRAFTERS_ROLE_NAME)
     pod_drafters = umbrella.mention if umbrella is not None else POD_DRAFTERS_ROLE_NAME
-    message = MSG_POD_WELCOME.format(user=user_mention, pod_drafters=pod_drafters).rstrip()
-    return _PodButtonCard(message, show_link_17lands_button=show_link_17lands)
+    content = MSG_POD_WELCOME_LEAD.format(user=user_mention, pod_drafters=pod_drafters)
+    embed = discord.Embed(description=MSG_POD_WELCOME_BODY, color=discord.Color.green())
+    return WelcomeMessage(content, _welcome_button_row(show_link_17lands=show_link_17lands), embed=embed)
 
 
 def build_demoted_welcome_view(greeting: str) -> discord.ui.LayoutView:
@@ -451,6 +460,16 @@ class _ManageRolesButton(discord.ui.Button):
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
         )
+
+
+def _welcome_button_row(*, show_link_17lands: bool) -> discord.ui.View:
+    view = discord.ui.View(timeout=None)
+    view.add_item(_LinkArenaButton())
+    if show_link_17lands:
+        view.add_item(_Link17LandsButton())
+    view.add_item(_PodGuideButton())
+    view.add_item(_ManageRolesButton())
+    return view
 
 
 def _dm_opt_in_for(discord_id: str) -> bool:
@@ -629,28 +648,32 @@ def forget_welcome(member_id: int) -> None:
 
 
 async def send_welcome(
-    client: discord.Client, member: discord.abc.User, view: discord.ui.LayoutView,
+    client: discord.Client, member: discord.abc.User, welcome: WelcomeMessage,
 ) -> discord.Message | None:
     """Post the welcome in pod-draft-chat, pinging the newcomer; None when it can't be sent"""
     channel = resolve_pod_chat_channel(client)
     if channel is None:
         return None
     mentions = discord.AllowedMentions(users=[member], roles=False, everyone=False)
-    return await post_welcome_card(channel, view, mentions=mentions)
+    return await post_welcome_card(channel, welcome, mentions=mentions)
 
 
-async def post_welcome(interaction: discord.Interaction, view: discord.ui.LayoutView) -> None:
+async def post_welcome(interaction: discord.Interaction, welcome: WelcomeMessage) -> None:
     """The interaction-path welcome, ephemeral when pod-draft-chat can't be resolved"""
-    if await send_welcome(interaction.client, interaction.user, view) is None:
-        await interaction.followup.send(view=view, ephemeral=True)
+    if await send_welcome(interaction.client, interaction.user, welcome) is None:
+        await interaction.followup.send(
+            content=welcome.content, embed=welcome.embed, view=welcome.view, ephemeral=True,
+        )
 
 
 async def post_welcome_card(
-    channel: discord.abc.Messageable, view: discord.ui.LayoutView, *, mentions: discord.AllowedMentions,
+    channel: discord.abc.Messageable, welcome: WelcomeMessage, *, mentions: discord.AllowedMentions,
 ) -> discord.Message | None:
-    """Post a welcome card and demote the ones already standing; None when the send fails"""
+    """Post a welcome and demote the ones already standing; None when the send fails"""
     try:
-        posted = await channel.send(view=view, allowed_mentions=mentions)
+        posted = await channel.send(
+            content=welcome.content, embed=welcome.embed, view=welcome.view, allowed_mentions=mentions,
+        )
     except discord.HTTPException:
         log.warning("could not post the pod welcome", exc_info=True)
         return None
@@ -659,7 +682,9 @@ async def post_welcome_card(
 
 
 async def demote_older_welcomes(channel: discord.abc.Messageable, *, newest: int) -> int:
-    """Strip the buttons off every welcome card older than `newest`, returning how many were demoted"""
+    """Strip the buttons off every welcome older than `newest`, returning how many were demoted. A classic
+    welcome loses its buttons in place; a Components V2 welcome left from before that switch keeps its
+    container, since Discord will not edit a V2 message into a classic one."""
     guild = getattr(channel, "guild", None)
     bot_id = guild.me.id if guild is not None else None
     demoted = 0
@@ -670,10 +695,16 @@ async def demote_older_welcomes(channel: discord.abc.Messageable, *, newest: int
         if greeting is None:
             continue
         try:
-            await message.edit(
-                view=build_demoted_welcome_view(greeting),
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
+            if message.flags.components_v2:
+                await message.edit(
+                    view=build_demoted_welcome_view(greeting),
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            else:
+                await message.edit(
+                    content=greeting, embed=None, view=None,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
             demoted += 1
         except discord.HTTPException:
             log.warning(f"could not demote welcome {message.id}", exc_info=True)
@@ -681,7 +712,7 @@ async def demote_older_welcomes(channel: discord.abc.Messageable, *, newest: int
 
 
 def welcome_card_greeting(message: discord.Message) -> str | None:
-    """The greeting off a welcome card that still carries its buttons, heading markdown stripped; None for
+    """The greeting off a welcome that still carries its buttons, heading markdown stripped; None for
     anything else"""
     components = list(_flat_components(message))
     carries_buttons = any(
@@ -689,6 +720,8 @@ def welcome_card_greeting(message: discord.Message) -> str | None:
     )
     if not carries_buttons:
         return None
+    if message.content.strip():
+        return HEADING_PREFIX.sub("", message.content.splitlines()[0])
     for item in components:
         if isinstance(item, TextDisplay) and item.content.strip():
             return HEADING_PREFIX.sub("", item.content.splitlines()[0])

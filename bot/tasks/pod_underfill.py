@@ -292,9 +292,8 @@ async def mark_underfill_fired(
     landed, so a pod that recruited for an hour announces its start above an hour of conversation, and the
     channel asks whether the draft began while the answer sits unread above them.
 
-    Sent with Discord's silent flag: the line is there for a reader, without a notification for a table that
-    is already drafting. Posts even when no nudge is up, so a pod that filled before its first recruiting
-    beat still announces itself."""
+    Posts even when no nudge is up, so a pod that filled before its first recruiting beat still announces
+    itself."""
     loaded = await asyncio.to_thread(_load_event_by_id_for_nudge, event_id)
     if loaded is None:
         return
@@ -308,7 +307,7 @@ async def mark_underfill_fired(
         if nudge is not None:
             await _safe_delete(nudge)
     body = build_underfill_fired_message(name, player_count, thread_url)
-    await _safe_post(channel, body, silent=True)
+    await _safe_post(channel, body)
 
 
 async def refresh_slot_nudge(bot: commands.Bot, signal_id: str) -> None:
@@ -524,11 +523,11 @@ def _scheduled_signal_id(event_id: str) -> str | None:
 
 
 async def _safe_post(
-    channel: discord.abc.Messageable, body: str, *, mention_role: bool = False, silent: bool = False,
+    channel: discord.abc.Messageable, body: str, *, mention_role: bool = False,
 ) -> None:
     allowed = discord.AllowedMentions(roles=True) if mention_role else discord.AllowedMentions.none()
     try:
-        await channel.send(body, allowed_mentions=allowed, silent=silent)
+        await channel.send(body, allowed_mentions=allowed)
     except discord.HTTPException:
         log.warning("could not post underfill nudge", exc_info=True)
 

@@ -115,8 +115,9 @@ async def _show_welcome_preview(interaction: discord.Interaction, role_name: str
     role = discord.utils.get(guild.roles, name=role_name) if guild is not None else None
     ping = QUEUE_GRANT_PING if role_name == POD_QUEUE_ROLE_NAME else slot_grant_ping(spec)
     preview_role = role or _StubRole(role_name)
+    welcome = build_welcome_view(guild, interaction.user.mention)
     await interaction.response.send_message(
-        view=build_welcome_view(guild, interaction.user.mention),
+        content=welcome.content, embed=welcome.embed, view=welcome.view,
         allowed_mentions=discord.AllowedMentions.none(),
     )
     linked = build_grant_view(preview_role, spec, ping=ping, arena_name="Tester#00000")
@@ -491,9 +492,10 @@ async def setup(bot: commands.Bot) -> None:
             return
         joiners = max(1, min(count, 8))
         newcomers = [f"**{name}**" for name in HALL_OF_FAME[: joiners - 1]]
+        pinging = discord.AllowedMentions(users=[ctx.author], roles=False, everyone=False)
         for mention in [*newcomers, ctx.author.mention]:
-            card = build_welcome_view(ctx.guild, mention, show_link_17lands=True)
-            await post_welcome_card(ctx.channel, card, mentions=discord.AllowedMentions.none())
+            welcome = build_welcome_view(ctx.guild, mention, show_link_17lands=True)
+            await post_welcome_card(ctx.channel, welcome, mentions=pinging)
 
     @test_group.command(name="rsvp")
     @commands.is_owner()
