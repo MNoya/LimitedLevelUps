@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { HelpCircle } from "lucide-react";
 import { Tooltip } from "../Tooltip";
 import { groupBySlot, findExtremes, classifyYourPick } from "../../data/p0p1Stats";
-import { SLOTS } from "../../data/p0p1Slots";
+import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
 import {
   buildRatingsByName,
   bestPossibleTeam,
@@ -83,6 +83,22 @@ export function P0P1BallotScorecard({
             <span className="text-text">{boldest.cardName}</span>
           </p>
         )}
+      </div>
+    </div>
+  );
+}
+
+export function BallotScorecardSkeleton() {
+  return (
+    <div className="inline-block" style={{ clipPath: CHAMFER, background: "#3b4458", padding: 1 }}>
+      <div className="bg-surface2 w-[clamp(280px,22vw,340px)] px-5 py-2.5 flex flex-col gap-2" style={{ clipPath: CHAMFER }}>
+        <div className="h-[15px] w-28 bg-surface animate-pulse" />
+        <div className="h-6 w-40 bg-surface animate-pulse" />
+        <div className="flex gap-1 -ml-[5px]" aria-hidden>
+          {Array.from({ length: SLOTS.length }, (_, i) => (
+            <div key={i} className="h-2.5 flex-1 rounded-[1px] bg-surface animate-pulse" />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -172,11 +188,12 @@ export function MidwayBallotScorecard({
   picksBySlot: Map<string, string>;
 }) {
   const aligned = useMemo(() => {
+    const slots = buildSlots(P0P1_CONTESTS[ratingsSnapshot.setCode]);
     const ratingsByName = buildRatingsByName(ratingsSnapshot);
-    const best = bestPossibleTeam(cards, SLOTS, ratingsByName);
+    const best = bestPossibleTeam(cards, slots, ratingsByName);
     const bestBySlot = new Map(best.picks.map((p) => [p.slot, p.cardName]));
     let count = 0;
-    for (const slot of SLOTS) {
+    for (const slot of slots) {
       const your = picksBySlot.get(slot.key);
       const bestCard = bestBySlot.get(slot.key as SlotKey);
       if (your && bestCard && your === bestCard) count++;
@@ -244,8 +261,9 @@ export function FinalBallotScorecard({
 }) {
   const selfPlacement = useP0P1DevSelfPlacement();
   const result = useMemo(() => {
+    const slots = buildSlots(P0P1_CONTESTS[ratingsSnapshot.setCode]);
     const ratingsByName = buildRatingsByName(ratingsSnapshot);
-    const bestTeam = bestPossibleTeam(cards, SLOTS, ratingsByName);
+    const bestTeam = bestPossibleTeam(cards, slots, ratingsByName);
     const rankedBallots = applyDevSelfPlacement(
       rankBallots(groupBallotRows(ballots), ratingsByName),
       0,
@@ -254,14 +272,14 @@ export function FinalBallotScorecard({
     );
     const userBallot = findUserBallot(rankedBallots, picksBySlot, discordId);
     const completeScores = rankedBallots
-      .filter((b) => b.picks.size === SLOTS.length)
+      .filter((b) => b.picks.size === slots.length)
       .map((b) => b.score);
     return {
       score: userBallot?.score ?? scoreBallot(picksBySlot as Map<SlotKey, string>, ratingsByName),
       rank: userBallot?.rank ?? null,
       total: rankedBallots.length,
       bestScore: bestTeam.score,
-      crowdScore: mostPopularTeam(pickStats, SLOTS, ratingsByName).score,
+      crowdScore: mostPopularTeam(pickStats, slots, ratingsByName).score,
       floor: completeScores.length > 0 ? Math.min(...completeScores) : 0,
     };
   }, [ratingsSnapshot, pickStats, ballots, cards, picksBySlot, selfPlacement, discordId]);

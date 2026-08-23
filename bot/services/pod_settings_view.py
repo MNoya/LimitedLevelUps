@@ -620,11 +620,11 @@ class _RescheduleButton(ui.Button):
 
 
 RESCHEDULE_HELP = (
-    "Enter a new start time in Eastern (ET). Formats:\n"
-    "`+1h` or `-30m` shifts from the current start\n"
-    "`11am`, `9 PM`, `21:00` sets a time today\n"
-    "`today 11am`, `tomorrow 8:30pm`, `fri 7pm` sets a day and time\n"
-    "A bare time already past today moves to tomorrow"
+    "**Set the new start time in Eastern (ET).** Formats:\n"
+    "- `+1h` or `-30m` shifts from the current start\n"
+    "- `11am`, `9 PM`, `21:00` sets a time today\n"
+    "- `today 11am`, `tomorrow 8:30pm`, `fri 7pm` sets a day and time\n"
+    "- A bare time already past today moves to tomorrow"
 )
 
 

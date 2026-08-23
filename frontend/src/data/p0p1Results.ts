@@ -5,7 +5,7 @@ import type { Card, P0P1BallotRow, P0P1PickStat, SlotKey } from "../types/p0p1";
 import type { SlotDefinition } from "../types/p0p1";
 import type { P0P1DevSelfPlacement } from "./p0p1DevState";
 
-export type P0P1Phase = "voting" | "postVoting" | "midway" | "finalizing" | "final";
+export type P0P1Phase = "loading" | "voting" | "postVoting" | "midway" | "final";
 
 export interface CardRating {
   card_name: string;
@@ -79,9 +79,9 @@ export function scoreBallot(
 }
 
 // Best-possible legal team: max-weight assignment of cards to slots under the
-// uniqueness constraint. Uses most-constrained-first greedy, which is optimal
-// for the MSH slot structure because the 5 color-common slots have disjoint
-// card pools and the wildcard slots are naturally last.
+// uniqueness constraint. Uses most-constrained-first greedy — near-optimal
+// since the color-common slots are mostly disjoint (only hybrid commons can
+// overlap two color slots) and the wildcard slots are naturally last.
 export function bestPossibleTeam(
   cards: Card[],
   slots: SlotDefinition[],

@@ -44,7 +44,7 @@ export function P0P1Countdown({
   phase: P0P1Phase;
 }) {
   useNow(30_000);
-  const now = p0p1Now();
+  const now = p0p1Now(scoringDate);
   const deadlineDiff = deadline.getTime() - now;
 
   if (phase === "voting") {
@@ -56,18 +56,14 @@ export function P0P1Countdown({
     );
   }
 
+  if (phase === "loading") {
+    return <span className="inline-block h-[1em] w-32 bg-surface2 animate-pulse align-middle" style={{ fontSize: size }} />;
+  }
+
   if (phase === "final") {
     return (
       <span className="text-green" style={{ fontSize: size }}>
         Results are in!
-      </span>
-    );
-  }
-
-  if (phase === "finalizing") {
-    return (
-      <span className="text-green" style={{ fontSize: size }}>
-        Finalizing results
       </span>
     );
   }

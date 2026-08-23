@@ -410,7 +410,7 @@ function useP0P1BadgeState() {
   const featured = useP0P1FeaturedContest();
   const setCode = featured?.code;
   const { data: picks } = useP0P1Picks(user ? setCode : undefined);
-  const { data: snapshot } = useP0P1Ratings(setCode ?? "");
+  const { data: snapshot, isLoading: snapshotLoading } = useP0P1Ratings(setCode ?? "");
   const devPreset = useP0P1DevPreset();
   const devActive = p0p1DevEnabled && devPreset !== "live";
   const now = p0p1Now(featured?.scoringDate);
@@ -421,23 +421,22 @@ function useP0P1BadgeState() {
     isPastScoringDate,
     snapshot ?? undefined,
     Boolean(snapshot),
+    snapshotLoading,
     devActive ? devPreset : "live",
   );
   const filled = user ? (picks?.length ?? 0) : 0;
   return { user, phase, filled, total: SLOTS.length, setCode };
 }
 
-// Phase-driven label for post-deadline states, centered and non-corner like
-// PRELIM DATA / RESULTS SOON; null falls through to the voting-progress badge.
 function p0p1BadgeLabel(phase: P0P1Phase): string | null {
   if (phase === "final") return "RESULTS";
-  if (phase === "finalizing") return "RESULTS SOON";
   if (phase === "midway" || phase === "postVoting") return "PRELIM DATA";
   return null;
 }
 
 function P0P1Badge({ active }: { active: boolean }) {
   const { user, phase, filled, total } = useP0P1BadgeState();
+  if (phase === "loading") return null;
 
   const pill = cn(
     "absolute -top-1.5 z-10 rounded-full border border-green px-1.5 py-0.5 text-[9px] leading-none font-sans font-bold tracking-wide",
@@ -461,6 +460,7 @@ function p0p1VotingLabel(signedIn: boolean, filled: number, total: number): stri
 
 function MobileBadgeSlot({ active }: { active: boolean }) {
   const { user, phase, filled, total, setCode } = useP0P1BadgeState();
+  if (phase === "loading") return null;
 
   const wrap = cn(
     "ml-3 inline-flex items-center gap-2 text-[14px] font-semibold font-sans tracking-[0.08em]",

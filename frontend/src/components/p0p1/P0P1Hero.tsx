@@ -47,13 +47,13 @@ export function P0P1Hero({
         </div>
         {isPastDeadline && (
           <div className="w-full mt-2">
-            <P0P1CountdownBar from={featured.votingDeadline} to={featured.scoringDate} />
+            <P0P1CountdownBar from={featured.votingDeadline} to={featured.scoringDate} phase={phase} />
           </div>
         )}
       </div>
       <div className="flex-1 min-w-0 self-stretch grid grid-rows-[1fr_auto] justify-items-center">
         <p className="self-center max-w-[580px] text-center text-subtle text-[14px] leading-[1.55]">
-          <P0P1IntroText setName={featured.name} votingDeadline={featured.votingDeadline} scoringDate={featured.scoringDate} phase={phase} dateRange={dateRange} multiline />
+          <P0P1IntroText setName={featured.name} phase={phase} dateRange={dateRange} multiline />
         </p>
         <div className="w-full flex justify-center text-subtle text-[14px]">
           {phase === "final" ? <NextContestOpens next={featured.next} /> : belowIntro}

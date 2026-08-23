@@ -28,25 +28,20 @@ const dataLink = (
 
 export function P0P1IntroText({
   setName: setNameProp,
-  votingDeadline,
-  scoringDate,
   phase,
   dateRange,
   multiline = false,
 }: {
   setName: string;
-  votingDeadline: Date;
-  scoringDate: Date;
   phase: P0P1Phase;
   dateRange?: { start: string; end: string } | null;
   multiline?: boolean;
 }) {
   const setName = <span className="font-semibold text-text">{setNameProp}</span>;
   const cardCount = spellOut(SLOTS.length);
-  const windowText = describeDuration(scoringDate.getTime() - votingDeadline.getTime());
   const formattedRange = dateRange ? formatDateRange(dateRange.start, dateRange.end) : null;
 
-  const sentences: ReactNode[] = buildSentences(phase, setName, cardCount, windowText, formattedRange);
+  const sentences: ReactNode[] = buildSentences(phase, setName, cardCount, formattedRange);
 
   return (
     <>
@@ -64,35 +59,33 @@ function buildSentences(
   phase: P0P1Phase,
   setName: ReactNode,
   cardCount: string,
-  windowText: string,
   formattedRange: string | null,
 ): ReactNode[] {
   switch (phase) {
+    case "loading":
+      return [
+        <span className="inline-block h-3.5 w-64 bg-surface2 animate-pulse align-middle" />,
+        <span className="inline-block h-3.5 w-80 bg-surface2 animate-pulse align-middle" />,
+      ];
     case "voting":
       return [
-        <>Put together a team of {cardCount} cards from {setName}.</>,
-        <>{capitalize(windowText)} after release, teams are ranked by their total {winRateLink}</>,
+        <>Put together a team of {cardCount} cards from {setName}</>,
+        <>Four weeks after voting, teams are ranked by their total {winRateLink}</>,
       ];
     case "postVoting":
       return [
-        <>Participants have put in their predictions for {setName}.</>,
-        <>Check out the most popular picks below, then come back once they're ranked by {winRateLink}, {windowText} after release.</>,
+        <>Participants have put in their predictions for {setName}</>,
+        <>Check out the most popular picks, then come back once they're ranked by {winRateLink}, four weeks after voting</>,
       ];
     case "midway":
       return [
-        <>{setName} season is underway.</>,
-        <>Check out the <strong>preliminary data</strong> below {formattedRange && <> from {formattedRange}</>}.</>,
-        <>Final results coming soon.</>
-      ];
-    case "finalizing":
-      return [
-        <>{capitalize(windowText)} of {setName} drafts are in the books.</>,
-        <>Showing <strong>preliminary data</strong> below{formattedRange && <> from {formattedRange}</>}.</>,
-        <>Final standings coming shortly.</>,
+        <>{setName} season is underway</>,
+        <>Check out the <strong>preliminary data</strong>{formattedRange && <> from {formattedRange}</>}</>,
+        <>Final results coming soon</>
       ];
     case "final":
       return [
-        <>After {windowText}, {setName} results are in!</>,
+        <>After four weeks, {setName} results are in!</>,
         <>Check out the final standings based on {dataLink}</>,
       ];
   }
@@ -105,19 +98,6 @@ const NUMBER_WORDS = [
 
 function spellOut(n: number): string {
   return NUMBER_WORDS[n] ?? String(n);
-}
-
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function describeDuration(ms: number): string {
-  const days = Math.round(ms / (24 * 60 * 60 * 1000));
-  if (days % 7 === 0) {
-    const weeks = days / 7;
-    return `${spellOut(weeks)} ${weeks === 1 ? "week" : "weeks"}`;
-  }
-  return `${spellOut(days)} ${days === 1 ? "day" : "days"}`;
 }
 
 function formatDateRange(start: string, end: string): string {
