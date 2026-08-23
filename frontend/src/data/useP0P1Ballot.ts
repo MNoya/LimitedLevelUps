@@ -128,7 +128,6 @@ export function useP0P1Ballot(overrideSetCode?: string) {
   const user = applyDevUser(authUser, devViewPreset);
   const effectivePicksBySlot = applyDevPicks(picksBySlot, pickStats, devViewPreset);
   const resultsDataReady = Boolean(ratingsSnapshot && cards && pickStats);
-  const midwayDataReady = resultsDataReady && ratingsSnapshot?.phase === "midway";
   const resultsPending = ratingsLoading || cardsLoading || pickStatsLoading;
   const phase = deriveP0P1Phase(isPastDeadline, isPastScoringDate, ratingsSnapshot ?? undefined, resultsDataReady, resultsPending, devViewPreset);
 
@@ -205,7 +204,6 @@ export function useP0P1Ballot(overrideSetCode?: string) {
     cardsByName,
     dataReady,
     resultsDataReady,
-    midwayDataReady,
     ballotReady,
     user,
     authLoading,
@@ -312,5 +310,5 @@ export function deriveP0P1Phase(
   }
 
   if (snapshot?.phase === "final" && dataPresent) return "final";
-  return "finalizing";
+  return "midway";
 }

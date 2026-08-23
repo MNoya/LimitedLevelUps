@@ -68,14 +68,6 @@ export function P0P1Countdown({
     );
   }
 
-  if (phase === "finalizing") {
-    return (
-      <span className="text-green" style={{ fontSize: size }}>
-        Finalizing results
-      </span>
-    );
-  }
-
   if (scoringDate) {
     const scoringDiff = scoringDate.getTime() - now;
     if (scoringDiff > 0) {

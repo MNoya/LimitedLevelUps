@@ -83,12 +83,6 @@ function buildSentences(
         <>Check out the <strong>preliminary data</strong> below {formattedRange && <> from {formattedRange}</>}</>,
         <>Final results coming soon</>
       ];
-    case "finalizing":
-      return [
-        <>Four weeks of {setName} drafts are in the books</>,
-        <>Showing <strong>preliminary data</strong> below{formattedRange && <> from {formattedRange}</>}</>,
-        <>Final standings coming shortly</>,
-      ];
     case "final":
       return [
         <>After four weeks, {setName} results are in!</>,

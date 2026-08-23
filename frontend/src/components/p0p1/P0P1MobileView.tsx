@@ -38,7 +38,6 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
     cardsByName,
     dataReady,
     resultsDataReady,
-    midwayDataReady,
     user,
     authLoading,
     signIn,
@@ -66,7 +65,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
   const groupedStats = hasParticipated && pickStats ? groupBySlot(pickStats) : undefined;
   const isCompleteEntrant = isPastDeadline && Boolean(user) && isComplete;
   const didNotVote = isPastDeadline && Boolean(user) && !isComplete;
-  const showMidway = phase === "midway" || (phase === "finalizing" && midwayDataReady);
+  const showMidway = phase === "midway";
 
   return (
     <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
@@ -138,7 +137,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
                   hasParticipated={hasParticipated}
                 />
               ) : null
-            ) : phase === "postVoting" || phase === "finalizing" ? (
+            ) : phase === "postVoting" ? (
               pickStats && pickStats.length > 0 && (
                 <>
                   {ballotReady && didNotVote && <MobileDidNotVoteLine />}
@@ -456,13 +455,6 @@ function CountdownStacked({
     );
   }
 
-  if (phase === "finalizing") {
-    return (
-      <div className="flex flex-col items-end leading-tight whitespace-nowrap shrink-0">
-        <span className="text-green text-[13px]">Finalizing results</span>
-      </div>
-    );
-  }
 
   if (scoringDate) {
     const scoringDiff = scoringDate.getTime() - now;

@@ -428,11 +428,8 @@ function useP0P1BadgeState() {
   return { user, phase, filled, total: SLOTS.length, setCode };
 }
 
-// Phase-driven label for post-deadline states, centered and non-corner like
-// PRELIM DATA / RESULTS SOON; null falls through to the voting-progress badge.
 function p0p1BadgeLabel(phase: P0P1Phase): string | null {
   if (phase === "final") return "RESULTS";
-  if (phase === "finalizing") return "RESULTS SOON";
   if (phase === "midway" || phase === "postVoting") return "PRELIM DATA";
   return null;
 }
