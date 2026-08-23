@@ -44,7 +44,7 @@ export function P0P1Countdown({
   phase: P0P1Phase;
 }) {
   useNow(30_000);
-  const now = p0p1Now();
+  const now = p0p1Now(scoringDate);
   const deadlineDiff = deadline.getTime() - now;
 
   if (phase === "voting") {

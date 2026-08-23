@@ -618,13 +618,25 @@ class _RescheduleButton(ui.Button):
         await interaction.response.send_modal(_RescheduleModal(self.view))
 
 
+RESCHEDULE_HELP = (
+    "**Set the new start time in Eastern (ET).** Formats:\n"
+    "- `+1h` or `-30m` shifts from the current start\n"
+    "- `11am`, `9 PM`, `21:00` sets a time today\n"
+    "- `today 11am`, `tomorrow 8:30pm`, `fri 7pm` sets a day and time\n"
+    "- A bare time already past today moves to tomorrow"
+)
+
+
 class _RescheduleModal(ui.Modal, title="Reschedule pod"):
     new_time = ui.TextInput(
-        label="New start (ET)", placeholder="+1h, 9 PM, 21:00, tomorrow 8:30pm", max_length=32)
+        label="New start (ET)", placeholder="+1h, -30m, 11am, today 9pm, tomorrow 8:30pm", max_length=32)
 
     def __init__(self, view: PodSettingsView) -> None:
         super().__init__()
         self.view = view
+        self.remove_item(self.new_time)
+        self.add_item(ui.TextDisplay(RESCHEDULE_HELP))
+        self.add_item(self.new_time)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)

@@ -7,7 +7,7 @@ export function P0P1CountdownBar({ from, to, phase }: { from: Date; to: Date; ph
   }
 
   const span = to.getTime() - from.getTime();
-  const elapsed = p0p1Now() - from.getTime();
+  const elapsed = p0p1Now(to) - from.getTime();
   const pct = Math.max(0, Math.min(100, Math.round((elapsed / span) * 100)));
 
   return (

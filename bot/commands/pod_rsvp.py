@@ -164,7 +164,7 @@ def register_launcher_refresh(handler: LauncherRefresh) -> None:
     _launcher_refresh = handler
 
 
-OFFSET_RE = re.compile(r"^\+?(?:(\d+)h)?(?:(\d+)m)?$")
+OFFSET_RE = re.compile(r"^([+-])?(?:(\d+)h)?(?:(\d+)m)?$")
 TIMESTAMP_RE = re.compile(r"^<t:(\d{1,15})(?::[a-z])?>$")
 CLOCK_RE = re.compile(r"^(\d{1,2})(?::(\d{2}))?(am|pm)?$")
 TZ_TOKENS = {"et", "est", "edt"}
@@ -1937,14 +1937,14 @@ def _opener_display_name(guild: discord.Guild | None, user_id: str | None) -> st
 def parse_new_time(raw: str, current: datetime, now: datetime) -> datetime | None:
     """A future event time (ET) from a sesh-style phrase. Understood forms:
     a pasted Discord timestamp token ('<t:1752624000:F>', in the viewer's own zone); an 'NhNm' offset
-    from the current time with an optional leading '+'; 'YYYY-MM-DD HH:MM'; a day word ('today',
-    'tonight', 'tomorrow', or a weekday like 'fri') optionally with 'at'/'on'/'ET' filler, followed by a
-    clock ('9 PM', '10pm', '8:30pm', '20:00'); or a bare clock. A bare clock or weekday already past today
-    rolls forward. None when unreadable or not in the future.
+    from the pod's own start with a leading '+' or '-' ('+1h' later, '-30m' earlier); 'YYYY-MM-DD HH:MM';
+    a day word ('today', 'tonight', 'tomorrow', or a weekday like 'fri') optionally with 'at'/'on'/'ET'
+    filler, followed by a clock ('9 PM', '10pm', '8:30pm', '20:00'); or a bare clock. A bare clock or
+    weekday already past today rolls forward. None when unreadable or not in the future.
 
-    Clocks and day words resolve against the later of the pod's start and the present, so a pod whose
-    start already passed still takes 'tomorrow 9pm'. Offsets stay relative to the pod's own start, which
-    is what makes '1h' mean 'one hour later than planned'."""
+    Clocks and day words resolve against today, so a bare '11am' or 'today 11am' moves a pod scheduled
+    for a later day back onto today. Offsets stay relative to the pod's own start, which is what makes
+    '1h' mean 'one hour later than planned' and '-1h' one hour earlier."""
     raw = raw.strip().lower()
     if not raw:
         return None
@@ -1953,24 +1953,27 @@ def parse_new_time(raw: str, current: datetime, now: datetime) -> datetime | Non
         parsed = datetime.fromtimestamp(int(stamp.group(1)), tz=timezone.utc)
         return parsed if parsed > now else None
     offset = OFFSET_RE.match(raw)
-    if offset and (offset.group(1) or offset.group(2)):
-        parsed = current + timedelta(hours=int(offset.group(1) or 0), minutes=int(offset.group(2) or 0))
+    if offset and (offset.group(2) or offset.group(3)):
+        delta = timedelta(hours=int(offset.group(2) or 0), minutes=int(offset.group(3) or 0))
+        if offset.group(1) == "-":
+            delta = -delta
+        parsed = current + delta
         return parsed if parsed > now else None
     try:
         parsed = datetime.strptime(raw, "%Y-%m-%d %H:%M").replace(tzinfo=SCHEDULE_TZ)
         return parsed if parsed > now else None
     except ValueError:
         pass
-    parsed = _parse_natural_time(raw, max(current, now), now)
+    parsed = _parse_natural_time(raw, now)
     return parsed if parsed is not None and parsed > now else None
 
 
-def _parse_natural_time(raw: str, base: datetime, now: datetime) -> datetime | None:
+def _parse_natural_time(raw: str, now: datetime) -> datetime | None:
     tokens = [t for t in raw.replace(",", " ").split() if t not in FILLER_TOKENS and t not in TZ_TOKENS]
     if not tokens:
         return None
 
-    base_date = base.astimezone(SCHEDULE_TZ).date()
+    base_date = now.astimezone(SCHEDULE_TZ).date()
     day = base_date
     day_word, weekday_word = False, False
     next_week = tokens[0] == "next" and len(tokens) > 1
