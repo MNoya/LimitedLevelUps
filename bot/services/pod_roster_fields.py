@@ -263,6 +263,8 @@ def _add_plain_rsvp_fields(
 ) -> None:
     for state, emoji, word in attendance_columns(rosters, include_no=include_no):
         names = rosters.get(state) or []
+        if state == RSVP_MAYBE and not names:
+            continue
         lines = _divided_by_table(names) if state == RSVP_YES else list(names)
         marked = [line if line == ROSTER_DIVIDER else marked_new(line, new_drafters) for line in lines]
         value = _quoted(marked) if marked else "-"
