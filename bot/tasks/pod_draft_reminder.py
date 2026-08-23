@@ -548,6 +548,11 @@ def confirm_ask_line() -> str:
     return MSG_CONFIRM_LOCK_IN
 
 
+def lobby_open_unix(event_time: datetime) -> int:
+    """The lobby-open moment the reminder countdown targets, ten minutes before the slot"""
+    return int((event_time - timedelta(minutes=REMINDER_LEAD_MIN)).timestamp())
+
+
 def reminder_header(
     event_name: str, event_time: datetime, attendance: Attendance, plan: TablePlan,
     seat_pending: bool = False,
@@ -559,7 +564,7 @@ def reminder_header(
     table and everybody is on it, so a count broken into confirmed and pending, a line naming the shape
     and a line asking for the next one are three answers to questions nobody has yet. They appear when
     the pod is big enough to split, which is when they start deciding something."""
-    unix = int(event_time.timestamp())
+    unix = lobby_open_unix(event_time)
     if seat_pending:
         headline = ROSTER_REMINDER_HEADLINE_COUNT.format(
             name=event_name, unix=unix, count=attendance.expected,
@@ -627,7 +632,7 @@ def build_roster_embed(
     not given them yet."""
     if championship_roster is not None:
         embed = discord.Embed(
-            description=ROSTER_REMINDER_HEADLINE.format(name=event_name, unix=int(event_time.timestamp())),
+            description=ROSTER_REMINDER_HEADLINE.format(name=event_name, unix=lobby_open_unix(event_time)),
             color=discord.Color.green(),
         )
         add_championship_roster_fields(embed, championship_roster)
