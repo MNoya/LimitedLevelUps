@@ -7,6 +7,7 @@ private ephemeral. The Seat Order button is contextual to Manual seats + a live 
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Awaitable, Callable
 
 import discord
@@ -37,6 +38,7 @@ from bot.services.pod_seating_select import (
     seating_mode_options,
 )
 from bot.services.pod_tournament import actor_label, is_pod_organizer
+from bot.services.pod_schedule import SCHEDULE_TZ
 from bot.discord_helpers import run_detached
 from bot.sets import active_set_code
 
@@ -167,7 +169,7 @@ class PodSettingsView(ui.View):
                  on_manage_rounds: Callable[[discord.Interaction], Awaitable[None]] | None = None,
                  on_restart: CancelApply | None = None,
                  on_cancel: CancelApply | None = None,
-                 on_reschedule: Apply | None = None,
+                 on_reschedule: Apply | None = None, current_start: datetime | None = None,
                  on_description: DescriptionApply | None = None, current_description: str | None = None,
                  on_closed_decklist: Apply | None = None, current_closed_decklist: bool = False,
                  event_name: str | None = None, mock: bool = False,
@@ -203,6 +205,7 @@ class PodSettingsView(ui.View):
         self.on_restart = on_restart
         self.on_cancel = on_cancel
         self.on_reschedule = on_reschedule
+        self.current_start = current_start
         self.on_description = on_description
         self.current_description = current_description
         self.on_closed_decklist = on_closed_decklist
@@ -294,7 +297,7 @@ class PodSettingsView(ui.View):
             kick_targets_provider=self.kick_targets_provider, on_kick=self.on_kick,
             link_targets_provider=self.link_targets_provider, on_link=self.on_link,
             on_manage_rounds=self.on_manage_rounds, on_restart=self.on_restart,
-            on_cancel=self.on_cancel, on_reschedule=self.on_reschedule,
+            on_cancel=self.on_cancel, on_reschedule=self.on_reschedule, current_start=self.current_start,
             on_description=self.on_description, current_description=self.current_description,
             on_closed_decklist=self.on_closed_decklist,
             current_closed_decklist=self.current_closed_decklist,
@@ -619,13 +622,18 @@ class _RescheduleButton(ui.Button):
         await interaction.response.send_modal(_RescheduleModal(self.view))
 
 
-RESCHEDULE_HELP = (
-    "**Set the new start time in Eastern (ET).** Formats:\n"
-    "- `+1h` or `-30m` shifts from the current start\n"
-    "- `11am`, `9 PM`, `21:00` sets a time today\n"
-    "- `today 11am`, `tomorrow 8:30pm`, `fri 7pm` sets a day and time\n"
-    "- A bare time already past today moves to tomorrow"
-)
+def reschedule_help(current_start: datetime | None = None) -> str:
+    hours = int(datetime.now(SCHEDULE_TZ).utcoffset().total_seconds() // 3600)
+    current = ""
+    if current_start is not None:
+        local = current_start.astimezone(SCHEDULE_TZ)
+        current = f" ({local.strftime('%-I:%M %p')})"
+    return (
+        f"**Set the new start in Eastern Time (GMT {hours:+d})**\n"
+        f"- `+1h` or `-30m` to move the current start{current}\n"
+        "- `11am`, `9 PM`, `21:00` sets a time today\n"
+        "- `today 11am`, `tomorrow 8:30pm`, `fri 7pm` sets day and time"
+    )
 
 
 class _RescheduleModal(ui.Modal, title="Reschedule pod"):
@@ -636,7 +644,7 @@ class _RescheduleModal(ui.Modal, title="Reschedule pod"):
         super().__init__()
         self.view = view
         self.remove_item(self.new_time)
-        self.add_item(ui.TextDisplay(RESCHEDULE_HELP))
+        self.add_item(ui.TextDisplay(reschedule_help(view.current_start)))
         self.add_item(self.new_time)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:

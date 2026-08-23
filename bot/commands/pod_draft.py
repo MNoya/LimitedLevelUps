@@ -53,6 +53,7 @@ from bot.services.pod_drafts import (
     load_event_seating_mode_sync,
     load_event_seeding_context_sync,
     load_event_set_code_sync,
+    load_event_time_sync,
     load_event_thread_id_sync,
     attach_arena_alias,
     lobby_match_status,
@@ -838,7 +839,10 @@ async def build_pod_settings_view(bot, event_id: str, *, is_organizer: bool) -> 
     on_reschedule = None
     on_description = None
     current_description = None
+    current_start = None
     if scheduled and not drafting:
+        current_start = await asyncio.to_thread(load_event_time_sync, event_id)
+
         async def on_reschedule(inter: discord.Interaction, raw: str) -> str | None:
             return await reschedule_event(
                 inter.client, event_id, raw, guild=inter.guild, actor_id=str(inter.user.id))
@@ -868,7 +872,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_organizer: bool) -> 
         kick_targets_provider=kick_targets_provider, on_kick=on_kick,
         link_targets_provider=link_targets_provider, on_link=on_link,
         on_manage_rounds=on_manage_rounds, on_restart=on_restart,
-        on_cancel=on_cancel, on_reschedule=on_reschedule,
+        on_cancel=on_cancel, on_reschedule=on_reschedule, current_start=current_start,
         on_description=on_description, current_description=current_description,
         on_closed_decklist=None if mock else on_closed_decklist,
         current_closed_decklist=current_closed_decklist,

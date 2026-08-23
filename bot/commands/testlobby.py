@@ -1644,6 +1644,7 @@ def _settings_preview_predraft_kwargs() -> dict:
         on_closed_decklist=_settings_preview_noop, current_closed_decklist=False,
         on_description=_settings_preview_description_noop,
         on_reschedule=_settings_preview_noop,
+        current_start=datetime.now(SCHEDULE_TZ) + timedelta(days=1, hours=3),
         on_cancel=_settings_preview_cancel_noop,
         event_name="Pod Draft Preview",
     )
