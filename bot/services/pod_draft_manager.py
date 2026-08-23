@@ -30,6 +30,7 @@ from bot.commands.messages import (
     MSG_DRAFTMANCER_USE_DISCORD_NAME,
     MSG_DRAFTMANCER_WELCOME,
     MSG_LOBBY_FULL_PROMPT,
+    MSG_LOBBY_WAITING,
     MSG_MOCK_CLOSED_IDLE,
     MSG_MOCK_COMPLETE,
     MSG_MOCK_COMPLETE_CHANNEL,
@@ -366,6 +367,8 @@ class PodDraftManager:
         self._lobby_full_prompt_task: asyncio.Task | None = None
         self._lobby_full_prompt_message: "discord.Message | None" = None
         self._lobby_full_prompted = False
+        self._lobby_waiting_message: "discord.Message | None" = None
+        self._lobby_waiting_text = ""
         self.rider_seats_held = 0
         self.rider_mentions: list[str] = []
         self._rider_window_task: asyncio.Task | None = None
@@ -2465,6 +2468,7 @@ class PodDraftManager:
         log.info(f"[DRAFT] started event={self.event_id} session_users={len(self.session_users)}")
         self._schedule_end_watchdog()
         await self._retire_lobby_full_prompt()
+        await self._retire_lobby_waiting()
         await self._retire_team_vote_offer()
         await self._retire_round_robin_offer()
         await self._retire_format_poll_offer()
@@ -2650,6 +2654,8 @@ class PodDraftManager:
             self._lobby_full_prompt_task = None
         if self._lobby_full_prompt_message is not None:
             asyncio.create_task(self._retire_lobby_full_prompt())
+        if self._lobby_waiting_message is not None:
+            asyncio.create_task(self._retire_lobby_waiting())
 
     async def _retire_lobby_full_prompt(self) -> None:
         """Delete the posted lobby-full nudge so its buttons can't outlive the lobby. Best-effort."""
@@ -2663,9 +2669,7 @@ class PodDraftManager:
             log.info(f"[LOBBY] full_prompt_delete_failed event={self.event_id}", exc_info=True)
 
     def _maybe_schedule_lobby_full_prompt(self, classified: list[tuple[str, str | None]]) -> None:
-        """Arm a one-shot nudge to start a Ready Check once the lobby first fills with a full pod of
-        linked players. The delayed task re-validates before posting, so a transient dip-and-refill is
-        harmless and a sustained drop just lets it lapse. Sent at most once per lobby."""
+        """Arm the delayed pass that posts the Ready Check button once safe, else the waiting announcement"""
         if self.draft_complete or self.drafting or self.ready_check_active or self._lobby_full_prompted:
             return
         if not self._lobby_pod_full(classified):
@@ -2681,18 +2685,56 @@ class PodDraftManager:
             return
         if self.draft_complete or self.drafting or self.ready_check_active or self._lobby_full_prompted:
             return
-        if not self._lobby_pod_full(await self.classified_session_users()):
+        classified = await self.classified_session_users()
+        if not self._lobby_pod_full(classified):
             return
         thread = await self._fetch_thread()
         if thread is None:
             return
+        mention_map = await self._resolve_rsvp_mentions(thread.guild)
+        waiting = waiting_roster(self.rsvps_yes, classified, mention_map)
+        if ready_check_strands_nobody(len(classified), self.max_players, len(waiting)):
+            await self._post_lobby_full_prompt(thread, len(classified))
+        else:
+            await self._post_lobby_waiting(thread, len(classified), waiting)
+
+    async def _post_lobby_full_prompt(self, thread: discord.Thread, present: int) -> None:
+        """Post the Ready Check button and retire any waiting announcement it supersedes"""
         self._lobby_full_prompted = True
+        await self._retire_lobby_waiting()
         try:
-            prompt = MSG_LOBBY_FULL_PROMPT.format(count=emojis.mana_number(self._lobby_full_count))
+            prompt = MSG_LOBBY_FULL_PROMPT.format(count=emojis.mana_number(present))
             self._lobby_full_prompt_message = await thread.send(prompt, view=LobbyReadyButtonView())
         except discord.HTTPException:
             self._lobby_full_prompted = False
             log.warning(f"[LOBBY] full_prompt_send_failed event={self.event_id}", exc_info=True)
+
+    async def _post_lobby_waiting(self, thread: discord.Thread, present: int, waiting: list[str]) -> None:
+        """Name who the lobby is waiting on, no button, edited in place and skipped when the text is unchanged"""
+        text = MSG_LOBBY_WAITING.format(count=emojis.mana_number(present), names=", ".join(waiting))
+        if text == self._lobby_waiting_text and self._lobby_waiting_message is not None:
+            return
+        self._lobby_waiting_text = text
+        allowed = discord.AllowedMentions(users=True)
+        try:
+            if self._lobby_waiting_message is not None:
+                await self._lobby_waiting_message.edit(content=text, allowed_mentions=allowed)
+            else:
+                self._lobby_waiting_message = await thread.send(text, allowed_mentions=allowed)
+        except discord.HTTPException:
+            log.warning(f"[LOBBY] waiting_post_failed event={self.event_id}", exc_info=True)
+
+    async def _retire_lobby_waiting(self) -> None:
+        """Delete the waiting announcement once it is superseded or the lobby moves on. Best-effort."""
+        message = self._lobby_waiting_message
+        self._lobby_waiting_message = None
+        self._lobby_waiting_text = ""
+        if message is None:
+            return
+        try:
+            await message.delete()
+        except discord.HTTPException:
+            log.info(f"[LOBBY] waiting_delete_failed event={self.event_id}", exc_info=True)
 
     def open_rider_window(self, planned: int, rider_mentions: list[str]) -> None:
         """Give a staged table's confirmed roster the first two minutes on its own seats.
@@ -3407,6 +3449,11 @@ class PodDraftManager:
             fingerprint=f"end_draft_watchdog:{self.event_id}",
             tag="DRAFT",
         )
+
+
+def ready_check_strands_nobody(present: int, room_size: int, waiting: int) -> bool:
+    """Whether a Ready Check now leaves no confirmed player behind: room full, or nobody confirmed absent"""
+    return present >= room_size or waiting == 0
 
 
 def name_nudge_text(names: list[str]) -> str:

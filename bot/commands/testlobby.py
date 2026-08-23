@@ -65,7 +65,7 @@ from bot.services.pod_pairing_select import DEFAULT_PAIRING_MODE, pairing_change
 from bot.services.pod_seating_select import seating_mode_label
 from bot.services.player_stats import rank_players_for_set
 from bot import emojis
-from bot.commands.messages import MSG_LOBBY_FULL_PROMPT
+from bot.commands.messages import MSG_LOBBY_FULL_PROMPT, MSG_LOBBY_WAITING
 from bot.tasks.pod_draft_reminder import build_lobby_open_body
 from bot.commands.pod_draft import build_seeding_image_message_from_names, post_manual_seating_table, post_table
 from bot.commands.pod_table import build_table_view
@@ -1350,7 +1350,7 @@ _LINKED_EIGHT: list[tuple[str, str]] = [
 ]
 _VALID_STATES = (
     "empty", "partial", "linked", "unlinked", "ready", "held", "notready", "titles",
-    "readyunlinked", "readyteam", "readycancel",
+    "readyunlinked", "readyteam", "readycancel", "waiting",
     "drafting", "complete", "submit", "deckpanel", "lobby", "lobbyopen", "dmlink", "unlink",
     "podbracket", "podswiss", "podrandom",
     "podteam", "podlobby", "podteamvote", "chat",
@@ -1870,6 +1870,15 @@ async def setup(bot: commands.Bot) -> None:
         if state == "readyteam":
             embed, _ = _build("six")
             await ctx.send(embed=embed, view=_ReadyCheckPreviewView(team_offer=True))
+            return
+
+        if state == "waiting":
+            names = ", ".join(name for _, name in _LINKED_EIGHT[6:8])
+            await ctx.send(MSG_LOBBY_WAITING.format(count=emojis.mana_number(8), names=names))
+            await ctx.send(
+                MSG_LOBBY_FULL_PROMPT.format(count=emojis.mana_number(10)),
+                view=LobbyReadyButtonView(draftmancer_url=_DRAFTMANCER_URL),
+            )
             return
 
         if state == "readycancel":

@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from bot.services.pod_draft_manager import PodDraftManager
+from bot.services.pod_draft_manager import PodDraftManager, ready_check_strands_nobody
 
 
 def _rider_manager(seated: int, planned: int) -> tuple[PodDraftManager, list[int]]:
@@ -34,3 +34,13 @@ def test_the_window_closes_only_once_the_table_holds_everyone_it_planned_for(
 
     assert bool(mgr.rider_seats_held) is still_open
     assert capped == capped_to
+
+
+@pytest.mark.parametrize("present, room_size, waiting, safe", [
+    (8, 10, 1, False),
+    (9, 10, 0, True),
+    (10, 10, 1, True),
+    (8, 8, 3, True),
+])
+def test_ready_check_only_offered_when_it_strands_nobody(present, room_size, waiting, safe):
+    assert ready_check_strands_nobody(present, room_size, waiting) is safe
