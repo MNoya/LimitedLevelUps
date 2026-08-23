@@ -216,6 +216,22 @@ def classify_lobby_names(
     return classified, frozenset(new_drafters)
 
 
+def new_drafters_in_roster(session: Session, names: Sequence[str]) -> frozenset[str]:
+    """Of these roster names, the ones yet to finish a pod, keyed by the name as given so a caller marks
+    the exact string it renders. A name with no player row reads new, the same as new_drafter_column."""
+    new: set[str] = set()
+    for name in names:
+        player = player_for_name(session, name)
+        if player is None or player.first_pod_at is None:
+            new.add(name)
+    return frozenset(new)
+
+
+def new_drafters_in_roster_sync(names: Sequence[str]) -> frozenset[str]:
+    with SessionLocal() as session:
+        return new_drafters_in_roster(session, names)
+
+
 def players_for_names(session: Session, names: Sequence[str]) -> list[tuple[str, Player | None]]:
     """Resolve each sesh attendee name to its Player (or None if unmatched), preserving order."""
     return [(n, player_for_name(session, n)) for n in names]

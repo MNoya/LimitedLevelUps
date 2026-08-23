@@ -121,6 +121,7 @@ from bot.services.pod_drafts import (
     load_event_time_sync,
     mock_repost_sync,
     name_token_match,
+    new_drafters_in_roster_sync,
     player_for_name,
     pod_page_url,
     record_mock_repost_sync,
@@ -336,6 +337,7 @@ class PodDraftManager:
         self.claimed_discord_ids: set[str] = set()
         self.table_event_ids: set[str] = set()
         self.new_drafters: frozenset[str] = frozenset()
+        self._rsvp_new_drafters: frozenset[str] | None = None
         self.session_users: list[dict] = []
         self.session_spectators: list[dict] = []
         self.spectator_user_ids: set[str] = set()
@@ -1390,6 +1392,26 @@ class PodDraftManager:
             out[mid] = member.display_name
         return out
 
+    async def _lobby_new_drafters(self, mention_map: dict[int, str]) -> frozenset[str]:
+        """The lobby's new-drafter set: the in-session seats plus the rsvp roster entries yet to finish a pod.
+        The rsvp half is keyed by the same string the Waiting on / Unconfirmed / Maybe columns render, so a
+        plain-text and a mention roster both mark, and it is resolved once since the roster is fixed."""
+        if self._rsvp_new_drafters is None:
+            resolved: dict[str, str] = {}
+            complete = True
+            for entry in (*self.rsvps_yes, *self.rsvps_unconfirmed, *self.rsvps_maybe):
+                name = _rsvp_display_name(entry, mention_map)
+                if name is None:
+                    complete = False
+                    continue
+                resolved[entry] = name
+            new_names = await asyncio.to_thread(new_drafters_in_roster_sync, list(resolved.values()))
+            computed = frozenset(entry for entry, name in resolved.items() if name in new_names)
+            if complete:
+                self._rsvp_new_drafters = computed
+            return self.new_drafters | computed
+        return self.new_drafters | self._rsvp_new_drafters
+
     def _settings_labels(self) -> dict:
         """Render inputs shared by the lobby + progress cards: the set code that prefixes the title's
         keyrune symbol, the Format / Pairings / Seats footer labels, and the mock flag both cards read to
@@ -1431,6 +1453,7 @@ class PodDraftManager:
             teams = None
             if self.pairing_mode == "team" and state in ("drafting", "complete"):
                 teams = self.team_map or await asyncio.to_thread(load_teams_sync, self.event_id)
+            mention_map = await self._resolve_rsvp_mentions(thread.guild)
             embed = render_lobby_embed(
                 title=self.event_name,
                 rsvps_yes=self.rsvps_yes,
@@ -1441,10 +1464,10 @@ class PodDraftManager:
                 draftmancer_url=self.draftmancer_url,
                 cancel_reason=self.last_cancel_reason,
                 initiated_by=self.initiated_by,
-                display_name_by_mention_id=await self._resolve_rsvp_mentions(thread.guild),
+                display_name_by_mention_id=mention_map,
                 spectators=self.spectator_names,
                 teams=teams,
-                new_drafters=self.new_drafters,
+                new_drafters=await self._lobby_new_drafters(mention_map),
                 **self._settings_labels(),
             )
             self._maybe_schedule_lobby_full_prompt(classified)
@@ -4033,6 +4056,16 @@ async def _find_pinned_lobby_card(thread, bot_user, event_name: str) -> "discord
             if any("Commands" in (field.name or "") for field in pinned_embed.fields):
                 return msg
     return None
+
+
+def _rsvp_display_name(rsvp: str, mention_map: dict[int, str]) -> str | None:
+    """The display name behind an rsvp entry, resolving a `<@id>` mention through the guild map.
+    None for a mention the map has not resolved yet, so a caller can leave it unmarked until it does."""
+    text = rsvp.strip()
+    m = re.match(r"^<@!?(\d+)>$", text)
+    if m:
+        return mention_map.get(int(m.group(1)))
+    return text
 
 
 def _classify_names_sync(names: list[str]) -> list[tuple[str, str | None]]:

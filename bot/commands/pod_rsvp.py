@@ -93,6 +93,7 @@ from bot.services.pod_drafts import (
     load_event_pairing_mode_sync,
     load_event_seating_mode_sync,
     load_event_set_code_sync,
+    new_drafters_in_roster_sync,
     record_ondemand_event,
 )
 from bot.services.pod_registration_embed import build_registered_embed, update_registered_embed
@@ -872,6 +873,8 @@ async def post_scheduled_card(
     rosters[pod_confirm.CONFIRMED] = [display for _, display in preseed_confirmed]
     rosters[RSVP_YES] = [display for _, display in preseed_yes]
     rosters[RSVP_MAYBE] = [display for _, display in preseed_maybe]
+    preseed_names = [display for _, display in preseed_confirmed + preseed_yes + preseed_maybe]
+    new_drafters = await asyncio.to_thread(new_drafters_in_roster_sync, preseed_names)
     guild = channel.guild
     name = await pod_launch.dedupe_pod_name(channel, name)
     starts_now = pod_is_numbered(name)
@@ -886,7 +889,7 @@ async def post_scheduled_card(
                 team_draft=pairing_mode == "team", announcement=card_body,
                 championship_roster=championship_card_roster,
                 created_by=opener.display_name if opener is not None else None,
-                starts_now=starts_now,
+                starts_now=starts_now, new_drafters=new_drafters,
             ),
             view=discord.utils.MISSING if starts_now else PodRsvpView(),
             allowed_mentions=discord.AllowedMentions(roles=True),

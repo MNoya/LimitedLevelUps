@@ -37,6 +37,7 @@ from bot.services.pod_seating_select import (
     seating_mode_options,
 )
 from bot.services.pod_tournament import actor_label, is_pod_organizer
+from bot.discord_helpers import run_detached
 from bot.sets import active_set_code
 
 
@@ -856,12 +857,14 @@ class _CancelConfirmView(ui.View):
 
     @ui.button(label="Delete Event", style=discord.ButtonStyle.danger, emoji="🗑️")
     async def confirm(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        await interaction.response.defer()
+        await interaction.response.edit_message(content=f"🗑️ **{self.event_name}** deleted", view=None)
+        run_detached(self._tear_down(interaction), f"the pod cancel from {interaction.user.id}")
+
+    async def _tear_down(self, interaction: discord.Interaction) -> None:
         err = await self.on_cancel(interaction)
         if err:
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
             return
-        await interaction.edit_original_response(content=f"🗑️ **{self.event_name}** deleted", view=None)
         channel = self.notice_channel or interaction.channel
         if channel is not None:
             await channel.send(cancel_notice(actor_label(interaction)))
