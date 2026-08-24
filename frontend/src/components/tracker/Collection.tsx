@@ -454,6 +454,8 @@ function useShrinkToFit(text: string, maxPx: number, minPx: number) {
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(el);
+    const refitAfterFonts = () => { measuredAt.current = 0; fit(); };
+    document.fonts?.ready.then(refitAfterFonts);
     return () => observer.disconnect();
   }, [text, maxPx, minPx]);
 
