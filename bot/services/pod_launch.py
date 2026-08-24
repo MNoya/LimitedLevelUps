@@ -1916,7 +1916,7 @@ async def launch_from_signal(
         log.warning("launch_from_signal: could not create pod thread", exc_info=True)
         return None
 
-    await _add_thread_watcher(thread)
+    await add_thread_watcher(thread)
 
     def _create() -> tuple[str, bool]:
         with SessionLocal() as session:
@@ -1947,14 +1947,14 @@ async def launch_from_signal(
     return event_id
 
 
-async def _add_thread_watcher(thread: discord.Thread) -> None:
+async def add_thread_watcher(thread: discord.Thread) -> None:
     watch_id = settings.pod_thread_watch_id
     if watch_id is None:
         return
     try:
         await thread.add_user(discord.Object(id=watch_id))
     except discord.HTTPException:
-        log.warning(f"launch_from_signal: could not add watcher {watch_id} to pod thread", exc_info=True)
+        log.warning(f"could not add watcher {watch_id} to pod thread {thread.id}", exc_info=True)
 
 
 async def open_ondemand_lobby(

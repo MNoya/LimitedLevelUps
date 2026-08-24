@@ -752,6 +752,7 @@ async def _open_discussion_thread(
         await thread.add_user(opener)
     except discord.HTTPException:
         log.warning(f"could not seed discussion thread {thread.id}", exc_info=True)
+    await pod_launch.add_thread_watcher(thread)
 
 
 async def _resolve_discussion_thread(
