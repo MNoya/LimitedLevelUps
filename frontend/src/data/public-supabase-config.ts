@@ -37,6 +37,6 @@ export const LOCAL_SUPABASE_URL =
 
 export const LOCAL_SUPABASE_PUBLISHABLE_KEY = "dev-anon-key";
 
-// The bot's tracker-refresh endpoint on Railway, empty until its domain exists; local mode uses the proxy
+// The bot's tracker-refresh endpoint on Railway; local mode uses the proxy instead
 export const PUBLIC_TRACKER_REFRESH_URL =
-  import.meta.env?.VITE_TRACKER_REFRESH_URL ?? "";
+  import.meta.env?.VITE_TRACKER_REFRESH_URL ?? "https://dischordleaderboard-production.up.railway.app";
