@@ -110,6 +110,7 @@ async def materialize_table(
         draftmancer_emoji=emojis.get("draftmancer"), event_name=event_name,
     ))
     thread = await starter.create_thread(name=event_name, reason="Pod table")
+    await pod_launch.add_thread_watcher(thread)
 
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, event_id)

@@ -627,6 +627,7 @@ async def move_pod_to_its_own_card(
     except discord.HTTPException:
         log.warning(f"could not move pod {event_id} onto a card of its own", exc_info=True)
         return None
+    await pod_launch.add_thread_watcher(thread)
     await asyncio.to_thread(
         pod_launch.move_scheduled_card_sync, event_id, str(message.id), str(thread.id),
     )
@@ -898,6 +899,7 @@ async def post_scheduled_card(
     except discord.HTTPException:
         log.warning("post_scheduled_card: could not post the card or create its thread", exc_info=True)
         return None
+    await pod_launch.add_thread_watcher(thread)
 
     signal_id = await asyncio.to_thread(
         pod_launch.create_scheduled_signal_sync,
