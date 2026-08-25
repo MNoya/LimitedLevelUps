@@ -73,6 +73,7 @@ def pair_round(
     *,
     rng: random.Random | None = None,
     final_round: bool = False,
+    dropped_ids: set[str] | None = None,
 ) -> list[tuple[str, str]]:
     """Return pairings for round_num as a list of (player_a_id, player_b_id).
 
@@ -82,8 +83,12 @@ def pair_round(
     re-pairing two players who have already met. Proximity (top seed vs the player half the group away,
     furthest from the neighbour) breaks ties between equal pairings — except in the final round, where
     standings decide everything and a neighbour rematch from the seating no longer matters.
+    Players in dropped_ids leave the pool before pairing, so an odd remainder floats a real bye to the
+    worst standing instead of handing a phantom bye to whoever the dropped player would have drawn.
     Raises ValueError if no rematch-free pairing exists.
     """
+    if dropped_ids:
+        players = [p for p in players if p.id not in dropped_ids]
     if len(players) % 2 == 1:
         return _pair_with_bye(players, prior_matches, round_num, rng=rng, final_round=final_round)
     if len(players) < 2:

@@ -1237,12 +1237,15 @@ async def advance_to_round(manager: "PodDraftManager", round_num: int) -> None:
     pairing_players = players
     if seats and manager.pairing_mode != "random":
         pairing_players = [replace(p, seat=seats.get(normalize_player_name(p.id))) for p in players]
+    dropped = await asyncio.to_thread(load_dropped_names, manager.event_id)
+    dropped_ids = {p.id for p in pairing_players if normalize_player_name(p.id) in dropped}
     try:
         if manager.pairing_mode == "roundrobin":
             pairings = pod_round_robin.pair_round(pairing_players, round_num)
         else:
             pairings = pod_swiss.pair_round(
-                pairing_players, prior, round_num, final_round=round_num == TOTAL_ROUNDS,
+                pairing_players, prior, round_num,
+                final_round=round_num == TOTAL_ROUNDS, dropped_ids=dropped_ids,
             )
     except ValueError as e:
         log.error("pairing for round %d failed for %s: %s", round_num, manager.event_id, e)

@@ -400,6 +400,31 @@ def test_odd_field_floats_the_bye_to_the_bottom_of_the_standings():
     assert len(pairings) == 3
 
 
+def test_dropped_player_leaves_the_pool_and_the_bye_floats_to_the_worst_standing():
+    roster = players(10)
+    r1 = [
+        match(1, "p0", "p7", "p0", "2-0"),
+        match(1, "p2", "p8", "p2", "2-0"),
+        match(1, "p6", "p9", "p6", "2-0"),
+        match(1, "p1", "p3", "p1", "2-0"),
+        match(1, "p4", "p5", "p4", "2-0"),
+    ]
+    r2 = [
+        match(2, "p0", "p1", "p0", "2-0"),
+        match(2, "p2", "p4", "p2", "2-0"),
+        match(2, "p6", "p7", "p6", "2-0"),
+        match(2, "p3", "p8", "p3", "2-0"),
+        match(2, "p5", "p9", "p5", "2-0"),
+    ]
+
+    pairings = pair_round(roster, r1 + r2, 3, dropped_ids={"p1"})
+
+    assert all("p1" not in pair for pair in pairings)
+    byes = [pair for pair in pairings if BYE_NAME in pair]
+    assert len(byes) == 1
+    assert byes[0][0] in {"p7", "p8", "p9"}
+
+
 def test_a_second_bye_skips_whoever_already_held_one():
     roster = players(5)
     matches = [
