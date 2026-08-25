@@ -90,12 +90,12 @@ def test_emit_format_asserts_color_balance_after_a_cube_import():
     assert events.index("importCube") < events.index("setColorBalance")
 
 
-def test_emit_format_asserts_color_balance_for_a_plain_set():
+def test_emit_format_disables_color_balance_for_a_plain_set():
     mgr = _manager("SOS")
 
     asyncio.run(mgr._emit_format())
 
-    assert ("setColorBalance", (True,)) in mgr.sio.calls
+    assert ("setColorBalance", (False,)) in mgr.sio.calls
 
 
 def test_apply_format_reasserts_color_balance_on_a_live_session(monkeypatch):

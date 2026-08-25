@@ -792,7 +792,9 @@ class PodDraftManager:
         flag before the set restriction, so a switch from a cube to a set has to turn it off or the pod
         drafts the cube it came from.
 
-        An import overwrites color balance from the imported list, so it is re-asserted on every format emit.
+        Color balance is on for cubes and off for plain sets, so a set drafts the way real Play Booster packs
+        do while a cube keeps every color present. An import overwrites the flag from the imported list, so it
+        is re-asserted on every format emit.
         """
         cube_id = pod_format.cube_id_for(self.set_code)
         if cube_id is not None:
@@ -808,7 +810,7 @@ class PodDraftManager:
         else:
             await self.sio.emit("setUseCustomCardList", False)
             await self.sio.emit("setRestriction", [self.set_code.lower()])
-        await self.sio.emit("setColorBalance", True)
+        await self.sio.emit("setColorBalance", cube_id is not None)
         return None
 
     async def _import_cube(self, cube_id: str) -> str | None:
