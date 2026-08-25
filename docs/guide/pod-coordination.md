@@ -77,7 +77,7 @@ None of this is binding. It is there so you can see whether the pod is going to 
 
 ## When a pod fires
 
-About 10 minutes before the start time, the bot opens the draft lobby on Draftmancer and posts the link in the thread. It can also send you the link by direct message. Open the link, set your name, and wait for the draft to begin.
+About 10 minutes before the start time, the bot opens the draft lobby on Draftmancer and posts the link in the thread. It can also send you the link by direct message. Open the link, set your name, and wait for the draft to begin. The lobby card carries a voice chat link while the pod is gathering, so you can hop in early while seats fill. Anyone can post the link again with `!voice`. Voice is optional and listening is fine.
 
 The name you use in Draftmancer is how the bot knows which seat is yours, so a seat it cannot place gets called out by name in the session chat, every few seconds, until it is fixed. What it asks for depends on what your name says you were reaching for: a browser that never set one is asked to set it, a handle like `YourName#12345` it has never been told about is sent to `/link-arena`, and anything else is asked for your exact Discord name. Your linked Arena handle and your Discord name both work, so either one ends it, and the bot says hello by name once your seat lands.
 
@@ -220,7 +220,7 @@ Restart Draft also sits on the Settings panel for as long as the draft is runnin
 
 The pod Settings panel also carries a Closed Decklist toggle: turn it on to hide that pod's decklists on the website until it finishes. Set Championship pods start with it on.
 
-A scheduled pod's Settings panel has a Description button. Whatever you write there takes the place of the "Please RSVP" line on the signup card, so you can say what the pod is about. Leave it empty to bring the RSVP line back. The card drops the note once the draft starts.
+A scheduled pod's Settings panel has a Details button, open before the draft starts. It holds the pod's name and a description. Rename the pod and its discussion thread follows the new name. Whatever you write in the description takes the place of the "Please RSVP" line on the signup card, so you can say what the pod is about. Leave it empty to bring the RSVP line back. The card drops the note once the draft starts.
 
 The Settings button stays on the lobby card after the draft finishes, because the panel is where you fix things during the rounds. Once a pod has pairings the panel carries Manage Rounds: pick a round and you get the same editor the 🔧 on a round message opens, where you can reassign a match's two players or set a result. The same editor carries Drop Player, for when someone has to leave mid-pod: pick their name, confirm, and every match they have left is reported as a bye for their opponent. Only Organizers can use it. Each round message keeps its own 🔧 where there is room for it, but a ten-player round fills every dropdown slot, so on those pods the Settings panel is the way in.
 

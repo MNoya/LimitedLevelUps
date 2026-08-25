@@ -36,6 +36,7 @@ from bot.services.pod_draft_manager import (
     set_event_picks_per_pack,
     set_event_seating,
     set_event_seating_mode,
+    rename_event_thread,
     set_card_refresh_hook,
     set_seeding_refresh_hook,
     set_seeding_repost_hook,
@@ -60,6 +61,7 @@ from bot.services.pod_drafts import (
     search_event_names_sync,
     set_event_closed_decklist_sync,
     set_event_description_sync,
+    set_event_name_sync,
 )
 from bot.commands.pod_rsvp import (
     fetch_channel,
@@ -93,7 +95,7 @@ from bot.services.pod_tournament import (
     round_picker_options,
 )
 from bot.services.pod_team_showcase import build_team_championship_view_for_event
-from bot.services.pod_voice import pod_voice_channel_url
+from bot.services.pod_voice import build_voice_offer_message, pod_voice_channel, pod_voice_channel_url
 
 
 log = logging.getLogger(__name__)
@@ -106,6 +108,7 @@ MSG_LINK_ARENA_NO_LOBBY_MATCH = (
 )
 MSG_LINK_ARENA_DID_YOU_MEAN = "Did you mean `{suggestion}`? Re-run `/link-arena` with that exact handle"
 MSG_NO_ACTIVE_POD = "No active pod draft session right now"
+MSG_NO_VOICE_CHANNEL = "No pod voice channel is set up here"
 
 YES_EMOJI = "✅"
 MAYBE_EMOJI = "🤷"
@@ -295,6 +298,16 @@ class PodDraft(commands.Cog):
             await message.add_reaction(REVIEW_EMOJI)
         except discord.HTTPException:
             log.warning("pod-review: could not add the review reaction", exc_info=True)
+
+    @commands.command(name="voice")
+    async def share_voice(self, ctx: commands.Context) -> None:
+        """Share the pod voice chat link in this channel, open to everyone"""
+        channel = pod_voice_channel(ctx.guild)
+        if channel is None:
+            await ctx.reply(MSG_NO_VOICE_CHANNEL, mention_author=False)
+            return
+        log.info(f"!voice: {ctx.author} shared the voice link in channel {ctx.channel.id}")
+        await ctx.send(await build_voice_offer_message(channel))
 
     @commands.command(name="start")
     @commands.is_owner()
@@ -838,6 +851,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_organizer: bool) -> 
 
     on_reschedule = None
     on_description = None
+    on_event_name = None
     current_description = None
     current_start = None
     if scheduled and not drafting:
@@ -851,6 +865,11 @@ async def build_pod_settings_view(bot, event_id: str, *, is_organizer: bool) -> 
 
         async def on_description(inter: discord.Interaction, text: str | None) -> None:
             await asyncio.to_thread(set_event_description_sync, event_id, text)
+            await refresh_card_embed(bot, event_id)
+
+        async def on_event_name(inter: discord.Interaction, name: str) -> None:
+            await asyncio.to_thread(set_event_name_sync, event_id, name)
+            await rename_event_thread(bot, event_id, name)
             await refresh_card_embed(bot, event_id)
 
     return PodSettingsView(
@@ -874,6 +893,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_organizer: bool) -> 
         on_manage_rounds=on_manage_rounds, on_restart=on_restart,
         on_cancel=on_cancel, on_reschedule=on_reschedule, current_start=current_start,
         on_description=on_description, current_description=current_description,
+        on_event_name=on_event_name,
         on_closed_decklist=None if mock else on_closed_decklist,
         current_closed_decklist=current_closed_decklist,
         event_name=event_name, mock=mock,

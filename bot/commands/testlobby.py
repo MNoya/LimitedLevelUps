@@ -115,6 +115,7 @@ from bot.services.pod_tournament import (
     build_capture_submit_deck_button,
     build_champion_announcement_view,
     build_deck_ping,
+    build_final_report_ping,
     build_draft_review_message,
     build_trophy_hype_view,
     mark_trophy_match,
@@ -1329,6 +1330,7 @@ def _bye_round_preview_states() -> list[dict]:
 
 _THREAD_NAME = "SOS Pod Draft #3 - May 15"
 _DRAFTMANCER_URL = f"{settings.draftmancer_web_url}/?session=LLUT-SOS-May-15-D"
+_VOICE_URL = "https://discord.com/channels/775371722065051658/000000000000000000"
 _UNLINKED_SEAT = "Stranger#12345"
 _RSVPS_YES = [
     "Noya", "Finkel", "LSV", "The Hump", "Paolo", "Shota",
@@ -1354,7 +1356,8 @@ _VALID_STATES = (
     "drafting", "complete", "submit", "deckpanel", "lobby", "lobbyopen", "dmlink", "unlink",
     "podbracket", "podswiss", "podrandom",
     "podteam", "podlobby", "podteamvote", "chat",
-    "format", "seeding", "trophyhype", "champ", "podium", "round1", "round2", "round3", "voicelink", "review",
+    "format", "seeding", "trophyhype", "champ", "podium", "round1", "round2", "round3",
+    "reportping", "voicelink", "review",
     "table",
     "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "p2vote",
     "formatpoll", "linkpicker", "settings", "dropped", "organizer", "reset",
@@ -1440,6 +1443,7 @@ def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
         initiated_by=initiated_by,
         spectators=_SPECTATORS,
         new_drafters=_NEW_DRAFTERS,
+        voice_url=_VOICE_URL,
         **_preview_settings_labels(),
     )
     spectate_url = f"{_DRAFTMANCER_URL}&spectate=preview"
@@ -1530,6 +1534,10 @@ async def _settings_preview_description_noop(
 
 
 async def _settings_preview_cancel_noop(interaction: discord.Interaction) -> str | None:
+    return None
+
+
+async def _settings_preview_event_name_noop(interaction: discord.Interaction, name: str) -> None:
     return None
 
 
@@ -1668,6 +1676,7 @@ def _settings_preview_predraft_kwargs() -> dict:
         on_max_players=_settings_preview_noop, current_max_players=8,
         on_closed_decklist=_settings_preview_noop, current_closed_decklist=False,
         on_description=_settings_preview_description_noop,
+        on_event_name=_settings_preview_event_name_noop,
         on_reschedule=_settings_preview_noop,
         current_start=datetime.now(SCHEDULE_TZ) + timedelta(days=1, hours=3),
         on_cancel=_settings_preview_cancel_noop,
@@ -1928,6 +1937,11 @@ async def setup(bot: commands.Bot) -> None:
                 await _post_disconnect_flap_preview(ctx)
             else:
                 await _post_disconnect_preview(ctx, int(extra) if extra.isdigit() else 1)
+            return
+
+        if state == "reportping":
+            content = build_final_report_ping([str(ctx.author.id)], 3, ctx.message.jump_url)
+            await ctx.send(content=content, allowed_mentions=discord.AllowedMentions.none())
             return
 
         if state == "submit":

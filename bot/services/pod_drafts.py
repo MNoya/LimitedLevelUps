@@ -989,6 +989,14 @@ def set_event_description_sync(event_id: str, description: str | None) -> None:
         session.commit()
 
 
+def set_event_name_sync(event_id: str, name: str) -> None:
+    with SessionLocal() as session:
+        session.execute(
+            update(PodDraftEvent).where(PodDraftEvent.id == event_id).values(name=name)
+        )
+        session.commit()
+
+
 def delete_event_sync(event_id: str) -> None:
     """Delete a pod event row; the cascade drops participants, matches, replays, and DM trackers."""
     with SessionLocal() as session:

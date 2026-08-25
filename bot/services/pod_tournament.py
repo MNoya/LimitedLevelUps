@@ -62,6 +62,9 @@ from bot.services.ping_roles import (
 )
 from bot.services.pod_roles import find_role
 from bot.services.pod_pairing_select import DEFAULT_PAIRING_MODE
+from bot.services.pod_reminder_copy import (
+    FINAL_REPORT_PING, FINAL_REPORT_ROUND_LINK, FINAL_REPORT_ROUND_PLAIN,
+)
 from bot.services.pod_replays import capture_event_replays
 from bot.services.seventeenlands import SeventeenLandsClient
 from bot.services.pod_drafts import (
@@ -170,6 +173,7 @@ DECK_GALLERY_CAP = 6  # Discord grids three per row; a seventh deck strands one 
 TROPHY_HYPE_HISTORY_LIMIT = 100  # messages scanned for a champion's own trophy post before the bot posts
 CHAMPIONSHIP_DEADLINE_SECONDS = 600  # hard cap from R3 end: post the announcement with whatever decks landed
 DECK_PING_DELAY_SECONDS = 300  # wait from R3 end before pinging whoever still owes a deck
+FINAL_REPORT_PING_DELAY_SECONDS = 2 * 60 * 60  # wait from final round posting before pinging non-reporters
 DECK_NUDGE_AFTER_FINISHERS = 4  # players done playing before the gentle screenshot reminder is armed
 DECK_NUDGE_DELAY_SECONDS = 120  # wait after arming, so a pod that posts its screenshots promptly gets no reminder
 CHAMPIONSHIP_RECONCILE_WINDOW = timedelta(hours=24)  # startup sweep only revisits recently-finalized pods
@@ -222,6 +226,16 @@ def _pod_page_deck_line(pod_url: str) -> str:
 
 def _mention_run(discord_ids: list[str]) -> str:
     return " ".join(f"<@{i}>" for i in discord_ids)
+
+
+def build_final_report_ping(discord_ids: list[str], round_num: int, jump_url: str | None = None) -> str:
+    if not discord_ids:
+        return ""
+    if jump_url:
+        round_ref = FINAL_REPORT_ROUND_LINK.format(round_num=round_num, url=jump_url)
+    else:
+        round_ref = FINAL_REPORT_ROUND_PLAIN.format(round_num=round_num)
+    return FINAL_REPORT_PING.format(round_ref=round_ref, mentions=_mention_run(discord_ids))
 
 
 def match_was_played(match: dict) -> bool:
@@ -1289,6 +1303,8 @@ async def advance_to_round(manager: "PodDraftManager", round_num: int) -> None:
             asyncio.create_task(send_submit_deck_dms(manager.bot, manager.event_id))
         await _attach_round_link(manager, round_num - 1)
         await settle_auto_forfeits(manager.bot, manager.event_id, [mid for mid, _, _ in pending_rows])
+        if round_num >= TOTAL_ROUNDS:
+            schedule_final_report_ping(manager, round_num)
 
 
 async def persist_round_entry_artifacts(manager: "PodDraftManager", round_num: int) -> None:
@@ -2681,6 +2697,19 @@ def _count_pending_in_round(event_id: str, round_num: int) -> int:
         ).scalar_one() or 0
 
 
+def load_unreported_matches(event_id: str, round_num: int) -> list[tuple[str, str]]:
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(PodDraftMatch.player_a_name, PodDraftMatch.player_b_name)
+            .where(
+                PodDraftMatch.event_id == event_id,
+                PodDraftMatch.round == round_num,
+                PodDraftMatch.winner_name.is_(None),
+            )
+        ).all()
+    return [(a, b) for a, b in rows]
+
+
 def _round_has_rows(event_id: str, round_num: int) -> bool:
     with SessionLocal() as session:
         count = session.execute(
@@ -3923,6 +3952,66 @@ def _missing_deck_mentions(standings, dm_info, deck_data, blocking_keys: set[str
         if key not in seen:
             collect(key)
     return blocking, other
+
+
+def schedule_final_report_ping(manager, round_num: int, *,
+                               delay: float = FINAL_REPORT_PING_DELAY_SECONDS) -> None:
+    """Hold a report-chase ping until `delay` seconds after the final round posts, then mention whoever
+    hasn't reported their match. In-memory only: a restart during the wait drops it."""
+    if manager.final_report_ping_task is not None and not manager.final_report_ping_task.done():
+        return
+    log.info(f"[FINALIZE] final_report_ping.scheduled event={manager.event_id} round={round_num} delay_s={delay:.0f}")
+    manager.final_report_ping_task = asyncio.create_task(_delayed_final_report_ping(manager, round_num, delay))
+
+
+async def _delayed_final_report_ping(manager, round_num: int, delay: float) -> None:
+    try:
+        await asyncio.sleep(max(0.0, delay))
+    except asyncio.CancelledError:
+        return
+    await ping_unreported_final_round(manager, round_num)
+
+
+async def ping_unreported_final_round(manager, round_num: int) -> None:
+    """Post one thread ping mentioning every player whose final-round match is still unreported. Skips
+    silently once the round is fully reported."""
+    event_id = manager.event_id
+    pending = await asyncio.to_thread(load_unreported_matches, event_id, round_num)
+    if not pending:
+        log.info(f"[FINALIZE] final_report_ping.skip event={event_id} reason=all_reported")
+        return
+    dm_info = await asyncio.to_thread(load_dm_info_sync, event_id)
+    discord_ids = _unreported_mention_ids(pending, dm_info)
+    if not discord_ids:
+        log.info(f"[FINALIZE] final_report_ping.skip event={event_id} reason=no_discord_ids")
+        return
+    thread = await manager._fetch_thread()
+    if thread is None:
+        log.info(f"[FINALIZE] final_report_ping.skip event={event_id} reason=no_thread")
+        return
+    round_message = manager.round_messages.get(round_num)
+    jump_url = round_message.jump_url if round_message is not None else None
+    content = build_final_report_ping(discord_ids, round_num, jump_url)
+    try:
+        await thread.send(content=content, allowed_mentions=discord.AllowedMentions(users=True))
+        log.info(f"[FINALIZE] final_report_ping.sent event={event_id} pinged={len(discord_ids)}")
+    except Exception:
+        log.warning(f"[FINALIZE] final_report_ping.error event={event_id}", exc_info=True)
+
+
+def _unreported_mention_ids(pending: list[tuple[str, str]], dm_info) -> list[str]:
+    ids: list[str] = []
+    seen: set[str] = set()
+    for a_name, b_name in pending:
+        for name in (a_name, b_name):
+            if not name:
+                continue
+            info = dm_info.get(normalize_player_name(name))
+            if info is None or not info.discord_id or info.discord_id in seen:
+                continue
+            seen.add(info.discord_id)
+            ids.append(info.discord_id)
+    return ids
 
 
 async def _championship_deadline(manager) -> None:

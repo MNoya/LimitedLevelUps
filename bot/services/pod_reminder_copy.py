@@ -98,3 +98,7 @@ RALLY_NO_POD = (
 )
 
 RALLY_NO_POD_NO_LAUNCHER = "{hello}No pod is gathering right now. Use `/draft` to open one"
+
+FINAL_REPORT_PING = "Please don't forget to report your {round_ref} match result {mentions}"
+FINAL_REPORT_ROUND_LINK = "[__**Round {round_num}**__]({url})"
+FINAL_REPORT_ROUND_PLAIN = "Round {round_num}"

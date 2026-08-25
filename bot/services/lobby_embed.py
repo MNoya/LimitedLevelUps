@@ -26,6 +26,8 @@ from bot.services.pod_tournament import actor_label, is_pod_organizer
 
 log = logging.getLogger("bot.lobby_embed")
 
+VOICE_CARD_LINK = "🔊 [**Join Voice Chat**]({url})"
+
 READY_CHECK_CUSTOM_ID = "pod-draft:ready-check"
 SETTINGS_CUSTOM_ID = "pod-draft:settings"
 FORCE_START_CUSTOM_ID = "pod-draft:force-start"
@@ -630,6 +632,7 @@ def render(
     teams: dict[str, str] | None = None,
     mock: bool = False,
     new_drafters: frozenset[str] = frozenset(),
+    voice_url: str | None = None,
 ) -> discord.Embed:
     """Lobby embed. `title` is the thread/event name; `rsvps_yes` / `rsvps_maybe` are sesh display
     names by RSVP type; `in_session` is Draftmancer sessionUsers as (arena_name,
@@ -651,7 +654,10 @@ def render(
     Unrecognized bucket, `/link-arena`, and `/report-results` all go.
 
     `new_drafters` marks the seats and the waiting roster for players yet to finish a pod, so the room
-    knows who to walk through it before the draft starts."""
+    knows who to walk through it before the draft starts.
+
+    `voice_url` adds a voice-chat link under the header while the pod is gathering, dropped once the
+    draft starts since the draft-end offer takes over there."""
     in_draftmancer = [(arena, dn) for arena, dn in in_session if dn is not None]
     unrecognized = [arena for arena, dn in in_session if dn is None]
     mention_map = display_name_by_mention_id or {}
@@ -735,7 +741,11 @@ def render(
         )
 
     if state != "complete":
-        embed.add_field(name="🤖 Commands", value="\n".join(_command_lines(mock)), inline=False)
+        lines = _command_lines(mock)
+        if voice_url and state != "drafting":
+            lines.append("​")
+            lines.append(VOICE_CARD_LINK.format(url=voice_url))
+        embed.add_field(name="🤖 Commands", value="\n".join(lines), inline=False)
     return embed
 
 

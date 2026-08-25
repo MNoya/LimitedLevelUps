@@ -137,7 +137,9 @@ from bot.services.pod_tournament import (
     refresh_round_pairing_messages,
     start_tournament,
 )
-from bot.services.pod_voice import build_voice_offer_message, free_voice_rooms, pod_voice_channel
+from bot.services.pod_voice import (
+    build_voice_offer_message, free_voice_rooms, pod_voice_channel, pod_voice_channel_url,
+)
 from bot.services.player_stats import leaderboard_seat_order
 from bot.slug import disambiguate_slug, slugify
 
@@ -269,9 +271,9 @@ def notify_seeding_repost(bot, event_id: str) -> None:
 
 def cancel_manager_tasks(manager: "PodDraftManager") -> None:
     """Stop every timer a manager can leave running: the round grace window, the championship deadline,
-    and the two deck-chase waits. Every teardown path has to clear all of them."""
+    the two deck-chase waits, and the final-round report ping. Every teardown path has to clear all of them."""
     for task in (manager.grace_task, manager.championship_task, manager.deck_nudge_task,
-                 manager.deck_ping_task):
+                 manager.deck_ping_task, manager.final_report_ping_task):
         if task is not None and not task.done():
             task.cancel()
 
@@ -442,6 +444,7 @@ class PodDraftManager:
         self.championship_task: asyncio.Task | None = None
         self.deck_nudge_task: asyncio.Task | None = None
         self.deck_ping_task: asyncio.Task | None = None
+        self.final_report_ping_task: asyncio.Task | None = None
         self._end_watchdog_task: asyncio.Task | None = None
         self.sio = socketio.AsyncClient(reconnection=False, logger=False, engineio_logger=False)
         self.sio.on("connect", self._on_connect)
@@ -1477,6 +1480,7 @@ class PodDraftManager:
                 spectators=self.spectator_names,
                 teams=teams,
                 new_drafters=await self._lobby_new_drafters(mention_map),
+                voice_url=pod_voice_channel_url(thread.guild),
                 **self._settings_labels(),
             )
             self._maybe_schedule_lobby_full_prompt(classified)
@@ -3594,7 +3598,7 @@ async def set_event_format(bot: commands.Bot, event_id: str, code: str) -> str |
     if pod_format.cube_id_for(code) is None:
         await asyncio.to_thread(
             pod_event_settings.clear_sync, event_id, pod_event_settings.CARDS_PER_PACK)
-    await _rename_event_thread(bot, event_id, new_name)
+    await rename_event_thread(bot, event_id, new_name)
     return None
 
 
@@ -3608,7 +3612,7 @@ def _persist_format(event_id: str, code: str) -> str | None:
         return new_name
 
 
-async def _rename_event_thread(bot: commands.Bot, event_id: str, name: str) -> None:
+async def rename_event_thread(bot: commands.Bot, event_id: str, name: str) -> None:
     thread_id = await asyncio.to_thread(load_event_thread_id_sync, event_id)
     if thread_id is None:
         return
