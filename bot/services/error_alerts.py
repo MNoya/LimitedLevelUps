@@ -6,7 +6,8 @@ storm of the same failure is one line saying how many, never one message per occ
 
 A WARNING alerts only when it carries a traceback, since the handled-and-logged path is the bot working
 as designed. Discord codes for a message or thread that went away are dropped outright: the daily poll
-cleaning up yesterday's archived threads is not news.
+cleaning up yesterday's archived threads is not news, and a gateway connection reset during a redeploy
+teardown is discord.py reconnecting, not a fault.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ import asyncio
 import logging
 import time
 
+import aiohttp
 import discord
 from discord.ext import commands
 
@@ -108,6 +110,8 @@ def _alertable(record: logging.LogRecord) -> bool:
 
 def _benign(record: logging.LogRecord) -> bool:
     error = record.exc_info[1] if record.exc_info else None
+    if isinstance(error, aiohttp.ClientConnectionError):
+        return True
     return isinstance(error, discord.HTTPException) and error.code in BENIGN_DISCORD_CODES
 
 

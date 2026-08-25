@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import urllib.error
 import urllib.request
 
 from sqlalchemy import and_, or_, select, update
@@ -36,6 +37,12 @@ def fetch_17lands(path: str) -> dict | None:
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.load(response)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            log.info(f"17lands has no detail for {path}")
+            return None
+        log.warning(f"17lands fetch failed for {path}", exc_info=True)
+        return None
     except Exception:
         log.warning(f"17lands fetch failed for {path}", exc_info=True)
         return None
