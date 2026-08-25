@@ -261,23 +261,29 @@ function FloatingOwnRow({
   hidden: boolean;
   onScrollToRow: () => void;
 }) {
-  if (!row || hidden) {
+  if (!row) {
     return null;
   }
   return (
     <div
-      className="sticky z-[5] border-b border-border bg-surface"
-      style={{ top: stickyTop }}
+      className={cn(
+        "sticky z-[5] transition-opacity",
+        hidden ? "pointer-events-none opacity-0" : "opacity-100",
+      )}
+      style={{ top: stickyTop, height: 0 }}
+      aria-hidden={hidden}
     >
-      <div
-        onClick={onScrollToRow}
-        className="cursor-pointer bg-green/[0.07] shadow-[inset_3px_0_0_0_#2ee85c,inset_-3px_0_0_0_#2ee85c]"
-      >
-        {variant === "mobile" ? (
-          <MobileRow row={row} mode={mode} />
-        ) : (
-          <DesktopRow row={row} mode={mode} />
-        )}
+      <div className="border-b border-border bg-surface">
+        <div
+          onClick={onScrollToRow}
+          className="cursor-pointer bg-green/[0.07] shadow-[inset_3px_0_0_0_#2ee85c,inset_-3px_0_0_0_#2ee85c]"
+        >
+          {variant === "mobile" ? (
+            <MobileRow row={row} mode={mode} />
+          ) : (
+            <DesktopRow row={row} mode={mode} />
+          )}
+        </div>
       </div>
     </div>
   );
