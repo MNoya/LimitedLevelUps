@@ -155,14 +155,17 @@ export function LeaderboardTable<T extends LeaderboardTableRow>({
   const isMobile = variant === "mobile";
 
   const [myRowEl, setMyRowEl] = useState<HTMLDivElement | null>(null);
-  const [myRowVisible, setMyRowVisible] = useState(true);
+  const [pinHidden, setPinHidden] = useState(true);
   useEffect(() => {
     if (!myRowEl) {
-      setMyRowVisible(true);
+      setPinHidden(true);
       return;
     }
     const observer = new IntersectionObserver(
-      ([entry]) => setMyRowVisible(entry.isIntersecting),
+      ([entry]) => {
+        const scrolledPast = !entry.isIntersecting && entry.boundingClientRect.top < stickyTop;
+        setPinHidden(!scrolledPast);
+      },
       { rootMargin: `${-stickyTop}px 0px 0px 0px`, threshold: 0 },
     );
     observer.observe(myRowEl);
@@ -184,7 +187,7 @@ export function LeaderboardTable<T extends LeaderboardTableRow>({
           mode={mode}
           variant={variant}
           stickyTop={stickyTop}
-          hidden={myRowVisible}
+          hidden={pinHidden}
           onScrollToRow={() => myRowEl?.scrollIntoView({ behavior: "smooth", block: "center" })}
         />
         {rows.map((r) => {
