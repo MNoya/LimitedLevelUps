@@ -1074,14 +1074,12 @@ async def _settle_card_rsvp(
     )
     if _is_card_surface(interaction.message):
         embed = interaction.message.embeds[0]
+        before = embed.to_dict()
         refresh_roster_fields(
             embed, result.rosters, status_line, result.roster_interests, championship=championship,
             championship_roster=champ_roster, new_drafters=result.new_drafters,
         )
-        try:
-            await interaction.message.edit(embed=embed)
-        except discord.HTTPException:
-            log.warning(f"could not render the clicked card {interaction.message.id}", exc_info=True)
+        await _edit_card_embed(interaction.message, embed, before, "the clicked card")
 
     first_pod = False
     if result.joined and isinstance(interaction.user, discord.Member):
@@ -1434,16 +1432,25 @@ async def _render_channel_card(
     if not _is_card_surface(message):
         return
     embed = message.embeds[0]
+    before = embed.to_dict()
     status_line, championship = await resolve_card_render_state(event_id)
     champ_roster = await resolve_championship_card_roster(event_id, rosters)
     refresh_roster_fields(
         embed, rosters, status_line, roster_interests, championship=championship,
         championship_roster=champ_roster, new_drafters=new_drafters,
     )
+    await _edit_card_embed(message, embed, before, "the channel card")
+
+
+async def _edit_card_embed(
+    message: discord.Message, embed: discord.Embed, before: dict, label: str,
+) -> None:
+    if embed.to_dict() == before:
+        return
     try:
         await message.edit(embed=embed)
     except discord.HTTPException:
-        log.warning(f"could not render the channel card {message_id}", exc_info=True)
+        log.warning(f"could not render {label} {message.id}", exc_info=True)
 
 
 async def fetch_channel(bot: commands.Bot, channel_id: str) -> discord.abc.Messageable | None:

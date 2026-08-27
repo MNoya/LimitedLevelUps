@@ -5,9 +5,8 @@ flush window, each failure reported once per cooldown carrying the count it accu
 storm of the same failure is one line saying how many, never one message per occurrence.
 
 A WARNING alerts only when it carries a traceback, since the handled-and-logged path is the bot working
-as designed. Discord codes for a message or thread that went away are dropped outright: the daily poll
-cleaning up yesterday's archived threads is not news, and a gateway connection reset during a redeploy
-teardown is discord.py reconnecting, not a fault.
+as designed. `BENIGN_DISCORD_CODES` and `_benign` list the failures dropped outright, each labelled
+where it lives.
 """
 from __future__ import annotations
 
@@ -32,6 +31,7 @@ SILENT_LOGGERS = ("bot.services.bot_log", "bot.services.error_alerts")
 BENIGN_DISCORD_CODES = {
     10003: "unknown channel",
     10008: "unknown message",
+    30046: "edit cap on messages over an hour old",
     50083: "thread archived",
 }
 
