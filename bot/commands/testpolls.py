@@ -17,7 +17,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Iterable
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import discord
 from discord.ext import commands
@@ -79,7 +79,9 @@ from bot.services.pod_signals import (
     STATUS_EXPIRED,
     STATUS_FIRED,
     STATUS_OPEN,
+    BONUS_BUCKET,
     bucket_for_lane,
+    is_bonus_time,
     named_bucket_key,
     poll_buckets_for,
     slot_event_time,
@@ -239,20 +241,27 @@ async def setup(bot: commands.Bot) -> None:
 
     @test_group.command(name="rolling")
     @commands.is_owner()
-    async def test_rolling(ctx: commands.Context) -> None:
+    async def test_rolling(ctx: commands.Context, *args: str) -> None:
         """Owner-only. Post the rolling launcher render across its situations as static previews from
         fixtures: a fresh morning board, one lane whose draft started and rolled to tomorrow, both lanes
         rolled, a slot whose sibling format closed unfired, a signup dealt into two tables still taking
         signups, and the handoff (retired On This Day history plus the fresh next-day card), plus the
-        next-day Play Again prompt, whose button is live and joins the soonest open slot of that name. A pod
+        next-day Play Again prompt, whose button is live and joins the soonest open slot of that name, and the
+        busiest board with a Bonus column in both placements, before Early and after Late, and two Bonus
+        pods of different formats as their own columns. A pod
         that started leaves the live board, so the point to check is that each column reads as the slot still
         open rather than as the day behind it; the winners only surface on the retired card, which lists
         every table a split made. The embeds are fixtures: no signals, threads, or jobs. Reuses the
-        production embed and view builders so the preview can't drift from what players see."""
+        production embed and view builders so the preview can't drift from what players see. Name one or more
+        case letters to post only those, so `!test rolling F` posts the busiest board alone."""
         guild = ctx.guild
         channel_id = str(ctx.channel.id)
         set_code = active_set_code()
         today, tomorrow, early, late, early_next, late_next = _rolling_lanes()
+        wanted = {arg.strip().upper() for arg in args if arg.strip()}
+
+        def want(letter: str) -> bool:
+            return not wanted or letter in wanted
 
         def early_today(**kw):
             return _rolling_slot(early, slot_event_time(today, early.key), **kw)
@@ -274,64 +283,98 @@ async def setup(bot: commands.Bot) -> None:
             view = None if closed else PodPollView(slots, guild)
             await ctx.send(embed=build_poll_embed(slots, guild, closed=closed), view=view)
 
-        await show("A. Fresh morning board, both slots gathering today", [
-            early_today(count=_ROLL_COUNT_FULL),
-            late_today(count=_ROLL_COUNT_SMALL),
-        ])
+        def bonus(slot_time, *, code=None, offset=30, **kw):
+            return _rolling_slot(
+                BONUS_BUCKET, slot_time, offset=offset, channel_id=channel_id, set_code=code or set_code,
+                fired=True, locked=False, **kw,
+            )
 
-        await show("B. Early started its draft, so the column drops it and offers tomorrow's Early slot", [
-            early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
-            late_today(count=_ROLL_COUNT_SMALL),
-            early_tom(count=_ROLL_COUNT_SMALL),
-        ])
+        if want("A"):
+            await show("A. Fresh morning board, both slots gathering today", [
+                early_today(count=_ROLL_COUNT_FULL),
+                late_today(count=_ROLL_COUNT_SMALL),
+            ])
 
-        await show("C. Both lanes started, so the full 2x2 is tomorrow's slots and today is off the board", [
-            early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
-            late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
-            early_tom(count=_ROLL_COUNT_SMALL),
-            late_tom(count=_ROLL_COUNT_SMALL),
-        ])
+        if want("B"):
+            await show("B. Early started its draft, so the column drops it and offers tomorrow's Early slot", [
+                early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
+                late_today(count=_ROLL_COUNT_SMALL),
+                early_tom(count=_ROLL_COUNT_SMALL),
+            ])
 
-        await show("C (sibling closed). Early is drafting and the format beside it closed unfired", [
-            early_today(count=_ROLL_COUNT_FULL, **playing),
-            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=12,
-                          fired=True, channel_id=channel_id, set_code=set_code, table=2),
-            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=15,
-                          set_code=pod_format.PEASANT_CODE, closed=True),
-            early_tom(count=_ROLL_COUNT_SMALL),
-            late_today(count=_ROLL_COUNT_SMALL),
-        ])
+        if want("C"):
+            await show("C. Both lanes started, so the full 2x2 is tomorrow's slots and today is off the board", [
+                early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
+                late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
+                early_tom(count=_ROLL_COUNT_SMALL),
+                late_tom(count=_ROLL_COUNT_SMALL),
+            ])
 
-        await show("C (split). One signup dealt into two tables, both still taking signups", [
-            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_FULL, offset=18,
-                          numbered=1, locked=False, **playing),
-            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=24,
-                          numbered=2, locked=False, **playing),
-            late_today(count=_ROLL_COUNT_SMALL),
-        ])
+            await show("C (sibling closed). Early is drafting and the format beside it closed unfired", [
+                early_today(count=_ROLL_COUNT_FULL, **playing),
+                _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=12,
+                              fired=True, channel_id=channel_id, set_code=set_code, table=2),
+                _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=15,
+                              set_code=pod_format.PEASANT_CODE, closed=True),
+                early_tom(count=_ROLL_COUNT_SMALL),
+                late_today(count=_ROLL_COUNT_SMALL),
+            ])
 
-        await ctx.send("**D. Handoff at 11:00, the old card retires to a compact On This Day history**")
-        await ctx.send(embed=build_poll_embed([
-            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_FULL, offset=18,
-                          numbered=1, winner="Finkel", **played),
-            _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=24,
-                          numbered=2, winner="Nassif", **played),
-            late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
-            early_tom(count=_ROLL_COUNT_FULL, winner="Reid", **played),
-        ], guild, closed=True, board_date=today))
-        await show("(new card, posted at the bottom)", [
-            early_tom(count=_ROLL_COUNT_SMALL),
-            late_tom(count=_ROLL_COUNT_SMALL),
-        ])
+            await show("C (split). One signup dealt into two tables, both still taking signups", [
+                _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_FULL, offset=18,
+                              numbered=1, locked=False, **playing),
+                _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=24,
+                              numbered=2, locked=False, **playing),
+                late_today(count=_ROLL_COUNT_SMALL),
+            ])
 
-        next_keys = [
-            named_bucket_key(early_next.key, code)
-            for code in pod_format_schedule.formats_for(tomorrow, early_next.lane)
-        ]
-        embed, view = build_play_again_prompt(next_keys, guild)
-        await ctx.send(
-            "**E. Play Again prompt, posted in a finished pod's thread, offering tomorrow's formats**")
-        await ctx.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+        if want("D"):
+            await ctx.send("**D. Handoff at 11:00, the old card retires to a compact On This Day history**")
+            await ctx.send(embed=build_poll_embed([
+                _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_FULL, offset=18,
+                              numbered=1, winner="Finkel", **played),
+                _rolling_slot(early, slot_event_time(today, early.key), count=_ROLL_COUNT_SMALL, offset=24,
+                              numbered=2, winner="Nassif", **played),
+                late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
+                early_tom(count=_ROLL_COUNT_FULL, winner="Reid", **played),
+            ], guild, closed=True, board_date=today))
+            await show("(new card, posted at the bottom)", [
+                early_tom(count=_ROLL_COUNT_SMALL),
+                late_tom(count=_ROLL_COUNT_SMALL),
+            ])
+
+        if want("E"):
+            next_keys = [
+                named_bucket_key(early_next.key, code)
+                for code in pod_format_schedule.formats_for(tomorrow, early_next.lane)
+            ]
+            embed, view = build_play_again_prompt(next_keys, guild)
+            await ctx.send(
+                "**E. Play Again prompt, posted in a finished pod's thread, offering tomorrow's formats**")
+            await ctx.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+
+        if want("F"):
+            await show("F. Busiest board: Early, Late and a Bonus pod after Late, each with a full roster", [
+                early_today(count=_ROLL_COUNT_FULL),
+                late_today(count=_ROLL_COUNT_FULL),
+                bonus(datetime.combine(today, time(23, 0), tzinfo=SCHEDULE_TZ), count=_ROLL_COUNT_FULL),
+            ])
+
+        if want("G"):
+            await show("G. A Bonus pod before Early sits above the pair", [
+                bonus(datetime.combine(today, time(11, 0), tzinfo=SCHEDULE_TZ), count=_ROLL_COUNT_SMALL),
+                early_today(count=_ROLL_COUNT_FULL),
+                late_today(count=_ROLL_COUNT_FULL),
+            ])
+
+        if want("H"):
+            await show("H. Two Bonus pods of different formats sit as their own columns", [
+                early_today(count=_ROLL_COUNT_FULL),
+                late_today(count=_ROLL_COUNT_FULL),
+                bonus(datetime.combine(today, time(17, 0), tzinfo=SCHEDULE_TZ), count=_ROLL_COUNT_SMALL),
+                bonus(datetime.combine(today, time(23, 0), tzinfo=SCHEDULE_TZ),
+                      code=pod_format.PEASANT_CODE, offset=40, count=_ROLL_COUNT_FULL),
+            ])
 
     @test_group.command(name="launcher")
     @commands.is_owner()
@@ -346,18 +389,22 @@ async def setup(bot: commands.Bot) -> None:
         shown as its roster) so that surface can be eyeballed, and a set or cube code is offered beside the
         latest set so any of them can be driven live without waiting for its date. A second code stages a
         third pod at that same slot the way `/draft` creates one, so the slot carries a pod nobody
-        scheduled beside the two the day offers.
+        scheduled beside the two the day offers. The word `bonus` stages an extra `/draft` pod two hours or
+        more from every slot, so the board grows a Bonus column between Early and Late.
 
         The first seeded player is put on every pod at the staged slot, so the shared marker renders with no
         live clicker on either side."""
         fill = 5
         close = False
+        bonus = False
         formats = []
         for arg in args:
             if arg.isdigit():
                 fill = int(arg)
             elif arg.lower() == "close":
                 close = True
+            elif arg.lower() == "bonus":
+                bonus = True
             else:
                 code = pod_format.resolve_format_code(arg)
                 if code:
@@ -388,6 +435,10 @@ async def setup(bot: commands.Bot) -> None:
             organized = await _stage_organized_pod(ctx, formats[1], slot_time, fill)
             if organized:
                 staged.append(organized)
+        if bonus:
+            bonus_name = await _stage_bonus_pod(ctx, set_code, target_day, now, fill)
+            if bonus_name:
+                staged.append(bonus_name)
         await ctx.send(
             f"Staged **{'** and **'.join(staged)}** at {reflect.name}; posting the live launcher for that day"
         )
@@ -1308,6 +1359,31 @@ async def _stage_organized_pod(
         return None
     seats = [_SHARED_FILL_SEAT, *range(fill, fill + max(0, fill - 1))]
     await _seed_fake_yes(ctx.channel, event_id, slot_time, name, seats)
+    return name
+
+
+async def _stage_bonus_pod(
+    ctx: commands.Context, set_code: str, target_day: date, now: datetime, fill: int,
+) -> str | None:
+    """A `/draft` pod two hours or more from every slot, so the board grows a Bonus column between Early and
+    Late. The first future off-grid hour on the board's day is used, so the pod is always ahead. None when no
+    off-grid hour is left today or the card could not be posted."""
+    bonus_time = None
+    for hour in (11, 17, 23):
+        candidate = datetime.combine(target_day, time(hour, 0), tzinfo=SCHEDULE_TZ)
+        if candidate > now and is_bonus_time(candidate):
+            bonus_time = candidate
+            break
+    if bonus_time is None:
+        return None
+    name = await asyncio.to_thread(pod_launch.ondemand_event_name_sync, set_code, bonus_time)
+    event_id = await post_scheduled_card(
+        ctx.bot, ctx.channel, set_code=set_code, event_time=bonus_time, name=name, ping_role=False,
+        opener=ctx.author,
+    )
+    if event_id is None:
+        return None
+    await _seed_fake_yes(ctx.channel, event_id, bonus_time, name, range(fill))
     return name
 
 

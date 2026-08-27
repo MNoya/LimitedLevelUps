@@ -36,8 +36,11 @@ RSVP_EMOJI = {RSVP_YES: "✅", RSVP_MAYBE: "🤷", RSVP_NO: "❌"}
 
 
 LANE_EARLY = "EARLY"
+LANE_BONUS = "BONUS"
 LANE_LATE = "LATE"
-LANE_ORDER = (LANE_EARLY, LANE_LATE)
+LANE_ORDER = (LANE_EARLY, LANE_BONUS, LANE_LATE)
+
+BONUS_GAP_MINUTES = 120
 
 
 @dataclass(frozen=True)
@@ -66,7 +69,9 @@ WEEKDAY_BUCKETS: tuple[PollBucket, ...] = (
 )
 WEEKEND_BUCKETS: tuple[PollBucket, ...] = (WEEKEND_EARLY_BUCKET, WEEKEND_LATE_BUCKET)
 SATURDAY_BUCKETS: tuple[PollBucket, ...] = (WEEKEND_EARLY_BUCKET, SATURDAY_LATE_BUCKET)
-ALL_BUCKETS: tuple[PollBucket, ...] = WEEKDAY_BUCKETS + WEEKEND_BUCKETS + (SATURDAY_LATE_BUCKET,)
+BONUS_BUCKET = PollBucket("BONUS", "Bonus Pod", "🌟", time(0, 0), "", LANE_BONUS)
+ALL_BUCKETS: tuple[PollBucket, ...] = (
+    WEEKDAY_BUCKETS + WEEKEND_BUCKETS + (SATURDAY_LATE_BUCKET, BONUS_BUCKET))
 
 
 def is_weekend(day: date) -> bool:
@@ -79,6 +84,18 @@ def poll_buckets_for(day: date) -> tuple[PollBucket, ...]:
     if day.weekday() == SATURDAY:
         return SATURDAY_BUCKETS
     return WEEKEND_BUCKETS if is_weekend(day) else WEEKDAY_BUCKETS
+
+
+def is_bonus_time(event_time: datetime) -> bool:
+    """Two hours or more from every slot of its day, so no slot claims it and it reads as a bonus pod."""
+    local = event_time.astimezone(SCHEDULE_TZ)
+    minutes = local.hour * 60 + local.minute
+    nearest = None
+    for bucket in poll_buckets_for(local.date()):
+        gap = abs(minutes - (bucket.start.hour * 60 + bucket.start.minute))
+        if nearest is None or gap < nearest:
+            nearest = gap
+    return nearest is not None and nearest >= BONUS_GAP_MINUTES
 
 
 FORMAT_SEP = "|"

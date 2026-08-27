@@ -15,9 +15,11 @@ def _et(year: int, month: int, day: int, hour: int, minute: int = 0) -> datetime
     [
         (_et(2026, 7, 16, 14, 0), "Early Pod"),
         (_et(2026, 7, 16, 20, 0), "Late Pod"),
-        (_et(2026, 7, 16, 11, 0), "Early Pod"),
-        (_et(2026, 7, 16, 23, 0), "Late Pod"),
-        (_et(2026, 7, 16, 17, 0), "Late Pod"),
+        (_et(2026, 7, 16, 15, 30), "Early Pod"),
+        (_et(2026, 7, 16, 21, 30), "Late Pod"),
+        (_et(2026, 7, 16, 11, 0), "Bonus Pod"),
+        (_et(2026, 7, 16, 17, 0), "Bonus Pod"),
+        (_et(2026, 7, 16, 23, 0), "Bonus Pod"),
     ],
 )
 def test_weekday_slot_label(event_time, expected):
@@ -29,9 +31,9 @@ def test_weekday_slot_label(event_time, expected):
     [
         (_et(2026, 7, 18, 14, 0), "Early Pod"),
         (_et(2026, 7, 18, 20, 0), "Late Pod"),
-        (_et(2026, 7, 18, 8, 0), "Early Pod"),
         (_et(2026, 7, 18, 12, 30), "Early Pod"),
-        (_et(2026, 7, 18, 17, 30), "Late Pod"),
+        (_et(2026, 7, 18, 8, 0), "Bonus Pod"),
+        (_et(2026, 7, 18, 17, 30), "Bonus Pod"),
     ],
 )
 def test_weekend_slot_label(event_time, expected):

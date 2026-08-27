@@ -20,7 +20,7 @@ import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import discord
 from discord.ext import commands
@@ -1382,8 +1382,63 @@ def _board_slots(session: Session, signals: list[PodSignal], signal_date: date) 
     now = datetime.now(timezone.utc)
     slots: list[LauncherSlot] = []
     for lane in pod_signals.LANE_ORDER:
-        slots.extend(_lane_snapshot(session, signals, lane, signal_date, now))
+        if lane == pod_signals.LANE_BONUS:
+            slots.extend(_bonus_slots(session, signals, signal_date))
+        else:
+            slots.extend(_lane_snapshot(session, signals, lane, signal_date, now))
     return slots
+
+
+def _bonus_slots(session: Session, signals: list[PodSignal], board_date: date) -> list[LauncherSlot]:
+    """Off-grid /draft pods no lane reflects, so the board shows them instead of leaving them website-only.
+    Covers the board's own day, the eve it looks ahead to, and any later day a column has rolled into."""
+    days = {board_date, board_date + timedelta(days=LANE_LOOKAHEAD_DAYS)}
+    days |= {signal.signal_date for signal in signals}
+    bonus: list[LauncherSlot] = []
+    for slot_time in _bonus_slot_times(session, days):
+        for event_id in _event_ids_for_slot(session, slot_time):
+            bonus.append(_committed_slot(session, pod_signals.LANE_BONUS, event_id))
+    bonus.sort(key=lambda slot: slot.slot_time or datetime.max.replace(tzinfo=timezone.utc))
+    return _one_joinable_bonus_per_format(bonus)
+
+
+def _one_joinable_bonus_per_format(bonus: list[LauncherSlot]) -> list[LauncherSlot]:
+    """Two bonus pods of one format is not a real state, so keep the earliest joinable one per format and
+    never render a format's join button twice. A spun-off table carries no button and is always kept."""
+    seen: set[str] = set()
+    kept: list[LauncherSlot] = []
+    for slot in bonus:
+        joinable = slot.committed and not slot.locked and slot.card_message_id is not None
+        if joinable and slot.bucket_key in seen:
+            continue
+        if joinable:
+            seen.add(slot.bucket_key)
+        kept.append(slot)
+    return kept
+
+
+def _bonus_slot_times(session: Session, days: set[date]) -> list[datetime]:
+    """The distinct off-grid scheduled-pod times on the board's days, earliest first, bounded to those days so
+    the scan reads the near window rather than every scheduled pod ever."""
+    lo = datetime.combine(min(days), time.min, tzinfo=SCHEDULE_TZ)
+    hi = datetime.combine(max(days) + timedelta(days=1), time.min, tzinfo=SCHEDULE_TZ)
+    rows = session.execute(
+        select(PodSignal.slot_time).where(
+            PodSignal.kind == pod_signals.KIND_SCHEDULED,
+            PodSignal.slot_time >= lo,
+            PodSignal.slot_time < hi,
+        )
+    ).scalars().all()
+    seen: set[datetime] = set()
+    times: list[datetime] = []
+    for slot_time in rows:
+        if slot_time in seen or pod_event_date(slot_time) not in days:
+            continue
+        if not pod_signals.is_bonus_time(slot_time):
+            continue
+        seen.add(slot_time)
+        times.append(slot_time)
+    return sorted(times)
 
 
 def _lane_snapshot(

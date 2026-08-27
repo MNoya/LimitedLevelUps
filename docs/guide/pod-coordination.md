@@ -10,7 +10,9 @@ The bot posts a Daily Pod Launcher every day in the pod channel. It lists the da
 
 - Every day: Early Pod at 2 PM ET, Late Pod at 8 PM ET. On Saturday the Late Pod starts at 9 PM ET.
 
-Times are Eastern. Each slot shows its start as a timestamp in your own timezone, so you never have to convert. The community is global, so pick whichever slot fits your day. Mods can also schedule extra pods at other times, which show up as their own signup posts.
+Times are Eastern. Each slot shows its start as a timestamp in your own timezone, so you never have to convert. The community is global, so pick whichever slot fits your day.
+
+Anyone can schedule an extra pod at another time. One close to a slot joins that slot, and one two hours or more from both slots reads as a Bonus pod. A Bonus pod gets its own column on the launcher, between Early and Late, so you can join it right there and it shows up on the day's record like any other. The column appears only on a day that has one.
 
 Each column moves forward on its own. As soon as a pod's draft starts, it leaves the board and its column starts collecting for the next day's slot, so the board only ever lists pods you can still join. The other column keeps its own day until its pod plays. A fresh launcher posts every morning at 10 AM ET and carries over everyone who already signed up for that day.
 

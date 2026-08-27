@@ -13,6 +13,7 @@ from bot.services.pod_launch import LauncherSlot, create_poll_signals
 from bot.services.pod_signals import (
     KIND_POLL,
     KIND_SCHEDULED,
+    LANE_BONUS,
     LANE_EARLY,
     LANE_LATE,
     SCHEDULE_TZ,
@@ -361,6 +362,30 @@ def test_both_tables_of_a_split_pod_reach_the_column(session, monkeypatch, lates
     slots = pod_launch.launcher_snapshot_sync("today", FRIDAY)
 
     assert [slot.thread_name for slot in slots if slot.committed] == [f"{LATEST} pod 1", f"{LATEST} pod 2"]
+
+
+def test_an_off_grid_pod_reflects_as_a_bonus_slot(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    bonus_time = datetime.combine(FRIDAY, time(17, 0), tzinfo=SCHEDULE_TZ)
+    _seed_pod(session, bonus_time, set_code=LATEST, name=f"{LATEST} Bonus Pod")
+    session.commit()
+
+    slots = pod_launch.launcher_snapshot_sync("today", FRIDAY)
+
+    bonus = [slot for slot in slots if lane_of(slot.bucket_key) == LANE_BONUS]
+    assert [(slot.committed, slot.slot_time) for slot in bonus] == [(True, bonus_time)]
+
+
+def test_two_same_format_bonus_pods_keep_one_joinable_column(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    _seed_pod(session, datetime.combine(FRIDAY, time(11, 0), tzinfo=SCHEDULE_TZ), set_code=LATEST, name="morning")
+    _seed_pod(session, datetime.combine(FRIDAY, time(17, 0), tzinfo=SCHEDULE_TZ), set_code=LATEST, name="evening")
+    session.commit()
+
+    slots = pod_launch.launcher_snapshot_sync("today", FRIDAY)
+
+    bonus = [slot for slot in slots if lane_of(slot.bucket_key) == LANE_BONUS]
+    assert [slot.slot_time for slot in bonus] == [datetime.combine(FRIDAY, time(11, 0), tzinfo=SCHEDULE_TZ)]
 
 
 def test_a_later_signup_at_one_slot_leaves_the_earlier_pod_off_the_column(session, monkeypatch, latest_only):

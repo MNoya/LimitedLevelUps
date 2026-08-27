@@ -14,7 +14,7 @@ from datetime import date, datetime
 
 from bot.services.pod_format import format_display
 from bot.services.pod_schedule import SCHEDULE_TZ
-from bot.services.pod_signals import PollBucket, poll_buckets_for
+from bot.services.pod_signals import BONUS_BUCKET, PollBucket, is_bonus_time, poll_buckets_for
 
 
 COLLISION_INDEX_RE = re.compile(r"#(\d+)\s*$")
@@ -54,7 +54,10 @@ def pod_slot_label(event_time: datetime) -> str:
 def slot_bucket_for(event_time: datetime) -> PollBucket:
     """The poll bucket a pod at this instant belongs to, by weekend and nearest start time. An
     exact-grid pod lands on its own slot; an off-grid `/draft` snaps to the closest slot, ties going
-    to the later one so a mid-afternoon pod reads Late rather than Early."""
+    to the later one so a mid-afternoon pod reads Late rather than Early. A pod two hours or more from
+    every slot belongs to no slot and reads Bonus."""
+    if is_bonus_time(event_time):
+        return BONUS_BUCKET
     local = event_time.astimezone(SCHEDULE_TZ)
     buckets = poll_buckets_for(local.date())
     minutes = local.hour * 60 + local.minute

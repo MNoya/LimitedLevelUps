@@ -111,6 +111,7 @@ from bot.services.pod_launcher_copy import (
 from bot.services.pod_reminder_copy import SLOT_FIRE_PING
 from bot.services.pod_roles import find_role, role_mention
 from bot.services.pod_signals import (
+    LANE_BONUS,
     LANE_EARLY,
     LANE_LATE,
     RSVP_MAYBE,
@@ -357,13 +358,58 @@ def build_poll_embed(
     parts = (heading, intro, _format_legend(codes, guild) if several else "")
     description = "\n".join(part for part in parts if part)
     embed = discord.Embed(description=description, color=discord.Color.green())
-    columns = [_lane_slots(slots, lane) for lane in _lane_order(slots)]
-    for column in columns:
-        value = _clamped_value(_column_value(column, guild))
-        if value:
-            embed.add_field(name=ZWSP, value=value, inline=True)
+    pair = [_lane_slots(slots, lane) for lane in _lane_order(slots) if lane != LANE_BONUS]
+    bonus = _bonus_columns(slots)
+    if bonus and _bonus_placed_first(slots):
+        groups = [bonus, pair]
+    elif bonus:
+        groups = [pair, bonus]
+    else:
+        groups = [pair]
+    _add_column_groups(embed, groups, guild)
     embed.add_field(name=ZWSP, value=_mechanics_note(several), inline=False)
     return embed
+
+
+def _add_column_groups(
+    embed: discord.Embed, groups: list[list[list[pod_launch.LauncherSlot]]], guild: discord.Guild | None,
+) -> None:
+    """Two stacked inline rows are each padded to three cells so their columns line up. Discord sizes a row by
+    its inline count, so unequal rows misalign and a full-width break would leave a band between them. A lone
+    Bonus pod stays full-width, and a board with no Bonus keeps the pair at half width."""
+    rendered = []
+    for group in groups:
+        values = [value for value in (_clamped_value(_column_value(column, guild)) for column in group) if value]
+        if values:
+            rendered.append((group, values))
+    inline_groups = sum(1 for group, _ in rendered if not (len(group) == 1 and _group_is_bonus(group)))
+    stacked = inline_groups >= 2
+    for group, values in rendered:
+        if len(group) == 1 and _group_is_bonus(group):
+            embed.add_field(name=ZWSP, value=values[0], inline=False)
+            continue
+        for value in values:
+            embed.add_field(name=ZWSP, value=value, inline=True)
+        if stacked:
+            for _ in range((-len(values)) % 3):
+                embed.add_field(name=ZWSP, value=ZWSP, inline=True)
+
+
+def _bonus_columns(slots: list[pod_launch.LauncherSlot]) -> list[list[pod_launch.LauncherSlot]]:
+    """One column per format, earliest first, so two bonus pods of different formats read as two columns."""
+    by_format: dict[str | None, list[pod_launch.LauncherSlot]] = {}
+    for slot in _lane_slots(slots, LANE_BONUS):
+        by_format.setdefault(slot.set_code, []).append(slot)
+    columns = list(by_format.values())
+    columns.sort(key=lambda column: min((slot.slot_time for slot in column if slot.slot_time), default=FAR_FUTURE))
+    return columns
+
+
+def _group_is_bonus(group: list[list[pod_launch.LauncherSlot]]) -> bool:
+    for column in group:
+        for slot in column:
+            return lane_of(slot.bucket_key) == LANE_BONUS
+    return False
 
 
 def _title_day(
@@ -469,6 +515,30 @@ def _lane_order(slots: list[pod_launch.LauncherSlot]) -> list[str]:
         if lane is not None and lane not in order:
             order.append(lane)
     return order
+
+
+def _ordered_lanes(slots: list[pod_launch.LauncherSlot]) -> list[str]:
+    """Render order: the Early and Late pair, with Bonus before it when the earliest bonus pod starts before
+    Early and after it otherwise, so the rows read in time order."""
+    fixed = [lane for lane in _lane_order(slots) if lane != LANE_BONUS]
+    if not any(lane_of(slot.bucket_key) == LANE_BONUS for slot in slots):
+        return fixed
+    return [LANE_BONUS] + fixed if _bonus_placed_first(slots) else fixed + [LANE_BONUS]
+
+
+def _bonus_placed_first(slots: list[pod_launch.LauncherSlot]) -> bool:
+    """Whether the earliest bonus pod starts before the day's Early pod, or before Late when no Early column
+    is on the board. Below by default."""
+    bonus_times = [slot.slot_time for slot in slots if lane_of(slot.bucket_key) == LANE_BONUS and slot.slot_time]
+    if not bonus_times:
+        return False
+    reference = _lane_start(slots, LANE_EARLY) or _lane_start(slots, LANE_LATE)
+    return reference is not None and min(bonus_times) < reference
+
+
+def _lane_start(slots: list[pod_launch.LauncherSlot], lane: str) -> datetime | None:
+    times = [slot.slot_time for slot in slots if lane_of(slot.bucket_key) == lane and slot.slot_time]
+    return min(times) if times else None
 
 
 def _lane_slots(slots: list[pod_launch.LauncherSlot], lane: str) -> list[pod_launch.LauncherSlot]:
@@ -889,7 +959,7 @@ class PodPollView(discord.ui.View):
     ) -> None:
         super().__init__(timeout=None)
         pods = 0
-        for lane in _lane_order(slots):
+        for lane in _ordered_lanes(slots):
             lane_slots = _lane_slots(slots, lane)
             for slot in lane_slots:
                 item = _slot_item(slot, guild, lane_slots)
