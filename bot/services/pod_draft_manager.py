@@ -2645,6 +2645,8 @@ class PodDraftManager:
         pairs no matches and reports no results, so an unrecognized seat is a seat like any other."""
         if self.kind != "mock" and any(display is None for _, display in classified):
             return False
+        if self.kind != "mock" and len(classified) % 2 == 1:
+            return False
         return len(classified) >= self._lobby_full_count
 
     @property

@@ -368,6 +368,18 @@ def test_a_full_lobby_arms_the_ready_check_nudge_on_pods_and_mocks():
         assert mgr._lobby_pod_full(classified) is expected
 
 
+def test_an_odd_present_count_never_arms_the_nudge_on_pods():
+    mgr, _ = _ready_manager([])
+    mgr.kind = "pod"
+    mgr.expected_attendee_count = 7
+
+    seven = [(f"p{i}", f"P{i}") for i in range(7)]
+    eight = [(f"p{i}", f"P{i}") for i in range(8)]
+
+    assert mgr._lobby_pod_full(seven) is False
+    assert mgr._lobby_pod_full(eight) is True
+
+
 def test_empty_lobby_is_still_a_hard_block():
     mgr, _ = _ready_manager([])
     mgr.ready_check_active = False

@@ -54,7 +54,7 @@ MSG_MOCK_CARD_SPECTATE_BUTTON = "Spectate"
 MSG_MOCK_CARD_THREAD_BUTTON = "Thread"
 MSG_LOBBY_FULL_PROMPT = "{count} Players in Draftmancer! Initiate Ready Check?"
 MSG_LOBBY_WAITING = (
-    "⌛ {count} in Draftmancer, waiting on {names}\n"
+    "⌛{count} in Draftmancer, waiting on {names}\n"
     "Use **Start Ready Check** on the pinned card once everyone is present"
 )
 MSG_RIDER_SEATS_OPEN = "➡️ {count} seats open at this table {mentions}\nJoin here: <{url}>"
