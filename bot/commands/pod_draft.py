@@ -781,7 +781,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_organizer: bool) -> 
         return await set_event_pick_timer(event_id, int(value))
 
     async def on_picks_per_pack(inter: discord.Interaction, value: str) -> str | None:
-        return await set_event_picks_per_pack(event_id, int(value))
+        return await set_event_picks_per_pack(event_id, int(value), by_user=True)
 
     async def on_packs(inter: discord.Interaction, value: str) -> str | None:
         return await set_event_packs_per_player(event_id, int(value))

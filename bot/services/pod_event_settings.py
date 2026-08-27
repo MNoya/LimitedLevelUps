@@ -19,6 +19,7 @@ from bot.services.pod_confirm import SESSION_SEATS, table_capacity_for
 
 PICK_TIMER = "pick_timer"
 PICKS_PER_PACK = "picks_per_pack"
+PICKS_SET_BY_USER = "picks_set_by_user"
 MAX_PLAYERS = "max_players"
 PACKS_PER_PLAYER = "packs_per_player"
 CARDS_PER_PACK = "cards_per_pack"
@@ -30,6 +31,7 @@ def defaults() -> dict[str, int | None]:
     return {
         PICK_TIMER: settings.pod_draft_pick_timer,
         PICKS_PER_PACK: settings.pod_draft_picks_per_pack,
+        PICKS_SET_BY_USER: False,
         MAX_PLAYERS: settings.pod_draft_max_players,
         PACKS_PER_PLAYER: None,
         CARDS_PER_PACK: None,
@@ -86,6 +88,7 @@ def apply_to_manager(manager, stored: dict[str, int | None]) -> None:
     """Seed a manager from stored setup so the session it opens carries the pod's configuration."""
     manager.pick_timer = stored[PICK_TIMER]
     manager.picks_per_pack = stored[PICKS_PER_PACK]
+    manager.picks_set_by_user = stored[PICKS_SET_BY_USER]
     manager.max_players = stored[MAX_PLAYERS]
     manager.packs_per_player = stored[PACKS_PER_PLAYER]
     manager.cards_per_pack = stored[CARDS_PER_PACK]
@@ -97,6 +100,7 @@ def from_manager(manager) -> dict[str, int | None]:
     return {
         PICK_TIMER: manager.pick_timer,
         PICKS_PER_PACK: manager.picks_per_pack,
+        PICKS_SET_BY_USER: manager.picks_set_by_user,
         MAX_PLAYERS: manager.max_players,
         PACKS_PER_PLAYER: manager.packs_per_player,
         CARDS_PER_PACK: manager.cards_per_pack,

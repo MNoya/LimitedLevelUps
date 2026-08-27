@@ -140,9 +140,11 @@ A table that opens short of six asks pod chat for the players it needs, once. An
 
 From the moment the lobby opens, the bot reads the room every minute and asks the table about the shape it can actually play. It only ever asks. Nothing about a pod changes until the players say so, and everything it says it says once.
 
-A pod whose signups can only ever make 4 is asked as soon as two of them are in the Draftmancer lobby, since waiting cannot make that roster bigger. Every other pod is asked after its start time has passed and the lobby has sat still for two minutes: at 6 the question is Team Draft, at 4 it is Pick 2. Five players are asked nothing, because five is odd and there is no shape to offer. Eight are asked nothing either, since the only thing left is the ready check.
+A pod on a Pick 2 set that opens short of six Yes is asked the moment its lobby opens: the bot posts the Pick 2 card right under the Draftmancer link, so nobody has to find the setting. Five players is still asked, since one can drop to the four a round robin plays. Every other pod is asked after its start time has passed and the lobby has sat still for two minutes: at 6 the question is Team Draft, at 4 it is Pick 2. Eight are asked nothing, since the only thing left is the ready check.
 
 Pick 2 is offered on the sets being tried out for it, HOB and MSH to start with. All 4 have to agree, so Wait is not a verdict: the card stays open, you can change your vote, and someone who wanted to wait can move to Pick 2 once it is clear nobody else is coming. The card also reminds you that `!pod` in another channel calls for more players. Once all 4 agree the pod switches to 2 picks per pack and round robin pairings, both still changeable in Settings. A ready check on a round robin pod does not warn about the short roster, since 4 is the point.
+
+The ready check asks one last time. When a four-player table starts its ready check and nobody has set the mode or pairings by hand, the confirm dialog offers Pick 2 Round Robin the same way a six-player table is offered Team Draft: one button takes it, Keep Pick 1 starts the check as it is. A table that already chose the mode or pairings in Settings is not asked again.
 
 `!pod` inside the thread moves the question to the bottom along with the lobby card, for a choice that conversation has buried.
 

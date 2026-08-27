@@ -34,7 +34,7 @@ from bot.services import pod_vote_card
 
 
 ROUND_ROBIN_PROMPT = "{count} Players in Draftmancer! Make it Pick 2 or Wait?"
-ROUND_ROBIN_SIGNUP_PROMPT = "Only {count} players signed up. Make it Pick 2 or Wait?"
+ROUND_ROBIN_SIGNUP_PROMPT = "{count} players signed up. Make it Pick 2 or Wait?"
 ROUND_ROBIN_GATHERING = "Turns into Pick 2 (Round Robin) with {needed} votes"
 ROUND_ROBIN_SETTINGS_HINT = "Change it in ⚙️ **Settings** anytime"
 ROUND_ROBIN_LOCKED_HEADING = "🔄 Pick 2 is on!"
@@ -84,7 +84,7 @@ def offer_description(pod_size: int, *, from_signups: bool = False) -> str:
 
 def asks_about_signups(embed: discord.Embed) -> bool:
     """Whether this card is the one asking about a four-signup roster instead of a full room"""
-    return ROUND_ROBIN_SIGNUP_PROMPT.split("{", 1)[0] in (embed.description or "")
+    return "signed up" in (embed.description or "")
 
 
 def promoted_from_signups(embed: discord.Embed, pod_size: int) -> discord.Embed:

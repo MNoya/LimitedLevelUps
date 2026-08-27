@@ -421,6 +421,7 @@ class PodDraftManager:
         self.team_vote_offered = False
         self.team_vote_size = 0
         self.pairing_set_by_user = False
+        self.picks_set_by_user = False
         self.round_robin_vote_message: "discord.Message | None" = None
         self.round_robin_vote_offered = False
         self.round_robin_vote_size = 0
@@ -2862,6 +2863,27 @@ class PodDraftManager:
             return False
         return len(self.player_session_users()) == TEAM_VOTE_POD_SIZE
 
+    def offers_pick_2(self) -> bool:
+        """Whether the ready check asks the initiator to make this pod a Pick 2 Round Robin: four players in
+        the Draftmancer lobby, a set that runs Pick 2, and nobody has picked the pairings or the mode"""
+        if self.kind == "mock" or self.drafting or self.draft_complete:
+            return False
+        if self.pairing_set_by_user or self.picks_set_by_user:
+            return False
+        if self.current_round or self.pairing_mode == "roundrobin" or self.picks_per_pack > 1:
+            return False
+        if not pod_format.pick_2_offered_for(self.set_code):
+            return False
+        return len(self.player_session_users()) == settings.pod_round_robin_size
+
+    async def take_pick_2(self, actor: str | None = None) -> str | None:
+        """Move the pod onto Pick 2 Round Robin as the choice `actor` made. Returns an error string when the
+        pod cannot take it, else None"""
+        await self.apply_round_robin_outcome()
+        log.info(f"[RR_VOTE] took_pick_2 event={self.event_id} actor={actor} "
+                 f"seated={len(self.player_session_users())}")
+        return None
+
     async def take_team_draft(self, actor: str | None = None) -> str | None:
         """Move the pod onto Team Draft as the choice `actor` made, so its size never moves it back.
         Returns an error string when the pod cannot take it, else None"""
@@ -4006,10 +4028,18 @@ async def set_event_pick_timer(event_id: str, seconds: int) -> str | None:
         lambda manager, value: manager.apply_pick_timer(value))
 
 
-async def set_event_picks_per_pack(event_id: str, n: int) -> str | None:
-    return await store_setup_value(
+async def set_event_picks_per_pack(event_id: str, n: int, *, by_user: bool = False) -> str | None:
+    """`by_user` marks a person's Settings choice so the four-player Pick 2 offer stops asking them"""
+    error = await store_setup_value(
         event_id, pod_event_settings.PICKS_PER_PACK, n,
         lambda manager, value: manager.apply_picks_per_pack(value))
+    if error is None and by_user:
+        manager = ACTIVE_POD_MANAGERS.get(event_id)
+        if manager is not None:
+            manager.picks_set_by_user = True
+        await asyncio.to_thread(
+            pod_event_settings.store_sync, event_id, **{pod_event_settings.PICKS_SET_BY_USER: True})
+    return error
 
 
 async def set_event_packs_per_player(event_id: str, n: int) -> str | None:

@@ -32,6 +32,7 @@ from bot.discord_helpers import snowflake_or_none
 from bot.database import SessionLocal
 from bot.models import Player, PodDraftEvent, PodDraftMatch, PodDraftParticipant, PodSignal, PodSignalMember
 from bot.services import pod_event_settings
+from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services import pod_team
@@ -2066,6 +2067,18 @@ async def open_ondemand_lobby(
     if manager is not None:
         manager.open_rider_window(len(seated), _mentions(riders))
         await _apply_scheduled_pick_timer(event_id, manager)
+        await _offer_pick_2_at_lobby_open(manager, len(roster), single_table, split, set_code)
+
+
+async def _offer_pick_2_at_lobby_open(
+    manager, yes_count: int, single_table: bool, split: bool, set_code: str,
+) -> None:
+    """Post the Pick 2 vote card at lobby open for a Pick 2 table holding fewer than six Yes"""
+    if single_table or split or yes_count >= settings.pod_signal_fire_threshold:
+        return
+    if not pod_format.pick_2_offered_for(set_code):
+        return
+    await manager.offer_round_robin_vote(pod_size=yes_count, from_signups=True)
 
 
 async def _seated_and_unconfirmed(

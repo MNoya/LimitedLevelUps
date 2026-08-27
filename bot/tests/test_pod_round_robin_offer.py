@@ -24,3 +24,28 @@ def test_other_pods_still_warn_at_four():
 
     assert mgr.ready_check_floor() == settings.pod_draft_min_ready_players
     assert mgr.ready_check_needs_confirm([]) is True
+
+
+def test_ready_check_offers_pick_2_on_a_four_player_pick_2_set():
+    mgr = _lobby_manager(4)
+
+    assert mgr.offers_pick_2() is True
+
+
+def test_pick_2_offer_respects_a_hand_set_mode_or_pairing():
+    mode_set = _lobby_manager(4)
+    mode_set.picks_set_by_user = True
+
+    pairing_set = _lobby_manager(4)
+    pairing_set.pairing_set_by_user = True
+
+    assert mode_set.offers_pick_2() is False
+    assert pairing_set.offers_pick_2() is False
+
+
+def test_pick_2_offer_skips_a_non_pick_2_set_and_off_sizes():
+    other_set = _lobby_manager(4, set_code="EOE")
+    five = _lobby_manager(5)
+
+    assert other_set.offers_pick_2() is False
+    assert five.offers_pick_2() is False

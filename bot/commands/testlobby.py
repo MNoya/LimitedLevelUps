@@ -1090,24 +1090,33 @@ class _AddFormatPreviewModal(discord.ui.Modal, title=pod_format_poll.ADD_MODAL_T
 
 
 class _ReadyCheckPreviewView(discord.ui.View):
-    """Preview-only Ready Check button for `!test readyunlinked` and `!test readyteam`: drives the real
-    warn-but-allow confirm ephemerally, exactly as the initiator sees it, with no live pod behind it. The
-    warning preview is seated one short of the floor and odd, so it carries every warning line at once;
-    `team_offer` seats a clean six and asks the Team Draft question instead."""
+    """Preview-only Ready Check button for `!test readyunlinked`, `!test readyteam` and `!test readypick2`:
+    drives the real warn-but-allow confirm ephemerally, exactly as the initiator sees it, with no live pod
+    behind it. The warning preview is seated one short of the floor and odd, so it carries every warning line
+    at once; `team_offer` seats a clean six and asks the Team Draft question, `pick_2_offer` a four and asks
+    the Pick 2 Round Robin question instead."""
 
-    def __init__(self, *, team_offer: bool = False) -> None:
+    def __init__(self, *, team_offer: bool = False, pick_2_offer: bool = False) -> None:
         super().__init__(timeout=900)
         self.team_offer = team_offer
+        self.pick_2_offer = pick_2_offer
 
     @discord.ui.button(label="Start Ready Check", style=discord.ButtonStyle.success)
     async def ready_check(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         floor = settings.pod_draft_min_ready_players
-        seated = TEAM_VOTE_POD_SIZE if self.team_offer else floor - 1
-        unlinked = [] if self.team_offer else [_UNLINKED_SEAT]
+        if self.team_offer:
+            seated = TEAM_VOTE_POD_SIZE
+        elif self.pick_2_offer:
+            seated = settings.pod_round_robin_size
+        else:
+            seated = floor - 1
+        unlinked = [] if self.team_offer or self.pick_2_offer else [_UNLINKED_SEAT]
         await interaction.response.send_message(
-            ready_check_confirm_text(seated, floor, unlinked, team_offer=self.team_offer),
+            ready_check_confirm_text(
+                seated, floor, unlinked, team_offer=self.team_offer, pick_2_offer=self.pick_2_offer),
             view=ReadyCheckConfirmView(
-                None, None, None, show_link_players=bool(unlinked), team_offer=self.team_offer,
+                None, None, None, show_link_players=bool(unlinked),
+                team_offer=self.team_offer, pick_2_offer=self.pick_2_offer,
             ),
             ephemeral=True,
         )
@@ -1352,7 +1361,7 @@ _LINKED_EIGHT: list[tuple[str, str]] = [
 ]
 _VALID_STATES = (
     "empty", "partial", "linked", "unlinked", "ready", "held", "notready", "titles",
-    "readyunlinked", "readyteam", "readycancel", "waiting",
+    "readyunlinked", "readyteam", "readypick2", "readycancel", "waiting",
     "drafting", "complete", "submit", "deckpanel", "lobby", "lobbyopen", "dmlink", "unlink",
     "podbracket", "podswiss", "podrandom",
     "podteam", "podlobby", "podteamvote", "chat",
@@ -1431,10 +1440,12 @@ def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
         in_session = [row for row in _LINKED_EIGHT if row != _PREVIEW_LEFT_SEAT]
     elif state == "six":
         in_session = list(_LINKED_EIGHT[:TEAM_VOTE_POD_SIZE])
+    elif state == "four":
+        in_session = list(_LINKED_EIGHT[:settings.pod_round_robin_size])
     else:
         in_session = list(_LINKED_EIGHT)
 
-    render_state = "linked" if state == "six" else state
+    render_state = "linked" if state in ("six", "four") else state
     initiated_by = _LINKED_EIGHT[0][1] if render_state in ("ready", "held", "notready") else None
     embed = render_lobby_embed(
         _THREAD_NAME, _RSVPS_YES, _RSVPS_MAYBE, in_session,
@@ -1737,7 +1748,7 @@ async def setup(bot: commands.Bot) -> None:
         Renders the pod-draft lobby embed in this channel.
 
         `state` ∈ empty | partial | linked | unlinked | ready | held | notready |
-        readyunlinked | readyteam | drafting | complete | submit | lobbyopen | podbracket | podswiss |
+        readyunlinked | readyteam | readypick2 | drafting | complete | submit | lobbyopen | podbracket | podswiss |
         podrandom | podteam |
         podlobby | format | seeding | trophyhype | champ | round1 | round2 | round3 | voicelink | linkpicker |
         settings.
@@ -1787,7 +1798,8 @@ async def setup(bot: commands.Bot) -> None:
         and a Draftmancer link. `notready` is the stopped card on its own; `readycancel` walks the whole
         check card lifecycle in order, armed through paused, overdue, stopped, drafting and complete, with
         the thread notice the overdue step posts. `readyunlinked` carries every warning line at once;
-        `readyteam` is the six-player lobby, where the confirm asks whether to make it a Team Draft.
+        `readyteam` is the six-player lobby, where the confirm asks whether to make it a Team Draft;
+        `readypick2` is the four-player lobby, where it asks whether to make it a Pick 2 Round Robin.
         `champ` posts the channel announcement twice, first a ten-player pod (3-0s and 2-1s only, one
         gallery per record) then the eight-player Set Championship (whole field), with #trophy-hype below.
         `titles` stacks every pod embed title, ten to a message and each labelled with the card it heads, so
@@ -1879,6 +1891,11 @@ async def setup(bot: commands.Bot) -> None:
         if state == "readyteam":
             embed, _ = _build("six")
             await ctx.send(embed=embed, view=_ReadyCheckPreviewView(team_offer=True))
+            return
+
+        if state == "readypick2":
+            embed, _ = _build("four")
+            await ctx.send(embed=embed, view=_ReadyCheckPreviewView(pick_2_offer=True))
             return
 
         if state == "waiting":
