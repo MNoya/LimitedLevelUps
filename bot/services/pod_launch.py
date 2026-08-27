@@ -51,6 +51,7 @@ from bot.services.pod_draft_manager import (
     start_manager,
 )
 from bot.services.pod_drafts import (
+    PRE_LAUNCH_STATUSES,
     build_ondemand_session,
     draftmancer_url_for,
     get_cube_choices,
@@ -1985,7 +1986,7 @@ async def open_ondemand_lobby(
         if event is None:
             log.warning(f"open_ondemand_lobby: event {event_id} not found")
             return
-        if event.socket_status not in ("pending", "reminded"):
+        if event.socket_status not in PRE_LAUNCH_STATUSES:
             log.info(f"open_ondemand_lobby: event {event_id} is {event.socket_status}; skipping")
             return
         thread_id = int(event.discord_thread_id)
@@ -2617,7 +2618,7 @@ def _rearm_open_if_pending(bot: commands.Bot, event_id: str, with_fill_jobs: boo
     top of the lobby open; poll and queue pods fire full by construction and skip them."""
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, event_id)
-        if event is None or event.socket_status not in ("pending", "reminded"):
+        if event is None or event.socket_status not in PRE_LAUNCH_STATUSES:
             return False
         event_time = event.event_time
         created_at = event.created_at

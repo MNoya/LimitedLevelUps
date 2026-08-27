@@ -39,6 +39,7 @@ DM_KIND_ROUND = "round_pairing"
 DM_KIND_SUBMIT_DECK = "submit_deck"
 
 FINALIZED_STATUSES = ("draft_done", "complete")
+PRE_LAUNCH_STATUSES = ("pending", "reminded")
 
 TOTAL_ROUNDS = 3
 
@@ -1115,13 +1116,6 @@ def upsert_participant(
     display_name: str,
     draftmancer_name: str | None = None,
 ) -> PodDraftParticipant:
-    """Find-or-create a participant for this event.
-
-    Match priority: existing draftmancer_name (normalized), existing display_name vs supplied draftmancer_name 
-    (normalized), existing display_name vs supplied display_name (normalized).
-    Backfills draftmancer_name and player_id when previously null.
-    Arena-name mismatches fall through to /pod-link-arena.
-    """
     rows = session.execute(
         select(PodDraftParticipant).where(PodDraftParticipant.event_id == event_id)
     ).scalars().all()
@@ -1129,28 +1123,17 @@ def upsert_participant(
     target_dn = normalize_player_name(display_name)
     target_dm = normalize_player_name(draftmancer_name) if draftmancer_name else None
 
-    found: PodDraftParticipant | None = None
-    if target_dm:
-        for row in rows:
-            if row.draftmancer_name and normalize_player_name(row.draftmancer_name) == target_dm:
-                found = row
-                break
-        if found is None:
-            for row in rows:
-                if normalize_player_name(row.display_name) == target_dm:
-                    found = row
-                    break
+    found = _seat_by_name(rows, target_dn, target_dm)
+    matched_by_name = found is not None
+
     if found is None:
-        for row in rows:
-            if normalize_player_name(row.display_name) == target_dn:
-                found = row
-                break
+        found = _seat_by_exact_player(session, rows, target_dn, target_dm)
 
     if found is None:
         found = PodDraftParticipant(event_id=event_id, display_name=display_name)
         session.add(found)
 
-    if draftmancer_name and not found.draftmancer_name:
+    if draftmancer_name and (not found.draftmancer_name or not matched_by_name):
         found.draftmancer_name = draftmancer_name
 
     if found.player_id is None:
@@ -1165,6 +1148,46 @@ def upsert_participant(
 
     session.flush()
     return found
+
+
+def _seat_by_name(
+    rows: list[PodDraftParticipant], target_dn: str, target_dm: str | None,
+) -> PodDraftParticipant | None:
+    if target_dm:
+        for row in rows:
+            if row.draftmancer_name and normalize_player_name(row.draftmancer_name) == target_dm:
+                return row
+        for row in rows:
+            if normalize_player_name(row.display_name) == target_dm:
+                return row
+    for row in rows:
+        if normalize_player_name(row.display_name) == target_dn:
+            return row
+    return None
+
+
+def _seat_by_exact_player(
+    session: Session, rows: list[PodDraftParticipant], target_dn: str, target_dm: str | None,
+) -> PodDraftParticipant | None:
+    seated = {row.player_id for row in rows if row.player_id}
+    if not seated:
+        return None
+    players = session.execute(select(Player).where(Player.id.in_(seated))).scalars().all()
+    by_id = {p.id: p for p in players}
+    for row in rows:
+        player = by_id.get(row.player_id)
+        if player is None:
+            continue
+        if _name_identifies_player(player, target_dn) or (target_dm and _name_identifies_player(player, target_dm)):
+            return row
+    return None
+
+
+def _name_identifies_player(player: Player, norm: str) -> bool:
+    if norm in (player.arena_aliases or []):
+        return True
+    return normalize_player_name(player.display_name or "") == norm \
+        or normalize_player_name(player.discord_username or "") == norm
 
 
 def _player_already_seated(

@@ -310,6 +310,18 @@ def test_a_confirmation_clashes_only_with_a_pod_at_the_same_hour(session, schedu
     assert [(pod.event_id, pod.card_message_id) for pod in clashing] == [(same_hour.id, "9102")]
 
 
+def test_a_pod_already_drafting_is_not_a_clash(session, scheduled_signal, monkeypatch):
+    monkeypatch.setattr(pod_confirm, "SessionLocal", _session_factory(session))
+    confirmed = _pod_starting_in(session, minutes=30)
+    scheduled_signal.event_id = confirmed.id
+    set_rsvp(session, MESSAGE_ID, "u14", "Duke", pod_signals.RSVP_YES, confirming=True)
+    _pod_signed_up_for(session, "u14", minutes=60, message_id="9104", socket_status="connected")
+
+    clashing = pod_confirm.clashing_signups_sync(confirmed.id, "u14")
+
+    assert clashing == []
+
+
 def _pod_starting_in(session, *, minutes: int) -> PodDraftEvent:
     event = PodDraftEvent(
         name=f"Pod in {minutes}", set_code="CUBE", discord_thread_id="77",
@@ -322,8 +334,11 @@ def _pod_starting_in(session, *, minutes: int) -> PodDraftEvent:
     return event
 
 
-def _pod_signed_up_for(session, discord_user_id: str, *, minutes: int, message_id: str) -> PodDraftEvent:
+def _pod_signed_up_for(
+    session, discord_user_id: str, *, minutes: int, message_id: str, socket_status: str = "pending",
+) -> PodDraftEvent:
     event = _pod_starting_in(session, minutes=minutes)
+    event.socket_status = socket_status
     signal = PodSignal(
         kind=pod_signals.KIND_SCHEDULED,
         bucket=pod_signals.SCHEDULED_BUCKET,

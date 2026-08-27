@@ -20,7 +20,7 @@ from bot.commands.messages import (
 )
 from bot.database import SessionLocal
 from bot.models import Player, PodDraftEvent, PodSignal, PodSignalMember
-from bot.services.pod_drafts import new_drafter_column
+from bot.services.pod_drafts import PRE_LAUNCH_STATUSES, new_drafter_column
 from bot.services.pod_signals import KIND_SCHEDULED, RSVP_MAYBE, RSVP_NO, RSVP_YES
 
 
@@ -369,7 +369,8 @@ def clashing_signups_sync(event_id: str, discord_user_id: str) -> list[ClashingS
     pods at one slot time.
 
     Only pods with a scheduled card are found, so an extra table is never read as a rival to the pod it
-    split off: a table carries no card of its own.
+    split off: a table carries no card of its own. A pod already drafting is skipped too: the player is
+    playing it, so a Yes elsewhere cannot move them out of a seat they already hold.
     """
     with SessionLocal() as session:
         confirmed_start = session.execute(
@@ -388,6 +389,7 @@ def clashing_signups_sync(event_id: str, discord_user_id: str) -> list[ClashingS
                 PodSignal.kind == KIND_SCHEDULED,
                 PodDraftEvent.id != event_id,
                 PodDraftEvent.finalized_at.is_(None),
+                PodDraftEvent.socket_status.in_(PRE_LAUNCH_STATUSES),
                 PodDraftEvent.event_time >= confirmed_start - window,
                 PodDraftEvent.event_time <= confirmed_start + window,
             )
