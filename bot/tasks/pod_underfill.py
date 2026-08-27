@@ -49,6 +49,7 @@ from bot.services.pod_drafts import is_championship
 from bot.services.pod_roles import find_role
 from bot.services.pod_draft_manager import set_underfill_fired_hook
 from bot.services.pod_schedule import (
+    CHAT_ANNOUNCE_MARKER,
     build_recruiting_message,
     build_underfill_fired_message,
     short_event_name,
@@ -449,10 +450,13 @@ async def _find_nudge(
     channel: discord.abc.Messageable, signup_url: str, marker: str | None = None,
 ) -> discord.Message | None:
     """The bot's own underfill nudge for a pod, located by the signup link it carries. `marker` narrows
-    the match for launcher slots, whose nudges all link to the one launcher message."""
+    the match for launcher slots, whose nudges all link to the one launcher message. The `/draft`
+    announcement carries the same link, so it is skipped and never edited into a nudge."""
     try:
         async for message in channel.history(limit=NUDGE_SEARCH_LIMIT):
             if message.author.id != _bot.user.id or signup_url not in message.content:
+                continue
+            if CHAT_ANNOUNCE_MARKER in message.content:
                 continue
             if marker is None or marker in message.content:
                 return message

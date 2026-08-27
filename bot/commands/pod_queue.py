@@ -35,7 +35,7 @@ from bot.services.pod_pairing_select import SELECT_PLACEHOLDER as PAIRING_PLACEH
 from bot.services.pod_pairing_select import pairing_options
 from bot.services.ping_roles import announce_pod_grant
 from bot.services.pod_roles import find_role, grant_pod_drafters
-from bot.services.pod_schedule import POD_QUEUE_ROLE_NAME
+from bot.services.pod_schedule import CHAT_ANNOUNCE_MARKER, POD_QUEUE_ROLE_NAME
 from bot.services.pod_slot import pod_display_name, queue_display_name
 from bot.services.pod_settings_view import (
     TIMER_MAX, TIMER_MIN, PodDescriptionModal, description_label, pick_timer_label,
@@ -90,8 +90,11 @@ LAUNCHER_JOIN_HINT = "Join an existing pod instead of starting a new one:"
 LAUNCHER_QUEUE_NAME = "{set_code} Pod Draft Queue"
 LAUNCHER_JOINABLE_LINE = "⚡ **[{name}]({url})**{emoji} {count} waiting"
 LAUNCHER_MORE_LINE = "And {count} more"
-CHAT_ANNOUNCE_SCHEDULED = "{mention} used `/draft`: **{name}** <t:{unix}:R> {manat} [**Sign up here**]({url})"
-CHAT_ANNOUNCE_QUEUE = "{mention} used `/draft`: **{name}** {manat} [**Join here**]({url})"
+CHAT_ANNOUNCE_SCHEDULED = (
+    f"{{mention}} {CHAT_ANNOUNCE_MARKER} {{symbol}} **{{name}}** <t:{{unix}}:R> {{manat}} "
+    "[**Sign up here**]({url})"
+)
+CHAT_ANNOUNCE_QUEUE = f"{{mention}} {CHAT_ANNOUNCE_MARKER} {{symbol}} **{{name}}** {{manat}} [**Join here**]({{url}})"
 LAUNCHER_OPENING = "⏳ Opening the queue..."
 LAUNCHER_SCHEDULING = "⏳ Creating the pod..."
 LAUNCHER_SCHEDULED = "Scheduled for {when}. RSVP card posted: {url}"
@@ -702,10 +705,10 @@ async def _open_queue(
         notify_role=role, description=description,
     )
     await _open_discussion_thread(message, set_code, description, interaction.user, signal_id)
-    queue_name = LAUNCHER_QUEUE_NAME.format(
-        set_code=format_display((set_code or active_set_code()).upper()))
+    resolved_set = (set_code or active_set_code()).upper()
+    queue_name = LAUNCHER_QUEUE_NAME.format(set_code=format_display(resolved_set))
     await _announce_pod(interaction, message.channel.id, CHAT_ANNOUNCE_QUEUE.format(
-        mention=interaction.user.mention, name=queue_name,
+        mention=interaction.user.mention, symbol=_announce_symbol(resolved_set), name=queue_name,
         manat=emojis.get("manat"), url=message.jump_url,
     ))
     result = await asyncio.to_thread(
@@ -825,8 +828,8 @@ async def _schedule_pod(
     log.info(f"scheduled pod {name} for {when.isoformat()} (event {event_id})")
     announced = card_url is not None and await _announce_pod(
         interaction, channel.id, CHAT_ANNOUNCE_SCHEDULED.format(
-            mention=interaction.user.mention, name=name, unix=int(when.timestamp()),
-            manat=emojis.get("manat"), url=card_url))
+            mention=interaction.user.mention, symbol=_announce_symbol(resolved_set), name=name,
+            unix=int(when.timestamp()), manat=emojis.get("manat"), url=card_url))
     if announced:
         await interaction.delete_original_response()
         return
@@ -863,6 +866,11 @@ async def _announce_pod(
         except discord.HTTPException:
             log.warning(f"could not announce the /draft pod in {channel_id}", exc_info=True)
     return posted
+
+
+def _announce_symbol(set_code: str) -> str:
+    symbol = emojis.set_symbol(set_code)
+    return str(symbol) if symbol is not None else "➡️"
 
 
 def _joinable_line(guild: discord.Guild, signal) -> str:
