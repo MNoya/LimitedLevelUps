@@ -216,8 +216,6 @@ def compute_standings(
                 wins[m.winner_id] += 1
                 games_won[m.winner_id] += _BYE_GAMES[0]
                 games_lost[m.winner_id] += _BYE_GAMES[1]
-            if m.loser_id in by_id:
-                losses[m.loser_id] += 1
             continue
         if a not in by_id or b not in by_id:
             continue

@@ -188,6 +188,30 @@ def test_upsert_participant_backfills_player_id(session):
     assert row.player_id is not None
 
 
+def test_upsert_participant_merges_session_name_into_linked_seat(session):
+    _seed_set(session)
+    event = _make_event(session, attendees=())
+    player = _seed_player(session, discord_id="444", username="hopper_47831",
+                          display_name="Hopper // hopsing#73830")
+    player.arena_name = "hopsing#73830"
+    player.arena_aliases = ["hopper // hopsing", "hopsing"]
+    session.add(PodDraftParticipant(
+        event_id=event.id, display_name="hopsing#73830",
+        draftmancer_name="hopsing#73830", player_id=player.id,
+    ))
+    session.flush()
+
+    merged = upsert_participant(session, event.id, display_name="Hopper // hopsing#73830",
+                                draftmancer_name="Hopper // hopsing#73830")
+
+    rows = session.execute(
+        select(PodDraftParticipant).where(PodDraftParticipant.event_id == event.id)
+    ).scalars().all()
+    assert len(rows) == 1
+    assert merged.player_id == player.id
+    assert merged.draftmancer_name == "Hopper // hopsing#73830"
+
+
 def test_upsert_participant_adopts_arena_handle_for_player_without_one(session):
     _seed_set(session)
     event = _make_event(session, attendees=("Bigmits",))

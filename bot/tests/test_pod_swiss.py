@@ -367,7 +367,7 @@ def test_bye_counts_as_a_win_and_leaves_the_dropped_player_no_loss_on_record():
 
     by_id = {s.player_id: s for s in standings}
     assert (by_id["p0"].wins, by_id["p0"].losses) == (1, 0)
-    assert (by_id["p1"].wins, by_id["p1"].losses) == (0, 1)
+    assert (by_id["p1"].wins, by_id["p1"].losses) == (0, 0)
     assert played_record("p0", matches) == (1, 0)
     assert played_record("p1", matches) == (0, 0)
 
