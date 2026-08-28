@@ -2,21 +2,22 @@
 Topic: A directory of the Discord's main sections
 
 **MTG General**
-General Magic talk and news.
-• {#magic-and-chill} — hang out and talk about Magic or other things!
-• {#preview-season} — discuss cards from upcoming sets
+General Magic talk and News
+• {#magic-and-chill} - hang out and chat about Magic or other things!
+• {#preview-season} - discuss cards from upcoming sets
 
 **Events**
-Coordination and discussion for pod drafts and Magic tournaments.
-• {#pod-draft-coordination} — draft with us in our weekly pod drafts!
+Daily Pod Drafts and Tournament discussion
+• {#pod-draft-coordination} - sign up to play with us
+• {#pod-draft-chat} - results and upcoming events
 
 **Limited Level-Ups & Stream**
-Discussion around the podcast, Twitch stream, and related content.
-• {#recent-episode-and-video-discussion} — talk about the latest episode here.
+Discussion around the podcast, stream and related content
+• {#recent-episode-and-video-discussion} - talk about the latest episode here
 
 **MTG Strategy**
-Talk about the latest Limited formats and improving your game.
-• Set-specific discussion lives here — currently: {latest-set-channel}
+Talk about the latest Limited formats and improving your game
+• Latest Set channel: {latest-set-channel}
 • Quick questions about deckbuilding, picks and gameplay:
     {#whats-the-build} | {#whats-the-pick} | {#whats-the-play}
 • In-depth feedback on a draft or deck:
