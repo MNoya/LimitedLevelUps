@@ -71,7 +71,7 @@ def format_options(current_code: str | None) -> list[discord.SelectOption]:
             label=f"Format: {fmt.label}",
             value=fmt.code,
             description=f"CubeCobra: {fmt.cube_id}",
-            emoji=fi.cube_emoji(),
+            emoji=emojis.set_symbol(fmt.code) or fi.cube_emoji(),
             default=(cur == fmt.code.upper()),
         ))
     for seed in recent:

@@ -479,7 +479,7 @@ def _set_options(current: str | None) -> list[discord.SelectOption]:
     for fmt in cubes:
         options.append(discord.SelectOption(
             label=f"Set: {fmt.label}", value=fmt.code, description=f"CubeCobra: {fmt.cube_id}",
-            emoji=fi.cube_emoji(), default=(chosen == fmt.code)))
+            emoji=emojis.set_symbol(fmt.code) or fi.cube_emoji(), default=(chosen == fmt.code)))
     for code in recent:
         options.append(set_select_option(
             code, label=f"Set: {code}", description=set_name_for(code), default=(chosen == code)))
@@ -869,8 +869,7 @@ async def _announce_pod(
 
 
 def _announce_symbol(set_code: str) -> str:
-    symbol = emojis.set_symbol(set_code)
-    return str(symbol) if symbol is not None else "➡️"
+    return str(fi.format_emoji(set_code))
 
 
 def _joinable_line(guild: discord.Guild, signal) -> str:

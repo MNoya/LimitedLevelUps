@@ -1,0 +1,355 @@
+[Settings]
+{
+	"name": "Middle-Earth Masters",
+    "withReplacement": true, "colorBalance": true,
+	"layouts": {
+		"L R U": {
+			"weight": 72,
+			"slots": {
+  				"Land": 1,
+				"Rare": 1,
+				"Uncommon": 4,
+				"Common": 9 
+			}
+		},
+		"B M R": {
+			"weight": 49,
+			"slots": {
+				"Basic": 1,
+				"Mythic": 1,
+				"Rare": 1,
+				"Uncommon": 3,
+				"Common": 9 
+			}
+		},
+		"L R C": {
+			"weight": 36,
+			"slots": {
+  				"Land": 1,
+				"Rare": 1,
+				"Uncommon": 3,
+				"Common": 10
+			}
+		},
+		"B R R": {
+			"weight": 23,
+			"slots": {
+  				"Basic": 1,
+				"Rare": 2,
+				"Uncommon": 3,
+				"Common": 9 
+			}
+		}
+		
+	},
+	"showSlots": true
+}
+[Common]
+1 Dwarven Provisioner (hob) 9
+1 Dwarven Shortsword (hob) 10
+1 Esgaroth Garrison (hob) 13
+1 Lake-town Lookout (hob) 18
+1 Magnificent End (hob) 20
+1 Moment of Glory (hob) 21
+1 Bilbo Baggins, Burglar (hob) 34
+1 Confusticate and Bebother (hob) 35
+1 Enchanted River's Grasp (hob) 39
+1 Lakeshore Apothecary (hob) 43
+1 Long Lake Nuisance (hob) 45
+1 Plunder the Trollshaws (hob) 51
+1 Bilbo's Deadly Slice (hob) 62
+1 Gollum, Silent Slinker (hob) 71
+1 Rage into the Valley (hob) 79
+1 Ravening Warg (hob) 80
+1 Stir Up Trouble (hob) 84
+1 Stony-Voiced Goblins (hob) 85
+1 Dori, Bearer of Friends (hob) 94
+1 Gundabad Opportunist (hob) 101
+1 Óin the Brave (hob) 106
+1 Ragged Short Spear (hob) 108
+1 Smaug, the Great Calamity (hob) 109
+1 Tidings of War (hob) 115
+1 Attercop (hob) 116
+1 Boughside Wanderers (hob) 121
+1 Ordinary Bear (hob) 133
+1 Warg Tactics (hob) 139
+1 Duskwatch Hunter (hob) 153
+1 Mirkwood Nurturer (hob) 160
+1 Nori, Teller of Tales (hob) 161
+1 Patient Instructor (hob) 162
+1 Well-Worn Spatula (hob) 180
+1 Bofur, Reliable Guardian (hob) 6
+1 Elven Raft-Steerer (hob) 37
+1 Lake-town Mariners (hob) 44
+1 Gathering of Darkness (hob) 68
+1 Snowslope Hunter (hob) 112
+1 Fearsome Goblin Pair (hob) 156
+1 Dúnedain Blade (ltr) 6
+1 Banishing Light (hoc) 161
+1 Errand-Rider of Gondor (ltr) 11
+1 Pelargir Survivor (ltr) 64
+1 Haunt of the Dead Marshes (ltr) 90
+1 Night's Whisper (hoc) 189
+1 Merciless Executioner (hoc) 188
+1 Smite the Deathless (ltr) 148
+1 Goblin Fireleaper (ltr) 133
+1 Improvised Club (ltr) 137
+1 Elvish Mystic (hoc) 205
+1 Elvish Visionary (hoc) 206
+1 Wayfarer's Bauble (hoc) 211
+1 Cultivate (ltc) 236
+1 Forbidden Alchemy (ltc) 191
+1 Orchard Strider (ltc) 253
+1 Great Hall of the Citadel (ltr) 254
+1 Eastfarthing Farmer (ltr) 8
+1 Hobbit's Sting (ltr) 20
+1 Westfold Rider (ltr) 37
+1 Protector of Gondor (ltr) 25
+1 Escape from Orthanc (ltr) 12
+1 Deceive the Messenger (ltr) 47
+1 Isolation at Orthanc (ltr) 57
+1 Cirith Ungol Patrol (ltr) 80
+1 Easterling Vanguard (ltr) 83
+1 Shelob's Ambush (ltr) 108
+1 Orcish Medicine (ltr) 104
+1 Dunland Crebain (ltr) 82
+1 Rally at the Hornburg (ltr) 142
+1 Quarrel's End (ltr) 141
+1 Warbeast of Gorgoroth (ltr) 152
+1 Ent's Fury (ltr) 164
+1 Stew the Coneys (ltr) 189
+1 Many Partings (ltr) 176
+1 Mushroom Watchdogs (ltr) 180
+1 Lembas (ltr) 243
+1 Wizard's Rockets (ltr) 252
+1 Peregrin Took (ltr) 181
+1 Glorious Gale (ltr) 51
+1 Consider (ltc) 187
+1 Treason of Isengard (ltr) 74
+1 Beorn, Reluctant Host (hob) 118
+1 Wose Pathfinder (ltr) 190
+1 Haradrim Spearmaster (ltr) 135
+1 Landroval, Horizon Witness (ltr) 21
+1 Morgul-Knife Wound (ltr) 98
+1 Gimli's Fury (ltr) 131
+1 Gimli's Axe (ltr) 130
+1 Revive the Shire (ltr) 185
+1 Knights of Dol Amroth (ltr) 59
+[Uncommon]
+1 Crude Bent Blade (hob) 63
+1 Goblin Plate Mail (hob) 157
+1 Celebrate the Mountain-king (hob) 7
+1 Dáin, Lord of the Iron Hills (hob) 8
+1 Iron Hills Blacksmith (hob) 16
+1 Lake-town Toymaker (hob) 19
+1 The Mountain-king's Return (hob) 22
+1 Stone by Sunlight (hob) 27
+1 Bilbo, Luckwearer (hob) 32
+1 Master's Councillors (hob) 47
+1 Ravenhill Flock (hob) 52
+1 Gnashing of Teeth (hob) 69
+1 Gollum the Abandoned (hob) 72
+1 Great Ugly-Looking Goblin (hob) 74
+1 Nighthowl Pursuer (hob) 78
+1 Bombur, Gentle Dreamer (hob) 88
+1 Bothersome Noisemaker (hob) 89
+1 Burn, Burn, Tree and Fern (hob) 90
+1 Dwarven Mauler (hob) 95
+1 Gandalf, Spark Starter (hob) 97
+1 Glóin the Mighty (hob) 99
+1 Beorn's Hospitality (hob) 120
+1 Mirkwood Pathmaker (hob) 129
+1 Nasty Little Rabbit (hob) 130
+1 Old Fat Spider (hob) 132
+1 Troll Negotiations (hob) 138
+1 Woodland Weavemaster (hob) 143
+1 Bifur, Melodic Rider (hob) 147
+1 The Chief Warg (hob) 150
+1 Eagle's Rescue (hob) 155
+1 Large Bear (hob) 159
+1 Silvan Reveler (hob) 163
+1 Thorin Oakenshield (hob) 165
+1 Thranduil, Sindarin Liege (hob) 166
+1 Dwarven Mattock (hob) 172
+1 Key to the Side-Door (hob) 175
+1 Thrór's Map (hob) 179
+1 Belladonna Took (hob) 4
+1 Most Decrepit Old Bird (hob) 49
+1 The Master of Lake-town (hob) 77
+1 The Sackville-Bagginses (hob) 83
+1 Cantankerous Keepers (hob) 122
+1 Down in the Valley (hob) 124
+1 Elven Passage (hob) 181
+1 Reprieve (ltr) 26
+1 Mentor of the Meek (hoc) 170
+1 Eagles of the North (ltr) 7
+1 Lórien Revealed (ltr) 60
+1 Troll of Khazad-dûm (ltr) 111
+1 Oliphaunt (ltr) 139
+1 Tireless Provisioner (ltc) 262
+1 Harmonize (ltc) 248
+1 Dawn of Hope (ltc) 164
+1 Boon of the Wish-Giver (ltc) 185
+1 Revenge of Ravens (ltc) 207
+1 Goblin Dark-Dwellers (ltc) 219
+1 Prince Imrahil the Fair (ltr) 219
+1 Bard the Bowman (hob) 145
+1 The Mouth of Sauron (ltr) 216
+1 Sauron's Ransom (ltr) 225
+1 Mauhúr, Uruk-hai Captain (ltr) 214
+1 Bolg's Company (hob) 149
+1 Friendly Rivalry (ltr) 204
+1 Strider, Ranger of the North (ltr) 232
+1 Frodo Baggins (ltr) 205
+1 Samwise Gamgee (ltr) 222
+1 Shadow Summoning (ltr) 226
+1 Denethor, Ruling Steward (ltr) 198
+1 Gandalf's Sanction (ltr) 208
+1 Gandalf the Grey (ltr) 207
+1 Old Man Willow (ltr) 217
+1 Merry, Esquire of Rohan (ltr) 215
+1 Growth Spiral (ltc) 267
+1 The Torment of Gollum (ltr) 110
+1 Bill the Pony (ltr) 3
+1 Éowyn, Lady of Rohan (ltr) 10
+1 Rosie Cotton of South Lane (ltr) 27
+1 Shire Shirriff (ltr) 30
+1 Horses of the Bruinen (ltr) 55
+1 Ioreth of the Healing House (ltr) 56
+1 Meneldor, Swift Savior (ltr) 62
+1 Saruman's Trickery (ltr) 68
+1 The Bath Song (ltr) 40
+1 Stern Scolding (ltr) 71
+1 Saruman the White (ltr) 67
+1 Gothmog, Morgul Lieutenant (ltr) 87
+1 Grond, the Gatebreaker (ltr) 89
+1 March from the Black Gate (ltr) 94
+1 Voracious Fell Beast (ltr) 113
+1 Éomer of the Riddermark (ltr) 121
+1 Fiery Inscription (ltr) 126
+1 Foray of Orcs (ltr) 128
+1 Grishnákh, Brash Instigator (ltr) 134
+1 Dúnedain Rangers (ltr) 159
+1 Meriadoc Brandybuck (ltr) 177
+1 Quickbeam, Upstart Ent (ltr) 183
+1 Galadriel, Gift-Giver (ltr) 296
+1 Phial of Galadriel (ltr) 248
+1 Goldberry, River-Daughter (ltr) 52
+1 Glóin, Dwarf Emissary (ltr) 132
+1 Legolas, Master Archer (ltr) 173
+1 Deep Analysis (ltc) 188
+1 Goblin Cratermaker (hoc) 194
+1 Faithless Looting (ltc) 215
+1 Oath of the Grey Host (ltr) 101
+[Land]
+1 Hobbit Hole (hob) 184
+1 Glacial Fortress (ltc) 315
+1 Drowned Catacomb (ltc) 305
+1 Dragonskull Summit (ltc) 304
+1 Sunpetal Grove (ltc) 336
+1 Isolated Chapel (ltc) 318
+1 Sulfur Falls (ltc) 333
+1 Woodland Cemetery (ltc) 346
+1 Clifftop Retreat (ltc) 300
+1 Hinterland Harbor (ltc) 317
+1 Rootbound Crag (c16) 317
+1 Ash Barrens (ltc) 295
+[Rare]
+1 Desolation Prowler (hob) 64
+1 Down, Down to Goblin-town (hob) 65
+1 Kíli the Resourceful (hob) 17
+1 The Queen of Dale (hob) 24
+1 Elrond, Moon-Reader (hob) 36
+1 Great Gilded Boat (hob) 42
+1 Uncover the Moon-Letters (hob) 57
+1 Head of the Hunt (hob) 75
+1 Inside Information (hob) 76
+1 Supper for Spiders (hob) 86
+1 Balin, Loremaster (hob) 87
+1 Dáin Ironfoot (hob) 91
+1 Desolation of Smaug (hob) 93
+1 The Misty Mountains Cold (hob) 104
+1 Stone-Giant of High Pass (hob) 113
+1 Bejeweled Warg (hob) 117
+1 Radagast of Rhosgobel (hob) 136
+1 Through the Forest Gate (hob) 137
+1 Chief Warg's Company (hob) 151
+1 Dáin's Company (hob) 152
+1 Dwalin, Weaponmaster (hob) 154
+1 The Great Goblin (hob) 158
+1 Smaug, Wicked Worm (hob) 164
+1 Thranduil's Company (hob) 168
+1 Glamdring, Foe-hammer (hob) 174
+1 My Precious (hob) 176
+1 The Lonely Mountain (hob) 187
+1 Galadriel's Dismissal (ltc) 500
+1 Minas Tirith (ltr) 256
+1 Thorin, King of Durin's Folk (hoc) 3
+1 Lotho, Corrupt Shirriff (ltr) 213
+1 Rivendell (ltr) 259
+1 Flame of Anor (ltr) 203
+1 Languish (hoc) 187
+1 Elvish Warmaster (khm) 167
+1 Mirkwood Elk (hoc) 210
+1 The Shire (ltr) 260
+1 Hostage Taker (ltc) 268
+1 Vanquisher's Banner (ltc) 289
+1 Siege-Gang Commander (ltc) 228
+1 Pippin, Guard of the Citadel (ltr) 218
+1 Bard, King of Dale (hob) 144
+1 Doors of Durin (ltr) 199
+1 Aragorn and Arwen, Wed (hoc) 28
+1 The Balrog, Durin's Bane (ltr) 195
+1 Shelob, Child of Ungoliant (ltr) 230
+1 Mind into Matter (sos) 202
+1 War of the Last Alliance (ltr) 36
+1 Fear, Fire, Foes! (ltr) 125
+1 Fall of Gil-galad (ltr) 165
+1 Barad-dûr (ltr) 253
+1 Forge Anew (ltr) 17
+1 The Battle of Bywater (ltr) 2
+1 Rangers of Ithilien (ltr) 66
+1 Raise the Palisade (ltc) 23
+1 Delighted Halfling (ltr) 158
+1 Gandalf, White Rider (pltc) 2
+1 Scroll of Isildur (ltr) 69
+[Mythic]
+1 The Eagles Are Coming! (hob) 12
+1 Fíli the Pathfinder (hob) 14
+1 An Unexpected Party (hob) 29
+1 Bilbo, Thief in the Night (hob) 33
+1 Gollum, Riddle Master (hob) 70
+1 Rhovanion Rampager (hob) 82
+1 Gandalf, Goblins' Bane (hob) 96
+1 Smaug the Magnificent (hob) 110
+1 Thorin, Mountain-king (hob) 114
+1 Beorn the Fierce (hob) 119
+1 Dancing from Dark to Dawn (hob) 123
+1 Bard's Company (hob) 146
+1 The Arkenstone (hob) 170
+1 Relic of Sauron (ltc) 79
+1 Shadow of the Enemy (ltr) 107
+1 Minas Morgul, Dark Fortress (hoc) 48
+1 Andúril, Narsil Reforged (hoc) 40
+1 Sauron, the Lidless Eye (hoc) 37
+1 Tom, Bert, and William (hob) 169
+1 Éowyn, Fearless Knight (ltr) 201
+1 Galadriel, Light of Valinor (ltc) 542
+1 Aragorn, the Uniter (ltr) 192
+1 Radagast the Brown (ltr) 184
+1 Mystic Confluence (ltc) 193
+1 Spiteful Banditry (ltr) 149
+1 Last March of the Ents (ltr) 172
+1 Minas Tirith Garrison (hoc) 180
+1 Pact of Negation (ltc) 523
+[Basic]
+1 Plains (hob) 189
+1 Island (hob) 190
+1 Swamp (hob) 191
+1 Mountain (hob) 192
+1 Forest (hob) 193
+1 Plains (hob) 194
+1 Island (hob) 195
+1 Swamp (hob) 196
+1 Mountain (hob) 197
+1 Forest (hob) 198

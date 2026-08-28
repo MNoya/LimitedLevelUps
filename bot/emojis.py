@@ -5,6 +5,7 @@ import logging
 import discord
 from discord.ext import commands
 
+from bot.services.pod_format import symbol_glyph_for
 from bot.sets import CUBE_CODE, cube_glyph_emoji_name, cube_variant_for_board, is_cube_board_code
 
 
@@ -27,8 +28,13 @@ def set_symbol(code: str) -> discord.Emoji | None:
     board takes its cube's registry glyph, and any cube board whose glyph is not uploaded falls back
     to the shared cube symbol."""
     found = _EMOJIS.get(code.lower()) or _EMOJIS.get(code.upper())
-    if found is not None or not is_cube_board_code(code):
+    if found is not None:
         return found
+    custom_glyph = symbol_glyph_for(code)
+    if custom_glyph is not None:
+        return _EMOJIS.get(custom_glyph)
+    if not is_cube_board_code(code):
+        return None
     variant = cube_variant_for_board(code)
     glyph = _EMOJIS.get(cube_glyph_emoji_name(variant)) if variant is not None else None
     return glyph or _EMOJIS.get(CUBE_CODE.lower())

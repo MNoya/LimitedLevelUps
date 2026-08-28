@@ -800,21 +800,50 @@ class PodDraftManager:
         do while a cube keeps every color present. An import overwrites the flag from the imported list, so it
         is re-asserted on every format emit.
         """
+        card_list = pod_format.card_list_for(self.set_code)
+        if card_list is not None:
+            err = await self._parse_custom_card_list(card_list)
+            if err is not None:
+                await self._post_format_error(err)
+            return err
         cube_id = pod_format.cube_id_for(self.set_code)
         if cube_id is not None:
             err = await self._import_cube(cube_id)
             if err is not None:
-                thread = await self._fetch_thread()
-                if thread is not None:
-                    try:
-                        await thread.send(f"⚠️ {err}")
-                    except Exception:
-                        log.warning(f"[LIFECYCLE] import_cube.thread_post_error event={self.event_id}", exc_info=True)
+                await self._post_format_error(err)
                 return err
         else:
             await self.sio.emit("setUseCustomCardList", False)
             await self.sio.emit("setRestriction", [self.set_code.lower()])
         await self.sio.emit("setColorBalance", cube_id is not None)
+        return None
+
+    async def _post_format_error(self, err: str) -> None:
+        thread = await self._fetch_thread()
+        if thread is None:
+            return
+        try:
+            await thread.send(f"⚠️ {err}")
+        except Exception:
+            log.warning(f"[LIFECYCLE] format.thread_post_error event={self.event_id}", exc_info=True)
+
+    async def _parse_custom_card_list(self, card_list: str) -> str | None:
+        """Load a Draftmancer custom card list into the session (owner-only). The list's [Settings] block
+        owns the layouts and color balance, so no setColorBalance follows this."""
+        result = await self._emit_with_ack("parseCustomCardList", card_list, timeout_s=30.0)
+        error_text = _ack_error_text(result)
+        if error_text is not None:
+            log.warning(
+                f"[LIFECYCLE] parse_custom_card_list.failed event={self.event_id} set={self.set_code} "
+                f"error={error_text!r}"
+            )
+            await bot_log_mod.get(self.bot).post(
+                f"parseCustomCardList failed for event `{self.event_id}` (`{self.set_code}`): {error_text}",
+                fingerprint=f"parse_card_list_failed:{self.event_id}",
+                tag="LIFECYCLE",
+            )
+            return f"Couldn't load the {self.set_code} card list in Draftmancer: {error_text}"
+        log.info(f"[LIFECYCLE] parse_custom_card_list.ok event={self.event_id} set={self.set_code}")
         return None
 
     async def _import_cube(self, cube_id: str) -> str | None:

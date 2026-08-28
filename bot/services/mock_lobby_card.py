@@ -46,7 +46,7 @@ from bot.commands.messages import (
 from bot.config import settings
 from bot.discord_helpers import NBSP, quote_block
 from bot.services.lobby_embed import event_title
-from bot.services.pod_format import is_custom
+from bot.services.pod_format import is_custom, symbol_glyph_for
 from bot.services.pod_join_button import build_mock_join_view
 from bot.services.pod_signals import inactivity_window_text
 from bot.sets import is_cube_board_code
@@ -138,8 +138,13 @@ def card_name(event_name: str) -> str:
 def set_symbol_url(set_code: str) -> str | None:
     """The set symbol the website serves, used as the card thumbnail. Every cube board and custom cube
     shares the one cube symbol, matching how `pod_schedule_image` and the app emojis resolve them."""
-    cube = is_cube_board_code(set_code) or is_custom(set_code)
-    name = CUBE_SYMBOL if cube else set_code.lower()
+    glyph = symbol_glyph_for(set_code)
+    if glyph is not None:
+        name = glyph
+    elif is_cube_board_code(set_code) or is_custom(set_code):
+        name = CUBE_SYMBOL
+    else:
+        name = set_code.lower()
     base = settings.public_site_url.rstrip("/")
     return f"{base}/set-symbols/{name}.png" if base else None
 

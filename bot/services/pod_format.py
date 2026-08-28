@@ -12,11 +12,13 @@ The selector UI that drives this lives in `lobby_embed.FormatSelectView`.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from bot.sets import ALL_SETS, active_set_code, is_known_set, set_name_for
 
 
 CUBECOBRA_LIST_URL = "https://cubecobra.com/cube/list/{cube_id}"
+CUSTOM_FORMAT_DIR = Path(__file__).resolve().parent.parent / "data" / "custom_formats"
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,9 @@ class PodFormat:
     session_slug: str
     link_text: str
     pick_label: str
+    card_list_file: str | None = None
+    symbol_glyph: str | None = None
+    command_name: str | None = None
 
     @property
     def url(self) -> str:
@@ -41,12 +46,26 @@ PEASANT_SESSION_SLUG = "Peasant"
 PEASANT_LINK_TEXT = "Peasant"
 PEASANT_PICK_LABEL = "Daneelius' Peasant"
 
-# Registered custom (CubeCobra) pod formats, keyed by the code stored in pod_draft_events.set_code.
+MEMA_CODE = "MEMA"
+MEMA_LABEL = "Middle-Earth Masters"
+MEMA_CUBE_ID = "MEMA"
+MEMA_SESSION_SLUG = "MEMA"
+MEMA_LINK_TEXT = "Middle-Earth Masters"
+MEMA_PICK_LABEL = "Middle-Earth Masters"
+
+# Registered custom pod formats, keyed by the code stored in pod_draft_events.set_code. A cube_id
+# alone loads a CubeCobra cube via importCube; a card_list_file loads a Draftmancer custom card list
+# whose own [Settings] block owns the layouts and color balance.
 CUSTOM_FORMATS: dict[str, PodFormat] = {
     PEASANT_CODE: PodFormat(
         PEASANT_CODE, PEASANT_LABEL, PEASANT_CUBE_ID, PEASANT_SESSION_SLUG, PEASANT_LINK_TEXT,
-        PEASANT_PICK_LABEL),
+        PEASANT_PICK_LABEL, command_name="peasant"),
+    MEMA_CODE: PodFormat(
+        MEMA_CODE, MEMA_LABEL, MEMA_CUBE_ID, MEMA_SESSION_SLUG, MEMA_LINK_TEXT, MEMA_PICK_LABEL,
+        card_list_file="mema.txt", symbol_glyph="mema", command_name="mema"),
 }
+
+_CARD_LIST_CACHE: dict[str, str] = {}
 
 SELECT_PLACEHOLDER = "Select a format"
 FORMAT_LOCKED_MSG = "The format can't be changed once the draft has started"
@@ -89,6 +108,25 @@ def is_latest_set(code: str | None) -> bool:
 def cube_id_for(code: str) -> str | None:
     fmt = CUSTOM_FORMATS.get(code.upper())
     return fmt.cube_id if fmt else None
+
+
+def card_list_for(code: str | None) -> str | None:
+    """The Draftmancer custom card list text for a format that ships one, read once and cached. None for
+    a plain set or a CubeCobra import, which route through setRestriction/importCube instead."""
+    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    if fmt is None or fmt.card_list_file is None:
+        return None
+    cached = _CARD_LIST_CACHE.get(fmt.code)
+    if cached is None:
+        cached = (CUSTOM_FORMAT_DIR / fmt.card_list_file).read_text(encoding="utf-8")
+        _CARD_LIST_CACHE[fmt.code] = cached
+    return cached
+
+
+def symbol_glyph_for(code: str | None) -> str | None:
+    """The keyrune glyph a custom format renders its set symbol with; None falls back to the cube symbol."""
+    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    return fmt.symbol_glyph if fmt else None
 
 
 def session_slug_for(code: str | None) -> str | None:
@@ -168,6 +206,14 @@ def cube_list_link(code: str | None) -> str | None:
     if fmt is None:
         return None
     return f"[__**{fmt.cube_id}**__]({fmt.url})"
+
+
+def command_hint(code: str | None) -> str | None:
+    """The `!<name>` prefix command that reprints a custom format's links, for a compact card hint."""
+    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    if fmt is None or fmt.command_name is None:
+        return None
+    return f"!{fmt.command_name}"
 
 
 def format_applied_message(code: str) -> str:

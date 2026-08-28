@@ -52,7 +52,7 @@ from bot.commands.messages import (
     MSG_POD_REMOVED,
 )
 from bot.database import SessionLocal
-from bot.discord_helpers import NBSP, RenderQueue, ordinal, run_detached
+from bot.discord_helpers import EM_SPACE, NBSP, RenderQueue, ordinal, run_detached
 from bot.services.lobby_embed import SettingsButton
 from sqlalchemy import select
 
@@ -409,7 +409,7 @@ def build_rsvp_embed(
         return _with_created_by(embed, created_by)
     calendar_url = google_calendar_url(name, event_time)
     if starts_now:
-        middle = None
+        middle = _cube_list_line(set_code).lstrip("\n") or None
     elif status_line is not None:
         middle = status_line
     elif announcement is not None:
@@ -465,7 +465,11 @@ def _cube_list_line(set_code: str | None) -> str:
     link = pod_format.cube_list_link(set_code)
     if link is None:
         return ""
-    return f"\n{CARD_CUBE_LIST.format(emoji=fi.format_emoji(set_code), link=link)}"
+    line = CARD_CUBE_LIST.format(emoji=fi.format_emoji(set_code), link=link)
+    hint = pod_format.command_hint(set_code)
+    if hint is not None:
+        line = f"{line}{EM_SPACE * 2}{hint}"
+    return f"\n{line}"
 
 
 def _multipod_suffix(rosters: dict[str, list[str]]) -> str:

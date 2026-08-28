@@ -1,18 +1,20 @@
-"""Generate and upload Discord application emojis from the keyrune / mana icon fonts.
+"""Generate and upload Discord application emojis from the keyrune / mana icon fonts or a local PNG.
 
-Each argument is ``source:glyph[:name]`` — source is ``keyrune`` or ``mana``, glyph is the icon's
-filename in that font's ``svg/`` directory, name is the application-emoji name (defaults to the
-glyph with non-alphanumeric characters stripped). Glyphs are recolored white and rasterized like
-the site's set symbols, then uploaded to the application DISCORD_BOT_TOKEN belongs to, so the same
-invocation seeds the test and production apps. An emoji whose name already exists is skipped;
-pass ``--force`` to replace it.
+Each argument is ``source:glyph[:name]`` — source is ``keyrune``, ``mana`` or ``file``. For a font
+source, glyph is the icon's filename in that font's ``svg/`` directory; the glyph is recolored white
+and rasterized like the site's set symbols. For ``file``, glyph is a path to a PNG that is trimmed,
+fit into a 128px transparent square, and uploaded as is. Name defaults to the glyph basename with
+non-alphanumeric characters stripped. Uploads target the application DISCORD_BOT_TOKEN belongs to,
+so the same invocation seeds the test and production apps. An emoji whose name already exists is
+skipped; pass ``--force`` to replace it.
 
 Example:
-    python -m bot.scripts.upload_app_emojis keyrune:8ed mana:dfc-day:dfcday mana:dfc-night:dfcnight
+    python -m bot.scripts.upload_app_emojis keyrune:8ed mana:dfc-day:dfcday file:art/mema.png:mema
 """
 from __future__ import annotations
 
 import base64
+import io
 import re
 import shutil
 import sys
@@ -70,6 +72,8 @@ def upload(specs: list[tuple[str, str, str]], force: bool) -> int:
 
 
 def _render_glyph(source: str, glyph: str, name: str) -> bytes | None:
+    if source == "file":
+        return _render_file(glyph)
     url = SVG_URLS[source].format(glyph=glyph)
     try:
         with urllib.request.urlopen(url, timeout=20) as resp:
@@ -86,12 +90,37 @@ def _render_glyph(source: str, glyph: str, name: str) -> bytes | None:
         return png_path.read_bytes()
 
 
+def _render_file(path: str) -> bytes | None:
+    src = Path(path)
+    if not src.is_file():
+        return None
+    return fit_square_png(src.read_bytes(), EMOJI_PX)
+
+
+def fit_square_png(raw: bytes, size: int) -> bytes:
+    """Trim transparent margins and center the image on a transparent square of `size` px."""
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(raw)).convert("RGBA")
+    bbox = image.getbbox()
+    if bbox is not None:
+        image = image.crop(bbox)
+    scale = size / max(image.width, image.height)
+    resized = image.resize((max(1, round(image.width * scale)), max(1, round(image.height * scale))), Image.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.paste(resized, ((size - resized.width) // 2, (size - resized.height) // 2), resized)
+    out = io.BytesIO()
+    canvas.save(out, format="PNG", optimize=True)
+    return out.getvalue()
+
+
 def parse_spec(arg: str) -> tuple[str, str, str] | None:
     parts = arg.split(":")
-    if len(parts) not in (2, 3) or parts[0] not in SVG_URLS:
+    if len(parts) not in (2, 3) or (parts[0] not in SVG_URLS and parts[0] != "file"):
         return None
     source, glyph = parts[0], parts[1]
-    name = parts[2] if len(parts) == 3 else re.sub(r"[^A-Za-z0-9_]", "", glyph)
+    default_name = re.sub(r"[^A-Za-z0-9_]", "", Path(glyph).stem if source == "file" else glyph)
+    name = parts[2] if len(parts) == 3 else default_name
     return source, glyph, name
 
 
@@ -101,16 +130,16 @@ def main(argv: list[str]) -> int:
     if not args:
         print("usage: upload_app_emojis [--force] source:glyph[:name] ...", file=sys.stderr)
         return 1
-    if shutil.which("inkscape") is None:
-        print("inkscape not found on PATH", file=sys.stderr)
-        return 1
     specs = []
     for arg in args:
         spec = parse_spec(arg)
         if spec is None:
-            print(f"bad spec {arg!r}; expected source:glyph[:name] with source keyrune|mana", file=sys.stderr)
+            print(f"bad spec {arg!r}; expected source:glyph[:name] with source keyrune|mana|file", file=sys.stderr)
             return 1
         specs.append(spec)
+    if any(source != "file" for source, _glyph, _name in specs) and shutil.which("inkscape") is None:
+        print("inkscape not found on PATH", file=sys.stderr)
+        return 1
     return upload(specs, force)
 
 

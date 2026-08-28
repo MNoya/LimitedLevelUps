@@ -175,10 +175,43 @@ const peasantMatches: PodEventMatchRow[] = podSos3Fixture.matches.map((m) => ({
   reportedAt: m.reportedAt,
 }));
 
+const MEMA_EVENT_ID = "mock-mema-1";
+const MEMA_NAME = "Middle-Earth Masters Pod Draft #1";
+
+const memaSummaries: PodEventSummary[] = [
+  {
+    ...summaryFromFixture(),
+    eventId: MEMA_EVENT_ID,
+    slug: "middle-earth-masters-pod-draft-1",
+    name: MEMA_NAME,
+    setCode: "MEMA",
+    eventDate: "2026-09-04",
+    eventTime: "2026-09-04T20:00:00Z",
+    formatLabel: "Middle-Earth Masters",
+  },
+];
+
+const memaParticipants: PodEventParticipantRow[] = podSos3Fixture.participants.map((p) => ({
+  ...participantToRow(p),
+  eventId: MEMA_EVENT_ID,
+}));
+
+const memaMatches: PodEventMatchRow[] = podSos3Fixture.matches.map((m) => ({
+  eventId: MEMA_EVENT_ID,
+  eventName: MEMA_NAME,
+  round: m.round,
+  playerAName: m.playerA,
+  playerBName: m.playerB,
+  winnerName: m.winner,
+  score: m.score,
+  reportedAt: m.reportedAt,
+}));
+
 export const podEventsFixture: PodEventSummary[] = [
   summaryFromFixture(),
   ...extraSummaries,
   ...peasantSummaries,
+  ...memaSummaries,
 ];
 
 const mockParticipants: PodEventParticipantRow[] = podSos3Fixture.participants.map((p, i) => ({
@@ -192,6 +225,7 @@ const mockParticipants: PodEventParticipantRow[] = podSos3Fixture.participants.m
 export const podEventParticipantsFixture: PodEventParticipantRow[] = [
   ...podSos3Fixture.participants.map(participantToRow),
   ...peasantParticipants,
+  ...memaParticipants,
   ...mockParticipants,
 ];
 
@@ -243,6 +277,7 @@ export const podEventMatchesFixture: PodEventMatchRow[] = [
     reportedAt: m.reportedAt,
   })),
   ...peasantMatches,
+  ...memaMatches,
   ...inProgressMatches,
 ];
 
@@ -284,10 +319,12 @@ function leaderboardRowsForSet(setCode: string): Omit<PodLeaderboardRow, "rank">
 export const podLeaderboardFixtureRaw: Omit<PodLeaderboardRow, "rank">[] = [
   ...leaderboardRowsForSet(podSos3Fixture.setCode),
   ...leaderboardRowsForSet("PEASANT"),
+  ...leaderboardRowsForSet("MEMA"),
 ];
 
 export const podSetCodesFixture = [
   { code: "SOS", label: null, events: 3 },
   { code: "MSH", label: null, events: 3 },
   { code: "PEASANT", label: "Peasant Cube", events: 2 },
+  { code: "MEMA", label: "Middle-Earth Masters", events: 1 },
 ];

@@ -31,7 +31,7 @@ from bot.scoring import (
 from bot.services.active_set import resolve_board_set
 from bot.services.pod_deck_color import PAIR_EMOJI_NAME
 from bot.services.pod_drafts import POD_TROPHY_WINS, pod_record_wins, pod_summary_by_set_for_player
-from bot.services.pod_format import PEASANT_CODE, PEASANT_LABEL
+from bot.services.pod_format import PEASANT_CODE, custom_formats, is_custom, label_for
 from bot.services.self_reported_events import rank_self_reported_events
 from bot.sets import (
     ALL_SETS,
@@ -633,11 +633,17 @@ def process_leaderboard_for_pod(
     return _pod_board(session, viewer_discord_id, top_n, set_code=magic_set.code, set_name=magic_set.name)
 
 
+def process_leaderboard_for_custom(
+    session: Session, code: str, viewer_discord_id: str | None, top_n: int = 10,
+) -> LeaderboardData:
+    """A custom-format pod board: a single season-long board, independent of the selected set."""
+    return _pod_board(session, viewer_discord_id, top_n, set_code=code, set_name=label_for(code) or code)
+
+
 def process_leaderboard_for_peasant(
     session: Session, viewer_discord_id: str | None, top_n: int = 10,
 ) -> LeaderboardData:
-    """Peasant Cube pod board: a single season-long board, independent of the selected set."""
-    return _pod_board(session, viewer_discord_id, top_n, set_code=PEASANT_CODE, set_name=PEASANT_LABEL)
+    return process_leaderboard_for_custom(session, PEASANT_CODE, viewer_discord_id, top_n)
 
 
 def process_leaderboard_for_mtgo(session: Session, set_code: str, top_n: int = 25) -> LeaderboardData:
@@ -1234,19 +1240,19 @@ class _FilterButton(discord.ui.Button):
 def _player_url(
     slug: str, set_code: str | None = None, filter_type: str | None = None, filter_value: str | None = None,
 ) -> str:
-    if set_code == PEASANT_CODE:
-        return _peasant_board_url()
+    if is_custom(set_code):
+        return _custom_board_url(set_code)
     return player_url(slug, set_code) + _site_query(filter_type, filter_value)
 
 
-def _peasant_board_url() -> str:
-    return f"{settings.public_site_url.rstrip('/')}/pods/{PEASANT_CODE}"
+def _custom_board_url(code: str) -> str:
+    return f"{settings.public_site_url.rstrip('/')}/pods/{code.upper()}"
 
 
 def board_site_url(set_code: str | None, filter_type: str | None, filter_value: str | None) -> str:
-    """Public-site URL for a board: the Peasant pods page, or the set page plus the filter query."""
-    if set_code == PEASANT_CODE:
-        return _peasant_board_url()
+    """Public-site URL for a board: a custom-format pods page, or the set page plus the filter query."""
+    if is_custom(set_code):
+        return _custom_board_url(set_code)
     base = settings.leaderboard_url
     set_base = base if set_code is None or set_code == active_set_code() else f"{base}/{set_code}"
     return set_base + _site_query(filter_type, filter_value)
@@ -1909,19 +1915,20 @@ class Leaderboard(commands.Cog):
         in_guild = interaction.guild is not None
         ephemeral = in_guild
 
-        # set:PEASANT → the season-long Peasant Cube pod board, posted as a snapshot
-        if set is not None and set.upper() == PEASANT_CODE:
+        # set:PEASANT / MEMA / … → a season-long custom-format pod board, posted as a snapshot
+        if set is not None and is_custom(set):
+            code = set.upper()
             if format is not None or color is not None:
                 await interaction.response.send_message(
-                    f"Format and color filters aren't available for `{PEASANT_CODE}`", ephemeral=ephemeral,
+                    f"Format and color filters aren't available for `{code}`", ephemeral=ephemeral,
                 )
                 return
             await interaction.response.defer()
             with SessionLocal() as session:
-                data = process_leaderboard_for_peasant(session, viewer_discord_id=user_id)
+                data = process_leaderboard_for_custom(session, code, viewer_discord_id=user_id)
             await interaction.followup.send(
                 embed=render_public_embed(data),
-                view=render_view(set_code=PEASANT_CODE, include_filter=False),
+                view=render_view(set_code=code, include_filter=False),
             )
             return
 
@@ -2070,8 +2077,9 @@ class Leaderboard(commands.Cog):
             code = cube_board_code(variant.slug)
             if cur in code or cur in variant.name.upper():
                 matches.append(app_commands.Choice(name=cube_list_name(variant), value=code))
-        if cur in PEASANT_CODE or cur in PEASANT_LABEL.upper():
-            matches.append(app_commands.Choice(name=f"{PEASANT_CODE} — {PEASANT_LABEL}", value=PEASANT_CODE))
+        for fmt in custom_formats():
+            if cur in fmt.code or cur in fmt.label.upper():
+                matches.append(app_commands.Choice(name=f"{fmt.code} — {fmt.label}", value=fmt.code))
         matches += [
             app_commands.Choice(name=f"{s.code} — {s.name}", value=s.code)
             for s in reversed(ALL_SETS)

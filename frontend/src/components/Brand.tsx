@@ -150,6 +150,12 @@ const KEYRUNE_OVERRIDES: Record<string, string> = {
   IPA: "inv",
 };
 
+// Boards whose symbol is a bespoke PNG rather than a Keyrune font glyph, rendered as an <img>
+const IMG_GLYPH_SRC: Record<string, string> = {
+  EVG: LLU_LOGO_SRC,
+  MEMA: `${import.meta.env.BASE_URL}set-symbols/mema.png`,
+};
+
 export function keyruneClass(code: string): string {
   return KEYRUNE_OVERRIDES[code] ?? code.toLowerCase();
 }
@@ -184,12 +190,16 @@ export function glyphSpec(code: string): { className: string; scale: number } {
   return { className: `ss ss-${glyph}`, scale: 1 };
 }
 
-// Custom pod cube formats have no Keyrune glyph of their own; fall back to the generic cube symbol.
+// Custom pod cube formats have no Keyrune glyph of their own; fall back to the generic cube symbol
+// unless the code carries its own override or bespoke image.
 export function setGlyphCode(set: { code: string; custom?: boolean; glyphCode?: string }): string {
   if (set.glyphCode) {
     return set.glyphCode;
   }
-  return set.custom ? "CUBE" : set.code;
+  if (set.custom && !(set.code in KEYRUNE_OVERRIDES) && !(set.code in IMG_GLYPH_SRC)) {
+    return "CUBE";
+  }
+  return set.code;
 }
 
 export function SetGlyph({ code, size = 18, className = "text-white" }: { code: string; size?: number; className?: string }) {
@@ -200,8 +210,8 @@ export function SetGlyph({ code, size = 18, className = "text-white" }: { code: 
       style={{ width: size, height: size }}
       aria-hidden="true"
     >
-      {code === "EVG" ? (
-        <img src={LLU_LOGO_SRC} alt="" style={{ width: size, height: size }} className="block object-contain" />
+      {IMG_GLYPH_SRC[code] ? (
+        <img src={IMG_GLYPH_SRC[code]} alt="" style={{ width: size, height: size }} className="block object-contain" />
       ) : (
         <i className={`${glyph.className} ${className}`} style={{ fontSize: size * glyph.scale, lineHeight: 1 }} />
       )}
