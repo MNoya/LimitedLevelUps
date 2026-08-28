@@ -991,9 +991,15 @@ export async function fetchPlayerProfile(
   }
   // Pods score flat (no weight/rate/confidence) — append as its own breakdown row
   let podTrophies = 0;
+  let podEvents = 0;
+  let podWins = 0;
+  let podLosses = 0;
   if (podResp.data) {
     const p = podResp.data as Record<string, unknown>;
     podTrophies = (p.trophies as number) ?? 0;
+    podEvents = (p.events as number) ?? 0;
+    podWins = (p.wins as number) ?? 0;
+    podLosses = (p.losses as number) ?? 0;
     const twoWins = (p.two_win_finishes as number) ?? 0;
     const oneWins = (p.one_win_finishes as number) ?? 0;
     const pts = podPoints(podTrophies, twoWins, oneWins);
@@ -1002,9 +1008,9 @@ export async function fetchPlayerProfile(
         setCode,
         slug,
         formatLabel: "Pod",
-        events: (p.events as number) ?? 0,
-        wins: (p.wins as number) ?? 0,
-        losses: (p.losses as number) ?? 0,
+        events: podEvents,
+        wins: podWins,
+        losses: podLosses,
         trophies: podTrophies,
         twoWins,
         oneWins,
@@ -1012,6 +1018,8 @@ export async function fetchPlayerProfile(
       });
     }
   }
+  // podOnlyHeadline already carries the pod totals, so only fold pods in on top of the 17lands row
+  const foldPods = Boolean(headlineResp.data);
   const board = await fetchLeaderboard(setCode);
   const inBoard = board.find((r) => r.slug === slug);
   return {
@@ -1022,9 +1030,9 @@ export async function fetchPlayerProfile(
     rank: inBoard?.rank ?? 0,
     score: inBoard?.score ?? 0,
     trophies: headline.trophies + podTrophies,
-    events: headline.events,
-    wins: headline.wins,
-    losses: headline.losses,
+    events: headline.events + (foldPods ? podEvents : 0),
+    wins: headline.wins + (foldPods ? podWins : 0),
+    losses: headline.losses + (foldPods ? podLosses : 0),
     linked17lands: Boolean(headlineResp.data),
     lastCalculatedAt: headline.lastCalculatedAt || undefined,
     formatBreakdown: breakdown,
@@ -1085,6 +1093,9 @@ export async function fetchLifetimeProfile(slug: string): Promise<PlayerProfile 
     const w = num(r, "wins");
     const l = num(r, "losses");
     const t = num(r, "trophies");
+    events += e;
+    wins += w;
+    losses += l;
     podTrophies += t;
     bump(r.set_code as string, (c) => ({ ...c, events: c.events + e, wins: c.wins + w, losses: c.losses + l, trophies: c.trophies + t }));
   }

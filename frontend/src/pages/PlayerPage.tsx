@@ -379,15 +379,12 @@ function LifetimePlayer({
 
   const setsPlayed = profile.setsPlayed ?? [];
   const seasonRow = seasonFilter !== "ALL" ? setsPlayed.find((sp) => sp.setCode === seasonFilter) : undefined;
-  const headline = seasonRow ?? profile;
-  const wp = winPct(headline.wins, headline.losses);
-  const stats: StatStripStats = {
-    trophies: headline.trophies,
-    events: headline.events,
-    wins: headline.wins,
-    losses: headline.losses,
-    score: 0,
-  };
+  const filtersActive = formatFilter !== "ALL" || colorsFilter !== "ALL";
+  const base = seasonFilter !== "ALL" ? (seasonRow ?? { trophies: 0, events: 0, wins: 0, losses: 0 }) : profile;
+  const stats: StatStripStats = filtersActive
+    ? statsFromEvents(events)
+    : { trophies: base.trophies, events: base.events, wins: base.wins, losses: base.losses, score: 0 };
+  const wp = winPct(stats.wins, stats.losses);
   const trophiesLabel = profile.selfReportedEvents.some((e) => e.isTrophy) ? "17L TROPHIES" : "TROPHIES";
   const updated = profile.lastCalculatedAt ? lastUpdated(profile.lastCalculatedAt) : null;
 
@@ -416,22 +413,12 @@ function LifetimePlayer({
               <span className="shrink-0 font-display text-[16px] tracking-[0.18em] text-muted">ALL SETS</span>
             )}
           </div>
-          {stats.events > 0 && (
-            <div className="mt-[18px] grid gap-[5px] grid-cols-4">
-              <StatChip
-                label={trophiesLabel}
-                value={
-                  <span className="flex items-center gap-[3px]">
-                    <Trophy size={12} color="#ffc63a" />
-                    {stats.trophies}
-                  </span>
-                }
-              />
-              <StatChip label="EVENTS" value={stats.events} />
-              <StatChip label="RECORD" value={`${stats.wins}–${stats.losses}`} />
-              <StatChip label="WIN %" value={`${wp}%`} />
-            </div>
-          )}
+          <div className="mt-[18px] grid gap-[5px] grid-cols-4">
+            <StatChip label={trophiesLabel} value={trophyChipValue(stats.trophies)} />
+            <StatChip label="EVENTS" value={eventsChipValue(stats.events)} />
+            <StatChip label="RECORD" value={recordChipValue(stats.wins, stats.losses)} />
+            <StatChip label="WIN %" value={winRateChipValue(stats.wins, stats.losses, wp)} />
+          </div>
         </section>
         <div className="flex items-stretch border-b border-border bg-surface h-11">
           <LeftPaneTab active={mobileTab === "sets"} onClick={() => setMobileTab("sets")} className="flex-1 justify-center">SET HISTORY</LeftPaneTab>
@@ -1015,7 +1002,7 @@ function NoSetData({
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 min-w-0">
               {identity && (
-                <AAvatar displayName={identity.displayName} avatarUrl={identity.avatarUrl} size={64} green />
+                <AAvatar displayName={identity.displayName} avatarUrl={identity.avatarUrl} size={84} green />
               )}
               {identity && (
                 <h1
@@ -1345,6 +1332,22 @@ function statsFromEvents(events: PlayerDraftEvent[]): StatStripStats {
   return { trophies, events: countedEvents, wins, losses, score: computeScore(rows) };
 }
 
+const emptyStat = <span className="text-dim">—</span>;
+
+const trophyChipValue = (trophies: number) =>
+  trophies > 0 ? (
+    <span className="flex items-center gap-[3px]">
+      <Trophy size={12} color="#ffc63a" />
+      {trophies}
+    </span>
+  ) : (
+    emptyStat
+  );
+
+const eventsChipValue = (events: number) => (events > 0 ? events : emptyStat);
+const recordChipValue = (wins: number, losses: number) => (wins + losses > 0 ? `${wins}–${losses}` : emptyStat);
+const winRateChipValue = (wins: number, losses: number, wp: string) => (wins + losses > 0 ? `${wp}%` : emptyStat);
+
 function aggregate(
   events: PlayerDraftEvent[],
   selfReported: readonly SelfReportedEvent[] = [],
@@ -1514,7 +1517,7 @@ function Desktop({
               <TrackerStatsBlock slug={profile.slug} setCode={profile.setCode} accountId={trackerAccount} />
             )}
             <ManualTrophiesBlock trophies={profile.selfReportedEvents} />
-            {profile.linked17lands && profile.events > 0 && (
+            {profile.events > 0 && (
               <StatStrip
                 stats={stats}
                 wp={wp}
@@ -2573,7 +2576,7 @@ function EventLogRow({
       </span>
       <div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          {setColumn && <SetGlyph code={e.setCode} size={13} className="text-white/85" />}
+          {setColumn && <SetGlyph code={e.setCode} size={16} className="text-white/85" />}
           {!podWithoutDeck && <Pips colors={e.colors} size={11} />}
           <span className="font-display text-[13px] tracking-[0.08em]">
             {highlightEventLabel(formatLabel)}
@@ -2844,20 +2847,14 @@ function Mobile({
           </div>
         </div>
 
-        {profile.linked17lands && profile.events > 0 && (
         <div className={cn("mt-[18px] grid gap-[5px]", ranked ? "grid-cols-5" : "grid-cols-4")}>
           <StatChip
             label={profile.selfReportedEvents.some((e) => e.isTrophy) ? "17L TROPHIES" : "TROPHIES"}
-            value={
-              <span className="flex items-center gap-[3px]">
-                <Trophy size={12} color="#ffc63a" />
-                {stats.trophies}
-              </span>
-            }
+            value={trophyChipValue(stats.trophies)}
           />
-          <StatChip label="EVENTS" value={stats.events} />
-          <StatChip label="RECORD" value={`${stats.wins}–${stats.losses}`} />
-          <StatChip label="WIN %" value={`${wp}%`} />
+          <StatChip label="EVENTS" value={eventsChipValue(stats.events)} />
+          <StatChip label="RECORD" value={recordChipValue(stats.wins, stats.losses)} />
+          <StatChip label="WIN %" value={winRateChipValue(stats.wins, stats.losses, wp)} />
           {ranked && (
             <StatChip
               label="POINTS"
@@ -2868,7 +2865,6 @@ function Mobile({
             />
           )}
         </div>
-        )}
       </section>
 
       {(hasBreakdown || trackerMode) && (
