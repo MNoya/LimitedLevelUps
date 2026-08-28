@@ -400,7 +400,7 @@ def _bonus_columns(slots: list[pod_launch.LauncherSlot]) -> list[list[pod_launch
     by_format: dict[str | None, list[pod_launch.LauncherSlot]] = {}
     for slot in _lane_slots(slots, LANE_BONUS):
         by_format.setdefault(slot.set_code, []).append(slot)
-    columns = list(by_format.values())
+    columns = [column for column in by_format.values() if _gathering_groups(column)]
     columns.sort(key=lambda column: min((slot.slot_time for slot in column if slot.slot_time), default=FAR_FUTURE))
     return columns
 
