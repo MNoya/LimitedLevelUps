@@ -74,6 +74,21 @@ def test_ingest_fresh_backfills_late_video_onto_podcast_row(session):
     assert row.category == "Metagame"
 
 
+def test_ingest_fresh_drops_standalone_video_when_podcast_claims_it(session):
+    now = datetime(2026, 6, 20, tzinfo=timezone.utc)
+    standalone = _row("yt:abc123", "Draft Guide", now, "Metagame")
+    standalone.kind = "video"
+    standalone.youtube_id = "abc123"
+    session.add(standalone)
+    session.commit()
+
+    item = _item("pod-1", "Draft Guide", now)
+    item.youtube_id = "abc123"
+    _ingest_fresh(session, [item])
+
+    assert set(session.execute(select(Episode.guid)).scalars()) == {"pod-1"}
+
+
 def test_ingest_fresh_leaves_already_videoed_rows_untouched(session):
     now = datetime(2026, 6, 20, tzinfo=timezone.utc)
     row = _row("pod-1", "Original title", now, "Coaching")

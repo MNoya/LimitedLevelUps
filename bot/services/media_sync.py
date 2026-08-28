@@ -287,8 +287,19 @@ def _ingest_fresh(session: Session, items: list[_Item]) -> SyncResult:
                 continue
         _assign(row, item)
         applied.append(item)
+    _prune_matched_video_twins(session, items)
     session.commit()
     return _result(applied)
+
+
+def _prune_matched_video_twins(session: Session, items: list[_Item]) -> None:
+    """Drop a standalone ``yt:<id>`` row once its podcast claims the same video"""
+    twin_guids = [f"yt:{item.youtube_id}" for item in items if item.kind == "episode" and item.youtube_id]
+    if not twin_guids:
+        return
+    twins = session.execute(select(Episode).where(Episode.guid.in_(twin_guids))).scalars()
+    for twin in twins:
+        session.delete(twin)
 
 
 def _assign(row: Episode, item: _Item) -> None:
