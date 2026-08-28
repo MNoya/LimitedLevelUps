@@ -4,7 +4,7 @@
 // fetch logic, fixtures, or supabase. Wired through TanStack Query so caching
 // keys, stale-time, and idle prefetch sit in one place.
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import {
@@ -24,6 +24,9 @@ import {
   fetchTrophyLeaderboard,
   fetchOtherColorsLeaderboard,
   fetchPlayerDraftEvents,
+  fetchLifetimeDraftEvents,
+  fetchLifetimeProfile,
+  LIFETIME_EVENTS_PAGE,
   fetchPlayerIdentity,
   fetchPlayerSlugByDiscordId,
   fetchPlayerProfile,
@@ -49,6 +52,7 @@ import {
 } from "./api";
 import { fetchDiscordStats } from "./discord";
 import { fetchYouTubeVideos, overlayLiveMedia, toVideoEpisode, type YouTubeVideo } from "./youtube";
+import { assignEpisodeSlugs } from "./episodes";
 import type { P0P1BallotRow, P0P1Pick, SlotKey } from "../types/p0p1";
 import type { FeaturedContest } from "./p0p1Slots";
 import { resolveContestByCode, resolveFeaturedContest } from "./p0p1Slots";
@@ -97,7 +101,7 @@ export function useMediaFeed() {
     if (!db.data) {
       return undefined;
     }
-    return overlayLiveMedia(db.data, mergedVideos.map(toVideoEpisode));
+    return assignEpisodeSlugs(overlayLiveMedia(db.data, mergedVideos.map(toVideoEpisode)));
   }, [db.data, mergedVideos]);
   return {
     data,
@@ -236,13 +240,41 @@ export function useOtherColorsLeaderboard(
   });
 }
 
-export function usePlayerProfile(slug: string | undefined, setCode: string) {
+export function usePlayerProfile(slug: string | undefined, setCode: string, enabled = true) {
   return useQuery({
     queryKey: ["player-profile", slug, setCode],
     queryFn: () => fetchPlayerProfile(slug!, setCode),
-    enabled: !!slug,
+    enabled: !!slug && enabled,
     staleTime: THIRTY_MINUTES,
     placeholderData: keepPreviousData,
+  });
+}
+
+export function usePlayerLifetimeProfile(slug: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["player-lifetime", slug],
+    queryFn: () => fetchLifetimeProfile(slug!),
+    enabled: !!slug && enabled,
+    staleTime: THIRTY_MINUTES,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useLifetimeDraftEvents(
+  slug: string | undefined,
+  enabled = true,
+  formatFilter = "ALL",
+  colorsFilter = "ALL",
+) {
+  return useInfiniteQuery({
+    queryKey: ["lifetime-events", slug, formatFilter, colorsFilter],
+    queryFn: ({ pageParam }) =>
+      fetchLifetimeDraftEvents(slug!, pageParam, LIFETIME_EVENTS_PAGE, formatFilter, colorsFilter),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < LIFETIME_EVENTS_PAGE ? undefined : allPages.length * LIFETIME_EVENTS_PAGE,
+    enabled: !!slug && enabled,
+    staleTime: THIRTY_MINUTES,
   });
 }
 
@@ -264,11 +296,11 @@ export function usePlayerSlugByDiscordId(discordId: string | undefined) {
   });
 }
 
-export function useDraftEvents(slug: string | undefined, setCode: string) {
+export function useDraftEvents(slug: string | undefined, setCode: string, enabled = true) {
   return useQuery({
     queryKey: ["draft-events", slug, setCode],
     queryFn: () => fetchPlayerDraftEvents(slug!, setCode),
-    enabled: !!slug,
+    enabled: !!slug && enabled,
     staleTime: THIRTY_MINUTES,
     placeholderData: keepPreviousData,
   });

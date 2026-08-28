@@ -26,6 +26,7 @@ from bot.services.pod_drafts import (
     apply_seat_indexes,
     finalize_champion,
     load_event_name_sync,
+    load_event_set_code_sync,
     normalize_player_name,
 )
 from bot.services.pod_replays import capture_event_replays
@@ -321,10 +322,11 @@ async def finalize_team_tournament(manager: "PodDraftManager") -> None:
     manager.team_map = teams
     displays = await asyncio.to_thread(load_participant_displays, event_id)
     event_name = await asyncio.to_thread(load_event_name_sync, event_id)
+    set_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
     embed = build_team_final_embed(
         standings, teams, event_name=event_name, displays=displays, pending_count=0,
-        player_colors=colors_only(deck_data),
+        player_colors=colors_only(deck_data), set_code=set_code,
     )
     thread = await manager._fetch_thread()
     if thread is not None:
@@ -424,7 +426,8 @@ TEAM_VICTORY_COLORS = {
 
 
 def build_team_final_embed(standings, teams, *, event_name, displays, pending_count,
-                           player_colors: dict[str, str | None] | None = None) -> discord.Embed:
+                           player_colors: dict[str, str | None] | None = None,
+                           set_code: str | None = None) -> discord.Embed:
     """Team-draft standings: the winner in the title, an oversized emoji scoreline, and each side's
     roster with records, personal 3-0 trophies, and deck colors. The accent takes the winning team's
     button colour. Per-player records still drive leaderboard pod points, so they stay visible.
@@ -443,7 +446,7 @@ def build_team_final_embed(standings, teams, *, event_name, displays, pending_co
         members = [s for s in standings if normalized.get(normalize_player_name(s.player_name)) == team]
         embed.add_field(
             name=f"{pod_team.team_emoji(team)} {pod_team.team_label(team)}",
-            value=team_record_column(members, displays, player_colors or {}) or "—",
+            value=team_record_column(members, displays, player_colors or {}, set_code=set_code) or "—",
             inline=True,
         )
     embed.set_footer(text=event_name)
@@ -451,7 +454,7 @@ def build_team_final_embed(standings, teams, *, event_name, displays, pending_co
 
 
 def team_record_line(s, displays: dict[str, dict], player_colors: dict[str, str | None],
-                     deck_data=None) -> str:
+                     deck_data=None, set_code: str | None = None) -> str:
     """One roster row: the name linking to the player's site profile, record, a 🏆 on a personal
     3-0, the italicized screenshot caption when `deck_data` is passed (championship card only),
     then the player's deck-color glyph once decks are known."""
@@ -459,7 +462,7 @@ def team_record_line(s, displays: dict[str, dict], player_colors: dict[str, str 
     info = displays.get(key, {})
     name = info.get("display_name") or s.player_name
     slug = info.get("slug")
-    rendered = f"[{name}]({player_url(slug)})" if slug else f"**{name}**"
+    rendered = f"[{name}]({player_url(slug, set_code)})" if slug else f"**{name}**"
     record = f"{s.wins}-{s.losses}"
     trophy = "  🏆" if record == "3-0" else ""
     data = deck_data.get(key) if deck_data else None
@@ -471,10 +474,10 @@ def team_record_line(s, displays: dict[str, dict], player_colors: dict[str, str 
 
 
 def team_record_column(members, displays: dict[str, dict], player_colors: dict[str, str | None],
-                       deck_data=None) -> str:
+                       deck_data=None, set_code: str | None = None) -> str:
     column_gap = NBSP * 6 + ZWSP
     return "\n".join(
-        f"{team_record_line(s, displays, player_colors, deck_data)}{column_gap}" for s in members
+        f"{team_record_line(s, displays, player_colors, deck_data, set_code)}{column_gap}" for s in members
     )
 
 
@@ -536,10 +539,11 @@ async def build_team_standings_embed_for_event(event_id: str) -> discord.Embed |
     board = await asyncio.to_thread(load_team_board_data, event_id)
     displays = await asyncio.to_thread(load_participant_displays, event_id)
     event_name = await asyncio.to_thread(load_event_name_sync, event_id)
+    set_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
     return build_team_final_embed(
         standings, teams, event_name=event_name, displays=displays, pending_count=board.pending,
-        player_colors=colors_only(deck_data),
+        player_colors=colors_only(deck_data), set_code=set_code,
     )
 
 

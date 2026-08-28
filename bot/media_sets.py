@@ -46,7 +46,7 @@ _EXTRA_MEDIA_SETS: tuple[MediaSet, ...] = (
     MediaSet("BRO", "The Brothers' War", aliases=("brothers war", "brothers' war"), start_date=date(2022, 11, 15)),
     MediaSet("ONE", "Phyrexia: All Will Be One", aliases=("phyrexia", "all will be one"), start_date=date(2023, 2, 7)),
     MediaSet("MOM", "March of the Machine", aliases=("march of the machine",), start_date=date(2023, 4, 18)),
-    MediaSet("LTR", "The Lord of the Rings: Tales of Middle-earth", aliases=("lord of the rings", "middle earth"),
+    MediaSet("LTR", "The Lord of the Rings", aliases=("lord of the rings", "middle earth"),
              start_date=date(2023, 6, 20)),
     MediaSet("SIR", "Shadows over Innistrad Remastered", aliases=("shadows over innistrad",),
              start_date=date(2023, 3, 21)),

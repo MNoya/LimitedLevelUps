@@ -13,6 +13,7 @@ from bot.database import SessionLocal
 from bot.discord_helpers import player_url
 from bot.models import Player
 from bot.services import bot_log
+from bot.sets import active_set_code
 
 
 class LeaderboardVisibility(commands.Cog):
@@ -46,7 +47,7 @@ class LeaderboardVisibility(commands.Cog):
         await bot_log.get(self.bot).post_plain(
             f"🕵️ **{interaction.user.display_name}** opted out from the leaderboard"
         )
-        message = MSG_NOW_HIDDEN.format(profile_url=player_url(slug))
+        message = MSG_NOW_HIDDEN.format(profile_url=player_url(slug, active_set_code()))
         await interaction.followup.send(message, ephemeral=ephemeral)
 
 

@@ -294,6 +294,9 @@ class DraftEvent(Base):
         # the feed reads in order instead of sorting every trophy in the log
         Index("ix_draft_events_trophy_feed", "set_id", text("finished_at DESC NULLS LAST"),
               postgresql_where=text("is_trophy")),
+        # one player's whole history newest-first for the lifetime event stream
+        Index("ix_draft_events_player_recent", "player_id",
+              text("finished_at DESC NULLS LAST"), "id"),
     )
 
 

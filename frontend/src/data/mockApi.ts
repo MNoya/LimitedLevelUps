@@ -284,6 +284,45 @@ export const fetchPlayerDraftEvents = (
   return wait(synthDraftEvents(slug));
 };
 
+// ─── Lifetime (set-agnostic) profile ─────────────────────────────────────────
+export const LIFETIME_EVENTS_PAGE = 100;
+
+export const fetchLifetimeProfile = (slug: string): Promise<PlayerProfile | null> => {
+  const headline = leaderboardSosFixture.find((r) => r.slug === slug);
+  if (!headline) return wait(null);
+  return wait({
+    slug: headline.slug,
+    displayName: headline.displayName,
+    avatarUrl: headline.avatarUrl,
+    setCode: "",
+    rank: 0,
+    score: 0,
+    trophies: headline.trophies,
+    events: headline.events,
+    wins: headline.wins,
+    losses: headline.losses,
+    linked17lands: true,
+    lastCalculatedAt: headline.lastCalculatedAt,
+    formatBreakdown: [],
+    selfReportedEvents: [],
+    lifetime: true,
+    setsPlayed: [
+      { setCode: "SOS", events: headline.events, wins: headline.wins, losses: headline.losses, trophies: headline.trophies },
+    ],
+  });
+};
+
+export const fetchLifetimeDraftEvents = (
+  slug: string,
+  offset = 0,
+  limit = LIFETIME_EVENTS_PAGE,
+  _formatFilter = "ALL",
+  _colorsFilter = "ALL",
+): Promise<PlayerDraftEvent[]> => {
+  const all = REAL_DRAFT_EVENTS[slug] ?? synthDraftEvents(slug);
+  return wait(all.slice(offset, offset + limit));
+};
+
 // ─── public_recent_trophies ──────────────────────────────────────────────────
 // Aggregates trophy events across all players we have draft event data for,
 // joined with their display names from the leaderboard. Sorted by finished_at

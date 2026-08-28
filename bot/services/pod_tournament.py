@@ -91,6 +91,7 @@ from bot.services.pod_drafts import (
     load_event_id_by_thread_sync,
     load_event_name_sync,
     load_event_pairing_mode_sync,
+    load_event_set_code_sync,
     latest_reported_match,
     pod_page_url,
     load_event_thread_id_sync,
@@ -459,6 +460,7 @@ def _build_standings_row(
     event_has_log: bool = False,
     inline_caption: bool = False,
     show_medal: bool = True,
+    set_code: str | None = None,
 ) -> str:
     """One standings row used by both the V2 announcement and the thread-side classic embed:
     `{rank}. {medal} {name}  {wins}-{losses}  {colors}  [Draft Log]({url}) 📜`.
@@ -472,7 +474,7 @@ def _build_standings_row(
     data = deck_data.get(key)
     medal = _RANK_MEDALS.get(s.rank) if show_medal else None
     prefix = f"{s.rank}. {medal} " if medal else f"{s.rank}. "
-    rendered = f"[{name}]({player_url(slug)})" if slug and leaderboard_url else name
+    rendered = f"[{name}]({player_url(slug, set_code)})" if slug and leaderboard_url else name
     color_glyph = format_deck_color_emojis(player_colors.get(key))
     color_suffix = f"  {color_glyph}" if color_glyph else ""
     log_suffix = ""
@@ -3135,6 +3137,7 @@ def build_champion_announcement_view(
     event_started_at: datetime | None = None,
     subtitle_override: str | None = None,
     champion_mention: str | None = None,
+    set_code: str | None = None,
 ) -> ui.LayoutView:
     """One-shot 'champion crowned' Components V2 layout for the pod-draft channel (not the thread).
 
@@ -3191,7 +3194,7 @@ def build_champion_announcement_view(
             rows.append(_build_standings_row(
                 s, displays=displays, player_colors=player_colors,
                 deck_data=deck_data, leaderboard_url=leaderboard_url,
-                event_name=event_name, inline_caption=True,
+                event_name=event_name, inline_caption=True, set_code=set_code,
             ))
             key = normalize_player_name(s.player_name)
             data = deck_data.get(key)
@@ -3272,6 +3275,7 @@ def build_champion_embed(
     deck_data: dict[str, "ParticipantDeckData"] | None = None,
     event_has_log: bool = False,
     match_states: list[dict] | None = None,
+    set_code: str | None = None,
 ) -> discord.Embed:
     """Thread-side standings embed. `player_colors` adds a mana-emoji glyph after each player's record.
     `event_has_log` appends an inline Draft Log link per row pointing at the in-site reviewer when the
@@ -3285,7 +3289,7 @@ def build_champion_embed(
         _build_standings_row(
             s, displays=displays, player_colors=player_colors,
             deck_data=deck_data, leaderboard_url=leaderboard_url, event_name=event_name,
-            event_has_log=event_has_log,
+            event_has_log=event_has_log, set_code=set_code,
             show_medal=medals_locked or (champion_locked and s.rank == 1),
         )
         for s in standings
@@ -3398,6 +3402,7 @@ async def build_standings_embed_for_event(event_id: str) -> discord.Embed | None
         pending_count = 0
     displays = await asyncio.to_thread(load_participant_displays, event_id)
     event_name = await asyncio.to_thread(load_event_name_sync, event_id)
+    set_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
     event_has_log = await asyncio.to_thread(_event_has_draft_log_sync, event_id)
     player_colors = colors_only(deck_data)
@@ -3409,6 +3414,7 @@ async def build_standings_embed_for_event(event_id: str) -> discord.Embed | None
         leaderboard_url=settings.leaderboard_url,
         champion_locked=champion_locked,
         pending_count=pending_count,
+        set_code=set_code,
         deck_data=deck_data,
         event_has_log=event_has_log,
         match_states=match_states,
@@ -3461,6 +3467,7 @@ async def build_champion_announcement_view_for_event(
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
     player_colors = colors_only(deck_data)
     event_name = await asyncio.to_thread(load_event_name_sync, event_id)
+    set_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
     event_started_at = await asyncio.to_thread(load_event_started_at_sync, event_id)
     thread_id_str = await asyncio.to_thread(load_event_thread_id_sync, event_id)
     thread_id = int(thread_id_str) if thread_id_str else None
@@ -3474,6 +3481,7 @@ async def build_champion_announcement_view_for_event(
         leaderboard_url=settings.leaderboard_url,
         pending_count=pending_count,
         deck_data=deck_data,
+        set_code=set_code,
         event_started_at=event_started_at,
         guild_id=guild_id,
         thread_id=thread_id,
@@ -4105,6 +4113,7 @@ async def maybe_post_championship(manager, *, force: bool = False) -> None:
         guild_id=getattr(guild, "id", None),
         thread_id=thread_id,
         champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
+        set_code=manager.set_code,
     )
     manager.champion_announced = True  # claim before the await so concurrent triggers don't double-post
     try:
@@ -4645,6 +4654,7 @@ async def _post_or_update_live_standings(manager) -> None:
         deck_data=deck_data,
         event_has_log=event_has_log,
         match_states=match_states,
+        set_code=manager.set_code,
     )
 
     async with manager._standings_post_lock:

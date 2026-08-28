@@ -362,4 +362,15 @@ export interface PlayerProfile {
   lastCalculatedAt?: string | null; // when this player's data was last pulled from 17lands
   formatBreakdown: PlayerFormatBreakdown[];
   selfReportedEvents: SelfReportedEvent[];
+  // Set on the lifetime (set-agnostic) profile only; setCode is "" there
+  lifetime?: boolean;
+  setsPlayed?: SetPlayed[];
+}
+
+export interface SetPlayed {
+  setCode: string;
+  events: number;
+  wins: number;
+  losses: number;
+  trophies: number;
 }

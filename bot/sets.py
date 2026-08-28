@@ -163,7 +163,7 @@ ALL_SETS: tuple[SetSeed, ...] = (
     SetSeed("ONE", "Phyrexia: All Will Be One", date(2023, 2, 7), date(2023, 3, 20)),
     SetSeed("SIR", "Shadows over Innistrad Remastered", date(2023, 3, 21), date(2023, 4, 17)),
     SetSeed("MOM", "March of the Machine", date(2023, 4, 18), date(2023, 6, 19), expansion_alias="MAT"),
-    SetSeed("LTR", "The Lord of the Rings: Tales of Middle-earth", date(2023, 6, 20), date(2023, 9, 4)),
+    SetSeed("LTR", "The Lord of the Rings", date(2023, 6, 20), date(2023, 9, 4)),
     SetSeed("WOE", "Wilds of Eldraine", date(2023, 9, 5), date(2023, 11, 13)),
     SetSeed("LCI", "The Lost Caverns of Ixalan", date(2023, 11, 14), date(2024, 2, 5)),
     SetSeed("KTK", "Khans of Tarkir", date(2023, 12, 12), date(2024, 2, 5)),

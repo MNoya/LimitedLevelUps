@@ -49,6 +49,7 @@ import type {
   PodSeasonResultRow,
   PodSetCode,
   RecentTrophy,
+  SetPlayed,
   SetSummary,
   TrophyLeaderboardRow,
 } from "../types/leaderboard";
@@ -1031,6 +1032,90 @@ export async function fetchPlayerProfile(
   };
 }
 
+// ─── Lifetime (set-agnostic) profile ──────────────────────────────────────
+
+export async function fetchLifetimeProfile(slug: string): Promise<PlayerProfile | null> {
+  const [headlineResp, podResp, trophiesResp] = await Promise.all([
+    client().from("public_player").select("*").eq("slug", slug),
+    client().from("public_pod_scoring").select("*").eq("slug", slug),
+    client()
+      .from("public_self_reported_events")
+      .select("*")
+      .eq("slug", slug)
+      .order("reported_at", { ascending: false }),
+  ]);
+  if (headlineResp.error) throw headlineResp.error;
+  if (podResp.error) throw podResp.error;
+  if (trophiesResp.error) throw trophiesResp.error;
+
+  const headlineRows = (headlineResp.data ?? []) as Record<string, unknown>[];
+  const podRows = (podResp.data ?? []) as Record<string, unknown>[];
+  const trophyRows = (trophiesResp.data ?? []) as Record<string, unknown>[];
+  if (headlineRows.length === 0 && podRows.length === 0 && trophyRows.length === 0) return null;
+
+  const num = (r: Record<string, unknown>, k: string) => (r[k] as number) ?? 0;
+  const bySet = new Map<string, SetPlayed>();
+  const bump = (code: string, f: (c: SetPlayed) => SetPlayed) => {
+    if (!code) return;
+    const cur = bySet.get(code) ?? { setCode: code, events: 0, wins: 0, losses: 0, trophies: 0 };
+    bySet.set(code, f(cur));
+  };
+
+  let events = 0;
+  let wins = 0;
+  let losses = 0;
+  let trophies17 = 0;
+  let lastCalculatedAt = "";
+  for (const r of headlineRows) {
+    const e = num(r, "events");
+    const w = num(r, "wins");
+    const l = num(r, "losses");
+    const t = num(r, "trophies");
+    events += e;
+    wins += w;
+    losses += l;
+    trophies17 += t;
+    const calc = (r.last_calculated_at as string) ?? "";
+    if (calc > lastCalculatedAt) lastCalculatedAt = calc;
+    bump(r.set_code as string, (c) => ({ ...c, events: c.events + e, wins: c.wins + w, losses: c.losses + l, trophies: c.trophies + t }));
+  }
+  let podTrophies = 0;
+  for (const r of podRows) {
+    const e = num(r, "events");
+    const w = num(r, "wins");
+    const l = num(r, "losses");
+    const t = num(r, "trophies");
+    podTrophies += t;
+    bump(r.set_code as string, (c) => ({ ...c, events: c.events + e, wins: c.wins + w, losses: c.losses + l, trophies: c.trophies + t }));
+  }
+  for (const r of trophyRows) {
+    if ((r.is_trophy as boolean) ?? true) {
+      bump((r.set_code as string) || "", (c) => ({ ...c, trophies: c.trophies + 1 }));
+    }
+  }
+
+  const setsPlayed = [...bySet.values()].sort((a, b) => b.trophies - a.trophies || b.events - a.events);
+  const identity = headlineRows[0] ?? podRows[0] ?? trophyRows[0];
+  return {
+    slug,
+    displayName: (identity.display_name as string) ?? slug,
+    avatarUrl: (identity.avatar_url as string | null) ?? null,
+    setCode: "",
+    rank: 0,
+    score: 0,
+    trophies: trophies17 + podTrophies,
+    events,
+    wins,
+    losses,
+    linked17lands: headlineRows.length > 0,
+    lastCalculatedAt: lastCalculatedAt || undefined,
+    formatBreakdown: [],
+    selfReportedEvents: trophyRows.map((r) => adaptSelfReportedEvent(r)),
+    lifetime: true,
+    setsPlayed,
+  };
+}
+
 function podOnlyHeadline(slug: string, setCode: string, pod: Record<string, unknown>): LeaderboardRow {
   return {
     setCode,
@@ -1117,6 +1202,41 @@ export async function fetchPlayerDraftEvents(
     .eq("slug", slug)
     .eq("set_code", setCode)
     .order("finished_at", { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => adaptDraftEvent(r as unknown as Record<string, unknown>));
+}
+
+export const LIFETIME_EVENTS_PAGE = 100;
+
+function lifetimeColorPattern(colorsFilter: string): string | null {
+  if (colorsFilter === "ALL") return null;
+  if (colorsFilter === MULTI) return "^[WUBRG]{3,}";
+  return `^${colorsFilter}[a-z]*$`;
+}
+
+export async function fetchLifetimeDraftEvents(
+  slug: string,
+  offset = 0,
+  limit = LIFETIME_EVENTS_PAGE,
+  formatFilter = "ALL",
+  colorsFilter = "ALL",
+): Promise<PlayerDraftEvent[]> {
+  let query = client()
+    .from("public_player_draft_events")
+    .select(DRAFT_EVENT_COLUMNS)
+    .eq("slug", slug);
+  if (formatFilter !== "ALL") {
+    const raw = FORMAT_RAW_GROUPS[formatFilter];
+    query = raw && raw.length > 0 ? query.in("format", raw) : query.ilike("format", `%${formatFilter}%`);
+  }
+  const colorPattern = lifetimeColorPattern(colorsFilter);
+  if (colorPattern) {
+    query = query.filter("colors", "match", colorPattern);
+  }
+  const { data, error } = await query
+    .order("finished_at", { ascending: false, nullsFirst: false })
+    .order("event_id", { ascending: false })
+    .range(offset, offset + limit - 1);
   if (error) throw error;
   return (data ?? []).map((r) => adaptDraftEvent(r as unknown as Record<string, unknown>));
 }
