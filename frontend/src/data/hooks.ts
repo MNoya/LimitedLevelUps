@@ -264,11 +264,13 @@ export function useLifetimeDraftEvents(
   enabled = true,
   formatFilter = "ALL",
   colorsFilter = "ALL",
+  seasonStart?: string,
+  seasonEndExclusive?: string,
 ) {
   return useInfiniteQuery({
-    queryKey: ["lifetime-events", slug, formatFilter, colorsFilter],
+    queryKey: ["lifetime-events", slug, formatFilter, colorsFilter, seasonStart ?? "ALL"],
     queryFn: ({ pageParam }) =>
-      fetchLifetimeDraftEvents(slug!, pageParam, LIFETIME_EVENTS_PAGE, formatFilter, colorsFilter),
+      fetchLifetimeDraftEvents(slug!, pageParam, LIFETIME_EVENTS_PAGE, formatFilter, colorsFilter, seasonStart, seasonEndExclusive),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < LIFETIME_EVENTS_PAGE ? undefined : allPages.length * LIFETIME_EVENTS_PAGE,

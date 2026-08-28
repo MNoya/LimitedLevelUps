@@ -119,8 +119,10 @@ export function PlayerPage() {
   const [topSearchParams] = useSearchParams();
   const lifetimeFormat = topSearchParams.get("format") ?? "ALL";
   const lifetimeColors = topSearchParams.get("colors") ?? "ALL";
+  const lifetimeSeason = topSearchParams.get("season") ?? "ALL";
+  const seasonWindow = useMemo(() => resolveSeasonWindow(lifetimeSeason, sets), [lifetimeSeason, sets]);
   const lifetimeProfile = usePlayerLifetimeProfile(slug, lifetime);
-  const lifetimeEvents = useLifetimeDraftEvents(slug, lifetime, lifetimeFormat, lifetimeColors);
+  const lifetimeEvents = useLifetimeDraftEvents(slug, lifetime, lifetimeFormat, lifetimeColors, seasonWindow?.start, seasonWindow?.endExclusive);
   const lifetimeRows = useMemo(
     () => (lifetimeEvents.data?.pages ?? []).flat(),
     [lifetimeEvents.data],
@@ -140,8 +142,10 @@ export function PlayerPage() {
   useEffect(() => {
     if (!params.setCode) return;
     if (setCode !== params.setCode) {
+      const search = new URLSearchParams(topSearchParams);
+      search.delete("season");
       navigate(
-        { pathname: playerPath(slug, setCode), search: topSearchParams.toString() },
+        { pathname: playerPath(slug, setCode), search: search.toString() },
         { replace: true },
       );
     }
@@ -164,10 +168,16 @@ export function PlayerPage() {
 
   const topQs = topSearchParams.toString();
   const deckModalOpen = topSearchParams.has("deck");
+  const perSetQs = () => {
+    const params = new URLSearchParams(topSearchParams);
+    params.delete("season");
+    return params.toString();
+  };
 
   const onChangeSet = (newCode: string) => {
-    const pathname = newCode === LIFETIME_SET_CODE ? `/player/${slug}` : playerPath(slug, newCode);
-    navigate({ pathname, search: topQs });
+    const toLifetime = newCode === LIFETIME_SET_CODE;
+    const pathname = toLifetime ? `/player/${slug}` : playerPath(slug, newCode);
+    navigate({ pathname, search: toLifetime ? topQs : perSetQs() });
   };
 
   useEffect(() => {
@@ -181,10 +191,10 @@ export function PlayerPage() {
       }
       if (e.key === "ArrowLeft" && prevSlug) {
         e.preventDefault();
-        navigate({ pathname: playerPath(prevSlug, setCode), search: topQs });
+        navigate({ pathname: playerPath(prevSlug, setCode), search: perSetQs() });
       } else if (e.key === "ArrowRight" && nextSlug) {
         e.preventDefault();
-        navigate({ pathname: playerPath(nextSlug, setCode), search: topQs });
+        navigate({ pathname: playerPath(nextSlug, setCode), search: perSetQs() });
       }
     };
     window.addEventListener("keydown", onKey);
@@ -205,7 +215,7 @@ export function PlayerPage() {
         isMobile={isMobile}
         onChangeSet={onChangeSet}
         navigate={navigate}
-        qs={topQs}
+        qs={perSetQs()}
       />
     );
   }
@@ -214,7 +224,7 @@ export function PlayerPage() {
     return (
       <div className="bg-bg text-text min-h-screen page-fade">
         {isMobile ? (
-          <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={topQs} />
+          <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={perSetQs()} />
         ) : (
           <AppHeader subtitle="PLAYER PROFILE" />
         )}
@@ -227,7 +237,7 @@ export function PlayerPage() {
     return (
       <div className="bg-bg text-text min-h-screen page-fade">
         {isMobile ? (
-          <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={topQs} />
+          <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={perSetQs()} />
         ) : (
           <AppHeader subtitle="PLAYER PROFILE" />
         )}
@@ -244,7 +254,7 @@ export function PlayerPage() {
         onChangeSet={onChangeSet}
         sibling={sibling}
         navigate={navigate}
-        qs={topQs}
+        qs={perSetQs()}
         isMobile={isMobile}
         identity={identity ?? null}
       />
@@ -264,6 +274,36 @@ export function PlayerPage() {
 }
 
 // ─── Lifetime (set-agnostic) profile ───────────────────────────────────────
+
+const LIFETIME_ALL_SEASONS = "ALL";
+
+function isRealSeasonSet(s: SetSummary): boolean {
+  return !s.custom && !!s.startDate && !!s.endDate && s.code !== "CUBE" && !s.code.includes("-");
+}
+
+function resolveSeasonWindow(seasonCode: string, sets: SetSummary[] | undefined): { start: string; endExclusive: string } | null {
+  if (seasonCode === LIFETIME_ALL_SEASONS) return null;
+  const set = sets?.find((s) => s.code === seasonCode);
+  if (!set || !set.startDate || !set.endDate) return null;
+  const end = new Date(`${set.endDate}T00:00:00Z`);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start: set.startDate, endExclusive: end.toISOString().slice(0, 10) };
+}
+
+function seasonOptions(sets: SetSummary[] | undefined): FilterOption[] {
+  const real = (sets ?? []).filter(isRealSeasonSet).sort((a, b) => b.startDate.localeCompare(a.startDate));
+  return [{ value: LIFETIME_ALL_SEASONS, label: "ALL SEASONS" }, ...real.map((s) => ({ value: s.code, label: `${s.code} SEASON` }))];
+}
+
+const renderSeasonOption = (opt: FilterOption) => {
+  if (opt.value === LIFETIME_ALL_SEASONS) return <span>{opt.label}</span>;
+  return (
+    <span className="flex items-center gap-2">
+      <SetGlyph code={opt.value} size={14} className="text-white/85 shrink-0" />
+      <span>{opt.label}</span>
+    </span>
+  );
+};
 
 function LifetimePlayer({
   profile,
@@ -297,7 +337,8 @@ function LifetimePlayer({
   const [mobileTab, setMobileTab] = useState<"sets" | "events">("sets");
   const formatFilter = searchParams.get("format") ?? "ALL";
   const colorsFilter = searchParams.get("colors") ?? "ALL";
-  const setParam = (key: "format" | "colors", v: string) => {
+  const seasonFilter = searchParams.get("season") ?? "ALL";
+  const setParam = (key: "format" | "colors" | "season", v: string) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       if (v === "ALL") next.delete(key);
@@ -305,6 +346,7 @@ function LifetimePlayer({
       return next;
     }, { replace: true });
   };
+  const seasonOpts = useMemo(() => seasonOptions(sets), [sets]);
   const colorOptions = useMemo<FilterOption[]>(
     () => [
       { value: "ALL", label: "ALL COLORS" },
@@ -335,16 +377,18 @@ function LifetimePlayer({
     );
   }
 
-  const wp = winPct(profile.wins, profile.losses);
+  const setsPlayed = profile.setsPlayed ?? [];
+  const seasonRow = seasonFilter !== "ALL" ? setsPlayed.find((sp) => sp.setCode === seasonFilter) : undefined;
+  const headline = seasonRow ?? profile;
+  const wp = winPct(headline.wins, headline.losses);
   const stats: StatStripStats = {
-    trophies: profile.trophies,
-    events: profile.events,
-    wins: profile.wins,
-    losses: profile.losses,
+    trophies: headline.trophies,
+    events: headline.events,
+    wins: headline.wins,
+    losses: headline.losses,
     score: 0,
   };
   const trophiesLabel = profile.selfReportedEvents.some((e) => e.isTrophy) ? "17L TROPHIES" : "TROPHIES";
-  const setsPlayed = profile.setsPlayed ?? [];
   const updated = profile.lastCalculatedAt ? lastUpdated(profile.lastCalculatedAt) : null;
 
   if (isMobile) {
@@ -372,7 +416,7 @@ function LifetimePlayer({
               <span className="shrink-0 font-display text-[16px] tracking-[0.18em] text-muted">ALL SETS</span>
             )}
           </div>
-          {profile.events > 0 && (
+          {stats.events > 0 && (
             <div className="mt-[18px] grid gap-[5px] grid-cols-4">
               <StatChip
                 label={trophiesLabel}
@@ -409,6 +453,9 @@ function LifetimePlayer({
             colorsFilter={colorsFilter}
             setColorsFilter={(v) => setParam("colors", v)}
             colorOptions={colorOptions}
+            seasonFilter={seasonFilter}
+            setSeasonFilter={(v) => setParam("season", v)}
+            seasonOptions={seasonOpts}
             isMobile
           />
         )}
@@ -445,7 +492,7 @@ function LifetimePlayer({
           </div>
           <div className="ml-auto flex items-stretch gap-4 min-w-0">
             <ManualTrophiesBlock trophies={profile.selfReportedEvents} />
-            {profile.events > 0 && (
+            {stats.events > 0 && (
               <StatStrip stats={stats} wp={wp} showPoints={false} trophiesLabel={trophiesLabel} />
             )}
           </div>
@@ -468,6 +515,9 @@ function LifetimePlayer({
           colorsFilter={colorsFilter}
           setColorsFilter={(v) => setParam("colors", v)}
           colorOptions={colorOptions}
+          seasonFilter={seasonFilter}
+          setSeasonFilter={(v) => setParam("season", v)}
+          seasonOptions={seasonOpts}
         />
       </div>
     </div>
@@ -663,6 +713,9 @@ function LifetimeEventLog({
   colorsFilter,
   setColorsFilter,
   colorOptions,
+  seasonFilter,
+  setSeasonFilter,
+  seasonOptions,
   isMobile = false,
 }: {
   events: PlayerDraftEvent[];
@@ -677,6 +730,9 @@ function LifetimeEventLog({
   colorsFilter: string;
   setColorsFilter: (v: string) => void;
   colorOptions: FilterOption[];
+  seasonFilter: string;
+  setSeasonFilter: (v: string) => void;
+  seasonOptions: FilterOption[];
   isMobile?: boolean;
 }) {
   const compact = useIsMobile(1240);
@@ -709,7 +765,7 @@ function LifetimeEventLog({
   );
   const empty = events.length === 0 && (
     <div className="p-6 text-center text-muted font-display tracking-[0.2em] col-span-full">
-      {formatFilter === "ALL" && colorsFilter === "ALL" ? "NO EVENTS RECORDED" : "NO EVENTS MATCH FILTER"}
+      {formatFilter === "ALL" && colorsFilter === "ALL" && seasonFilter === "ALL" ? "NO EVENTS RECORDED" : "NO EVENTS MATCH FILTER"}
     </div>
   );
 
@@ -727,7 +783,16 @@ function LifetimeEventLog({
             <span className="font-display text-[13px] tracking-[0.14em] text-muted shrink-0 whitespace-nowrap">UPDATED {updated}</span>
           )}
         </div>
-        <div className="mb-2 grid grid-cols-2 gap-2">
+        <div className="mb-2 grid grid-cols-3 gap-2">
+          <FilterDropdown
+            value={seasonFilter}
+            onChange={setSeasonFilter}
+            options={seasonOptions}
+            renderValue={renderSeasonOption}
+            renderOption={renderSeasonOption}
+            className="w-full min-w-0"
+            triggerClassName="w-full min-w-0"
+          />
           <FilterDropdown
             value={formatFilter}
             onChange={setFormatFilter}
@@ -771,6 +836,15 @@ function LifetimeEventLog({
           {updated && (
             <span className="font-display text-[13px] tracking-[0.14em] text-muted shrink-0 whitespace-nowrap mr-1">UPDATED {updated}</span>
           )}
+          <FilterDropdown
+            value={seasonFilter}
+            onChange={setSeasonFilter}
+            options={seasonOptions}
+            renderValue={renderSeasonOption}
+            renderOption={renderSeasonOption}
+            className="min-w-0 max-w-[200px]"
+            triggerClassName="min-w-0"
+          />
           <FilterDropdown
             value={formatFilter}
             onChange={setFormatFilter}
@@ -834,12 +908,14 @@ function useUrlFilters(): [
       return next;
     }, { replace: true });
   };
+  const navParams = new URLSearchParams(searchParams);
+  navParams.delete("season");
   return [
     formatFilter,
     (v) => update("format", v),
     colorsFilter,
     (v) => update("colors", v),
-    searchParams.toString(),
+    navParams.toString(),
   ];
 }
 

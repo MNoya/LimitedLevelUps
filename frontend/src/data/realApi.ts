@@ -1220,6 +1220,8 @@ export async function fetchLifetimeDraftEvents(
   limit = LIFETIME_EVENTS_PAGE,
   formatFilter = "ALL",
   colorsFilter = "ALL",
+  seasonStart?: string,
+  seasonEndExclusive?: string,
 ): Promise<PlayerDraftEvent[]> {
   let query = client()
     .from("public_player_draft_events")
@@ -1232,6 +1234,12 @@ export async function fetchLifetimeDraftEvents(
   const colorPattern = lifetimeColorPattern(colorsFilter);
   if (colorPattern) {
     query = query.filter("colors", "match", colorPattern);
+  }
+  if (seasonStart) {
+    query = query.gte("finished_at", seasonStart);
+  }
+  if (seasonEndExclusive) {
+    query = query.lt("finished_at", seasonEndExclusive);
   }
   const { data, error } = await query
     .order("finished_at", { ascending: false, nullsFirst: false })

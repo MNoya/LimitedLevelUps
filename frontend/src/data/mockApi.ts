@@ -318,8 +318,16 @@ export const fetchLifetimeDraftEvents = (
   limit = LIFETIME_EVENTS_PAGE,
   _formatFilter = "ALL",
   _colorsFilter = "ALL",
+  seasonStart?: string,
+  seasonEndExclusive?: string,
 ): Promise<PlayerDraftEvent[]> => {
-  const all = REAL_DRAFT_EVENTS[slug] ?? synthDraftEvents(slug);
+  let all = REAL_DRAFT_EVENTS[slug] ?? synthDraftEvents(slug);
+  if (seasonStart) {
+    all = all.filter((e) => e.finishedAt != null && e.finishedAt >= seasonStart);
+  }
+  if (seasonEndExclusive) {
+    all = all.filter((e) => e.finishedAt != null && e.finishedAt < seasonEndExclusive);
+  }
   return wait(all.slice(offset, offset + limit));
 };
 
