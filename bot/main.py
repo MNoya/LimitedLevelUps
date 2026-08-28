@@ -619,6 +619,20 @@ def build_bot(guild_id: int) -> commands.Bot:
     bot.startup_announced = False
 
     @bot.event
+    async def on_interaction(interaction: discord.Interaction) -> None:
+        data = interaction.data or {}
+        custom_id = data.get("custom_id")
+        if not custom_id:
+            return
+        if interaction.type is discord.InteractionType.component:
+            values = data.get("values")
+            chosen = f" values={values}" if values else ""
+            surface = interaction.message.id if interaction.message else "?"
+            log.info(f"component: {custom_id}{chosen} on {surface} by {interaction.user}")
+        elif interaction.type is discord.InteractionType.modal_submit:
+            log.info(f"modal: {custom_id} by {interaction.user}")
+
+    @bot.event
     async def on_ready() -> None:
         log.info(f"logged in as {bot.user} (id={bot.user.id if bot.user else '?'})")
         await bot.change_presence(activity=discord.Activity(

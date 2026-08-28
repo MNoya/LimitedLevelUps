@@ -20,6 +20,7 @@ Rescheduling a pod lives in the lobby Settings panel (scheduled pods, pre-draft)
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 import re
 from dataclasses import dataclass
@@ -899,7 +900,6 @@ async def post_scheduled_card(
     except discord.HTTPException:
         log.warning("post_scheduled_card: could not post the card or create its thread", exc_info=True)
         return None
-    await pod_launch.add_thread_watcher(thread)
 
     signal_id = await asyncio.to_thread(
         pod_launch.create_scheduled_signal_sync,
@@ -940,6 +940,7 @@ async def post_scheduled_card(
     except discord.HTTPException:
         log.warning(f"could not post the registered embed in thread {thread.id}", exc_info=True)
 
+    await pod_launch.add_thread_watcher(thread)
     if not starts_now:
         await add_members_to_thread(thread, preseed_confirmed + preseed_yes + preseed_maybe)
     pod_launch.arm_scheduled_pod_jobs(bot, event_id, event_time, created_at)
@@ -1074,7 +1075,7 @@ async def _settle_card_rsvp(
     )
     if _is_card_surface(interaction.message):
         embed = interaction.message.embeds[0]
-        before = embed.to_dict()
+        before = _embed_snapshot(embed)
         refresh_roster_fields(
             embed, result.rosters, status_line, result.roster_interests, championship=championship,
             championship_roster=champ_roster, new_drafters=result.new_drafters,
@@ -1420,19 +1421,23 @@ async def _render_channel_card(
 ) -> None:
     card = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
     if card is None:
+        log.info(f"channel card render skipped for {event_id}: no scheduled card ref")
         return
     _, channel_id, message_id, _ = card
     channel = await fetch_channel(bot, channel_id)
     if channel is None:
+        log.info(f"channel card render skipped for {event_id}: channel {channel_id} unreachable")
         return
     try:
         message = await channel.fetch_message(int(message_id))
     except discord.HTTPException:
+        log.warning(f"channel card render skipped for {event_id}: message {message_id} fetch failed", exc_info=True)
         return
     if not _is_card_surface(message):
+        log.info(f"channel card render skipped for {event_id}: message {message_id} is not a card surface")
         return
     embed = message.embeds[0]
-    before = embed.to_dict()
+    before = _embed_snapshot(embed)
     status_line, championship = await resolve_card_render_state(event_id)
     champ_roster = await resolve_championship_card_roster(event_id, rosters)
     refresh_roster_fields(
@@ -1440,6 +1445,11 @@ async def _render_channel_card(
         championship_roster=champ_roster, new_drafters=new_drafters,
     )
     await _edit_card_embed(message, embed, before, "the channel card")
+
+
+def _embed_snapshot(embed: discord.Embed) -> dict:
+    """A stable embed dict immune to a later in-place field edit, since `to_dict` aliases `_fields`"""
+    return copy.deepcopy(embed.to_dict())
 
 
 async def _edit_card_embed(
