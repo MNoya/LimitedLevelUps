@@ -652,7 +652,11 @@ function LifetimeSetsPanel({
                 <FitText text={shortSetName(nameFor(sp.setCode))} className="font-display text-muted tracking-[0.03em]" max={12} min={9} />
               </span>
             </span>
-            <TrophyCount count={sp.trophies} size="md" display fixedDigits={2} className="text-subtle justify-self-end" />
+            {sp.trophies > 0 ? (
+              <TrophyCount count={sp.trophies} size="md" display fixedDigits={2} className="text-subtle justify-self-end" />
+            ) : (
+              <span className="font-display text-[17px] text-dim leading-none justify-self-end">—</span>
+            )}
             <span className="font-display text-[17px] text-right text-subtle">{sp.events}</span>
             <span className="font-display text-[17px] text-right text-subtle">{winPct(sp.wins, sp.losses)}%</span>
           </Link>
