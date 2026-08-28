@@ -28,6 +28,7 @@ export const fetchFormatColorsLeaderboard = impl.fetchFormatColorsLeaderboard;
 export const fetchPlayerDraftEvents = impl.fetchPlayerDraftEvents;
 export const fetchLifetimeProfile = impl.fetchLifetimeProfile;
 export const fetchLifetimeDraftEvents = impl.fetchLifetimeDraftEvents;
+export const fetchLifetimeStats = impl.fetchLifetimeStats;
 export const LIFETIME_EVENTS_PAGE = impl.LIFETIME_EVENTS_PAGE;
 export const fetchRecentTrophies = impl.fetchRecentTrophies;
 export const fetchFormatRecentTrophies = impl.fetchFormatRecentTrophies;

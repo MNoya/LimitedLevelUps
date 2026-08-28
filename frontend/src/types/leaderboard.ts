@@ -374,3 +374,10 @@ export interface SetPlayed {
   losses: number;
   trophies: number;
 }
+
+export interface LifetimeEventStats {
+  events: number;
+  wins: number;
+  losses: number;
+  trophies: number;
+}

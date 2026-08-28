@@ -331,6 +331,31 @@ export const fetchLifetimeDraftEvents = (
   return wait(all.slice(offset, offset + limit));
 };
 
+export const fetchLifetimeStats = (
+  slug: string,
+  _formatFilter = "ALL",
+  _colorsFilter = "ALL",
+  seasonStart?: string,
+  seasonEndExclusive?: string,
+): Promise<{ events: number; wins: number; losses: number; trophies: number }> => {
+  let all = REAL_DRAFT_EVENTS[slug] ?? synthDraftEvents(slug);
+  if (seasonStart) {
+    all = all.filter((e) => e.finishedAt != null && e.finishedAt >= seasonStart);
+  }
+  if (seasonEndExclusive) {
+    all = all.filter((e) => e.finishedAt != null && e.finishedAt < seasonEndExclusive);
+  }
+  let wins = 0;
+  let losses = 0;
+  let trophies = 0;
+  for (const e of all) {
+    wins += e.wins;
+    losses += e.losses;
+    if (e.isTrophy) trophies += 1;
+  }
+  return wait({ events: all.length, wins, losses, trophies });
+};
+
 // ─── public_recent_trophies ──────────────────────────────────────────────────
 // Aggregates trophy events across all players we have draft event data for,
 // joined with their display names from the leaderboard. Sorted by finished_at

@@ -44,7 +44,7 @@ import { ArenaRankIcon } from "../components/ArenaRankIcon";
 import { GoToTopButton } from "../components/GoToTopButton";
 import { Tooltip } from "../components/Tooltip";
 
-import { useAvailableFormats, useColorChips, useDraftEvents, useLeaderboard, useLifetimeDraftEvents, usePlayerIdentity, usePlayerLifetimeProfile, usePlayerProfile, usePlayerSlugByDiscordId, useSets } from "../data/hooks";
+import { useAvailableFormats, useColorChips, useDraftEvents, useLeaderboard, useLifetimeDraftEvents, useLifetimeStats, usePlayerIdentity, usePlayerLifetimeProfile, usePlayerProfile, usePlayerSlugByDiscordId, useSets } from "../data/hooks";
 import { withMtgoSets } from "../data/mtgoSets";
 import { aggregate as scoreAggregate, computeScore, type ScoringStatRow } from "../data/scoring";
 import { canonicalSetCode, colorsOf, eventDate, eventDisplayLabel, fmtShortDate, formatTag, isCubeCode, isFlashbackEvent, isSoup, lastUpdated, lcqCashPrize, leaderboardPath, mainColors, playerPath, prettyFormat, winPct } from "../data/utils";
@@ -64,6 +64,7 @@ import {
 import { FMT_COLORS, renderColorOption, renderFormatOption, shortFormat } from "../data/format-display";
 import { cn } from "../lib/utils";
 import type {
+  LifetimeEventStats,
   PlayerDraftEvent,
   PlayerFormatBreakdown,
   PlayerIdentity,
@@ -127,6 +128,8 @@ export function PlayerPage() {
     () => (lifetimeEvents.data?.pages ?? []).flat(),
     [lifetimeEvents.data],
   );
+  const needAggregate = lifetime && (lifetimeFormat !== "ALL" || lifetimeColors !== "ALL") && !!lifetimeEvents.hasNextPage;
+  const lifetimeFilteredStats = useLifetimeStats(slug, needAggregate, lifetimeFormat, lifetimeColors, seasonWindow?.start, seasonWindow?.endExclusive);
   const { data: identity } = usePlayerIdentity(slug, !lifetime && !isLoading && !profile);
   const showLoadingBar = (isFetching || isFetchingEvents) && !isLoading;
   // Sibling navigation needs the leaderboard rows so we know who's adjacent
@@ -208,6 +211,7 @@ export function PlayerPage() {
         isLoading={lifetimeProfile.isLoading}
         error={lifetimeProfile.error as Error | null}
         events={lifetimeRows}
+        filteredStats={lifetimeFilteredStats.data ?? null}
         hasNextPage={!!lifetimeEvents.hasNextPage}
         isFetchingNextPage={lifetimeEvents.isFetchingNextPage}
         fetchNextPage={lifetimeEvents.fetchNextPage}
@@ -310,6 +314,7 @@ function LifetimePlayer({
   isLoading,
   error,
   events,
+  filteredStats,
   hasNextPage,
   isFetchingNextPage,
   fetchNextPage,
@@ -323,6 +328,7 @@ function LifetimePlayer({
   isLoading: boolean;
   error: Error | null;
   events: PlayerDraftEvent[];
+  filteredStats: LifetimeEventStats | null;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   fetchNextPage: () => void;
@@ -381,8 +387,9 @@ function LifetimePlayer({
   const seasonRow = seasonFilter !== "ALL" ? setsPlayed.find((sp) => sp.setCode === seasonFilter) : undefined;
   const filtersActive = formatFilter !== "ALL" || colorsFilter !== "ALL";
   const base = seasonFilter !== "ALL" ? (seasonRow ?? { trophies: 0, events: 0, wins: 0, losses: 0 }) : profile;
+  const filteredStrip = filteredStats ?? statsFromEvents(events);
   const stats: StatStripStats = filtersActive
-    ? statsFromEvents(events)
+    ? { trophies: filteredStrip.trophies, events: filteredStrip.events, wins: filteredStrip.wins, losses: filteredStrip.losses, score: 0 }
     : { trophies: base.trophies, events: base.events, wins: base.wins, losses: base.losses, score: 0 };
   const wp = winPct(stats.wins, stats.losses);
   const trophiesLabel = profile.selfReportedEvents.some((e) => e.isTrophy) ? "17L TROPHIES" : "TROPHIES";

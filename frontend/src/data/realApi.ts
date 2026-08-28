@@ -36,6 +36,7 @@ import type {
   ColorsSummary,
   CubeSeason,
   LeaderboardRow,
+  LifetimeEventStats,
   PlayerDraftEvent,
   PlayerFormatBreakdown,
   PlayerIdentity,
@@ -1258,6 +1259,27 @@ export async function fetchLifetimeDraftEvents(
     .range(offset, offset + limit - 1);
   if (error) throw error;
   return (data ?? []).map((r) => adaptDraftEvent(r as unknown as Record<string, unknown>));
+}
+
+export async function fetchLifetimeStats(
+  slug: string,
+  formatFilter = "ALL",
+  colorsFilter = "ALL",
+  seasonStart?: string,
+  seasonEndExclusive?: string,
+): Promise<LifetimeEventStats> {
+  const raw = formatFilter !== "ALL" ? FORMAT_RAW_GROUPS[formatFilter] : undefined;
+  const { data, error } = await client().rpc("public_lifetime_event_stats", {
+    p_slug: slug,
+    p_formats: raw && raw.length > 0 ? raw : null,
+    p_format_like: formatFilter !== "ALL" && !(raw && raw.length > 0) ? formatFilter : null,
+    p_color_pattern: lifetimeColorPattern(colorsFilter),
+    p_start: seasonStart ?? null,
+    p_end_exclusive: seasonEndExclusive ?? null,
+  });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as LifetimeEventStats | undefined;
+  return row ?? { events: 0, wins: 0, losses: 0, trophies: 0 };
 }
 
 // ─── public_recent_trophies ────────────────────────────────────────────────

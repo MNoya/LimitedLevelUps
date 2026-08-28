@@ -26,6 +26,7 @@ import {
   fetchPlayerDraftEvents,
   fetchLifetimeDraftEvents,
   fetchLifetimeProfile,
+  fetchLifetimeStats,
   LIFETIME_EVENTS_PAGE,
   fetchPlayerIdentity,
   fetchPlayerSlugByDiscordId,
@@ -274,6 +275,22 @@ export function useLifetimeDraftEvents(
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < LIFETIME_EVENTS_PAGE ? undefined : allPages.length * LIFETIME_EVENTS_PAGE,
+    enabled: !!slug && enabled,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function useLifetimeStats(
+  slug: string | undefined,
+  enabled: boolean,
+  formatFilter = "ALL",
+  colorsFilter = "ALL",
+  seasonStart?: string,
+  seasonEndExclusive?: string,
+) {
+  return useQuery({
+    queryKey: ["lifetime-stats", slug, formatFilter, colorsFilter, seasonStart ?? "ALL"],
+    queryFn: () => fetchLifetimeStats(slug!, formatFilter, colorsFilter, seasonStart, seasonEndExclusive),
     enabled: !!slug && enabled,
     staleTime: THIRTY_MINUTES,
   });
