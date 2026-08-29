@@ -67,6 +67,7 @@ ROSTER_REMINDER_LEAD_MIN = 60
 ROSTER_SEARCH_LIMIT = 50
 ROSTER_CATCHUP_DELAY_S = 30
 BURIED_AFTER_MESSAGES = 10
+ROSTER_CARD_MIN_SIGNUPS = 4
 WIDE_GAP = EM_SPACE * 4
 
 _messages_since_card: dict[int, int] = {}
@@ -214,6 +215,9 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
         return None
     rosters, roster_interests, new_drafters = await event_rsvp_rosters(event_id)
     championship_roster = await asyncio.to_thread(championship_roster_for_event_sync, event_id, rosters)
+    if championship_roster is None and attendance_of(rosters, new_drafters).signed_up < ROSTER_CARD_MIN_SIGNUPS:
+        log.info(f"repost_roster_reminder: event {event_id} has too few signups; skipping")
+        return None
     embed = reminder_embed(
         event_name, event_time, rosters, roster_interests, championship_roster, set_code, new_drafters,
     )

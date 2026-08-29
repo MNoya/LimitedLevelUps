@@ -38,6 +38,10 @@ class PodFormat:
         """Always the card list, the page a player opens to prepare for the draft."""
         return CUBECOBRA_LIST_URL.format(cube_id=self.cube_id)
 
+    @property
+    def list_label(self) -> str:
+        return "Card List" if self.card_list_file else "Cube List"
+
 
 PEASANT_CODE = "PEASANT"
 PEASANT_LABEL = "Peasant Cube"
@@ -208,12 +212,19 @@ def cube_list_link(code: str | None) -> str | None:
     return f"[__**{fmt.cube_id}**__]({fmt.url})"
 
 
+def list_label(code: str | None) -> str | None:
+    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    if fmt is None:
+        return None
+    return fmt.list_label
+
+
 def command_hint(code: str | None) -> str | None:
     """The `!<name>` prefix command that reprints a custom format's links, for a compact card hint."""
     fmt = CUSTOM_FORMATS.get((code or "").upper())
     if fmt is None or fmt.command_name is None:
         return None
-    return f"!{fmt.command_name}"
+    return f"`!{fmt.command_name}`"
 
 
 def format_applied_message(code: str) -> str:
