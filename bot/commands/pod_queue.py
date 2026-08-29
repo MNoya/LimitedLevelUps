@@ -29,7 +29,7 @@ from bot.discord_helpers import NBSP, resolve_pod_chat_channel
 from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
 from bot.services.pod_draft_manager import set_event_pick_timer
-from bot.services.pod_format import custom_formats, default_pick_timer_for, format_display
+from bot.services.pod_format import custom_formats, default_pick_timer_for, format_display, is_custom
 from bot.services.pod_format_select import WRITE_IN_VALUE, set_select_option, write_in_option
 from bot.services.pod_pairing_select import SELECT_PLACEHOLDER as PAIRING_PLACEHOLDER
 from bot.services.pod_pairing_select import pairing_options
@@ -869,7 +869,12 @@ async def _announce_pod(
 
 
 def _announce_symbol(set_code: str) -> str:
-    return str(fi.format_emoji(set_code))
+    symbol = emojis.set_symbol(set_code)
+    if symbol is not None:
+        return str(symbol)
+    if is_custom(set_code):
+        return str(fi.cube_emoji())
+    return "➡️"
 
 
 def _joinable_line(guild: discord.Guild, signal) -> str:
