@@ -111,12 +111,16 @@ from bot.services.pod_tournament import (
     ManageRoundsPickerView,
     OrganizerDeckPanel,
     ParticipantDeckData,
+    RoundResultsView,
     actor_label,
     build_capture_submit_deck_button,
     build_champion_announcement_view,
     build_deck_ping,
     build_final_report_ping,
     build_draft_review_message,
+    build_live_deck_color_select_view,
+    build_pairing_dm_embed,
+    build_submit_deck_dm_embed,
     build_trophy_hype_view,
     mark_trophy_match,
     pod_page_url,
@@ -494,6 +498,35 @@ async def _preview_link_dms(ctx) -> None:
         await ctx.send(f"🧪 Sent {landed}/2 link DMs to your DMs.{note}")
     else:
         await ctx.send("⚠️ Couldn't DM you, open DMs from server members and try again")
+
+
+async def _preview_round_dm(ctx) -> None:
+    """DM the caller the round pairing DM before and after a result, plus the Submit Deck colors DM"""
+    pairings_url = ctx.message.jump_url
+    open_state = {
+        "match_id": "dmpreview-1",
+        "a_name": _INVOKER_SEAT, "b_name": "Eli",
+        "a_display": ctx.author.display_name, "b_display": "Eli",
+        "winner_name": None, "score": None,
+    }
+    played_state = {**open_state, "winner_name": _INVOKER_SEAT, "score": "2-1"}
+
+    try:
+        for match_state in (open_state, played_state):
+            embed = build_pairing_dm_embed(
+                round_num=1, opponent_label="**Eli**", opponent_arena="Eli#10005",
+                pairings_url=pairings_url, event_name="Testlobby Live Pod",
+                match_state=match_state, viewer_is_a=True,
+            )
+            await ctx.author.send(embed=embed, view=RoundResultsView([match_state]))
+        await ctx.author.send(
+            embed=build_submit_deck_dm_embed(None),
+            view=build_live_deck_color_select_view(None),
+        )
+    except discord.Forbidden:
+        await ctx.send("⚠️ Couldn't DM you, open DMs from server members and try again")
+        return
+    await ctx.send("🧪 Sent 3 DMs: pairing, result, deck colors")
 
 
 _TEST_LOBBY_THREAD_NAME = "Pod Draft Test"
@@ -1362,7 +1395,7 @@ _LINKED_EIGHT: list[tuple[str, str]] = [
 _VALID_STATES = (
     "empty", "partial", "linked", "unlinked", "ready", "held", "notready", "titles",
     "readyunlinked", "readyteam", "readypick2", "readycancel", "waiting",
-    "drafting", "complete", "submit", "deckpanel", "lobby", "lobbyopen", "dmlink", "unlink",
+    "drafting", "complete", "submit", "deckpanel", "lobby", "lobbyopen", "dmlink", "dmround", "unlink",
     "podbracket", "podswiss", "podrandom",
     "podteam", "podlobby", "podteamvote", "chat",
     "format", "seeding", "trophyhype", "champ", "podium", "round1", "round2", "round3",
@@ -1755,7 +1788,9 @@ async def setup(bot: commands.Bot) -> None:
         `lobbyopen` posts the real lobby-open message and its Join Draft button — click it to get the
         ephemeral link with your Arena name pre-filled, or the Link Arena nudge when unlinked.
         `dmlink` DMs you both lobby-open link DMs (linked + unlinked) and the opt-in test DM, so every
-        DM string can be reviewed in a real inbox without a live lobby. `unlink` clears your own Arena
+        DM string can be reviewed in a real inbox without a live lobby. `dmround` DMs you the Round 1
+        pairing DM twice (the pairing then the same DM with a result in) plus the Submit Deck colors DM,
+        so all three can be checked in a real inbox without driving a whole pod. `unlink` clears your own Arena
         handle so the unlinked Join Draft nudge can be replayed; re-link with the Link Arena button.
         `voicelink [url]` posts the voice offer, with the bot's own guest invite or the link you pass, so
         the same URL can be compared side by side with one you post yourself.
@@ -1854,6 +1889,10 @@ async def setup(bot: commands.Bot) -> None:
 
         if state == "dmlink":
             await _preview_link_dms(ctx)
+            return
+
+        if state == "dmround":
+            await _preview_round_dm(ctx)
             return
 
         if state == "unlink":

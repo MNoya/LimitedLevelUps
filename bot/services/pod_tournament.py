@@ -513,9 +513,15 @@ def build_pairing_dm_embed(
     An odd field's bye has no opponent to name, so that DM carries the bye line alone.
     """
     short = short_event_name(event_name)
-    suffix = "Updated" if updated else "Started"
+    has_result = bool(match_state) and bool(match_state.get("winner_name"))
+    if has_result:
+        suffix = "Reported"
+    elif updated:
+        suffix = "Updated"
+    else:
+        suffix = "Started"
     title_round = f"Round {round_num} {suffix}"
-    title = f"{short} · {title_round}" if short else title_round
+    title = f"{short} - {title_round}" if short else title_round
 
     mtga = emojis.get("mtga")
     arena_part = f" {mtga} `{opponent_arena}`" if opponent_arena else ""
@@ -542,9 +548,12 @@ def build_pairing_dm_embed(
         link_prefix = emojis.get("manat") or "↳"
         body_lines.append(f"{link_prefix} [**View Pairings**]({pairings_url})")
 
-    color = discord.Color.yellow() if updated else discord.Color.green()
-    if match_state and match_state.get("winner_name"):
+    if has_result:
         color = discord.Color.dark_grey()
+    elif updated:
+        color = discord.Color.yellow()
+    else:
+        color = discord.Color.green()
     return discord.Embed(
         title=title,
         description="\n".join(body_lines),
@@ -1014,7 +1023,7 @@ def build_live_deck_color_select_view(current_value: str | None = None) -> DeckC
     return DeckColorSelectView(live_deck_color_submit, current_value=current_value, persistent=True)
 
 
-def _build_submit_deck_dm_embed(deck_colors: str | None) -> discord.Embed:
+def build_submit_deck_dm_embed(deck_colors: str | None) -> discord.Embed:
     """Embed body for the Submit Deck DM. Pre-submit shows the prompt; post-submit collapses to
     SAVED_MSG (the dropdown default already conveys the saved value visually)."""
     if deck_colors is not None:
@@ -1032,7 +1041,7 @@ async def send_submit_deck_dms(bot_client, event_id: str) -> None:
         existing = await asyncio.to_thread(_load_submit_deck_dm_sync, p["participant_id"])
         if existing is not None:
             continue
-        embed = _build_submit_deck_dm_embed(p["deck_colors"])
+        embed = build_submit_deck_dm_embed(p["deck_colors"])
         view = build_live_deck_color_select_view(p["deck_colors"])
         msg = None
         try:
@@ -1094,7 +1103,7 @@ async def _refresh_submit_deck_dm(bot_client, event_id: str, discord_id: str) ->
     row = await asyncio.to_thread(_load_submit_deck_dm_sync, participant_id)
     if row is not None:
         await _edit_submit_deck_dm(
-            bot_client, row, _build_submit_deck_dm_embed(deck_colors), deck_colors,
+            bot_client, row, build_submit_deck_dm_embed(deck_colors), deck_colors,
         )
 
 
@@ -2311,7 +2320,7 @@ async def _nothing_open_card(discord_id: str) -> OwnMatchReport:
     if deck is not None:
         event_id, thread_id = deck
         return OwnMatchReport(
-            _build_submit_deck_dm_embed(None),
+            build_submit_deck_dm_embed(None),
             DeckColorSelectView(bound_deck_color_submit(event_id, thread_id)),
             None,
         )
