@@ -143,7 +143,7 @@ def test_late_report_overflow_beyond_three_is_dropped_not_filed_under_prior_roun
 
 
 def test_excludes_games_already_claimed_by_an_earlier_pod() -> None:
-    """A player who drafts a second pod the same night: games the earlier pod already owns are
+    """A player who drafts a second pod the same day: games the earlier pod already owns are
     skipped here, so the same game isn't saved under both events."""
     matches = [_match(1, "Noya", "X", "Noya", "2-1", reported_at=_BASE + timedelta(minutes=35))]
     games = [

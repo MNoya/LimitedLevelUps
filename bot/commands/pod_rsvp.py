@@ -218,7 +218,7 @@ class ScheduledRegisteredView(discord.ui.View):
 
 
 def offered_rsvp_states(maybe: bool) -> tuple[str, ...]:
-    """The answers a pod's card takes. A pod past the first was opened because the night is busy, out of
+    """The answers a pod's card takes. A pod past the first was opened because the slot is busy, out of
     players who had already confirmed, so Maybe is not one of them: the question there is which table you
     are on, and an answer that commits to neither leaves a seat nobody can plan around."""
     return RSVP_STATES if maybe else (RSVP_YES, RSVP_NO)
@@ -1204,7 +1204,7 @@ async def demote_clashing_signups(
     and say so in each clashing pod's thread.
 
     Nothing about a confirmation waits on this. It answers a question about the other pods, which the player
-    who pressed Confirm is not asking, and a night with nothing clashing costs one read to find that out.
+    who pressed Confirm is not asking, and a day with nothing clashing costs one read to find that out.
 
     Maybe rather than No: the player has said which pod they are playing, not that they are unavailable, and
     a clashing pod that ends up not firing should still find them on its roster."""

@@ -3,7 +3,7 @@
 Discord threads have no auto-archive below 24h, so old draft rooms and never-fired queue threads
 linger in the sidebar. Archiving is reversible, so a stray reply just reopens the thread. A short
 lookback keeps each run to a handful; already-archived threads and any with activity inside the
-grace window are left for a later night so a live conversation is never cut off.
+grace window are left for a later run so a live conversation is never cut off.
 """
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ async def delete_threads(bot: commands.Bot, thread_ids: Iterable[int]) -> int:
 async def _delete_all(threads: list[discord.Thread]) -> int:
     """Delete every thread at once and count the ones that went.
 
-    One at a time, a `!test reset` clearing a night of pods spent most of a minute waiting on round trips
+    One at a time, a `!test reset` clearing a day of pods spent most of a minute waiting on round trips
     that have nothing to do with each other."""
     async def delete(thread: discord.Thread) -> bool:
         try:

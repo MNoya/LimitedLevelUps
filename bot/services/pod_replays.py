@@ -170,7 +170,7 @@ def attribute_games_to_rounds(
 
     A game qualifies when it is a pod game with at least MIN_TURNS turns (restarts and quick
     concessions fall out in filter_and_sort_games), inside the event window, not already claimed by an
-    earlier pod (the earliest pod owns a game, so drafting twice in one night doesn't double-count),
+    earlier pod (the earliest pod owns a game, so drafting twice in one day doesn't double-count),
     and it falls in a match's report window: after the previous match's report, up to this one plus a
     minute of grace. Round 1's window starts at event_time so pre-draft and other-pod games can't leak
     in through an open-ended lower bound. At most MAX_GAMES_PER_MATCH games are kept per match, earliest
@@ -274,7 +274,7 @@ def _claimed_game_ids_for_player(
     session, player_id: str, event_time: datetime | None,
 ) -> frozenset[str]:
     """Game ids already stored for this player under a pod that started earlier. The earliest pod owns
-    a game, so a player who drafts a second pod the same night doesn't get its ±6h window re-capturing
+    a game, so a player who drafts a second pod the same day doesn't get its ±6h window re-capturing
     the first pod's games."""
     if event_time is None:
         return frozenset()

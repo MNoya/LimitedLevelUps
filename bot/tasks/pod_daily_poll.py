@@ -194,7 +194,7 @@ def _poll_channel(bot: commands.Bot) -> "discord.abc.Messageable | None":
 async def fire_daily_poll() -> None:
     """Post today's board with the day's ping, replacing the one the evening repost may already have put up
     for today. The board itself is what players read, so the day's ping goes on a fresh board at the bottom
-    of the channel instead of on a line pointing up at one posted the night before. Adoption moves every open
+    of the channel instead of on a line pointing up at one posted the day before. Adoption moves every open
     row onto the new message first, so the one it replaces is left holding nothing and is deleted."""
     if _bot is None:
         return
@@ -233,7 +233,7 @@ async def catch_up_daily_poll(bot: commands.Bot) -> None:
     thing that graduates the pods that filled overnight: without this they sit full until their slot time
     passes and expires. Posts the missing board, or runs the graduation pass when the board is already up.
 
-    A board for today that went up before the post hour is last night's repost, not the day's post, so it is
+    A board for today that went up before the post hour is the previous day's repost, not the day's post, so it is
     caught up too: the day's ping is still owed.
 
     A board that stands is repainted on the way out, so a deploy that changes what the board says lands on the
@@ -561,7 +561,7 @@ def _time_groups(
 def _clamped_value(value: str) -> str:
     """A column that still runs past what an embed field holds, cut on a line boundary so it renders as
     markdown instead of a severed link. Discord refuses the whole edit over one long field, which froze a
-    live board for a night and stopped it tracking every signup on it. The Played cap keeps a column far
+    live board for a day and stopped it tracking every signup on it. The Played cap keeps a column far
     inside the limit, so this only ever catches a Next section carrying enormous rosters."""
     if len(value) <= FIELD_VALUE_LIMIT:
         return value
@@ -1819,16 +1819,16 @@ async def _roll_lane_for_event(bot: commands.Bot, event_id: str) -> tuple[str, d
 
 
 async def repost_board_after_the_late_pods(bot: commands.Bot, played_day: date) -> bool:
-    """Post the next day's board once the night's late pods are finished, silently, below everything they
+    """Post the next day's board once the day's late pods are finished, silently, below everything they
     left in the channel.
 
     Someone opening pod coordination should find a current board near the bottom. The board is posted in the
-    morning and edited in place from then on, so by night it sits above a whole day of pod cards, threads and
+    morning and edited in place from then on, so by evening it sits above a whole day of pod cards, threads and
     reminders, and the freshest thing in the channel is a pod that already played. Reposting is not a second
     surface: it is the morning post run early, and the morning post then replaces it and carries the ping.
 
     Strictly the late lane, and strictly on the transition: an early pod still playing does not hold it, and
-    a night whose late slot never fires simply leaves the morning post to do its normal job. The board for
+    a day whose late slot never fires simply leaves the morning post to do its normal job. The board for
     the next day existing is itself the claim, so two pods finalizing seconds apart, or a startup sweep
     re-rolling a lane it already rolled, cannot post it twice."""
     async with _repost_lock:

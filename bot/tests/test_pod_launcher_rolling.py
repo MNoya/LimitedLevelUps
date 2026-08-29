@@ -402,7 +402,7 @@ def test_a_later_signup_at_one_slot_leaves_the_earlier_pod_off_the_column(sessio
 
 def test_a_lane_looks_at_tomorrow_for_a_pod_its_closed_slot_can_never_open(session, monkeypatch):
     """The Set Championship sits on a slot the format schedule closes, so no signal ever reaches its day and
-    the lane it holds would never look there. The launcher is what players read the night before, so a pod
+    the lane it holds would never look there. The launcher is what players read the day before, so a pod
     that already exists at tomorrow's slot is found without one. The lane with nothing tomorrow stays put."""
     monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
     monkeypatch.setattr(

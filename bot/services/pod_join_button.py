@@ -60,7 +60,7 @@ class JoinDraftButton(ui.DynamicItem[ui.Button], template=rf"{JOIN_BUTTON_PREFIX
         confirmation and the thread membership are all things the room needs rather than things they are
         waiting on.
 
-        A night running one table needs no routing at all, and says so in the pod's own name: a pod is
+        A slot running one table needs no routing at all, and says so in the pod's own name: a pod is
         unnumbered until a second one opens. Only a numbered pod pays for resolving which table has room,
         and that press acknowledges first so the work never races the three seconds Discord allows."""
         handle, event_id, pod_name = await asyncio.to_thread(
@@ -146,8 +146,8 @@ def build_mock_join_view(session_id: str) -> ui.View:
 def _join_answer(
     offer: SeatOffer | None, session_id: str, handle: str, guild_id: int | None,
 ) -> str:
-    """The presser's private answer. A night running one table hands over the link and says nothing more.
-    A night running several names the table first, and says which one filled up when the press lands
+    """The presser's private answer. A slot running one table hands over the link and says nothing more.
+    A slot running several names the table first, and says which one filled up when the press lands
     somewhere other than the room it was made in, so nobody reads the switch as the bot losing track."""
     join_line = format_join_line(session_id, handle)
     if offer is None or guild_id is None or offer.pod.index <= 1 and not offer.switched:
@@ -180,7 +180,7 @@ async def _admit_clicker_to_thread(
 
 def _join_context(session_id: str, discord_id: str) -> tuple[str | None, str | None, str]:
     """Everything the answer needs, on one connection: the presser's Arena handle, and the id and name of
-    the pod behind the session. The name is what says whether the night ever split."""
+    the pod behind the session. The name is what says whether the slot ever split."""
     with SessionLocal() as session:
         handle = player_arena_handle(session, discord_id)
         event = session.execute(

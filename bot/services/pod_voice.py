@@ -6,7 +6,7 @@ The link is a discord.gg invite because only an invite makes Discord draw its ow
 showing the avatars of whoever is already in the channel. It is a guest invite, matching what Discord's
 Invite to Voice Chat button creates: someone who follows it lands in the voice channel without joining
 the server. `unique=False` lets Discord hand back an invite it already holds with the same settings, so a
-pod every night does not fill the server's invite list, and a missing Create Invite permission degrades
+pod every day does not fill the server's invite list, and a missing Create Invite permission degrades
 to the plain channel link, which Discord draws as a narrower card with no occupants on it.
 
 Seven days is the ceiling the API accepts for an invite, whatever longer lifetime the Discord client

@@ -97,8 +97,8 @@ def pod_thread_link(guild_id: int, pod: FamilyPod) -> str:
 
 
 def multi_pod_context(thread, family: Sequence[FamilyPod]) -> dict:
-    """The DM's multi-pod lines: how many are playing across the night, which pod this DM is for, and
-    where the others are. Empty for a night that runs one pod, which leaves the DM as it has always been.
+    """The DM's multi-pod lines: how many are playing across the slot, which pod this DM is for, and
+    where the others are. Empty for a slot that runs one pod, which leaves the DM as it has always been.
 
     The pod being opened is the one whose thread the DM points at, so a recipient reads their own pod
     named and the others offered, and nobody has to work out which link is theirs."""
@@ -150,7 +150,7 @@ async def send_lobby_link_dms(
 ) -> int:
     """DM the personalized link to opted-in Yes/Maybe recipients. `recipients` is (discord_id,
     display_name, rsvp); rsvp is 'yes' or 'maybe'. `family` is every pod running at this start time, which
-    a recipient needs to read their own pod off a night that split. Returns the number delivered."""
+    a recipient needs to read their own pod off a slot that split. Returns the number delivered."""
     resolved = await asyncio.to_thread(_resolve_recipients, recipients)
     if not resolved:
         return 0
