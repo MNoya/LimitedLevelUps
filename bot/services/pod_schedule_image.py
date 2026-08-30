@@ -1,10 +1,9 @@
 """The pod format calendar grid, rendered to PNG for the `/pod-schedule` embed.
 
-The grid answers one question: what does a day add on top of the set every pod already drafts? That set is
-named once in the message, so a cell carries only its own flashback or cube, and a day that adds nothing
-falls back to the daily set's own symbol in `FAINT` — enough to read as a drafting day without repeating a
-code the message already gives. Two days break the pattern and each gets a filled date band: the day a new
-set arrives, and the Set Championship.
+Each cell lists the formats the schedule planned for that day, named by code, capped at two. A community
+flashback pick shows blue, the fixed sets grey, and a past day dims to what was scheduled then rather than the
+off-grid pods players ran. Two days break the pattern and each gets a filled date band: the day a new set
+arrives, and the Set Championship.
 
 Discord fits an embed image inside 400x300, so the layout is sized in logical pixels well under that and
 drawn at `SCALE`: a narrower logical grid is shown larger, which is the only lever the image has over how
@@ -36,7 +35,7 @@ from bot.services.pod_format_schedule import (
     extras_on,
     is_rotation_day,
     latest_on,
-    planned_on,
+    scheduled_formats,
 )
 
 SYMBOLS_DIR = Path(__file__).resolve().parents[2] / "frontend" / "public" / "set-symbols"
@@ -80,7 +79,6 @@ GRID = (78, 82, 90)
 TEXT = (219, 222, 225)
 MUTED = (160, 167, 176)
 DIM = (138, 144, 153)
-FAINT = (96, 101, 110)
 ARRIVAL = ACCENT
 CHAMPIONSHIP = (201, 156, 84)
 PLACEHOLDER = (153, 170, 255)
@@ -162,30 +160,27 @@ def _flag_fill(day: date) -> RGB | None:
 
 def _rows_for(day: date, *, past: bool) -> list[tuple[str, RGB, str]]:
     """What a cell lists, as (label, colour, symbol). The championship day shows its set in the championship
-    ink alone, its other pod still opening but the day read as one thing. A day running only the latest set
-    falls back to its symbol; a day naming two formats lists both, so the latest set shows by code on a
-    shared day."""
+    ink alone. Every other day lists the formats the schedule planned for it, named by code; a past day shows
+    what was scheduled then, never the off-grid pods players ran on their own."""
     if championship_on(day) is not None:
         return [(CHAMPIONSHIP_LABEL, CHAMPIONSHIP, latest_on(day))]
-    ink = DIM if past else TEXT
     latest = latest_on(day)
     if is_rotation_day(day):
         rows = [(latest, ARRIVAL, latest)]
         rows.extend((_cell_label(code), _format_color(code, latest, past), code) for code in extras_on(day))
         return rows[:MAX_CELL_FORMATS]
-    formats = planned_on(day)
-    if not formats or formats == (latest,):
-        return [("", FAINT if past else ink, latest)]
-    rows = [(_cell_label(code), _format_color(code, latest, past), code) for code in formats]
+    rows = [(_cell_label(code), _format_color(code, latest, past), code) for code in scheduled_formats(day)]
     return rows[:MAX_CELL_FORMATS]
 
 
 def _format_color(code: str, latest: str, past: bool) -> RGB:
-    """The community flashback pick, the voted set or the TBD placeholder, shows blue to stand out from the
-    fixed featured set, the latest set and the staple cube."""
+    """A scheduled community flashback pick, the voted set or the TBD placeholder, shows blue to stand out from
+    the fixed featured set, the latest set and the staple cube. A past day is history, not a vote, so it dims."""
+    if past:
+        return DIM
     if code != latest and not is_custom(code):
         return PLACEHOLDER
-    return DIM if past else TEXT
+    return TEXT
 
 
 def _cell_label(code: str) -> str:
