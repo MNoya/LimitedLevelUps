@@ -8,6 +8,7 @@ on the ballot; the cubes are always on it, everything else enters by a vote or a
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import date
@@ -147,6 +148,17 @@ def removable_options(session: Session, season: str) -> list[str]:
     return written
 
 
+def _removable_options(season: str) -> list[str]:
+    with SessionLocal() as session:
+        return removable_options(session, season)
+
+
+def _delete_option_commit(season: str, code: str) -> None:
+    with SessionLocal() as session:
+        delete_format_votes(session, season, code)
+        session.commit()
+
+
 def player_votes(session: Session, discord_id: str, season: str) -> set[str]:
     player = session.execute(select(Player).where(Player.discord_id == discord_id)).scalar_one_or_none()
     if player is None:
@@ -244,13 +256,20 @@ def build_vote_view(codes: list[str], voted: set[str] | None = None) -> ui.View:
 def _vote_embed(season: str, codes: list[str], counts: dict[str, int]) -> discord.Embed:
     heading = MSG_VOTE_HEADING.format(name=set_name_for(season))
     embed = discord.Embed(color=discord.Color.green(), description=f"{heading}\n\n{MSG_VOTE_INTRO}")
-    total = sum(counts.values())
+    top = max(counts.values(), default=0)
     for code in codes:
         embed.add_field(name=f"{_emoji_prefix(code)}{_option_label(code)}",
-                        value=_vote_bar(counts.get(code, 0), total), inline=True)
+                        value=_vote_bar(counts.get(code, 0), top), inline=True)
     for _ in range((-len(codes)) % 3):
         embed.add_field(name=NBSP_FIELD, value=NBSP_FIELD, inline=True)
     return embed
+
+
+def _voters_panel(season: str, discord_id: str) -> discord.Embed:
+    with SessionLocal() as session:
+        voters = voters_by_format(session, season)
+        mine = player_votes(session, discord_id, season)
+    return _voters_embed(season, voters, mine)
 
 
 def _voters_embed(season: str, voters: dict[str, list[str]], mine: set[str]) -> discord.Embed:
@@ -268,13 +287,11 @@ def _voters_embed(season: str, voters: dict[str, list[str]], mine: set[str]) -> 
     return embed
 
 
-def _vote_bar(count: int, total: int) -> str:
-    """A bar filled to the format's share of all votes, so the shape reads across hundreds of voters where a
-    fixed pip count would not. The share and the raw count follow."""
-    filled = round(BAR_WIDTH * count / total) if total > 0 else 0
+def _vote_bar(count: int, top: int) -> str:
+    """A bar filled to the leading format's count, so the top choice fills it and the rest read against it"""
+    filled = round(BAR_WIDTH * count / top) if top > 0 else 0
     bar = "█" * filled + " " * (BAR_WIDTH - filled)
-    pct = round(count / total * 100) if total > 0 else 0
-    return f"`{bar}` {pct}% ({count})"
+    return f"`{bar}` {count}"
 
 
 def _option_label(code: str) -> str:
@@ -336,7 +353,7 @@ async def post_vote_card(channel: discord.abc.Messageable, content: str, *, forc
         return
     if existing is not None:
         await _delete_quietly(existing)
-    embed, view = panel(season)
+    embed, view = await asyncio.to_thread(panel, season)
     try:
         message = await channel.send(
             content=content, embed=embed, view=view, allowed_mentions=discord.AllowedMentions(roles=True),
@@ -354,7 +371,7 @@ async def refresh_vote_card(channel: discord.abc.Messageable) -> None:
     existing = await _existing_card(channel)
     if existing is None:
         return
-    embed, view = panel(season_code())
+    embed, view = await asyncio.to_thread(panel, season_code())
     try:
         await existing.edit(embed=embed, view=view)
     except discord.HTTPException:
@@ -371,7 +388,7 @@ def request_public_repaint(client: discord.Client) -> None:
 
 
 async def send_vote_panel(interaction: discord.Interaction) -> None:
-    embed, view = voter_panel(season_code(), interaction.user)
+    embed, view = await asyncio.to_thread(voter_panel, season_code(), interaction.user)
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
@@ -409,23 +426,33 @@ def _is_ephemeral(message: discord.Message | None) -> bool:
     return message is not None and message.flags.ephemeral
 
 
-async def _apply_toggle(interaction: discord.Interaction, code: str, ephemeral: bool) -> None:
-    """The write behind a vote click, off the interaction that already answered. The public card repaints
-    through the queue so a crowd clicking at once collapses to one edit; a private copy edits itself."""
-    season = season_code()
+def _toggle_vote_commit(voter: discord.abc.User, season: str, code: str) -> None:
     with SessionLocal() as session:
-        toggle_vote(session, interaction.user, season, code)
+        toggle_vote(session, voter, season, code)
         session.commit()
+
+
+def _add_votes_commit(voter: discord.abc.User, season: str, raw: str) -> list[str]:
+    with SessionLocal() as session:
+        added = add_votes(session, voter, season, raw)
+        session.commit()
+        return added
+
+
+async def _apply_toggle(interaction: discord.Interaction, code: str, ephemeral: bool) -> None:
+    """The write behind a vote click, off the interaction that already answered and off the event loop, so a
+    crowd clicking at once never blocks the loop past the interaction ack window. The public card repaints
+    through the queue so a burst collapses to one edit; a private copy edits itself."""
+    season = season_code()
+    await asyncio.to_thread(_toggle_vote_commit, interaction.user, season, code)
     request_public_repaint(interaction.client)
     if ephemeral:
-        embed, view = voter_panel(season, interaction.user)
+        embed, view = await asyncio.to_thread(voter_panel, season, interaction.user)
         await interaction.edit_original_response(embed=embed, view=view)
 
 
 async def _apply_add(interaction: discord.Interaction, raw: str) -> None:
-    with SessionLocal() as session:
-        added = add_votes(session, interaction.user, season_code(), raw)
-        session.commit()
+    added = await asyncio.to_thread(_add_votes_commit, interaction.user, season_code(), raw)
     request_public_repaint(interaction.client)
     message = MSG_FORMATS_ADDED.format(codes=", ".join(added)) if added else MSG_FORMATS_ALREADY
     await interaction.followup.send(message, ephemeral=True)
@@ -461,10 +488,8 @@ class VotersItem(ui.DynamicItem[ui.Button], template=VOTERS_ID):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         season = season_code()
-        with SessionLocal() as session:
-            voters = voters_by_format(session, season)
-            mine = player_votes(session, str(interaction.user.id), season)
-        await interaction.response.send_message(embed=_voters_embed(season, voters, mine), ephemeral=True)
+        embed = await asyncio.to_thread(_voters_panel, season, str(interaction.user.id))
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 class AddFormatItem(ui.DynamicItem[ui.Button], template=ADD_FORMAT_ID):
@@ -520,8 +545,7 @@ class ManageVotesItem(ui.DynamicItem[ui.Button], template=MANAGE_ID):
                 MSG_ORGANIZER_ONLY_SETTINGS.format(organizer=organizer_mention(interaction.guild)), ephemeral=True,
             )
             return
-        with SessionLocal() as session:
-            codes = removable_options(session, season_code())
+        codes = await asyncio.to_thread(_removable_options, season_code())
         if not codes:
             await interaction.response.send_message(MSG_NO_REMOVABLE, ephemeral=True)
             return
@@ -544,9 +568,7 @@ class DeleteOptionSelect(ui.Select):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         code = self.values[0]
-        with SessionLocal() as session:
-            delete_format_votes(session, season_code(), code)
-            session.commit()
+        await asyncio.to_thread(_delete_option_commit, season_code(), code)
         request_public_repaint(interaction.client)
         await interaction.response.edit_message(content=MSG_OPTION_REMOVED.format(code=code), view=None)
 
