@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from bot.models import PodScheduleSlot, PodSignal
@@ -76,12 +76,15 @@ def test_a_season_after_the_featured_one_has_no_featured_pick():
     assert featured_format("FRA") is None
 
 
+REVEALED = datetime.now(timezone.utc) + timedelta(days=2)
+
+
 def test_run_allocation_fills_both_slots_and_never_touches_a_manual_row(session):
     _seed_floor_votes(session, "NEO")
     set_slot(session, WED, SLOT_EARLY, ("PEASANT",), source="manual")
     session.commit()
 
-    assignments = run_allocation(session, MON, rewrite=True)
+    assignments = run_allocation(session, MON, rewrite=True, now=REVEALED)
     session.commit()
 
     assert assignments[(MON, SLOT_EARLY)] == (MEMA_CODE, "NEO")
@@ -94,11 +97,20 @@ def test_run_allocation_fills_both_slots_and_never_touches_a_manual_row(session)
     assert (WED, SLOT_LATE) in assignments
 
 
+def test_run_allocation_holds_flashbacks_until_a_day_after_the_first_vote(session):
+    _seed_floor_votes(session, "NEO")
+    session.commit()
+
+    assignments = run_allocation(session, MON, rewrite=True, now=datetime.now(timezone.utc))
+
+    assert assignments[(MON, SLOT_EARLY)] == (MEMA_CODE, FLASHBACK)
+
+
 def test_run_allocation_ignores_a_set_below_the_vote_floor(session):
     vote.toggle_vote(session, _user(1), vote.season_code(), "NEO")
     session.commit()
 
-    assignments = run_allocation(session, MON, rewrite=True)
+    assignments = run_allocation(session, MON, rewrite=True, now=REVEALED)
 
     assert assignments[(MON, SLOT_EARLY)] == (MEMA_CODE, FLASHBACK)
 

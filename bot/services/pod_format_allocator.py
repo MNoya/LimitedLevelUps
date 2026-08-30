@@ -15,7 +15,7 @@ never touches an organizer's manual override, and skips the championship day so 
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -39,6 +39,7 @@ STAPLE_FORMAT = PEASANT_CODE
 FLASHBACK_WEEKDAYS = frozenset({0, 2, 4, 6})
 VOTE_FLOOR = 6
 HORIZON_CAP_DAYS = 70
+FLASHBACK_REVEAL_DELAY = timedelta(hours=24)
 
 FEATURED_BY_SEASON: dict[str, str] = {"HOB": MEMA_CODE}
 
@@ -73,7 +74,9 @@ def assign_flashbacks(days: list[date], scores: dict[str, float]) -> list[str | 
     return _spread(counts, [day.weekday() for day in days])
 
 
-def run_allocation(session: Session, start: date, *, rewrite: bool = True) -> dict[tuple[date, str], tuple[str, ...]]:
+def run_allocation(
+    session: Session, start: date, *, rewrite: bool = True, now: datetime | None = None,
+) -> dict[tuple[date, str], tuple[str, ...]]:
     """Fill the flashback season from `start` to the day before the next rotation and return the written rows.
     `rewrite` clears the allocator's prior rows first and lays the whole window fresh; without it the sweep only
     fills days that carry no overlay row yet, so a re-run adds newly-in-range days without moving announced ones.
@@ -90,7 +93,8 @@ def run_allocation(session: Session, start: date, *, rewrite: bool = True) -> di
     latest = latest_on(days[0])
     season = season_code()
     featured = featured_format(season)
-    scores = _flashback_scores(session, season, latest)
+    revealed = _flashback_revealed(session, season, now or datetime.now(timezone.utc))
+    scores = _flashback_scores(session, season, latest) if revealed else {}
     flashback_days = [day for day in days if _is_flashback_day(day)]
     assignments = dict(zip(flashback_days, assign_flashbacks(flashback_days, scores)))
 
@@ -133,6 +137,15 @@ def _is_flashback_day(day: date) -> bool:
 
 def _is_championship(day: date) -> bool:
     return championship_date_for(day) == day
+
+
+def _flashback_revealed(session: Session, season: str, now: datetime) -> bool:
+    """Whether the flashback picks are due to appear yet: `FLASHBACK_REVEAL_DELAY` after the season's first
+    vote, so a fresh vote holds every day at TBD for a day before the sets fill in."""
+    opened = session.execute(
+        select(func.min(PodFormatVote.voted_at)).where(PodFormatVote.season_set_code == season)
+    ).scalar_one_or_none()
+    return opened is not None and now >= opened + FLASHBACK_REVEAL_DELAY
 
 
 def _flashback_scores(session: Session, season: str, latest: str) -> dict[str, float]:

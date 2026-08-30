@@ -168,16 +168,24 @@ def _rows_for(day: date, *, past: bool) -> list[tuple[str, RGB, str]]:
     if championship_on(day) is not None:
         return [(CHAMPIONSHIP_LABEL, CHAMPIONSHIP, latest_on(day))]
     ink = DIM if past else TEXT
-    if is_rotation_day(day):
-        rows = [(latest_on(day), ARRIVAL, latest_on(day))]
-        rows.extend((_cell_label(code), ink, code) for code in extras_on(day))
-        return rows[:MAX_CELL_FORMATS]
     latest = latest_on(day)
+    if is_rotation_day(day):
+        rows = [(latest, ARRIVAL, latest)]
+        rows.extend((_cell_label(code), _format_color(code, latest, past), code) for code in extras_on(day))
+        return rows[:MAX_CELL_FORMATS]
     formats = planned_on(day)
     if not formats or formats == (latest,):
         return [("", FAINT if past else ink, latest)]
-    rows = [(_cell_label(code), PLACEHOLDER if code == FLASHBACK else ink, code) for code in formats]
+    rows = [(_cell_label(code), _format_color(code, latest, past), code) for code in formats]
     return rows[:MAX_CELL_FORMATS]
+
+
+def _format_color(code: str, latest: str, past: bool) -> RGB:
+    """The community flashback pick, the voted set or the TBD placeholder, shows blue to stand out from the
+    fixed featured set, the latest set and the staple cube."""
+    if code != latest and not is_custom(code):
+        return PLACEHOLDER
+    return DIM if past else TEXT
 
 
 def _cell_label(code: str) -> str:
