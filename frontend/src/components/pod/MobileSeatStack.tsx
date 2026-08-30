@@ -1,7 +1,7 @@
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import { Pips } from "../ManaPips";
 import { Record } from "../Record";
-import { keyruneClass, Trophy } from "../Brand";
+import { SetGlyph, setGlyphCode, Trophy } from "../Brand";
 import { cn } from "../../lib/utils";
 import { HeroSection } from "../HeroSection";
 import { type DeckTab } from "./DeckScreenshotModal";
@@ -298,10 +298,10 @@ function TileGrid({
             fontSize: Math.round(mobileLabelFontSize(eventLabel) * scale),
           }}
         >
-          <i
-            className={`ss ss-${keyruneClass(formatLabel ? "CUBE" : setCode)} text-text shrink-0`}
-            style={{ fontSize: Math.round(20 * scale), lineHeight: 1 }}
-            aria-hidden="true"
+          <SetGlyph
+            code={setGlyphCode({ code: setCode, custom: formatLabel != null })}
+            size={Math.round(20 * scale)}
+            className="text-text"
           />
           <span className="truncate">{highlightEventLabel(eventLabel)}</span>
         </div>

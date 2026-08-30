@@ -83,11 +83,24 @@ import type {
   PodEventParticipantRow,
   PodEventSummary,
   PodLeaderboardRow,
+  PodSetCode,
   SetSummary,
 } from "../types/leaderboard";
 
 // A format tried once is not a board, so it stays out of the switcher and keeps its pods on the season
 const MIN_BOARD_PODS = 2;
+
+function synthesizePodSet(p: PodSetCode): SetSummary {
+  return {
+    code: p.code,
+    name: p.label ?? p.code,
+    startDate: "",
+    endDate: "",
+    isActive: false,
+    custom: p.label != null,
+    shortCode: p.label != null ? CUBE_BASE : undefined,
+  };
+}
 
 // A board that ran in one season has nothing to pick between, so it shows no season selector
 const MIN_BOARD_SEASONS = 2;
@@ -209,15 +222,7 @@ export function PodDraftsPage({
     const real = allSets.filter((s) => podSetCodes.some((p) => p.code === s.code));
     const synthesized = podSetCodes
       .filter((p) => !byCode.has(p.code) && (p.label == null || p.events >= MIN_BOARD_PODS))
-      .map<SetSummary>((p) => ({
-        code: p.code,
-        name: p.label ?? p.code,
-        startDate: "",
-        endDate: "",
-        isActive: false,
-        custom: p.label != null,
-        shortCode: p.label != null ? CUBE_BASE : undefined,
-      }));
+      .map(synthesizePodSet);
     return [...real, ...synthesized];
   }, [allSets, podSetCodes]);
 
@@ -243,7 +248,10 @@ export function PodDraftsPage({
   const boardEvents = usePodEvents(season ? undefined : activeSet).data;
   const boardResults = usePodResultsForSet(season ? undefined : activeSet).data;
 
-  const setMeta = season ?? legacySets.find((s) => s.code === activeSet);
+  // A set below the board threshold still resolves its name when opened directly by code
+  const directPod = podSetCodes?.find((p) => p.code === activeSet);
+  const setMeta =
+    season ?? legacySets.find((s) => s.code === activeSet) ?? (directPod ? synthesizePodSet(directPod) : undefined);
   const buckets = useMemo(() => seasonBuckets(seasonEvents, activeSet), [seasonEvents, activeSet]);
   const boardSeasons = useMemo(() => seasonsPlayed(boardEvents, allSets), [boardEvents, allSets]);
 

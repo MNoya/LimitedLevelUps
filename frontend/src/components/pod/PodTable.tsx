@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { keyruneClass } from "../Brand";
+import { SetGlyph, setGlyphCode } from "../Brand";
 import { ChevronsRight, LuScrollText, TbCards } from "../Icons";
 import { Tooltip } from "../Tooltip";
 import { highlightEventLabel } from "./EventLabel";
@@ -371,7 +371,8 @@ function CenterMedallion({
 }) {
   const { weekday, date: dateLabel } = formatDateParts(date);
   const labelFontSize = medallionFontSize(eventLabel);
-  const glyphCode = formatLabel ? "CUBE" : setCode;
+  const glyphCode = setGlyphCode({ code: setCode, custom: formatLabel != null });
+  const format = medallionFormatStyle(formatLabel ?? setCode);
   return (
     <div
       className="flex flex-col items-center justify-center text-center select-none"
@@ -394,14 +395,10 @@ function CenterMedallion({
         )}
       </div>
       <div className="flex items-center" style={{ gap: "2.2cqw" }}>
-        <i
-          className={`ss ss-${keyruneClass(glyphCode)} text-white`}
-          style={{ fontSize: "8cqw", lineHeight: 1 }}
-          aria-hidden="true"
-        />
+        <SetGlyph code={glyphCode} size={format.glyphSize} className="text-white" />
         <span
           className="font-display text-text"
-          style={{ fontSize: "5.2cqw", letterSpacing: "0.24em" }}
+          style={{ fontSize: format.fontSize, letterSpacing: format.letterSpacing }}
         >
           {formatLabel ?? setCode}
         </span>
@@ -424,6 +421,13 @@ function medallionFontSize(label: string): string {
   if (len <= 14) return "7cqw";
   if (len <= 18) return "5.5cqw";
   return "4.5cqw";
+}
+
+function medallionFormatStyle(label: string): { fontSize: string; letterSpacing: string; glyphSize: string } {
+  const len = label.length;
+  if (len <= 12) return { fontSize: "5.2cqw", letterSpacing: "0.24em", glyphSize: "8cqw" };
+  if (len <= 18) return { fontSize: "4.2cqw", letterSpacing: "0.16em", glyphSize: "6.4cqw" };
+  return { fontSize: "3.4cqw", letterSpacing: "0.12em", glyphSize: "5.2cqw" };
 }
 
 function formatDateParts(iso: string): { weekday: string; date: string } {

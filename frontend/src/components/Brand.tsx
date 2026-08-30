@@ -202,8 +202,9 @@ export function setGlyphCode(set: { code: string; custom?: boolean; glyphCode?: 
   return set.code;
 }
 
-export function SetGlyph({ code, size = 18, className = "text-white" }: { code: string; size?: number; className?: string }) {
+export function SetGlyph({ code, size = 18, className = "text-white" }: { code: string; size?: number | string; className?: string }) {
   const glyph = glyphSpec(code);
+  const fontSize = typeof size === "number" ? size * glyph.scale : `calc(${size} * ${glyph.scale})`;
   return (
     <span
       className="inline-flex items-center justify-center shrink-0 overflow-visible"
@@ -213,7 +214,7 @@ export function SetGlyph({ code, size = 18, className = "text-white" }: { code: 
       {IMG_GLYPH_SRC[code] ? (
         <img src={IMG_GLYPH_SRC[code]} alt="" style={{ width: size, height: size }} className="block object-contain" />
       ) : (
-        <i className={`${glyph.className} ${className}`} style={{ fontSize: size * glyph.scale, lineHeight: 1 }} />
+        <i className={`${glyph.className} ${className}`} style={{ fontSize, lineHeight: 1 }} />
       )}
     </span>
   );

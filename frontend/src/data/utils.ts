@@ -305,6 +305,11 @@ export function cleanPodEventName(name: string, setCode: string): string {
   if (afterCube && afterCube !== cleaned) {
     cleaned = afterCube;
   }
+  // A custom format label with no "Cube" word still leads the date, so drop anything before it
+  const dateStart = cleaned.search(POD_DATE_START_RE);
+  if (dateStart > 0) {
+    cleaned = cleaned.slice(dateStart).trim();
+  }
   const withoutCode = cleaned
     .replace(new RegExp(`\\b${escaped}\\b`, "gi"), "")
     .replace(/\s{2,}/g, " ")
@@ -327,33 +332,28 @@ export function podSlotName(name: string, setCode: string): string {
 }
 
 // Unanchored: a format word can lead the date (`Peasant Cube Aug 14 Early Pod`)
-const POD_NAME_DATE_RE =
-  /\s*[-–]?\s*\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}\b/gi;
+const POD_DATE_START_RE =
+  /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}\b/i;
+
+const POD_NAME_DATE_RE = new RegExp(`\\s*[-–]?\\s*${POD_DATE_START_RE.source}`, "gi");
 
 // Plain-string title (medallions, aria): `#15 Early Pod - Table 2` once run, the slot alone upcoming.
 // PodEventTitle renders the styled version. Number is the execution-ordered ordinal, not any baked #N.
-export function podEventTitle(
-  event: {
-    ordinal?: number | null;
-    tableIndex?: number;
-    isTeamDraft?: boolean;
-    name: string;
-    setCode: string;
-  },
-  opts: { teamAsSuffix?: boolean } = {},
-): string {
+export function podEventTitle(event: {
+  ordinal?: number | null;
+  tableIndex?: number;
+  name: string;
+  setCode: string;
+}): string {
   const slot = podSlotName(event.name, event.setCode);
-  const teamAsSuffix = opts.teamAsSuffix ?? true;
-  const qualifier = podEventQualifier({ ...event, isTeamDraft: teamAsSuffix && event.isTeamDraft });
+  const qualifier = podEventQualifier(event);
   if (event.ordinal != null) {
     return `#${event.ordinal} ${slot}${qualifier}`;
   }
   return slot;
 }
 
-// A team draft outranks the table suffix, so a second-table team draft still reads as a team draft
-export function podEventQualifier(event: { tableIndex?: number; isTeamDraft?: boolean }): string {
-  if (event.isTeamDraft) return " - Team Draft";
+export function podEventQualifier(event: { tableIndex?: number }): string {
   if ((event.tableIndex ?? 1) > 1) return ` - Table ${event.tableIndex}`;
   return "";
 }

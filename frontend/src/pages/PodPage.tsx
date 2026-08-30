@@ -357,7 +357,6 @@ export function PodPage() {
   }
 
   const eventLabel = podEventTitle(event).toUpperCase();
-  const medallionLabel = podEventTitle(event, { teamAsSuffix: false }).toUpperCase();
   const deckLogHref =
     draftArtifact && deckTarget && decklistAccess.canViewSeat(deckTarget.avatarUrl)
       ? `/pods/${event.slug}/${deckTarget.playerSlug ?? deckTarget.seatIndex}`
@@ -463,7 +462,7 @@ export function PodPage() {
               onSelect={handleSelectSeat}
               onShowDeck={openDeck}
               canViewDeck={decklistAccess.canViewSeat}
-              eventLabel={medallionLabel}
+              eventLabel={eventLabel}
               teamDraft={event.isTeamDraft ?? false}
               eventSlug={event.slug}
               hasDraftLog={!!draftArtifact}
