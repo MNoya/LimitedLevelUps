@@ -48,6 +48,8 @@ MSG_YOUR_VOTES = "Your Votes: {codes}"
 MSG_YOUR_VOTES_NONE = "Your Votes: none yet"
 MSG_FORMATS_ADDED = "Added {codes} to the ballot"
 MSG_FORMATS_ALREADY = "Those formats are already on the ballot"
+MSG_VOTED_ON = "Voted for {name}"
+MSG_VOTED_OFF = "Removed your vote for {name}"
 ADD_BUTTON_LABEL = "Add Format"
 VOTERS_LABEL = "Voters"
 VOTERS_SHOWN = 20
@@ -426,10 +428,11 @@ def _is_ephemeral(message: discord.Message | None) -> bool:
     return message is not None and message.flags.ephemeral
 
 
-def _toggle_vote_commit(voter: discord.abc.User, season: str, code: str) -> None:
+def _toggle_vote_commit(voter: discord.abc.User, season: str, code: str) -> bool:
     with SessionLocal() as session:
-        toggle_vote(session, voter, season, code)
+        now_on = toggle_vote(session, voter, season, code)
         session.commit()
+        return now_on
 
 
 def _add_votes_commit(voter: discord.abc.User, season: str, raw: str) -> list[str]:
@@ -444,11 +447,15 @@ async def _apply_toggle(interaction: discord.Interaction, code: str, ephemeral: 
     crowd clicking at once never blocks the loop past the interaction ack window. The public card repaints
     through the queue so a burst collapses to one edit; a private copy edits itself."""
     season = season_code()
-    await asyncio.to_thread(_toggle_vote_commit, interaction.user, season, code)
+    now_on = await asyncio.to_thread(_toggle_vote_commit, interaction.user, season, code)
     request_public_repaint(interaction.client)
     if ephemeral:
         embed, view = await asyncio.to_thread(voter_panel, season, interaction.user)
         await interaction.edit_original_response(embed=embed, view=view)
+    else:
+        name = _option_label(code)
+        message = MSG_VOTED_ON.format(name=name) if now_on else MSG_VOTED_OFF.format(name=name)
+        await interaction.followup.send(message, ephemeral=True)
 
 
 async def _apply_add(interaction: discord.Interaction, raw: str) -> None:
