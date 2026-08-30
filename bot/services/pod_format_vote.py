@@ -390,8 +390,9 @@ def request_public_repaint(client: discord.Client) -> None:
 
 
 async def send_vote_panel(interaction: discord.Interaction) -> None:
+    await interaction.response.defer(ephemeral=True, thinking=True)
     embed, view = await asyncio.to_thread(voter_panel, season_code(), interaction.user)
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
 
 async def _existing_card(channel: discord.abc.Messageable) -> discord.Message | None:
@@ -494,9 +495,10 @@ class VotersItem(ui.DynamicItem[ui.Button], template=VOTERS_ID):
         return cls()
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
         season = season_code()
         embed = await asyncio.to_thread(_voters_panel, season, str(interaction.user.id))
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 class AddFormatItem(ui.DynamicItem[ui.Button], template=ADD_FORMAT_ID):
@@ -552,11 +554,12 @@ class ManageVotesItem(ui.DynamicItem[ui.Button], template=MANAGE_ID):
                 MSG_ORGANIZER_ONLY_SETTINGS.format(organizer=organizer_mention(interaction.guild)), ephemeral=True,
             )
             return
+        await interaction.response.defer(ephemeral=True, thinking=True)
         codes = await asyncio.to_thread(_removable_options, season_code())
         if not codes:
-            await interaction.response.send_message(MSG_NO_REMOVABLE, ephemeral=True)
+            await interaction.followup.send(MSG_NO_REMOVABLE, ephemeral=True)
             return
-        await interaction.response.send_message(MSG_MANAGE_PROMPT, view=DeleteOptionView(codes), ephemeral=True)
+        await interaction.followup.send(MSG_MANAGE_PROMPT, view=DeleteOptionView(codes), ephemeral=True)
 
 
 class DeleteOptionView(ui.View):
