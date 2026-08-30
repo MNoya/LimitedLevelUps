@@ -560,6 +560,37 @@ class PodSignalMember(Base):
     )
 
 
+class PodScheduleSlot(Base):
+    __tablename__ = "pod_schedule_slots"
+
+    id         = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    day        = Column(Date, nullable=False)
+    slot           = Column(String, nullable=False)
+    formats    = Column(ARRAY(String), nullable=False, server_default="{}")
+    source     = Column(String, nullable=False, server_default="auto")
+    decided_by = Column(String, nullable=True)
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("day", "slot", name="uq_pod_schedule_slot_day_slot"),
+    )
+
+
+class PodFormatVote(Base):
+    __tablename__ = "pod_format_votes"
+
+    id              = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    player_id       = Column(String, ForeignKey("players.id", ondelete="CASCADE"), nullable=False)
+    season_set_code = Column(String, nullable=False)
+    format_code     = Column(String, nullable=False)
+    voted_at        = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("player_id", "season_set_code", "format_code", name="uq_pod_format_vote"),
+        Index("ix_pod_format_votes_season", "season_set_code"),
+    )
+
+
 class SelfReportedEvent(Base):
     """A draft result a player posted in trophy-hype and logged to their profile via /trophy.
 

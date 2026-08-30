@@ -77,7 +77,7 @@ from bot.services.player_stats import rank_ordered_names
 from bot.services import pod_active
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_signals import SCHEDULE_TZ, slot_event_time
-from bot.services.pod_format_schedule import formats_on, latest_on
+from bot.services.pod_format_schedule import formats_on, latest_on, schedule_overlay
 from bot.services.pod_slot import COLLISION_INDEX_RE, next_collision_index, pod_display_name, pod_event_date
 from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import (
@@ -115,7 +115,7 @@ instead of dropping them: a control that vanishes reads as one that was never th
 
 REMINDER_LEAD_MIN = 10
 CARD_CLOSE_WINDOW_H = 48
-LANE_LOOKAHEAD_DAYS = 1
+SLOT_LOOKAHEAD_DAYS = 1
 """How far past its own day a launcher column looks for a pod already committed at its slot. One day, so the
 board points at tomorrow's Set Championship the evening before without carrying it all five days it exists."""
 
@@ -252,32 +252,33 @@ def create_poll_signals(
     row records nothing the closed one does not and only collides once a repost sweeps the earlier board's
     rows onto this message."""
     bound: list[tuple[str, datetime]] = []
-    for bucket in pod_signals.poll_buckets_for(signal_date):
-        slot_time = slot_event_time(signal_date, bucket.key)
-        covered = _event_formats_for_slot(session, slot_time)
-        for set_code in formats_on(signal_date, bucket.lane):
-            if set_code in covered:
-                continue
-            signal = _open_poll_signal_for_slot(session, bucket.key, set_code, signal_date)
-            if signal is None:
-                if _expired_poll_signal_exists(session, bucket.key, set_code, signal_date):
+    with schedule_overlay(session, signal_date, signal_date):
+        for bucket in pod_signals.poll_buckets_for(signal_date):
+            slot_time = slot_event_time(signal_date, bucket.key)
+            covered = _event_formats_for_slot(session, slot_time)
+            for set_code in formats_on(signal_date, bucket.slot_key):
+                if set_code in covered:
                     continue
-                signal = PodSignal(
-                    kind=pod_signals.KIND_POLL,
-                    bucket=pod_signals.named_bucket_key(bucket.key, set_code),
-                    guild_id=guild_id,
-                    channel_id=channel_id,
-                    message_id=message_id,
-                    signal_date=signal_date,
-                    slot_time=slot_time,
-                    set_code=set_code,
-                )
-                session.add(signal)
-            else:
-                signal.channel_id = channel_id
-                signal.message_id = message_id
-            session.flush()
-            bound.append((signal.id, slot_time))
+                signal = _open_poll_signal_for_slot(session, bucket.key, set_code, signal_date)
+                if signal is None:
+                    if _expired_poll_signal_exists(session, bucket.key, set_code, signal_date):
+                        continue
+                    signal = PodSignal(
+                        kind=pod_signals.KIND_POLL,
+                        bucket=pod_signals.named_bucket_key(bucket.key, set_code),
+                        guild_id=guild_id,
+                        channel_id=channel_id,
+                        message_id=message_id,
+                        signal_date=signal_date,
+                        slot_time=slot_time,
+                        set_code=set_code,
+                    )
+                    session.add(signal)
+                else:
+                    signal.channel_id = channel_id
+                    signal.message_id = message_id
+                session.flush()
+                bound.append((signal.id, slot_time))
     return bound
 
 
@@ -292,11 +293,36 @@ def create_poll_signals_sync(
         return created
 
 
+def expire_dropped_poll_signals_sync(signal_date: date) -> list[str]:
+    """Expire the still-gathering poll rows for a day whose format the schedule no longer offers, and return
+    their ids. An organizer retargeting a live day drops the formats the new schedule leaves out; a fired pod's
+    row is left alone, its draft already made."""
+    expired: list[str] = []
+    with SessionLocal() as session, schedule_overlay(session, signal_date, signal_date):
+        wanted: set[tuple[str, str]] = set()
+        for bucket in pod_signals.poll_buckets_for(signal_date):
+            for set_code in formats_on(signal_date, bucket.slot_key):
+                wanted.add((bucket.key, set_code))
+        signals = session.execute(
+            select(PodSignal).where(
+                PodSignal.kind == pod_signals.KIND_POLL,
+                PodSignal.signal_date == signal_date,
+                PodSignal.status == pod_signals.STATUS_OPEN,
+            )
+        ).scalars().all()
+        for signal in signals:
+            if (pod_signals.time_key_of(signal.bucket), signal.set_code) not in wanted:
+                signal.status = pod_signals.STATUS_EXPIRED
+                expired.append(signal.id)
+        session.commit()
+    return expired
+
+
 def rebind_launcher_rows_sync(old_message_id: str, new_message_id: str) -> int:
     """Move every poll row hanging on one launcher message onto another, and return how many moved.
 
     `create_poll_signals` adopts by day, which covers the board's own slots and misses a column already
-    gathering for tomorrow: a lane rolls forward the moment its pod finishes, and the row it opens is bound
+    gathering for tomorrow: a slot_key rolls forward the moment its pod finishes, and the row it opens is bound
     to the message that was live then. A board reposted mid-day would render without that column.
 
     A row the target already carries for the same slot and day stays where it is. One (message, bucket, day)
@@ -376,22 +402,22 @@ def _expired_poll_signal_exists(
 
 
 def roll_slot_forward_sync(
-    *, lane: str, from_day: date, guild_id: str, channel_id: str, message_id: str,
+    *, slot_key: str, from_day: date, guild_id: str, channel_id: str, message_id: str,
 ) -> list[tuple[str, str, datetime]]:
-    """Open the next day's pods for a lane whose current pod is done, and bind them to the launcher message
+    """Open the next day's pods for a slot_key whose current pod is done, and bind them to the launcher message
     that is already posted so their buttons have a home right away. Returns (signal_id, bucket_key,
     slot_time) per format the next day offers, empty when a pod already covers every one of them.
 
     Idempotent: a second table finishing after the first, or a restart, re-uses the rows already opened."""
     day = from_day + timedelta(days=1)
-    bucket = pod_signals.bucket_for_lane(day, lane)
+    bucket = pod_signals.bucket_for_slot(day, slot_key)
     if bucket is None:
         return []
     slot_time = slot_event_time(day, bucket.key)
     rolled: list[tuple[str, str, datetime]] = []
-    with SessionLocal() as session:
+    with SessionLocal() as session, schedule_overlay(session, day, day):
         covered = _event_formats_for_slot(session, slot_time)
-        for set_code in formats_on(day, lane):
+        for set_code in formats_on(day, slot_key):
             if set_code in covered:
                 continue
             signal = _open_poll_signal_for_slot(session, bucket.key, set_code, day)
@@ -1181,7 +1207,7 @@ def live_launcher_board_sync() -> tuple[str, str, str, date] | None:
     """(guild_id, channel_id, message_id, posting day) of the newest launcher board — the live surface a
     rolled slot binds to and re-renders on.
 
-    Newest is by when the board was posted, never by the days its slots cover. A board that has rolled a lane
+    Newest is by when the board was posted, never by the days its slots cover. A board that has rolled a slot_key
     forward carries next-day rows, and a fresh board posted the same day adopts only the rows dated for its
     own day, so the older board is left holding the later dates. Ranking on those dates handed the roll a
     retired message: the live board kept its dead slot, its buttons stayed closed, and the column never
@@ -1244,18 +1270,18 @@ def slot_occupied_by_any_pod_sync(slot_time: datetime) -> bool:
         return _event_id_for_slot(session, slot_time) is not None
 
 
-def slot_lane_ref_sync(signal_id: str) -> tuple[str, date] | None:
-    """(lane, the day the slot sat on) for a poll signal, so a caller can roll its column forward."""
+def slot_key_ref_sync(signal_id: str) -> tuple[str, date] | None:
+    """(slot_key, the day the slot sat on) for a poll signal, so a caller can roll its column forward."""
     with SessionLocal() as session:
         signal = session.get(PodSignal, signal_id)
         if signal is None:
             return None
-        lane = pod_signals.lane_of(signal.bucket)
-        return (lane, signal.signal_date) if lane else None
+        slot_key = pod_signals.slot_of(signal.bucket)
+        return (slot_key, signal.signal_date) if slot_key else None
 
 
-def event_lane_ref_sync(event_id: str) -> tuple[str, date] | None:
-    """(lane, the day the pod played) for a pod sitting at a launcher slot, or None for an off-grid pod that
+def event_slot_ref_sync(event_id: str) -> tuple[str, date] | None:
+    """(slot_key, the day the pod played) for a pod sitting at a launcher slot, or None for an off-grid pod that
     no column owns. Keyed on the slot the launcher reflects, so a postponed pod still rolls the column it was
     gathered in."""
     with SessionLocal() as session:
@@ -1265,7 +1291,7 @@ def event_lane_ref_sync(event_id: str) -> tuple[str, date] | None:
     local = slot_time.astimezone(SCHEDULE_TZ)
     for bucket in pod_signals.poll_buckets_for(local.date()):
         if bucket.start.hour == local.hour and bucket.start.minute == local.minute:
-            return bucket.lane, local.date()
+            return bucket.slot_key, local.date()
     return None
 
 
@@ -1344,10 +1370,10 @@ def slot_fire_candidates_sync(message_id: str, signal_date: date) -> list[Signal
 
 
 def launcher_snapshot_sync(message_id: str, signal_date: date) -> list[LauncherSlot]:
-    """The board's launcher slots lane by lane, each resolved to committed / lazy / expired.
+    """The board's launcher slots slot_key by slot_key, each resolved to committed / lazy / expired.
 
-    A lane stacks every pod already locked at its slot — a second table is its own slot — above the
-    gathering slot the lane has rolled to, so a column can play today while the other gathers tomorrow.
+    A slot_key stacks every pod already locked at its slot — a second table is its own slot — above the
+    gathering slot the slot_key has rolled to, so a column can play today while the other gathers tomorrow.
     A slot whose scheduled card carries this exact slot time reflects it: count, thread, and real start
     time are read off the event (the card is the truth; a little render-time staleness is fine).
     Otherwise the slot is lazy — its own poll signal, or an empty open slot before signals exist.
@@ -1380,24 +1406,28 @@ def _launcher_signals(session: Session, message_id: str) -> list[PodSignal]:
 
 def _board_slots(session: Session, signals: list[PodSignal], signal_date: date) -> list[LauncherSlot]:
     now = datetime.now(timezone.utc)
+    signal_days = [signal.signal_date for signal in signals]
+    start = min([signal_date, *signal_days])
+    end = max([signal_date + timedelta(days=SLOT_LOOKAHEAD_DAYS), *signal_days])
     slots: list[LauncherSlot] = []
-    for lane in pod_signals.LANE_ORDER:
-        if lane == pod_signals.LANE_BONUS:
-            slots.extend(_bonus_slots(session, signals, signal_date))
-        else:
-            slots.extend(_lane_snapshot(session, signals, lane, signal_date, now))
+    with schedule_overlay(session, start, end):
+        for slot_key in pod_signals.SLOT_ORDER:
+            if slot_key == pod_signals.SLOT_BONUS:
+                slots.extend(_bonus_slots(session, signals, signal_date))
+            else:
+                slots.extend(_slot_snapshot(session, signals, slot_key, signal_date, now))
     return slots
 
 
 def _bonus_slots(session: Session, signals: list[PodSignal], board_date: date) -> list[LauncherSlot]:
-    """Off-grid /draft pods no lane reflects, so the board shows them instead of leaving them website-only.
+    """Off-grid /draft pods no slot_key reflects, so the board shows them instead of leaving them website-only.
     Covers the board's own day, the eve it looks ahead to, and any later day a column has rolled into."""
-    days = {board_date, board_date + timedelta(days=LANE_LOOKAHEAD_DAYS)}
+    days = {board_date, board_date + timedelta(days=SLOT_LOOKAHEAD_DAYS)}
     days |= {signal.signal_date for signal in signals}
     bonus: list[LauncherSlot] = []
     for slot_time in _bonus_slot_times(session, days):
         for event_id in _event_ids_for_slot(session, slot_time):
-            bonus.append(_committed_slot(session, pod_signals.LANE_BONUS, event_id))
+            bonus.append(_committed_slot(session, pod_signals.SLOT_BONUS, event_id))
     bonus.sort(key=lambda slot: slot.slot_time or datetime.max.replace(tzinfo=timezone.utc))
     return _one_joinable_bonus_per_format(bonus)
 
@@ -1441,37 +1471,37 @@ def _bonus_slot_times(session: Session, days: set[date]) -> list[datetime]:
     return sorted(times)
 
 
-def _lane_snapshot(
-    session: Session, signals: list[PodSignal], lane: str, board_date: date, now: datetime,
+def _slot_snapshot(
+    session: Session, signals: list[PodSignal], slot_key: str, board_date: date, now: datetime,
 ) -> list[LauncherSlot]:
-    """One launcher column, earliest day first: the board's own day plus every later day this lane has
+    """One launcher column, earliest day first: the board's own day plus every later day this slot_key has
     rolled to, and within a day one entry per pod the slot carries.
 
-    A lane reaches a later day through the signals it opened, so it also always walks tomorrow: a day whose
+    A slot_key reaches a later day through the signals it opened, so it also always walks tomorrow: a day whose
     slot the format schedule closes opens no signal, and that is exactly the day the Set Championship sits on.
     The loop appends nothing for a day carrying neither a pod nor a signal, so this costs an empty read on an
     ordinary day and shows a pod committed ahead of time on the eve, which is when players read the board.
     The board's own day carries an empty slot before its signals are bound, which is what the first render of
     a fresh post draws. A day the schedule offers no format on carries none: nothing is going to bind there,
     so the column would offer a pod that never opens."""
-    lane_signals = [signal for signal in signals if pod_signals.lane_of(signal.bucket) == lane]
-    rolled_days = {signal.signal_date for signal in lane_signals if signal.signal_date > board_date}
-    lane_slots: list[LauncherSlot] = []
-    for day in sorted({board_date, board_date + timedelta(days=LANE_LOOKAHEAD_DAYS)} | rolled_days):
-        bucket = pod_signals.bucket_for_lane(day, lane)
+    slot_signals = [signal for signal in signals if pod_signals.slot_of(signal.bucket) == slot_key]
+    rolled_days = {signal.signal_date for signal in slot_signals if signal.signal_date > board_date}
+    key_slots: list[LauncherSlot] = []
+    for day in sorted({board_date, board_date + timedelta(days=SLOT_LOOKAHEAD_DAYS)} | rolled_days):
+        bucket = pod_signals.bucket_for_slot(day, slot_key)
         if bucket is None:
             continue
         slot_time = slot_event_time(day, bucket.key)
-        day_signals = [signal for signal in lane_signals if signal.signal_date == day]
+        day_signals = [signal for signal in slot_signals if signal.signal_date == day]
         pods = _slot_pods(session, bucket.key, slot_time, day_signals, now)
-        lane_slots += pods
-        if not pods and day == board_date and formats_on(day, lane):
-            lane_slots.append(LauncherSlot(
+        key_slots += pods
+        if not pods and day == board_date and formats_on(day, slot_key):
+            key_slots.append(LauncherSlot(
                 bucket.key, committed=False,
                 status=_lazy_status(pod_signals.STATUS_OPEN, slot_time, now),
                 count=0, slot_time=slot_time, names=[], thread_id=None, signal_id=None,
             ))
-    return _without_rolled_past_slots(lane_slots)
+    return _without_rolled_past_slots(key_slots)
 
 
 def _slot_pods(
@@ -1537,17 +1567,17 @@ def _signal_format(signal: PodSignal) -> str:
     return pod_signals.format_of(signal.bucket) or signal.set_code or active_set_code()
 
 
-def _without_rolled_past_slots(lane_slots: list[LauncherSlot]) -> list[LauncherSlot]:
-    """Drop a closed slot the lane has already rolled past: a slot whose time passed unfired belongs to
+def _without_rolled_past_slots(key_slots: list[LauncherSlot]) -> list[LauncherSlot]:
+    """Drop a closed slot the slot_key has already rolled past: a slot whose time passed unfired belongs to
     nobody, so the column shows the day it rolled to instead of a dead one. Played pods always stay."""
     rolled_to = None
-    for slot in lane_slots:
+    for slot in key_slots:
         if not slot.committed and slot.status != pod_signals.STATUS_EXPIRED and slot.slot_time is not None:
             rolled_to = slot.slot_time
     if rolled_to is None:
-        return lane_slots
+        return key_slots
     kept: list[LauncherSlot] = []
-    for slot in lane_slots:
+    for slot in key_slots:
         expired_and_passed = (
             not slot.committed
             and slot.status == pod_signals.STATUS_EXPIRED

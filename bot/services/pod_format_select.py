@@ -19,7 +19,7 @@ from bot.services.pod_format import (
     custom_formats,
     format_applied_message,
 )
-from bot.sets import active_set_code, recent_released_sets
+from bot.sets import active_set_code, flashback_picker_sets
 
 
 ApplyFormatCallback = Callable[[discord.Interaction, str], Awaitable[str | None]]
@@ -47,15 +47,14 @@ def write_in_option(label_prefix: str) -> discord.SelectOption:
 
 
 def format_options(current_code: str | None) -> list[discord.SelectOption]:
-    """The format dropdown options (active set + custom cubes + recent released sets + a write-in
+    """The format dropdown options (active set + custom cubes + the curated flashback sets + a write-in
     launcher), with the current one defaulted. Custom cubes sit right under the active set, matching
     the /draft set picker. Labels are prefixed with 'Format:' so the collapsed dropdown reads e.g.
-    'Format: SOS', matching the Pairings and Seats dropdowns and the lobby footer. Unreleased upcoming
-    sets are left out — they have no card pool to draft; the write-in option still drafts any set code
-    the user types, so a preview draft stays possible on purpose."""
+    'Format: SOS', matching the Pairings and Seats dropdowns and the lobby footer. Any set not in the
+    curated list is still reachable through the write-in option."""
     cur = (current_code or "").upper()
     active = active_set_code()
-    recent = recent_released_sets()
+    recent = flashback_picker_sets()
     known = {active} | {seed.code for seed in recent} | set(CUSTOM_FORMATS)
     options = [write_in_option("Format")]
     if cur and cur not in known:

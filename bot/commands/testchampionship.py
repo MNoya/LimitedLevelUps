@@ -43,14 +43,14 @@ from bot.services.pod_join_button import build_join_view
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
 from bot.services.pod_signals import (
-    LANE_EARLY,
-    LANE_LATE,
+    SLOT_EARLY,
+    SLOT_LATE,
     RSVP_MAYBE,
     RSVP_NO,
     RSVP_YES,
     STATUS_FIRED,
     STATUS_OPEN,
-    bucket_for_lane,
+    bucket_for_slot,
     named_bucket_key,
     slot_event_time,
 )
@@ -216,11 +216,11 @@ async def setup(bot: commands.Bot) -> None:
 def _preview_launcher_slots(
     set_code: str, event_at: datetime, names: list[str], thread_id: str,
 ) -> list[LauncherSlot]:
-    """Championship-day launcher slots for the preview: the Early lane overridden to the committed
-    championship pointer, the Late lane a normal open weekend slot."""
+    """Championship-day launcher slots for the preview: the Early slot_key overridden to the committed
+    championship pointer, the Late slot_key a normal open weekend slot."""
     day = event_at.astimezone(SCHEDULE_TZ).date()
-    early_bucket = bucket_for_lane(day, LANE_EARLY)
-    late_bucket = bucket_for_lane(day, LANE_LATE)
+    early_bucket = bucket_for_slot(day, SLOT_EARLY)
+    late_bucket = bucket_for_slot(day, SLOT_LATE)
     top_yes = names[: championship.SEAT_COUNT]
     afternoon = LauncherSlot(
         bucket_key=early_bucket.key, committed=True, status=STATUS_FIRED, count=len(top_yes),

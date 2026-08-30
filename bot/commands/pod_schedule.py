@@ -2,20 +2,12 @@
 
 The grid ships as a rendered PNG (`pod_schedule_image`); everything a reader might want to select, click or
 localize stays text. An embed rather than Components V2: mobile Pins, search results and reply previews
-render content and embeds only, so a V2 layout shows as an empty message everywhere it is previewed. The
-cost is the set-release note, which an embed can only place above the calendar it annotates.
+render content and embeds only, so a V2 layout shows as an empty message everywhere it is previewed.
 
-The heading opens the description instead of filling `title`, which takes no markdown: only the body can
-carry a heading level, and only there does the link stop exactly where its text does.
-
-The slot line reads off the poll buckets and answers with each slot's next start, so a call after midnight
-names today's pods without the reader converting anything out of ET.
+The embed and image builders live in `pod_schedule_card`, shared with the daily tick. This command renders a
+one-off snapshot carrying the same Vote and configure buttons, not pinned or kept fresh like the tick's card.
 """
 from __future__ import annotations
-
-import asyncio
-import io
-from datetime import date, datetime
 
 import discord
 from discord import app_commands
@@ -23,38 +15,15 @@ from discord.ext import commands
 
 from bot import audit
 from bot.commands import descriptions as desc
-from bot.config import PRODUCTION_GUILD_ID, settings
-from bot.discord_helpers import EM_SPACE, posts_publicly
-from bot.services import pod_format_interest as fi
-from bot.services.championship_dates import championship_on
-from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
-from bot.services.pod_format import is_custom
-from bot.services.pod_format_schedule import calendar_days, extras_on, latest_on, rotation_in
-from bot.services.pod_roles import role_mention
-from bot.services.pod_schedule import SCHEDULE_TZ
-from bot.services.pod_schedule_image import render_calendar_png
-from bot.services.pod_signals import WEEKDAY_BUCKETS, is_weekend, next_lane_start
-from bot.sets import active_set_code, release_instant, set_name_for
+from bot.commands.authorization import moderator_authorized_interaction
+from bot.discord_helpers import posts_publicly, resolve_pod_chat_channel
+from bot.services.pod_format_vote import post_vote_card, vote_ping_text
+from bot.services.pod_schedule_card import DEFAULT_WEEKS, MAX_WEEKS, render_schedule
+from bot.services.pod_schedule_controls import PodScheduleView
 
-MSG_HEADING = "## 🗓️ [Pod Draft Format Schedule]({url}) 🚀"
-MSG_SLOT = "{emoji} {role} **<t:{unix}:t>**"
-MSG_DAILY_SET = "{symbol} {role} **every day**"
-MSG_EXTRA_FORMAT = "{symbol} {role} **{days}**"
-MSG_EXTRA_FORMAT_ANY_DAY = "{symbol} {role}"
-DAYS_WEEKDAY = "Mon-Fri"
-DAYS_WEEKEND = "Weekends"
-MSG_CHAMPIONSHIP = "👑 {role} <t:{unix}:R>"
-MSG_ARRIVAL = "{symbol} **{name}** <t:{unix}:R>"
-
-CHANNEL_URL = "https://discord.com/channels/{guild_id}/{channel_id}"
-
-IMAGE_FILENAME = "pod-schedule.png"
-IMAGE_URL = f"attachment://{IMAGE_FILENAME}"
-DEFAULT_WEEKS = 4
-MAX_WEEKS = 8
-COLUMN_GAP = EM_SPACE * 2
-SET_COLUMN_GAP = EM_SPACE
-LINE_GAP = "\n\n"
+MSG_OPEN_VOTE_DENIED = "Only organizers can open the format vote"
+MSG_NO_POD_CHAT = "Pod chat channel unavailable"
+MSG_VOTE_POSTED = "Posted the format vote card in pod chat"
 
 
 class PodSchedule(commands.Cog):
@@ -68,125 +37,31 @@ class PodSchedule(commands.Cog):
     async def pod_schedule(
         self, interaction: discord.Interaction, weeks: app_commands.Range[int, 1, MAX_WEEKS] = DEFAULT_WEEKS,
     ) -> None:
-        now = datetime.now(SCHEDULE_TZ)
         audit.event("pod_schedule_invoked", user_id=str(interaction.user.id), weeks=weeks)
-        png = await asyncio.to_thread(render_calendar_png, now.date(), weeks)
+        embed, file = await render_schedule(interaction.guild, weeks)
         await interaction.response.send_message(
-            embed=build_schedule_embed(interaction.guild, now, weeks),
-            file=discord.File(io.BytesIO(png), IMAGE_FILENAME),
+            embed=embed,
+            file=file,
+            view=PodScheduleView(),
             allowed_mentions=discord.AllowedMentions.none(),
             ephemeral=not posts_publicly(interaction),
         )
 
-
-def build_schedule_embed(guild: discord.Guild | None, now: datetime, weeks: int) -> discord.Embed:
-    days = calendar_days(now.date(), weeks)
-    lines = [slot_line(guild, now), set_line(guild, days, now)]
-    extras = extras_line(guild, days, now.date())
-    if extras:
-        lines.append(extras)
-    championship = championship_line(guild, days, now)
-    if championship:
-        lines.append(championship)
-    heading = MSG_HEADING.format(url=coordination_url(guild))
-    embed = discord.Embed(description=f"{heading}\n{LINE_GAP.join(lines)}", color=discord.Color.green())
-    embed.set_image(url=IMAGE_URL)
-    return embed
-
-
-def coordination_url(guild: discord.Guild | None) -> str:
-    """The heading links to the channel the pods actually run in, which is the one route out of the schedule
-    that survives a pin preview: those render the embed but drop any button under it. A DM carries no guild
-    of its own, so it lands on the production server."""
-    guild_id = guild.id if guild is not None else PRODUCTION_GUILD_ID
-    return CHANNEL_URL.format(guild_id=guild_id, channel_id=settings.pod_draft_channel_id)
-
-
-def slot_line(guild: discord.Guild | None, now: datetime) -> str:
-    """Both slots on one row, each naming the role to hold and when it next drafts."""
-    slots = []
-    for bucket in WEEKDAY_BUCKETS:
-        start = next_lane_start(bucket.lane, now)
-        if start is None:
-            continue
-        slots.append(MSG_SLOT.format(
-            emoji=bucket.emoji, role=role_mention(guild, bucket.role_name), unix=int(start.timestamp()),
-        ))
-    return COLUMN_GAP.join(slots)
-
-
-def set_line(guild: discord.Guild | None, days: list[date], now: datetime) -> str:
-    """Two columns: the set every pod drafts, and the set arriving inside the span.
-
-    The daily set is named by its ping role, not by its code, so the line stays true across a rotation.
-
-    The second column names the next rotation still ahead. A rotation stays in the span for the rest of its
-    week, and a long span can hold a second one, so the one already made is skipped: that set is the daily
-    set the first column names, and its timestamp would read as upcoming.
-
-    The gap is narrower here because the first column runs wider than the rows around it."""
-    code = active_set_code()
-    columns = [MSG_DAILY_SET.format(
-        symbol=fi.format_emoji(code), role=role_mention(guild, fi.LATEST_SET_ROLE_NAME),
-    )]
-    arrival = rotation_in(days, now)
-    if arrival is not None:
-        incoming = latest_on(arrival)
-        columns.append(MSG_ARRIVAL.format(
-            symbol=fi.format_emoji(incoming), name=set_name_for(incoming),
-            unix=int(release_instant(arrival).timestamp()),
-        ))
-    return SET_COLUMN_GAP.join(columns)
-
-
-def extras_line(guild: discord.Guild | None, days: list[date], today: date) -> str:
-    """The formats that run beside the daily set, in the same columns the slots use. Empty until a set cycle
-    has days written for them."""
-    items = []
-    for role_name, symbol, when in scheduled_extras(days, today):
-        template = MSG_EXTRA_FORMAT if when else MSG_EXTRA_FORMAT_ANY_DAY
-        items.append(template.format(symbol=symbol, role=role_mention(guild, role_name), days=when))
-    return COLUMN_GAP.join(items)
-
-
-def scheduled_extras(days: list[date], today: date) -> list[tuple[str, object, str]]:
-    """The flashback and cube roles that have pods still to come in the rendered span, each with the days it
-    runs on. A cadence a set cycle has not been written yet, the weeks straight after a rotation, drops off
-    the line rather than promising pods no day carries."""
-    weekends: dict[str, set[bool]] = {}
-    for day in days:
-        if day < today:
-            continue
-        for code in extras_on(day):
-            role_name = fi.CUBE_ROLE_NAME if is_custom(code) else fi.FLASHBACK_ROLE_NAME
-            weekends.setdefault(role_name, set()).add(is_weekend(day))
-    ordered = ((fi.FLASHBACK_ROLE_NAME, fi.flashback_emoji()), (fi.CUBE_ROLE_NAME, fi.cube_emoji()))
-    return [
-        (role_name, symbol, _days_label(weekends[role_name]))
-        for role_name, symbol in ordered if role_name in weekends
-    ]
-
-
-def _days_label(weekends: set[bool]) -> str:
-    """Named as the week half a role's pods sit in, and left unnamed once they sit in both, so the label
-    never promises a day the table does not carry."""
-    if weekends == {False}:
-        return DAYS_WEEKDAY
-    if weekends == {True}:
-        return DAYS_WEEKEND
-    return ""
-
-
-def championship_line(guild: discord.Guild | None, days: list[date], now: datetime) -> str:
-    """The next championship the span holds. Empty in a span with none left: a played one keeps its calendar
-    crown but leaves this line, where its relative timestamp would read as upcoming."""
-    for day in days:
-        starts_at = championship_on(day)
-        if starts_at is not None and starts_at > now:
-            return MSG_CHAMPIONSHIP.format(
-                role=role_mention(guild, SET_CHAMPION_ROLE_NAME), unix=int(starts_at.timestamp()),
-            )
-    return ""
+    @app_commands.command(name="openvote", description=desc.OPEN_VOTE)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    @app_commands.allowed_installs(guilds=True, users=False)
+    async def open_vote(self, interaction: discord.Interaction) -> None:
+        if not await moderator_authorized_interaction(interaction):
+            await interaction.response.send_message(MSG_OPEN_VOTE_DENIED, ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        channel = resolve_pod_chat_channel(self.bot)
+        if channel is None:
+            await interaction.followup.send(MSG_NO_POD_CHAT, ephemeral=True)
+            return
+        await post_vote_card(channel, vote_ping_text(interaction.guild), force=True)
+        audit.event("format_vote_opened", user_id=str(interaction.user.id))
+        await interaction.followup.send(MSG_VOTE_POSTED, ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

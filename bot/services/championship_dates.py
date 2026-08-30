@@ -19,6 +19,9 @@ SATURDAY = 5
 CHAMPIONSHIP_TIME = time(14, 0)
 CREATION_LEAD_DAYS = 5
 CREATION_HOUR_ET = 12
+BALLOT_LEAD_DAYS = 21
+PARALLEL_LEAD_DAYS = 14
+VOTE_REMINDER_LAG_DAYS = 2
 
 
 @dataclass(frozen=True)
@@ -87,3 +90,35 @@ def plan_due_for_creation(when: datetime) -> ChampionshipPlan | None:
     if plan is None:
         return None
     return plan if when.astimezone(RELEASE_TZ).date() == plan.create_on else None
+
+
+def vote_opens_at(plan: ChampionshipPlan) -> datetime:
+    """When the community format vote opens: `BALLOT_LEAD_DAYS` before the championship."""
+    return plan.event_at - timedelta(days=BALLOT_LEAD_DAYS)
+
+
+def voting_open(when: datetime | None = None) -> bool:
+    """Whether the format vote is live now: from the ballot open through the rotation that ends the season."""
+    plan = plan_for(when)
+    if plan is None:
+        return False
+    now = when if when is not None else datetime.now(RELEASE_TZ)
+    return vote_opens_at(plan) <= now < plan.next_release_at
+
+
+def vote_ping_due(when: datetime) -> ChampionshipPlan | None:
+    """The plan whose ballot opens on the ET date of `when`, for the one opening ping, else None."""
+    plan = plan_for(when)
+    if plan is None:
+        return None
+    return plan if when.astimezone(RELEASE_TZ).date() == vote_opens_at(plan).date() else None
+
+
+def vote_reminder_due(when: datetime) -> ChampionshipPlan | None:
+    """The plan whose ballot opened `VOTE_REMINDER_LAG_DAYS` before the ET date of `when`, for the single
+    reminder ping, else None."""
+    plan = plan_for(when)
+    if plan is None:
+        return None
+    reminder_date = vote_opens_at(plan).date() + timedelta(days=VOTE_REMINDER_LAG_DAYS)
+    return plan if when.astimezone(RELEASE_TZ).date() == reminder_date else None

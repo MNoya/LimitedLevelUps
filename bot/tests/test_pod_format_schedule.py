@@ -2,53 +2,56 @@ from datetime import date, datetime, time, timedelta
 
 import pytest
 
-from bot.commands.pod_schedule import SET_COLUMN_GAP, set_line
-from bot.services import pod_format
+from bot.services.pod_schedule_card import arrival_line
+from bot.models import PodDraftEvent, PodScheduleSlot
 from bot.services import pod_format_schedule as schedule
 from bot.services.pod_format import PEASANT_CODE
-from bot.services.pod_signals import LANE_EARLY, LANE_LATE
+from bot.services.pod_signals import SLOT_EARLY, SLOT_LATE
 from bot.sets import RELEASE_TZ, active_set_code
 
 
-def test_every_scheduled_format_resolves_to_a_known_set_or_cube():
-    unresolved = {}
-    for key, entry in schedule.FORMATS_BY_DAY.items():
-        day, lane = key if isinstance(key, tuple) else (key, None)
-        if schedule.FLASHBACK in entry:
-            unresolved[key] = schedule.FLASHBACK
-        for code in schedule.formats_for(day, lane):
-            if pod_format.resolve_format_code(code) != code:
-                unresolved[key] = code
-
-    assert unresolved == {}
+def _add_slots(session, slots):
+    for (day, slot_key), formats in slots.items():
+        session.add(PodScheduleSlot(day=day, slot=slot_key, formats=list(formats), source="manual"))
+    session.flush()
 
 
-def test_a_slot_override_beats_the_whole_day_entry(monkeypatch):
+def _add_pod(session, day, set_code, *, kind="tournament"):
+    session.add(PodDraftEvent(
+        event_date=day, event_time=datetime.combine(day, time(20, 0)), set_code=set_code, kind=kind,
+        name=f"{set_code} pod", draftmancer_session="s", discord_thread_id="t", socket_status="open",
+    ))
+    session.flush()
+
+
+def test_an_overlay_row_beats_the_derived_default(session):
     day = date(2027, 1, 4)
-    monkeypatch.setitem(schedule.FORMATS_BY_DAY, day, (schedule.LATEST, "NEO"))
-    monkeypatch.setitem(schedule.FORMATS_BY_DAY, (day, LANE_LATE), (schedule.LATEST, "PEASANT"))
+    _add_slots(session, {(day, SLOT_EARLY): (schedule.LATEST, "NEO"), (day, SLOT_LATE): (schedule.LATEST, "PEASANT")})
 
-    assert schedule.formats_for(day, LANE_EARLY) == (active_set_code(), "NEO")
-    assert schedule.formats_for(day, LANE_LATE) == (active_set_code(), "PEASANT")
-    assert schedule.formats_for(day) == (active_set_code(), "NEO")
+    with schedule.schedule_overlay(session, day, day):
+        assert schedule.formats_for(day, SLOT_EARLY) == (active_set_code(), "NEO")
+        assert schedule.formats_for(day, SLOT_LATE) == (active_set_code(), "PEASANT")
+        assert schedule.formats_for(day) == (active_set_code(), "NEO", "PEASANT")
 
 
 def test_a_day_off_the_schedule_offers_only_the_latest_set():
     assert schedule.formats_for(date(1999, 1, 1)) == (active_set_code(),)
 
 
-def test_a_day_can_drop_the_latest_set_entirely(monkeypatch):
+def test_a_slot_can_drop_the_latest_set_entirely(session):
     day = date(2027, 1, 5)
-    monkeypatch.setitem(schedule.FORMATS_BY_DAY, day, ("PEASANT",))
+    _add_slots(session, {(day, SLOT_EARLY): ("PEASANT",)})
 
-    assert schedule.formats_for(day) == ("PEASANT",)
+    with schedule.schedule_overlay(session, day, day):
+        assert schedule.formats_for(day, SLOT_EARLY) == ("PEASANT",)
 
 
-def test_naming_the_active_set_beside_latest_opens_one_pod_not_two(monkeypatch):
+def test_naming_the_active_set_beside_latest_opens_one_pod_not_two(session):
     day = date(2027, 1, 6)
-    monkeypatch.setitem(schedule.FORMATS_BY_DAY, day, (schedule.LATEST, active_set_code(), "NEO"))
+    _add_slots(session, {(day, SLOT_EARLY): (schedule.LATEST, active_set_code(), "NEO")})
 
-    assert schedule.formats_for(day) == (active_set_code(), "NEO")
+    with schedule.schedule_overlay(session, day, day):
+        assert schedule.formats_for(day, SLOT_EARLY) == (active_set_code(), "NEO")
 
 
 @pytest.mark.parametrize("day, expected", [
@@ -63,8 +66,8 @@ def test_a_day_carries_the_set_live_on_that_day(day, expected):
 def test_the_championship_closes_its_own_early_slot():
     champs = date(2026, 9, 19)
 
-    assert schedule.formats_on(champs, LANE_EARLY) == ()
-    assert schedule.formats_on(champs, LANE_LATE) == ("HOB",)
+    assert schedule.formats_on(champs, SLOT_EARLY) == ()
+    assert schedule.formats_on(champs, SLOT_LATE) == ("HOB",)
 
 
 @pytest.mark.parametrize("day, opens, planned", [
@@ -81,49 +84,73 @@ def test_the_days_after_a_championship_drop_the_latest_set(day, opens, planned):
     assert schedule.planned_on(day) == planned
 
 
-def test_a_day_past_a_rotation_offers_the_set_it_will_draft(monkeypatch):
+def test_a_day_past_a_rotation_offers_the_set_it_will_draft(session):
     day = date(2026, 3, 3)
-    monkeypatch.setitem(schedule.FORMATS_BY_DAY, day, (schedule.LATEST, "NEO"))
+    _add_slots(session, {(day, SLOT_EARLY): (schedule.LATEST, "NEO")})
 
-    assert schedule.formats_on(day) == ("TMT", "NEO")
+    with schedule.schedule_overlay(session, day, day):
+        assert schedule.formats_on(day, SLOT_EARLY) == ("TMT", "NEO")
 
 
-def test_a_day_shows_only_what_it_adds_to_the_daily_set(monkeypatch):
+def test_a_day_shows_only_what_it_adds_to_the_daily_set(session):
     day = date(2026, 3, 4)
-    monkeypatch.setitem(schedule.FORMATS_BY_DAY, day, (schedule.LATEST, "NEO"))
+    _add_slots(session, {(day, SLOT_EARLY): (schedule.LATEST, "NEO"), (day, SLOT_LATE): (schedule.LATEST, "NEO")})
 
-    assert schedule.extras_on(day) == ("NEO",)
-
-
-def test_a_day_offering_the_set_alone_adds_nothing(monkeypatch):
-    day = date(2026, 3, 5)
-    monkeypatch.setitem(schedule.FORMATS_BY_DAY, day, (schedule.LATEST,))
-
-    assert schedule.extras_on(day) == ()
+    with schedule.schedule_overlay(session, day, day):
+        assert schedule.extras_on(day) == ("NEO",)
 
 
-def test_a_closed_slot_offers_nothing_while_the_day_still_offers_the_set(monkeypatch):
+def test_a_day_offering_the_set_alone_adds_nothing():
+    assert schedule.extras_on(date(2026, 3, 5)) == ()
+
+
+def test_a_real_pod_shows_as_an_extra_beside_the_daily_set(session):
+    day = date(2026, 9, 10)
+    _add_pod(session, day, PEASANT_CODE)
+
+    with schedule.schedule_overlay(session, day, day):
+        assert schedule.extras_on(day) == (PEASANT_CODE,)
+
+
+def test_a_real_pod_supersedes_the_flashback_placeholder(session):
+    day = date(2026, 9, 21)
+    _add_pod(session, day, "NEO")
+
+    with schedule.schedule_overlay(session, day, day):
+        assert schedule.planned_on(day) == ("NEO",)
+
+
+def test_set_slot_replaces_the_row_and_can_close_the_slot(session):
+    day = date(2027, 2, 1)
+    schedule.set_slot(session, day, SLOT_EARLY, (schedule.LATEST, "PEASANT"))
+    schedule.set_slot(session, day, SLOT_EARLY, ())
+
+    with schedule.schedule_overlay(session, day, day):
+        assert schedule.formats_for(day, SLOT_EARLY) == ()
+
+
+def test_a_closed_slot_offers_nothing_while_the_day_still_offers_the_set(session):
     day = date(2027, 1, 7)
-    monkeypatch.setitem(schedule.FORMATS_BY_DAY, day, (schedule.LATEST,))
-    monkeypatch.setitem(schedule.FORMATS_BY_DAY, (day, LANE_EARLY), schedule.CLOSED)
+    _add_slots(session, {(day, SLOT_EARLY): schedule.CLOSED})
 
-    assert schedule.formats_for(day, LANE_EARLY) == ()
-    assert schedule.formats_for(day, LANE_LATE) == (active_set_code(),)
+    with schedule.schedule_overlay(session, day, day):
+        assert schedule.formats_for(day, SLOT_EARLY) == ()
+        assert schedule.formats_for(day, SLOT_LATE) == (active_set_code(),)
 
 
 def test_the_rotation_day_is_found_inside_the_rendered_span():
     assert schedule.rotation_in(schedule.calendar_days(date(2026, 3, 5), 1)) == date(2026, 3, 3)
 
 
-def test_the_set_line_drops_the_arrival_once_the_rotation_has_happened():
+def test_the_arrival_line_drops_once_the_rotation_has_happened():
     days = schedule.calendar_days(date(2026, 3, 5), 1)
     noon = datetime.combine(date(2026, 3, 3), time(12, 0), tzinfo=RELEASE_TZ)
 
-    before = set_line(None, days, noon - timedelta(hours=1))
-    after = set_line(None, days, noon + timedelta(hours=1))
+    before = arrival_line(None, days, noon - timedelta(hours=1))
+    after = arrival_line(None, days, noon + timedelta(hours=1))
 
-    assert SET_COLUMN_GAP in before
-    assert SET_COLUMN_GAP not in after
+    assert before != ""
+    assert after == ""
 
 
 def test_a_span_marks_every_rotation_it_holds():

@@ -117,10 +117,19 @@ from bot.tasks.pod_daily_poll import (
     SlotJoinButton,
     SlotSignUpButton,
     init_daily_poll,
-    reconcile_rolled_lanes,
+    reconcile_rolled_slots,
 )
 from bot.services.pod_launch import init_launch, rearm_signals
 from bot.tasks.format_schedule_post import init_format_schedule
+from bot.tasks.pod_schedule_post import fire_schedule_post, init_pod_schedule_post
+from bot.services.pod_schedule_controls import PodScheduleView
+from bot.services.pod_format_vote import (
+    AddFormatItem as VoteAddFormatItem,
+    ManageVotesItem,
+    VoteFormatsButton,
+    VoteOptionItem,
+    VotersItem,
+)
 from bot.tasks.set_awards_post import init_set_awards_schedule
 from bot.tasks.championship_post import init_championship_schedule
 from bot.tasks.p0p1_reminder_post import init_p0p1_reminder
@@ -228,6 +237,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         init_reminder(bot)
         init_underfill(bot)
         init_format_schedule(bot)
+        init_pod_schedule_post(bot)
         init_set_awards_schedule(bot)
         init_championship_schedule(bot)
         init_p0p1_reminder(bot)
@@ -296,6 +306,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(DisconnectVoteButton)
         bot.add_dynamic_items(FormatPollButton)
         bot.add_dynamic_items(AddFormatButton)
+        bot.add_dynamic_items(VoteOptionItem, VoteAddFormatItem, VotersItem, ManageVotesItem, VoteFormatsButton)
         bot.add_dynamic_items(JoinDraftButton)
         bot.add_dynamic_items(AttendeesButton)
         bot.add_dynamic_items(OpenTablesButton)
@@ -321,6 +332,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_view(RolesView())
         bot.add_view(persistent_pod_card_view())
         bot.add_view(PodQueueView())
+        bot.add_view(PodScheduleView())
         bot.add_view(PodRsvpView())
 
         log.info("setup_hook: cogs loaded; run `!sync` to publish slash commands to Discord")
@@ -649,8 +661,10 @@ def build_bot(guild_id: int) -> commands.Bot:
             await heal_finished_cards(bot)
             await heal_format_locked_cards(bot)
             await rearm_signals(bot)
-            await reconcile_rolled_lanes(bot)
+            await reconcile_rolled_slots(bot)
             await catch_up_daily_poll(bot)
+            if settings.pod_schedule_enabled:
+                await fire_schedule_post()
             await reconcile_unannounced_championships(bot)
             try:
                 await reconcile_ping_roles(bot)

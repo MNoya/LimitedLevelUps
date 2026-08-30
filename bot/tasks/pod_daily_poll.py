@@ -56,6 +56,8 @@ from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_format_poll
 from bot.services import pod_launch
+from bot.services.championship_dates import voting_open
+from bot.services.pod_format_vote import VoteFormatsButton
 from bot.services.pod_hold_view import build_hold_items
 from bot.services.pod_active import set_pod_complete_hook, set_pod_drafting_hook, set_podium_posted_hook
 from bot.services.ping_roles import (
@@ -111,9 +113,9 @@ from bot.services.pod_launcher_copy import (
 from bot.services.pod_reminder_copy import SLOT_FIRE_PING
 from bot.services.pod_roles import find_role, role_mention
 from bot.services.pod_signals import (
-    LANE_BONUS,
-    LANE_EARLY,
-    LANE_LATE,
+    SLOT_BONUS,
+    SLOT_EARLY,
+    SLOT_LATE,
     RSVP_MAYBE,
     RSVP_NO,
     RSVP_YES,
@@ -124,7 +126,7 @@ from bot.services.pod_signals import (
     bucket_role_name,
     fire_threshold_for,
     format_of,
-    lane_of,
+    slot_of,
     should_fire,
     slot_can_fire,
     slot_role_name_for_event_time,
@@ -173,10 +175,10 @@ def init_daily_poll(bot: commands.Bot) -> None:
     global _bot
     _bot = bot
     register_launcher_refresh(refresh_launcher_for_date)
-    set_pod_drafting_hook(roll_lane_after_draft_start)
-    set_pod_complete_hook(roll_lane_after_pod)
+    set_pod_drafting_hook(roll_slot_after_draft_start)
+    set_pod_complete_hook(roll_slot_after_pod)
     set_podium_posted_hook(release_play_again)
-    pod_launch.set_slot_roll_hook(roll_lane_after_expired_slot)
+    pod_launch.set_slot_roll_hook(roll_slot_after_expiry)
     register_short_fire_hook(fire_short_slot)
     bot.pod_scheduler.add_job(
         fire_daily_poll, "cron", hour=POST_HOUR_ET, minute=0,
@@ -358,7 +360,7 @@ def build_poll_embed(
     parts = (heading, intro, _format_legend(codes, guild) if several else "")
     description = "\n".join(part for part in parts if part)
     embed = discord.Embed(description=description, color=discord.Color.green())
-    pair = [_lane_slots(slots, lane) for lane in _lane_order(slots) if lane != LANE_BONUS]
+    pair = [_key_slots(slots, slot_key) for slot_key in _slot_order(slots) if slot_key != SLOT_BONUS]
     bonus = _bonus_columns(slots)
     if bonus and _bonus_placed_first(slots):
         groups = [bonus, pair]
@@ -398,7 +400,7 @@ def _add_column_groups(
 def _bonus_columns(slots: list[pod_launch.LauncherSlot]) -> list[list[pod_launch.LauncherSlot]]:
     """One column per format, earliest first, so two bonus pods of different formats read as two columns."""
     by_format: dict[str | None, list[pod_launch.LauncherSlot]] = {}
-    for slot in _lane_slots(slots, LANE_BONUS):
+    for slot in _key_slots(slots, SLOT_BONUS):
         by_format.setdefault(slot.set_code, []).append(slot)
     columns = [column for column in by_format.values() if _gathering_groups(column)]
     columns.sort(key=lambda column: min((slot.slot_time for slot in column if slot.slot_time), default=FAR_FUTURE))
@@ -408,7 +410,7 @@ def _bonus_columns(slots: list[pod_launch.LauncherSlot]) -> list[list[pod_launch
 def _group_is_bonus(group: list[list[pod_launch.LauncherSlot]]) -> bool:
     for column in group:
         for slot in column:
-            return lane_of(slot.bucket_key) == LANE_BONUS
+            return slot_of(slot.bucket_key) == SLOT_BONUS
     return False
 
 
@@ -456,7 +458,7 @@ def _format_legend(codes: list[str], guild: discord.Guild | None) -> str:
     renders none of it: there is nothing to tell apart, and one line naming the set the whole board already
     plays is a line between the reader and the slots.
 
-    Deliberately not a numbered list of choices: lanes can sit on different days carrying different formats,
+    Deliberately not a numbered list of choices: slot_keys can sit on different days carrying different formats,
     and a numbered slate would then claim a pod is on offer tonight when it is tomorrow's. Which format is
     where stays the columns' job."""
     lines = []
@@ -505,45 +507,45 @@ def _played_on_day(slot: pod_launch.LauncherSlot, day: date | None) -> bool:
     return slot.slot_time.astimezone(SCHEDULE_TZ).date() == day
 
 
-def _lane_order(slots: list[pod_launch.LauncherSlot]) -> list[str]:
-    """Lanes in first-seen order, so each lane renders as one column in the order slots arrive. A lane is
+def _slot_order(slots: list[pod_launch.LauncherSlot]) -> list[str]:
+    """Slot keys in first-seen order, so each renders as one column in the order slots arrive. A slot_key is
     the column a slot belongs to for life, so a slot that rolled from a weekday to a weekend stays in the
     column it started in instead of opening a third one."""
     order: list[str] = []
     for slot in slots:
-        lane = lane_of(slot.bucket_key)
-        if lane is not None and lane not in order:
-            order.append(lane)
+        slot_key = slot_of(slot.bucket_key)
+        if slot_key is not None and slot_key not in order:
+            order.append(slot_key)
     return order
 
 
-def _ordered_lanes(slots: list[pod_launch.LauncherSlot]) -> list[str]:
+def _ordered_slots(slots: list[pod_launch.LauncherSlot]) -> list[str]:
     """Render order: the Early and Late pair, with Bonus before it when the earliest bonus pod starts before
     Early and after it otherwise, so the rows read in time order."""
-    fixed = [lane for lane in _lane_order(slots) if lane != LANE_BONUS]
-    if not any(lane_of(slot.bucket_key) == LANE_BONUS for slot in slots):
+    fixed = [slot_key for slot_key in _slot_order(slots) if slot_key != SLOT_BONUS]
+    if not any(slot_of(slot.bucket_key) == SLOT_BONUS for slot in slots):
         return fixed
-    return [LANE_BONUS] + fixed if _bonus_placed_first(slots) else fixed + [LANE_BONUS]
+    return [SLOT_BONUS] + fixed if _bonus_placed_first(slots) else fixed + [SLOT_BONUS]
 
 
 def _bonus_placed_first(slots: list[pod_launch.LauncherSlot]) -> bool:
     """Whether the earliest bonus pod starts before the day's Early pod, or before Late when no Early column
     is on the board. Below by default."""
-    bonus_times = [slot.slot_time for slot in slots if lane_of(slot.bucket_key) == LANE_BONUS and slot.slot_time]
+    bonus_times = [slot.slot_time for slot in slots if slot_of(slot.bucket_key) == SLOT_BONUS and slot.slot_time]
     if not bonus_times:
         return False
-    reference = _lane_start(slots, LANE_EARLY) or _lane_start(slots, LANE_LATE)
+    reference = _slot_start(slots, SLOT_EARLY) or _slot_start(slots, SLOT_LATE)
     return reference is not None and min(bonus_times) < reference
 
 
-def _lane_start(slots: list[pod_launch.LauncherSlot], lane: str) -> datetime | None:
-    times = [slot.slot_time for slot in slots if lane_of(slot.bucket_key) == lane and slot.slot_time]
+def _slot_start(slots: list[pod_launch.LauncherSlot], slot_key: str) -> datetime | None:
+    times = [slot.slot_time for slot in slots if slot_of(slot.bucket_key) == slot_key and slot.slot_time]
     return min(times) if times else None
 
 
-def _lane_slots(slots: list[pod_launch.LauncherSlot], lane: str) -> list[pod_launch.LauncherSlot]:
-    """A lane's slots stacked earliest first, so today's block sits above the next day's in the column."""
-    matches = [slot for slot in slots if lane_of(slot.bucket_key) == lane]
+def _key_slots(slots: list[pod_launch.LauncherSlot], slot_key: str) -> list[pod_launch.LauncherSlot]:
+    """A slot_key's slots stacked earliest first, so today's block sits above the next day's in the column."""
+    matches = [slot for slot in slots if slot_of(slot.bucket_key) == slot_key]
     return sorted(matches, key=lambda slot: slot.slot_time or FAR_FUTURE)
 
 
@@ -572,7 +574,7 @@ def _clamped_value(value: str) -> str:
 def _column_value(
     bucket_slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None,
 ) -> str:
-    """One lane column: the pods it offers, then the championship it points at. A championship is read-only
+    """One slot_key column: the pods it offers, then the championship it points at. A championship is read-only
     and carries its own header, so it renders as a block below the column's own pods and never replaces
     them: on the eve of a championship the column still shows the pod it offers that day."""
     pods = [slot for slot in bucket_slots if not slot.championship]
@@ -624,7 +626,7 @@ def _group_block(
 ) -> str | None:
     """One full self-contained block for a slot time: the date, then a block per format the slot carries.
 
-    The lane name leads the column's first block only. A later dated block is another time in the same
+    The slot_key name leads the column's first block only. A later dated block is another time in the same
     column, a pod moved off its slot or a day this column rolled to, and repeating the name there reads as a
     second slot. The Played and Next sections do the same, heading the column once."""
     if bucket_by_key(group[0].bucket_key) is None:
@@ -638,7 +640,7 @@ def _group_block(
 
 
 def _group_header(group: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> str:
-    """The lane header with its countdown beside it. Without this the block carries a date and nothing about
+    """The slot_key header with its countdown beside it. Without this the block carries a date and nothing about
     how soon the pod starts."""
     lead = group[0]
     name = _slot_name_only(lead, guild)
@@ -676,7 +678,7 @@ def _pod_block(
 
 
 def _championship_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str | None:
-    """The championship lane's own block: crown, set symbol, the role at stake, date, then the thread link
+    """The championship slot_key's own block: crown, set symbol, the role at stake, date, then the thread link
     and top RSVPs. The header names `@Set Champion` rather than the event, so the column says what the pod
     is played for. The button below it keeps the event name, since a button label cannot carry a mention."""
     if bucket_by_key(slot.bucket_key) is None:
@@ -690,7 +692,7 @@ def _championship_block(slot: pod_launch.LauncherSlot, guild: discord.Guild | No
 
 
 def _slot_name_only(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
-    """The lane header wears its ping role, so the colored pill both names the column and shows the role a
+    """The slot_key header wears its ping role, so the colored pill both names the column and shows the role a
     player joins to be pinged for it."""
     bucket = bucket_by_key(slot.bucket_key)
     slot_emoji = emojis.resolve(bucket.emoji) if bucket else None
@@ -736,8 +738,8 @@ def _winner_seat_url(slot: pod_launch.LauncherSlot) -> str | None:
 
 
 def _championship_body(slot: pod_launch.LauncherSlot, guild: discord.Guild | None) -> str:
-    """The championship lane on the launcher: a link into the thread and the current top Yes RSVPs,
-    read-only. Signup happens in the thread, so this lane carries no join toggle."""
+    """The championship slot_key on the launcher: a link into the thread and the current top Yes RSVPs,
+    read-only. Signup happens in the thread, so this slot_key carries no join toggle."""
     lines: list[str] = []
     link = _committed_card_link(guild, slot)
     if link:
@@ -829,7 +831,7 @@ def _card_url(guild: discord.Guild | None, slot: pod_launch.LauncherSlot) -> str
 
 
 def _committed_card_link(guild: discord.Guild | None, slot: pod_launch.LauncherSlot) -> str | None:
-    """A committed pod's full-name link to its coordination card, for the championship lane."""
+    """A committed pod's full-name link to its coordination card, for the championship slot_key."""
     if not slot.thread_name:
         return None
     url = _card_url(guild, slot)
@@ -959,10 +961,10 @@ class PodPollView(discord.ui.View):
     ) -> None:
         super().__init__(timeout=None)
         pods = 0
-        for lane in _ordered_lanes(slots):
-            lane_slots = _lane_slots(slots, lane)
-            for slot in lane_slots:
-                item = _slot_item(slot, guild, lane_slots)
+        for slot_key in _ordered_slots(slots):
+            key_slots = _key_slots(slots, slot_key)
+            for slot in key_slots:
+                item = _slot_item(slot, guild, key_slots)
                 if item is not None:
                     self.add_item(item)
                     pods += 1
@@ -970,6 +972,8 @@ class PodPollView(discord.ui.View):
         if any(_leavable(slot) for slot in slots):
             self.add_item(BoardLeaveButton(row=footer_row))
         self.add_item(build_pod_guide_button(style=discord.ButtonStyle.secondary, row=footer_row))
+        if voting_open():
+            self.add_item(VoteFormatsButton(row=footer_row))
 
 
 BUTTONS_PER_ROW = 5
@@ -988,7 +992,7 @@ def _leavable(slot: pod_launch.LauncherSlot) -> bool:
 
 def _slot_item(
     slot: pod_launch.LauncherSlot, guild: discord.Guild | None,
-    lane_slots: list[pod_launch.LauncherSlot],
+    key_slots: list[pod_launch.LauncherSlot],
 ) -> "discord.ui.Item | None":
     if bucket_by_key(slot.bucket_key) is None:
         return None
@@ -1003,7 +1007,7 @@ def _slot_item(
     if slot.locked or slot.set_code is None:
         return None
     if slot.committed:
-        if not slot.card_message_id or _later_table_holds_the_button(slot, lane_slots):
+        if not slot.card_message_id or _later_table_holds_the_button(slot, key_slots):
             return None
         return SlotSignUpButton(slot.bucket_key, _named_pod_label(slot.bucket_key, slot.set_code))
     if _slot_closed(slot):
@@ -1012,7 +1016,7 @@ def _slot_item(
 
 
 def _later_table_holds_the_button(
-    slot: pod_launch.LauncherSlot, lane_slots: list[pod_launch.LauncherSlot],
+    slot: pod_launch.LauncherSlot, key_slots: list[pod_launch.LauncherSlot],
 ) -> bool:
     """Whether a later table of this signup carries the sign up button for the whole family.
 
@@ -1023,7 +1027,7 @@ def _later_table_holds_the_button(
     table the plan filled is asked for in its thread."""
     if slot.card_message_id is None:
         return False
-    for other in lane_slots:
+    for other in key_slots:
         same_pod = (
             other.committed
             and other.card_message_id is not None
@@ -1782,15 +1786,42 @@ async def refresh_launcher_for_date(bot: commands.Bot, signal_date: date) -> Non
     await _rerender_poll(bot, message_id, board_date)
 
 
-async def roll_lane_after_draft_start(bot: commands.Bot, event_id: str) -> None:
+async def retarget_launcher_day(bot: commands.Bot, signal_date: date) -> bool:
+    """Re-sync a day already on the live launcher to the schedule after an organizer override: drop the
+    still-gathering pods for a format the day no longer offers, open one for each format it now does, arm their
+    beats and repaint the board. A pod that already fired keeps its draft. Returns False when the day is not the
+    live board's, leaving the overlay change for the next post."""
+    board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
+    if board is None:
+        return False
+    guild_id, channel_id, message_id, board_date = board
+    if signal_date < board_date:
+        return False
+    await asyncio.to_thread(pod_launch.expire_dropped_poll_signals_sync, signal_date)
+    bound = await asyncio.to_thread(
+        pod_launch.create_poll_signals_sync,
+        guild_id=guild_id, channel_id=channel_id, message_id=message_id, signal_date=signal_date,
+    )
+    now = datetime.now(timezone.utc)
+    for signal_id, slot_time in bound:
+        if slot_time <= now:
+            await pod_launch.fire_slot_expiry(signal_id)
+            continue
+        pod_launch.arm_slot_expiry(bot, signal_id, slot_time)
+        schedule_slot_underfill_checks(bot.pod_scheduler, signal_id, slot_time, now)
+    await _rerender_poll(bot, message_id, board_date)
+    return True
+
+
+async def roll_slot_after_draft_start(bot: commands.Bot, event_id: str) -> None:
     """Move the launcher column a pod now drafting sat in to the next day. The board stops offering a pod the
     moment its first pack is passed, so a column whose only pod just started would otherwise hold an empty
     slot for the hours between the draft and the pod being finalized. The roll is idempotent, so the
     completion roll still runs and re-uses the rows opened here."""
-    await _roll_lane_for_event(bot, event_id)
+    await _roll_slot_for_event(bot, event_id)
 
 
-async def roll_lane_after_pod(bot: commands.Bot, event_id: str) -> None:
+async def roll_slot_after_pod(bot: commands.Bot, event_id: str) -> None:
     """Move the launcher column a played pod sat in to the next day, then arm that pod's sign-off. Fired once
     the pod is finalized, so a column can gather tomorrow while the other still plays today. An off-grid pod
     rolls no column, and is still signed off and invited back.
@@ -1798,23 +1829,23 @@ async def roll_lane_after_pod(bot: commands.Bot, event_id: str) -> None:
     Play Again then offers whatever the nearest slot carries tomorrow, one button per format, so a group that
     drafted a cube tonight is invited back to the past set running at their time tomorrow."""
     _arm_play_again(bot, event_id)
-    ref = await _roll_lane_for_event(bot, event_id)
+    ref = await _roll_slot_for_event(bot, event_id)
     if ref is None:
         return
-    lane, played_day = ref
-    if lane == LANE_LATE:
+    slot_key, played_day = ref
+    if slot_key == SLOT_LATE:
         await repost_board_after_the_late_pods(bot, played_day)
     else:
         await resurface_board_after_the_early_pods(bot, played_day)
 
 
-async def _roll_lane_for_event(bot: commands.Bot, event_id: str) -> tuple[str, date] | None:
-    """Roll the column one pod sits in, returning its (lane, day) or None for a pod on no launcher slot"""
-    ref = await asyncio.to_thread(pod_launch.event_lane_ref_sync, event_id)
+async def _roll_slot_for_event(bot: commands.Bot, event_id: str) -> tuple[str, date] | None:
+    """Roll the column one pod sits in, returning its (slot_key, day) or None for a pod on no launcher slot"""
+    ref = await asyncio.to_thread(pod_launch.event_slot_ref_sync, event_id)
     if ref is None:
         return None
-    lane, slot_day = ref
-    await _roll_lane(bot, lane, slot_day)
+    slot_key, slot_day = ref
+    await _roll_slot(bot, slot_key, slot_day)
     return ref
 
 
@@ -1827,17 +1858,17 @@ async def repost_board_after_the_late_pods(bot: commands.Bot, played_day: date) 
     reminders, and the freshest thing in the channel is a pod that already played. Reposting is not a second
     surface: it is the morning post run early, and the morning post then replaces it and carries the ping.
 
-    Strictly the late lane, and strictly on the transition: an early pod still playing does not hold it, and
+    Strictly the late slot_key, and strictly on the transition: an early pod still playing does not hold it, and
     a day whose late slot never fires simply leaves the morning post to do its normal job. The board for
     the next day existing is itself the claim, so two pods finalizing seconds apart, or a startup sweep
-    re-rolling a lane it already rolled, cannot post it twice."""
+    re-rolling a slot_key it already rolled, cannot post it twice."""
     async with _repost_lock:
         board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
         if board is None:
             return False
         _guild_id, _channel_id, message_id, board_day = board
         slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, board_day)
-        if not lane_settled_for_day(slots, LANE_LATE, played_day):
+        if not slot_settled_for_day(slots, SLOT_LATE, played_day):
             return False
         next_day = board_day + timedelta(days=1)
         if await asyncio.to_thread(pod_launch.poll_exists_for_date_sync, next_day):
@@ -1899,21 +1930,21 @@ def _early_transition_is_live(
 ) -> bool:
     """Whether the board is at the moment between the day's early pods and its late ones, with no board
     posted for it since."""
-    if not lane_settled_for_day(slots, LANE_EARLY, played_day):
+    if not slot_settled_for_day(slots, SLOT_EARLY, played_day):
         return False
-    if lane_settled_for_day(slots, LANE_LATE, played_day):
+    if slot_settled_for_day(slots, SLOT_LATE, played_day):
         return False
-    started = _lane_start_for_day(slots, LANE_EARLY, played_day)
+    started = _slot_start_for_day(slots, SLOT_EARLY, played_day)
     return started is not None and _posted_before(message_id, started)
 
 
-def lane_settled_for_day(
-    slots: list[pod_launch.LauncherSlot], lane: str, day: date,
+def slot_settled_for_day(
+    slots: list[pod_launch.LauncherSlot], slot_key: str, day: date,
 ) -> bool:
     """Whether a column has nothing left to happen on one day: every pod it carried is finished and no slot
     of that day is still gathering. A slot offering two formats and a second table at the same time all
     finalize seconds apart, so the day is only settled once the last of them is."""
-    on_day = _lane_slots_on_day(slots, lane, day)
+    on_day = _key_slots_on_day(slots, slot_key, day)
     if not on_day:
         return False
     return all(
@@ -1922,37 +1953,37 @@ def lane_settled_for_day(
     )
 
 
-def _lane_slots_on_day(
-    slots: list[pod_launch.LauncherSlot], lane: str, day: date,
+def _key_slots_on_day(
+    slots: list[pod_launch.LauncherSlot], slot_key: str, day: date,
 ) -> list[pod_launch.LauncherSlot]:
     on_day = []
-    for slot in _lane_slots(slots, lane):
+    for slot in _key_slots(slots, slot_key):
         if slot.slot_time is not None and slot.slot_time.astimezone(SCHEDULE_TZ).date() == day:
             on_day.append(slot)
     return on_day
 
 
-def _lane_start_for_day(
-    slots: list[pod_launch.LauncherSlot], lane: str, day: date,
+def _slot_start_for_day(
+    slots: list[pod_launch.LauncherSlot], slot_key: str, day: date,
 ) -> datetime | None:
     """When a column's pods of one day were due to start, or None when it carries none of that day."""
-    on_day = _lane_slots_on_day(slots, lane, day)
+    on_day = _key_slots_on_day(slots, slot_key, day)
     if not on_day:
         return None
     return on_day[0].slot_time
 
 
-async def roll_lane_after_expired_slot(bot: commands.Bot, signal_id: str) -> None:
+async def roll_slot_after_expiry(bot: commands.Bot, signal_id: str) -> None:
     """Move a column past a slot whose start passed with no pod. The slot is dead, so the column offers the
     next day instead of a closed row."""
-    ref = await asyncio.to_thread(pod_launch.slot_lane_ref_sync, signal_id)
+    ref = await asyncio.to_thread(pod_launch.slot_key_ref_sync, signal_id)
     if ref is None:
         return
-    lane, slot_day = ref
-    await _roll_lane(bot, lane, slot_day)
+    slot_key, slot_day = ref
+    await _roll_slot(bot, slot_key, slot_day)
 
 
-async def reconcile_rolled_lanes(bot: commands.Bot) -> None:
+async def reconcile_rolled_slots(bot: commands.Bot) -> None:
     """Startup sweep: roll any column whose pod finished, or whose slot passed unfired, while the bot was
     down. A restart then never leaves the live board offering a slot nobody can join."""
     board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
@@ -1960,8 +1991,8 @@ async def reconcile_rolled_lanes(bot: commands.Bot) -> None:
         return
     _guild_id, _channel_id, message_id, board_date = board
     slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, board_date)
-    for lane in _lane_order(slots):
-        last = _time_groups(_lane_slots(slots, lane))[-1]
+    for slot_key in _slot_order(slots):
+        last = _time_groups(_key_slots(slots, slot_key))[-1]
         if last[0].slot_time is None:
             continue
         settled = all(
@@ -1969,13 +2000,13 @@ async def reconcile_rolled_lanes(bot: commands.Bot) -> None:
             for slot in last
         )
         if settled:
-            await _roll_lane(bot, lane, last[0].slot_time.astimezone(SCHEDULE_TZ).date())
+            await _roll_slot(bot, slot_key, last[0].slot_time.astimezone(SCHEDULE_TZ).date())
 
 
-async def _roll_lane(
-    bot: commands.Bot, lane: str, from_day: date,
+async def _roll_slot(
+    bot: commands.Bot, slot_key: str, from_day: date,
 ) -> list[tuple[str, datetime]]:
-    """Open the next day's pods for a lane, arm each one's beats, and re-render the live board so the column
+    """Open the next day's pods for a slot_key, arm each one's beats, and re-render the live board so the column
     shows them. Returns (bucket_key, slot_time) per pod now gathering, empty when a pod already covers every
     format that slot offers."""
     board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
@@ -1984,14 +2015,14 @@ async def _roll_lane(
     guild_id, channel_id, message_id, board_date = board
     rolled = await asyncio.to_thread(
         pod_launch.roll_slot_forward_sync,
-        lane=lane, from_day=from_day, guild_id=guild_id, channel_id=channel_id, message_id=message_id,
+        slot_key=slot_key, from_day=from_day, guild_id=guild_id, channel_id=channel_id, message_id=message_id,
     )
     await _rerender_poll(bot, message_id, board_date)
     opened: list[tuple[str, datetime]] = []
     for signal_id, bucket_key, slot_time in rolled:
         pod_launch.arm_slot_expiry(bot, signal_id, slot_time)
         schedule_slot_underfill_checks(bot.pod_scheduler, signal_id, slot_time, datetime.now(timezone.utc))
-        log.info(f"rolled {lane} lane from {from_day} to {slot_time.isoformat()} as signal {signal_id}")
+        log.info(f"rolled {slot_key} slot_key from {from_day} to {slot_time.isoformat()} as signal {signal_id}")
         opened.append((bucket_key, slot_time))
     return opened
 

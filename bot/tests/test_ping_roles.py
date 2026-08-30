@@ -45,7 +45,7 @@ def test_button_custom_id_is_a_stable_slug():
     assert button_custom_id(_spec_named(POD_DRAFTERS_ROLE_NAME)) == "role-toggle-pod-drafters"
 
 
-def test_blurb_with_time_lists_every_hour_a_lane_runs_at():
+def test_blurb_with_time_lists_every_hour_a_slot_runs_at():
     early = blurb_with_time(_spec_named(EARLY_POD_ROLE_NAME))
     late = blurb_with_time(_spec_named(LATE_POD_ROLE_NAME))
 

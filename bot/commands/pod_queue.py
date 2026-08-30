@@ -42,19 +42,19 @@ from bot.services.pod_settings_view import (
 )
 from bot.services.pod_signals import (
     KIND_QUEUE,
-    LANE_EARLY,
-    LANE_LATE,
+    SLOT_EARLY,
+    SLOT_LATE,
     QUEUE_BUCKET,
     SCHEDULE_TZ,
     STATUS_FIRED,
-    bucket_for_lane,
+    bucket_for_slot,
     inactivity_window_text,
-    next_lane_start,
+    next_slot_start,
     should_fire,
     slot_role_name_for_event_time,
     teardown_at,
 )
-from bot.sets import active_set_code, recent_released_sets, set_name_for
+from bot.sets import active_set_code, flashback_picker_sets, set_name_for
 
 
 log = logging.getLogger(__name__)
@@ -458,15 +458,14 @@ class DraftLauncherView(discord.ui.View):
 
 
 def _set_options(current: str | None) -> list[discord.SelectOption]:
-    """The set dropdown: the active set (default), the registered cubes, the most recent released sets,
-    then a write-in for any other code — each carrying its keyrune emoji when one is loaded. Cubes are
-    always offered right under the latest set. Unreleased upcoming sets are left out; they have no card
-    pool to draft. A written-in current outside the known list shows as its own defaulted option so it
-    survives re-render."""
+    """The set dropdown: the active set (default), the registered cubes, the curated flashback sets, then a
+    write-in for any other code, each carrying its keyrune emoji when one is loaded. Cubes are always offered
+    right under the latest set. Any set outside the curated list is reachable through the write-in, and a
+    written-in current shows as its own defaulted option so it survives re-render."""
     active = active_set_code()
     active_upper = active.upper()
     chosen = (current or active).upper()
-    recent = [seed.code for seed in recent_released_sets()]
+    recent = [seed.code for seed in flashback_picker_sets()]
     cubes = custom_formats()
     known = {active_upper} | {fmt.code for fmt in cubes} | {code.upper() for code in recent}
 
@@ -529,15 +528,15 @@ def _when_options(scheduled_time: datetime | None, now: datetime) -> list[discor
     """Right now (default) plus the two named slots at their next occurrence, then a custom write-in.
     A custom time shows as its own defaulted option."""
     today = now.astimezone(SCHEDULE_TZ).date()
-    early = next_lane_start(LANE_EARLY, now)
-    late = next_lane_start(LANE_LATE, now)
+    early = next_slot_start(SLOT_EARLY, now)
+    late = next_slot_start(SLOT_LATE, now)
     options = [discord.SelectOption(
         label="When: Right now", value="now", emoji="⚡", description="Open a live queue now",
         default=(scheduled_time is None))]
-    for lane, slot in ((LANE_EARLY, early), (LANE_LATE, late)):
-        bucket = bucket_for_lane(today, lane)
+    for slot_key, slot in ((SLOT_EARLY, early), (SLOT_LATE, late)):
+        bucket = bucket_for_slot(today, slot_key)
         options.append(discord.SelectOption(
-            label=f"When: {bucket.name}", value=lane, emoji=bucket.emoji,
+            label=f"When: {bucket.name}", value=slot_key, emoji=bucket.emoji,
             description=f"{_when_day_label(slot, now)} {_when_clock(slot)}",
             default=(scheduled_time is not None and scheduled_time == slot)))
     is_custom = scheduled_time is not None and scheduled_time not in (early, late)
@@ -565,7 +564,7 @@ class _LauncherWhenSelect(discord.ui.Select):
         if value == "now":
             self.view.scheduled_time = None
         else:
-            self.view.scheduled_time = next_lane_start(value, datetime.now(timezone.utc))
+            self.view.scheduled_time = next_slot_start(value, datetime.now(timezone.utc))
         await self.view.rerender(interaction)
 
 

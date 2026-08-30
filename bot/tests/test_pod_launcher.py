@@ -11,14 +11,14 @@ from bot.services.pod_format_select import WRITE_IN_VALUE
 from bot.services import pod_launch
 from bot.services.pod_launch import LauncherSlot, _lazy_status
 from bot.services.pod_signals import (
-    LANE_LATE,
+    SLOT_LATE,
     RSVP_YES,
     SCHEDULE_TZ,
     STATUS_EXPIRED,
     STATUS_FIRED,
     STATUS_OPEN,
     named_bucket_key,
-    next_lane_start,
+    next_slot_start,
 )
 from bot.sets import active_set_code
 from bot.tasks.pod_daily_poll import (
@@ -30,12 +30,17 @@ from bot.tasks.pod_daily_poll import (
     _column_value,
     _committed_card_link,
     _early_transition_is_live,
-    lane_settled_for_day,
+    slot_settled_for_day,
 )
 
 
 BEFORE_EARLY = datetime(2026, 7, 14, 10, 0, tzinfo=timezone.utc)
 LATEST = active_set_code()
+
+
+@pytest.fixture(autouse=True)
+def _voting_closed(monkeypatch):
+    monkeypatch.setattr("bot.tasks.pod_daily_poll.voting_open", lambda when=None: False)
 
 
 def _committed(bucket_key, thread_id, thread_message_id):
@@ -153,8 +158,8 @@ def _late_slot(slot_time, *, committed, finished=False, status=STATUS_OPEN, set_
     ], True),
     ([_late_slot(LATE_TOMORROW, committed=False, status=STATUS_OPEN)], False),
 ])
-def test_a_lane_settles_only_once_every_pod_of_that_day_is_done(slots, settled):
-    assert lane_settled_for_day(slots, LANE_LATE, LATE_TONIGHT.date()) is settled
+def test_a_slot_settles_only_once_every_pod_of_that_day_is_done(slots, settled):
+    assert slot_settled_for_day(slots, SLOT_LATE, LATE_TONIGHT.date()) is settled
 
 
 EARLY_TODAY = datetime(2026, 7, 18, 14, 0, tzinfo=SCHEDULE_TZ)
@@ -219,7 +224,7 @@ def test_when_options_default_right_now_when_unscheduled():
 
 
 def test_when_options_defaults_the_selected_preset():
-    late = next_lane_start(LANE_LATE, BEFORE_EARLY)
+    late = next_slot_start(SLOT_LATE, BEFORE_EARLY)
 
     options = _when_options(late, BEFORE_EARLY)
 
@@ -303,7 +308,7 @@ def test_championship_slot_is_a_link_not_an_rsvp_toggle():
     assert link_buttons and link_buttons[0].url.endswith("/555/777")
 
 
-def test_a_championship_lane_keeps_the_pod_its_column_still_offers():
+def test_a_championship_slot_keeps_the_pod_its_column_still_offers():
     """The eve of a championship, where the column still offers its own pod and also points at tomorrow's
     event: the pointer is a block below it and never a replacement for the column."""
     value = _column_value([_gathering_with_roster(4), _committed_championship()], guild=None)

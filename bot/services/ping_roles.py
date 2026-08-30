@@ -1,6 +1,6 @@
 """Self-assignable ping roles — the single registry every guild reconciles against.
 
-`PING_ROLES` is the source of truth: name, color, the toggle-menu blurb, and an optional lane the
+`PING_ROLES` is the source of truth: name, color, the toggle-menu blurb, and an optional slot_key the
 role is tied to (for showing its local times and auto-granting on RSVP). `reconcile_ping_roles`
 makes every guild match this list — creating missing roles, recoloring drift, and renaming in place
 when a name moves to `aliases`. To rename a role, set the new `name` and list the old name in
@@ -66,9 +66,9 @@ from bot.services.pod_schedule import (
     SCHEDULE_TZ,
 )
 from bot.services.pod_signals import (
-    LANE_EARLY,
-    LANE_LATE,
-    bucket_for_lane,
+    SLOT_EARLY,
+    SLOT_LATE,
+    bucket_for_slot,
     slot_event_time,
     slot_role_name_for_event_time,
 )
@@ -89,7 +89,7 @@ class PingRole:
     blurb: str
     color: str | None = None
     aliases: tuple[str, ...] = ()
-    lane: str | None = None
+    slot_key: str | None = None
     auto_grant: bool = False
     grant_when: str = "at this time of day"
 
@@ -101,11 +101,11 @@ PING_ROLES: tuple[PingRole, ...] = (
     PingRole("drafters", POD_DRAFTERS_ROLE_NAME, "llu", "Server-Wide Pod Announcements", color="#C0C0C0"),
     PingRole(
         "early", EARLY_POD_ROLE_NAME, "💫", "every day", color=EARLY_POD_COLOR,
-        aliases=("Early Pods", "Early Pod Drafters", "Euro Pod Drafters"), lane=LANE_EARLY, auto_grant=True,
+        aliases=("Early Pods", "Early Pod Drafters", "Euro Pod Drafters"), slot_key=SLOT_EARLY, auto_grant=True,
     ),
     PingRole(
         "late", LATE_POD_ROLE_NAME, "☄️", "every day", color=LATE_POD_COLOR,
-        aliases=("Late Pods", "Late Pod Drafters"), lane=LANE_LATE, auto_grant=True,
+        aliases=("Late Pods", "Late Pod Drafters"), slot_key=SLOT_LATE, auto_grant=True,
     ),
     PingRole("queue", POD_QUEUE_ROLE_NAME, "⚡", "Daily Draft Sign-Ups", color="#FFAC33"),
     PingRole(
@@ -201,25 +201,25 @@ def button_custom_id(spec: PingRole) -> str:
 
 
 def blurb_with_time(spec: PingRole) -> str:
-    """A lane role pairs its blurb with every hour its lane starts at across a week. Roles with no lane
+    """A slot_key role pairs its blurb with every hour its slot_key starts at across a week. Roles with no slot_key
     show their blurb alone."""
-    if spec.lane is None:
+    if spec.slot_key is None:
         return spec.blurb
-    stamps = _lane_stamps(spec.lane)
+    stamps = _slot_stamps(spec.slot_key)
     if not stamps:
         return spec.blurb
     times = ", ".join(f"<t:{int(stamp.timestamp())}:t>" for stamp in stamps)
     return f"{spec.blurb} at {times}" if spec.blurb else f"at {times}"
 
 
-def _lane_stamps(lane: str, *, today: date | None = None) -> list[datetime]:
-    """One stamp per distinct start the lane runs at over the coming week, earliest hour first: a lane
+def _slot_stamps(slot_key: str, *, today: date | None = None) -> list[datetime]:
+    """One stamp per distinct start the slot_key runs at over the coming week, earliest hour first: a slot_key
     holding one hour every day names it once, and one that shifts on Saturday names both hours."""
     today = today or datetime.now(SCHEDULE_TZ).date()
     by_start: dict[time, datetime] = {}
     for offset in range(7):
         day = today + timedelta(days=offset)
-        bucket = bucket_for_lane(day, lane)
+        bucket = bucket_for_slot(day, slot_key)
         if bucket is None or bucket.start in by_start:
             continue
         by_start[bucket.start] = slot_event_time(day, bucket.key)

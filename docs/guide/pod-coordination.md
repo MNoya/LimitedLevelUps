@@ -50,15 +50,15 @@ Change your answer any time before the pod starts. Yes and Maybe both put you in
 
 ## Formats
 
-Every pod plays one Magic format, and you know which one before you sign up. A day offers the latest set and often a second format:
+Every pod plays one Magic format, and you know which one before you sign up. A day offers two formats, and each one runs at both the Early Pod and the Late Pod:
 
 - **Latest set** — the current Arena set everyone is drafting.
 - **Flashback** — an older set. The launcher names the exact set and pings the Flashback role.
 - **Cube** — one of the server's cubes. The launcher names it and links its card list, and pings the Cube role. The signup card carries the same link, so you can read the list before you sign up.
 
-The formats are set ahead of time, so there is no vote and nothing to resolve later. If you want a set or a cube on the schedule, ask a mod.
+The flashback set each day runs is set by a vote. Run `/pod-schedule` and press **Vote Formats** to pick every format you would draft this season, or add one that is not listed. A format needs enough votes to earn a day, and votes from players who draft often count for more.
 
-The latest set stops after its Set Championship. The days left before the next set arrives run cube on the weekend and flashback during the week, and the flashback set is picked by a mod day by day, so a weekday there carries a pod only once one is made.
+Some days pair the season's featured cube with a voted flashback set, other days pair the latest set with the Peasant cube. No flashback set runs two days in a row, so the schedule keeps changing through the season. A mod can set any day by hand.
 
 Run `/pod-schedule` to see a calendar of the formats each day offers over the weeks ahead. It marks today, shows when the next Early and Late pods start in your own time zone, and marks the day a new set arrives, after which every day drafts the new set.
 

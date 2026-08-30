@@ -35,17 +35,17 @@ RSVP_STATES = (RSVP_YES, RSVP_MAYBE, RSVP_NO)
 RSVP_EMOJI = {RSVP_YES: "✅", RSVP_MAYBE: "🤷", RSVP_NO: "❌"}
 
 
-LANE_EARLY = "EARLY"
-LANE_BONUS = "BONUS"
-LANE_LATE = "LATE"
-LANE_ORDER = (LANE_EARLY, LANE_BONUS, LANE_LATE)
+SLOT_EARLY = "EARLY"
+SLOT_BONUS = "BONUS"
+SLOT_LATE = "LATE"
+SLOT_ORDER = (SLOT_EARLY, SLOT_BONUS, SLOT_LATE)
 
 BONUS_GAP_MINUTES = 120
 
 
 @dataclass(frozen=True)
 class PollBucket:
-    """One slot of one day. `lane` is the launcher column the slot belongs to for life: the weekday and
+    """One slot of one day. `slot_key` is the launcher column the slot belongs to for life: the weekday and
     weekend buckets of a time of day are two keys for one column, so a slot rolling from Friday to
     Saturday stays in its column."""
     key: str
@@ -53,23 +53,23 @@ class PollBucket:
     emoji: str
     start: time
     role_name: str
-    lane: str
+    slot_key: str
 
 
 WEEKEND_EARLY_BUCKET = PollBucket(
-    "AFTERNOON", "Early Pod", "💫", time(14, 0), EARLY_POD_ROLE_NAME, LANE_EARLY)
+    "AFTERNOON", "Early Pod", "💫", time(14, 0), EARLY_POD_ROLE_NAME, SLOT_EARLY)
 WEEKEND_LATE_BUCKET = PollBucket(
-    "EVENING", "Late Pod", "☄️", time(20, 0), LATE_POD_ROLE_NAME, LANE_LATE)
+    "EVENING", "Late Pod", "☄️", time(20, 0), LATE_POD_ROLE_NAME, SLOT_LATE)
 SATURDAY_LATE_BUCKET = PollBucket(
-    "SATURDAY_EVENING", "Late Pod", "☄️", time(21, 0), LATE_POD_ROLE_NAME, LANE_LATE)
+    "SATURDAY_EVENING", "Late Pod", "☄️", time(21, 0), LATE_POD_ROLE_NAME, SLOT_LATE)
 
 WEEKDAY_BUCKETS: tuple[PollBucket, ...] = (
-    PollBucket("EARLY", "Early Pod", "💫", time(14, 0), EARLY_POD_ROLE_NAME, LANE_EARLY),
-    PollBucket("LATE", "Late Pod", "☄️", time(20, 0), LATE_POD_ROLE_NAME, LANE_LATE),
+    PollBucket("EARLY", "Early Pod", "💫", time(14, 0), EARLY_POD_ROLE_NAME, SLOT_EARLY),
+    PollBucket("LATE", "Late Pod", "☄️", time(20, 0), LATE_POD_ROLE_NAME, SLOT_LATE),
 )
 WEEKEND_BUCKETS: tuple[PollBucket, ...] = (WEEKEND_EARLY_BUCKET, WEEKEND_LATE_BUCKET)
 SATURDAY_BUCKETS: tuple[PollBucket, ...] = (WEEKEND_EARLY_BUCKET, SATURDAY_LATE_BUCKET)
-BONUS_BUCKET = PollBucket("BONUS", "Bonus Pod", "🌟", time(0, 0), "", LANE_BONUS)
+BONUS_BUCKET = PollBucket("BONUS", "Bonus Pod", "🌟", time(0, 0), "", SLOT_BONUS)
 ALL_BUCKETS: tuple[PollBucket, ...] = (
     WEEKDAY_BUCKETS + WEEKEND_BUCKETS + (SATURDAY_LATE_BUCKET, BONUS_BUCKET))
 
@@ -80,7 +80,7 @@ def is_weekend(day: date) -> bool:
 
 def poll_buckets_for(day: date) -> tuple[PollBucket, ...]:
     """Saturday drafts its late pod an hour after every other day's, so it carries a bucket of its own. Same
-    lane and same ping role as the rest of the weekend: only the hour differs."""
+    slot_key and same ping role as the rest of the weekend: only the hour differs."""
     if day.weekday() == SATURDAY:
         return SATURDAY_BUCKETS
     return WEEKEND_BUCKETS if is_weekend(day) else WEEKDAY_BUCKETS
@@ -109,7 +109,7 @@ def named_bucket_key(bucket_key: str, set_code: str) -> str:
 
 
 def time_key_of(bucket_key: str) -> str:
-    """The time-slot half of a key. Lanes, ping roles and slot times all belong to the time dimension, so
+    """The time-slot half of a key. Slots, ping roles and slot times all belong to the time dimension, so
     every lookup resolves through here and a named key behaves exactly like its plain slot."""
     return bucket_key.split(FORMAT_SEP, 1)[0]
 
@@ -127,28 +127,28 @@ def bucket_by_key(key: str) -> PollBucket | None:
     return None
 
 
-def lane_of(bucket_key: str) -> str | None:
+def slot_of(bucket_key: str) -> str | None:
     bucket = bucket_by_key(bucket_key)
-    return bucket.lane if bucket else None
+    return bucket.slot_key if bucket else None
 
 
-def bucket_for_lane(day: date, lane: str) -> PollBucket | None:
-    """The bucket a lane resolves to on `day`, so a rolled slot re-reads its weekday or weekend identity
+def bucket_for_slot(day: date, slot_key: str) -> PollBucket | None:
+    """The bucket a slot_key resolves to on `day`, so a rolled slot re-reads its weekday or weekend identity
     from the day it now sits on."""
     for bucket in poll_buckets_for(day):
-        if bucket.lane == lane:
+        if bucket.slot_key == slot_key:
             return bucket
     return None
 
 
-def next_lane_start(lane: str, now: datetime) -> datetime | None:
-    """When the lane's slot next comes around: today's start while it is still ahead, tomorrow's once it has
+def next_slot_start(slot_key: str, now: datetime) -> datetime | None:
+    """When the slot_key's slot next comes around: today's start while it is still ahead, tomorrow's once it has
     passed. The hour is read off the day the slot lands on, so a day running its slot at its own hour is
     named at that hour. Rebuilt from the wall clock rather than shifted by a day, so a start stays at its ET
     hour across a daylight saving change."""
     today = now.astimezone(SCHEDULE_TZ).date()
     for day in (today, today + timedelta(days=1)):
-        bucket = bucket_for_lane(day, lane)
+        bucket = bucket_for_slot(day, slot_key)
         if bucket is None:
             continue
         start = datetime.combine(day, bucket.start, tzinfo=SCHEDULE_TZ)

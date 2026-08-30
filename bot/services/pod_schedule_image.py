@@ -29,8 +29,15 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 from bot.services.championship_dates import championship_on
-from bot.services.pod_format import is_custom
-from bot.services.pod_format_schedule import FLASHBACK, calendar_days, extras_on, is_rotation_day, latest_on
+from bot.services.pod_format import PEASANT_CODE, is_custom
+from bot.services.pod_format_schedule import (
+    FLASHBACK,
+    calendar_days,
+    extras_on,
+    is_rotation_day,
+    latest_on,
+    planned_on,
+)
 
 SYMBOLS_DIR = Path(__file__).resolve().parents[2] / "frontend" / "public" / "set-symbols"
 CUBE_SYMBOL = "cube"
@@ -75,6 +82,7 @@ DIM = (138, 144, 153)
 FAINT = (96, 101, 110)
 ARRIVAL = ACCENT
 CHAMPIONSHIP = (201, 156, 84)
+PLACEHOLDER = (153, 170, 255)
 ON_FLAG = (30, 32, 35)
 TODAY = ACCENT
 
@@ -153,19 +161,21 @@ def _flag_fill(day: date) -> RGB | None:
 
 def _rows_for(day: date, *, past: bool) -> list[tuple[str, RGB, str]]:
     """What a cell lists, as (label, colour, symbol). The championship day shows its set in the championship
-    ink alone: its other pod is still on the schedule and still opens, but the day is read as one thing.
-
-    Only the arrival itself names the incoming set. The days after it fall back to its symbol alone, since
-    the message names the daily set by role rather than by code and the calendar never has to repeat a set
-    that a rotation is about to change."""
+    ink alone, its other pod still opening but the day read as one thing. A day running only the latest set
+    falls back to its symbol; a day naming two formats lists both, so the latest set shows by code on a
+    shared day."""
     if championship_on(day) is not None:
         return [(CHAMPIONSHIP_LABEL, CHAMPIONSHIP, latest_on(day))]
     ink = DIM if past else TEXT
-    rows = [(latest_on(day), ARRIVAL, latest_on(day))] if is_rotation_day(day) else []
-    rows.extend((_cell_label(code), ink, code) for code in extras_on(day))
-    if not rows:
-        rows.append(("", FAINT if past else ink, latest_on(day)))
-    return rows
+    if is_rotation_day(day):
+        rows = [(latest_on(day), ARRIVAL, latest_on(day))]
+        rows.extend((_cell_label(code), ink, code) for code in extras_on(day))
+        return rows
+    latest = latest_on(day)
+    formats = planned_on(day)
+    if not formats or formats == (latest,):
+        return [("", FAINT if past else ink, latest)]
+    return [(_cell_label(code), PLACEHOLDER if code == FLASHBACK else ink, code) for code in formats]
 
 
 def _cell_label(code: str) -> str:
@@ -177,7 +187,8 @@ def _draw_row(draw: ImageDraw.ImageDraw, cell_x: int, top: int, label: str, colo
               cell_w: int) -> None:
     """One centred symbol-and-code row. Centring the pair rather than left-aligning it keeps a one-row cell
     reading as a calendar entry instead of a list of one."""
-    font = _font(FONT_DISPLAY, CODE_SIZE)
+    long_label = label == PEASANT_CODE
+    font = _font(FONT_DISPLAY, CODE_SIZE - 1 if long_label else CODE_SIZE)
     mark = _symbol(symbol)
     mark_w = _px(SYMBOL_PX) + (_px(SYMBOL_GAP) if label else 0) if mark is not None else 0
     x = cell_x + (_px(cell_w) - mark_w - font.getlength(label)) / 2
@@ -242,9 +253,21 @@ def _label_font(size: int) -> ImageFont.FreeTypeFont:
 @lru_cache(maxsize=64)
 def _symbol(code: str) -> Image.Image | None:
     """The format's symbol as an alpha mask, so `bitmap` can paint it in whatever ink the cell uses."""
-    name = CUBE_SYMBOL if is_custom(code) else code.lower()
-    path = SYMBOLS_DIR / f"{name}.png"
-    if not path.exists():
+    path = _symbol_path(code)
+    if path is None:
         return None
     side = _px(SYMBOL_PX)
     return Image.open(path).convert("RGBA").resize((side, side), Image.LANCZOS).getchannel("A")
+
+
+def _symbol_path(code: str) -> Path | None:
+    """The format's own set-symbol PNG first, so a cube with an uploaded symbol like MEMA uses it, then the
+    generic cube symbol for a custom format that has none."""
+    own = SYMBOLS_DIR / f"{code.lower()}.png"
+    if own.exists():
+        return own
+    if is_custom(code):
+        cube = SYMBOLS_DIR / f"{CUBE_SYMBOL}.png"
+        if cube.exists():
+            return cube
+    return None

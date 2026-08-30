@@ -139,7 +139,7 @@ from bot.services.pod_voice import (
 )
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import SCHEDULE_TZ
-from bot.services.pod_signals import LANE_EARLY, bucket_for_lane, named_bucket_key
+from bot.services.pod_signals import SLOT_EARLY, bucket_for_slot, named_bucket_key
 from bot.services.pod_slot import pod_event_date
 from bot.slug import disambiguate_slug, slugify
 from bot.tasks.pod_daily_poll import build_play_again_prompt
@@ -1290,10 +1290,10 @@ def _play_again_preview_keys() -> list[str]:
     """Tomorrow's early slot, one key per format it opens. Falls back to the bare slot when the day opens
     no pod, so the prompt still renders a button."""
     tomorrow = datetime.now(SCHEDULE_TZ).date() + timedelta(days=1)
-    bucket = bucket_for_lane(tomorrow, LANE_EARLY)
+    bucket = bucket_for_slot(tomorrow, SLOT_EARLY)
     if bucket is None:
         return []
-    keys = [named_bucket_key(bucket.key, code) for code in pod_format_schedule.formats_for(tomorrow, LANE_EARLY)]
+    keys = [named_bucket_key(bucket.key, code) for code in pod_format_schedule.formats_for(tomorrow, SLOT_EARLY)]
     return keys or [bucket.key]
 
 

@@ -297,6 +297,27 @@ def recent_released_sets(limit: int = 8, when: datetime | None = None) -> tuple[
     return tuple(others[:limit])
 
 
+FLASHBACK_PICKER_CODES: frozenset[str] = frozenset({
+    "FIN", "DSK", "MH3", "NEO", "WOE", "OTJ", "DFT", "SOS", "TDM",
+    "DMU", "BRO", "MOM", "LCI", "MID", "KHM", "IKO", "EOE", "TLA",
+})
+
+
+def flashback_picker_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:
+    """The curated flashback sets the pod pickers offer, newest release first, released and minus the active set"""
+    now = when or datetime.now(timezone.utc)
+    active = active_set_code(when)
+    out: list[SetSeed] = []
+    for seed in ALL_SETS:
+        if seed.code not in FLASHBACK_PICKER_CODES or seed.code == active:
+            continue
+        if release_instant(seed.start_date) > now:
+            continue
+        out.append(seed)
+    out.sort(key=lambda seed: seed.start_date, reverse=True)
+    return tuple(out)
+
+
 def seed_for_code(code: str) -> SetSeed | None:
     for seed in ALL_SETS:
         if seed.code == code.upper():

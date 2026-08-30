@@ -71,8 +71,8 @@ from bot.services.ping_roles import (
 from bot.services.pod_schedule import POD_QUEUE_ROLE_NAME
 from bot.services.pod_signals import (
     KIND_POLL,
-    LANE_EARLY,
-    LANE_LATE,
+    SLOT_EARLY,
+    SLOT_LATE,
     RSVP_MAYBE,
     RSVP_YES,
     SCHEDULE_TZ,
@@ -80,7 +80,7 @@ from bot.services.pod_signals import (
     STATUS_FIRED,
     STATUS_OPEN,
     BONUS_BUCKET,
-    bucket_for_lane,
+    bucket_for_slot,
     is_bonus_time,
     named_bucket_key,
     poll_buckets_for,
@@ -95,12 +95,17 @@ from bot.tasks.pod_daily_poll import (
     build_play_again_prompt,
     build_poll_embed,
     close_launcher_for_date,
-    lane_settled_for_day,
+    slot_settled_for_day,
     post_launcher,
     repost_board_after_the_late_pods,
     resurface_board_after_the_early_pods,
 )
 from bot.tasks.pod_draft_reminder import fire_roster_reminder
+from bot.services.pod_schedule_card import repost_schedule_post
+from bot.services.pod_schedule_controls import PodScheduleView
+from bot.services.pod_format_vote import post_vote_card, preview_codes, render_panel, season_code
+from bot.services.pod_format_allocator import run_allocation
+from bot.services.pod_format_vote import vote_ping_text
 from bot.tasks.pod_thread_cleanup import delete_bot_threads_in, delete_threads
 
 
@@ -196,6 +201,49 @@ async def setup(bot: commands.Bot) -> None:
         slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, str(message.id), day)
         await message.edit(embed=build_poll_embed(slots, ctx.guild), view=PodPollView(slots, ctx.guild))
 
+    @test_group.command(name="podschedule")
+    @commands.is_owner()
+    async def test_podschedule(ctx: commands.Context) -> None:
+        """Owner-only. Remove any pinned pod format schedule card and post and pin a fresh one, carrying the
+        Manage Schedule button."""
+        await repost_schedule_post(ctx.channel, view=PodScheduleView())
+
+    @test_group.command(name="votecard")
+    @commands.is_owner()
+    async def test_votecard(ctx: commands.Context, count: int = 0) -> None:
+        """Owner-only. Post and pin the public vote card here with the opening ping, the same one the tick
+        posts when voting opens, replacing any already up. A count seeds that many formats with descending
+        fake counts for a density preview instead, posted unpinned. Vote from the real card or an ephemeral
+        /pod-schedule copy to see it repaint."""
+        if count > 0:
+            codes = preview_codes(count)
+            counts = {code: count - index for index, code in enumerate(codes)}
+            embed, view = render_panel(season_code(), codes, counts)
+            await ctx.send(
+                content=vote_ping_text(ctx.guild), embed=embed, view=view,
+                allowed_mentions=discord.AllowedMentions(roles=True),
+            )
+            return
+        await post_vote_card(ctx.channel, vote_ping_text(ctx.guild), force=True)
+
+    @test_group.command(name="allocate")
+    @commands.is_owner()
+    async def test_allocate(ctx: commands.Context, start_date: str = "") -> None:
+        """Owner-only. Sweep the whole flashback season from `start_date` (YYYY-MM-DD, default today) out of the
+        current votes, report the two formats each day carries and refresh the schedule card."""
+        start = date.fromisoformat(start_date) if start_date else datetime.now(SCHEDULE_TZ).date()
+        with SessionLocal() as session:
+            assignments = run_allocation(session, start, rewrite=True)
+            session.commit()
+        if not assignments:
+            await ctx.send(f"No schedule days to fill from {start}")
+            return
+        by_day: dict[date, tuple[str, ...]] = {}
+        for (day, slot), picks in assignments.items():
+            by_day[day] = picks
+        lines = [f"{day:%a %d %b}: {' + '.join(picks)}" for day, picks in sorted(by_day.items())]
+        await ctx.send(f"Swept {len(by_day)} days from {start}\n" + "\n".join(lines))
+
     @test_group.command(name="named")
     @commands.is_owner()
     async def test_named(ctx: commands.Context, *codes: str) -> None:
@@ -243,7 +291,7 @@ async def setup(bot: commands.Bot) -> None:
     @commands.is_owner()
     async def test_rolling(ctx: commands.Context, *args: str) -> None:
         """Owner-only. Post the rolling launcher render across its situations as static previews from
-        fixtures: a fresh morning board, one lane whose draft started and rolled to tomorrow, both lanes
+        fixtures: a fresh morning board, one slot_key whose draft started and rolled to tomorrow, both slot_keys
         rolled, a slot whose sibling format closed unfired, a signup dealt into two tables still taking
         signups, and the handoff (retired On This Day history plus the fresh next-day card), plus the
         next-day Play Again prompt, whose button is live and joins the soonest open slot of that name, and the
@@ -257,7 +305,7 @@ async def setup(bot: commands.Bot) -> None:
         guild = ctx.guild
         channel_id = str(ctx.channel.id)
         set_code = active_set_code()
-        today, tomorrow, early, late, early_next, late_next = _rolling_lanes()
+        today, tomorrow, early, late, early_next, late_next = _rolling_slots()
         wanted = {arg.strip().upper() for arg in args if arg.strip()}
 
         def want(letter: str) -> bool:
@@ -303,7 +351,7 @@ async def setup(bot: commands.Bot) -> None:
             ])
 
         if want("C"):
-            await show("C. Both lanes started, so the full 2x2 is tomorrow's slots and today is off the board", [
+            await show("C. Both slot_keys started, so the full 2x2 is tomorrow's slots and today is off the board", [
                 early_today(count=_ROLL_COUNT_FULL, winner="Finkel", **played),
                 late_today(count=_ROLL_COUNT_FULL, winner="Shota", **played),
                 early_tom(count=_ROLL_COUNT_SMALL),
@@ -346,7 +394,7 @@ async def setup(bot: commands.Bot) -> None:
         if want("E"):
             next_keys = [
                 named_bucket_key(early_next.key, code)
-                for code in pod_format_schedule.formats_for(tomorrow, early_next.lane)
+                for code in pod_format_schedule.formats_for(tomorrow, early_next.slot_key)
             ]
             embed, view = build_play_again_prompt(next_keys, guild)
             await ctx.send(
@@ -466,8 +514,8 @@ async def setup(bot: commands.Bot) -> None:
         lowered = {arg.lower() for arg in args}
         if "force" not in lowered:
             slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, board_day)
-            early_done = lane_settled_for_day(slots, LANE_EARLY, board_day)
-            late_done = lane_settled_for_day(slots, LANE_LATE, board_day)
+            early_done = slot_settled_for_day(slots, SLOT_EARLY, board_day)
+            late_done = slot_settled_for_day(slots, SLOT_LATE, board_day)
             resurfaced = await resurface_board_after_the_early_pods(ctx.bot, board_day)
             reposted = await repost_board_after_the_late_pods(ctx.bot, board_day)
             await ctx.send("\n".join([
@@ -809,13 +857,15 @@ def _posted_or_skipped(value: bool) -> str:
 
 
 
-def _rolling_lanes():
-    """Today's two lane buckets and the ones they roll into tomorrow, shared by the rolling and width
+def _rolling_slots():
+    """Today's two slot_key buckets and the ones they roll into tomorrow, shared by the rolling and width
     previews."""
     today = datetime.now(SCHEDULE_TZ).date()
     tomorrow = today + timedelta(days=1)
     early, late = poll_buckets_for(today)[:2]
-    return today, tomorrow, early, late, bucket_for_lane(tomorrow, early.lane), bucket_for_lane(tomorrow, late.lane)
+    early_next = bucket_for_slot(tomorrow, early.slot_key)
+    late_next = bucket_for_slot(tomorrow, late.slot_key)
+    return today, tomorrow, early, late, early_next, late_next
 
 
 def _rolling_slot(
@@ -1496,9 +1546,12 @@ def _slots_remain(now: datetime, day: date) -> bool:
 
 def _force_formats(day, codes: tuple[str, ...]) -> None:
     """Point the schedule at `codes` beside the latest set for one day so a live `!test poll` / `!test
-    launcher` can drive any format without waiting for its date. Mutates the in-memory table only, so a
-    restart drops it."""
-    pod_format_schedule.FORMATS_BY_DAY[day] = (pod_format_schedule.LATEST, *codes)
+    launcher` can drive any format without waiting for its date. Writes both of that day's overlay rows."""
+    formats = [pod_format_schedule.LATEST, *codes]
+    with SessionLocal() as session:
+        for slot_key in (SLOT_EARLY, SLOT_LATE):
+            pod_format_schedule.set_slot(session, day, slot_key, formats)
+        session.commit()
     log.info(f"[testpolls] forced formats {codes} for {day}")
 
 

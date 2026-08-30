@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 
-from bot.commands.pod_schedule import championship_line
+from bot.services.pod_schedule_card import championship_line
 from bot.commands.test_group import HALL_OF_FAME
 from bot.models import (
     DraftEvent,
