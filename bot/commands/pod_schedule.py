@@ -50,9 +50,10 @@ class PodSchedule(commands.Cog):
         )
 
     @app_commands.command(name="openvote", description=desc.OPEN_VOTE)
+    @app_commands.describe(notify="Ping @Pod Drafters above the card (default on)")
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
-    async def open_vote(self, interaction: discord.Interaction) -> None:
+    async def open_vote(self, interaction: discord.Interaction, notify: bool = True) -> None:
         if not await moderator_authorized_interaction(interaction):
             await interaction.response.send_message(MSG_OPEN_VOTE_DENIED, ephemeral=True)
             return
@@ -61,7 +62,8 @@ class PodSchedule(commands.Cog):
         if channel is None:
             await interaction.followup.send(MSG_NO_POD_CHAT, ephemeral=True)
             return
-        await post_vote_card(channel, vote_ping_text(interaction.guild), force=True)
+        content = vote_ping_text(interaction.guild) if notify else None
+        await post_vote_card(channel, content, force=True)
         audit.event("format_vote_opened", user_id=str(interaction.user.id))
         await interaction.followup.send(MSG_VOTE_POSTED, ephemeral=True)
 
