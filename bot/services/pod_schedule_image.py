@@ -65,6 +65,7 @@ MIN_ASPECT = 4 / 3
 WEEKDAY_NAMES = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 CHAMPIONSHIP_LABEL = "CHAMPS"
 PLACEHOLDER_LABEL = "TBD"
+MAX_CELL_FORMATS = 2
 
 RGB = tuple[int, int, int]
 
@@ -170,12 +171,13 @@ def _rows_for(day: date, *, past: bool) -> list[tuple[str, RGB, str]]:
     if is_rotation_day(day):
         rows = [(latest_on(day), ARRIVAL, latest_on(day))]
         rows.extend((_cell_label(code), ink, code) for code in extras_on(day))
-        return rows
+        return rows[:MAX_CELL_FORMATS]
     latest = latest_on(day)
     formats = planned_on(day)
     if not formats or formats == (latest,):
         return [("", FAINT if past else ink, latest)]
-    return [(_cell_label(code), PLACEHOLDER if code == FLASHBACK else ink, code) for code in formats]
+    rows = [(_cell_label(code), PLACEHOLDER if code == FLASHBACK else ink, code) for code in formats]
+    return rows[:MAX_CELL_FORMATS]
 
 
 def _cell_label(code: str) -> str:
