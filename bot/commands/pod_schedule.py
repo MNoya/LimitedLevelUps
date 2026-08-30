@@ -38,13 +38,15 @@ class PodSchedule(commands.Cog):
         self, interaction: discord.Interaction, weeks: app_commands.Range[int, 1, MAX_WEEKS] = DEFAULT_WEEKS,
     ) -> None:
         audit.event("pod_schedule_invoked", user_id=str(interaction.user.id), weeks=weeks)
+        ephemeral = not posts_publicly(interaction)
+        await interaction.response.defer(ephemeral=ephemeral, thinking=True)
         embed, file = await render_schedule(interaction.guild, weeks)
-        await interaction.response.send_message(
+        await interaction.followup.send(
             embed=embed,
             file=file,
             view=PodScheduleView(),
             allowed_mentions=discord.AllowedMentions.none(),
-            ephemeral=not posts_publicly(interaction),
+            ephemeral=ephemeral,
         )
 
     @app_commands.command(name="openvote", description=desc.OPEN_VOTE)
