@@ -450,13 +450,13 @@ async def _apply_toggle(interaction: discord.Interaction, code: str, ephemeral: 
     season = season_code()
     now_on = await asyncio.to_thread(_toggle_vote_commit, interaction.user, season, code)
     request_public_repaint(interaction.client)
+    embed, view = await asyncio.to_thread(voter_panel, season, interaction.user)
     if ephemeral:
-        embed, view = await asyncio.to_thread(voter_panel, season, interaction.user)
         await interaction.edit_original_response(embed=embed, view=view)
     else:
         name = _option_label(code)
-        message = MSG_VOTED_ON.format(name=name) if now_on else MSG_VOTED_OFF.format(name=name)
-        await interaction.followup.send(message, ephemeral=True)
+        content = MSG_VOTED_ON.format(name=name) if now_on else MSG_VOTED_OFF.format(name=name)
+        await interaction.followup.send(content=content, embed=embed, view=view, ephemeral=True)
 
 
 async def _apply_add(interaction: discord.Interaction, raw: str) -> None:
