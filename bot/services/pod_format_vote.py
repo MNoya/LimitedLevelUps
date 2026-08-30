@@ -50,6 +50,7 @@ MSG_FORMATS_ADDED = "Added {codes} to the ballot"
 MSG_FORMATS_ALREADY = "Those formats are already on the ballot"
 MSG_VOTED_ON = "Voted for {name}"
 MSG_VOTED_OFF = "Removed your vote for {name}"
+MSG_ALSO_VOTED = "Also voted, add with {plus} Add Format to keep voting them"
 ADD_BUTTON_LABEL = "Add Format"
 VOTERS_LABEL = "Voters"
 VOTERS_SHOWN = 20
@@ -59,6 +60,8 @@ ADD_MODAL_PLACEHOLDER = "e.g. DSK FIN MH3"
 CARD_MARKER = "Flashback Format Vote"
 BAR_WIDTH = 10
 BALLOT_LABEL_MAX = 24
+EMBED_FIELD_MAX = 25
+BAR_LIMIT = EMBED_FIELD_MAX
 NBSP_FIELD = "​"
 
 MSG_NO_REMOVABLE = "No written-in options to remove"
@@ -184,23 +187,20 @@ def voters_by_format(session: Session, season: str) -> dict[str, list[str]]:
     return result
 
 
-def ballot_order(counts: dict[str, int]) -> list[str]:
-    """The formats on the ballot: the seeded flashback sets plus every written-in format, newest release first.
-    The order is fixed on release date, not votes, so a button never moves under a clicker as the tally shifts.
-    Only when the list overruns the button grid does the tally matter: an option with votes is always kept and
-    the unvoted ones are dropped oldest first, so no format a player picked is ever hidden."""
+def ballot_order(counts: dict[str, int], limit: int = MAX_ROWED_OPTIONS) -> list[str]:
+    """The formats to show, the seeded flashback sets plus every written-in format, displayed newest release
+    first. Within `limit` the order is fixed on release date so a button never moves under a clicker. When the
+    list overruns `limit` the most-voted are kept, so a format a player picked is never dropped for an unvoted
+    or less-voted one."""
     codes = list(seed_formats())
     for code in counts:
         if code not in codes:
             codes.append(code)
+    if len(codes) > limit:
+        codes.sort(key=lambda code: (counts.get(code, 0), _release_sort_key(code)), reverse=True)
+        codes = codes[:limit]
     codes.sort(key=_release_sort_key, reverse=True)
-    if len(codes) <= MAX_ROWED_OPTIONS:
-        return codes
-    voted = [code for code in codes if counts.get(code, 0) > 0]
-    unvoted = [code for code in codes if counts.get(code, 0) == 0]
-    kept = (voted + unvoted)[:MAX_ROWED_OPTIONS]
-    kept.sort(key=_release_sort_key, reverse=True)
-    return kept
+    return codes
 
 
 def _release_sort_key(code: str) -> date:
@@ -216,7 +216,7 @@ def panel(season: str) -> tuple[discord.Embed, ui.View]:
     with SessionLocal() as session:
         counts = tally(session, season)
     codes = ballot_order(counts)
-    return _vote_embed(season, codes, counts), build_vote_view(codes)
+    return _vote_embed(season, codes, counts, _extra_voted(counts, codes)), build_vote_view(codes)
 
 
 def voter_panel(season: str, voter: discord.abc.User) -> tuple[discord.Embed, ui.View]:
@@ -225,7 +225,16 @@ def voter_panel(season: str, voter: discord.abc.User) -> tuple[discord.Embed, ui
         counts = tally(session, season)
         voted = player_votes(session, str(voter.id), season)
     codes = ballot_order(counts)
-    return _vote_embed(season, codes, counts), build_vote_view(codes, voted)
+    embed = _vote_embed(season, codes, counts, _extra_voted(counts, codes))
+    return embed, build_vote_view(codes, voted)
+
+
+def _extra_voted(counts: dict[str, int], shown: list[str]) -> list[tuple[str, int]]:
+    """The voted formats that did not make the button grid, most-voted first, for the compact Also-voted line"""
+    on_grid = set(shown)
+    extra = [(code, count) for code, count in counts.items() if count > 0 and code not in on_grid]
+    extra.sort(key=lambda pair: (pair[1], _release_sort_key(pair[0])), reverse=True)
+    return extra
 
 
 def render_panel(season: str, codes: list[str], counts: dict[str, int]) -> tuple[discord.Embed, ui.View]:
@@ -255,15 +264,21 @@ def build_vote_view(codes: list[str], voted: set[str] | None = None) -> ui.View:
     return view
 
 
-def _vote_embed(season: str, codes: list[str], counts: dict[str, int]) -> discord.Embed:
+def _vote_embed(
+    season: str, codes: list[str], counts: dict[str, int], extras: list[tuple[str, int]] | None = None,
+) -> discord.Embed:
     heading = MSG_VOTE_HEADING.format(name=set_name_for(season))
     embed = discord.Embed(color=discord.Color.green(), description=f"{heading}\n\n{MSG_VOTE_INTRO}")
     top = max(counts.values(), default=0)
     for code in codes:
         embed.add_field(name=f"{_emoji_prefix(code)}{_option_label(code)}",
                         value=_vote_bar(counts.get(code, 0), top), inline=True)
-    for _ in range((-len(codes)) % 3):
+    pad = (-len(codes)) % 3
+    for _ in range(pad):
         embed.add_field(name=NBSP_FIELD, value=NBSP_FIELD, inline=True)
+    if extras:
+        listed = "  ".join(f"{_emoji_prefix(code)}**{code}** {count}" for code, count in extras)
+        embed.add_field(name=MSG_ALSO_VOTED.format(plus=add_button_emoji()), value=listed, inline=False)
     return embed
 
 
@@ -278,7 +293,7 @@ def _voters_embed(season: str, voters: dict[str, list[str]], mine: set[str]) -> 
     your_votes = MSG_YOUR_VOTES.format(codes=", ".join(sorted(mine))) if mine else MSG_YOUR_VOTES_NONE
     embed = discord.Embed(color=discord.Color.green(), description=f"{MSG_VOTERS_HEADING}\n\n{your_votes}")
     counts = {code: len(names) for code, names in voters.items()}
-    for code in ballot_order(counts):
+    for code in ballot_order(counts, BAR_LIMIT):
         names = voters.get(code, [])
         if not names:
             continue
@@ -346,9 +361,9 @@ def vote_ping_text(guild: discord.Guild) -> str:
     return MSG_VOTE_OPEN.format(role=role_mention(guild, POD_DRAFTERS_ROLE_NAME))
 
 
-async def post_vote_card(channel: discord.abc.Messageable, content: str, *, force: bool = False) -> None:
-    """Post the season's public vote card and pin it, pinging with `content`. A card already up for this
-    season is left alone unless `force`, so a same-day repost does not re-ping."""
+async def post_vote_card(channel: discord.abc.Messageable, content: str | None, *, force: bool = False) -> None:
+    """Post the season's public vote card and pin it, pinging with `content` when it is set. A card already up
+    for this season is left alone unless `force`, so a same-day repost does not re-ping."""
     season = season_code()
     existing = await _existing_card(channel)
     if existing is not None and not force and _is_current_card(existing, season):
