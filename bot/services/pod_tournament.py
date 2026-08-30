@@ -4297,7 +4297,9 @@ async def post_trophy_hype_for_event(bot, event_id: str, guild) -> None:
 
         players = await asyncio.to_thread(load_tournament_players_sync, event_id)
         thread_id_str = await asyncio.to_thread(load_event_thread_id_sync, event_id)
-        shim = _RecoveryManager(bot, event_id, int(thread_id_str) if thread_id_str else 0, players, "team")
+        set_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
+        shim = _RecoveryManager(
+            bot, event_id, int(thread_id_str) if thread_id_str else 0, players, "team", set_code)
         await maybe_post_team_trophy_hype(shim)
         return
     resolved = await _resolve_announcement_standings(event_id)
@@ -4413,12 +4415,13 @@ class _RecoveryManager:
     read; backed by the DB row."""
 
     def __init__(self, bot, event_id: str, thread_id: int, tournament_players: list,
-                 pairing_mode: str) -> None:
+                 pairing_mode: str, set_code: str = "") -> None:
         self.bot = bot
         self.event_id = event_id
         self.thread_id = thread_id
         self.tournament_players = tournament_players
         self.pairing_mode = pairing_mode
+        self.set_code = set_code
         self.team_map: dict[str, str] | None = None
         self.finalized = True
         self.champion_announced = False
@@ -4541,7 +4544,8 @@ async def post_championship_for_event(
     doesn't jump the gate."""
     players = await asyncio.to_thread(load_tournament_players_sync, event_id)
     pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
-    shim = _RecoveryManager(bot, event_id, int(thread_id), players, pairing_mode)
+    set_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
+    shim = _RecoveryManager(bot, event_id, int(thread_id), players, pairing_mode, set_code)
     if pairing_mode == "team":
         from bot.services.pod_team_showcase import maybe_post_team_championship
 
@@ -4561,7 +4565,8 @@ async def refresh_standings_for_event(bot, event_id: str, thread_id: str | int) 
     if len(players) < 2:
         return
     pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id) or "swiss"
-    shim = _RecoveryManager(bot, event_id, int(thread_id), players, pairing_mode)
+    set_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
+    shim = _RecoveryManager(bot, event_id, int(thread_id), players, pairing_mode, set_code)
     if pairing_mode == "team":
         from bot.services import pod_team_flow, pod_team_showcase
         from bot.services.pod_team_board import load_team_board_data
@@ -4606,7 +4611,8 @@ async def _rearm_deck_ping(bot, event_id: str, thread_id: str | int, delay: floa
     if pairing_mode == "team":
         return
     players = await asyncio.to_thread(load_tournament_players_sync, event_id)
-    shim = _RecoveryManager(bot, event_id, int(thread_id), players, pairing_mode)
+    set_code = await asyncio.to_thread(load_event_set_code_sync, event_id)
+    shim = _RecoveryManager(bot, event_id, int(thread_id), players, pairing_mode, set_code)
     schedule_deck_ping(shim, delay=delay)
 
 
