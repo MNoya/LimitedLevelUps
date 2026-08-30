@@ -7,6 +7,7 @@ and the championship day are left alone. The render, post and edit-in-place live
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, time
 
@@ -56,8 +57,13 @@ async def fire_schedule_post() -> None:
         log.warning("pod-schedule post: no pod chat channel; skipping tick")
         return
     today = datetime.now(SCHEDULE_TZ).date()
+    count = await asyncio.to_thread(_sweep, today)
+    log.info(f"pod-schedule post: swept {count} slots from {today}")
+    await refresh_schedule_post(channel, view=PodScheduleView())
+
+
+def _sweep(today) -> int:
     with SessionLocal() as session:
         assignments = run_allocation(session, today, rewrite=True)
         session.commit()
-    log.info(f"pod-schedule post: swept {len(assignments)} slots from {today}")
-    await refresh_schedule_post(channel, view=PodScheduleView())
+        return len(assignments)
