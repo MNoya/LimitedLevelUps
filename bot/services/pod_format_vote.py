@@ -50,6 +50,10 @@ MSG_FORMATS_ADDED = "Added {codes} to the ballot"
 MSG_FORMATS_ALREADY = "Those formats are already on the ballot"
 MSG_VOTED_ON = "Voted for {name}"
 MSG_VOTED_OFF = "Removed your vote for {name}"
+MSG_CONFIRM_REMOVE = "Remove your vote for {name}?"
+MSG_VOTE_KEPT = "Your vote is kept"
+CONFIRM_REMOVE_LABEL = "Remove Vote"
+KEEP_VOTE_LABEL = "Keep Vote"
 MSG_ALSO_VOTED = "{plus} Also Voted"
 ADD_BUTTON_LABEL = "Add Format"
 VOTERS_LABEL = "Voters"
@@ -105,6 +109,19 @@ def toggle_vote(session: Session, voter: discord.abc.User, season: str, code: st
     session.add(PodFormatVote(player_id=player.id, season_set_code=season, format_code=code))
     session.flush()
     return True
+
+
+def remove_vote(session: Session, voter: discord.abc.User, season: str, code: str) -> bool:
+    """Retract this voter's vote for `code`. Returns True when a vote was removed, False when none was on."""
+    player = _voter_player(session, voter)
+    result = session.execute(
+        delete(PodFormatVote).where(
+            PodFormatVote.player_id == player.id,
+            PodFormatVote.season_set_code == season,
+            PodFormatVote.format_code == code,
+        )
+    )
+    return result.rowcount > 0
 
 
 def add_votes(session: Session, voter: discord.abc.User, season: str, raw: str) -> list[str]:
@@ -451,6 +468,17 @@ def _toggle_vote_commit(voter: discord.abc.User, season: str, code: str) -> bool
         return now_on
 
 
+def _remove_vote_commit(voter: discord.abc.User, season: str, code: str) -> None:
+    with SessionLocal() as session:
+        remove_vote(session, voter, season, code)
+        session.commit()
+
+
+def _has_vote(voter: discord.abc.User, season: str, code: str) -> bool:
+    with SessionLocal() as session:
+        return code in player_votes(session, str(voter.id), season)
+
+
 def _add_votes_commit(voter: discord.abc.User, season: str, raw: str) -> list[str]:
     with SessionLocal() as session:
         added = add_votes(session, voter, season, raw)
@@ -463,6 +491,12 @@ async def _apply_toggle(interaction: discord.Interaction, code: str, ephemeral: 
     crowd clicking at once never blocks the loop past the interaction ack window. The public card repaints
     through the queue so a burst collapses to one edit; a private copy edits itself."""
     season = season_code()
+    if not ephemeral and await asyncio.to_thread(_has_vote, interaction.user, season, code):
+        await interaction.followup.send(
+            MSG_CONFIRM_REMOVE.format(name=_option_label(code)),
+            view=ConfirmRemoveView(code), ephemeral=True,
+        )
+        return
     now_on = await asyncio.to_thread(_toggle_vote_commit, interaction.user, season, code)
     request_public_repaint(interaction.client)
     if ephemeral:
@@ -497,6 +531,35 @@ class VoteOptionItem(ui.DynamicItem[ui.Button], template=rf"{VOTE_OPTION_ID}:(?P
         ephemeral = _is_ephemeral(interaction.message)
         await interaction.response.defer()
         run_detached(_apply_toggle(interaction, self.code, ephemeral), label="format-vote-toggle")
+
+
+class ConfirmRemoveView(ui.View):
+    def __init__(self, code: str) -> None:
+        super().__init__(timeout=60)
+        self.add_item(ConfirmRemoveButton(code))
+        self.add_item(KeepVoteButton())
+
+
+class ConfirmRemoveButton(ui.Button):
+    def __init__(self, code: str) -> None:
+        super().__init__(style=discord.ButtonStyle.danger, label=CONFIRM_REMOVE_LABEL)
+        self.code = code
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        await asyncio.to_thread(_remove_vote_commit, interaction.user, season_code(), self.code)
+        request_public_repaint(interaction.client)
+        await interaction.edit_original_response(
+            content=MSG_VOTED_OFF.format(name=_option_label(self.code)), view=None,
+        )
+
+
+class KeepVoteButton(ui.Button):
+    def __init__(self) -> None:
+        super().__init__(style=discord.ButtonStyle.secondary, label=KEEP_VOTE_LABEL)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.edit_message(content=MSG_VOTE_KEPT, view=None)
 
 
 class VotersItem(ui.DynamicItem[ui.Button], template=VOTERS_ID):
