@@ -14,18 +14,21 @@ from datetime import date, datetime
 
 import discord
 
+from bot import emojis
 from bot.config import PRODUCTION_GUILD_ID, settings
 from bot.database import SessionLocal
-from bot.discord_helpers import EM_SPACE, message_text
+from bot.discord_helpers import EM_SPACE, NBSP, message_text
 from bot.services import pod_format_interest as fi
 from bot.services.championship_dates import championship_on
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
+from bot.services.pod_format_allocator import vote_results
 from bot.services.pod_format_schedule import (
     calendar_days,
     latest_on,
     rotation_in,
     schedule_overlay,
     scheduled_formats,
+    weeks_until_next_rotation,
 )
 from bot.services.pod_roles import role_mention
 from bot.services.pod_schedule import SCHEDULE_TZ
@@ -44,6 +47,8 @@ MSG_FLASHBACK_SEASON = (
 )
 MSG_CHAMPIONSHIP = "👑 {role} <t:{unix}:R>"
 MSG_ARRIVAL = "{symbol} **{name}** <t:{unix}:R>"
+MSG_NO_VOTES = "No votes yet"
+RESULTS_PER_ROW = 4
 
 CHANNEL_URL = "https://discord.com/channels/{guild_id}/{channel_id}"
 SCHEDULE_MARKER = "Pod Draft Format Schedule"
@@ -82,9 +87,10 @@ async def repost_schedule_post(channel: discord.abc.Messageable, *, view: discor
 
 
 async def render_schedule(
-    guild: discord.Guild | None, weeks: int = DEFAULT_WEEKS,
+    guild: discord.Guild | None, weeks: int | None = None,
 ) -> tuple[discord.Embed, discord.File]:
     now = datetime.now(SCHEDULE_TZ)
+    weeks = weeks if weeks is not None else weeks_until_next_rotation(now.date(), MAX_WEEKS)
     days = calendar_days(now.date(), weeks)
     with SessionLocal() as session, schedule_overlay(session, days[0], days[-1]):
         png = await asyncio.to_thread(render_calendar_png, now.date(), weeks)
@@ -133,6 +139,28 @@ def build_schedule_embed(guild: discord.Guild | None, now: datetime, weeks: int)
     embed = discord.Embed(description=f"{heading}\n{LINE_GAP.join(lines)}", color=discord.Color.green())
     embed.set_image(url=IMAGE_URL)
     return embed
+
+
+def build_vote_results_embed() -> discord.Embed:
+    today = datetime.now(SCHEDULE_TZ).date()
+    with SessionLocal() as session:
+        kept = vote_results(session, today)
+    tiers: dict[int, list[str]] = {}
+    for code, votes, days in kept:
+        if days == 0:
+            continue
+        icon = emojis.set_symbol(code) or fi.flashback_emoji()
+        tiers.setdefault(days, []).append(f"{icon} **{code}** {votes}")
+    sections = []
+    for days in sorted(tiers, reverse=True):
+        label = f"{days} days" if days != 1 else "1 day"
+        entries = tiers[days]
+        gap = NBSP * 3
+        rows = [gap.join(entries[i:i + RESULTS_PER_ROW]) for i in range(0, len(entries), RESULTS_PER_ROW)]
+        sections.append(f"### {label}\n" + "\n".join(rows))
+    heading = f"### {fi.flashback_emoji()} Format Vote Results"
+    body = "\n".join(sections) if sections else MSG_NO_VOTES
+    return discord.Embed(description=f"{heading}\n\n{body}", color=discord.Color.green())
 
 
 def coordination_url(guild: discord.Guild | None) -> str:

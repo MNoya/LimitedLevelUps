@@ -18,7 +18,7 @@ from bot.commands import descriptions as desc
 from bot.commands.authorization import moderator_authorized_interaction
 from bot.discord_helpers import posts_publicly, resolve_pod_chat_channel
 from bot.services.pod_format_vote import post_vote_card, vote_ping_text
-from bot.services.pod_schedule_card import DEFAULT_WEEKS, MAX_WEEKS, render_schedule
+from bot.services.pod_schedule_card import MAX_WEEKS, render_schedule
 from bot.services.pod_schedule_controls import PodScheduleView
 
 MSG_OPEN_VOTE_DENIED = "Only organizers can open the format vote"
@@ -35,7 +35,7 @@ class PodSchedule(commands.Cog):
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
     async def pod_schedule(
-        self, interaction: discord.Interaction, weeks: app_commands.Range[int, 1, MAX_WEEKS] = DEFAULT_WEEKS,
+        self, interaction: discord.Interaction, weeks: app_commands.Range[int, 1, MAX_WEEKS] | None = None,
     ) -> None:
         audit.event("pod_schedule_invoked", user_id=str(interaction.user.id), weeks=weeks)
         ephemeral = not posts_publicly(interaction)

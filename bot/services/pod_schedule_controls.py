@@ -6,6 +6,7 @@ never overwrites, so the card redraws with the change at once. Everyone else is 
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 
@@ -23,7 +24,7 @@ from bot.services.pod_format_poll import normalize_write_ins
 from bot.services.pod_format_schedule import LATEST, set_slot
 from bot.services.pod_format_vote import send_vote_panel
 from bot.services.pod_schedule import SCHEDULE_TZ
-from bot.services.pod_schedule_card import refresh_schedule_post
+from bot.services.pod_schedule_card import build_vote_results_embed, refresh_schedule_post
 from bot.services.pod_signals import SLOT_EARLY, SLOT_LATE
 from bot.services.ping_roles import ORGANIZER_ROLE_NAME, organizer_mention
 from bot.tasks.pod_daily_poll import retarget_launcher_day
@@ -47,6 +48,7 @@ _SLOT_LABELS = {SLOT_EARLY: "Early Pod", SLOT_LATE: "Late Pod", SLOT_BOTH: "both
 class PodScheduleView(ui.View):
     def __init__(self) -> None:
         super().__init__(timeout=None)
+        self.results.emoji = fi.flashback_emoji()
 
     @ui.button(label="Vote Formats", emoji="🗳️", style=discord.ButtonStyle.primary, custom_id="pod_schedule:vote")
     async def vote(self, interaction: discord.Interaction, button: ui.Button) -> None:
@@ -54,6 +56,12 @@ class PodScheduleView(ui.View):
             await interaction.response.send_message(_vote_closed_message(), ephemeral=True)
             return
         await send_vote_panel(interaction)
+
+    @ui.button(label="Results", style=discord.ButtonStyle.secondary, custom_id="pod_schedule:results")
+    async def results(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        embed = await asyncio.to_thread(build_vote_results_embed)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     @ui.button(emoji="⚙️", style=discord.ButtonStyle.secondary, custom_id="pod_schedule:config")
     async def config(self, interaction: discord.Interaction, button: ui.Button) -> None:

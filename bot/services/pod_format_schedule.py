@@ -207,6 +207,13 @@ def rotation_in(days: Sequence[date], after: datetime | None = None) -> date | N
     return None
 
 
+def weeks_until_next_rotation(around: date, cap: int) -> int:
+    for weeks in range(1, cap + 1):
+        if rotation_in(calendar_days(around, weeks), release_instant(around)) is not None:
+            return weeks
+    return cap
+
+
 def _resolved(day: date, slot_key: str | None, latest: str) -> tuple[str, ...]:
     if slot_key is None:
         codes: list[str] = []

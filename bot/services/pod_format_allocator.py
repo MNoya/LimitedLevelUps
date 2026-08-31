@@ -7,14 +7,15 @@ weekday:
 - Flashback days (Mon/Wed/Fri/Sun): the featured custom set plus one voted flashback set.
 - Staple days (Tue/Thu/Sat): the latest set plus the staple cube.
 
-A flashback set needs `VOTE_FLOOR` raw votes to be eligible. Ranking among eligible sets uses votes weighted by
-each voter's recent pod attendance, floored at one so a new player still counts. One sweep fills the whole
-window from a start day to the day before the next set rotates in; it writes `source='auto'` overlay rows,
-never touches an organizer's manual override, and skips the championship day so its own machinery keeps it.
+A flashback set needs `VOTE_FLOOR` raw votes to be eligible, and the top `TOP_N` by vote count earn days, with
+ties broken by voter pod attendance. Days split across the window in proportion to each set's votes. One sweep
+fills the whole window from a start day to the day before the next set rotates in; it writes `source='auto'`
+overlay rows, never touches an organizer's manual override, and skips the championship day so its own machinery
+keeps it.
 """
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
@@ -38,6 +39,7 @@ from bot.sets import is_known_set, previous_set_code, seed_for_code
 STAPLE_FORMAT = PEASANT_CODE
 FLASHBACK_WEEKDAYS = frozenset({0, 2, 4, 6})
 VOTE_FLOOR = 6
+TOP_N = 12
 HORIZON_CAP_DAYS = 70
 FLASHBACK_REVEAL_DELAY = timedelta(hours=24)
 
@@ -111,6 +113,23 @@ def run_allocation(
     return result
 
 
+def vote_results(session: Session, start: date) -> list[tuple[str, int, int]]:
+    """Each scheduled flashback set as (code, votes, days), most days then most votes first. Days count over the
+    same window `run_allocation` fills."""
+    season = season_code()
+    days = _horizon(start)
+    if not days:
+        return []
+    latest = latest_on(days[0])
+    kept_votes = _flashback_scores(session, season, latest)
+    launched = _launched_days(session, days[0], days[-1])
+    flashback_days = [day for day in days if _is_flashback_day(day) and day not in launched]
+    day_counts = Counter(code for code in assign_flashbacks(flashback_days, kept_votes) if code)
+    kept = [(code, int(votes), day_counts.get(code, 0)) for code, votes in kept_votes.items()]
+    kept.sort(key=lambda row: (row[2], row[1]), reverse=True)
+    return kept
+
+
 def _horizon(start: date) -> list[date]:
     base = latest_on(start)
     days: list[date] = []
@@ -163,7 +182,9 @@ def _flashback_scores(session: Session, season: str, latest: str) -> dict[str, f
             continue
         raw[code] += 1
         weighted[code] += weights.get(player_id, 1)
-    return {code: weighted[code] for code in raw if raw[code] >= VOTE_FLOOR}
+    eligible = [code for code in raw if raw[code] >= VOTE_FLOOR]
+    eligible.sort(key=lambda code: (raw[code], weighted[code]), reverse=True)
+    return {code: float(raw[code]) for code in eligible[:TOP_N]}
 
 
 def _is_flashback_candidate(code: str, latest: str) -> bool:
