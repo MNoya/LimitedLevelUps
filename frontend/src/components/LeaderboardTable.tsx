@@ -155,16 +155,21 @@ export function LeaderboardTable<T extends LeaderboardTableRow>({
   const isMobile = variant === "mobile";
 
   const [myRowEl, setMyRowEl] = useState<HTMLDivElement | null>(null);
-  const [pinHidden, setPinHidden] = useState(true);
+  const [pinMode, setPinMode] = useState<PinMode>("hidden");
   useEffect(() => {
     if (!myRowEl) {
-      setPinHidden(true);
+      setPinMode("hidden");
       return;
     }
     const observer = new IntersectionObserver(
       ([entry]) => {
-        const scrolledPast = !entry.isIntersecting && entry.boundingClientRect.top < stickyTop;
-        setPinHidden(!scrolledPast);
+        if (entry.isIntersecting) {
+          setPinMode("hidden");
+        } else if (entry.boundingClientRect.top < stickyTop) {
+          setPinMode("overlay");
+        } else {
+          setPinMode("inflow");
+        }
       },
       { rootMargin: `${-stickyTop}px 0px 0px 0px`, threshold: 0 },
     );
@@ -187,7 +192,7 @@ export function LeaderboardTable<T extends LeaderboardTableRow>({
           mode={mode}
           variant={variant}
           stickyTop={stickyTop}
-          hidden={pinHidden}
+          pinMode={pinMode}
           onScrollToRow={() => myRowEl?.scrollIntoView({ behavior: "smooth", block: "center" })}
         />
         {rows.map((r) => {
@@ -204,9 +209,9 @@ export function LeaderboardTable<T extends LeaderboardTableRow>({
               className={cn(
                 "transition-colors",
                 isMobile && "border-b border-border",
-                open ? "bg-surface2" : isMobile ? "bg-transparent" : "bg-surface",
+                open ? "bg-surface2" : mine ? "bg-surface" : isMobile ? "bg-transparent" : "bg-surface",
                 (expandable || href) && !isMobile && "hover:bg-surface2",
-                mine && !open && "bg-green/[0.07]",
+                mine && !open && "bg-[linear-gradient(rgba(46,232,92,0.07),rgba(46,232,92,0.07))]",
                 mine && "shadow-[inset_3px_0_0_0_#2ee85c,inset_-3px_0_0_0_#2ee85c]",
               )}
             >
@@ -246,47 +251,48 @@ export function LeaderboardTable<T extends LeaderboardTableRow>({
   );
 }
 
-// The signed-in viewer's own standing, pinned to the top of the table while their
-// real row is scrolled out of view, so they never lose sight of their rank. Sticky
-// within the rows column so it inherits the table width rather than the viewport's.
+type PinMode = "hidden" | "inflow" | "overlay";
+
 function FloatingOwnRow({
   row,
   mode,
   variant,
   stickyTop,
-  hidden,
+  pinMode,
   onScrollToRow,
 }: {
   row: LeaderboardTableRow | undefined;
   mode: BoardMode;
   variant: "desktop" | "mobile";
   stickyTop: number;
-  hidden: boolean;
+  pinMode: PinMode;
   onScrollToRow: () => void;
 }) {
   if (!row) {
     return null;
   }
+  const hidden = pinMode === "hidden";
+  const inflow = pinMode === "inflow";
   return (
     <div
-      className={cn(
-        "sticky z-[5] transition-opacity",
-        hidden ? "pointer-events-none opacity-0" : "opacity-100",
-      )}
-      style={{ top: stickyTop, height: 0 }}
+      className={cn("sticky z-[5]", hidden && "pointer-events-none opacity-0")}
+      style={{ top: stickyTop, height: inflow ? undefined : 0 }}
       aria-hidden={hidden}
     >
-      <div className="border-b border-border bg-surface">
-        <div
-          onClick={onScrollToRow}
-          className="cursor-pointer bg-green/[0.07] shadow-[inset_3px_0_0_0_#2ee85c,inset_-3px_0_0_0_#2ee85c]"
-        >
-          {variant === "mobile" ? (
-            <MobileRow row={row} mode={mode} />
-          ) : (
-            <DesktopRow row={row} mode={mode} />
-          )}
-        </div>
+      <div
+        onClick={onScrollToRow}
+        className={cn(
+          "cursor-pointer border-b bg-surface",
+          variant === "mobile" ? "border-border" : "border-bg",
+          "bg-[linear-gradient(rgba(46,232,92,0.07),rgba(46,232,92,0.07))]",
+          "shadow-[inset_3px_0_0_0_#2ee85c,inset_-3px_0_0_0_#2ee85c]",
+        )}
+      >
+        {variant === "mobile" ? (
+          <MobileRow row={row} mode={mode} />
+        ) : (
+          <DesktopRow row={row} mode={mode} />
+        )}
       </div>
     </div>
   );
