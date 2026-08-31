@@ -24,15 +24,18 @@ import { cubeVariantForBoard } from "../frontend/src/data/cubeVariants";
 import { skeletonsFor } from "../frontend/src/data/skeletons";
 
 const EPISODE_CATEGORY_DESCRIPTIONS: Record<string, string> = {
-  "Set Review": "Card-by-card set reviews and first impressions for MTG limited.",
-  Draft: "Draft playthroughs, archetype guides and deckbuilding for MTG limited.",
-  Sealed: "Sealed and prerelease deckbuilding and gameplay.",
-  Rankings: "Tier lists, top-10s and best-of-year rankings.",
-  Metagame: "Format state, metagame updates and tournament reports.",
-  Coaching: "Coaching sessions and gameplay reviews.",
-  Guest: "Interviews and conversations with limited players.",
-  Evergreen: "Timeless limited skills, fundamentals and strategy.",
+  "Set Review": "Card-by-card set reviews and first impressions for MTG limited",
+  Draft: "Draft playthroughs, archetype guides and deckbuilding for MTG limited",
+  Sealed: "Sealed and prerelease deckbuilding and gameplay",
+  Rankings: "Tier lists, top-10s and best-of-year rankings",
+  Metagame: "Format state, metagame updates and tournament reports",
+  Coaching: "Coaching sessions and gameplay reviews",
+  Guest: "Interviews and conversations with limited players",
+  Evergreen: "Timeless limited skills, fundamentals and strategy",
 };
+
+const EPISODE_WATCH_FALLBACK = "Watch this episode";
+const EPISODE_LISTEN_FALLBACK = "Listen to this episode";
 
 const LEADERBOARD_DESCRIPTION =
   "Check ranks and trophies from the community. /join on Discord to share your drafts and climb the leaderboard";
@@ -142,21 +145,69 @@ const fetchEpisodeSetName = async (code: string): Promise<string | null> => {
 
 const episodeSlugMeta = async (slug: string): Promise<RouteMeta | null> => {
   try {
-    const resp = await restGet("public_episodes?select=title,youtube_id");
+    const resp = await restGet("public_episodes?select=title,youtube_id,summary");
     if (!resp.ok) return null;
-    const rows = (await resp.json()) as Array<{ title: string; youtube_id: string | null }>;
+    const rows = (await resp.json()) as Array<{ title: string; youtube_id: string | null; summary: string | null }>;
     for (const row of rows) {
       if (episodeSlugBase(row.title) === slug) {
         const image: ImageIntent = row.youtube_id
           ? { kind: "url", url: `https://i.ytimg.com/vi/${row.youtube_id}/hqdefault.jpg` }
           : null;
-        return page(row.title, "Listen and watch this episode.", image);
+        const fallback = row.youtube_id ? EPISODE_WATCH_FALLBACK : EPISODE_LISTEN_FALLBACK;
+        return page(row.title, episodeDescription(row.summary) ?? fallback, image);
       }
     }
   } catch {
     // fall through
   }
   return null;
+};
+
+const EPISODE_SUMMARY_MAX = 300;
+const EPISODE_SUMMARY_MIN = 12;
+const EPISODE_BOILERPLATE_MARKERS = [
+  "http://", "https://", "bit.ly", "limited level-ups patreon", "llu patreon", "llu tierlist",
+  "tierlist:", "limited level-ups discord", "llu discord", "alex's stream", "alex's coaching",
+  "limited level-ups podcast", "untappedgg", "set primer playlist", "set review playlist",
+];
+const EPISODE_TRAILING_LABEL = /\s+[A-Za-z][A-Za-z'\- ]{0,40}:$/;
+const EPISODE_TRAILING_TAGS = /(?:\s+#\S+)+$/;
+const EPISODE_TIMESTAMP = /^\d{1,2}:\d{2}(:\d{2})?\b/;
+
+const episodeDescription = (summary: string | null): string | null => {
+  if (!summary) return null;
+  for (const line of summary.split("\n")) {
+    const prose = episodeProseFromLine(line);
+    if (prose.length >= EPISODE_SUMMARY_MIN) {
+      if (prose.length > EPISODE_SUMMARY_MAX) {
+        return prose.slice(0, EPISODE_SUMMARY_MAX).replace(/\s+\S*$/, "") + "…";
+      }
+      return prose;
+    }
+  }
+  return null;
+};
+
+const episodeProseFromLine = (line: string): string => {
+  let text = line.trim();
+  if (!text) return "";
+  const lower = text.toLowerCase();
+  let cut = text.length;
+  for (const marker of EPISODE_BOILERPLATE_MARKERS) {
+    const idx = lower.indexOf(marker);
+    if (idx >= 0 && idx < cut) cut = idx;
+  }
+  text = text.slice(0, cut).replace(/\s+/g, " ").trim();
+  const hadTags = EPISODE_TRAILING_TAGS.test(text);
+  text = text.replace(EPISODE_TRAILING_TAGS, "").trim();
+  if (!text || EPISODE_TIMESTAMP.test(text) || text.startsWith("#")) return "";
+  if (hadTags && text.length < 40 && !/[.!?]/.test(text)) return "";
+  text = text.replace(EPISODE_TRAILING_LABEL, "").trim();
+  if (text.endsWith(":")) {
+    const terminated = text.match(/^.*[.!?]/);
+    text = terminated ? terminated[0] : "";
+  }
+  return text.replace(/[.\s]+$/, "").trim();
 };
 
 // Pod-only custom formats never reach public_sets; their display name lives on the pod events
@@ -211,7 +262,7 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
       return page("Leaderboard", LEADERBOARD_DESCRIPTION);
     }
     if (rest[0] === "about") {
-      return page("About", "Learn how the community leaderboard works.");
+      return page("About", "Learn how the community leaderboard works");
     }
     if (rest[0] === "player" && rest[1]) {
       return playerMeta(await fetchPlayerName(rest[1]), rest[1]);
@@ -231,7 +282,7 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
     const setName = variant?.name ?? await fetchSetName(baseCode);
     return page(
       `${label} Leaderboard`,
-      `Check ${setName} ranks and trophies on the leaderboard.`,
+      `Check ${setName} ranks and trophies on the leaderboard`,
       { kind: "setSymbol", code: baseCode },
     );
   }
@@ -262,15 +313,15 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
       const code = rest[0].toUpperCase();
       if (setCodes.has(code)) {
         const setName = await fetchSetName(code);
-        return page(`${code} Pod Drafts`, `${setName} pod draft results and standings.`, { kind: "setSymbol", code });
+        return page(`${code} Pod Drafts`, `${setName} pod draft results and standings`, { kind: "setSymbol", code });
       }
       const formatLabel = await fetchPodFormatLabel(code);
       if (formatLabel) {
-        return page(`${code} Pod Drafts`, `${formatLabel} pod draft results and standings.`, { kind: "setSymbol", code });
+        return page(`${code} Pod Drafts`, `${formatLabel} pod draft results and standings`, { kind: "setSymbol", code });
       }
-      return page(titleCaseSlug(rest[0], setCodes), "Check seats, logs & replays for this pod draft.");
+      return page(titleCaseSlug(rest[0], setCodes), "Check seats, logs & replays for this pod draft");
     }
-    return page("Pod Drafts", "Check community pod draft results and standings.");
+    return page("Pod Drafts", "Check community pod draft results and standings");
   }
 
   if (section === "p0p1") {
@@ -279,17 +330,17 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
   if (section === "episodes") {
     const slug = rest[0];
     if (!slug) {
-      return page("Episodes", "Check out the latest episodes, or search the archive.");
+      return page("Episodes", "Check out the latest episodes, or search the archive");
     }
     if (rest[1]) {
       const meta = await episodeSlugMeta(rest[1]);
-      return meta ?? page(titleCaseSlug(rest[1], new Set()), "Listen and watch this episode.");
+      return meta ?? page(titleCaseSlug(rest[1], new Set()), EPISODE_WATCH_FALLBACK);
     }
     if (slug === "shorts") {
-      return page("Shorts", "Quick limited tips and highlights in under two minutes.");
+      return page("Shorts", "Quick limited tips and highlights in under two minutes");
     }
     if (slug === "audio") {
-      return page("Audio", "Listen to the podcast archive.");
+      return page("Audio", "Listen to the podcast archive");
     }
     const category = categoryFromSlug(slug);
     if (category) {
@@ -300,18 +351,18 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
     if (setName) {
       return page(
         `${setCode} Episodes`,
-        `Episodes, set reviews and draft guides for ${setName}.`,
+        `Episodes, set reviews and draft guides for ${setName}`,
         { kind: "setSymbol", code: setCode },
       );
     }
     const episodeMeta = await episodeSlugMeta(slug);
-    return episodeMeta ?? page(titleCaseSlug(slug, new Set()), "Listen and watch this episode.");
+    return episodeMeta ?? page(titleCaseSlug(slug, new Set()), EPISODE_WATCH_FALLBACK);
   }
   if (section === "community") {
-    return page("Community", "Learn about us, the show and the community behind it.");
+    return page("Community", "Learn about us, the show and the community behind it");
   }
   if (section === "about") {
-    return page("About", "Learn how the community leaderboard works.");
+    return page("About", "Learn how the community leaderboard works");
   }
 
   return { ...HOME_META, description: null };
