@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { X } from "lucide-react";
 
 import type { Episode } from "../data/episodes";
@@ -14,6 +15,7 @@ export function PlayableThumbnail({
   aspect,
   audioMode = false,
   portrait = false,
+  linkTo,
   playing: controlledPlaying,
   onPlayingChange,
 }: {
@@ -22,6 +24,7 @@ export function PlayableThumbnail({
   aspect: string;
   audioMode?: boolean;
   portrait?: boolean;
+  linkTo?: string;
   playing?: boolean;
   onPlayingChange?: (playing: boolean) => void;
 }) {
@@ -44,7 +47,11 @@ export function PlayableThumbnail({
         aspect,
       )}
     >
-      {playing ? (
+      {linkTo ? (
+        <Link to={linkTo} aria-label={episode.title} className="absolute inset-0 block w-full">
+          <ThumbnailInner episode={episode} thumbnailPending={thumbnailPending} audio={canPlayAudio} portrait={portrait} />
+        </Link>
+      ) : playing ? (
         <>
           <EpisodeEmbed episode={episode} thumbnailPending={thumbnailPending} audioMode={audioMode} />
           {controlled ? (

@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePlayerProfile, useSets } from "../data/hooks";
-import { categoryFromSlug } from "../data/episodes";
+import { categoryFromSlug, episodeSlug, type Episode } from "../data/episodes";
 import { cubeVariantForBoard } from "../data/cubeVariants";
 import { skeletonsFor } from "../data/skeletons";
 import { ACTIVE_SET_CODE, SITE_NAME, TITLE_SEPARATOR } from "../data/constants";
@@ -19,7 +20,8 @@ export function DocumentTitle() {
   const liveSetCode = (sets ?? []).find((s) => s.isActive)?.code;
   const { data: profile } = usePlayerProfile(playerSlug, routeSetCode ?? liveSetCode ?? ACTIVE_SET_CODE);
 
-  const pageTitle = resolvePageTitle(segments, profile?.displayName, setCodes);
+  const episodes = useQueryClient().getQueryData<Episode[]>(["db-episodes"]);
+  const pageTitle = resolvePageTitle(segments, profile?.displayName, setCodes, episodes);
 
   useEffect(() => {
     document.title = pageTitle === SITE_NAME ? SITE_NAME : `${pageTitle}${TITLE_SEPARATOR}${SITE_NAME}`;
@@ -69,10 +71,24 @@ const setTitleLabel = (code: string): string => {
   return upper;
 };
 
+const episodeTitleForSlug = (slug: string, episodes: Episode[] | undefined): string | null => {
+  if (!episodes) {
+    return null;
+  }
+  const target = slug.toLowerCase();
+  for (const ep of episodes) {
+    if (episodeSlug(ep) === target) {
+      return ep.title;
+    }
+  }
+  return null;
+};
+
 const resolvePageTitle = (
   segments: string[],
   playerName: string | undefined,
   setCodes: Set<string>,
+  episodes: Episode[] | undefined,
 ): string => {
   if (segments.length === 0) {
     return SITE_NAME;
@@ -109,6 +125,9 @@ const resolvePageTitle = (
     return `${setCode} Tier List`;
   }
   if (section === "pods") {
+    if (rest[0] === "guide") {
+      return "Pod Guide";
+    }
     return rest[0] ? titleCaseSlug(rest[0], setCodes) : "Pod Drafts";
   }
   if (section === "p0p1" || section === "p0p1-mocks") {
@@ -118,6 +137,9 @@ const resolvePageTitle = (
     const slug = rest[0];
     if (!slug) {
       return "Episodes";
+    }
+    if (rest[1]) {
+      return episodeTitleForSlug(rest[1], episodes) ?? titleCaseSlug(rest[1], setCodes);
     }
     if (slug === "shorts") {
       return "Shorts";
@@ -129,7 +151,10 @@ const resolvePageTitle = (
     if (category) {
       return `${category} Episodes`;
     }
-    return `${setTitleLabel(slug)} Episodes`;
+    if (setCodes.has(slug.toUpperCase())) {
+      return `${setTitleLabel(slug)} Episodes`;
+    }
+    return episodeTitleForSlug(slug, episodes) ?? titleCaseSlug(slug, setCodes);
   }
   if (section === "community") {
     return "Community";

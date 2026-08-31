@@ -41,6 +41,26 @@
 
 html {
   scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: #3b4458 #14181f;
+}
+html::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+html::-webkit-scrollbar-track {
+  background: #14181f;
+}
+html::-webkit-scrollbar-thumb {
+  background: #3b4458;
+  border: 3px solid #14181f;
+  border-radius: 7px;
+}
+html::-webkit-scrollbar-thumb:hover {
+  background: #4b556b;
+}
+html::-webkit-scrollbar-corner {
+  background: #14181f;
 }
 
 html,

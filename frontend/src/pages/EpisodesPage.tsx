@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { SiApplepodcasts, SiRss, SiSpotify, SiYoutube } from "react-icons/si";
 import type { IconType } from "react-icons";
 import {
@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { PageShell } from "../components/PageShell";
 import { EpisodeCard } from "../components/EpisodeCard";
+import { EpisodeEmbed } from "../components/PlayableThumbnail";
+import { EpisodeTag } from "../components/CategoryTag";
 import { ShortCard } from "../components/ShortCard";
 import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
 import { GoToTopButton } from "../components/GoToTopButton";
@@ -35,10 +37,17 @@ import { CUT_CORNER_CHAMFER } from "../components/ChamferCta";
 import { Crossfade } from "../components/Crossfade";
 import { SetGlyph } from "../components/Brand";
 import { useMediaFeed } from "../data/hooks";
-import { EPISODE_CATEGORIES, categoryFromSlug, categorySlug, type Episode, type EpisodeCategory } from "../data/episodes";
+import {
+  EPISODE_CATEGORIES,
+  categoryFromSlug,
+  categorySlug,
+  findEpisodeBySlug,
+  type Episode,
+  type EpisodeCategory,
+} from "../data/episodes";
 import { LISTEN_ON } from "../data/site";
 import { cn } from "../lib/utils";
-import { useEpisodeGridColumns, useIsMobile } from "../lib/use-is-mobile";
+import { useIsMobile } from "../lib/use-is-mobile";
 import { TOGGLE_ACTIVE, TOGGLE_INACTIVE } from "../lib/toggle-styles";
 
 const SORT_OPTIONS: { value: SortKey; label: string; icon: LucideIcon }[] = [
@@ -89,17 +98,16 @@ const setLandingPath = (code: string) => `/episodes/${code.toLowerCase()}`;
 
 export function EpisodesPage() {
   const { data: episodes, isPending, isError, thumbnailsPending, setsReady } = useMediaFeed();
-  const { categorySlug: slug } = useParams<{ categorySlug?: string }>();
+  const { categorySlug: slug, episodeSlug } = useParams<{ categorySlug?: string; episodeSlug?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [params] = useSearchParams();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => params.get("q") ?? "");
   const [sort, setSort] = useState<SortKey>("newest");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const isMobile = useIsMobile();
-  const gridColumns = useEpisodeGridColumns();
   const sentinelRef = useRef<HTMLDivElement>(null);
   const contentTopRef = useRef<HTMLDivElement>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
@@ -141,6 +149,19 @@ export function EpisodesPage() {
   const activeSet = pathSet ?? params.get("set");
   const awaitingSetSlug = !!slugLower && !shortsView && !audioView && !activeCategory && !setsReady;
 
+  const openEpisode = useMemo(() => {
+    if (!episodes) {
+      return null;
+    }
+    if (episodeSlug) {
+      return findEpisodeBySlug(episodes, episodeSlug.toLowerCase());
+    }
+    if (slugLower && !shortsView && !audioView && !activeCategory && !setCodesBySlug.has(slugLower)) {
+      return findEpisodeBySlug(episodes, slugLower);
+    }
+    return null;
+  }, [episodes, episodeSlug, slugLower, shortsView, audioView, activeCategory, setCodesBySlug]);
+
   useEffect(() => {
     const legacyCategory = params.get("category");
     const legacyShorts = params.get("type") === "shorts";
@@ -167,10 +188,16 @@ export function EpisodesPage() {
       navigate({ pathname: setLandingPath(querySet), search: next.toString() }, { replace: true });
       return;
     }
-    if (setsReady && slugLower && !shortsView && !audioView && !activeCategory && !setCodesBySlug.has(slugLower)) {
+    if (episodeSlug && !findEpisodeBySlug(episodes, episodeSlug.toLowerCase())) {
+      navigate({ pathname: `/episodes/${slug ?? ""}`.replace(/\/$/, ""), search: params.toString() }, { replace: true });
+      return;
+    }
+    const unknownSlug =
+      setsReady && slugLower && !shortsView && !audioView && !activeCategory && !setCodesBySlug.has(slugLower);
+    if (unknownSlug && !episodeSlug && !findEpisodeBySlug(episodes, slugLower)) {
       navigate({ pathname: "/episodes", search: params.toString() }, { replace: true });
     }
-  }, [params, slug, slugLower, navigate, episodes, setCodesBySlug, shortsView, audioView, activeCategory, setsReady]);
+  }, [params, slug, slugLower, episodeSlug, navigate, episodes, setCodesBySlug, shortsView, audioView, activeCategory, setsReady]);
 
   const categoryPath = shortsView
     ? "/episodes/shorts"
@@ -179,6 +206,7 @@ export function EpisodesPage() {
       : activeCategory
         ? `/episodes/${categorySlug(activeCategory)}`
         : null;
+  const detailBase = categoryPath ?? (pathSet ? setLandingPath(pathSet) : "/episodes");
 
   const contentTopOffset = () => {
     const root = contentTopRef.current;
@@ -197,6 +225,17 @@ export function EpisodesPage() {
     if (window.scrollY > contentTop) {
       window.scrollTo({ top: contentTop });
     }
+  };
+  const updateQuery = (value: string) => {
+    setQuery(value);
+    setVisible(PAGE_SIZE);
+    const next = new URLSearchParams(params);
+    if (value.trim()) {
+      next.set("q", value);
+    } else {
+      next.delete("q");
+    }
+    navigate({ pathname: location.pathname, search: next.toString() }, { replace: true });
   };
   const setCategory = (category: EpisodeCategory | null) => {
     if (category) {
@@ -305,10 +344,6 @@ export function EpisodesPage() {
     const rows = !shortsView && !audioView && activeCategory ? base.filter((ep) => ep.category === activeCategory) : base;
     return sortEpisodes(rows, sort);
   }, [shortsView, audioView, scopedShorts, scopedAudio, scopedLongform, activeCategory, sort]);
-
-  useEffect(() => {
-    setExpandedId(null);
-  }, [slug, activeSet, audioView, shortsView, sort, query]);
 
   useEffect(() => {
     if (visible >= filtered.length) {
@@ -432,10 +467,7 @@ export function EpisodesPage() {
               />
               <input
                 value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setVisible(PAGE_SIZE);
-                }}
+                onChange={(e) => updateQuery(e.target.value)}
                 placeholder="Search"
                 className={cn(
                   "w-full h-10 bg-bg border pl-9 pr-3.5 text-[14px] text-text placeholder:text-dim outline-none transition-colors focus:border-green",
@@ -466,7 +498,9 @@ export function EpisodesPage() {
           </div>
 
           <div ref={listRef} className="px-4 md:px-6 pt-6 pb-4">
-            {awaitingSetSlug || (isPending && filtered.length === 0) ? (
+            {openEpisode ? (
+              <EpisodeDetail episode={openEpisode} audioMode={audioView} thumbnailPending={thumbnailsPending} />
+            ) : awaitingSetSlug || (isPending && filtered.length === 0) ? (
               <Grid>
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="aspect-video bg-surface border border-border animate-pulse" />
@@ -485,25 +519,15 @@ export function EpisodesPage() {
                     </ShortGrid>
                   ) : (
                     <Grid>
-                      {filtered.slice(0, visible).map((ep, index) => {
-                        const isExpanded = expandedId === ep.id;
-                        const column = index % gridColumns;
-                        const colStart = column === gridColumns - 1 ? gridColumns - 1 : column + 1;
-                        const rowStart = Math.floor(index / gridColumns) + 1;
-                        const placed = isExpanded && gridColumns > 1;
-                        return (
-                          <EpisodeCard
-                            key={ep.id}
-                            episode={ep}
-                            thumbnailPending={thumbnailsPending}
-                            audioMode={audioView}
-                            expanded={isExpanded}
-                            colStart={placed ? colStart : undefined}
-                            rowStart={placed ? rowStart : undefined}
-                            onPlayingChange={(playing) => setExpandedId(playing ? ep.id : null)}
-                          />
-                        );
-                      })}
+                      {filtered.slice(0, visible).map((ep) => (
+                        <EpisodeCard
+                          key={ep.id}
+                          episode={ep}
+                          thumbnailPending={thumbnailsPending}
+                          audioMode={audioView}
+                          detailBase={detailBase}
+                        />
+                      ))}
                     </Grid>
                   )}
                 </Crossfade>
@@ -520,10 +544,7 @@ export function EpisodesPage() {
                 category={activeCategory}
                 set={activeSet}
                 indent={searchIndent}
-                onClear={() => {
-                  setQuery("");
-                  setVisible(PAGE_SIZE);
-                }}
+                onClear={() => updateQuery("")}
               />
             )}
           </div>
@@ -536,6 +557,41 @@ export function EpisodesPage() {
 
       <GoToTopButton onClick={() => window.scrollTo({ top: contentTopOffset(), behavior: "smooth" })} />
     </PageShell>
+  );
+}
+
+function EpisodeDetail({
+  episode,
+  audioMode,
+  thumbnailPending,
+}: {
+  episode: Episode;
+  audioMode: boolean;
+  thumbnailPending: boolean;
+}) {
+  return (
+    <div className="mx-auto flex min-h-[calc(100vh-9rem)] max-w-[1200px] flex-col">
+      <div className="relative aspect-video overflow-hidden rounded-lg border border-border bg-surface">
+        <EpisodeEmbed episode={episode} thumbnailPending={thumbnailPending} audioMode={audioMode} />
+      </div>
+      <div className="mt-4 flex items-start justify-between gap-3">
+        <h1 className="min-w-0 font-body text-text text-[22px] md:text-[28px] font-medium leading-tight">
+          {episode.title}
+        </h1>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <EpisodeTag episode={episode} />
+          <div className="mono flex items-center gap-2 text-[12px] tracking-[0.08em] text-muted uppercase">
+            <span>{episode.publishedLabel}</span>
+            {episode.number ? (
+              <>
+                <span aria-hidden className="text-dim">·</span>
+                <span>EP {episode.number}</span>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

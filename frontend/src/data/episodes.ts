@@ -51,6 +51,7 @@ export interface Episode {
   kind: MediaKind;
   number: number | null;
   title: string;
+  slug?: string;
   link: string;
   audioUrl: string;
   pubDate: string;
@@ -112,6 +113,36 @@ export function categoryFor(title: string, rawCategory: string | null): EpisodeC
     return rawCategory as EpisodeCategory;
   }
   return inferCategory(title);
+}
+
+export function episodeSlugBase(title: string): string {
+  const slug = cleanTitle(title)
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)
+    .replace(/-+$/g, "");
+  return slug || "episode";
+}
+
+export function episodeSlug(episode: Episode): string {
+  return episodeSlugBase(episode.title);
+}
+
+export function assignEpisodeSlugs(episodes: Episode[]): Episode[] {
+  return episodes.map((ep) => ({ ...ep, slug: episodeSlug(ep) }));
+}
+
+export function findEpisodeBySlug(episodes: Episode[], slug: string): Episode | null {
+  const target = slug.toLowerCase();
+  for (const ep of episodes) {
+    if (ep.slug === target) {
+      return ep;
+    }
+  }
+  return null;
 }
 
 export function parseEpisodeNumber(title: string): number | null {

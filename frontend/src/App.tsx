@@ -42,6 +42,7 @@ export function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/episodes" element={<EpisodesPage />} />
       <Route path="/episodes/:categorySlug" element={<EpisodesPage />} />
+      <Route path="/episodes/:categorySlug/:episodeSlug" element={<EpisodesPage />} />
       <Route path="/community" element={<CommunityPage />} />
 
       <Route path="/leaderboard" element={<LeaderboardPage />} />

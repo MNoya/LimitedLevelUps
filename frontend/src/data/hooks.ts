@@ -53,6 +53,7 @@ import {
 } from "./api";
 import { fetchDiscordStats } from "./discord";
 import { fetchYouTubeVideos, overlayLiveMedia, toVideoEpisode, type YouTubeVideo } from "./youtube";
+import { assignEpisodeSlugs } from "./episodes";
 import type { P0P1BallotRow, P0P1Pick, SlotKey } from "../types/p0p1";
 import type { FeaturedContest } from "./p0p1Slots";
 import { resolveContestByCode, resolveFeaturedContest } from "./p0p1Slots";
@@ -101,7 +102,7 @@ export function useMediaFeed() {
     if (!db.data) {
       return undefined;
     }
-    return overlayLiveMedia(db.data, mergedVideos.map(toVideoEpisode));
+    return assignEpisodeSlugs(overlayLiveMedia(db.data, mergedVideos.map(toVideoEpisode)));
   }, [db.data, mergedVideos]);
   return {
     data,
@@ -135,7 +136,8 @@ export function useRecentEpisodes(limit = 8) {
     if (!db.data) {
       return undefined;
     }
-    return videos.data ? overlayLiveMedia(db.data, videos.data.map(toVideoEpisode)) : db.data;
+    const merged = videos.data ? overlayLiveMedia(db.data, videos.data.map(toVideoEpisode)) : db.data;
+    return assignEpisodeSlugs(merged);
   }, [db.data, videos.data]);
   return { data, isLoading: db.isLoading };
 }

@@ -19,7 +19,7 @@ import {
 import { SITE_NAME as SITE, TITLE_SEPARATOR, TIER_LIST_PREVIEW_SETS } from "../frontend/src/data/constants";
 import { mtgoSetName } from "../frontend/src/data/mtgoSets";
 import { resolveContestByCode, resolveFeaturedContest } from "../frontend/src/data/p0p1Slots";
-import { categoryFromSlug } from "../frontend/src/data/episodes";
+import { categoryFromSlug, episodeSlugBase } from "../frontend/src/data/episodes";
 import { cubeVariantForBoard } from "../frontend/src/data/cubeVariants";
 import { skeletonsFor } from "../frontend/src/data/skeletons";
 
@@ -133,6 +133,25 @@ const fetchEpisodeSetName = async (code: string): Promise<string | null> => {
     if (resp.ok) {
       const rows = (await resp.json()) as Array<{ set_name: string | null }>;
       if (rows.length > 0) return rows[0].set_name ?? code;
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+};
+
+const episodeSlugMeta = async (slug: string): Promise<RouteMeta | null> => {
+  try {
+    const resp = await restGet("public_episodes?select=title,youtube_id");
+    if (!resp.ok) return null;
+    const rows = (await resp.json()) as Array<{ title: string; youtube_id: string | null }>;
+    for (const row of rows) {
+      if (episodeSlugBase(row.title) === slug) {
+        const image: ImageIntent = row.youtube_id
+          ? { kind: "url", url: `https://i.ytimg.com/vi/${row.youtube_id}/hqdefault.jpg` }
+          : null;
+        return page(row.title, "Listen and watch this episode.", image);
+      }
     }
   } catch {
     // fall through
@@ -262,6 +281,10 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
     if (!slug) {
       return page("Episodes", "Check out the latest episodes, or search the archive.");
     }
+    if (rest[1]) {
+      const meta = await episodeSlugMeta(rest[1]);
+      return meta ?? page(titleCaseSlug(rest[1], new Set()), "Listen and watch this episode.");
+    }
     if (slug === "shorts") {
       return page("Shorts", "Quick limited tips and highlights in under two minutes.");
     }
@@ -281,7 +304,8 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
         { kind: "setSymbol", code: setCode },
       );
     }
-    return page("Episodes", "Check out the latest episodes, or search the archive.");
+    const episodeMeta = await episodeSlugMeta(slug);
+    return episodeMeta ?? page(titleCaseSlug(slug, new Set()), "Listen and watch this episode.");
   }
   if (section === "community") {
     return page("Community", "Learn about us, the show and the community behind it.");
