@@ -575,7 +575,7 @@ function EpisodeDetail({
         <EpisodeEmbed episode={episode} thumbnailPending={thumbnailPending} audioMode={audioMode} />
       </div>
       <div className="mt-4 flex items-start justify-between gap-3">
-        <h1 className="min-w-0 font-body text-text text-[22px] md:text-[28px] font-medium leading-tight">
+        <h1 className="min-w-0 font-body text-text text-[15px] md:text-[20px] font-medium leading-snug">
           {episode.title}
         </h1>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
