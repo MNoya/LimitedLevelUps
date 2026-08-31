@@ -69,7 +69,7 @@ WEEKDAY_BUCKETS: tuple[PollBucket, ...] = (
 )
 WEEKEND_BUCKETS: tuple[PollBucket, ...] = (WEEKEND_EARLY_BUCKET, WEEKEND_LATE_BUCKET)
 SATURDAY_BUCKETS: tuple[PollBucket, ...] = (WEEKEND_EARLY_BUCKET, SATURDAY_LATE_BUCKET)
-BONUS_BUCKET = PollBucket("BONUS", "Bonus Pod", "🌟", time(0, 0), "", SLOT_BONUS)
+BONUS_BUCKET = PollBucket("BONUS", "Bonus Pod", "🌟", time(17, 0), "", SLOT_BONUS)
 ALL_BUCKETS: tuple[PollBucket, ...] = (
     WEEKDAY_BUCKETS + WEEKEND_BUCKETS + (SATURDAY_LATE_BUCKET, BONUS_BUCKET))
 
@@ -155,6 +155,14 @@ def next_slot_start(slot_key: str, now: datetime) -> datetime | None:
         if start > now:
             return start
     return None
+
+
+def next_bonus_start(now: datetime) -> datetime:
+    today = now.astimezone(SCHEDULE_TZ).date()
+    start = datetime.combine(today, BONUS_BUCKET.start, tzinfo=SCHEDULE_TZ)
+    if start > now:
+        return start
+    return datetime.combine(today + timedelta(days=1), BONUS_BUCKET.start, tzinfo=SCHEDULE_TZ)
 
 
 def slot_can_fire(slot_time: datetime, now: datetime) -> bool:

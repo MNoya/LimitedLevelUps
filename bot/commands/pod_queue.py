@@ -41,7 +41,9 @@ from bot.services.pod_settings_view import (
     TIMER_MAX, TIMER_MIN, PodDescriptionModal, description_label, pick_timer_label,
 )
 from bot.services.pod_signals import (
+    BONUS_BUCKET,
     KIND_QUEUE,
+    SLOT_BONUS,
     SLOT_EARLY,
     SLOT_LATE,
     QUEUE_BUCKET,
@@ -49,6 +51,7 @@ from bot.services.pod_signals import (
     STATUS_FIRED,
     bucket_for_slot,
     inactivity_window_text,
+    next_bonus_start,
     next_slot_start,
     should_fire,
     slot_role_name_for_event_time,
@@ -525,21 +528,21 @@ def _when_clock(when: datetime) -> str:
 
 
 def _when_options(scheduled_time: datetime | None, now: datetime) -> list[discord.SelectOption]:
-    """Right now (default) plus the two named slots at their next occurrence, then a custom write-in.
-    A custom time shows as its own defaulted option."""
     today = now.astimezone(SCHEDULE_TZ).date()
     early = next_slot_start(SLOT_EARLY, now)
+    bonus = next_bonus_start(now)
     late = next_slot_start(SLOT_LATE, now)
     options = [discord.SelectOption(
         label="When: Right now", value="now", emoji="⚡", description="Open a live queue now",
         default=(scheduled_time is None))]
-    for slot_key, slot in ((SLOT_EARLY, early), (SLOT_LATE, late)):
-        bucket = bucket_for_slot(today, slot_key)
+    for bucket, slot in ((bucket_for_slot(today, SLOT_EARLY), early),
+                         (BONUS_BUCKET, bonus),
+                         (bucket_for_slot(today, SLOT_LATE), late)):
         options.append(discord.SelectOption(
-            label=f"When: {bucket.name}", value=slot_key, emoji=bucket.emoji,
+            label=f"When: {bucket.name}", value=bucket.slot_key, emoji=bucket.emoji,
             description=f"{_when_day_label(slot, now)} {_when_clock(slot)}",
             default=(scheduled_time is not None and scheduled_time == slot)))
-    is_custom = scheduled_time is not None and scheduled_time not in (early, late)
+    is_custom = scheduled_time is not None and scheduled_time not in (early, bonus, late)
     if is_custom:
         label = f"When: {_when_day_label(scheduled_time, now)} {_when_clock(scheduled_time)}"
         description = "Change the custom time"
@@ -561,10 +564,13 @@ class _LauncherWhenSelect(discord.ui.Select):
         if value == WRITE_IN_VALUE:
             await interaction.response.send_modal(_LauncherWhenModal(self.view))
             return
+        now = datetime.now(timezone.utc)
         if value == "now":
             self.view.scheduled_time = None
+        elif value == SLOT_BONUS:
+            self.view.scheduled_time = next_bonus_start(now)
         else:
-            self.view.scheduled_time = next_slot_start(value, datetime.now(timezone.utc))
+            self.view.scheduled_time = next_slot_start(value, now)
         await self.view.rerender(interaction)
 
 
