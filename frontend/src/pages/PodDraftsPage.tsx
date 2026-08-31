@@ -90,15 +90,19 @@ import type {
 // A format tried once is not a board, so it stays out of the switcher and keeps its pods on the season
 const MIN_BOARD_PODS = 2;
 
+// A custom-format code longer than this overflows the chip and shows the generic CUBE label
+const POD_CHIP_CODE_MAX = 4;
+
 function synthesizePodSet(p: PodSetCode): SetSummary {
+  const custom = p.label != null;
   return {
     code: p.code,
     name: p.label ?? p.code,
     startDate: "",
     endDate: "",
     isActive: false,
-    custom: p.label != null,
-    shortCode: p.label != null ? CUBE_BASE : undefined,
+    custom,
+    shortCode: custom && p.code.length > POD_CHIP_CODE_MAX ? CUBE_BASE : undefined,
   };
 }
 

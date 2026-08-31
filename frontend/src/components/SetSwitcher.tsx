@@ -1,5 +1,5 @@
 import React from "react";
-import { keyruneClass, setGlyphCode, SetGlyph } from "./Brand";
+import { setGlyphCode, SetGlyph } from "./Brand";
 import { ChevronDown } from "./Icons";
 import { FilterDropdown, type FilterOption } from "./FilterDropdown";
 import { cn } from "../lib/utils";
@@ -130,11 +130,7 @@ function SetChip({
           )}
           style={{ clipPath: CHAMFER, minHeight: 40 }}
         >
-          <i
-            className={`ss ss-${keyruneClass(setGlyphCode(set))} inline-flex justify-center shrink-0 w-6`}
-            style={{ fontSize: 22, color: active ? "#0a0c10" : "#e6ecf5", lineHeight: 1 }}
-            aria-hidden="true"
-          />
+          <SetGlyph code={setGlyphCode(set)} size={22} className={active ? "text-bg" : "text-text"} />
           <span className="text-[20px] tracking-[0.06em] leading-none">{set.shortCode ?? set.code}</span>
         </span>
       </button>

@@ -150,10 +150,12 @@ const KEYRUNE_OVERRIDES: Record<string, string> = {
   IPA: "inv",
 };
 
-// Boards whose symbol is a bespoke PNG rather than a Keyrune font glyph, rendered as an <img>
-const IMG_GLYPH_SRC: Record<string, string> = {
-  EVG: LLU_LOGO_SRC,
-  MEMA: `${import.meta.env.BASE_URL}set-symbols/mema.png`,
+// Codes with no Keyrune glyph; "mask" recolors to currentColor, "image" keeps its own colors
+type BespokeGlyph = { src: string; mode: "image" | "mask" };
+
+const BESPOKE_GLYPHS: Record<string, BespokeGlyph> = {
+  EVG: { src: LLU_LOGO_SRC, mode: "image" },
+  MEMA: { src: `${import.meta.env.BASE_URL}set-symbols/mema.png`, mode: "mask" },
 };
 
 export function keyruneClass(code: string): string {
@@ -196,7 +198,7 @@ export function setGlyphCode(set: { code: string; custom?: boolean; glyphCode?: 
   if (set.glyphCode) {
     return set.glyphCode;
   }
-  if (set.custom && !(set.code in KEYRUNE_OVERRIDES) && !(set.code in IMG_GLYPH_SRC)) {
+  if (set.custom && !(set.code in KEYRUNE_OVERRIDES) && !(set.code in BESPOKE_GLYPHS)) {
     return "CUBE";
   }
   return set.code;
@@ -211,11 +213,39 @@ export function SetGlyph({ code, size = 18, className = "text-white" }: { code: 
       style={{ width: size, height: size }}
       aria-hidden="true"
     >
-      {IMG_GLYPH_SRC[code] ? (
-        <img src={IMG_GLYPH_SRC[code]} alt="" style={{ width: size, height: size }} className="block object-contain" />
+      {BESPOKE_GLYPHS[code] ? (
+        <BespokeGlyphMark glyph={BESPOKE_GLYPHS[code]} size={size} className={className} />
       ) : (
         <i className={`${glyph.className} ${className}`} style={{ fontSize, lineHeight: 1 }} />
       )}
     </span>
+  );
+}
+
+function BespokeGlyphMark({
+  glyph,
+  size,
+  className,
+}: { glyph: BespokeGlyph; size: number | string; className: string }) {
+  if (glyph.mode === "image") {
+    return <img src={glyph.src} alt="" style={{ width: size, height: size }} className="block object-contain" />;
+  }
+  return (
+    <span
+      className={className}
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: "currentColor",
+        WebkitMaskImage: `url(${glyph.src})`,
+        maskImage: `url(${glyph.src})`,
+        WebkitMaskSize: "contain",
+        maskSize: "contain",
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        WebkitMaskPosition: "center",
+        maskPosition: "center",
+      }}
+    />
   );
 }

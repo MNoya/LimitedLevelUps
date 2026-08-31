@@ -140,6 +140,21 @@ const fetchEpisodeSetName = async (code: string): Promise<string | null> => {
   return null;
 };
 
+// Pod-only custom formats never reach public_sets; their display name lives on the pod events
+const fetchPodFormatLabel = async (code: string): Promise<string | null> => {
+  try {
+    const query = `public_pod_draft_events?set_code=eq.${encodeURIComponent(code)}&format_label=not.is.null&select=format_label&limit=1`;
+    const resp = await restGet(query);
+    if (resp.ok) {
+      const rows = (await resp.json()) as Array<{ format_label: string | null }>;
+      if (rows[0]?.format_label) return rows[0].format_label;
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+};
+
 const fetchPlayerName = async (slug: string): Promise<string> => {
   try {
     const resp = await restGet(`public_leaderboard?slug=eq.${encodeURIComponent(slug)}&select=display_name&limit=1`);
@@ -229,6 +244,10 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
       if (setCodes.has(code)) {
         const setName = await fetchSetName(code);
         return page(`${code} Pod Drafts`, `${setName} pod draft results and standings.`, { kind: "setSymbol", code });
+      }
+      const formatLabel = await fetchPodFormatLabel(code);
+      if (formatLabel) {
+        return page(`${code} Pod Drafts`, `${formatLabel} pod draft results and standings.`, { kind: "setSymbol", code });
       }
       return page(titleCaseSlug(rest[0], setCodes), "Check seats, logs & replays for this pod draft.");
     }
