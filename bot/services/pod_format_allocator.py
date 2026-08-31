@@ -8,20 +8,22 @@ weekday:
 - Staple days (Tue/Thu/Sat): the latest set plus the staple cube.
 
 A flashback set needs `VOTE_FLOOR` raw votes to be eligible, and the top `TOP_N` by vote count earn days, with
-ties broken by voter pod attendance. Days split across the window in proportion to each set's votes. One sweep
-fills the whole window from a start day to the day before the next set rotates in; it writes `source='auto'`
-overlay rows, never touches an organizer's manual override, and skips the championship day so its own machinery
-keeps it.
+ties broken by voter pod attendance. Each set's season day budget is its vote share of the whole season's
+flashback days. Every sweep counts the days a set already played or has locked on the launcher and fills only
+the deficit onto the still-open days, so a set never runs more than its budget and a late vote reshapes only
+the days not yet played. One sweep fills the window from a start day to the day before the next set rotates in;
+it writes `source='auto'` overlay rows, never touches an organizer's manual override, and skips the championship
+day so its own machinery keeps it.
 """
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from bot.models import PodDraftEvent, PodDraftParticipant, PodFormatVote, PodSignal
+from bot.models import PodDraftEvent, PodDraftParticipant, PodFormatVote, PodScheduleSlot, PodSignal
 from bot.services.championship_dates import championship_date_for
 from bot.services.pod_format import MEMA_CODE, PEASANT_CODE, is_custom
 from bot.services.pod_format_schedule import (
@@ -62,18 +64,27 @@ def day_picks(day: date, flashback_set: str | None, latest: str, featured: str |
 
 
 def assign_flashbacks(days: list[date], scores: dict[str, float]) -> list[str | None]:
-    """Which flashback set fills each flashback day, in day order. Sets earn days in proportion to their
-    weighted score, no set lands two flashback days in a row while another set has days left, and a set's days
-    spread across different weekdays so a popular one does not settle onto one weekday every week. A day with
-    nothing eligible left stays `None` and falls back to the placeholder."""
+    """Which flashback set fills each flashback day, in day order. Sets earn days in proportion to their vote
+    count, no set lands two flashback days in a row while another set has days left, and a set's days spread
+    across different weekdays so a popular one does not settle onto one weekday every week. A day with nothing
+    eligible left stays `None` and falls back to the placeholder."""
     if not days or not scores:
         return [None] * len(days)
+    return _spread(_quota_counts(scores, len(days)), [day.weekday() for day in days])
+
+
+def _quota_counts(scores: dict[str, float], total_days: int) -> dict[str, int]:
+    """Largest-remainder split of `total_days` across the sets by vote share."""
+    if total_days <= 0 or not scores:
+        return {code: 0 for code in scores}
     total = sum(scores.values())
-    quota = {code: len(days) * score / total for code, score in scores.items()}
+    if total <= 0:
+        return {code: 0 for code in scores}
+    quota = {code: total_days * score / total for code, score in scores.items()}
     counts = {code: int(quota[code]) for code in scores}
-    while sum(counts.values()) < len(days):
+    while sum(counts.values()) < total_days:
         counts[_largest_remainder(list(scores), quota, counts)] += 1
-    return _spread(counts, [day.weekday() for day in days])
+    return counts
 
 
 def run_allocation(
@@ -97,8 +108,7 @@ def run_allocation(
     featured = featured_format(season)
     revealed = _flashback_revealed(session, season, now or datetime.now(timezone.utc))
     scores = _flashback_scores(session, season, latest) if revealed else {}
-    flashback_days = [day for day in days if _is_flashback_day(day)]
-    assignments = dict(zip(flashback_days, assign_flashbacks(flashback_days, scores)))
+    assignments, _ = _season_allocation(session, days[0], scores)
 
     result: dict[tuple[date, str], tuple[str, ...]] = {}
     for day in days:
@@ -114,20 +124,80 @@ def run_allocation(
 
 
 def vote_results(session: Session, start: date) -> list[tuple[str, int, int]]:
-    """Each scheduled flashback set as (code, votes, days), most days then most votes first. Days count over the
-    same window `run_allocation` fills."""
-    season = season_code()
+    """Each top-12 flashback set as (code, votes, days), most days then most votes first. Days are the set's
+    season total under the same budget `run_allocation` writes: what it already played or has locked, plus its
+    share of the days still open."""
     days = _horizon(start)
     if not days:
         return []
     latest = latest_on(days[0])
-    kept_votes = _flashback_scores(session, season, latest)
-    launched = _launched_days(session, days[0], days[-1])
-    flashback_days = [day for day in days if _is_flashback_day(day) and day not in launched]
-    day_counts = Counter(code for code in assign_flashbacks(flashback_days, kept_votes) if code)
-    kept = [(code, int(votes), day_counts.get(code, 0)) for code, votes in kept_votes.items()]
+    votes = _flashback_scores(session, season_code(), latest)
+    _, per_set_days = _season_allocation(session, days[0], votes)
+    kept = [(code, int(count), per_set_days.get(code, 0)) for code, count in votes.items()]
     kept.sort(key=lambda row: (row[2], row[1]), reverse=True)
     return kept
+
+
+def _season_allocation(
+    session: Session, today: date, scores: dict[str, float],
+) -> tuple[dict[date, str | None], dict[str, int]]:
+    """The flashback pick for each still-open day, and each set's total season days. A set's budget is its vote
+    share of the season's flashback days; the days it already played or has locked are subtracted, and only the
+    deficit is laid onto the open days, so no set exceeds its budget across the season."""
+    days = _horizon(today)
+    if not days:
+        return {}, {}
+    latest = latest_on(today)
+    launched = _launched_days(session, days[0], days[-1])
+    reserved = manual_slots(session, days[0], days[-1])
+    open_days = [
+        day for day in days
+        if _is_flashback_day(day) and day not in launched and (day, SLOT_EARLY) not in reserved
+    ]
+    committed = _committed_counts(session, _season_start(today), days[-1], today, launched, reserved, latest)
+    budget = _quota_counts(scores, sum(committed.values()) + len(open_days))
+    deficit = {code: max(0, budget.get(code, 0) - committed.get(code, 0)) for code in scores}
+    picks = _spread(deficit, [day.weekday() for day in open_days])
+    per_set_days: dict[str, int] = defaultdict(int)
+    for code, count in committed.items():
+        per_set_days[code] += count
+    for code in picks:
+        if code:
+            per_set_days[code] += 1
+    return dict(zip(open_days, picks)), dict(per_set_days)
+
+
+def _season_start(today: date) -> date:
+    base = latest_on(today)
+    start = today
+    for _ in range(HORIZON_CAP_DAYS):
+        previous = start - timedelta(days=1)
+        if latest_on(previous) != base:
+            break
+        start = previous
+    return start
+
+
+def _committed_counts(
+    session: Session, season_start: date, end: date, today: date,
+    launched: set[date], reserved: set[tuple[date, str]], latest: str,
+) -> dict[str, int]:
+    """How many flashback days each set already holds that the sweep will not move: days already played, plus
+    launched or manually overridden days ahead. Read off the Early slot's stored pick."""
+    rows = session.execute(
+        select(PodScheduleSlot.day, PodScheduleSlot.formats)
+        .where(PodScheduleSlot.slot == SLOT_EARLY, PodScheduleSlot.day >= season_start, PodScheduleSlot.day <= end)
+    ).all()
+    counts: dict[str, int] = defaultdict(int)
+    for day, formats in rows:
+        locked = day < today or day in launched or (day, SLOT_EARLY) in reserved
+        if not (_is_flashback_day(day) and locked):
+            continue
+        for code in formats:
+            if _is_flashback_candidate(code, latest):
+                counts[code] += 1
+                break
+    return dict(counts)
 
 
 def _horizon(start: date) -> list[date]:

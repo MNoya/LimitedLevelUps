@@ -129,6 +129,22 @@ def test_run_allocation_leaves_a_day_already_on_the_launcher_alone(session):
     assert (MON, SLOT_EARLY) in assignments
 
 
+def test_a_played_day_counts_against_a_set_s_season_budget(session):
+    _seed_floor_votes(session, "NEO")
+    _seed_floor_votes(session, "FIN")
+    played = date(2026, 8, 26)
+    set_slot(session, played, SLOT_EARLY, (MEMA_CODE, "NEO"), source="auto")
+    session.commit()
+
+    assignments = run_allocation(session, MON, rewrite=True, now=REVEALED)
+
+    future = [
+        picks[1] for (day, slot), picks in assignments.items()
+        if slot == SLOT_EARLY and len(picks) == 2 and picks[0] == MEMA_CODE
+    ]
+    assert future.count("NEO") + 1 == future.count("FIN")
+
+
 def test_run_allocation_leaves_the_championship_day_alone(session):
     _seed_floor_votes(session, "NEO")
     session.commit()
