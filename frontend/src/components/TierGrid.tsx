@@ -4,6 +4,7 @@ import { RefreshCw } from "./Icons";
 import { GradeLabel } from "./TierGuide";
 import { ModalNavButton } from "./ModalNavButton";
 import { cn } from "../lib/utils";
+import { isImageLoaded, markImageLoaded, preloadImage, useImageReveal } from "../lib/imageReveal";
 import { TEXT_OUTLINE } from "../lib/text-styles";
 import { useIsMobile } from "../lib/use-is-mobile";
 import {
@@ -950,44 +951,6 @@ function FlipCardImage({
 const CARD_CORNER = "rounded-[4.5%/3.2%]";
 const CARD_EDGE = "outline outline-1 -outline-offset-1 outline-white/10";
 
-const loadedImages = new Set<string>();
-
-function preloadImage(url: string, onReady?: () => void) {
-  if (loadedImages.has(url)) {
-    onReady?.();
-    return;
-  }
-  const warm = new Image();
-  const done = () => {
-    loadedImages.add(url);
-    onReady?.();
-  };
-  warm.onload = done;
-  warm.onerror = done;
-  warm.src = url;
-  if (warm.complete && warm.naturalWidth > 0) {
-    done();
-  }
-}
-
-function useImageReveal(src: string) {
-  const [loaded, setLoaded] = useState(false);
-  const [instant, setInstant] = useState(false);
-
-  useLayoutEffect(() => {
-    const cached = loadedImages.has(src);
-    setLoaded(cached);
-    setInstant(cached);
-  }, [src]);
-
-  const onLoad = () => {
-    loadedImages.add(src);
-    setLoaded(true);
-  };
-
-  return { loaded, instant, onLoad };
-}
-
 function CardImage({
   src,
   alt,
@@ -1056,7 +1019,7 @@ function CardImageLayer({
   const [instant, setInstant] = useState(false);
 
   useLayoutEffect(() => {
-    const cached = loadedImages.has(src);
+    const cached = isImageLoaded(src);
     setReady(cached);
     setInstant(cached);
     if (cached) {
@@ -1071,7 +1034,7 @@ function CardImageLayer({
   }, [src, base]);
 
   const reveal = () => {
-    loadedImages.add(src);
+    markImageLoaded(src);
     setReady(true);
   };
 

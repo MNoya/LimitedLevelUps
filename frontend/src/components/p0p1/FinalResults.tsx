@@ -4,6 +4,7 @@ import { SectionLabel } from "../SectionLabel";
 import { Tooltip } from "../Tooltip";
 import { PickGrid } from "./CommunityGrid";
 import { CardImagePreview } from "./CardImagePreview";
+import { usePreloaded } from "../../lib/imageReveal";
 import { breakdownStripAccent } from "./slotVisuals";
 import { CHAMFER, MEDAL_COLOR } from "./P0P1BallotScorecard";
 import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
@@ -152,6 +153,8 @@ function ballotContributions(
 }
 
 function SegTooltipContent({ seg }: { seg: SlotContrib }) {
+  const imageReady = usePreloaded(seg.card?.imageNormal ?? "");
+  if (seg.card && !imageReady) return null;
   return (
     <div className="bg-surface2 border border-border2 rounded-sm shadow-xl overflow-hidden w-56">
       {seg.card ? (

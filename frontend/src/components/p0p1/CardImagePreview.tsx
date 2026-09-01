@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { preloadImage } from "../../lib/imageReveal";
 
 interface Props {
   imageUrl: string;
@@ -26,7 +27,7 @@ export function CardImagePreview({ imageUrl, alt, children, className }: Props) 
         className={`relative shrink-0 cursor-pointer ${className ?? ""}`}
         onClick={(e) => {
           e.stopPropagation();
-          setOpen(true);
+          preloadImage(imageUrl, () => setOpen(true));
         }}
       >
         {children}
@@ -40,10 +41,10 @@ export function CardImagePreview({ imageUrl, alt, children, className }: Props) 
           }}
         >
           <div
-            className="w-full max-w-[320px] overflow-hidden rounded-xl border border-border2 bg-surface shadow-2xl"
+            className="w-full max-w-[320px] overflow-hidden rounded-xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <img src={imageUrl} alt={alt} className="w-full" />
+            <img src={imageUrl} alt={alt} className="w-full block rounded-xl" />
           </div>
         </div>,
         document.body,
