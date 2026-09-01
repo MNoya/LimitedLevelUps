@@ -56,6 +56,7 @@ from bot import emojis
 from bot.commands.test_group import setup as setup_test_group
 from bot.commands.testads import setup as setup_testads
 from bot.commands.testp0p1reminder import setup as setup_testp0p1reminder
+from bot.commands.testp0p1podium import setup as setup_testp0p1podium
 from bot.commands.testawards import setup as setup_testawards
 from bot.commands.testchampcard import setup as setup_testchampcard
 from bot.commands.testchampionship import setup as setup_testchampionship
@@ -133,6 +134,7 @@ from bot.services.pod_format_vote import (
 from bot.tasks.set_awards_post import init_set_awards_schedule
 from bot.tasks.championship_post import init_championship_schedule
 from bot.tasks.p0p1_reminder_post import init_p0p1_reminder
+from bot.tasks.p0p1_ceremony_post import init_p0p1_ceremony
 from bot.tasks.pod_organizer import init_table_organizer
 from bot.tasks.pod_underfill import init_underfill
 from bot.tasks.pod_thread_cleanup import init_thread_cleanup
@@ -241,6 +243,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         init_set_awards_schedule(bot)
         init_championship_schedule(bot)
         init_p0p1_reminder(bot)
+        init_p0p1_ceremony(bot)
         init_launch(bot)
         init_daily_poll(bot)
         init_table_organizer(bot)
@@ -288,6 +291,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testcomponent(bot)
         await setup_testads(bot)
         await setup_testp0p1reminder(bot)
+        await setup_testp0p1podium(bot)
         await setup_testawards(bot)
         await setup_testsandbox(bot)
         await setup_testschedule(bot)

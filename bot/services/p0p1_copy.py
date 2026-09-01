@@ -72,6 +72,30 @@ def advertisement(
     return build_container("\n".join(lines), set_symbol_url(contest.code))
 
 
+PODIUM_MEDALS = ("🥇", "🥈", "🥉")
+
+
+def ceremony_view(
+    contest: Contest, *, featured_code: str | None, podium: list[str], challenger_mention: str,
+) -> ui.LayoutView:
+    return as_view(ceremony(
+        contest, featured_code=featured_code, podium=podium, challenger_mention=challenger_mention,
+    ))
+
+
+def ceremony(
+    contest: Contest, *, featured_code: str | None, podium: list[str], challenger_mention: str,
+) -> ui.Container:
+    """The reveal-day podium. Each entry is already a mention for a member or a bold name for someone who
+    left, so the send decides who actually gets pinged."""
+    url = contest_url(contest.code, featured_code)
+    lines = [f"## [{contest.code} Pack 0 Pick 1 Challenge]({url}) results are in!",
+             f"### {challenger_mention}"]
+    lines += [f"{medal} {name}" for medal, name in zip(PODIUM_MEDALS, podium)]
+    lines.append(f"### {emojis.prefix('llu')}[**See the final standings**]({url})")
+    return build_container("\n".join(lines), set_symbol_url(contest.code), accent=P0P1_ACCENT)
+
+
 def reminder_view(contest: Contest, *, featured_code: str | None, role_mention: str, voter_count: int) -> ui.LayoutView:
     """The T-1 nudge as it is sent: the addressed line as a bare text block above the card, so the ping
     reads as an address to the reader instead of as part of the post."""
