@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -168,6 +170,25 @@ def test_clearing_a_reported_match_reports_it_was_reported(monkeypatch, session)
 def test_the_thread_hears_about_a_result_that_changed(result, expected) -> None:
     assert pod_tournament.result_needs_announcement(result) is expected
     assert pod_tournament.result_was_corrected(result) is (expected and result["was_reported"])
+
+
+@pytest.mark.parametrize("round_num, armed", [
+    (pod_tournament.TOTAL_ROUNDS, True),
+    (pod_tournament.TOTAL_ROUNDS - 1, False),
+], ids=["final_round_arms", "earlier_round_no_op"])
+def test_reaching_the_final_round_arms_the_report_ping(round_num, armed) -> None:
+    manager = SimpleNamespace(event_id="evt", final_report_ping_task=None)
+
+    async def run():
+        await pod_tournament.on_final_round_posted(manager, round_num)
+        task = manager.final_report_ping_task
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        return task is not None
+
+    assert asyncio.run(run()) is armed
 
 
 def test_serves_deck_colors_once_the_matches_are_in(monkeypatch) -> None:

@@ -1314,8 +1314,7 @@ async def advance_to_round(manager: "PodDraftManager", round_num: int) -> None:
             asyncio.create_task(send_submit_deck_dms(manager.bot, manager.event_id))
         await _attach_round_link(manager, round_num - 1)
         await settle_auto_forfeits(manager.bot, manager.event_id, [mid for mid, _, _ in pending_rows])
-        if round_num >= TOTAL_ROUNDS:
-            schedule_final_report_ping(manager, round_num)
+        await on_final_round_posted(manager, round_num)
 
 
 async def persist_round_entry_artifacts(manager: "PodDraftManager", round_num: int) -> None:
@@ -3971,6 +3970,15 @@ def _missing_deck_mentions(standings, dm_info, deck_data, blocking_keys: set[str
     return blocking, other
 
 
+async def on_final_round_posted(manager, round_num: int) -> None:
+    """Finalize hooks that must fire once, the instant the final round's message first appears. The one
+    seam both round-posters call, Swiss `advance_to_round` and bracket `bracket_advance`, so a
+    final-round hook can never again land on only one path. No-op before the final round."""
+    if round_num < TOTAL_ROUNDS:
+        return
+    schedule_final_report_ping(manager, round_num)
+
+
 def schedule_final_report_ping(manager, round_num: int, *,
                                delay: float = FINAL_REPORT_PING_DELAY_SECONDS) -> None:
     """Hold a report-chase ping until `delay` seconds after the final round posts, then mention whoever
@@ -5476,6 +5484,7 @@ async def bracket_advance(manager, source_round: int, *, announce_fill: bool = T
         await _pin_round_message(target_msg, target)
         await _attach_round_link(manager, source_round)
         await persist_round_entry_artifacts(manager, target)
+        await on_final_round_posted(manager, target)
     else:
         try:
             await target_msg.edit(content=None, embed=embed, view=view)
