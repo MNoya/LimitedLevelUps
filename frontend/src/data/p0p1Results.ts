@@ -127,6 +127,33 @@ export function bestPossibleTeam(
   return { picks, score: picks.reduce((sum, p) => sum + p.gihwr * 100, 0) };
 }
 
+// Top card per slot, ranked independently (no cross-slot uniqueness). Mirrors the
+// breakdown columns, so a card can top two slots at once. This is the "best pick"
+// a slot's #1 badge shows, distinct from the achievable-team pick in bestPossibleTeam.
+export function slotTopCards(
+  cards: Card[],
+  slots: SlotDefinition[],
+  ratingsByName: Map<string, CardRating>,
+): Map<SlotKey, string> {
+  const empty = new Set<string>();
+  const top = new Map<SlotKey, string>();
+  for (const slot of slots) {
+    let bestName = "";
+    let bestGihwr = -Infinity;
+    for (const card of cards) {
+      if (!slot.filter(card, empty)) continue;
+      const r = ratingsByName.get(normalizeCardName(card.name));
+      if (!r || r.gih < GIH_SAMPLE_FLOOR || r.gihwr === null) continue;
+      if (r.gihwr > bestGihwr) {
+        bestGihwr = r.gihwr;
+        bestName = card.name;
+      }
+    }
+    if (bestName) top.set(slot.key, bestName);
+  }
+  return top;
+}
+
 // Most-popular legal team: same uniqueness constraint, greedy from most-voted
 // card per slot. SLOTS order (color slots before wildcards) is intentional so
 // the specific slots claim their top card before wildcards pick remainders.

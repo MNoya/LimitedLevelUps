@@ -6,6 +6,7 @@ import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
 import {
   buildRatingsByName,
   bestPossibleTeam,
+  slotTopCards,
   mostPopularTeam,
   scoreBallot,
   groupBallotRows,
@@ -190,8 +191,7 @@ export function MidwayBallotScorecard({
   const aligned = useMemo(() => {
     const slots = buildSlots(P0P1_CONTESTS[ratingsSnapshot.setCode]);
     const ratingsByName = buildRatingsByName(ratingsSnapshot);
-    const best = bestPossibleTeam(cards, slots, ratingsByName);
-    const bestBySlot = new Map(best.picks.map((p) => [p.slot, p.cardName]));
+    const bestBySlot = slotTopCards(cards, slots, ratingsByName);
     let count = 0;
     for (const slot of slots) {
       const your = picksBySlot.get(slot.key);
