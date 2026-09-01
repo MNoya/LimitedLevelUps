@@ -1905,20 +1905,43 @@ export async function deleteAllP0P1Picks(setCode: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function fetchP0P1Ballots(setCode: string): Promise<P0P1BallotRow[]> {
+const BALLOT_PAGE_SIZE = 1000;
+const BALLOT_PAGE_BATCH = 2;
+
+async function fetchBallotPage(setCode: string, offset: number) {
   const { data, error } = await client()
     .from("public_p0p1_ballots")
     .select("*")
-    .eq("set_code", setCode);
+    .eq("set_code", setCode)
+    .order("ballot_id", { ascending: true })
+    .order("slot", { ascending: true })
+    .range(offset, offset + BALLOT_PAGE_SIZE - 1);
   if (error) throw error;
-  return (data ?? []).map((r) => ({
-    setCode: r.set_code as string,
-    ballotId: r.ballot_id as number,
-    name: r.name as string,
-    avatarUrl: r.avatar_url as string | null,
-    slot: r.slot as SlotKey,
-    cardName: r.card_name as string,
-  }));
+  return data ?? [];
+}
+
+export async function fetchP0P1Ballots(setCode: string): Promise<P0P1BallotRow[]> {
+  const rows: P0P1BallotRow[] = [];
+  for (let base = 0; ; base += BALLOT_PAGE_SIZE * BALLOT_PAGE_BATCH) {
+    const offsets = Array.from({ length: BALLOT_PAGE_BATCH }, (_, i) => base + i * BALLOT_PAGE_SIZE);
+    const pages = await Promise.all(offsets.map((offset) => fetchBallotPage(setCode, offset)));
+    let reachedEnd = false;
+    for (const page of pages) {
+      for (const r of page) {
+        rows.push({
+          setCode: r.set_code as string,
+          ballotId: r.ballot_id as number,
+          name: r.name as string,
+          avatarUrl: r.avatar_url as string | null,
+          slot: r.slot as SlotKey,
+          cardName: r.card_name as string,
+        });
+      }
+      if (page.length < BALLOT_PAGE_SIZE) reachedEnd = true;
+    }
+    if (reachedEnd) break;
+  }
+  return rows;
 }
 
 export async function fetchP0P1PickStats(setCode: string): Promise<P0P1PickStat[]> {
