@@ -32,6 +32,7 @@ MSG_MOCK_COMPLETE_CHANNEL = "✅ **{event_name} complete!**"
 MSG_MOCK_CLOSED_IDLE = (
     "🕒 **Lobby closed** after {window} of inactivity. Start a new one with `/mock-draft`"
 )
+MSG_POD_CLOSED_IDLE = "🕒 **Pod Closed** after {window} of inactivity"
 MSG_MOCK_CARD_CONTENT = "{role} {state}"
 MSG_MOCK_CARD_OPENING = "opening the lobby..."
 MSG_MOCK_CARD_OPEN = "looking for drafters"

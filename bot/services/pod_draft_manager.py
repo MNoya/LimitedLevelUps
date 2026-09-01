@@ -34,6 +34,7 @@ from bot.commands.messages import (
     MSG_MOCK_CLOSED_IDLE,
     MSG_MOCK_COMPLETE,
     MSG_MOCK_COMPLETE_CHANNEL,
+    MSG_POD_CLOSED_IDLE,
     MSG_POD_RESTARTED,
     MSG_POD_RESTARTING,
     MSG_RIDER_SEATS_OPEN,
@@ -72,6 +73,7 @@ from bot.services.mock_lobby_card import (
 )
 from bot.services.pod_confirm import plan_tables
 from bot.services import pod_disconnect
+from bot.services import pod_self_destruct
 from bot.services import pod_event_settings
 from bot.services import pod_format
 from bot.services.pod_format import settings_notice_markers
@@ -331,8 +333,11 @@ class PodDraftManager:
         self.created_by = created_by
         self.canceled_by: str | None = None
         self.canceled_idle = False
-        self._mock_idle_task: asyncio.Task | None = None
-        self._mock_lobby_signature: tuple[str, ...] | None = None
+        self._idle_task: asyncio.Task | None = None
+        self._lobby_present_ids: set[str] = set()
+        self._self_destruct_task: asyncio.Task | None = None
+        self._self_destruct_message: "discord.Message | None" = None
+        self._self_destruct_declined = False
         self._thread_added_ids: set[str] = set()
         self.rsvps_yes: list[str] = list(rsvps_yes or [])
         self.rsvps_unconfirmed: list[str] = list(rsvps_unconfirmed or [])
@@ -505,7 +510,7 @@ class PodDraftManager:
         )
         self._closed = True
         self._cancel_end_watchdog()
-        self._cancel_mock_idle_timer()
+        self._cancel_idle_timer()
         self._cancel_lobby_refresh()
         self._stop_name_nudge()
         try:
@@ -579,7 +584,7 @@ class PodDraftManager:
         if self.bot_user_id is not None and not self.is_owner and not self.drafting:
             asyncio.create_task(self._claim_ownership_and_apply_settings())
 
-        self._note_mock_lobby_activity()
+        self._note_lobby_activity()
 
         self._sync_ready_check_roster()
 
@@ -1769,7 +1774,7 @@ class PodDraftManager:
             log.warning(f"[MOCK] repost_send_failed event={self.event_id}", exc_info=True)
             return None
         self._mock_repost_message = repost
-        self._arm_mock_idle_timer()
+        self._arm_idle_timer()
         await asyncio.to_thread(
             record_mock_repost_sync, self.event_id, str(repost.channel.id), str(repost.id),
         )
@@ -1805,76 +1810,127 @@ class PodDraftManager:
         except discord.HTTPException:
             log.info(f"[MOCK] repost_delete_failed event={self.event_id}", exc_info=True)
 
-    def _note_mock_lobby_activity(self) -> None:
-        """Restart the inactivity clock when the Draftmancer roster actually changes. Every sessionUsers
-        broadcast lands here, so the seat signature is what decides: Draftmancer re-broadcasts the roster
-        for collection uploads and ready flags too, and those are not somebody turning up."""
-        if self.kind != "mock":
-            return
-        signature = tuple(sorted(self.non_bot_session_names()))
-        if signature == self._mock_lobby_signature:
-            return
-        self._mock_lobby_signature = signature
-        self._arm_mock_idle_timer()
+    def _idle_watch_applies(self) -> bool:
+        """The self-destruct watch runs only on an open lobby that could still stall. A draft under way, a
+        finished draft, a closed lobby, and a pod someone already kept have nothing left to close."""
+        if self._self_destruct_declined or self._closed or self.drafting or self.draft_complete:
+            return False
+        return not self._lobby_closed()
 
-    def _arm_mock_idle_timer(self) -> None:
-        """Start the window over. A draft under way, a finished draft, and a closed lobby all have nothing
-        left to expire, so they hold no timer.
+    def _note_lobby_activity(self) -> None:
+        """Decide the inactivity clock off each Draftmancer roster broadcast. A full pod is healthy and
+        holds no timer. An under-filled lobby runs one, reset only when a new seat appears: players
+        trickling out are the pod dying, not activity, so a departure never postpones the close."""
+        if not self._idle_watch_applies():
+            self._cancel_idle_timer()
+            return
+        present = {u.get("userID") for u in self.player_session_users() if u.get("userID")}
+        arrived = bool(present - self._lobby_present_ids)
+        self._lobby_present_ids = present
+        if len(present) >= settings.pod_signal_fire_threshold:
+            self._cancel_idle_timer()
+            return
+        if arrived or self._idle_task is None or self._idle_task.done():
+            self._arm_idle_timer()
+
+    def _arm_idle_timer(self) -> None:
+        """Start the inactivity window over. Nothing left to close means no timer.
 
         The deadline lives in this task rather than a scheduled job because the activity that resets it is
         in memory too. A restart reconnects the lobby and arms a fresh window off the first roster
         broadcast, which is the forgiving side to err on: the lobby outlives the bot going down."""
-        if self.kind != "mock":
+        self._cancel_idle_timer()
+        if not self._idle_watch_applies():
             return
-        self._cancel_mock_idle_timer()
-        if self._closed or self.drafting or self.draft_complete or self._mock_lobby_closed():
-            return
-        self._mock_idle_task = asyncio.create_task(self._close_mock_lobby_when_idle())
+        self._idle_task = asyncio.create_task(self._run_idle_watch())
 
-    def _cancel_mock_idle_timer(self) -> None:
-        if self._mock_idle_task is not None and not self._mock_idle_task.done():
-            self._mock_idle_task.cancel()
-        self._mock_idle_task = None
+    def _cancel_idle_timer(self) -> None:
+        if self._idle_task is not None and not self._idle_task.done():
+            self._idle_task.cancel()
+        self._idle_task = None
 
-    async def _close_mock_lobby_when_idle(self) -> None:
-        """Sleeps out the window, then deletes the event. Drops its own handle first: the teardown disarms
-        the timer on its way through, and this task is the timer, so a held handle would cancel the close
-        half-done."""
-        await asyncio.sleep(settings.pod_mock_inactivity_minutes * 60)
-        if self._closed or self.drafting or self.draft_complete or self._mock_lobby_closed():
+    async def _run_idle_watch(self) -> None:
+        """Sleep out the window, then offer to close if the lobby is still open and under-filled. Drops its
+        own handle first: the offer arms no timer of this kind, and a held handle would outlive the task."""
+        await asyncio.sleep(settings.pod_idle_offer_minutes * 60)
+        self._idle_task = None
+        if not self._idle_watch_applies():
             return
-        self._mock_idle_task = None
+        if len(self.player_session_users()) >= settings.pod_signal_fire_threshold:
+            return
         log.info(
-            f"[MOCK] idle_close event={self.event_id} "
-            f"minutes={settings.pod_mock_inactivity_minutes} seated={len(self.non_bot_session_names())}"
+            f"[POD] idle_offer event={self.event_id} kind={self.kind} "
+            f"minutes={settings.pod_idle_offer_minutes} seated={len(self.player_session_users())}"
         )
+        await self._offer_self_destruct()
+
+    async def _offer_self_destruct(self) -> None:
+        """Post the Keep it Open card and start the grace countdown. Anyone at the table can keep the pod;
+        nobody in the window closes it."""
+        if self._self_destruct_task is not None and not self._self_destruct_task.done():
+            return
+        thread = await self._fetch_thread()
+        if thread is None:
+            return
+        from bot.services.pod_launch import event_opener_sync
+        opener_id = await asyncio.to_thread(event_opener_sync, self.event_id)
+        mention = f"<@{opener_id}>" if opener_id else None
+        closes_at = int(datetime.now(timezone.utc).timestamp()) + settings.pod_self_destruct_grace_minutes * 60
+        try:
+            self._self_destruct_message = await thread.send(
+                view=pod_self_destruct.build_offer_card(self.event_id, closes_at=closes_at, mention=mention),
+                allowed_mentions=discord.AllowedMentions(users=True),
+            )
+        except discord.HTTPException:
+            log.info(f"[POD] self_destruct_offer_failed event={self.event_id}", exc_info=True)
+            return
+        self._self_destruct_task = asyncio.create_task(self._close_when_unanswered())
+
+    async def _close_when_unanswered(self) -> None:
+        await asyncio.sleep(settings.pod_self_destruct_grace_minutes * 60)
+        self._self_destruct_task = None
+        if self._self_destruct_declined or not self._idle_watch_applies():
+            return
+        log.info(f"[POD] self_destruct_close event={self.event_id} kind={self.kind}")
         await cancel_pod_event(self.event_id, idle=True)
 
-    def _mock_lobby_closed(self) -> bool:
+    def keep_pod(self, actor: str) -> None:
+        """A Keep click: stop the close and stand the whole watch down for good, so a pod someone chose to
+        keep is never offered up again. The offer card is greyed to Kept by the click handler."""
+        self._self_destruct_declined = True
+        if self._self_destruct_task is not None and not self._self_destruct_task.done():
+            self._self_destruct_task.cancel()
+        self._self_destruct_task = None
+        self._self_destruct_message = None
+        self._cancel_idle_timer()
+        log.info(f"[POD] self_destruct_kept event={self.event_id} by={actor}")
+
+    def _lobby_closed(self) -> bool:
         return self.canceled_by is not None or self.canceled_idle
 
     async def stand_down_idle_lobby(self) -> None:
-        """Retire a mock lobby that went quiet: the card names the window that closed it, the thread says
+        """Retire a lobby that went quiet: the mock card names the window that closed it, the thread says
         so, then archives so a lobby nobody answered leaves the sidebar. Archiving is reversible, so a
         later reply reopens the thread; the event row is deleted by the caller either way."""
         await self.mark_canceled(idle=True)
         thread = await self._fetch_thread()
         if thread is None:
             return
-        window = inactivity_window_text(settings.pod_mock_inactivity_minutes)
+        window = inactivity_window_text(settings.pod_idle_offer_minutes)
+        notice = MSG_MOCK_CLOSED_IDLE if self.kind == "mock" else MSG_POD_CLOSED_IDLE
         try:
-            await thread.send(MSG_MOCK_CLOSED_IDLE.format(window=window))
+            await thread.send(notice.format(window=window))
         except discord.HTTPException:
-            log.info(f"[MOCK] idle_notice_failed event={self.event_id}", exc_info=True)
+            log.info(f"[POD] idle_notice_failed event={self.event_id}", exc_info=True)
         try:
-            await thread.edit(archived=True, reason="Mock draft lobby closed after inactivity")
+            await thread.edit(archived=True, reason="Pod lobby closed after inactivity")
         except discord.HTTPException:
-            log.info(f"[MOCK] idle_archive_failed event={self.event_id}", exc_info=True)
+            log.info(f"[POD] idle_archive_failed event={self.event_id}", exc_info=True)
 
     def _mock_card_state(self) -> str:
         """A lobby the bot does not hold reads as opening, not open: the card's link and Join button are
         what send players into the session, and until ownership lands the first arrival takes it."""
-        if self._mock_lobby_closed():
+        if self._lobby_closed():
             return STATE_CANCELED
         if self.draft_complete:
             return STATE_COMPLETE
@@ -1908,7 +1964,7 @@ class PodDraftManager:
             return
         self.canceled_by = actor
         self.canceled_idle = idle
-        self._cancel_mock_idle_timer()
+        self._cancel_idle_timer()
         roster = await self.classified_session_users()
         await self._update_mock_anchor(roster)
 
@@ -2451,7 +2507,7 @@ class PodDraftManager:
             return "Could not stop the draft, see logs"
         await asyncio.sleep(_RESTART_SETTLE_S)
         self.draft_logs = {}
-        self._arm_mock_idle_timer()
+        self._arm_idle_timer()
         await self._mark_socket_status("connected")
         notify_card_phase(self.bot, self.event_id)
         await self.refresh_lobby_now()
@@ -2508,7 +2564,7 @@ class PodDraftManager:
         self.draft_cancelled = False
         self.draft_paused = False
         self._stop_name_nudge()
-        self._cancel_mock_idle_timer()
+        self._cancel_idle_timer()
         log.info(f"[DRAFT] started event={self.event_id} session_users={len(self.session_users)}")
         self._schedule_end_watchdog()
         await self._retire_lobby_full_prompt()
@@ -3823,6 +3879,48 @@ async def _close_disconnect_vote(interaction: "discord.Interaction", manager, bo
 
 
 pod_disconnect.register_vote_click_handler(handle_disconnect_vote_click)
+
+
+async def handle_keep_pod_click(interaction: "discord.Interaction", event_id: str) -> None:
+    """A Keep it Open click: grey the offer to Kept and stand the pod's inactivity watch down for good."""
+    actor = interaction.user.display_name
+    manager = ACTIVE_POD_MANAGERS.get(event_id)
+    if manager is not None:
+        manager.keep_pod(actor)
+    try:
+        await interaction.response.edit_message(view=pod_self_destruct.build_kept_card(actor))
+    except discord.HTTPException:
+        log.warning(f"[POD_KEEP] edit_failed event={event_id}", exc_info=True)
+
+
+async def handle_close_pod_click(interaction: "discord.Interaction", event_id: str) -> None:
+    """A Close it click on the offer card: close the pod now instead of waiting out the countdown, and
+    archive the thread the same as the countdown would. The offer card already names who closed it, so no
+    separate notice goes out."""
+    actor = interaction.user.display_name
+    manager = ACTIVE_POD_MANAGERS.get(event_id)
+    if manager is not None:
+        manager.keep_pod(actor)
+    thread = interaction.channel if isinstance(interaction.channel, discord.Thread) else None
+    try:
+        await interaction.response.edit_message(view=pod_self_destruct.build_closed_card(actor))
+    except discord.HTTPException:
+        log.warning(f"[POD_CLOSE] edit_failed event={event_id}", exc_info=True)
+    run_detached(_close_pod_and_archive(event_id, actor, thread), label=f"self_destruct_close:{event_id}")
+
+
+async def _close_pod_and_archive(event_id: str, actor: str, thread: "discord.Thread | None") -> None:
+    await cancel_pod_event(event_id, actor=actor)
+    if thread is None or thread.archived:
+        return
+    try:
+        await thread.edit(archived=True, reason=f"Pod closed by {actor}")
+    except discord.HTTPException:
+        log.info(f"[POD_CLOSE] archive_failed event={event_id}", exc_info=True)
+
+
+pod_self_destruct.register_keep_click_handler(handle_keep_pod_click)
+pod_self_destruct.register_close_click_handler(handle_close_pod_click)
 
 
 _round_robin_vote_click_locks: dict[str, asyncio.Lock] = {}

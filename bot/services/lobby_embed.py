@@ -575,6 +575,7 @@ async def open_settings_panel(interaction: discord.Interaction) -> None:
     Acknowledged before the lookups, which together can run past the three seconds Discord allows a
     first response."""
     from bot.commands.pod_draft import build_pod_settings_view
+    from bot.services.pod_launch import event_opener_sync
     await interaction.response.defer(ephemeral=True, thinking=True)
     channel_id = interaction.channel_id
     actor = actor_label(interaction)
@@ -591,8 +592,11 @@ async def open_settings_panel(interaction: discord.Interaction) -> None:
         return
     log.info(f"{actor} opened Settings for event {event_id}")
     is_organizer = await is_pod_organizer(interaction.client, interaction.user)
+    opener = await asyncio.to_thread(event_opener_sync, event_id)
+    is_creator = opener is not None and opener == str(interaction.user.id)
     await interaction.followup.send(
-        view=await build_pod_settings_view(interaction.client, event_id, is_organizer=is_organizer),
+        view=await build_pod_settings_view(
+            interaction.client, event_id, is_organizer=is_organizer, is_creator=is_creator),
         ephemeral=True,
     )
 

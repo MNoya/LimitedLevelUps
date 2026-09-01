@@ -43,6 +43,7 @@ from bot.commands.messages import (
     MSG_DM_PREF_OFF_TITLE, MSG_DM_PREF_ON_TITLE, MSG_POD_RESTARTING,
 )
 from bot.services import pod_disconnect
+from bot.services import pod_self_destruct
 from bot.services import pod_format_schedule
 from bot.services.pod_format_poll import FORMAT_POLL_PROMPT
 from bot.services.pod_reminder_copy import ROSTER_REMINDER_TITLE
@@ -1402,7 +1403,7 @@ _VALID_STATES = (
     "reportping", "voicelink", "review",
     "table",
     "teams", "teamreveal", "teamround", "teamstandings", "teamchamp", "teamhype", "teamvote", "p2vote",
-    "formatpoll", "linkpicker", "settings", "dropped", "organizer", "reset",
+    "formatpoll", "linkpicker", "settings", "dropped", "selfdestruct", "organizer", "reset",
 )
 
 _ORGANIZER_LOBBY_SIZES = ("4", "6")
@@ -1611,6 +1612,48 @@ async def _post_disconnect_flap_preview(ctx: commands.Context) -> None:
     await ctx.send(embed=pod_disconnect.build_waiting_embed(names, opens_at=_preview_vote_opens_at()))
     await pod_disconnect.delete_cards(first_pair)
     await ctx.send(embed=pod_disconnect.build_back_embed(names))
+
+
+async def _post_self_destruct_preview(ctx: commands.Context) -> None:
+    """The card a stalled pod posts once it sits under-filled and idle: an offer to close that pings the
+    pod creator, with live Keep it Open and Close it buttons, no pod behind it. Both draw the card from the
+    same builders the live pod uses."""
+    closes_at = int(datetime.now(timezone.utc).timestamp()) + _PREVIEW_DISCONNECT_GRACE_S
+    await ctx.send(
+        view=_PreviewSelfDestructView(closes_at, ctx.author.mention),
+        allowed_mentions=discord.AllowedMentions(users=True),
+    )
+
+
+class _PreviewSelfDestructView(discord.ui.LayoutView):
+    """The offer card's Keep it Open and Close it buttons wired to this module. The live card uses the
+    persistent pod-keyed buttons, and both draw the card from the same builders."""
+
+    def __init__(self, closes_at: int, mention: str) -> None:
+        super().__init__(timeout=None)
+        container = discord.ui.Container(accent_colour=discord.Colour.orange())
+        self.add_item(container)
+        container.add_item(discord.ui.TextDisplay(f"{pod_self_destruct.offer_heading(closes_at)}\n{mention}"))
+        row = discord.ui.ActionRow()
+        keep = discord.ui.Button(
+            style=discord.ButtonStyle.success,
+            label=pod_self_destruct.KEEP_LABEL, emoji=pod_self_destruct.KEEP_EMOJI)
+        keep.callback = self._keep
+        close = discord.ui.Button(
+            style=discord.ButtonStyle.secondary,
+            label=pod_self_destruct.CLOSE_LABEL, emoji=pod_self_destruct.CLOSE_EMOJI)
+        close.callback = self._close
+        row.add_item(keep)
+        row.add_item(close)
+        self.add_item(row)
+
+    async def _keep(self, interaction: discord.Interaction) -> None:
+        await interaction.response.edit_message(
+            view=pod_self_destruct.build_kept_card(interaction.user.display_name))
+
+    async def _close(self, interaction: discord.Interaction) -> None:
+        await interaction.response.edit_message(
+            view=pod_self_destruct.build_closed_card(interaction.user.display_name))
 
 
 def _preview_vote_opens_at() -> int:
@@ -1993,6 +2036,10 @@ async def setup(bot: commands.Bot) -> None:
                 await _post_disconnect_flap_preview(ctx)
             else:
                 await _post_disconnect_preview(ctx, int(extra) if extra.isdigit() else 1)
+            return
+
+        if state == "selfdestruct":
+            await _post_self_destruct_preview(ctx)
             return
 
         if state == "reportping":

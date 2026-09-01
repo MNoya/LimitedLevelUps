@@ -86,6 +86,7 @@ from bot.services.pod_hold_view import AttendeesButton, MovePlayersButton, OpenT
 from bot.services.pod_join_button import JoinDraftButton, MockJoinDraftButton
 from bot.services.pod_link_dm import DmLinkArenaButton
 from bot.services.pod_disconnect import DisconnectVoteButton
+from bot.services.pod_self_destruct import ClosePodButton, KeepPodButton
 from bot.services.pod_round_robin_vote import RoundRobinVoteButton
 from bot.services.pod_team_vote import TeamVoteButton
 from bot.services.pod_format_poll import AddFormatButton, FormatPollButton
@@ -308,6 +309,8 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(TeamVoteButton)
         bot.add_dynamic_items(RoundRobinVoteButton)
         bot.add_dynamic_items(DisconnectVoteButton)
+        bot.add_dynamic_items(KeepPodButton)
+        bot.add_dynamic_items(ClosePodButton)
         bot.add_dynamic_items(FormatPollButton)
         bot.add_dynamic_items(AddFormatButton)
         bot.add_dynamic_items(VoteOptionItem, VoteAddFormatItem, VotersItem, ManageVotesItem, VoteFormatsButton)

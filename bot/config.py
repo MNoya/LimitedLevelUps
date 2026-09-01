@@ -68,7 +68,8 @@ class Settings(BaseSettings):
     pod_draft_end_watchdog_minutes: int = 90
     pod_signal_fire_threshold: int = 6
     pod_queue_inactivity_minutes: int = 180
-    pod_mock_inactivity_minutes: int = 60
+    pod_idle_offer_minutes: int = 30
+    pod_self_destruct_grace_minutes: int = 5
     pod_underfill_check_hours: str = "3,2,1"
     pod_underfill_ping_hours: str = "1"
     pod_underfill_ping_close_gap: int = 2

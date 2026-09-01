@@ -1853,6 +1853,16 @@ def scheduled_card_opener_sync(event_id: str) -> str | None:
     return row[0] if row else None
 
 
+def event_opener_sync(event_id: str) -> str | None:
+    """Discord user id of whoever created this pod with /draft, queue or scheduled. None for a pod the
+    launcher or a job opened, which no one person owns."""
+    with SessionLocal() as session:
+        row = session.execute(
+            select(PodSignal.opened_by).where(PodSignal.event_id == event_id)
+        ).first()
+    return row[0] if row else None
+
+
 def pod_card_ref_sync(event_id: str) -> tuple[str, str, datetime | None] | None:
     """(channel_id, message_id, slot_time) of the card this pod renders on: the scheduled signal's, else
     the one a queue or table pod posted for itself. Only a signal carries a slot_time."""

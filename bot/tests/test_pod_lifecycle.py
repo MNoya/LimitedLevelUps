@@ -247,65 +247,106 @@ def test_mock_card_state_withholds_open_until_the_bot_owns_the_lobby(flags, expe
     assert mgr._mock_card_state() == expected
 
 
-def test_mock_idle_timer_rearms_only_when_the_lobby_roster_changes():
+def test_idle_timer_rearms_on_arrival_but_not_on_rebroadcast_or_departure():
     async def scenario():
-        mgr = _manager(kind="mock")
+        mgr = _manager(kind="tournament")
         armed = []
-        for roster in ((), (), ("Finkel",)):
+        for roster in ((), (), ("Finkel",), ("Finkel",), ()):
             mgr.session_users = _session_users(*roster)
-            mgr._note_mock_lobby_activity()
-            armed.append(mgr._mock_idle_task)
-        mgr._cancel_mock_idle_timer()
+            mgr._note_lobby_activity()
+            armed.append(mgr._idle_task)
+        mgr._cancel_idle_timer()
         return armed
 
-    opened, rebroadcast, joined = asyncio.run(scenario())
+    opened, rebroadcast, joined, joined_rebroadcast, left = asyncio.run(scenario())
 
     assert opened is not None
     assert rebroadcast is opened
     assert joined is not opened
+    assert joined_rebroadcast is joined
+    assert left is joined
 
 
 @pytest.mark.parametrize(
     "flags",
     [
-        {"kind": "tournament"},
         {"drafting": True},
         {"draft_complete": True},
         {"canceled_by": "Finkel"},
         {"canceled_idle": True},
+        {"_self_destruct_declined": True},
     ],
-    ids=["tournament-pod", "drafting", "complete", "canceled", "already-closed"],
+    ids=["drafting", "complete", "canceled", "already-closed", "kept"],
 )
-def test_mock_idle_timer_stays_disarmed_when_there_is_nothing_left_to_close(flags):
+def test_idle_timer_stays_disarmed_when_there_is_nothing_left_to_close(flags):
     async def scenario():
-        mgr = _manager(kind=flags.get("kind", "mock"))
+        mgr = _manager(kind="mock")
         for flag, value in flags.items():
             setattr(mgr, flag, value)
-        mgr._note_mock_lobby_activity()
-        armed = mgr._mock_idle_task
-        mgr._cancel_mock_idle_timer()
+        mgr._note_lobby_activity()
+        armed = mgr._idle_task
+        mgr._cancel_idle_timer()
         return armed
 
     assert asyncio.run(scenario()) is None
 
 
-def test_mock_idle_timer_deletes_the_event_once_the_window_passes(monkeypatch):
-    monkeypatch.setattr(settings, "pod_mock_inactivity_minutes", 0)
+def test_idle_timer_stays_disarmed_when_the_lobby_is_full():
+    async def scenario():
+        mgr = _manager(kind="tournament")
+        mgr.session_users = _session_users(*[f"P{n}" for n in range(settings.pod_signal_fire_threshold)])
+        mgr._note_lobby_activity()
+        armed = mgr._idle_task
+        mgr._cancel_idle_timer()
+        return armed
+
+    assert asyncio.run(scenario()) is None
+
+
+def test_stalled_pod_offers_then_closes_once_both_windows_pass(monkeypatch):
+    monkeypatch.setattr(settings, "pod_idle_offer_minutes", 0)
+    monkeypatch.setattr(settings, "pod_self_destruct_grace_minutes", 0)
     closed = []
 
     async def fake_cancel(event_id, *, actor=None, idle=False):
         closed.append((event_id, actor, idle))
 
     monkeypatch.setattr(pod_draft_manager, "cancel_pod_event", fake_cancel)
+    monkeypatch.setattr("bot.services.pod_launch.event_opener_sync", lambda event_id: None)
 
     async def scenario():
-        mgr = _manager(kind="mock")
-        mgr._note_mock_lobby_activity()
-        await asyncio.wait_for(mgr._mock_idle_task, timeout=1)
+        mgr = _manager(kind="tournament")
+        thread = _FakeThread()
 
-    asyncio.run(scenario())
+        async def fetch():
+            return thread
 
+        mgr._fetch_thread = fetch
+        mgr._note_lobby_activity()
+        await asyncio.wait_for(mgr._idle_task, timeout=1)
+        await asyncio.wait_for(mgr._self_destruct_task, timeout=1)
+        return thread.sent
+
+    sent = asyncio.run(scenario())
+
+    assert len(sent) == 1
     assert closed == [("evt", None, True)]
+
+
+def test_keeping_a_stalled_pod_stands_the_watch_down_for_good():
+    async def scenario():
+        mgr = _manager(kind="tournament")
+        mgr.keep_pod("Finkel")
+        applies = mgr._idle_watch_applies()
+        mgr.session_users = _session_users("Finkel")
+        mgr._note_lobby_activity()
+        return applies, mgr._idle_task, mgr._self_destruct_declined
+
+    applies, idle_task, declined = asyncio.run(scenario())
+
+    assert declined is True
+    assert applies is False
+    assert idle_task is None
 
 
 def _manager(kind: str = "tournament") -> PodDraftManager:
@@ -316,6 +357,15 @@ def _manager(kind: str = "tournament") -> PodDraftManager:
 
 def _session_users(*names: str) -> list[dict]:
     return [{"userID": name, "userName": name} for name in names]
+
+
+class _FakeThread:
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+
+    async def send(self, **kwargs) -> object:
+        self.sent.append(kwargs)
+        return object()
 
 
 class _FakeSio:

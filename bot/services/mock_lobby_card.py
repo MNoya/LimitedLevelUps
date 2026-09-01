@@ -166,7 +166,7 @@ def _seat_label(state: str) -> str:
 def _closes_line(created_by: str | None) -> str:
     """The window an open lobby stands down after, so a card nobody answers reads as temporary, led by
     whoever opened it."""
-    closes = MSG_MOCK_CARD_CLOSES.format(window=inactivity_window_text(settings.pod_mock_inactivity_minutes))
+    closes = MSG_MOCK_CARD_CLOSES.format(window=inactivity_window_text(settings.pod_idle_offer_minutes))
     if not created_by:
         return closes
     gap = NBSP * 3
@@ -217,7 +217,7 @@ def _open_line(seated: int, max_players: int) -> str:
 
 def _canceled_line(canceled_by: str | None, canceled_idle: bool) -> str:
     if canceled_idle:
-        window = inactivity_window_text(settings.pod_mock_inactivity_minutes)
+        window = inactivity_window_text(settings.pod_idle_offer_minutes)
         return MSG_MOCK_CARD_CANCELED_IDLE.format(window=window)
     if canceled_by is None:
         return MSG_MOCK_CARD_CANCELED_NO_ACTOR
