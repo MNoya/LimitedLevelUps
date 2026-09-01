@@ -10,7 +10,6 @@ import {
   BsPaletteFill,
   ExternalLink,
 } from "../components/Icons";
-import { Footer } from "../components/Footer";
 import { Pip, Pips } from "../components/ManaPips";
 import { SetSwitcherDesktop, SetSwitcherMobile } from "../components/SetSwitcher";
 import { TrophyLeaderboard } from "../components/TrophyLeaderboard";
@@ -375,7 +374,6 @@ function MtgoBoard({
           <MtgoSidebar rows={rows} setCode={activeSet} />
         </div>
       </div>
-      <Footer className="mt-auto px-10 pt-5 pb-3" />
     </div>
   );
 }
@@ -474,7 +472,6 @@ function Desktop({
           />
         </div>
       </div>
-      <Footer className="mt-auto px-10 pt-5 pb-3" />
     </div>
   );
 }
@@ -855,7 +852,6 @@ function Mobile({
           />
         )}
       />
-      <Footer className="mt-auto px-4 py-4" />
     </div>
   );
 }
