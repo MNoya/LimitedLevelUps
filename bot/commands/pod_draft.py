@@ -14,11 +14,11 @@ from discord.ext import commands
 from bot import audit, emojis
 from bot.commands import descriptions as desc
 from bot.commands.messages import (
-    MSG_ADMIN_ONLY, MSG_ARENA_BAD_FORMAT, MSG_ARENA_LINKED, MSG_RESTART_NOT_ORGANIZER,
+    MSG_ADMIN_ONLY, MSG_ARENA_BAD_FORMAT, MSG_ARENA_LINKED, MSG_ARENA_LINKED_SELF, MSG_RESTART_NOT_ORGANIZER,
 )
 from bot.config import settings
 from bot.database import SessionLocal
-from bot.discord_helpers import extract_avatar_hash
+from bot.discord_helpers import extract_avatar_hash, in_pod_chat, in_pod_coordination
 from bot.services import championship as championship_service
 from bot.services import pod_event_settings
 from bot.services import pod_format
@@ -341,6 +341,8 @@ class PodDraft(commands.Cog):
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
     async def pod_link_arena(self, interaction: discord.Interaction, name: str) -> None:
+        channel = interaction.channel
+        public = in_pod_coordination(channel) or in_pod_chat(channel)
         user_id = str(interaction.user.id)
         arena_name = name.strip()
         mention = interaction.user.mention
@@ -366,10 +368,11 @@ class PodDraft(commands.Cog):
 
         audit.event("pod_link_arena_success", user_id=user_id, player_id=player_id)
         log.info(f"pod-link-arena: {interaction.user} linked {arena_name} (player_id={player_id})")
-        await interaction.response.send_message(
-            MSG_ARENA_LINKED.format(emoji=emojis.get("mtga"), mention=mention, arena_name=arena_name),
-            allowed_mentions=no_pings,
-        )
+        if public:
+            reply = MSG_ARENA_LINKED.format(emoji=emojis.get("mtga"), mention=mention, arena_name=arena_name)
+        else:
+            reply = MSG_ARENA_LINKED_SELF.format(emoji=emojis.get("mtga"), arena_name=arena_name)
+        await interaction.response.send_message(reply, allowed_mentions=no_pings, ephemeral=not public)
 
         await self._warn_if_no_lobby_match(interaction, arena_name, player_id)
 
@@ -732,17 +735,18 @@ async def delete_stale_seeding_messages(
         log.warning(f"pod-seeding: could not purge stale seeding messages: {exc}")
 
 
-async def build_pod_settings_view(bot, event_id: str, *, is_organizer: bool) -> PodSettingsView:
+async def build_pod_settings_view(
+        bot, event_id: str, *, is_organizer: bool, is_creator: bool = False) -> PodSettingsView:
     """Settings panel wired for `event_id`. Shared by /pod-settings and the lobby Settings button.
     Link Players and Kick Player need a live Draftmancer session, and Link Players stays through the
     draft so an unlinked seat can be fixed mid-draft. The format/pairing/seats/pick-options controls are
     pre-draft only: they read the live table when there is one and the pod's stored setup otherwise, so a
     scheduled pod can be configured before its lobby opens.
 
-    Cancel Draft is Organizer-only on a tournament pod, whose signups and matches belong to the people who
-    organized it. A mock draft opens it to everyone until the picks are done: anyone can open a lobby, so
-    anyone can close one, but a finished draft has decks and logs on the site that nobody else's click
-    should take down.
+    Cancel Draft on a tournament pod is for the Organizer and the person who opened it with /draft, whose
+    signups and matches belong to the people who organized it. A mock draft opens it to everyone until the
+    picks are done: anyone can open a lobby, so anyone can close one, but a finished draft has decks and
+    logs on the site that nobody else's click should take down.
 
     A mock draft plays no matches and opens its draft logs to everyone the moment the draft ends, so
     Pairings and Closed Decklist are left off its panel."""
@@ -845,7 +849,7 @@ async def build_pod_settings_view(bot, event_id: str, *, is_organizer: bool) -> 
             return await manager.restart_draft(thread, initiated_by=actor_label(inter))
 
     on_cancel = None
-    if is_organizer or (mock and not drafted):
+    if is_organizer or is_creator or (mock and not drafted):
         async def on_cancel(inter: discord.Interaction) -> str | None:
             return await cancel_pod_event(event_id, actor=actor_label(inter))
 

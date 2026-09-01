@@ -153,6 +153,7 @@ MSG_MOCK_WELCOME = (
 )
 MSG_ARENA_BAD_FORMAT = "❌ Expected a full MTG Arena handle: `ArenaID#12345`"
 MSG_ARENA_LINKED = "{emoji} {mention} is **{arena_name}** on Arena"
+MSG_ARENA_LINKED_SELF = "{emoji} You are **{arena_name}** on Arena"
 MSG_ARENA_ALREADY_LINKED_NOTE = "Currently linked as {emoji} **{arena_name}**\nSubmit a new handle to change it"
 MSG_ARENA_LINK_CTA = "Please link your Arena handle so the bot knows it's you when joining the lobby"
 MSG_POD_ROLE_GRANTED = "{subject} now on {role} and will be notified {ping}"
