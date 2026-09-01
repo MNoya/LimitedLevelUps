@@ -132,10 +132,10 @@ POD_CAPACITY = 8
 CARD_INTRO = "{emoji} {note}"
 CARD_CUBE_LIST = "{emoji} {label}: {link}"
 CARD_RSVP_PROMPT = "Sign up for this draft ✅"
-ROOM_NOTICE = "still room at this table 🔥"
+ROOM_NOTICE = "still room for more 🔥"
 TABLE_GATHERING_NOTICE = "{ordinal} table gathering 🔥"
 TABLE_GATHERING_YES = 11
-NOTICE_GAP = NBSP * 3
+NOTICE_GAP = NBSP * 2
 CARD_STATUS_DRAFTING = "🎉 **Draft started!**"
 CARD_STATUS_PLAYING = "⚔️ **Matches In Progress**"
 CARD_STATUS_LOBBY_OPEN = "{emoji} **Lobby is open**"
@@ -469,7 +469,7 @@ def _cube_list_line(set_code: str | None) -> str:
         emoji=fi.format_emoji(set_code), label=pod_format.list_label(set_code), link=link)
     hint = pod_format.command_hint(set_code)
     if hint is not None:
-        line = f"{line}{EM_SPACE * 2}{hint}"
+        line = f"{line}{EM_SPACE}{hint}"
     return f"\n{line}"
 
 
