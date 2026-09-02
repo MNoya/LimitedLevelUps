@@ -1,4 +1,4 @@
-import React, { type ReactNode } from "react";
+import React from "react";
 import { cubeBoardCode, CUBE_VARIANTS } from "../data/cubeVariants";
 import { cn } from "../lib/utils";
 
@@ -24,14 +24,10 @@ export function AWordmark({
   size = "md",
   subtitle = "LEADERBOARD",
   subtitleShort,
-  subtitleSlot,
-  subtitleTrailing,
 }: {
   size?: "sm" | "md" | "lg";
   subtitle?: string;
   subtitleShort?: string;
-  subtitleSlot?: ReactNode;
-  subtitleTrailing?: ReactNode;
 }) {
   if (size === "sm") {
     return (
@@ -40,11 +36,9 @@ export function AWordmark({
           LIMITED LEVEL-UPS
         </span>
         <span className="bg-border2 shrink-0" style={{ width: 1, height: 16 }} />
-        {subtitleSlot ?? (
-          <span className="text-green leading-none" style={{ fontSize: 15, letterSpacing: "0.14em" }}>
-            {subtitleShort ?? subtitle}
-          </span>
-        )}
+        <span className="text-green leading-none" style={{ fontSize: 15, letterSpacing: "0.14em" }}>
+          {subtitleShort ?? subtitle}
+        </span>
       </div>
     );
   }
@@ -55,11 +49,8 @@ export function AWordmark({
       <span className="text-text" style={{ fontSize: title, letterSpacing: "0.09em" }}>
         LIMITED LEVEL-UPS
       </span>
-      <span className="flex items-center justify-between gap-4" style={{ marginTop: 4 }}>
-        <span className="text-green" style={{ fontSize: sub, letterSpacing: "0.28em" }}>
-          {subtitle}
-        </span>
-        {subtitleTrailing}
+      <span className="text-green" style={{ fontSize: sub, letterSpacing: "0.28em", marginTop: 4 }}>
+        {subtitle}
       </span>
     </div>
   );
