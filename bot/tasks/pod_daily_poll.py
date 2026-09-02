@@ -137,7 +137,6 @@ from bot.services.pod_slot import pod_display_name
 from bot.services.pod_staging import pod_index, pod_is_numbered
 from bot.services.pod_tournament import (
     CHAMPIONSHIP_DEADLINE_SECONDS,
-    GRACE_SECONDS,
     build_podium_link_button,
 )
 from bot.sets import active_set_code, set_name_for
@@ -157,7 +156,8 @@ _bot: commands.Bot | None = None
 
 LAUNCHER_CLOSE_LOOKBACK_DAYS = 3
 PLAY_AGAIN_FLOOR_MIN = 5
-PLAY_AGAIN_FALLBACK_SECONDS = CHAMPIONSHIP_DEADLINE_SECONDS - GRACE_SECONDS + 60
+PLAY_AGAIN_PODIUM_SLACK_SECONDS = 60
+PLAY_AGAIN_FALLBACK_SECONDS = CHAMPIONSHIP_DEADLINE_SECONDS + PLAY_AGAIN_PODIUM_SLACK_SECONDS
 
 _repost_lock = asyncio.Lock()
 _PLAY_AGAIN_POSTED: set[str] = set()
