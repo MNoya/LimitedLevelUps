@@ -1641,6 +1641,29 @@ def set_participant_deck_colors(
     return True
 
 
+def set_participant_deck_caption(
+    session: Session,
+    discord_thread_id: str,
+    discord_id: str,
+    caption: str,
+) -> bool:
+    """Set deck_screenshot_caption on the participant row. False when the user isn't in this pod"""
+    participant = session.execute(
+        select(PodDraftParticipant)
+        .join(Player, Player.id == PodDraftParticipant.player_id)
+        .join(PodDraftEvent, PodDraftEvent.id == PodDraftParticipant.event_id)
+        .where(
+            PodDraftEvent.discord_thread_id == discord_thread_id,
+            Player.discord_id == discord_id,
+        )
+    ).scalar_one_or_none()
+    if participant is None:
+        return False
+    participant.deck_screenshot_caption = caption
+    session.flush()
+    return True
+
+
 def list_event_participants_sync(event_id: str) -> list[tuple[str, str, str | None]]:
     """(participant_id, display_name, deck_colors) for a pod, seat order then name — the roster the
     organizer color panel lists."""

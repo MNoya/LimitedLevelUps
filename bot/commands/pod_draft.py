@@ -84,6 +84,7 @@ from bot.services.pod_tournament import (
     build_champion_announcement_view_for_event,
     build_draft_review_embed,
     build_draft_review_message,
+    build_live_deck_description_button,
     build_live_submit_deck_button,
     build_replays_link_button,
     build_standings_embed_for_event,
@@ -478,6 +479,7 @@ class PodDraft(commands.Cog):
         view.add_item(build_replays_link_button(event_name))
         if not invoked_outside_thread:
             view.add_item(build_live_submit_deck_button())
+            view.add_item(build_live_deck_description_button())
 
         await interaction.followup.send(embed=embed, view=view)
 

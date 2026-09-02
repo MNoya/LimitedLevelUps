@@ -69,6 +69,10 @@ NOT_IN_POD_MSG = "You are not registered as a player in this pod"
 
 SAVED_MSG = "Deck Color saved!"
 
+DESCRIPTION_SAVED_MSG = "Deck Recap saved!"
+
+DECK_DESCRIPTION_CUSTOM_ID = "poddeckdescription"
+
 
 def color_label(code: str) -> str:
     if code in GUILD_LABEL:
@@ -315,3 +319,50 @@ class DeckColorWriteInModal(ui.Modal, title="Deck colors"):
                 content=warning,
                 view=DeckColorSelectView(self._submit, current_value=None),
             )
+
+
+class DeckDescriptionView(ui.View):
+    """Holds the Deck Description button. Register once at startup with bot.add_view for the persistent
+    surfaces so its custom_id catches clicks from any message it was composed into."""
+
+    def __init__(self, on_submit: SubmitCallback, custom_id: str = DECK_DESCRIPTION_CUSTOM_ID) -> None:
+        super().__init__(timeout=None)
+        self.add_item(DeckDescriptionButton(on_submit, custom_id=custom_id))
+
+
+class DeckDescriptionButton(ui.Button):
+    def __init__(self, on_submit: SubmitCallback, custom_id: str | None = DECK_DESCRIPTION_CUSTOM_ID) -> None:
+        super().__init__(
+            label="Deck Recap",
+            style=discord.ButtonStyle.secondary,
+            custom_id=custom_id,
+            emoji="📝",
+        )
+        self._submit = on_submit
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_modal(DeckDescriptionModal(self._submit))
+
+
+class DeckDescriptionModal(ui.Modal, title="Deck Recap"):
+    description = ui.TextInput(
+        label="Event Write-Up",
+        style=discord.TextStyle.paragraph,
+        placeholder="Describe your deck and how the event played out",
+        max_length=200,
+        required=True,
+    )
+
+    def __init__(self, on_submit: SubmitCallback) -> None:
+        super().__init__()
+        self._submit = on_submit
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        text = self.description.value.strip()
+        await interaction.response.defer()
+        try:
+            await self._submit(interaction, text)
+        except NotInPodError:
+            await interaction.followup.send(NOT_IN_POD_MSG, ephemeral=_dm_ephemeral(interaction))
+            return
+        await interaction.followup.send(DESCRIPTION_SAVED_MSG, ephemeral=_dm_ephemeral(interaction))

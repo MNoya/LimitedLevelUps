@@ -46,6 +46,8 @@ from bot.services.pod_deck_color import (
     NOT_IN_POD_MSG,
     SAVED_MSG,
     DeckColorSelectView,
+    DeckDescriptionButton,
+    DeckDescriptionView,
     NotInPodError,
     SubmitCallback,
     SubmitDeckButton,
@@ -102,6 +104,7 @@ from bot.services.pod_drafts import (
     participants_with_discord_for_event,
     seed_event_participants,
     set_match_result,
+    set_participant_deck_caption,
     set_participant_deck_colors,
     set_participant_deck_colors_by_id_sync,
     set_participant_deck_screenshot_by_id_sync,
@@ -748,6 +751,46 @@ async def save_deck_colors(
     asyncio.create_task(_refresh_submit_deck_dm(interaction.client, event_id, discord_id))
 
 
+async def live_deck_description_submit(interaction: discord.Interaction, text: str) -> None:
+    event_id, thread_id = await _resolve_event_for_interaction(interaction)
+    await save_deck_caption(interaction, event_id, thread_id, text)
+
+
+def bound_deck_description_submit(event_id: str, thread_id: str) -> SubmitCallback:
+    """A deck-description submit pinned to one pod, for the `/report-results` card built outside a pod thread."""
+    async def _submit(interaction: discord.Interaction, text: str) -> None:
+        await save_deck_caption(interaction, event_id, thread_id, text)
+
+    return _submit
+
+
+async def save_deck_caption(
+    interaction: discord.Interaction, event_id: str | None, thread_id: str | None, text: str,
+) -> None:
+    if thread_id is None:
+        raise NotInPodError()
+    discord_id = str(interaction.user.id)
+
+    def _do() -> bool:
+        with SessionLocal() as session:
+            ok = set_participant_deck_caption(session, thread_id, discord_id, text)
+            session.commit()
+            return ok
+
+    ok = await asyncio.to_thread(_do)
+    if not ok:
+        raise NotInPodError()
+
+    actor = actor_label(interaction)
+    surface = surface_label(interaction)
+    if event_id is None:
+        log.info(f"{actor} saved deck description (from {surface}, no event)")
+        return
+    event_name = await asyncio.to_thread(load_event_name_sync, event_id)
+    log.info(f"[{event_name}] {actor} saved deck description (from {surface})")
+    await _refresh_standings_after_deck_change(interaction.client, event_id, thread_id)
+
+
 async def _refresh_standings_after_deck_change(
     client: discord.Client, event_id: str, thread_id: str,
 ) -> None:
@@ -1016,6 +1059,20 @@ def build_live_submit_deck_button() -> SubmitDeckButton:
     persistent view registered at startup catches the click regardless of which message it came from.
     """
     return SubmitDeckButton(live_deck_color_submit, live_deck_state_lookup, open_organizer_color_panel)
+
+
+def build_live_deck_description_button() -> DeckDescriptionButton:
+    """A standalone Deck Description button for composing next to Submit Colors. Shares the persistent
+    custom_id with the view registered at startup, so its click is caught from any message."""
+    return DeckDescriptionButton(live_deck_description_submit)
+
+
+def build_bound_deck_description_button(event_id: str, thread_id: str) -> DeckDescriptionButton:
+    """The `/report-results` Deck Description button. Bound to one pod and carries no persistent custom_id,
+    so the ephemeral card's own view handles the click even when opened outside the pod thread."""
+    return DeckDescriptionButton(
+        bound_deck_description_submit(event_id, thread_id), custom_id=None,
+    )
 
 
 def build_live_deck_color_select_view(current_value: str | None = None) -> DeckColorSelectView:
@@ -2273,6 +2330,9 @@ async def build_own_match_report(discord_id: str, *, team_submit: ResultSubmit) 
     view = RoundResultsView(
         [m.state for m in open_matches], on_submit=team_submit if mode == "team" else None,
     )
+    thread_id = await asyncio.to_thread(load_event_thread_id_sync, event_id)
+    if thread_id is not None:
+        view.add_item(build_bound_deck_description_button(event_id, thread_id))
     return OwnMatchReport(embed, view, None)
 
 
@@ -2318,11 +2378,9 @@ async def _nothing_open_card(discord_id: str) -> OwnMatchReport:
     deck = await asyncio.to_thread(_owed_deck_colors_sync, discord_id)
     if deck is not None:
         event_id, thread_id = deck
-        return OwnMatchReport(
-            build_submit_deck_dm_embed(None),
-            DeckColorSelectView(bound_deck_color_submit(event_id, thread_id)),
-            None,
-        )
+        view = DeckColorSelectView(bound_deck_color_submit(event_id, thread_id))
+        view.add_item(build_bound_deck_description_button(event_id, thread_id))
+        return OwnMatchReport(build_submit_deck_dm_embed(None), view, None)
     reported = await asyncio.to_thread(_latest_reported_sync, discord_id)
     if reported is None:
         return OwnMatchReport(None, None, MSG_POD_NO_MATCH_TO_REPORT)
@@ -2866,6 +2924,7 @@ def register_persistent_views(bot) -> None:
     bot.add_dynamic_items(ManageRoundButton)
     bot.add_view(build_live_submit_deck_view())
     bot.add_view(build_capture_submit_deck_view())
+    bot.add_view(DeckDescriptionView(live_deck_description_submit))
     bot.add_view(build_live_deck_color_select_view())
 
 
@@ -3918,6 +3977,7 @@ async def ping_missing_deck_participants(manager, blocking_keys: set[str] | None
         return
     view = ui.View(timeout=None)
     view.add_item(build_capture_submit_deck_button())
+    view.add_item(build_live_deck_description_button())
     try:
         await thread.send(
             content=content,

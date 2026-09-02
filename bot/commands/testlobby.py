@@ -115,6 +115,7 @@ from bot.services.pod_tournament import (
     RoundResultsView,
     actor_label,
     build_capture_submit_deck_button,
+    build_live_deck_description_button,
     build_champion_announcement_view,
     build_deck_ping,
     build_final_report_ping,
@@ -1270,6 +1271,7 @@ async def _post_podium_signoff_preview(ctx) -> None:
     it does after a real pod. Falls back to this channel when the guild has no pod-draft-chat."""
     deck_ping_view = discord.ui.View(timeout=None)
     deck_ping_view.add_item(build_capture_submit_deck_button())
+    deck_ping_view.add_item(build_live_deck_description_button())
     me = ctx.author.id
     await ctx.send(
         build_deck_ping(([me], [me]), ([me], []), pod_page_url(_pod_preview_name())),

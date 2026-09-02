@@ -197,7 +197,9 @@ def test_serves_deck_colors_once_the_matches_are_in(monkeypatch) -> None:
     report = asyncio.run(build_own_match_report("d-finkel", team_submit="team-submit"))
 
     assert report.notice is None
-    assert [type(child).__name__ for child in report.view.children] == ["DeckColorSelect"]
+    assert [type(child).__name__ for child in report.view.children] == [
+        "DeckColorSelect", "DeckDescriptionButton",
+    ]
 
 
 def test_skips_deck_colors_when_they_are_already_saved(monkeypatch) -> None:

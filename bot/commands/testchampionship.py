@@ -62,6 +62,7 @@ from bot.services.pod_tournament import (
     TOTAL_ROUNDS,
     build_champion_embed,
     build_deck_ping,
+    build_live_deck_description_button,
     build_live_submit_deck_button,
     mark_trophy_match,
     pod_page_url,
@@ -205,6 +206,7 @@ async def setup(bot: commands.Bot) -> None:
         me = ctx.author.id
         view = ui.View(timeout=None)
         view.add_item(build_live_submit_deck_button())
+        view.add_item(build_live_deck_description_button())
         await ctx.send(DECK_NUDGE_MSG, allowed_mentions=discord.AllowedMentions.none())
         await ctx.send(
             build_deck_ping(([me, me], [me, me]), ([me], [me, me]), pod_page_url("Sample Pod 7")),
