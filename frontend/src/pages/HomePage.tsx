@@ -92,6 +92,7 @@ function Panel({
   actionBorder = false,
   headerBorder = false,
   linkBody = false,
+  dense = false,
   className,
   bodyClassName,
   children,
@@ -104,6 +105,7 @@ function Panel({
   actionBorder?: boolean;
   headerBorder?: boolean;
   linkBody?: boolean;
+  dense?: boolean;
   className?: string;
   bodyClassName?: string;
   children: ReactNode;
@@ -111,7 +113,8 @@ function Panel({
   return (
     <section
       className={cn(
-        "group bg-surface border border-border rounded-xl p-4 flex flex-col min-h-0",
+        "group bg-surface border border-border rounded-xl flex flex-col min-h-0",
+        dense ? "p-3" : "p-4",
         linkBody && "relative",
         className,
       )}
@@ -126,7 +129,7 @@ function Panel({
       <div
         className={cn(
           "flex items-center gap-3 shrink-0",
-          headerBorder ? "-mx-4 px-4 pb-3 border-b border-border" : "mb-3",
+          headerBorder ? "-mx-4 px-4 pb-3 border-b border-border" : dense ? "mb-2" : "mb-3",
         )}
       >
         <Link
@@ -147,7 +150,8 @@ function Panel({
         <Link
           to={to}
           className={cn(
-            "relative z-0 -mx-4 -mb-4 shrink-0 flex w-[calc(100%+2rem)] items-center justify-end gap-1.5 rounded-b-xl px-4 py-2.5 font-display tracking-[0.08em] text-[15px] text-green no-underline transition-colors hover:bg-green/5 hover:text-green-2",
+            "relative z-0 shrink-0 flex items-center justify-end gap-1.5 rounded-b-xl font-display tracking-[0.08em] text-[15px] text-green no-underline transition-colors hover:bg-green/5 hover:text-green-2",
+            dense ? "-mx-3 -mb-3 w-[calc(100%+1.5rem)] px-3 py-2" : "-mx-4 -mb-4 w-[calc(100%+2rem)] px-4 py-2.5",
             linkBody && "peer-hover/cta:bg-green/5 peer-hover/cta:text-green-2",
             actionBorder && "border-t border-border",
           )}
@@ -184,13 +188,13 @@ function IdentityPanel() {
           onClick={toggleAbout}
           aria-expanded={aboutOpen}
           aria-label={aboutOpen ? "Collapse about the community" : "Expand about the community"}
-          className="flex w-full items-center justify-between gap-3 text-left lg:pointer-events-none"
+          className="flex w-full items-center justify-between gap-3 text-left"
         >
           About the Community
-          <ChevronDown size={22} className={cn("shrink-0 text-muted transition-transform lg:hidden", !aboutOpen && "-rotate-90")} />
+          <ChevronDown size={22} className={cn("shrink-0 text-muted transition-transform", !aboutOpen && "-rotate-90")} />
         </button>
       </h2>
-      <div className={cn("flex flex-col gap-3", !aboutOpen && "max-lg:hidden")}>
+      <div className={cn("flex flex-col gap-3", !aboutOpen && "hidden")}>
         <p className="text-subtle text-[13px] leading-[1.5] text-center">
           Everything you need to get better at <span className="text-green">Limited Magic</span>
         </p>
@@ -319,9 +323,9 @@ function TierPanel() {
   );
 
   return (
-    <Panel title="SET REVIEW" to={`/tier-list/${current}`} corner={tierDropdown} action="Full Tier List Review" className="order-3 lg:order-none flex-1">
+    <Panel title="SET REVIEW" to={`/tier-list/${current}`} corner={tierDropdown} action="Full Tier List Review" dense className="order-3 lg:order-none flex-1">
       {rows.length ? (
-        <div className="-mx-4 flex-1 min-h-0 flex flex-col border-y border-border">
+        <div className="-mx-3 flex-1 min-h-0 flex flex-col border-y border-border">
           {rows.map((row) => (
             <TierCardRow
               key={row.letter}
