@@ -208,7 +208,7 @@ Beyond the daily launcher, you can schedule a pod at any time with the `/draft` 
 
 Notify starts off, so the pod pings nobody until you turn it on. Anyone can run `/draft`, and a pod that nobody asked for should not wake a role at a bad hour. A quiet pod still reaches the channel on its own once it is short of players. Either way the bot posts one line where you ran the command, naming the pod and linking its card, and a scheduled card carries your name in its footer so players can see who organized it.
 
-Which formats a day offers is a table in the bot's code, so ask for a change ahead of time. A pod that already exists can change format from its lobby Settings panel.
+Which formats a day offers is a table in the bot's code, so ask for a change ahead of time. A pod that already exists can change format from its lobby Settings panel. Both the `/draft` set picker and that Settings picker carry a **Write-in Code** option: type a set code for a set, or a CubeCobra cube name or link to draft any cube that is not on the list.
 
 Draft Setup on the Settings panel holds the shape of the draft: the seconds each player gets per pick, and how many packs each player opens. On a cube pod it also takes how many cards a pack holds, which a set pod does not offer, since a set draft opens the set's own packs. Leave a field empty to keep what the pod already runs. Next to it, Mode toggles between Pick One and Pick Two, which is how many cards a player takes from a pack before passing it. Pick One is the normal draft and the button sits grey; turn it on for a Pick Two pod and it goes green, and the lobby card footer reads the format as "Pick 2" so everyone sees it. All of them are locked once the draft starts.
 

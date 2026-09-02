@@ -30,6 +30,29 @@ def test_format_applied_message_uses_label_then_code():
     assert "SOS" in pod_format.format_applied_message("SOS")
 
 
+def test_parse_cube_input_preserves_case_and_extracts_from_link():
+    assert pod_format.parse_cube_input("  LSVCube ") == "LSVCube"
+    assert pod_format.parse_cube_input("https://cubecobra.com/cube/list/LSVCube") == "LSVCube"
+    assert pod_format.parse_cube_input("https://cubecobra.com/cube/overview/AbC123?tab=1") == "AbC123"
+
+
+def test_resolve_write_in_routes_sets_and_cubes():
+    assert pod_format.resolve_write_in("fin") == "FIN"
+    assert pod_format.resolve_write_in("  MH3 ") == "MH3"
+    assert pod_format.resolve_write_in("LSVCube") == pod_format.write_in_cube_code("LSVCube")
+    assert pod_format.resolve_write_in(
+        "https://cubecobra.com/cube/list/AbC") == pod_format.write_in_cube_code("AbC")
+    assert pod_format.resolve_write_in("   ") is None
+
+
+def test_write_in_cube_code_resolves_exact_case_and_routes_to_import():
+    code = pod_format.write_in_cube_code("LSVCube")
+    assert pod_format.is_write_in_cube(code)
+    assert pod_format.cube_id_for(code) == "LSVCube"
+    assert pod_format.card_list_for(code) is None
+    assert pod_format.label_for(code) == "LSVCube"
+
+
 class _FakeSio:
     """Captures emitted events; invokes ack callbacks with a success payload."""
 
@@ -59,6 +82,14 @@ def test_emit_format_loads_cube_for_registered_code():
     assert expected_import in mgr.sio.calls
     assert "setRestriction" not in mgr.sio.events()
     assert ("setUseCustomCardList", (False,)) not in mgr.sio.calls
+
+
+def test_emit_format_imports_written_in_cube_with_exact_case():
+    mgr = _manager(pod_format.write_in_cube_code("LSVCube"))
+    asyncio.run(mgr._emit_format())
+    payload = {"service": "Cube Cobra", "cubeID": "LSVCube", "matchVersions": True}
+    assert ("importCube", (payload,)) in mgr.sio.calls
+    assert "setRestriction" not in mgr.sio.events()
 
 
 def test_emit_format_restricts_to_set_for_plain_code():
@@ -159,6 +190,17 @@ def test_update_event_format_repoints_set_code(session):
     assert event.format_label == PEASANT_LABEL
     assert new_name == "Peasant Cube Pod Draft"
     assert event.name == "Peasant Cube Pod Draft"
+
+
+def test_update_event_format_preserves_written_in_cube_case(session):
+    event = _seed_event(session)
+    code = pod_format.write_in_cube_code("LSVCube")
+
+    update_event_format(session, event.id, code)
+
+    assert event.set_code == code
+    assert event.set_id is None
+    assert event.format_label == "LSVCube"
 
 
 def test_update_event_format_renumbers_against_target_set(session):

@@ -736,7 +736,7 @@ def record_ondemand_event(
     """Insert a kind='tournament' pod with no sesh post — the shared creation path for the daily poll
     and /pod-queue. The roster is seeded by the caller from the signal's members; rounds and champion
     finalize exactly like a sesh-born tournament."""
-    code = set_code.upper()
+    code = set_code if pod_format.is_write_in_cube(set_code) else set_code.upper()
     event = PodDraftEvent(
         event_date=pod_event_date(event_time),
         event_time=event_time,
@@ -794,8 +794,9 @@ def record_table_event(session: Session, *, source_event_id: str, format_code: s
     source = session.get(PodDraftEvent, source_event_id)
     if source is None:
         raise ValueError(f"source pod event {source_event_id} not found")
-    code = (format_code or source.set_code or "").upper()
-    same_format = code == (source.set_code or "").upper()
+    raw = format_code or source.set_code or ""
+    code = raw if pod_format.is_write_in_cube(raw) else raw.upper()
+    same_format = raw.upper() == (source.set_code or "").upper()
     base_name = table_base_name(source.name)
     table_index = next_table_index(session, base_name)
     session_id = build_table_session(session, source.draftmancer_session, table_index)
@@ -891,7 +892,7 @@ def update_event_format(session: Session, event_id: str, code: str) -> str | Non
 
 def _set_event_names(session: Session, code: str) -> list[str]:
     return list(session.execute(
-        select(PodDraftEvent.name).where(PodDraftEvent.set_code == code.upper())
+        select(PodDraftEvent.name).where(func.upper(PodDraftEvent.set_code) == code.upper())
     ).scalars())
 
 

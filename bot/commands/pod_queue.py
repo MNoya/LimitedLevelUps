@@ -29,8 +29,12 @@ from bot.discord_helpers import NBSP, resolve_pod_chat_channel
 from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
 from bot.services.pod_draft_manager import set_event_pick_timer
-from bot.services.pod_format import custom_formats, default_pick_timer_for, format_display, is_custom
-from bot.services.pod_format_select import WRITE_IN_VALUE, set_select_option, write_in_option
+from bot.services.pod_format import (
+    custom_formats, default_pick_timer_for, format_display, is_custom, is_write_in_cube, resolve_write_in,
+)
+from bot.services.pod_format_select import (
+    WRITE_IN_VALUE, set_select_option, write_in_cube_option, write_in_option,
+)
 from bot.services.pod_pairing_select import SELECT_PLACEHOLDER as PAIRING_PLACEHOLDER
 from bot.services.pod_pairing_select import pairing_options
 from bot.services.ping_roles import announce_pod_grant
@@ -225,7 +229,7 @@ def _opened_line(opened_at: datetime | None, opened_by: str | None) -> str | Non
 def _queue_title(role_mention: str | None, set_code: str | None) -> str:
     """`SET Pod Draft Queue {emoji}` so a non-default queue is legible before anyone joins. The queue
     role is itself named "Pod Draft Queue", so its mention doubles as the label and the ping."""
-    code = (set_code or active_set_code()).upper()
+    code = set_code or active_set_code()
     return f"{format_display(code)} {role_mention or QUEUE_TITLE} {fi.format_emoji(code)}"
 
 
@@ -473,7 +477,9 @@ def _set_options(current: str | None) -> list[discord.SelectOption]:
     known = {active_upper} | {fmt.code for fmt in cubes} | {code.upper() for code in recent}
 
     options: list[discord.SelectOption] = [write_in_option("Set")]
-    if chosen not in known:
+    if is_write_in_cube(current):
+        options.append(write_in_cube_option(current, "Set"))
+    elif chosen not in known:
         options.append(set_select_option(
             chosen, label=f"Set: {chosen}", description=set_name_for(chosen), default=True))
     options.append(set_select_option(
@@ -501,15 +507,22 @@ class _LauncherSetSelect(discord.ui.Select):
         await self.view.rerender(interaction)
 
 
-class _LauncherSetModal(discord.ui.Modal, title="Draft a different set"):
-    code = discord.ui.TextInput(label="Set code", placeholder="e.g. FIN", min_length=2, max_length=8)
+class _LauncherSetModal(discord.ui.Modal, title="Write in a format"):
+    code = discord.ui.TextInput(
+        label="Set code or CubeCobra cube",
+        placeholder="A set code (like FIN, MH3, etc.) or a CubeCobra name or link", min_length=1, max_length=200)
 
     def __init__(self, view: "DraftLauncherView") -> None:
         super().__init__()
         self.launcher = view
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        self.launcher.set_format(self.code.value.strip().upper())
+        resolved = resolve_write_in(self.code.value)
+        if resolved is None:
+            await interaction.response.send_message(
+                "⚠️ Enter a set code or a CubeCobra cube name or link", ephemeral=True)
+            return
+        self.launcher.set_format(resolved)
         await self.launcher.rerender(interaction)
 
 
@@ -710,7 +723,7 @@ async def _open_queue(
         notify_role=role, description=description,
     )
     await _open_discussion_thread(message, set_code, description, interaction.user, signal_id)
-    resolved_set = (set_code or active_set_code()).upper()
+    resolved_set = set_code or active_set_code()
     queue_name = LAUNCHER_QUEUE_NAME.format(set_code=format_display(resolved_set))
     await _announce_pod(interaction, message.channel.id, CHAT_ANNOUNCE_QUEUE.format(
         mention=interaction.user.mention, symbol=_announce_symbol(resolved_set), name=queue_name,
@@ -816,7 +829,8 @@ async def _schedule_pod(
         await interaction.edit_original_response(content=LAUNCHER_SCHEDULE_NO_CHANNEL, view=None)
         return
     role = derived_notify_role(when, notify)
-    resolved_set = (set_code or active_set_code()).upper()
+    raw_set = set_code or active_set_code()
+    resolved_set = raw_set if is_write_in_cube(raw_set) else raw_set.upper()
     name = await asyncio.to_thread(pod_launch.ondemand_event_name_sync, resolved_set, when)
     opener = [(str(interaction.user.id), interaction.user.display_name)]
     event_id = await post_scheduled_card(
@@ -884,7 +898,7 @@ def _announce_symbol(set_code: str) -> str:
 
 def _joinable_line(guild: discord.Guild, signal) -> str:
     url = f"https://discord.com/channels/{guild.id}/{signal.channel_id}/{signal.message_id}"
-    set_code = (signal.set_code or active_set_code()).upper()
+    set_code = signal.set_code or active_set_code()
     if signal.kind == KIND_QUEUE or signal.slot_time is None:
         name = LAUNCHER_QUEUE_NAME.format(set_code=format_display(set_code))
     else:

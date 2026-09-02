@@ -18,6 +18,9 @@ from bot.services.pod_format import (
     SELECT_PLACEHOLDER,
     custom_formats,
     format_applied_message,
+    format_display,
+    is_write_in_cube,
+    resolve_write_in,
 )
 from bot.sets import active_set_code, flashback_picker_sets
 
@@ -42,7 +45,15 @@ def write_in_option(label_prefix: str) -> discord.SelectOption:
     """The 'write in any set code' launcher row, shared by the /draft set picker and the Settings
     format picker so its copy stays identical; `label_prefix` is 'Set' or 'Format' to match the picker."""
     return discord.SelectOption(
-        label=f"{label_prefix}: Write-in Code", value=WRITE_IN_VALUE, description="Draft any other set",
+        label=f"{label_prefix}: Write-in Code", value=WRITE_IN_VALUE,
+        description="A Set Code or a CubeCobra list",
+    )
+
+
+def write_in_cube_option(current_code: str, label_prefix: str = "Format") -> discord.SelectOption:
+    return discord.SelectOption(
+        label=f"{label_prefix}: {format_display(current_code)}", value=current_code,
+        description="Custom Cube", emoji=fi.cube_emoji(), default=True,
     )
 
 
@@ -57,7 +68,9 @@ def format_options(current_code: str | None) -> list[discord.SelectOption]:
     recent = flashback_picker_sets()
     known = {active} | {seed.code for seed in recent} | set(CUSTOM_FORMATS)
     options = [write_in_option("Format")]
-    if cur and cur not in known:
+    if is_write_in_cube(current_code):
+        options.append(write_in_cube_option(current_code))
+    elif cur and cur not in known:
         options.append(set_select_option(
             cur, label=f"Format: {cur}", description="Written-in set code", default=True,
         ))
@@ -118,12 +131,12 @@ class FormatSelect(ui.Select):
         )
 
 
-class FormatWriteInModal(ui.Modal, title="Write in a set code"):
+class FormatWriteInModal(ui.Modal, title="Write in a format"):
     code = ui.TextInput(
-        label="Set code",
-        placeholder="e.g. MH3, FIN, DSK",
-        min_length=2,
-        max_length=5,
+        label="Set code or CubeCobra cube",
+        placeholder="A set code (like FIN, MH3, etc.) or a CubeCobra name or link",
+        min_length=1,
+        max_length=200,
         required=True,
     )
 
@@ -132,11 +145,10 @@ class FormatWriteInModal(ui.Modal, title="Write in a set code"):
         self._on_code = on_code
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        typed = self.code.value.strip().upper()
-        if not typed.isalnum():
+        resolved = resolve_write_in(self.code.value)
+        if resolved is None:
             await interaction.response.send_message(
-                f"⚠️ `{self.code.value}` isn't a valid set code. Use letters and numbers only",
-                ephemeral=True,
+                "⚠️ Enter a set code or a CubeCobra cube name or link", ephemeral=True,
             )
             return
-        await self._on_code(interaction, typed)
+        await self._on_code(interaction, resolved)

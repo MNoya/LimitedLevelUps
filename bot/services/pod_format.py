@@ -11,6 +11,7 @@ The selector UI that drives this lives in `lobby_embed.FormatSelectView`.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -71,6 +72,54 @@ CUSTOM_FORMATS: dict[str, PodFormat] = {
 
 _CARD_LIST_CACHE: dict[str, str] = {}
 
+CUBE_MARKER = "cube:"
+
+
+def parse_cube_input(raw: str) -> str:
+    text = raw.strip()
+    match = re.search(
+        r"cubecobra\.com/cube/(?:list|overview|playtest|blog|analysis)/([^/?#\s]+)", text, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return text.strip("/")
+
+
+def write_in_cube_code(cube_id: str) -> str:
+    return f"{CUBE_MARKER}{cube_id}"
+
+
+def is_write_in_cube(code: str | None) -> bool:
+    return bool(code) and code.lower().startswith(CUBE_MARKER)
+
+
+def resolve_write_in(raw: str) -> str | None:
+    text = raw.strip()
+    if not text:
+        return None
+    if "cubecobra.com" in text.lower() or "/" in text:
+        cube_id = parse_cube_input(text)
+        return write_in_cube_code(cube_id) if cube_id else None
+    upper = text.upper()
+    if is_known_set(upper) or re.fullmatch(r"[A-Z0-9]{2,5}", upper):
+        return upper
+    return write_in_cube_code(text)
+
+
+def _write_in_cube_format(code: str | None) -> PodFormat | None:
+    if not is_write_in_cube(code):
+        return None
+    cube_id = code[len(CUBE_MARKER):]
+    slug = re.sub(r"[^A-Za-z0-9]", "", cube_id).upper() or "CUBE"
+    return PodFormat(
+        code=code, label=cube_id, cube_id=cube_id, session_slug=slug, link_text=cube_id, pick_label=cube_id)
+
+
+def _format_for(code: str | None) -> PodFormat | None:
+    if not code:
+        return None
+    return CUSTOM_FORMATS.get(code.upper()) or _write_in_cube_format(code)
+
+
 SELECT_PLACEHOLDER = "Select a format"
 FORMAT_LOCKED_MSG = "The format can't be changed once the draft has started"
 def custom_formats() -> list[PodFormat]:
@@ -92,6 +141,8 @@ def format_choices() -> list[tuple[str, str]]:
 
 def resolve_format_code(value: str | None) -> str | None:
     """Normalize a set option to a stored code, or None when it isn't a registered set/cube."""
+    if is_write_in_cube(value):
+        return value
     code = (value or active_set_code()).strip().upper()
     if is_known_set(code) or is_custom(code):
         return code
@@ -99,7 +150,7 @@ def resolve_format_code(value: str | None) -> str | None:
 
 
 def is_custom(code: str | None) -> bool:
-    return bool(code) and code.upper() in CUSTOM_FORMATS
+    return _format_for(code) is not None
 
 
 def is_latest_set(code: str | None) -> bool:
@@ -110,14 +161,14 @@ def is_latest_set(code: str | None) -> bool:
 
 
 def cube_id_for(code: str) -> str | None:
-    fmt = CUSTOM_FORMATS.get(code.upper())
+    fmt = _format_for(code)
     return fmt.cube_id if fmt else None
 
 
 def card_list_for(code: str | None) -> str | None:
     """The Draftmancer custom card list text for a format that ships one, read once and cached. None for
     a plain set or a CubeCobra import, which route through setRestriction/importCube instead."""
-    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    fmt = _format_for(code)
     if fmt is None or fmt.card_list_file is None:
         return None
     cached = _CARD_LIST_CACHE.get(fmt.code)
@@ -129,13 +180,13 @@ def card_list_for(code: str | None) -> str | None:
 
 def symbol_glyph_for(code: str | None) -> str | None:
     """The keyrune glyph a custom format renders its set symbol with; None falls back to the cube symbol."""
-    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    fmt = _format_for(code)
     return fmt.symbol_glyph if fmt else None
 
 
 def session_slug_for(code: str | None) -> str | None:
     """Short token used in the Draftmancer session id for a custom format; None for a plain set."""
-    fmt = CUSTOM_FORMATS.get(code.upper()) if code else None
+    fmt = _format_for(code)
     return fmt.session_slug if fmt else None
 
 
@@ -150,7 +201,7 @@ def detect_in_title(title: str) -> str | None:
 
 def label_for(code: str) -> str | None:
     """Display label for a custom (cube) format; None for a plain set — its name lives in the title."""
-    fmt = CUSTOM_FORMATS.get(code.upper())
+    fmt = _format_for(code)
     return fmt.label if fmt else None
 
 
@@ -183,21 +234,21 @@ def split_format_prefix(name: str) -> tuple[str | None, str]:
 def format_name(code: str) -> str:
     """The format's own name carrying no kind word: a cube's name, since the @Cube role mention beside it
     already says Cube, or a set's full name. `format_display` stays the short label for footers."""
-    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    fmt = _format_for(code)
     return fmt.pick_label if fmt is not None else set_name_for(code)
 
 
 def format_short_name(code: str) -> str:
     """The format named for a sentence that supplies its own kind word, `the next Late Peasant Pod`: a
     cube's short name, since Cube would land next to Pod, or the bare set code."""
-    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    fmt = _format_for(code)
     return fmt.link_text if fmt is not None else (code or "").upper()
 
 
 def format_name_link(code: str) -> str:
     """`format_name` with a cube's name linked to its CubeCobra page, so a reader can open the card list
     before signing up. A set has no list to open and stays plain text."""
-    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    fmt = _format_for(code)
     if fmt is None:
         return set_name_for(code)
     return f"[__**{fmt.pick_label}**__]({fmt.url})"
@@ -206,14 +257,14 @@ def format_name_link(code: str) -> str:
 def cube_list_link(code: str | None) -> str | None:
     """The cube's CubeCobra id linked to its card list, so a reader searching the site finds the same list
     under the same name. None for a set, which has no list to open."""
-    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    fmt = _format_for(code)
     if fmt is None:
         return None
     return f"[__**{fmt.cube_id}**__]({fmt.url})"
 
 
 def list_label(code: str | None) -> str | None:
-    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    fmt = _format_for(code)
     if fmt is None:
         return None
     return fmt.list_label
@@ -221,7 +272,7 @@ def list_label(code: str | None) -> str | None:
 
 def command_hint(code: str | None) -> str | None:
     """The `!<name>` prefix command that reprints a custom format's links, for a compact card hint."""
-    fmt = CUSTOM_FORMATS.get((code or "").upper())
+    fmt = _format_for(code)
     if fmt is None or fmt.command_name is None:
         return None
     return f"`!{fmt.command_name}`"

@@ -933,7 +933,7 @@ async def post_scheduled_card(
         if not starts_now:
             registered = await thread.send(
                 embed=build_registered_embed(
-                    set_code.upper(), pairing_mode, seating_mode,
+                    set_code, pairing_mode, seating_mode,
                     championship=is_championship(name), rsvp_hint=True,
                     channel_post_url=message.jump_url, guild=guild, event_time=event_time,
                 ),
