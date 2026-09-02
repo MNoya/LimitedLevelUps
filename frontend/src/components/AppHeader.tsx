@@ -1,10 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronDown, LogOut, User } from "lucide-react";
-import { GiCardPick, GiRoundTable, House, MdVideoLibrary, Rocket, TbListNumbers, Trophy } from "./Icons";
+import { ExternalLink, GiCardPick, GiRoundTable, House, MdVideoLibrary, Rocket, TbListNumbers, Trophy } from "./Icons";
 import { DiscordIcon } from "./BrandIcons";
 import { ALogo, AWordmark, SetGlyph } from "./Brand";
+import { TcgPlayerLogo } from "./TcgPlayerLogo";
+import { Tooltip } from "./Tooltip";
 import { cn } from "../lib/utils";
+import { SITE_LINKS } from "../data/site";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { useAuth } from "../auth/useAuth";
 import { useP0P1FeaturedContest, useP0P1Picks, useP0P1Ratings, usePlayerSlugByDiscordId } from "../data/hooks";
@@ -42,7 +45,7 @@ export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = fals
   const brandHref = "/";
 
   const headerRef = useRef<HTMLElement>(null);
-  const brandRef = useRef<HTMLAnchorElement>(null);
+  const brandRef = useRef<HTMLDivElement>(null);
   const navMeasureRef = useRef<HTMLDivElement>(null);
   const authMeasureRef = useRef<HTMLSpanElement>(null);
 
@@ -113,6 +116,28 @@ export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = fals
     if (!hasMenu) setMenuOpen(false);
   }, [hasMenu]);
 
+  const sponsorLink = (logoClass: string) => (
+    <Tooltip
+      label={
+        <span className="inline-flex items-center gap-1.5">
+          Sponsored by TCGplayer
+          <ExternalLink size={12} />
+        </span>
+      }
+      side="bottom"
+    >
+      <a
+        rel="sponsored noreferrer"
+        href={SITE_LINKS.tcgplayer}
+        target="_blank"
+        aria-label="Sponsored by TCGplayer"
+        className="pointer-events-auto relative z-10 inline-flex items-center text-text hover:text-green transition-colors"
+      >
+        <TcgPlayerLogo className={logoClass} />
+      </a>
+    </Tooltip>
+  );
+
   return (
     <header
       ref={headerRef}
@@ -122,22 +147,30 @@ export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = fals
       )}
       style={fill && !isMobile ? { paddingRight: "calc(2.5rem + var(--app-scrollbar, 0px))" } : undefined}
     >
-      <Link
+      <div
         ref={brandRef}
-        to={brandHref}
         className={cn(
-          "flex items-center no-underline shrink-0",
+          "relative flex items-center shrink-0",
           isMobile ? "gap-3 pl-2" : "gap-6 pl-[13px]",
         )}
       >
+        <Link to={brandHref} aria-label="Home" className="absolute inset-0 z-0" />
         <div
-          className="flex items-center justify-center shrink-0 overflow-visible"
+          className="pointer-events-none flex items-center justify-center shrink-0 overflow-visible"
           style={{ height: isMobile ? 44 : 64 }}
         >
           <ALogo size={isMobile ? 42 : 55} />
         </div>
-        <AWordmark size={isMobile ? "sm" : "lg"} subtitle={subtitle} subtitleShort={subtitleShort} />
-      </Link>
+        <div className="pointer-events-none">
+          <AWordmark
+            size={isMobile ? "sm" : "lg"}
+            subtitle={subtitle}
+            subtitleShort={subtitleShort}
+            subtitleSlot={isMobile ? sponsorLink("h-[14px]") : undefined}
+            subtitleTrailing={isMobile ? undefined : sponsorLink("h-[13px]")}
+          />
+        </div>
+      </div>
 
       <div
         ref={navMeasureRef}
