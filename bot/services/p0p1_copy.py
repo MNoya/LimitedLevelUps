@@ -18,6 +18,12 @@ CHANGE_PICKS_EARLY_ACCESS = "Update anytime before the Early Access deadline"
 SYNTHETIC_CHALLENGER_TAG = f"**@{TOP_P0P1_CHALLENGER_ROLE_NAME}**"
 P0P1_ACCENT = discord.Color.from_str(P0P1_COLOR)
 REMINDER_ADDRESS = "{role_mention} if you haven't made your P0P1 picks yet!"
+CEREMONY_TITLE = "Pack 0 Pick 1 Challenge"
+CEREMONY_MARKER = "results are in"
+
+
+def ceremony_header(code: str) -> str:
+    return f"{code} {CEREMONY_TITLE}"
 
 
 def challenger_mention(role: discord.Role | None) -> str:
@@ -89,7 +95,7 @@ def ceremony(
     """The reveal-day podium. Each entry is already a mention for a member or a bold name for someone who
     left, so the send decides who actually gets pinged."""
     url = contest_url(contest.code, featured_code)
-    lines = [f"## [{contest.code} Pack 0 Pick 1 Challenge]({url}) results are in!",
+    lines = [f"## [{ceremony_header(contest.code)}]({url}) {CEREMONY_MARKER}!",
              f"### {challenger_mention}"]
     lines += [f"{medal} {name}" for medal, name in zip(PODIUM_MEDALS, podium)]
     lines.append(f"### {emojis.prefix('llu')}[**See the final standings**]({url})")

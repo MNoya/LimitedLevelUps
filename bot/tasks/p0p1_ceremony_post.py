@@ -27,7 +27,7 @@ from bot.sets import ALL_SETS
 
 log = logging.getLogger(__name__)
 
-REVEAL_WINDOW = timedelta(days=14)
+REVEAL_WINDOW = timedelta(hours=4)
 
 _bot: commands.Bot | None = None
 
@@ -160,16 +160,14 @@ def _set_channel(guild: discord.Guild, set_code: str) -> discord.TextChannel | N
 
 
 async def _already_announced(channel: discord.TextChannel, contest: p0p1_contest.Contest) -> bool:
-    """Whether this contest's reveal already sits in the channel, matched on the header and the contest name
-    so a prior contest's reveal does not suppress this one."""
     since = contest.scoring_date - timedelta(hours=1)
-    marker = "results are in"
+    header = p0p1_copy.ceremony_header(contest.code)
     try:
         async for message in channel.history(after=since, limit=200):
             if _bot is not None and _bot.user is not None and message.author.id != _bot.user.id:
                 continue
             body = message_text(message)
-            if marker in body and contest.name in body:
+            if p0p1_copy.CEREMONY_MARKER in body and header in body:
                 return True
     except discord.HTTPException:
         log.warning(f"p0p1-ceremony: could not read #{channel.name} history, skipping to avoid a repeat",
