@@ -12,6 +12,7 @@ export const SITE_LINKS = {
   podcast: "https://limitedlevelups.libsyn.com",
   youtube: "https://www.youtube.com/@limitedlevel-ups",
   twitch: "https://www.twitch.tv/chord_o_calls",
+  tcgplayer: "https://partner.tcgplayer.com/level-ups",
   apple: "https://podcasts.apple.com/us/podcast/limited-level-ups/id1486488039",
   spotify: "https://open.spotify.com/show/7LUZexiWvU1LM5xBpA7h2X",
   rss: "https://feeds.libsyn.com/limitedlevelups/rss",

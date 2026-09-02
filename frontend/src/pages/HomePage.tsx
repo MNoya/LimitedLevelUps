@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
 import { ChamferCta, CUT_CORNER_CHAMFER } from "../components/ChamferCta";
 import { DiscordIcon } from "../components/BrandIcons";
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Music, Play, Trophy } from "../components/Icons";
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Music, Play, Trophy } from "../components/Icons";
 import { EpisodeTag } from "../components/CategoryTag";
 import { EpisodeThumbnail } from "../components/EpisodeThumbnail";
 import { EpisodeEmbed, episodePlayability } from "../components/PlayableThumbnail";
@@ -17,6 +17,7 @@ import type { IconType } from "react-icons";
 import { Tooltip } from "../components/Tooltip";
 import { EpisodeLinkTooltip, episodeTitleHref } from "../components/EpisodeLink";
 import { AAvatar, fmtPts, SetGlyph, setGlyphCode } from "../components/Brand";
+import { TcgPlayerLogo } from "../components/TcgPlayerLogo";
 import { TierSetDropdown } from "../components/TierSetDropdown";
 import { boardModeFor, type BoardMode } from "../components/LeaderboardTable";
 import {
@@ -159,10 +160,11 @@ function Panel({
 }
 
 function IdentityPanel() {
-  const socials: Array<{ label: string; url: string; Icon: IconType }> = [
-    { label: "YouTube", url: SITE_LINKS.youtube, Icon: SiYoutube },
-    { label: "Twitch", url: SITE_LINKS.twitch, Icon: SiTwitch },
-    { label: "Patreon", url: SITE_LINKS.patreon, Icon: SiPatreon },
+  const socials: Array<{ label: string; tooltip: string; url: string; Icon?: IconType; logo?: string; sponsored?: boolean }> = [
+    { label: "YouTube", tooltip: "Watch on YouTube", url: SITE_LINKS.youtube, Icon: SiYoutube },
+    { label: "Twitch", tooltip: "Stream on Twitch", url: SITE_LINKS.twitch, Icon: SiTwitch },
+    { label: "Patreon", tooltip: "Support on Patreon", url: SITE_LINKS.patreon, Icon: SiPatreon },
+    { label: "TCGplayer", tooltip: "Sponsored by TCGplayer", url: SITE_LINKS.tcgplayer, logo: "/sponsors/tcgplayer-horizontal.png", sponsored: true },
   ];
   const offerings = ["Weekly episodes", "Set review tier lists", "Strategy discussion", "Community events"];
   const [aboutOpen, setAboutOpen] = useState(readAboutOpen);
@@ -226,19 +228,36 @@ function IdentityPanel() {
             @{HOST.handle}
           </a>
         </p>
-        <div className="grid grid-cols-3 gap-2">
-          {socials.map(({ label, url, Icon }) => (
-            <a
+        <div className="grid grid-cols-2 gap-2">
+          {socials.map(({ label, tooltip, url, Icon, logo, sponsored }) => (
+            <Tooltip
               key={label}
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="mono text-[12px] tracking-[0.04em] flex items-center justify-center gap-1.5 bg-surface2 py-2 text-subtle no-underline hover:bg-border hover:text-green transition-colors"
-              style={{ clipPath: CUT_CORNER_CHAMFER }}
+              label={
+                <span className="inline-flex items-center gap-1.5">
+                  {tooltip}
+                  <ExternalLink size={12} />
+                </span>
+              }
+              side="bottom"
             >
-              <Icon className="text-[13px]" />
-              {label}
-            </a>
+              <a
+                href={url}
+                target="_blank"
+                rel={sponsored ? "sponsored noreferrer" : "noreferrer"}
+                aria-label={tooltip}
+                className="font-display uppercase text-[15px] tracking-[0.1em] flex items-center justify-center gap-2 bg-surface2 py-2 text-subtle no-underline hover:bg-border hover:text-green transition-colors"
+                style={{ clipPath: CUT_CORNER_CHAMFER }}
+              >
+                {logo ? (
+                  <TcgPlayerLogo className="h-[15px]" />
+                ) : (
+                  <>
+                    {Icon ? <Icon className="text-[15px]" /> : null}
+                    {label}
+                  </>
+                )}
+              </a>
+            </Tooltip>
           ))}
         </div>
       </div>

@@ -12,7 +12,7 @@ const FOOTER_ICONS: Record<string, IconType> = {
   Patreon: SiPatreon,
 };
 
-const SPONSOR_HREF = "https://partner.tcgplayer.com/c/4928581/2794440/21018";
+const SPONSOR_HREF = SITE_LINKS.tcgplayer;
 const SPONSOR_IMG = "/sponsors/tcgplayer-stacked-offwhite.png";
 const SPONSOR_IMG_HOVER = "/sponsors/tcgplayer-stacked-hover.png";
 
