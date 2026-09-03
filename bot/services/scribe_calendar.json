@@ -216,30 +216,6 @@
     "end_date": "2026-08-30 11:00:00"
   },
   {
-    "title": "ACQ Play-In: Timeless Bo1",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "best-of-one"
-      },
-      {
-        "slug": "constructed"
-      },
-      {
-        "slug": "play-in"
-      },
-      {
-        "slug": "timeless"
-      }
-    ],
-    "utc_start_date": "2026-08-22 13:00:00",
-    "utc_end_date": "2026-08-23 10:00:00",
-    "start_date": "2026-08-22 09:00:00",
-    "end_date": "2026-08-23 06:00:00"
-  },
-  {
     "title": "Contender Draft: The Hobbit",
     "tags": [
       {
@@ -283,75 +259,6 @@
     "utc_end_date": "2026-09-08 15:00:00",
     "start_date": "2026-08-25 11:00:00",
     "end_date": "2026-09-08 11:00:00"
-  },
-  {
-    "title": "Midweek Magic: Brawl Builder Challenge",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "brawl"
-      },
-      {
-        "slug": "builder-challenge"
-      },
-      {
-        "slug": "midweek-magic"
-      }
-    ],
-    "utc_start_date": "2026-08-25 21:00:00",
-    "utc_end_date": "2026-08-27 21:00:00",
-    "start_date": "2026-08-25 17:00:00",
-    "end_date": "2026-08-27 17:00:00"
-  },
-  {
-    "title": "Spotlight Series Brisbane: Modern",
-    "tags": [
-      {
-        "slug": "constructed"
-      },
-      {
-        "slug": "lets-play-games"
-      },
-      {
-        "slug": "magic-spotlight-series"
-      },
-      {
-        "slug": "modern"
-      },
-      {
-        "slug": "tabletop"
-      }
-    ],
-    "utc_start_date": "2026-08-28 04:00:00",
-    "utc_end_date": "2026-08-31 03:59:59",
-    "start_date": "2026-08-28 00:00:00",
-    "end_date": "2026-08-30 23:59:59"
-  },
-  {
-    "title": "ACQ Play-In: Timeless Bo3",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "best-of-three"
-      },
-      {
-        "slug": "constructed"
-      },
-      {
-        "slug": "play-in"
-      },
-      {
-        "slug": "timeless"
-      }
-    ],
-    "utc_start_date": "2026-08-28 13:00:00",
-    "utc_end_date": "2026-08-29 10:00:00",
-    "start_date": "2026-08-28 09:00:00",
-    "end_date": "2026-08-29 06:00:00"
   },
   {
     "title": "Sealed: The Lord of the Rings + The Hobbit",
@@ -400,48 +307,6 @@
     "utc_end_date": "2026-09-06 15:00:00",
     "start_date": "2026-08-28 11:00:00",
     "end_date": "2026-09-06 11:00:00"
-  },
-  {
-    "title": "Standard Metagame Challenge",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "constructed"
-      },
-      {
-        "slug": "metagame-challenge"
-      },
-      {
-        "slug": "standard"
-      }
-    ],
-    "utc_start_date": "2026-08-28 15:00:00",
-    "utc_end_date": "2026-08-31 15:00:00",
-    "start_date": "2026-08-28 11:00:00",
-    "end_date": "2026-08-31 11:00:00"
-  },
-  {
-    "title": "ACQ Weekend: Timeless",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "constructed"
-      },
-      {
-        "slug": "qualifier"
-      },
-      {
-        "slug": "timeless"
-      }
-    ],
-    "utc_start_date": "2026-08-29 04:00:00",
-    "utc_end_date": "2026-08-31 03:59:59",
-    "start_date": "2026-08-29 00:00:00",
-    "end_date": "2026-08-30 23:59:59"
   },
   {
     "title": "Quick Draft: Secrets of Strixhaven",
@@ -597,6 +462,24 @@
     "end_date": "2026-09-29 11:00:00"
   },
   {
+    "title": "Midweek Magic: Momir",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "midweek-magic"
+      },
+      {
+        "slug": "momir"
+      }
+    ],
+    "utc_start_date": "2026-09-08 21:00:00",
+    "utc_end_date": "2026-09-10 21:00:00",
+    "start_date": "2026-09-08 17:00:00",
+    "end_date": "2026-09-10 17:00:00"
+  },
+  {
     "title": "US Regional Championship: Baltimore &#8211; Modern",
     "tags": [
       {
@@ -744,6 +627,30 @@
     "end_date": "2026-09-20 11:00:00"
   },
   {
+    "title": "Midweek Magic: The Hobbit Phantom Quick Draft",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "midweek-magic"
+      },
+      {
+        "slug": "phantom"
+      },
+      {
+        "slug": "quick-draft"
+      }
+    ],
+    "utc_start_date": "2026-09-15 21:00:00",
+    "utc_end_date": "2026-09-17 21:00:00",
+    "start_date": "2026-09-15 17:00:00",
+    "end_date": "2026-09-17 17:00:00"
+  },
+  {
     "title": "ACQ Play-In: Bo3 The Hobbit Sealed",
     "tags": [
       {
@@ -817,6 +724,30 @@
     "utc_end_date": "2026-09-29 15:00:00",
     "start_date": "2026-09-22 11:00:00",
     "end_date": "2026-09-29 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: The Hobbit Phantom Sealed",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "midweek-magic"
+      },
+      {
+        "slug": "phantom"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-09-22 21:00:00",
+    "utc_end_date": "2026-09-24 21:00:00",
+    "start_date": "2026-09-22 17:00:00",
+    "end_date": "2026-09-24 17:00:00"
   },
   {
     "title": "Reality Fracture Prerelease Weekend",
