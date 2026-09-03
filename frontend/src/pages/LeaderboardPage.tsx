@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { AppHeader } from "../components/AppHeader";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -754,7 +754,7 @@ function Mobile({
 
   const chromeRef = useRef<HTMLDivElement>(null);
   const [chromeHeight, setChromeHeight] = useState(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = chromeRef.current;
     if (!el) {
       return;

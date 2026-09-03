@@ -161,20 +161,26 @@ export function LeaderboardTable<T extends LeaderboardTableRow>({
       setPinMode("hidden");
       return;
     }
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setPinMode("hidden");
-        } else if (entry.boundingClientRect.top < stickyTop) {
-          setPinMode("overlay");
-        } else {
-          setPinMode("inflow");
-        }
-      },
-      { rootMargin: `${-stickyTop}px 0px 0px 0px`, threshold: 0 },
-    );
+    const evaluate = () => {
+      const rect = myRowEl.getBoundingClientRect();
+      if (rect.bottom > stickyTop && rect.top < window.innerHeight) {
+        setPinMode("hidden");
+      } else if (rect.top < stickyTop) {
+        setPinMode("overlay");
+      } else {
+        setPinMode("inflow");
+      }
+    };
+    const observer = new IntersectionObserver(evaluate, {
+      rootMargin: `${-stickyTop}px 0px 0px 0px`,
+      threshold: 0,
+    });
     observer.observe(myRowEl);
-    return () => observer.disconnect();
+    const raf = requestAnimationFrame(evaluate);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(raf);
+    };
   }, [myRowEl, stickyTop]);
 
   if (error) return <ErrorState error={error} compact={isMobile} />;
@@ -282,8 +288,8 @@ function FloatingOwnRow({
       <div
         onClick={onScrollToRow}
         className={cn(
-          "cursor-pointer border-b bg-surface",
-          variant === "mobile" ? "border-border" : "border-bg",
+          "cursor-pointer bg-surface",
+          variant === "mobile" ? "border-b border-border" : !inflow && "border-b border-bg",
           "bg-[linear-gradient(rgba(46,232,92,0.07),rgba(46,232,92,0.07))]",
           "shadow-[inset_3px_0_0_0_#2ee85c,inset_-3px_0_0_0_#2ee85c]",
         )}
