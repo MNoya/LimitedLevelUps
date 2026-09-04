@@ -235,12 +235,13 @@ def set_rally_fired_hook(callback) -> None:
     _RALLY_FIRED_HOOK = callback
 
 
-def notify_rally_fired(bot, event_id: str) -> None:
-    """Delete any `!pod` rally still asking for players (no-op if unset). A rally is a static post in
-    whichever channel it was called from, so without this it would keep sending people to a pod that is
-    already drafting."""
+def notify_rally_fired(bot, event_id: str, player_count: int, thread_url: str) -> None:
+    """Rewrite any `!pod` rally still asking for players into the fired record (no-op if unset). A rally is
+    a static post in whichever channel it was called from, so without this it would keep sending people to a
+    pod that is already drafting. Editing keeps the caller's own `!pod` message answered instead of leaving
+    it hanging with no reply above it."""
     if _RALLY_FIRED_HOOK is not None:
-        asyncio.create_task(_RALLY_FIRED_HOOK(bot, event_id))
+        asyncio.create_task(_RALLY_FIRED_HOOK(bot, event_id, player_count, thread_url))
 
 
 def set_seeding_refresh_hook(callback) -> None:
@@ -2589,7 +2590,9 @@ class PodDraftManager:
                 notify_underfill_fired(
                     self.bot, self.event_id, player_count=seated, thread_url=thread.jump_url,
                 )
-                notify_rally_fired(self.bot, self.event_id)
+                notify_rally_fired(
+                    self.bot, self.event_id, player_count=seated, thread_url=thread.jump_url,
+                )
 
     def _odd_roster_blocks_start(self) -> bool:
         """Whether an odd roster must stop this draft. A mock plays no rounds, so it drafts happily at seven,

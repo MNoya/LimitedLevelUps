@@ -20,6 +20,7 @@ from discord.ext import commands
 from bot import audit, emojis
 from bot.config import settings
 from bot.services import pod_launch, pod_rally
+from bot.services.pod_schedule import build_underfill_fired_message
 from bot.services.pod_active import active_manager_for_channel
 from bot.services.pod_draft_manager import set_rally_fired_hook
 from bot.services.pod_join_button import build_join_view
@@ -43,7 +44,7 @@ _LAST_RALLY: dict[int, PostedRally] = {}
 
 
 async def setup(bot: commands.Bot) -> None:
-    set_rally_fired_hook(retire_rally_on_start)
+    set_rally_fired_hook(finish_rally_on_start)
 
     @bot.command(name="pod")
     async def pod_cmd(ctx: commands.Context, *, note: str = "") -> None:
@@ -103,19 +104,21 @@ def _join_view(target: pod_rally.RallyTarget) -> discord.ui.View | None:
     return None
 
 
-async def retire_rally_on_start(bot, event_id: str) -> None:
-    """Delete every standing rally for this pod once its draft starts. A rally is a static post in whichever
-    channel someone called it from, so left alone it would keep asking for players for a pod that is already
-    drafting. It is deleted instead of rewritten because pod-chat posts the fired record fresh at the same
-    moment, and a rally holds nothing the record does not."""
+async def finish_rally_on_start(bot, event_id: str, player_count: int, thread_url: str) -> None:
+    """Rewrite every standing rally for this pod into the fired record once its draft starts. A rally is a
+    static post in whichever channel someone called it from, so left alone it would keep asking for players
+    for a pod that is already drafting. Editing it in place keeps the caller's own `!pod` message answered
+    instead of deleting the reply and leaving the question hanging with no context above it."""
     for channel_id, rally in list(_LAST_RALLY.items()):
         if rally.event_id != event_id:
             continue
         del _LAST_RALLY[channel_id]
+        record = build_underfill_fired_message(rally.name, player_count, thread_url)
         try:
-            await rally.message.delete()
+            await rally.message.edit(content=record, view=None, suppress=True,
+                                     allowed_mentions=discord.AllowedMentions.none())
         except discord.HTTPException:
-            log.warning(f"could not delete the rally for event {event_id} at draft start", exc_info=True)
+            log.warning(f"could not rewrite the rally for event {event_id} at draft start", exc_info=True)
 
 
 async def _retire_previous_rally(channel) -> None:
