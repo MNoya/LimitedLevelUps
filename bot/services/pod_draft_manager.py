@@ -2634,7 +2634,7 @@ class PodDraftManager:
     async def seating_lobby_order(self) -> list[tuple[str, str]]:
         """Current non-bot lobby users in Draftmancer order, as (userName, display_label)."""
         names = [u.get("userName") for u in self.player_session_users() if u.get("userID")]
-        classified = await asyncio.to_thread(_classify_names_sync, names)
+        classified, _ = await asyncio.to_thread(_classify_names_sync, names)
         return [(name, display or name) for name, display in classified]
 
     async def set_seating_order(self, ordered_user_names: list[str]) -> str | None:
@@ -4292,7 +4292,7 @@ def _rsvp_display_name(rsvp: str, mention_map: dict[int, str]) -> str | None:
     return text
 
 
-def _classify_names_sync(names: list[str]) -> list[tuple[str, str | None]]:
+def _classify_names_sync(names: list[str]) -> tuple[list[tuple[str, str | None]], frozenset[str]]:
     with SessionLocal() as session:
         return classify_lobby_names(session, names)
 

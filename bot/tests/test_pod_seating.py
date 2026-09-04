@@ -1,7 +1,9 @@
+import asyncio
 from datetime import date
 
 from bot.models import MagicSet, Player, PlayerStats
 from bot.services.player_stats import leaderboard_seat_order, seated_ring_order
+from bot.services.pod_draft_manager import PodDraftManager
 from bot.services.pod_seating_select import parse_seat_reorder
 
 ORDER = ["alice#1", "bob#2", "carol#3", "dave#4"]
@@ -36,6 +38,18 @@ def test_seated_ring_order_non_eight_has_no_swap():
     # Six players: top half in order, bottom half reversed, no 3<->4 / 5<->6 swap
     ranked = ["r1", "r2", "r3", "r4", "r5", "r6"]
     assert seated_ring_order(ranked) == ["r1", "r2", "r3", "r6", "r5", "r4"]
+
+
+def test_seating_lobby_order_returns_name_display_pairs(session):
+    mgr = PodDraftManager(object(), "evt", "sid", 123, "SOS", 8)
+    mgr.session_users = [
+        {"userID": "1", "userName": "Ava"},
+        {"userID": "2", "userName": "Bram"},
+    ]
+
+    order = asyncio.run(mgr.seating_lobby_order())
+
+    assert order == [("Ava", "Ava"), ("Bram", "Bram")]
 
 
 def _seed_set(session, code="SOS"):
