@@ -1212,6 +1212,7 @@ async def demote_clashing_signups(
     clashing = await asyncio.to_thread(
         pod_confirm.clashing_signups_sync, confirmed_event_id, str(user.id),
     )
+    clashing = await _drop_family_siblings(confirmed_event_id, clashing)
     if not clashing:
         return
     log.info(f"{user} confirmed {confirmed_name}, demoting {len(clashing)} clashing signups to Maybe")
@@ -1220,6 +1221,15 @@ async def demote_clashing_signups(
         await set_card_rsvp(bot, user, pod.card_message_id, RSVP_MAYBE)
         await _announce_clashing_maybe(bot, pod, user, confirmed_link)
         await _refresh_launcher_for_event(bot, pod.event_id)
+
+
+async def _drop_family_siblings(
+    confirmed_event_id: str, clashing: list[pod_confirm.ClashingSignup],
+) -> list[pod_confirm.ClashingSignup]:
+    if not clashing:
+        return clashing
+    family_ids = {pod.event_id for pod in await asyncio.to_thread(pod_family_sync, confirmed_event_id)}
+    return [pod for pod in clashing if pod.event_id not in family_ids]
 
 
 async def _announce_clashing_maybe(

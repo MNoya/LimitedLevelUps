@@ -769,6 +769,8 @@ def set_rsvp(
         ))
         signal.last_activity_at = datetime.now(timezone.utc)
         joined = rsvp == pod_signals.RSVP_YES
+    if rsvp == pod_signals.RSVP_YES and event is not None:
+        _drop_split_sibling_memberships(session, event, discord_user_id)
     session.flush()
     rosters, new_drafters = _members_by_rsvp(session, signal.id)
     roster_interests = _render_interests(session, signal)
@@ -781,6 +783,29 @@ def set_rsvp(
         event_time=event.event_time if event is not None else None,
         confirmed=confirming and rsvp == pod_signals.RSVP_YES,
     )
+
+
+def _drop_split_sibling_memberships(session: Session, event: PodDraftEvent, discord_user_id: str) -> None:
+    if not pod_is_numbered(event.name):
+        return
+    base = pod_base_name(event.name)
+    rows = session.execute(
+        select(PodSignal.id, PodDraftEvent.name)
+        .join(PodDraftEvent, PodDraftEvent.id == PodSignal.event_id)
+        .where(
+            PodDraftEvent.id != event.id,
+            PodDraftEvent.event_time == event.event_time,
+            PodDraftEvent.finalized_at.is_(None),
+        )
+    ).all()
+    sibling_ids = [signal_id for signal_id, name in rows if pod_base_name(name) == base]
+    if sibling_ids:
+        session.execute(
+            delete(PodSignalMember).where(
+                PodSignalMember.signal_id.in_(sibling_ids),
+                PodSignalMember.discord_user_id == discord_user_id,
+            )
+        )
 
 
 def _inside_confirmation_window(event: PodDraftEvent | None, rsvp: str) -> bool:

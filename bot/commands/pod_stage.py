@@ -102,12 +102,23 @@ async def stage_pods(bot: commands.Bot, event_id: str) -> None:
                 bot, event_id, source, members, index,
                 moved[offset - 1], maybes if last else [], unconfirmed if last else [],
             )
+        await _reclaim_source_roster(event_id, groups, unconfirmed, maybes)
     if signup_card is not None:
         await render_pod_overview(bot, event_id, signup_card[2])
     family = await asyncio.to_thread(pod_family_sync, event_id)
     if len(family) < 2 or signup_thread is None:
         return
     await _point_at_the_tables(event_id, family, signup_thread)
+
+
+async def _reclaim_source_roster(
+    event_id: str, groups: list[list[Signup]], unconfirmed: list[Signup], maybes: list[Signup],
+) -> None:
+    handed = [signup for group in groups[1:] for signup in group] + unconfirmed
+    if handed:
+        await asyncio.to_thread(hand_over_members_sync, event_id, handed)
+    if maybes:
+        await asyncio.to_thread(hand_over_maybes_sync, event_id, maybes)
 
 
 async def _maybes_for_the_last_table(event_id: str, groups: list[list[Signup]]) -> list[Signup]:

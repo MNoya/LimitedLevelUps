@@ -322,6 +322,48 @@ def test_a_pod_already_drafting_is_not_a_clash(session, scheduled_signal, monkey
     assert clashing == []
 
 
+def test_confirming_a_split_table_drops_the_player_from_its_sibling(session):
+    """A Yes on one table of a split takes the player off its siblings."""
+    start = datetime.now(timezone.utc) + timedelta(minutes=10)
+    pod_one = _split_sibling(session, "Early Pod 1", start, message_id="7001")
+    pod_two = _split_sibling(session, "Early Pod 2", start, message_id="7002")
+    set_rsvp(session, "7001", "u30", "Finkel", pod_signals.RSVP_YES, confirming=True)
+
+    set_rsvp(session, "7002", "u30", "Finkel", pod_signals.RSVP_YES, confirming=True)
+
+    on_pod_one = _member_count(session, pod_one.id, "u30")
+    on_pod_two = _member_count(session, pod_two.id, "u30")
+    assert (on_pod_one, on_pod_two) == (0, 1)
+
+
+def _split_sibling(session, name: str, start: datetime, *, message_id: str) -> PodDraftEvent:
+    event = PodDraftEvent(
+        name=name, set_code="HOB", discord_thread_id=message_id,
+        draftmancer_session=f"llu-{message_id}", socket_status="pending",
+        event_date=start.date(), event_time=start,
+    )
+    session.add(event)
+    session.flush()
+    signal = PodSignal(
+        kind=pod_signals.KIND_SCHEDULED, bucket=pod_signals.SCHEDULED_BUCKET,
+        guild_id="1", channel_id="2", message_id=message_id,
+        signal_date=start.date(), slot_time=start, status=pod_signals.STATUS_FIRED,
+        event_id=event.id,
+    )
+    session.add(signal)
+    session.flush()
+    return event
+
+
+def _member_count(session, event_id: str, discord_user_id: str) -> int:
+    return (
+        session.query(PodSignalMember)
+        .join(PodSignal, PodSignal.id == PodSignalMember.signal_id)
+        .filter(PodSignal.event_id == event_id, PodSignalMember.discord_user_id == discord_user_id)
+        .count()
+    )
+
+
 def _pod_starting_in(session, *, minutes: int) -> PodDraftEvent:
     event = PodDraftEvent(
         name=f"Pod in {minutes}", set_code="CUBE", discord_thread_id="77",
