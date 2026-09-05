@@ -123,6 +123,7 @@ class PodScheduleOverrideView(ui.View):
         if self.day is None or self.slot_key is None:
             await interaction.response.send_message(MSG_PICK_DAY_POD, ephemeral=True)
             return
+        await interaction.response.defer()
         formats = self.formats()
         day = datetime.fromisoformat(self.day).date()
         slot_keys = (SLOT_EARLY, SLOT_LATE) if self.slot_key == SLOT_BOTH else (self.slot_key,)
@@ -130,8 +131,10 @@ class PodScheduleOverrideView(ui.View):
             for slot_key in slot_keys:
                 set_slot(session, day, slot_key, formats, decided_by=str(interaction.user.id))
             session.commit()
-        await interaction.response.edit_message(content=self._confirmation(day, formats), view=None)
-        await refresh_schedule_post(interaction.channel, view=PodScheduleView())
+        await interaction.edit_original_response(content=self._confirmation(day, formats), view=None)
+        run_detached(
+            refresh_schedule_post(interaction.channel, view=PodScheduleView()), label="schedule-override-refresh",
+        )
         run_detached(retarget_launcher_day(interaction.client, day), label="schedule-override-retarget")
 
     def _confirmation(self, day, formats: list[str]) -> str:

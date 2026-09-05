@@ -630,7 +630,7 @@ async def handle_team_report(
 
             asyncio.create_task(maybe_post_team_trophy_hype(manager))
     await refresh_board_messages(event_id, data, board_message)
-    await sync_round_reveals(event_id, data)
+    await sync_round_reveals(event_id, data, board_message, interaction.client)
 
 
 def _player_has_no_pending(data: TeamBoardData, name: str) -> bool:
@@ -679,22 +679,28 @@ def _round_all_reported(data: TeamBoardData, round_num: int) -> bool:
     return False
 
 
-async def sync_round_reveals(event_id: str, data: TeamBoardData) -> None:
+async def sync_round_reveals(
+    event_id: str, data: TeamBoardData,
+    clicked_message: discord.Message | None = None, client: discord.Client | None = None,
+) -> None:
     """Post and refresh the per-round reveal blocks for rounds after the first. A round's reveal is
     posted the first time one of its matches becomes playable, then re-rendered on every later report so
     its results and cumulative footer stay current. The big block stays the full board; reveals exist so
     a freshly playable round surfaces without scrolling back up. Best-effort — a reveal that fails to
     post or edit never blocks the report, which the big block already recorded."""
     manager = ACTIVE_POD_MANAGERS.get(event_id)
-    if manager is None:
-        return
-    thread = await manager._fetch_thread()
+    thread = clicked_message.channel if clicked_message is not None else await _board_channel(manager)
     if thread is None:
         return
+    if manager is not None:
+        reveals = manager.team_reveal_messages
+    else:
+        bot_user = client.user if client is not None else None
+        reveals = await find_reveal_messages(thread, bot_user)
     for round_num, _matches in data.rounds:
         if round_num <= 1:
             continue
-        existing = manager.team_reveal_messages.get(round_num)
+        existing = reveals.get(round_num)
         if existing is not None:
             try:
                 await existing.edit(view=build_team_round_view(data, round_num))
@@ -708,7 +714,9 @@ async def sync_round_reveals(event_id: str, data: TeamBoardData) -> None:
         except discord.HTTPException:
             log.warning(f"[TEAM] reveal_post_failed event={event_id} round={round_num}", exc_info=True)
             continue
-        manager.team_reveal_messages[round_num] = message
+        reveals[round_num] = message
+        if manager is not None:
+            manager.team_reveal_messages[round_num] = message
         log.info(f"[TEAM] reveal_posted event={event_id} round={round_num}")
 
 

@@ -14,6 +14,7 @@ from bot import audit
 from bot.commands import descriptions as desc
 from bot.commands.messages import MSG_NOT_ON_BOARD
 from bot.database import SessionLocal
+from bot.discord_helpers import run_detached
 from bot.models import DraftEvent, Player, PlayerStats
 from bot.services import bot_log
 
@@ -71,6 +72,7 @@ class ConfirmExileView(discord.ui.View):
 
     @discord.ui.button(label="Yes, delete my data", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.defer()
         with SessionLocal() as session:
             result = process_delete_account(session, self.user_id)
         audit.event(
@@ -78,13 +80,16 @@ class ConfirmExileView(discord.ui.View):
             deleted_player_id=result.deleted_player_id,
         )
         logger.info(f"exile: {interaction.user} deleted player_id={result.deleted_player_id}")
-        if result.kind == "deleted":
-            await bot_log.get(self.bot).post_plain(
-                f"🚪 **{interaction.user.display_name}** exiled from the leaderboard"
-            )
-        await interaction.response.edit_message(
+        await interaction.edit_original_response(
             content=MSG_DELETED if result.kind == "deleted" else MSG_NOT_ON_BOARD, view=None,
         )
+        if result.kind == "deleted":
+            run_detached(
+                bot_log.get(self.bot).post_plain(
+                    f"🚪 **{interaction.user.display_name}** exiled from the leaderboard"
+                ),
+                label="exile_oversight",
+            )
         self.stop()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)

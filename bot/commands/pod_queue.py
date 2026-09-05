@@ -25,7 +25,7 @@ from bot.commands import descriptions as desc
 from bot.commands.messages import MSG_LOBBY_GATHERING, MSG_PLAYERS_JOINED
 from bot.commands.pod_rsvp import parse_new_time, post_scheduled_card
 from bot.config import settings
-from bot.discord_helpers import NBSP, resolve_pod_chat_channel
+from bot.discord_helpers import NBSP, resolve_pod_chat_channel, run_detached
 from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
 from bot.services.pod_draft_manager import set_event_pick_timer
@@ -138,11 +138,12 @@ class _QueueCancelConfirm(discord.ui.View):
 
     @discord.ui.button(label="Close Queue", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.defer()
         resolution = await asyncio.to_thread(
             pod_launch.resolve_last_leave_sync, str(self.card.id), str(interaction.user.id),
         )
         if resolution.outcome == pod_launch.LEAVE_GONE:
-            await interaction.response.edit_message(content="This queue already closed", view=None)
+            await interaction.edit_original_response(content="This queue already closed", view=None)
             return
         mention = role_mention_for(interaction.guild, resolution.notify_role)
         if resolution.outcome == pod_launch.LEAVE_LEFT:
@@ -151,19 +152,22 @@ class _QueueCancelConfirm(discord.ui.View):
                 opened_at=resolution.created_at, opened_by=resolution.opened_by,
                 description=resolution.description,
             )
-            await self.card.edit(view=view)
-            await _remove_from_discussion_thread(
-                str(self.card.id), interaction.guild, interaction.client, interaction.user,
+            await interaction.edit_original_response(content=QUEUE_CANCEL_LEFT, view=None)
+            run_detached(self.card.edit(view=view), label="queue_card_left")
+            run_detached(
+                _remove_from_discussion_thread(
+                    str(self.card.id), interaction.guild, interaction.client, interaction.user,
+                ),
+                label="queue_cancel_thread",
             )
-            await interaction.response.edit_message(content=QUEUE_CANCEL_LEFT, view=None)
             return
         reason = QUEUE_CLOSED_MANUAL.format(when=f"<t:{int(datetime.now(timezone.utc).timestamp())}:R>")
         view = PodQueueView(
             role_mention=mention, close_reason=reason, set_code=resolution.set_code,
             opened_at=resolution.created_at, opened_by=resolution.opened_by,
         )
-        await self.card.edit(view=view)
-        await interaction.response.edit_message(content=reason, view=None)
+        await interaction.edit_original_response(content=reason, view=None)
+        run_detached(self.card.edit(view=view), label="queue_card_closed")
 
     @discord.ui.button(label="Stay in Queue", style=discord.ButtonStyle.secondary)
     async def keep(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -262,20 +266,22 @@ def derived_notify_role(scheduled_time: datetime | None, notify: bool) -> str | 
 
 
 async def _handle_click(interaction: discord.Interaction, action: str) -> None:
+    if not interaction.response.is_done():
+        await interaction.response.defer()
     message_id = str(interaction.message.id)
     result = await asyncio.to_thread(
         pod_launch.set_membership_sync,
         message_id, QUEUE_BUCKET, str(interaction.user.id), interaction.user.display_name, action,
     )
     if result is None:
-        await interaction.response.send_message("This queue is no longer active", ephemeral=True)
+        await interaction.followup.send("This queue is no longer active", ephemeral=True)
         return
     if result.closed:
-        await interaction.response.send_message("This queue already closed", ephemeral=True)
+        await interaction.followup.send("This queue already closed", ephemeral=True)
         return
     if not result.changed:
         note = "You're already in the queue." if action == "join" else "You're not in the queue."
-        await interaction.response.send_message(note, ephemeral=True)
+        await interaction.followup.send(note, ephemeral=True)
         return
 
     if action == "join":
@@ -299,12 +305,13 @@ async def _handle_click(interaction: discord.Interaction, action: str) -> None:
             opened_at=result.state.created_at, opened_by=result.state.opened_by,
             description=result.state.description,
         )
-    await interaction.response.edit_message(view=view)
+    await interaction.edit_original_response(view=view)
     if action == "leave":
-        await _remove_from_discussion_thread(
-            message_id, interaction.guild, interaction.client, interaction.user,
+        run_detached(
+            _remove_from_discussion_thread(message_id, interaction.guild, interaction.client, interaction.user),
+            label="queue_leave_thread",
         )
-    await _post_join_followups(interaction, result, fired)
+    run_detached(_post_join_followups(interaction, result, fired), label="queue_join_followups")
 
 
 async def _claim_fire_if_ready(result) -> bool:

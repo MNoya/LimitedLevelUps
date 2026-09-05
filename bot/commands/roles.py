@@ -68,17 +68,18 @@ class _RoleToggleButton(discord.ui.Button):
         self.role_name = role_name
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
         member, guild = await _resolve_member(interaction)
         if member is None or guild is None:
-            await interaction.response.send_message(MSG_NO_GUILD, ephemeral=True)
+            await interaction.followup.send(MSG_NO_GUILD, ephemeral=True)
             return
         role = find_role(guild, self.role_name)
         if role is None:
-            await interaction.response.send_message(MSG_ROLE_MISSING, ephemeral=True)
+            await interaction.followup.send(MSG_ROLE_MISSING, ephemeral=True)
             return
         new_state = await toggle_role(member, role)
         if new_state is None:
-            await interaction.response.send_message(MSG_ROLE_TOGGLE_FAILED, ephemeral=True)
+            await interaction.followup.send(MSG_ROLE_TOGGLE_FAILED, ephemeral=True)
             return
         _remember_role_choice(member, self.role_name, held=new_state)
         refreshed = guild.get_member(member.id) or member
@@ -90,7 +91,7 @@ class _RoleToggleButton(discord.ui.Button):
         if not new_state and self.role_name == POD_DRAFTERS_ROLE_NAME:
             held -= {spec.name for spec in PING_ROLES}
         dm_opt_in = await asyncio.to_thread(_dm_opt_in_for, str(member.id))
-        await interaction.response.edit_message(
+        await interaction.edit_original_response(
             view=RolesView(held, guild, in_guild=interaction.guild is not None, dm_opt_in=dm_opt_in),
         )
 
@@ -107,12 +108,13 @@ class _DmPrefToggleButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
         user = interaction.user
         avatar_hash = extract_avatar_hash(user)
         new_state = await asyncio.to_thread(_toggle_dm_pref, str(user.id), user.name, user.display_name, avatar_hash)
         member, guild = await _resolve_member(interaction)
         held = {role.name for role in getattr(member, "roles", [])} if member else set()
-        await interaction.response.edit_message(
+        await interaction.edit_original_response(
             view=RolesView(held, guild, in_guild=interaction.guild is not None, dm_opt_in=new_state),
         )
         await interaction.followup.send(embed=dm_pref_embed(new_state), ephemeral=True)

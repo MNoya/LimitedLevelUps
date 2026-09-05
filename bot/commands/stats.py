@@ -50,6 +50,7 @@ class LeaderboardVisibilityView(discord.ui.View):
         return str(interaction.user.id) == self.user_id
 
     async def _toggle(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
         self.opted_in = not self.opted_in
         with SessionLocal() as session:
             set_opt_in(session, self.user_id, self.opted_in)
@@ -59,9 +60,9 @@ class LeaderboardVisibilityView(discord.ui.View):
             self.data = data
         self._render_buttons()
         if data is not None:
-            await interaction.response.edit_message(embed=render_embed(data), view=self)
+            await interaction.edit_original_response(embed=render_embed(data), view=self)
         else:
-            await interaction.response.edit_message(view=self)
+            await interaction.edit_original_response(view=self)
 
 
 class Stats(commands.Cog):

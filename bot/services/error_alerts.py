@@ -52,8 +52,9 @@ class ErrorAlertHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         if not _alertable(record):
             return
-        fingerprint = f"{record.module}.{record.funcName}:{record.lineno}"
-        detail, count = self._pending.get(fingerprint, (_detail(record), 0))
+        fingerprint = getattr(record, "alert_fingerprint", None) or f"{record.module}.{record.funcName}:{record.lineno}"
+        default_detail = (getattr(record, "alert_detail", None) or _detail(record))[:DETAIL_MAX_CHARS]
+        detail, count = self._pending.get(fingerprint, (default_detail, 0))
         self._pending[fingerprint] = (detail, count + 1)
 
     def drain(self) -> list[str]:
@@ -84,8 +85,37 @@ class ErrorAlertHandler(logging.Handler):
 def install(bot: commands.Bot) -> ErrorAlertHandler:
     handler = ErrorAlertHandler()
     logging.getLogger().addHandler(handler)
+    _install_interaction_error_logging()
     run_detached(flush_alerts(bot, handler), "the error alert flush loop")
     return handler
+
+
+interaction_log = logging.getLogger("bot.interactions")
+
+
+def _install_interaction_error_logging() -> None:
+    async def view_on_error(self, interaction: discord.Interaction, error: Exception, item) -> None:
+        _log_interaction_error(interaction, error, view=self, item=item)
+
+    async def modal_on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        _log_interaction_error(interaction, error, view=self, item=None)
+
+    discord.ui.View.on_error = view_on_error
+    discord.ui.Modal.on_error = modal_on_error
+
+
+def _log_interaction_error(interaction: discord.Interaction, error: Exception, *, view, item) -> None:
+    item_name = type(item).__name__ if item is not None else None
+    label = f"{type(view).__name__}.{item_name}" if item_name else type(view).__name__
+    custom_id = getattr(item, "custom_id", None) or (interaction.data or {}).get("custom_id")
+    channel = interaction.channel
+    where = f"#{channel.name}" if getattr(channel, "name", None) else getattr(channel, "id", "?")
+    context = f"{label} user={interaction.user} ch={where} custom_id={custom_id}"
+    interaction_log.error(
+        context,
+        exc_info=error,
+        extra={"alert_fingerprint": label, "alert_detail": f"{context}: {type(error).__name__}: {error}"},
+    )
 
 
 async def flush_alerts(bot: commands.Bot, handler: ErrorAlertHandler) -> None:

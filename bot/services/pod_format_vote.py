@@ -655,10 +655,11 @@ class DeleteOptionSelect(ui.Select):
         super().__init__(placeholder=MSG_MANAGE_PROMPT, options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
         code = self.values[0]
         await asyncio.to_thread(_delete_option_commit, season_code(), code)
+        await interaction.edit_original_response(content=MSG_OPTION_REMOVED.format(code=code), view=None)
         request_public_repaint(interaction.client)
-        await interaction.response.edit_message(content=MSG_OPTION_REMOVED.format(code=code), view=None)
 
 
 def _voter_player(session: Session, voter: discord.abc.User) -> Player:

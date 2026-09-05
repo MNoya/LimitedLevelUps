@@ -30,6 +30,7 @@ from bot.discord_helpers import (
     parse_message_link,
     player_deck_url,
     resolve_display_name,
+    run_detached,
 )
 from bot.services import bot_log
 from bot.services.pod_backfill import COLORS_RE, RECORD_RE, normalize_colors, strip_cdn_dims
@@ -351,6 +352,7 @@ class _ConfirmButton(ui.Button):
         super().__init__(label="Confirm", style=discord.ButtonStyle.success, emoji="🏆", disabled=disabled)
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
         view: TrophyConfirmView = self.view
         draft = view.draft
         with SessionLocal() as session:
@@ -391,8 +393,6 @@ class _ConfirmButton(ui.Button):
             f"**{draft.record}** · {colors} · {draft.platform} · {draft.format} · {draft.set_code} — "
             f"[post]({draft.source_url})"
         )
-        await bot_log.get(interaction.client).post_plain(oversight)
-        await _mark_post_logged(view.message, draft.set_code, draft.platform)
         color_glyph = format_deck_color_emojis(draft.colors)
         platform_glyph = emojis.prefix(PLATFORM_EMOJI_NAME.get(draft.platform, ""))
         headline_parts = [f"**{draft.record}**"]
@@ -406,7 +406,9 @@ class _ConfirmButton(ui.Button):
             description=f"{' '.join(headline_parts)}\n{profile_line}",
             color=0x57F287,
         )
-        await interaction.response.edit_message(embed=done, view=None)
+        await interaction.edit_original_response(embed=done, view=None)
+        run_detached(bot_log.get(interaction.client).post_plain(oversight), label="trophy_oversight")
+        run_detached(_mark_post_logged(view.message, draft.set_code, draft.platform), label="trophy_mark_logged")
 
 
 class _CancelButton(ui.Button):

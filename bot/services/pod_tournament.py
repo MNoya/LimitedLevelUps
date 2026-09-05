@@ -1757,14 +1757,15 @@ class FixPairingView(ui.View):
         if self.selected_a == self.selected_b:
             await interaction.response.send_message(MSG_FIX_SAME_PLAYER, ephemeral=True)
             return
+        await interaction.response.defer()
         match_id = self.selected_match["match_id"]
         if await asyncio.to_thread(bracket_edit_blocked, match_id):
-            await interaction.response.send_message(BRACKET_EDIT_BLOCKED_MSG, ephemeral=True)
+            await interaction.followup.send(BRACKET_EDIT_BLOCKED_MSG, ephemeral=True)
             return
         result = await asyncio.to_thread(apply_pairing_swap, match_id, self.selected_a, self.selected_b)
         if result is None:
             self.stop()
-            await interaction.response.edit_message(content=MSG_FIX_MATCH_GONE, view=None)
+            await interaction.edit_original_response(content=MSG_FIX_MATCH_GONE, view=None)
             return
         choice = self._resolve_result_choice()
         result_meta = None
@@ -1774,7 +1775,6 @@ class FixPairingView(ui.View):
             if result_meta == "not_found":
                 result_meta = None
         self.stop()
-        await interaction.response.defer()
         try:
             await interaction.delete_original_response()
         except discord.HTTPException:
