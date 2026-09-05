@@ -120,7 +120,7 @@ def _format_for(code: str | None) -> PodFormat | None:
     return CUSTOM_FORMATS.get(code.upper()) or _write_in_cube_format(code)
 
 
-SELECT_PLACEHOLDER = "Select a format"
+SELECT_PLACEHOLDER = "Select Format"
 FORMAT_LOCKED_MSG = "The format can't be changed once the draft has started"
 def custom_formats() -> list[PodFormat]:
     return list(CUSTOM_FORMATS.values())

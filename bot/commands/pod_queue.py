@@ -89,7 +89,7 @@ QUEUE_PLAYERS_EMPTY = "Players"
 
 JOINABLE_WINDOW = timedelta(hours=6)
 MAX_JOINABLE_LINES = 3
-SET_PLACEHOLDER = "Choose the set"
+SET_PLACEHOLDER = "Select Format"
 WHEN_PLACEHOLDER = "When to draft"
 LAUNCHER_TITLE = "### Start a Pod Draft"
 LAUNCHER_PROMPT = "Set your options below, then open a queue now or schedule a pod for later"
@@ -483,21 +483,21 @@ def _set_options(current: str | None) -> list[discord.SelectOption]:
     cubes = custom_formats()
     known = {active_upper} | {fmt.code for fmt in cubes} | {code.upper() for code in recent}
 
-    options: list[discord.SelectOption] = [write_in_option("Set")]
+    options: list[discord.SelectOption] = [write_in_option("Format")]
     if is_write_in_cube(current):
-        options.append(write_in_cube_option(current, "Set"))
+        options.append(write_in_cube_option(current, "Format"))
     elif chosen not in known:
         options.append(set_select_option(
-            chosen, label=f"Set: {chosen}", description=set_name_for(chosen), default=True))
+            chosen, label=f"Format: {chosen}", description=set_name_for(chosen), default=True))
     options.append(set_select_option(
-        active, label=f"Set: {active}", description="The latest set", default=(chosen == active_upper)))
+        active, label=f"Format: {active}", description="The latest set", default=(chosen == active_upper)))
     for fmt in cubes:
         options.append(discord.SelectOption(
-            label=f"Set: {fmt.label}", value=fmt.code, description=f"CubeCobra: {fmt.cube_id}",
+            label=f"Format: {fmt.label}", value=fmt.code, description=f"CubeCobra: {fmt.cube_id}",
             emoji=emojis.set_symbol(fmt.code) or fi.cube_emoji(), default=(chosen == fmt.code)))
     for code in recent:
         options.append(set_select_option(
-            code, label=f"Set: {code}", description=set_name_for(code), default=(chosen == code)))
+            code, label=f"Format: {code}", description=set_name_for(code), default=(chosen == code)))
     return options
 
 

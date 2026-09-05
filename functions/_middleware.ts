@@ -309,7 +309,7 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
 
   if (section === "pods") {
     if (rest[0] === "guide") {
-      return page("Pod Guide", "How to play community pod drafts, from signing up to reporting results.");
+      return page("Pod Drafts Guide", "How to play on our community Pod Drafts");
     }
     if (rest[0]) {
       const setCodes = await fetchSetCodes();
