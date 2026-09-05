@@ -24,6 +24,10 @@ export const CONTACT_EMAIL = "chordocoach@gmail.com";
 export const DISCORD_GUILD_ID = "775371722065051658";
 export const DISCORD_INVITE_CODE = "XWNVT9mxvU";
 export const POD_DRAFT_CHANNEL_ID = "1028072146645295125";
+export const POD_DRAFT_CHANNEL_NAME = "#🚀-pod-draft-coordination";
+export const POD_DRAFT_CHANNEL_URL = `https://discord.com/channels/${DISCORD_GUILD_ID}/${POD_DRAFT_CHANNEL_ID}`;
+export const DISCHORD_BOT_NAME = "DisChordBot";
+export const DISCHORD_BOT_DM_URL = "https://discord.com/channels/@me/1499601495329341470";
 
 // Alex-approved copy — the canonical blurbs. SITE_BLURB is the brand identity
 // (YouTube + podcast + Discord); DISCORD_BLURB is the server-specific invite.

@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 
-import { AAvatar, AVATAR_CLIP } from "../Brand";
+import { AAvatar, AVATAR_CLIP, Trophy } from "../Brand";
 import { LuScrollText, TbCards } from "../Icons";
 import { Pips } from "../ManaPips";
 import { Record } from "../Record";
@@ -42,9 +42,13 @@ export function PodStandingRow({
   p,
   rank,
   cols = STANDING_COLS_CLASS,
+  padX = STANDING_ROW_PAD_X,
   compact = false,
+  dense = false,
+  iconOnly = false,
   teamSide = null,
   selected = false,
+  trophy = false,
   nameHref,
   logHref,
   onShowDeck,
@@ -54,9 +58,13 @@ export function PodStandingRow({
   p: PodEventParticipantRow;
   rank: number | null;
   cols?: string;
+  padX?: string;
   compact?: boolean;
+  dense?: boolean;
+  iconOnly?: boolean;
   teamSide?: "A" | "B" | null;
   selected?: boolean;
+  trophy?: boolean;
   nameHref?: string | null;
   logHref?: string | null;
   onShowDeck?: () => void;
@@ -82,7 +90,7 @@ export function PodStandingRow({
       onMouseLeave={() => onHover?.(false)}
       className={cn(
         "group/row grid items-center gap-x-2 lg:gap-x-3 transition-colors",
-        compact ? `py-[7px] ${STANDING_ROW_PAD_X}` : STANDING_ROW_PAD,
+        dense ? `py-1.5 ${padX}` : compact ? `py-[7px] ${padX}` : `py-2.5 ${padX}`,
         cols,
         selected ? "bg-green/10" : "bg-surface",
         interactive && "cursor-pointer hover:bg-surface2",
@@ -100,12 +108,14 @@ export function PodStandingRow({
           >
             <SeatAvatar name={name} avatarUrl={p.avatarUrl} size={avatarSize} teamSide={teamSide} />
             <PlayerName name={name} compact={compact} />
+            {trophy && <Trophy size={compact ? 12 : 14} color="#ffc63a" className="shrink-0" />}
           </Link>
         </Tooltip>
       ) : (
         <div className="flex items-center gap-2 lg:gap-2.5 min-w-0">
           <SeatAvatar name={name} avatarUrl={p.avatarUrl} size={avatarSize} teamSide={teamSide} />
           <PlayerName name={name} compact={compact} />
+          {trophy && <Trophy size={compact ? 12 : 14} color="#ffc63a" className="shrink-0" />}
         </div>
       )}
       <div className="flex items-center">
@@ -131,20 +141,20 @@ export function PodStandingRow({
             e.stopPropagation();
             onShowDeck?.();
           }}
-          className={ACTION_CLASS}
-          style={{ height: compact ? 30 : 34 }}
+          className={cn(ACTION_CLASS, iconOnly && "justify-self-end")}
+          style={{ height: dense ? 28 : compact ? 30 : 34 }}
         >
-          {!compact && <ActionLabel>VIEW DECK</ActionLabel>}
+          {!compact && !iconOnly && <ActionLabel>VIEW DECK</ActionLabel>}
           <TbCards size={compact ? 16 : 17} aria-hidden="true" className="transition-colors" />
         </button>
       ) : draftLog ? (
         <Link
           to={draftLog}
           onClick={(e) => e.stopPropagation()}
-          className={cn(ACTION_CLASS, "no-underline")}
-          style={{ height: compact ? 30 : 34 }}
+          className={cn(ACTION_CLASS, "no-underline", iconOnly && "justify-self-end")}
+          style={{ height: dense ? 28 : compact ? 30 : 34 }}
         >
-          {!compact && <ActionLabel>DRAFT LOG</ActionLabel>}
+          {!compact && !iconOnly && <ActionLabel>DRAFT LOG</ActionLabel>}
           <LuScrollText size={compact ? 15 : 16} aria-hidden="true" className="transition-colors" />
         </Link>
       ) : (

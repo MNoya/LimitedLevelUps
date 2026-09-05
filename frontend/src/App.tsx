@@ -10,6 +10,7 @@ import { CommunityPage } from "./pages/CommunityPage";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
 import { PlayerPage } from "./pages/PlayerPage";
 import { PodDraftsPage, PodsRoute } from "./pages/PodDraftsPage";
+import { PodGuidePage } from "./pages/PodGuidePage";
 import { PodDraftLogRoute } from "./pages/PodPage";
 import { AboutPage } from "./pages/AboutPage";
 import { TierListPage } from "./pages/TierListPage";
@@ -56,6 +57,9 @@ export function App() {
 
       <Route path="/about" element={<Navigate to="/leaderboard/about" replace />} />
       <Route path="/players" element={<Navigate to="/leaderboard" replace />} />
+
+      {/* Static /pods/guide ranks above /pods/:slug; declared first for readers */}
+      <Route path="/pods/guide" element={<PodGuidePage />} />
 
       {/* Both render PodsRoute so moving between them reconciles instead of remounting the page */}
       <Route path="/pods" element={<PodsRoute />} />

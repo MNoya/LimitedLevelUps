@@ -2,6 +2,7 @@
 
 // Active set fallback when the live set isn't yet known from the network
 export const ACTIVE_SET_CODE = "HOB";
+export const ACTIVE_SET_NAME = "The Hobbit";
 
 // Site name and the title separator. functions/_middleware.ts imports these too, so the
 // browser tab (set by DocumentTitle) and the link-unfurl title render the exact same string.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
+import { BookOpen, ChevronDown } from "lucide-react";
 
 import { PodPage } from "./PodPage";
 
@@ -37,6 +37,7 @@ import {
 } from "../components/LeaderboardTable";
 import { useNow } from "../lib/countdown";
 import { useIsMobile } from "../lib/use-is-mobile";
+import { POD_SLOTS, easternHourInLocalTime } from "../lib/podSlots";
 import { cn } from "../lib/utils";
 import {
   cleanPodEventName,
@@ -123,12 +124,6 @@ function parseMonthDay(iso: string): { month: string; day: number } {
   const m = parseInt(iso.slice(5, 7), 10);
   const d = parseInt(iso.slice(8, 10), 10);
   return { month: MONTHS_CAL[m - 1] ?? "", day: d };
-}
-
-function formatLocalTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(d);
 }
 
 function toLeaderboardRow(r: PodLeaderboardRow): LeaderboardTableRow {
@@ -650,27 +645,20 @@ function UpcomingBlock() {
     <div>
       <SectionHeading label="UPCOMING" meta={<SlotSchedule />} />
       <div className="flex flex-col lg:gap-2">
-        <LauncherLink />
+        <PodActionRow />
       </div>
     </div>
   );
 }
 
-// Mirrors WEEKDAY_BUCKETS in bot/services/pod_signals.py: fixed Eastern wall-clock slots, read where
-// the visitor is. Saturday's late pod runs an hour later and the line does not carry the exception
-const POD_SLOTS = [
-  { label: "EARLY POD", easternHour: 14 },
-  { label: "LATE POD", easternHour: 20 },
-];
-
 function SlotSchedule() {
   return (
     <span className="flex items-center gap-3 whitespace-nowrap">
       <span
-        className="flex items-center gap-2 font-display text-muted tracking-[0.16em] leading-none"
+        className="flex items-center gap-2 font-display text-text tracking-[0.16em] leading-none"
         style={{ fontSize: 12 }}
       >
-        <CalendarRange size={15} className="text-subtle" />
+        <CalendarRange size={15} className="text-subtle -translate-y-[2px]" />
         EVERY DAY
       </span>
       {POD_SLOTS.map((slot) => (
@@ -693,48 +681,23 @@ function SlotSchedule() {
   );
 }
 
-const EASTERN_CLOCK = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/New_York",
-  hour12: false,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-function easternHourInLocalTime(hour: number): string {
-  const now = new Date();
-  const asIfUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour);
-  return formatLocalTime(new Date(asIfUtc + easternOffsetMs(asIfUtc)).toISOString());
-}
-
-function easternOffsetMs(atMs: number): number {
-  const parts = EASTERN_CLOCK.formatToParts(new Date(atMs));
-  const value = (type: string) => Number(parts.find((p) => p.type === type)?.value);
-  const eastern = Date.UTC(value("year"), value("month") - 1, value("day"), value("hour"), value("minute"));
-  return atMs - eastern;
-}
-
-// Pods run every day, so there is always something to sign up for even with no slot open
-function LauncherLink() {
+// Two equal halves, Discord join and the guide, split by a divider in one row. Pods run every day, so
+// there is always something to sign up for even with no slot open
+function PodActionRow() {
+  const half =
+    "flex flex-1 items-center justify-center gap-2.5 min-h-[46px] bg-green/10 no-underline text-green hover:bg-green/20 transition-colors font-display tracking-[0.14em] leading-none";
   return (
-    <a
-      href={SITE_LINKS.discordPods}
-      target="_blank"
-      rel="noreferrer"
-      className="group/launch relative flex items-center justify-center gap-3 px-10 min-h-[46px] bg-green/10
-        border-b lg:border lg:-mt-px border-green/30 no-underline text-green hover:bg-green/20 transition-colors"
-    >
-      <DiscordIcon size={18} />
-      <span className="font-display tracking-[0.14em] leading-none" style={{ fontSize: 15 }}>
+    <div className="flex items-stretch border-b border-border">
+      <a href={SITE_LINKS.discordPods} target="_blank" rel="noreferrer" className={half} style={{ fontSize: 15 }}>
+        <DiscordIcon size={18} />
         SIGN UP ON DISCORD
-      </span>
-      <ArrowRight
-        size={15}
-        className="absolute right-3 shrink-0 transition-transform group-hover/launch:translate-x-0.5"
-      />
-    </a>
+      </a>
+      <Link to="/pods/guide" className={cn(half, "border-l border-green/30")} style={{ fontSize: 15 }}>
+        <BookOpen size={16} strokeWidth={2} />
+        HOW TO PLAY
+        <ArrowRight size={14} />
+      </Link>
+    </div>
   );
 }
 
@@ -1253,7 +1216,7 @@ function MobileEventsBlock({
       </div>
       {tab === "upcoming" ? (
         <>
-          <LauncherLink />
+          <PodActionRow />
           {(loading || played[0]) && <SectionHeading label="LAST EVENT" compact />}
           {loading ? (
             <EventRowSkeleton index={0} stacked />

@@ -33,6 +33,7 @@ import { FilterDropdown, type FilterOption } from "../components/FilterDropdown"
 import { GoToTopButton } from "../components/GoToTopButton";
 import { SwipeableDrawer } from "../components/SwipeableDrawer";
 import { Tooltip } from "../components/Tooltip";
+import { RailHeader, RailRow } from "../components/Rail";
 import { CUT_CORNER_CHAMFER } from "../components/ChamferCta";
 import { Crossfade } from "../components/Crossfade";
 import { SetGlyph } from "../components/Brand";
@@ -663,10 +664,7 @@ function CategoryRail({
           </button>
         </Tooltip>
       ) : (
-        <div className="flex h-[60px] items-center gap-2.5 border-b border-border px-4">
-          <Library size={22} strokeWidth={2} className="shrink-0 text-green" />
-          <span className="font-display text-[25px] leading-none tracking-[0.12em] text-text">LIBRARY</span>
-        </div>
+        <RailHeader icon={Library} label="LIBRARY" />
       )}
       <div>
         <RailRow
@@ -722,79 +720,6 @@ function CategoryRail({
       </div>
     </nav>
   );
-}
-
-function RailRow({
-  label,
-  icon: Icon,
-  count,
-  active,
-  collapsed = false,
-  onClick,
-}: {
-  label: string;
-  icon: LucideIcon;
-  count: number;
-  active: boolean;
-  collapsed?: boolean;
-  onClick: () => void;
-}) {
-  const button = (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={collapsed ? label : undefined}
-      className={cn(
-        "group relative flex w-full items-center text-left transition-colors",
-        collapsed ? "justify-center py-3.5" : "gap-3 px-4 py-3.5",
-        active ? "bg-surface2" : "hover:bg-bg/40",
-      )}
-    >
-      <span
-        className={cn(
-          "absolute left-0 top-0 h-full w-[3px] origin-center bg-green transition-all duration-200",
-          active ? "opacity-100" : "opacity-0 scale-y-50 group-hover:opacity-100 group-hover:scale-y-100",
-        )}
-      />
-      <Icon
-        size={18}
-        strokeWidth={2}
-        className={cn(
-          "shrink-0 transition-colors",
-          active ? "text-green" : "text-muted group-hover:text-green",
-        )}
-      />
-      {collapsed ? null : (
-        <>
-          <span
-            className={cn(
-              "flex-1 font-display uppercase tracking-[0.08em] text-[16px] transition-colors",
-              active ? "text-green" : "text-text group-hover:text-green",
-            )}
-          >
-            {label}
-          </span>
-          <span
-            className={cn(
-              "mono text-[13px] tabular-nums transition-colors",
-              active ? "text-green" : "text-muted group-hover:text-green",
-            )}
-          >
-            {count || "–"}
-          </span>
-        </>
-      )}
-    </button>
-  );
-
-  if (collapsed) {
-    return (
-      <Tooltip label={`${label} (${count || "–"})`} side="right">
-        {button}
-      </Tooltip>
-    );
-  }
-  return button;
 }
 
 function EmptyResults({

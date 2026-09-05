@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { IconType } from "react-icons";
 import { FaYoutube } from "react-icons/fa";
+import { POD_DRAFT_CHANNEL_NAME, POD_DRAFT_CHANNEL_URL } from "./site";
 import { categorySlug, type EpisodeCategory } from "./episodes";
 import { useDiscordStats } from "./hooks";
 import { DISCORD_BLURB, SITE_BLURB_PARAGRAPHS } from "./site";
@@ -91,9 +92,9 @@ export const COMMUNITY_EVENTS: CommunityLink[] = [
     Icon: GiProgression,
   },
   {
-    title: "Weekly pod drafts",
+    title: "Daily pod drafts",
     steps: [
-      "Sign up for the next draft in [#🚀-pod-draft-coordination](https://discord.com/channels/775371722065051658/1028072146645295125)",
+      `Sign up for the next draft in [${POD_DRAFT_CHANNEL_NAME}](${POD_DRAFT_CHANNEL_URL})`,
       "Draft together using [Draftmancer](draftmancer.com) and play the matches live on MTGA",
       "All seats, logs and replays are saved on the site to revisit anytime",
     ],
