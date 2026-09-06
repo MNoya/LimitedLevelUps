@@ -1,8 +1,8 @@
 """Route failures to the bot-spam channel, so a broken path is noticed before a player reports it.
 
-Railway keeps the full log. This is the alarm, and it is built to stay quiet: at most one message per
-flush window, each failure reported once per cooldown carrying the count it accumulated while silent. A
-storm of the same failure is one line saying how many, never one message per occurrence.
+Railway keeps the full log. This is the alarm, and it is built to stay quiet: one embed per flush
+window, each failure reported once per cooldown carrying the count it accumulated while silent. A storm
+of the same failure is one field saying how many, never one message per occurrence.
 
 A WARNING alerts only when it carries a traceback, since the handled-and-logged path is the bot working
 as designed. `BENIGN_DISCORD_CODES` and `_benign` list the failures dropped outright, each labelled
@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
+import traceback
 
 import aiohttp
 import discord
@@ -25,8 +27,10 @@ from bot.services import bot_log
 FLUSH_INTERVAL_S = 30.0
 REPEAT_COOLDOWN_S = 1800.0
 FINGERPRINTS_PER_MESSAGE = 5
-DETAIL_MAX_CHARS = 240
+DETAIL_MAX_CHARS = 900
+TRACE_FRAMES = 4
 
+APP_MARKER = f"{os.sep}bot{os.sep}"
 SILENT_LOGGERS = ("bot.services.bot_log", "bot.services.error_alerts")
 BENIGN_DISCORD_CODES = {
     10003: "unknown channel",
@@ -39,7 +43,7 @@ log = logging.getLogger(__name__)
 
 
 class ErrorAlertHandler(logging.Handler):
-    """Counts failures by call site and hands the due ones to the flush loop.
+    """Counts failures by crash site and hands the due ones to the flush loop.
 
     `emit` runs on whichever thread logged, including `asyncio.to_thread` workers, so it only touches
     memory. Every send happens on the loop, in `flush_alerts`."""
@@ -52,28 +56,28 @@ class ErrorAlertHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         if not _alertable(record):
             return
-        fingerprint = getattr(record, "alert_fingerprint", None) or f"{record.module}.{record.funcName}:{record.lineno}"
-        default_detail = (getattr(record, "alert_detail", None) or _detail(record))[:DETAIL_MAX_CHARS]
-        detail, count = self._pending.get(fingerprint, (default_detail, 0))
+        fingerprint = getattr(record, "alert_fingerprint", None) or _crash_site(record)
+        detail = _compose_detail(record)
+        _, count = self._pending.get(fingerprint, (detail, 0))
         self._pending[fingerprint] = (detail, count + 1)
 
-    def drain(self) -> list[str]:
-        """The lines due now. A fingerprint inside its cooldown keeps counting silently and reports the
-        whole run at once when the cooldown lapses, so a failure firing every second still costs one
-        message every half hour."""
+    def drain(self) -> list[tuple[str, str, int]]:
+        """The failures due now, each `(crash site, detail, count)`. A fingerprint inside its cooldown
+        keeps counting silently and reports the whole run at once when the cooldown lapses, so a failure
+        firing every second still costs one message every half hour."""
         now = time.monotonic()
-        lines: list[str] = []
+        due: list[tuple[str, str, int]] = []
         for fingerprint, (detail, count) in list(self._pending.items()):
-            if len(lines) >= FINGERPRINTS_PER_MESSAGE:
+            if len(due) >= FINGERPRINTS_PER_MESSAGE:
                 break
             last = self._reported_at.get(fingerprint)
             if last is not None and now - last < REPEAT_COOLDOWN_S:
                 continue
             del self._pending[fingerprint]
             self._reported_at[fingerprint] = now
-            lines.append(f"`{fingerprint}` ×{count}\n{detail}")
+            due.append((fingerprint, detail, count))
         self._forget_stale(now)
-        return lines
+        return due
 
     def _forget_stale(self, now: float) -> None:
         if len(self._reported_at) <= 256:
@@ -100,7 +104,8 @@ def _install_interaction_error_logging() -> None:
     async def modal_on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         _log_interaction_error(interaction, error, view=self, item=None)
 
-    discord.ui.View.on_error = view_on_error
+    for view_cls in (discord.ui.View, discord.ui.LayoutView):
+        view_cls.on_error = view_on_error
     discord.ui.Modal.on_error = modal_on_error
 
 
@@ -110,24 +115,32 @@ def _log_interaction_error(interaction: discord.Interaction, error: Exception, *
     custom_id = getattr(item, "custom_id", None) or (interaction.data or {}).get("custom_id")
     channel = interaction.channel
     where = f"#{channel.name}" if getattr(channel, "name", None) else getattr(channel, "id", "?")
-    context = f"{label} user={interaction.user} ch={where} custom_id={custom_id}"
-    interaction_log.error(
-        context,
-        exc_info=error,
-        extra={"alert_fingerprint": label, "alert_detail": f"{context}: {type(error).__name__}: {error}"},
-    )
+    context = f"{label}\nuser {interaction.user} ({interaction.user.id}) in {where}\ncustom_id {custom_id}"
+    interaction_log.error(context, exc_info=error, extra={"alert_context": context})
 
 
 async def flush_alerts(bot: commands.Bot, handler: ErrorAlertHandler) -> None:
     while True:
         await asyncio.sleep(FLUSH_INTERVAL_S)
-        lines = handler.drain()
-        if not lines:
+        due = handler.drain()
+        if not due:
             continue
         try:
-            await bot_log.get(bot).post_plain("\n".join(lines))
+            await bot_log.get(bot).post_plain(embed=_alert_embed(due))
         except Exception:  # noqa: BLE001 - the alarm must outlive a failure to sound it
             log.warning("could not post the error alert", exc_info=True)
+
+
+def _alert_embed(due: list[tuple[str, str, int]]) -> discord.Embed:
+    total = sum(count for _, _, count in due)
+    title = f"{total} error{'s' if total != 1 else ''}"
+    if len(due) > 1:
+        title = f"{title} across {len(due)} sites"
+    embed = discord.Embed(title=title, color=discord.Color.red())
+    for fingerprint, detail, count in due:
+        name = f"{fingerprint}  ×{count}" if count > 1 else fingerprint
+        embed.add_field(name=name[:256], value=(detail or "—")[:1024], inline=False)
+    return embed
 
 
 def _alertable(record: logging.LogRecord) -> bool:
@@ -145,9 +158,39 @@ def _benign(record: logging.LogRecord) -> bool:
     return isinstance(error, discord.HTTPException) and error.code in BENIGN_DISCORD_CODES
 
 
-def _detail(record: logging.LogRecord) -> str:
-    """The exception line when there is one, else the message that was logged. The traceback stays in
-    Railway: a channel message is where to look, not what to read."""
+def _crash_site(record: logging.LogRecord) -> str:
+    frames = _app_frames(record)
+    if frames:
+        return frames[-1]
+    return f"{record.module}.{record.funcName}:{record.lineno}"
+
+
+def _app_frames(record: logging.LogRecord) -> list[str]:
+    if not record.exc_info:
+        return []
+    frames: list[str] = []
+    for frame in traceback.extract_tb(record.exc_info[2]):
+        marker = frame.filename.find(APP_MARKER)
+        if marker == -1:
+            continue
+        rel = frame.filename[marker + 1 :]
+        frames.append(f"{rel}:{frame.lineno} {frame.name}")
+    return frames
+
+
+def _compose_detail(record: logging.LogRecord) -> str:
+    context = getattr(record, "alert_context", None) or record.getMessage()
+    parts = [context, _exception_line(record)]
+    frames = _app_frames(record)
+    if len(frames) > 1:
+        callers = frames[:-1][-TRACE_FRAMES:]
+        parts.append("via " + " → ".join(callers))
+    detail = "\n".join(part for part in parts if part)
+    return detail[:DETAIL_MAX_CHARS]
+
+
+def _exception_line(record: logging.LogRecord) -> str:
     error = record.exc_info[1] if record.exc_info else None
-    text = f"{type(error).__name__}: {error}" if error is not None else record.getMessage()
-    return text[:DETAIL_MAX_CHARS]
+    if error is None:
+        return ""
+    return f"{type(error).__name__}: {error}"
