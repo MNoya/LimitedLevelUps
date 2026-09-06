@@ -316,8 +316,9 @@ function GuideBody() {
               Finish deckbuilding after the draft, then press <B>Export</B>
             </Bullet>
             <Bullet>
-              <B>Import</B> your deck on Arena
+              <B>Import</B> your deck on Arena<span className="hidden sm:inline"> and adjust your lands</span>
             </Bullet>
+            <Bullet>Drop unwanted cards from your sideboard</Bullet>
             <Bullet>Craft any cards you don't own</Bullet>
           </Bullets>
         </Block>
@@ -546,15 +547,7 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
       <>
         <li>Run <Cmd>/mock-draft</Cmd> to practice a set before it hits Arena</li>
         <li>No matches expected, but you can challenge willing opponents on{" "}
-          <a
-            href="https://moxgate.com"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-0.5 text-green no-underline hover:underline"
-          >
-            moxgate.com
-            <ExternalLink size={12} strokeWidth={2.5} className="mb-[1px] shrink-0" />
-          </a>
+          <ExternalDomainLink href="https://moxgate.com">moxgate.com</ExternalDomainLink>
         </li>
       </>
     ),
@@ -1252,6 +1245,20 @@ function WalkthroughLink() {
 
 function B({ children }: { children: ReactNode }) {
   return <strong className="font-medium text-text">{children}</strong>;
+}
+
+function ExternalDomainLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-0.5 text-green no-underline hover:underline"
+    >
+      {children}
+      <ExternalLink size={12} strokeWidth={2.5} className="mb-[1px] shrink-0" />
+    </a>
+  );
 }
 
 function Cmd({ children }: { children: ReactNode }) {

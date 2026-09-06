@@ -30,6 +30,7 @@ from discord.components import Button, TextDisplay
 from sqlalchemy import select
 
 from bot import audit, emojis
+from bot.config import settings
 from bot.commands.messages import (
     MSG_ARENA_ALREADY_LINKED_NOTE,
     MSG_ARENA_BAD_FORMAT,
@@ -582,11 +583,9 @@ def build_link_arena_modal(after_link=None) -> discord.ui.Modal:
     return _LinkArenaModal(after_link=after_link)
 
 
-def build_pod_guide_button(
-    style: discord.ButtonStyle = discord.ButtonStyle.success, row: int | None = None,
-) -> discord.ui.Button:
-    """The registered Pod Guide button; shares the custom_id so clicks dispatch after a restart"""
-    return _PodGuideButton(style=style, row=row)
+def build_pod_guide_button(row: int | None = None) -> discord.ui.Button:
+    url = f"{settings.public_site_url.rstrip('/')}/pods/guide"
+    return discord.ui.Button(label="Pod Guide", style=discord.ButtonStyle.link, emoji="📖", url=url, row=row)
 
 
 async def _linked_arena_handle(discord_id: str) -> str | None:

@@ -1,7 +1,9 @@
 ### :mtga: _Pod Draft Guide_
 
+📖 Read the full guide at [**limitedlevelups.com/pods/guide**](<https://limitedlevelups.com/pods/guide>)
+
 * Get the @Pod Drafters role from <id:customize> to be notified about upcoming events.
-* Sign up by reacting **✅** on a Pod Draft event post.
+* Sign up on a Pod Draft event post ✅
 
 **Draft Setup:**
 1. Ten minutes before the scheduled draft time, the bot will create a table on [Draftmancer](<https://draftmancer.com>), sharing the link in Discord and notifying all who signed up.
@@ -16,7 +18,7 @@
 
 **Tournament Play:**
 5. The bot will send your pairing for each of the 3 rounds via Direct Message.
-6. Add your opponent as a friend in Arena, then **Challenge** them to a **Limited Tournament Match** (Bo3).
+6. **Challenge** your opponent to a **Limited Tournament Match** (Bo3).
 7. After each match, report your result in the bot DMs.
 
 **After Your Matches:**

@@ -971,7 +971,7 @@ class PodPollView(discord.ui.View):
         footer_row = min(4, pods // BUTTONS_PER_ROW + 1)
         if any(_leavable(slot) for slot in slots):
             self.add_item(BoardLeaveButton(row=footer_row))
-        self.add_item(build_pod_guide_button(style=discord.ButtonStyle.secondary, row=footer_row))
+        self.add_item(build_pod_guide_button(row=footer_row))
         if voting_open():
             self.add_item(VoteFormatsButton(row=footer_row))
 
