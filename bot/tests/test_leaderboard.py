@@ -696,7 +696,7 @@ def test_peasant_board_filters_to_peasant_pods(session):
     data = process_leaderboard_for_peasant(session, viewer_discord_id=None)
 
     assert data.set_code == "PEASANT"
-    assert data.show_score is False
+    assert data.show_score is True
     assert [(e.slug, e.trophies, e.events) for e in data.top] == [(alice.slug, 1, 1)]
 
 

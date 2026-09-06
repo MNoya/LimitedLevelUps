@@ -625,7 +625,7 @@ def process_leaderboard_for_pod(
     session: Session, viewer_discord_id: str | None, top_n: int = 10,
     magic_set: MagicSet | None = None,
 ) -> LeaderboardData | None:
-    """Pod-draft leaderboard for the active set: ranked by trophies, no score column."""
+    """Pod-draft leaderboard for the active set, ranked by pod points."""
     if magic_set is None:
         magic_set = _current_set(session)
     if magic_set is None:
@@ -751,13 +751,20 @@ def _trophy_board_last_updated(session: Session, magic_set: MagicSet) -> datetim
 def _pod_board(
     session: Session, viewer_discord_id: str | None, top_n: int, set_code: str, set_name: str,
 ) -> LeaderboardData:
-    trophy_expr = func.coalesce(func.sum(case((pod_record_wins() >= POD_TROPHY_WINS, 1), else_=0)), 0)
+    """A pod board ranked by pod points, the same term the website's pod standings use: trophies plus
+    two-win and one-win finishes weighted by scoring_buckets. Points and trophy count are the columns."""
+    wins = pod_record_wins()
+    trophy_expr = func.coalesce(func.sum(case((wins >= POD_TROPHY_WINS, 1), else_=0)), 0)
+    two_win_expr = func.coalesce(func.sum(case((wins == 2, 1), else_=0)), 0)
+    one_win_expr = func.coalesce(func.sum(case((wins == 1, 1), else_=0)), 0)
     events_expr = func.count(PodDraftParticipant.id)
 
     rows = session.execute(
         select(
             Player.id, Player.slug, Player.display_name, Player.discord_id,
             trophy_expr.label("trophies"),
+            two_win_expr.label("two_wins"),
+            one_win_expr.label("one_wins"),
             events_expr.label("events"),
         )
         .join(PodDraftParticipant, PodDraftParticipant.player_id == Player.id)
@@ -768,28 +775,26 @@ def _pod_board(
             func.upper(PodDraftEvent.set_code) == set_code.upper(),
         )
         .group_by(Player.id, Player.slug, Player.display_name, Player.discord_id)
-        .order_by(trophy_expr.desc(), events_expr.desc(), Player.display_name.asc())
     ).all()
 
-    ranked = [
-        (idx + 1, r.id, r.slug, r.display_name, r.discord_id, int(r.trophies), int(r.events))
-        for idx, r in enumerate(rows)
+    scored = [
+        (r, pod_points(int(r.trophies), int(r.two_wins), int(r.one_wins)))
+        for r in rows
     ]
-    top = [
-        LeaderboardEntry(
-            rank=rank, player_id=pid, slug=slug, display_name=name,
-            score=float(trophies), trophies=trophies, events=events,
+    scored.sort(key=lambda item: (-item[1], -int(item[0].trophies), -int(item[0].events), item[0].display_name.lower()))
+
+    def entry(rank: int, r, points: int) -> LeaderboardEntry:
+        return LeaderboardEntry(
+            rank=rank, player_id=r.id, slug=r.slug, display_name=r.display_name,
+            score=float(points), trophies=int(r.trophies), events=int(r.events),
         )
-        for rank, pid, slug, name, _did, trophies, events in ranked[:top_n]
-    ]
+
+    top = [entry(idx + 1, r, points) for idx, (r, points) in enumerate(scored[:top_n])]
     viewer_entry: LeaderboardEntry | None = None
     if viewer_discord_id is not None:
-        for rank, pid, slug, name, did, trophies, events in ranked:
-            if did == viewer_discord_id:
-                viewer_entry = LeaderboardEntry(
-                    rank=rank, player_id=pid, slug=slug, display_name=name,
-                    score=float(trophies), trophies=trophies, events=events,
-                )
+        for idx, (r, points) in enumerate(scored):
+            if r.discord_id == viewer_discord_id:
+                viewer_entry = entry(idx + 1, r, points)
                 break
 
     last_updated = session.execute(
@@ -807,7 +812,7 @@ def _pod_board(
         viewer=viewer_entry,
         last_updated=last_updated,
         drafter_count=0,
-        show_score=False,
+        show_score=True,
     )
 
 
@@ -1915,14 +1920,9 @@ class Leaderboard(commands.Cog):
         in_guild = interaction.guild is not None
         ephemeral = in_guild
 
-        # set:PEASANT / MEMA / … → a season-long custom-format pod board, posted as a snapshot
+        # set:PEASANT / MEMA / … → a season-long custom-format pod board; a stray format/color filter is dropped
         if set is not None and is_custom(set):
             code = set.upper()
-            if format is not None or color is not None:
-                await interaction.response.send_message(
-                    f"Format and color filters aren't available for `{code}`", ephemeral=ephemeral,
-                )
-                return
             await interaction.response.defer()
             with SessionLocal() as session:
                 data = process_leaderboard_for_custom(session, code, viewer_discord_id=user_id)
