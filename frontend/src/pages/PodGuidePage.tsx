@@ -272,7 +272,7 @@ function GuideBody() {
               hideArrow
               icon={<PlatformIcon src="draftmancer.png" size={24} style={{ filter: OFFWHITE_OUTLINE }} />}
             >
-              <Bullet>Link is posted in the Discord thread 10 minutes before start</Bullet>
+              <Bullet>Link is posted in the Discord thread <B>10 minutes before</B> start</Bullet>
               <Bullet>
                 Set your{" "}
                 <Tooltip label="ArenaID#12345">
@@ -328,6 +328,7 @@ function GuideBody() {
             <Bullet>Pods of 6 play Team Draft, 8~10 play Swiss</Bullet>
             <Bullet>If there's more than 10 players, the bot creates separate tables</Bullet>
             <Bullet>Report your match from the thread or your DMs</Bullet>
+            <Bullet>The next round starts as soon as a match can be played</Bullet>
           </Bullets>
         </Block>
 
@@ -996,7 +997,7 @@ function SettingsCard() {
   return (
     <DiscordMessage>
       <DiscordSelect icon={<SetGlyph code="TLA" size={15} className="text-white" />} label="Format: TLA" />
-      <DiscordSelect icon={<span className="text-[14px]">👥</span>} label="Pairings: Team Draft" />
+      <DiscordSelect icon={<span className="text-[14px]">👥</span>} label="Pairings: Fast Bracket" />
       <DiscordSelect icon={<span className="text-[14px]">🪑</span>} label="Seats: Random" />
       <DiscordButtonGrid>
         <DiscordButton icon={<span className="text-[14px]">⏱️</span>} label="Pick Timer: 60s" />
