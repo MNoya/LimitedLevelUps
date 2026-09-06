@@ -20,7 +20,7 @@ const SPONSOR_IMG_HOVER = "/sponsors/tcgplayer-stacked-hover.png";
 export function SiteFooter({ sponsorVariant = "gray" }: { sponsorVariant?: "color" | "gray" }) {
   const links = [...LISTEN_ON, { label: "Patreon", url: SITE_LINKS.patreon }];
   const linkByLabel = Object.fromEntries(links.map((link) => [link.label, link]));
-  const renderLink = ({ label, url }: { label: string; url: string }) => {
+  const renderLink = ({ label, url }: { label: string; url: string }, anchorClass = "") => {
     const Icon = FOOTER_ICONS[label];
     return (
       <a
@@ -28,7 +28,7 @@ export function SiteFooter({ sponsorVariant = "gray" }: { sponsorVariant?: "colo
         href={url}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex items-center gap-1.5 no-underline hover:text-green transition-colors"
+        className={cn("inline-flex items-center gap-1.5 no-underline hover:text-green transition-colors", anchorClass)}
       >
         {Icon ? <Icon className="text-[16px]" /> : null}
         {label}
@@ -86,6 +86,8 @@ export function SiteFooter({ sponsorVariant = "gray" }: { sponsorVariant?: "colo
   };
   const desktopHeight = sponsorVariant === "color" ? "h-9" : "h-5";
   const mobileHeight = sponsorVariant === "color" ? "h-7" : "h-[15px]";
+  const mobileMidAlign = sponsorVariant === "gray" ? "justify-self-center" : "";
+  const mobileGridCols = sponsorVariant === "gray" ? "grid-cols-[repeat(3,auto)]" : "grid-cols-3";
   const navClass = "flex items-center justify-center gap-5 font-display tracking-[0.12em] text-[15px]";
   const row = (
     <>
@@ -97,15 +99,20 @@ export function SiteFooter({ sponsorVariant = "gray" }: { sponsorVariant?: "colo
             cn("pointer-events-auto col-start-2 justify-self-center", sponsorVariant === "color" && "-translate-y-[3px]"),
           )}
         </div>
-        <nav className={navClass}>{links.map(renderLink)}</nav>
+        <nav className={navClass}>{links.map((link) => renderLink(link))}</nav>
       </div>
       <div className="flex flex-col items-center gap-3 text-[11px] text-muted lg:hidden">
-        <nav className="grid grid-cols-3 items-center justify-items-start gap-x-5 gap-y-3.5 font-display tracking-[0.12em] text-[15px]">
+        <nav
+          className={cn(
+            "grid items-center justify-items-start gap-x-5 gap-y-3.5 font-display tracking-[0.12em] text-[15px]",
+            mobileGridCols,
+          )}
+        >
           {renderLink(linkByLabel.YouTube)}
           {sponsorLogo(mobileHeight, "justify-self-center")}
           {renderLink(linkByLabel.Patreon)}
           {renderLink(linkByLabel.Apple)}
-          {renderLink(linkByLabel.Spotify)}
+          {renderLink(linkByLabel.Spotify, mobileMidAlign)}
           {renderLink(linkByLabel.RSS)}
         </nav>
         <span className="mono block text-center text-[10px] leading-tight">{copyright}</span>
