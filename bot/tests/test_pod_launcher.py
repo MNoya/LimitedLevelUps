@@ -6,7 +6,7 @@ import pytest
 
 from bot.commands.pod_queue import _when_clock, _when_options
 from bot.commands.test_group import HALL_OF_FAME
-from bot.services.ping_roles import POD_GUIDE_BUTTON_ID
+from bot.services.ping_roles import build_pod_guide_button
 from bot.services.pod_format_select import WRITE_IN_VALUE
 from bot.services import pod_launch
 from bot.services.pod_launch import LauncherSlot, _lazy_status
@@ -92,13 +92,20 @@ def test_committed_card_link_is_none_without_a_thread_name():
     assert _committed_card_link(None, slot) is None
 
 
-FOOTER_IDS = {BOARD_LEAVE_ID, POD_GUIDE_BUTTON_ID}
+POD_GUIDE = build_pod_guide_button().url
+
+
+def _child_ids(view):
+    return [getattr(child, "url", None) or child.custom_id for child in view.children]
+
+
+FOOTER_IDS = {BOARD_LEAVE_ID, POD_GUIDE}
 
 
 def test_a_closed_slot_carries_no_join_button_while_an_open_one_does():
     view = PodPollView([_lazy("EARLY", STATUS_EXPIRED), _lazy("LATE", STATUS_OPEN)])
 
-    pods = [child.custom_id for child in view.children if child.custom_id not in FOOTER_IDS]
+    pods = [cid for cid in _child_ids(view) if cid not in FOOTER_IDS]
 
     assert pods == [f"pod_poll:{named_bucket_key('LATE', LATEST)}"]
 
@@ -106,11 +113,11 @@ def test_a_closed_slot_carries_no_join_button_while_an_open_one_does():
 def test_a_slot_offering_two_formats_carries_one_button_per_pod():
     view = PodPollView([_lazy("EARLY", STATUS_OPEN), _lazy("EARLY", STATUS_OPEN, set_code="PEASANT")])
 
-    assert [child.custom_id for child in view.children] == [
+    assert _child_ids(view) == [
         f"pod_poll:{named_bucket_key('EARLY', LATEST)}",
         f"pod_poll:{named_bucket_key('EARLY', 'PEASANT')}",
         BOARD_LEAVE_ID,
-        POD_GUIDE_BUTTON_ID,
+        POD_GUIDE,
     ]
 
 
@@ -121,13 +128,13 @@ def test_the_board_carries_one_leave_for_every_pod_on_it():
         _committed("LATE", "555", "777"),
     ])
 
-    assert [child.custom_id for child in view.children].count(BOARD_LEAVE_ID) == 1
+    assert _child_ids(view).count(BOARD_LEAVE_ID) == 1
 
 
 def test_a_board_with_nothing_left_to_leave_carries_no_leave_button():
     view = PodPollView([_lazy("EARLY", STATUS_EXPIRED)])
 
-    assert BOARD_LEAVE_ID not in [child.custom_id for child in view.children]
+    assert BOARD_LEAVE_ID not in _child_ids(view)
 
 
 LATE_TONIGHT = datetime(2026, 7, 18, 20, 0, tzinfo=SCHEDULE_TZ)
@@ -197,7 +204,7 @@ def test_a_pod_that_started_drafting_carries_no_button():
 
     view = PodPollView([drafting])
 
-    assert [child.custom_id for child in view.children] == [POD_GUIDE_BUTTON_ID]
+    assert _child_ids(view) == [POD_GUIDE]
 
 
 @pytest.mark.parametrize(
@@ -330,4 +337,4 @@ def test_a_board_leave_never_reaches_a_championship_seat(monkeypatch):
     view = PodPollView([championship_slot])
 
     assert [slot.thread_id for slot in held] == ["111"]
-    assert BOARD_LEAVE_ID not in [child.custom_id for child in view.children]
+    assert BOARD_LEAVE_ID not in _child_ids(view)
