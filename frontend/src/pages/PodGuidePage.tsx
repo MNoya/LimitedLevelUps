@@ -155,7 +155,7 @@ export function PodGuidePage() {
   };
 
   return (
-    <PageShell subtitle="POD DRAFTS" flushFooter>
+    <PageShell subtitle="POD DRAFTS">
       <div className="flex min-h-full flex-1">
         <aside className="hidden lg:block shrink-0 self-stretch w-[clamp(200px,15vw,220px)] border-r border-border bg-surface">
           <div className="sticky top-0 max-h-screen overflow-y-auto overflow-x-hidden">

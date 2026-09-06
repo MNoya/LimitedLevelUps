@@ -222,7 +222,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
         )}
       </main>
 
-      <SiteFooter flush />
+      <SiteFooter />
 
       <MobileLoginBar show={loginBarVisible} signIn={signIn} text={!isPastDeadline ? "LOG IN TO SUBMIT PICKS" : "LOG IN TO VIEW YOUR PICKS"} />
 

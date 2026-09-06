@@ -408,7 +408,7 @@ export function EpisodesPage() {
   };
 
   return (
-    <PageShell subtitle="EPISODES" flushFooter>
+    <PageShell subtitle="EPISODES">
       <div ref={contentTopRef} className="flex min-h-full flex-1">
         <aside
           className={cn(

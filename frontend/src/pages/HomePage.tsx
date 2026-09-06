@@ -56,7 +56,7 @@ export function HomePage() {
   const { data: episodes, isLoading: episodesLoading } = useRecentEpisodes();
 
   return (
-    <PageShell subtitle="HOME" fill>
+    <PageShell subtitle="HOME" fill sponsorVariant="color">
       <div
         className={cn(
           "p-4 lg:p-5 grid gap-4 grid-cols-1 lg:h-full",

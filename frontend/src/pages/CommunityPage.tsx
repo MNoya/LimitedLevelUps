@@ -71,7 +71,7 @@ export function CommunityPage() {
         </Container>
       </section>
 
-      <Container className="pt-10 md:pt-12">
+      <Container className="pt-10 py-10 md:pt-12">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {COMMUNITY_EVENTS.map((event) => (
             <EventCard key={event.to} event={event} />
