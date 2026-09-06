@@ -438,7 +438,7 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
     title: "Scheduling Pods",
     body: (
       <>
-        <li>Use <Cmd>/draft</Cmd> to start a pod right now or at a specific time</li>
+        <li>Use <Cmd>/draft</Cmd> to create a pod for now or at a specific time</li>
         <li>Select an existing format or <B>Write-In</B> for a set or cube not covered by the list</li>
         <li>Turn on <B>Notifications</B> wisely if you must</li>
       </>
@@ -643,10 +643,10 @@ function Acc(
   { title: string; divider?: boolean; preview?: ReactNode; children: ReactNode },
 ) {
   return (
-    <details className={cn("group", divider ? "border-t border-border" : null)}>
+    <details className={cn("group/acc", divider ? "border-t border-border" : null)}>
       <summary className="flex items-center gap-1.5 py-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-        <ChevronDown size={17} strokeWidth={2.5} className="-mt-[2px] shrink-0 text-green -rotate-90 transition-transform group-open:rotate-0" />
-        <span className="text-[17px] font-semibold text-text transition-colors group-hover:text-green">{title}</span>
+        <ChevronDown size={17} strokeWidth={2.5} className="-mt-[2px] shrink-0 text-green -rotate-90 transition-transform group-open/acc:rotate-0" />
+        <span className="text-[17px] font-semibold text-text transition-colors group-hover/acc:text-green">{title}</span>
       </summary>
       <ul className="mb-4 flex flex-col gap-1.5 text-subtle text-[14px] leading-[1.45] [&_strong]:font-semibold [&>li]:relative [&>li]:pl-[19px] [&>li]:before:absolute [&>li]:before:left-[6px] [&>li]:before:top-[8px] [&>li]:before:h-[4px] [&>li]:before:w-[4px] [&>li]:before:rotate-45 [&>li]:before:bg-green [&>li]:before:content-['']">
         {children}
@@ -1206,9 +1206,9 @@ function SeasonBoardCard() {
       <div className={cn(SEASON_COLS, "border-b border-border bg-surface2", GUIDE_TABLE_PAD)} style={{ height: 34 }}>
         <Link
           to="/pods"
-          className="col-span-2 flex items-center gap-2 min-w-0 no-underline text-white hover:underline"
+          className="group/season col-span-2 flex items-center gap-2 min-w-0 no-underline text-white transition-colors hover:text-green"
         >
-          <SetGlyph code={ACTIVE_SET_CODE} size={17} className="shrink-0 text-white" />
+          <SetGlyph code={ACTIVE_SET_CODE} size={17} className="shrink-0 text-white transition-colors group-hover/season:text-green" />
           <span className="font-display tracking-[0.04em] text-[15px]">SEASON LEADERBOARD</span>
           <ArrowRight size={14} strokeWidth={2} className="shrink-0" />
         </Link>
