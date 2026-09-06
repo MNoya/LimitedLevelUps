@@ -89,14 +89,14 @@ export function SiteFooter({ sponsorVariant = "gray" }: { sponsorVariant?: "colo
   const navClass = "flex items-center justify-center gap-5 font-display tracking-[0.12em] text-[15px]";
   const row = (
     <>
-      <div className="relative hidden items-center justify-between text-[12px] text-muted md:flex">
+      <div className="relative hidden items-center justify-between text-[12px] text-muted lg:flex">
         <span className="mono flex flex-col gap-0.5 text-[10px] leading-tight">{copyright}</span>
         <div className="pointer-events-none absolute inset-0 grid grid-cols-[minmax(300px,360px)_minmax(0,1fr)_clamp(300px,22vw,340px)] items-center gap-4">
           {sponsorLogo(desktopHeight, "pointer-events-auto col-start-2 justify-self-center")}
         </div>
         <nav className={navClass}>{links.map(renderLink)}</nav>
       </div>
-      <div className="flex flex-col items-center gap-3 text-[11px] text-muted md:hidden">
+      <div className="flex flex-col items-center gap-3 text-[11px] text-muted lg:hidden">
         <nav className="grid grid-cols-3 items-center justify-items-start gap-x-5 gap-y-3.5 font-display tracking-[0.12em] text-[15px]">
           {renderLink(linkByLabel.YouTube)}
           {sponsorLogo(mobileHeight, "justify-self-center")}
