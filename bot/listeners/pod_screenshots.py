@@ -20,6 +20,7 @@ import logging
 import discord
 from discord.ext import commands
 
+from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import first_image_url, message_caption
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
@@ -27,6 +28,7 @@ from bot.services.pod_drafts import (
     active_event_for_discord_user_in_dm,
     capture_deck_screenshot,
     is_pod_thread_champion,
+    update_deck_caption_for_message,
 )
 from bot.services.pod_team_showcase import maybe_post_team_championship, maybe_post_team_trophy_hype
 from bot.services.pod_thread_backfill import parse_caption_colors
@@ -86,6 +88,24 @@ class PodScreenshotListener(commands.Cog):
             except discord.HTTPException:
                 log.info("could not add 🏆 reaction", exc_info=True)
 
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
+        """Carry a caption edit on an on-file screenshot into the db, cached edits only"""
+        if after.author.bot:
+            return
+        if not isinstance(after.channel, discord.Thread):
+            return
+        if after.channel.parent_id != settings.pod_draft_channel_id:
+            return
+        image_url = first_image_url(after)
+        if image_url is None:
+            return
+
+        thread_id = str(after.channel.id)
+        discord_id = str(after.author.id)
+        caption = message_caption(after)
+        await asyncio.to_thread(_update_caption_sync, thread_id, discord_id, image_url, caption)
+
     async def _redirect_dm_image(self, message: discord.Message) -> None:
         """User posted an image in DM — point them at the pod thread so the screenshot is publicly
         viewable. DM CDN URLs carry signed expiries and aren't reliably embeddable on the frontend."""
@@ -115,6 +135,14 @@ def _capture_sync(thread_id: str, discord_id: str, image_url: str, caption: str 
         if event_id is not None:
             session.commit()
         return event_id
+
+
+def _update_caption_sync(thread_id: str, discord_id: str, image_url: str, caption: str | None) -> None:
+    with SessionLocal() as session:
+        colors = parse_caption_colors(caption)
+        event_id = update_deck_caption_for_message(session, thread_id, discord_id, image_url, caption, colors)
+        if event_id is not None:
+            session.commit()
 
 
 def _is_thread_champion_sync(thread_id: str, discord_id: str) -> bool:

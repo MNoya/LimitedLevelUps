@@ -1799,6 +1799,41 @@ def capture_deck_screenshot(
     return event_id
 
 
+def update_deck_caption_for_message(
+    session: Session,
+    discord_thread_id: str,
+    discord_id: str,
+    image_url: str,
+    caption: str | None,
+    colors: str | None = None,
+) -> str | None:
+    """Update the caption when a player edits the screenshot already on file, matched by image url"""
+    participant = session.execute(
+        select(PodDraftParticipant)
+        .join(Player, Player.id == PodDraftParticipant.player_id)
+        .join(PodDraftEvent, PodDraftEvent.id == PodDraftParticipant.event_id)
+        .where(
+            PodDraftEvent.discord_thread_id == discord_thread_id,
+            Player.discord_id == discord_id,
+        )
+    ).scalar_one_or_none()
+    if participant is None or participant.deck_screenshot_url is None:
+        return None
+    if participant.deck_screenshot_url.split("?", 1)[0] != image_url.split("?", 1)[0]:
+        return None
+    if participant.deck_screenshot_caption == (caption or None):
+        return None
+    participant.deck_screenshot_caption = caption or None
+    if colors and not participant.deck_colors:
+        participant.deck_colors = colors
+    session.flush()
+    log.info(
+        f"[DECK] screenshot.caption_edited event={participant.event_id} discord_id={discord_id} "
+        f"caption={caption!r}"
+    )
+    return participant.event_id
+
+
 def get_participant_deck_state(
     session: Session,
     discord_thread_id: str,

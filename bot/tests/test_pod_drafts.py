@@ -12,6 +12,7 @@ from bot.services.pod_drafts import (
     active_event_for_discord_user_in_dm,
     capture_deck_screenshot,
     declined_pod_roles,
+    update_deck_caption_for_message,
     dm_draft_link_enabled,
     draftmancer_url_for,
     finalize_champion,
@@ -715,6 +716,45 @@ def test_capture_deck_screenshot_gating(
     else:
         assert result is None
         assert stored.deck_screenshot_url == existing_url
+
+
+@pytest.mark.parametrize(
+    "edited_url, updated",
+    [
+        ("https://cdn.test/deck.png", True),
+        ("https://cdn.test/deck.png?ex=refreshed&hm=abc", True),
+        ("https://cdn.test/other.png", False),
+    ],
+    ids=["same-message", "same-message-resigned-url", "different-message-no-clobber"],
+)
+def test_update_deck_caption_for_message(session, edited_url, updated):
+    player = _seed_player(session, discord_id="902", username="edit", display_name="Edit")
+    event = PodDraftEvent(
+        event_date=date(2026, 6, 3), event_time=datetime(2026, 6, 3, tzinfo=timezone.utc),
+        set_code="SOS", name="SOS Pod Edit", draftmancer_session="edit-sess",
+        discord_thread_id="edit-thread", socket_status="complete", current_round=3,
+    )
+    session.add(event)
+    session.flush()
+    session.add(PodDraftParticipant(
+        event_id=event.id, player_id=player.id, display_name="Edit",
+        deck_screenshot_url="https://cdn.test/deck.png?ex=old", deck_screenshot_caption="2-1 rakos",
+    ))
+    session.flush()
+
+    result = update_deck_caption_for_message(
+        session, "edit-thread", "902", edited_url, "2-1 rakdos",
+    )
+
+    stored = session.execute(
+        select(PodDraftParticipant).where(PodDraftParticipant.event_id == event.id)
+    ).scalar_one()
+    if updated:
+        assert result == event.id
+        assert stored.deck_screenshot_caption == "2-1 rakdos"
+    else:
+        assert result is None
+        assert stored.deck_screenshot_caption == "2-1 rakos"
 
 
 def test_draftmancer_url_for_base_has_no_username():
