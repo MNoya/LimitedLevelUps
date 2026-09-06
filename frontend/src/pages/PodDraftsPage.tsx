@@ -720,6 +720,21 @@ function rowBodyClass(stacked: boolean): string {
   );
 }
 
+// Leads every pod row so the format reads at a glance, hugging the title next to it
+function PodSetTitle({
+  event,
+  stacked,
+  children,
+}: { event: PodEventSummary; stacked: boolean; children: React.ReactNode }) {
+  const code = setGlyphCode({ code: event.setCode, custom: event.formatLabel != null });
+  return (
+    <span className={cn("flex items-center min-w-0 flex-1", stacked ? "gap-2" : "gap-2.5")}>
+      <SetGlyph code={code} size={stacked ? 18 : 22} className="text-white shrink-0" />
+      {children}
+    </span>
+  );
+}
+
 function RowTitle({ stacked, children }: { stacked: boolean; children: React.ReactNode }) {
   return (
     <span
@@ -769,9 +784,11 @@ function MockEventRow({
       >
         {!stacked && <DateRail date={event.eventDate} highlighted={false} />}
         <div className={rowBodyClass(stacked)}>
-          <RowTitle stacked={stacked}>
-            {highlightEventLabel(cleanPodEventName(event.name, event.setCode).toUpperCase())}
-          </RowTitle>
+          <PodSetTitle event={event} stacked={stacked}>
+            <RowTitle stacked={stacked}>
+              {highlightEventLabel(cleanPodEventName(event.name, event.setCode).toUpperCase())}
+            </RowTitle>
+          </PodSetTitle>
           {stacked && <DateStamp event={event} />}
         </div>
         {stacked && (
@@ -998,7 +1015,7 @@ function EventRowBody({
   }, [matches, event.totalRounds]);
   const title = (
     <RowTitle stacked={stacked}>
-      <PodEventTitle event={event} omitQualifier={event.isTeamDraft} />
+      <PodEventTitle event={event} />
     </RowTitle>
   );
   // A pod with no champion is a pod still running, so the row says nothing about being in progress
@@ -1011,7 +1028,9 @@ function EventRowBody({
   );
   return (
     <div className={rowBodyClass(stacked)}>
-      {title}
+      <PodSetTitle event={event} stacked={stacked}>
+        {title}
+      </PodSetTitle>
       {outcome}
       {stacked && <DateStamp event={event} />}
     </div>

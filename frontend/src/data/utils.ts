@@ -274,7 +274,10 @@ export function lcqCashPrize(event: { format: string; wins: number; losses: numb
 }
 
 export function stripDiscriminator(name: string): string {
-  return name.replace(/#\d+/, "").trim();
+  return name
+    .replace(/#\d+/, "")
+    .replace(/\s*\[[^\]]*\]\s*$/, "")
+    .trim();
 }
 
 export function podDiscordName(p: {
@@ -294,11 +297,15 @@ export function podSeatName(p: { draftmancerName: string | null; displayName: st
   return p.draftmancerName ?? p.displayName;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function cleanPodEventName(name: string, setCode: string): string {
   const tableMatch = name.match(/\s+(?:[-–]\s+)?Table\s+(\d+)\s*$/i);
   const tableSuffix = tableMatch ? ` - Table ${tableMatch[1]}` : "";
   const withoutTable = tableMatch ? name.slice(0, tableMatch.index).trim() : name;
-  const escaped = setCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = escapeRegExp(setCode);
   let cleaned = withoutTable.replace(/\s+[-–]\s+.+$/, "").trim();
   // Cube events lead with an organizer name and the format label; keep only what follows "Cube"
   const afterCube = cleaned.replace(/^.*\bcube\b\s*/i, "").trim();
@@ -318,17 +325,23 @@ export function cleanPodEventName(name: string, setCode: string): string {
 }
 
 // The slot phrase alone (`Early Pod`, `Late Pod`), stripped of set code, date, baked number, and any
-// Table suffix. The date lives in the row's date box and the Table suffix renders separately, so
-// neither belongs here.
-export function podSlotName(name: string, setCode: string): string {
-  const escaped = setCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return name
+// Table suffix. A title that leads with the code drops it (the glyph carries the format); one that
+// spells the set name out instead swaps in the short code, so an obscure symbol still reads.
+export function podSlotName(name: string, setCode: string, formatLabel?: string | null): string {
+  const escaped = escapeRegExp(setCode);
+  const leadsWithCode = new RegExp(`\\b${escaped}\\b`, "i").test(name);
+  let base = name;
+  if (!leadsWithCode && formatLabel && !setCode.startsWith(CUBE_BASE)) {
+    base = base.replace(new RegExp(`\\b${escapeRegExp(formatLabel)}\\b`, "gi"), setCode);
+  }
+  base = base
     .replace(/\s*[-–]?\s*Table\s+\d+\s*$/i, "")
     .replace(/#\d+/g, "")
-    .replace(new RegExp(`\\b${escaped}\\b`, "gi"), "")
-    .replace(POD_NAME_DATE_RE, " ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+    .replace(POD_NAME_DATE_RE, " ");
+  if (leadsWithCode) {
+    base = base.replace(new RegExp(`\\b${escaped}\\b`, "gi"), "");
+  }
+  return base.replace(/\s{2,}/g, " ").trim();
 }
 
 // Unanchored: a format word can lead the date (`Peasant Cube Aug 14 Early Pod`)

@@ -1,27 +1,13 @@
 import type { ReactNode } from "react";
 
-import { podEventQualifier, podSlotName } from "../../data/utils";
+import { podSlotName } from "../../data/utils";
 import type { PodEventSummary } from "../../types/leaderboard";
 
 const SPLIT_RE = /(#\d+|\bmock\b)/gi;
 
-// Green execution-ordered `#N` (absent until the pod runs), the slot phrase, then a muted qualifier
-export function PodEventTitle({
-  event,
-  omitQualifier = false,
-}: {
-  event: PodEventSummary;
-  omitQualifier?: boolean;
-}): ReactNode {
-  const slot = podSlotName(event.name, event.setCode).toUpperCase();
-  const qualifier = omitQualifier ? "" : podEventQualifier(event).toUpperCase();
-  return (
-    <>
-      {event.ordinal != null && <span className="text-green">#{event.ordinal} </span>}
-      {slot}
-      {qualifier && <span className="text-muted">{qualifier}</span>}
-    </>
-  );
+// The slot phrase alone. The set glyph to the left carries the format now
+export function PodEventTitle({ event }: { event: PodEventSummary }): ReactNode {
+  return podSlotName(event.name, event.setCode, event.formatLabel).toUpperCase();
 }
 
 // The green execution ordinal only ever leads the label, so a leading `#N` (and "MOCK") light up
