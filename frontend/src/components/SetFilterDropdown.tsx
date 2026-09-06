@@ -7,9 +7,9 @@ import type { SetSummary } from "../types/leaderboard";
 export interface SetFilterOption extends FilterOption {
   glyphCode?: string;
   meta?: ReactNode;
-  // Shown on the trigger in place of the raw value, for a board whose code is not readable and
-  // whose name is too wide for a half-width control
   triggerLabel?: string;
+  icon?: ReactNode;
+  code?: string;
 }
 
 // Newest release first, with the trigger showing the code and the list the set's own name.
@@ -75,7 +75,9 @@ export function SetFilterDropdown({
   const renderValue = (option: FilterOption) =>
     option.value ? (
       <span className="flex w-full items-center gap-2 min-w-0">
-        <SetGlyph code={glyphFor(option.value)} size={20} className="text-white shrink-0" />
+        {byValue.get(option.value)?.icon ?? (
+          <SetGlyph code={glyphFor(option.value)} size={20} className="text-white shrink-0" />
+        )}
         <span className="truncate">
           {valueLabel === "name"
             ? option.label
@@ -91,13 +93,24 @@ export function SetFilterDropdown({
       option.label
     );
 
-  const renderOption = (option: FilterOption) => (
-    <span className="flex w-full min-w-0 items-center gap-2.5">
-      {option.value ? <SetGlyph code={glyphFor(option.value)} size={20} /> : <span className="w-5 shrink-0" />}
-      <span className="flex-1 truncate">{option.label}</span>
-      {byValue.get(option.value)?.meta ?? null}
-    </span>
-  );
+  const renderOption = (option: FilterOption) => {
+    const opt = byValue.get(option.value);
+    return (
+      <span className="flex w-full min-w-0 items-center gap-2.5">
+        {opt?.icon ??
+          (option.value ? <SetGlyph code={glyphFor(option.value)} size={20} /> : <span className="w-5 shrink-0" />)}
+        {opt?.code ? (
+          <span className="flex-1 min-w-0 flex items-baseline gap-2">
+            <span className="shrink-0 leading-none">{opt.code}</span>
+            <span className="truncate text-muted text-[11px] tracking-[0.08em]">{option.label}</span>
+          </span>
+        ) : (
+          <span className="flex-1 truncate">{option.label}</span>
+        )}
+        {opt?.meta ?? null}
+      </span>
+    );
+  };
 
   return (
     <FilterDropdown

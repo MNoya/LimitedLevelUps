@@ -135,7 +135,7 @@ export function podFormatBuckets<E>(
     const bucket = bucketFor(e);
     counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
   }
-  const order: PodFormatBucket[] = ["set", "flashback", "cube", "mock"];
+  const order: PodFormatBucket[] = ["set", "flashback", "cube"];
   return order
     .filter((key) => (counts.get(key) ?? 0) > 0)
     .map((key) => ({ key, count: counts.get(key)! }));

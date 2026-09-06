@@ -316,7 +316,7 @@ function GuideBody() {
               Finish deckbuilding after the draft, then press <B>Export</B>
             </Bullet>
             <Bullet>
-              <B>Import</B> your deck on Arena<span className="hidden sm:inline"> and adjust your lands</span>
+              <B>Import</B> your deck on Arena and adjust your lands
             </Bullet>
             <Bullet>Drop unwanted cards from your sideboard</Bullet>
             <Bullet>Craft any cards you don't own</Bullet>

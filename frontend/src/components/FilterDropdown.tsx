@@ -171,8 +171,10 @@ export function FilterDropdown({
               return (
                 <React.Fragment key={o.value}>
                   {showSectionHeader && (
-                    <div className="border-t border-border2 px-3.5 pt-2.5 pb-1 font-display text-[11px] tracking-[0.2em] text-muted select-none">
-                      {o.section}
+                    <div className="flex items-center gap-3 px-3.5 py-1 select-none">
+                      <span className="h-px flex-1 bg-border2" />
+                      <span className="font-display text-[12px] tracking-[0.22em] text-subtle">{o.section}</span>
+                      <span className="h-px flex-1 bg-border2" />
                     </div>
                   )}
                   <button

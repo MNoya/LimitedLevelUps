@@ -8,8 +8,9 @@ import { AppHeader } from "../components/AppHeader";
 import { Footer } from "../components/Footer";
 import { SectionLabel } from "../components/SectionLabel";
 import { SetSwitcherDesktop } from "../components/SetSwitcher";
-import { SetFilterDropdown, setFilterOptionsFrom } from "../components/SetFilterDropdown";
-import { InlineFilterSelect, type InlineFilterOption } from "../components/InlineFilterSelect";
+import { type InlineFilterOption } from "../components/InlineFilterSelect";
+import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
+import { SetFilterDropdown, type SetFilterOption } from "../components/SetFilterDropdown";
 import { AAvatar, setGlyphCode, SetGlyph, Trophy } from "../components/Brand";
 import { ArrowRight, BsAsterisk, CalendarRange, GiCardPick, GiRoundTable, TbCards } from "../components/Icons";
 import { DiscordIcon } from "../components/BrandIcons";
@@ -43,6 +44,7 @@ import {
   colorsOf,
   CUBE_BASE,
   fmtRange,
+  isCubeCode,
   orderedDeckColors,
   playerPath,
   podDiscordName,
@@ -117,13 +119,15 @@ const MIN_BOARD_FORMATS = 2;
 const AXIS_ALL = "all";
 const AXIS_PARAM_FORMAT = "format";
 const AXIS_PARAM_SEASON = "season";
+const AXIS_PARAM_SET = "set";
+const SCOPE_SET_PREFIX = "set:";
 
-const FORMAT_BUCKETS: PodFormatBucket[] = ["set", "flashback", "cube", "mock"];
+const FORMAT_BUCKETS: PodFormatBucket[] = ["set", "flashback", "cube"];
 
 function formatBucketLabel(bucket: PodFormatBucket, season: SetSummary | undefined): string {
-  if (bucket === "set") return season ? `${season.code} Only` : "Set Drafts";
-  if (bucket === "flashback") return "Flashback";
-  return bucket === "cube" ? "Cube" : "Mock";
+  if (bucket === "set") return season ? `${season.code} Only` : "Live Sets";
+  if (bucket === "flashback") return "Flashbacks";
+  return bucket === "cube" ? "Peasant Cube" : "Mock";
 }
 
 const POD_DESKTOP_WIDTH = 900;
@@ -220,13 +224,15 @@ export function PodDraftsPage({
   const seasonAxis = searchParams.get(AXIS_PARAM_SEASON);
   // Every season at once, the one window a route cannot name
   const allSeasons = !setCode && seasonAxis === AXIS_ALL;
+  const bySetCode =
+    !setCode && !seasonCode && seasonAxis !== AXIS_ALL ? searchParams.get(AXIS_PARAM_SET) : null;
 
   const season = useMemo<SetSummary | undefined>(() => {
-    if (setCode || allSeasons) return undefined;
+    if (setCode || allSeasons || bySetCode) return undefined;
     const wanted = seasonCode ?? (seasonAxis === AXIS_ALL ? null : seasonAxis);
     if (wanted) return seasons.find((s) => s.code === wanted) ?? podSeasons(allSets).find((s) => s.code === wanted);
     return currentSeason(allSets) ?? seasons[0];
-  }, [setCode, allSeasons, seasonCode, seasonAxis, seasons, allSets]);
+  }, [setCode, allSeasons, bySetCode, seasonCode, seasonAxis, seasons, allSets]);
 
   const legacySets = useMemo<SetSummary[]>(() => {
     if (!allSets || !podSetCodes) return [];
@@ -246,7 +252,7 @@ export function PodDraftsPage({
     return seasons[0]?.code ?? ACTIVE_SET_CODE;
   }, [allSets, seasons]);
 
-  const activeSet = season?.code ?? setCode ?? homeCode;
+  const activeSet = season?.code ?? setCode ?? bySetCode ?? homeCode;
   const onSelectSet = (code: string) => {
     navigate(code === homeCode ? "/pods" : `/pods/${code}`);
   };
@@ -255,11 +261,22 @@ export function PodDraftsPage({
   const seasonResults = usePodSeasonResults(season).data;
   const boardEvents = usePodEvents(setCode).data;
   const boardResults = usePodResultsForSet(setCode).data;
-  const lifetimeEvents = useAllPodEvents(allSeasons).data;
-  const lifetimeResults = useAllPodResults(allSeasons).data;
+  const lifetimeEvents = useAllPodEvents(allSeasons || !!bySetCode).data;
+  const lifetimeResults = useAllPodResults(allSeasons || !!bySetCode).data;
 
-  const scopeEvents = allSeasons ? lifetimeEvents : setCode ? boardEvents : seasonEvents;
-  const scopeResults = allSeasons ? lifetimeResults : setCode ? boardResults : seasonResults;
+  const setScopedEvents = useMemo(
+    () => (bySetCode ? lifetimeEvents?.filter((e) => e.setCode === bySetCode) : undefined),
+    [bySetCode, lifetimeEvents],
+  );
+
+  const scopeEvents = allSeasons
+    ? lifetimeEvents
+    : bySetCode
+      ? setScopedEvents
+      : setCode
+        ? boardEvents
+        : seasonEvents;
+  const scopeResults = allSeasons || bySetCode ? lifetimeResults : setCode ? boardResults : seasonResults;
 
   // A set below the board threshold still resolves its name when opened directly by code
   const directPod = podSetCodes?.find((p) => p.code === activeSet);
@@ -270,10 +287,10 @@ export function PodDraftsPage({
   // A format board is already one format, so only a season board buckets. Across every season an
   // event is a set draft against the season it was played in, not against the one on screen.
   const bucketFor = useMemo(() => {
-    if (setCode) return undefined;
+    if (setCode || bySetCode) return undefined;
     if (season) return (e: PodEventSummary) => bucketOf(e, season.code);
     return (e: PodEventSummary) => lifetimeBucketOf(e, allSets);
-  }, [setCode, season, allSets]);
+  }, [setCode, bySetCode, season, allSets]);
 
   const formatBuckets = useMemo(
     () => (bucketFor ? podFormatBuckets(scopeEvents, bucketFor) : []),
@@ -371,7 +388,7 @@ export function PodDraftsPage({
 
   usePodEventParticipants(played[0]?.eventId);
 
-  const onSeasonBoard = !!season && !format;
+  const showUpcoming = true;
 
   // Any season prints the set's own run, so it reads the same whether one pod happened in it or
   // twenty. Only a whole board, which spans no single set, falls back to the pods it actually holds.
@@ -384,26 +401,64 @@ export function PodDraftsPage({
     return dates.length > 0 ? fmtRange(dates[0], dates[dates.length - 1]) : null;
   }, [season, boardWindow, events]);
 
-  const liveSeasonCode = currentSeason(allSets)?.code;
+  const liveSeason = currentSeason(allSets);
+  const liveSeasonCode = liveSeason?.code;
   const iconSize = isMobile ? 16 : 18;
 
-  const seasonOptions = useMemo<InlineFilterOption[]>(() => {
-    const all: InlineFilterOption = {
+  const scopeOptions = useMemo<SetFilterOption[]>(() => {
+    const all: SetFilterOption = {
       value: AXIS_ALL,
       label: "All Seasons",
-      icon: <CalendarRange size={iconSize} className="text-white shrink-0" />,
+      triggerLabel: "All Seasons",
+      icon: <GiRoundTable size={20} className="text-white shrink-0" />,
     };
-    const toOption = (s: SetSummary): InlineFilterOption => ({
-      value: s.code,
-      label: s.code === liveSeasonCode ? "Current Season" : `${s.code} Season`,
-      icon: <SetGlyph code={setGlyphCode(s)} size={iconSize} className="text-white shrink-0" />,
-    });
-    // A board that ran in one season has nothing to pick between
     if (setCode) {
-      return boardSeasons.length < MIN_BOARD_SEASONS ? [] : [all, ...boardSeasons.map((b) => toOption(b.season))];
+      if (boardSeasons.length < MIN_BOARD_SEASONS) return [];
+      const windowRow = (s: SetSummary): SetFilterOption => {
+        const label = `${s.code} Season`;
+        return { value: s.code, label, triggerLabel: label, glyphCode: setGlyphCode(s) };
+      };
+      return [all, ...boardSeasons.map((b) => windowRow(b.season))];
     }
-    return [all, ...seasons.map(toOption)];
-  }, [setCode, boardSeasons, seasons, liveSeasonCode, iconSize]);
+    const seasonRow = (s: SetSummary): SetFilterOption => {
+      const label = `${s.code} Season`;
+      const meta =
+        s.code === liveSeasonCode ? (
+          <span className="mono text-[10px] tracking-[0.18em] text-green shrink-0">LIVE</span>
+        ) : undefined;
+      return { value: s.code, label, triggerLabel: label, glyphCode: setGlyphCode(s), meta };
+    };
+    const setRow = (s: SetSummary): SetFilterOption => ({
+      value: `${SCOPE_SET_PREFIX}${s.code}`,
+      label: s.name,
+      triggerLabel: s.name,
+      code: s.code,
+      glyphCode: setGlyphCode(s),
+      section: "By Set",
+    });
+    const bySet = isMobile ? switcherSets : switcherSets.filter((s) => !isCubeCode(s.code) && !s.custom);
+    return [all, ...seasons.map(seasonRow), ...bySet.map(setRow)];
+  }, [setCode, boardSeasons, seasons, switcherSets, liveSeasonCode, isMobile]);
+
+  const routeToSet = (code: string) => {
+    if (isCubeCode(code) || switcherSets.find((s) => s.code === code)?.custom) {
+      onSelectSet(code);
+      return;
+    }
+    navigate({ pathname: "/pods", search: `?${AXIS_PARAM_SET}=${code}` });
+  };
+
+  const onSelectScope = (value: string) => {
+    if (value === AXIS_ALL) {
+      onSelectSeason(AXIS_ALL);
+      return;
+    }
+    if (value.startsWith(SCOPE_SET_PREFIX)) {
+      routeToSet(value.slice(SCOPE_SET_PREFIX.length));
+      return;
+    }
+    onSelectSet(value);
+  };
 
   const formatOptions = useMemo<InlineFilterOption[]>(() => {
     if (!bucketFor || formatBuckets.length < MIN_BOARD_FORMATS) return [];
@@ -416,26 +471,54 @@ export function PodDraftsPage({
       ...formatBuckets.map(({ key }) => ({
         value: key,
         label: formatBucketLabel(key, season),
-        icon: <ChipIcon bucket={key} seasonMeta={season} className="text-white shrink-0" size={iconSize} />,
+        icon: (
+          <ChipIcon
+            bucket={key}
+            seasonMeta={season ?? liveSeason}
+            className="text-white shrink-0"
+            size={iconSize}
+          />
+        ),
       })),
     ];
-  }, [bucketFor, formatBuckets, season, iconSize]);
+  }, [bucketFor, formatBuckets, season, liveSeason, iconSize]);
 
-  const filterVariant = isMobile ? "mobile" : "inline";
-  const seasonSelector = seasonOptions.length > 0 ? (
-    <InlineFilterSelect
-      value={season?.code ?? (setCode ? boardWindow?.code ?? AXIS_ALL : AXIS_ALL)}
-      options={seasonOptions}
-      onChange={onSelectSeason}
-      variant={filterVariant}
+  const selectorVariant = isMobile ? "mobile" : "desktop";
+  const renderScopeFormat = (option: FilterOption) => {
+    const icon = formatOptions.find((o) => o.value === option.value)?.icon;
+    return (
+      <span className="flex items-center gap-2 min-w-0">
+        {icon}
+        <span className="truncate">{option.label}</span>
+      </span>
+    );
+  };
+  const scopeValue = setCode
+    ? boardWindow?.code ?? AXIS_ALL
+    : allSeasons
+      ? AXIS_ALL
+      : bySetCode
+        ? `${SCOPE_SET_PREFIX}${bySetCode}`
+        : activeSet;
+  const scopeSelector = scopeOptions.length > 1 ? (
+    <SetFilterDropdown
+      value={scopeValue}
+      options={scopeOptions}
+      onChange={setCode ? onSelectSeason : onSelectScope}
+      variant={selectorVariant}
+      triggerClassName={isMobile ? undefined : "!min-w-0"}
+      searchable
     />
   ) : null;
   const formatSelector = formatOptions.length > 0 ? (
-    <InlineFilterSelect
+    <FilterDropdown
       value={format ?? AXIS_ALL}
       options={formatOptions}
       onChange={onSelectFormat}
-      variant={filterVariant}
+      variant={selectorVariant}
+      triggerClassName={isMobile ? undefined : "!min-w-0"}
+      renderValue={renderScopeFormat}
+      renderOption={renderScopeFormat}
     />
   ) : null;
 
@@ -452,13 +535,7 @@ export function PodDraftsPage({
       {isMobile ? (
         <div ref={chromeRef} className="page-chrome sticky top-0 z-10 bg-bg">
           <AppHeader subtitle="POD DRAFTS" />
-          <MobileFilterBar
-            activeSet={activeSet}
-            availableSets={switcherSets}
-            onSelectSet={onSelectSet}
-            seasonSelector={seasonSelector}
-            formatSelector={formatSelector}
-          />
+          <MobileFilterBar scopeSelector={scopeSelector} formatSelector={formatSelector} />
         </div>
       ) : (
         <>
@@ -471,13 +548,14 @@ export function PodDraftsPage({
             range={boardRange}
             isSeason={!!season}
             allSeasons={allSeasons}
+            bySet={!!bySetCode}
           />
         </>
       )}
 
       <main className="flex-1 lg:pl-5 lg:pr-8 lg:pb-10">
         <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-x-6 lg:gap-y-8">
-          <section className="order-1 lg:order-2 min-w-0 flex flex-col gap-4">
+          <section className="order-1 lg:order-2 min-w-0 flex flex-col">
             {isMobile ? (
               <MobileEventsBlock
                 played={played}
@@ -487,7 +565,7 @@ export function PodDraftsPage({
               />
             ) : (
               <>
-                {onSeasonBoard && <UpcomingBlock />}
+                {showUpcoming && <UpcomingBlock />}
                 {events === undefined ? (
                   <EventsLoadingBlock />
                 ) : played.length > 0 ? (
@@ -519,10 +597,10 @@ export function PodDraftsPage({
                 leaderboard={leaderboard}
                 events={events}
                 controls={
-                  <>
-                    {seasonSelector}
+                  <div className="flex items-center gap-3 ml-4">
+                    {scopeSelector}
                     {formatSelector}
-                  </>
+                  </div>
                 }
               />
             )}
@@ -590,6 +668,7 @@ function StandingsHeading({
       unit={(leaderboard?.length ?? 0) === 1 ? "PLAYER" : "PLAYERS"}
       controls={controls}
       compact={compact}
+      padLeftClass="pl-5"
       meta={
         !compact ? undefined : leaderboard && events ? (
           <span className="inline-flex items-baseline gap-2.5">
@@ -617,6 +696,7 @@ function SectionHeading({
   compact,
   meta,
   controls,
+  padLeftClass = "pl-2",
 }: {
   label: string;
   count?: number;
@@ -624,6 +704,7 @@ function SectionHeading({
   compact?: boolean;
   meta?: React.ReactNode;
   controls?: React.ReactNode;
+  padLeftClass?: string;
 }) {
   if (compact) {
     return (
@@ -640,8 +721,8 @@ function SectionHeading({
     );
   }
   return (
-    <div className="relative flex items-baseline justify-between py-4 pl-2 pr-5 border-b border-border gap-4">
-      <div className="flex-1 basis-0 min-w-0 flex items-baseline gap-5">
+    <div className={cn("relative flex items-center justify-between h-[50px] pr-5 border-b border-border gap-4", padLeftClass)}>
+      <div className="flex-1 basis-0 min-w-0 flex items-center gap-3">
         <span
           className="shrink-0 font-display text-text tracking-[0.18em] leading-none"
           style={{ fontSize: 17 }}
@@ -723,7 +804,7 @@ function SlotSchedule() {
         className="flex items-center gap-2 font-display text-text tracking-[0.16em] leading-none"
         style={{ fontSize: 12 }}
       >
-        <CalendarRange size={15} className="text-subtle -translate-y-[2px]" />
+        <CalendarRange size={15} className="text-subtle" />
         EVERY DAY
       </span>
       {POD_SLOTS.map((slot) => (
@@ -731,7 +812,7 @@ function SlotSchedule() {
           key={slot.label}
           className="flex items-baseline gap-2 border border-border2 bg-surface2/40 px-2.5 py-1.5"
         >
-          <span className="font-display text-muted tracking-[0.14em] leading-none" style={{ fontSize: 11 }}>
+          <span className="font-display text-text tracking-[0.14em] leading-none" style={{ fontSize: 13 }}>
             {slot.label}
           </span>
           <span
@@ -1430,24 +1511,14 @@ function EmptyHint({ children }: { children: React.ReactNode }) {
   );
 }
 
-// One band holding both filters, so the set and the format never read as separate controls
 function MobileFilterBar({
-  activeSet,
-  availableSets,
-  onSelectSet,
-  seasonSelector,
+  scopeSelector,
   formatSelector,
 }: {
-  activeSet: string;
-  availableSets: SetSummary[];
-  onSelectSet: (code: string) => void;
-  seasonSelector?: React.ReactNode;
+  scopeSelector?: React.ReactNode;
   formatSelector?: React.ReactNode;
 }) {
-  const options = useMemo(() => setFilterOptionsFrom(availableSets, true), [availableSets]);
-  // The set list is its own query, so hold the band's shape until it lands instead of pushing the
-  // whole page down when it does
-  if (options.length === 0) {
+  if (!scopeSelector) {
     return (
       <div className="px-3 py-2 border-b border-border bg-surface flex items-stretch gap-2">
         {[0, 1].map((i) => (
@@ -1459,23 +1530,9 @@ function MobileFilterBar({
     );
   }
   return (
-    <div className="px-3 py-2 border-b border-border bg-surface flex flex-col gap-2">
-      <div className="flex items-stretch gap-2">
-        <SetFilterDropdown
-          value={activeSet}
-          options={options}
-          onChange={onSelectSet}
-          variant="mobile"
-          searchable
-          valueLabel="name"
-        />
-      </div>
-      {(seasonSelector || formatSelector) && (
-        <div className="flex items-stretch gap-2">
-          {seasonSelector && <div className="flex-1 min-w-0 flex">{seasonSelector}</div>}
-          {formatSelector && <div className="flex-1 min-w-0 flex">{formatSelector}</div>}
-        </div>
-      )}
+    <div className="px-3 py-2 border-b border-border bg-surface flex items-stretch gap-2">
+      <div className="flex-1 min-w-0 flex">{scopeSelector}</div>
+      {formatSelector && <div className="flex-1 min-w-0 flex">{formatSelector}</div>}
     </div>
   );
 }
@@ -1496,7 +1553,10 @@ function ChipIcon({
     if (!seasonMeta) return <GiCardPick size={size} className={className} />;
     return <SetGlyph code={setGlyphCode(seasonMeta)} size={size} className={className} />;
   }
-  return <SetGlyph code={bucket === "cube" ? CUBE_BASE : "FLASHBACK"} size={size} className={className} />;
+  if (bucket === "flashback") {
+    return <SetGlyph code="FLASHBACK" size={Math.round(size * 1.22)} className={className} />;
+  }
+  return <SetGlyph code={CUBE_BASE} size={size} className={className} />;
 }
 
 function SetHero({
@@ -1507,6 +1567,7 @@ function SetHero({
   range,
   isSeason,
   allSeasons,
+  bySet,
 }: {
   activeSet: string;
   setMeta: SetSummary | undefined;
@@ -1515,9 +1576,10 @@ function SetHero({
   range?: string | null;
   isSeason: boolean;
   allSeasons: boolean;
+  bySet: boolean;
 }) {
   const week = isSeason && !allSeasons ? weekOfSet(setMeta) : null;
-  const isActive = !allSeasons && (setMeta?.isActive ?? false);
+  const isActive = !allSeasons && !bySet && (setMeta?.isActive ?? false);
   return (
     <div className="relative px-10 py-5 border-b border-border bg-surface flex items-center gap-6">
       {allSeasons ? (
@@ -1529,20 +1591,28 @@ function SetHero({
         <SectionLabel size={13} className={cn("text-green", !isActive && "invisible")}>LIVE</SectionLabel>
         <div className="flex items-baseline gap-3.5 mt-0.5">
           <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
-            {allSeasons ? "ALL SEASONS" : activeSet}
+            {allSeasons ? "POD DRAFTS" : activeSet}
           </span>
           <span className="font-display text-[22px] text-muted tracking-[0.06em]">
-            {allSeasons ? "EVERY POD DRAFT" : (setMeta?.name?.toUpperCase() ?? "")}
+            {allSeasons ? "ALL SEASONS" : (setMeta?.name?.toUpperCase() ?? "")}
           </span>
         </div>
         <div className="mono text-[11px] text-muted mt-1 flex items-center justify-between gap-4 h-4">
-          <span>{range || " "}</span>
-          {week && <span>{week}</span>}
+          {!allSeasons && !bySet && (
+            <>
+              <span>{range || " "}</span>
+              {week && <span>{week}</span>}
+            </>
+          )}
         </div>
       </div>
       <div className="flex-1" />
       {sets.length > 0 && (
-        <SetSwitcherDesktop sets={sets} activeCode={allSeasons ? "" : activeSet} onChange={onSelectSet} />
+        <SetSwitcherDesktop
+          sets={sets}
+          activeCode={allSeasons || bySet ? "" : activeSet}
+          onChange={onSelectSet}
+        />
       )}
     </div>
   );
