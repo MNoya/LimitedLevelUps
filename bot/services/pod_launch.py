@@ -1518,7 +1518,7 @@ def _slot_snapshot(
             continue
         slot_time = slot_event_time(day, bucket.key)
         day_signals = [signal for signal in slot_signals if signal.signal_date == day]
-        pods = _slot_pods(session, bucket.key, slot_time, day_signals, now)
+        pods = _slot_pods(session, bucket.key, day, slot_key, day_signals, now)
         key_slots += pods
         if not pods and day == board_date and formats_on(day, slot_key):
             key_slots.append(LauncherSlot(
@@ -1530,7 +1530,7 @@ def _slot_snapshot(
 
 
 def _slot_pods(
-    session: Session, time_key: str, slot_time: datetime, day_signals: list[PodSignal], now: datetime,
+    session: Session, time_key: str, day: date, slot_key: str, day_signals: list[PodSignal], now: datetime,
 ) -> list[LauncherSlot]:
     """Every pod at one slot time in the day's format order: the pods that exist, then one entry per format
     still gathering. A pod that exists covers its own format only, so the signal it fired on and any other
@@ -1538,7 +1538,7 @@ def _slot_pods(
     hides the table beside it. The pods hold the day's format order whatever state each is in, so a format
     keeps its place in the column and on the button row from the moment it is offered to the moment it is
     played."""
-    event_ids = _event_ids_for_slot(session, slot_time)
+    event_ids = _committed_event_ids_for_slot(session, day, slot_key)
     committed = [_committed_slot(session, time_key, event_id) for event_id in event_ids]
     covered = {slot.set_code for slot in committed}
     gathering = [
@@ -2836,8 +2836,30 @@ def _event_ids_for_slot(session: Session, slot_time: datetime) -> list[str]:
         )
         .order_by(PodDraftEvent.created_at)
     ).scalars().unique().all()
+    return _expand_event_tables(session, _newest_signup_per_format(list(primaries)))
+
+
+def _committed_event_ids_for_slot(session: Session, day: date, slot_key: str) -> list[str]:
+    lo = datetime.combine(day, time.min, tzinfo=SCHEDULE_TZ)
+    hi = datetime.combine(day + timedelta(days=1), time.min, tzinfo=SCHEDULE_TZ)
+    primaries = session.execute(
+        select(PodDraftEvent)
+        .join(PodSignal, PodSignal.event_id == PodDraftEvent.id)
+        .where(
+            PodSignal.kind == pod_signals.KIND_SCHEDULED,
+            PodSignal.slot_time >= lo,
+            PodSignal.slot_time < hi,
+        )
+        .order_by(PodDraftEvent.created_at)
+    ).scalars().unique().all()
+    owned = [event for event in primaries if pod_signals.owning_slot_key(event.event_time) == slot_key]
+    return _expand_event_tables(session, _newest_signup_per_format(owned))
+
+
+def _expand_event_tables(session: Session, events: list[PodDraftEvent]) -> list[str]:
+    """Each pod's id followed by the extra tables it spun off, found by the ` - Table N` name they inherit"""
     event_ids: list[str] = []
-    for event in _newest_signup_per_format(list(primaries)):
+    for event in events:
         event_ids.append(event.id)
         base = table_base_name(event.name)
         tables = session.execute(

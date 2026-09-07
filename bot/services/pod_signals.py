@@ -78,16 +78,23 @@ def poll_buckets_for(day: date) -> tuple[PollBucket, ...]:
     return WEEKEND_BUCKETS if is_weekend(day) else WEEKDAY_BUCKETS
 
 
-def is_bonus_time(event_time: datetime) -> bool:
-    """Two hours or more from every slot of its day, so no slot claims it and it reads as a bonus pod."""
+def owning_slot_key(event_time: datetime) -> str | None:
     local = event_time.astimezone(SCHEDULE_TZ)
     minutes = local.hour * 60 + local.minute
-    nearest = None
+    nearest_key = None
+    nearest_gap = None
     for bucket in poll_buckets_for(local.date()):
         gap = abs(minutes - (bucket.start.hour * 60 + bucket.start.minute))
-        if nearest is None or gap < nearest:
-            nearest = gap
-    return nearest is not None and nearest >= BONUS_GAP_MINUTES
+        if nearest_gap is None or gap < nearest_gap:
+            nearest_gap = gap
+            nearest_key = bucket.slot_key
+    if nearest_gap is None or nearest_gap >= BONUS_GAP_MINUTES:
+        return None
+    return nearest_key
+
+
+def is_bonus_time(event_time: datetime) -> bool:
+    return owning_slot_key(event_time) is None
 
 
 FORMAT_SEP = "|"

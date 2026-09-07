@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import pytest
 
 from bot.services.pod_schedule import SCHEDULE_TZ
+from bot.services.pod_signals import SLOT_LATE, owning_slot_key
 from bot.services.pod_slot import pod_display_name, pod_slot_label
 
 
@@ -38,6 +39,18 @@ def test_weekday_slot_label(event_time, expected):
 )
 def test_weekend_slot_label(event_time, expected):
     assert pod_slot_label(event_time) == expected
+
+
+@pytest.mark.parametrize(
+    "event_time, expected",
+    [
+        (_et(2026, 7, 16, 21, 0), SLOT_LATE),
+        (_et(2026, 7, 16, 20, 0), SLOT_LATE),
+        (_et(2026, 7, 16, 17, 0), None),
+    ],
+)
+def test_committed_pod_homes_to_nearest_slot(event_time, expected):
+    assert owning_slot_key(event_time) == expected
 
 
 def test_display_name_shape():
