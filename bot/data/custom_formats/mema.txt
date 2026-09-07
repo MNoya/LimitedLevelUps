@@ -1,29 +1,29 @@
 [Settings]
 {
-	"name": "Middle-Earth Masters",
+	"name": "MEMA",
     "withReplacement": true, "colorBalance": true,
 	"layouts": {
 		"L R U": {
-			"weight": 72,
+			"weight": 1,
 			"slots": {
   				"Land": 1,
 				"Rare": 1,
 				"Uncommon": 4,
-				"Common": 9 
+				"Common": 9
 			}
 		},
 		"B M R": {
-			"weight": 49,
+			"weight": 1,
 			"slots": {
 				"Basic": 1,
 				"Mythic": 1,
 				"Rare": 1,
 				"Uncommon": 3,
-				"Common": 9 
+				"Common": 9
 			}
 		},
 		"L R C": {
-			"weight": 36,
+			"weight": 2,
 			"slots": {
   				"Land": 1,
 				"Rare": 1,
@@ -31,16 +31,16 @@
 				"Common": 10
 			}
 		},
-		"B R R": {
-			"weight": 23,
+		"B R U": {
+			"weight": 1,
 			"slots": {
   				"Basic": 1,
-				"Rare": 2,
-				"Uncommon": 3,
-				"Common": 9 
+				"Rare": 1,
+				"Uncommon": 4,
+				"Common": 9
 			}
 		}
-		
+
 	},
 	"showSlots": true
 }
@@ -127,7 +127,7 @@
 1 Consider (ltc) 187
 1 Treason of Isengard (ltr) 74
 1 Beorn, Reluctant Host (hob) 118
-1 Wose Pathfinder (ltr) 190
+1 Paradise Druid (ltc) 255
 1 Haradrim Spearmaster (ltr) 135
 1 Landroval, Horizon Witness (ltr) 21
 1 Morgul-Knife Wound (ltr) 98
@@ -160,7 +160,7 @@
 1 Beorn's Hospitality (hob) 120
 1 Mirkwood Pathmaker (hob) 129
 1 Nasty Little Rabbit (hob) 130
-1 Old Fat Spider (hob) 132
+1 Generous Ent (ltr) 169
 1 Troll Negotiations (hob) 138
 1 Woodland Weavemaster (hob) 143
 1 Bifur, Melodic Rider (hob) 147
@@ -225,10 +225,8 @@
 1 Grond, the Gatebreaker (ltr) 89
 1 March from the Black Gate (ltr) 94
 1 Voracious Fell Beast (ltr) 113
-1 Éomer of the Riddermark (ltr) 121
 1 Fiery Inscription (ltr) 126
 1 Foray of Orcs (ltr) 128
-1 Grishnákh, Brash Instigator (ltr) 134
 1 Dúnedain Rangers (ltr) 159
 1 Meriadoc Brandybuck (ltr) 177
 1 Quickbeam, Upstart Ent (ltr) 183
@@ -241,6 +239,8 @@
 1 Goblin Cratermaker (hoc) 194
 1 Faithless Looting (ltc) 215
 1 Oath of the Grey Host (ltr) 101
+1 Guttersnipe (ltc) 220
+1 Orcish Siegemaster (hoc) 201
 [Land]
 1 Hobbit Hole (hob) 184
 1 Glacial Fortress (ltc) 315
@@ -262,10 +262,10 @@
 1 Elrond, Moon-Reader (hob) 36
 1 Great Gilded Boat (hob) 42
 1 Uncover the Moon-Letters (hob) 57
-1 Head of the Hunt (hob) 75
 1 Inside Information (hob) 76
 1 Supper for Spiders (hob) 86
 1 Balin, Loremaster (hob) 87
+1 Gandalf, Goblins' Bane (hob) 96
 1 Dáin Ironfoot (hob) 91
 1 Desolation of Smaug (hob) 93
 1 The Misty Mountains Cold (hob) 104
@@ -294,7 +294,6 @@
 1 The Shire (ltr) 260
 1 Hostage Taker (ltc) 268
 1 Vanquisher's Banner (ltc) 289
-1 Siege-Gang Commander (ltc) 228
 1 Pippin, Guard of the Citadel (ltr) 218
 1 Bard, King of Dale (hob) 144
 1 Doors of Durin (ltr) 199
@@ -313,6 +312,16 @@
 1 Delighted Halfling (ltr) 158
 1 Gandalf, White Rider (pltc) 2
 1 Scroll of Isildur (ltr) 69
+1 Éomer of the Riddermark (ltr) 121
+1 Grishnákh, Brash Instigator (ltr) 134
+1 Swords to Plowshares (ltc) 178
+1 The Notary Hobbits (hob) 131
+1 Elvish Archdruid (hoc) 204
+1 Settle the Wreckage (hob) 26
+1 Elvish Mariner (ltr) 283
+1 Isildur's Fateful Strike (ltr) 91
+1 Gollum, Scheming Guide (ltr) 292
+1 Shadow of the Enemy (ltr) 107
 [Mythic]
 1 The Eagles Are Coming! (hob) 12
 1 Fíli the Pathfinder (hob) 14
@@ -320,16 +329,16 @@
 1 Bilbo, Thief in the Night (hob) 33
 1 Gollum, Riddle Master (hob) 70
 1 Rhovanion Rampager (hob) 82
-1 Gandalf, Goblins' Bane (hob) 96
+1 Head of the Hunt (hob) 75
 1 Smaug the Magnificent (hob) 110
 1 Thorin, Mountain-king (hob) 114
+1 Siege-Gang Commander (ltc) 228
 1 Beorn the Fierce (hob) 119
 1 Dancing from Dark to Dawn (hob) 123
 1 Bard's Company (hob) 146
 1 The Arkenstone (hob) 170
 1 Relic of Sauron (ltc) 79
-1 Shadow of the Enemy (ltr) 107
-1 Minas Morgul, Dark Fortress (hoc) 48
+1 Reanimate (ltc) 206
 1 Andúril, Narsil Reforged (hoc) 40
 1 Sauron, the Lidless Eye (hoc) 37
 1 Tom, Bert, and William (hob) 169
