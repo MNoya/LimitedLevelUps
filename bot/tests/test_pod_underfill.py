@@ -8,7 +8,7 @@ from bot.tasks.pod_underfill import _arm_underfill_beats, _nudge_ping_role
 
 
 ET = ZoneInfo("America/New_York")
-WEDNESDAY_LATE = datetime(2026, 6, 24, 20, 0, tzinfo=ET)
+WEDNESDAY_LATE = datetime(2026, 6, 24, 21, 0, tzinfo=ET)
 WEDNESDAY_OFF_GRID = datetime(2026, 6, 24, 9, 0, tzinfo=ET)
 FLOOR = 6
 AIM = 8

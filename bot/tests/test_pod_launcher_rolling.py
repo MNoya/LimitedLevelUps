@@ -55,8 +55,8 @@ LATER = EARLIER + timedelta(hours=5)
 @pytest.mark.parametrize("slot_key, called_at, expected_start", [
     (SLOT_EARLY, datetime(2026, 7, 26, 0, 35, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 26, 14, 0)),
     (SLOT_EARLY, datetime(2026, 7, 26, 15, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 27, 14, 0)),
-    (SLOT_LATE, datetime(2026, 7, 26, 15, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 26, 20, 0)),
-    (SLOT_LATE, datetime(2026, 7, 26, 21, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 27, 20, 0)),
+    (SLOT_LATE, datetime(2026, 7, 26, 15, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 26, 21, 0)),
+    (SLOT_LATE, datetime(2026, 7, 26, 22, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 27, 21, 0)),
     (SLOT_EARLY, datetime(2026, 11, 1, 20, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 11, 2, 14, 0)),
     (SLOT_LATE, datetime(2026, 7, 25, 15, 0, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 25, 21, 0)),
     (SLOT_LATE, datetime(2026, 7, 24, 21, 30, tzinfo=SCHEDULE_TZ), datetime(2026, 7, 25, 21, 0)),

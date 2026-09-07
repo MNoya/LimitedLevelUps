@@ -59,19 +59,15 @@ class PollBucket:
 WEEKEND_EARLY_BUCKET = PollBucket(
     "AFTERNOON", "Early Pod", "💫", time(14, 0), EARLY_POD_ROLE_NAME, SLOT_EARLY)
 WEEKEND_LATE_BUCKET = PollBucket(
-    "EVENING", "Late Pod", "☄️", time(20, 0), LATE_POD_ROLE_NAME, SLOT_LATE)
-SATURDAY_LATE_BUCKET = PollBucket(
-    "SATURDAY_EVENING", "Late Pod", "☄️", time(21, 0), LATE_POD_ROLE_NAME, SLOT_LATE)
+    "EVENING", "Late Pod", "☄️", time(21, 0), LATE_POD_ROLE_NAME, SLOT_LATE)
 
 WEEKDAY_BUCKETS: tuple[PollBucket, ...] = (
     PollBucket("EARLY", "Early Pod", "💫", time(14, 0), EARLY_POD_ROLE_NAME, SLOT_EARLY),
-    PollBucket("LATE", "Late Pod", "☄️", time(20, 0), LATE_POD_ROLE_NAME, SLOT_LATE),
+    PollBucket("LATE", "Late Pod", "☄️", time(21, 0), LATE_POD_ROLE_NAME, SLOT_LATE),
 )
 WEEKEND_BUCKETS: tuple[PollBucket, ...] = (WEEKEND_EARLY_BUCKET, WEEKEND_LATE_BUCKET)
-SATURDAY_BUCKETS: tuple[PollBucket, ...] = (WEEKEND_EARLY_BUCKET, SATURDAY_LATE_BUCKET)
 BONUS_BUCKET = PollBucket("BONUS", "Bonus Pod", "🌟", time(17, 0), "", SLOT_BONUS)
-ALL_BUCKETS: tuple[PollBucket, ...] = (
-    WEEKDAY_BUCKETS + WEEKEND_BUCKETS + (SATURDAY_LATE_BUCKET, BONUS_BUCKET))
+ALL_BUCKETS: tuple[PollBucket, ...] = (WEEKDAY_BUCKETS + WEEKEND_BUCKETS + (BONUS_BUCKET,))
 
 
 def is_weekend(day: date) -> bool:
@@ -79,10 +75,6 @@ def is_weekend(day: date) -> bool:
 
 
 def poll_buckets_for(day: date) -> tuple[PollBucket, ...]:
-    """Saturday drafts its late pod an hour after every other day's, so it carries a bucket of its own. Same
-    slot_key and same ping role as the rest of the weekend: only the hour differs."""
-    if day.weekday() == SATURDAY:
-        return SATURDAY_BUCKETS
     return WEEKEND_BUCKETS if is_weekend(day) else WEEKDAY_BUCKETS
 
 

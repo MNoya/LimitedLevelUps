@@ -1,7 +1,7 @@
 // Mirrors WEEKDAY_BUCKETS in bot/services/pod_signals.py
 export const POD_SLOTS = [
   { label: "EARLY POD", easternHour: 14 },
-  { label: "LATE POD", easternHour: 20 },
+  { label: "LATE POD", easternHour: 21 },
 ] as const;
 
 export function easternHourLabel(hour: number): string {

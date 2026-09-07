@@ -20,7 +20,7 @@ def test_slots_for_week_returns_wednesday_thursday_and_saturday_eastern():
     slots = slots_for_week(date(2026, 6, 8))
 
     assert slots == [
-        datetime(2026, 6, 10, 20, 0, tzinfo=SCHEDULE_TZ),
+        datetime(2026, 6, 10, 21, 0, tzinfo=SCHEDULE_TZ),
         datetime(2026, 6, 11, 14, 0, tzinfo=SCHEDULE_TZ),
         datetime(2026, 6, 13, 15, 0, tzinfo=SCHEDULE_TZ),
     ]

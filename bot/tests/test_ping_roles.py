@@ -29,7 +29,7 @@ from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
 
 @pytest.mark.parametrize("event_time, expected", [
     (datetime(2026, 6, 11, 14, 0, tzinfo=SCHEDULE_TZ), EARLY_POD_ROLE_NAME),
-    (datetime(2026, 6, 10, 20, 0, tzinfo=SCHEDULE_TZ), LATE_POD_ROLE_NAME),
+    (datetime(2026, 6, 10, 21, 0, tzinfo=SCHEDULE_TZ), LATE_POD_ROLE_NAME),
     (datetime(2026, 6, 13, 14, 0, tzinfo=SCHEDULE_TZ), EARLY_POD_ROLE_NAME),
     (datetime(2026, 6, 13, 21, 0, tzinfo=SCHEDULE_TZ), LATE_POD_ROLE_NAME),
     (datetime(2026, 6, 9, 11, 0, tzinfo=SCHEDULE_TZ), None),
@@ -50,7 +50,7 @@ def test_blurb_with_time_lists_every_hour_a_slot_runs_at():
     late = blurb_with_time(_spec_named(LATE_POD_ROLE_NAME))
 
     assert early.count("<t:") == 1
-    assert late.count("<t:") == 2
+    assert late.count("<t:") == 1
 
 
 def test_first_welcome_fires_once_until_forgotten():

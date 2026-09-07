@@ -1,6 +1,6 @@
 """Daily Pod Launcher — the always-forward-looking "who's playing next" signup surface.
 
-Posts every day at 11:00 ET with the same two columns (Early 14:00, Late 20:00). A slot offers one pod per
+Posts every day at 11:00 ET with the same two columns (Early 14:00, Late 21:00). A slot offers one pod per
 format the day carries (`pod_format_schedule`), each with its own signal, roster, quorum and lifecycle, and
 each with its own button naming the format it joins. A pod fires once it reaches the threshold, graduating
 into a scheduled RSVP card on its own format. Nothing here reads a stored player preference: a press says
