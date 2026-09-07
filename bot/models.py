@@ -670,3 +670,13 @@ class Episode(Base):
         Index("ix_episodes_published_at", "published_at"),
         Index("ix_episodes_set_code", "set_code"),
     )
+
+
+class EpisodeTranscript(Base):
+    __tablename__ = "episode_transcripts"
+
+    youtube_id  = Column(String, primary_key=True)
+    segments    = Column(JSONB, nullable=False)
+    word_count  = Column(Integer, nullable=False, server_default="0")
+    source      = Column(String, nullable=False, server_default="whisper-large-v3")
+    generated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())

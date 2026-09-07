@@ -14,6 +14,7 @@ export const fetchSets = impl.fetchSets;
 export const fetchCubeSeasons = impl.fetchCubeSeasons;
 export const fetchDbEpisodes = impl.fetchDbEpisodes;
 export const fetchRecentDbEpisodes = impl.fetchRecentDbEpisodes;
+export const fetchEpisodeTranscript = impl.fetchEpisodeTranscript;
 export const fetchLeaderboard = impl.fetchLeaderboard;
 export const fetchTrophyLeaderboard = impl.fetchTrophyLeaderboard;
 export const fetchFormatLeaderboard = impl.fetchFormatLeaderboard;

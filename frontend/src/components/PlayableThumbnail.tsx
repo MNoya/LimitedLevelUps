@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 
 import type { Episode } from "../data/episodes";
 import { EpisodeThumbnail } from "./EpisodeThumbnail";
-import { PodcastAudioPlayer } from "./PodcastAudioPlayer";
+import { PodcastAudioPlayer, type AudioControls } from "./PodcastAudioPlayer";
 import { Headphones, Music, Play } from "./Icons";
 import { PlayBadge } from "./PlayBadge";
 import { cn } from "../lib/utils";
@@ -95,17 +95,27 @@ export function EpisodeEmbed({
   episode,
   thumbnailPending = false,
   audioMode = false,
+  iframeRef,
+  enableJsApi = false,
+  audioControlsRef,
 }: {
   episode: Episode;
   thumbnailPending?: boolean;
   audioMode?: boolean;
+  iframeRef?: React.Ref<HTMLIFrameElement>;
+  enableJsApi?: boolean;
+  audioControlsRef?: React.Ref<AudioControls>;
 }) {
   const [embedLoaded, setEmbedLoaded] = useState(false);
   if (episode.youtubeId && !audioMode) {
+    const src = `https://www.youtube.com/embed/${episode.youtubeId}?autoplay=1&playsinline=1&rel=0${
+      enableJsApi ? "&enablejsapi=1" : ""
+    }`;
     return (
       <>
         <iframe
-          src={`https://www.youtube.com/embed/${episode.youtubeId}?autoplay=1&playsinline=1&rel=0`}
+          ref={iframeRef}
+          src={src}
           title={episode.title}
           className="absolute inset-0 h-full w-full"
           allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
@@ -127,7 +137,7 @@ export function EpisodeEmbed({
         pending={thumbnailPending}
         className="transition-transform duration-300 scale-[1.07]"
       />
-      <PodcastAudioPlayer src={episode.audioUrl} title={episode.title} />
+      <PodcastAudioPlayer ref={audioControlsRef} src={episode.audioUrl} title={episode.title} />
     </>
   );
 }

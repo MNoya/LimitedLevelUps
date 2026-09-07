@@ -1,10 +1,17 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState, type CSSProperties } from "react";
 
 import { Pause, Play } from "./Icons";
 import { PlayBadge } from "./PlayBadge";
 import { cn } from "../lib/utils";
 
-export function PodcastAudioPlayer({ src, title }: { src: string; title: string }) {
+export interface AudioControls {
+  seek: (seconds: number) => void;
+}
+
+export const PodcastAudioPlayer = forwardRef<AudioControls, { src: string; title: string }>((
+  { src, title },
+  controlsRef,
+) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(true);
   const [current, setCurrent] = useState(0);
@@ -30,6 +37,8 @@ export function PodcastAudioPlayer({ src, title }: { src: string; title: string 
     el.currentTime = seconds;
     setCurrent(seconds);
   };
+
+  useImperativeHandle(controlsRef, () => ({ seek }), []);
 
   const ratio = duration > 0 ? current / duration : 0;
 
@@ -82,7 +91,9 @@ export function PodcastAudioPlayer({ src, title }: { src: string; title: string 
       </div>
     </div>
   );
-}
+});
+
+PodcastAudioPlayer.displayName = "PodcastAudioPlayer";
 
 function Equalizer({ playing }: { playing: boolean }) {
   return (

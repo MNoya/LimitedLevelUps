@@ -14,6 +14,7 @@ import {
   adaptSet,
 } from "./adapter";
 import { adaptDbEpisode, type DbEpisodeRow, type Episode } from "./episodes";
+import type { TranscriptSegment } from "./transcript";
 import {
   aggregate,
   boxesForEvent,
@@ -108,6 +109,18 @@ export async function fetchRecentDbEpisodes(limit = 8): Promise<Episode[]> {
 
 const DB_EPISODE_COLUMNS =
   "guid, kind, number, title, link, image, published_at, duration_seconds, audio_url, youtube_id, category, set_code, set_name, set_released_at";
+
+export async function fetchEpisodeTranscript(youtubeId: string): Promise<TranscriptSegment[] | null> {
+  const { data, error } = await client()
+    .from("public_episode_transcripts")
+    .select("segments")
+    .eq("youtube_id", youtubeId)
+    .maybeSingle();
+  if (error) {
+    throw error;
+  }
+  return (data?.segments as TranscriptSegment[] | undefined) ?? null;
+}
 
 export async function fetchCubeSeasons(): Promise<CubeSeason[]> {
   const { data, error } = await client()

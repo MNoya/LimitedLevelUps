@@ -49,13 +49,15 @@ import {
   fetchSets,
   fetchDbEpisodes,
   fetchRecentDbEpisodes,
+  fetchEpisodeTranscript,
   upsertP0P1Pick,
   deleteAllP0P1Picks,
   fetchP0P1Ratings,
 } from "./api";
 import { fetchDiscordStats } from "./discord";
 import { fetchYouTubeVideos, overlayLiveMedia, toVideoEpisode, type YouTubeVideo } from "./youtube";
-import { assignEpisodeSlugs } from "./episodes";
+import { assignEpisodeSlugs, type Episode } from "./episodes";
+import type { TranscriptSegment } from "./transcript";
 import type { P0P1BallotRow, P0P1Pick, SlotKey } from "../types/p0p1";
 import type { FeaturedContest } from "./p0p1Slots";
 import { resolveContestByCode, resolveFeaturedContest } from "./p0p1Slots";
@@ -88,6 +90,17 @@ export function useDbEpisodes() {
     queryFn: fetchDbEpisodes,
     staleTime: ONE_HOUR,
   });
+}
+
+export function useEpisodeTranscript(episode: Episode): TranscriptSegment[] | null {
+  const youtubeId = episode.youtubeId ?? null;
+  const query = useQuery({
+    queryKey: ["episode-transcript", youtubeId],
+    queryFn: () => fetchEpisodeTranscript(youtubeId as string),
+    enabled: Boolean(youtubeId),
+    staleTime: ONE_HOUR,
+  });
+  return query.data ?? null;
 }
 
 // DB rows are the authoritative, categorized base; a video the next bot sync has not folded in yet overlays on top

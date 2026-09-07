@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { SiApplepodcasts, SiRss, SiSpotify, SiYoutube } from "react-icons/si";
 import type { IconType } from "react-icons";
@@ -27,6 +27,7 @@ import {
 import { PageShell } from "../components/PageShell";
 import { EpisodeCard } from "../components/EpisodeCard";
 import { EpisodeEmbed } from "../components/PlayableThumbnail";
+import type { AudioControls } from "../components/PodcastAudioPlayer";
 import { EpisodeTag } from "../components/CategoryTag";
 import { ShortCard } from "../components/ShortCard";
 import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
@@ -37,7 +38,7 @@ import { RailHeader, RailRow } from "../components/Rail";
 import { CUT_CORNER_CHAMFER } from "../components/ChamferCta";
 import { Crossfade } from "../components/Crossfade";
 import { SetGlyph } from "../components/Brand";
-import { useMediaFeed } from "../data/hooks";
+import { useMediaFeed, useEpisodeTranscript } from "../data/hooks";
 import {
   EPISODE_CATEGORIES,
   categoryFromSlug,
@@ -46,6 +47,7 @@ import {
   type Episode,
   type EpisodeCategory,
 } from "../data/episodes";
+import { transcriptWordCount, type TranscriptSegment } from "../data/transcript";
 import { LISTEN_ON } from "../data/site";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -570,10 +572,30 @@ function EpisodeDetail({
   audioMode: boolean;
   thumbnailPending: boolean;
 }) {
+  const transcript = useEpisodeTranscript(episode);
+  const playerRef = useRef<HTMLIFrameElement>(null);
+  const audioControlsRef = useRef<AudioControls>(null);
+  const usingAudioPlayer = audioMode || !episode.youtubeId;
+  const canSeek = usingAudioPlayer ? Boolean(episode.audioUrl) : Boolean(episode.youtubeId);
+  const seek = (seconds: number) => {
+    if (usingAudioPlayer) {
+      audioControlsRef.current?.seek(seconds);
+      return;
+    }
+    const message = JSON.stringify({ event: "command", func: "seekTo", args: [seconds, true] });
+    playerRef.current?.contentWindow?.postMessage(message, "https://www.youtube.com");
+  };
   return (
     <div className="mx-auto flex min-h-[calc(100vh-9rem)] max-w-[1200px] flex-col">
       <div className="relative aspect-video overflow-hidden rounded-lg border border-border bg-surface">
-        <EpisodeEmbed episode={episode} thumbnailPending={thumbnailPending} audioMode={audioMode} />
+        <EpisodeEmbed
+          episode={episode}
+          thumbnailPending={thumbnailPending}
+          audioMode={audioMode}
+          iframeRef={playerRef}
+          enableJsApi={!usingAudioPlayer}
+          audioControlsRef={audioControlsRef}
+        />
       </div>
       <div className="mt-4 flex items-start justify-between gap-3">
         <h1 className="min-w-0 font-body text-text text-[15px] md:text-[20px] font-medium leading-snug">
@@ -592,8 +614,59 @@ function EpisodeDetail({
           </div>
         </div>
       </div>
+      {transcript && transcript.length > 0 ? (
+        <EpisodeTranscript segments={transcript} onSeek={canSeek ? seek : undefined} />
+      ) : null}
     </div>
   );
+}
+
+function EpisodeTranscript({ segments, onSeek }: { segments: TranscriptSegment[]; onSeek?: (seconds: number) => void }) {
+  const wordCount = useMemo(() => transcriptWordCount(segments), [segments]);
+  return (
+    <div className="mt-8 border-t border-border pt-6">
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="font-display text-text text-[16px] tracking-[0.02em]">Transcript</h2>
+        <div className="mono flex items-center gap-x-3 text-[11px] tracking-[0.1em] text-dim uppercase">
+          <span>{wordCount.toLocaleString()} words</span>
+          <span>auto-generated</span>
+        </div>
+      </div>
+      <div className="max-w-[820px]">
+        {segments.map((segment, index) => (
+          <Fragment key={index}>
+            {segment.heading ? (
+              <h3 className="font-display text-text text-[15px] tracking-[0.02em] mt-7 mb-1 first:mt-0">
+                {segment.heading}
+              </h3>
+            ) : null}
+            <div className="flex gap-4 border-t border-border/40 py-2 first:border-t-0">
+              {onSeek ? (
+                <button
+                  type="button"
+                  onClick={() => onSeek(segment.t)}
+                  className="mono w-[54px] shrink-0 pt-0.5 text-left text-[12px] text-green transition-colors hover:text-green/70"
+                >
+                  {formatTimestamp(segment.t)}
+                </button>
+              ) : (
+                <span className="mono w-[54px] shrink-0 pt-0.5 text-[12px] text-dim">{formatTimestamp(segment.t)}</span>
+              )}
+              <p className="text-subtle text-[15px] leading-[1.6]">{segment.text}</p>
+            </div>
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatTimestamp(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  const mm = hours ? String(minutes).padStart(2, "0") : String(minutes);
+  return `${hours ? `${hours}:` : ""}${mm}:${String(secs).padStart(2, "0")}`;
 }
 
 function CategoryRail({

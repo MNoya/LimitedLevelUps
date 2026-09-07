@@ -32,6 +32,7 @@ _ALLOWED_VIEWS = {
     "public_cube_season_breakdown",
     "public_cube_season_events",
     "public_episodes",
+    "public_episode_transcripts",
     "public_leaderboard",
     "public_p0p1_pick_stats",
     "public_player",
