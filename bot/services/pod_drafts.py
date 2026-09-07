@@ -1726,8 +1726,11 @@ def capture_deck_screenshot(
     image_url: str,
     caption: str | None = None,
     colors: str | None = None,
+    force: bool = False,
 ) -> str | None:
     """Capture (or overwrite) a participant's deck screenshot. Returns event_id on capture.
+
+    `force` is the camera-react override that bypasses the record-lock and post-championship guards.
 
     Gating:
       - The final round must have started. Decks are asked for at round 3, and the images a thread
@@ -1774,13 +1777,14 @@ def capture_deck_screenshot(
         return None
     new_has_record = caption_has_record_pattern(caption)
     existing_locked = caption_has_record_pattern(participant.deck_screenshot_caption)
-    if not new_has_record and existing_locked:
+    if not force and not new_has_record and existing_locked:
         log.info(
             f"[DECK] screenshot.locked_ignored event={event_id} discord_id={discord_id} "
             f"locked_caption={participant.deck_screenshot_caption!r} new_caption={caption!r}"
         )
         return None
-    if not new_has_record and championship_posted_at is not None and participant.deck_screenshot_url is not None:
+    after_championship = championship_posted_at is not None and participant.deck_screenshot_url is not None
+    if not force and not new_has_record and after_championship:
         log.info(
             f"[DECK] screenshot.post_championship_ignored event={event_id} discord_id={discord_id} "
             f"caption={caption!r}"
@@ -1794,7 +1798,7 @@ def capture_deck_screenshot(
     session.flush()
     log.info(
         f"[DECK] screenshot.stored event={event_id} discord_id={discord_id} round={current_round} "
-        f"caption={caption!r} has_record={new_has_record} replaced={replaced}"
+        f"caption={caption!r} has_record={new_has_record} replaced={replaced} force={force}"
     )
     return event_id
 
@@ -1806,8 +1810,9 @@ def update_deck_caption_for_message(
     image_url: str,
     caption: str | None,
     colors: str | None = None,
+    only_if_missing: bool = False,
 ) -> str | None:
-    """Update the caption when a player edits the screenshot already on file, matched by image url"""
+    """Update the caption on the screenshot already on file, matched by image url"""
     participant = session.execute(
         select(PodDraftParticipant)
         .join(Player, Player.id == PodDraftParticipant.player_id)
@@ -1820,6 +1825,8 @@ def update_deck_caption_for_message(
     if participant is None or participant.deck_screenshot_url is None:
         return None
     if participant.deck_screenshot_url.split("?", 1)[0] != image_url.split("?", 1)[0]:
+        return None
+    if only_if_missing and participant.deck_screenshot_caption is not None:
         return None
     if participant.deck_screenshot_caption == (caption or None):
         return None
