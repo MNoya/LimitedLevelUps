@@ -25,7 +25,8 @@ SUBTOPIC_CHAPTER_GAP = 30
 SENTENCE_BOUNDARY = re.compile(r"(?<=[.?!…])\s+")
 MULETILLAS = re.compile(r"\b(uh+|um+|erm+|hmm+)\b[,]?\s*", re.I)
 STUTTER_ANY = re.compile(r"\b(\w+)(?:[,.]?\s+\1\b){2,}", re.I)
-STUTTER_FILLER = re.compile(r"\b(i|a|the|and|so|it|is|that|you|no|yeah|yep|yup|well|but|to|of|we)(?:[,.]?\s+\1\b)+", re.I)
+STUTTER_WORDS = "i|a|the|and|so|it|is|that|you|no|yeah|yep|yup|well|but|to|of|we"
+STUTTER_FILLER = re.compile(rf"\b({STUTTER_WORDS})(?:[,.]?\s+\1\b)+", re.I)
 WHISPER_MODEL = "large-v3"
 WHISPER_PROMPT = "Alright, welcome everybody. Let's talk about the format today, and go through it step by step."
 SOURCE = f"whisper-{WHISPER_MODEL}"
