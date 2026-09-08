@@ -34,7 +34,7 @@ export const TIER_LIST_UIDS: Record<string, string> = {
   FDN: "597d29e75d704ecf9877fc0e4b2c4116",
   DSK: "edec3f514f264753bf4a46a8a2fc7d82",
   BLB: "6057e51272c94a7cb304bd511b7c3bcf",
-  MH3: "1775dc0b2fed451cbc5ad4441e2ab9c3",
+  MH3: "14b36e19f924475fb93badb9268174a4",
   WOE: "87b40a05e0974eafa368be44e1d3e0c4",
   MOM: "a7daeb6a90b246e895c8634e34734090",
   VOW: "ac2ca9722737412ba0c4c4c4b2e28598",
