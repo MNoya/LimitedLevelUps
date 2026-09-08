@@ -2,6 +2,8 @@ export interface TranscriptSegment {
   t: number;
   text: string;
   heading?: string;
+  subheading?: string;
+  cards?: { name: string }[];
 }
 
 export function transcriptWordCount(segments: TranscriptSegment[]): number {

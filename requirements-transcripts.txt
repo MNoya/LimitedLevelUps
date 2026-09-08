@@ -1,0 +1,6 @@
+# Local-only extras for bot/scripts/generate_transcripts.py punctuation restore; not installed on the bot or in CI
+onnxruntime==1.29.0
+sentencepiece==0.2.2
+huggingface-hub==1.30.0
+numpy==2.5.3
+pyyaml==6.0.3

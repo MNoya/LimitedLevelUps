@@ -1,0 +1,70 @@
+# Episode transcripts — generating and publishing
+
+Transcripts are produced by a **local, zero-cost** pipeline and written straight into the `episode_transcripts` table. The bot never runs this; it is a manual publisher you run on your machine (it needs a GPU, a logged-in browser-free `yt-dlp`, and the `claude` CLI). The site reads the `public_episode_transcripts` view and renders a transcript under any episode that has a row; episodes without one stay unchanged.
+
+## What runs
+
+`bot/scripts/generate_transcripts.py`, one episode at a time:
+
+1. `yt-dlp` downloads the audio (no cookies, no account — a `deno` JS runtime on PATH is all YouTube needs).
+2. `whisper-ctranslate2` (large-v3, GPU) transcribes.
+3. Sentences group into blocks, YouTube chapters become section headings, and one `claude -p` call decides paragraph breaks (structure only, never touching words).
+4. A deterministic clean pass strips muletillas (`uh`, `um`, `er`) and collapses exact repeated-sentence loops. Nothing else is edited: Alex's `you know` / `kind of` / `like` and all word choices stay verbatim.
+5. The paragraphs upsert into `episode_transcripts`, keyed on `youtube_id`.
+
+Cost is zero: Whisper is local, `claude -p` runs on the Claude subscription (not the metered API — keep `ANTHROPIC_API_KEY` unset so it can never switch).
+
+## Locked Whisper config (do not lower)
+
+`--no_repeat_ngram_size 4 --initial_prompt "<a punctuated sentence>"`
+
+- `no_repeat_ngram_size 4` stops the decoder's repetition-loop hallucinations. `3` is too aggressive — it also suppresses natural repeats like "you want to … you want to" and eats a word.
+- The punctuated `initial_prompt` seeds the decoder's style. Without it, some episodes come out as a lowercase wall with no punctuation (a known faster-whisper drift), independent of the ngram value. The seed fixes it across episodes.
+
+## Prerequisites (one-time)
+
+- The repo venv at `.venv`.
+- `yt-dlp` on PATH, plus a `deno` binary on PATH (the JS-challenge solver). Install deno to a stable location (e.g. `~/.deno/bin`), not `/tmp`.
+- `whisper-ctranslate2` (the uv tool) with CUDA; the script finds the bundled CUDA libs automatically.
+- `ffmpeg` on PATH.
+- The `claude` CLI, logged in. Confirm no `ANTHROPIC_API_KEY` in the environment.
+
+## Running it
+
+Local test (writes to the docker Postgres):
+
+```bash
+DATABASE_URL=postgresql://postgres:devpw@localhost:5433/dischord \
+  .venv/bin/python -m bot.scripts.generate_transcripts --youtube-id <YOUTUBE_ID>
+```
+
+Publish to prod (map the Supabase URL onto `DATABASE_URL`):
+
+```bash
+DATABASE_URL="$(grep '^SUPABASE_DB_URL=' .env.supabase | cut -d= -f2-)" \
+  .venv/bin/python -m bot.scripts.generate_transcripts --youtube-id <YOUTUBE_ID>
+```
+
+Selection flags:
+
+- `--youtube-id <id>` (repeatable) — specific episodes.
+- `--latest N` — the N most recent eligible episodes not yet transcribed.
+- neither — every eligible episode not yet transcribed (a full backfill).
+- `--redo` — overwrite episodes that already have a transcript.
+- `--no-structure` — skip chapters + the Claude paragraph pass (raw blocks only).
+
+Eligible = has a `youtube_id` and is not in the `Draft` / `Sealed` gameplay categories. The run is idempotent and resumable: it skips anything already in `episode_transcripts` unless `--redo`.
+
+## Timing and memory
+
+- About 5-8 minutes per episode on the RTX 3060 (~7.5x realtime), plus ~1-2 minutes for the Claude paragraph call.
+- Run it as a normal foreground process or a cron job. (Driving it through Claude Code specifically, put the Whisper step in the foreground — Claude's background-task memory guard will kill a long background job. A plain shell or cron run is unaffected.)
+
+## Backfill and new episodes
+
+- **Backfill:** run with no `--youtube-id` / `--latest` to sweep every eligible episode. Safe to run overnight and re-run; interruptions lose nothing.
+- **New episodes:** `--latest 3` after a drop, or a nightly cron that runs the same. The cron needs `deno`, `yt-dlp`, `whisper-ctranslate2`, `ffmpeg` and `claude` on PATH and `SUPABASE_DB_URL` available, and must not set `ANTHROPIC_API_KEY`.
+
+## Not covered yet
+
+Audio-only episodes (podcast entries with no `youtube_id`) are out of scope here. They have no YouTube chapters and their podcast timeline differs from any video, so they will transcribe from `audio_url` directly when that backfill is taken on. Video episodes always transcribe from YouTube so the transcript timeline matches the embedded player and its chapters.

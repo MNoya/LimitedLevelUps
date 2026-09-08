@@ -28,6 +28,7 @@ import { PageShell } from "../components/PageShell";
 import { EpisodeCard } from "../components/EpisodeCard";
 import { EpisodeEmbed } from "../components/PlayableThumbnail";
 import type { AudioControls } from "../components/PodcastAudioPlayer";
+import { ChevronRight } from "lucide-react";
 import { EpisodeTag } from "../components/CategoryTag";
 import { ShortCard } from "../components/ShortCard";
 import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
@@ -47,7 +48,9 @@ import {
   type Episode,
   type EpisodeCategory,
 } from "../data/episodes";
-import { transcriptWordCount, type TranscriptSegment } from "../data/transcript";
+import type { TranscriptSegment } from "../data/transcript";
+import { useCardImageMap } from "../data/cardImages";
+import { TranscriptCardLink } from "../components/TranscriptCardLink";
 import { LISTEN_ON } from "../data/site";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -431,6 +434,7 @@ export function EpisodesPage() {
         </aside>
 
         <div className="min-w-0 flex-1">
+          {openEpisode ? null : (
           <div className="sticky top-0 z-10 flex h-[60px] items-center gap-2.5 border-b border-border bg-surface px-4 md:px-6">
             <button
               type="button"
@@ -499,6 +503,7 @@ export function EpisodesPage() {
               })}
             </div>
           </div>
+          )}
 
           <div ref={listRef} className="px-4 md:px-6 pt-6 pb-4">
             {openEpisode ? (
@@ -575,6 +580,19 @@ function EpisodeDetail({
   const transcript = useEpisodeTranscript(episode);
   const playerRef = useRef<HTMLIFrameElement>(null);
   const audioControlsRef = useRef<AudioControls>(null);
+  const stickyRef = useRef<HTMLDivElement>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [collapsedChapters, setCollapsedChapters] = useState<ReadonlySet<number>>(() => new Set());
+  const toggleChapter = (t: number) =>
+    setCollapsedChapters((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) {
+        next.delete(t);
+      } else {
+        next.add(t);
+      }
+      return next;
+    });
   const usingAudioPlayer = audioMode || !episode.youtubeId;
   const canSeek = usingAudioPlayer ? Boolean(episode.audioUrl) : Boolean(episode.youtubeId);
   const seek = (seconds: number) => {
@@ -582,22 +600,139 @@ function EpisodeDetail({
       audioControlsRef.current?.seek(seconds);
       return;
     }
-    const message = JSON.stringify({ event: "command", func: "seekTo", args: [seconds, true] });
-    playerRef.current?.contentWindow?.postMessage(message, "https://www.youtube.com");
+    const command = (func: string, args: unknown[]) =>
+      playerRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ event: "command", func, args }),
+        "https://www.youtube.com",
+      );
+    command("seekTo", [seconds, true]);
+    command("playVideo", []);
+  };
+  useEffect(() => {
+    if (usingAudioPlayer) {
+      return;
+    }
+    const hideCaptions = () => {
+      const message = JSON.stringify({ event: "command", func: "setOption", args: ["captions", "track", {}] });
+      playerRef.current?.contentWindow?.postMessage(message, "https://www.youtube.com");
+    };
+    const timers = [800, 1600, 2800].map((delay) => window.setTimeout(hideCaptions, delay));
+    return () => timers.forEach(window.clearTimeout);
+  }, [usingAudioPlayer, episode.youtubeId]);
+  useEffect(() => {
+    if (usingAudioPlayer) {
+      return;
+    }
+    const listen = () =>
+      playerRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ event: "listening", id: 1, channel: "widget" }),
+        "https://www.youtube.com",
+      );
+    const timers = [500, 1200, 2500].map((delay) => window.setTimeout(listen, delay));
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== "https://www.youtube.com") {
+        return;
+      }
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event === "infoDelivery" && typeof data.info?.currentTime === "number") {
+          setCurrentTime(data.info.currentTime);
+        }
+      } catch {
+        return;
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => {
+      timers.forEach(window.clearTimeout);
+      window.removeEventListener("message", onMessage);
+    };
+  }, [usingAudioPlayer, episode.youtubeId]);
+  const chapters = useMemo(
+    () => (transcript ?? []).filter((s) => s.heading).map((s) => ({ t: s.t, heading: s.heading as string })),
+    [transcript],
+  );
+  const activeChapterT = useMemo(() => {
+    let active = -1;
+    for (const chapter of chapters) {
+      if (chapter.t <= currentTime + 0.5) {
+        active = chapter.t;
+      } else {
+        break;
+      }
+    }
+    return active;
+  }, [chapters, currentTime]);
+  const jumpToChapter = (seconds: number) => {
+    setCollapsedChapters((prev) => {
+      if (!prev.has(seconds)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(seconds);
+      return next;
+    });
+    if (canSeek) {
+      seek(seconds);
+    }
+    const target = document.getElementById(`ch-${seconds}`);
+    if (!target) {
+      return;
+    }
+    const offset = (stickyRef.current?.offsetHeight ?? 0) + 12;
+    window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - offset, behavior: "smooth" });
   };
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-9rem)] max-w-[1200px] flex-col">
-      <div className="relative aspect-video overflow-hidden rounded-lg border border-border bg-surface">
-        <EpisodeEmbed
-          episode={episode}
-          thumbnailPending={thumbnailPending}
-          audioMode={audioMode}
-          iframeRef={playerRef}
-          enableJsApi={!usingAudioPlayer}
-          audioControlsRef={audioControlsRef}
-        />
+    <div className="mx-auto w-full min-h-[calc(100vh-9rem)] max-w-[1120px] lg:min-h-0">
+      <div
+        ref={stickyRef}
+        className="sticky top-0 z-30 -mx-4 -mt-6 bg-bg md:-mx-6 md:mt-0 md:px-6 md:py-2 lg:mx-0 lg:mt-0 lg:px-0 lg:pb-3 lg:pt-6"
+      >
+        <div className="lg:flex lg:items-stretch lg:gap-4">
+          <div className="lg:min-w-0 lg:flex-1">
+            <div className="relative aspect-video w-full overflow-hidden border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:rounded-lg md:border lg:mx-0 lg:h-auto lg:w-full lg:rounded-none lg:border-0">
+              <EpisodeEmbed
+                episode={episode}
+                thumbnailPending={thumbnailPending}
+                audioMode={audioMode}
+                iframeRef={playerRef}
+                enableJsApi={!usingAudioPlayer}
+                audioControlsRef={audioControlsRef}
+              />
+              <div className="pointer-events-none absolute inset-0 z-10 hidden border-border lg:block lg:border" />
+            </div>
+          </div>
+          {chapters.length > 0 ? (
+            <aside className="relative hidden lg:block lg:w-[300px] lg:shrink-0">
+              <nav className="absolute inset-0 flex flex-col overflow-y-auto border border-border bg-surface/40 px-3 py-1">
+                {chapters.map((chapter) => {
+                  const isActive = chapter.t === activeChapterT;
+                  return (
+                    <button
+                      key={chapter.t}
+                      type="button"
+                      onClick={() => jumpToChapter(chapter.t)}
+                      className="group flex items-baseline justify-between gap-3 border-t border-border/40 py-2.5 text-left first:border-t-0"
+                    >
+                      <span
+                        className={cn(
+                          "text-[13px] leading-snug transition-colors group-hover:text-green",
+                          isActive ? "text-green" : "text-subtle",
+                        )}
+                      >
+                        {chapter.heading}
+                      </span>
+                      <span className="font-num shrink-0 text-[12px] text-green">{formatTimestamp(chapter.t)}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </aside>
+          ) : null}
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 top-full hidden h-5 bg-gradient-to-b from-bg to-transparent lg:block" />
       </div>
-      <div className="mt-4 flex items-start justify-between gap-3">
+      <div className="mt-3 flex items-start justify-between gap-3">
         <h1 className="min-w-0 font-body text-text text-[15px] md:text-[20px] font-medium leading-snug">
           {episode.title}
         </h1>
@@ -615,47 +750,246 @@ function EpisodeDetail({
         </div>
       </div>
       {transcript && transcript.length > 0 ? (
-        <EpisodeTranscript segments={transcript} onSeek={canSeek ? seek : undefined} />
+        <EpisodeTranscript
+          segments={transcript}
+          setCode={episode.setCode}
+          onSeek={canSeek ? seek : undefined}
+          collapsedChapters={collapsedChapters}
+          onToggleChapter={toggleChapter}
+        />
       ) : null}
     </div>
   );
 }
 
-function EpisodeTranscript({ segments, onSeek }: { segments: TranscriptSegment[]; onSeek?: (seconds: number) => void }) {
-  const wordCount = useMemo(() => transcriptWordCount(segments), [segments]);
+type TranscriptItem =
+  | { kind: "chapter"; t: number; heading: string }
+  | { kind: "section"; t: number; title: string; paras: string[] }
+  | { kind: "para"; text: string };
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function EpisodeTranscript({
+  segments,
+  setCode,
+  onSeek,
+  collapsedChapters,
+  onToggleChapter,
+}: {
+  segments: TranscriptSegment[];
+  setCode?: string | null;
+  onSeek?: (seconds: number) => void;
+  collapsedChapters: ReadonlySet<number>;
+  onToggleChapter: (t: number) => void;
+}) {
+  const cardNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const segment of segments) {
+      for (const card of segment.cards ?? []) {
+        names.add(card.name);
+      }
+    }
+    return [...names].sort((a, b) => b.length - a.length);
+  }, [segments]);
+  const cardNameSet = useMemo(() => new Set(cardNames), [cardNames]);
+
+  const cardItems = useMemo(
+    () => (setCode ? cardNames.map((name) => ({ name, set: setCode })) : []),
+    [cardNames, setCode],
+  );
+  const cardImages = useCardImageMap(cardItems);
+
+  const items = useMemo<TranscriptItem[]>(() => {
+    const out: TranscriptItem[] = [];
+    let section: Extract<TranscriptItem, { kind: "section" }> | null = null;
+    for (const segment of segments) {
+      if (segment.heading) {
+        section = null;
+        out.push({ kind: "chapter", t: segment.t, heading: segment.heading });
+        out.push({ kind: "para", text: segment.text });
+      } else if (segment.subheading) {
+        section = { kind: "section", t: segment.t, title: segment.subheading, paras: [segment.text] };
+        out.push(section);
+      } else if (section) {
+        section.paras.push(segment.text);
+      } else {
+        out.push({ kind: "para", text: segment.text });
+      }
+    }
+    return out;
+  }, [segments]);
+
+  const linkable = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    let seen = new Set<string>();
+    const allow = (text: string) => {
+      const names = new Set<string>();
+      for (const name of cardNames) {
+        if (!seen.has(name) && text.includes(name)) {
+          names.add(name);
+          seen.add(name);
+        }
+      }
+      return names;
+    };
+    items.forEach((item, index) => {
+      if (item.kind === "chapter") {
+        seen = new Set();
+      } else if (item.kind === "section") {
+        seen = new Set();
+        item.paras.forEach((para, paraIndex) => map.set(`${index}:${paraIndex}`, allow(para)));
+      } else {
+        map.set(`${index}:0`, allow(item.text));
+      }
+    });
+    return map;
+  }, [items, cardNames]);
+
+  const renderText = (text: string, allowed: Set<string> | undefined): ReactNode => {
+    if (!setCode || cardNames.length === 0) {
+      return text;
+    }
+    const pattern = new RegExp(`(${cardNames.map(escapeRegExp).join("|")})`, "g");
+    const linkedHere = new Set<string>();
+    return text.split(pattern).map((part, index) => {
+      if (!cardNameSet.has(part)) {
+        return part;
+      }
+      if (allowed?.has(part) && !linkedHere.has(part)) {
+        linkedHere.add(part);
+        return <TranscriptCardLink key={index} name={part} set={setCode} cardImages={cardImages} />;
+      }
+      return (
+        <em key={index} className="text-subtle/90 italic">
+          {part}
+        </em>
+      );
+    });
+  };
+
+  const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set());
+  const toggle = (index: number) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  const chapterOf = useMemo(() => {
+    const map = new Map<number, number>();
+    let currentT = -1;
+    items.forEach((item, itemIndex) => {
+      if (item.kind === "chapter") {
+        currentT = item.t;
+      } else {
+        map.set(itemIndex, currentT);
+      }
+    });
+    return map;
+  }, [items]);
+
   return (
-    <div className="mt-8 border-t border-border pt-6">
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 className="font-display text-text text-[16px] tracking-[0.02em]">Transcript</h2>
-        <div className="mono flex items-center gap-x-3 text-[11px] tracking-[0.1em] text-dim uppercase">
-          <span>{wordCount.toLocaleString()} words</span>
-          <span>auto-generated</span>
-        </div>
-      </div>
-      <div className="max-w-[820px]">
-        {segments.map((segment, index) => (
-          <Fragment key={index}>
-            {segment.heading ? (
-              <h3 className="font-display text-text text-[15px] tracking-[0.02em] mt-7 mb-1 first:mt-0">
-                {segment.heading}
-              </h3>
-            ) : null}
-            <div className="flex gap-4 border-t border-border/40 py-2 first:border-t-0">
-              {onSeek ? (
+    <div className="mt-4 border-t border-border pt-4">
+      <div className="w-full">
+        {items.map((item, index) => {
+          if (item.kind !== "chapter") {
+            const parent = chapterOf.get(index);
+            if (parent !== undefined && parent >= 0 && collapsedChapters.has(parent)) {
+              return null;
+            }
+          }
+          if (item.kind === "chapter") {
+            const isChapterCollapsed = collapsedChapters.has(item.t);
+            return (
+              <div
+                key={index}
+                id={`ch-${item.t}`}
+                className="mt-8 mb-1.5 flex items-center gap-2 scroll-mt-[calc(56vw+1rem)] first:mt-0 lg:scroll-mt-4"
+              >
                 <button
                   type="button"
-                  onClick={() => onSeek(segment.t)}
-                  className="mono w-[54px] shrink-0 pt-0.5 text-left text-[12px] text-green transition-colors hover:text-green/70"
+                  onClick={() => onToggleChapter(item.t)}
+                  aria-expanded={!isChapterCollapsed}
+                  className="group flex items-center gap-2 text-left"
                 >
-                  {formatTimestamp(segment.t)}
+                  <ChevronRight
+                    size={18}
+                    strokeWidth={2.5}
+                    className={cn("shrink-0 text-green transition-transform", isChapterCollapsed ? "" : "rotate-90")}
+                  />
+                  <h3 className="font-display text-text text-[19px] tracking-[0.02em] leading-none transition-colors group-hover:text-green">
+                    {item.heading}
+                  </h3>
                 </button>
-              ) : (
-                <span className="mono w-[54px] shrink-0 pt-0.5 text-[12px] text-dim">{formatTimestamp(segment.t)}</span>
-              )}
-              <p className="text-subtle text-[15px] leading-[1.6]">{segment.text}</p>
-            </div>
-          </Fragment>
-        ))}
+                {onSeek ? (
+                  <button
+                    type="button"
+                    onClick={() => onSeek(item.t)}
+                    className="font-num shrink-0 text-[14px] leading-none text-green transition-colors hover:text-green/70"
+                  >
+                    {formatTimestamp(item.t)}
+                  </button>
+                ) : (
+                  <span className="font-num shrink-0 text-[14px] leading-none text-dim">{formatTimestamp(item.t)}</span>
+                )}
+              </div>
+            );
+          }
+          if (item.kind === "section") {
+            const isCollapsed = collapsed.has(index);
+            return (
+              <div key={index} className="pt-4 first:pt-0">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => toggle(index)}
+                    aria-expanded={!isCollapsed}
+                    className="group flex items-center gap-1.5 text-left"
+                  >
+                    <ChevronRight
+                      size={15}
+                      strokeWidth={2.5}
+                      className={cn("shrink-0 text-green transition-transform", isCollapsed ? "" : "rotate-90")}
+                    />
+                    <span className="font-display text-text/90 text-[17px] tracking-[0.02em] leading-none transition-colors group-hover:text-green">
+                      {item.title}
+                    </span>
+                  </button>
+                  {onSeek ? (
+                    <button
+                      type="button"
+                      onClick={() => onSeek(item.t)}
+                      className="font-num ml-1 shrink-0 text-[14px] leading-none text-green transition-colors hover:text-green/70"
+                    >
+                      {formatTimestamp(item.t)}
+                    </button>
+                  ) : (
+                    <span className="font-num ml-1 shrink-0 text-[14px] leading-none text-dim">
+                      {formatTimestamp(item.t)}
+                    </span>
+                  )}
+                </div>
+                {isCollapsed
+                  ? null
+                  : item.paras.map((para, paraIndex) => (
+                      <p key={paraIndex} className="text-subtle text-[15px] leading-[1.6] mt-2">
+                        {renderText(para, linkable.get(`${index}:${paraIndex}`))}
+                      </p>
+                    ))}
+              </div>
+            );
+          }
+          return (
+            <p key={index} className="text-subtle text-[15px] leading-[1.6] mt-2">
+              {renderText(item.text, linkable.get(`${index}:0`))}
+            </p>
+          );
+        })}
       </div>
     </div>
   );

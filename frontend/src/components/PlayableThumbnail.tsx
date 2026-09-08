@@ -108,7 +108,7 @@ export function EpisodeEmbed({
 }) {
   const [embedLoaded, setEmbedLoaded] = useState(false);
   if (episode.youtubeId && !audioMode) {
-    const src = `https://www.youtube.com/embed/${episode.youtubeId}?autoplay=1&playsinline=1&rel=0${
+    const src = `https://www.youtube.com/embed/${episode.youtubeId}?autoplay=1&playsinline=1&rel=0&cc_load_policy=0${
       enableJsApi ? "&enablejsapi=1" : ""
     }`;
     return (
