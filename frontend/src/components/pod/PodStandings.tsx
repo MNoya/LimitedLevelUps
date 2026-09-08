@@ -229,7 +229,7 @@ function TeamHeading({ team, wins, won }: { team: string; wins: number; won: boo
           {won && <Trophy size={14} color="#ffc63a" />}
         </span>
         {team === "A" ? "GREEN TEAM" : "BLUE TEAM"}
-        <span className="mono text-[14px] ml-2.5">{wins}</span>
+        <span className="font-num text-[14px] ml-2.5">{wins}</span>
       </span>
       <span />
       <span />

@@ -172,7 +172,7 @@ export function VsMetricSide({
           </span>
           <span className="flex items-baseline gap-1.5">
           <span
-            className="font-mono tabular-nums font-semibold leading-none"
+            className="font-num tabular-nums font-semibold leading-none"
             style={{ fontSize: 20, color: dim ? "#4a5568" : valueColor }}
           >
             {value}
@@ -215,7 +215,7 @@ export function VsMetricSide({
         <div className={headerClass}>
           <span className={numberGroupClass}>
             <span
-              className="font-mono tabular-nums text-[20px] font-semibold leading-none lg:text-[30px]"
+              className="font-num tabular-nums text-[20px] font-semibold leading-none lg:text-[30px]"
               style={{ color: dim ? "#4a5568" : valueColor }}
             >
               {value}

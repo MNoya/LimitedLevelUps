@@ -163,7 +163,7 @@ function ThumbnailInner({
         className="transition-transform duration-300 group-hover:scale-[1.07]"
       />
       {audioOnly || episode.durationLabel ? (
-        <span className="absolute bottom-2 right-2 flex items-center gap-1.5 mono text-[11px] text-text bg-bg/85 px-1.5 py-0.5">
+        <span className="absolute bottom-2 right-2 flex items-center gap-1.5 font-mono text-[11px] text-text bg-bg/85 px-1.5 py-0.5">
           {audioOnly ? <Headphones size={12} /> : null}
           {episode.durationLabel ? episode.durationLabel : null}
         </span>

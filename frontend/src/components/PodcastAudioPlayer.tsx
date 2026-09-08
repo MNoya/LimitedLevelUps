@@ -74,7 +74,7 @@ export const PodcastAudioPlayer = forwardRef<AudioControls, { src: string; title
       <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-bg via-bg/90 to-transparent">
         <div className="flex items-center gap-2.5">
           <Equalizer playing={playing} />
-          <span className="mono text-[11px] text-text tabular-nums shrink-0">{formatClock(current)}</span>
+          <span className="font-num text-[11px] text-text tabular-nums shrink-0">{formatClock(current)}</span>
           <input
             type="range"
             className="audio-scrubber pointer-events-auto flex-1 min-w-0"
@@ -86,7 +86,7 @@ export const PodcastAudioPlayer = forwardRef<AudioControls, { src: string; title
             aria-label="Seek"
             style={{ "--pct": ratio } as CSSProperties}
           />
-          <span className="mono text-[11px] text-muted tabular-nums shrink-0">{formatClock(duration)}</span>
+          <span className="font-num text-[11px] text-muted tabular-nums shrink-0">{formatClock(duration)}</span>
         </div>
       </div>
     </div>

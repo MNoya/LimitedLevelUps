@@ -30,7 +30,7 @@ export function TrophyCount({
       <Trophy size={trophySize} color="#ffc63a" />
       <span
         className={cn(
-          display ? cn("font-display leading-none", displaySize) : cn("mono", monoSize),
+          display ? cn("font-display leading-none", displaySize) : cn("font-num", monoSize),
           !display && size === "md" && "font-semibold",
         )}
         style={countStyle}

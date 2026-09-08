@@ -863,7 +863,7 @@ export function CardModal({
           >
             <ModalNavButton dir="prev" srLabel="Previous card" onClick={onPrev} />
             {position && (
-              <span className="mono text-[12px] tracking-[0.1em] text-white/70">
+              <span className="font-num text-[12px] tracking-[0.1em] text-white/70">
                 {position}
               </span>
             )}

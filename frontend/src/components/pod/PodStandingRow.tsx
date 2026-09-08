@@ -96,7 +96,7 @@ export function PodStandingRow({
         interactive && "cursor-pointer hover:bg-surface2",
       )}
     >
-      <span className={cn("mono text-center tabular-nums text-muted", compact ? "text-[12px]" : "text-[14px]")}>
+      <span className="font-num text-center tabular-nums text-muted text-[13px]">
         {rank ?? ""}
       </span>
       {nameHref ? (
@@ -127,12 +127,12 @@ export function PodStandingRow({
       </div>
       {played ? (
         <Record
-          className={cn("mono text-center", compact ? "text-[13px]" : "text-[13px]")}
+          className={cn("font-num text-center", compact ? "text-[13px]" : "text-[13px]")}
           wins={wins}
           losses={losses}
         />
       ) : (
-        <span className={cn("mono text-center text-dim", compact ? "text-[13px]" : "text-[13px]")}>—</span>
+        <span className={cn("font-num text-center text-dim", compact ? "text-[13px]" : "text-[13px]")}>—</span>
       )}
       {hasDeck ? (
         <button

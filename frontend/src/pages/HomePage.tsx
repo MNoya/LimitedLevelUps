@@ -140,7 +140,7 @@ function Panel({
         </Link>
         <div className="flex-1 min-w-0 flex justify-center">{headerCenter}</div>
         {typeof corner === "string" ? (
-          <span className="mono text-[10px] tracking-[0.16em] text-muted uppercase shrink-0">{corner}</span>
+          <span className="font-mono text-[10px] tracking-[0.16em] text-muted uppercase shrink-0">{corner}</span>
         ) : (
           corner ?? null
         )}
@@ -221,7 +221,7 @@ function IdentityPanel() {
             </span>
           }
         />
-        <p className="mono text-[12px] tracking-[0.04em] text-subtle text-center">
+        <p className="font-mono text-[12px] tracking-[0.04em] text-subtle text-center">
           Hosted by {HOST.name}{" "}
           <a
             href={`https://x.com/${HOST.handle}`}
@@ -913,7 +913,7 @@ function LeaderboardMiniRow({ row, setCode, mode }: { row: LeaderboardRow; setCo
       className="group/row flex flex-1 items-center gap-2.5 px-4 border-t border-border no-underline text-text transition-colors first:border-t-0 hover:bg-surface2"
       style={{ minHeight: LB_ROW_HEIGHT }}
     >
-      <span className="mono w-5 shrink-0 text-center text-[12px] text-muted">{row.rank}</span>
+      <span className="font-num w-5 shrink-0 text-center text-[12px] text-muted">{row.rank}</span>
       <AAvatar displayName={row.displayName} avatarUrl={row.avatarUrl} size={22} />
       <span className="truncate font-display text-[15px] leading-none tracking-[0.04em] transition-colors group-hover/row:text-green">
         {row.displayName.toUpperCase()}
@@ -1053,7 +1053,7 @@ function PodRow({ entry }: { entry: PodEntry }) {
       </span>
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-medium text-text truncate">{highlightEventLabel(title)}</div>
-        <div className="mono text-[12px] text-muted flex items-center gap-1.5 min-w-0">{sub}</div>
+        <div className="font-mono text-[12px] text-muted flex items-center gap-1.5 min-w-0">{sub}</div>
       </div>
       {upcoming ? (
         <PodCountdown target={podStartMs(event)} />
@@ -1136,7 +1136,7 @@ function PodCountdown({ target }: { target: number }) {
   }, []);
   const remaining = target - now;
   return (
-    <span className="mono shrink-0 rounded border border-border bg-surface2 px-2 py-1 text-[11px] tracking-[0.08em] tabular-nums text-subtle">
+    <span className="font-mono shrink-0 rounded border border-border bg-surface2 px-2 py-1 text-[11px] tracking-[0.08em] tabular-nums text-subtle">
       {remaining <= 0 ? "LIVE" : formatCountdown(remaining)}
     </span>
   );

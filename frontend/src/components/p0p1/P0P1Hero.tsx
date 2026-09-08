@@ -35,7 +35,7 @@ export function P0P1Hero({
           </span>
           <span className="font-display text-[22px] text-muted tracking-[0.06em]">{featured.name.toUpperCase()}</span>
         </div>
-        <div className="mono text-[11px] mt-1 flex items-center justify-between gap-x-6">
+        <div className="font-mono text-[11px] mt-1 flex items-center justify-between gap-x-6">
           <P0P1Countdown deadline={featured.votingDeadline} scoringDate={featured.scoringDate} size={11} phase={phase} />
           {phase === "final" && featured.next && (
             <span className="flex items-center gap-1.5 text-muted">

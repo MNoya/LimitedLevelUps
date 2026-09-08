@@ -129,7 +129,7 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
             {participant.displayName}
           </span>
           {hasRecord && (
-            <Record wins={recordWins} losses={recordLosses} className="mono text-[20px] shrink-0" />
+            <Record wins={recordWins} losses={recordLosses} className="font-num text-[20px] shrink-0" />
           )}
           <button
             type="button"

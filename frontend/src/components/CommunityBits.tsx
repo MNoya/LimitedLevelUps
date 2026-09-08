@@ -116,7 +116,7 @@ export function HostBlock({ host }: { host: Host }) {
             })}
           </div>
         </div>
-        <div className="mono text-[11px] tracking-[0.12em] text-green uppercase mt-1">{host.role}</div>
+        <div className="font-mono text-[11px] tracking-[0.12em] text-green uppercase mt-1">{host.role}</div>
         <p className="text-subtle text-[13.5px] leading-[1.6] mt-2">{host.bio}</p>
       </div>
     </div>
@@ -137,7 +137,7 @@ function renderStep(step: string) {
     }
     if (match[1]) {
       nodes.push(
-        <code key={key++} className="mono text-text bg-surface2 border border-border2 px-1.5 py-px text-[12.5px]">
+        <code key={key++} className="font-mono text-text bg-surface2 border border-border2 px-1.5 py-px text-[12.5px]">
           {match[1]}
         </code>,
       );
@@ -264,7 +264,7 @@ export function CommunityLinks() {
           <span className="font-display text-[14px] md:text-[15px] tracking-[0.06em] text-text shrink-0 w-[90px]">
             {link.label}
           </span>
-          <span className="mono text-[12px] md:text-[13px] text-muted group-hover:text-green transition-colors break-all">
+          <span className="font-mono text-[12px] md:text-[13px] text-muted group-hover:text-green transition-colors break-all">
             {displayUrl(link.url)}
           </span>
         </a>

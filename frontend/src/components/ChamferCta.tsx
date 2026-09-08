@@ -15,7 +15,7 @@ const SIZE_CLASSES: Record<ChamferSize, string> = {
 
 const ARROW_SIZE: Record<ChamferSize, number> = { sm: 13, lg: 16 };
 
-const BASE = "inline-flex items-center bg-green text-bg mono font-bold no-underline hover:bg-green-2 transition-colors";
+const BASE = "inline-flex items-center bg-green text-bg font-mono font-bold no-underline hover:bg-green-2 transition-colors";
 
 const GROW = "transition-[transform,background-color] duration-200 hover:scale-105";
 

@@ -20,7 +20,7 @@ export function ErrorState({
       >
         SOMETHING WENT WRONG
       </div>
-      <div className="mono text-[11px] text-muted mt-2 max-w-[460px] mx-auto break-words">
+      <div className="font-mono text-[11px] text-muted mt-2 max-w-[460px] mx-auto break-words">
         {error.message || "UNKNOWN ERROR"}
       </div>
       {onRetry && (

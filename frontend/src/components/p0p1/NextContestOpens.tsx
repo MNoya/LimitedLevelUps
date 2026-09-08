@@ -15,7 +15,7 @@ export function NextContestOpens({ next }: { next: FeaturedContest["next"] }) {
       <span className="font-semibold text-text">{next.code}</span>
       <span>picks open</span>
       <span
-        className="mono text-green tabular-nums border border-border2 bg-surface2/40 px-2 py-1"
+        className="font-mono text-green tabular-nums border border-border2 bg-surface2/40 px-2 py-1"
         style={{ fontSize: 13, lineHeight: 1, letterSpacing: "0.02em" }}
       >
         {formatCountdown(next.previewsOpen.getTime(), now)}

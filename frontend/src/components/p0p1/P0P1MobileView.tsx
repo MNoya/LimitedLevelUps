@@ -285,7 +285,7 @@ function MobileChip({
         </span>
       )}
       {yourStat && classification && (
-        <div className={`absolute bottom-0 left-0 right-0 text-center font-mono tabular-nums text-[10px] py-0.5 bg-bg/75 ${stateColor}`}>
+        <div className={`absolute bottom-0 left-0 right-0 text-center font-num tabular-nums text-[10px] py-0.5 bg-bg/75 ${stateColor}`}>
           {pickPctLabel(yourStat.pickPct)}
         </div>
       )}

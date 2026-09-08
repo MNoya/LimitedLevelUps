@@ -40,7 +40,7 @@ export function TrophyLeaderboard({
             className="group/row grid items-center gap-x-3 py-2.5 pl-2 pr-5 bg-surface hover:bg-surface2 transition-colors no-underline text-inherit"
             style={{ gridTemplateColumns: COLS }}
           >
-            <span className="mono text-[13px] text-muted text-center">{r.rank}</span>
+            <span className="font-num text-[13px] text-muted text-center">{r.rank}</span>
             <div className="flex items-center gap-2.5 min-w-0">
               <AAvatar displayName={r.displayName} avatarUrl={r.avatarUrl} size={30} />
               <div className="min-w-0">
@@ -71,7 +71,7 @@ function DeckPips({ decks }: { decks: TrophyLeaderboardRow["decks"] }) {
         <Pips key={`${d.sourceMessageId}-${i}`} colors={d.colors} size={12} />
       ))}
       {decks.length > MAX_DECK_PIPS && (
-        <span className="mono text-[11px] text-dim">+{decks.length - MAX_DECK_PIPS}</span>
+        <span className="font-num text-[11px] text-dim">+{decks.length - MAX_DECK_PIPS}</span>
       )}
     </div>
   );
@@ -99,7 +99,7 @@ function EmptyState() {
   return (
     <div className="p-10 text-center">
       <div className="font-display text-[22px] tracking-[0.04em] text-text">NO TROPHIES YET</div>
-      <div className="mono text-[11px] text-muted mt-2">
+      <div className="font-mono text-[11px] text-muted mt-2">
         NO TROPHIES LOGGED FOR THIS SET YET. LOG ONE WITH /trophy IN DISCORD.
       </div>
     </div>

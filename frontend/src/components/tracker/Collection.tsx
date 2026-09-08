@@ -390,7 +390,7 @@ function CardRow({
     >
       <span
         ref={nameRef}
-        className={cn("flex-1 min-w-0 self-center truncate pl-3 pr-2 font-spectral",
+        className={cn("flex-1 min-w-0 self-center truncate pl-3 pr-2 font-serif",
           touch ? "py-2" : "py-[3px]",
           owned === 0 ? "text-muted" : "text-text")}
       >

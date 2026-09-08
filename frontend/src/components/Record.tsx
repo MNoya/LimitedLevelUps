@@ -26,6 +26,7 @@ export function Record({
   style?: React.CSSProperties;
 }) {
   if (centered) {
+    const tricolor = !mono && !color;
     const gridStyle: React.CSSProperties = {
       ...style,
       display: "inline-grid",
@@ -35,14 +36,14 @@ export function Record({
     };
     return (
       <span className={cn(mono && !color ? "text-text" : "", className)} style={gridStyle}>
-        <span className="text-right">{wins}</span>
+        <span className={cn("text-right", tricolor && "text-green")}>{wins}</span>
         <span
           className="text-dim"
           style={separatorMargin ? { margin: `0 ${separatorMargin}px` } : undefined}
         >
           –
         </span>
-        <span className="text-left">{losses}</span>
+        <span className={cn("text-left", tricolor && "text-muted")}>{losses}</span>
       </span>
     );
   }

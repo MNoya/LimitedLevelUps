@@ -73,7 +73,7 @@ export function MidwayBreakdownList({
                 : 100
               : 0,
           value: (
-            <span className={`font-mono tabular-nums text-[13px] font-semibold ${row.gihwr !== null ? "text-text" : "text-muted"}`}>
+            <span className={`font-num tabular-nums text-[13px] font-semibold ${row.gihwr !== null ? "text-text" : "text-muted"}`}>
               {row.gihwr !== null ? `${(row.gihwr * 100).toFixed(1)}%` : "—"}
             </span>
           ),

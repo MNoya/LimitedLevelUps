@@ -144,7 +144,7 @@ function MemberCount({ members, online }: { members?: number; online?: number })
     return null;
   }
   return (
-    <div className="mono text-[12px] tracking-[0.12em] text-muted flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+    <div className="font-mono text-[12px] tracking-[0.12em] text-muted flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
       <span>
         <span className="text-text">{members.toLocaleString()}</span> MEMBERS
       </span>

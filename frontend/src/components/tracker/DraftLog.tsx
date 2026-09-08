@@ -336,7 +336,7 @@ function DraftRow({
               <span className="font-display tabular-nums text-[17px]">{event.wins}-{event.losses}</span>
             </Cell>
             <Cell>
-              <span className="font-spectral text-[14px] text-subtle truncate">{note}</span>
+              <span className="font-serif text-[14px] text-subtle truncate">{note}</span>
             </Cell>
             <Cell className="p-0 justify-center">
               {expanded
@@ -360,7 +360,7 @@ function DraftRow({
                 {formatLabel(event.format)}
               </span>
             </Cell>
-            <Cell><span className="mono text-[13px] text-muted whitespace-nowrap">{date}</span></Cell>
+            <Cell><span className="font-mono text-[13px] text-muted whitespace-nowrap">{date}</span></Cell>
             <Cell className={cn("justify-end", GROUP_END)}>
               <span className="font-display tabular-nums text-[17px]">{event.wins}-{event.losses}</span>
             </Cell>
@@ -377,7 +377,7 @@ function DraftRow({
               <span className="font-display tabular-nums text-[16px] text-subtle">{payout ? payout.packs : ""}</span>
             </Cell>
             <Cell>
-              <span className="font-spectral text-[14px] text-subtle truncate">{note}</span>
+              <span className="font-serif text-[14px] text-subtle truncate">{note}</span>
             </Cell>
             <Cell className="p-0 justify-center">
               {expanded
@@ -442,7 +442,7 @@ function DraftNotesPanel({
             <span className="font-display text-[12px] tracking-[0.1em] text-muted leading-none whitespace-nowrap">
               {shortFormat(event.format)}
             </span>
-            <span className="mono text-[11px] text-dim leading-none whitespace-nowrap">{shortDate}</span>
+            <span className="font-mono text-[11px] text-dim leading-none whitespace-nowrap">{shortDate}</span>
           </div>
         )}
         {event.seventeenlandsEventId && (
@@ -743,7 +743,7 @@ function NoteField({ initial, placeholder = "", onSave }: { initial: string; pla
       }}
       onBlur={commit}
       className={cn(
-        `block w-full h-full min-h-[42px] px-2 py-2.5 bg-transparent font-spectral text-[15px] leading-relaxed
+        `block w-full h-full min-h-[42px] px-2 py-2.5 bg-transparent font-serif text-[15px] leading-relaxed
          text-text outline-none resize-none overflow-hidden border border-transparent
          placeholder:font-body placeholder:text-[13px] placeholder:text-muted
          hover:border-border2 focus:border-green focus:bg-bg`,

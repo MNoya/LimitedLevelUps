@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { SortHeaderButton } from "./SortHeader";
 import { AAvatar, Trophy, fmtPts } from "./Brand";
 import { Record } from "./Record";
 import { ErrorState } from "./ErrorState";
@@ -87,7 +87,7 @@ export function sortRows<T extends LeaderboardTableRow>(
 // bounds are given so a narrow desktop spends that padding first and the name keeps its floor.
 const NAME_COL = "minmax(175px, 1fr)";
 const METRIC_COLS =
-  "minmax(62px, 70px) minmax(44px, 100px) minmax(52px, 110px) minmax(44px, 90px) minmax(44px, 90px)";
+  "minmax(62px, 70px) minmax(44px, 72px) minmax(52px, 68px) minmax(48px, 54px) minmax(44px, 90px)";
 
 const COLS_DESKTOP: Record<BoardMode, string> = {
   points: `44px ${NAME_COL} ${METRIC_COLS}`,
@@ -335,12 +335,12 @@ export function LeaderboardColumnHeader({
         {mode === "pod" && (
           <>
             <SortHeader label="PODS" sortKey="events" sort={sort} onSort={onSort} />
-            <SortHeader label="RECORD" sortKey="record" sort={sort} onSort={onSort} />
+            <SortHeader label="RECORD" sortKey="record" sort={sort} onSort={onSort} align="center" />
           </>
         )}
         {mode === "direct" && (
           <>
-            <SortHeader label="RECORD" sortKey="record" sort={sort} onSort={onSort} />
+            <SortHeader label="RECORD" sortKey="record" sort={sort} onSort={onSort} align="center" />
             <SortHeader label="BOXES" sortKey="boxes" sort={sort} onSort={onSort} />
           </>
         )}
@@ -349,7 +349,7 @@ export function LeaderboardColumnHeader({
   }
   return (
     <div
-      className="grid gap-x-3 py-2.5 pl-2 pr-5 mb-1 font-display text-[11px] tracking-[0.2em] text-muted"
+      className="grid gap-x-5 py-2.5 pl-2 pr-5 font-display text-[11px] tracking-[0.2em] text-muted"
       style={{ gridTemplateColumns: COLS_DESKTOP[mode] }}
     >
       <span className="text-center">RANK</span>
@@ -357,7 +357,7 @@ export function LeaderboardColumnHeader({
       {mode === "lcq" && <SortHeader label="$" sortKey="earnings" sort={sort} onSort={onSort} />}
       <SortHeader label="TROPHIES" sortKey="trophies" sort={sort} onSort={onSort} />
       <SortHeader label="EVENTS" sortKey="events" sort={sort} onSort={onSort} />
-      <SortHeader label="RECORD" sortKey="record" sort={sort} onSort={onSort} />
+      <SortHeader label="RECORD" sortKey="record" sort={sort} onSort={onSort} align="center" />
       <SortHeader label="WIN %" sortKey="winPct" sort={sort} onSort={onSort} />
       {(mode === "points" || mode === "lcq" || mode === "pod") && (
         <ScoringSortHeader label="POINTS" sort={sort} onSort={onSort} />
@@ -373,41 +373,28 @@ function SortHeader({
   sort,
   onSort,
   inline = false,
+  align = "right",
 }: {
   label: string;
   sortKey: SortKey;
   sort?: SortState;
   onSort?: (key: SortKey) => void;
   inline?: boolean;
+  align?: "right" | "center";
 }) {
+  const centered = align === "center";
   if (!onSort) {
-    return <span className="text-right">{label}</span>;
+    return <span className={centered ? "block w-full text-center" : "text-right"}>{label}</span>;
   }
-  const active = sort?.key === sortKey;
-  const Icon = active && sort?.dir === "asc" ? ChevronUp : ChevronDown;
   return (
-    <button
-      type="button"
+    <SortHeaderButton
+      label={label}
+      active={sort?.key === sortKey}
+      dir={sort?.dir ?? "desc"}
       onClick={() => onSort(sortKey)}
-      aria-label={`Sort by ${label}`}
-      aria-sort={active ? (sort?.dir === "asc" ? "ascending" : "descending") : "none"}
-      className={cn(
-        "relative cursor-pointer transition-colors tracking-[inherit] text-[inherit] font-[inherit]",
-        inline ? "inline-flex items-center" : "block w-full text-right",
-        active ? "text-text" : "hover:text-text",
-      )}
-    >
-      <span>{label}</span>
-      <Icon
-        size={11}
-        strokeWidth={2.5}
-        className={cn(
-          "absolute left-full top-1/2 -translate-y-1/2 ml-0.5 shrink-0",
-          active ? "opacity-100" : "opacity-30",
-        )}
-        aria-hidden="true"
-      />
-    </button>
+      align={align}
+      inline={inline}
+    />
   );
 }
 
@@ -434,7 +421,7 @@ function ScoringSortHeader({
 
 const rankLabel = (rank: number): string => (rank > 0 ? String(rank) : "—");
 
-const EmptyStat = () => <span className="mono text-right text-[13px] text-dim">—</span>;
+const EmptyStat = () => <span className="font-num text-right text-[13px] text-dim">—</span>;
 
 function DesktopRow({
   row,
@@ -451,22 +438,22 @@ function DesktopRow({
   const rowLinked = !!href && !onToggle;
   const body = (
     <>
-      <span className="mono text-[13px] text-muted text-center">{rankLabel(row.rank)}</span>
+      <span className="font-num text-[13px] text-muted text-center">{rankLabel(row.rank)}</span>
       <PlayerCell row={row} avatarSize={30} nameSize={18} linked={rowLinked} />
       {mode === "lcq" && <EarningsCell earnings={row.earnings ?? 0} />}
       <TrophyCell trophies={row.trophies} compact={false} large={mode === "pod"} />
       {row.events > 0 ? (
-        <span className="mono text-right text-[13px] text-muted">{row.events}</span>
+        <span className="font-num text-right text-[13px] text-muted">{row.events}</span>
       ) : (
         <EmptyStat />
       )}
       {row.events > 0 ? (
-        <Record className="mono text-right text-[13px]" wins={row.wins} losses={row.losses} />
+        <Record centered className="font-num text-[13px] w-full" wins={row.wins} losses={row.losses} />
       ) : (
         <EmptyStat />
       )}
       {row.events > 0 ? (
-        <span className="mono text-right text-[13px] text-muted">{winPct(row.wins, row.losses)}%</span>
+        <span className="font-num text-right text-[13px] text-muted">{winPct(row.wins, row.losses)}%</span>
       ) : (
         <EmptyStat />
       )}
@@ -480,7 +467,7 @@ function DesktopRow({
     return (
       <Link
         to={href!}
-        className="group/row grid items-center gap-x-3 py-2.5 pl-2 pr-5 cursor-pointer no-underline text-inherit"
+        className="group/row grid items-center gap-x-5 py-2.5 pl-2 pr-5 cursor-pointer no-underline text-inherit"
         style={{ gridTemplateColumns: cols }}
       >
         {body}
@@ -491,7 +478,7 @@ function DesktopRow({
     <div
       onClick={onToggle}
       className={cn(
-        "grid items-center gap-x-3 py-2.5 pl-2 pr-5",
+        "grid items-center gap-x-5 py-2.5 pl-2 pr-5",
         onToggle && "cursor-pointer",
       )}
       style={{ gridTemplateColumns: cols }}
@@ -516,13 +503,13 @@ function MobileRow({
   const rowLinked = !!href && !onToggle;
   const body = (
     <>
-      <span className="mono text-[12px] text-muted text-center">{rankLabel(row.rank)}</span>
+      <span className="font-num text-[12px] text-muted text-center">{rankLabel(row.rank)}</span>
       <PlayerCell row={row} avatarSize={26} nameSize={17} linked={rowLinked} />
       {mode === "lcq" && <EarningsCell earnings={row.earnings ?? 0} compact />}
       <TrophyCell trophies={row.trophies} compact large={mode === "pod"} />
       {(mode === "points" || mode === "lcq") &&
         (row.rank === 0 ? (
-          <span className="mono text-right text-[13px] text-dim">—</span>
+          <span className="font-num text-right text-[13px] text-dim">—</span>
         ) : (
           <span className="font-display text-right text-[18px] tracking-[0.02em] tabular-nums leading-none">
             {fmtPts(row.score ?? 0)}
@@ -530,13 +517,13 @@ function MobileRow({
         ))}
       {mode === "pod" && (
         <>
-          <span className="mono text-right text-[13px] text-muted tabular-nums">{row.events}</span>
-          <Record className="mono text-right text-[13px]" wins={row.wins} losses={row.losses} />
+          <span className="font-num text-right text-[13px] text-muted tabular-nums">{row.events}</span>
+          <Record centered className="font-num text-[13px] w-full" wins={row.wins} losses={row.losses} />
         </>
       )}
       {mode === "direct" && (
         <>
-          <Record className="mono text-right text-[13px]" wins={row.wins} losses={row.losses} />
+          <Record centered className="font-num text-[13px] w-full" wins={row.wins} losses={row.losses} />
           <BoxesCell boxes={row.boxes ?? 0} />
         </>
       )}
@@ -634,7 +621,7 @@ function TrophyCell({
 
 function ScoreCell({ score, large, unranked }: { score: number; large?: boolean; unranked?: boolean }) {
   if (unranked) {
-    return <span className="mono text-right text-[13px] text-dim">—</span>;
+    return <span className="font-num text-right text-[13px] text-dim">—</span>;
   }
   return (
     <div
@@ -650,7 +637,7 @@ function ScoreCell({ score, large, unranked }: { score: number; large?: boolean;
 
 function EarningsCell({ earnings, compact = false }: { earnings: number; compact?: boolean }) {
   if (earnings <= 0) {
-    return <span className="mono text-right text-[13px] text-dim">—</span>;
+    return <span className="font-num text-right text-[13px] text-dim">—</span>;
   }
   return (
     <span
@@ -710,7 +697,7 @@ function EmptyState({ children }: { children?: React.ReactNode }) {
   return (
     <div className="p-10 text-center">
       <div className="font-display text-[22px] tracking-[0.04em] text-text">NO EVENTS YET</div>
-      <div className="mono text-[11px] text-muted mt-2">
+      <div className="font-mono text-[11px] text-muted mt-2">
         {children ?? "NO PLAYER DATA FOR THIS SET / FILTER YET. CHECK BACK SOON."}
       </div>
     </div>

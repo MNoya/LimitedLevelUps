@@ -92,7 +92,7 @@ export function SiteFooter({ sponsorVariant = "gray" }: { sponsorVariant?: "colo
   const row = (
     <>
       <div className="relative hidden items-center justify-between text-[12px] text-muted lg:flex">
-        <span className="mono flex flex-col gap-0.5 text-[10px] leading-tight">{copyright}</span>
+        <span className="font-mono flex flex-col gap-0.5 text-[10px] leading-tight">{copyright}</span>
         <div className="pointer-events-none absolute inset-0 grid grid-cols-[minmax(300px,360px)_minmax(0,1fr)_clamp(300px,22vw,340px)] items-center gap-4">
           {sponsorLogo(
             desktopHeight,
@@ -115,7 +115,7 @@ export function SiteFooter({ sponsorVariant = "gray" }: { sponsorVariant?: "colo
           {renderLink(linkByLabel.Spotify, mobileMidAlign)}
           {renderLink(linkByLabel.RSS)}
         </nav>
-        <span className="mono block text-center text-[10px] leading-tight">{copyright}</span>
+        <span className="font-mono block text-center text-[10px] leading-tight">{copyright}</span>
       </div>
     </>
   );

@@ -192,7 +192,7 @@ function PickTile({
             </button>
           )}
           {hasStats && (
-            <span className="absolute bottom-1 right-1 text-[11px] lg:text-[13px] font-mono tabular-nums font-semibold px-1 rounded-sm bg-bg/85">
+            <span className="absolute bottom-1 right-1 text-[11px] lg:text-[13px] font-num tabular-nums font-semibold px-1 rounded-sm bg-bg/85">
               {pctLabel ?? pickPctLabel(stats[0].pickPct)}
             </span>
           )}

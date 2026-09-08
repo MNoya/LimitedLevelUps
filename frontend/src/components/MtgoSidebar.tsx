@@ -59,7 +59,7 @@ export function MtgoSidebar({
       </SurfaceCard>
 
       {rows && (
-        <div className="mono text-[11px] text-muted -mt-2 flex justify-between px-12">
+        <div className="font-mono text-[11px] text-muted -mt-2 flex justify-between px-12">
           <span>{rows.length} PLAYERS</span>
           <span>{trophyTotal} TROPHIES</span>
         </div>
@@ -98,10 +98,10 @@ function TopColorsRows({
 }) {
   const [limit, setLimit] = useState(maxColors);
   if (loading) {
-    return <div className="mono text-[11px] text-muted py-2">LOADING…</div>;
+    return <div className="font-mono text-[11px] text-muted py-2">LOADING…</div>;
   }
   if (topColors.length === 0) {
-    return <div className="mono text-[11px] text-muted py-2">NO TROPHIES YET</div>;
+    return <div className="font-mono text-[11px] text-muted py-2">NO TROPHIES YET</div>;
   }
   const canShowMore = topColors.length > limit;
   return (
@@ -114,7 +114,7 @@ function TopColorsRows({
             i > 0 && "border-t border-border",
           )}
         >
-          <span className="mono text-[11px] text-muted">{i + 1}</span>
+          <span className="font-num text-[11px] text-muted">{i + 1}</span>
           <span className="flex justify-center">
             {row.colors === MULTI ? (
               <BsPaletteFill size={18} className="shrink-0 block -my-1" aria-hidden="true" />
@@ -146,10 +146,10 @@ function RecentTrophyRows({
 }) {
   const [limit, setLimit] = useState(maxRecent);
   if (loading) {
-    return <div className="mono text-[11px] text-muted py-2">LOADING…</div>;
+    return <div className="font-mono text-[11px] text-muted py-2">LOADING…</div>;
   }
   if (recent.length === 0) {
-    return <div className="mono text-[11px] text-muted py-2">NO DECKS YET</div>;
+    return <div className="font-mono text-[11px] text-muted py-2">NO DECKS YET</div>;
   }
   const canShowMore = recent.length > limit;
   return (
@@ -177,11 +177,11 @@ function RecentTrophyRows({
             <span className="font-display text-[15px] leading-none tracking-[0.04em] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
               {t.displayName.toUpperCase()}
             </span>
-            <Record wins={wins} losses={losses} mono className="mono text-[13px] text-subtle text-right" />
+            <Record wins={wins} losses={losses} mono className="font-num text-[13px] text-subtle text-right" />
             <span className="flex items-center gap-1.5 justify-end whitespace-nowrap">
               {t.isTrophy && <Trophy size={11} color="#ffc63a" />}
-              <span className="mono text-[11px] text-text">{t.platform}</span>
-              <span className="mono text-[11px] text-dim tabular-nums transition-colors group-hover:text-text">
+              <span className="font-mono text-[11px] text-text">{t.platform}</span>
+              <span className="font-mono text-[11px] text-dim tabular-nums transition-colors group-hover:text-text">
                 {relativeTime(t.reportedAt)}
               </span>
             </span>

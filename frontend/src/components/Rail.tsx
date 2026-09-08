@@ -57,7 +57,7 @@ export function RailRow({ label, icon: Icon, active, count, collapsed = false, h
           {count === undefined ? null : (
             <span
               className={cn(
-                "mono text-[13px] tabular-nums transition-colors",
+                "font-num text-[13px] tabular-nums transition-colors",
                 active ? "text-green" : "text-muted group-hover:text-green",
               )}
             >

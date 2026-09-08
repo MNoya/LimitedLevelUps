@@ -239,7 +239,7 @@ function TeamRow({
 function ScoreDisplay({ score, scoreColor, showHelp }: { score: number; scoreColor: string; showHelp: boolean }) {
   return (
     <span className="inline-flex items-baseline gap-1.5">
-      <span className={cn("font-mono text-[16px] font-semibold leading-none tabular-nums lg:text-[20px]", scoreColor)}>
+      <span className={cn("font-num text-[16px] font-semibold leading-none tabular-nums lg:text-[20px]", scoreColor)}>
         {score.toFixed(1)}
       </span>
       {showHelp && (

@@ -828,7 +828,7 @@ function ReadyRosterGroup(
               <Fragment key={row.name}>
                 <span className="text-[#dbdee1] text-[14px]">{row.name}</span>
                 <span
-                  className="mono justify-self-start rounded border px-1.5 text-[12px]"
+                  className="font-mono justify-self-start rounded border px-1.5 text-[12px]"
                   style={{ backgroundColor: "#2d2f33", borderColor: "#4e5058", color: "#b5bac1" }}
                 >
                   {row.handle}
@@ -888,7 +888,7 @@ const ROUND1_PAIRINGS = [
 function MonoPill({ children }: { children: ReactNode }) {
   return (
     <span
-      className="mono rounded border px-1.5 text-[12px]"
+      className="font-mono rounded border px-1.5 text-[12px]"
       style={{ backgroundColor: "#2d2f33", borderColor: "#4e5058", color: "#b5bac1" }}
     >
       {children}
@@ -1170,7 +1170,7 @@ const SEASON_METRIC = "font-display text-[16px] tabular-nums text-text text-cent
 function SeasonRow({ row }: { row: PodLeaderboardRow }) {
   return (
     <div className={cn(SEASON_COLS, "bg-surface py-1.5", GUIDE_TABLE_PAD)}>
-      <span className="mono text-center tabular-nums text-muted text-[14px]">{row.rank}</span>
+      <span className="font-num text-center tabular-nums text-muted text-[14px]">{row.rank}</span>
       <Link
         to={playerPath(row.slug, ACTIVE_SET_CODE)}
         className="flex items-center gap-2 lg:gap-2.5 min-w-0 justify-self-start w-fit max-w-full no-underline text-text transition-colors hover:text-green"
@@ -1264,7 +1264,7 @@ function ExternalDomainLink({ href, children }: { href: string; children: ReactN
 
 function Cmd({ children }: { children: ReactNode }) {
   return (
-    <code className="mono text-text bg-surface2 border border-border2 px-1.5 py-px text-[13px] whitespace-nowrap">
+    <code className="font-mono text-text bg-surface2 border border-border2 px-1.5 py-px text-[13px] whitespace-nowrap">
       {children}
     </code>
   );

@@ -135,12 +135,12 @@ function SetChip({
         </span>
       </button>
       {set.early ? (
-        <span className="absolute left-0 right-0 top-full mt-1 mono flex flex-col items-center text-[10px] leading-[1.15] tracking-[0.12em] text-green">
+        <span className="absolute left-0 right-0 top-full mt-1 font-mono flex flex-col items-center text-[10px] leading-[1.15] tracking-[0.12em] text-green">
           <span>EARLY</span>
           <span>ACCESS</span>
         </span>
       ) : (
-        <span className="absolute left-0 right-0 top-full mt-1 mono text-center text-[10px] leading-none tracking-[0.06em] text-muted">
+        <span className="absolute left-0 right-0 top-full mt-1 font-mono text-center text-[10px] leading-none tracking-[0.06em] text-muted">
           {chipDateLabel(set)}
         </span>
       )}

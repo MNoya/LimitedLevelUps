@@ -40,7 +40,7 @@ export function P0P1ProgressBar({
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className={`mono text-[12px] shrink-0 ${isComplete ? "text-green" : "text-muted"}`}>
+      <span className={`font-num tabular-nums text-[12px] shrink-0 ${isComplete ? "text-green" : "text-muted"}`}>
         {filled}/{total}
       </span>
     </div>

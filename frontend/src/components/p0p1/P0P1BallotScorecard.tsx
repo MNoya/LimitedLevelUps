@@ -312,7 +312,7 @@ export function FinalBallotScorecard({
 
         <div className="flex items-baseline justify-between">
           <span className="flex items-baseline gap-1.5">
-            <span className="font-mono tabular-nums leading-none" style={{ fontSize: 24, color: accent }}>
+            <span className="font-num tabular-nums leading-none" style={{ fontSize: 24, color: accent }}>
               {result.score.toFixed(1)}
             </span>
             <span className="font-body text-[12px] leading-none" style={{ color: accent }}>GIH WR total</span>

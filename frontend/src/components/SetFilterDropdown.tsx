@@ -30,7 +30,7 @@ export function setFilterOptionsFrom(sets: SetSummary[], pinCustom = false): Set
     triggerLabel: isCubeCode(s.code) ? s.name : undefined,
     glyphCode: setGlyphCode(s),
     meta: s.isActive ? (
-      <span className="mono text-[10px] tracking-[0.18em] text-green shrink-0">LIVE</span>
+      <span className="font-mono text-[10px] tracking-[0.18em] text-green shrink-0">LIVE</span>
     ) : undefined,
   }));
 }
@@ -84,7 +84,7 @@ export function SetFilterDropdown({
             : byValue.get(option.value)?.triggerLabel ?? option.value}
         </span>
         {subtext && (
-          <span className="ml-auto shrink-0 pl-2 mono text-[9px] tracking-normal text-muted whitespace-nowrap">
+          <span className="ml-auto shrink-0 pl-2 font-mono text-[9px] tracking-normal text-muted whitespace-nowrap">
             {subtext}
           </span>
         )}

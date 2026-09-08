@@ -114,7 +114,7 @@ export function LeaderboardSidebar({
           <Trophy size={16} color="#ffc63a" />
           <SectionLabel size={16} className="text-subtle">{d.recentTitle}</SectionLabel>
           {!filterActive && updated && (
-            <span className="ml-auto mono text-[11px] text-muted whitespace-nowrap">UPDATED {updated}</span>
+            <span className="ml-auto font-mono text-[11px] text-muted whitespace-nowrap">UPDATED {updated}</span>
           )}
           {d.namedScope && (
             <span className="ml-auto inline-flex items-center">
@@ -144,7 +144,7 @@ export function LeaderboardSidebar({
         )}
       </SurfaceCard>
       {stats && (
-        <div className="mono text-[11px] text-muted -mt-2 flex justify-between px-12">
+        <div className="font-mono text-[11px] text-muted -mt-2 flex justify-between px-12">
           <span>{stats.players} PLAYERS</span>
           <span>{stats.events} EVENTS</span>
         </div>
@@ -279,10 +279,10 @@ function TopColorsRows({
 }) {
   const [limit, setLimit] = useState(maxColors);
   if (!topColors) {
-    return <div className="mono text-[11px] text-muted py-2">LOADING…</div>;
+    return <div className="font-mono text-[11px] text-muted py-2">LOADING…</div>;
   }
   if (topColors.length === 0) {
-    return <div className="mono text-[11px] text-muted py-2">NO TROPHIES YET</div>;
+    return <div className="font-mono text-[11px] text-muted py-2">NO TROPHIES YET</div>;
   }
   const canShowMore = topColors.length > limit;
   return (
@@ -299,7 +299,7 @@ function TopColorsRows({
           (onColorsSelect ? " cursor-pointer hover:bg-surface2" : "");
         const inner = (
           <>
-            <span className="mono text-[11px] text-muted">{i + 1}</span>
+            <span className="font-num text-[13px] text-muted pl-1 leading-none">{i + 1}</span>
             <span className="flex justify-center">
               {row.colors === MULTI ? (
                 <BsPaletteFill size={18} className="shrink-0 block -my-1" aria-hidden="true" />
@@ -315,7 +315,7 @@ function TopColorsRows({
                 {row.earnings ? `$${row.earnings / 1000}K` : ""}
               </span>
             )}
-            <TrophyCount count={row.trophies} size="compact" className="text-muted" />
+            <TrophyCount count={row.trophies} size="md" display />
           </>
         );
         return onColorsSelect ? (
@@ -364,10 +364,10 @@ function RecentTrophyRows({
   qs: string;
 }) {
   if (!recentScoped) {
-    return <div className="mono text-[11px] text-muted py-2">LOADING…</div>;
+    return <div className="font-mono text-[11px] text-muted py-2">LOADING…</div>;
   }
   if (recentScoped.length === 0) {
-    return <div className="mono text-[11px] text-muted py-2">{recentEmpty}</div>;
+    return <div className="font-mono text-[11px] text-muted py-2">{recentEmpty}</div>;
   }
   return (
     <>
@@ -396,9 +396,9 @@ function RecentTrophyRows({
               losses={t.losses}
               mono
               color={lcqCashForRow(t) > 0 ? "#2ee85c" : undefined}
-              className="mono text-[13px] text-subtle text-right"
+              className="font-num text-[13px] text-subtle text-right"
             />
-            <span className="grid grid-cols-[1fr_auto] items-center gap-1 mono text-dim">
+            <span className="grid grid-cols-[1fr_auto] items-center gap-1 font-mono text-dim">
               <span
                 className="text-[11px] text-text justify-self-center text-center leading-[1.15]"
                 style={LCQ_DRAFT_2_FORMATS.includes(t.format) ? { color: FMT_COLORS.LCQ } : undefined}

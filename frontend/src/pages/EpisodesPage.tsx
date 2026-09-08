@@ -324,7 +324,7 @@ export function EpisodesPage() {
       <span className="flex w-full min-w-0 items-center gap-2.5">
         {option.value ? <SetGlyph code={option.value} size={20} /> : <span className="w-5 shrink-0" />}
         <span className="flex-1 truncate">{option.label}</span>
-        {count != null && <span className="mono text-[12px] tabular-nums text-muted shrink-0">{count}</span>}
+        {count != null && <span className="font-num text-[12px] tabular-nums text-muted shrink-0">{count}</span>}
       </span>
     );
   };
@@ -536,7 +536,7 @@ export function EpisodesPage() {
                 </Crossfade>
                 {visible < filtered.length ? (
                   <div ref={sentinelRef} className="h-10 flex items-center justify-center mt-10">
-                    <span className="mono text-[11px] tracking-[0.16em] text-dim uppercase animate-pulse">Loading…</span>
+                    <span className="font-mono text-[11px] tracking-[0.16em] text-dim uppercase animate-pulse">Loading…</span>
                   </div>
                 ) : null}
               </>
@@ -603,7 +603,7 @@ function EpisodeDetail({
         </h1>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <EpisodeTag episode={episode} />
-          <div className="mono flex items-center gap-2 text-[12px] tracking-[0.08em] text-muted uppercase">
+          <div className="font-mono flex items-center gap-2 text-[12px] tracking-[0.08em] text-muted uppercase">
             <span>{episode.publishedLabel}</span>
             {episode.number ? (
               <>
@@ -829,7 +829,7 @@ function EmptyResults({
         <h3 className="font-display text-[22px] leading-none tracking-[0.06em] text-text md:text-[26px]">
           {searching ? "No matches found" : `No ${nounPhrase} yet`}
         </h3>
-        <p className="mono mt-3 text-[12px] leading-relaxed text-muted">
+        <p className="font-mono mt-3 text-[12px] leading-relaxed text-muted">
           {searching ? (
             <>
               Nothing matches <span className="text-green">“{query}”</span>

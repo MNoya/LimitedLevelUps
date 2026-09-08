@@ -28,7 +28,7 @@ export function FullBreakdownList({
           isYours: picksBySlot?.get(slot.key) === stat.cardName,
           fillPct: topPct > 0 ? Math.max((stat.pickPct / topPct) * 100, 3) : 0,
           value: (
-            <span className="font-mono tabular-nums text-[16px] font-semibold text-text w-8 text-right">
+            <span className="font-num tabular-nums text-[16px] font-semibold text-text w-8 text-right">
               {stat.pickCount}
             </span>
           ),

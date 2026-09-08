@@ -23,7 +23,7 @@ export function DiscordBand() {
           </h2>
           <p className="text-subtle text-[14px] md:text-[15px] leading-[1.6] max-w-[560px] mt-3">{COMMUNITY_DISCORD_PITCH}</p>
           {stats ? (
-            <div className="mono text-[11px] tracking-[0.14em] text-muted mt-4 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <div className="font-mono text-[11px] tracking-[0.14em] text-muted mt-4 flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-subtle">{stats.memberCount.toLocaleString()}</span> MEMBERS
               <span className="text-dim">·</span>
               <span className="inline-flex items-center gap-1.5">

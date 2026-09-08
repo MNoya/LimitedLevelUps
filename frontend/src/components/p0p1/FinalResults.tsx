@@ -351,7 +351,7 @@ function SyntheticRow({
         />
 
         <span
-          className="font-mono tabular-nums text-[13px] lg:text-[14px] font-semibold shrink-0"
+          className="font-num tabular-nums text-[13px] lg:text-[14px] font-semibold shrink-0"
           style={{ color: style.color }}
         >
           {standing.team.score.toFixed(2)}
@@ -461,7 +461,7 @@ function BroadcastTop3({
           <div className="text-right shrink-0 pl-3 sm:pl-4">
             <div className="hidden sm:block" style={{ borderLeft: "2px solid #ffc63a55", paddingLeft: 18 }}>
               <div
-                className="font-mono tabular-nums text-[34px] font-bold leading-[1.05] text-gold"
+                className="font-num tabular-nums text-[34px] font-bold leading-[1.05] text-gold"
                 style={{ textShadow: "0 0 34px #ffc63a90" }}
               >
                 {champion.score.toFixed(2)}
@@ -470,7 +470,7 @@ function BroadcastTop3({
             </div>
             <div className="sm:hidden">
               <div
-                className="font-mono tabular-nums text-[22px] font-bold leading-[1.05] text-gold"
+                className="font-num tabular-nums text-[22px] font-bold leading-[1.05] text-gold"
                 style={{ textShadow: "0 0 34px #ffc63a90" }}
               >
                 {champion.score.toFixed(2)}
@@ -579,7 +579,7 @@ function BroadcastSubBar({
               </span>
             )}
           </span>
-          <span className="font-mono tabular-nums text-[14px] sm:text-[16px] font-bold shrink-0" style={{ color: accent }}>
+          <span className="font-num tabular-nums text-[14px] sm:text-[16px] font-bold shrink-0" style={{ color: accent }}>
             {ballot.score.toFixed(2)}
           </span>
           <ChevronDown
@@ -677,7 +677,7 @@ function MedalRow({
         />
 
         <span
-          className="font-mono tabular-nums text-[13px] lg:text-[14px] font-semibold shrink-0"
+          className="font-num tabular-nums text-[13px] lg:text-[14px] font-semibold shrink-0"
           style={{ color: medal.color }}
         >
           {ballot.score.toFixed(2)}
@@ -736,7 +736,7 @@ function LeaderboardRow({
         onClick={() => setExpanded((e) => !e)}
         className="w-full flex items-center gap-2 lg:gap-3 px-3 lg:px-4 py-2.5 lg:py-3 text-left cursor-pointer bg-transparent border-0"
       >
-        <span className="w-7 lg:w-8 shrink-0 text-right font-mono tabular-nums text-[12px] lg:text-[13px] text-muted">
+        <span className="w-7 lg:w-8 shrink-0 text-right font-num tabular-nums text-[12px] lg:text-[13px] text-muted">
           #{ballot.rank}
         </span>
 
@@ -765,7 +765,7 @@ function LeaderboardRow({
           stickyTop={stickyTop}
         />
 
-        <span className="font-mono tabular-nums text-[13px] lg:text-[14px] text-subtle shrink-0">
+        <span className="font-num tabular-nums text-[13px] lg:text-[14px] text-subtle shrink-0">
           {ballot.score.toFixed(2)}
         </span>
 
@@ -812,7 +812,7 @@ function FloatingSelfRow({
         onClick={onScrollToRow}
         className="flex items-center gap-2 lg:gap-3 px-3 lg:px-4 py-2.5 lg:py-3 cursor-pointer bg-green/[0.07] shadow-[inset_3px_0_0_0_#2ee85c]"
       >
-        <span className="w-7 lg:w-8 shrink-0 text-right font-mono tabular-nums text-[12px] lg:text-[13px] text-muted">
+        <span className="w-7 lg:w-8 shrink-0 text-right font-num tabular-nums text-[12px] lg:text-[13px] text-muted">
           #{ballot.rank}
         </span>
 
@@ -838,7 +838,7 @@ function FloatingSelfRow({
           stickyTop={stickyTop}
         />
 
-        <span className="font-mono tabular-nums text-[13px] lg:text-[14px] text-subtle shrink-0">
+        <span className="font-num tabular-nums text-[13px] lg:text-[14px] text-subtle shrink-0">
           {ballot.score.toFixed(2)}
         </span>
 
@@ -1195,7 +1195,7 @@ function HighlightTile({
           </span>
 
           <div
-            className="font-mono font-bold tabular-nums leading-none mt-2 sm:mt-1.5 text-[30px] sm:text-[38px] [text-shadow:0_1px_2px_#000,0_0_5px_#000a,var(--pp-glow)]"
+            className="font-num font-bold tabular-nums leading-none mt-2 sm:mt-1.5 text-[30px] sm:text-[38px] [text-shadow:0_1px_2px_#000,0_0_5px_#000a,var(--pp-glow)]"
             style={{
               color: accent,
               ["--pp-glow" as string]: `0 0 16px color-mix(in srgb, ${accent} 30%, transparent)`,

@@ -70,7 +70,7 @@ body,
   padding: 0;
   background: #0a0c10;
   color: #e6ecf5;
-  font-family: "Space Grotesk", Inter, sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
@@ -85,9 +85,14 @@ button {
   font-family: inherit;
 }
 
-.mono {
-  font-family: "JetBrains Mono", monospace;
-  font-variant-numeric: tabular-nums;
+/* Typography roles. Each font choice lives on one line; swap a role here and it changes everywhere.
+   Tailwind exposes them as font-display / font-body / font-num / font-mono / font-serif. */
+:root {
+  --font-display: "Bebas Neue", sans-serif;
+  --font-body: "Space Grotesk", Inter, sans-serif;
+  --font-num: "Hanken Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-serif: "Spectral", Georgia, serif;
 }
 
 .no-scrollbar {

@@ -227,7 +227,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               {graders.length > 0 && (
                 <div className="flex items-center gap-x-2">
-                  <span className="mono text-[10px] md:text-[12px] text-muted">Set Reviews:</span>
+                  <span className="font-mono text-[10px] md:text-[12px] text-muted">Set Reviews:</span>
                   <div className="flex items-center gap-x-3.5">
                     {graders.map((grader) => (
                       <SourceLink key={grader.uid} uid={grader.uid} label={`${grader.name}'s`} />
@@ -237,7 +237,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
               )}
               {uid && (
                 <div className="flex items-center gap-x-2">
-                  <span className="mono text-[10px] md:text-[12px] text-muted">
+                  <span className="font-mono text-[10px] md:text-[12px] text-muted">
                     {graders.length > 0 ? "Live:" : "Set Review List:"}
                   </span>
                   <SourceLink uid={uid} label="LLU" />
@@ -248,7 +248,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
               href={`https://www.17lands.com/tier_list/${effectiveUid ?? ""}`}
               target="_blank"
               rel="noreferrer"
-              className="mono text-[10px] md:text-[12px] text-muted hover:text-green transition-colors no-underline whitespace-nowrap"
+              className="font-mono text-[10px] md:text-[12px] text-muted hover:text-green transition-colors no-underline whitespace-nowrap"
             >
               Powered by 17Lands
             </a>
@@ -291,7 +291,7 @@ function SourceLink({ uid, label }: { uid: string; label: string }) {
         href={`https://www.17lands.com/tier_list/${uid}`}
         target="_blank"
         rel="noreferrer"
-        className="mono flex items-center gap-1 text-[10px] md:text-[12px] text-muted hover:text-green transition-colors no-underline"
+        className="font-mono flex items-center gap-1 text-[10px] md:text-[12px] text-muted hover:text-green transition-colors no-underline"
       >
         {label}
         <ExternalLink size={11} />
@@ -309,7 +309,7 @@ function ListMeta({
 }) {
   const updated = lastUpdated ? lastUpdatedLabel(lastUpdated) : null;
   return (
-    <div className={cn("mono flex w-full items-center justify-between gap-x-4 text-muted", className)}>
+    <div className={cn("font-mono flex w-full items-center justify-between gap-x-4 text-muted", className)}>
       <GradeGuideTrigger className="tracking-[0.16em]">
         SET REVIEW GRADES
         <GradeGuideIcon className="ml-1.5" />

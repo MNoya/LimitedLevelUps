@@ -41,10 +41,11 @@ const config: Config = {
         pink: "#ff79c6",
       },
       fontFamily: {
-        display: ["'Bebas Neue'", "sans-serif"],
-        body: ["'Space Grotesk'", "Inter", "sans-serif"],
-        mono: ["'JetBrains Mono'", "monospace"],
-        spectral: ["Spectral", "Georgia", "serif"],
+        display: ["var(--font-display)"],
+        body: ["var(--font-body)"],
+        num: ["var(--font-num)", { fontFeatureSettings: '"tnum"' }],
+        mono: ["var(--font-mono)"],
+        serif: ["var(--font-serif)"],
       },
       fontVariantNumeric: {
         tabular: ["tabular-nums"],

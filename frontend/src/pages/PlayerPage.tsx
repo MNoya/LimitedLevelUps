@@ -1968,7 +1968,7 @@ function BreakdownPanel({
                 fixedDigits={2}
                 className="text-subtle justify-self-end"
               />
-              <span className="mono text-[15px] text-subtle text-right">
+              <span className="font-num text-[15px] text-subtle text-right">
                 ×{count}
               </span>
             </div>
@@ -2007,7 +2007,7 @@ function BreakdownPanel({
                 <span className="font-display text-[15px] tracking-[0.06em]">
                   {COLOR_NAMES[c]}
                 </span>
-                <span className="mono text-[15px] text-subtle text-right">
+                <span className="font-num text-[15px] text-subtle text-right">
                   {pct.toFixed(0)}%
                 </span>
               </div>
@@ -2064,7 +2064,7 @@ function FormatLegend({
               mono
               wins={f.wins}
               losses={f.losses}
-              className="mono text-[13px] text-right text-subtle"
+              className="font-num text-[13px] text-right text-subtle"
             />
             <span
               className={cn(
@@ -3169,7 +3169,7 @@ function MobileFormatTab({ breakdown, lockedFormats }: { breakdown: PlayerFormat
               mono
               wins={f.wins}
               losses={f.losses}
-              className="mono text-[13px] text-right text-muted"
+              className="font-num text-[13px] text-right text-muted"
             />
             <span
               className={cn(
@@ -3243,7 +3243,7 @@ function MobileDeckColorsTab({ events, selfReported }: { events: PlayerDraftEven
               fixedDigits={2}
               className="text-muted justify-self-end"
             />
-            <span className="mono text-[13px] text-muted text-right">
+            <span className="font-num text-[13px] text-muted text-right">
               ×{count}
             </span>
           </div>
@@ -3289,7 +3289,7 @@ function MobileManaPipsTab({ events, selfReported }: { events: PlayerDraftEvent[
                 <span className="font-display text-[13px] tracking-[0.06em]">
                   {COLOR_NAMES[c]}
                 </span>
-                <span className="mono text-[13px] text-muted text-right">
+                <span className="font-num text-[13px] text-muted text-right">
                   {pct.toFixed(0)}%
                 </span>
               </div>

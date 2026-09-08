@@ -139,7 +139,7 @@ function BreakdownRowItem({
       )}
 
       <div className={`relative flex items-center gap-2.5 ${wide ? "pl-4" : "pl-1.5"} pr-3 py-1.5 ${row.isYours ? "bg-green/[0.07]" : ""}`}>
-        <span className={`w-4 shrink-0 text-right font-mono tabular-nums text-[13px] ${isLeader ? "text-text font-bold" : "text-muted"}`}>
+        <span className={`w-4 shrink-0 text-right font-num tabular-nums text-[13px] ${isLeader ? "text-text font-bold" : "text-muted"}`}>
           {rank}
         </span>
 

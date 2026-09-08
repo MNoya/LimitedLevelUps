@@ -354,7 +354,7 @@ function MtgoBoard({
             </span>
           </div>
           {releaseDate && (
-            <div className="mono text-[11px] text-muted mt-1 tracking-[0.04em]">{fmtShortDate(releaseDate)}</div>
+            <div className="font-mono text-[11px] text-muted mt-1 tracking-[0.04em]">{fmtShortDate(releaseDate)}</div>
           )}
         </div>
         <div className="flex-1" />
@@ -541,7 +541,7 @@ function SetHero({
         {isCube ? (
           // Every cube prints its own run here, never the shared CUBE row's open-ended window. Height
           // comes from the same text-[11px] element a normal set uses, so the hero matches exactly.
-          <div className="mono text-[11px] text-muted mt-1 tracking-[0.04em] flex items-center gap-6">
+          <div className="font-mono text-[11px] text-muted mt-1 tracking-[0.04em] flex items-center gap-6">
             {/* Zero height holds the hero to a normal set's while the selector keeps its width */}
             {cubeBoardHasSeasons(activeSet) && (
               <div className="h-0 shrink-0 flex items-center">
@@ -553,7 +553,7 @@ function SetHero({
             <span className="whitespace-nowrap ml-auto self-end translate-y-[4px]">{seasonRange || " "}</span>
           </div>
         ) : (
-          <div className="mono text-[11px] text-muted mt-1 flex justify-between gap-4">
+          <div className="font-mono text-[11px] text-muted mt-1 flex justify-between gap-4">
             {setMeta && <span>{fmtRange(setMeta.startDate, setMeta.endDate)}</span>}
             {week && <span>{week}</span>}
           </div>
@@ -985,7 +985,7 @@ function FormatBreakdownPreview({
                     <span className={cn("font-display tracking-[0.08em] truncate", labelCls)}>
                       {shortFormat(f.formatLabel)}
                     </span>
-                    <span className={cn("mono text-muted tabular-nums justify-self-end", numCls)}>
+                    <span className={cn("font-num text-muted tabular-nums justify-self-end", numCls)}>
                       {f.events}
                     </span>
                   </Fragment>
@@ -1218,9 +1218,9 @@ function LastTrophyPanel({
                   wins={e.wins}
                   losses={e.losses}
                   mono
-                  className="mono text-[12px] text-muted text-right justify-self-end"
+                  className="font-num text-[12px] text-muted text-right justify-self-end"
                 />
-                <span className="mono text-[12px] text-dim">{relativeTime(eventDate(e))}</span>
+                <span className="font-mono text-[12px] text-dim">{relativeTime(eventDate(e))}</span>
                 <span className="flex justify-center text-subtle">
                   {href && <ExternalLink size={10} aria-hidden="true" />}
                 </span>
@@ -1228,7 +1228,7 @@ function LastTrophyPanel({
             );
           })
         ) : (
-          <div className="mono text-[12px] text-muted">NONE YET</div>
+          <div className="font-mono text-[12px] text-muted">NONE YET</div>
         )}
       </div>
     </div>
@@ -1258,7 +1258,7 @@ function BiggestStreakPanel({
           <SectionLabel size={13} className="text-subtle text-center">STREAK</SectionLabel>
         </>
       ) : (
-        <div className="mono text-[12px] text-muted text-center mt-1">—</div>
+        <div className="font-num text-[12px] text-muted text-center mt-1">—</div>
       )}
     </div>
   );

@@ -17,7 +17,7 @@ export function ScoringExplainer() {
 function Scoring() {
   return (
     <div className="flex flex-col gap-5 md:gap-6">
-      <div className="bg-surface border border-border2 px-2.5 py-4 md:px-6 md:py-5 mono tracking-tight">
+      <div className="bg-surface border border-border2 px-2.5 py-4 md:px-6 md:py-5 font-mono tracking-tight">
         <div
           className="flex flex-nowrap items-center justify-center md:justify-start whitespace-nowrap"
           style={{ fontSize: "clamp(9px, 2.8vw, 17px)" }}
@@ -52,7 +52,7 @@ function Scoring() {
           </p>
           <p>
             <span className="text-text">Confidence</span> factor{" "}
-            <code className="mono text-muted text-[11px] md:text-[12px] whitespace-nowrap">
+            <code className="font-mono text-muted text-[11px] md:text-[12px] whitespace-nowrap">
               trophies / (trophies + 2)
             </code>{" "}
             provides sample-size protection.
@@ -63,7 +63,7 @@ function Scoring() {
         </div>
 
         <div className="flex flex-col">
-          <div className="mono text-[10px] text-muted tracking-[0.24em] pb-2 flex justify-between">
+          <div className="font-mono text-[10px] text-muted tracking-[0.24em] pb-2 flex justify-between">
             <span>QUEUE</span>
             <span>WEIGHT</span>
           </div>
@@ -90,7 +90,7 @@ function Scoring() {
         </div>
 
         <div className="flex flex-col">
-          <div className="mono text-[10px] text-muted tracking-[0.24em] pb-2 flex justify-between">
+          <div className="font-mono text-[10px] text-muted tracking-[0.24em] pb-2 flex justify-between">
             <span>POD DRAFT</span>
             <span>POINTS</span>
           </div>
@@ -136,7 +136,7 @@ function Leader({
         <span className="text-[11px] md:text-[12px] text-muted italic shrink-0">{note}</span>
       )}
       <span className="flex-1 border-b border-dotted border-dim relative -top-1.5" />
-      <span className="mono text-[13px] md:text-[14px] text-muted tabular-nums">{value}</span>
+      <span className="font-num text-[13px] md:text-[14px] text-muted tabular-nums">{value}</span>
     </div>
   );
 }
