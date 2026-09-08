@@ -47,6 +47,10 @@ import {
 
 import { ACTIVE_SET_CODE } from "./constants";
 import { setsFixture } from "./fixtures/sets";
+import { peasantPodCardsFixture } from "./fixtures/pod-cards-peasant";
+import { peasantArchetypesFixture } from "./fixtures/pod-archetypes-peasant";
+import type { PodCardStatRow } from "./podCards";
+import type { PodArchetypeRow } from "./podArchetypes";
 import { leaderboardSosFixture } from "./fixtures/leaderboard-sos";
 import { selfReportedTrophiesSosFixture } from "./fixtures/self-reported-sos";
 import { mergeSelfReportedTrophies } from "./selfReported";
@@ -100,6 +104,10 @@ const wait = <T,>(value: T): Promise<T> =>
 export const fetchSets = (): Promise<SetSummary[]> => wait(setsFixture);
 
 export const fetchCubeSeasons = (): Promise<CubeSeason[]> => wait([]);
+
+export const fetchPodCardStats = (_boardCode: string): Promise<PodCardStatRow[]> => wait(peasantPodCardsFixture);
+
+export const fetchPodArchetypes = (_boardCode: string): Promise<PodArchetypeRow[]> => wait(peasantArchetypesFixture);
 
 export const fetchDbEpisodes = (): Promise<Episode[]> => wait([]);
 

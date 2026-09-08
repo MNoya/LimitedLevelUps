@@ -22,6 +22,7 @@ export interface PodSetCode {
   label: string | null; // format_label — non-null only for custom cube formats
   // Pods played under this code, so a format tried once does not earn a board
   events: number;
+  firstEvent?: string; // earliest pod event date under this code, for chronological sorting
 }
 
 export interface CubeSeason {

@@ -44,6 +44,7 @@ from bot.database import SessionLocal
 from bot.discord_helpers import NBSP, extract_avatar_hash, run_detached
 from bot.models import Player, PodDraftEvent, PodDraftParticipant
 from bot.scripts.draftmancer_log import build_compact
+from bot.services.pod_card_extract import tracks_card_data, rebuild_pod_card_facts
 from bot.services import bot_log as bot_log_mod
 from bot.services import championship
 from bot.services.lobby_embed import (
@@ -2111,6 +2112,8 @@ class PodDraftManager:
                 event.draft_log_gz = blob
                 event.draft_log = compact
                 apply_seat_indexes(session, self.event_id, compact.get("seats") or [])
+                if tracks_card_data(event.set_code):
+                    rebuild_pod_card_facts(session, self.event_id, event.set_code, compact)
                 session.commit()
                 log.info(f"[DRAFT] persist.done event={self.event_id} bytes={len(blob)}")
         except Exception:

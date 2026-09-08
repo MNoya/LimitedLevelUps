@@ -6,13 +6,15 @@ import { PodPage } from "./PodPage";
 
 import { AppHeader } from "../components/AppHeader";
 import { Footer } from "../components/Footer";
+import { SectionHeading } from "../components/SectionHeading";
 import { SectionLabel } from "../components/SectionLabel";
+import { TabButton } from "../components/TabButton";
 import { SetSwitcherDesktop } from "../components/SetSwitcher";
 import { type InlineFilterOption } from "../components/InlineFilterSelect";
 import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
 import { SetFilterDropdown, type SetFilterOption } from "../components/SetFilterDropdown";
 import { AAvatar, setGlyphCode, SetGlyph, Trophy } from "../components/Brand";
-import { ArrowRight, BsAsterisk, CalendarRange, GiCardPick, GiRoundTable, TbCards } from "../components/Icons";
+import { ArrowRight, BsAsterisk, CalendarRange, GiCardPick, GiRoundTable, TbCards, TbListNumbers } from "../components/Icons";
 import { DiscordIcon } from "../components/BrandIcons";
 import { Tooltip } from "../components/Tooltip";
 import { DeckScreenshotModal } from "../components/pod/DeckScreenshotModal";
@@ -83,6 +85,7 @@ import {
 } from "../data/podSeasons";
 import { resolveDeck } from "../data/draft-artifact";
 import { usePodDecklistAccess } from "../data/podDecklistAccess";
+import { hasCardData } from "../data/podCards";
 import type {
   PodEventParticipantRow,
   PodEventSummary,
@@ -102,7 +105,7 @@ function synthesizePodSet(p: PodSetCode): SetSummary {
   return {
     code: p.code,
     name: p.label ?? p.code,
-    startDate: "",
+    startDate: p.firstEvent ?? "",
     endDate: "",
     isActive: false,
     custom,
@@ -412,22 +415,6 @@ export function PodDraftsPage({
       triggerLabel: "All Seasons",
       icon: <GiRoundTable size={20} className="text-white shrink-0" />,
     };
-    if (setCode) {
-      if (boardSeasons.length < MIN_BOARD_SEASONS) return [];
-      const windowRow = (s: SetSummary): SetFilterOption => {
-        const label = `${s.code} Season`;
-        return { value: s.code, label, triggerLabel: label, glyphCode: setGlyphCode(s) };
-      };
-      return [all, ...boardSeasons.map((b) => windowRow(b.season))];
-    }
-    const seasonRow = (s: SetSummary): SetFilterOption => {
-      const label = `${s.code} Season`;
-      const meta =
-        s.code === liveSeasonCode ? (
-          <span className="mono text-[10px] tracking-[0.18em] text-green shrink-0">LIVE</span>
-        ) : undefined;
-      return { value: s.code, label, triggerLabel: label, glyphCode: setGlyphCode(s), meta };
-    };
     const setRow = (s: SetSummary): SetFilterOption => ({
       value: `${SCOPE_SET_PREFIX}${s.code}`,
       label: s.name,
@@ -436,9 +423,32 @@ export function PodDraftsPage({
       glyphCode: setGlyphCode(s),
       section: "By Set",
     });
-    const bySet = isMobile ? switcherSets : switcherSets.filter((s) => !isCubeCode(s.code) && !s.custom);
-    return [all, ...seasons.map(seasonRow), ...bySet.map(setRow)];
-  }, [setCode, boardSeasons, seasons, switcherSets, liveSeasonCode, isMobile]);
+    const recencyKey = (s: SetSummary) => (s.code === "PEASANT" ? "9999-99-99" : s.startDate || "");
+    const bySetRows = [...switcherSets]
+      .sort((a, b) => {
+        const ak = recencyKey(a);
+        const bk = recencyKey(b);
+        return ak < bk ? 1 : ak > bk ? -1 : 0;
+      })
+      .map(setRow);
+    if (setCode) {
+      const windowRow = (s: SetSummary): SetFilterOption => {
+        const label = `${s.code} Season`;
+        return { value: s.code, label, triggerLabel: label, glyphCode: setGlyphCode(s) };
+      };
+      const windows = boardSeasons.length >= MIN_BOARD_SEASONS ? boardSeasons.map((b) => windowRow(b.season)) : [];
+      return [all, ...windows, ...bySetRows];
+    }
+    const seasonRow = (s: SetSummary): SetFilterOption => {
+      const label = `${s.code} Season`;
+      const meta =
+        s.code === liveSeasonCode ? (
+          <span className="font-mono text-[10px] tracking-[0.18em] text-green shrink-0">LIVE</span>
+        ) : undefined;
+      return { value: s.code, label, triggerLabel: label, glyphCode: setGlyphCode(s), meta };
+    };
+    return [all, ...seasons.map(seasonRow), ...bySetRows];
+  }, [setCode, boardSeasons, seasons, switcherSets, liveSeasonCode]);
 
   const routeToSet = (code: string) => {
     if (isCubeCode(code) || switcherSets.find((s) => s.code === code)?.custom) {
@@ -458,6 +468,14 @@ export function PodDraftsPage({
       return;
     }
     onSelectSet(value);
+  };
+
+  const onSelectBoardScope = (value: string) => {
+    if (value.startsWith(SCOPE_SET_PREFIX)) {
+      routeToSet(value.slice(SCOPE_SET_PREFIX.length));
+      return;
+    }
+    onSelectSeason(value);
   };
 
   const formatOptions = useMemo<InlineFilterOption[]>(() => {
@@ -504,7 +522,7 @@ export function PodDraftsPage({
     <SetFilterDropdown
       value={scopeValue}
       options={scopeOptions}
-      onChange={setCode ? onSelectSeason : onSelectScope}
+      onChange={setCode ? onSelectBoardScope : onSelectScope}
       variant={selectorVariant}
       triggerClassName={isMobile ? undefined : "!min-w-0"}
       searchable
@@ -522,6 +540,8 @@ export function PodDraftsPage({
     />
   ) : null;
 
+  const cardDataHref = hasCardData(activeSet) ? `/pods/${activeSet}/data` : null;
+
   const { user } = useAuth();
   const { data: mySlug } = usePlayerSlugByDiscordId(user?.discordId);
 
@@ -535,7 +555,11 @@ export function PodDraftsPage({
       {isMobile ? (
         <div ref={chromeRef} className="page-chrome sticky top-0 z-10 bg-bg">
           <AppHeader subtitle="POD DRAFTS" />
-          <MobileFilterBar scopeSelector={scopeSelector} formatSelector={formatSelector} />
+          <MobileFilterBar
+            scopeSelector={scopeSelector}
+            formatSelector={formatSelector}
+            cardDataLink={cardDataHref ? <CardDataLink href={cardDataHref} variant="mobile" /> : undefined}
+          />
         </div>
       ) : (
         <>
@@ -596,6 +620,7 @@ export function PodDraftsPage({
               <StandingsHeading
                 leaderboard={leaderboard}
                 events={events}
+                center={cardDataHref ? <CardDataLink href={cardDataHref} variant="center" /> : undefined}
                 controls={
                   <div className="flex items-center gap-3 ml-4">
                     {scopeSelector}
@@ -654,11 +679,13 @@ function StandingsHeading({
   leaderboard,
   events,
   controls,
+  center,
   compact = false,
 }: {
   leaderboard: PodLeaderboardRow[] | undefined;
   events: PodEventSummary[] | undefined;
   controls?: React.ReactNode;
+  center?: React.ReactNode;
   compact?: boolean;
 }) {
   return (
@@ -667,6 +694,7 @@ function StandingsHeading({
       count={leaderboard ? leaderboard.length : undefined}
       unit={(leaderboard?.length ?? 0) === 1 ? "PLAYER" : "PLAYERS"}
       controls={controls}
+      center={center}
       compact={compact}
       padLeftClass="pl-5"
       meta={
@@ -689,69 +717,6 @@ function StandingsHeading({
   );
 }
 
-function SectionHeading({
-  label,
-  count,
-  unit,
-  compact,
-  meta,
-  controls,
-  padLeftClass = "pl-2",
-}: {
-  label: string;
-  count?: number;
-  unit?: string;
-  compact?: boolean;
-  meta?: React.ReactNode;
-  controls?: React.ReactNode;
-  padLeftClass?: string;
-}) {
-  if (compact) {
-    return (
-      <div className="flex items-baseline justify-between gap-3 py-2 pl-5 pr-3 border-b border-border">
-        <span className="font-display text-text text-[14px] tracking-[0.16em] leading-none">
-          {label}
-        </span>
-        {meta && (
-          <span className="font-display text-[12px] tracking-[0.14em] leading-none text-muted">
-            {meta}
-          </span>
-        )}
-      </div>
-    );
-  }
-  return (
-    <div className={cn("relative flex items-center justify-between h-[50px] pr-5 border-b border-border gap-4", padLeftClass)}>
-      <div className="flex-1 basis-0 min-w-0 flex items-center gap-3">
-        <span
-          className="shrink-0 font-display text-text tracking-[0.18em] leading-none"
-          style={{ fontSize: 17 }}
-        >
-          {label}
-        </span>
-        {controls}
-      </div>
-      {/* Out of flow, so a meta taller than the label cannot grow the row and shift the label */}
-      {meta ? (
-        <div className="absolute inset-y-0 right-0 flex items-center">{meta}</div>
-      ) : (
-        <div className="flex-1 basis-0 min-w-0 flex justify-end">
-          {!unit ? null : count === undefined ? (
-            <span className="inline-block h-3.5 w-24 bg-surface2 animate-pulse" />
-          ) : count === 0 ? null : (
-            <span
-              className="font-display tracking-[0.18em] leading-none flex items-baseline gap-1.5 whitespace-nowrap"
-              style={{ fontSize: 17 }}
-            >
-              <span className="tabular-nums text-subtle">{count}</span>
-              <span className="text-muted">{unit}</span>
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // A row's collapse is the reader's decision, so it outlives the tab switch that unmounts the row
 function useRowDisclosure(defaultOpenId: string | undefined) {
@@ -1426,12 +1391,12 @@ function MobileEventsBlock({
   return (
     <div>
       <div className="flex border-b border-border">
-        <EventsTabButton active={tab === "upcoming"} onClick={() => setTab("upcoming")}>
+        <TabButton active={tab === "upcoming"} onClick={() => setTab("upcoming")}>
           UPCOMING
-        </EventsTabButton>
-        <EventsTabButton active={tab === "all"} onClick={() => setTab("all")}>
+        </TabButton>
+        <TabButton active={tab === "all"} onClick={() => setTab("all")}>
           PAST EVENTS
-        </EventsTabButton>
+        </TabButton>
       </div>
       {tab === "upcoming" ? (
         <>
@@ -1479,30 +1444,6 @@ function MobileEventsBlock({
   );
 }
 
-function EventsTabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex-1 py-2 px-1.5 bg-transparent cursor-pointer font-display text-[14px] tracking-[0.16em] leading-none transition-colors border-b-2 border-solid inline-flex items-center justify-center gap-1.5",
-        active ? "text-text border-green" : "text-muted border-transparent",
-      )}
-      style={active ? { marginBottom: -1 } : undefined}
-    >
-      {children}
-    </button>
-  );
-}
-
 function EmptyHint({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-muted text-[13px] py-4 px-2 bg-surface border border-border">
@@ -1514,9 +1455,11 @@ function EmptyHint({ children }: { children: React.ReactNode }) {
 function MobileFilterBar({
   scopeSelector,
   formatSelector,
+  cardDataLink,
 }: {
   scopeSelector?: React.ReactNode;
   formatSelector?: React.ReactNode;
+  cardDataLink?: React.ReactNode;
 }) {
   if (!scopeSelector) {
     return (
@@ -1533,7 +1476,32 @@ function MobileFilterBar({
     <div className="px-3 py-2 border-b border-border bg-surface flex items-stretch gap-2">
       <div className="flex-1 min-w-0 flex">{scopeSelector}</div>
       {formatSelector && <div className="flex-1 min-w-0 flex">{formatSelector}</div>}
+      {cardDataLink && <div className="flex-1 min-w-0 flex">{cardDataLink}</div>}
     </div>
+  );
+}
+
+function CardDataLink({ href, variant }: { href: string; variant: "center" | "mobile" }) {
+  if (variant === "mobile") {
+    return (
+      <Link
+        to={href}
+        className="w-full flex items-center justify-center gap-2 border border-green/40 text-green transition-colors hover:bg-green/10 no-underline font-display text-[13px] tracking-[0.14em] leading-none"
+      >
+        <TbListNumbers size={16} />
+        VIEW CARD DATA
+        <ArrowRight size={14} className="shrink-0" />
+      </Link>
+    );
+  }
+  return (
+    <Link
+      to={href}
+      className="group inline-flex items-center gap-2 font-display text-[15px] tracking-[0.14em] leading-none text-subtle transition-colors hover:text-green"
+    >
+      VIEW CARD DATA
+      <ArrowRight size={14} className="shrink-0 transition-transform group-hover:translate-x-0.5" />
+    </Link>
   );
 }
 
@@ -1597,7 +1565,7 @@ function SetHero({
             {allSeasons ? "ALL SEASONS" : (setMeta?.name?.toUpperCase() ?? "")}
           </span>
         </div>
-        <div className="mono text-[11px] text-muted mt-1 flex items-center justify-between gap-4 h-4">
+        <div className="font-mono text-[11px] text-muted mt-1 flex items-center justify-between gap-4 h-4">
           {!allSeasons && !bySet && (
             <>
               <span>{range || " "}</span>

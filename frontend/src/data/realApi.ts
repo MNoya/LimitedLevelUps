@@ -15,6 +15,8 @@ import {
 } from "./adapter";
 import { adaptDbEpisode, type DbEpisodeRow, type Episode } from "./episodes";
 import type { TranscriptSegment } from "./transcript";
+import type { PodCardStatRow } from "./podCards";
+import type { PodArchetypeRow } from "./podArchetypes";
 import {
   aggregate,
   boxesForEvent,
@@ -142,6 +144,21 @@ export async function fetchCubeSeasons(): Promise<CubeSeason[]> {
       players: (r.players as number) ?? 0,
     };
   });
+}
+
+export async function fetchPodCardStats(boardCode: string): Promise<PodCardStatRow[]> {
+  return pagedRows<PodCardStatRow>((from, to) =>
+    client().from("public_pod_card_stats").select("*").eq("set_code", boardCode).range(from, to),
+  );
+}
+
+export async function fetchPodArchetypes(boardCode: string): Promise<PodArchetypeRow[]> {
+  const { data, error } = await client()
+    .from("public_pod_archetype_stats")
+    .select("*")
+    .eq("set_code", boardCode);
+  if (error) throw error;
+  return (data ?? []).map((r) => r as unknown as PodArchetypeRow);
 }
 
 // ─── public_sets ───────────────────────────────────────────────────────────
@@ -1798,14 +1815,15 @@ export async function fetchPodEventDates(): Promise<string[]> {
 export async function fetchPodSetCodes(): Promise<PodSetCode[]> {
   const { data, error } = await client()
     .from("public_pod_draft_events")
-    .select("set_code, format_label, kind");
+    .select("set_code, format_label, kind, event_date");
   if (error) throw error;
-  const byCode = new Map<string, { label: string | null; events: number }>();
+  const byCode = new Map<string, { label: string | null; events: number; firstEvent: string }>();
   for (const r of data ?? []) {
-    const row = r as { set_code: string; format_label: string | null; kind: string };
-    const entry = byCode.get(row.set_code) ?? { label: null, events: 0 };
+    const row = r as { set_code: string; format_label: string | null; kind: string; event_date: string };
+    const entry = byCode.get(row.set_code) ?? { label: null, events: 0, firstEvent: "" };
     entry.label = entry.label ?? row.format_label ?? null;
     if (row.kind !== "mock") entry.events += 1;
+    if (!entry.firstEvent || row.event_date < entry.firstEvent) entry.firstEvent = row.event_date;
     byCode.set(row.set_code, entry);
   }
   return Array.from(byCode, ([code, entry]) => ({ code, ...entry }));

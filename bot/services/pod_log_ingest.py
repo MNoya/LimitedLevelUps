@@ -19,6 +19,7 @@ from sqlalchemy import select
 from bot.database import SessionLocal
 from bot.models import Player, PodDraftEvent, PodDraftParticipant
 from bot.scripts.draftmancer_log import build_compact
+from bot.services.pod_card_extract import tracks_card_data, rebuild_pod_card_facts
 from bot.services.pod_drafts import apply_seat_indexes
 
 
@@ -96,6 +97,8 @@ def ingest_draft_log_sync(event_id: str, draft_log: dict) -> IngestSummary | Non
         event.draft_log = compact
         stored_bytes = len(event.draft_log_gz)
         apply_seat_indexes(session, event_id, compact.get("seats") or [])
+        if tracks_card_data(event.set_code):
+            rebuild_pod_card_facts(session, event_id, event.set_code, compact)
         session.commit()
 
     return IngestSummary(

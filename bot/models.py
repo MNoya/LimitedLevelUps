@@ -458,6 +458,31 @@ class PodDraftReplay(Base):
     )
 
 
+class PodCardStat(Base):
+    __tablename__ = "pod_card_stats"
+
+    event_id      = Column(String, ForeignKey("pod_draft_events.id", ondelete="CASCADE"), primary_key=True)
+    card_index    = Column(Integer, primary_key=True)
+    card_name     = Column(String, nullable=False)
+    set_code      = Column(String, nullable=False)
+    card_set      = Column(String, nullable=True)
+    colors        = Column(String, nullable=True)
+    rarity        = Column(String, nullable=True)
+    cmc           = Column(Float, nullable=True)
+    type_line     = Column(String, nullable=True)
+    seat          = Column(Integer, nullable=True)
+    pick_num      = Column(Integer, nullable=True)
+    maindecked    = Column(Boolean, nullable=False, server_default=text("false"))
+    seen_count    = Column(Integer, nullable=False)
+    last_seen_sum = Column(Integer, nullable=False)
+    saw_count     = Column(Integer, nullable=False)
+
+    __table_args__ = (
+        Index("ix_pod_card_stats_set", "set_code"),
+        Index("ix_pod_card_stats_set_card", "set_code", "card_name"),
+    )
+
+
 class PodChampionshipSeed(Base):
     """Frozen leaderboard standings for a Set Championship, snapshotted at the deadline its invites went out
     on so seeds lock in. One row per ranked player on the whole board; the seat cut, the invite waves, and

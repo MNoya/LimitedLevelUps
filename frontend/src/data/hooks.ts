@@ -13,6 +13,8 @@ import {
   fetchColorsLeaderboard,
   fetchColorsSummary,
   fetchCubeSeasons,
+  fetchPodCardStats,
+  fetchPodArchetypes,
   fetchP0P1Cards,
   fetchP0P1Ballots,
   fetchP0P1PickStats,
@@ -169,6 +171,24 @@ export function useCubeSeasons() {
   return useQuery({
     queryKey: ["cube-seasons"],
     queryFn: fetchCubeSeasons,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function usePodCardStats(boardCode: string | undefined) {
+  return useQuery({
+    queryKey: ["pod-card-stats", boardCode],
+    queryFn: () => fetchPodCardStats(boardCode!),
+    enabled: !!boardCode,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function usePodArchetypes(boardCode: string | undefined) {
+  return useQuery({
+    queryKey: ["pod-archetypes", boardCode],
+    queryFn: () => fetchPodArchetypes(boardCode!),
+    enabled: !!boardCode,
     staleTime: THIRTY_MINUTES,
   });
 }

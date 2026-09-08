@@ -14,6 +14,7 @@ import { PodGuidePage } from "./pages/PodGuidePage";
 import { PodDraftLogRoute } from "./pages/PodPage";
 import { AboutPage } from "./pages/AboutPage";
 import { TierListPage } from "./pages/TierListPage";
+import { PodCardDataPage } from "./pages/PodCardDataPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { P0P1Page } from "./pages/P0P1Page";
 import { BannerLab } from "./pages/BannerLab";
@@ -63,6 +64,7 @@ export function App() {
 
       {/* Both render PodsRoute so moving between them reconciles instead of remounting the page */}
       <Route path="/pods" element={<PodsRoute />} />
+      <Route path="/pods/:board/data" element={<PodCardDataPage />} />
       <Route path="/pods/:slug" element={<PodsRoute />} />
       <Route path="/pods/:slug/:who" element={<PodDraftLogRoute />} />
       <Route path="/pods/:slug/:who/:pack/:pick" element={<PodDraftLogRoute />} />

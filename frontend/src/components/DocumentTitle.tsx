@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { usePlayerProfile, useSets } from "../data/hooks";
 import { categoryFromSlug, episodeSlug, type Episode } from "../data/episodes";
 import { cubeVariantForBoard } from "../data/cubeVariants";
+import { cardDataLabel } from "../data/podCards";
 import { skeletonsFor } from "../data/skeletons";
 import { ACTIVE_SET_CODE, SITE_NAME, TITLE_SEPARATOR } from "../data/constants";
 
@@ -127,6 +128,9 @@ const resolvePageTitle = (
   if (section === "pods") {
     if (rest[0] === "guide") {
       return "Pod Guide";
+    }
+    if (rest[0] && rest[1] === "data") {
+      return `${cardDataLabel(rest[0].toUpperCase())} Data`;
     }
     return rest[0] ? titleCaseSlug(rest[0], setCodes) : "Pod Drafts";
   }

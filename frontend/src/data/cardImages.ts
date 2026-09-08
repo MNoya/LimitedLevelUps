@@ -1,12 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-// Card art comes from our own `/api/card-images` endpoint, which resolves a draft's exact cards to
-// base-printing CDN URLs server-side (Scryfall's collection batch, ~75 cards per request) and is
-// edge-cached. The browser only ever hits that endpoint and the image CDN, never Scryfall's
-// rate-limited API, so whole pools — including a cube spanning dozens of sets — load in a few batched
-// requests. Cards are keyed by `<set>|<front-face name>`; the named endpoint covers the rare card the
-// batch can't resolve (basics).
+// Card art resolves through /api/card-images (Scryfall batch → CDN URLs); the browser never hits Scryfall directly
 
 export interface CardImageItem {
   name: string | null;
@@ -59,31 +54,69 @@ async function fetchCardImages(identifiers: { name: string; set: string }[]): Pr
   return res.ok ? ((await res.json()) as Record<string, string>) : {};
 }
 
-// `<set>|<front-face name>` -> base-printing CDN URL for the given cards, plus a `ready` flag. The
-// query is keyed by the card set, so the same draft resolves once per session; the endpoint itself is
-// edge-cached across sessions and users.
+// One app-wide card->URL map shared by every caller, persisted to localStorage; a hook resolves only its missing cards
+const CACHE_KEY = "cardimg:v2";
+const memoryMap = new Map<string, string>();
+let hydrated = false;
+
+function hydrate(): void {
+  if (hydrated) {
+    return;
+  }
+  hydrated = true;
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (raw) {
+      for (const [key, url] of Object.entries(JSON.parse(raw) as Record<string, string>)) {
+        memoryMap.set(key, url);
+      }
+    }
+  } catch {
+    return;
+  }
+}
+
+function persist(): void {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(Object.fromEntries(memoryMap)));
+  } catch {
+    return;
+  }
+}
+
+// Resolves art for items against the shared map: fetches only missing cards, merges + persists, returns a ready flag
 export function useCardImageMap(items: CardImageItem[]): CardImages {
+  hydrate();
   const identifiers = useMemo(() => dedupeIdentifiers(items), [items]);
-  const signature = useMemo(
-    () => identifiers.map((id) => `${id.set.toLowerCase()}|${frontFaceName(id.name).toLowerCase()}`).sort().join(","),
+  const missing = useMemo(
+    () => identifiers.filter((id) => !memoryMap.has(mapKey(id.set, id.name))),
     [identifiers],
   );
-  const { data, isPending } = useQuery({
-    queryKey: ["card-images", signature],
-    queryFn: () => fetchCardImages(identifiers),
-    enabled: identifiers.length > 0,
+  const missingSignature = useMemo(
+    () => missing.map((id) => mapKey(id.set, id.name)).sort().join(","),
+    [missing],
+  );
+  const { isFetching } = useQuery({
+    queryKey: ["card-images", missingSignature],
+    queryFn: async () => {
+      const fetched = await fetchCardImages(missing);
+      for (const [key, url] of Object.entries(fetched)) {
+        memoryMap.set(key, url);
+      }
+      persist();
+      return fetched;
+    },
+    enabled: missing.length > 0,
     staleTime: Infinity,
     gcTime: Infinity,
   });
-  return useMemo(() => {
-    const images = new Map<string, string>(Object.entries(data ?? {}));
-    return { images, ready: identifiers.length === 0 || !isPending };
-  }, [data, isPending, identifiers.length]);
+  return useMemo(
+    () => ({ images: new Map(memoryMap), ready: missing.length === 0 || !isFetching }),
+    [missing.length, isFetching],
+  );
 }
 
-// The `<img>` src candidates for a card, best first: the base-printing CDN URL from the map, then
-// Scryfall's named endpoint. While the map is still loading an unresolved card yields nothing (a
-// placeholder), so the named fallback only ever covers the few cards a loaded map omits (basics).
+// <img> src candidates for a card, best first: the mapped CDN URL, then Scryfall's named endpoint
 export function cardImageSources(
   name: string | null | undefined,
   set: string | null | undefined,
@@ -101,4 +134,15 @@ export function cardImageSources(
   }
   const ready = cardImages?.ready ?? true;
   return ready ? fallback : [];
+}
+
+// Like cardImageSources but rewritten to Scryfall's art_crop for a frameless thumbnail
+export function cardArtSources(
+  name: string | null | undefined,
+  set: string | null | undefined,
+  cardImages?: CardImages,
+): string[] {
+  return cardImageSources(name, set, cardImages).map((url) =>
+    url.includes("cards.scryfall.io/") ? url.replace("/normal/", "/art_crop/") : url.replace("version=normal", "version=art_crop"),
+  );
 }

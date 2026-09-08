@@ -15,6 +15,7 @@ import argparse
 import gzip
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -103,26 +104,46 @@ def picks_per_turn(log: dict) -> int:
     return most
 
 
-def simulate(compact: dict) -> list[list[list[int]]]:
+@dataclass(frozen=True)
+class SeatView:
+    seat: int
+    pack: int
+    pick: int
+    booster: list[int]
+    taken_positions: list[int]
+
+    @property
+    def taken(self) -> list[int]:
+        return [self.booster[pos] for pos in self.taken_positions]
+
+
+def walk(compact: dict):
+    """Replay the draft, yielding one SeatView per seat per turn: the booster exactly as that seat saw
+    it and the positions taken from it. `pick` is a 1-based turn ordinal within the pack. simulate and
+    every card-stat extraction consume this so the pass rotation lives in one place."""
     n_seats = len(compact["seats"])
     packs = compact["packs"]
     picks = compact["picks"]
     per_turn = compact.get("pp", 1)
-    out: list[list[list[int]]] = [[[] for _ in range(3)] for _ in range(n_seats)]
     for pack_num in range(3):
         booster_at: list[list[int]] = [list(packs[seat + pack_num * n_seats]) for seat in range(n_seats)]
         direction = PASS_DIRS[pack_num]
         turns = len(picks[0][pack_num]) // per_turn
         for turn in range(turns):
-            taken: list[list[int]] = []
+            positions_at = [picks[seat][pack_num][turn * per_turn:(turn + 1) * per_turn] for seat in range(n_seats)]
             for seat in range(n_seats):
-                positions = picks[seat][pack_num][turn * per_turn:(turn + 1) * per_turn]
-                taken.append([booster_at[seat][pos] for pos in positions])
-                for pos in sorted(positions, reverse=True):
+                yield SeatView(seat, pack_num, turn + 1, list(booster_at[seat]), positions_at[seat])
+            for seat in range(n_seats):
+                for pos in sorted(positions_at[seat], reverse=True):
                     booster_at[seat].pop(pos)
-            for seat, cards in enumerate(taken):
-                out[seat][pack_num].extend(cards)
             booster_at = [booster_at[(seat - direction) % n_seats] for seat in range(n_seats)]
+
+
+def simulate(compact: dict) -> list[list[list[int]]]:
+    n_seats = len(compact["seats"])
+    out: list[list[list[int]]] = [[[] for _ in range(3)] for _ in range(n_seats)]
+    for view in walk(compact):
+        out[view.seat][view.pack].extend(view.taken)
     return out
 
 

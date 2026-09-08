@@ -12,6 +12,8 @@ const impl = useSupabase ? real : mock;
 
 export const fetchSets = impl.fetchSets;
 export const fetchCubeSeasons = impl.fetchCubeSeasons;
+export const fetchPodCardStats = impl.fetchPodCardStats;
+export const fetchPodArchetypes = impl.fetchPodArchetypes;
 export const fetchDbEpisodes = impl.fetchDbEpisodes;
 export const fetchRecentDbEpisodes = impl.fetchRecentDbEpisodes;
 export const fetchEpisodeTranscript = impl.fetchEpisodeTranscript;
