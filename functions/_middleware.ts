@@ -17,7 +17,7 @@ import {
   PUBLIC_SUPABASE_PUBLISHABLE_KEY,
 } from "../frontend/src/data/public-supabase-config";
 import { SITE_NAME as SITE, TITLE_SEPARATOR, TIER_LIST_PREVIEW_SETS } from "../frontend/src/data/constants";
-import { cubeLabel } from "../frontend/src/data/cubeCards";
+import { cardDataLabel } from "../frontend/src/data/podCards";
 import { mtgoSetName } from "../frontend/src/data/mtgoSets";
 import { resolveContestByCode, resolveFeaturedContest } from "../frontend/src/data/p0p1Slots";
 import { categoryFromSlug, episodeSlugBase } from "../frontend/src/data/episodes";
@@ -313,7 +313,7 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
       return page("Pod Drafts Guide", "How to play on our community Pod Drafts");
     }
     if (rest[0] && rest[1] === "data") {
-      const label = cubeLabel(rest[0].toUpperCase());
+      const label = cardDataLabel(rest[0].toUpperCase());
       return page(`${label} Data`, `Card draft data for the ${label}`);
     }
     if (rest[0]) {
