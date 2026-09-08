@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -10,16 +11,51 @@ export function SortHeaderButton({
   onClick,
   align = "right",
   inline = false,
+  fill = false,
+  trailing = null,
+  className,
 }: {
   label: string;
   active: boolean;
   dir: SortDir;
   onClick: () => void;
-  align?: "right" | "center";
+  align?: "right" | "center" | "left";
   inline?: boolean;
+  fill?: boolean;
+  trailing?: ReactNode;
+  className?: string;
 }) {
-  const centered = align === "center";
   const Icon = active && dir === "asc" ? ChevronUp : ChevronDown;
+
+  if (fill) {
+    const justify =
+      align === "center" ? "justify-center" : align === "left" ? "justify-start" : "justify-end";
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Sort by ${label}`}
+        aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
+        className={cn(
+          "flex w-full items-center gap-0.5 cursor-pointer transition-colors tracking-[inherit] text-[inherit] font-[inherit]",
+          justify,
+          active ? "text-text" : "hover:text-text",
+          className,
+        )}
+      >
+        <span>{label}</span>
+        <Icon
+          size={11}
+          strokeWidth={2.5}
+          className={cn("shrink-0", active ? "opacity-100" : "opacity-30")}
+          aria-hidden="true"
+        />
+        {trailing}
+      </button>
+    );
+  }
+
+  const centered = align === "center";
   return (
     <button
       type="button"

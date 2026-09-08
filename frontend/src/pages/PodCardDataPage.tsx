@@ -78,8 +78,8 @@ export function PodCardDataPage() {
   const [tab, setTab] = useState<CardDataTab>("cards");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [season, setSeason] = useState<string | null>(ALL_SEASONS);
-  const [sortKey, setSortKey] = useState<keyof PodCard>("seen");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortKey, setSortKey] = useState<keyof PodCard>("alsa");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [minDrafts, setMinDrafts] = useState(1);
   const [filters, setFilters] = useState<PodCardFilters>(EMPTY_POD_CARD_FILTERS);
   const [search, setSearch] = useState("");
@@ -273,24 +273,30 @@ export function PodCardDataPage() {
                 <thead>
                   <tr className="border-b border-border text-left">
                     <th className="sticky left-0 z-10 bg-bg pl-2 py-2" aria-hidden />
-                    <th className="pr-2 py-2 text-left font-normal font-display tracking-[0.2em] text-[11px] text-muted">
+                    <th className="p-0 text-left font-normal font-display tracking-[0.2em] text-[11px] text-muted">
                       <SortHeaderButton
                         label="CARD NAME"
                         active={sortKey === "name"}
                         dir={sortDir}
                         onClick={() => onSort("name")}
-                        inline
+                        fill
+                        align="left"
+                        className="pr-2 py-2"
                       />
                     </th>
                     {POD_CARD_COLUMNS.map((col, i) => (
                       <th
                         key={col.key}
-                        className={cn(
-                          "whitespace-nowrap px-2 py-2 text-right font-normal font-display tracking-[0.2em] text-[11px] text-muted",
-                          i === POD_CARD_COLUMNS.length - 1 && "pr-3",
-                        )}
+                        className="whitespace-nowrap p-0 text-right font-normal font-display tracking-[0.2em] text-[11px] text-muted"
                       >
-                        <MetricHeader col={col} sortKey={sortKey} sortDir={sortDir} onSort={onSort} mobile />
+                        <MetricHeader
+                          col={col}
+                          sortKey={sortKey}
+                          sortDir={sortDir}
+                          onSort={onSort}
+                          mobile
+                          isLast={i === POD_CARD_COLUMNS.length - 1}
+                        />
                       </th>
                     ))}
                   </tr>
@@ -377,24 +383,29 @@ export function PodCardDataPage() {
             </colgroup>
             <thead>
               <tr className="border-b border-border text-left">
-                <th className="pl-5 md:pl-10 pr-3 py-2 text-left font-normal font-display tracking-[0.2em] text-[11px] text-muted">
+                <th className="p-0 text-left font-normal font-display tracking-[0.2em] text-[11px] text-muted">
                   <SortHeaderButton
                     label="CARD NAME"
                     active={sortKey === "name"}
                     dir={sortDir}
                     onClick={() => onSort("name")}
-                    inline
+                    fill
+                    align="left"
+                    className="pl-5 md:pl-10 pr-3 py-2"
                   />
                 </th>
                 {POD_CARD_COLUMNS.map((col, i) => (
                   <th
                     key={col.key}
-                    className={cn(
-                      "whitespace-nowrap px-3 py-2 text-right font-normal font-display tracking-[0.2em] text-[11px] text-muted",
-                      i === POD_CARD_COLUMNS.length - 1 && "pr-5 md:pr-10",
-                    )}
+                    className="whitespace-nowrap p-0 text-right font-normal font-display tracking-[0.2em] text-[11px] text-muted"
                   >
-                    <MetricHeader col={col} sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                    <MetricHeader
+                      col={col}
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={onSort}
+                      isLast={i === POD_CARD_COLUMNS.length - 1}
+                    />
                   </th>
                 ))}
               </tr>
@@ -473,26 +484,30 @@ function MetricHeader({
   sortDir,
   onSort,
   mobile = false,
+  isLast = false,
 }: {
   col: (typeof POD_CARD_COLUMNS)[number];
   sortKey: keyof PodCard;
   sortDir: SortDir;
   onSort: (key: keyof PodCard) => void;
   mobile?: boolean;
+  isLast?: boolean;
 }) {
   const hasSuffix = col.key === "playRate";
+  const padding = mobile
+    ? cn("px-2 py-2", isLast && "pr-3")
+    : cn("px-3 py-2", isLast && "pr-5 md:pr-10");
   return (
     <Tooltip label={col.title} side="top">
-      <span className="inline-flex items-baseline align-middle">
-        <SortHeaderButton
-          label={mobile && col.shortLabel ? col.shortLabel : col.label}
-          active={sortKey === col.key}
-          dir={sortDir}
-          onClick={() => onSort(col.key)}
-          inline
-        />
-        {hasSuffix ? <span className="ml-1 w-7 shrink-0" aria-hidden /> : null}
-      </span>
+      <SortHeaderButton
+        label={mobile && col.shortLabel ? col.shortLabel : col.label}
+        active={sortKey === col.key}
+        dir={sortDir}
+        onClick={() => onSort(col.key)}
+        fill
+        className={padding}
+        trailing={hasSuffix ? <span className="ml-1 w-7 shrink-0" aria-hidden /> : null}
+      />
     </Tooltip>
   );
 }

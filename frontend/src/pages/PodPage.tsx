@@ -81,6 +81,7 @@ export function PodPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const preselectName = searchParams.get("player");
+  const deckParam = searchParams.get("deck");
   const isMobile = useIsMobile();
   const isLandscapePhone = useIsLandscapePhone();
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
@@ -95,6 +96,27 @@ export function PodPage() {
     if (!decklistAccess.canViewSeat(seat.avatarUrl)) return;
     setDeckInitialTab(tab);
     setDeckTarget(seat);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("player", seat.discordName);
+        next.set("deck", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  const closeDeck = () => {
+    setDeckTarget(null);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("deck");
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   const handleRoundHover = (seat: number | null, round: number | null, outcome: RoundOutcome | null) => {
@@ -265,8 +287,11 @@ export function PodPage() {
       target = seats.find((p) => p.placement === 1) ?? seats[0];
     }
     if (target) setSelectedSeat(target.seatIndex);
+    if (target && deckParam) {
+      openDeck(target, deckParam === "decklist" ? "decklist" : "screenshot");
+    }
     setPreselectChecked(true);
-  }, [seats, preselectName, isMobile, preselectChecked, participantRows]);
+  }, [seats, preselectName, deckParam, isMobile, preselectChecked, participantRows]);
 
   // Browser Back and Forward move ?player=, so the open seat follows the URL and not only the click
   useEffect(() => {
@@ -419,7 +444,7 @@ export function PodPage() {
             initialTab={deckInitialTab}
             draftLogHref={deckLogHref}
             cardImages={warmedImages}
-            onClose={() => setDeckTarget(null)}
+            onClose={closeDeck}
             onPrev={() => cycleDeck(-1)}
             onNext={() => cycleDeck(1)}
           />
@@ -541,7 +566,7 @@ export function PodPage() {
           }}
           initialTab={deckInitialTab}
           draftLogHref={deckLogHref}
-          onClose={() => setDeckTarget(null)}
+          onClose={closeDeck}
           onPrev={() => cycleDeck(-1)}
           onNext={() => cycleDeck(1)}
         />

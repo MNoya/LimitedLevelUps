@@ -130,7 +130,7 @@ const resolvePageTitle = (
       return "Pod Guide";
     }
     if (rest[0] && rest[1] === "data") {
-      return `${cardDataLabel(rest[0].toUpperCase())} Data`;
+      return `${cardDataLabel(rest[0].toUpperCase())} Cube Card Data`;
     }
     return rest[0] ? titleCaseSlug(rest[0], setCodes) : "Pod Drafts";
   }

@@ -314,7 +314,7 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
     }
     if (rest[0] && rest[1] === "data") {
       const label = cardDataLabel(rest[0].toUpperCase());
-      return page(`${label} Data`, `Card draft data for the ${label}`);
+      return page(`${label} Cube Card Data`, `Card stats from every ${label} Cube pod draft`);
     }
     if (rest[0]) {
       const setCodes = await fetchSetCodes();

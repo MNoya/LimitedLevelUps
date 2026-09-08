@@ -1,0 +1,8 @@
+# Local-only extras for bot.scripts.ocr_pod_decks (deck-screenshot OCR).
+# Kept out of requirements.txt so the Railway image stays small (torch is ~200MB CPU-only).
+#   pip install -r requirements-ocr.txt --extra-index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.0+cpu
+torchvision==0.29.0+cpu
+easyocr==1.7.2
+rapidfuzz==3.14.6

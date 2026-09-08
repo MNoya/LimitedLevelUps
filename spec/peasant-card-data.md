@@ -37,10 +37,9 @@ The design goal is that the numbers improve on their own as pod play accumulates
 
 `% GP` and `GP WR` are only as accurate as each seat's Draftmancer decklist captured at draft time. Players who build or tune outside Draftmancer aren't reflected, so a few seats store the whole pool as "main". `reprocess_pod_cards` can't fix this — it re-reads the same stored compact; the real signal is missing. Counts, ALSA, ATA, `# Picked`, `# Seen` and the color/archetype win rates are unaffected.
 
-Roadmap to improve it, in preference order:
-1. **17lands-sourced decks** — cleanest real maindeck; no ingest path exists yet.
-2. **OCR-reported decklists** (other branch) — let a player report a final list and rewrite `pod_card_stats.maindecked` for their `(event_id, seat)`; the views recompute for free.
-3. **Interim heuristic** — discount or flag seats whose `main == full pool` so they don't skew the rate.
+Chosen cleanup: **OCR-reported decklists** (other branch). A player's posted final list is OCR'd to the real main/side and written back, correcting the event regardless of whether they run 17lands. It corrects the stored decks; `reprocess_pod_cards` then recomputes the views. For the launch backfill this runs locally against prod, one pass over the existing events; the automated in-flow hook is deferred.
+
+Later avenues: **17lands-sourced decks** (cleanest real maindeck, no ingest path yet) as an eventual replacement, or an interim heuristic that discounts seats whose `main == full pool` if OCR coverage lags.
 
 ## Key files
 
