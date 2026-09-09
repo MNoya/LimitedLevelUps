@@ -118,8 +118,11 @@ def classify(frags: list[dict], width: int, pool: dict[int, str]) -> Verdict:
     if len(main) < MAIN_FLOOR:
         return Verdict("SKIP", "too-few-cards", None, None, f"only {len(main)} cards read (scrolled/partial)")
     side = all_idxs - main
-    return Verdict("FLAG", "no-sideboard-region", frozenset(main), frozenset(side),
-                   "no sideboard region; maindeck read is recall-limited")
+    if len(main) < MAIN_MIN:
+        return Verdict("FLAG", "no-sideboard-region", frozenset(main), frozenset(side),
+                       f"maindeck {len(main)} under {MAIN_MIN} (likely OCR under-read)")
+    return Verdict("AUTO", "no-sideboard-region", frozenset(main), frozenset(side),
+                   f"maindeck-only, {len(main)} cards")
 
 
 def refresh_urls(urls: list[str], token: str) -> dict[str, str]:
