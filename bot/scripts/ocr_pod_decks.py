@@ -38,14 +38,13 @@ from bot.models import PodDraftEvent, PodDraftParticipant
 from bot.scripts.draftmancer_log import simulate
 from bot.services.pod_card_extract import reingest_pod_card_facts, tracks_card_data
 
-MATCH_MIN = 88
+MATCH_MIN = 80
 MAIN_FLOOR = 20
+MAIN_MIN = 25
 SIDE_LIST_MIN = 5
 MARKER_SOURCE = "ocr-auto"
 USER_AGENT = "DiscordBot (https://limitedlevelups.com, 1.0)"
-# MTGA renders the sideboard quantity as "1x", which OCR often reads as "Ix"/"lx"/"|x".
 NX_RE = re.compile(r"^[0-9il|]{1,2}x$")
-CARDS_RE = re.compile(r"^\d+\s*cards?$")
 
 
 def norm(s: str) -> str:
@@ -56,14 +55,9 @@ def _is_nx(text: str) -> bool:
     return bool(NX_RE.match(text.replace(" ", "").lower()))
 
 
-def _nx_value(text: str) -> int:
-    digits = re.sub(r"\D", "", text)
-    return int(digits) if digits else 1
-
-
 @dataclass(frozen=True)
 class Verdict:
-    action: str  # AUTO | FLAG | SKIP
+    action: str
     layout: str
     main: frozenset[int] | None
     side: frozenset[int] | None
@@ -109,25 +103,16 @@ def classify(frags: list[dict], width: int, pool: dict[int, str]) -> Verdict:
         sb_x, layout = max(sb_right, key=lambda f: f["cx"])["x0"] - 20, "sideboard-panel"
 
     if sb_x is not None:
-        # Split at the 1x/SIDEBOARD anchor; auto-write when the fully-read side matches the printed count
         side_read = {idx for idx, cx in matched if cx >= sb_x}
-        main_read = {idx for idx, cx in matched if cx < sb_x}
         if len(side_read) >= SIDE_LIST_MIN or len(nx_right) >= 2:
-            if len(main_read) < MAIN_FLOOR:
-                return Verdict("SKIP", layout, None, None, f"only {len(main_read)} maindeck cards left of anchor")
-            expected_side = _printed_sideboard_size(frags, width, nx_right)
-            if expected_side is not None:
-                if len(side_read) == expected_side:
-                    main = all_idxs - side_read
-                    return Verdict("AUTO", layout, frozenset(main), frozenset(side_read),
-                                   f"sideboard {len(side_read)} matches printed {expected_side}")
-                if len(main_read) == len(all_idxs) - expected_side:
-                    side = all_idxs - main_read
-                    return Verdict("AUTO", layout, frozenset(main_read), frozenset(side),
-                                   f"maindeck {len(main_read)} = pool - printed {expected_side}")
-            main = all_idxs - side_read
-            detail = f"side {len(side_read)}, main {len(main_read)} vs printed {expected_side}"
-            return Verdict("FLAG", layout, frozenset(main), frozenset(all_idxs - main), f"unverified split ({detail})")
+            main = {idx for idx, cx in matched if cx < sb_x}
+            if len(main) < MAIN_FLOOR:
+                return Verdict("SKIP", layout, None, None, f"only {len(main)} maindeck cards left of anchor")
+            side = all_idxs - main
+            if len(main) < MAIN_MIN:
+                return Verdict("FLAG", layout, frozenset(main), frozenset(side),
+                               f"maindeck {len(main)} under {MAIN_MIN} (likely OCR under-read)")
+            return Verdict("AUTO", layout, frozenset(main), frozenset(side), f"maindeck {len(main)} left of anchor")
 
     main = {idx for idx, _ in matched}
     if len(main) < MAIN_FLOOR:
@@ -135,22 +120,6 @@ def classify(frags: list[dict], width: int, pool: dict[int, str]) -> Verdict:
     side = all_idxs - main
     return Verdict("FLAG", "no-sideboard-region", frozenset(main), frozenset(side),
                    "no sideboard region; maindeck read is recall-limited")
-
-
-def _printed_sideboard_size(frags: list[dict], width: int, nx_tokens: list[dict]) -> int | None:
-    for f in frags:
-        if "sideboard" in norm(f["t"]):
-            found = re.search(r"\d+", f["t"])
-            if found and int(found.group()) <= 40:
-                return int(found.group())
-    for f in frags:
-        if f["cx"] > 0.55 * width and CARDS_RE.match(f["t"].strip().lower()):
-            n = int(re.search(r"\d+", f["t"]).group())
-            if n <= 40:
-                return n
-    if nx_tokens:
-        return sum(_nx_value(f["t"]) for f in nx_tokens)
-    return None
 
 
 def refresh_urls(urls: list[str], token: str) -> dict[str, str]:
@@ -179,12 +148,16 @@ def download(url: str) -> str:
     return handle.name
 
 
+OCR_PASSES = ({}, {"mag_ratio": 2.0, "text_threshold": 0.6, "low_text": 0.3})
+
+
 def ocr_boxes(reader, path: str) -> list[dict]:
     out = []
-    for bbox, text, conf in reader.readtext(path):
-        xs = [p[0] for p in bbox]
-        ys = [p[1] for p in bbox]
-        out.append({"t": text, "x0": min(xs), "cx": sum(xs) / 4, "cy": sum(ys) / 4, "conf": conf})
+    for kw in OCR_PASSES:
+        for bbox, text, conf in reader.readtext(path, **kw):
+            xs = [p[0] for p in bbox]
+            ys = [p[1] for p in bbox]
+            out.append({"t": text, "x0": min(xs), "cx": sum(xs) / 4, "cy": sum(ys) / 4, "conf": conf})
     return out
 
 
@@ -192,9 +165,18 @@ def apply_correction(
     session: Session, event: PodDraftEvent, seat: int, main: frozenset[int], side: frozenset[int]
 ) -> None:
     compact = event.draft_log
-    compact["decks"][seat]["main"] = sorted(main)
-    compact["decks"][seat]["side"] = sorted(side)
-    compact["decks"][seat]["correction"] = {"source": MARKER_SOURCE, "at": datetime.now(timezone.utc).isoformat()}
+    deck = compact["decks"][seat]
+    prior = deck.get("correction") or {}
+    orig_main = prior.get("orig_main", deck.get("main"))
+    orig_side = prior.get("orig_side", deck.get("side"))
+    deck["main"] = sorted(main)
+    deck["side"] = sorted(side)
+    deck["correction"] = {
+        "source": MARKER_SOURCE,
+        "at": datetime.now(timezone.utc).isoformat(),
+        "orig_main": orig_main,
+        "orig_side": orig_side,
+    }
     flag_modified(event, "draft_log")
     event.draft_log_gz = gzip.compress(json.dumps(compact, separators=(",", ":")).encode(), compresslevel=9)
 
@@ -231,7 +213,10 @@ def run(event_ids: list[str], commit: bool, force: bool) -> None:
             for seat, url in urls.items():
                 if seat >= len(decks):
                     continue
-                if decks[seat].get("correction") and not force:
+                corr = decks[seat].get("correction")
+                if corr and corr.get("source") != MARKER_SOURCE:
+                    continue
+                if corr and not force:
                     continue
                 jobs.append((event.id, seat, url, event.set_code, event.draft_log))
 
