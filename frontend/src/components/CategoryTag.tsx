@@ -49,8 +49,11 @@ export function EpisodeTag({
 }) {
   return (
     <span className={cn("flex items-center gap-2 shrink-0", className)}>
-      {episode.setCode ? <SetGlyph code={episode.setCode} size={glyphSize} /> : null}
-      {episode.category === "Evergreen" ? <SetGlyph code="EVG" size={glyphSize} /> : null}
+      {episode.setCode ? (
+        <SetGlyph code={episode.setCode} size={glyphSize} />
+      ) : episode.category === "Evergreen" ? (
+        <SetGlyph code="EVG" size={glyphSize} />
+      ) : null}
       <CategoryTag category={episode.category} />
     </span>
   );
