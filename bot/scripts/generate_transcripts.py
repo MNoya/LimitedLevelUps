@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -77,6 +78,7 @@ STRUCTURE_PROMPT = (
 RESTORE_MIN_WORDS = 40
 
 CACHE_DIR = Path("cache/transcripts")
+USAGE_LOG = Path("logs/transcript_usage.jsonl")
 SPAWN_STAGGER_SECONDS = 5
 CHAPTER_LOOKBACK_SECONDS = 12
 CHAPTER_LOOKBACK_MAX = 2
@@ -212,7 +214,7 @@ def _build_segments(youtube_id, units, chapters, set_code, args) -> list[dict]:
     if args.no_structure:
         segments = [{"t": unit["t"], "text": unit["text"]} for unit in units]
     else:
-        segments = _structure(units, chapters)
+        segments = _structure(units, chapters, youtube_id)
         headings = sum(1 for s in segments if s.get("heading"))
         subheadings = sum(1 for s in segments if s.get("subheading"))
         log.info(f"[{youtube_id}] {len(segments)} paragraphs, {headings} chapters, {subheadings} subtopics")
@@ -270,15 +272,44 @@ def _fetch_cards_safe(set_code: str | None) -> list[str]:
         return []
 
 
+def _claude_json(prompt: str, label: str, youtube_id: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["claude", "-p", prompt, "--output-format", "json"], check=True, capture_output=True, text=True
+        )
+    except subprocess.CalledProcessError as exc:
+        log.warning(f"[{youtube_id}] {label} failed: {exc}")
+        return None
+    start = result.stdout.find("{")
+    if start < 0:
+        return None
+    wrapper = json.loads(result.stdout[start:])
+    _log_usage(youtube_id, label, wrapper.get("total_cost_usd"), wrapper.get("usage", {}))
+    return wrapper.get("result", "")
+
+
+def _log_usage(youtube_id: str, label: str, cost: float | None, usage: dict) -> None:
+    USAGE_LOG.parent.mkdir(parents=True, exist_ok=True)
+    entry = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "youtube_id": youtube_id,
+        "call": label,
+        "cost_usd": cost,
+        "input_tokens": usage.get("input_tokens"),
+        "output_tokens": usage.get("output_tokens"),
+    }
+    with open(USAGE_LOG, "a") as handle:
+        handle.write(json.dumps(entry) + "\n")
+    log.info(f"[{youtube_id}] {label}: ${cost:.4f}" if cost is not None else f"[{youtube_id}] {label}: no cost")
+
+
 def _fix_card_names(youtube_id: str, segments: list[dict], card_names: list[str]) -> None:
     full_text = "\n".join(segment["text"] for segment in segments)
     prompt = CARD_FIX_PROMPT.replace("{cards}", "\n".join(card_names)).replace("{text}", full_text)
-    try:
-        result = subprocess.run(["claude", "-p", prompt], check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as exc:
-        log.warning(f"[{youtube_id}] card-name fix skipped: {exc}")
+    output = _claude_json(prompt, "card-fix", youtube_id)
+    if output is None:
         return
-    match = re.search(r"\{.*\}", result.stdout, re.DOTALL)
+    match = re.search(r"\{.*\}", output, re.DOTALL)
     fixes = json.loads(match.group(0)).get("fixes", []) if match else []
     applied = 0
     for segment in segments:
@@ -591,9 +622,9 @@ def _fetch_chapters(youtube_id: str, cookie_args: list[str]) -> list[dict]:
     return json.loads(raw)
 
 
-def _structure(units: list[dict], chapters: list[dict]) -> list[dict]:
+def _structure(units: list[dict], chapters: list[dict], youtube_id: str) -> list[dict]:
     heads = _chapter_heads(units, chapters)
-    subtopics, paragraphs, sections = _subtopics_and_paragraphs(units)
+    subtopics, paragraphs, sections = _subtopics_and_paragraphs(units, youtube_id)
     if not heads:
         heads = _promote_sections(units, subtopics, sections)
     chapter_times = [units[i]["t"] for i in heads]
@@ -633,10 +664,10 @@ def _merge_short_paragraphs(segments: list[dict], min_words: int = 6) -> list[di
     return merged
 
 
-def _subtopics_and_paragraphs(units: list[dict]) -> tuple[dict[int, str], set[int], set[int]]:
+def _subtopics_and_paragraphs(units: list[dict], youtube_id: str) -> tuple[dict[int, str], set[int], set[int]]:
     numbered = "\n".join(f"{i}: {unit['text']}" for i, unit in enumerate(units))
-    result = subprocess.run(["claude", "-p", STRUCTURE_PROMPT + numbered], check=True, capture_output=True, text=True)
-    match = re.search(r"\{.*\}", result.stdout, re.DOTALL)
+    output = _claude_json(STRUCTURE_PROMPT + numbered, "structure", youtube_id)
+    match = re.search(r"\{.*\}", output, re.DOTALL) if output else None
     if not match:
         return {}, {0}, set()
     data = json.loads(match.group(0))
