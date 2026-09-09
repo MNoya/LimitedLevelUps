@@ -839,7 +839,7 @@ function EpisodeDetail({
               ) : null}
             </div>
           </div>
-          {expectTranscript ? (
+          {expectTranscript && (chapters.length > 0 || !transcriptSettled) ? (
             <aside className="relative hidden lg:block lg:w-[300px] lg:shrink-0">
               <nav className="absolute inset-0 flex flex-col overflow-y-auto border border-border bg-surface/40 px-3 py-1">
                 {chapters.length > 0
