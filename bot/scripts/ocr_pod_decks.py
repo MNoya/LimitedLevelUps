@@ -111,7 +111,7 @@ def classify(frags: list[dict], width: int, pool: dict[int, str]) -> Verdict:
             side = all_idxs - main
             if len(main) < MAIN_MIN:
                 return Verdict("FLAG", layout, frozenset(main), frozenset(side),
-                               f"maindeck {len(main)} under {MAIN_MIN} (likely OCR under-read)")
+                               f"near-complete maindeck ({len(main)} cards), held for a manual look")
             return Verdict("AUTO", layout, frozenset(main), frozenset(side), f"maindeck {len(main)} left of anchor")
 
     main = {idx for idx, _ in matched}
@@ -120,7 +120,7 @@ def classify(frags: list[dict], width: int, pool: dict[int, str]) -> Verdict:
     side = all_idxs - main
     if len(main) < MAIN_MIN:
         return Verdict("FLAG", "no-sideboard-region", frozenset(main), frozenset(side),
-                       f"maindeck {len(main)} under {MAIN_MIN} (likely OCR under-read)")
+                       f"near-complete maindeck ({len(main)} cards), held for a manual look")
     return Verdict("AUTO", "no-sideboard-region", frozenset(main), frozenset(side),
                    f"maindeck-only, {len(main)} cards")
 
