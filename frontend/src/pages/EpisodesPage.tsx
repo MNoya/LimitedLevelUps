@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { SiApplepodcasts, SiRss, SiSpotify, SiYoutube } from "react-icons/si";
 import type { IconType } from "react-icons";
@@ -8,6 +8,7 @@ import {
   CalendarArrowDown,
   CalendarArrowUp,
   ChevronsLeft,
+  ChevronsUpDown,
   GraduationCap,
   Headphones,
   Layers,
@@ -591,6 +592,19 @@ export function EpisodesPage() {
   );
 }
 
+const VIDEO_HEIGHT_KEY = "llu:episode-video-vh";
+const VIDEO_HEIGHT_MIN = 18;
+const VIDEO_HEIGHT_MAX = 92;
+const VIDEO_HEIGHT_DEFAULT = 52;
+
+function readStoredVideoHeight(): number {
+  if (typeof window === "undefined") {
+    return VIDEO_HEIGHT_DEFAULT;
+  }
+  const stored = Number(window.localStorage.getItem(VIDEO_HEIGHT_KEY));
+  return stored >= VIDEO_HEIGHT_MIN && stored <= VIDEO_HEIGHT_MAX ? stored : VIDEO_HEIGHT_DEFAULT;
+}
+
 function EpisodeDetail({
   episode,
   audioMode,
@@ -607,6 +621,29 @@ function EpisodeDetail({
   const audioControlsRef = useRef<AudioControls>(null);
   const stickyRef = useRef<HTMLDivElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [videoHeightVh, setVideoHeightVh] = useState<number>(readStoredVideoHeight);
+  const [resizing, setResizing] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [pointerOnVideo, setPointerOnVideo] = useState(false);
+  const hideResizeTimer = useRef<number | null>(null);
+  const resizeStart = useRef<{ y: number; vh: number } | null>(null);
+  const showResizeHandle = pointerOnVideo || resizing || !videoPlaying;
+  const enterVideo = () => {
+    if (hideResizeTimer.current) {
+      window.clearTimeout(hideResizeTimer.current);
+      hideResizeTimer.current = null;
+    }
+    setPointerOnVideo(true);
+  };
+  const leaveVideo = () => {
+    hideResizeTimer.current = window.setTimeout(() => setPointerOnVideo(false), 3000);
+  };
+  useEffect(() => () => window.clearTimeout(hideResizeTimer.current ?? undefined), []);
+  const changeVideoHeight = (value: number) => {
+    const clamped = Math.round(Math.min(VIDEO_HEIGHT_MAX, Math.max(VIDEO_HEIGHT_MIN, value)));
+    setVideoHeightVh(clamped);
+    window.localStorage.setItem(VIDEO_HEIGHT_KEY, String(clamped));
+  };
   const [collapsedChapters, setCollapsedChapters] = useState<ReadonlySet<number>>(() => new Set());
   const toggleChapter = (t: number) =>
     setCollapsedChapters((prev) => {
@@ -662,6 +699,9 @@ function EpisodeDetail({
         const data = JSON.parse(event.data);
         if (data.event === "infoDelivery" && typeof data.info?.currentTime === "number") {
           setCurrentTime(data.info.currentTime);
+        }
+        if (data.event === "infoDelivery" && typeof data.info?.playerState === "number") {
+          setVideoPlaying(data.info.playerState === 1 || data.info.playerState === 3);
         }
       } catch {
         return;
@@ -719,6 +759,7 @@ function EpisodeDetail({
     <div
       className={cn(
         "mx-auto w-full max-w-[1120px] lg:min-h-0",
+        expectTranscript && "lg:max-w-none",
         transcriptSettled ? "" : "min-h-[calc(100vh-9rem)]",
       )}
     >
@@ -726,9 +767,19 @@ function EpisodeDetail({
         ref={stickyRef}
         className="sticky top-0 z-30 -mx-4 -mt-6 bg-bg md:-mx-6 md:mt-0 md:px-6 md:py-2 lg:mx-0 lg:-mt-6 lg:px-0 lg:pb-0 lg:pt-6"
       >
-        <div className="lg:flex lg:items-stretch lg:gap-4">
-          <div className="lg:min-w-0 lg:flex-1">
-            <div className="relative aspect-video w-full overflow-hidden border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:rounded-lg md:border lg:mx-0 lg:h-auto lg:w-full lg:rounded-none lg:border-0">
+        <div className={cn("lg:flex lg:items-stretch lg:gap-4", expectTranscript && "lg:justify-center")}>
+          <div
+            className={cn("relative", expectTranscript ? "lg:shrink-0" : "lg:min-w-0 lg:flex-1")}
+            onPointerEnter={expectTranscript ? enterVideo : undefined}
+            onPointerLeave={expectTranscript ? leaveVideo : undefined}
+          >
+            <div
+              className={cn(
+                "relative aspect-video w-full overflow-hidden border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:rounded-lg md:border lg:mx-0 lg:rounded-none lg:border-0",
+                expectTranscript ? "lg:h-[var(--epv)] lg:max-h-[calc((100vw_-_616px)*0.5625)] lg:w-auto" : "lg:h-auto lg:w-full",
+              )}
+              style={expectTranscript ? ({ "--epv": `${videoHeightVh}vh` } as CSSProperties) : undefined}
+            >
               <EpisodeEmbed
                 episode={episode}
                 thumbnailPending={thumbnailPending}
@@ -738,6 +789,54 @@ function EpisodeDetail({
                 audioControlsRef={audioControlsRef}
               />
               <div className="pointer-events-none absolute inset-0 z-10 hidden border-border lg:block lg:border" />
+              {expectTranscript ? (
+                <Tooltip label="Drag to resize" side="top">
+                  <div
+                    role="separator"
+                    aria-orientation="horizontal"
+                    aria-label="Resize video"
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      setResizing(true);
+                      resizeStart.current = { y: e.clientY, vh: videoHeightVh };
+                      try {
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                      } catch {
+                        /* older browsers */
+                      }
+                    }}
+                    onPointerMove={(e) => {
+                      if (!resizeStart.current) {
+                        return;
+                      }
+                      const dyVh = ((e.clientY - resizeStart.current.y) / window.innerHeight) * 100;
+                      changeVideoHeight(resizeStart.current.vh + dyVh);
+                    }}
+                    onPointerUp={(e) => {
+                      resizeStart.current = null;
+                      setResizing(false);
+                      try {
+                        e.currentTarget.releasePointerCapture(e.pointerId);
+                      } catch {
+                        /* older browsers */
+                      }
+                    }}
+                    onPointerCancel={() => {
+                      resizeStart.current = null;
+                      setResizing(false);
+                    }}
+                    className={cn(
+                      "absolute bottom-2.5 left-1/2 z-20 hidden -translate-x-1/2 cursor-row-resize touch-none items-center justify-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-3 py-1 text-white/85 backdrop-blur-sm transition-opacity duration-150 lg:flex",
+                      showResizeHandle ? "opacity-100" : "pointer-events-none opacity-0",
+                      resizing ? "border-green/70 text-green" : "hover:border-green/70 hover:text-green",
+                    )}
+                  >
+                    <span className="h-px w-4 bg-current opacity-60" />
+                    <ChevronsUpDown size={13} strokeWidth={2.25} className="shrink-0" />
+                    <span className="h-px w-4 bg-current opacity-60" />
+                  </div>
+                </Tooltip>
+              ) : null}
             </div>
           </div>
           {expectTranscript ? (
@@ -782,6 +881,7 @@ function EpisodeDetail({
         </div>
         <div className="pointer-events-none absolute inset-x-0 top-full hidden h-3 bg-gradient-to-b from-bg to-transparent lg:block" />
       </div>
+      <div className="mx-auto lg:max-w-[1120px]">
       <div className="mt-3 flex items-center justify-between gap-3 lg:mt-6">
         <h1 className="min-w-0 font-body text-text text-[16px] md:text-[20px] font-medium leading-snug">
           {episode.title}
@@ -814,6 +914,7 @@ function EpisodeDetail({
       ) : transcriptSettled && moreEpisodes.length > 0 ? (
         <MoreEpisodes episodes={moreEpisodes} />
       ) : null}
+      </div>
     </div>
   );
 }
