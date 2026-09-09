@@ -40,6 +40,10 @@ CAPTION_SOURCE = "youtube-caption"
 CAPTION_RESTORED_SOURCE = "youtube-caption-restored"
 CAPTION_PUNCT_MIN = 1.5
 CAPTION_RETRY_WAIT = 1800
+BASIC_SUFFIX = "-basic"
+BASIC_PARAGRAPH_SENTENCES = 4
+BASIC_PARAGRAPH_GAP = 10
+BASIC_FETCH_DELAY = 40
 _RATE_LIMITED = object()
 
 CARD_FIX_PROMPT = (
@@ -109,6 +113,9 @@ def main() -> None:
     if args.audio_only:
         _run_audio_only(args)
         return
+    if args.enhance:
+        _run_enhance(args)
+        return
     with SessionLocal() as session:
         targets = _select_targets(session, args)
     if not targets:
@@ -117,17 +124,21 @@ def main() -> None:
     if args.workers > 1:
         _run_parallel(targets, args)
         return
-    log.info(f"transcribing {len(targets)} episode(s)")
-    for youtube_id, title in targets:
+    process = _process_basic if args.basic else _process_one
+    log.info(f"transcribing {len(targets)} episode(s){' (basic)' if args.basic else ''}")
+    for index, (youtube_id, title) in enumerate(targets):
         while True:
-            if not _wait_for_usage(args):
+            if not args.basic and not _wait_for_usage(args):
                 log.info("session usage at or above the limit, stopping (resume next run)")
                 return
             with SessionLocal() as session:
-                if _process_one(session, youtube_id, title, args):
+                if process(session, youtube_id, title, args):
                     break
             log.info(f"[{youtube_id}] captions rate-limited, waiting {CAPTION_RETRY_WAIT}s before retry")
             time.sleep(CAPTION_RETRY_WAIT)
+        if args.basic and args.fetch_delay and index < len(targets) - 1:
+            log.info(f"basic pacing: waiting {args.fetch_delay}s before the next fetch")
+            time.sleep(args.fetch_delay)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -175,6 +186,23 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Re-run structuring from cached raw units, no download or Whisper (needs a prior cached run)",
     )
+    parser.add_argument(
+        "--basic",
+        action="store_true",
+        help="Phase 1 (YouTube, no Claude): captions to deterministic paragraphs, marks source -basic. Runs on its own",
+    )
+    parser.add_argument(
+        "--enhance",
+        action="store_true",
+        help="Phase 2 (Claude, no YouTube): restructure and card-fix basic rows from cache. Independent of --basic; "
+        "pick episodes with --youtube-id or --latest, or omit both for all non-gameplay basic rows",
+    )
+    parser.add_argument(
+        "--fetch-delay",
+        type=int,
+        default=BASIC_FETCH_DELAY,
+        help="Seconds to wait between caption fetches on --basic, to stay under YouTube's burst limit",
+    )
     return parser.parse_args()
 
 
@@ -183,7 +211,7 @@ def _select_targets(session, args: argparse.Namespace) -> list[tuple[str, str]]:
     query = select(Episode.youtube_id, Episode.title).where(Episode.youtube_id.isnot(None))
     if args.youtube_id:
         query = query.where(Episode.youtube_id.in_(args.youtube_id))
-    else:
+    elif not args.basic:
         query = query.where(Episode.category.notin_(SKIP_CATEGORIES))
     query = query.order_by(Episode.published_at.desc())
 
@@ -243,7 +271,7 @@ def _process_audio_only(session, guid: str, title: str, audio_url: str, set_code
     log.info(f"[{guid}] {len(units)} sentences from {SOURCE}")
     _write_cache(guid, title, set_code, units, [], SOURCE)
     segments = _build_segments(guid, units, [], set_code, args)
-    word_count = sum(len(segment["text"].split()) for segment in segments)
+    word_count = _word_count(segments)
     _upsert(session, guid, segments, word_count, SOURCE)
     log.info(f"[{guid}] wrote {len(segments)} segments, {word_count} words")
 
@@ -333,14 +361,87 @@ def _process_one(session, youtube_id: str, title: str, args: argparse.Namespace)
     chapters = _fetch_chapters(youtube_id, cookie_args)
     _write_cache(youtube_id, title, set_code, units, chapters, source)
     segments = _build_segments(youtube_id, units, chapters, set_code, args)
-    word_count = sum(len(segment["text"].split()) for segment in segments)
+    word_count = _word_count(segments)
     _upsert(session, youtube_id, segments, word_count, source)
     log.info(f"[{youtube_id}] wrote {len(segments)} segments, {word_count} words")
     return True
 
 
+def _process_basic(session, youtube_id: str, title: str, args: argparse.Namespace) -> bool:
+    log.info(f"[{youtube_id}] {title}")
+    cookie_args = ["--cookies", args.cookies_file] if args.cookies_file else []
+    set_code = session.execute(select(Episode.set_code).where(Episode.youtube_id == youtube_id)).scalar()
+    caption = _caption_units(youtube_id)
+    if caption is _RATE_LIMITED:
+        return False
+    if not caption:
+        log.info(f"[{youtube_id}] no caption available, skipping basic pass")
+        return True
+    units, source = caption
+    source = f"{source}{BASIC_SUFFIX}"
+    log.info(f"[{youtube_id}] {len(units)} sentences from {source}")
+    chapters = _fetch_chapters_safe(youtube_id, cookie_args)
+    _write_cache(youtube_id, title, set_code, units, chapters, source)
+    segments = _build_segments(youtube_id, units, chapters, set_code, args)
+    word_count = _word_count(segments)
+    _upsert(session, youtube_id, segments, word_count, source)
+    log.info(f"[{youtube_id}] wrote {len(segments)} segments, {word_count} words (basic)")
+    return True
+
+
+def _run_enhance(args: argparse.Namespace) -> None:
+    with SessionLocal() as session:
+        targets = _enhance_targets(session, args)
+    if not targets:
+        log.info("no basic rows to enhance")
+        return
+    log.info(f"enhancing {len(targets)} basic row(s)")
+    for youtube_id in targets:
+        if not _wait_for_usage(args):
+            log.info("session usage at or above the limit, stopping (resume next run)")
+            return
+        with SessionLocal() as session:
+            _enhance_one(session, youtube_id, args)
+
+
+def _enhance_targets(session, args: argparse.Namespace) -> list[str]:
+    query = (
+        select(EpisodeTranscript.youtube_id)
+        .join(Episode, Episode.youtube_id == EpisodeTranscript.youtube_id)
+        .where(EpisodeTranscript.source.like(f"%{BASIC_SUFFIX}"))
+        .order_by(Episode.published_at.desc())
+    )
+    if args.youtube_id:
+        query = query.where(EpisodeTranscript.youtube_id.in_(args.youtube_id))
+    else:
+        query = query.where(Episode.category.notin_(SKIP_CATEGORIES))
+    targets = list(session.execute(query).scalars())
+    if args.latest:
+        targets = targets[: args.latest]
+    return targets
+
+
+def _enhance_one(session, youtube_id: str, args: argparse.Namespace) -> None:
+    cache_path = CACHE_DIR / f"{youtube_id}.json"
+    if not cache_path.exists():
+        log.warning(f"[{youtube_id}] no cache, cannot enhance (rerun --basic first)")
+        return
+    cache = _read_cache(youtube_id)
+    log.info(f"[{youtube_id}] enhancing from cache")
+    segments = _build_segments(youtube_id, cache["units"], cache["chapters"], cache.get("set_code"), args)
+    word_count = _word_count(segments)
+    source = cache.get("source", CAPTION_SOURCE)
+    if source.endswith(BASIC_SUFFIX):
+        source = source[: -len(BASIC_SUFFIX)]
+    _upsert(session, youtube_id, segments, word_count, source)
+    log.info(f"[{youtube_id}] enhanced {len(segments)} segments, {word_count} words")
+
+
 def _build_segments(youtube_id, units, chapters, set_code, args) -> list[dict]:
-    if args.no_structure:
+    basic = getattr(args, "basic", False)
+    if basic:
+        segments = _basic_paragraphs(units, chapters)
+    elif args.no_structure:
         segments = [{"t": unit["t"], "text": unit["text"]} for unit in units]
     else:
         segments = _structure(units, chapters, youtube_id)
@@ -352,24 +453,59 @@ def _build_segments(youtube_id, units, chapters, set_code, args) -> list[dict]:
     if not args.no_cards:
         card_names = _fetch_cards_safe(set_code)
         if card_names:
-            if not args.no_card_fix:
+            if not args.no_card_fix and not basic:
                 _fix_card_names(youtube_id, segments, card_names)
             _link_cards(segments, card_names)
     _apply_known_terms(segments)
     return segments
 
 
+def _basic_paragraphs(units: list[dict], chapters: list[dict]) -> list[dict]:
+    heads = _chapter_heads(units, chapters)
+    segments: list[dict] = []
+    current: dict | None = None
+    count = 0
+    prev_t = None
+    for index, unit in enumerate(units):
+        gap_break = prev_t is not None and unit["t"] - prev_t >= BASIC_PARAGRAPH_GAP
+        if current is None or index in heads or count >= BASIC_PARAGRAPH_SENTENCES or gap_break:
+            current = {"t": unit["t"], "text": unit["text"]}
+            if index in heads:
+                title, chapter_t = heads[index]
+                current["heading"] = title
+                current["head_t"] = unit["t"]
+                current["t"] = chapter_t
+            segments.append(current)
+            count = 1
+        else:
+            current["text"] = f"{current['text']} {unit['text']}"
+            count += 1
+        prev_t = unit["t"]
+    return _merge_short_paragraphs(segments)
+
+
+def _fetch_chapters_safe(youtube_id: str, cookie_args: list[str]) -> list[dict]:
+    try:
+        return _fetch_chapters(youtube_id, cookie_args)
+    except Exception as exc:
+        log.warning(f"[{youtube_id}] chapter fetch skipped: {exc}")
+        return []
+
+
 def _restructure_targets(args: argparse.Namespace) -> list[str]:
     if args.youtube_id:
         return [yid for yid in args.youtube_id if (CACHE_DIR / f"{yid}.json").exists()]
-    return sorted(path.stem for path in CACHE_DIR.glob("*.json"))
+    stems = sorted(path.stem for path in CACHE_DIR.glob("*.json"))
+    if args.basic:
+        stems = [stem for stem in stems if _read_cache(stem).get("source", "").startswith(CAPTION_SOURCE)]
+    return stems
 
 
 def _restructure_one(session, youtube_id: str, args: argparse.Namespace) -> None:
     cache = _read_cache(youtube_id)
     log.info(f"[{youtube_id}] restructuring from cache")
     segments = _build_segments(youtube_id, cache["units"], cache["chapters"], cache.get("set_code"), args)
-    word_count = sum(len(segment["text"].split()) for segment in segments)
+    word_count = _word_count(segments)
     _upsert(session, youtube_id, segments, word_count, cache.get("source", SOURCE))
     log.info(f"[{youtube_id}] rewrote {len(segments)} segments, {word_count} words")
 
@@ -404,7 +540,8 @@ def _fetch_cards_safe(set_code: str | None) -> list[str]:
 def _claude_json(prompt: str, label: str, youtube_id: str) -> str | None:
     try:
         result = subprocess.run(
-            ["claude", "-p", "--output-format", "json"], input=prompt, check=True, capture_output=True, text=True
+            ["claude", "-p", "--strict-mcp-config", "--output-format", "json"],
+            input=prompt, check=True, capture_output=True, text=True,
         )
     except subprocess.CalledProcessError as exc:
         log.warning(f"[{youtube_id}] {label} failed: {exc}")
@@ -830,6 +967,13 @@ def _pull_head_to_intro(blocks, head_index, start, title, heads) -> int:
         if opens or names_topic:
             target = candidate
     return target
+
+
+def _word_count(segments: list[dict]) -> int:
+    total = 0
+    for segment in segments:
+        total += len(re.sub(r">{2,}", " ", segment["text"]).split())
+    return total
 
 
 def _upsert(session, youtube_id: str, segments: list[dict], word_count: int, source: str = SOURCE) -> None:

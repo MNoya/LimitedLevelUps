@@ -51,12 +51,41 @@ Selection flags:
 - `--latest N` — the N most recent eligible episodes not yet transcribed.
 - neither — every eligible episode not yet transcribed (a full backfill).
 - `--redo` — overwrite episodes that already have a transcript.
+- `--basic` — Phase 1 of the two-phase flow (see below): captions to deterministic paragraphs, no Claude, near-instant.
+- `--enhance` — Phase 2: rerun structure and card-fix over the basic rows from cache.
 - `--no-structure` — skip chapters + the Claude paragraph pass (raw blocks only).
 - `--restructure` — re-run only the structuring stage from the local cache, no download or Whisper. Restructures every cached episode, or just the `--youtube-id` ones. Use it after a structuring change to republish without paying for GPU time.
 - `--whisper` — force the Whisper audio path, ignore captions (for A/B against the caption source).
 - `--no-card-fix` — skip the Claude card-name correction pass, keep only the deterministic linker.
 - `--workers N` — backfill in N parallel worker processes, staggered to spare YouTube. Not combined with the usage limit.
 - `--usage-limit 248` — serial only: before each episode, read the active 5-hour window's cost via `ccusage blocks --active --json` and stop once it reaches this many USD. Stops if usage cannot be read, so a paced cron never overshoots the session limit.
+
+## Two phases: basic now, enhance later
+
+A transcript ships in two passes so the text is readable within seconds of a drop and the expensive Claude work is decoupled and pausable. **The two passes are fully independent and hit different platforms:** `--basic` talks to YouTube (network, IP-rate-limited), `--enhance` talks to Claude (Anthropic usage). Neither requires the other in the same run. You can run a full basic sweep and never enhance, or enhance chosen episodes without any basic run — `--enhance` reads existing basic rows plus their cache, so it needs no YouTube access at all.
+
+- **Phase 1, `--basic`:** fetch captions, split into sentences, group into paragraphs deterministically (a new paragraph every four sentences or on a pause of `BASIC_PARAGRAPH_GAP` seconds), link card names with the deterministic linker, upsert. No Claude, no usage cost, near-instant. The row's `source` carries a `-basic` suffix (`youtube-caption-basic`) and it renders as plain paragraphs with clickable cards, no chapter headings or subtopics yet.
+- **Phase 2, `--enhance`:** select the `-basic` rows, replay structure and the Claude card-fix from the cached raw units (no caption re-fetch), overwrite `segments`, and strip the `-basic` suffix back off `source`. Honors `--usage-limit` / `--usage-wait`, so it paces itself against the session window like any Claude pass.
+
+The `source` suffix is the only marker, so no migration is needed. `--enhance` orders newest episode first and takes `--latest N` and `--youtube-id`. It reads each episode from `cache/transcripts/<id>.json`, so a basic row whose cache was cleared is skipped with a warning until `--basic` reruns it.
+
+### Running the two steps on their own
+
+```bash
+# Phase 1 only — fetch captions for everything missing (no Claude), paced for YouTube
+… generate_transcripts --basic --fetch-delay 60
+
+# Phase 2 only — Claude pass on episodes you choose, no YouTube, any time
+… generate_transcripts --enhance --youtube-id <ID> --youtube-id <ID>   # specific episodes
+… generate_transcripts --enhance --latest 5                            # the 5 newest basic rows
+… generate_transcripts --enhance                                        # every non-gameplay basic row
+```
+
+Enhance a `--youtube-id` that names a gameplay episode too; the category skip only applies to the bulk (no-id) selection. This is the pass to run while YouTube is rate-limiting the basic sweep: it consumes Claude, not YouTube, so the two never compete.
+
+`--basic` is fast enough (~9s per episode) that back-to-back it fetches captions at ~400/hr and trips YouTube's burst limit into an IP block that lasts hours. It paces itself with `--fetch-delay` (default 40s between fetches, ~90/hr) to stay under that limit. Keep the pace slow for a full backfill; the `--enhance` phase re-fetches nothing, so it needs no delay.
+
+The nightly service (`~/.local/bin/llu-nightly-transcripts.sh`) chains the two as a convenience — `--basic` for fresh episodes so a transcript is live immediately, then `--enhance` to drain the backlog under the usage ceiling. That chaining is only the wrapper's choice; the two commands stay independent, so run either alone whenever you want (for example `--enhance` on hand-picked episodes during a YouTube rate-limit).
 
 ## Usage tracking
 
@@ -70,7 +99,7 @@ Chapter headings snap to the sentence that opens a topic, not the raw chapter ti
 
 Episodes with no editor chapters (most before 2026) get headings from the Claude pass instead: each subtopic carries a `section` flag the model sets only for a major, self-contained part it is highly confident about, and when an episode has no real chapters those promote to headings, spaced at least 60s apart. The rest stay subtopics. Seek is still accurate on these: every sentence carries its Whisper timestamp, so no chapter markers are invented.
 
-Eligible = has a `youtube_id` and is not in the `Draft` / `Sealed` gameplay categories. The run is idempotent and resumable: it skips anything already in `episode_transcripts` unless `--redo`.
+Eligible = has a `youtube_id` and is not in the `Draft` / `Sealed` / `Guest` gameplay categories, except under `--basic`, which sweeps every category (captions are cheap enough to keep even gameplay episodes). The run is idempotent and resumable: it skips anything already in `episode_transcripts` unless `--redo`.
 
 ## Timing and memory
 
