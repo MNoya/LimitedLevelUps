@@ -53,6 +53,14 @@ Selection flags:
 - `--redo` — overwrite episodes that already have a transcript.
 - `--no-structure` — skip chapters + the Claude paragraph pass (raw blocks only).
 - `--restructure` — re-run only the structuring stage from the local cache, no download or Whisper. Restructures every cached episode, or just the `--youtube-id` ones. Use it after a structuring change to republish without paying for GPU time.
+- `--whisper` — force the Whisper audio path, ignore captions (for A/B against the caption source).
+- `--no-card-fix` — skip the Claude card-name correction pass, keep only the deterministic linker.
+- `--workers N` — backfill in N parallel worker processes, staggered to spare YouTube. Not combined with the usage limit.
+- `--usage-limit 248` — serial only: before each episode, read the active 5-hour window's cost via `ccusage blocks --active --json` and stop once it reaches this many USD. Stops if usage cannot be read, so a paced cron never overshoots the session limit.
+
+## Usage tracking
+
+Both Claude passes run with `--output-format json` and append cost and token counts per call to `logs/transcript_usage.jsonl` (gitignored), so a backfill's consumption is auditable after the fact. The `--usage-limit` check reads the live 5-hour window with `ccusage` (run via `npx`, nothing to install). ccusage reports an API-equivalent cost, not the plan percent the Claude app shows, so calibrate the limit once: read the app's percent at a moment, read the same window's cost from ccusage, scale to the percent you want to stop at. A nightly cron scheduled at the session reset with `--usage-limit` drains the fresh window to that ceiling and resumes the next night, so it never blocks your own usage.
 
 ## Raw-unit cache and restructuring
 

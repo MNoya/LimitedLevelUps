@@ -111,6 +111,9 @@ def main() -> None:
             return
         log.info(f"transcribing {len(targets)} episode(s)")
         for youtube_id, title in targets:
+            if args.usage_limit and not _under_usage_limit(args.usage_limit):
+                log.info("session usage at or above the limit, stopping (resume next run)")
+                return
             _process_one(session, youtube_id, title, args)
 
 
@@ -127,6 +130,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--cookies-file", help="Netscape cookies.txt for YouTube, only if a download is blocked")
     parser.add_argument("--device", default="cuda", choices=("cuda", "cpu"))
     parser.add_argument("--workers", type=int, default=1, help="Backfill in N parallel worker processes")
+    parser.add_argument(
+        "--usage-limit",
+        type=float,
+        help="Stop before an episode once the active 5-hour window's ccusage cost reaches this many USD. "
+        "Serial runs only; stops if usage cannot be read. Calibrate from the percent shown in the Claude app",
+    )
     parser.add_argument("--whisper", action="store_true", help="Force the Whisper audio path, ignore captions")
     parser.add_argument("--no-structure", action="store_true", help="Skip chapter headings and Claude subtopics")
     parser.add_argument("--no-restore", action="store_true", help="Skip punctuation restore of run-on stretches")
@@ -181,6 +190,26 @@ def _run_parallel(targets: list[tuple[str, str]], args: argparse.Namespace) -> N
         time.sleep(SPAWN_STAGGER_SECONDS)
     failures = sum(1 for proc in procs if proc.wait() != 0)
     log.info(f"backfill done: {len(ids)} episodes, {failures} worker(s) exited with errors")
+
+
+def _under_usage_limit(limit_usd: float) -> bool:
+    try:
+        result = subprocess.run(
+            ["npx", "-y", "ccusage@latest", "blocks", "--active", "--json"], check=True, capture_output=True, text=True
+        )
+    except Exception as exc:
+        log.warning(f"usage check failed, treating as over the limit: {exc}")
+        return False
+    start = result.stdout.find("{")
+    if start < 0:
+        return False
+    blocks = json.loads(result.stdout[start:]).get("blocks", [])
+    active = next((block for block in blocks if block.get("isActive")), None)
+    if not active:
+        return True
+    cost = active.get("costUSD", 0)
+    log.info(f"active window at ${cost:.1f} of ${limit_usd:.1f} limit")
+    return cost < limit_usd
 
 
 def _process_one(session, youtube_id: str, title: str, args: argparse.Namespace) -> None:
