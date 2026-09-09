@@ -37,6 +37,8 @@ SOURCE = f"whisper-{WHISPER_MODEL}"
 CAPTION_SOURCE = "youtube-caption"
 CAPTION_RESTORED_SOURCE = "youtube-caption-restored"
 CAPTION_PUNCT_MIN = 1.5
+CAPTION_RETRY_WAIT = 600
+_RATE_LIMITED = object()
 
 CARD_FIX_PROMPT = (
     "You are given a Magic: The Gathering set's card list, then an auto-generated podcast transcript "
@@ -111,13 +113,15 @@ def main() -> None:
             return
         log.info(f"transcribing {len(targets)} episode(s)")
         for youtube_id, title in targets:
-            while args.usage_limit and not _under_usage_limit(args.usage_limit):
-                if not args.usage_wait:
+            if not _wait_for_usage(args):
+                log.info("session usage at or above the limit, stopping (resume next run)")
+                return
+            while not _process_one(session, youtube_id, title, args):
+                log.info(f"[{youtube_id}] captions rate-limited, waiting {CAPTION_RETRY_WAIT}s before retry")
+                time.sleep(CAPTION_RETRY_WAIT)
+                if not _wait_for_usage(args):
                     log.info("session usage at or above the limit, stopping (resume next run)")
                     return
-                log.info(f"session usage at the limit, waiting {args.usage_wait}s before rechecking")
-                time.sleep(args.usage_wait)
-            _process_one(session, youtube_id, title, args)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -221,13 +225,24 @@ def _under_usage_limit(limit_usd: float) -> bool:
     return cost < limit_usd
 
 
-def _process_one(session, youtube_id: str, title: str, args: argparse.Namespace) -> None:
+def _wait_for_usage(args: argparse.Namespace) -> bool:
+    while args.usage_limit and not _under_usage_limit(args.usage_limit):
+        if not args.usage_wait:
+            return False
+        log.info(f"session usage at the limit, waiting {args.usage_wait}s before rechecking")
+        time.sleep(args.usage_wait)
+    return True
+
+
+def _process_one(session, youtube_id: str, title: str, args: argparse.Namespace) -> bool:
     log.info(f"[{youtube_id}] {title}")
     cookie_args = ["--cookies", args.cookies_file] if args.cookies_file else []
     set_code = session.execute(select(Episode.set_code).where(Episode.youtube_id == youtube_id)).scalar()
     units, source = (None, SOURCE)
     if not args.whisper:
         caption = _caption_units(youtube_id, cookie_args)
+        if caption is _RATE_LIMITED:
+            return False
         if caption:
             units, source = caption
             log.info(f"[{youtube_id}] {len(units)} sentences from {source}")
@@ -246,6 +261,7 @@ def _process_one(session, youtube_id: str, title: str, args: argparse.Namespace)
     word_count = sum(len(segment["text"].split()) for segment in segments)
     _upsert(session, youtube_id, segments, word_count, source)
     log.info(f"[{youtube_id}] wrote {len(segments)} segments, {word_count} words")
+    return True
 
 
 def _build_segments(youtube_id, units, chapters, set_code, args) -> list[dict]:
@@ -380,8 +396,10 @@ def _apply_known_terms(segments: list[dict]) -> None:
         segment["text"] = text
 
 
-def _caption_units(youtube_id: str, cookie_args: list[str]) -> tuple[list[dict], str] | None:
+def _caption_units(youtube_id: str, cookie_args: list[str]):
     srt = _download_caption(youtube_id, cookie_args)
+    if srt is _RATE_LIMITED:
+        return _RATE_LIMITED
     if not srt:
         return None
     words = _caption_word_times(srt)
@@ -394,11 +412,12 @@ def _caption_units(youtube_id: str, cookie_args: list[str]) -> tuple[list[dict],
     return _restore_caption(words), CAPTION_RESTORED_SOURCE
 
 
-def _download_caption(youtube_id: str, cookie_args: list[str]) -> str | None:
+def _download_caption(youtube_id: str, cookie_args: list[str]):
     with tempfile.TemporaryDirectory(prefix="llu-caption-") as tmp:
         stem = Path(tmp) / youtube_id
+        rate_limited = False
         for attempt in range(4):
-            subprocess.run(
+            result = subprocess.run(
                 [
                     "yt-dlp", "--write-auto-subs", "--sub-langs", "en", "--skip-download",
                     "--convert-subs", "srt", *cookie_args,
@@ -410,8 +429,12 @@ def _download_caption(youtube_id: str, cookie_args: list[str]) -> str | None:
             srt = Path(f"{stem}.en.srt")
             if srt.exists():
                 return srt.read_text()
-            time.sleep(45)
-    return None
+            if "429" in result.stderr or "429" in result.stdout:
+                rate_limited = True
+                time.sleep(45)
+                continue
+            return None
+    return _RATE_LIMITED if rate_limited else None
 
 
 def _caption_word_times(srt: str) -> list[tuple[str, float]]:
