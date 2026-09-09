@@ -6,10 +6,12 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import urllib.request
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -104,6 +106,9 @@ def main() -> None:
             for youtube_id in targets:
                 _restructure_one(session, youtube_id, args)
             return
+        if args.audio_only:
+            _run_audio_only(session, args)
+            return
         targets = _select_targets(session, args)
         if not targets:
             log.info("no episodes to transcribe")
@@ -150,6 +155,11 @@ def _parse_args() -> argparse.Namespace:
         "throttles itself and keeps going as the window frees up",
     )
     parser.add_argument("--whisper", action="store_true", help="Force the Whisper audio path, ignore captions")
+    parser.add_argument(
+        "--audio-only",
+        action="store_true",
+        help="Transcribe podcast-only episodes (no youtube_id) from audio_url with Whisper, keyed by guid",
+    )
     parser.add_argument("--no-structure", action="store_true", help="Skip chapter headings and Claude subtopics")
     parser.add_argument("--no-restore", action="store_true", help="Skip punctuation restore of run-on stretches")
     parser.add_argument("--no-cards", action="store_true", help="Skip card-name detection and linking")
@@ -179,6 +189,62 @@ def _select_targets(session, args: argparse.Namespace) -> list[tuple[str, str]]:
         if args.latest and len(targets) >= args.latest:
             break
     return targets
+
+
+def _select_audio_targets(session, args: argparse.Namespace) -> list[tuple[str, str, str, str | None]]:
+    done = set(session.execute(select(EpisodeTranscript.youtube_id)).scalars())
+    query = (
+        select(Episode.guid, Episode.title, Episode.audio_url, Episode.set_code)
+        .where(Episode.youtube_id.is_(None), Episode.audio_url.isnot(None), Episode.audio_url != "")
+        .where(Episode.category.notin_(SKIP_CATEGORIES))
+        .order_by(Episode.published_at.desc())
+    )
+    targets: list[tuple[str, str, str, str | None]] = []
+    for guid, title, audio_url, set_code in session.execute(query):
+        if guid in done and not args.redo:
+            continue
+        targets.append((guid, title, audio_url, set_code))
+        if args.latest and len(targets) >= args.latest:
+            break
+    return targets
+
+
+def _run_audio_only(session, args: argparse.Namespace) -> None:
+    targets = _select_audio_targets(session, args)
+    if not targets:
+        log.info("no audio-only episodes to transcribe")
+        return
+    log.info(f"transcribing {len(targets)} audio-only episode(s)")
+    for guid, title, audio_url, set_code in targets:
+        if not _wait_for_usage(args):
+            log.info("session usage at or above the limit, stopping (resume next run)")
+            return
+        _process_audio_only(session, guid, title, audio_url, set_code, args)
+
+
+def _process_audio_only(session, guid: str, title: str, audio_url: str, set_code: str | None, args) -> None:
+    log.info(f"[{guid}] {title}")
+    with tempfile.TemporaryDirectory(prefix="llu-audio-") as tmp:
+        workdir = Path(tmp)
+        audio = _download_audio_url(audio_url, workdir)
+        whisper_segments = _transcribe(audio, workdir, args.device)
+    units = [{"t": round(start), "text": text} for text, start in _sentences(whisper_segments)]
+    if not args.no_restore:
+        units = _restore_runons(units)
+    log.info(f"[{guid}] {len(units)} sentences from {SOURCE}")
+    _write_cache(guid, title, set_code, units, [], SOURCE)
+    segments = _build_segments(guid, units, [], set_code, args)
+    word_count = sum(len(segment["text"].split()) for segment in segments)
+    _upsert(session, guid, segments, word_count, SOURCE)
+    log.info(f"[{guid}] wrote {len(segments)} segments, {word_count} words")
+
+
+def _download_audio_url(url: str, workdir: Path) -> Path:
+    dest = workdir / "audio.mp3"
+    request = urllib.request.Request(url, headers={"User-Agent": "llu-transcripts/1.0"})
+    with urllib.request.urlopen(request) as response, open(dest, "wb") as handle:
+        shutil.copyfileobj(response, handle)
+    return dest
 
 
 def _run_parallel(targets: list[tuple[str, str]], args: argparse.Namespace) -> None:
