@@ -161,6 +161,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Transcribe podcast-only episodes (no youtube_id) from audio_url with Whisper, keyed by guid",
     )
+    parser.add_argument(
+        "--oldest-first",
+        action="store_true",
+        help="Backfill audio-only episodes oldest first; --latest still takes the newest",
+    )
     parser.add_argument("--no-structure", action="store_true", help="Skip chapter headings and Claude subtopics")
     parser.add_argument("--no-restore", action="store_true", help="Skip punctuation restore of run-on stretches")
     parser.add_argument("--no-cards", action="store_true", help="Skip card-name detection and linking")
@@ -194,11 +199,12 @@ def _select_targets(session, args: argparse.Namespace) -> list[tuple[str, str]]:
 
 def _select_audio_targets(session, args: argparse.Namespace) -> list[tuple[str, str, str, str | None]]:
     done = set(session.execute(select(EpisodeTranscript.youtube_id)).scalars())
+    order = Episode.published_at.asc() if args.oldest_first and not args.latest else Episode.published_at.desc()
     query = (
         select(Episode.guid, Episode.title, Episode.audio_url, Episode.set_code)
         .where(Episode.youtube_id.is_(None), Episode.audio_url.isnot(None), Episode.audio_url != "")
         .where(Episode.category.notin_(SKIP_CATEGORIES))
-        .order_by(Episode.published_at.desc())
+        .order_by(order)
     )
     targets: list[tuple[str, str, str, str | None]] = []
     for guid, title, audio_url, set_code in session.execute(query):
@@ -309,7 +315,7 @@ def _process_one(session, youtube_id: str, title: str, args: argparse.Namespace)
     set_code = session.execute(select(Episode.set_code).where(Episode.youtube_id == youtube_id)).scalar()
     units, source = (None, SOURCE)
     if not args.whisper:
-        caption = _caption_units(youtube_id, cookie_args)
+        caption = _caption_units(youtube_id)
         if caption is _RATE_LIMITED:
             return False
         if caption:
@@ -398,7 +404,7 @@ def _fetch_cards_safe(set_code: str | None) -> list[str]:
 def _claude_json(prompt: str, label: str, youtube_id: str) -> str | None:
     try:
         result = subprocess.run(
-            ["claude", "-p", prompt, "--output-format", "json"], check=True, capture_output=True, text=True
+            ["claude", "-p", "--output-format", "json"], input=prompt, check=True, capture_output=True, text=True
         )
     except subprocess.CalledProcessError as exc:
         log.warning(f"[{youtube_id}] {label} failed: {exc}")
@@ -465,13 +471,13 @@ def _apply_known_terms(segments: list[dict]) -> None:
         segment["text"] = text
 
 
-def _caption_units(youtube_id: str, cookie_args: list[str]):
-    srt = _download_caption(youtube_id, cookie_args)
-    if srt is _RATE_LIMITED:
+def _caption_units(youtube_id: str):
+    segments = _fetch_caption_segments(youtube_id)
+    if segments is _RATE_LIMITED:
         return _RATE_LIMITED
-    if not srt:
+    if not segments:
         return None
-    words = _caption_word_times(srt)
+    words = [(word, segment["start"]) for segment in segments for word in segment["text"].split()]
     if not words:
         return None
     text = " ".join(word for word, _ in words)
@@ -481,46 +487,17 @@ def _caption_units(youtube_id: str, cookie_args: list[str]):
     return _restore_caption(words), CAPTION_RESTORED_SOURCE
 
 
-def _download_caption(youtube_id: str, cookie_args: list[str]):
-    with tempfile.TemporaryDirectory(prefix="llu-caption-") as tmp:
-        stem = Path(tmp) / youtube_id
-        result = subprocess.run(
-            [
-                "yt-dlp", "--write-auto-subs", "--sub-langs", "en", "--skip-download",
-                "--convert-subs", "srt", *cookie_args,
-                "--extractor-args", "youtube:player_client=android",
-                "-o", f"{stem}.%(ext)s", f"https://www.youtube.com/watch?v={youtube_id}",
-            ],
-            capture_output=True, text=True,
-        )
-        srt = Path(f"{stem}.en.srt")
-        if srt.exists():
-            return srt.read_text()
-        if "429" in result.stderr or "429" in result.stdout:
-            return _RATE_LIMITED
+def _fetch_caption_segments(youtube_id: str):
+    from youtube_transcript_api import CouldNotRetrieveTranscript, IpBlocked, RequestBlocked, YouTubeTranscriptApi
+
+    try:
+        return YouTubeTranscriptApi().fetch(youtube_id).to_raw_data()
+    except (IpBlocked, RequestBlocked) as exc:
+        log.warning(f"[{youtube_id}] transcript request blocked: {exc}")
+        return _RATE_LIMITED
+    except CouldNotRetrieveTranscript as exc:
+        log.warning(f"[{youtube_id}] no transcript available: {exc}")
         return None
-
-
-def _caption_word_times(srt: str) -> list[tuple[str, float]]:
-    emitted: list[tuple[float, str]] = []
-    last = None
-    for block in srt.split("\n\n"):
-        lines = [line for line in block.splitlines() if line.strip()]
-        timing = next((line for line in lines if "-->" in line), None)
-        if not timing:
-            continue
-        start = _parse_srt_ts(timing.split("-->")[0].strip())
-        for line in [ln for ln in lines if "-->" not in ln and not ln.strip().isdigit()]:
-            if line != last:
-                emitted.append((start, line))
-                last = line
-    return [(word, start) for start, line in emitted for word in line.split()]
-
-
-def _parse_srt_ts(stamp: str) -> float:
-    hms, ms = stamp.split(",")
-    hours, minutes, seconds = hms.split(":")
-    return int(hours) * 3600 + int(minutes) * 60 + int(seconds) + int(ms) / 1000
 
 
 def _caption_sentences(words: list[tuple[str, float]]) -> list[dict]:

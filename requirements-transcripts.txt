@@ -1,4 +1,5 @@
-# Local-only extras for bot/scripts/generate_transcripts.py punctuation restore; not installed on the bot or in CI
+# Local-only extras for bot/scripts/generate_transcripts.py; not installed on the bot or in CI
+youtube-transcript-api==1.2.4
 onnxruntime==1.29.0
 sentencepiece==0.2.2
 huggingface-hub==1.30.0
