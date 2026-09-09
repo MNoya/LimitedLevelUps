@@ -111,9 +111,12 @@ def main() -> None:
             return
         log.info(f"transcribing {len(targets)} episode(s)")
         for youtube_id, title in targets:
-            if args.usage_limit and not _under_usage_limit(args.usage_limit):
-                log.info("session usage at or above the limit, stopping (resume next run)")
-                return
+            while args.usage_limit and not _under_usage_limit(args.usage_limit):
+                if not args.usage_wait:
+                    log.info("session usage at or above the limit, stopping (resume next run)")
+                    return
+                log.info(f"session usage at the limit, waiting {args.usage_wait}s before rechecking")
+                time.sleep(args.usage_wait)
             _process_one(session, youtube_id, title, args)
 
 
@@ -133,8 +136,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--usage-limit",
         type=float,
-        help="Stop before an episode once the active 5-hour window's ccusage cost reaches this many USD. "
-        "Serial runs only; stops if usage cannot be read. Calibrate from the percent shown in the Claude app",
+        help="Hold before an episode once the active 5-hour window's ccusage cost reaches this many USD. "
+        "Serial runs only; holds too if usage cannot be read. Calibrate from the percent shown in the Claude app",
+    )
+    parser.add_argument(
+        "--usage-wait",
+        type=int,
+        help="With --usage-limit, sleep this many seconds and recheck instead of stopping, so the run "
+        "throttles itself and keeps going as the window frees up",
     )
     parser.add_argument("--whisper", action="store_true", help="Force the Whisper audio path, ignore captions")
     parser.add_argument("--no-structure", action="store_true", help="Skip chapter headings and Claude subtopics")
