@@ -37,7 +37,7 @@ SOURCE = f"whisper-{WHISPER_MODEL}"
 CAPTION_SOURCE = "youtube-caption"
 CAPTION_RESTORED_SOURCE = "youtube-caption-restored"
 CAPTION_PUNCT_MIN = 1.5
-CAPTION_RETRY_WAIT = 600
+CAPTION_RETRY_WAIT = 1800
 _RATE_LIMITED = object()
 
 CARD_FIX_PROMPT = (
@@ -415,26 +415,21 @@ def _caption_units(youtube_id: str, cookie_args: list[str]):
 def _download_caption(youtube_id: str, cookie_args: list[str]):
     with tempfile.TemporaryDirectory(prefix="llu-caption-") as tmp:
         stem = Path(tmp) / youtube_id
-        rate_limited = False
-        for attempt in range(4):
-            result = subprocess.run(
-                [
-                    "yt-dlp", "--write-auto-subs", "--sub-langs", "en", "--skip-download",
-                    "--convert-subs", "srt", *cookie_args,
-                    "--extractor-args", "youtube:player_client=android",
-                    "-o", f"{stem}.%(ext)s", f"https://www.youtube.com/watch?v={youtube_id}",
-                ],
-                capture_output=True, text=True,
-            )
-            srt = Path(f"{stem}.en.srt")
-            if srt.exists():
-                return srt.read_text()
-            if "429" in result.stderr or "429" in result.stdout:
-                rate_limited = True
-                time.sleep(45)
-                continue
-            return None
-    return _RATE_LIMITED if rate_limited else None
+        result = subprocess.run(
+            [
+                "yt-dlp", "--write-auto-subs", "--sub-langs", "en", "--skip-download",
+                "--convert-subs", "srt", *cookie_args,
+                "--extractor-args", "youtube:player_client=android",
+                "-o", f"{stem}.%(ext)s", f"https://www.youtube.com/watch?v={youtube_id}",
+            ],
+            capture_output=True, text=True,
+        )
+        srt = Path(f"{stem}.en.srt")
+        if srt.exists():
+            return srt.read_text()
+        if "429" in result.stderr or "429" in result.stdout:
+            return _RATE_LIMITED
+        return None
 
 
 def _caption_word_times(srt: str) -> list[tuple[str, float]]:
