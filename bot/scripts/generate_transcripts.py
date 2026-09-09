@@ -96,37 +96,38 @@ CHAPTER_INTRO_OPENER = re.compile(
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = _parse_args()
-    with SessionLocal() as session:
-        if args.restructure:
-            targets = _restructure_targets(args)
-            if not targets:
-                log.info("no cached episodes to restructure")
-                return
-            log.info(f"restructuring {len(targets)} cached episode(s)")
-            for youtube_id in targets:
-                _restructure_one(session, youtube_id, args)
-            return
-        if args.audio_only:
-            _run_audio_only(session, args)
-            return
-        targets = _select_targets(session, args)
+    if args.restructure:
+        targets = _restructure_targets(args)
         if not targets:
-            log.info("no episodes to transcribe")
+            log.info("no cached episodes to restructure")
             return
-        if args.workers > 1:
-            _run_parallel(targets, args)
-            return
-        log.info(f"transcribing {len(targets)} episode(s)")
-        for youtube_id, title in targets:
+        log.info(f"restructuring {len(targets)} cached episode(s)")
+        for youtube_id in targets:
+            with SessionLocal() as session:
+                _restructure_one(session, youtube_id, args)
+        return
+    if args.audio_only:
+        _run_audio_only(args)
+        return
+    with SessionLocal() as session:
+        targets = _select_targets(session, args)
+    if not targets:
+        log.info("no episodes to transcribe")
+        return
+    if args.workers > 1:
+        _run_parallel(targets, args)
+        return
+    log.info(f"transcribing {len(targets)} episode(s)")
+    for youtube_id, title in targets:
+        while True:
             if not _wait_for_usage(args):
                 log.info("session usage at or above the limit, stopping (resume next run)")
                 return
-            while not _process_one(session, youtube_id, title, args):
-                log.info(f"[{youtube_id}] captions rate-limited, waiting {CAPTION_RETRY_WAIT}s before retry")
-                time.sleep(CAPTION_RETRY_WAIT)
-                if not _wait_for_usage(args):
-                    log.info("session usage at or above the limit, stopping (resume next run)")
-                    return
+            with SessionLocal() as session:
+                if _process_one(session, youtube_id, title, args):
+                    break
+            log.info(f"[{youtube_id}] captions rate-limited, waiting {CAPTION_RETRY_WAIT}s before retry")
+            time.sleep(CAPTION_RETRY_WAIT)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -209,8 +210,9 @@ def _select_audio_targets(session, args: argparse.Namespace) -> list[tuple[str, 
     return targets
 
 
-def _run_audio_only(session, args: argparse.Namespace) -> None:
-    targets = _select_audio_targets(session, args)
+def _run_audio_only(args: argparse.Namespace) -> None:
+    with SessionLocal() as session:
+        targets = _select_audio_targets(session, args)
     if not targets:
         log.info("no audio-only episodes to transcribe")
         return
@@ -219,7 +221,8 @@ def _run_audio_only(session, args: argparse.Namespace) -> None:
         if not _wait_for_usage(args):
             log.info("session usage at or above the limit, stopping (resume next run)")
             return
-        _process_audio_only(session, guid, title, audio_url, set_code, args)
+        with SessionLocal() as session:
+            _process_audio_only(session, guid, title, audio_url, set_code, args)
 
 
 def _process_audio_only(session, guid: str, title: str, audio_url: str, set_code: str | None, args) -> None:
