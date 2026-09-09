@@ -93,6 +93,7 @@ export function toVideoEpisode(video: YouTubeVideo): Episode {
     youtubeId: video.id,
     videoUrl: watchUrl(video.id),
     isShort: isShortMedia("video", durationSeconds, video.title),
+    hasTranscript: false,
   };
 }
 

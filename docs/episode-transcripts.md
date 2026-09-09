@@ -52,6 +52,15 @@ Selection flags:
 - neither — every eligible episode not yet transcribed (a full backfill).
 - `--redo` — overwrite episodes that already have a transcript.
 - `--no-structure` — skip chapters + the Claude paragraph pass (raw blocks only).
+- `--restructure` — re-run only the structuring stage from the local cache, no download or Whisper. Restructures every cached episode, or just the `--youtube-id` ones. Use it after a structuring change to republish without paying for GPU time.
+
+## Raw-unit cache and restructuring
+
+Each transcribe run writes the Whisper output it feeds into structuring to `cache/transcripts/<youtube_id>.json` (the sentence units plus the YouTube chapter list, gitignored on this machine). That is the input to the chapter-head and paragraph logic, so `--restructure` can replay structuring from it: it re-runs chapter heads, the Claude paragraph pass and card linking, then overwrites `segments`. No yt-dlp, no Whisper, no GPU — only the `claude -p` paragraph call. An episode transcribed before the cache existed has no file yet; re-transcribe it once with `--redo` to populate it, and every later structuring tweak is a cheap `--restructure`.
+
+Chapter headings snap to the sentence that opens a topic, not the raw chapter timestamp: the host often speaks the intro sentence a few seconds before the marker, so a head pulls back up to two sentences (within 12s) when the preceding sentence is a transition opener or names a word from the chapter title.
+
+Episodes with no editor chapters (most before 2026) get headings from the Claude pass instead: each subtopic carries a `section` flag the model sets only for a major, self-contained part it is highly confident about, and when an episode has no real chapters those promote to headings, spaced at least 60s apart. The rest stay subtopics. Seek is still accurate on these: every sentence carries its Whisper timestamp, so no chapter markers are invented.
 
 Eligible = has a `youtube_id` and is not in the `Draft` / `Sealed` gameplay categories. The run is idempotent and resumable: it skips anything already in `episode_transcripts` unless `--redo`.
 

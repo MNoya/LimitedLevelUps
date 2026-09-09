@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { SiApplepodcasts, SiRss, SiSpotify, SiYoutube } from "react-icons/si";
 import type { IconType } from "react-icons";
 import {
@@ -30,6 +30,7 @@ import { EpisodeEmbed } from "../components/PlayableThumbnail";
 import type { AudioControls } from "../components/PodcastAudioPlayer";
 import { ChevronRight } from "lucide-react";
 import { EpisodeTag } from "../components/CategoryTag";
+import { EpisodeThumbnail } from "../components/EpisodeThumbnail";
 import { ShortCard } from "../components/ShortCard";
 import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
 import { GoToTopButton } from "../components/GoToTopButton";
@@ -167,6 +168,17 @@ export function EpisodesPage() {
     }
     return null;
   }, [episodes, episodeSlug, slugLower, shortsView, audioView, activeCategory, setCodesBySlug]);
+
+  const looksLikeEpisodeTarget =
+    Boolean(episodeSlug) ||
+    Boolean(
+      slugLower &&
+        !shortsView &&
+        !audioView &&
+        !activeCategory &&
+        !setCodesBySlug.has(slugLower) &&
+        (slugLower.includes("-") || slugLower.length > 4),
+    );
 
   useEffect(() => {
     const legacyCategory = params.get("category");
@@ -434,7 +446,7 @@ export function EpisodesPage() {
         </aside>
 
         <div className="min-w-0 flex-1">
-          {openEpisode ? null : (
+          {openEpisode || (looksLikeEpisodeTarget && isPending) ? null : (
           <div className="sticky top-0 z-10 flex h-[60px] items-center gap-2.5 border-b border-border bg-surface px-4 md:px-6">
             <button
               type="button"
@@ -507,7 +519,14 @@ export function EpisodesPage() {
 
           <div ref={listRef} className="px-4 md:px-6 pt-6 pb-4">
             {openEpisode ? (
-              <EpisodeDetail episode={openEpisode} audioMode={audioView} thumbnailPending={thumbnailsPending} />
+              <EpisodeDetail
+                episode={openEpisode}
+                audioMode={audioView}
+                thumbnailPending={thumbnailsPending}
+                siblings={episodes}
+              />
+            ) : looksLikeEpisodeTarget && isPending ? (
+              <EpisodeDetailSkeleton />
             ) : awaitingSetSlug || (isPending && filtered.length === 0) ? (
               <Grid>
                 {Array.from({ length: 6 }).map((_, i) => (
@@ -563,7 +582,11 @@ export function EpisodesPage() {
         <CategoryRail {...railProps} />
       </SwipeableDrawer>
 
-      <GoToTopButton onClick={() => window.scrollTo({ top: contentTopOffset(), behavior: "smooth" })} />
+      <GoToTopButton
+        onClick={() => window.scrollTo({ top: contentTopOffset(), behavior: "smooth" })}
+        dimmed={Boolean(openEpisode)}
+        className={openEpisode ? "lg:hidden" : undefined}
+      />
     </PageShell>
   );
 }
@@ -572,12 +595,14 @@ function EpisodeDetail({
   episode,
   audioMode,
   thumbnailPending,
+  siblings,
 }: {
   episode: Episode;
   audioMode: boolean;
   thumbnailPending: boolean;
+  siblings?: Episode[];
 }) {
-  const transcript = useEpisodeTranscript(episode);
+  const { transcript, settled: transcriptSettled } = useEpisodeTranscript(episode);
   const playerRef = useRef<HTMLIFrameElement>(null);
   const audioControlsRef = useRef<AudioControls>(null);
   const stickyRef = useRef<HTMLDivElement>(null);
@@ -652,6 +677,14 @@ function EpisodeDetail({
     () => (transcript ?? []).filter((s) => s.heading).map((s) => ({ t: s.t, heading: s.heading as string })),
     [transcript],
   );
+  const hasTranscript = Boolean(transcript && transcript.length > 0);
+  const expectTranscript = !audioMode && (episode.hasTranscript || hasTranscript);
+  const moreEpisodes = useMemo(() => {
+    const others = (siblings ?? []).filter((e) => e.id !== episode.id && !e.isShort);
+    const sameCategory = others.filter((e) => e.category === episode.category);
+    const rest = others.filter((e) => e.category !== episode.category);
+    return [...sameCategory, ...rest].slice(0, 12);
+  }, [siblings, episode.id, episode.category]);
   const activeChapterT = useMemo(() => {
     let active = -1;
     for (const chapter of chapters) {
@@ -680,13 +713,18 @@ function EpisodeDetail({
       return;
     }
     const offset = (stickyRef.current?.offsetHeight ?? 0) + 12;
-    window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - offset, behavior: "smooth" });
+    animateScrollTo(target.getBoundingClientRect().top + window.scrollY - offset);
   };
   return (
-    <div className="mx-auto w-full min-h-[calc(100vh-9rem)] max-w-[1120px] lg:min-h-0">
+    <div
+      className={cn(
+        "mx-auto w-full max-w-[1120px] lg:min-h-0",
+        transcriptSettled ? "" : "min-h-[calc(100vh-9rem)]",
+      )}
+    >
       <div
         ref={stickyRef}
-        className="sticky top-0 z-30 -mx-4 -mt-6 bg-bg md:-mx-6 md:mt-0 md:px-6 md:py-2 lg:mx-0 lg:mt-0 lg:px-0 lg:pb-3 lg:pt-6"
+        className="sticky top-0 z-30 -mx-4 -mt-6 bg-bg md:-mx-6 md:mt-0 md:px-6 md:py-2 lg:mx-0 lg:-mt-6 lg:px-0 lg:pb-0 lg:pt-6"
       >
         <div className="lg:flex lg:items-stretch lg:gap-4">
           <div className="lg:min-w-0 lg:flex-1">
@@ -702,63 +740,161 @@ function EpisodeDetail({
               <div className="pointer-events-none absolute inset-0 z-10 hidden border-border lg:block lg:border" />
             </div>
           </div>
-          {chapters.length > 0 ? (
+          {expectTranscript ? (
             <aside className="relative hidden lg:block lg:w-[300px] lg:shrink-0">
               <nav className="absolute inset-0 flex flex-col overflow-y-auto border border-border bg-surface/40 px-3 py-1">
-                {chapters.map((chapter) => {
-                  const isActive = chapter.t === activeChapterT;
-                  return (
-                    <button
-                      key={chapter.t}
-                      type="button"
-                      onClick={() => jumpToChapter(chapter.t)}
-                      className="group flex items-baseline justify-between gap-3 border-t border-border/40 py-2.5 text-left first:border-t-0"
-                    >
-                      <span
-                        className={cn(
-                          "text-[13px] leading-snug transition-colors group-hover:text-green",
-                          isActive ? "text-green" : "text-subtle",
-                        )}
+                {chapters.length > 0
+                  ? chapters.map((chapter) => {
+                      const isActive = chapter.t === activeChapterT;
+                      return (
+                        <button
+                          key={chapter.t}
+                          type="button"
+                          onClick={() => jumpToChapter(chapter.t)}
+                          className="group flex cursor-pointer items-baseline justify-between gap-3 border-t border-border/40 py-2.5 text-left first:border-t-0"
+                        >
+                          <span
+                            className={cn(
+                              "font-display text-[15px] uppercase tracking-[0.02em] leading-snug transition-colors group-hover:text-green",
+                              isActive ? "text-green" : "text-subtle",
+                            )}
+                          >
+                            {chapter.heading}
+                          </span>
+                          <span className="font-num shrink-0 text-[12px] text-green">
+                            {formatTimestamp(chapter.t)}
+                          </span>
+                        </button>
+                      );
+                    })
+                  : Array.from({ length: 9 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between gap-3 border-t border-border/40 py-2.5 first:border-t-0"
                       >
-                        {chapter.heading}
-                      </span>
-                      <span className="font-num shrink-0 text-[12px] text-green">{formatTimestamp(chapter.t)}</span>
-                    </button>
-                  );
-                })}
+                        <div className="h-3 flex-1 animate-pulse bg-border" style={{ maxWidth: `${70 - (i % 3) * 14}%` }} />
+                        <div className="h-3 w-8 animate-pulse bg-border" />
+                      </div>
+                    ))}
               </nav>
             </aside>
           ) : null}
         </div>
-        <div className="pointer-events-none absolute inset-x-0 top-full hidden h-5 bg-gradient-to-b from-bg to-transparent lg:block" />
+        <div className="pointer-events-none absolute inset-x-0 top-full hidden h-3 bg-gradient-to-b from-bg to-transparent lg:block" />
       </div>
-      <div className="mt-3 flex items-start justify-between gap-3">
-        <h1 className="min-w-0 font-body text-text text-[15px] md:text-[20px] font-medium leading-snug">
+      <div className="mt-3 flex items-center justify-between gap-3 lg:mt-6">
+        <h1 className="min-w-0 font-body text-text text-[16px] md:text-[20px] font-medium leading-snug">
           {episode.title}
         </h1>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <EpisodeTag episode={episode} />
-          <div className="font-mono flex items-center gap-2 text-[12px] tracking-[0.08em] text-muted uppercase">
-            <span>{episode.publishedLabel}</span>
-            {episode.number ? (
-              <>
-                <span aria-hidden className="text-dim">·</span>
-                <span>EP {episode.number}</span>
-              </>
-            ) : null}
-          </div>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <EpisodeTag episode={episode} className={expectTranscript ? "hidden md:flex" : undefined} />
+          {expectTranscript ? null : (
+            <div className="flex items-center gap-2 font-num text-[12px] tabular-nums text-muted">
+              <span>{episode.publishedLabel}</span>
+              {episode.number ? (
+                <>
+                  <span aria-hidden className="h-3 w-px bg-border2" />
+                  <span>EP {episode.number}</span>
+                </>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
-      {transcript && transcript.length > 0 ? (
+      {hasTranscript ? (
         <EpisodeTranscript
-          segments={transcript}
+          segments={transcript as TranscriptSegment[]}
           setCode={episode.setCode}
           onSeek={canSeek ? seek : undefined}
           collapsedChapters={collapsedChapters}
           onToggleChapter={toggleChapter}
         />
+      ) : !transcriptSettled && expectTranscript ? (
+        <TranscriptBodySkeleton />
+      ) : transcriptSettled && moreEpisodes.length > 0 ? (
+        <MoreEpisodes episodes={moreEpisodes} />
       ) : null}
     </div>
+  );
+}
+
+function EpisodeDetailSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-[1120px]">
+      <div className="-mx-4 -mt-6 md:mx-0 md:mt-0">
+        <div className="aspect-video w-full animate-pulse border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:aspect-auto md:rounded-lg md:border lg:mx-0 lg:h-auto lg:w-full lg:aspect-video lg:rounded-none lg:border-0" />
+      </div>
+      <div className="mt-3 h-6 w-3/4 animate-pulse bg-surface md:h-7 lg:mt-6" />
+      <TranscriptBodySkeleton />
+    </div>
+  );
+}
+
+function TranscriptBodySkeleton() {
+  return (
+    <div className="mt-4 border-t border-border pt-4 lg:mt-6">
+      {Array.from({ length: 3 }).map((_, group) => (
+        <div key={group} className={group === 0 ? "" : "mt-8"}>
+          <div className="mb-3 h-5 w-1/3 animate-pulse bg-surface" />
+          <div className="space-y-2.5">
+            {Array.from({ length: 4 }).map((_, line) => (
+              <div key={line} className="h-4 animate-pulse bg-surface" style={{ width: `${96 - (line % 4) * 9}%` }} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MoreEpisodes({ episodes }: { episodes: Episode[] }) {
+  return (
+    <div className="mt-8 border-t border-border pt-6">
+      <h2 className="mb-4 font-display text-text text-[16px] tracking-[0.02em]">More episodes</h2>
+      <div className="flex flex-col gap-3">
+        {episodes.map((episode) => (
+          <MoreEpisodeRow key={episode.id} episode={episode} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MoreEpisodeRow({ episode }: { episode: Episode }) {
+  const href = episode.slug ? `/episodes/${categorySlug(episode.category)}/${episode.slug}` : null;
+  const meta = [episode.publishedLabel.toUpperCase(), episode.number ? `EP ${episode.number}` : null]
+    .filter(Boolean)
+    .join(" · ");
+  const body = (
+    <>
+      <div className="relative aspect-video w-36 shrink-0 overflow-hidden rounded-md border border-border bg-surface sm:w-44">
+        <EpisodeThumbnail
+          src={episode.image}
+          className="transition-transform duration-300 group-hover/row:scale-[1.06]"
+        />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <span className="font-num text-[11px] tracking-[0.06em] text-muted">{meta}</span>
+          <EpisodeTag episode={episode} className="mt-0.5" />
+        </div>
+        <span className="mt-1 block font-body text-text text-[14px] md:text-[15px] font-medium leading-snug line-clamp-2 transition-colors group-hover/row:text-green">
+          {episode.title}
+        </span>
+      </div>
+    </>
+  );
+  if (href) {
+    return (
+      <Link to={href} className="group/row flex gap-3 no-underline">
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <a href={episode.link} target="_blank" rel="noreferrer" className="group/row flex gap-3 no-underline">
+      {body}
+    </a>
   );
 }
 
@@ -894,7 +1030,7 @@ function EpisodeTranscript({
   }, [items]);
 
   return (
-    <div className="mt-4 border-t border-border pt-4">
+    <div className="mt-4 border-t border-border pt-4 lg:mt-6">
       <div className="w-full">
         {items.map((item, index) => {
           if (item.kind !== "chapter") {
@@ -993,6 +1129,25 @@ function EpisodeTranscript({
       </div>
     </div>
   );
+}
+
+function animateScrollTo(top: number, duration = 240) {
+  const start = window.scrollY;
+  const distance = top - start;
+  if (Math.abs(distance) < 4) {
+    window.scrollTo({ top });
+    return;
+  }
+  const startTime = performance.now();
+  const step = (now: number) => {
+    const progress = Math.min(1, (now - startTime) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    window.scrollTo({ top: start + distance * eased });
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    }
+  };
+  requestAnimationFrame(step);
 }
 
 function formatTimestamp(seconds: number): string {

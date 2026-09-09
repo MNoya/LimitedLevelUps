@@ -110,7 +110,7 @@ export async function fetchRecentDbEpisodes(limit = 8): Promise<Episode[]> {
 }
 
 const DB_EPISODE_COLUMNS =
-  "guid, kind, number, title, link, image, published_at, duration_seconds, audio_url, youtube_id, category, set_code, set_name, set_released_at";
+  "guid, kind, number, title, link, image, published_at, duration_seconds, audio_url, youtube_id, category, set_code, set_name, set_released_at, has_transcript";
 
 export async function fetchEpisodeTranscript(youtubeId: string): Promise<TranscriptSegment[] | null> {
   const { data, error } = await client()

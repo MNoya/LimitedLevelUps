@@ -49,10 +49,10 @@ function TitleBlock({ episode, meta }: { episode: Episode; meta: string }) {
   return (
     <>
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[11px] tracking-[0.12em] text-muted">{meta}</span>
+        <span className="font-num text-[11px] tracking-[0.06em] text-muted">{meta}</span>
         <EpisodeTag episode={episode} />
       </div>
-      <span className="block font-body text-text text-[15px] md:text-[16px] font-medium leading-snug mt-1.5 min-h-[2.75rem] line-clamp-2 transition-colors group-hover:text-green">
+      <span className="block font-body text-text text-[15px] md:text-[16px] font-medium leading-snug mt-1.5 line-clamp-2 transition-colors group-hover:text-green sm:min-h-[2.75rem]">
         {episode.title}
       </span>
     </>

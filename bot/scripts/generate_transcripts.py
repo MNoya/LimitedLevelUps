@@ -1,4 +1,4 @@
-"""Generate Whisper transcripts for YouTube episodes and upsert them keyed on youtube_id"""
+"""Generate episode transcripts from YouTube captions (Whisper fallback) and upsert them keyed on youtube_id"""
 from __future__ import annotations
 
 import argparse
@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -22,6 +23,7 @@ log = logging.getLogger(__name__)
 SKIP_CATEGORIES = {"Draft", "Sealed", "Guest"}
 SENTENCE_MAX_SPAN = 60.0
 SUBTOPIC_CHAPTER_GAP = 30
+SECTION_MIN_GAP = 60
 SENTENCE_BOUNDARY = re.compile(r"(?<=[.?!…])\s+")
 MULETILLAS = re.compile(r"\b(uh+|um+|erm+|hmm+)\b[,]?\s*", re.I)
 STUTTER_ANY = re.compile(r"\b(\w+)(?:[,.]?\s+\1\b){2,}", re.I)
@@ -30,6 +32,26 @@ STUTTER_FILLER = re.compile(rf"\b({STUTTER_WORDS})(?:[,.]?\s+\1\b)+", re.I)
 WHISPER_MODEL = "large-v3"
 WHISPER_PROMPT = "Alright, welcome everybody. Let's talk about the format today, and go through it step by step."
 SOURCE = f"whisper-{WHISPER_MODEL}"
+CAPTION_SOURCE = "youtube-caption"
+CAPTION_RESTORED_SOURCE = "youtube-caption-restored"
+CAPTION_PUNCT_MIN = 1.5
+
+CARD_FIX_PROMPT = (
+    "You are given a Magic: The Gathering set's card list, then an auto-generated podcast transcript "
+    "that misspells some card names. List EVERY distinct misspelled form of any card in the list, "
+    "including partial and single-word references. Map each wrong form to the correctly spelled version "
+    "of the SAME reference, preserving scope: a full multi-word attempt maps to the full correct name; "
+    "a short or first-name reference maps to just that reference correctly spelled, never expanded. Fix "
+    "spelling only. The transcript is phonetic, so a wrong form may be badly garbled (wrong vowels, "
+    "split or merged words, homophones); match by sound and context to the closest card in the list. "
+    'Each distinct wrong form once. Return ONLY JSON: {"fixes": [{"wrong": <exact misspelled text>, '
+    '"right": <correct spelling, same scope>}]}. Skip correct references. Change nothing that is not a '
+    "card name.\n\nCARD LIST:\n{cards}\n\nTRANSCRIPT:\n{text}\n"
+)
+
+KNOWN_TERMS = [
+    (re.compile(r"\blimited level[-\s]?ups\b", re.I), "Limited Level-Ups"),
+]
 
 STRUCTURE_PROMPT = (
     "Below are numbered sentences from a Magic: The Gathering podcast transcript. Do two things.\n"
@@ -43,17 +65,39 @@ STRUCTURE_PROMPT = (
     "underlook that one.') and does not introduce the new point, start the subtopic on the next sentence and "
     "leave that trailing sentence with the previous subtopic.\n"
     "2. Mark PARAGRAPH breaks for readability, roughly every 3 to 5 sentences.\n"
-    "Return ONLY JSON: {\"subtopics\": [{\"start\": <int>, \"title\": <str>}], \"paragraphs\": [<int>, ...]}. "
-    "Sentence 0 starts both.\n\n"
+    "3. For each subtopic set \"section\": true only when it opens a major, self-contained part of the episode "
+    "that a viewer would bookmark as a chapter, a clear shift to a new segment of the show, and you are highly "
+    "confident. Most subtopics are not sections. Default to false, mark only a handful across the whole episode, "
+    "and never mark two within a short span.\n"
+    "Return ONLY JSON: {\"subtopics\": [{\"start\": <int>, \"title\": <str>, \"section\": <bool>}], "
+    "\"paragraphs\": [<int>, ...]}. Sentence 0 starts both.\n\n"
 )
 
 RESTORE_MIN_WORDS = 40
+
+CACHE_DIR = Path("cache/transcripts")
+CHAPTER_LOOKBACK_SECONDS = 12
+CHAPTER_LOOKBACK_MAX = 2
+CHAPTER_INTRO_OPENER = re.compile(
+    r"^(?:next|now|the next|another|moving on|let'?s|let us|ok|okay|all ?right|alright|"
+    r"so,?\s+(?:the\s+)?next|first|second|third|fourth|finally)\b",
+    re.I,
+)
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = _parse_args()
     with SessionLocal() as session:
+        if args.restructure:
+            targets = _restructure_targets(args)
+            if not targets:
+                log.info("no cached episodes to restructure")
+                return
+            log.info(f"restructuring {len(targets)} cached episode(s)")
+            for youtube_id in targets:
+                _restructure_one(session, youtube_id, args)
+            return
         targets = _select_targets(session, args)
         if not targets:
             log.info("no episodes to transcribe")
@@ -65,18 +109,26 @@ def main() -> None:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Local-only, zero cost: yt-dlp pulls audio, whisper-ctranslate2 (GPU) transcribes, "
-        "rows land in episode_transcripts. Point DATABASE_URL at prod to publish, local to test. "
-        "Needs yt-dlp (with a deno JS runtime), whisper-ctranslate2 and ffmpeg on PATH.",
+        description="Local-only, zero cost. Default source is YouTube auto-captions (no GPU); Whisper is the "
+        "fallback when no caption exists. Rows land in episode_transcripts. Point DATABASE_URL at prod to "
+        "publish, local to test. Needs yt-dlp (with a deno JS runtime), the claude CLI and ffmpeg on PATH; "
+        "the Whisper fallback also needs whisper-ctranslate2.",
     )
     parser.add_argument("--youtube-id", action="append", default=[], help="Transcribe these ids only")
     parser.add_argument("--latest", type=int, help="Transcribe the N most recent eligible episodes")
     parser.add_argument("--redo", action="store_true", help="Overwrite episodes already transcribed")
     parser.add_argument("--cookies-file", help="Netscape cookies.txt for YouTube, only if a download is blocked")
     parser.add_argument("--device", default="cuda", choices=("cuda", "cpu"))
+    parser.add_argument("--whisper", action="store_true", help="Force the Whisper audio path, ignore captions")
     parser.add_argument("--no-structure", action="store_true", help="Skip chapter headings and Claude subtopics")
     parser.add_argument("--no-restore", action="store_true", help="Skip punctuation restore of run-on stretches")
     parser.add_argument("--no-cards", action="store_true", help="Skip card-name detection and linking")
+    parser.add_argument("--no-card-fix", action="store_true", help="Skip the Claude card-name correction pass")
+    parser.add_argument(
+        "--restructure",
+        action="store_true",
+        help="Re-run structuring from cached raw units, no download or Whisper (needs a prior cached run)",
+    )
     return parser.parse_args()
 
 
@@ -102,17 +154,34 @@ def _select_targets(session, args: argparse.Namespace) -> list[tuple[str, str]]:
 def _process_one(session, youtube_id: str, title: str, args: argparse.Namespace) -> None:
     log.info(f"[{youtube_id}] {title}")
     cookie_args = ["--cookies", args.cookies_file] if args.cookies_file else []
-    with tempfile.TemporaryDirectory(prefix="llu-transcript-") as tmp:
-        workdir = Path(tmp)
-        audio = _download_audio(youtube_id, workdir, cookie_args)
-        whisper_segments = _transcribe(audio, workdir, args.device)
-    units = [{"t": round(start), "text": text} for text, start in _sentences(whisper_segments)]
-    if not args.no_restore:
-        units = _restore_runons(units)
+    set_code = session.execute(select(Episode.set_code).where(Episode.youtube_id == youtube_id)).scalar()
+    units, source = (None, SOURCE)
+    if not args.whisper:
+        caption = _caption_units(youtube_id, cookie_args)
+        if caption:
+            units, source = caption
+            log.info(f"[{youtube_id}] {len(units)} sentences from {source}")
+    if units is None:
+        with tempfile.TemporaryDirectory(prefix="llu-transcript-") as tmp:
+            workdir = Path(tmp)
+            audio = _download_audio(youtube_id, workdir, cookie_args)
+            whisper_segments = _transcribe(audio, workdir, args.device)
+        units = [{"t": round(start), "text": text} for text, start in _sentences(whisper_segments)]
+        if not args.no_restore:
+            units = _restore_runons(units)
+        log.info(f"[{youtube_id}] {len(units)} sentences from {source}")
+    chapters = _fetch_chapters(youtube_id, cookie_args)
+    _write_cache(youtube_id, title, set_code, units, chapters, source)
+    segments = _build_segments(youtube_id, units, chapters, set_code, args)
+    word_count = sum(len(segment["text"].split()) for segment in segments)
+    _upsert(session, youtube_id, segments, word_count, source)
+    log.info(f"[{youtube_id}] wrote {len(segments)} segments, {word_count} words")
+
+
+def _build_segments(youtube_id, units, chapters, set_code, args) -> list[dict]:
     if args.no_structure:
         segments = [{"t": unit["t"], "text": unit["text"]} for unit in units]
     else:
-        chapters = _fetch_chapters(youtube_id, cookie_args)
         segments = _structure(units, chapters)
         headings = sum(1 for s in segments if s.get("heading"))
         subheadings = sum(1 for s in segments if s.get("subheading"))
@@ -120,21 +189,78 @@ def _process_one(session, youtube_id: str, title: str, args: argparse.Namespace)
     for segment in segments:
         segment["text"] = _clean_text(segment["text"])
     if not args.no_cards:
-        set_code = session.execute(select(Episode.set_code).where(Episode.youtube_id == youtube_id)).scalar()
-        _link_cards(segments, set_code)
+        card_names = _fetch_cards_safe(set_code)
+        if card_names:
+            if not args.no_card_fix:
+                _fix_card_names(youtube_id, segments, card_names)
+            _link_cards(segments, card_names)
+    _apply_known_terms(segments)
+    return segments
+
+
+def _restructure_targets(args: argparse.Namespace) -> list[str]:
+    if args.youtube_id:
+        return [yid for yid in args.youtube_id if (CACHE_DIR / f"{yid}.json").exists()]
+    return sorted(path.stem for path in CACHE_DIR.glob("*.json"))
+
+
+def _restructure_one(session, youtube_id: str, args: argparse.Namespace) -> None:
+    cache = _read_cache(youtube_id)
+    log.info(f"[{youtube_id}] restructuring from cache")
+    segments = _build_segments(youtube_id, cache["units"], cache["chapters"], cache.get("set_code"), args)
     word_count = sum(len(segment["text"].split()) for segment in segments)
-    _upsert(session, youtube_id, segments, word_count)
-    log.info(f"[{youtube_id}] wrote {len(segments)} segments, {word_count} words")
+    _upsert(session, youtube_id, segments, word_count, cache.get("source", SOURCE))
+    log.info(f"[{youtube_id}] rewrote {len(segments)} segments, {word_count} words")
 
 
-def _link_cards(segments: list[dict], set_code: str | None) -> None:
+def _write_cache(youtube_id, title, set_code, units, chapters, source) -> None:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "youtube_id": youtube_id,
+        "title": title,
+        "set_code": set_code,
+        "source": source,
+        "chapters": chapters,
+        "units": units,
+    }
+    (CACHE_DIR / f"{youtube_id}.json").write_text(json.dumps(payload, ensure_ascii=False))
+
+
+def _read_cache(youtube_id) -> dict:
+    return json.loads((CACHE_DIR / f"{youtube_id}.json").read_text())
+
+
+def _fetch_cards_safe(set_code: str | None) -> list[str]:
     if not set_code:
-        return
+        return []
     try:
-        card_names = fetch_set_cards(set_code.lower())
+        return fetch_set_cards(set_code.lower())
     except Exception as exc:
-        log.warning(f"card linking skipped for set {set_code}: {exc}")
+        log.warning(f"card list fetch skipped for set {set_code}: {exc}")
+        return []
+
+
+def _fix_card_names(youtube_id: str, segments: list[dict], card_names: list[str]) -> None:
+    full_text = "\n".join(segment["text"] for segment in segments)
+    prompt = CARD_FIX_PROMPT.replace("{cards}", "\n".join(card_names)).replace("{text}", full_text)
+    try:
+        result = subprocess.run(["claude", "-p", prompt], check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        log.warning(f"[{youtube_id}] card-name fix skipped: {exc}")
         return
+    match = re.search(r"\{.*\}", result.stdout, re.DOTALL)
+    fixes = json.loads(match.group(0)).get("fixes", []) if match else []
+    applied = 0
+    for segment in segments:
+        text = segment["text"]
+        for fix in fixes:
+            text, count = re.subn(rf"\b{re.escape(fix['wrong'])}\b", fix["right"], text, flags=re.I)
+            applied += count
+        segment["text"] = text
+    log.info(f"[{youtube_id}] card-name fix: {len(fixes)} forms, {applied} applied")
+
+
+def _link_cards(segments: list[dict], card_names: list[str]) -> None:
     linked = 0
     for segment in segments:
         corrected, cards = tag_text(segment["text"], card_names)
@@ -142,7 +268,106 @@ def _link_cards(segments: list[dict], set_code: str | None) -> None:
         if cards:
             segment["cards"] = cards
             linked += len(cards)
-    log.info(f"linked {linked} card mentions from set {set_code}")
+        elif "cards" in segment:
+            del segment["cards"]
+    log.info(f"linked {linked} card mentions")
+
+
+def _apply_known_terms(segments: list[dict]) -> None:
+    for segment in segments:
+        text = segment["text"]
+        for pattern, replacement in KNOWN_TERMS:
+            text = pattern.sub(replacement, text)
+        segment["text"] = text
+
+
+def _caption_units(youtube_id: str, cookie_args: list[str]) -> tuple[list[dict], str] | None:
+    srt = _download_caption(youtube_id, cookie_args)
+    if not srt:
+        return None
+    words = _caption_word_times(srt)
+    if not words:
+        return None
+    text = " ".join(word for word, _ in words)
+    density = 100 * sum(text.count(mark) for mark in ".?!") / max(len(words), 1)
+    if density >= CAPTION_PUNCT_MIN:
+        return _caption_sentences(words), CAPTION_SOURCE
+    return _restore_caption(words), CAPTION_RESTORED_SOURCE
+
+
+def _download_caption(youtube_id: str, cookie_args: list[str]) -> str | None:
+    with tempfile.TemporaryDirectory(prefix="llu-caption-") as tmp:
+        stem = Path(tmp) / youtube_id
+        for attempt in range(4):
+            subprocess.run(
+                [
+                    "yt-dlp", "--write-auto-subs", "--sub-langs", "en", "--skip-download",
+                    "--convert-subs", "srt", *cookie_args,
+                    "--extractor-args", "youtube:player_client=android",
+                    "-o", f"{stem}.%(ext)s", f"https://www.youtube.com/watch?v={youtube_id}",
+                ],
+                capture_output=True, text=True,
+            )
+            srt = Path(f"{stem}.en.srt")
+            if srt.exists():
+                return srt.read_text()
+            time.sleep(45)
+    return None
+
+
+def _caption_word_times(srt: str) -> list[tuple[str, float]]:
+    emitted: list[tuple[float, str]] = []
+    last = None
+    for block in srt.split("\n\n"):
+        lines = [line for line in block.splitlines() if line.strip()]
+        timing = next((line for line in lines if "-->" in line), None)
+        if not timing:
+            continue
+        start = _parse_srt_ts(timing.split("-->")[0].strip())
+        for line in [ln for ln in lines if "-->" not in ln and not ln.strip().isdigit()]:
+            if line != last:
+                emitted.append((start, line))
+                last = line
+    return [(word, start) for start, line in emitted for word in line.split()]
+
+
+def _parse_srt_ts(stamp: str) -> float:
+    hms, ms = stamp.split(",")
+    hours, minutes, seconds = hms.split(":")
+    return int(hours) * 3600 + int(minutes) * 60 + int(seconds) + int(ms) / 1000
+
+
+def _caption_sentences(words: list[tuple[str, float]]) -> list[dict]:
+    units: list[dict] = []
+    current: list[str] = []
+    current_t = None
+    for word, start in words:
+        if not current:
+            current_t = start
+        current.append(word)
+        if re.search(r"[.?!…]['\"]?$", word):
+            units.append({"t": round(current_t), "text": " ".join(current)})
+            current = []
+    if current:
+        units.append({"t": round(current_t), "text": " ".join(current)})
+    return units
+
+
+def _restore_caption(words: list[tuple[str, float]]) -> list[dict]:
+    model = _load_punct_model()
+    if not model:
+        return _caption_sentences(words)
+    raw = _strip_punct(" ".join(word for word, _ in words))
+    units: list[dict] = []
+    index = 0
+    for sentence in model.restore(raw):
+        count = len(sentence.split())
+        if not count:
+            continue
+        start = words[min(index, len(words) - 1)][1]
+        units.append({"t": round(start), "text": sentence.strip()})
+        index += count
+    return units
 
 
 def _download_audio(youtube_id: str, workdir: Path, cookie_args: list[str]) -> Path:
@@ -338,11 +563,13 @@ def _fetch_chapters(youtube_id: str, cookie_args: list[str]) -> list[dict]:
 
 def _structure(units: list[dict], chapters: list[dict]) -> list[dict]:
     heads = _chapter_heads(units, chapters)
-    subtopics, paragraphs = _subtopics_and_paragraphs(units)
+    subtopics, paragraphs, sections = _subtopics_and_paragraphs(units)
+    if not heads:
+        heads = _promote_sections(units, subtopics, sections)
     chapter_times = [units[i]["t"] for i in heads]
     subtopics = {
         i: title for i, title in subtopics.items()
-        if all(abs(units[i]["t"] - c) >= SUBTOPIC_CHAPTER_GAP for c in chapter_times)
+        if i not in heads and all(abs(units[i]["t"] - c) >= SUBTOPIC_CHAPTER_GAP for c in chapter_times)
     }
     para_starts = paragraphs | set(subtopics) | set(heads) | {0}
 
@@ -361,19 +588,49 @@ def _structure(units: list[dict], chapters: list[dict]) -> list[dict]:
             segments.append(current)
         else:
             current["text"] = f"{current['text']} {unit['text']}"
-    return segments
+    return _merge_short_paragraphs(segments)
 
 
-def _subtopics_and_paragraphs(units: list[dict]) -> tuple[dict[int, str], set[int]]:
+def _merge_short_paragraphs(segments: list[dict], min_words: int = 6) -> list[dict]:
+    merged: list[dict] = []
+    for segment in segments:
+        prev = merged[-1] if merged else None
+        joinable = prev is not None and not segment.get("heading") and not segment.get("subheading")
+        if joinable and len(prev["text"].split()) <= min_words:
+            prev["text"] = f"{prev['text']} {segment['text']}"
+            continue
+        merged.append(segment)
+    return merged
+
+
+def _subtopics_and_paragraphs(units: list[dict]) -> tuple[dict[int, str], set[int], set[int]]:
     numbered = "\n".join(f"{i}: {unit['text']}" for i, unit in enumerate(units))
     result = subprocess.run(["claude", "-p", STRUCTURE_PROMPT + numbered], check=True, capture_output=True, text=True)
     match = re.search(r"\{.*\}", result.stdout, re.DOTALL)
     if not match:
-        return {}, {0}
+        return {}, {0}, set()
     data = json.loads(match.group(0))
     subtopics = {int(s["start"]): str(s["title"]).strip() for s in data.get("subtopics", [])}
+    sections = {int(s["start"]) for s in data.get("subtopics", []) if s.get("section")}
     paragraphs = {int(i) for i in data.get("paragraphs", [])} | {0}
-    return subtopics, {i for i in paragraphs if 0 <= i < len(units)}
+    def valid(i):
+        return 0 <= i < len(units)
+
+    return subtopics, {i for i in paragraphs if valid(i)}, {i for i in sections if valid(i)}
+
+
+def _promote_sections(units, subtopics, sections) -> dict[int, tuple[str, int]]:
+    heads: dict[int, tuple[str, int]] = {}
+    last_t = None
+    for index in sorted(sections):
+        if index not in subtopics:
+            continue
+        t = units[index]["t"]
+        if last_t is not None and t - last_t < SECTION_MIN_GAP:
+            continue
+        heads[index] = (subtopics[index], round(t))
+        last_t = t
+    return heads
 
 
 def _chapter_heads(blocks: list[dict], chapters: list[dict]) -> dict[int, tuple[str, int]]:
@@ -390,18 +647,36 @@ def _chapter_heads(blocks: list[dict], chapters: list[dict]) -> dict[int, tuple[
                 break
         while head_index in heads and head_index < len(blocks) - 1:
             head_index += 1
+        head_index = _pull_head_to_intro(blocks, head_index, start, title, heads)
         heads[head_index] = (title, round(start))
     return heads
 
 
-def _upsert(session, youtube_id: str, segments: list[dict], word_count: int) -> None:
+def _pull_head_to_intro(blocks, head_index, start, title, heads) -> int:
+    keywords = [w.lower() for w in re.findall(r"[A-Za-z']+", title) if len(w) >= 5]
+    target = head_index
+    for back in range(1, CHAPTER_LOOKBACK_MAX + 1):
+        candidate = head_index - back
+        if candidate <= 0 or candidate in heads:
+            break
+        if start - blocks[candidate]["t"] > CHAPTER_LOOKBACK_SECONDS:
+            break
+        text = blocks[candidate]["text"].lstrip()
+        opens = bool(CHAPTER_INTRO_OPENER.match(text))
+        names_topic = any(keyword in text.lower() for keyword in keywords)
+        if opens or names_topic:
+            target = candidate
+    return target
+
+
+def _upsert(session, youtube_id: str, segments: list[dict], word_count: int, source: str = SOURCE) -> None:
     row = session.get(EpisodeTranscript, youtube_id)
     if row is None:
         row = EpisodeTranscript(youtube_id=youtube_id)
         session.add(row)
     row.segments = segments
     row.word_count = word_count
-    row.source = SOURCE
+    row.source = source
     session.commit()
 
 

@@ -66,6 +66,7 @@ export interface Episode {
   setName?: string | null;
   setReleasedAt?: string | null;
   isShort: boolean;
+  hasTranscript: boolean;
 }
 
 const COACHING = /coach/i;
@@ -198,6 +199,7 @@ export interface DbEpisodeRow {
   set_code: string | null;
   set_name: string | null;
   set_released_at: string | null;
+  has_transcript: boolean | null;
 }
 
 // Authoritative episode rows from the public_episodes view, already categorized and
@@ -223,5 +225,6 @@ export function adaptDbEpisode(row: DbEpisodeRow): Episode {
     setName: row.set_name,
     setReleasedAt: row.set_released_at,
     isShort: isShortMedia(row.kind, row.duration_seconds, row.title),
+    hasTranscript: Boolean(row.has_transcript),
   };
 }

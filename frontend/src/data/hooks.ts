@@ -94,7 +94,7 @@ export function useDbEpisodes() {
   });
 }
 
-export function useEpisodeTranscript(episode: Episode): TranscriptSegment[] | null {
+export function useEpisodeTranscript(episode: Episode): { transcript: TranscriptSegment[] | null; settled: boolean } {
   const youtubeId = episode.youtubeId ?? null;
   const query = useQuery({
     queryKey: ["episode-transcript", youtubeId],
@@ -102,7 +102,7 @@ export function useEpisodeTranscript(episode: Episode): TranscriptSegment[] | nu
     enabled: Boolean(youtubeId),
     staleTime: ONE_HOUR,
   });
-  return query.data ?? null;
+  return { transcript: query.data ?? null, settled: !youtubeId || query.isFetched };
 }
 
 // DB rows are the authoritative, categorized base; a video the next bot sync has not folded in yet overlays on top

@@ -7,7 +7,7 @@ import { DiscordIcon } from "../components/BrandIcons";
 import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Music, Play, Trophy } from "../components/Icons";
 import { EpisodeTag } from "../components/CategoryTag";
 import { EpisodeThumbnail } from "../components/EpisodeThumbnail";
-import { EpisodeEmbed, episodePlayability } from "../components/PlayableThumbnail";
+import { episodePlayability } from "../components/PlayableThumbnail";
 import { PlayBadge } from "../components/PlayBadge";
 import { Pips } from "../components/ManaPips";
 import { highlightEventLabel } from "../components/pod/EventLabel";
@@ -15,7 +15,6 @@ import { GiRoundTable } from "react-icons/gi";
 import { SiPatreon, SiTwitch, SiYoutube } from "react-icons/si";
 import type { IconType } from "react-icons";
 import { Tooltip } from "../components/Tooltip";
-import { EpisodeLinkTooltip, episodeTitleHref } from "../components/EpisodeLink";
 import { AAvatar, fmtPts, SetGlyph, setGlyphCode } from "../components/Brand";
 import { TcgPlayerLogo } from "../components/TcgPlayerLogo";
 import { TierSetDropdown } from "../components/TierSetDropdown";
@@ -46,7 +45,7 @@ import { FORMAT_OPTIONS } from "../data/filters";
 import { HOST, SITE_LINKS } from "../data/site";
 import { cleanPodEventName, leaderboardPath, playerPath, relativeAge, relativeAgeShort } from "../data/utils";
 import type { Episode } from "../data/episodes";
-import { formatDurationShort } from "../data/episodes";
+import { categorySlug, formatDurationShort } from "../data/episodes";
 import type { LeaderboardRow, PodEventSummary, SetSummary } from "../types/leaderboard";
 import { cn } from "../lib/utils";
 
@@ -593,10 +592,8 @@ function HeroEpisodeCard({
   compact?: boolean;
   thumbnailPending?: boolean;
 }) {
-  const [playing, setPlaying] = useState(false);
-  const { canPlayAudio, playable } = episodePlayability(episode);
-  const play = () => setPlaying(true);
-  const titleHref = episodeTitleHref(episode);
+  const { canPlayAudio } = episodePlayability(episode);
+  const detailHref = episode.slug ? `/episodes/${categorySlug(episode.category)}/${episode.slug}` : null;
 
   const thumbnail = (
     <>
@@ -629,17 +626,10 @@ function HeroEpisodeCard({
       )}
     >
       <div className="relative z-10 aspect-video lg:aspect-auto lg:flex-1 lg:min-h-0 overflow-hidden bg-surface">
-        {playing ? (
-          <EpisodeEmbed episode={episode} thumbnailPending={thumbnailPending} />
-        ) : playable ? (
-          <button
-            type="button"
-            onClick={play}
-            aria-label={`Play ${episode.title}`}
-            className="absolute inset-0 block w-full cursor-pointer"
-          >
+        {detailHref ? (
+          <Link to={detailHref} aria-label={episode.title} className="absolute inset-0 block w-full">
             {thumbnail}
-          </button>
+          </Link>
         ) : (
           <a href={episode.link} target="_blank" rel="noreferrer" className="absolute inset-0 block w-full">
             {thumbnail}
@@ -654,20 +644,25 @@ function HeroEpisodeCard({
           </span>
           <EpisodeTag episode={episode} glyphSize={14} className="gap-1" />
         </div>
+      ) : detailHref ? (
+        <Link to={detailHref} className="p-3 shrink-0 flex items-start justify-between gap-2 no-underline group-hover/ep:text-green">
+          <h3 className="flex-1 min-w-0 font-body text-text text-[16px] font-medium leading-snug line-clamp-2 transition-colors group-hover/ep:text-green">
+            {episodeShortTitle(episode.title)}
+          </h3>
+          <EpisodeTag episode={episode} className="mt-0.5" />
+        </Link>
       ) : (
-        <EpisodeLinkTooltip episode={episode}>
-          <a
-            href={titleHref}
-            target="_blank"
-            rel="noreferrer"
-            className="p-3 shrink-0 flex items-start justify-between gap-2 no-underline group-hover/ep:text-green"
-          >
-            <h3 className="flex-1 min-w-0 font-body text-text text-[16px] font-medium leading-snug line-clamp-2 transition-colors group-hover/ep:text-green">
-              {episodeShortTitle(episode.title)}
-            </h3>
-            <EpisodeTag episode={episode} className="mt-0.5" />
-          </a>
-        </EpisodeLinkTooltip>
+        <a
+          href={episode.link}
+          target="_blank"
+          rel="noreferrer"
+          className="p-3 shrink-0 flex items-start justify-between gap-2 no-underline group-hover/ep:text-green"
+        >
+          <h3 className="flex-1 min-w-0 font-body text-text text-[16px] font-medium leading-snug line-clamp-2 transition-colors group-hover/ep:text-green">
+            {episodeShortTitle(episode.title)}
+          </h3>
+          <EpisodeTag episode={episode} className="mt-0.5" />
+        </a>
       )}
     </div>
   );
