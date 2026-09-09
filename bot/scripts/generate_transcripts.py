@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 from difflib import SequenceMatcher
@@ -76,6 +77,7 @@ STRUCTURE_PROMPT = (
 RESTORE_MIN_WORDS = 40
 
 CACHE_DIR = Path("cache/transcripts")
+SPAWN_STAGGER_SECONDS = 5
 CHAPTER_LOOKBACK_SECONDS = 12
 CHAPTER_LOOKBACK_MAX = 2
 CHAPTER_INTRO_OPENER = re.compile(
@@ -102,6 +104,9 @@ def main() -> None:
         if not targets:
             log.info("no episodes to transcribe")
             return
+        if args.workers > 1:
+            _run_parallel(targets, args)
+            return
         log.info(f"transcribing {len(targets)} episode(s)")
         for youtube_id, title in targets:
             _process_one(session, youtube_id, title, args)
@@ -119,6 +124,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--redo", action="store_true", help="Overwrite episodes already transcribed")
     parser.add_argument("--cookies-file", help="Netscape cookies.txt for YouTube, only if a download is blocked")
     parser.add_argument("--device", default="cuda", choices=("cuda", "cpu"))
+    parser.add_argument("--workers", type=int, default=1, help="Backfill in N parallel worker processes")
     parser.add_argument("--whisper", action="store_true", help="Force the Whisper audio path, ignore captions")
     parser.add_argument("--no-structure", action="store_true", help="Skip chapter headings and Claude subtopics")
     parser.add_argument("--no-restore", action="store_true", help="Skip punctuation restore of run-on stretches")
@@ -149,6 +155,30 @@ def _select_targets(session, args: argparse.Namespace) -> list[tuple[str, str]]:
         if args.latest and len(targets) >= args.latest:
             break
     return targets
+
+
+def _run_parallel(targets: list[tuple[str, str]], args: argparse.Namespace) -> None:
+    ids = [youtube_id for youtube_id, _ in targets]
+    workers = min(args.workers, len(ids))
+    chunks = [ids[i::workers] for i in range(workers)]
+    passthrough: list[str] = ["--workers", "1", "--device", args.device]
+    for flag in ("redo", "whisper", "no_structure", "no_restore", "no_cards", "no_card_fix"):
+        if getattr(args, flag):
+            passthrough.append("--" + flag.replace("_", "-"))
+    if args.cookies_file:
+        passthrough += ["--cookies-file", args.cookies_file]
+    log.info(f"backfill: {len(ids)} episodes across {workers} workers")
+    procs: list[subprocess.Popen] = []
+    for chunk in chunks:
+        if not chunk:
+            continue
+        cmd = [sys.executable, "-m", "bot.scripts.generate_transcripts", *passthrough]
+        for youtube_id in chunk:
+            cmd += [f"--youtube-id={youtube_id}"]
+        procs.append(subprocess.Popen(cmd))
+        time.sleep(SPAWN_STAGGER_SECONDS)
+    failures = sum(1 for proc in procs if proc.wait() != 0)
+    log.info(f"backfill done: {len(ids)} episodes, {failures} worker(s) exited with errors")
 
 
 def _process_one(session, youtube_id: str, title: str, args: argparse.Namespace) -> None:
