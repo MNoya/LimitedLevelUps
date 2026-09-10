@@ -1259,8 +1259,18 @@ function ChapterNav({
 function EpisodeDetailSkeleton() {
   return (
     <div className="mx-auto w-full max-w-[1120px]">
-      <div className="-mx-4 -mt-6 md:mx-0 md:mt-0">
-        <div className="aspect-video w-full animate-pulse border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:aspect-auto md:rounded-lg md:border lg:mx-0 lg:h-auto lg:w-full lg:aspect-video lg:rounded-none lg:border-0" />
+      <div
+        className="-mx-4 -mt-6 md:mx-0 md:mt-0 lg:flex lg:items-start lg:justify-center lg:gap-4"
+        style={{ "--epv": `${VIDEO_HEIGHT_DEFAULT}vh` } as CSSProperties}
+      >
+        <div className="relative aspect-video w-full animate-pulse border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:rounded-lg md:border lg:mx-0 lg:h-[var(--epv)] lg:max-h-[calc((100vw_-_616px)*0.5625)] lg:w-auto lg:shrink-0 lg:rounded-none lg:border-0" />
+        <ChapterNav
+          className="hidden lg:flex lg:w-[300px] lg:shrink-0 lg:max-h-[var(--epv,40vh)]"
+          chapters={[]}
+          activeT={-1}
+          onJump={() => {}}
+          loading
+        />
       </div>
       <div className="mt-3 h-6 w-3/4 animate-pulse bg-surface md:h-7 lg:mt-6" />
       <TranscriptBodySkeleton />
