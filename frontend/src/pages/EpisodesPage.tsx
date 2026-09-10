@@ -815,7 +815,9 @@ export function EpisodesPage() {
               transcriptsView ? <TranscriptArticleSkeleton /> : <EpisodeDetailSkeleton />
             ) : awaitingSetSlug || (isPending && filtered.length === 0) ? (
               transcriptsView ? (
-                <TranscriptListSkeleton showStatus={isTranscriptAdmin} />
+                <div className="relative -top-6 -mr-4 md:-mr-6">
+                  <TranscriptListSkeleton showStatus={isTranscriptAdmin} />
+                </div>
               ) : (
                 <Grid>
                   {Array.from({ length: 6 }).map((_, i) => (
@@ -1827,10 +1829,11 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
 }
 
 function TranscriptContentSkeleton() {
+  const wide = readStoredArticleWide();
   return (
-    <div className="lg:flex lg:items-start lg:gap-10">
-      <div className="min-w-0 flex-1 lg:max-w-3xl">
-        <div className="flex items-center justify-between gap-3 pt-3 pb-2 lg:pt-6">
+    <div className={cn("lg:flex lg:items-start lg:gap-10", wide && "lg:gap-6")}>
+      <div className={cn("min-w-0 flex-1", wide ? "lg:max-w-none" : "lg:max-w-3xl")}>
+        <div className="flex items-center justify-between gap-3 pt-3 pb-4 lg:pt-6 lg:pb-6">
           <div className="h-6 w-2/3 max-w-xl animate-pulse rounded bg-surface md:h-7" />
           <div className="h-5 w-20 shrink-0 animate-pulse rounded bg-surface" />
         </div>
@@ -1859,8 +1862,9 @@ function TranscriptContentSkeleton() {
 }
 
 function TranscriptArticleSkeleton() {
+  const wide = readStoredArticleWide();
   return (
-    <div className="mx-auto w-full max-w-[1120px]">
+    <div className={cn("mx-auto w-full max-w-[1120px]", wide && "lg:max-w-none lg:px-6")}>
       <TranscriptContentSkeleton />
     </div>
   );
