@@ -184,6 +184,13 @@ export function EpisodesPage() {
         (slugLower.includes("-") || slugLower.length > 4),
     );
 
+  const openEpisodeId = openEpisode?.id;
+  useEffect(() => {
+    if (openEpisodeId) {
+      window.scrollTo({ top: 0 });
+    }
+  }, [openEpisodeId]);
+
   useEffect(() => {
     const legacyCategory = params.get("category");
     const legacyShorts = params.get("type") === "shorts";
@@ -623,8 +630,8 @@ const READING_SETTINGS_KEY = "llu:transcript-reading";
 
 type ReadingSettings = { highlight: boolean; autoScroll: boolean; textPx: number };
 
-function readStoredReading(defaultAutoScroll: boolean): ReadingSettings {
-  const fallback: ReadingSettings = { highlight: true, autoScroll: defaultAutoScroll, textPx: 15 };
+function readStoredReading(): ReadingSettings {
+  const fallback: ReadingSettings = { highlight: true, autoScroll: false, textPx: 15 };
   if (typeof window === "undefined") {
     return fallback;
   }
@@ -663,7 +670,7 @@ function EpisodeDetail({
     window.localStorage.setItem(TRANSCRIPT_WIDE_KEY, wide ? "1" : "0");
   };
   const isMobile = useIsMobile();
-  const [reading, setReading] = useState<ReadingSettings>(() => readStoredReading(isMobile));
+  const [reading, setReading] = useState<ReadingSettings>(() => readStoredReading());
   const changeReading = (next: ReadingSettings) => {
     setReading(next);
     window.localStorage.setItem(READING_SETTINGS_KEY, JSON.stringify(next));
@@ -856,7 +863,7 @@ function EpisodeDetail({
         ref={stickyRef}
         className={cn(
           "z-30 -mx-4 -mt-6 bg-bg md:-mx-6 md:mt-0 md:px-6 md:py-2 lg:-mx-5 lg:-mt-6 lg:px-5 lg:pb-0 lg:pt-6",
-          usingAudioPlayer ? "lg:sticky lg:top-0" : "sticky top-0",
+          "sticky top-0",
         )}
       >
         <div
