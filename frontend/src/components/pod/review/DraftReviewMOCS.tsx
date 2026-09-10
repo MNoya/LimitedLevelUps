@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Link } from "react-router-dom";
 
 import { cn } from "../../../lib/utils";
+import { ToggleSwitch } from "../../ToggleSwitch";
 import { Pips } from "../../ManaPips";
 import { Tooltip } from "../../Tooltip";
 import { ArrowRight, GoSidebarCollapse, TbCards } from "../../Icons";
@@ -817,14 +818,7 @@ function SwitchToggle({
         <span className={cn("font-display text-[12px] tracking-[0.12em]", on ? "text-green" : "text-subtle")}>
           {label}
         </span>
-        <span className={cn("relative h-[18px] w-8 rounded-full transition-colors", on ? "bg-green" : "bg-border2")}>
-          <span
-            className={cn(
-              "absolute top-[3px] h-3.5 w-3.5 rounded-full bg-white transition-all",
-              on ? "left-[15px]" : "left-[1px]",
-            )}
-          />
-        </span>
+        <ToggleSwitch on={on} />
       </button>
     </Tooltip>
   );

@@ -95,14 +95,14 @@ export function useDbEpisodes() {
 }
 
 export function useEpisodeTranscript(episode: Episode): { transcript: TranscriptSegment[] | null; settled: boolean } {
-  const youtubeId = episode.youtubeId ?? null;
+  const transcriptKey = episode.youtubeId ?? episode.id;
   const query = useQuery({
-    queryKey: ["episode-transcript", youtubeId],
-    queryFn: () => fetchEpisodeTranscript(youtubeId as string),
-    enabled: Boolean(youtubeId),
+    queryKey: ["episode-transcript", transcriptKey],
+    queryFn: () => fetchEpisodeTranscript(transcriptKey),
+    enabled: Boolean(transcriptKey),
     staleTime: ONE_HOUR,
   });
-  return { transcript: query.data ?? null, settled: !youtubeId || query.isFetched };
+  return { transcript: query.data ?? null, settled: !transcriptKey || query.isFetched };
 }
 
 // DB rows are the authoritative, categorized base; a video the next bot sync has not folded in yet overlays on top

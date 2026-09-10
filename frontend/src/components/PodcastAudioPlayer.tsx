@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useRef, useState, type CSSProperties } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type CSSProperties } from "react";
 
 import { Pause, Play } from "./Icons";
 import { PlayBadge } from "./PlayBadge";
@@ -8,14 +8,22 @@ export interface AudioControls {
   seek: (seconds: number) => void;
 }
 
-export const PodcastAudioPlayer = forwardRef<AudioControls, { src: string; title: string }>((
-  { src, title },
-  controlsRef,
-) => {
+export const PodcastAudioPlayer = forwardRef<
+  AudioControls,
+  { src: string; title: string; onTime?: (seconds: number) => void }
+>(({ src, title, onTime }, controlsRef) => {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) {
+      return;
+    }
+    void el.play().catch(() => setPlaying(false));
+  }, [src]);
 
   const togglePlay = () => {
     const el = audioRef.current;
@@ -36,24 +44,44 @@ export const PodcastAudioPlayer = forwardRef<AudioControls, { src: string; title
     }
     el.currentTime = seconds;
     setCurrent(seconds);
+    onTime?.(seconds);
   };
 
   useImperativeHandle(controlsRef, () => ({ seek }), []);
 
   const ratio = duration > 0 ? current / duration : 0;
+  const media = (
+    <audio
+      ref={audioRef}
+      src={src}
+      autoPlay
+      onPlay={() => setPlaying(true)}
+      onPause={() => setPlaying(false)}
+      onEnded={() => setPlaying(false)}
+      onTimeUpdate={(e) => {
+        setCurrent(e.currentTarget.currentTime);
+        onTime?.(e.currentTarget.currentTime);
+      }}
+      onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+    />
+  );
+  const scrubber = (
+    <input
+      type="range"
+      className="audio-scrubber pointer-events-auto flex-1 min-w-0"
+      min={0}
+      max={duration || 0}
+      step="any"
+      value={current}
+      onChange={(e) => seek(Number(e.target.value))}
+      aria-label="Seek"
+      style={{ "--pct": ratio } as CSSProperties}
+    />
+  );
 
   return (
     <div className="absolute inset-0">
-      <audio
-        ref={audioRef}
-        src={src}
-        autoPlay
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
-        onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-      />
+      {media}
       <button
         type="button"
         onClick={togglePlay}
@@ -75,17 +103,7 @@ export const PodcastAudioPlayer = forwardRef<AudioControls, { src: string; title
         <div className="flex items-center gap-2.5">
           <Equalizer playing={playing} />
           <span className="font-num text-[11px] text-text tabular-nums shrink-0">{formatClock(current)}</span>
-          <input
-            type="range"
-            className="audio-scrubber pointer-events-auto flex-1 min-w-0"
-            min={0}
-            max={duration || 0}
-            step="any"
-            value={current}
-            onChange={(e) => seek(Number(e.target.value))}
-            aria-label="Seek"
-            style={{ "--pct": ratio } as CSSProperties}
-          />
+          {scrubber}
           <span className="font-num text-[11px] text-muted tabular-nums shrink-0">{formatClock(duration)}</span>
         </div>
       </div>
