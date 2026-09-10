@@ -1,4 +1,14 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { SiApplepodcasts, SiRss, SiSpotify, SiYoutube } from "react-icons/si";
 import type { IconType } from "react-icons";
@@ -10,7 +20,6 @@ import {
   Captions,
   ChevronDown,
   ChevronsLeft,
-  ChevronsRight,
   ChevronsUpDown,
   Download,
   GraduationCap,
@@ -304,6 +313,25 @@ export function EpisodesPage() {
       window.scrollTo({ top: contentTop });
     }
   };
+  const railLink = (pathname: string, querySet: string | null) => {
+    const next = new URLSearchParams(params);
+    next.delete("set");
+    if (querySet) {
+      next.set("set", querySet);
+    }
+    const search = next.toString();
+    return {
+      href: search ? `${pathname}?${search}` : pathname,
+      onClick: (event: ReactMouseEvent) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+          return;
+        }
+        event.preventDefault();
+        navTo(pathname, querySet);
+        setDrawerOpen(false);
+      },
+    };
+  };
   const updateQuery = (value: string) => {
     setQuery(value);
     setVisible(PAGE_SIZE);
@@ -315,15 +343,6 @@ export function EpisodesPage() {
     }
     navigate({ pathname: location.pathname, search: next.toString() }, { replace: true });
   };
-  const setCategory = (category: EpisodeCategory | null) => {
-    if (category) {
-      navTo(`/episodes/${categorySlug(category)}`, activeSet);
-    } else if (activeSet) {
-      navTo(setLandingPath(activeSet), null);
-    } else {
-      navTo("/episodes", null);
-    }
-  };
   const chooseSet = (code: string | null) => {
     if (!code) {
       navTo(categoryPath ?? "/episodes", null);
@@ -333,9 +352,6 @@ export function EpisodesPage() {
       navTo(setLandingPath(code), null);
     }
   };
-  const showShorts = () => navTo("/episodes/shorts", activeSet);
-  const showAudio = () => navTo("/episodes/audio", activeSet);
-  const showTranscripts = () => navTo("/episodes/transcripts", activeSet);
 
   const transcriptKey = (ep: Episode) => ep.youtubeId ?? ep.id;
   const statusOf = (ep: Episode) => transcriptIndex?.get(transcriptKey(ep));
@@ -661,27 +677,6 @@ export function EpisodesPage() {
     return () => observer.disconnect();
   }, [visible, filtered.length, openEpisodeId]);
 
-  const chooseAll = () => {
-    setCategory(null);
-    setDrawerOpen(false);
-  };
-  const chooseCategory = (category: EpisodeCategory) => {
-    setCategory(category);
-    setDrawerOpen(false);
-  };
-  const chooseShorts = () => {
-    showShorts();
-    setDrawerOpen(false);
-  };
-  const chooseAudio = () => {
-    showAudio();
-    setDrawerOpen(false);
-  };
-  const chooseTranscripts = () => {
-    showTranscripts();
-    setDrawerOpen(false);
-  };
-
   const mobileFilter = shortsView
     ? { label: "Shorts", icon: Zap }
     : audioView
@@ -702,14 +697,11 @@ export function EpisodesPage() {
     transcriptsExist: isPending || withTranscript.length > 0,
     counts,
     activeCategory,
+    activeSet,
     shortsView,
     audioView,
     transcriptsView,
-    onAll: chooseAll,
-    onCategory: chooseCategory,
-    onShorts: chooseShorts,
-    onAudio: chooseAudio,
-    onTranscripts: chooseTranscripts,
+    link: railLink,
   };
 
   return (
@@ -805,9 +797,9 @@ export function EpisodesPage() {
           <div
             ref={listRef}
             className={cn(
-              "pb-4 pl-4 md:pl-6",
-              transcriptsView ? "pt-0" : "pt-6",
-              transcriptsView && !openEpisode ? "pr-0" : "pr-4 md:pr-6",
+              "pb-4 pr-4 md:pr-6",
+              openEpisode ? "pl-2" : "pl-4 md:pl-6",
+              openEpisode && transcriptsView ? "pt-0" : "pt-6",
             )}
           >
             {openEpisode && transcriptsView ? (
@@ -843,7 +835,7 @@ export function EpisodesPage() {
                       ))}
                     </ShortGrid>
                   ) : transcriptsView ? (
-                    <div>
+                    <div className="relative -top-6 -mr-4 md:-mr-6">
                       <TranscriptRowHeader
                         sort={transcriptSort}
                         onSort={onTranscriptSort}
@@ -939,15 +931,6 @@ function readStoredArticleWide(): boolean {
     return true;
   }
   return window.localStorage.getItem(ARTICLE_WIDE_KEY) !== "0";
-}
-
-const ARTICLE_CHAPTERS_KEY = "llu:transcript-article-chapters";
-
-function readStoredArticleChapters(): boolean {
-  if (typeof window === "undefined") {
-    return true;
-  }
-  return window.localStorage.getItem(ARTICLE_CHAPTERS_KEY) !== "0";
 }
 
 const TRANSCRIPT_CATEGORY_KEY = "llu:transcript-category";
@@ -1669,11 +1652,6 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
     setWide(value);
     window.localStorage.setItem(ARTICLE_WIDE_KEY, value ? "1" : "0");
   };
-  const [chaptersExpanded, setChaptersExpanded] = useState<boolean>(readStoredArticleChapters);
-  const changeChaptersExpanded = (value: boolean) => {
-    setChaptersExpanded(value);
-    window.localStorage.setItem(ARTICLE_CHAPTERS_KEY, value ? "1" : "0");
-  };
   const headerRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   useLayoutEffect(() => {
@@ -1770,97 +1748,74 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
   );
 
   return (
-    <div className="w-full">
-      <div
-        ref={headerRef}
-        className="sticky top-0 z-20 -mx-4 bg-bg/95 px-4 pt-4 pb-3 backdrop-blur md:-mx-6 md:px-6 md:pt-6 md:pb-4"
-      >
-        <div className="pointer-events-none absolute inset-x-0 top-full h-3 bg-gradient-to-b from-bg to-transparent" />
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0 w-fit max-w-full">
-            <div className="flex w-full items-center justify-between gap-3">
-              <EpisodeTag episode={episode} glyphSize={16} />
-              <span className="font-num text-[11px] tracking-[0.06em] text-muted">
-                {episode.publishedLabel.toUpperCase()}
-              </span>
-            </div>
-            <h1 className="mt-1.5 font-display text-[18px] leading-tight text-text line-clamp-1 md:text-[22px]">
-              {episode.title}
-            </h1>
-          </div>
-          {hasBody ? (
-            <div className={cn("flex shrink-0 items-center gap-2", hasChapters && "lg:hidden")}>
-              {readingControl(true)}
-              <button
-                type="button"
-                onClick={download}
-                aria-label="Download transcript"
-                className="flex h-8 w-8 items-center justify-center border border-border2 text-subtle transition-colors hover:border-green hover:text-green"
-              >
-                <Download size={16} strokeWidth={2} />
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
+    <div className={cn("mx-auto w-full max-w-[1120px]", wide && "lg:max-w-none lg:px-6")}>
       {hasBody ? (
-        <div className={cn("mt-2 lg:mt-3 lg:flex lg:gap-10", wide && "lg:gap-6")}>
-          <aside
-            className={cn(
-              "hidden lg:shrink-0",
-              hasChapters && "lg:block",
-              chaptersExpanded ? "lg:w-[280px]" : "lg:w-8",
-            )}
-          >
-            <div className="lg:sticky" style={{ top: headerHeight + 12 }}>
-              {hasChapters ? (
-                <ChapterNav
-                  className="overflow-y-auto"
-                  style={{ maxHeight: `calc(100vh - ${headerHeight + 100}px)` }}
-                  chapters={chapters}
-                  activeT={activeChapterT}
-                  onJump={jumpToHeading}
-                  loading={false}
-                  hideTime
-                  compact={!chaptersExpanded}
-                />
-              ) : null}
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => changeChaptersExpanded(!chaptersExpanded)}
-                  aria-label={chaptersExpanded ? "Collapse chapters" : "Expand chapters"}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center border border-border2 text-subtle transition-colors hover:border-green hover:text-green"
-                >
-                  {chaptersExpanded ? <ChevronsLeft size={16} strokeWidth={2} /> : <ChevronsRight size={16} strokeWidth={2} />}
-                </button>
-                {chaptersExpanded ? (
-                  <div className="grid flex-1 grid-cols-2 gap-2">
+        <div className={cn("lg:flex lg:items-start lg:gap-10", wide && "lg:gap-6")}>
+          <div className={cn("min-w-0 flex-1", wide ? "lg:max-w-none" : "lg:max-w-3xl")}>
+            <div ref={headerRef} className="sticky top-0 z-20 bg-bg pt-3 pb-4 lg:pt-6 lg:pb-6">
+              <div className="flex items-center justify-between gap-3">
+                <h1 className="min-w-0 font-body text-text text-[16px] md:text-[20px] font-medium leading-snug">
+                  {episode.title}
+                </h1>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="hidden font-num text-[12px] tracking-[0.06em] text-muted sm:inline">
+                    {episode.publishedLabel.toUpperCase()}
+                  </span>
+                  <EpisodeTag episode={episode} />
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-border">
+              <EpisodeTranscript
+                segments={transcript as TranscriptSegment[]}
+                setCode={episode.setCode}
+                currentTime={0}
+                collapsedChapters={collapsedChapters}
+                onToggleChapter={toggleChapter}
+                features={{ articleMode: true, textPx: reading.textPx }}
+                headerAction={
+                  <div className="flex items-center gap-2 lg:hidden">
+                    {readingControl(true)}
                     <button
                       type="button"
                       onClick={download}
-                      className="flex h-8 w-full items-center justify-center gap-1.5 border border-border2 px-2 font-display text-[13px] leading-none tracking-[0.02em] text-subtle transition-colors hover:border-green hover:text-green"
+                      aria-label="Download transcript"
+                      className="flex h-8 w-8 items-center justify-center border border-border2 text-subtle transition-colors hover:border-green hover:text-green"
                     >
-                      <Download size={14} strokeWidth={2} className="shrink-0" />
-                      <span className="leading-none">Download</span>
+                      <Download size={16} strokeWidth={2} />
                     </button>
-                    {readingControl(false, true)}
                   </div>
-                ) : null}
-              </div>
+                }
+              />
             </div>
-          </aside>
-          <div className={cn("min-w-0 flex-1 border-t border-border", wide ? "lg:max-w-none" : "lg:max-w-3xl")}>
-            <EpisodeTranscript
-              segments={transcript as TranscriptSegment[]}
-              setCode={episode.setCode}
-              currentTime={0}
-              collapsedChapters={collapsedChapters}
-              onToggleChapter={toggleChapter}
-              features={{ articleMode: true, textPx: reading.textPx }}
-            />
           </div>
+          {hasChapters ? (
+            <aside
+              className="hidden lg:mt-6 lg:flex lg:flex-col lg:sticky lg:self-start lg:w-[300px] lg:shrink-0"
+              style={{ top: 24 }}
+            >
+              <ChapterNav
+                className="overflow-y-auto"
+                style={{ maxHeight: "calc(100vh - 112px)" }}
+                chapters={chapters}
+                activeT={activeChapterT}
+                onJump={jumpToHeading}
+                loading={false}
+                hideTime
+              />
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={download}
+                  className="flex h-8 w-full items-center justify-center gap-1.5 border border-border2 px-2 font-display text-[13px] leading-none tracking-[0.02em] text-subtle transition-colors hover:border-green hover:text-green"
+                >
+                  <Download size={14} strokeWidth={2} className="shrink-0" />
+                  <span className="leading-none">Download</span>
+                </button>
+                {readingControl(false, true)}
+              </div>
+            </aside>
+          ) : null}
         </div>
       ) : settled ? (
         <p className="mt-8 text-[14px] text-muted">No transcript yet.</p>
@@ -1873,42 +1828,39 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
 
 function TranscriptContentSkeleton() {
   return (
-    <div className="mt-2 lg:mt-3 lg:flex lg:gap-10">
-      <aside className="hidden lg:block lg:w-[280px] lg:shrink-0">
+    <div className="lg:flex lg:items-start lg:gap-10">
+      <div className="min-w-0 flex-1 lg:max-w-3xl">
+        <div className="flex items-center justify-between gap-3 pt-3 pb-2 lg:pt-6">
+          <div className="h-6 w-2/3 max-w-xl animate-pulse rounded bg-surface md:h-7" />
+          <div className="h-5 w-20 shrink-0 animate-pulse rounded bg-surface" />
+        </div>
+        <div className="border-t border-border pt-2 lg:pt-4">
+          {Array.from({ length: 3 }).map((_, group) => (
+            <div key={group} className={group === 0 ? "" : "mt-8"}>
+              <div className="mb-3 h-5 w-1/3 animate-pulse bg-surface" />
+              <div className="space-y-2.5">
+                {Array.from({ length: 4 }).map((_, line) => (
+                  <div key={line} className="h-4 animate-pulse bg-surface" style={{ width: `${96 - (line % 4) * 9}%` }} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <aside className="hidden lg:mt-6 lg:block lg:w-[300px] lg:shrink-0">
         <ChapterNav className="lg:max-h-[70vh]" chapters={[]} activeT={-1} onJump={() => {}} loading hideTime />
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="h-8 animate-pulse bg-surface" />
           <div className="h-8 animate-pulse bg-surface" />
         </div>
       </aside>
-      <div className="min-w-0 flex-1 border-t border-border pt-2 lg:pt-4">
-        {Array.from({ length: 3 }).map((_, group) => (
-          <div key={group} className={group === 0 ? "" : "mt-8"}>
-            <div className="mb-3 h-5 w-1/3 animate-pulse bg-surface" />
-            <div className="space-y-2.5">
-              {Array.from({ length: 4 }).map((_, line) => (
-                <div key={line} className="h-4 animate-pulse bg-surface" style={{ width: `${96 - (line % 4) * 9}%` }} />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
 
 function TranscriptArticleSkeleton() {
   return (
-    <div className="w-full">
-      <div className="-mx-4 px-4 pt-4 pb-3 md:-mx-6 md:px-6 md:pt-6 md:pb-4">
-        <div className="w-2/3 max-w-xl">
-          <div className="flex items-center justify-between gap-3">
-            <div className="h-5 w-24 animate-pulse rounded bg-surface" />
-            <div className="h-3 w-20 animate-pulse rounded bg-surface" />
-          </div>
-          <div className="mt-1.5 h-6 w-full animate-pulse rounded bg-surface md:h-7" />
-        </div>
-      </div>
+    <div className="mx-auto w-full max-w-[1120px]">
       <TranscriptContentSkeleton />
     </div>
   );
@@ -2362,14 +2314,11 @@ function CategoryRail({
   transcriptsExist,
   counts,
   activeCategory,
+  activeSet,
   shortsView,
   audioView,
   transcriptsView,
-  onAll,
-  onCategory,
-  onShorts,
-  onAudio,
-  onTranscripts,
+  link,
   collapsed = false,
   onCollapse,
   onExpand,
@@ -2383,14 +2332,11 @@ function CategoryRail({
   transcriptsExist: boolean;
   counts: Map<EpisodeCategory, number>;
   activeCategory: EpisodeCategory | null;
+  activeSet: string | null;
   shortsView: boolean;
   audioView: boolean;
   transcriptsView: boolean;
-  onAll: () => void;
-  onCategory: (category: EpisodeCategory) => void;
-  onShorts: () => void;
-  onAudio: () => void;
-  onTranscripts: () => void;
+  link: (pathname: string, querySet: string | null) => { href: string; onClick: (event: ReactMouseEvent) => void };
   collapsed?: boolean;
   onCollapse?: () => void;
   onExpand?: () => void;
@@ -2437,7 +2383,7 @@ function CategoryRail({
           count={allCount}
           active={!shortsView && !audioView && !transcriptsView && !activeCategory}
           collapsed={collapsed}
-          onClick={onAll}
+          {...link(activeSet ? setLandingPath(activeSet) : "/episodes", null)}
         />
         <div>
           <RailRow
@@ -2446,7 +2392,7 @@ function CategoryRail({
             count={counts.get("Evergreen") ?? 0}
             active={!shortsView && activeCategory === "Evergreen"}
             collapsed={collapsed}
-            onClick={() => onCategory("Evergreen")}
+            {...link(`/episodes/${categorySlug("Evergreen")}`, activeSet)}
           />
           {EPISODE_CATEGORIES.filter((category) => category !== "Evergreen").map((category) => (
             <RailRow
@@ -2456,7 +2402,7 @@ function CategoryRail({
               count={counts.get(category) ?? 0}
               active={!shortsView && activeCategory === category}
               collapsed={collapsed}
-              onClick={() => onCategory(category)}
+              {...link(`/episodes/${categorySlug(category)}`, activeSet)}
             />
           ))}
         </div>
@@ -2470,7 +2416,7 @@ function CategoryRail({
             count={shortsCount}
             active={shortsView}
             collapsed={collapsed}
-            onClick={onShorts}
+            {...link("/episodes/shorts", activeSet)}
           />
         ) : null}
         {audioExist ? (
@@ -2480,7 +2426,7 @@ function CategoryRail({
             count={audioCount}
             active={audioView}
             collapsed={collapsed}
-            onClick={onAudio}
+            {...link("/episodes/audio", activeSet)}
           />
         ) : null}
         {transcriptsExist ? (
@@ -2490,7 +2436,7 @@ function CategoryRail({
             count={transcriptsCount}
             active={transcriptsView}
             collapsed={collapsed}
-            onClick={onTranscripts}
+            {...link("/episodes/transcripts", activeSet)}
           />
         ) : null}
       </div>
