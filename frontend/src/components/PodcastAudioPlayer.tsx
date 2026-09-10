@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type CSSProperties } from "react";
 
 import { Pause, Play } from "./Icons";
-import { PlayBadge } from "./PlayBadge";
+import { EpisodeThumbnail } from "./EpisodeThumbnail";
 import { cn } from "../lib/utils";
 
 export interface AudioControls {
@@ -10,8 +10,8 @@ export interface AudioControls {
 
 export const PodcastAudioPlayer = forwardRef<
   AudioControls,
-  { src: string; title: string; onTime?: (seconds: number) => void }
->(({ src, title, onTime }, controlsRef) => {
+  { src: string; title: string; image?: string | null; pending?: boolean; onTime?: (seconds: number) => void }
+>(({ src, title, image, pending, onTime }, controlsRef) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -50,62 +50,49 @@ export const PodcastAudioPlayer = forwardRef<
   useImperativeHandle(controlsRef, () => ({ seek }), []);
 
   const ratio = duration > 0 ? current / duration : 0;
-  const media = (
-    <audio
-      ref={audioRef}
-      src={src}
-      autoPlay
-      onPlay={() => setPlaying(true)}
-      onPause={() => setPlaying(false)}
-      onEnded={() => setPlaying(false)}
-      onTimeUpdate={(e) => {
-        setCurrent(e.currentTarget.currentTime);
-        onTime?.(e.currentTarget.currentTime);
-      }}
-      onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-    />
-  );
-  const scrubber = (
-    <input
-      type="range"
-      className="audio-scrubber pointer-events-auto flex-1 min-w-0"
-      min={0}
-      max={duration || 0}
-      step="any"
-      value={current}
-      onChange={(e) => seek(Number(e.target.value))}
-      aria-label="Seek"
-      style={{ "--pct": ratio } as CSSProperties}
-    />
-  );
-
   return (
-    <div className="absolute inset-0">
-      {media}
+    <div className="flex items-center gap-3 border border-border bg-surface p-2.5">
+      <audio
+        ref={audioRef}
+        src={src}
+        autoPlay
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        onTimeUpdate={(e) => {
+          setCurrent(e.currentTarget.currentTime);
+          onTime?.(e.currentTarget.currentTime);
+        }}
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+      />
       <button
         type="button"
         onClick={togglePlay}
         aria-label={playing ? `Pause ${title}` : `Play ${title}`}
-        className="group/audio absolute inset-0 w-full cursor-pointer"
+        className="group/art relative h-16 w-16 shrink-0 cursor-pointer overflow-hidden border border-border bg-surface2"
       >
-        <span
-          className={cn(
-            "absolute inset-0 flex items-center justify-center bg-bg/30 transition-opacity",
-            playing ? "opacity-0 group-hover/audio:opacity-100" : "opacity-100",
-          )}
-        >
-          <PlayBadge>
-            {playing ? <Pause size={28} /> : <Play size={32} />}
-          </PlayBadge>
+        <EpisodeThumbnail src={image ?? undefined} pending={pending} />
+        <span className="absolute inset-0 flex items-center justify-center bg-bg/25 transition-colors group-hover/art:bg-bg/40">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-green/85 text-white transition-colors group-hover/art:bg-green">
+            {playing ? <Pause size={16} /> : <Play size={18} />}
+          </span>
         </span>
       </button>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-bg via-bg/90 to-transparent">
-        <div className="flex items-center gap-2.5">
-          <Equalizer playing={playing} />
-          <span className="font-num text-[11px] text-text tabular-nums shrink-0">{formatClock(current)}</span>
-          {scrubber}
-          <span className="font-num text-[11px] text-muted tabular-nums shrink-0">{formatClock(duration)}</span>
-        </div>
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <Equalizer playing={playing} />
+        <span className="font-num text-[11px] text-text tabular-nums shrink-0">{formatClock(current)}</span>
+        <input
+          type="range"
+          className="audio-scrubber flex-1 min-w-0"
+          min={0}
+          max={duration || 0}
+          step="any"
+          value={current}
+          onChange={(e) => seek(Number(e.target.value))}
+          aria-label="Seek"
+          style={{ "--pct": ratio } as CSSProperties}
+        />
+        <span className="font-num text-[11px] text-muted tabular-nums shrink-0">{formatClock(duration)}</span>
       </div>
     </div>
   );

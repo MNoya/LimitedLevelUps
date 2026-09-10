@@ -600,6 +600,8 @@ const VIDEO_HEIGHT_MIN = 18;
 const VIDEO_HEIGHT_MAX = 92;
 const VIDEO_HEIGHT_DEFAULT = 52;
 
+const AUDIO_INTRO_OFFSET_SECONDS = 14;
+
 function readStoredVideoHeight(): number {
   if (typeof window === "undefined") {
     return VIDEO_HEIGHT_DEFAULT;
@@ -743,7 +745,7 @@ function EpisodeDetail({
   const canSeek = usingAudioPlayer ? Boolean(episode.audioUrl) : Boolean(episode.youtubeId);
   const seek = (seconds: number) => {
     if (usingAudioPlayer) {
-      audioControlsRef.current?.seek(seconds);
+      audioControlsRef.current?.seek(seconds + AUDIO_INTRO_OFFSET_SECONDS);
       return;
     }
     const command = (func: string, args: unknown[]) =>
@@ -804,6 +806,7 @@ function EpisodeDetail({
   const hasTranscript = Boolean(transcript && transcript.length > 0);
   const richLayout = episode.hasTranscript || hasTranscript;
   const resizableVideo = richLayout && !usingAudioPlayer;
+  const audioRich = richLayout && usingAudioPlayer;
   const moreEpisodes = useMemo(() => {
     const others = (siblings ?? []).filter((e) => e.id !== episode.id && !e.isShort);
     const sameCategory = others.filter((e) => e.category === episode.category);
@@ -863,20 +866,19 @@ function EpisodeDetail({
           onPointerLeave={richLayout ? leaveReadingHandle : undefined}
         >
           <div
-            className={cn("relative", richLayout ? "lg:shrink-0" : "lg:min-w-0 lg:flex-1")}
+            className={cn("relative", richLayout && !usingAudioPlayer ? "lg:shrink-0" : "lg:min-w-0 lg:flex-1")}
             onPointerEnter={resizableVideo ? enterVideo : undefined}
             onPointerLeave={resizableVideo ? leaveVideo : undefined}
           >
             {usingAudioPlayer ? (
-              <div className="relative aspect-video w-full overflow-hidden border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:rounded-lg md:border lg:mx-0 lg:h-auto lg:w-[380px] lg:rounded-none lg:border">
-                <EpisodeThumbnail src={episode.image} pending={thumbnailPending} className="scale-[1.07]" />
-                <PodcastAudioPlayer
-                  ref={audioControlsRef}
-                  src={episode.audioUrl}
-                  title={episode.title}
-                  onTime={setCurrentTime}
-                />
-              </div>
+              <PodcastAudioPlayer
+                ref={audioControlsRef}
+                src={episode.audioUrl}
+                title={episode.title}
+                image={episode.image}
+                pending={thumbnailPending}
+                onTime={(seconds) => setCurrentTime(Math.max(0, seconds - AUDIO_INTRO_OFFSET_SECONDS))}
+              />
             ) : (
               <div
                 className={cn(
@@ -944,7 +946,7 @@ function EpisodeDetail({
               </div>
             )}
           </div>
-          {richLayout && (chapters.length > 0 || !transcriptSettled) ? (
+          {richLayout && !usingAudioPlayer && (chapters.length > 0 || !transcriptSettled) ? (
             <aside className="relative hidden lg:flex lg:flex-col lg:w-[300px] lg:shrink-0">
               <ChapterNav
                 className="lg:max-h-[var(--epv,40vh)]"
@@ -978,7 +980,8 @@ function EpisodeDetail({
         </div>
         <div className="pointer-events-none absolute inset-x-0 top-full hidden h-3 bg-gradient-to-b from-bg to-transparent lg:block" />
       </div>
-      <div className="w-full">
+      <div className={cn("w-full", audioRich && "lg:flex lg:items-start lg:gap-6")}>
+        <div className={cn("min-w-0", audioRich && "lg:flex-1")}>
         <div className="mt-3 flex items-center justify-between gap-3 lg:mt-6">
           <h1 className="min-w-0 font-body text-text text-[16px] md:text-[20px] font-medium leading-snug">
             {episode.title}
@@ -1025,6 +1028,33 @@ function EpisodeDetail({
           <TranscriptBodySkeleton />
         ) : transcriptSettled && moreEpisodes.length > 0 ? (
           <MoreEpisodes episodes={moreEpisodes} />
+        ) : null}
+        </div>
+        {audioRich && (chapters.length > 0 || !transcriptSettled) ? (
+          <aside
+            className="hidden lg:mt-6 lg:flex lg:flex-col lg:sticky lg:self-start lg:w-[300px] lg:shrink-0"
+            style={{ top: headerHeight + 24 }}
+          >
+            <ChapterNav
+              style={{ maxHeight: `calc(100vh - ${headerHeight + 84}px)` }}
+              chapters={chapters}
+              activeT={activeChapterT}
+              onJump={jumpToChapter}
+              loading={chapters.length === 0}
+            />
+            <div className="pt-2">
+              <ReadingSettings
+                settings={reading}
+                onChange={changeReading}
+                wide={transcriptWide}
+                onWideChange={changeTranscriptWide}
+                isMobile={isMobile}
+                canGoWide={canGoWide}
+                panelUp
+                panelLeft
+              />
+            </div>
+          </aside>
         ) : null}
       </div>
     </div>
