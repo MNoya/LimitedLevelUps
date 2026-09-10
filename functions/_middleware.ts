@@ -343,7 +343,13 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
     }
     if (slug === "transcripts") {
       if (!rest[1]) {
-        return page("Transcripts", "Read the episode library");
+        return {
+          ogTitle: "Episode Transcripts",
+          tabTitle: `Transcripts${TITLE_SEPARATOR}${SITE}`,
+          siteName: SITE,
+          description: "Read the episode library",
+          image: null,
+        };
       }
       const base = await episodeSlugMeta(rest[1]);
       if (base) {
