@@ -660,21 +660,29 @@ export function EpisodesPage() {
     if (!sentinel) {
       return;
     }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisible((current) => Math.min(current + PAGE_SIZE, filtered.length));
-        }
-      },
-      { rootMargin: "600px" },
-    );
-    observer.observe(sentinel);
-    // The sentinel may already sit on-screen (short list); bump directly since StrictMode's
-    // mount/cleanup/mount can drop the observer's initial callback in that case.
-    if (sentinel.getBoundingClientRect().top < window.innerHeight + 600) {
-      setVisible((current) => Math.min(current + PAGE_SIZE, filtered.length));
-    }
-    return () => observer.disconnect();
+    let queued = false;
+    const check = () => {
+      queued = false;
+      if (sentinel.getBoundingClientRect().top < window.innerHeight + 600) {
+        setVisible((current) => Math.min(current + PAGE_SIZE, filtered.length));
+      }
+    };
+    const onScroll = () => {
+      if (queued) {
+        return;
+      }
+      queued = true;
+      requestAnimationFrame(check);
+    };
+    check();
+    const settle = setTimeout(check, 300);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      clearTimeout(settle);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, [visible, filtered.length, openEpisodeId]);
 
   const mobileFilter = shortsView
