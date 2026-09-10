@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 
 from bot.models import PodDraftEvent
 from bot.services import pod_format
-from bot.services.pod_format import PEASANT_CODE, PEASANT_CUBE_ID, PEASANT_LABEL
+from bot.services.pod_format import PEASANT_CODE, PEASANT_CUBE_ID, PEASANT_LABEL, SAMP_CODE, SAMP_CUBE_ID
 from bot.services.pod_draft_manager import PodDraftManager, _persist_format, set_event_format
 from bot.services.pod_drafts import renamed_for_format, update_event_format
 
@@ -43,6 +43,24 @@ def test_resolve_write_in_routes_sets_and_cubes():
     assert pod_format.resolve_write_in(
         "https://cubecobra.com/cube/list/AbC") == pod_format.write_in_cube_code("AbC")
     assert pod_format.resolve_write_in("   ") is None
+
+
+def test_hidden_format_resolves_for_launch_but_stays_out_of_picker():
+    assert pod_format.cube_id_for(SAMP_CODE) == SAMP_CUBE_ID
+    assert pod_format.cube_id_for(SAMP_CODE.lower()) == SAMP_CUBE_ID
+
+    offered = [fmt.code for fmt in pod_format.custom_formats()]
+
+    assert SAMP_CODE not in offered
+    assert PEASANT_CODE in offered
+
+
+def test_resolve_write_in_converges_registered_cube_link_and_bare_code():
+    bare = pod_format.resolve_write_in("samp")
+    linked = pod_format.resolve_write_in("https://cubecobra.com/cube/list/samp")
+
+    assert bare == SAMP_CODE
+    assert linked == SAMP_CODE
 
 
 def test_write_in_cube_code_resolves_exact_case_and_routes_to_import():

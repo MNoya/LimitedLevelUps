@@ -33,6 +33,7 @@ class PodFormat:
     card_list_file: str | None = None
     symbol_glyph: str | None = None
     command_name: str | None = None
+    hidden: bool = False
 
     @property
     def url(self) -> str:
@@ -58,9 +59,14 @@ MEMA_SESSION_SLUG = "MEMA"
 MEMA_LINK_TEXT = "Middle-Earth Masters"
 MEMA_PICK_LABEL = "Middle-Earth Masters"
 
+SAMP_CODE = "SAMP"
+SAMP_LABEL = "samp Cube"
+SAMP_CUBE_ID = "samp"
+
 # Registered custom pod formats, keyed by the code stored in pod_draft_events.set_code. A cube_id
 # alone loads a CubeCobra cube via importCube; a card_list_file loads a Draftmancer custom card list
-# whose own [Settings] block owns the layouts and color balance.
+# whose own [Settings] block owns the layouts and color balance. A hidden format resolves for launch
+# and board display but stays out of the format picker.
 CUSTOM_FORMATS: dict[str, PodFormat] = {
     PEASANT_CODE: PodFormat(
         PEASANT_CODE, PEASANT_LABEL, PEASANT_CUBE_ID, PEASANT_SESSION_SLUG, PEASANT_LINK_TEXT,
@@ -68,6 +74,9 @@ CUSTOM_FORMATS: dict[str, PodFormat] = {
     MEMA_CODE: PodFormat(
         MEMA_CODE, MEMA_LABEL, MEMA_CUBE_ID, MEMA_SESSION_SLUG, MEMA_LINK_TEXT, MEMA_PICK_LABEL,
         card_list_file="mema.txt", symbol_glyph="mema", command_name="mema"),
+    SAMP_CODE: PodFormat(
+        SAMP_CODE, SAMP_LABEL, SAMP_CUBE_ID, SAMP_CODE, SAMP_LABEL, SAMP_LABEL,
+        command_name="sampcube", hidden=True),
 }
 
 _CARD_LIST_CACHE: dict[str, str] = {}
@@ -98,11 +107,21 @@ def resolve_write_in(raw: str) -> str | None:
         return None
     if "cubecobra.com" in text.lower() or "/" in text:
         cube_id = parse_cube_input(text)
-        return write_in_cube_code(cube_id) if cube_id else None
+        if not cube_id:
+            return None
+        return _registered_code_for_cube(cube_id) or write_in_cube_code(cube_id)
     upper = text.upper()
     if is_known_set(upper) or re.fullmatch(r"[A-Z0-9]{2,5}", upper):
         return upper
     return write_in_cube_code(text)
+
+
+def _registered_code_for_cube(cube_id: str) -> str | None:
+    lowered = cube_id.lower()
+    for fmt in CUSTOM_FORMATS.values():
+        if fmt.cube_id and fmt.cube_id.lower() == lowered:
+            return fmt.code
+    return None
 
 
 def _write_in_cube_format(code: str | None) -> PodFormat | None:
@@ -123,7 +142,7 @@ def _format_for(code: str | None) -> PodFormat | None:
 SELECT_PLACEHOLDER = "Select Format"
 FORMAT_LOCKED_MSG = "The format can't be changed once the draft has started"
 def custom_formats() -> list[PodFormat]:
-    return list(CUSTOM_FORMATS.values())
+    return [fmt for fmt in CUSTOM_FORMATS.values() if not fmt.hidden]
 
 
 def format_choices() -> list[tuple[str, str]]:
