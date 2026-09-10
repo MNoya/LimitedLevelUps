@@ -15,6 +15,7 @@ import {
 } from "./adapter";
 import { adaptDbEpisode, type DbEpisodeRow, type Episode } from "./episodes";
 import type { TranscriptSegment } from "./transcript";
+import type { TranscriptIndex } from "./transcriptStatus";
 import type { PodCardStatRow } from "./podCards";
 import type { PodArchetypeRow } from "./podArchetypes";
 import {
@@ -122,6 +123,20 @@ export async function fetchEpisodeTranscript(youtubeId: string): Promise<Transcr
     throw error;
   }
   return (data?.segments as TranscriptSegment[] | undefined) ?? null;
+}
+
+export async function fetchTranscriptIndex(): Promise<TranscriptIndex> {
+  const { data, error } = await client()
+    .from("public_episode_transcripts")
+    .select("youtube_id, source, word_count");
+  if (error) {
+    throw error;
+  }
+  const index: TranscriptIndex = new Map();
+  for (const row of (data ?? []) as { youtube_id: string; source: string; word_count: number }[]) {
+    index.set(row.youtube_id, { source: row.source, wordCount: row.word_count });
+  }
+  return index;
 }
 
 export async function fetchCubeSeasons(): Promise<CubeSeason[]> {

@@ -7,9 +7,12 @@ import {
   BookOpen,
   CalendarArrowDown,
   CalendarArrowUp,
+  Captions,
   ChevronDown,
   ChevronsLeft,
+  ChevronsRight,
   ChevronsUpDown,
+  Download,
   GraduationCap,
   Headphones,
   Layers,
@@ -32,7 +35,7 @@ import { EpisodeCard } from "../components/EpisodeCard";
 import { EpisodeEmbed } from "../components/PlayableThumbnail";
 import { PodcastAudioPlayer, type AudioControls } from "../components/PodcastAudioPlayer";
 import { ChevronRight } from "lucide-react";
-import { EpisodeTag } from "../components/CategoryTag";
+import { EpisodeTag, CATEGORY_COLOR } from "../components/CategoryTag";
 import { EpisodeThumbnail } from "../components/EpisodeThumbnail";
 import { ToggleSwitch } from "../components/ToggleSwitch";
 import { ShortCard } from "../components/ShortCard";
@@ -44,7 +47,18 @@ import { RailHeader, RailRow } from "../components/Rail";
 import { CUT_CORNER_CHAMFER } from "../components/ChamferCta";
 import { Crossfade } from "../components/Crossfade";
 import { SetGlyph } from "../components/Brand";
-import { useMediaFeed, useEpisodeTranscript } from "../data/hooks";
+import { useMediaFeed, useEpisodeTranscript, useTranscriptIndex } from "../data/hooks";
+import { useAuth } from "../auth/useAuth";
+import { isPodOrganizer } from "../data/podOrganizers";
+import {
+  TranscriptListSkeleton,
+  TranscriptRow,
+  TranscriptRowHeader,
+  type TranscriptSort,
+  type TranscriptSortKey,
+} from "../components/TranscriptCard";
+import { BsAsterisk } from "../components/Icons";
+import { stripSpeakerTurns, transcriptToText, downloadTextFile } from "../lib/transcriptText";
 import {
   EPISODE_CATEGORIES,
   categoryFromSlug,
@@ -53,7 +67,16 @@ import {
   type Episode,
   type EpisodeCategory,
 } from "../data/episodes";
-import type { TranscriptSegment } from "../data/transcript";
+import { type TranscriptSegment } from "../data/transcript";
+import {
+  NONE_META,
+  TIER_META,
+  TIER_RANK,
+  transcriptTier,
+  type TranscriptIndex,
+  type TranscriptStatus,
+  type TranscriptTier,
+} from "../data/transcriptStatus";
 import { useCardImageMap } from "../data/cardImages";
 import { TranscriptCardLink } from "../components/TranscriptCardLink";
 import { LISTEN_ON } from "../data/site";
@@ -66,23 +89,32 @@ const SORT_OPTIONS: { value: SortKey; label: string; icon: LucideIcon }[] = [
   { value: "oldest", label: "Oldest", icon: CalendarArrowUp },
 ];
 
-const renderSetValue = (option: FilterOption) => (
-  <span className="flex min-w-0 items-center gap-2">
-    <span className="hidden shrink-0 text-[11px] tracking-[0.22em] text-muted sm:inline">SET</span>
-    <span className="hidden h-3.5 w-px shrink-0 bg-border2 sm:block" />
-    {option.value ? (
-      <span className="flex min-w-0 items-center gap-1.5 truncate text-green">
-        <SetGlyph code={option.value} size={18} className="text-green" />
-        {option.value}
-      </span>
-    ) : (
-      <span className="truncate text-subtle">All sets</span>
-    )}
+const AllSetsGlyph = ({ size = 18 }: { size?: number }) => (
+  <span className="flex shrink-0 items-center justify-center" style={{ width: size, height: size }}>
+    <BsAsterisk size={Math.round(size * 0.62)} />
   </span>
 );
 
+const renderSetValue = (option: FilterOption) =>
+  option.value ? (
+    <span className="flex min-w-0 items-center gap-1.5 truncate text-green">
+      <SetGlyph code={option.value} size={18} className="text-green" />
+      {option.value}
+    </span>
+  ) : (
+    <span className="flex min-w-0 items-center gap-1.5 truncate text-subtle">
+      <AllSetsGlyph />
+      ALL SETS
+    </span>
+  );
+
+// BookOpen's glyph mass sits high in its viewBox, so it reads as raised next to the row label; nudge it down.
+const SetReviewIcon = ((props: { size?: number; strokeWidth?: number; className?: string }) => (
+  <BookOpen {...props} className={cn("translate-y-[1px]", props.className)} />
+)) as unknown as LucideIcon;
+
 const CATEGORY_ICON: Record<EpisodeCategory, LucideIcon> = {
-  "Set Review": BookOpen,
+  "Set Review": SetReviewIcon,
   Metagame: BarChart3,
   Draft: Layers,
   Sealed: Package,
@@ -109,6 +141,9 @@ const setLandingPath = (code: string) => `/episodes/${code.toLowerCase()}`;
 
 export function EpisodesPage() {
   const { data: episodes, isPending, isError, thumbnailsPending, setsReady } = useMediaFeed();
+  const { data: transcriptIndex } = useTranscriptIndex();
+  const { user: authUser } = useAuth();
+  const isTranscriptAdmin = isPodOrganizer(authUser?.discordId);
   const { categorySlug: slug, episodeSlug } = useParams<{ categorySlug?: string; episodeSlug?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -118,6 +153,17 @@ export function EpisodesPage() {
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const [transcriptCategory, setTranscriptCategory] = useState<EpisodeCategory | "">(readStoredTranscriptCategory);
+  const [transcriptTierFilter, setTranscriptTierFilter] = useState<TranscriptTier | "none" | "">(
+    readStoredTranscriptTier,
+  );
+  const [transcriptSort, setTranscriptSort] = useState<TranscriptSort>({ key: "date", dir: "desc" });
+  useEffect(() => {
+    window.localStorage.setItem(TRANSCRIPT_CATEGORY_KEY, transcriptCategory);
+  }, [transcriptCategory]);
+  useEffect(() => {
+    window.localStorage.setItem(TRANSCRIPT_TIER_KEY, transcriptTierFilter);
+  }, [transcriptTierFilter]);
   const isMobile = useIsMobile();
   const sentinelRef = useRef<HTMLDivElement>(null);
   const contentTopRef = useRef<HTMLDivElement>(null);
@@ -155,10 +201,12 @@ export function EpisodesPage() {
   const slugLower = slug?.toLowerCase() ?? null;
   const shortsView = slugLower === "shorts";
   const audioView = slugLower === "audio";
+  const transcriptsView = slugLower === "transcripts";
+  const sectionView = shortsView || audioView || transcriptsView;
   const activeCategory = slug ? categoryFromSlug(slug) : null;
-  const pathSet = slugLower && !shortsView && !audioView && !activeCategory ? setCodesBySlug.get(slugLower) ?? null : null;
+  const pathSet = slugLower && !sectionView && !activeCategory ? setCodesBySlug.get(slugLower) ?? null : null;
   const activeSet = pathSet ?? params.get("set");
-  const awaitingSetSlug = !!slugLower && !shortsView && !audioView && !activeCategory && !setsReady;
+  const awaitingSetSlug = !!slugLower && !sectionView && !activeCategory && !setsReady;
 
   const openEpisode = useMemo(() => {
     if (!episodes) {
@@ -167,18 +215,17 @@ export function EpisodesPage() {
     if (episodeSlug) {
       return findEpisodeBySlug(episodes, episodeSlug.toLowerCase());
     }
-    if (slugLower && !shortsView && !audioView && !activeCategory && !setCodesBySlug.has(slugLower)) {
+    if (slugLower && !sectionView && !activeCategory && !setCodesBySlug.has(slugLower)) {
       return findEpisodeBySlug(episodes, slugLower);
     }
     return null;
-  }, [episodes, episodeSlug, slugLower, shortsView, audioView, activeCategory, setCodesBySlug]);
+  }, [episodes, episodeSlug, slugLower, sectionView, activeCategory, setCodesBySlug]);
 
   const looksLikeEpisodeTarget =
     Boolean(episodeSlug) ||
     Boolean(
       slugLower &&
-        !shortsView &&
-        !audioView &&
+        !sectionView &&
         !activeCategory &&
         !setCodesBySlug.has(slugLower) &&
         (slugLower.includes("-") || slugLower.length > 4),
@@ -222,19 +269,21 @@ export function EpisodesPage() {
       return;
     }
     const unknownSlug =
-      setsReady && slugLower && !shortsView && !audioView && !activeCategory && !setCodesBySlug.has(slugLower);
+      setsReady && slugLower && !sectionView && !activeCategory && !setCodesBySlug.has(slugLower);
     if (unknownSlug && !episodeSlug && !findEpisodeBySlug(episodes, slugLower)) {
       navigate({ pathname: "/episodes", search: params.toString() }, { replace: true });
     }
-  }, [params, slug, slugLower, episodeSlug, navigate, episodes, setCodesBySlug, shortsView, audioView, activeCategory, setsReady]);
+  }, [params, slug, slugLower, episodeSlug, navigate, episodes, setCodesBySlug, sectionView, activeCategory, setsReady]);
 
   const categoryPath = shortsView
     ? "/episodes/shorts"
     : audioView
       ? "/episodes/audio"
-      : activeCategory
-        ? `/episodes/${categorySlug(activeCategory)}`
-        : null;
+      : transcriptsView
+        ? "/episodes/transcripts"
+        : activeCategory
+          ? `/episodes/${categorySlug(activeCategory)}`
+          : null;
   const detailBase = categoryPath ?? (pathSet ? setLandingPath(pathSet) : "/episodes");
 
   const contentTopOffset = () => {
@@ -286,11 +335,20 @@ export function EpisodesPage() {
   };
   const showShorts = () => navTo("/episodes/shorts", activeSet);
   const showAudio = () => navTo("/episodes/audio", activeSet);
+  const showTranscripts = () => navTo("/episodes/transcripts", activeSet);
+
+  const transcriptKey = (ep: Episode) => ep.youtubeId ?? ep.id;
+  const statusOf = (ep: Episode) => transcriptIndex?.get(transcriptKey(ep));
 
   const longform = useMemo(() => all.filter((ep) => !ep.isShort), [all]);
   const shorts = useMemo(() => all.filter((ep) => ep.isShort), [all]);
   const withAudio = useMemo(() => longform.filter((ep) => Boolean(ep.audioUrl)), [longform]);
-  const pool = shortsView ? shorts : audioView ? withAudio : longform;
+  // Admins review the whole catalogue (with per-episode status); everyone else sees only transcribed episodes.
+  const withTranscript = useMemo(
+    () => (isTranscriptAdmin ? longform : longform.filter((ep) => transcriptIndex?.has(transcriptKey(ep)))),
+    [longform, transcriptIndex, isTranscriptAdmin],
+  );
+  const pool = shortsView ? shorts : audioView ? withAudio : transcriptsView ? withTranscript : longform;
 
   const longformInSet = useMemo(
     () => (activeSet ? longform.filter((ep) => setCodeOf(ep) === activeSet) : longform),
@@ -304,11 +362,42 @@ export function EpisodesPage() {
     () => (activeSet ? withAudio.filter((ep) => setCodeOf(ep) === activeSet) : withAudio),
     [withAudio, activeSet],
   );
+  const transcriptsInSet = useMemo(
+    () => (activeSet ? withTranscript.filter((ep) => setCodeOf(ep) === activeSet) : withTranscript),
+    [withTranscript, activeSet],
+  );
 
   const needle = query.trim().toLowerCase();
   const scopedLongform = useMemo(() => longformInSet.filter((ep) => matchesQuery(ep, needle)), [longformInSet, needle]);
   const scopedShorts = useMemo(() => shortsInSet.filter((ep) => matchesQuery(ep, needle)), [shortsInSet, needle]);
   const scopedAudio = useMemo(() => audioInSet.filter((ep) => matchesQuery(ep, needle)), [audioInSet, needle]);
+  const scopedTranscript = useMemo(
+    () => transcriptsInSet.filter((ep) => matchesQuery(ep, needle)),
+    [transcriptsInSet, needle],
+  );
+  const transcriptCategoryCounts = useMemo(() => {
+    const map = new Map<EpisodeCategory, number>();
+    for (const ep of scopedTranscript) {
+      map.set(ep.category, (map.get(ep.category) ?? 0) + 1);
+    }
+    return map;
+  }, [scopedTranscript]);
+  const filteredTranscript = useMemo(() => {
+    let rows = scopedTranscript;
+    if (transcriptCategory) {
+      rows = rows.filter((ep) => ep.category === transcriptCategory);
+    }
+    if (isTranscriptAdmin && transcriptTierFilter) {
+      rows = rows.filter((ep) => {
+        const status = transcriptIndex?.get(ep.youtubeId ?? ep.id);
+        if (transcriptTierFilter === "none") {
+          return !status;
+        }
+        return status ? transcriptTier(status.source) === transcriptTierFilter : false;
+      });
+    }
+    return rows;
+  }, [scopedTranscript, transcriptCategory, transcriptTierFilter, isTranscriptAdmin, transcriptIndex]);
 
   const counts = useMemo(() => {
     const map = new Map<EpisodeCategory, number>();
@@ -348,7 +437,7 @@ export function EpisodesPage() {
     const count = option.value ? setMeta.get(option.value)?.count : pool.length;
     return (
       <span className="flex w-full min-w-0 items-center gap-2.5">
-        {option.value ? <SetGlyph code={option.value} size={20} /> : <span className="w-5 shrink-0" />}
+        {option.value ? <SetGlyph code={option.value} size={20} /> : <AllSetsGlyph size={20} />}
         <span className="flex-1 truncate">{option.label}</span>
         {count != null && <span className="font-num text-[12px] tabular-nums text-muted shrink-0">{count}</span>}
       </span>
@@ -363,16 +452,189 @@ export function EpisodesPage() {
       renderValue={renderSetValue}
       renderOption={renderSetOption}
       searchPlaceholder="Search sets or codes…"
-      triggerClassName="!min-w-[124px] md:!min-w-[200px] !h-10 !py-0 hover:!bg-surface2"
+      triggerClassName="!min-w-[108px] md:!min-w-[132px] !h-10 !py-0 hover:!bg-surface2"
       mobileCentered
     />
   );
 
+  const transcriptCategoryOptions = useMemo<FilterOption[]>(() => {
+    const options: FilterOption[] = [{ value: "", label: "All categories" }];
+    for (const category of EPISODE_CATEGORIES) {
+      if (transcriptCategoryCounts.get(category)) {
+        options.push({ value: category, label: category });
+      }
+    }
+    return options;
+  }, [transcriptCategoryCounts]);
+
+  const renderCategoryValue = (option: FilterOption) => {
+    const category = option.value as EpisodeCategory | "";
+    const Icon = category ? CATEGORY_ICON[category] : SlidersHorizontal;
+    return (
+      <span className="flex min-w-0 items-center gap-2 truncate">
+        <Icon size={15} strokeWidth={2} className={cn("shrink-0", category ? CATEGORY_COLOR[category] : "text-muted")} />
+        <span className="truncate">{category ? option.label : "CATEGORY"}</span>
+      </span>
+    );
+  };
+
+  const renderCategoryOption = (option: FilterOption) => {
+    const category = option.value as EpisodeCategory | "";
+    const Icon = category ? CATEGORY_ICON[category] : null;
+    const count = category ? transcriptCategoryCounts.get(category) : scopedTranscript.length;
+    return (
+      <span className="flex w-full min-w-0 items-center gap-2.5">
+        {Icon ? (
+          <Icon size={16} strokeWidth={2} className={cn("shrink-0", CATEGORY_COLOR[category as EpisodeCategory])} />
+        ) : (
+          <span className="w-4 shrink-0" />
+        )}
+        <span className="flex-1 truncate">{option.label}</span>
+        {count != null && <span className="font-num text-[12px] tabular-nums text-muted shrink-0">{count}</span>}
+      </span>
+    );
+  };
+
+  const transcriptTierCounts = useMemo(() => {
+    const base = transcriptCategory
+      ? scopedTranscript.filter((ep) => ep.category === transcriptCategory)
+      : scopedTranscript;
+    const counts = { all: base.length, done: 0, youtube: 0, whisper: 0, none: 0 };
+    for (const ep of base) {
+      const status = transcriptIndex?.get(ep.youtubeId ?? ep.id);
+      if (!status) {
+        counts.none += 1;
+      } else {
+        counts[transcriptTier(status.source)] += 1;
+      }
+    }
+    return counts;
+  }, [scopedTranscript, transcriptCategory, transcriptIndex]);
+
+  const transcriptTierOptions: FilterOption[] = [
+    { value: "", label: "All" },
+    { value: "done", label: TIER_META.done.label },
+    { value: "youtube", label: TIER_META.youtube.label },
+    { value: "whisper", label: TIER_META.whisper.label },
+    { value: "none", label: NONE_META.label },
+  ];
+
+  const tierDot = (value: string) => {
+    if (!value) {
+      return null;
+    }
+    return value === "none" ? NONE_META.dot : TIER_META[value as TranscriptTier].dot;
+  };
+
+  const renderTierValue = (option: FilterOption) => {
+    if (!option.value) {
+      return <span className="truncate text-subtle">STATUS</span>;
+    }
+    return (
+      <span className="flex min-w-0 items-center gap-2 truncate">
+        <span className={cn("h-2 w-2 shrink-0 rounded-full", tierDot(option.value))} />
+        {option.label}
+      </span>
+    );
+  };
+
+  const renderTierOption = (option: FilterOption) => {
+    const dot = tierDot(option.value);
+    const key = (option.value || "all") as keyof typeof transcriptTierCounts;
+    const count = transcriptTierCounts[key];
+    return (
+      <span className="flex w-full min-w-0 items-center gap-2.5">
+        {dot ? <span className={cn("h-2 w-2 shrink-0 rounded-full", dot)} /> : <span className="w-2 shrink-0" />}
+        <span className="flex-1 truncate">{option.label}</span>
+        <span className="font-num text-[12px] tabular-nums text-muted shrink-0">{count > 0 ? count : "-"}</span>
+      </span>
+    );
+  };
+
+  const transcriptCategoryDropdown = (
+    <FilterDropdown
+      value={transcriptCategory}
+      options={transcriptCategoryOptions}
+      onChange={(v) => {
+        setTranscriptCategory(v as EpisodeCategory | "");
+        setVisible(PAGE_SIZE);
+      }}
+      renderValue={renderCategoryValue}
+      renderOption={renderCategoryOption}
+      searchable={false}
+      triggerClassName="!min-w-[150px] !h-10 !py-0 hover:!bg-surface2"
+      mobileCentered
+    />
+  );
+  const transcriptStatusDropdown = (
+    <FilterDropdown
+      value={transcriptTierFilter}
+      options={transcriptTierOptions}
+      onChange={(v) => {
+        setTranscriptTierFilter(v as TranscriptTier | "none" | "");
+        setVisible(PAGE_SIZE);
+      }}
+      renderValue={renderTierValue}
+      renderOption={renderTierOption}
+      searchable={false}
+      triggerClassName="!min-w-[120px] !h-10 !py-0 hover:!bg-surface2"
+      mobileCentered
+    />
+  );
+  const transcriptToolbarFilters = transcriptsView ? (
+    <div className="hidden shrink-0 items-center gap-2 lg:flex">
+      {transcriptCategoryDropdown}
+      {isTranscriptAdmin ? transcriptStatusDropdown : null}
+    </div>
+  ) : null;
+
+  const searchField = (
+    <>
+      <Search
+        size={15}
+        strokeWidth={2}
+        className={cn(
+          "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 transition-colors",
+          query.trim() ? "text-green" : "text-dim",
+        )}
+      />
+      <input
+        value={query}
+        onChange={(e) => updateQuery(e.target.value)}
+        placeholder="Search"
+        className={cn(
+          "w-full h-10 bg-bg border pl-9 pr-3.5 text-[14px] text-text placeholder:text-dim outline-none transition-colors focus:border-green",
+          query.trim() ? "border-green" : "border-border2",
+        )}
+      />
+    </>
+  );
+
+  const onTranscriptSort = (key: TranscriptSortKey) => {
+    setTranscriptSort((prev) => {
+      if (prev.key === key) {
+        return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+      }
+      const numericFirst = key === "date" || key === "words" || key === "status";
+      return { key, dir: numericFirst ? "desc" : "asc" };
+    });
+    setVisible(PAGE_SIZE);
+  };
+
   const filtered = useMemo(() => {
-    const base = shortsView ? scopedShorts : audioView ? scopedAudio : scopedLongform;
-    const rows = !shortsView && !audioView && activeCategory ? base.filter((ep) => ep.category === activeCategory) : base;
+    const base = shortsView
+      ? scopedShorts
+      : audioView
+        ? scopedAudio
+        : transcriptsView
+          ? filteredTranscript
+          : scopedLongform;
+    const rows = !sectionView && activeCategory ? base.filter((ep) => ep.category === activeCategory) : base;
+    if (transcriptsView) {
+      return sortTranscriptRows(rows, transcriptSort, transcriptIndex);
+    }
     return sortEpisodes(rows, sort);
-  }, [shortsView, audioView, scopedShorts, scopedAudio, scopedLongform, activeCategory, sort]);
+  }, [shortsView, audioView, transcriptsView, sectionView, scopedShorts, scopedAudio, filteredTranscript, scopedLongform, activeCategory, sort, transcriptSort, transcriptIndex]);
 
   useEffect(() => {
     if (visible >= filtered.length) {
@@ -391,8 +653,13 @@ export function EpisodesPage() {
       { rootMargin: "600px" },
     );
     observer.observe(sentinel);
+    // The sentinel may already sit on-screen (short list); bump directly since StrictMode's
+    // mount/cleanup/mount can drop the observer's initial callback in that case.
+    if (sentinel.getBoundingClientRect().top < window.innerHeight + 600) {
+      setVisible((current) => Math.min(current + PAGE_SIZE, filtered.length));
+    }
     return () => observer.disconnect();
-  }, [visible, filtered.length]);
+  }, [visible, filtered.length, openEpisodeId]);
 
   const chooseAll = () => {
     setCategory(null);
@@ -410,29 +677,39 @@ export function EpisodesPage() {
     showAudio();
     setDrawerOpen(false);
   };
+  const chooseTranscripts = () => {
+    showTranscripts();
+    setDrawerOpen(false);
+  };
 
   const mobileFilter = shortsView
     ? { label: "Shorts", icon: Zap }
     : audioView
       ? { label: "Audio", icon: Headphones }
-      : activeCategory
-        ? { label: activeCategory, icon: CATEGORY_ICON[activeCategory] }
-        : null;
+      : transcriptsView
+        ? { label: "Transcripts", icon: Captions }
+        : activeCategory
+          ? { label: activeCategory, icon: CATEGORY_ICON[activeCategory] }
+          : null;
 
   const railProps = {
     allCount: scopedLongform.length,
     shortsCount: scopedShorts.length,
-    shortsExist: shorts.length > 0,
+    shortsExist: isPending || shorts.length > 0,
     audioCount: scopedAudio.length,
-    audioExist: withAudio.length > 0,
+    audioExist: isPending || withAudio.length > 0,
+    transcriptsCount: scopedTranscript.filter((ep) => transcriptIndex?.has(transcriptKey(ep))).length,
+    transcriptsExist: isPending || withTranscript.length > 0,
     counts,
     activeCategory,
     shortsView,
     audioView,
+    transcriptsView,
     onAll: chooseAll,
     onCategory: chooseCategory,
     onShorts: chooseShorts,
     onAudio: chooseAudio,
+    onTranscripts: chooseTranscripts,
   };
 
   return (
@@ -458,7 +735,8 @@ export function EpisodesPage() {
 
         <div className="min-w-0 flex-1">
           {openEpisode || (looksLikeEpisodeTarget && isPending) ? null : (
-          <div className="sticky top-0 z-10 flex h-[60px] items-center gap-2.5 border-b border-border bg-surface px-4 md:px-6">
+          <div className="sticky top-0 z-10 border-b border-border bg-surface">
+            <div className="flex h-[60px] items-center gap-2.5 px-4 md:px-6">
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
@@ -482,28 +760,17 @@ export function EpisodesPage() {
             {isMobile ? (
               <span className="shrink-0">{setFilterDropdown}</span>
             ) : (
-              <Tooltip label="Filter by set" side="bottom">
+              <Tooltip label="Filter by set" side="top">
                 <span className="shrink-0">{setFilterDropdown}</span>
               </Tooltip>
             )}
-            <div ref={searchWrapRef} className="relative min-w-0 flex-1">
-              <Search
-                size={15}
-                strokeWidth={2}
-                className={cn(
-                  "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 transition-colors",
-                  query.trim() ? "text-green" : "text-dim",
-                )}
-              />
-              <input
-                value={query}
-                onChange={(e) => updateQuery(e.target.value)}
-                placeholder="Search"
-                className={cn(
-                  "w-full h-10 bg-bg border pl-9 pr-3.5 text-[14px] text-text placeholder:text-dim outline-none transition-colors focus:border-green",
-                  query.trim() ? "border-green" : "border-border2",
-                )}
-              />
+            {transcriptsView ? <div className="min-w-0 flex-1 lg:hidden">{transcriptCategoryDropdown}</div> : null}
+            {transcriptToolbarFilters}
+            <div
+              ref={searchWrapRef}
+              className={cn("relative min-w-0 flex-1", transcriptsView && "hidden lg:block")}
+            >
+              {searchField}
             </div>
             <SortControl value={sort} onChange={setSort} className="hidden sm:flex shrink-0" />
             <div className="ml-1 hidden xl:flex items-center gap-2.5">
@@ -525,11 +792,27 @@ export function EpisodesPage() {
                 );
               })}
             </div>
+            </div>
+            {transcriptsView ? (
+              <div className="flex items-center gap-2.5 px-4 pb-3 md:px-6 lg:hidden">
+                <div className="relative min-w-0 flex-1">{searchField}</div>
+                {isTranscriptAdmin ? transcriptStatusDropdown : null}
+              </div>
+            ) : null}
           </div>
           )}
 
-          <div ref={listRef} className="px-4 md:px-6 pt-6 pb-4">
-            {openEpisode ? (
+          <div
+            ref={listRef}
+            className={cn(
+              "pb-4 pl-4 md:pl-6",
+              transcriptsView ? "pt-0" : "pt-6",
+              transcriptsView && !openEpisode ? "pr-0" : "pr-4 md:pr-6",
+            )}
+          >
+            {openEpisode && transcriptsView ? (
+              <TranscriptArticle episode={openEpisode} />
+            ) : openEpisode ? (
               <EpisodeDetail
                 episode={openEpisode}
                 audioMode={audioView}
@@ -537,13 +820,17 @@ export function EpisodesPage() {
                 siblings={episodes}
               />
             ) : looksLikeEpisodeTarget && isPending ? (
-              <EpisodeDetailSkeleton />
+              transcriptsView ? <TranscriptArticleSkeleton /> : <EpisodeDetailSkeleton />
             ) : awaitingSetSlug || (isPending && filtered.length === 0) ? (
-              <Grid>
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="aspect-video bg-surface border border-border animate-pulse" />
-                ))}
-              </Grid>
+              transcriptsView ? (
+                <TranscriptListSkeleton showStatus={isTranscriptAdmin} />
+              ) : (
+                <Grid>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="aspect-video bg-surface border border-border animate-pulse" />
+                  ))}
+                </Grid>
+              )
             ) : isError ? (
               <p className="text-muted text-[14px] py-8">Could not load episodes. Refresh to try again.</p>
             ) : filtered.length ? (
@@ -555,6 +842,25 @@ export function EpisodesPage() {
                         <ShortCard key={ep.id} episode={ep} thumbnailPending={thumbnailsPending} />
                       ))}
                     </ShortGrid>
+                  ) : transcriptsView ? (
+                    <div>
+                      <TranscriptRowHeader
+                        sort={transcriptSort}
+                        onSort={onTranscriptSort}
+                        showStatus={isTranscriptAdmin}
+                      />
+                      <div className="divide-y divide-border">
+                        {filtered.slice(0, visible).map((ep) => (
+                          <TranscriptRow
+                            key={ep.id}
+                            episode={ep}
+                            detailBase={detailBase}
+                            status={statusOf(ep)}
+                            showStatus={isTranscriptAdmin}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ) : (
                     <Grid>
                       {filtered.slice(0, visible).map((ep) => (
@@ -578,7 +884,7 @@ export function EpisodesPage() {
             ) : (
               <EmptyResults
                 query={needle ? query.trim() : ""}
-                noun={shortsView ? "shorts" : audioView ? "audio episodes" : "episodes"}
+                noun={shortsView ? "shorts" : audioView ? "audio episodes" : transcriptsView ? "transcripts" : "episodes"}
                 category={activeCategory}
                 set={activeSet}
                 indent={searchIndent}
@@ -626,6 +932,37 @@ function readStoredTranscriptWide(): boolean {
   return window.localStorage.getItem(TRANSCRIPT_WIDE_KEY) === "1";
 }
 
+const ARTICLE_WIDE_KEY = "llu:transcript-article-wide";
+
+function readStoredArticleWide(): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  return window.localStorage.getItem(ARTICLE_WIDE_KEY) !== "0";
+}
+
+const ARTICLE_CHAPTERS_KEY = "llu:transcript-article-chapters";
+
+function readStoredArticleChapters(): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  return window.localStorage.getItem(ARTICLE_CHAPTERS_KEY) !== "0";
+}
+
+const TRANSCRIPT_CATEGORY_KEY = "llu:transcript-category";
+const TRANSCRIPT_TIER_KEY = "llu:transcript-tier";
+
+function readStoredTranscriptCategory(): EpisodeCategory | "" {
+  const value = typeof window === "undefined" ? null : window.localStorage.getItem(TRANSCRIPT_CATEGORY_KEY);
+  return value && (EPISODE_CATEGORIES as readonly string[]).includes(value) ? (value as EpisodeCategory) : "";
+}
+
+function readStoredTranscriptTier(): TranscriptTier | "none" | "" {
+  const value = typeof window === "undefined" ? null : window.localStorage.getItem(TRANSCRIPT_TIER_KEY);
+  return value === "done" || value === "youtube" || value === "whisper" || value === "none" ? value : "";
+}
+
 const READING_SETTINGS_KEY = "llu:transcript-reading";
 
 type ReadingSettings = { highlight: boolean; autoScroll: boolean; textPx: number };
@@ -665,6 +1002,10 @@ function EpisodeDetail({
   const canGoWide = availableWidth > 1200;
   const [videoHeightVh, setVideoHeightVh] = useState<number>(readStoredVideoHeight);
   const [transcriptWide, setTranscriptWide] = useState<boolean>(readStoredTranscriptWide);
+  const chapterRailReserve = 300 + 16;
+  const boardWidth = Math.min(availableWidth || 1120, 1120);
+  const videoMaxHeightPx = Math.max(0, Math.floor((boardWidth - chapterRailReserve) * 0.5625));
+  const wideLayout = transcriptWide && canGoWide;
   const changeTranscriptWide = (wide: boolean) => {
     setTranscriptWide(wide);
     window.localStorage.setItem(TRANSCRIPT_WIDE_KEY, wide ? "1" : "0");
@@ -867,8 +1208,12 @@ function EpisodeDetail({
         )}
       >
         <div
-          className={cn("lg:flex lg:items-start lg:gap-4", richLayout && "lg:justify-center")}
-          style={resizableVideo ? ({ "--epv": `${videoHeightVh}vh` } as CSSProperties) : undefined}
+          className={cn("lg:flex lg:items-start lg:gap-4", wideLayout && "lg:justify-center")}
+          style={
+            resizableVideo
+              ? ({ "--epv": `${videoHeightVh}vh`, "--epvmax": `${videoMaxHeightPx}px` } as CSSProperties)
+              : undefined
+          }
           onPointerEnter={richLayout ? enterReadingHandle : undefined}
           onPointerLeave={richLayout ? leaveReadingHandle : undefined}
         >
@@ -890,7 +1235,7 @@ function EpisodeDetail({
               <div
                 className={cn(
                   "relative aspect-video w-full overflow-hidden border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:rounded-lg md:border lg:mx-0 lg:rounded-none lg:border-0",
-                  richLayout ? "lg:h-[var(--epv)] lg:max-h-[calc((100vw_-_616px)*0.5625)] lg:w-auto" : "lg:h-auto lg:w-full",
+                  richLayout ? "lg:h-[var(--epv)] lg:max-h-[var(--epvmax)] lg:w-auto" : "lg:h-auto lg:w-full",
                 )}
               >
                 <EpisodeEmbed
@@ -953,20 +1298,22 @@ function EpisodeDetail({
               </div>
             )}
           </div>
-          {richLayout && !usingAudioPlayer && (chapters.length > 0 || !transcriptSettled) ? (
-            <aside className="relative hidden lg:flex lg:flex-col lg:w-[300px] lg:shrink-0">
-              <ChapterNav
-                className="lg:max-h-[var(--epv,40vh)]"
-                chapters={chapters}
-                activeT={activeChapterT}
-                onJump={jumpToChapter}
-                loading={chapters.length === 0}
-              />
+          {richLayout && !usingAudioPlayer && (hasTranscript || !transcriptSettled) ? (
+            <aside className="relative hidden lg:flex lg:flex-col lg:w-[300px] lg:shrink-0 lg:h-[var(--epv)] lg:max-h-[var(--epvmax)]">
+              {chapters.length > 0 || !transcriptSettled ? (
+                <ChapterNav
+                  className="lg:min-h-0 lg:shrink"
+                  chapters={chapters}
+                  activeT={activeChapterT}
+                  onJump={jumpToChapter}
+                  loading={chapters.length === 0}
+                />
+              ) : null}
               <div
                 onPointerEnter={enterReadingHandle}
                 onPointerLeave={leaveReadingHandle}
                 className={cn(
-                  "absolute left-0 top-full z-20 flex w-fit justify-start pt-2 transition-opacity duration-200",
+                  "mt-auto flex w-fit justify-start pt-2 transition-opacity duration-200",
                   showReadingHandle ? "opacity-100" : "opacity-0",
                 )}
               >
@@ -1078,6 +1425,8 @@ function ReadingSettings({
   panelUp = false,
   panelLeft = false,
   floating = false,
+  articleMode = false,
+  block = false,
 }: {
   settings: ReadingSettings;
   onChange: (next: ReadingSettings) => void;
@@ -1088,6 +1437,8 @@ function ReadingSettings({
   panelUp?: boolean;
   panelLeft?: boolean;
   floating?: boolean;
+  articleMode?: boolean;
+  block?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const body = (
@@ -1108,22 +1459,26 @@ function ReadingSettings({
           <span className="font-display text-[15px] leading-none text-muted">A</span>
         </div>
       </SettingRow>
-      <div className="my-1 h-px bg-border" />
-      <ToggleRow
-        label="Read Along"
-        on={settings.highlight}
-        onToggle={() => onChange({ ...settings, highlight: !settings.highlight })}
-      />
-      <ToggleRow
-        label="Auto-Scroll"
-        on={settings.autoScroll}
-        onToggle={() => onChange({ ...settings, autoScroll: !settings.autoScroll })}
-      />
+      {articleMode ? null : (
+        <>
+          <div className="my-1 h-px bg-border" />
+          <ToggleRow
+            label="Read Along"
+            on={settings.highlight}
+            onToggle={() => onChange({ ...settings, highlight: !settings.highlight })}
+          />
+          <ToggleRow
+            label="Auto-Scroll"
+            on={settings.autoScroll}
+            onToggle={() => onChange({ ...settings, autoScroll: !settings.autoScroll })}
+          />
+        </>
+      )}
       {canGoWide ? <ToggleRow label="Full Width" on={wide} onToggle={() => onWideChange(!wide)} /> : null}
     </div>
   );
   return (
-    <div className="relative">
+    <div className={cn("relative", block && "w-full")}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -1131,7 +1486,11 @@ function ReadingSettings({
         aria-label="Reading options"
         className={cn(
           "flex h-8 cursor-pointer items-center border leading-none transition-colors",
-          isMobile ? "w-8 justify-center" : "gap-1.5 px-2.5 font-display text-[14px] tracking-[0.04em]",
+          isMobile
+            ? "w-8 justify-center"
+            : block
+              ? "w-full justify-center gap-1.5 px-2 font-display text-[13px] tracking-[0.02em]"
+              : "gap-1.5 px-2.5 font-display text-[14px] tracking-[0.04em]",
           open ? "relative z-50" : "",
           floating && !open && "bg-surface/95 text-subtle shadow-[0_6px_18px_rgba(0,0,0,0.45)] backdrop-blur-sm",
           open
@@ -1139,11 +1498,15 @@ function ReadingSettings({
             : cn("border-border2 hover:border-green hover:text-green", floating ? "" : "bg-transparent text-subtle"),
         )}
       >
-        <Settings size={isMobile ? 16 : 14} strokeWidth={2} />
+        <Settings size={isMobile ? 16 : 14} strokeWidth={2} className="shrink-0" />
         {isMobile ? null : (
           <>
-            <span>Reading options</span>
-            <ChevronDown size={14} strokeWidth={2.25} className={cn("transition-transform", open ? "rotate-180" : "")} />
+            <span className="whitespace-nowrap">{block ? "Options" : "Reading options"}</span>
+            <ChevronDown
+              size={14}
+              strokeWidth={2.25}
+              className={cn("shrink-0 transition-transform", open ? "rotate-180" : "")}
+            />
           </>
         )}
       </button>
@@ -1215,6 +1578,8 @@ function ChapterNav({
   loading,
   className,
   style,
+  hideTime = false,
+  compact = false,
 }: {
   chapters: { t: number; heading: string }[];
   activeT: number;
@@ -1222,10 +1587,16 @@ function ChapterNav({
   loading: boolean;
   className?: string;
   style?: CSSProperties;
+  hideTime?: boolean;
+  compact?: boolean;
 }) {
   return (
     <nav
-      className={cn("flex flex-col overflow-y-auto border border-border bg-surface/40 px-3 py-1", className)}
+      className={cn(
+        "flex flex-col overflow-y-auto border border-border bg-surface/40",
+        compact ? "items-stretch px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : "px-3",
+        className,
+      )}
       style={style}
     >
       {loading
@@ -1240,6 +1611,26 @@ function ChapterNav({
           ))
         : chapters.map((chapter) => {
             const isActive = chapter.t === activeT;
+            if (compact) {
+              return (
+                <button
+                  key={chapter.t}
+                  type="button"
+                  onClick={() => onJump(chapter.t)}
+                  title={chapter.heading}
+                  className="group flex cursor-pointer items-center justify-center border-t border-border/40 py-2.5 leading-snug first:border-t-0"
+                >
+                  <span
+                    className={cn(
+                      "font-display text-[15px] uppercase leading-snug transition-colors group-hover:text-green",
+                      isActive ? "text-green" : "text-subtle",
+                    )}
+                  >
+                    {chapter.heading.trim().charAt(0)}
+                  </span>
+                </button>
+              );
+            }
             return (
               <button
                 key={chapter.t}
@@ -1255,7 +1646,9 @@ function ChapterNav({
                 >
                   {chapter.heading}
                 </span>
-                <span className="font-num shrink-0 text-[12px] text-green">{formatTimestamp(chapter.t)}</span>
+                {hideTime ? null : (
+                  <span className="font-num shrink-0 text-[12px] text-green">{formatTimestamp(chapter.t)}</span>
+                )}
               </button>
             );
           })}
@@ -1263,14 +1656,272 @@ function ChapterNav({
   );
 }
 
+function TranscriptArticle({ episode }: { episode: Episode }) {
+  const { transcript, settled } = useEpisodeTranscript(episode);
+  const [collapsedChapters, setCollapsedChapters] = useState<ReadonlySet<number>>(() => new Set());
+  const [reading, setReading] = useState<ReadingSettings>(readStoredReading);
+  const changeReading = (next: ReadingSettings) => {
+    setReading(next);
+    window.localStorage.setItem(READING_SETTINGS_KEY, JSON.stringify(next));
+  };
+  const [wide, setWide] = useState<boolean>(readStoredArticleWide);
+  const changeWide = (value: boolean) => {
+    setWide(value);
+    window.localStorage.setItem(ARTICLE_WIDE_KEY, value ? "1" : "0");
+  };
+  const [chaptersExpanded, setChaptersExpanded] = useState<boolean>(readStoredArticleChapters);
+  const changeChaptersExpanded = (value: boolean) => {
+    setChaptersExpanded(value);
+    window.localStorage.setItem(ARTICLE_CHAPTERS_KEY, value ? "1" : "0");
+  };
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el) {
+      return;
+    }
+    const measure = () => setHeaderHeight(el.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const chapters = useMemo(
+    () => (transcript ?? []).filter((s) => s.heading).map((s) => ({ t: s.t, heading: s.heading as string })),
+    [transcript],
+  );
+  const toggleChapter = (t: number) =>
+    setCollapsedChapters((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) {
+        next.delete(t);
+      } else {
+        next.add(t);
+      }
+      return next;
+    });
+  const jumpToHeading = (t: number) => {
+    setCollapsedChapters((prev) => {
+      if (!prev.has(t)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(t);
+      return next;
+    });
+    const target = document.getElementById(`ch-${t}`);
+    if (!target) {
+      return;
+    }
+    animateScrollTo(target.getBoundingClientRect().top + window.scrollY - headerHeight - 12);
+  };
+  const plainText = useMemo(
+    () => (transcript ? transcriptToText(episode.title, transcript) : ""),
+    [transcript, episode.title],
+  );
+  const hasBody = Boolean(transcript && transcript.length > 0);
+  const hasChapters = chapters.length > 0;
+  const download = () => downloadTextFile(`${episode.slug ?? "transcript"}.txt`, plainText);
+  const [activeChapterT, setActiveChapterT] = useState(-1);
+  useEffect(() => {
+    if (!hasChapters) {
+      return;
+    }
+    let queued = false;
+    const update = () => {
+      queued = false;
+      const threshold = headerHeight + 28;
+      let active = -1;
+      for (const chapter of chapters) {
+        const el = document.getElementById(`ch-${chapter.t}`);
+        if (el && el.getBoundingClientRect().top <= threshold) {
+          active = chapter.t;
+        } else {
+          break;
+        }
+      }
+      setActiveChapterT(active);
+    };
+    const onScroll = () => {
+      if (queued) {
+        return;
+      }
+      queued = true;
+      requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [hasChapters, chapters, headerHeight]);
+  const readingControl = (mobile: boolean, block = false) => (
+    <ReadingSettings
+      settings={reading}
+      onChange={changeReading}
+      wide={wide}
+      onWideChange={changeWide}
+      isMobile={mobile}
+      canGoWide={!mobile}
+      articleMode
+      block={block}
+      panelUp={false}
+      panelLeft={false}
+    />
+  );
+
+  return (
+    <div className="w-full">
+      <div
+        ref={headerRef}
+        className="sticky top-0 z-20 -mx-4 bg-bg/95 px-4 pt-4 pb-3 backdrop-blur md:-mx-6 md:px-6 md:pt-6 md:pb-4"
+      >
+        <div className="pointer-events-none absolute inset-x-0 top-full h-3 bg-gradient-to-b from-bg to-transparent" />
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0 w-fit max-w-full">
+            <div className="flex w-full items-center justify-between gap-3">
+              <EpisodeTag episode={episode} glyphSize={16} />
+              <span className="font-num text-[11px] tracking-[0.06em] text-muted">
+                {episode.publishedLabel.toUpperCase()}
+              </span>
+            </div>
+            <h1 className="mt-1.5 font-display text-[18px] leading-tight text-text line-clamp-1 md:text-[22px]">
+              {episode.title}
+            </h1>
+          </div>
+          {hasBody ? (
+            <div className={cn("flex shrink-0 items-center gap-2", hasChapters && "lg:hidden")}>
+              {readingControl(true)}
+              <button
+                type="button"
+                onClick={download}
+                aria-label="Download transcript"
+                className="flex h-8 w-8 items-center justify-center border border-border2 text-subtle transition-colors hover:border-green hover:text-green"
+              >
+                <Download size={16} strokeWidth={2} />
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {hasBody ? (
+        <div className={cn("mt-2 lg:mt-3 lg:flex lg:gap-10", wide && "lg:gap-6")}>
+          <aside
+            className={cn(
+              "hidden lg:shrink-0",
+              hasChapters && "lg:block",
+              chaptersExpanded ? "lg:w-[280px]" : "lg:w-8",
+            )}
+          >
+            <div className="lg:sticky" style={{ top: headerHeight + 12 }}>
+              {hasChapters ? (
+                <ChapterNav
+                  className="overflow-y-auto"
+                  style={{ maxHeight: `calc(100vh - ${headerHeight + 100}px)` }}
+                  chapters={chapters}
+                  activeT={activeChapterT}
+                  onJump={jumpToHeading}
+                  loading={false}
+                  hideTime
+                  compact={!chaptersExpanded}
+                />
+              ) : null}
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => changeChaptersExpanded(!chaptersExpanded)}
+                  aria-label={chaptersExpanded ? "Collapse chapters" : "Expand chapters"}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center border border-border2 text-subtle transition-colors hover:border-green hover:text-green"
+                >
+                  {chaptersExpanded ? <ChevronsLeft size={16} strokeWidth={2} /> : <ChevronsRight size={16} strokeWidth={2} />}
+                </button>
+                {chaptersExpanded ? (
+                  <div className="grid flex-1 grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={download}
+                      className="flex h-8 w-full items-center justify-center gap-1.5 border border-border2 px-2 font-display text-[13px] leading-none tracking-[0.02em] text-subtle transition-colors hover:border-green hover:text-green"
+                    >
+                      <Download size={14} strokeWidth={2} className="shrink-0" />
+                      <span className="leading-none">Download</span>
+                    </button>
+                    {readingControl(false, true)}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </aside>
+          <div className={cn("min-w-0 flex-1 border-t border-border", wide ? "lg:max-w-none" : "lg:max-w-3xl")}>
+            <EpisodeTranscript
+              segments={transcript as TranscriptSegment[]}
+              setCode={episode.setCode}
+              currentTime={0}
+              collapsedChapters={collapsedChapters}
+              onToggleChapter={toggleChapter}
+              features={{ articleMode: true, textPx: reading.textPx }}
+            />
+          </div>
+        </div>
+      ) : settled ? (
+        <p className="mt-8 text-[14px] text-muted">No transcript yet.</p>
+      ) : (
+        <TranscriptContentSkeleton />
+      )}
+    </div>
+  );
+}
+
+function TranscriptContentSkeleton() {
+  return (
+    <div className="mt-2 lg:mt-3 lg:flex lg:gap-10">
+      <aside className="hidden lg:block lg:w-[280px] lg:shrink-0">
+        <ChapterNav className="lg:max-h-[70vh]" chapters={[]} activeT={-1} onJump={() => {}} loading hideTime />
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="h-8 animate-pulse bg-surface" />
+          <div className="h-8 animate-pulse bg-surface" />
+        </div>
+      </aside>
+      <div className="min-w-0 flex-1 border-t border-border pt-2 lg:pt-4">
+        {Array.from({ length: 3 }).map((_, group) => (
+          <div key={group} className={group === 0 ? "" : "mt-8"}>
+            <div className="mb-3 h-5 w-1/3 animate-pulse bg-surface" />
+            <div className="space-y-2.5">
+              {Array.from({ length: 4 }).map((_, line) => (
+                <div key={line} className="h-4 animate-pulse bg-surface" style={{ width: `${96 - (line % 4) * 9}%` }} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TranscriptArticleSkeleton() {
+  return (
+    <div className="w-full">
+      <div className="-mx-4 px-4 pt-4 pb-3 md:-mx-6 md:px-6 md:pt-6 md:pb-4">
+        <div className="w-2/3 max-w-xl">
+          <div className="flex items-center justify-between gap-3">
+            <div className="h-5 w-24 animate-pulse rounded bg-surface" />
+            <div className="h-3 w-20 animate-pulse rounded bg-surface" />
+          </div>
+          <div className="mt-1.5 h-6 w-full animate-pulse rounded bg-surface md:h-7" />
+        </div>
+      </div>
+      <TranscriptContentSkeleton />
+    </div>
+  );
+}
+
 function EpisodeDetailSkeleton() {
   return (
     <div className="mx-auto w-full max-w-[1120px]">
       <div
-        className="-mx-4 -mt-6 md:mx-0 md:mt-0 lg:flex lg:items-start lg:justify-center lg:gap-4"
+        className="-mx-4 -mt-6 md:-mx-6 md:mt-0 md:px-6 lg:-mx-5 lg:px-5 lg:flex lg:items-start lg:gap-4"
         style={{ "--epv": `${VIDEO_HEIGHT_DEFAULT}vh` } as CSSProperties}
       >
-        <div className="relative aspect-video w-full animate-pulse border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:rounded-lg md:border lg:mx-0 lg:h-[var(--epv)] lg:max-h-[calc((100vw_-_616px)*0.5625)] lg:w-auto lg:shrink-0 lg:rounded-none lg:border-0" />
+        <div className="relative aspect-video w-full animate-pulse border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:rounded-lg md:border lg:mx-0 lg:h-[var(--epv)] lg:max-h-[calc((min(100vw,1120px)_-_316px)*0.5625)] lg:w-auto lg:shrink-0 lg:rounded-none lg:border-0" />
         <ChapterNav
           className="hidden lg:flex lg:w-[300px] lg:shrink-0 lg:max-h-[var(--epv,40vh)]"
           chapters={[]}
@@ -1362,13 +2013,12 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-const stripSpeakerTurns = (text: string): string =>
-  text.replace(/\s*>{2,}\s*/g, " ").replace(/\s{2,}/g, " ").trim();
 
 type TranscriptFeatures = {
   highlight?: boolean;
   autoScroll?: boolean;
   textPx?: number;
+  articleMode?: boolean;
 };
 
 function EpisodeTranscript({
@@ -1392,7 +2042,10 @@ function EpisodeTranscript({
   topInset?: number;
   headerAction?: ReactNode;
 }) {
-  const { highlight = true, autoScroll = false, textPx = 15 } = features ?? {};
+  const articleMode = features?.articleMode ?? false;
+  const highlight = (features?.highlight ?? true) && !articleMode;
+  const autoScroll = (features?.autoScroll ?? false) && !articleMode;
+  const textPx = features?.textPx ?? 15;
   const bodyRef = useRef<HTMLDivElement>(null);
   const cardNames = useMemo(() => {
     const names = new Set<string>();
@@ -1549,7 +2202,7 @@ function EpisodeTranscript({
   }, [items]);
 
   return (
-    <div className="mt-4 border-t border-border pt-4 lg:mt-6">
+    <div className={cn(articleMode ? "pt-2 lg:pt-4" : "mt-4 border-t border-border pt-4 lg:mt-6")}>
       <div ref={bodyRef} className="w-full" style={{ ["--tsize" as string]: `${textPx}px` }}>
         {items.map((item, index) => {
           if (item.kind !== "chapter") {
@@ -1584,7 +2237,7 @@ function EpisodeTranscript({
                     {item.heading}
                   </h3>
                 </button>
-                {onSeek ? (
+                {articleMode ? null : onSeek ? (
                   <button
                     type="button"
                     onClick={() => onSeek(item.t)}
@@ -1619,7 +2272,7 @@ function EpisodeTranscript({
                       {item.title}
                     </span>
                   </button>
-                  {onSeek ? (
+                  {articleMode ? null : onSeek ? (
                     <button
                       type="button"
                       onClick={() => onSeek(item.t)}
@@ -1705,14 +2358,18 @@ function CategoryRail({
   shortsExist,
   audioCount,
   audioExist,
+  transcriptsCount,
+  transcriptsExist,
   counts,
   activeCategory,
   shortsView,
   audioView,
+  transcriptsView,
   onAll,
   onCategory,
   onShorts,
   onAudio,
+  onTranscripts,
   collapsed = false,
   onCollapse,
   onExpand,
@@ -1722,14 +2379,18 @@ function CategoryRail({
   shortsExist: boolean;
   audioCount: number;
   audioExist: boolean;
+  transcriptsCount: number;
+  transcriptsExist: boolean;
   counts: Map<EpisodeCategory, number>;
   activeCategory: EpisodeCategory | null;
   shortsView: boolean;
   audioView: boolean;
+  transcriptsView: boolean;
   onAll: () => void;
   onCategory: (category: EpisodeCategory) => void;
   onShorts: () => void;
   onAudio: () => void;
+  onTranscripts: () => void;
   collapsed?: boolean;
   onCollapse?: () => void;
   onExpand?: () => void;
@@ -1774,7 +2435,7 @@ function CategoryRail({
           label="All"
           icon={LayoutGrid}
           count={allCount}
-          active={!shortsView && !audioView && !activeCategory}
+          active={!shortsView && !audioView && !transcriptsView && !activeCategory}
           collapsed={collapsed}
           onClick={onAll}
         />
@@ -1799,7 +2460,9 @@ function CategoryRail({
             />
           ))}
         </div>
-        {shortsExist || audioExist ? <div className="mx-4 my-2 border-t border-border" /> : null}
+        {shortsExist || audioExist || transcriptsExist ? (
+          <div className="mx-4 my-2 border-t border-border" />
+        ) : null}
         {shortsExist ? (
           <RailRow
             label="Shorts"
@@ -1818,6 +2481,16 @@ function CategoryRail({
             active={audioView}
             collapsed={collapsed}
             onClick={onAudio}
+          />
+        ) : null}
+        {transcriptsExist ? (
+          <RailRow
+            label="Transcripts"
+            icon={Captions}
+            count={transcriptsCount}
+            active={transcriptsView}
+            collapsed={collapsed}
+            onClick={onTranscripts}
           />
         ) : null}
       </div>
@@ -1964,4 +2637,37 @@ function sortEpisodes(rows: Episode[], sort: SortKey): Episode[] {
     sorted.reverse();
   }
   return sorted;
+}
+
+function tierRankOf(status: TranscriptStatus | undefined): number {
+  return status ? TIER_RANK[transcriptTier(status.source)] : 0;
+}
+
+function sortTranscriptRows(rows: Episode[], sort: TranscriptSort, index?: TranscriptIndex): Episode[] {
+  const dir = sort.dir === "asc" ? 1 : -1;
+  const statusOf = (ep: Episode) => index?.get(ep.youtubeId ?? ep.id);
+  const compare = (a: Episode, b: Episode): number => {
+    switch (sort.key) {
+      case "title":
+        return a.title.localeCompare(b.title);
+      case "set":
+        return (a.setCode ?? "").localeCompare(b.setCode ?? "");
+      case "category":
+        return a.category.localeCompare(b.category);
+      case "words":
+        return (statusOf(a)?.wordCount ?? 0) - (statusOf(b)?.wordCount ?? 0);
+      case "status":
+        return tierRankOf(statusOf(a)) - tierRankOf(statusOf(b));
+      case "date":
+      default:
+        return new Date(a.pubDate).getTime() - new Date(b.pubDate).getTime();
+    }
+  };
+  return [...rows].sort((a, b) => {
+    const primary = compare(a, b) * dir;
+    if (primary !== 0) {
+      return primary;
+    }
+    return new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime();
+  });
 }

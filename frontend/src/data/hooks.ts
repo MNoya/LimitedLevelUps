@@ -52,6 +52,7 @@ import {
   fetchDbEpisodes,
   fetchRecentDbEpisodes,
   fetchEpisodeTranscript,
+  fetchTranscriptIndex,
   upsertP0P1Pick,
   deleteAllP0P1Picks,
   fetchP0P1Ratings,
@@ -103,6 +104,14 @@ export function useEpisodeTranscript(episode: Episode): { transcript: Transcript
     staleTime: ONE_HOUR,
   });
   return { transcript: query.data ?? null, settled: !transcriptKey || query.isFetched };
+}
+
+export function useTranscriptIndex() {
+  return useQuery({
+    queryKey: ["transcript-index"],
+    queryFn: fetchTranscriptIndex,
+    staleTime: ONE_HOUR,
+  });
 }
 
 // DB rows are the authoritative, categorized base; a video the next bot sync has not folded in yet overlays on top

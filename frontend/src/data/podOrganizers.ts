@@ -10,6 +10,7 @@ const ENV_IDS = (import.meta.env.VITE_POD_ORGANIZER_DISCORD_IDS ?? "")
 const BUILT_IN_ORGANIZERS: Record<string, string> = {
   Noya: "237762740532412416",
   GatoDelFuego: "178987550780817408",
+  ChordOCalls: "507301384979349526",
 };
 
 const BUILT_IN_IDS = Object.values(BUILT_IN_ORGANIZERS);

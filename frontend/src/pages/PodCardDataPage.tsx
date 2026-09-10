@@ -494,21 +494,23 @@ function MetricHeader({
   isLast?: boolean;
 }) {
   const hasSuffix = col.key === "playRate";
-  const padding = mobile
-    ? cn("px-2 py-2", isLast && "pr-3")
-    : cn("px-3 py-2", isLast && "pr-5 md:pr-10");
+  const cellPadding = mobile
+    ? cn("px-2 py-2", isLast && "pr-1")
+    : cn("px-3 py-2", isLast && "pr-2 md:pr-7");
   return (
-    <Tooltip label={col.title} side="top">
-      <SortHeaderButton
-        label={mobile && col.shortLabel ? col.shortLabel : col.label}
-        active={sortKey === col.key}
-        dir={sortDir}
-        onClick={() => onSort(col.key)}
-        fill
-        className={padding}
-        trailing={hasSuffix ? <span className="ml-1 w-7 shrink-0" aria-hidden /> : null}
-      />
-    </Tooltip>
+    <div className={cn("flex justify-end", cellPadding)}>
+      <Tooltip label={col.title} side="top">
+        <SortHeaderButton
+          label={mobile && col.shortLabel ? col.shortLabel : col.label}
+          active={sortKey === col.key}
+          dir={sortDir}
+          onClick={() => onSort(col.key)}
+          fill
+          grow={false}
+          trailing={hasSuffix ? <span className="ml-1 w-7 shrink-0" aria-hidden /> : null}
+        />
+      </Tooltip>
+    </div>
   );
 }
 

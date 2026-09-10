@@ -37,6 +37,7 @@ const EPISODE_CATEGORY_DESCRIPTIONS: Record<string, string> = {
 
 const EPISODE_WATCH_FALLBACK = "Watch this episode";
 const EPISODE_LISTEN_FALLBACK = "Listen to this episode";
+const TRANSCRIPT_READ_DESCRIPTION = "Read this episode";
 
 const LEADERBOARD_DESCRIPTION =
   "Check ranks and trophies from the community. /join on Discord to share your drafts and climb the leaderboard";
@@ -339,6 +340,16 @@ const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
     const slug = rest[0];
     if (!slug) {
       return page("Episodes", "Check out the latest episodes, or search the archive");
+    }
+    if (slug === "transcripts") {
+      if (!rest[1]) {
+        return page("Transcripts", "Read the episode library");
+      }
+      const base = await episodeSlugMeta(rest[1]);
+      if (base) {
+        return { ...base, description: TRANSCRIPT_READ_DESCRIPTION };
+      }
+      return page(titleCaseSlug(rest[1], new Set()), TRANSCRIPT_READ_DESCRIPTION);
     }
     if (rest[1]) {
       const meta = await episodeSlugMeta(rest[1]);
