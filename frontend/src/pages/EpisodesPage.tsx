@@ -2070,15 +2070,33 @@ const SPEAKER_LANES = [
   { border: "border-[#f087c0]", name: "text-[#f087c0]" },
 ];
 
+const HOST_PRIORITY = ["Alex", "Marc", "Abram"];
+
 function annotateSpeakers(items: TranscriptItem[]): void {
+  const order: string[] = [];
+  const seen = new Set<string>();
+  const collect = (para: ParaLine) => {
+    if (para.speaker && !seen.has(para.speaker)) {
+      seen.add(para.speaker);
+      order.push(para.speaker);
+    }
+  };
+  for (const item of items) {
+    if (item.kind === "para") {
+      collect(item);
+    } else if (item.kind === "section") {
+      item.paras.forEach(collect);
+    }
+  }
+  const hosts = HOST_PRIORITY.filter((name) => seen.has(name));
+  const guests = order.filter((s) => !HOST_PRIORITY.includes(s));
   const laneOf = new Map<string, number>();
+  [...hosts, ...guests].forEach((speaker, index) => laneOf.set(speaker, index));
+
   let named = new Set<string>();
   const mark = (para: ParaLine) => {
     if (!para.speaker) {
       return;
-    }
-    if (!laneOf.has(para.speaker)) {
-      laneOf.set(para.speaker, laneOf.size);
     }
     para.lane = laneOf.get(para.speaker);
     if (!named.has(para.speaker)) {
