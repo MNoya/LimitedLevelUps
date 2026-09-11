@@ -1051,6 +1051,7 @@ function EpisodeDetail({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+  useStickyScrollPadding(headerHeight);
   useLayoutEffect(() => {
     const parent = rootRef.current?.parentElement;
     if (!parent) {
@@ -1675,6 +1676,7 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+  useStickyScrollPadding(headerHeight);
   const chapters = useMemo(
     () => (transcript ?? []).filter((s) => s.heading).map((s) => ({ t: s.t, heading: s.heading as string })),
     [transcript],
@@ -1977,6 +1979,25 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+const chapterSlug = (heading: string) =>
+  heading
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+function useStickyScrollPadding(headerHeight: number): void {
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.scrollPaddingTop = headerHeight ? `${headerHeight + 12}px` : "";
+    return () => {
+      root.style.scrollPaddingTop = "";
+    };
+  }, [headerHeight]);
+}
+
+const PATREON_URL = "https://www.patreon.com/limitedlevelups";
+const PATREON_PHRASE = /patreon(?:\.com|\s+dot\s+com)?\s*(?:\/|\s+slash\s+)\s*limited[-\s]*level[-\s]*ups/gi;
+
 
 type TranscriptFeatures = {
   highlight?: boolean;
@@ -2051,6 +2072,39 @@ function EpisodeTranscript({
 
   const firstChapterIndex = items.findIndex((item) => item.kind === "chapter");
 
+  const hashLocation = useLocation();
+  const handledHash = useRef("");
+  useEffect(() => {
+    const raw = decodeURIComponent(hashLocation.hash.replace(/^#/, "")).trim();
+    if (!raw || items.length === 0 || handledHash.current === raw) {
+      return;
+    }
+    let target: number | null = null;
+    const tsMatch = raw.match(/^ch-(\d+)$/i);
+    if (tsMatch) {
+      target = Number(tsMatch[1]);
+    } else {
+      const wanted = raw.toLowerCase();
+      for (const item of items) {
+        if (item.kind === "chapter" && chapterSlug(item.heading) === wanted) {
+          target = item.t;
+          break;
+        }
+      }
+    }
+    if (target === null) {
+      return;
+    }
+    handledHash.current = raw;
+    if (collapsedChapters.has(target)) {
+      onToggleChapter(target);
+    }
+    const t = target;
+    window.setTimeout(() => {
+      document.getElementById(`ch-${t}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }, [hashLocation.hash, items, collapsedChapters, onToggleChapter]);
+
   const activeParaT = useMemo(() => {
     if (!(currentTime > 0)) {
       return -1;
@@ -2119,12 +2173,11 @@ function EpisodeTranscript({
     return map;
   }, [items, cardNames]);
 
-  const renderText = (text: string, allowed: Set<string> | undefined): ReactNode => {
+  const renderCards = (text: string, allowed: Set<string> | undefined, linkedHere: Set<string>): ReactNode => {
     if (!setCode || cardNames.length === 0) {
       return text;
     }
     const pattern = new RegExp(`(${cardNames.map(escapeRegExp).join("|")})`, "g");
-    const linkedHere = new Set<string>();
     return text.split(pattern).map((part, index) => {
       if (!cardNameSet.has(part)) {
         return part;
@@ -2139,6 +2192,39 @@ function EpisodeTranscript({
         </em>
       );
     });
+  };
+
+  const renderText = (text: string, allowed: Set<string> | undefined): ReactNode => {
+    const linkedHere = new Set<string>();
+    const nodes: ReactNode[] = [];
+    let last = 0;
+    let key = 0;
+    PATREON_PHRASE.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = PATREON_PHRASE.exec(text)) !== null) {
+      if (match.index > last) {
+        nodes.push(<Fragment key={key++}>{renderCards(text.slice(last, match.index), allowed, linkedHere)}</Fragment>);
+      }
+      nodes.push(
+        <a
+          key={key++}
+          href={PATREON_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="text-green underline transition-colors hover:text-green/70"
+        >
+          patreon.com/limitedlevelups
+        </a>,
+      );
+      last = match.index + match[0].length;
+    }
+    if (last === 0) {
+      return renderCards(text, allowed, linkedHere);
+    }
+    if (last < text.length) {
+      nodes.push(<Fragment key={key++}>{renderCards(text.slice(last), allowed, linkedHere)}</Fragment>);
+    }
+    return nodes;
   };
 
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set());
@@ -2188,7 +2274,12 @@ function EpisodeTranscript({
               >
                 <button
                   type="button"
-                  onClick={() => onToggleChapter(item.t)}
+                  onClick={() => {
+                    const slug = chapterSlug(item.heading);
+                    handledHash.current = slug;
+                    window.history.replaceState(null, "", `#${slug}`);
+                    onToggleChapter(item.t);
+                  }}
                   aria-expanded={!isChapterCollapsed}
                   className="group flex items-center gap-2 text-left"
                 >
