@@ -2023,10 +2023,45 @@ function MoreEpisodeRow({ episode }: { episode: Episode }) {
   );
 }
 
+type ParaLine = { t: number; text: string; speaker?: string; showName?: boolean; lane?: number };
 type TranscriptItem =
   | { kind: "chapter"; t: number; heading: string }
-  | { kind: "section"; t: number; title: string; paras: { t: number; text: string }[] }
-  | { kind: "para"; t: number; text: string };
+  | { kind: "section"; t: number; title: string; paras: ParaLine[] }
+  | { kind: "para"; t: number; text: string; speaker?: string; showName?: boolean; lane?: number };
+
+const SPEAKER_LANES = [
+  { border: "border-[#2ee85c]", name: "text-[#2ee85c]" },
+  { border: "border-[#5ab0ff]", name: "text-[#5ab0ff]" },
+  { border: "border-[#f0b74a]", name: "text-[#f0b74a]" },
+  { border: "border-[#f087c0]", name: "text-[#f087c0]" },
+];
+
+function annotateSpeakers(items: TranscriptItem[]): void {
+  const laneOf = new Map<string, number>();
+  let named = new Set<string>();
+  const mark = (para: ParaLine) => {
+    if (!para.speaker) {
+      return;
+    }
+    if (!laneOf.has(para.speaker)) {
+      laneOf.set(para.speaker, laneOf.size);
+    }
+    para.lane = laneOf.get(para.speaker);
+    if (!named.has(para.speaker)) {
+      para.showName = true;
+      named.add(para.speaker);
+    }
+  };
+  for (const item of items) {
+    if (item.kind === "chapter") {
+      named = new Set();
+    } else if (item.kind === "para") {
+      mark(item);
+    } else if (item.kind === "section") {
+      item.paras.forEach(mark);
+    }
+  }
+}
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -2296,19 +2331,26 @@ function EpisodeTranscript({
     let section: Extract<TranscriptItem, { kind: "section" }> | null = null;
     for (const segment of segments) {
       const text = stripSpeakerTurns(segment.text);
+      const speaker = segment.speaker;
       if (segment.heading) {
         section = null;
         out.push({ kind: "chapter", t: segment.t, heading: segment.heading });
-        out.push({ kind: "para", t: segment.t, text });
+        out.push({ kind: "para", t: segment.t, text, speaker });
       } else if (segment.subheading) {
-        section = { kind: "section", t: segment.t, title: segment.subheading, paras: [{ t: segment.t, text }] };
+        section = { kind: "section", t: segment.t, title: segment.subheading, paras: [{ t: segment.t, text, speaker }] };
         out.push(section);
       } else if (section) {
-        section.paras.push({ t: segment.t, text });
+        section.paras.push({ t: segment.t, text, speaker });
       } else {
-        out.push({ kind: "para", t: segment.t, text });
+        const prev = out[out.length - 1];
+        if (speaker && prev && prev.kind === "para" && prev.speaker === speaker) {
+          prev.text = `${prev.text}\n\n${text}`;
+        } else {
+          out.push({ kind: "para", t: segment.t, text, speaker });
+        }
       }
     }
+    annotateSpeakers(out);
     return out;
   }, [segments]);
 
@@ -2659,6 +2701,30 @@ function EpisodeTranscript({
             );
           }
           const isActive = highlight && item.t === activeParaT;
+          if (item.speaker) {
+            const lane = SPEAKER_LANES[(item.lane ?? 0) % SPEAKER_LANES.length];
+            const linked = linkable.get(`${index}:0`);
+            return (
+              <div key={index} className="mt-5">
+                {item.showName ? (
+                  <span className={cn("mb-1.5 block font-display text-[14px] tracking-[0.1em] leading-none", lane.name)}>
+                    {item.speaker}
+                  </span>
+                ) : null}
+                <div className={cn("border-l-2 pl-4", lane.border)}>
+                  {item.text.split("\n\n").map((para, paraIndex) => (
+                    <p
+                      key={paraIndex}
+                      data-active={isActive && paraIndex === 0}
+                      className="text-[length:var(--tsize,15px)] leading-[1.6] mt-2 first:mt-0 text-subtle"
+                    >
+                      {renderText(para, linked)}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            );
+          }
           return (
             <p
               key={index}

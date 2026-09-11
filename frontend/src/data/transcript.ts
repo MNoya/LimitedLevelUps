@@ -3,6 +3,7 @@ export interface TranscriptSegment {
   text: string;
   heading?: string;
   subheading?: string;
+  speaker?: string;
   cards?: { name: string }[];
 }
 
