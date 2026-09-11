@@ -24,10 +24,7 @@ import {
   CardPreview,
   comparePagerOrder,
   neighborCardUrls,
-  PREVIEW_EXTRAS_H,
-  PREVIEW_GAP,
-  PREVIEW_RATIO,
-  PREVIEW_W,
+  previewAnchorFor,
   type PreviewAnchor,
 } from "../components/TierGrid";
 import {
@@ -296,14 +293,7 @@ function TierPanel() {
   const selectedCard = selectedIndex >= 0 ? allCards[selectedIndex] : null;
 
   const showPreview = (el: HTMLElement, card: TierCard) => {
-    const rect = el.getBoundingClientRect();
-    const previewH = PREVIEW_W * PREVIEW_RATIO + PREVIEW_EXTRAS_H;
-    const centerY = rect.top + rect.height / 2;
-    const top = Math.min(Math.max(centerY - previewH / 2, 8), Math.max(window.innerHeight - previewH - 8, 8));
-    const onRight = rect.right + PREVIEW_GAP + PREVIEW_W <= window.innerWidth - 8;
-    const left = onRight ? rect.right + PREVIEW_GAP : rect.left - PREVIEW_GAP - PREVIEW_W;
-    const arrowTop = Math.min(Math.max(centerY - top, 14), previewH - 14);
-    setHover({ card, anchor: { left, top, onRight, arrowTop } });
+    setHover({ card, anchor: previewAnchorFor(el) });
   };
 
   const tierDropdown = (

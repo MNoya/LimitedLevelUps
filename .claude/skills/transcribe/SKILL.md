@@ -1,6 +1,6 @@
 ---
 name: transcribe
-description: Run the LLU episode transcript pipeline on demand from the local box. Fetches YouTube auto-captions for every episode missing a transcript, then runs the Claude structure + card-fix enhance pass, then reports a summary. Writes to prod. Optionally target a single youtube_id. Same pipeline the nightly systemd timer runs.
+description: Run the LLU episode transcript pipeline on demand from the local box against the latest episodes. Fetches YouTube auto-captions, then runs the Claude structure + card-fix enhance pass, then reports a summary. Writes to prod. Defaults to the 3 most recent episodes; pass a count for more, or a youtube_id for one. Does not drain the backlog. Same pipeline the nightly systemd timer runs.
 ---
 
 # transcribe
@@ -13,8 +13,11 @@ Captions can only be fetched from a **residential IP**. YouTube blocks datacente
 
 `$ARGUMENTS` is optional:
 
-- **empty** — drain the full backlog: fetch captions for all episodes missing a transcript, then enhance all basic rows, no date limit. This is the controlled backlog drain; the nightly timer only touches recent episodes.
+- **empty** — the 3 most recent episodes: fetch any missing captions, then enhance them.
+- **an integer N** — the N most recent episodes instead of 3.
 - **an 11-char YouTube id** — process just that episode (fetch its caption if missing, then enhance it).
+
+This skill never drains the whole backlog. It always works on the newest episodes by count, whatever their age. The historical backlog is handled separately.
 
 ## Workflow
 
@@ -29,16 +32,16 @@ If `.env.supabase` is missing or the URL is empty, stop and tell the user.
 
 ### 2. Run the pipeline
 
-Unset `ANTHROPIC_API_KEY` so the `claude` CLI structure pass bills the subscription, not the API.
+Unset `ANTHROPIC_API_KEY` so the `claude` CLI structure pass bills the subscription, not the API. Pick the invocation from `$ARGUMENTS`:
 
-Full drain:
+Default (empty) or an integer count N — the N most recent episodes, 3 when empty:
 
 ```bash
 unset ANTHROPIC_API_KEY
-.venv/bin/python -u -m bot.scripts.generate_transcripts --auto --usage-limit 248 --usage-wait 900
+.venv/bin/python -u -m bot.scripts.generate_transcripts --auto --latest 3 --usage-limit 248 --usage-wait 900
 ```
 
-Single episode (`$ARGUMENTS` is the id):
+Single episode (`$ARGUMENTS` is an 11-char id):
 
 ```bash
 unset ANTHROPIC_API_KEY
@@ -56,4 +59,4 @@ If the caption phase logged repeated rate-limit blocks, the local IP is temporar
 ## Notes
 
 - Enhanced rows publish to the site immediately through the `public_episode_transcripts` view; no deploy needed.
-- The nightly timer (`systemctl --user list-timers llu-transcribe.timer`) runs this same pipeline at 09:00 local, capped to episodes published in the last 30 days (`--since-days 30`), so recent drops land on their own. This skill with no argument is the way to drain the older backlog, on your own timing.
+- The nightly timer (`systemctl --user list-timers llu-transcribe.timer`) runs this same pipeline at 09:00 local, capped to episodes published in the last 30 days (`--since-days 30`), so recent drops land on their own. Reach for this skill to transcribe a new episode now instead of waiting for 09:00.

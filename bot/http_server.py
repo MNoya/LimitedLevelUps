@@ -15,13 +15,20 @@ import aiohttp
 from aiohttp import web
 from sqlalchemy import select
 
-from bot.config import settings
+from bot.config import is_admin, settings
 from bot.database import SessionLocal
-from bot.models import MagicSet, Player
+from bot.models import EpisodeTranscript, MagicSet, Player
 from bot.services.active_set import resolve_active_set
 from bot.services.refresh import refresh_player
 from bot.services.seventeenlands import SeventeenLandsClient
 from bot.services.tracker_detail import fill_pending_draft_detail, is_tracker_player, refetch_draft_detail
+from bot.services.transcript_cards import build_card_tagger
+from bot.services.transcript_edit import (
+    TranscriptEditError,
+    merge_transcript_segments,
+    relink_changed_segments,
+    word_count,
+)
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +104,53 @@ async def _handle_options(request: web.Request) -> web.Response:
     return web.Response(status=204, headers=_cors_headers())
 
 
+async def _require_admin(request: web.Request) -> str | web.Response:
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    if not token:
+        return web.json_response({"error": "missing token"}, status=401, headers=_cors_headers())
+    discord_id = await _discord_id_for_token(token)
+    if not is_admin(discord_id):
+        return web.json_response({"error": "forbidden"}, status=403, headers=_cors_headers())
+    return discord_id
+
+
+def _save_transcript(key: str, incoming: list[dict]) -> tuple[str, int] | None:
+    with SessionLocal() as session:
+        row = session.get(EpisodeTranscript, key)
+        if row is None:
+            return ("transcript not found", 404)
+        stored = row.segments
+        try:
+            merged = merge_transcript_segments(stored, incoming)
+        except TranscriptEditError as exc:
+            return (str(exc), 400)
+        tagger = build_card_tagger(session, key)
+        if tagger is not None:
+            relink_changed_segments(stored, merged, tagger)
+        row.segments = merged
+        row.word_count = word_count(merged)
+        session.commit()
+    return None
+
+
+async def _handle_transcript_edit(request: web.Request) -> web.Response:
+    admin = await _require_admin(request)
+    if isinstance(admin, web.Response):
+        return admin
+    try:
+        incoming = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid body"}, status=400, headers=_cors_headers())
+    if not isinstance(incoming, list):
+        return web.json_response({"error": "expected a segments array"}, status=400, headers=_cors_headers())
+    failure = await asyncio.to_thread(_save_transcript, request.match_info["key"], incoming)
+    if failure is not None:
+        message, status = failure
+        return web.json_response({"error": message}, status=status, headers=_cors_headers())
+    return web.json_response({"ok": True}, headers=_cors_headers())
+
+
 async def start_tracker_http_server() -> web.AppRunner | None:
     """Bind the tracker refresh endpoint when a port is set"""
     raw_port = settings.tracker_http_port or os.environ.get("PORT")
@@ -106,6 +160,8 @@ async def start_tracker_http_server() -> web.AppRunner | None:
     app = web.Application()
     app.router.add_post("/tracker/refresh", _handle_refresh)
     app.router.add_route("OPTIONS", "/tracker/refresh", _handle_options)
+    app.router.add_post("/episodes/{key}/transcript", _handle_transcript_edit)
+    app.router.add_route("OPTIONS", "/episodes/{key}/transcript", _handle_options)
     app.router.add_get("/health", lambda _r: web.json_response({"ok": True}))
     runner = web.AppRunner(app)
     await runner.setup()

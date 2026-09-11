@@ -17,10 +17,17 @@ from sqlalchemy.orm import sessionmaker
 
 from bot.config import OWNER_DISCORD_ID
 
-from bot.models import DraftEvent, MagicSet, Player
+from bot.models import DraftEvent, EpisodeTranscript, MagicSet, Player
 from bot.services.refresh import refresh_player
 from bot.services.seventeenlands import SeventeenLandsClient
 from bot.services.tracker_detail import DRAFT_GAP_S, present_detail, summarise_draft
+from bot.services.transcript_cards import build_card_tagger
+from bot.services.transcript_edit import (
+    TranscriptEditError,
+    merge_transcript_segments,
+    relink_changed_segments,
+    word_count,
+)
 
 
 log = logging.getLogger(__name__)
@@ -276,6 +283,36 @@ async def _handle_refresh(request: web.Request) -> web.Response:
     return web.json_response({"ingested": ingested, "pending": len(pending), "filled": filled, "missed": missed})
 
 
+def _save_transcript(sessions: sessionmaker, key: str, incoming: list[dict]) -> tuple[str, int] | None:
+    with sessions() as session:
+        row = session.get(EpisodeTranscript, key)
+        if row is None:
+            return ("transcript not found", 404)
+        stored = row.segments
+        try:
+            merged = merge_transcript_segments(stored, incoming)
+        except TranscriptEditError as exc:
+            return (str(exc), 400)
+        tagger = build_card_tagger(session, key)
+        if tagger is not None:
+            relink_changed_segments(stored, merged, tagger)
+        row.segments = merged
+        row.word_count = word_count(merged)
+        session.commit()
+    return None
+
+
+async def _handle_transcript_edit(request: web.Request) -> web.Response:
+    incoming = await request.json()
+    if not isinstance(incoming, list):
+        return web.json_response({"error": "expected a segments array"}, status=400)
+    failure = await asyncio.to_thread(_save_transcript, request.app["sessions"], request.match_info["key"], incoming)
+    if failure is not None:
+        message, status = failure
+        return web.json_response({"error": message}, status=status)
+    return web.json_response({"ok": True})
+
+
 @web.middleware
 async def _cors_middleware(request: web.Request, handler):
     if request.method == "OPTIONS":
@@ -313,6 +350,8 @@ def main() -> None:
     _ensure_dev_user(app["engine"])
     app.router.add_post("/tracker/refresh", _handle_refresh)
     app.router.add_route("OPTIONS", "/tracker/refresh", _handle_refresh)
+    app.router.add_post("/episodes/{key}/transcript", _handle_transcript_edit)
+    app.router.add_route("OPTIONS", "/episodes/{key}/transcript", _handle_transcript_edit)
     app.router.add_get("/rest/v1/{view}", _handle_view)
     app.router.add_post("/rest/v1/{view}", _handle_view)
     app.router.add_delete("/rest/v1/{view}", _handle_view)

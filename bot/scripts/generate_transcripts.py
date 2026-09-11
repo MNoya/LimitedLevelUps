@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from bot.database import SessionLocal
 from bot.models import Episode, EpisodeTranscript
+from bot.services.transcript_edit import word_count
 from bot.scripts import card_index
 from bot.scripts.card_links import tag_text
 from bot.scripts.episode_review_table import episode_type
@@ -80,6 +81,7 @@ CARD_EXTRACT_PROMPT = (
 KNOWN_TERMS = [
     (re.compile(r"\blimited level[-\s]?ups\b", re.I), "Limited Level-Ups"),
     (re.compile(r"\bMark\b(?!\s+[Oo]f\b)"), "Marc"),
+    (re.compile(r"\bCiritz\b", re.I), "Sierkovitz"),
 ]
 
 STRUCTURE_PROMPT = (
@@ -348,9 +350,9 @@ def _process_audio_only(session, guid: str, title: str, audio_url: str, set_code
     log.info(f"[{guid}] {len(units)} sentences from {SOURCE}")
     _write_cache(guid, title, set_code, units, [], SOURCE)
     segments = _build_segments(guid, units, [], set_code, args)
-    word_count = _word_count(segments)
-    _upsert(session, guid, segments, word_count, SOURCE)
-    log.info(f"[{guid}] wrote {len(segments)} segments, {word_count} words")
+    count = word_count(segments)
+    _upsert(session, guid, segments, count, SOURCE)
+    log.info(f"[{guid}] wrote {len(segments)} segments, {count} words")
 
 
 def _download_audio_url(url: str, workdir: Path) -> Path:
@@ -438,9 +440,9 @@ def _process_one(session, youtube_id: str, title: str, args: argparse.Namespace)
     chapters = _fetch_chapters(youtube_id, cookie_args)
     _write_cache(youtube_id, title, set_code, units, chapters, source)
     segments = _build_segments(youtube_id, units, chapters, set_code, args)
-    word_count = _word_count(segments)
-    _upsert(session, youtube_id, segments, word_count, source)
-    log.info(f"[{youtube_id}] wrote {len(segments)} segments, {word_count} words")
+    count = word_count(segments)
+    _upsert(session, youtube_id, segments, count, source)
+    log.info(f"[{youtube_id}] wrote {len(segments)} segments, {count} words")
     return True
 
 
@@ -460,9 +462,9 @@ def _process_basic(session, youtube_id: str, title: str, args: argparse.Namespac
     chapters = _fetch_chapters_safe(youtube_id, cookie_args)
     _write_cache(youtube_id, title, set_code, units, chapters, source)
     segments = _build_segments(youtube_id, units, chapters, set_code, args)
-    word_count = _word_count(segments)
-    _upsert(session, youtube_id, segments, word_count, source)
-    log.info(f"[{youtube_id}] wrote {len(segments)} segments, {word_count} words (basic)")
+    count = word_count(segments)
+    _upsert(session, youtube_id, segments, count, source)
+    log.info(f"[{youtube_id}] wrote {len(segments)} segments, {count} words (basic)")
     return True
 
 
@@ -565,12 +567,12 @@ def _enhance_one(session, youtube_id: str, args: argparse.Namespace) -> None:
     cache = _read_cache(youtube_id)
     log.info(f"[{youtube_id}] enhancing from cache")
     segments = _build_segments(youtube_id, cache["units"], cache["chapters"], cache.get("set_code"), args)
-    word_count = _word_count(segments)
+    count = word_count(segments)
     source = cache.get("source", CAPTION_SOURCE)
     if source.endswith(BASIC_SUFFIX):
         source = source[: -len(BASIC_SUFFIX)]
-    _upsert(session, youtube_id, segments, word_count, source)
-    log.info(f"[{youtube_id}] enhanced {len(segments)} segments, {word_count} words")
+    _upsert(session, youtube_id, segments, count, source)
+    log.info(f"[{youtube_id}] enhanced {len(segments)} segments, {count} words")
 
 
 def _build_segments(youtube_id, units, chapters, set_code, args) -> list[dict]:
@@ -638,9 +640,9 @@ def _restructure_one(session, youtube_id: str, args: argparse.Namespace) -> None
     cache = _read_cache(youtube_id)
     log.info(f"[{youtube_id}] restructuring from cache")
     segments = _build_segments(youtube_id, cache["units"], cache["chapters"], cache.get("set_code"), args)
-    word_count = _word_count(segments)
-    _upsert(session, youtube_id, segments, word_count, cache.get("source", SOURCE))
-    log.info(f"[{youtube_id}] rewrote {len(segments)} segments, {word_count} words")
+    count = word_count(segments)
+    _upsert(session, youtube_id, segments, count, cache.get("source", SOURCE))
+    log.info(f"[{youtube_id}] rewrote {len(segments)} segments, {count} words")
 
 
 def _write_cache(youtube_id, title, set_code, units, chapters, source) -> None:
@@ -1217,13 +1219,6 @@ def _pull_head_to_intro(blocks, head_index, start, title, heads) -> int:
         if opens or names_topic:
             target = candidate
     return target
-
-
-def _word_count(segments: list[dict]) -> int:
-    total = 0
-    for segment in segments:
-        total += len(re.sub(r">{2,}", " ", segment["text"]).split())
-    return total
 
 
 def _upsert(session, youtube_id: str, segments: list[dict], word_count: int, source: str = SOURCE) -> None:

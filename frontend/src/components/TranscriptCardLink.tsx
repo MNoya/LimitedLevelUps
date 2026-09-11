@@ -4,9 +4,13 @@ import { createPortal } from "react-dom";
 import { cardImageSources, type CardImages } from "../data/cardImages";
 import { preloadImage } from "../lib/imageReveal";
 import { useIsMobile } from "../lib/use-is-mobile";
-import { PreviewShell, previewAnchorFor } from "./TierGrid";
+import { PREVIEW_W, PreviewShell, previewAnchorFor } from "./TierGrid";
 
 type Anchor = ReturnType<typeof previewAnchorFor>;
+
+const CARD_ASPECT = 680 / 488;
+const PREVIEW_PADDING = 12;
+const previewHeight = PREVIEW_W * CARD_ASPECT + PREVIEW_PADDING;
 
 export function TranscriptCardLink({
   name,
@@ -53,7 +57,7 @@ export function TranscriptCardLink({
     }
     preloadImage(src, () => {
       if (hovering.current && ref.current) {
-        setAnchor(previewAnchorFor(ref.current));
+        setAnchor(previewAnchorFor(ref.current, previewHeight));
       }
     });
   };

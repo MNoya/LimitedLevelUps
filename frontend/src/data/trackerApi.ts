@@ -4,7 +4,7 @@
 import { DEV_AUTH_USER } from "./devAuth";
 import { supabase } from "./supabase";
 import type { PlayerDraftEvent } from "../types/leaderboard";
-import { LOCAL_SUPABASE_URL, PUBLIC_TRACKER_REFRESH_URL } from "./public-supabase-config";
+import { LOCAL_SUPABASE_URL, PUBLIC_BOT_API_URL } from "./public-supabase-config";
 
 export interface DraftNote {
   draftEventId: string;
@@ -223,7 +223,7 @@ async function trackerRefresh(query: string): Promise<{ ingested: number; filled
     return resp.json();
   }
 
-  const base = PUBLIC_TRACKER_REFRESH_URL.replace(/\/$/, "");
+  const base = PUBLIC_BOT_API_URL.replace(/\/$/, "");
   if (!base) throw new Error("Refresh is not available yet");
   const { data } = await client().auth.getSession();
   const token = data.session?.access_token;

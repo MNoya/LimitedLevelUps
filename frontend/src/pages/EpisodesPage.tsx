@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
@@ -19,6 +20,7 @@ import {
   CalendarArrowDown,
   CalendarArrowUp,
   Captions,
+  Check,
   ChevronDown,
   ChevronsLeft,
   ChevronsUpDown,
@@ -30,12 +32,15 @@ import {
   Leaf,
   Library,
   ListOrdered,
+  Loader2,
   Mic,
   Package,
+  Pencil,
   Search,
   SearchX,
   Settings,
   SlidersHorizontal,
+  Trash2,
   X,
   Zap,
   type LucideIcon,
@@ -58,8 +63,11 @@ import { CUT_CORNER_CHAMFER } from "../components/ChamferCta";
 import { Crossfade } from "../components/Crossfade";
 import { SetGlyph } from "../components/Brand";
 import { useMediaFeed, useEpisodeTranscript, useTranscriptIndex } from "../data/hooks";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/useAuth";
 import { isPodOrganizer } from "../data/podOrganizers";
+import { isAdmin } from "../data/admins";
+import { saveTranscript } from "../data/adminApi";
 import {
   TranscriptListSkeleton,
   TranscriptRow,
@@ -987,6 +995,7 @@ function EpisodeDetail({
   siblings?: Episode[];
 }) {
   const { transcript, settled: transcriptSettled } = useEpisodeTranscript(episode);
+  const transcriptEdit = useTranscriptEdit(episode.youtubeId ?? episode.id, transcript ?? []);
   const playerRef = useRef<HTMLIFrameElement>(null);
   const audioControlsRef = useRef<AudioControls>(null);
   const stickyRef = useRef<HTMLDivElement>(null);
@@ -1305,25 +1314,28 @@ function EpisodeDetail({
                   loading={chapters.length === 0}
                 />
               ) : null}
-              <div
-                onPointerEnter={enterReadingHandle}
-                onPointerLeave={leaveReadingHandle}
-                className={cn(
-                  "mt-auto flex w-fit justify-start pt-2 transition-opacity duration-200",
-                  showReadingHandle ? "opacity-100" : "opacity-0",
-                )}
-              >
-                <ReadingSettings
-                  settings={reading}
-                  onChange={changeReading}
-                  wide={transcriptWide}
-                  onWideChange={changeTranscriptWide}
-                  isMobile={isMobile}
-                  canGoWide={canGoWide}
-                  panelUp
-                  panelLeft
-                  floating
-                />
+              <div className="mt-auto flex items-center justify-between pt-2">
+                <div
+                  onPointerEnter={enterReadingHandle}
+                  onPointerLeave={leaveReadingHandle}
+                  className={cn(
+                    "flex transition-opacity duration-200",
+                    showReadingHandle ? "opacity-100" : "opacity-0",
+                  )}
+                >
+                  <ReadingSettings
+                    settings={reading}
+                    onChange={changeReading}
+                    wide={transcriptWide}
+                    onWideChange={changeTranscriptWide}
+                    isMobile={isMobile}
+                    canGoWide={canGoWide}
+                    panelUp
+                    panelLeft
+                    floating
+                  />
+                </div>
+                <EditControls edit={transcriptEdit} floating />
               </div>
             </aside>
           ) : null}
@@ -1361,6 +1373,7 @@ function EpisodeDetail({
             onToggleChapter={toggleChapter}
             features={reading}
             topInset={headerHeight}
+            edit={transcriptEdit}
             headerAction={
               isMobile ? (
                 <ReadingSettings
@@ -1392,7 +1405,7 @@ function EpisodeDetail({
               onJump={jumpToChapter}
               loading={chapters.length === 0}
             />
-            <div className="pt-2">
+            <div className="flex items-center justify-between pt-2">
               <ReadingSettings
                 settings={reading}
                 onChange={changeReading}
@@ -1403,6 +1416,7 @@ function EpisodeDetail({
                 panelUp
                 panelLeft
               />
+              <EditControls edit={transcriptEdit} />
             </div>
           </aside>
         ) : null}
@@ -1654,6 +1668,7 @@ function ChapterNav({
 
 function TranscriptArticle({ episode }: { episode: Episode }) {
   const { transcript, settled } = useEpisodeTranscript(episode);
+  const transcriptEdit = useTranscriptEdit(episode.youtubeId ?? episode.id, transcript ?? []);
   const [collapsedChapters, setCollapsedChapters] = useState<ReadonlySet<number>>(() => new Set());
   const [reading, setReading] = useState<ReadingSettings>(readStoredReading);
   const changeReading = (next: ReadingSettings) => {
@@ -1786,6 +1801,7 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
                 collapsedChapters={collapsedChapters}
                 onToggleChapter={toggleChapter}
                 features={{ articleMode: true, textPx: reading.textPx }}
+                edit={transcriptEdit}
                 headerAction={
                   <div className="flex items-center gap-2 lg:hidden">
                     {readingControl(true)}
@@ -1816,7 +1832,8 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
                 loading={false}
                 hideTime
               />
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className={cn("mt-3 grid gap-2", transcriptEdit.canEdit ? "grid-cols-3" : "grid-cols-2")}>
+                <EditControls edit={transcriptEdit} block />
                 <button
                   type="button"
                   onClick={download}
@@ -2033,6 +2050,7 @@ function useStickyScrollPadding(headerHeight: number): void {
 
 const PATREON_URL = "https://www.patreon.com/limitedlevelups";
 const PATREON_PHRASE = /patreon(?:\.com|\s+dot\s+com)?\s*(?:\/|\s+slash\s+)\s*limited[-\s]*level[-\s]*ups/gi;
+const DOMAIN_LINK = /\b(?:https?:\/\/)?(?:www\.)?(17lands\.com|limitedlevelups\.com)(\/[^\s)]*)?/gi;
 
 
 type TranscriptFeatures = {
@@ -2041,6 +2059,186 @@ type TranscriptFeatures = {
   textPx?: number;
   articleMode?: boolean;
 };
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+interface TranscriptEdit {
+  canEdit: boolean;
+  editing: boolean;
+  working: TranscriptSegment[];
+  saving: boolean;
+  status: SaveStatus;
+  message: string | null;
+  canSave: boolean;
+  enterEdit: () => void;
+  discard: () => void;
+  save: () => void;
+  dismiss: () => void;
+  editBlock: (index: number, field: "text" | "heading" | "subheading", value: string) => void;
+  dropSubheading: (index: number) => void;
+}
+
+function useTranscriptEdit(episodeKey: string | undefined, segments: TranscriptSegment[]): TranscriptEdit {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const canEdit = Boolean(episodeKey) && isAdmin(user?.discordId);
+  const [editing, setEditing] = useState(false);
+  const [working, setWorking] = useState<TranscriptSegment[]>(segments);
+  const [status, setStatus] = useState<SaveStatus>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const saving = status === "saving";
+
+  const enterEdit = () => {
+    setWorking(structuredClone(segments));
+    setStatus("idle");
+    setMessage(null);
+    setEditing(true);
+  };
+  const discard = () => {
+    setEditing(false);
+    setStatus("idle");
+    setMessage(null);
+  };
+  const editBlock = (index: number, field: "text" | "heading" | "subheading", value: string) => {
+    setWorking((prev) => {
+      const next = prev.slice();
+      const segment = { ...next[index] };
+      if (field === "text") {
+        segment.text = value;
+      } else {
+        const trimmed = value.trim();
+        if (trimmed) {
+          segment[field] = trimmed;
+        } else {
+          delete segment[field];
+        }
+      }
+      next[index] = segment;
+      return next;
+    });
+  };
+  const dropSubheading = (index: number) => {
+    setWorking((prev) => {
+      const next = prev.slice();
+      const segment = { ...next[index] };
+      delete segment.subheading;
+      next[index] = segment;
+      return next;
+    });
+  };
+
+  const dirty = useMemo(() => JSON.stringify(working) !== JSON.stringify(segments), [working, segments]);
+  const hasEmptyParagraph = useMemo(() => working.some((segment) => !segment.text.trim()), [working]);
+  const canSave = dirty && !hasEmptyParagraph && !saving;
+
+  const save = async () => {
+    if (!episodeKey || !canSave) {
+      return;
+    }
+    setStatus("saving");
+    setMessage(null);
+    try {
+      await saveTranscript(episodeKey, working);
+      await queryClient.invalidateQueries({ queryKey: ["episode-transcript", episodeKey] });
+      setEditing(false);
+      setStatus("saved");
+      window.setTimeout(() => setStatus((prev) => (prev === "saved" ? "idle" : prev)), 2500);
+    } catch (err) {
+      setStatus("error");
+      setMessage(err instanceof Error ? err.message : "Save failed");
+      window.setTimeout(() => setStatus((prev) => (prev === "error" ? "idle" : prev)), 6000);
+    }
+  };
+  const dismiss = () => {
+    setStatus("idle");
+    setMessage(null);
+  };
+
+  return {
+    canEdit, editing, working, saving, status, message, canSave,
+    enterEdit, discard, save, dismiss, editBlock, dropSubheading,
+  };
+}
+
+function EditControls({
+  edit,
+  floating = false,
+  block = false,
+}: {
+  edit: TranscriptEdit;
+  floating?: boolean;
+  block?: boolean;
+}) {
+  if (!edit.canEdit) {
+    return null;
+  }
+  const buttonBase =
+    "flex h-8 items-center justify-center gap-1.5 border px-2.5 font-display text-[13px] leading-none tracking-[0.02em] transition-colors";
+  const chrome = floating ? "bg-surface/95 shadow-[0_6px_18px_rgba(0,0,0,0.45)] backdrop-blur-sm" : "";
+  if (!edit.editing) {
+    return (
+      <button
+        type="button"
+        onClick={edit.enterEdit}
+        className={cn(buttonBase, chrome, block && "w-full", "border-border2 text-subtle hover:border-green hover:text-green")}
+      >
+        <Pencil size={14} strokeWidth={2} className="shrink-0" />
+        <span className="leading-none">Edit</span>
+      </button>
+    );
+  }
+  const discardButton = (
+    <button
+      type="button"
+      onClick={edit.discard}
+      aria-label="Discard"
+      className={cn(
+        "flex h-8 w-8 shrink-0 items-center justify-center border transition-colors",
+        chrome,
+        "border-border2 text-subtle hover:border-text hover:text-text",
+      )}
+    >
+      <X size={16} strokeWidth={2} />
+    </button>
+  );
+  const saveButton = (
+    <button
+      type="button"
+      onClick={edit.save}
+      disabled={!edit.canSave}
+      className={cn(
+        buttonBase,
+        chrome,
+        block && "flex-1 px-1.5",
+        "border-green text-green hover:bg-green/10",
+        "disabled:cursor-not-allowed disabled:border-border2 disabled:text-dim disabled:hover:bg-transparent",
+      )}
+    >
+      {edit.saving ? (
+        <>
+          <Loader2 size={14} strokeWidth={2} className="shrink-0 animate-spin" />
+          <span className="leading-none">Saving</span>
+        </>
+      ) : (
+        "Save"
+      )}
+    </button>
+  );
+  if (block) {
+    return (
+      <div className="flex gap-1.5">
+        {discardButton}
+        {saveButton}
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      {discardButton}
+      {saveButton}
+    </div>
+  );
+}
 
 function EpisodeTranscript({
   segments,
@@ -2052,6 +2250,7 @@ function EpisodeTranscript({
   features,
   topInset = 0,
   headerAction,
+  edit,
 }: {
   segments: TranscriptSegment[];
   setCode?: string | null;
@@ -2062,6 +2261,7 @@ function EpisodeTranscript({
   features?: TranscriptFeatures;
   topInset?: number;
   headerAction?: ReactNode;
+  edit?: TranscriptEdit;
 }) {
   const articleMode = features?.articleMode ?? false;
   const highlight = (features?.highlight ?? true) && !articleMode;
@@ -2232,30 +2432,50 @@ function EpisodeTranscript({
 
   const renderText = (text: string, allowed: Set<string> | undefined): ReactNode => {
     const linkedHere = new Set<string>();
+    const linkClass = "text-green underline transition-colors hover:text-green/70";
+    const hits: { start: number; end: number; node: ReactNode }[] = [];
+    PATREON_PHRASE.lastIndex = 0;
+    for (let match: RegExpExecArray | null; (match = PATREON_PHRASE.exec(text)) !== null; ) {
+      hits.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        node: (
+          <a href={PATREON_URL} target="_blank" rel="noreferrer" className={linkClass}>
+            patreon.com/limitedlevelups
+          </a>
+        ),
+      });
+    }
+    DOMAIN_LINK.lastIndex = 0;
+    for (let match: RegExpExecArray | null; (match = DOMAIN_LINK.exec(text)) !== null; ) {
+      const shown = match[0];
+      const href = `https://${match[1]}${match[2] ?? ""}`;
+      hits.push({
+        start: match.index,
+        end: match.index + shown.length,
+        node: (
+          <a href={href} target="_blank" rel="noreferrer" className={linkClass}>
+            {shown}
+          </a>
+        ),
+      });
+    }
+    if (hits.length === 0) {
+      return renderCards(text, allowed, linkedHere);
+    }
+    hits.sort((a, b) => a.start - b.start);
     const nodes: ReactNode[] = [];
     let last = 0;
     let key = 0;
-    PATREON_PHRASE.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = PATREON_PHRASE.exec(text)) !== null) {
-      if (match.index > last) {
-        nodes.push(<Fragment key={key++}>{renderCards(text.slice(last, match.index), allowed, linkedHere)}</Fragment>);
+    for (const hit of hits) {
+      if (hit.start < last) {
+        continue;
       }
-      nodes.push(
-        <a
-          key={key++}
-          href={PATREON_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="text-green underline transition-colors hover:text-green/70"
-        >
-          patreon.com/limitedlevelups
-        </a>,
-      );
-      last = match.index + match[0].length;
-    }
-    if (last === 0) {
-      return renderCards(text, allowed, linkedHere);
+      if (hit.start > last) {
+        nodes.push(<Fragment key={key++}>{renderCards(text.slice(last, hit.start), allowed, linkedHere)}</Fragment>);
+      }
+      nodes.push(<Fragment key={key++}>{hit.node}</Fragment>);
+      last = hit.end;
     }
     if (last < text.length) {
       nodes.push(<Fragment key={key++}>{renderCards(text.slice(last), allowed, linkedHere)}</Fragment>);
@@ -2289,6 +2509,40 @@ function EpisodeTranscript({
 
   return (
     <div className={cn(articleMode ? "pt-2 lg:pt-4" : "mt-4 border-t border-border pt-4 lg:mt-6")}>
+      {edit && edit.status !== "idle" ? (
+        <button
+          type="button"
+          onClick={edit.dismiss}
+          aria-label="Dismiss"
+          className={cn(
+            "fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 cursor-pointer items-center gap-2 rounded-md border px-3 py-2",
+            "bg-surface/95 text-[13px] shadow-lg shadow-black/50 backdrop-blur-sm transition-colors hover:bg-surface",
+            edit.status === "error"
+              ? "border-red-400/60 text-red-400"
+              : edit.status === "saved"
+                ? "border-green/60 text-green"
+                : "border-border2 text-subtle",
+          )}
+        >
+          {edit.status === "saving" ? <Loader2 size={14} className="shrink-0 animate-spin" /> : null}
+          {edit.status === "saved" ? <Check size={14} className="shrink-0" /> : null}
+          {edit.status === "error" ? <X size={14} className="shrink-0" /> : null}
+          <span>{edit.status === "saving" ? "Saving…" : edit.status === "saved" ? "Saved" : edit.message}</span>
+        </button>
+      ) : null}
+      {edit?.editing ? (
+        <div className="w-full" style={{ ["--tsize" as string]: `${textPx}px` }}>
+          {edit.working.map((segment, index) => (
+            <EditableSegment
+              key={index}
+              index={index}
+              segment={segment}
+              onEdit={edit.editBlock}
+              onDropSubheading={edit.dropSubheading}
+            />
+          ))}
+        </div>
+      ) : (
       <div ref={bodyRef} className="w-full" style={{ ["--tsize" as string]: `${textPx}px` }}>
         {items.map((item, index) => {
           if (item.kind !== "chapter") {
@@ -2411,6 +2665,91 @@ function EpisodeTranscript({
             </p>
           );
         })}
+      </div>
+      )}
+    </div>
+  );
+}
+
+function EditableSegment({
+  index,
+  segment,
+  onEdit,
+  onDropSubheading,
+}: {
+  index: number;
+  segment: TranscriptSegment;
+  onEdit: (index: number, field: "text" | "heading" | "subheading", value: string) => void;
+  onDropSubheading: (index: number) => void;
+}) {
+  const box =
+    "-mx-1 min-h-[1.2em] cursor-text rounded-sm px-1 outline-none transition-colors hover:bg-green/5 focus:bg-green/10 focus:ring-1 focus:ring-green/40";
+  const commitOnShiftEnter = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" && e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
+  };
+  const commitOnEnter = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
+  };
+  return (
+    <div className="mt-3 first:mt-0">
+      {segment.heading !== undefined ? (
+        <div
+          id={`ch-${segment.t}`}
+          contentEditable
+          suppressContentEditableWarning
+          data-idx={index}
+          data-field="heading"
+          onKeyDown={commitOnEnter}
+          onBlur={(e) => onEdit(index, "heading", e.currentTarget.innerText)}
+          className={cn(
+            "mb-1 scroll-mt-[calc(56vw+1rem)] font-display text-text text-[19px] tracking-[0.02em] lg:scroll-mt-4",
+            box,
+          )}
+        >
+          {segment.heading}
+        </div>
+      ) : null}
+      {segment.subheading !== undefined ? (
+        <div className="mb-1 flex items-center gap-2">
+          <Tooltip label="Remove subtopic" side="top">
+            <button
+              type="button"
+              onClick={() => onDropSubheading(index)}
+              aria-label="Remove subtopic"
+              className="shrink-0 -translate-y-[1px] text-dim transition-colors hover:text-green"
+            >
+              <Trash2 size={16} strokeWidth={2} />
+            </button>
+          </Tooltip>
+          <div
+            contentEditable
+            suppressContentEditableWarning
+            data-idx={index}
+            data-field="subheading"
+            onKeyDown={commitOnEnter}
+            onBlur={(e) => onEdit(index, "subheading", e.currentTarget.innerText)}
+            className={cn("flex-1 font-display text-text/90 text-[17px] tracking-[0.02em]", box)}
+          >
+            {segment.subheading}
+          </div>
+        </div>
+      ) : null}
+      <div
+        contentEditable
+        suppressContentEditableWarning
+        data-idx={index}
+        data-field="text"
+        onKeyDown={commitOnShiftEnter}
+        onBlur={(e) => onEdit(index, "text", e.currentTarget.innerText)}
+        className={cn("text-[length:var(--tsize,15px)] leading-[1.6] text-subtle", box)}
+      >
+        {segment.text}
       </div>
     </div>
   );

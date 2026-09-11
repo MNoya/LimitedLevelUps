@@ -475,7 +475,7 @@ export interface PreviewAnchor {
   left: number;
   top: number;
   onRight: boolean;
-  arrowTop: number;
+  centerY: number;
 }
 
 
@@ -490,29 +490,39 @@ export function previewAnchorFor(el: HTMLElement, previewH = PREVIEW_W * PREVIEW
   );
   const onRight = rect.right + PREVIEW_GAP + PREVIEW_W <= window.innerWidth - 8;
   const left = onRight ? rect.right + PREVIEW_GAP : rect.left - PREVIEW_GAP - PREVIEW_W;
-  const arrowTop = Math.min(Math.max(centerY - top, 14), previewH - 14);
-  return { left, top, onRight, arrowTop };
+  return { left, top, onRight, centerY };
 }
 
 export function PreviewShell({ anchor, children }: { anchor: PreviewAnchor; children: React.ReactNode }) {
   const g = PREVIEW_GAP;
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [cardHeight, setCardHeight] = useState(0);
+  useLayoutEffect(() => {
+    setCardHeight(cardRef.current?.offsetHeight ?? 0);
+  }, [anchor, children]);
+
+  const arrowTop = anchor.centerY - anchor.top;
+  const arrowVisible = cardHeight > 0 && arrowTop >= 14 && arrowTop <= cardHeight - 14;
   const triangle = anchor.onRight ? `M${g} 0 L0 11 L${g} 22 Z` : `M0 0 L${g} 11 L0 22 Z`;
   const triangleInner = anchor.onRight
     ? `M${g} 1.4 L1.6 11 L${g} 20.6 Z`
     : `M0 1.4 L${g - 1.6} 11 L0 20.6 Z`;
   return (
     <div className="pointer-events-none fixed z-[100]" style={{ left: anchor.left, top: anchor.top, width: PREVIEW_W }}>
-      <svg
-        width={g}
-        height="22"
-        viewBox={`0 0 ${g} 22`}
-        className="absolute z-10"
-        style={{ top: anchor.arrowTop - 11, ...(anchor.onRight ? { left: -(g - 1) } : { right: -(g - 1) }) }}
-      >
-        <path d={triangle} fill="#fff" fillOpacity="0.6" />
-        <path d={triangleInner} fill={PREVIEW_MAT} />
-      </svg>
+      {arrowVisible && (
+        <svg
+          width={g}
+          height="22"
+          viewBox={`0 0 ${g} 22`}
+          className="absolute z-10"
+          style={{ top: arrowTop - 11, ...(anchor.onRight ? { left: -(g - 1) } : { right: -(g - 1) }) }}
+        >
+          <path d={triangle} fill="#fff" fillOpacity="0.6" />
+          <path d={triangleInner} fill={PREVIEW_MAT} />
+        </svg>
+      )}
       <div
+        ref={cardRef}
         className="relative flex flex-col rounded-xl border border-white/60 p-[6px] shadow-2xl"
         style={{ backgroundColor: PREVIEW_MAT }}
       >

@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     public_site_url: str = "https://limitedlevelups.com"
     auto_refresh_enabled: bool = True
     tracker_discord_ids: str = str(OWNER_DISCORD_ID)
+    admin_discord_ids: str = f"{OWNER_DISCORD_ID},507301384979349526"
     pod_thread_watch_id: int | None = OWNER_DISCORD_ID
     supabase_url: str = ""
     supabase_anon_key: str = ""
@@ -38,6 +39,10 @@ class Settings(BaseSettings):
     @property
     def tracker_discord_ids_set(self) -> frozenset[str]:
         return frozenset(part.strip() for part in self.tracker_discord_ids.split(",") if part.strip())
+
+    @property
+    def admin_discord_ids_set(self) -> frozenset[str]:
+        return frozenset(part.strip() for part in self.admin_discord_ids.split(",") if part.strip())
 
     @property
     def leaderboard_url(self) -> str:
@@ -104,3 +109,7 @@ def _int_csv(raw: str) -> tuple[int, ...]:
 
 
 settings = Settings()
+
+
+def is_admin(discord_id: str | None) -> bool:
+    return bool(discord_id) and discord_id in settings.admin_discord_ids_set
