@@ -128,13 +128,25 @@ export async function fetchEpisodeTranscript(youtubeId: string): Promise<Transcr
 export async function fetchTranscriptIndex(): Promise<TranscriptIndex> {
   const { data, error } = await client()
     .from("public_episode_transcripts")
-    .select("youtube_id, source, word_count");
+    .select("youtube_id, source, word_count, sections, subsections");
   if (error) {
     throw error;
   }
   const index: TranscriptIndex = new Map();
-  for (const row of (data ?? []) as { youtube_id: string; source: string; word_count: number }[]) {
-    index.set(row.youtube_id, { source: row.source, wordCount: row.word_count });
+  const rows = (data ?? []) as {
+    youtube_id: string;
+    source: string;
+    word_count: number;
+    sections: number;
+    subsections: number;
+  }[];
+  for (const row of rows) {
+    index.set(row.youtube_id, {
+      source: row.source,
+      wordCount: row.word_count,
+      sections: row.sections,
+      subsections: row.subsections,
+    });
   }
   return index;
 }

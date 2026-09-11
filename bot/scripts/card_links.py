@@ -1,14 +1,10 @@
-"""Detect Magic card names in transcript text by fuzzy matching a set's card list"""
+"""Detect Magic card names in transcript text by fuzzy matching a candidate card list"""
 from __future__ import annotations
 
-import json
 import re
 import unicodedata
-import urllib.parse
-import urllib.request
 from difflib import SequenceMatcher
 
-SCRYFALL_SEARCH = "https://api.scryfall.com/cards/search"
 RATIO_STRONG = 0.90
 RATIO_ANCHORED = 0.80
 WORD = re.compile(r"[0-9A-Za-zÀ-ÿ']+")
@@ -17,21 +13,6 @@ STOPWORDS = {
     "the", "a", "an", "of", "and", "or", "to", "in", "on", "at", "for", "with", "from", "by",
     "as", "is", "it", "his", "her", "our", "your", "this", "that", "one", "two",
 }
-
-
-def fetch_set_cards(scryfall_set: str) -> list[str]:
-    names: list[str] = []
-    params = urllib.parse.urlencode({"q": f"set:{scryfall_set}", "unique": "cards"})
-    url: str | None = f"{SCRYFALL_SEARCH}?{params}"
-    while url:
-        headers = {"User-Agent": "llu-transcripts/1.0", "Accept": "application/json"}
-        request = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(request) as response:
-            data = json.load(response)
-        for card in data.get("data", []):
-            names.append(card["name"].split(" // ")[0])
-        url = data.get("next_page") if data.get("has_more") else None
-    return names
 
 
 def _normalize(text: str) -> str:

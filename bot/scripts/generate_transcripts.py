@@ -12,7 +12,7 @@ import sys
 import tempfile
 import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -20,7 +20,9 @@ from sqlalchemy import select
 
 from bot.database import SessionLocal
 from bot.models import Episode, EpisodeTranscript
-from bot.scripts.card_links import fetch_set_cards, tag_text
+from bot.scripts import card_index
+from bot.scripts.card_links import tag_text
+from bot.scripts.episode_review_table import episode_type
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ STUTTER_FILLER = re.compile(rf"\b({STUTTER_WORDS})(?:[,.]?\s+\1\b)+", re.I)
 WHISPER_MODEL = "large-v3"
 WHISPER_PROMPT = "Alright, welcome everybody. Let's talk about the format today, and go through it step by step."
 SOURCE = f"whisper-{WHISPER_MODEL}"
+AUDIO_MAX_MINUTES = 180
 CAPTION_SOURCE = "youtube-caption"
 CAPTION_RESTORED_SOURCE = "youtube-caption-restored"
 CAPTION_PUNCT_MIN = 1.5
@@ -44,6 +47,7 @@ BASIC_SUFFIX = "-basic"
 BASIC_PARAGRAPH_SENTENCES = 4
 BASIC_PARAGRAPH_GAP = 10
 BASIC_FETCH_DELAY = 40
+BASIC_MAX_BLOCKS = 3
 _RATE_LIMITED = object()
 
 CARD_FIX_PROMPT = (
@@ -59,8 +63,23 @@ CARD_FIX_PROMPT = (
     "card name.\n\nCARD LIST:\n{cards}\n\nTRANSCRIPT:\n{text}\n"
 )
 
+CARD_EXTRACT_PROMPT = (
+    "You are given an auto-generated transcript of a Magic: The Gathering limited podcast. The hosts name real "
+    "Magic cards throughout, often misspelled by the auto-captioner. List every distinct reference to a real "
+    "Magic card the hosts actually mean as a card. For each, map the exact transcript form to the correct official "
+    "card name, preserving scope: a full multi-word attempt maps to the full correct name; a short or first-name "
+    "reference maps to just that reference correctly spelled, never expanded. Include correctly spelled references "
+    "too, mapping them to themselves. The transcript is phonetic, so a form may be badly garbled; match by sound "
+    "and context. A card name that is also a common English word (Anger, Fury, Growth, Fog, Duress, Opt, Rest, "
+    "Shock, Doom, Negate, Consider) counts only when the hosts clearly mean the card; when in doubt, leave it out. "
+    "Skip generic card-type talk (a removal spell, a two-drop, the bomb rare). Each distinct form once. Return ONLY "
+    'JSON: {"fixes": [{"wrong": <exact transcript text>, "right": <correct official card name>}]}. Change nothing '
+    "that is not a card name.\n\nTRANSCRIPT:\n{text}\n"
+)
+
 KNOWN_TERMS = [
     (re.compile(r"\blimited level[-\s]?ups\b", re.I), "Limited Level-Ups"),
+    (re.compile(r"\bMark\b(?!\s+[Oo]f\b)"), "Marc"),
 ]
 
 STRUCTURE_PROMPT = (
@@ -87,6 +106,7 @@ RESTORE_MIN_WORDS = 40
 
 CACHE_DIR = Path("cache/transcripts")
 USAGE_LOG = Path("logs/transcript_usage.jsonl")
+STRUCTURE_FAILURE_LOG = Path("logs/structure_failures.jsonl")
 SPAWN_STAGGER_SECONDS = 5
 CHAPTER_LOOKBACK_SECONDS = 12
 CHAPTER_LOOKBACK_MAX = 2
@@ -116,6 +136,9 @@ def main() -> None:
     if args.enhance:
         _run_enhance(args)
         return
+    if args.auto:
+        _run_auto(args)
+        return
     with SessionLocal() as session:
         targets = _select_targets(session, args)
     if not targets:
@@ -124,21 +147,20 @@ def main() -> None:
     if args.workers > 1:
         _run_parallel(targets, args)
         return
-    process = _process_basic if args.basic else _process_one
-    log.info(f"transcribing {len(targets)} episode(s){' (basic)' if args.basic else ''}")
-    for index, (youtube_id, title) in enumerate(targets):
+    if args.basic:
+        _run_basic_sweep(targets, args)
+        return
+    log.info(f"transcribing {len(targets)} episode(s)")
+    for youtube_id, title in targets:
         while True:
-            if not args.basic and not _wait_for_usage(args):
+            if not _wait_for_usage(args):
                 log.info("session usage at or above the limit, stopping (resume next run)")
                 return
             with SessionLocal() as session:
-                if process(session, youtube_id, title, args):
+                if _process_one(session, youtube_id, title, args):
                     break
             log.info(f"[{youtube_id}] captions rate-limited, waiting {CAPTION_RETRY_WAIT}s before retry")
             time.sleep(CAPTION_RETRY_WAIT)
-        if args.basic and args.fetch_delay and index < len(targets) - 1:
-            log.info(f"basic pacing: waiting {args.fetch_delay}s before the next fetch")
-            time.sleep(args.fetch_delay)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -166,6 +188,12 @@ def _parse_args() -> argparse.Namespace:
         help="With --usage-limit, sleep this many seconds and recheck instead of stopping, so the run "
         "throttles itself and keeps going as the window frees up",
     )
+    parser.add_argument(
+        "--space",
+        type=int,
+        default=0,
+        help="Sleep this many seconds between enhance episodes, to drip the backlog at a fixed rate",
+    )
     parser.add_argument("--whisper", action="store_true", help="Force the Whisper audio path, ignore captions")
     parser.add_argument(
         "--audio-only",
@@ -177,10 +205,21 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Backfill audio-only episodes oldest first; --latest still takes the newest",
     )
+    parser.add_argument(
+        "--shortest-first",
+        action="store_true",
+        help="Backfill audio-only episodes shortest first; overrides --oldest-first for ordering",
+    )
+    parser.add_argument(
+        "--max-minutes",
+        type=int,
+        help="Skip audio-only episodes longer than this, so the multi-hour set reviews are left out",
+    )
     parser.add_argument("--no-structure", action="store_true", help="Skip chapter headings and Claude subtopics")
     parser.add_argument("--no-restore", action="store_true", help="Skip punctuation restore of run-on stretches")
     parser.add_argument("--no-cards", action="store_true", help="Skip card-name detection and linking")
     parser.add_argument("--no-card-fix", action="store_true", help="Skip the Claude card-name correction pass")
+    parser.add_argument("--refresh-cards", action="store_true", help="Re-fetch Scryfall set sheets and oracle index")
     parser.add_argument(
         "--restructure",
         action="store_true",
@@ -198,26 +237,57 @@ def _parse_args() -> argparse.Namespace:
         "pick episodes with --youtube-id or --latest, or omit both for all non-gameplay basic rows",
     )
     parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Nightly pipeline: fetch captions for every episode missing a transcript, then Claude-enhance every "
+        "basic row, then print a summary. No-op when nothing is pending. Run from a residential IP, not a datacenter",
+    )
+    parser.add_argument(
         "--fetch-delay",
         type=int,
         default=BASIC_FETCH_DELAY,
         help="Seconds to wait between caption fetches on --basic, to stay under YouTube's burst limit",
     )
+    parser.add_argument(
+        "--max-blocks",
+        type=int,
+        default=BASIC_MAX_BLOCKS,
+        help="Stop the --basic sweep after this many straight YouTube rate-limit blocks (banned IP). 0 never stops",
+    )
+    parser.add_argument(
+        "--since-days",
+        type=int,
+        help="Only touch episodes published within the last N days, leaving older backlog for a manual run. "
+        "Ignored when --youtube-id names episodes explicitly",
+    )
     return parser.parse_args()
+
+
+def _since_cutoff(args: argparse.Namespace) -> datetime | None:
+    days = getattr(args, "since_days", None)
+    if not days:
+        return None
+    return datetime.now(timezone.utc) - timedelta(days=days)
 
 
 def _select_targets(session, args: argparse.Namespace) -> list[tuple[str, str]]:
     done = set(session.execute(select(EpisodeTranscript.youtube_id)).scalars())
-    query = select(Episode.youtube_id, Episode.title).where(Episode.youtube_id.isnot(None))
+    query = select(Episode.youtube_id, Episode.title, Episode.duration_seconds).where(Episode.youtube_id.isnot(None))
     if args.youtube_id:
         query = query.where(Episode.youtube_id.in_(args.youtube_id))
-    elif not args.basic:
-        query = query.where(Episode.category.notin_(SKIP_CATEGORIES))
+    else:
+        if not args.basic:
+            query = query.where(Episode.category.notin_(SKIP_CATEGORIES))
+        cutoff = _since_cutoff(args)
+        if cutoff:
+            query = query.where(Episode.published_at >= cutoff)
     query = query.order_by(Episode.published_at.desc())
 
     targets: list[tuple[str, str]] = []
-    for youtube_id, title in session.execute(query):
+    for youtube_id, title, duration in session.execute(query):
         if youtube_id in done and not args.redo:
+            continue
+        if not args.youtube_id and episode_type("video", duration, title) == "short":
             continue
         targets.append((youtube_id, title))
         if args.latest and len(targets) >= args.latest:
@@ -227,13 +297,20 @@ def _select_targets(session, args: argparse.Namespace) -> list[tuple[str, str]]:
 
 def _select_audio_targets(session, args: argparse.Namespace) -> list[tuple[str, str, str, str | None]]:
     done = set(session.execute(select(EpisodeTranscript.youtube_id)).scalars())
-    order = Episode.published_at.asc() if args.oldest_first and not args.latest else Episode.published_at.desc()
+    if args.shortest_first:
+        order = Episode.duration_seconds.asc()
+    elif args.oldest_first and not args.latest:
+        order = Episode.published_at.asc()
+    else:
+        order = Episode.published_at.desc()
     query = (
         select(Episode.guid, Episode.title, Episode.audio_url, Episode.set_code)
         .where(Episode.youtube_id.is_(None), Episode.audio_url.isnot(None), Episode.audio_url != "")
         .where(Episode.category.notin_(SKIP_CATEGORIES))
         .order_by(order)
     )
+    cap_minutes = args.max_minutes or AUDIO_MAX_MINUTES
+    query = query.where(Episode.duration_seconds <= cap_minutes * 60)
     targets: list[tuple[str, str, str, str | None]] = []
     for guid, title, audio_url, set_code in session.execute(query):
         if guid in done and not args.redo:
@@ -289,7 +366,7 @@ def _run_parallel(targets: list[tuple[str, str]], args: argparse.Namespace) -> N
     workers = min(args.workers, len(ids))
     chunks = [ids[i::workers] for i in range(workers)]
     passthrough: list[str] = ["--workers", "1", "--device", args.device]
-    for flag in ("redo", "whisper", "no_structure", "no_restore", "no_cards", "no_card_fix"):
+    for flag in ("redo", "whisper", "no_structure", "no_restore", "no_cards", "no_card_fix", "refresh_cards"):
         if getattr(args, flag):
             passthrough.append("--" + flag.replace("_", "-"))
     if args.cookies_file:
@@ -389,6 +466,25 @@ def _process_basic(session, youtube_id: str, title: str, args: argparse.Namespac
     return True
 
 
+def _run_basic_sweep(targets: list[tuple[str, str]], args: argparse.Namespace) -> None:
+    log.info(f"transcribing {len(targets)} episode(s) (basic)")
+    consecutive_blocks = 0
+    for index, (youtube_id, title) in enumerate(targets):
+        with SessionLocal() as session:
+            wrote = _process_basic(session, youtube_id, title, args)
+        if wrote:
+            consecutive_blocks = 0
+        else:
+            consecutive_blocks += 1
+            if args.max_blocks and consecutive_blocks >= args.max_blocks:
+                log.info(f"stopping: {consecutive_blocks} straight blocks, IP likely banned (rerun to resume)")
+                return
+            log.info(f"[{youtube_id}] rate-limited ({consecutive_blocks}/{args.max_blocks}), skipping to next")
+        if args.fetch_delay and index < len(targets) - 1:
+            log.info(f"basic pacing: waiting {args.fetch_delay}s before the next fetch")
+            time.sleep(args.fetch_delay)
+
+
 def _run_enhance(args: argparse.Namespace) -> None:
     with SessionLocal() as session:
         targets = _enhance_targets(session, args)
@@ -396,12 +492,49 @@ def _run_enhance(args: argparse.Namespace) -> None:
         log.info("no basic rows to enhance")
         return
     log.info(f"enhancing {len(targets)} basic row(s)")
-    for youtube_id in targets:
+    for index, youtube_id in enumerate(targets):
         if not _wait_for_usage(args):
             log.info("session usage at or above the limit, stopping (resume next run)")
             return
         with SessionLocal() as session:
             _enhance_one(session, youtube_id, args)
+        if args.space and index < len(targets) - 1:
+            time.sleep(args.space)
+
+
+def _run_auto(args: argparse.Namespace) -> None:
+    args.basic = False
+    with SessionLocal() as session:
+        caption_targets = _select_targets(session, args)
+    fetched = 0
+    still_missing = 0
+    if caption_targets:
+        args.basic = True
+        _run_basic_sweep(caption_targets, args)
+        args.basic = False
+        with SessionLocal() as session:
+            still_missing = len(_select_targets(session, args))
+        fetched = len(caption_targets) - still_missing
+
+    args.enhance = True
+    with SessionLocal() as session:
+        enhance_targets = _enhance_targets(session, args)
+    enhanced = 0
+    if enhance_targets:
+        _run_enhance(args)
+        with SessionLocal() as session:
+            enhanced = len(enhance_targets) - len(_enhance_targets(session, args))
+
+    _report_auto(len(caption_targets), fetched, still_missing, len(enhance_targets), enhanced)
+
+
+def _report_auto(caption_pending: int, fetched: int, still_missing: int, enhance_pending: int, enhanced: int) -> None:
+    if not caption_pending and not enhance_pending:
+        log.info("transcribe auto: nothing pending, no-op")
+        return
+    log.info("=== transcribe auto summary ===")
+    log.info(f"captions: {fetched} fetched of {caption_pending} pending, {still_missing} still without a caption")
+    log.info(f"enhance: {enhanced} upgraded of {enhance_pending} basic row(s)")
 
 
 def _enhance_targets(session, args: argparse.Namespace) -> list[str]:
@@ -415,6 +548,9 @@ def _enhance_targets(session, args: argparse.Namespace) -> list[str]:
         query = query.where(EpisodeTranscript.youtube_id.in_(args.youtube_id))
     else:
         query = query.where(Episode.category.notin_(SKIP_CATEGORIES))
+        cutoff = _since_cutoff(args)
+        if cutoff:
+            query = query.where(Episode.published_at >= cutoff)
     targets = list(session.execute(query).scalars())
     if args.latest:
         targets = targets[: args.latest]
@@ -451,12 +587,9 @@ def _build_segments(youtube_id, units, chapters, set_code, args) -> list[dict]:
     for segment in segments:
         segment["text"] = _clean_text(segment["text"])
     if not args.no_cards:
-        card_names = _fetch_cards_safe(set_code)
-        if card_names:
-            if not args.no_card_fix and not basic:
-                _fix_card_names(youtube_id, segments, card_names)
-            _link_cards(segments, card_names)
+        _tag_cards(youtube_id, segments, set_code, args)
     _apply_known_terms(segments)
+    _fix_patreon_links(segments)
     return segments
 
 
@@ -527,14 +660,41 @@ def _read_cache(youtube_id) -> dict:
     return json.loads((CACHE_DIR / f"{youtube_id}.json").read_text())
 
 
-def _fetch_cards_safe(set_code: str | None) -> list[str]:
-    if not set_code:
-        return []
+def _tag_cards(youtube_id: str, segments: list[dict], set_code: str | None, args) -> None:
+    basic = getattr(args, "basic", False)
+    refresh = getattr(args, "refresh_cards", False)
+    if set_code:
+        card_names = _fetch_cards_safe(set_code, refresh)
+        if not card_names:
+            return
+        if not args.no_card_fix and not basic:
+            card_names = _correct_card_names(youtube_id, segments, card_names, None)
+        _link_cards(segments, card_names)
+        return
+    if args.no_card_fix or basic:
+        return
+    index = _fetch_index_safe(refresh)
+    if not index:
+        return
+    linkable = _correct_card_names(youtube_id, segments, None, index)
+    if linkable:
+        _link_cards(segments, linkable)
+
+
+def _fetch_cards_safe(set_code: str, refresh: bool) -> list[str]:
     try:
-        return fetch_set_cards(set_code.lower())
+        return card_index.set_card_names(set_code, refresh=refresh)
     except Exception as exc:
         log.warning(f"card list fetch skipped for set {set_code}: {exc}")
         return []
+
+
+def _fetch_index_safe(refresh: bool) -> dict[str, str]:
+    try:
+        return card_index.all_card_names(refresh=refresh)
+    except Exception as exc:
+        log.warning(f"oracle index fetch skipped: {exc}")
+        return {}
 
 
 def _claude_json(prompt: str, label: str, youtube_id: str) -> str | None:
@@ -569,14 +729,32 @@ def _log_usage(youtube_id: str, label: str, cost: float | None, usage: dict) -> 
     log.info(f"[{youtube_id}] {label}: ${cost:.4f}" if cost is not None else f"[{youtube_id}] {label}: no cost")
 
 
-def _fix_card_names(youtube_id: str, segments: list[dict], card_names: list[str]) -> None:
+def _flag_structure_failure(youtube_id: str, sentences: int) -> None:
+    log.warning(f"[{youtube_id}] structure pass returned no subtopics, shipping flat (flagged, card-fix kept)")
+    STRUCTURE_FAILURE_LOG.parent.mkdir(parents=True, exist_ok=True)
+    entry = {"ts": datetime.now(timezone.utc).isoformat(), "youtube_id": youtube_id, "sentences": sentences}
+    with open(STRUCTURE_FAILURE_LOG, "a") as handle:
+        handle.write(json.dumps(entry) + "\n")
+
+
+def _correct_card_names(youtube_id: str, segments: list[dict], card_names: list[str] | None,
+                        index: dict[str, str] | None) -> list[str]:
     full_text = "\n".join(segment["text"] for segment in segments)
-    prompt = CARD_FIX_PROMPT.replace("{cards}", "\n".join(card_names)).replace("{text}", full_text)
-    output = _claude_json(prompt, "card-fix", youtube_id)
+    if index is None:
+        prompt = CARD_FIX_PROMPT.replace("{cards}", "\n".join(card_names)).replace("{text}", full_text)
+        label = "card-fix"
+    else:
+        prompt = CARD_EXTRACT_PROMPT.replace("{text}", full_text)
+        label = "card-extract"
+    output = _claude_json(prompt, label, youtube_id)
     if output is None:
-        return
+        return card_names or []
     match = re.search(r"\{.*\}", output, re.DOTALL)
     fixes = json.loads(match.group(0)).get("fixes", []) if match else []
+    if index is None:
+        linkable = card_names
+    else:
+        fixes, linkable = _validate_fixes(fixes, index)
     applied = 0
     for segment in segments:
         text = segment["text"]
@@ -584,7 +762,23 @@ def _fix_card_names(youtube_id: str, segments: list[dict], card_names: list[str]
             text, count = re.subn(rf"\b{re.escape(fix['wrong'])}\b", fix["right"], text, flags=re.I)
             applied += count
         segment["text"] = text
-    log.info(f"[{youtube_id}] card-name fix: {len(fixes)} forms, {applied} applied")
+    log.info(f"[{youtube_id}] {label}: {len(fixes)} forms, {applied} applied, {len(linkable)} linkable")
+    return linkable
+
+
+def _validate_fixes(fixes: list[dict], index: dict[str, str]) -> tuple[list[dict], list[str]]:
+    fragments = card_index.name_fragments(index)
+    validated: list[dict] = []
+    linkable: list[str] = []
+    for fix in fixes:
+        canonical = card_index.resolve(fix["right"], index)
+        if canonical:
+            validated.append({"wrong": fix["wrong"], "right": canonical})
+            if canonical not in linkable:
+                linkable.append(canonical)
+        elif card_index.fold(fix["right"]) in fragments:
+            validated.append(fix)
+    return validated, linkable
 
 
 def _link_cards(segments: list[dict], card_names: list[str]) -> None:
@@ -602,10 +796,60 @@ def _link_cards(segments: list[dict], card_names: list[str]) -> None:
 
 def _apply_known_terms(segments: list[dict]) -> None:
     for segment in segments:
-        text = segment["text"]
-        for pattern, replacement in KNOWN_TERMS:
-            text = pattern.sub(replacement, text)
-        segment["text"] = text
+        for field in ("text", "heading", "subheading"):
+            value = segment.get(field)
+            if not value:
+                continue
+            for pattern, replacement in KNOWN_TERMS:
+                value = pattern.sub(replacement, value)
+            segment[field] = value
+
+
+_PATREON_CANON = "patreon.com/limitedlevelups"
+_PATREON_GAP = r"[\s/.,:-]*"
+_PATREON_LIMITED = r"(?:un)?(?:limit\w*|lim|liim|liit|slimed)"
+_PATREON_NAME = rf"(?:{_PATREON_LIMITED}|levels?\w*|levelops|ups?|lups?|lubs?|leups?|loops?|lied|loves?)"
+_PATREON_URL = (
+    rf"patreon(?:\s*\.?\s*com\b|\s+dot\s+com\b)"
+    rf"(?:{_PATREON_GAP}(?:slash{_PATREON_GAP})?{_PATREON_NAME}(?:{_PATREON_GAP}{_PATREON_NAME})*)?"
+    rf"|patreon{_PATREON_GAP}(?:slash{_PATREON_GAP})?{_PATREON_LIMITED}(?:{_PATREON_GAP}{_PATREON_NAME})*"
+)
+_PATREON_PLUG = re.compile(
+    rf"(?P<lead>\b(?:the|that|this|our|my|a)\s+)?(?P<noun>patreon[,.]?\s+)?(?P<url>{_PATREON_URL})",
+    re.I,
+)
+_PATREON_STARTS = re.compile(r"^\W*patreon\.com/limitedlevelups[.,!?]?\s*", re.I)
+_PATREON_TRAIL = re.compile(
+    r"(patreon\.com/limitedlevelups)\s+slash\b[a-z0-9,'\s-]*?level[-\s]?ups?"
+    r"|(patreon\.com/limitedlevelups)\s+(?:Live in a love Loves|Liit (?:Level-ups|levelops)|Loops\??|S\.L\.)",
+    re.I,
+)
+
+
+def _fix_patreon_links(segments: list[dict]) -> None:
+    def canonicalize(match: re.Match) -> str:
+        if match.group("noun") or match.group("lead"):
+            return f"{match.group('lead') or ''}Patreon, {_PATREON_CANON}"
+        return _PATREON_CANON
+
+    for segment in segments:
+        for field in ("text", "heading", "subheading"):
+            value = segment.get(field)
+            if not value or "patreon" not in value.lower():
+                continue
+            value = _PATREON_PLUG.sub(canonicalize, value)
+            value = _PATREON_TRAIL.sub(lambda match: match.group(1) or match.group(2), value)
+            segment[field] = value
+    for index in range(1, len(segments)):
+        text = segments[index].get("text") or ""
+        if not _PATREON_STARTS.match(text):
+            continue
+        previous = (segments[index - 1].get("text") or "").rstrip()
+        if not previous.rstrip(".,!?").lower().endswith(_PATREON_CANON):
+            if previous and previous[-1] not in ".?!":
+                previous += "."
+            segments[index - 1]["text"] = f"{previous} {_PATREON_CANON}"
+        segments[index]["text"] = _PATREON_STARTS.sub("", text, count=1)
 
 
 def _caption_units(youtube_id: str):
@@ -864,8 +1108,14 @@ def _fetch_chapters(youtube_id: str, cookie_args: list[str]) -> list[dict]:
 def _structure(units: list[dict], chapters: list[dict], youtube_id: str) -> list[dict]:
     heads = _chapter_heads(units, chapters)
     subtopics, paragraphs, sections = _subtopics_and_paragraphs(units, youtube_id)
+    if not subtopics:
+        _flag_structure_failure(youtube_id, len(units))
     if not heads:
         heads = _promote_sections(units, subtopics, sections)
+    if subtopics:
+        first_subtopic = min(subtopics)
+        if not heads or first_subtopic < min(heads):
+            heads = {**heads, first_subtopic: (subtopics[first_subtopic], units[first_subtopic]["t"])}
     chapter_times = [units[i]["t"] for i in heads]
     subtopics = {
         i: title for i, title in subtopics.items()

@@ -14,7 +14,7 @@ export function TranscriptCardLink({
   cardImages,
 }: {
   name: string;
-  set: string;
+  set?: string;
   cardImages?: CardImages;
 }) {
   const mobile = useIsMobile();

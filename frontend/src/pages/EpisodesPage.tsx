@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -239,6 +240,8 @@ export function EpisodesPage() {
         !setCodesBySlug.has(slugLower) &&
         (slugLower.includes("-") || slugLower.length > 4),
     );
+
+  const transcriptArticleView = transcriptsView && Boolean(openEpisode || (looksLikeEpisodeTarget && isPending));
 
   const openEpisodeId = openEpisode?.id;
   useEffect(() => {
@@ -515,7 +518,7 @@ export function EpisodesPage() {
     const base = transcriptCategory
       ? scopedTranscript.filter((ep) => ep.category === transcriptCategory)
       : scopedTranscript;
-    const counts = { all: base.length, done: 0, youtube: 0, whisper: 0, none: 0 };
+    const counts = { all: base.length, done: 0, youtube: 0, none: 0 };
     for (const ep of base) {
       const status = transcriptIndex?.get(ep.youtubeId ?? ep.id);
       if (!status) {
@@ -531,7 +534,6 @@ export function EpisodesPage() {
     { value: "", label: "All" },
     { value: "done", label: TIER_META.done.label },
     { value: "youtube", label: TIER_META.youtube.label },
-    { value: "whisper", label: TIER_META.whisper.label },
     { value: "none", label: NONE_META.label },
   ];
 
@@ -806,8 +808,8 @@ export function EpisodesPage() {
             ref={listRef}
             className={cn(
               "pb-4 pr-4 md:pr-6",
-              openEpisode ? "pl-2" : "pl-4 md:pl-6",
-              openEpisode && transcriptsView ? "pt-0" : "pt-6",
+              openEpisode || transcriptArticleView ? "pl-2" : "pl-4 md:pl-6",
+              transcriptArticleView ? "pt-0" : "pt-6",
             )}
           >
             {openEpisode && transcriptsView ? (
@@ -828,7 +830,7 @@ export function EpisodesPage() {
                 </div>
               ) : (
                 <Grid>
-                  {Array.from({ length: 6 }).map((_, i) => (
+                  {Array.from({ length: 12 }).map((_, i) => (
                     <div key={i} className="aspect-video bg-surface border border-border animate-pulse" />
                   ))}
                 </Grid>
@@ -953,7 +955,7 @@ function readStoredTranscriptCategory(): EpisodeCategory | "" {
 
 function readStoredTranscriptTier(): TranscriptTier | "none" | "" {
   const value = typeof window === "undefined" ? null : window.localStorage.getItem(TRANSCRIPT_TIER_KEY);
-  return value === "done" || value === "youtube" || value === "whisper" || value === "none" ? value : "";
+  return value === "done" || value === "youtube" || value === "none" ? value : "";
 }
 
 const READING_SETTINGS_KEY = "llu:transcript-reading";
@@ -1663,18 +1665,17 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
     setWide(value);
     window.localStorage.setItem(ARTICLE_WIDE_KEY, value ? "1" : "0");
   };
-  const headerRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
-  useLayoutEffect(() => {
-    const el = headerRef.current;
+  const headerObserver = useRef<ResizeObserver | null>(null);
+  const headerRef = useCallback((el: HTMLDivElement | null) => {
+    headerObserver.current?.disconnect();
     if (!el) {
       return;
     }
     const measure = () => setHeaderHeight(el.getBoundingClientRect().height);
     measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
+    headerObserver.current = new ResizeObserver(measure);
+    headerObserver.current.observe(el);
   }, []);
   useStickyScrollPadding(headerHeight);
   const chapters = useMemo(
@@ -1830,7 +1831,42 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
           ) : null}
         </div>
       ) : settled ? (
-        <p className="mt-8 text-[14px] text-muted">No transcript yet.</p>
+        <div className="mx-auto max-w-3xl pt-6 lg:pt-10">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="min-w-0 font-body text-text text-[16px] md:text-[20px] font-medium leading-snug">
+              {episode.title}
+            </h1>
+            <div className="flex shrink-0 items-center gap-3">
+              <span className="hidden font-num text-[12px] tracking-[0.06em] text-muted sm:inline">
+                {episode.publishedLabel.toUpperCase()}
+              </span>
+              <EpisodeTag episode={episode} />
+            </div>
+          </div>
+          <p className="mt-6 text-[14px] text-muted">No transcript available</p>
+          {(episode.youtubeId || episode.audioUrl) && episode.slug ? (
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+              {episode.youtubeId ? (
+                <Link
+                  to={`/episodes/${categorySlug(episode.category)}/${episode.slug}`}
+                  className="inline-flex items-center gap-1.5 text-[14px] text-subtle transition-colors hover:text-green"
+                >
+                  <SiYoutube size={15} className="shrink-0" />
+                  Watch this episode
+                </Link>
+              ) : null}
+              {episode.audioUrl ? (
+                <Link
+                  to={`/episodes/audio/${episode.slug}`}
+                  className="inline-flex items-center gap-1.5 text-[14px] text-subtle transition-colors hover:text-green"
+                >
+                  <Headphones size={15} strokeWidth={2} className="shrink-0" />
+                  Listen to this episode
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       ) : (
         <TranscriptContentSkeleton />
       )}
@@ -2174,7 +2210,7 @@ function EpisodeTranscript({
   }, [items, cardNames]);
 
   const renderCards = (text: string, allowed: Set<string> | undefined, linkedHere: Set<string>): ReactNode => {
-    if (!setCode || cardNames.length === 0) {
+    if (cardNames.length === 0) {
       return text;
     }
     const pattern = new RegExp(`(${cardNames.map(escapeRegExp).join("|")})`, "g");
@@ -2184,7 +2220,7 @@ function EpisodeTranscript({
       }
       if (allowed?.has(part) && !linkedHere.has(part)) {
         linkedHere.add(part);
-        return <TranscriptCardLink key={index} name={part} set={setCode} cardImages={cardImages} />;
+        return <TranscriptCardLink key={index} name={part} set={setCode ?? undefined} cardImages={cardImages} />;
       }
       return (
         <em key={index} className="text-subtle/90 italic">
@@ -2692,6 +2728,10 @@ function tierRankOf(status: TranscriptStatus | undefined): number {
   return status ? TIER_RANK[transcriptTier(status.source)] : 0;
 }
 
+function structureRankOf(status: TranscriptStatus | undefined): number {
+  return status ? status.sections + status.subsections : -1;
+}
+
 function sortTranscriptRows(rows: Episode[], sort: TranscriptSort, index?: TranscriptIndex): Episode[] {
   const dir = sort.dir === "asc" ? 1 : -1;
   const statusOf = (ep: Episode) => index?.get(ep.youtubeId ?? ep.id);
@@ -2707,6 +2747,8 @@ function sortTranscriptRows(rows: Episode[], sort: TranscriptSort, index?: Trans
         return (statusOf(a)?.wordCount ?? 0) - (statusOf(b)?.wordCount ?? 0);
       case "status":
         return tierRankOf(statusOf(a)) - tierRankOf(statusOf(b));
+      case "structure":
+        return structureRankOf(statusOf(a)) - structureRankOf(statusOf(b));
       case "date":
       default:
         return new Date(a.pubDate).getTime() - new Date(b.pubDate).getTime();
