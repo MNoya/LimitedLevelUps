@@ -115,7 +115,7 @@ async def _require_admin(request: web.Request) -> str | web.Response:
     return discord_id
 
 
-def _save_transcript(key: str, incoming: list[dict]) -> tuple[str, int] | None:
+def _save_transcript(key: str, incoming: list[dict]) -> tuple[str, int] | list[dict]:
     with SessionLocal() as session:
         row = session.get(EpisodeTranscript, key)
         if row is None:
@@ -131,7 +131,7 @@ def _save_transcript(key: str, incoming: list[dict]) -> tuple[str, int] | None:
         row.segments = merged
         row.word_count = word_count(merged)
         session.commit()
-    return None
+    return merged
 
 
 async def _handle_transcript_edit(request: web.Request) -> web.Response:
@@ -144,11 +144,11 @@ async def _handle_transcript_edit(request: web.Request) -> web.Response:
         return web.json_response({"error": "invalid body"}, status=400, headers=_cors_headers())
     if not isinstance(incoming, list):
         return web.json_response({"error": "expected a segments array"}, status=400, headers=_cors_headers())
-    failure = await asyncio.to_thread(_save_transcript, request.match_info["key"], incoming)
-    if failure is not None:
-        message, status = failure
+    result = await asyncio.to_thread(_save_transcript, request.match_info["key"], incoming)
+    if isinstance(result, tuple):
+        message, status = result
         return web.json_response({"error": message}, status=status, headers=_cors_headers())
-    return web.json_response({"ok": True}, headers=_cors_headers())
+    return web.json_response({"ok": True, "segments": result}, headers=_cors_headers())
 
 
 async def start_tracker_http_server() -> web.AppRunner | None:

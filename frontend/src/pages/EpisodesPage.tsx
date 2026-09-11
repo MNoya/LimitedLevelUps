@@ -2074,6 +2074,7 @@ interface TranscriptEdit {
   discard: () => void;
   save: () => void;
   dismiss: () => void;
+  markInput: () => void;
   editBlock: (index: number, field: "text" | "heading" | "subheading", value: string) => void;
   dropSubheading: (index: number) => void;
 }
@@ -2086,20 +2087,25 @@ function useTranscriptEdit(episodeKey: string | undefined, segments: TranscriptS
   const [working, setWorking] = useState<TranscriptSegment[]>(segments);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
   const saving = status === "saving";
 
   const enterEdit = () => {
     setWorking(structuredClone(segments));
     setStatus("idle");
     setMessage(null);
+    setTouched(false);
     setEditing(true);
   };
   const discard = () => {
     setEditing(false);
     setStatus("idle");
     setMessage(null);
+    setTouched(false);
   };
+  const markInput = () => setTouched(true);
   const editBlock = (index: number, field: "text" | "heading" | "subheading", value: string) => {
+    setTouched(false);
     setWorking((prev) => {
       const next = prev.slice();
       const segment = { ...next[index] };
@@ -2129,7 +2135,7 @@ function useTranscriptEdit(episodeKey: string | undefined, segments: TranscriptS
 
   const dirty = useMemo(() => JSON.stringify(working) !== JSON.stringify(segments), [working, segments]);
   const hasEmptyParagraph = useMemo(() => working.some((segment) => !segment.text.trim()), [working]);
-  const canSave = dirty && !hasEmptyParagraph && !saving;
+  const canSave = (dirty || touched) && !hasEmptyParagraph && !saving;
 
   const save = async () => {
     if (!episodeKey || !canSave) {
@@ -2138,8 +2144,8 @@ function useTranscriptEdit(episodeKey: string | undefined, segments: TranscriptS
     setStatus("saving");
     setMessage(null);
     try {
-      await saveTranscript(episodeKey, working);
-      await queryClient.invalidateQueries({ queryKey: ["episode-transcript", episodeKey] });
+      const saved = await saveTranscript(episodeKey, working);
+      queryClient.setQueryData(["episode-transcript", episodeKey], saved);
       setEditing(false);
       setStatus("saved");
       window.setTimeout(() => setStatus((prev) => (prev === "saved" ? "idle" : prev)), 2500);
@@ -2156,7 +2162,7 @@ function useTranscriptEdit(episodeKey: string | undefined, segments: TranscriptS
 
   return {
     canEdit, editing, working, saving, status, message, canSave,
-    enterEdit, discard, save, dismiss, editBlock, dropSubheading,
+    enterEdit, discard, save, dismiss, markInput, editBlock, dropSubheading,
   };
 }
 
@@ -2538,6 +2544,7 @@ function EpisodeTranscript({
               index={index}
               segment={segment}
               onEdit={edit.editBlock}
+              onInput={edit.markInput}
               onDropSubheading={edit.dropSubheading}
             />
           ))}
@@ -2675,11 +2682,13 @@ function EditableSegment({
   index,
   segment,
   onEdit,
+  onInput,
   onDropSubheading,
 }: {
   index: number;
   segment: TranscriptSegment;
   onEdit: (index: number, field: "text" | "heading" | "subheading", value: string) => void;
+  onInput: () => void;
   onDropSubheading: (index: number) => void;
 }) {
   const box =
@@ -2706,6 +2715,7 @@ function EditableSegment({
           data-idx={index}
           data-field="heading"
           onKeyDown={commitOnEnter}
+          onInput={onInput}
           onBlur={(e) => onEdit(index, "heading", e.currentTarget.innerText)}
           className={cn(
             "mb-1 scroll-mt-[calc(56vw+1rem)] font-display text-text text-[19px] tracking-[0.02em] lg:scroll-mt-4",
@@ -2733,6 +2743,7 @@ function EditableSegment({
             data-idx={index}
             data-field="subheading"
             onKeyDown={commitOnEnter}
+            onInput={onInput}
             onBlur={(e) => onEdit(index, "subheading", e.currentTarget.innerText)}
             className={cn("flex-1 font-display text-text/90 text-[17px] tracking-[0.02em]", box)}
           >
@@ -2746,6 +2757,7 @@ function EditableSegment({
         data-idx={index}
         data-field="text"
         onKeyDown={commitOnShiftEnter}
+        onInput={onInput}
         onBlur={(e) => onEdit(index, "text", e.currentTarget.innerText)}
         className={cn("text-[length:var(--tsize,15px)] leading-[1.6] text-subtle", box)}
       >

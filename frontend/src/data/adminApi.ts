@@ -6,7 +6,7 @@ import { supabase } from "./supabase";
 import type { TranscriptSegment } from "./transcript";
 import { LOCAL_SUPABASE_URL, PUBLIC_BOT_API_URL } from "./public-supabase-config";
 
-async function postAdmin(path: string, body: unknown): Promise<void> {
+async function postAdmin(path: string, body: unknown): Promise<unknown> {
   const mode = (import.meta.env?.VITE_DATA_MODE ?? "prod").toLowerCase();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   let base: string;
@@ -34,8 +34,12 @@ async function postAdmin(path: string, body: unknown): Promise<void> {
     }
     throw new Error(message);
   }
+  return resp.json();
 }
 
-export async function saveTranscript(key: string, segments: TranscriptSegment[]): Promise<void> {
-  await postAdmin(`/episodes/${encodeURIComponent(key)}/transcript`, segments);
+export async function saveTranscript(key: string, segments: TranscriptSegment[]): Promise<TranscriptSegment[]> {
+  const result = (await postAdmin(`/episodes/${encodeURIComponent(key)}/transcript`, segments)) as {
+    segments?: TranscriptSegment[];
+  };
+  return result.segments ?? segments;
 }

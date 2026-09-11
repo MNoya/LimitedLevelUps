@@ -30,9 +30,9 @@ HEADERS = {"User-Agent": "llu-transcripts/1.0", "Accept": "application/json"}
 _FRAGMENTS: set[str] | None = None
 
 
-def set_card_names(code: str, refresh: bool = False) -> list[str]:
+def set_card_names(code: str, refresh: bool = False, stale_ok: bool = False) -> list[str]:
     path = CACHE_DIR / f"set_{code.lower()}.json"
-    if not refresh and path.exists() and not _set_sheet_stale(code, path):
+    if not refresh and path.exists() and (stale_ok or not _set_sheet_stale(code, path)):
         return json.loads(path.read_text())
     try:
         names = _fetch_set_cards(code.lower())

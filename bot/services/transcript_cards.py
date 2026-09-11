@@ -21,7 +21,7 @@ def build_card_tagger(session: Session, key: str) -> CardTagger | None:
     if not set_code:
         return None
     try:
-        card_names = card_index.set_card_names(set_code)
+        card_names = card_index.set_card_names(set_code, stale_ok=True)
     except Exception:
         log.warning(f"card sheet fetch failed for set {set_code}, skipping card pass", exc_info=True)
         return None

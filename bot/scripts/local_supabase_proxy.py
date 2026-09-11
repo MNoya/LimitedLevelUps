@@ -283,7 +283,7 @@ async def _handle_refresh(request: web.Request) -> web.Response:
     return web.json_response({"ingested": ingested, "pending": len(pending), "filled": filled, "missed": missed})
 
 
-def _save_transcript(sessions: sessionmaker, key: str, incoming: list[dict]) -> tuple[str, int] | None:
+def _save_transcript(sessions: sessionmaker, key: str, incoming: list[dict]) -> tuple[str, int] | list[dict]:
     with sessions() as session:
         row = session.get(EpisodeTranscript, key)
         if row is None:
@@ -299,18 +299,18 @@ def _save_transcript(sessions: sessionmaker, key: str, incoming: list[dict]) -> 
         row.segments = merged
         row.word_count = word_count(merged)
         session.commit()
-    return None
+    return merged
 
 
 async def _handle_transcript_edit(request: web.Request) -> web.Response:
     incoming = await request.json()
     if not isinstance(incoming, list):
         return web.json_response({"error": "expected a segments array"}, status=400)
-    failure = await asyncio.to_thread(_save_transcript, request.app["sessions"], request.match_info["key"], incoming)
-    if failure is not None:
-        message, status = failure
+    result = await asyncio.to_thread(_save_transcript, request.app["sessions"], request.match_info["key"], incoming)
+    if isinstance(result, tuple):
+        message, status = result
         return web.json_response({"error": message}, status=status)
-    return web.json_response({"ok": True})
+    return web.json_response({"ok": True, "segments": result})
 
 
 @web.middleware
