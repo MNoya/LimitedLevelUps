@@ -34,6 +34,7 @@ import {
   ListOrdered,
   Loader2,
   Mic,
+  MonitorPlay,
   Package,
   Pencil,
   Search,
@@ -1666,6 +1667,37 @@ function ChapterNav({
   );
 }
 
+function EpisodeMediaIcons({ episode }: { episode: Episode }) {
+  const hasAudio = Boolean(episode.audioUrl);
+  const hasVideo = Boolean(episode.youtubeId);
+  if ((!hasAudio && !hasVideo) || !episode.slug) {
+    return null;
+  }
+  const iconClass = "h-[17px] w-[17px] shrink-0 text-muted transition-colors group-hover:text-green";
+  return (
+    <span className="hidden items-center gap-2.5 sm:flex">
+      {hasAudio ? (
+        <Tooltip label="Audio version" side="bottom">
+          <Link to={`/episodes/audio/${episode.slug}`} aria-label="Audio version" className="group">
+            <Headphones className={iconClass} strokeWidth={1.75} />
+          </Link>
+        </Tooltip>
+      ) : null}
+      {hasVideo ? (
+        <Tooltip label="Video version" side="bottom">
+          <Link
+            to={`/episodes/${categorySlug(episode.category)}/${episode.slug}`}
+            aria-label="Video version"
+            className="group"
+          >
+            <MonitorPlay className={iconClass} strokeWidth={1.75} />
+          </Link>
+        </Tooltip>
+      ) : null}
+    </span>
+  );
+}
+
 function TranscriptArticle({ episode }: { episode: Episode }) {
   const { transcript, settled } = useEpisodeTranscript(episode);
   const transcriptEdit = useTranscriptEdit(episode.youtubeId ?? episode.id, transcript ?? []);
@@ -1786,6 +1818,7 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
                   {episode.title}
                 </h1>
                 <div className="flex shrink-0 items-center gap-3">
+                  <EpisodeMediaIcons episode={episode} />
                   <span className="hidden font-num text-[12px] tracking-[0.06em] text-muted sm:inline">
                     {episode.publishedLabel.toUpperCase()}
                   </span>
@@ -1854,6 +1887,7 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
               {episode.title}
             </h1>
             <div className="flex shrink-0 items-center gap-3">
+              <EpisodeMediaIcons episode={episode} />
               <span className="hidden font-num text-[12px] tracking-[0.06em] text-muted sm:inline">
                 {episode.publishedLabel.toUpperCase()}
               </span>
@@ -2705,7 +2739,7 @@ function EpisodeTranscript({
             const lane = SPEAKER_LANES[(item.lane ?? 0) % SPEAKER_LANES.length];
             const linked = linkable.get(`${index}:0`);
             return (
-              <div key={index} className="mt-5">
+              <div key={index} className="mt-5 first:mt-0">
                 {item.showName ? (
                   <span className={cn("mb-1.5 block font-display text-[14px] tracking-[0.1em] leading-none", lane.name)}>
                     {item.speaker}
