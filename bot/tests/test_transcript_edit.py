@@ -48,7 +48,17 @@ def test_emptying_heading_removes_it():
     assert "heading" not in merged[0]
 
 
-def test_empty_paragraph_is_rejected():
+def test_emptied_paragraph_is_dropped():
+    stored = [{"t": 0, "text": "keep"}, {"t": 5, "text": "remove"}, {"t": 9, "text": "keep too"}]
+    incoming = [{"t": 0, "text": "keep"}, {"t": 5, "text": "   "}, {"t": 9, "text": "keep too"}]
+
+    merged = merge_transcript_segments(stored, incoming)
+
+    assert [s["t"] for s in merged] == [0, 9]
+    assert [s["text"] for s in merged] == ["keep", "keep too"]
+
+
+def test_all_empty_transcript_is_rejected():
     stored = [{"t": 0, "text": "body"}]
     incoming = [{"t": 0, "text": "   "}]
 

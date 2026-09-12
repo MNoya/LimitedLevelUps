@@ -923,7 +923,7 @@ export function EpisodesPage() {
 }
 
 const VIDEO_HEIGHT_KEY = "llu:episode-video-vh";
-const VIDEO_HEIGHT_MIN = 18;
+const VIDEO_HEIGHT_MIN = 12;
 const VIDEO_HEIGHT_MAX = 92;
 const VIDEO_HEIGHT_DEFAULT = 52;
 
@@ -944,6 +944,15 @@ function readStoredTranscriptWide(): boolean {
     return false;
   }
   return window.localStorage.getItem(TRANSCRIPT_WIDE_KEY) === "1";
+}
+
+const HIDE_TRANSCRIPT_KEY = "llu:episode-hide-transcript";
+
+function readStoredHideTranscript(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.localStorage.getItem(HIDE_TRANSCRIPT_KEY) === "1";
 }
 
 const ARTICLE_WIDE_KEY = "llu:transcript-article-wide";
@@ -1008,9 +1017,6 @@ function EpisodeDetail({
   const canGoWide = availableWidth > 1200;
   const [videoHeightVh, setVideoHeightVh] = useState<number>(readStoredVideoHeight);
   const [transcriptWide, setTranscriptWide] = useState<boolean>(readStoredTranscriptWide);
-  const chapterRailReserve = 300 + 16;
-  const boardWidth = Math.min(availableWidth || 1120, 1120);
-  const videoMaxHeightPx = Math.max(0, Math.floor((boardWidth - chapterRailReserve) * 0.5625));
   const wideLayout = transcriptWide && canGoWide;
   const changeTranscriptWide = (wide: boolean) => {
     setTranscriptWide(wide);
@@ -1021,6 +1027,14 @@ function EpisodeDetail({
   const changeReading = (next: ReadingSettings) => {
     setReading(next);
     window.localStorage.setItem(READING_SETTINGS_KEY, JSON.stringify(next));
+  };
+  const [hideTranscript, setHideTranscript] = useState<boolean>(readStoredHideTranscript);
+  const toggleHideTranscript = () => {
+    setHideTranscript((prev) => {
+      const next = !prev;
+      window.localStorage.setItem(HIDE_TRANSCRIPT_KEY, next ? "1" : "0");
+      return next;
+    });
   };
   const [resizing, setResizing] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
@@ -1144,10 +1158,14 @@ function EpisodeDetail({
     () => (transcript ?? []).filter((s) => s.heading).map((s) => ({ t: s.t, heading: s.heading as string })),
     [transcript],
   );
-  const hasTranscript = Boolean(transcript && transcript.length > 0);
-  const richLayout = episode.hasTranscript || hasTranscript;
-  const resizableVideo = richLayout && !usingAudioPlayer;
+  const transcriptAvailable = episode.hasTranscript || Boolean(transcript && transcript.length > 0);
+  const hasTranscript = Boolean(transcript && transcript.length > 0) && !hideTranscript;
+  const richLayout = transcriptAvailable && !hideTranscript;
+  const resizableVideo = transcriptAvailable && !usingAudioPlayer;
   const audioRich = richLayout && usingAudioPlayer;
+  const chapterRailReserve = richLayout && !usingAudioPlayer ? 300 + 16 : 0;
+  const boardWidth = wideLayout ? availableWidth || 1440 : Math.min(availableWidth || 1440, 1440);
+  const videoMaxHeightPx = Math.max(0, Math.floor((boardWidth - chapterRailReserve) * 0.5625));
   const moreEpisodes = useMemo(() => {
     const others = (siblings ?? []).filter((e) => e.id !== episode.id && !e.isShort);
     const sameCategory = others.filter((e) => e.category === episode.category);
@@ -1188,7 +1206,7 @@ function EpisodeDetail({
     <div
       ref={rootRef}
       className={cn(
-        "mx-auto w-full max-w-[1120px] lg:min-h-0",
+        "mx-auto w-full max-w-[1440px] lg:min-h-0",
         richLayout && transcriptWide && canGoWide && "lg:max-w-none lg:px-6",
         transcriptSettled ? "" : "min-h-[calc(100vh-9rem)]",
       )}
@@ -1210,9 +1228,7 @@ function EpisodeDetail({
           onPointerEnter={resizableVideo ? enterVideo : undefined}
           onPointerLeave={resizableVideo ? leaveVideo : undefined}
         >
-          <div
-            className={cn("relative", richLayout && !usingAudioPlayer ? "lg:shrink-0" : "lg:min-w-0 lg:flex-1")}
-          >
+          <div className={cn("relative", resizableVideo ? "lg:shrink-0" : "lg:min-w-0 lg:flex-1 lg:max-w-[1120px]")}>
             {usingAudioPlayer ? (
               <PodcastAudioPlayer
                 ref={audioControlsRef}
@@ -1226,7 +1242,7 @@ function EpisodeDetail({
               <div
                 className={cn(
                   "relative aspect-video w-full overflow-hidden border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:rounded-lg md:border lg:mx-0 lg:rounded-none lg:border-0",
-                  richLayout ? "lg:h-[var(--epv)] lg:max-h-[var(--epvmax)] lg:w-auto" : "lg:h-auto lg:w-full",
+                  resizableVideo ? "lg:h-[var(--epv)] lg:max-h-[var(--epvmax)] lg:w-auto" : "lg:h-auto lg:w-full",
                 )}
               >
                 <EpisodeEmbed
@@ -1314,6 +1330,8 @@ function EpisodeDetail({
                     onWideChange={changeTranscriptWide}
                     isMobile={isMobile}
                     canGoWide={canGoWide}
+                    showTranscript={!hideTranscript}
+                    onTranscriptToggle={toggleHideTranscript}
                     panelUp
                     panelLeft
                     floating
@@ -1327,14 +1345,34 @@ function EpisodeDetail({
         </div>
         <div className="pointer-events-none absolute inset-x-0 top-full hidden h-3 bg-gradient-to-b from-bg to-transparent lg:block" />
       </div>
-      <div className={cn("w-full", audioRich && "lg:flex lg:items-start lg:gap-6")}>
+      <div
+        className={cn(
+          "w-full",
+          !(transcriptWide && canGoWide) && "lg:max-w-[1120px]",
+          audioRich && "lg:flex lg:items-start lg:gap-6",
+        )}
+      >
         <div className={cn("min-w-0", audioRich && "lg:flex-1")}>
         <div className="mt-3 flex items-center justify-between gap-3 lg:mt-6">
           <h1 className="min-w-0 font-body text-text text-[16px] md:text-[20px] font-medium leading-snug">
             {episode.title}
           </h1>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            <EpisodeTag episode={episode} className={richLayout ? "hidden md:flex" : undefined} />
+            <div className="flex items-center gap-2">
+              {transcriptAvailable && !richLayout ? (
+                <ReadingSettings
+                  settings={reading}
+                  onChange={changeReading}
+                  wide={transcriptWide}
+                  onWideChange={changeTranscriptWide}
+                  isMobile={isMobile}
+                  canGoWide={canGoWide}
+                  showTranscript={!hideTranscript}
+                  onTranscriptToggle={toggleHideTranscript}
+                />
+              ) : null}
+              <EpisodeTag episode={episode} className={richLayout ? "hidden md:flex" : undefined} />
+            </div>
             {richLayout ? null : (
               <div className="flex items-center gap-2 font-num text-[12px] tabular-nums text-muted">
                 <span>{episode.publishedLabel}</span>
@@ -1368,6 +1406,8 @@ function EpisodeDetail({
                   onWideChange={changeTranscriptWide}
                   isMobile={isMobile}
                   canGoWide={canGoWide}
+                  showTranscript={!hideTranscript}
+                  onTranscriptToggle={toggleHideTranscript}
                 />
               ) : undefined
             }
@@ -1399,6 +1439,8 @@ function EpisodeDetail({
                   onWideChange={changeTranscriptWide}
                   isMobile={isMobile}
                   canGoWide={canGoWide}
+                  showTranscript={!hideTranscript}
+                  onTranscriptToggle={toggleHideTranscript}
                   panelUp
                   panelLeft
                 />
@@ -1426,6 +1468,8 @@ function ReadingSettings({
   floating = false,
   articleMode = false,
   block = false,
+  showTranscript = true,
+  onTranscriptToggle,
 }: {
   settings: ReadingSettings;
   onChange: (next: ReadingSettings) => void;
@@ -1438,41 +1482,51 @@ function ReadingSettings({
   floating?: boolean;
   articleMode?: boolean;
   block?: boolean;
+  showTranscript?: boolean;
+  onTranscriptToggle?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const body = (
     <div className="flex flex-col">
-      <SettingRow label="Text Size">
-        <div className="flex items-center gap-1.5">
-          <span className="font-display text-[11px] leading-none text-muted">A</span>
-          <input
-            type="range"
-            min={13}
-            max={17}
-            step={1}
-            value={settings.textPx}
-            onChange={(e) => onChange({ ...settings, textPx: Number(e.target.value) })}
-            aria-label="Text size"
-            className="h-1 w-16 cursor-pointer accent-green hover:accent-green-2"
-          />
-          <span className="font-display text-[15px] leading-none text-muted">A</span>
-        </div>
-      </SettingRow>
-      {articleMode ? null : (
+      {onTranscriptToggle ? (
+        <ToggleRow label="Show Transcript" on={showTranscript} onToggle={onTranscriptToggle} />
+      ) : null}
+      {showTranscript ? (
         <>
-          <div className="my-1 h-px bg-border" />
-          <ToggleRow
-            label="Read Along"
-            on={settings.highlight}
-            onToggle={() => onChange({ ...settings, highlight: !settings.highlight })}
-          />
-          <ToggleRow
-            label="Auto-Scroll"
-            on={settings.autoScroll}
-            onToggle={() => onChange({ ...settings, autoScroll: !settings.autoScroll })}
-          />
+          {onTranscriptToggle ? <div className="my-1 h-px bg-border" /> : null}
+          <SettingRow label="Text Size">
+            <div className="flex items-center gap-1.5">
+              <span className="font-display text-[11px] leading-none text-muted">A</span>
+              <input
+                type="range"
+                min={13}
+                max={17}
+                step={1}
+                value={settings.textPx}
+                onChange={(e) => onChange({ ...settings, textPx: Number(e.target.value) })}
+                aria-label="Text size"
+                className="h-1 w-16 cursor-pointer accent-green hover:accent-green-2"
+              />
+              <span className="font-display text-[15px] leading-none text-muted">A</span>
+            </div>
+          </SettingRow>
+          {articleMode ? null : (
+            <>
+              <div className="my-1 h-px bg-border" />
+              <ToggleRow
+                label="Read Along"
+                on={settings.highlight}
+                onToggle={() => onChange({ ...settings, highlight: !settings.highlight })}
+              />
+              <ToggleRow
+                label="Auto-Scroll"
+                on={settings.autoScroll}
+                onToggle={() => onChange({ ...settings, autoScroll: !settings.autoScroll })}
+              />
+            </>
+          )}
         </>
-      )}
+      ) : null}
       {canGoWide ? <ToggleRow label="Full Width" on={wide} onToggle={() => onWideChange(!wide)} /> : null}
     </div>
   );
@@ -2182,7 +2236,6 @@ interface TranscriptEdit {
   discard: () => void;
   save: () => void;
   dismiss: () => void;
-  markInput: () => void;
   editBlock: (index: number, field: "text" | "heading" | "subheading", value: string) => void;
   dropSubheading: (index: number) => void;
 }
@@ -2195,25 +2248,20 @@ function useTranscriptEdit(episodeKey: string | undefined, segments: TranscriptS
   const [working, setWorking] = useState<TranscriptSegment[]>(segments);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [message, setMessage] = useState<string | null>(null);
-  const [touched, setTouched] = useState(false);
   const saving = status === "saving";
 
   const enterEdit = () => {
     setWorking(structuredClone(segments));
     setStatus("idle");
     setMessage(null);
-    setTouched(false);
     setEditing(true);
   };
   const discard = () => {
     setEditing(false);
     setStatus("idle");
     setMessage(null);
-    setTouched(false);
   };
-  const markInput = () => setTouched(true);
   const editBlock = (index: number, field: "text" | "heading" | "subheading", value: string) => {
-    setTouched(false);
     setWorking((prev) => {
       const next = prev.slice();
       const segment = { ...next[index] };
@@ -2241,9 +2289,7 @@ function useTranscriptEdit(episodeKey: string | undefined, segments: TranscriptS
     });
   };
 
-  const dirty = useMemo(() => JSON.stringify(working) !== JSON.stringify(segments), [working, segments]);
-  const hasEmptyParagraph = useMemo(() => working.some((segment) => !segment.text.trim()), [working]);
-  const canSave = (dirty || touched) && !hasEmptyParagraph && !saving;
+  const canSave = !saving;
 
   const save = async () => {
     if (!episodeKey || !canSave) {
@@ -2270,7 +2316,7 @@ function useTranscriptEdit(episodeKey: string | undefined, segments: TranscriptS
 
   return {
     canEdit, editing, working, saving, status, message, canSave,
-    enterEdit, discard, save, dismiss, markInput, editBlock, dropSubheading,
+    enterEdit, discard, save, dismiss, editBlock, dropSubheading,
   };
 }
 
@@ -2447,6 +2493,9 @@ function EpisodeTranscript({
     let section: Extract<TranscriptItem, { kind: "section" }> | null = null;
     for (const segment of segments) {
       const text = stripSpeakerTurns(segment.text);
+      if (!text.trim()) {
+        continue;
+      }
       const speaker = segment.speaker;
       if (segment.heading) {
         section = null;
@@ -2702,7 +2751,6 @@ function EpisodeTranscript({
               index={index}
               segment={segment}
               onEdit={edit.editBlock}
-              onInput={edit.markInput}
               onDropSubheading={edit.dropSubheading}
             />
           ))}
@@ -2864,13 +2912,11 @@ function EditableSegment({
   index,
   segment,
   onEdit,
-  onInput,
   onDropSubheading,
 }: {
   index: number;
   segment: TranscriptSegment;
   onEdit: (index: number, field: "text" | "heading" | "subheading", value: string) => void;
-  onInput: () => void;
   onDropSubheading: (index: number) => void;
 }) {
   const box =
@@ -2897,7 +2943,6 @@ function EditableSegment({
           data-idx={index}
           data-field="heading"
           onKeyDown={commitOnEnter}
-          onInput={onInput}
           onBlur={(e) => onEdit(index, "heading", e.currentTarget.innerText)}
           className={cn(
             "mb-1 scroll-mt-[calc(56vw+1rem)] font-display text-text text-[19px] tracking-[0.02em] lg:scroll-mt-4",
@@ -2925,7 +2970,6 @@ function EditableSegment({
             data-idx={index}
             data-field="subheading"
             onKeyDown={commitOnEnter}
-            onInput={onInput}
             onBlur={(e) => onEdit(index, "subheading", e.currentTarget.innerText)}
             className={cn("flex-1 font-display text-text/90 text-[17px] tracking-[0.02em]", box)}
           >
@@ -2939,7 +2983,6 @@ function EditableSegment({
         data-idx={index}
         data-field="text"
         onKeyDown={commitOnShiftEnter}
-        onInput={onInput}
         onBlur={(e) => onEdit(index, "text", e.currentTarget.innerText)}
         className={cn("text-[length:var(--tsize,15px)] leading-[1.6] text-subtle", box)}
       >

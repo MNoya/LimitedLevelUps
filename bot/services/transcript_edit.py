@@ -26,7 +26,7 @@ def merge_transcript_segments(stored: list[dict], incoming: list[dict]) -> list[
     for stored_segment, incoming_segment in zip(stored, incoming):
         text = str(incoming_segment.get("text", "")).strip()
         if not text:
-            raise TranscriptEditError("a paragraph cannot be empty")
+            continue
         segment = dict(stored_segment)
         segment["text"] = text
         for label in ("heading", "subheading"):
@@ -36,12 +36,16 @@ def merge_transcript_segments(stored: list[dict], incoming: list[dict]) -> list[
             else:
                 segment.pop(label, None)
         merged.append(segment)
+    if not merged:
+        raise TranscriptEditError("a transcript cannot be empty")
     return merged
 
 
 def relink_changed_segments(stored: list[dict], merged: list[dict], tagger: CardTagger) -> list[dict]:
-    for stored_segment, segment in zip(stored, merged):
-        if segment["text"] == stored_segment["text"]:
+    stored_by_t = {stored_segment["t"]: stored_segment for stored_segment in stored}
+    for segment in merged:
+        origin = stored_by_t.get(segment["t"])
+        if origin is not None and segment["text"] == origin["text"]:
             continue
         corrected, cards = tagger(segment["text"])
         segment["text"] = corrected

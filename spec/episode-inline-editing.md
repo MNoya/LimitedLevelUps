@@ -1,5 +1,14 @@
 # Episode inline transcript editing (admin)
 
+## Resume status (built, awaiting deploy)
+The feature is implemented and committed; it works locally but is not on prod yet, because the bot endpoint and the frontend build both need to ship. Until then, Save on the site returns "Not Authorized"/"Transcript Not Found" (the browser posts to the prod bot, which lacks the route). Where to look:
+- Backend: `bot/http_server.py` (`POST /episodes/{key}/transcript`, `_require_admin`, `_save_transcript`); `bot/services/transcript_edit.py` (`merge_transcript_segments`, `relink_changed_segments`, `word_count`); `bot/services/transcript_cards.py` (`build_card_tagger`, returns None for setless so no card pass there); `bot/config.py` (`is_admin`, `admin_discord_ids`); `bot/scripts/local_supabase_proxy.py` (same route, no-auth, for local dev).
+- Frontend: `frontend/src/pages/EpisodesPage.tsx` (`useTranscriptEdit`, `EditControls`, `MobileEditFab`, and the `contentEditable` block editor); `frontend/src/data/adminApi.ts` (`saveTranscript`, `errorMessage`); `frontend/src/data/admins.ts` (`isAdmin`, defaults Noya + ChordOCalls, override `VITE_ADMIN_DISCORD_IDS`).
+- Done: desktop + mobile edit (pencil FAB to cancel/save), delete-subsection, single Title Case save error, timestamp/card-preserving merge.
+- To do: deploy (push master so the bot serves the route and the frontend ships), verify on a phone as admin, then the optional add-subsection (promote a paragraph to a subheading, reusing its `t`).
+- Test before deploy: run the dev server in local mode (proxy on :3001 + the episode present in local Postgres) to exercise Save end to end; prod-mode shows the UI but Save 404s until the bot deploys.
+- Caveat: edits live only in the stored `episode_transcripts` row. A re-enhance reads raw captions from `cache/transcripts/`, so re-running the pipeline on an edited episode overwrites manual edits.
+
 Handoff spec for a fresh session. Goal: a lightweight, admin-only way to make localized text edits to an episode transcript straight from the episode detail page on the site, to fix a card name, a person's name, punctuation, or a cringy Claude-generated title, without touching timestamps or segment structure.
 
 This is the first site-modifying endpoint that writes public content. Keep it small and safe.
