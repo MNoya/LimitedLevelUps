@@ -148,6 +148,7 @@ const KEYRUNE_OVERRIDES: Record<string, string> = {
   CUBE: "pz1",
   PEASANT: "pz1",
   IPA: "inv",
+  CHAOS: "mb2",
 };
 
 // Codes with no Keyrune glyph; "mask" recolors to currentColor, "image" keeps its own colors

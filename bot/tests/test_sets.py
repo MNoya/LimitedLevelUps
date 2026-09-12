@@ -19,10 +19,10 @@ def test_a_set_becomes_selectable_at_midnight_et_on_its_prerelease_date():
     assert prereleased_sets(prerelease_morning)[0].code == "HOB"
 
 
-def test_chaos_expansion_routes_only_events_from_2026_on():
+def test_chaos_expansion_routes_only_events_from_the_2026_event_on():
     cases = [
         ("Chaos", date(2026, 9, 2), "CHAOS"),
-        ("Chaos", date(2026, 1, 1), "CHAOS"),
+        ("Chaos", date(2026, 9, 1), "CHAOS"),
         ("Chaos", date(2025, 6, 15), None),
         ("Chaos", date(2023, 1, 21), None),
         ("Chaos", None, None),

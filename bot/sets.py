@@ -62,8 +62,8 @@ class SetSeed:
 
     ``match_from`` narrows an ``expansion_matches`` route to events on or after a date, for an expansion
     17lands uses as a catch-all: ``Chaos`` carries the current chaos drafts plus years of dead one-off
-    events (Decathlon, Remix, Festival-in-a-Box), so CHAOS routes only 2026 on and leaves the rest
-    unrouted. ``None`` routes every matched event regardless of date.
+    events (Decathlon, Remix, Festival-in-a-Box), so CHAOS routes only its 2026 run on and leaves the
+    rest unrouted. ``None`` routes every matched event regardless of date.
 
     ``short_name`` is the set as a person says it, for surfaces where the full name does not fit —
     the per-set champion role reads ``Marvel Set Champion``, not ``Marvel Super Heroes Set Champion``.
@@ -186,8 +186,8 @@ ALL_SETS: tuple[SetSeed, ...] = (
     SetSeed("EOE", "Edge of Eternities", date(2025, 7, 29), date(2025, 9, 23)),
     SetSeed("SPM", "Marvel's Spider-Man", date(2025, 9, 23), date(2025, 11, 15), expansion_alias="OM1"),
     SetSeed(CUBE_CODE, "Arena Powered Cube", date(2025, 10, 28), None, expansion_matches=CUBE_VARIANT_EXPANSIONS),
-    SetSeed("CHAOS", "Chaos Draft", date(2026, 1, 1), None,
-            expansion_matches=("Chaos",), match_from=date(2026, 1, 1)),
+    SetSeed("CHAOS", "Chaos Draft", date(2026, 9, 1), None,
+            expansion_matches=("Chaos",), match_from=date(2026, 9, 1)),
     SetSeed("TLA", "Avatar: The Last Airbender", date(2025, 11, 16), date(2026, 1, 19)),
     SetSeed("ECL", "Lorwyn Eclipsed", date(2026, 1, 20), date(2026, 3, 2)),
     SetSeed("TMT", "Teenage Mutant Ninja Turtles", date(2026, 3, 3), date(2026, 4, 20)),

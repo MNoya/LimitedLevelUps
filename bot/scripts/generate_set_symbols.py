@@ -34,7 +34,7 @@ SYMBOL_PX = 256
 
 # Sets keyrune has no glyph of their own borrow a source set's symbol. Mirror any block/flashback
 # override here and in KEYRUNE_OVERRIDES (frontend/src/components/Brand.tsx).
-KEYRUNE_ALIAS = {"SIR": "soi", "IPA": "inv"}
+KEYRUNE_ALIAS = {"SIR": "soi", "IPA": "inv", "CHAOS": "mb2"}
 
 
 def generate(codes: list[str]) -> tuple[list[str], list[str]]:
