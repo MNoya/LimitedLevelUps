@@ -62,7 +62,7 @@ def main() -> None:
 
         for seed, magic_set in seeded_sets:
             affected_players = claim_orphan_drafts(
-                session, magic_set, seed.expansion_alias, seed.expansion_matches,
+                session, magic_set, seed.expansion_alias, seed.expansion_matches, seed.match_from,
             )
             if not affected_players:
                 continue

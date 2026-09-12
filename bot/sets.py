@@ -60,6 +60,11 @@ class SetSeed:
     expansions to one set and keeps the raw string on each event, which is how the cube variants
     share the CUBE set while staying separable per board.
 
+    ``match_from`` narrows an ``expansion_matches`` route to events on or after a date, for an expansion
+    17lands uses as a catch-all: ``Chaos`` carries the current chaos drafts plus years of dead one-off
+    events (Decathlon, Remix, Festival-in-a-Box), so CHAOS routes only 2026 on and leaves the rest
+    unrouted. ``None`` routes every matched event regardless of date.
+
     ``short_name`` is the set as a person says it, for surfaces where the full name does not fit —
     the per-set champion role reads ``Marvel Set Champion``, not ``Marvel Super Heroes Set Champion``.
     Set it only where the full name is too long; there is no shortening rule worth guessing at, since
@@ -73,6 +78,7 @@ class SetSeed:
     prerelease_date: date | None = None
     expansion_alias: str | None = None
     expansion_matches: tuple[str, ...] = ()
+    match_from: date | None = None
 
 
 @dataclass(frozen=True)
@@ -180,6 +186,8 @@ ALL_SETS: tuple[SetSeed, ...] = (
     SetSeed("EOE", "Edge of Eternities", date(2025, 7, 29), date(2025, 9, 23)),
     SetSeed("SPM", "Marvel's Spider-Man", date(2025, 9, 23), date(2025, 11, 15), expansion_alias="OM1"),
     SetSeed(CUBE_CODE, "Arena Powered Cube", date(2025, 10, 28), None, expansion_matches=CUBE_VARIANT_EXPANSIONS),
+    SetSeed("CHAOS", "Chaos Draft", date(2026, 1, 1), None,
+            expansion_matches=("Chaos",), match_from=date(2026, 1, 1)),
     SetSeed("TLA", "Avatar: The Last Airbender", date(2025, 11, 16), date(2026, 1, 19)),
     SetSeed("ECL", "Lorwyn Eclipsed", date(2026, 1, 20), date(2026, 3, 2)),
     SetSeed("TMT", "Teenage Mutant Ninja Turtles", date(2026, 3, 3), date(2026, 4, 20)),
@@ -400,16 +408,29 @@ EXPANSION_ROUTES: dict[str, str] = {
     match: s.code for s in ALL_SETS for match in s.expansion_matches
 }
 
+ROUTE_MATCH_FROM: dict[str, date] = {
+    match: s.match_from
+    for s in ALL_SETS if s.match_from is not None
+    for match in s.expansion_matches
+}
+
 
 def normalize_expansion(expansion: str) -> str:
     return EXPANSION_ALIASES.get(expansion, expansion)
 
 
-def set_code_for_expansion(expansion: str) -> str | None:
+def set_code_for_event(expansion: str, event_date: date | None) -> str | None:
     """The set an exactly-named 17lands expansion belongs to, for expansions kept verbatim on their
-    events (the cube variants). ``None`` when the expansion carries no explicit route, leaving the
-    caller's substring match on the set code to resolve it."""
-    return EXPANSION_ROUTES.get(expansion)
+    events (the cube variants, Chaos). ``None`` when the expansion carries no explicit route, or when
+    the route starts on a date and the event predates it (or has no date), leaving the caller's
+    substring match on the set code to resolve it."""
+    code = EXPANSION_ROUTES.get(expansion)
+    if code is None:
+        return None
+    starts = ROUTE_MATCH_FROM.get(expansion)
+    if starts is not None and (event_date is None or event_date < starts):
+        return None
+    return code
 
 
 def set_name_for(code: str) -> str:

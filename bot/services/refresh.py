@@ -20,7 +20,7 @@ from datetime import date, timedelta
 from typing import Iterable, Protocol, Sequence
 
 import requests
-from sqlalchemy import delete, func, or_, select, text, update
+from sqlalchemy import and_, delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -34,7 +34,7 @@ from bot.models import (
 from bot.scoring import DEFAULT_QUEUE_GROUPS
 from bot.services.active_set import resolve_active_set
 from bot.services.seventeenlands import SUPPORTED_FORMATS, extract_event_row
-from bot.sets import active_set_code, set_code_for_expansion
+from bot.sets import active_set_code, set_code_for_event
 
 PERIODIC_WINDOW_DAYS = 7
 
@@ -49,10 +49,11 @@ class _DraftClient(Protocol):
     def fetch_drafts(self, token: str, start_date=..., end_date=..., expansion=...) -> list[dict]: ...
 
 
-def _resolve_set_id(expansion: str, codes: list[str], sets_by_code: dict[str, MagicSet]) -> str | None:
-    """The set an expansion belongs to: an explicit route first (the cube variants, whose raw
-    17lands names stay on the event), then the first registered set whose code substring-matches."""
-    routed = set_code_for_expansion(expansion)
+def _resolve_set_id(expansion: str, event_date, codes: list[str], sets_by_code: dict[str, MagicSet]) -> str | None:
+    """The set an event belongs to: an explicit route first (the cube variants and Chaos, whose raw
+    17lands names stay on the event), then the first registered set whose code substring-matches. A
+    date-restricted route (Chaos) resolves only events on or after its start."""
+    routed = set_code_for_event(expansion, event_date)
     if routed is not None and routed in sets_by_code:
         return sets_by_code[routed].id
     for code in codes:
@@ -110,7 +111,8 @@ def bulk_upsert_draft_events(
         row = extract_event_row(draft)
         if row is None:
             continue
-        set_id = _resolve_set_id(row["expansion"], codes, sets_by_code)
+        started = row["started_at"]
+        set_id = _resolve_set_id(row["expansion"], started.date() if started else None, codes, sets_by_code)
         row["player_id"] = player_id
         row["set_id"] = set_id
 
@@ -224,6 +226,7 @@ def claim_orphan_drafts(
     magic_set: MagicSet,
     expansion_alias: str | None = None,
     expansion_matches: Sequence[str] = (),
+    match_from: date | None = None,
 ) -> set[str]:
     """Attach unrouted ``draft_events`` rows to ``magic_set`` when their expansion now matches.
 
@@ -234,7 +237,8 @@ def claim_orphan_drafts(
     Match rule mirrors the ingest path: an exact ``expansion_matches`` name, or ``magic_set.code``
     as a substring of the expansion. A row ingested before its ``expansion_alias`` existed still
     holds the raw 17lands string (``OM1`` for SPM), so the alias is rewritten to the code first,
-    restoring the invariant and letting the substring claim pick it up.
+    restoring the invariant and letting the substring claim pick it up. ``match_from`` restricts the
+    claim to events on or after a date (Chaos: 2026 on).
     """
     if expansion_alias is not None:
         session.execute(
@@ -246,6 +250,8 @@ def claim_orphan_drafts(
     criteria = DraftEvent.expansion.contains(magic_set.code)
     if matches:
         criteria = or_(criteria, DraftEvent.expansion.in_(matches))
+    if match_from is not None:
+        criteria = and_(criteria, DraftEvent.started_at >= match_from)
 
     affected = session.execute(
         select(DraftEvent.player_id).where(DraftEvent.set_id.is_(None), criteria).distinct()
