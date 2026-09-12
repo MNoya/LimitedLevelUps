@@ -33,9 +33,7 @@ export function P0P1Hero({
     <div ref={innerRef} className="sticky top-0 z-30 px-10 py-5 border-b border-border bg-surface flex flex-wrap items-center gap-x-8 gap-y-3">
       <SetGlyph code={featured.code} size={84} />
       <div className="shrink-0">
-        <div className="flex items-center gap-4">
-          <SectionLabel size={13}>PACK 0, PICK 1</SectionLabel>
-        </div>
+        <SectionLabel size={13}>PACK 0, PICK 1</SectionLabel>
         <div className="flex items-baseline gap-3.5 mt-0.5">
           {contests.length > 1 ? (
             <P0P1ContestDropdown
