@@ -2921,14 +2921,8 @@ function EditableSegment({
 }) {
   const box =
     "-mx-1 min-h-[1.2em] cursor-text rounded-sm px-1 outline-none transition-colors hover:bg-green/5 focus:bg-green/10 focus:ring-1 focus:ring-green/40";
-  const commitOnShiftEnter = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Enter" && e.shiftKey) {
-      e.preventDefault();
-      e.currentTarget.blur();
-    }
-  };
   const commitOnEnter = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       e.currentTarget.blur();
     }
@@ -2982,7 +2976,7 @@ function EditableSegment({
         suppressContentEditableWarning
         data-idx={index}
         data-field="text"
-        onKeyDown={commitOnShiftEnter}
+        onKeyDown={commitOnEnter}
         onBlur={(e) => onEdit(index, "text", e.currentTarget.innerText)}
         className={cn("text-[length:var(--tsize,15px)] leading-[1.6] text-subtle", box)}
       >
