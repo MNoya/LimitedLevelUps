@@ -36,11 +36,21 @@ import type { PickEntry } from "./CommunityGrid";
 
 const HIGHLIGHTS_COUNT = 5;
 
-function SectionHeading({ title, children }: { title: string; children?: React.ReactNode }) {
+function SectionHeading({
+  title,
+  children,
+  right,
+}: {
+  title: string;
+  children?: React.ReactNode;
+  right?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col">
-      <div className="flex justify-center">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div />
         <SectionLabel size={22} className="text-white">{title}</SectionLabel>
+        <div className="justify-self-end">{right}</div>
       </div>
       {children && <p className="text-center text-[13.5px] text-subtle mt-1.5">{children}</p>}
     </div>

@@ -183,6 +183,7 @@ function TeamRow({
   onTileOpen,
   toggle,
   aligned = false,
+  right,
 }: {
   label: string;
   labelToggle?: boolean;
@@ -196,6 +197,7 @@ function TeamRow({
   onTileOpen: (slotKey: SlotKey) => void;
   toggle?: Toggle;
   aligned?: boolean;
+  right?: React.ReactNode;
 }) {
   const labelEl = (
     <span
@@ -225,9 +227,12 @@ function TeamRow({
 
       <div className="mb-2 hidden items-baseline lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-5">
         <div className="lg:col-start-2">{labelEl}</div>
-        <div className="flex items-baseline gap-4 lg:col-start-3 lg:justify-self-start">
-          {scoreEl}
-          {toggleEl}
+        <div className="flex items-baseline justify-between gap-4 lg:col-start-3 lg:justify-self-stretch">
+          <div className="flex items-baseline gap-4">
+            {scoreEl}
+            {toggleEl}
+          </div>
+          {right && <div className="self-center">{right}</div>}
         </div>
       </div>
 

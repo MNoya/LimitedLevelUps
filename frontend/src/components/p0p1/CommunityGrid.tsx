@@ -52,19 +52,23 @@ function PickRow({
   cardsByName,
   picksBySlot,
   setCode,
+  right,
 }: {
   title: string;
   entries: PickEntry[];
   cardsByName: Map<string, Card>;
   picksBySlot?: Map<string, string>;
   setCode?: string;
+  right?: React.ReactNode;
 }) {
   return (
     <div>
-      <div className="flex justify-center mb-1.5 lg:mb-2">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 mb-1.5 lg:mb-2">
+        <div />
         <SectionLabel size={22} color={'white'}>
           {title}
         </SectionLabel>
+        <div className="justify-self-end">{right}</div>
       </div>
       <PickGrid entries={entries} cardsByName={cardsByName} picksBySlot={picksBySlot} setCode={setCode} />
     </div>

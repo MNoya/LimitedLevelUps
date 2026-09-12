@@ -5,11 +5,14 @@ import { P0P1Countdown } from "./Countdown";
 import { P0P1CountdownBar } from "./CountdownBar";
 import { P0P1IntroText } from "./P0P1IntroText";
 import { NextContestOpens } from "./NextContestOpens";
-import type { FeaturedContest } from "../../data/p0p1Slots";
+import { P0P1ContestDropdown } from "./P0P1ContestDropdown";
+import type { FeaturedContest, ContestChipInfo } from "../../data/p0p1Slots";
 import type { P0P1Phase, RatingsSnapshot } from "../../data/p0p1Results";
 
 export function P0P1Hero({
   featured,
+  contests,
+  onContestChange,
   cta,
   innerRef,
   belowIntro,
@@ -17,6 +20,8 @@ export function P0P1Hero({
   dateRange,
 }: {
   featured: FeaturedContest;
+  contests: ContestChipInfo[];
+  onContestChange: (code: string) => void;
   cta: ReactNode;
   innerRef?: Ref<HTMLDivElement>;
   belowIntro?: ReactNode;
@@ -30,20 +35,23 @@ export function P0P1Hero({
       <div className="shrink-0">
         <SectionLabel size={13}>PACK 0, PICK 1</SectionLabel>
         <div className="flex items-baseline gap-3.5 mt-0.5">
-          <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
-            {featured.code}
-          </span>
-          <span className="font-display text-[22px] text-muted tracking-[0.06em]">{featured.name.toUpperCase()}</span>
+          {contests.length > 1 ? (
+            <P0P1ContestDropdown
+              contests={contests}
+              activeCode={featured.code}
+              onSelect={onContestChange}
+            />
+          ) : (
+            <>
+              <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
+                {featured.code}
+              </span>
+              <span className="font-display text-[22px] text-muted tracking-[0.06em]">{featured.name.toUpperCase()}</span>
+            </>
+          )}
         </div>
         <div className="font-mono text-[11px] mt-1 flex items-center justify-between gap-x-6">
           <P0P1Countdown deadline={featured.votingDeadline} scoringDate={featured.scoringDate} size={11} phase={phase} />
-          {phase === "final" && featured.next && (
-            <span className="flex items-center gap-1.5 text-muted">
-              NEXT
-              <SetGlyph code={featured.next.code} size={14} className="text-white" />
-              <span className="text-white">{featured.next.name}</span>
-            </span>
-          )}
         </div>
         {isPastDeadline && (
           <div className="w-full mt-2">
@@ -59,7 +67,9 @@ export function P0P1Hero({
           {phase === "final" ? <NextContestOpens next={featured.next} /> : belowIntro}
         </div>
       </div>
-      <div className="shrink-0 ml-auto flex justify-end min-w-[280px]">{cta}</div>
+      <div className="shrink-0 ml-auto flex items-center justify-end gap-x-8 min-w-[280px]">
+        {cta}
+      </div>
     </div>
   );
 }

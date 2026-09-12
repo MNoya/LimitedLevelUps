@@ -113,6 +113,27 @@ function describeContest(
   };
 }
 
+// --- Contest chip list (for the switcher) ---
+
+export interface ContestChipInfo {
+  code: string;
+  name: string;
+  release: number;
+  status: "pre" | "live" | "results" | "frozen";
+}
+
+export function resolveAllContestChips(now: number): ContestChipInfo[] {
+  const contests = resolveContests();
+  const latest = contests.find((c) => now >= c.previewsOpen);
+  return contests.map((c) => {
+    let status: ContestChipInfo["status"] = "frozen";
+    if (now < c.previewsOpen) status = "pre";
+    else if (c === latest && now < c.scoringDate) status = "live";
+    else if (c === latest) status = "results";
+    return { code: c.code, name: c.name, release: c.release, status };
+  });
+}
+
 // --- Slot definitions (set-independent) ---
 
 function isBasicLand(card: Card) {

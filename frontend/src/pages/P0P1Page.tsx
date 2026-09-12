@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { Crossfade } from "../components/Crossfade";
 import { CtaPill } from "../components/CtaPill";
@@ -18,14 +18,14 @@ import { PostVotingStats } from "../components/p0p1/PostVotingStats";
 import { MidwayResults } from "../components/p0p1/MidwayResults";
 import { FinalResults } from "../components/p0p1/FinalResults";
 import { P0P1DevPanel } from "../components/p0p1/P0P1DevPanel";
-import { p0p1DevEnabled } from "../data/p0p1DevState";
+import { p0p1DevEnabled, p0p1Now } from "../data/p0p1DevState";
 import { isP0P1Previewer } from "../data/p0p1Previewers";
 import { useAuth } from "../auth/useAuth";
 import { P0P1BallotScorecard, MidwayBallotScorecard, FinalBallotScorecard, BallotScorecardSkeleton, CHAMFER } from "../components/p0p1/P0P1BallotScorecard";
 import { PickGrid } from "../components/p0p1/CommunityGrid";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { useP0P1Ballot } from "../data/useP0P1Ballot";
-import { SLOTS } from "../data/p0p1Slots";
+import { SLOTS, resolveAllContestChips, resolveFeaturedContest } from "../data/p0p1Slots";
 import { groupBySlot, findExtremes, classifyYourPick } from "../data/p0p1Stats";
 import type { Card, SlotDefinition, SlotKey } from "../types/p0p1";
 import { SITE_LINKS } from "../data/site";
@@ -66,6 +66,23 @@ export function P0P1Page() {
   const { user: authUser } = useAuth();
   const canPreviewPre = p0p1DevEnabled || isP0P1Previewer(authUser?.discordId);
 
+  const navigate = useNavigate();
+  const allContests = resolveAllContestChips(p0p1Now(featured?.scoringDate));
+  const visibleContests = canPreviewPre
+    ? allContests
+    : allContests.filter((c) => c.status !== "pre");
+  const handleContestChange = useCallback(
+    (code: string) => {
+      const featuredContest = resolveFeaturedContest(p0p1Now(featured?.scoringDate));
+      if (featuredContest && code === featuredContest.code) {
+        navigate("/p0p1");
+      } else {
+        navigate(`/p0p1/${code.toLowerCase()}`);
+      }
+    },
+    [navigate, featured?.scoringDate],
+  );
+
   const isDesktop = !useIsMobile(1024);
   const heroRef = useRef<HTMLDivElement>(null);
   const [heroHeight, setHeroHeight] = useState(0);
@@ -91,7 +108,7 @@ export function P0P1Page() {
   if (!isDesktop) {
     return (
       <>
-        <P0P1MobileSelector ballot={ballot} />
+        <P0P1MobileSelector ballot={ballot} contests={visibleContests} onContestChange={handleContestChange} />
         <P0P1DevPanel />
       </>
     );
@@ -146,7 +163,7 @@ export function P0P1Page() {
   return (
     <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
-      {featured && <P0P1Hero featured={featured} innerRef={heroRef} cta={heroCta} belowIntro={belowIntro} phase={phase} dateRange={ratingsSnapshot?.dateRange} />}
+      {featured && <P0P1Hero featured={featured} contests={visibleContests} onContestChange={handleContestChange} innerRef={heroRef} cta={heroCta} belowIntro={belowIntro} phase={phase} dateRange={ratingsSnapshot?.dateRange} />}
 
       <main className="flex-1 px-10 pb-5 pt-5">
         {!isPastDeadline &&
