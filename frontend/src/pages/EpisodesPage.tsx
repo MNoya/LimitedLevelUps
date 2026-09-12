@@ -922,10 +922,9 @@ export function EpisodesPage() {
   );
 }
 
-const VIDEO_HEIGHT_KEY = "llu:episode-video-vh";
-const VIDEO_HEIGHT_MIN = 12;
-const VIDEO_HEIGHT_MAX = 92;
-const VIDEO_HEIGHT_DEFAULT = 52;
+const VIDEO_HEIGHT_KEY = "llu:episode-video-h";
+const VIDEO_HEIGHT_MIN = 200;
+const VIDEO_HEIGHT_DEFAULT = 452;
 
 const AUDIO_INTRO_OFFSET_SECONDS = 14;
 
@@ -934,7 +933,7 @@ function readStoredVideoHeight(): number {
     return VIDEO_HEIGHT_DEFAULT;
   }
   const stored = Number(window.localStorage.getItem(VIDEO_HEIGHT_KEY));
-  return stored >= VIDEO_HEIGHT_MIN && stored <= VIDEO_HEIGHT_MAX ? stored : VIDEO_HEIGHT_DEFAULT;
+  return stored >= VIDEO_HEIGHT_MIN ? stored : VIDEO_HEIGHT_DEFAULT;
 }
 
 const TRANSCRIPT_WIDE_KEY = "llu:episode-transcript-wide";
@@ -1015,7 +1014,7 @@ function EpisodeDetail({
   const [headerHeight, setHeaderHeight] = useState(0);
   const [availableWidth, setAvailableWidth] = useState(0);
   const canGoWide = availableWidth > 1200;
-  const [videoHeightVh, setVideoHeightVh] = useState<number>(readStoredVideoHeight);
+  const [videoHeightPx, setVideoHeightPx] = useState<number>(readStoredVideoHeight);
   const [transcriptWide, setTranscriptWide] = useState<boolean>(readStoredTranscriptWide);
   const wideLayout = transcriptWide && canGoWide;
   const changeTranscriptWide = (wide: boolean) => {
@@ -1040,7 +1039,7 @@ function EpisodeDetail({
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [pointerOnVideo, setPointerOnVideo] = useState(false);
   const hideResizeTimer = useRef<number | null>(null);
-  const resizeStart = useRef<{ y: number; vh: number } | null>(null);
+  const resizeStart = useRef<{ y: number; h: number } | null>(null);
   const showResizeHandle = pointerOnVideo || resizing || !videoPlaying;
   const enterVideo = () => {
     if (hideResizeTimer.current) {
@@ -1080,9 +1079,20 @@ function EpisodeDetail({
     observer.observe(parent);
     return () => observer.disconnect();
   }, []);
+  const usingAudioPlayer = audioMode || !episode.youtubeId;
+  const chapters = useMemo(
+    () => (transcript ?? []).filter((s) => s.heading).map((s) => ({ t: s.t, heading: s.heading as string })),
+    [transcript],
+  );
+  const transcriptAvailable = episode.hasTranscript || Boolean(transcript && transcript.length > 0);
+  const richLayout = transcriptAvailable && !hideTranscript;
+  const showChapterRail = !usingAudioPlayer && (chapters.length > 0 || (richLayout && !transcriptSettled));
+  const chapterRailReserve = showChapterRail ? 300 + 16 : 0;
+  const boardWidth = wideLayout ? availableWidth || 1440 : Math.min(availableWidth || 1440, 1440);
+  const videoMaxHeightPx = Math.max(VIDEO_HEIGHT_MIN, Math.floor((boardWidth - chapterRailReserve) * 0.5625));
   const changeVideoHeight = (value: number) => {
-    const clamped = Math.round(Math.min(VIDEO_HEIGHT_MAX, Math.max(VIDEO_HEIGHT_MIN, value)));
-    setVideoHeightVh(clamped);
+    const clamped = Math.round(Math.min(videoMaxHeightPx, Math.max(VIDEO_HEIGHT_MIN, value)));
+    setVideoHeightPx(clamped);
     window.localStorage.setItem(VIDEO_HEIGHT_KEY, String(clamped));
   };
   const [collapsedChapters, setCollapsedChapters] = useState<ReadonlySet<number>>(() => new Set());
@@ -1096,7 +1106,6 @@ function EpisodeDetail({
       }
       return next;
     });
-  const usingAudioPlayer = audioMode || !episode.youtubeId;
   const canSeek = usingAudioPlayer ? Boolean(episode.audioUrl) : Boolean(episode.youtubeId);
   const seek = (seconds: number) => {
     if (usingAudioPlayer) {
@@ -1154,18 +1163,9 @@ function EpisodeDetail({
       window.removeEventListener("message", onMessage);
     };
   }, [usingAudioPlayer, episode.youtubeId]);
-  const chapters = useMemo(
-    () => (transcript ?? []).filter((s) => s.heading).map((s) => ({ t: s.t, heading: s.heading as string })),
-    [transcript],
-  );
-  const transcriptAvailable = episode.hasTranscript || Boolean(transcript && transcript.length > 0);
   const hasTranscript = Boolean(transcript && transcript.length > 0) && !hideTranscript;
-  const richLayout = transcriptAvailable && !hideTranscript;
   const resizableVideo = transcriptAvailable && !usingAudioPlayer;
   const audioRich = richLayout && usingAudioPlayer;
-  const chapterRailReserve = richLayout && !usingAudioPlayer ? 300 + 16 : 0;
-  const boardWidth = wideLayout ? availableWidth || 1440 : Math.min(availableWidth || 1440, 1440);
-  const videoMaxHeightPx = Math.max(0, Math.floor((boardWidth - chapterRailReserve) * 0.5625));
   const moreEpisodes = useMemo(() => {
     const others = (siblings ?? []).filter((e) => e.id !== episode.id && !e.isShort);
     const sameCategory = others.filter((e) => e.category === episode.category);
@@ -1192,6 +1192,10 @@ function EpisodeDetail({
       next.delete(seconds);
       return next;
     });
+    const chapter = chapters.find((c) => c.t === seconds);
+    if (chapter) {
+      window.history.replaceState(null, "", `#${chapterSlug(chapter.heading)}`);
+    }
     if (canSeek) {
       seek(seconds);
     }
@@ -1219,16 +1223,16 @@ function EpisodeDetail({
         )}
       >
         <div
-          className={cn("lg:flex lg:items-start lg:gap-4", wideLayout && "lg:justify-center")}
+          className={cn("lg:flex lg:items-start lg:gap-4", (wideLayout || resizableVideo) && "lg:justify-center")}
           style={
             resizableVideo
-              ? ({ "--epv": `${videoHeightVh}vh`, "--epvmax": `${videoMaxHeightPx}px` } as CSSProperties)
+              ? ({ "--epv": `${videoHeightPx}px`, "--epvmax": `${videoMaxHeightPx}px` } as CSSProperties)
               : undefined
           }
           onPointerEnter={resizableVideo ? enterVideo : undefined}
           onPointerLeave={resizableVideo ? leaveVideo : undefined}
         >
-          <div className={cn("relative", resizableVideo ? "lg:shrink-0" : "lg:min-w-0 lg:flex-1 lg:max-w-[1120px]")}>
+          <div className={cn("relative", resizableVideo ? "lg:shrink-0" : "lg:mx-auto lg:w-full lg:max-w-[1120px]")}>
             {usingAudioPlayer ? (
               <PodcastAudioPlayer
                 ref={audioControlsRef}
@@ -1263,7 +1267,7 @@ function EpisodeDetail({
                     onPointerDown={(e) => {
                       e.preventDefault();
                       setResizing(true);
-                      resizeStart.current = { y: e.clientY, vh: videoHeightVh };
+                      resizeStart.current = { y: e.clientY, h: Math.min(videoHeightPx, videoMaxHeightPx) };
                       try {
                         e.currentTarget.setPointerCapture(e.pointerId);
                       } catch {
@@ -1274,8 +1278,8 @@ function EpisodeDetail({
                       if (!resizeStart.current) {
                         return;
                       }
-                      const dyVh = ((e.clientY - resizeStart.current.y) / window.innerHeight) * 100;
-                      changeVideoHeight(resizeStart.current.vh + dyVh);
+                      const dy = e.clientY - resizeStart.current.y;
+                      changeVideoHeight(resizeStart.current.h + dy);
                     }}
                     onPointerUp={(e) => {
                       resizeStart.current = null;
@@ -1305,7 +1309,7 @@ function EpisodeDetail({
               </div>
             )}
           </div>
-          {richLayout && !usingAudioPlayer && (hasTranscript || !transcriptSettled) ? (
+          {showChapterRail ? (
             <aside className="relative hidden lg:flex lg:flex-col lg:w-[300px] lg:shrink-0 lg:h-[var(--epv)] lg:max-h-[var(--epvmax)]">
               {chapters.length > 0 || !transcriptSettled ? (
                 <ChapterNav
@@ -1347,7 +1351,7 @@ function EpisodeDetail({
       </div>
       <div
         className={cn(
-          "w-full",
+          "mx-auto w-full",
           !(transcriptWide && canGoWide) && "lg:max-w-[1120px]",
           audioRich && "lg:flex lg:items-start lg:gap-6",
         )}
@@ -1359,7 +1363,7 @@ function EpisodeDetail({
           </h1>
           <div className="flex shrink-0 flex-col items-end gap-2">
             <div className="flex items-center gap-2">
-              {transcriptAvailable && !richLayout ? (
+              {transcriptAvailable && !richLayout && !showChapterRail ? (
                 <ReadingSettings
                   settings={reading}
                   onChange={changeReading}
@@ -2523,6 +2527,7 @@ function EpisodeTranscript({
 
   const hashLocation = useLocation();
   const handledHash = useRef("");
+  const initialHashScrolled = useRef(false);
   useEffect(() => {
     const raw = decodeURIComponent(hashLocation.hash.replace(/^#/, "")).trim();
     if (!raw || items.length === 0 || handledHash.current === raw) {
@@ -2550,7 +2555,11 @@ function EpisodeTranscript({
     }
     const t = target;
     window.setTimeout(() => {
-      document.getElementById(`ch-${t}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById(`ch-${t}`)?.scrollIntoView({
+        behavior: initialHashScrolled.current ? "smooth" : "auto",
+        block: "start",
+      });
+      initialHashScrolled.current = true;
     }, 80);
   }, [hashLocation.hash, items, collapsedChapters, onToggleChapter]);
 
