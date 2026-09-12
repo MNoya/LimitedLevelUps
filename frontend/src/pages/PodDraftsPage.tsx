@@ -542,6 +542,12 @@ export function PodDraftsPage({
 
   const cardDataHref = hasCardData(activeSet) ? `/pods/${activeSet}/data` : null;
 
+  // Under a cube filter each row already carries its own cube board code, so a name lands on that profile
+  const profileSetFor = (row: LeaderboardTableRow) => {
+    if (format === "cube") return row.setCode;
+    return allSeasons ? homeCode : activeSet;
+  };
+
   const { user } = useAuth();
   const { data: mySlug } = usePlayerSlugByDiscordId(user?.discordId);
 
@@ -640,7 +646,7 @@ export function PodDraftsPage({
               stickyTop={chromeHeight + standingsHeadHeight}
               highlightSlug={mySlug ?? undefined}
               emptyMessage={allSeasons ? "No player stats yet." : `No player stats yet for ${activeSet}.`}
-              playerHref={(row) => playerPath(row.slug, allSeasons ? homeCode : activeSet)}
+              playerHref={(row) => playerPath(row.slug, profileSetFor(row))}
             />
           </section>
 

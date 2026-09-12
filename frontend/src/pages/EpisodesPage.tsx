@@ -1038,20 +1038,6 @@ function EpisodeDetail({
     hideResizeTimer.current = window.setTimeout(() => setPointerOnVideo(false), 3000);
   };
   useEffect(() => () => window.clearTimeout(hideResizeTimer.current ?? undefined), []);
-  const [readingHandleShown, setReadingHandleShown] = useState(false);
-  const readingHideTimer = useRef<number | null>(null);
-  const enterReadingHandle = () => {
-    if (readingHideTimer.current) {
-      window.clearTimeout(readingHideTimer.current);
-      readingHideTimer.current = null;
-    }
-    setReadingHandleShown(true);
-  };
-  const leaveReadingHandle = () => {
-    readingHideTimer.current = window.setTimeout(() => setReadingHandleShown(false), 3000);
-  };
-  useEffect(() => () => window.clearTimeout(readingHideTimer.current ?? undefined), []);
-  const showReadingHandle = readingHandleShown || !videoPlaying;
   useLayoutEffect(() => {
     const el = stickyRef.current;
     if (!el) {
@@ -1220,13 +1206,11 @@ function EpisodeDetail({
               ? ({ "--epv": `${videoHeightVh}vh`, "--epvmax": `${videoMaxHeightPx}px` } as CSSProperties)
               : undefined
           }
-          onPointerEnter={richLayout ? enterReadingHandle : undefined}
-          onPointerLeave={richLayout ? leaveReadingHandle : undefined}
+          onPointerEnter={resizableVideo ? enterVideo : undefined}
+          onPointerLeave={resizableVideo ? leaveVideo : undefined}
         >
           <div
             className={cn("relative", richLayout && !usingAudioPlayer ? "lg:shrink-0" : "lg:min-w-0 lg:flex-1")}
-            onPointerEnter={resizableVideo ? enterVideo : undefined}
-            onPointerLeave={resizableVideo ? leaveVideo : undefined}
           >
             {usingAudioPlayer ? (
               <PodcastAudioPlayer
@@ -1317,11 +1301,9 @@ function EpisodeDetail({
               ) : null}
               <div className="mt-auto flex items-center justify-between pt-2">
                 <div
-                  onPointerEnter={enterReadingHandle}
-                  onPointerLeave={leaveReadingHandle}
                   className={cn(
-                    "flex transition-opacity duration-200",
-                    showReadingHandle ? "opacity-100" : "opacity-0",
+                    "flex items-center gap-2 transition-opacity duration-200",
+                    showResizeHandle ? "opacity-100" : "opacity-0",
                   )}
                 >
                   <ReadingSettings
@@ -1335,6 +1317,7 @@ function EpisodeDetail({
                     panelLeft
                     floating
                   />
+                  <FormatSwitchLink episode={episode} target="audio" floating />
                 </div>
                 <EditControls edit={transcriptEdit} floating />
               </div>
@@ -1397,26 +1380,29 @@ function EpisodeDetail({
         {audioRich && (chapters.length > 0 || !transcriptSettled) ? (
           <aside
             className="hidden lg:mt-6 lg:flex lg:flex-col lg:sticky lg:self-start lg:w-[300px] lg:shrink-0"
-            style={{ top: headerHeight + 24 }}
+            style={{ top: headerHeight + 24, height: `calc(100vh - ${headerHeight + 48}px)` }}
           >
             <ChapterNav
-              style={{ maxHeight: `calc(100vh - ${headerHeight + 84}px)` }}
+              className="lg:min-h-0 lg:flex-1"
               chapters={chapters}
               activeT={activeChapterT}
               onJump={jumpToChapter}
               loading={chapters.length === 0}
             />
             <div className="flex items-center justify-between pt-2">
-              <ReadingSettings
-                settings={reading}
-                onChange={changeReading}
-                wide={transcriptWide}
-                onWideChange={changeTranscriptWide}
-                isMobile={isMobile}
-                canGoWide={canGoWide}
-                panelUp
-                panelLeft
-              />
+              <div className="flex items-center gap-2">
+                <ReadingSettings
+                  settings={reading}
+                  onChange={changeReading}
+                  wide={transcriptWide}
+                  onWideChange={changeTranscriptWide}
+                  isMobile={isMobile}
+                  canGoWide={canGoWide}
+                  panelUp
+                  panelLeft
+                />
+                <FormatSwitchLink episode={episode} target="video" />
+              </div>
               <EditControls edit={transcriptEdit} />
             </div>
           </aside>
@@ -1667,6 +1653,39 @@ function ChapterNav({
   );
 }
 
+function FormatSwitchLink({
+  episode,
+  target,
+  floating = false,
+}: {
+  episode: Episode;
+  target: "audio" | "video";
+  floating?: boolean;
+}) {
+  if (!episode.slug || (target === "audio" && !episode.audioUrl) || (target === "video" && !episode.youtubeId)) {
+    return null;
+  }
+  const to =
+    target === "audio" ? `/episodes/audio/${episode.slug}` : `/episodes/${categorySlug(episode.category)}/${episode.slug}`;
+  const label = target === "audio" ? "Audio version" : "Video version";
+  const Icon = target === "audio" ? Headphones : MonitorPlay;
+  const chrome = floating ? "bg-surface/95 shadow-[0_6px_18px_rgba(0,0,0,0.45)] backdrop-blur-sm" : "bg-transparent";
+  return (
+    <Tooltip label={label} side="top">
+      <Link
+        to={to}
+        aria-label={label}
+        className={cn(
+          "flex h-8 w-8 items-center justify-center border border-border2 text-subtle transition-colors hover:border-green hover:text-green",
+          chrome,
+        )}
+      >
+        <Icon className="h-4 w-4" strokeWidth={1.75} />
+      </Link>
+    </Tooltip>
+  );
+}
+
 function EpisodeMediaIcons({ episode }: { episode: Episode }) {
   const hasAudio = Boolean(episode.audioUrl);
   const hasVideo = Boolean(episode.youtubeId);
@@ -1676,13 +1695,6 @@ function EpisodeMediaIcons({ episode }: { episode: Episode }) {
   const iconClass = "h-[17px] w-[17px] shrink-0 text-muted transition-colors group-hover:text-green";
   return (
     <span className="hidden items-center gap-2.5 sm:flex">
-      {hasAudio ? (
-        <Tooltip label="Audio version" side="bottom">
-          <Link to={`/episodes/audio/${episode.slug}`} aria-label="Audio version" className="group">
-            <Headphones className={iconClass} strokeWidth={1.75} />
-          </Link>
-        </Tooltip>
-      ) : null}
       {hasVideo ? (
         <Tooltip label="Video version" side="bottom">
           <Link
@@ -1691,6 +1703,13 @@ function EpisodeMediaIcons({ episode }: { episode: Episode }) {
             className="group"
           >
             <MonitorPlay className={iconClass} strokeWidth={1.75} />
+          </Link>
+        </Tooltip>
+      ) : null}
+      {hasAudio ? (
+        <Tooltip label="Audio version" side="bottom">
+          <Link to={`/episodes/audio/${episode.slug}`} aria-label="Audio version" className="group">
+            <Headphones className={iconClass} strokeWidth={1.75} />
           </Link>
         </Tooltip>
       ) : null}
@@ -1854,11 +1873,10 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
           {hasChapters ? (
             <aside
               className="hidden lg:mt-6 lg:flex lg:flex-col lg:sticky lg:self-start lg:w-[300px] lg:shrink-0"
-              style={{ top: 24 }}
+              style={{ top: 24, height: "calc(100vh - 48px)" }}
             >
               <ChapterNav
-                className="overflow-y-auto"
-                style={{ maxHeight: "calc(100vh - 112px)" }}
+                className="lg:min-h-0 lg:flex-1"
                 chapters={chapters}
                 activeT={activeChapterT}
                 onJump={jumpToHeading}
@@ -1972,7 +1990,7 @@ function EpisodeDetailSkeleton() {
     <div className="mx-auto w-full max-w-[1120px]">
       <div
         className="-mx-4 -mt-6 md:-mx-6 md:mt-0 md:px-6 lg:-mx-5 lg:px-5 lg:flex lg:items-start lg:gap-4"
-        style={{ "--epv": `${VIDEO_HEIGHT_DEFAULT}vh` } as CSSProperties}
+        style={{ "--epv": `${readStoredVideoHeight()}vh` } as CSSProperties}
       >
         <div className="relative aspect-video w-full animate-pulse border-b border-border bg-surface md:mx-auto md:h-[36vh] md:w-auto md:rounded-lg md:border lg:mx-0 lg:h-[var(--epv)] lg:max-h-[calc((min(100vw,1120px)_-_316px)*0.5625)] lg:w-auto lg:shrink-0 lg:rounded-none lg:border-0" />
         <ChapterNav

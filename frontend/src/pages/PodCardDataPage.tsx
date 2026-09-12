@@ -194,7 +194,8 @@ export function PodCardDataPage() {
       <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
         <AppHeader subtitle={label.toUpperCase()} />
 
-        <div className="relative z-30 px-4 py-3 border-b border-border bg-surface flex items-center gap-3">
+        <div className="sticky top-0 z-30">
+        <div className="relative z-10 px-4 py-3 border-b border-border bg-surface flex items-center gap-3">
           <SetGlyph code="CUBE" size={40} className="text-text shrink-0" />
           <span className="min-w-0 truncate font-display tracking-[0.04em]" style={{ fontSize: 24, lineHeight: 0.9 }}>
             {label.toUpperCase()}
@@ -230,7 +231,7 @@ export function PodCardDataPage() {
           </div>
         </div>
 
-        <div className="page-chrome sticky top-0 z-20 bg-bg">
+        <div className="page-chrome bg-bg">
           <div className="flex items-stretch border-b border-border">
             <TabButton active={tab === "cards"} onClick={() => setTab("cards")}>
               CARD DATA
@@ -253,11 +254,12 @@ export function PodCardDataPage() {
             </div>
           )}
         </div>
+        </div>
 
         <main className="flex-1">
           {tab === "archetypes" ? (
             <div className="flex flex-col gap-4 p-4">
-              <ArchetypePanel setCode={boardCode} season={season} />
+              <ArchetypePanel setCode={boardCode} season={season} sets={sets} />
               <PodRecentTrophies setCode={boardCode} season={season} sets={sets} />
             </div>
           ) : (
@@ -432,7 +434,7 @@ export function PodCardDataPage() {
         </div>
 
         <aside className="flex flex-col gap-4 p-4 border-t border-border lg:border-t-0">
-          <ArchetypePanel setCode={boardCode} season={season} />
+          <ArchetypePanel setCode={boardCode} season={season} sets={sets} />
           <PodRecentTrophies setCode={boardCode} season={season} sets={sets} />
         </aside>
         <div className="hidden lg:block pointer-events-none absolute inset-y-0 right-[340px] w-px bg-border" />

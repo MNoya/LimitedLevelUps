@@ -98,7 +98,7 @@ const COLS_DESKTOP: Record<BoardMode, string> = {
 const COLS_MOBILE: Record<BoardMode, string> = {
   points: "20px 1fr 44px 50px",
   lcq: "20px 1fr 44px 40px 50px",
-  pod: "20px 1fr 40px 44px 56px",
+  pod: "20px 1fr 40px 46px 50px",
   direct: "20px 1fr 40px 56px 44px",
 };
 
@@ -334,8 +334,8 @@ export function LeaderboardColumnHeader({
         )}
         {mode === "pod" && (
           <>
-            <SortHeader label="PODS" sortKey="events" sort={sort} onSort={onSort} />
-            <SortHeader label="RECORD" sortKey="record" sort={sort} onSort={onSort} align="center" />
+            <SortHeader label="RECORD" sortKey="record" sort={sort} onSort={onSort} />
+            <ScoringSortHeader label="PTS" sort={sort} onSort={onSort} />
           </>
         )}
         {mode === "direct" && (
@@ -517,8 +517,14 @@ function MobileRow({
         ))}
       {mode === "pod" && (
         <>
-          <span className="font-num text-right text-[13px] text-muted tabular-nums">{row.events}</span>
-          <Record centered className="font-num text-[13px] w-full" wins={row.wins} losses={row.losses} />
+          <Record className="font-num text-[13px] block text-right" wins={row.wins} losses={row.losses} />
+          {row.rank === 0 ? (
+            <span className="font-num text-right text-[13px] text-dim">—</span>
+          ) : (
+            <span className="font-display text-right text-[18px] tracking-[0.02em] tabular-nums leading-none">
+              {fmtPts(row.score ?? 0)}
+            </span>
+          )}
         </>
       )}
       {mode === "direct" && (

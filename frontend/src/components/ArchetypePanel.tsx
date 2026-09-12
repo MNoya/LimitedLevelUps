@@ -9,23 +9,49 @@ import { SurfaceCard } from "./SurfaceCard";
 import { cn } from "../lib/utils";
 import { colorsDisplayName } from "../data/filters";
 import { winRateColor } from "../data/winRate";
-import { usePodArchetypes } from "../data/hooks";
-import { OTHER_KEY, aggregateArchetypes, type Archetype } from "../data/podArchetypes";
+import { usePodArchetypes, usePodEvents } from "../data/hooks";
+import { OTHER_KEY, aggregateArchetypes, mainPair, type Archetype } from "../data/podArchetypes";
+import { eventSeason } from "./PodRecentTrophies";
+import type { SetSummary } from "../types/leaderboard";
 
 const pct = (n: number | null) => (n == null ? "—" : `${(n * 100).toFixed(1)}%`);
 
-const GRID = "grid grid-cols-[22px_26px_minmax(0,1fr)_78px_62px] gap-1.5 items-center";
+const GRID = "grid grid-cols-[22px_26px_minmax(0,1fr)_28px_66px_54px] gap-1.5 items-center";
 
 const ARCH_PAGE = 5;
 
 type ArchSortKey = "play" | "win";
 type ArchSortDir = "asc" | "desc";
 
-export function ArchetypePanel({ setCode, season }: { setCode: string; season: string | null }) {
+export function ArchetypePanel({
+  setCode,
+  season,
+  sets,
+}: {
+  setCode: string;
+  season: string | null;
+  sets: SetSummary[] | undefined;
+}) {
   const { data, isPending } = usePodArchetypes(setCode);
-  const [sortKey, setSortKey] = useState<ArchSortKey>("play");
+  const { data: events } = usePodEvents(setCode);
+  const [sortKey, setSortKey] = useState<ArchSortKey>("win");
   const [sortDir, setSortDir] = useState<ArchSortDir>("desc");
   const [limit, setLimit] = useState(ARCH_PAGE);
+
+  const trophiesByKey = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of events ?? []) {
+      if (e.kind === "mock" || !e.isFinalized || !e.championDeckColors) {
+        continue;
+      }
+      if (season != null && eventSeason(e, sets) !== season) {
+        continue;
+      }
+      const key = mainPair(e.championDeckColors);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [events, season, sets]);
 
   const rows = useMemo(() => {
     const scoped = season == null ? (data ?? []) : (data ?? []).filter((r) => r.season === season);
@@ -53,6 +79,9 @@ export function ArchetypePanel({ setCode, season }: { setCode: string; season: s
           <Trophy size={16} color="#ffc63a" />
           <SectionLabel size={16} className="text-subtle">TOP COLORS</SectionLabel>
         </div>
+        <span className="flex justify-end">
+          <Trophy size={13} color="#ffc63a" />
+        </span>
         <SortHeaderButton label="PLAY RATE" active={sortKey === "play"} dir={sortDir} onClick={() => onSort("play")} />
         <SortHeaderButton label="WIN RATE" active={sortKey === "win"} dir={sortDir} onClick={() => onSort("win")} />
       </div>
@@ -74,6 +103,9 @@ export function ArchetypePanel({ setCode, season }: { setCode: string; season: s
               </span>
               <span className="font-display text-[14px] tracking-[0.05em] pl-1.5 truncate">
                 {a.key === OTHER_KEY ? "Other" : colorsDisplayName(a.colors)}
+              </span>
+              <span className="font-num text-[14px] tabular-nums text-right text-text">
+                {trophiesByKey.get(a.key) ?? 0}
               </span>
               <span className="font-num text-[14px] tabular-nums text-right text-text">
                 {pct(a.playRate)}

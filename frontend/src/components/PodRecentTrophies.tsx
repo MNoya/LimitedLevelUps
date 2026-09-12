@@ -23,7 +23,7 @@ function podShortName(e: PodEventSummary): string {
   return [datePart, slot].filter(Boolean).join(" ").toUpperCase();
 }
 
-function eventSeason(e: PodEventSummary, sets: SetSummary[] | undefined): string | undefined {
+export function eventSeason(e: PodEventSummary, sets: SetSummary[] | undefined): string | undefined {
   const date = e.eventDate.slice(0, 10);
   for (const set of sets ?? []) {
     if (date >= set.startDate && date <= set.endDate) {
