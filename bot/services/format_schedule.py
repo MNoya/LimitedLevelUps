@@ -24,7 +24,6 @@ ANNOUNCE_WINDOWS: tuple[time, ...] = (time(6, 0), time(8, 0), time(14, 0))
 DEDUP_LOOKBACK = timedelta(hours=24)
 SET_PIN_FREEZE_LEAD = timedelta(days=7)
 
-PERMANENT_CUBE_CODE = "CUBE"
 LATEST_SET_CATEGORY = "MTG Strategy"
 FORMAT_ARCHIVE_CATEGORY = "Format Archive"
 DEEP_ARCHIVE_CATEGORY = "Archive"
@@ -72,8 +71,14 @@ SCHEDULE_PINS: tuple[SchedulePin, ...] = (
 )
 
 
+def rotates(seed: SetSeed) -> bool:
+    """False for a side board matched by expansion (the cube, Chaos Draft) that runs alongside the
+    Arena rotation instead of being the set for a window"""
+    return not seed.expansion_matches
+
+
 def newest_set():
-    candidates = [seed for seed in ALL_SETS if seed.code != PERMANENT_CUBE_CODE]
+    candidates = [seed for seed in ALL_SETS if rotates(seed)]
     newest = candidates[0]
     for seed in candidates[1:]:
         if seed.start_date > newest.start_date:
@@ -119,7 +124,7 @@ def archive_candidates(text_channels, when: datetime | None = None) -> list:
     channels match no stale set, so they stay put."""
     active = active_set_seed(when)
     stale_sets = [seed for seed in ALL_SETS
-                  if seed.code != PERMANENT_CUBE_CODE and seed.start_date < active.start_date]
+                  if rotates(seed) and seed.start_date < active.start_date]
     candidates = []
     for channel in text_channels:
         if channel.category is None or channel.category.name != LATEST_SET_CATEGORY:
@@ -148,7 +153,7 @@ def latest_set_channel(channels, category_name: str = LATEST_SET_CATEGORY):
     set's mod-created channel, where discussion moves before the set goes live. The permanent strategy
     channels sitting in the same category match no set, so a new one of those never wins. ``None`` when
     the category holds no set channel."""
-    registered = [seed for seed in ALL_SETS if seed.code != PERMANENT_CUBE_CODE]
+    registered = [seed for seed in ALL_SETS if rotates(seed)]
     newest = None
     for channel in channels:
         if channel.category is None or channel.category.name != category_name:
@@ -165,7 +170,7 @@ def set_tracking_todo_index(actions, channels) -> int | None:
     channel matches a registered set by name, so it re-targets on renames without depending on the
     To-Do's copy. ``None`` when no action points at a set channel."""
     by_id = {str(channel.id): channel for channel in channels}
-    registered = [seed for seed in ALL_SETS if seed.code != PERMANENT_CUBE_CODE]
+    registered = [seed for seed in ALL_SETS if rotates(seed)]
     for index, action in enumerate(actions):
         channel = by_id.get(str(action.get("channel_id")))
         if channel is None:
@@ -180,7 +185,7 @@ def set_before(seed: SetSeed) -> SetSeed | None:
     excluding the permanent cube. ``None`` when ``seed`` is the earliest."""
     previous: SetSeed | None = None
     for candidate in ALL_SETS:
-        if candidate.code == PERMANENT_CUBE_CODE or candidate.start_date >= seed.start_date:
+        if not rotates(candidate) or candidate.start_date >= seed.start_date:
             continue
         if previous is None or candidate.start_date > previous.start_date:
             previous = candidate
@@ -215,7 +220,7 @@ def awards_eve_set(when: datetime | None = None) -> SetSeed | None:
     now = when or datetime.now(timezone.utc)
     tomorrow = (now.astimezone(EVENT_DAY_TZ) + timedelta(days=1)).date()
     for seed in ALL_SETS:
-        if seed.code != PERMANENT_CUBE_CODE and seed.start_date == tomorrow:
+        if rotates(seed) and seed.start_date == tomorrow:
             return active_set_seed(now)
     return None
 
@@ -234,7 +239,7 @@ def set_after(seed: SetSeed) -> SetSeed | None:
     excluding the permanent cube. ``None`` when ``seed`` is the newest registered."""
     following: SetSeed | None = None
     for candidate in ALL_SETS:
-        if candidate.code == PERMANENT_CUBE_CODE or candidate.start_date <= seed.start_date:
+        if not rotates(candidate) or candidate.start_date <= seed.start_date:
             continue
         if following is None or candidate.start_date < following.start_date:
             following = candidate
@@ -258,7 +263,7 @@ def awards_posted_set(when: datetime | None = None) -> SetSeed | None:
     now = when or datetime.now(timezone.utc)
     posted: SetSeed | None = None
     for seed in ALL_SETS:
-        if seed.code == PERMANENT_CUBE_CODE:
+        if not rotates(seed):
             continue
         instant = awards_ceremony_instant(seed)
         if instant is None or instant > now:
@@ -275,7 +280,7 @@ def set_seed_for_channel(channel_name: str, when: datetime | None = None) -> Set
     active = active_set_seed(when)
     matched: SetSeed | None = None
     for seed in ALL_SETS:
-        if seed.code == PERMANENT_CUBE_CODE or seed.start_date >= active.start_date:
+        if not rotates(seed) or seed.start_date >= active.start_date:
             continue
         if not channel_matches_set(channel_name, seed.name):
             continue

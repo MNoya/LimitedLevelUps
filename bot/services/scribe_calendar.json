@@ -237,30 +237,6 @@
     "end_date": "2026-09-29 11:00:00"
   },
   {
-    "title": "Premier Draft: Lord of the Rings",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "flashback"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "lord-of-the-rings"
-      },
-      {
-        "slug": "premier-draft"
-      }
-    ],
-    "utc_start_date": "2026-08-25 15:00:00",
-    "utc_end_date": "2026-09-08 15:00:00",
-    "start_date": "2026-08-25 11:00:00",
-    "end_date": "2026-09-08 11:00:00"
-  },
-  {
     "title": "Sealed: The Lord of the Rings + The Hobbit",
     "tags": [
       {
@@ -307,87 +283,6 @@
     "utc_end_date": "2026-09-06 15:00:00",
     "start_date": "2026-08-28 11:00:00",
     "end_date": "2026-09-06 11:00:00"
-  },
-  {
-    "title": "Quick Draft: Secrets of Strixhaven",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "premier-draft"
-      },
-      {
-        "slug": "secrets-of-strixhaven"
-      }
-    ],
-    "utc_start_date": "2026-08-31 15:00:00",
-    "utc_end_date": "2026-09-07 15:00:00",
-    "start_date": "2026-08-31 11:00:00",
-    "end_date": "2026-09-07 11:00:00"
-  },
-  {
-    "title": "Midweek Magic: Foundations Middle-earth",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "foundations"
-      },
-      {
-        "slug": "middle-earth"
-      },
-      {
-        "slug": "midweek-magic"
-      }
-    ],
-    "utc_start_date": "2026-09-01 21:00:00",
-    "utc_end_date": "2026-09-03 21:00:00",
-    "start_date": "2026-09-01 17:00:00",
-    "end_date": "2026-09-03 17:00:00"
-  },
-  {
-    "title": "Yargle Day!",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "yargle"
-      }
-    ],
-    "utc_start_date": "2026-09-03 15:00:00",
-    "utc_end_date": "2026-09-04 15:00:00",
-    "start_date": "2026-09-03 11:00:00",
-    "end_date": "2026-09-04 11:00:00"
-  },
-  {
-    "title": "Spotlight Series Dallas/Fort Worth: Modern",
-    "tags": [
-      {
-        "slug": "constructed"
-      },
-      {
-        "slug": "magic-spotlight-series"
-      },
-      {
-        "slug": "modern"
-      },
-      {
-        "slug": "star-city-games"
-      },
-      {
-        "slug": "tabletop"
-      }
-    ],
-    "utc_start_date": "2026-09-04 04:00:00",
-    "utc_end_date": "2026-09-07 03:59:59",
-    "start_date": "2026-09-04 00:00:00",
-    "end_date": "2026-09-06 23:59:59"
   },
   {
     "title": "Premier Draft: Mixed-Up",
@@ -460,24 +355,6 @@
     "utc_end_date": "2026-09-29 15:00:00",
     "start_date": "2026-09-08 11:00:00",
     "end_date": "2026-09-29 11:00:00"
-  },
-  {
-    "title": "Midweek Magic: Momir",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "midweek-magic"
-      },
-      {
-        "slug": "momir"
-      }
-    ],
-    "utc_start_date": "2026-09-08 21:00:00",
-    "utc_end_date": "2026-09-10 21:00:00",
-    "start_date": "2026-09-08 17:00:00",
-    "end_date": "2026-09-10 17:00:00"
   },
   {
     "title": "US Regional Championship: Baltimore &#8211; Modern",
@@ -619,6 +496,9 @@
       },
       {
         "slug": "play-boosters"
+      },
+      {
+        "slug": "sealed"
       }
     ],
     "utc_start_date": "2026-09-15 15:00:00",
@@ -787,6 +667,9 @@
       },
       {
         "slug": "march-of-the-machine"
+      },
+      {
+        "slug": "sealed"
       },
       {
         "slug": "set-boosters"
