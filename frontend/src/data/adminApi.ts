@@ -23,16 +23,7 @@ async function postAdmin(path: string, body: unknown): Promise<unknown> {
   }
   const resp = await fetch(`${base}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
   if (!resp.ok) {
-    let message = `Save failed (${resp.status})`;
-    try {
-      const parsed = await resp.json();
-      if (parsed?.error) {
-        message = parsed.error;
-      }
-    } catch {
-      // response had no JSON body
-    }
-    throw new Error(message);
+    throw new Error(await errorMessage(resp));
   }
   return resp.json();
 }
@@ -42,4 +33,22 @@ export async function saveTranscript(key: string, segments: TranscriptSegment[])
     segments?: TranscriptSegment[];
   };
   return result.segments ?? segments;
+}
+
+async function errorMessage(resp: Response): Promise<string> {
+  if (resp.status === 401 || resp.status === 403) {
+    return "Not Authorized";
+  }
+  if (resp.status === 404) {
+    return "Transcript Not Found";
+  }
+  try {
+    const parsed = await resp.json();
+    if (parsed?.error) {
+      return parsed.error.charAt(0).toUpperCase() + parsed.error.slice(1);
+    }
+  } catch {
+    // response had no JSON body
+  }
+  return `Save Failed (${resp.status})`;
 }

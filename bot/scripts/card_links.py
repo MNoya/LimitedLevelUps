@@ -42,7 +42,27 @@ def tag_text(text: str, card_names: list[str]) -> tuple[str, list[dict]]:
             if score is None:
                 continue
             matches.append((tokens[start_idx][1], tokens[end_idx - 1][2], name, score))
-    return _apply(text, _resolve_overlaps(matches))
+    corrected, cards = _apply(text, _resolve_overlaps(matches))
+    return strip_split_tail(corrected, [card["name"] for card in cards]), cards
+
+
+def strip_split_tail(text: str, names: list[str]) -> str:
+    """Drop a stray word left when the caption split a card's compound final word (Weavemaster -> Weave Master)"""
+    for name in names:
+        last = name.split()[-1].lower()
+        pattern = re.compile(re.escape(name) + r"\s+([A-Za-z]+)")
+        out: list[str] = []
+        pos = 0
+        for match in pattern.finditer(text):
+            tail = match.group(1)
+            if 3 <= len(tail) < len(last) and last.endswith(tail.lower()):
+                out.append(text[pos:match.start()])
+                out.append(name)
+                pos = match.end()
+        if out:
+            out.append(text[pos:])
+            text = "".join(out)
+    return text
 
 
 def _content(normed: str) -> set[str]:
@@ -68,7 +88,7 @@ def _mishearing(window: str, card: str) -> bool:
         if window_word == card_word:
             if len(window_word) >= 5 and window_word not in STOPWORDS:
                 anchored = True
-        elif SequenceMatcher(None, window_word, card_word).ratio() < 0.5:
+        elif window_word in STOPWORDS or SequenceMatcher(None, window_word, card_word).ratio() < 0.5:
             return False
     return anchored
 

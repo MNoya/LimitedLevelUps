@@ -79,7 +79,12 @@ CARD_EXTRACT_PROMPT = (
 )
 
 KNOWN_TERMS = [
+    (re.compile(r"\blimited[-\s]*(?:level|love)[-\s]*ups\s*(?:\.\s*com|\s+dot\s+com)\b", re.I), "limitedlevelups.com"),
     (re.compile(r"\blimited level[-\s]?ups\b", re.I), "Limited Level-Ups"),
+    (re.compile(r"\blimited love\s+(?:loves|labs|lups|lupps|phillips|looks|lifts|lumps|lux)\b", re.I),
+     "Limited Level-Ups"),
+    (re.compile(r"\blimited love[-\s]?ups\b", re.I), "Limited Level-Ups"),
+    (re.compile(r"\blimited loves?\b", re.I), "Limited Level-Ups"),
     (re.compile(r"\bMark\b(?!\s+[Oo]f\b)"), "Marc"),
     (re.compile(r"\bCiritz\b", re.I), "Sierkovitz"),
 ]

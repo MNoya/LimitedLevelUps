@@ -51,6 +51,7 @@ import { EpisodeCard } from "../components/EpisodeCard";
 import { EpisodeEmbed } from "../components/PlayableThumbnail";
 import { PodcastAudioPlayer, type AudioControls } from "../components/PodcastAudioPlayer";
 import { ChevronRight } from "lucide-react";
+import { createPortal } from "react-dom";
 import { EpisodeTag, CATEGORY_COLOR } from "../components/CategoryTag";
 import { EpisodeThumbnail } from "../components/EpisodeThumbnail";
 import { ToggleSwitch } from "../components/ToggleSwitch";
@@ -1408,6 +1409,7 @@ function EpisodeDetail({
           </aside>
         ) : null}
       </div>
+      <MobileEditFab edit={transcriptEdit} />
     </div>
   );
 }
@@ -1939,6 +1941,7 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
       ) : (
         <TranscriptContentSkeleton />
       )}
+      <MobileEditFab edit={transcriptEdit} />
     </div>
   );
 }
@@ -2280,7 +2283,8 @@ function EditControls({
   floating?: boolean;
   block?: boolean;
 }) {
-  if (!edit.canEdit) {
+  const mobile = useIsMobile();
+  if (!edit.canEdit || mobile) {
     return null;
   }
   const buttonBase =
@@ -2349,6 +2353,48 @@ function EditControls({
       {saveButton}
     </div>
   );
+}
+
+function MobileEditFab({ edit }: { edit: TranscriptEdit }) {
+  const mobile = useIsMobile();
+  if (!mobile || !edit.canEdit) {
+    return null;
+  }
+  const fab =
+    "flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_6px_18px_rgba(0,0,0,0.45)] bg-surface/95 backdrop-blur-sm transition-colors";
+  const body = !edit.editing ? (
+    <button
+      type="button"
+      onClick={edit.enterEdit}
+      aria-label="Edit transcript"
+      className={cn(fab, "border-border2 text-subtle active:border-green active:text-green")}
+    >
+      <Pencil size={20} strokeWidth={2} />
+    </button>
+  ) : (
+    <div className="flex flex-col items-end gap-2">
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={edit.discard}
+          aria-label="Cancel"
+          className={cn(fab, "border-border2 text-subtle")}
+        >
+          <X size={20} strokeWidth={2} />
+        </button>
+        <button
+          type="button"
+          onClick={edit.save}
+          disabled={!edit.canSave}
+          aria-label="Save"
+          className={cn(fab, "border-green text-green disabled:border-border2 disabled:text-dim")}
+        >
+          {edit.saving ? <Loader2 size={20} strokeWidth={2} className="animate-spin" /> : <Check size={20} strokeWidth={2} />}
+        </button>
+      </div>
+    </div>
+  );
+  return createPortal(<div className="fixed bottom-5 right-5 z-50">{body}</div>, document.body);
 }
 
 function EpisodeTranscript({
