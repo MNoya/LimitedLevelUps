@@ -12,7 +12,7 @@ import { P0P1ContestDropdown } from "./P0P1ContestDropdown";
 import { SlotPip, SLOT_ACCENT } from "./slotVisuals";
 import { P0P1ProgressBar } from "./ProgressBar";
 import { P0P1CountdownBar } from "./CountdownBar";
-import { formatRemaining, formatScoringRemaining } from "./Countdown";
+import { formatRemaining, formatScoringRemaining, formatOpensDate } from "./Countdown";
 import { useNow } from "../../lib/countdown";
 import { ClearAll } from "./ClearAll";
 import { GoToTopButton } from "../GoToTopButton";
@@ -69,7 +69,7 @@ export function P0P1MobileSelector({
     ballots,
   } = ballot;
 
-  const loginBarVisible = !authLoading && !user;
+  const loginBarVisible = !authLoading && !user && phase !== "comingSoon";
   const groupedStats = hasParticipated && pickStats ? groupBySlot(pickStats) : undefined;
   const isCompleteEntrant = isPastDeadline && Boolean(user) && isComplete;
   const didNotVote = isPastDeadline && Boolean(user) && !isComplete;
@@ -81,7 +81,11 @@ export function P0P1MobileSelector({
 
       <main className={`flex-1 flex flex-col w-full px-3 pt-3 ${loginBarVisible ? "pb-24" : "pb-4"}`}>
         <MobileIntro featured={featured} phase={phase} dateRange={ratingsSnapshot?.dateRange} contests={contests} onContestChange={onContestChange} />
-        {dataReady ? (
+        {phase === "comingSoon" ? (
+          <div className="flex-1 flex items-center justify-center py-20">
+            <span className="font-display tracking-[0.12em] text-muted text-[32px]">COMING SOON</span>
+          </div>
+        ) : dataReady ? (
           <>
             {!isPastDeadline && (
               <div className="mb-1.5">
@@ -349,10 +353,11 @@ function MobileIntro({
   onContestChange?: (code: string) => void;
 }) {
   const [open, setOpen] = useState(true);
-  const isPastDeadline = phase !== "voting";
+  const isPastDeadline = phase !== "voting" && phase !== "comingSoon";
   const setCode = featured?.code ?? "";
   const votingDeadline = featured?.votingDeadline ?? new Date();
   const scoringDate = featured?.scoringDate ?? new Date();
+  const opensAt = featured?.previewsOpen;
 
   return (
     <section className="bg-surface border border-border rounded-xl p-4 mb-3 flex flex-col gap-2.5">
@@ -383,7 +388,7 @@ function MobileIntro({
           className="flex flex-col items-end gap-1 shrink-0 bg-transparent border-0 p-0 cursor-pointer"
         >
           <div className="flex items-center gap-2">
-            <CountdownStacked deadline={votingDeadline} scoringDate={scoringDate} phase={phase} />
+            <CountdownStacked deadline={votingDeadline} scoringDate={scoringDate} opensAt={opensAt} phase={phase} />
             <ChevronDown size={22} className={`shrink-0 text-muted transition-transform ${open ? "" : "-rotate-90"}`} />
           </div>
           {isPastDeadline && (
@@ -436,15 +441,26 @@ function MobileResultsSkeleton() {
 function CountdownStacked({
   deadline,
   scoringDate,
+  opensAt,
   phase,
 }: {
   deadline: Date;
   scoringDate?: Date;
+  opensAt?: Date;
   phase: P0P1Phase;
 }) {
   useNow(30_000);
   const now = p0p1Now(scoringDate);
   const deadlineDiff = deadline.getTime() - now;
+
+  if (phase === "comingSoon") {
+    return (
+      <div className="flex flex-col items-end leading-tight whitespace-nowrap shrink-0">
+        <span className="text-muted text-[11px] tracking-[0.04em]">Opens</span>
+        <span className="text-green text-[13px]">{formatOpensDate(opensAt ?? deadline)}</span>
+      </div>
+    );
+  }
 
   if (phase === "voting") {
     return (

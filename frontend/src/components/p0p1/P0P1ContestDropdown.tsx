@@ -21,6 +21,7 @@ function chipDateLabel(release: number): string {
 function statusBadge(contest: ContestChipInfo): { text: string; className: string } {
   if (contest.status === "live") return { text: "LIVE", className: "text-green" };
   if (contest.status === "results") return { text: "RESULTS", className: "text-green/70" };
+  if (contest.status === "soon") return { text: "SOON", className: "text-dim" };
   return { text: chipDateLabel(contest.release), className: "text-dim" };
 }
 

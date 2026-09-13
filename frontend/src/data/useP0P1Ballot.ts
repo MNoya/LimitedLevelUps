@@ -129,7 +129,9 @@ export function useP0P1Ballot(overrideSetCode?: string) {
   const effectivePicksBySlot = applyDevPicks(picksBySlot, pickStats, devViewPreset);
   const resultsDataReady = Boolean(ratingsSnapshot && cards && pickStats);
   const resultsPending = ratingsLoading || cardsLoading || pickStatsLoading;
-  const phase = deriveP0P1Phase(isPastDeadline, isPastScoringDate, ratingsSnapshot ?? undefined, resultsDataReady, resultsPending, devViewPreset);
+  const phase = featured?.comingSoon
+    ? "comingSoon"
+    : deriveP0P1Phase(isPastDeadline, isPastScoringDate, ratingsSnapshot ?? undefined, resultsDataReady, resultsPending, devViewPreset);
 
   const devFinal = devActive && phase === "final";
   const willBeFinal = isPastDeadline && isPastScoringDate && ratingsSnapshot?.phase === "final";

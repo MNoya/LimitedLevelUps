@@ -30,7 +30,7 @@ export function P0P1Hero({
   dateRange?: RatingsSnapshot["dateRange"];
   isCurrent: boolean;
 }) {
-  const isPastDeadline = phase !== "voting";
+  const isPastDeadline = phase !== "voting" && phase !== "comingSoon";
   return (
     <div ref={innerRef} className="sticky top-0 z-30 relative px-10 py-5 border-b border-border bg-surface flex flex-wrap items-center gap-x-8 gap-y-3">
       <SetGlyph code={featured.code} size={84} />
@@ -53,7 +53,7 @@ export function P0P1Hero({
           )}
         </div>
         <div className="font-mono text-[11px] mt-1 flex items-center justify-between gap-x-6">
-          <P0P1Countdown deadline={featured.votingDeadline} scoringDate={featured.scoringDate} size={11} phase={phase} isCurrent={isCurrent} />
+          <P0P1Countdown deadline={featured.votingDeadline} scoringDate={featured.scoringDate} opensAt={featured.previewsOpen} size={11} phase={phase} isCurrent={isCurrent} />
         </div>
         {isPastDeadline && (
           <div className="w-full mt-2">

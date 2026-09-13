@@ -27,6 +27,7 @@ export interface ContestConfig {
   votingDeadline?: string;
   scoringDate?: string;
   hybridCommonSlots?: boolean;
+  comingSoon?: boolean;
 }
 
 export type SlotKey =

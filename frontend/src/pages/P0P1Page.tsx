@@ -99,7 +99,7 @@ export function P0P1Page() {
   }, []);
 
   if (!featured) return <NotFoundPage />;
-  if (featured.status === "pre" && !canPreviewPre) {
+  if (featured.status === "pre" && !featured.comingSoon && !canPreviewPre) {
     return authLoading ? <div className="bg-bg min-h-screen" /> : <NotFoundPage />;
   }
 
@@ -113,6 +113,27 @@ export function P0P1Page() {
         <P0P1MobileSelector ballot={ballot} contests={visibleContests} onContestChange={handleContestChange} />
         <P0P1DevPanel />
       </>
+    );
+  }
+
+  if (phase === "comingSoon") {
+    return (
+      <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
+        <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
+        <P0P1Hero
+          featured={featured}
+          contests={visibleContests}
+          onContestChange={handleContestChange}
+          innerRef={heroRef}
+          cta={null}
+          belowIntro={null}
+          phase={phase}
+          isCurrent={isCurrentContest}
+        />
+        <main className="flex-1 flex items-center justify-center px-10 py-24">
+          <span className="font-display tracking-[0.12em] text-muted" style={{ fontSize: 48 }}>COMING SOON</span>
+        </main>
+      </div>
     );
   }
 

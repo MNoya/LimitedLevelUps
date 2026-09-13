@@ -14,5 +14,14 @@
     "votingDeadline": "2026-06-23T15:00:00Z",
     "scoringDate": "2026-07-21T16:00:00Z",
     "hybridCommonSlots": false
+  },
+  "FRA": {
+    "name": "Reality Fracture",
+    "release": "2026-09-29T16:00:00Z",
+    "previewsOpen": "2026-09-18T16:00:00Z",
+    "votingDeadline": "2026-09-23T16:00:00Z",
+    "scoringDate": "2026-10-21T16:00:00Z",
+    "hybridCommonSlots": false,
+    "comingSoon": true
   }
 }

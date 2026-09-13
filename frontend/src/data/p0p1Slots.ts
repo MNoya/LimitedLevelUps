@@ -13,9 +13,11 @@ export interface FeaturedContest {
   code: string;
   name: string;
   release: Date;
+  previewsOpen: Date;
   votingDeadline: Date;
   scoringDate: Date;
   status: "pre" | "voting" | "reveal" | "frozen";
+  comingSoon: boolean;
   next?: { code: string; name: string; previewsOpen: Date };
 }
 
@@ -26,6 +28,7 @@ interface ResolvedContest {
   previewsOpen: number;
   votingDeadline: number;
   scoringDate: number;
+  comingSoon: boolean;
 }
 
 function resolveContests(): ResolvedContest[] {
@@ -42,6 +45,7 @@ function resolveContests(): ResolvedContest[] {
         previewsOpen: new Date(config.previewsOpen).getTime(),
         votingDeadline: config.votingDeadline ? new Date(config.votingDeadline).getTime() : release,
         scoringDate,
+        comingSoon: config.comingSoon ?? false,
       };
     })
     .sort((a, b) => b.release - a.release);
@@ -104,9 +108,11 @@ function describeContest(
     code: contest.code,
     name: contest.name,
     release: new Date(contest.release),
+    previewsOpen: new Date(contest.previewsOpen),
     votingDeadline: new Date(contest.votingDeadline),
     scoringDate: new Date(contest.scoringDate),
     status,
+    comingSoon: contest.comingSoon,
     next: next
       ? { code: next.code, name: next.name, previewsOpen: new Date(next.previewsOpen) }
       : undefined,
@@ -119,7 +125,7 @@ export interface ContestChipInfo {
   code: string;
   name: string;
   release: number;
-  status: "pre" | "live" | "results" | "frozen";
+  status: "pre" | "soon" | "live" | "results" | "frozen";
 }
 
 export function resolveAllContestChips(now: number): ContestChipInfo[] {
@@ -127,7 +133,8 @@ export function resolveAllContestChips(now: number): ContestChipInfo[] {
   const latest = contests.find((c) => now >= c.previewsOpen);
   return contests.map((c) => {
     let status: ContestChipInfo["status"] = "frozen";
-    if (now < c.previewsOpen) status = "pre";
+    if (c.comingSoon) status = "soon";
+    else if (now < c.previewsOpen) status = "pre";
     else if (c === latest && now < c.scoringDate) status = "live";
     else if (c === latest) status = "results";
     return { code: c.code, name: c.name, release: c.release, status };
