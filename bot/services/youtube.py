@@ -87,7 +87,10 @@ class YouTubeClient:
     def _get(self, path: str, params: dict) -> dict:
         params = {**params, "key": self.api_key}
         resp = self.session.get(f"{YOUTUBE_API}/{path}", params=params, timeout=self.timeout_s)
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as e:
+            raise requests.HTTPError(f"{e} — {_api_error_detail(resp)}", response=resp) from None
         return resp.json()
 
     def _resolve_channel(self) -> tuple[str, str]:
@@ -103,6 +106,7 @@ class YouTubeClient:
 
     def _channel_playlists(self, channel_id: str) -> list[tuple[str, str]]:
         playlists: list[tuple[str, str]] = []
+        seen_pages: set[str] = set()
         page = ""
         while True:
             params = {"part": "snippet", "channelId": channel_id, "maxResults": 50}
@@ -111,12 +115,14 @@ class YouTubeClient:
             body = self._get("playlists", params)
             for item in body.get("items", []):
                 playlists.append((item["id"], item.get("snippet", {}).get("title", "")))
+            seen_pages.add(page)
             page = body.get("nextPageToken", "")
-            if not page:
+            if not page or page in seen_pages:
                 return playlists
 
     def _playlist_video_ids(self, playlist_id: str) -> list[str]:
         ids: list[str] = []
+        seen_pages: set[str] = set()
         page = ""
         while True:
             params = {"part": "snippet", "playlistId": playlist_id, "maxResults": 50}
@@ -124,8 +130,9 @@ class YouTubeClient:
                 params["pageToken"] = page
             body = self._get("playlistItems", params)
             ids.extend(_video_ids_from_items(body))
+            seen_pages.add(page)
             page = body.get("nextPageToken", "")
-            if not page:
+            if not page or page in seen_pages:
                 return ids
 
     def _recent_upload_ids(self, playlist_id: str, limit: int) -> list[str]:
@@ -157,6 +164,16 @@ class YouTubeClient:
                     "duration_seconds": _parse_iso_duration(item.get("contentDetails", {}).get("duration", "")),
                 }
         return details
+
+
+def _api_error_detail(resp: requests.Response) -> str:
+    try:
+        error = resp.json().get("error", {})
+    except ValueError:
+        return (resp.text or "")[:200]
+    reasons = ", ".join(item.get("reason", "") for item in error.get("errors", []) if item.get("reason"))
+    message = error.get("message", "")
+    return f"{reasons}: {message}" if reasons else message or "no error detail"
 
 
 def _video_ids_from_items(body: dict) -> list[str]:
