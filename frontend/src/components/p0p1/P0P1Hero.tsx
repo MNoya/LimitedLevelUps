@@ -67,9 +67,7 @@ export function P0P1Hero({
           {phase === "final" ? <NextContestOpens next={featured.next} /> : belowIntro}
         </div>
       </div>
-      <div className="shrink-0 ml-auto flex items-center justify-end gap-x-8 min-w-[280px]">
-        {cta}
-      </div>
+      <div className="shrink-0 ml-auto flex justify-end min-w-[280px]">{cta}</div>
     </div>
   );
 }
