@@ -19,6 +19,10 @@ export function formatRemaining(diff: number): string {
   return pluralizeUnit(minutes, "minute");
 }
 
+export function formatResultsDate(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 export function formatScoringRemaining(diff: number): string {
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   if (days >= 2) {
@@ -37,11 +41,13 @@ export function P0P1Countdown({
   scoringDate,
   size = 13,
   phase,
+  isCurrent = true,
 }: {
   deadline: Date;
   scoringDate?: Date;
   size?: number;
   phase: P0P1Phase;
+  isCurrent?: boolean;
 }) {
   useNow(30_000);
   const now = p0p1Now(scoringDate);
@@ -61,6 +67,14 @@ export function P0P1Countdown({
   }
 
   if (phase === "final") {
+    if (!isCurrent && scoringDate) {
+      return (
+        <span className="whitespace-nowrap" style={{ fontSize: size }}>
+          <span className="text-muted">Results </span>
+          <span className="text-green">{formatResultsDate(scoringDate)}</span>
+        </span>
+      );
+    }
     return (
       <span className="text-green" style={{ fontSize: size }}>
         Results are in!

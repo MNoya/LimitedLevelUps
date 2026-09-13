@@ -148,7 +148,7 @@ export function P0P1ContestDropdown({
                   <span className={cn("flex-1 truncate text-[16px] leading-none", activeRow ? "text-green" : "text-text")}>
                     {c.name.toUpperCase()}
                   </span>
-                  <span className={cn("text-[11px] tracking-[0.04em] mono shrink-0", activeRow ? "text-green" : badge.className)}>
+                  <span className={cn("text-[13px] tracking-[0.04em] mono shrink-0", activeRow ? "text-green" : badge.className)}>
                     {badge.text}
                   </span>
                 </button>

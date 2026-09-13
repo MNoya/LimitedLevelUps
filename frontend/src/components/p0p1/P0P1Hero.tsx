@@ -18,6 +18,7 @@ export function P0P1Hero({
   belowIntro,
   phase,
   dateRange,
+  isCurrent,
 }: {
   featured: FeaturedContest;
   contests: ContestChipInfo[];
@@ -27,10 +28,11 @@ export function P0P1Hero({
   belowIntro?: ReactNode;
   phase: P0P1Phase;
   dateRange?: RatingsSnapshot["dateRange"];
+  isCurrent: boolean;
 }) {
   const isPastDeadline = phase !== "voting";
   return (
-    <div ref={innerRef} className="sticky top-0 z-30 px-10 py-5 border-b border-border bg-surface flex flex-wrap items-center gap-x-8 gap-y-3">
+    <div ref={innerRef} className="sticky top-0 z-30 relative px-10 py-5 border-b border-border bg-surface flex flex-wrap items-center gap-x-8 gap-y-3">
       <SetGlyph code={featured.code} size={84} />
       <div className="shrink-0">
         <SectionLabel size={13}>PACK 0, PICK 1</SectionLabel>
@@ -51,7 +53,7 @@ export function P0P1Hero({
           )}
         </div>
         <div className="font-mono text-[11px] mt-1 flex items-center justify-between gap-x-6">
-          <P0P1Countdown deadline={featured.votingDeadline} scoringDate={featured.scoringDate} size={11} phase={phase} />
+          <P0P1Countdown deadline={featured.votingDeadline} scoringDate={featured.scoringDate} size={11} phase={phase} isCurrent={isCurrent} />
         </div>
         {isPastDeadline && (
           <div className="w-full mt-2">
@@ -59,7 +61,7 @@ export function P0P1Hero({
           </div>
         )}
       </div>
-      <div className="flex-1 min-w-0 self-stretch grid grid-rows-[1fr_auto] justify-items-center">
+      <div className="flex-1 min-w-0 self-stretch grid grid-rows-[1fr_auto] justify-items-center xl:absolute xl:left-1/2 xl:top-1/2 xl:h-full xl:w-[580px] xl:-translate-x-1/2 xl:-translate-y-1/2 xl:flex-none xl:self-auto">
         <p className="self-center max-w-[580px] text-center text-subtle text-[14px] leading-[1.55]">
           <P0P1IntroText setName={featured.name} phase={phase} dateRange={dateRange} multiline />
         </p>
