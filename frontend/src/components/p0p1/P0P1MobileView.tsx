@@ -12,7 +12,7 @@ import { P0P1ContestDropdown } from "./P0P1ContestDropdown";
 import { SlotPip, SLOT_ACCENT } from "./slotVisuals";
 import { P0P1ProgressBar } from "./ProgressBar";
 import { P0P1CountdownBar } from "./CountdownBar";
-import { formatRemaining, formatScoringRemaining, formatOpensDate } from "./Countdown";
+import { formatRemaining, formatScoringRemaining, formatOpensDate, formatResultsDate } from "./Countdown";
 import { useNow } from "../../lib/countdown";
 import { ClearAll } from "./ClearAll";
 import { GoToTopButton } from "../GoToTopButton";
@@ -35,10 +35,12 @@ export function P0P1MobileSelector({
   ballot,
   contests,
   onContestChange,
+  isCurrent,
 }: {
   ballot: Ballot;
   contests: ContestChipInfo[];
   onContestChange: (code: string) => void;
+  isCurrent: boolean;
 }) {
   const {
     featured,
@@ -80,7 +82,7 @@ export function P0P1MobileSelector({
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
 
       <main className={`flex-1 flex flex-col w-full px-3 pt-3 ${loginBarVisible ? "pb-24" : "pb-4"}`}>
-        <MobileIntro featured={featured} phase={phase} dateRange={ratingsSnapshot?.dateRange} contests={contests} onContestChange={onContestChange} />
+        <MobileIntro featured={featured} phase={phase} dateRange={ratingsSnapshot?.dateRange} contests={contests} onContestChange={onContestChange} isCurrent={isCurrent} />
         {phase === "comingSoon" ? (
           <div className="flex-1 flex items-center justify-center py-20">
             <span className="font-display tracking-[0.12em] text-muted text-[32px]">COMING SOON</span>
@@ -345,12 +347,14 @@ function MobileIntro({
   dateRange,
   contests,
   onContestChange,
+  isCurrent,
 }: {
   featured: FeaturedContest | undefined;
   phase: P0P1Phase;
   dateRange?: { start: string; end: string } | null;
   contests?: ContestChipInfo[];
   onContestChange?: (code: string) => void;
+  isCurrent: boolean;
 }) {
   const [open, setOpen] = useState(true);
   const isPastDeadline = phase !== "voting" && phase !== "comingSoon";
@@ -388,7 +392,7 @@ function MobileIntro({
           className="flex flex-col items-end gap-1 shrink-0 bg-transparent border-0 p-0 cursor-pointer"
         >
           <div className="flex items-center gap-2">
-            <CountdownStacked deadline={votingDeadline} scoringDate={scoringDate} opensAt={opensAt} phase={phase} />
+            <CountdownStacked deadline={votingDeadline} scoringDate={scoringDate} opensAt={opensAt} phase={phase} isCurrent={isCurrent} />
             <ChevronDown size={22} className={`shrink-0 text-muted transition-transform ${open ? "" : "-rotate-90"}`} />
           </div>
           {isPastDeadline && (
@@ -443,11 +447,13 @@ function CountdownStacked({
   scoringDate,
   opensAt,
   phase,
+  isCurrent,
 }: {
   deadline: Date;
   scoringDate?: Date;
   opensAt?: Date;
   phase: P0P1Phase;
+  isCurrent: boolean;
 }) {
   useNow(30_000);
   const now = p0p1Now(scoringDate);
@@ -480,9 +486,12 @@ function CountdownStacked({
   }
 
   if (phase === "final") {
+    const isPastResults = !isCurrent && scoringDate;
     return (
       <div className="flex flex-col items-end leading-tight whitespace-nowrap shrink-0">
-        <span className="text-green text-[13px]">Results are in!</span>
+        <span className={`text-green ${isPastResults ? "text-[11px]" : "text-[13px]"}`}>
+          {isPastResults ? formatResultsDate(scoringDate) : "Results are in!"}
+        </span>
       </div>
     );
   }

@@ -111,7 +111,7 @@ export function P0P1Page() {
   if (!isDesktop) {
     return (
       <>
-        <P0P1MobileSelector ballot={ballot} contests={visibleContests} onContestChange={handleContestChange} />
+        <P0P1MobileSelector ballot={ballot} contests={visibleContests} onContestChange={handleContestChange} isCurrent={isCurrentContest} />
         <P0P1DevPanel />
       </>
     );
