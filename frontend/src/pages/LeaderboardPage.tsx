@@ -128,14 +128,17 @@ export function LeaderboardPage() {
   const { chips: colorChips, otherCombos, loading: colorChipsLoading } = useColorChips(activeSet);
   const { data: availableFormatLabels } = useAvailableFormats(activeSet);
   const formatOptions = useMemo(() => {
-    if (!availableFormatLabels) return FORMAT_OPTIONS;
-    const available = new Set(availableFormatLabels);
-    return FORMAT_OPTIONS.filter((opt) => {
-      if (opt.value === "ALL") return true;
-      const labels = FORMAT_LABEL_GROUPS[opt.value] ?? [opt.value];
-      return labels.some((l) => available.has(l));
-    });
-  }, [availableFormatLabels]);
+    let source = FORMAT_OPTIONS;
+    if (availableFormatLabels) {
+      const available = new Set(availableFormatLabels);
+      source = FORMAT_OPTIONS.filter((opt) => {
+        if (opt.value === "ALL") return true;
+        const labels = FORMAT_LABEL_GROUPS[opt.value] ?? [opt.value];
+        return labels.some((l) => available.has(l));
+      });
+    }
+    return source.map((opt) => ({ ...opt, label: formatFilterLabel(opt.value, activeSet) }));
+  }, [availableFormatLabels, activeSet]);
 
   const otherMode = colorsOnlyMode && colors === OTHER;
   const namedColorsOnlyMode = colorsOnlyMode && colors !== OTHER;
@@ -559,7 +562,7 @@ function SetHero({
           </div>
         )}
       </div>
-      {filterActive ? <FilterHero format={format} colors={colors} /> : <div className="flex-1" />}
+      {filterActive ? <FilterHero format={format} colors={colors} setCode={activeSet} /> : <div className="flex-1" />}
       {sets && (
         <SetSwitcherDesktop
           sets={sets}
@@ -623,11 +626,19 @@ function ColorsHeroGlyphInner({ code }: { code: string }) {
   return <Pips colors={code} size={22} />;
 }
 
-function FilterHero({ format, colors }: { format: string; colors: string }) {
+const OPEN_DRAFT_LCQ_SETS = new Set(["HOB"]);
+
+function formatFilterLabel(value: string, setCode: string): string {
+  if (value === "LCQ" && OPEN_DRAFT_LCQ_SETS.has(setCode)) {
+    return "OPEN DRAFT";
+  }
+  return FORMAT_OPTIONS.find((o) => o.value === value)?.label ?? value.toUpperCase();
+}
+
+function FilterHero({ format, colors, setCode }: { format: string; colors: string; setCode: string }) {
   const colorsActive = colors !== "ALL";
   const formatActive = format !== "ALL";
-  const opt = FORMAT_OPTIONS.find((o) => o.value === format);
-  const formatLabel = opt?.label ?? format.toUpperCase();
+  const formatLabel = formatFilterLabel(format, setCode);
   const formatColor = FMT_COLORS[format] ?? FMT_DEFAULT_COLOR;
   const colorsName = colorsActive ? colorsDisplayName(colors) : "";
 
