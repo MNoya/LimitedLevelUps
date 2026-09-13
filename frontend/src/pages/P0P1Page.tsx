@@ -11,6 +11,7 @@ import { SlotPip, SLOT_ACCENT } from "../components/p0p1/slotVisuals";
 import { P0P1ProgressBar } from "../components/p0p1/ProgressBar";
 import { ClearAll } from "../components/p0p1/ClearAll";
 import { P0P1Hero } from "../components/p0p1/P0P1Hero";
+import { NextContestOpens } from "../components/p0p1/NextContestOpens";
 import { AutoSaveBadge } from "../components/p0p1/AutoSaveBadge";
 import { P0P1MobileSelector } from "../components/p0p1/P0P1MobileView";
 import { GoToTopButton } from "../components/GoToTopButton";
@@ -126,7 +127,12 @@ export function P0P1Page() {
           onContestChange={handleContestChange}
           innerRef={heroRef}
           cta={null}
-          belowIntro={null}
+          belowIntro={
+            <NextContestOpens
+              next={{ code: featured.code, name: featured.name, previewsOpen: featured.previewsOpen }}
+              showSet={false}
+            />
+          }
           phase={phase}
           isCurrent={isCurrentContest}
         />

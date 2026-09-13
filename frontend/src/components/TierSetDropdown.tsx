@@ -176,12 +176,12 @@ export function TierSetDropdown({
                   <SetGlyph code={setGlyphCode(s)} size={24} />
                   <span className="flex-1 truncate text-[17px] leading-none">{s.name.toUpperCase()}</span>
                   {s.isActive ? (
-                    <span className={cn("text-[10px] tracking-[0.18em]", active ? "text-green" : "text-muted")}>
+                    <span className={cn("text-[13px] tracking-[0.18em]", active ? "text-green" : "text-muted")}>
                       LIVE
                     </span>
                   ) : (
                     s.startDate > today && (
-                      <span className="text-[10px] tracking-[0.18em]" style={{ color: "#cca54e" }}>
+                      <span className="text-[13px] tracking-[0.18em]" style={{ color: "#cca54e" }}>
                         PREVIEW
                       </span>
                     )

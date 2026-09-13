@@ -62,13 +62,12 @@ function buildSentences(
   formattedRange: string | null,
 ): ReactNode[] {
   switch (phase) {
-    case "comingSoon":
-      return [];
     case "loading":
       return [
         <span className="inline-block h-3.5 w-64 bg-surface2 animate-pulse align-middle" />,
         <span className="inline-block h-3.5 w-80 bg-surface2 animate-pulse align-middle" />,
       ];
+    case "comingSoon":
     case "voting":
       return [
         <>Put together a team of {cardCount} cards from {setName}</>,
