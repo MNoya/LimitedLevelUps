@@ -17,7 +17,6 @@
       "formats": [
         "PremierDraft",
         "ContenderDraft",
-        "OpenDraft_D1_Bo1",
         "PremierDraftRemixArtifacts",
         "ArenaDirect_Draft",
         "DraftChallenge"
@@ -69,13 +68,13 @@
     {
       "label": "LCQ Draft 1",
       "points": 30,
-      "formats": ["LimitedChampionshipQualifier_Draft1"]
+      "formats": ["LimitedChampionshipQualifier_Draft1", "OpenDraft_D1_Bo1"]
     },
     {
       "label": "LCQ Draft 2",
       "points": 10,
       "rule": "lcq_draft_2",
-      "formats": ["LimitedChampionshipQualifier_Draft2"]
+      "formats": ["LimitedChampionshipQualifier_Draft2", "OpenDraft_D2_Bo1"]
     }
   ]
 }
