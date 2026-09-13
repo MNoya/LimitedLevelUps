@@ -19,7 +19,7 @@ from sqlalchemy.exc import ProgrammingError
 
 from bot.config import PRODUCTION_GUILD_ID
 from bot.database import SessionLocal
-from bot.services.ping_roles import REMINDER_COLOR, REMINDER_ROLE_NAME
+from bot.services.ping_roles import P0P1_COLOR, P0P1_POLL_ROLE_NAME, REMINDER_COLOR, REMINDER_ROLE_NAME
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +36,17 @@ NON_VOTERS_SQL = text("""
         select 1 from p0p1_entries e
         where e.user_id = k.user_id and e.set_code = :set_code
     )
+""")
+
+ALL_VOTERS_SQL = text("""
+    with known as (
+        select user_id from p0p1_voters
+        union
+        select distinct user_id from p0p1_entries
+    )
+    select i.provider_id
+    from known k
+    join auth.identities i on i.user_id = k.user_id and i.provider = 'discord'
 """)
 
 LOCAL_NON_VOTERS_SQL = text("select discord_id from players where discord_id is not null")
@@ -58,24 +69,38 @@ class ReminderOutcome:
 
 
 @dataclass(frozen=True)
-class NonVoters:
+class AudienceIds:
     discord_ids: list[str]
     source: str
 
 
-def non_voter_discord_ids_sync(set_code: str) -> NonVoters:
+def non_voter_discord_ids_sync(set_code: str) -> AudienceIds:
     """Supabase owns ``auth``, so no developer database has it. Falling back to every local player keeps the
     role swap exercisable off production; nothing links a ``players`` row to a P0P1 identity, so that
     audience excludes nobody and is labelled ``SOURCE_PLAYERS`` instead of passing as the real list."""
     with SessionLocal() as session:
         try:
             rows = session.execute(NON_VOTERS_SQL, {"set_code": set_code.upper()}).scalars().all()
-            return NonVoters([str(row) for row in rows], SOURCE_AUTH)
+            return AudienceIds([str(row) for row in rows], SOURCE_AUTH)
         except ProgrammingError:
             session.rollback()
             log.warning(f"p0p1-reminder: no auth schema, falling back to every {SOURCE_PLAYERS} row")
             rows = session.execute(LOCAL_NON_VOTERS_SQL).scalars().all()
-            return NonVoters([str(row) for row in rows], SOURCE_PLAYERS)
+            return AudienceIds([str(row) for row in rows], SOURCE_PLAYERS)
+
+
+def all_voter_discord_ids_sync() -> AudienceIds:
+    """Every Discord id that has ever filed a P0P1 ballot, across all contests. Same ``auth`` dependency and
+    every-local-player fallback as the non-voter read, so it is exercisable off production."""
+    with SessionLocal() as session:
+        try:
+            rows = session.execute(ALL_VOTERS_SQL).scalars().all()
+            return AudienceIds([str(row) for row in rows], SOURCE_AUTH)
+        except ProgrammingError:
+            session.rollback()
+            log.warning(f"p0p1-poll: no auth schema, falling back to every {SOURCE_PLAYERS} row")
+            rows = session.execute(LOCAL_NON_VOTERS_SQL).scalars().all()
+            return AudienceIds([str(row) for row in rows], SOURCE_PLAYERS)
 
 
 def voter_count_sync(set_code: str) -> int:
@@ -89,15 +114,9 @@ async def ping_non_voters(
 ) -> ReminderOutcome:
     """The non-voter list is read immediately before the grants, so a ballot filed during the run is not
     pinged for being unfilled."""
-    await _ensure_member_cache(guild)
     non_voters = await asyncio.to_thread(non_voter_discord_ids_sync, set_code)
     discord_ids = audience(guild, non_voters.discord_ids, restrict_to)
-    members = _members_for(guild, discord_ids)
-
-    await _empty_role(role)
-    pinged = await _grant_all(role, members)
-    await _post_ping(role, build_post)
-    await _empty_role(role)
+    pinged, members = await ping_audience(guild, role, discord_ids, build_post)
 
     outcome = ReminderOutcome(
         targeted=len(discord_ids), pinged=pinged, absent=len(discord_ids) - len(members),
@@ -107,6 +126,21 @@ async def ping_non_voters(
              f"{outcome.absent} not in guild")
     log.info(f"p0p1-reminder: {set_code} pinged {', '.join(str(member) for member in members) or 'nobody'}")
     return outcome
+
+
+async def ping_audience(
+    guild: discord.Guild, role: discord.Role, discord_ids: list[str], build_post,
+) -> tuple[int, list[discord.Member]]:
+    """Grant the role to every reachable id, fire one ping through ``build_post``, then strip the role again.
+    Returns how many were granted and the members reached. The role is emptied before the grants too, so a
+    run that died mid-strip starts clean, and never deleted, so the live post keeps a real pill."""
+    await _ensure_member_cache(guild)
+    members = _members_for(guild, discord_ids)
+    await _empty_role(role)
+    pinged = await _grant_all(role, members)
+    await _post_ping(role, build_post)
+    await _empty_role(role)
+    return pinged, members
 
 
 def audience(
@@ -125,22 +159,14 @@ def audience(
 
 
 async def reminder_role(guild: discord.Guild) -> discord.Role | None:
-    """The shared reminder role, not mentionable outside the post itself. Created here for a guild whose
-    reconcile has not run yet; `MANAGED_ROLES` owns its name and color afterwards, renaming and recoloring
-    one that predates either."""
-    role = discord.utils.get(guild.roles, name=REMINDER_ROLE_NAME)
-    if role is not None:
-        return role
-    try:
-        role = await guild.create_role(
-            name=REMINDER_ROLE_NAME, colour=discord.Colour.from_str(REMINDER_COLOR),
-            mentionable=False, reason="p0p1 reminder ping",
-        )
-    except discord.HTTPException:
-        log.warning(f"p0p1-reminder: could not create {REMINDER_ROLE_NAME!r} in {guild.name}", exc_info=True)
-        return None
-    log.info(f"p0p1-reminder: created {REMINDER_ROLE_NAME!r} in {guild.name}")
-    return role
+    """The shared reminder role, not mentionable outside the post itself. `MANAGED_ROLES` owns its name and
+    color once a reconcile has run."""
+    return await _ping_role(guild, REMINDER_ROLE_NAME, REMINDER_COLOR, "p0p1 reminder ping")
+
+
+async def poll_role(guild: discord.Guild) -> discord.Role | None:
+    """The transient P0P1 role the challenger poll pings, granted to past voters and stripped after the send"""
+    return await _ping_role(guild, P0P1_POLL_ROLE_NAME, P0P1_COLOR, "p0p1 challenger poll")
 
 
 async def _ensure_member_cache(guild: discord.Guild) -> None:
@@ -202,3 +228,19 @@ async def _empty_role(role: discord.Role) -> None:
             await member.remove_roles(role, reason="p0p1 reminder ping sent")
         except discord.HTTPException:
             log.warning(f"p0p1-reminder: could not strip {role.name!r} from {member}", exc_info=True)
+
+
+async def _ping_role(guild: discord.Guild, name: str, color: str, reason: str) -> discord.Role | None:
+    """The transient ping role by name, created non-mentionable when a guild has none yet"""
+    role = discord.utils.get(guild.roles, name=name)
+    if role is not None:
+        return role
+    try:
+        role = await guild.create_role(
+            name=name, colour=discord.Colour.from_str(color), mentionable=False, reason=reason,
+        )
+    except discord.HTTPException:
+        log.warning(f"p0p1-reminder: could not create {name!r} in {guild.name}", exc_info=True)
+        return None
+    log.info(f"p0p1-reminder: created {name!r} in {guild.name}")
+    return role

@@ -31,6 +31,7 @@ from bot.commands.leaderboard import (
     setup as setup_leaderboard,
 )
 from bot.commands.mock_draft import setup as setup_mock_draft
+from bot.commands.p0p1_poll import setup as setup_p0p1_poll
 from bot.commands.pod_draft import setup as setup_pod_draft
 from bot.commands.pod_queue import PodQueueView, setup as setup_pod_queue
 from bot.commands.pod_guide import setup as setup_pod_guide
@@ -264,6 +265,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_save_resource(bot)
         await setup_guide(bot)
         await setup_advertise(bot)
+        await setup_p0p1_poll(bot)
         await setup_help(bot)
         await setup_event_scribe(bot)
         await setup_link_17lands(bot)
