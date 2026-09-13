@@ -136,7 +136,7 @@ def _create_view(label_case: str) -> None:
         FROM grouped
         WHERE format_label IS NOT NULL;
     """)
-    op.execute("GRANT SELECT ON public_player_format_breakdown TO anon;")
+    op.execute("GRANT SELECT ON public_player_format_breakdown TO anon, authenticated;")
 
 
 def upgrade() -> None:
