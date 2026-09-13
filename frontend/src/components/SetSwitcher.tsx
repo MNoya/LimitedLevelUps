@@ -95,7 +95,7 @@ function chipDateLabel(set: SetSummary): string {
   if (set.isActive || isCubeCode(set.code) || !set.startDate) return "";
   const [year, month] = set.startDate.split("-");
   const name = MONTHS[Number(month) - 1];
-  return name ? `${name} ${year.slice(2)}'` : "";
+  return name ? `${name} '${year.slice(2)}` : "";
 }
 
 function SetChip({

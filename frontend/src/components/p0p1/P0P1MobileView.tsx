@@ -8,11 +8,11 @@ import { CardSelectionGrid } from "./CardSelectionGrid";
 import { PostVotingStats } from "./PostVotingStats";
 import { PickGrid } from "./CommunityGrid";
 import { P0P1IntroText } from "./P0P1IntroText";
-import { NextContestOpens } from "./NextContestOpens";
+import { P0P1ContestDropdown } from "./P0P1ContestDropdown";
 import { SlotPip, SLOT_ACCENT } from "./slotVisuals";
 import { P0P1ProgressBar } from "./ProgressBar";
 import { P0P1CountdownBar } from "./CountdownBar";
-import { formatRemaining, formatScoringRemaining } from "./Countdown";
+import { formatRemaining, formatScoringRemaining, formatOpensDate } from "./Countdown";
 import { useNow } from "../../lib/countdown";
 import { ClearAll } from "./ClearAll";
 import { GoToTopButton } from "../GoToTopButton";
@@ -22,7 +22,7 @@ import { MidwayResults } from "./MidwayResults";
 import { FinalResults } from "./FinalResults";
 import type { useP0P1Ballot } from "../../data/useP0P1Ballot";
 import type { P0P1Phase } from "../../data/p0p1Results";
-import type { FeaturedContest } from "../../data/p0p1Slots";
+import type { ContestChipInfo, FeaturedContest } from "../../data/p0p1Slots";
 import { SLOTS } from "../../data/p0p1Slots";
 import { groupBySlot, findExtremes, classifyYourPick, pickPctLabel } from "../../data/p0p1Stats";
 import { SITE_LINKS } from "../../data/site";
@@ -31,7 +31,15 @@ import type { Card, P0P1PickStat, SlotDefinition, SlotKey } from "../../types/p0
 
 type Ballot = ReturnType<typeof useP0P1Ballot>;
 
-export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
+export function P0P1MobileSelector({
+  ballot,
+  contests,
+  onContestChange,
+}: {
+  ballot: Ballot;
+  contests: ContestChipInfo[];
+  onContestChange: (code: string) => void;
+}) {
   const {
     featured,
     cards,
@@ -61,7 +69,7 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
     ballots,
   } = ballot;
 
-  const loginBarVisible = !authLoading && !user;
+  const loginBarVisible = !authLoading && !user && phase !== "comingSoon";
   const groupedStats = hasParticipated && pickStats ? groupBySlot(pickStats) : undefined;
   const isCompleteEntrant = isPastDeadline && Boolean(user) && isComplete;
   const didNotVote = isPastDeadline && Boolean(user) && !isComplete;
@@ -72,8 +80,12 @@ export function P0P1MobileSelector({ ballot }: { ballot: Ballot }) {
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
 
       <main className={`flex-1 flex flex-col w-full px-3 pt-3 ${loginBarVisible ? "pb-24" : "pb-4"}`}>
-        <MobileIntro featured={featured} phase={phase} dateRange={ratingsSnapshot?.dateRange} />
-        {dataReady ? (
+        <MobileIntro featured={featured} phase={phase} dateRange={ratingsSnapshot?.dateRange} contests={contests} onContestChange={onContestChange} />
+        {phase === "comingSoon" ? (
+          <div className="flex-1 flex items-center justify-center py-20">
+            <span className="font-display tracking-[0.12em] text-muted text-[32px]">COMING SOON</span>
+          </div>
+        ) : dataReady ? (
           <>
             {!isPastDeadline && (
               <div className="mb-1.5">
@@ -331,38 +343,52 @@ function MobileIntro({
   featured,
   phase,
   dateRange,
+  contests,
+  onContestChange,
 }: {
   featured: FeaturedContest | undefined;
   phase: P0P1Phase;
   dateRange?: { start: string; end: string } | null;
+  contests?: ContestChipInfo[];
+  onContestChange?: (code: string) => void;
 }) {
   const [open, setOpen] = useState(true);
-  const isPastDeadline = phase !== "voting";
+  const isPastDeadline = phase !== "voting" && phase !== "comingSoon";
   const setCode = featured?.code ?? "";
   const votingDeadline = featured?.votingDeadline ?? new Date();
   const scoringDate = featured?.scoringDate ?? new Date();
+  const opensAt = featured?.previewsOpen;
 
   return (
     <section className="bg-surface border border-border rounded-xl p-4 mb-3 flex flex-col gap-2.5">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-label={open ? "Hide details" : "Show details"}
-        className="flex w-full items-center gap-3 text-left bg-transparent border-0 p-0 cursor-pointer"
-      >
-        <div className="flex items-center gap-1 shrink-0">
-          <SetGlyph code={setCode} size={34} />
-          <span className="font-display text-text tracking-[0.04em]" style={{ fontSize: 22, lineHeight: 1 }}>
-            {setCode}
-          </span>
-        </div>
-        <span className="flex-1 min-w-0 text-center font-display text-[16px] text-text tracking-[0.1em] truncate pointer-events-none">
+      <div className="flex w-full items-center gap-3">
+        {contests && contests.length > 1 && onContestChange ? (
+          <P0P1ContestDropdown
+            contests={contests}
+            activeCode={setCode}
+            onSelect={onContestChange}
+            isMobile
+          />
+        ) : (
+          <div className="flex items-center gap-1 shrink-0">
+            <SetGlyph code={setCode} size={34} />
+            <span className="font-display text-text tracking-[0.04em]" style={{ fontSize: 22, lineHeight: 1 }}>
+              {setCode}
+            </span>
+          </div>
+        )}
+        <span className="flex-1 min-w-0 text-center font-display text-[16px] text-text tracking-[0.1em] truncate">
           PACK 0, PICK 1
         </span>
-        <div className="flex flex-col items-end gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-label={open ? "Hide details" : "Show details"}
+          className="flex flex-col items-end gap-1 shrink-0 bg-transparent border-0 p-0 cursor-pointer"
+        >
           <div className="flex items-center gap-2">
-            <CountdownStacked deadline={votingDeadline} scoringDate={scoringDate} phase={phase} />
+            <CountdownStacked deadline={votingDeadline} scoringDate={scoringDate} opensAt={opensAt} phase={phase} />
             <ChevronDown size={22} className={`shrink-0 text-muted transition-transform ${open ? "" : "-rotate-90"}`} />
           </div>
           {isPastDeadline && (
@@ -370,17 +396,12 @@ function MobileIntro({
               <P0P1CountdownBar from={votingDeadline} to={scoringDate} phase={phase} />
             </div>
           )}
-        </div>
-      </button>
+        </button>
+      </div>
       {open && (
         <p className="text-subtle text-[13.5px] leading-[1.5]">
           <P0P1IntroText phase={phase} dateRange={dateRange} setName={featured?.name ?? ""} />
         </p>
-      )}
-      {phase === "final" && (
-        <div className="text-subtle text-[13.5px]">
-          <NextContestOpens next={featured?.next} />
-        </div>
       )}
     </section>
   );
@@ -420,15 +441,26 @@ function MobileResultsSkeleton() {
 function CountdownStacked({
   deadline,
   scoringDate,
+  opensAt,
   phase,
 }: {
   deadline: Date;
   scoringDate?: Date;
+  opensAt?: Date;
   phase: P0P1Phase;
 }) {
   useNow(30_000);
   const now = p0p1Now(scoringDate);
   const deadlineDiff = deadline.getTime() - now;
+
+  if (phase === "comingSoon") {
+    return (
+      <div className="flex flex-col items-end leading-tight whitespace-nowrap shrink-0">
+        <span className="text-muted text-[11px] tracking-[0.04em]">Opens</span>
+        <span className="text-green text-[13px]">{formatOpensDate(opensAt ?? deadline)}</span>
+      </div>
+    );
+  }
 
   if (phase === "voting") {
     return (
