@@ -2172,26 +2172,46 @@ function annotateSpeakers(items: TranscriptItem[]): void {
   const laneOf = new Map<string, number>();
   [...hosts, ...guests].forEach((speaker, index) => laneOf.set(speaker, index));
 
-  let named = new Set<string>();
+  let prevSpeaker: string | undefined;
   const mark = (para: ParaLine) => {
     if (!para.speaker) {
       return;
     }
     para.lane = laneOf.get(para.speaker);
-    if (!named.has(para.speaker)) {
+    if (para.speaker !== prevSpeaker) {
       para.showName = true;
-      named.add(para.speaker);
     }
+    prevSpeaker = para.speaker;
   };
   for (const item of items) {
     if (item.kind === "chapter") {
-      named = new Set();
+      prevSpeaker = undefined;
     } else if (item.kind === "para") {
       mark(item);
     } else if (item.kind === "section") {
       item.paras.forEach(mark);
     }
   }
+}
+
+type SpeakerRun = {
+  speaker?: string;
+  lane?: number;
+  showName?: boolean;
+  paras: { para: ParaLine; paraIndex: number }[];
+};
+
+function groupSpeakerRuns(paras: ParaLine[]): SpeakerRun[] {
+  const runs: SpeakerRun[] = [];
+  paras.forEach((para, paraIndex) => {
+    const last = runs[runs.length - 1];
+    if (para.speaker && last && last.speaker === para.speaker) {
+      last.paras.push({ para, paraIndex });
+    } else {
+      runs.push({ speaker: para.speaker, lane: para.lane, showName: para.showName, paras: [{ para, paraIndex }] });
+    }
+  });
+  return runs;
 }
 
 function escapeRegExp(value: string): string {
@@ -2853,23 +2873,50 @@ function EpisodeTranscript({
                     </span>
                   )}
                 </div>
-                {isCollapsed
-                  ? null
-                  : item.paras.map((para, paraIndex) => {
-                      const active = highlight && para.t === activeParaT;
-                      return (
-                        <p
-                          key={paraIndex}
-                          data-active={active}
-                          className={cn(
-                            "text-[length:var(--tsize,15px)] leading-[1.6] mt-2 transition-colors",
-                            active ? "-ml-4 border-l-2 border-green pl-4 text-text" : "text-subtle",
-                          )}
-                        >
-                          {renderText(para.text, linkable.get(`${index}:${paraIndex}`))}
-                        </p>
-                      );
-                    })}
+                {isCollapsed ? null : groupSpeakerRuns(item.paras).map((run, runIndex) => {
+                  if (run.speaker) {
+                    const lane = SPEAKER_LANES[(run.lane ?? 0) % SPEAKER_LANES.length];
+                    return (
+                      <div key={runIndex} className="mt-3 first:mt-2">
+                        {run.showName ? (
+                          <span
+                            className={cn(
+                              "mb-1.5 block font-display text-[14px] tracking-[0.1em] leading-none",
+                              lane.name,
+                            )}
+                          >
+                            {run.speaker}
+                          </span>
+                        ) : null}
+                        <div className={cn("border-l-2 pl-4", lane.border)}>
+                          {run.paras.map(({ para, paraIndex }) => (
+                            <p
+                              key={paraIndex}
+                              data-active={highlight && para.t === activeParaT}
+                              className="text-[length:var(--tsize,15px)] leading-[1.6] mt-2 first:mt-0 text-subtle"
+                            >
+                              {renderText(para.text, linkable.get(`${index}:${paraIndex}`))}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  const { para, paraIndex } = run.paras[0];
+                  const active = highlight && para.t === activeParaT;
+                  return (
+                    <p
+                      key={runIndex}
+                      data-active={active}
+                      className={cn(
+                        "text-[length:var(--tsize,15px)] leading-[1.6] mt-2 transition-colors",
+                        active ? "-ml-4 border-l-2 border-green pl-4 text-text" : "text-subtle",
+                      )}
+                    >
+                      {renderText(para.text, linkable.get(`${index}:${paraIndex}`))}
+                    </p>
+                  );
+                })}
               </div>
             );
           }
