@@ -137,6 +137,9 @@ def main() -> None:
             with SessionLocal() as session:
                 _restructure_one(session, youtube_id, args)
         return
+    if args.structure_only:
+        _run_structure_only(args)
+        return
     if args.audio_only:
         _run_audio_only(args)
         return
@@ -221,6 +224,11 @@ def _parse_args() -> argparse.Namespace:
         "--max-minutes",
         type=int,
         help="Skip audio-only episodes longer than this, so the multi-hour set reviews are left out",
+    )
+    parser.add_argument(
+        "--structure-only",
+        action="store_true",
+        help="Claude section/subsection pass over an existing DB transcript, annotate headings in place, keep speakers",
     )
     parser.add_argument("--no-structure", action="store_true", help="Skip chapter headings and Claude subtopics")
     parser.add_argument("--no-restore", action="store_true", help="Skip punctuation restore of run-on stretches")
@@ -648,6 +656,28 @@ def _restructure_one(session, youtube_id: str, args: argparse.Namespace) -> None
     count = word_count(segments)
     _upsert(session, youtube_id, segments, count, cache.get("source", SOURCE))
     log.info(f"[{youtube_id}] rewrote {len(segments)} segments, {count} words")
+
+
+def _run_structure_only(args: argparse.Namespace) -> None:
+    if not args.youtube_id:
+        log.info("--structure-only needs --youtube-id")
+        return
+    for youtube_id in args.youtube_id:
+        with SessionLocal() as session:
+            _structure_only_one(session, youtube_id)
+
+
+def _structure_only_one(session, youtube_id: str) -> None:
+    row = session.get(EpisodeTranscript, youtube_id)
+    if row is None or not row.segments:
+        log.warning(f"[{youtube_id}] no transcript to structure")
+        return
+    segments = [dict(segment) for segment in row.segments]
+    _annotate_structure(segments, youtube_id)
+    headings = sum(1 for segment in segments if segment.get("heading"))
+    subheadings = sum(1 for segment in segments if segment.get("subheading"))
+    _upsert(session, youtube_id, segments, word_count(segments), row.source)
+    log.info(f"[{youtube_id}] {headings} chapters, {subheadings} subtopics over {len(segments)} segments")
 
 
 def _write_cache(youtube_id, title, set_code, units, chapters, source) -> None:
@@ -1146,6 +1176,33 @@ def _structure(units: list[dict], chapters: list[dict], youtube_id: str) -> list
         else:
             current["text"] = f"{current['text']} {unit['text']}"
     return _merge_short_paragraphs(segments)
+
+
+def _annotate_structure(segments: list[dict], youtube_id: str) -> None:
+    for segment in segments:
+        for key in ("heading", "subheading", "head_t"):
+            segment.pop(key, None)
+    subtopics, _paragraphs, sections = _subtopics_and_paragraphs(segments, youtube_id)
+    if not subtopics:
+        _flag_structure_failure(youtube_id, len(segments))
+        return
+    heads = _promote_sections(segments, subtopics, sections)
+    first_subtopic = min(subtopics)
+    if not heads or first_subtopic < min(heads):
+        heads = {**heads, first_subtopic: (subtopics[first_subtopic], segments[first_subtopic]["t"])}
+    chapter_times = [segments[i]["t"] for i in heads]
+    subheads = {
+        i: title for i, title in subtopics.items()
+        if i not in heads and all(abs(segments[i]["t"] - c) >= SUBTOPIC_CHAPTER_GAP for c in chapter_times)
+    }
+    for index, segment in enumerate(segments):
+        if index in heads:
+            title, chapter_t = heads[index]
+            segment["head_t"] = segment["t"]
+            segment["heading"] = title
+            segment["t"] = chapter_t
+        if index in subheads:
+            segment["subheading"] = subheads[index]
 
 
 def _merge_short_paragraphs(segments: list[dict], min_words: int = 6) -> list[dict]:

@@ -1310,7 +1310,7 @@ function EpisodeDetail({
             )}
           </div>
           {showChapterRail ? (
-            <aside className="relative hidden lg:flex lg:flex-col lg:w-[300px] lg:shrink-0 lg:h-[var(--epv)] lg:max-h-[var(--epvmax)]">
+            <aside className="relative hidden lg:flex lg:flex-col lg:w-[300px] lg:shrink-0 lg:h-[var(--epv)] lg:max-h-[min(var(--epvmax),calc(100vh-1.5rem))]">
               {chapters.length > 0 || !transcriptSettled ? (
                 <ChapterNav
                   className="lg:min-h-0 lg:shrink"
@@ -1425,10 +1425,10 @@ function EpisodeDetail({
         {audioRich && (chapters.length > 0 || !transcriptSettled) ? (
           <aside
             className="hidden lg:mt-6 lg:flex lg:flex-col lg:sticky lg:self-start lg:w-[300px] lg:shrink-0"
-            style={{ top: headerHeight + 24, height: `calc(100vh - ${headerHeight + 48}px)` }}
+            style={{ top: headerHeight + 24, maxHeight: `calc(100vh - ${headerHeight + 48}px)` }}
           >
             <ChapterNav
-              className="lg:min-h-0 lg:flex-1"
+              className="lg:min-h-0 lg:shrink"
               chapters={chapters}
               activeT={activeChapterT}
               onJump={jumpToChapter}
@@ -1933,10 +1933,10 @@ function TranscriptArticle({ episode }: { episode: Episode }) {
           {hasChapters ? (
             <aside
               className="hidden lg:mt-6 lg:flex lg:flex-col lg:sticky lg:self-start lg:w-[300px] lg:shrink-0"
-              style={{ top: 24, height: "calc(100vh - 48px)" }}
+              style={{ top: 24, maxHeight: "calc(100vh - 48px)" }}
             >
               <ChapterNav
-                className="lg:min-h-0 lg:flex-1"
+                className="lg:min-h-0 lg:shrink"
                 chapters={chapters}
                 activeT={activeChapterT}
                 onJump={jumpToHeading}
