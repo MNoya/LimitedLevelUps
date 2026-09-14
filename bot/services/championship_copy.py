@@ -96,8 +96,8 @@ def explainer(
     *, set_code: str, event_at: datetime | None, signup_at: datetime | None, champion_mention: str,
     card_url: str | None, coordination_channel: str,
 ) -> ui.Container:
-    """The `!championship` container. Evergreen: the date shows only while an edition is ahead, and the
-    signup line either links the posted card or says when it arrives."""
+    """The `!championship` container. Evergreen: the start line shows only while an edition is ahead, and it
+    links the signup card once posted, else names when signup arrives."""
     symbol = emojis.prefix(set_code.lower())
     header = (
         "## 👑 Set Championship\n"
@@ -106,13 +106,15 @@ def explainer(
     )
     lines = []
     if event_at is not None:
-        lines.append(f"{symbol}**{set_code} Championship:** <t:{int(event_at.timestamp())}:F>")
+        start = f"<t:{int(event_at.timestamp())}:F>"
+        if card_url is not None:
+            lines.append(f"{symbol}[**Set Championship**]({card_url}) will be played {start}")
+        else:
+            lines.append(f"{symbol}**Set Championship starts** {start}")
         lines.append("")
     lines.append(f"{emojis.prefix('llu')}[**Leaderboard**](<{standings_url(set_code)}>) standings decide who plays. "
                  f"Matches streamed at [**twitch.tv/GatoDelFuego**](<{TWITCH_URL}>)")
-    if card_url is not None:
-        lines.append(f"\n[**Event signup**]({card_url}) is now open at {coordination_channel}")
-    elif signup_at is not None:
+    if card_url is None and signup_at is not None:
         lines.append(f"\nEvent signup will be posted on {coordination_channel} "
                      f"<t:{int(signup_at.timestamp())}:R>")
     return build_container(header, set_symbol_url(set_code), "\n".join(lines))
