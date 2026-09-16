@@ -63,7 +63,8 @@ export function CardSelectionGrid({
     if (autoFocusSearch) inputRef.current?.focus();
   }, [autoFocusSearch]);
 
-  const isWildcard = slot.key === "wildcard_common" || slot.key === "wildcard_uncommon";
+  const spansColors =
+    slot.key === "wildcard_common" || slot.key === "wildcard_uncommon" || slot.key === "best_card";
 
   const toggleColor = (c: Color) => setColor((prev) => (prev === c ? null : c));
 
@@ -78,17 +79,17 @@ export function CardSelectionGrid({
       const q = search.toLowerCase();
       list = list.filter((c) => c.name.toLowerCase().includes(q));
     }
-    if (isWildcard && color) {
+    if (spansColors && color) {
       list = color === "C"
         ? list.filter((c) => c.colors.length === 0)
         : list.filter((c) => c.colors.includes(color));
     }
     return list;
-  }, [eligible, search, isWildcard, color]);
+  }, [eligible, search, spansColors, color]);
 
   const availableCount = filtered.filter((c) => !pickedCards.has(c.name)).length;
 
-  const colorFilter = isWildcard ? (
+  const colorFilter = spansColors ? (
     <div className="flex items-center gap-1">
       {WILDCARD_COLORS.map((c) => {
         const on = color === c;

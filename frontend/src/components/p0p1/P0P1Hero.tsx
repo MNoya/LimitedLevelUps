@@ -63,7 +63,7 @@ export function P0P1Hero({
       </div>
       <div className="flex-1 min-w-0 flex flex-col items-center justify-center gap-2.5 xl:absolute xl:left-1/2 xl:top-1/2 xl:w-[580px] xl:-translate-x-1/2 xl:-translate-y-1/2 xl:flex-none">
         <p className="max-w-[580px] text-center text-subtle text-[14px] leading-[1.55]">
-          <P0P1IntroText setName={featured.name} phase={phase} dateRange={dateRange} multiline />
+          <P0P1IntroText setName={featured.name} setCode={featured.code} phase={phase} dateRange={dateRange} multiline />
         </p>
         <div className="w-full flex justify-center text-subtle text-[14px]">
           {phase === "final" ? <NextContestOpens next={featured.next} /> : belowIntro}

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { BreakdownList } from "./BreakdownList";
 import type { BreakdownRow } from "./BreakdownList";
 import { groupBySlot, participantCount } from "../../data/p0p1Stats";
-import { SLOTS } from "../../data/p0p1Slots";
+import { slotsForSet } from "../../data/p0p1Slots";
 import type { Card, P0P1PickStat, SlotKey } from "../../types/p0p1";
 
 export function FullBreakdownList({
@@ -19,7 +19,7 @@ export function FullBreakdownList({
   const bySlot = useMemo(() => {
     const grouped = groupBySlot(pickStats);
     return new Map(
-      SLOTS.map((slot) => {
+      slotsForSet(setCode ?? "").map((slot) => {
         const stats = [...(grouped.get(slot.key) ?? [])].sort((a, b) => b.pickCount - a.pickCount);
         const topPct = stats.length ? stats[0].pickPct : 0;
         const rows: BreakdownRow[] = stats.map((stat) => ({
@@ -36,7 +36,7 @@ export function FullBreakdownList({
         return [slot.key as SlotKey, rows] as const;
       }),
     );
-  }, [pickStats, cardsByName, picksBySlot]);
+  }, [pickStats, cardsByName, picksBySlot, setCode]);
 
   const entryCount = useMemo(() => participantCount(pickStats), [pickStats]);
 

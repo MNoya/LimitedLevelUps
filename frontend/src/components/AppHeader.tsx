@@ -8,7 +8,7 @@ import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { useAuth } from "../auth/useAuth";
 import { useP0P1FeaturedContest, useP0P1Picks, useP0P1Ratings, usePlayerSlugByDiscordId } from "../data/hooks";
-import { SLOTS } from "../data/p0p1Slots";
+import { slotsForSet } from "../data/p0p1Slots";
 import { p0p1DevEnabled, p0p1Now, useP0P1DevPreset } from "../data/p0p1DevState";
 import { deriveP0P1Phase } from "../data/useP0P1Ballot";
 import type { P0P1Phase } from "../data/p0p1Results";
@@ -425,7 +425,7 @@ function useP0P1BadgeState() {
     devActive ? devPreset : "live",
   );
   const filled = user ? (picks?.length ?? 0) : 0;
-  return { user, phase, filled, total: SLOTS.length, setCode };
+  return { user, phase, filled, total: setCode ? slotsForSet(setCode).length : 0, setCode };
 }
 
 function p0p1BadgeLabel(phase: P0P1Phase): string | null {

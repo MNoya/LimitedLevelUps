@@ -78,10 +78,9 @@ export function scoreBallot(
   return total;
 }
 
-// Best-possible legal team: max-weight assignment of cards to slots under the
-// uniqueness constraint. Uses most-constrained-first greedy — near-optimal
-// since the color-common slots are mostly disjoint (only hybrid commons can
-// overlap two color slots) and the wildcard slots are naturally last.
+// Best-possible legal team: max-weight assignment of cards to slots under the uniqueness
+// constraint, most-constrained-first greedy; identical-filter slots resolve to distinct top cards
+// and only hybrids overlap two color slots, so it stays near-optimal
 export function bestPossibleTeam(
   cards: Card[],
   slots: SlotDefinition[],
@@ -154,9 +153,8 @@ export function slotTopCards(
   return top;
 }
 
-// Most-popular legal team: same uniqueness constraint, greedy from most-voted
-// card per slot. SLOTS order (color slots before wildcards) is intentional so
-// the specific slots claim their top card before wildcards pick remainders.
+// Most-popular legal team: same uniqueness constraint, greedy from the most-voted card per slot in
+// slot order, so narrower slots claim their top card before broader ones pick remainders
 export function mostPopularTeam(
   pickStats: P0P1PickStat[],
   slots: SlotDefinition[],
@@ -411,10 +409,8 @@ export function findUserBallot(
 }
 
 // ── Highlights feed ─────────────────────────────────────────────────────────
-// Trap / Sleeper awards selected by GIHWR effect size; see
-// Sleeper popularity uses team share
-// (fraction of all ballots playing the card in any slot — wildcard slots
-// overlap the color slots); the Trap keeps within-slot share, its cost is slot-local.
+// Trap / Sleeper awards selected by GIHWR effect size. Sleeper popularity uses team share, the
+// fraction of ballots playing the card in any slot; the Trap keeps within-slot share.
 
 const TRAP_SHORTFALL_FLOOR = 0.02;
 const SLEEPER_TEAM_SHARE_CEIL = 0.05;
@@ -549,7 +545,7 @@ export function highlightsFeed(
     }
   }
 
-  // A card qualifying in multiple slots (wildcard overlap) keeps its strongest instance
+  // A card qualifying in multiple slots (hybrid overlap) keeps its strongest instance
   const dedupe = <T extends Highlight>(entries: T[]): T[] => {
     const byCard = new Map<string, T>();
     for (const e of entries) {

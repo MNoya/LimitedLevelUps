@@ -10,7 +10,7 @@ import {
   useUpsertP0P1Pick,
   useDeleteAllP0P1Picks,
 } from "./hooks";
-import { SLOTS, buildSlots, P0P1_CONTESTS } from "./p0p1Slots";
+import { buildSlots, P0P1_CONTESTS } from "./p0p1Slots";
 import type { FeaturedContest } from "./p0p1Slots";
 import { useLocalP0P1Picks, setLocalPick, clearLocalPicks, getLocalPicks } from "./localPicks";
 import { p0p1DevEnabled, p0p1Now, useP0P1DevPreset, type P0P1DevPreset } from "./p0p1DevState";
@@ -78,7 +78,7 @@ export function useP0P1Ballot(overrideSetCode?: string) {
   }, [useServerPicks, clearAll, setCode]);
 
   const contestSlots = useMemo(
-    () => (setCode ? buildSlots(P0P1_CONTESTS[setCode]) : SLOTS),
+    () => buildSlots(setCode ? P0P1_CONTESTS[setCode] : undefined),
     [setCode],
   );
 
@@ -96,12 +96,12 @@ export function useP0P1Ballot(overrideSetCode?: string) {
 
   const pickedSlotLabels = useMemo(() => {
     const labels = new Map<string, string>();
-    for (const slot of SLOTS) {
+    for (const slot of contestSlots) {
       const name = picksBySlot.get(slot.key);
       if (name) labels.set(name, slot.label);
     }
     return labels;
-  }, [picksBySlot]);
+  }, [picksBySlot, contestSlots]);
 
   const pickedExcept = useCallback(
     (slotKey: SlotKey) => {
@@ -165,28 +165,28 @@ export function useP0P1Ballot(overrideSetCode?: string) {
       (phase !== "loading" &&
         (phase !== "final" || effectiveBallots !== undefined || Boolean(ballotsError))));
 
-  const scoringFilled = SLOTS.filter((s) => effectivePicksBySlot.has(s.key)).length;
-  const isComplete = scoringFilled === SLOTS.length;
+  const scoringFilled = contestSlots.filter((s) => effectivePicksBySlot.has(s.key)).length;
+  const isComplete = scoringFilled === contestSlots.length;
   const hasParticipated = isPastDeadline && Boolean(user) && scoringFilled > 0;
 
   const defaultSlotKey = useMemo(
-    () => SLOTS.find((s) => !picksBySlot.has(s.key))?.key ?? SLOTS[0].key,
-    [picksBySlot],
+    () => contestSlots.find((s) => !picksBySlot.has(s.key))?.key ?? contestSlots[0].key,
+    [picksBySlot, contestSlots],
   );
   const activeSlotKey = editingSlotKey ?? defaultSlotKey;
   const activeSlot = contestSlots.find((s) => s.key === activeSlotKey)!;
 
   const nextUnfilledSlot = useCallback(
     (afterKey: SlotKey) => {
-      const idx = SLOTS.findIndex((s) => s.key === afterKey);
+      const idx = contestSlots.findIndex((s) => s.key === afterKey);
       if (idx === -1) return afterKey;
-      for (let i = 1; i < SLOTS.length; i++) {
-        const candidate = SLOTS[(idx + i) % SLOTS.length];
+      for (let i = 1; i < contestSlots.length; i++) {
+        const candidate = contestSlots[(idx + i) % contestSlots.length];
         if (!picksBySlot.has(candidate.key)) return candidate.key;
       }
       return afterKey;
     },
-    [picksBySlot],
+    [picksBySlot, contestSlots],
   );
 
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

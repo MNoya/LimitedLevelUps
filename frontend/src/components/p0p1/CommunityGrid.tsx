@@ -6,7 +6,7 @@ import { PickVersusModal, usePickVersusPager } from "./PickVersusCard";
 import { SectionLabel } from "../SectionLabel";
 import { ManaCost } from "../ManaPips";
 import { groupBySlot, findExtremes, buildPickVersus, pickPctLabel } from "../../data/p0p1Stats";
-import { SLOTS } from "../../data/p0p1Slots";
+import { slotsForSet } from "../../data/p0p1Slots";
 import type { Card, P0P1PickStat, PickVersus, SlotKey } from "../../types/p0p1";
 
 export function CommunityGrid({
@@ -25,7 +25,7 @@ export function CommunityGrid({
   return (
     <PickRow
       title="Crowd Favorites"
-      entries={SLOTS.map((slot) => {
+      entries={slotsForSet(setCode ?? "").map((slot) => {
         const slotStats = grouped.get(slot.key) ?? [];
         return { slotKey: slot.key, label: slot.label, stats: findExtremes(slotStats).most, slotStats };
       })}
@@ -99,9 +99,10 @@ export function PickGrid({
     }
   }
   const pager = usePickVersusPager(versusList);
+  const lgCols = entries.length > 8 ? "lg:grid-cols-6" : "lg:grid-cols-8";
 
   return (
-    <div className="grid grid-cols-4 lg:grid-cols-8 gap-2">
+    <div className={`grid grid-cols-4 ${lgCols} gap-2`}>
       {entries.map(({ slotKey, label, stats, badge, pctLabel }) => {
         const pagerIndex = pagerIndexBySlot.get(slotKey);
         const onOpen = onTileOpen

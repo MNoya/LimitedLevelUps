@@ -3,7 +3,7 @@
 // ranking is exercised.
 
 import type { P0P1BallotRow, P0P1PickStat, SlotKey } from "../types/p0p1";
-import { SLOTS } from "./p0p1Slots";
+import { slotsForSet } from "./p0p1Slots";
 
 export function syntheticBallotsFromStats(
   pickStats: P0P1PickStat[],
@@ -22,12 +22,13 @@ export function syntheticBallotsFromStats(
   }
 
   const rows: P0P1BallotRow[] = [];
+  const slots = slotsForSet(setCode);
 
   for (let ballotId = 1; ballotId <= TOTAL; ballotId++) {
     const isPartial = ballotId > PARTIAL_START;
     const usedCards = new Set<string>();
 
-    for (const { key: slot } of SLOTS) {
+    for (const { key: slot } of slots) {
       if (isPartial && rng() < 0.4) continue;
 
       const candidates = statsBySlot.get(slot) ?? [];

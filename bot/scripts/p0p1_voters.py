@@ -11,12 +11,21 @@ joined the leaderboard, falling back to the Discord OAuth metadata otherwise.
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 
 from sqlalchemy import text
 
 from bot.database import engine
 
-FULL_BALLOT_SLOTS = 8
+CONTESTS_JSON = Path(__file__).resolve().parents[2] / "p0p1_contests.json"
+
+
+def full_ballot_slots(set_code: str) -> int:
+    """A full ballot is 8 slots on layout 1, 12 on layout 2, keyed off p0p1_contests.json."""
+    contests = json.loads(CONTESTS_JSON.read_text()) if CONTESTS_JSON.exists() else {}
+    layout = contests.get(set_code, {}).get("layout", 1)
+    return 12 if layout >= 2 else 8
 
 VOTERS_SQL = text("""
     select
@@ -53,7 +62,8 @@ def main() -> None:
 
     print(f"{len(rows)} voter/set rows\n")
     for name, set_value, picks, last_pick in rows:
-        flag = "" if picks >= FULL_BALLOT_SLOTS else f"  (incomplete, {picks}/{FULL_BALLOT_SLOTS})"
+        full = full_ballot_slots(set_value)
+        flag = "" if picks >= full else f"  (incomplete, {picks}/{full})"
         stamp = last_pick.strftime("%Y-%m-%d %H:%M") if last_pick else "?"
         print(f"{name or '?':24} {set_value:6} {picks} picks  last={stamp}{flag}")
 

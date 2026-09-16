@@ -619,11 +619,6 @@ const cardLoaders = import.meta.glob<Card[]>(
   { import: "default" },
 );
 
-const P0P1_SLOT_KEYS: SlotKey[] = [
-  "white_common", "blue_common", "black_common", "red_common",
-  "green_common", "multicolor_uncommon", "wildcard_common", "wildcard_uncommon",
-];
-
 const p0p1Picks = new Map<string, P0P1Pick>();
 
 export async function fetchP0P1Cards(setCode: string): Promise<Card[]> {
@@ -665,8 +660,6 @@ function getSyntheticData(setCode: string) {
     if (!loader) throw new Error(`No card fixture for set ${setCode}`);
     p = loader().then((cards) => {
       const stats = generateSyntheticPickStats(cards, setCode);
-      const picks = buildSyntheticPicks(stats);
-      for (const pick of picks) p0p1Picks.set(pick.slot, pick);
       const ratings = generateSyntheticRatings(cards, setCode);
       const ballots = syntheticBallotsFromStats(stats, setCode);
       return { stats, ratings, ballots };
@@ -735,37 +728,6 @@ function generateSyntheticPickStats(cards: Card[], setCode: string): P0P1PickSta
   return stats;
 }
 
-function buildSyntheticPicks(stats: P0P1PickStat[]): P0P1Pick[] {
-  const statsBySlot = new Map<SlotKey, P0P1PickStat[]>();
-  for (const stat of stats) {
-    const slotStats = statsBySlot.get(stat.slot);
-    if (slotStats) slotStats.push(stat);
-    else statsBySlot.set(stat.slot, [stat]);
-  }
-
-  const RANK_PATTERN: Array<"top" | "middle" | "bottom"> =
-    ["top", "bottom", "middle", "top", "bottom", "middle", "top", "bottom"];
-  const claimed = new Set<string>();
-  const picks: P0P1Pick[] = [];
-
-  P0P1_SLOT_KEYS.forEach((slot, i) => {
-    const slotStats = statsBySlot.get(slot);
-    if (!slotStats || slotStats.length === 0) return;
-    const rank = RANK_PATTERN[i % RANK_PATTERN.length];
-    const targetIndex = rank === "top" ? 0
-      : rank === "bottom" ? slotStats.length - 1
-      : Math.floor(slotStats.length / 2);
-    for (let offset = 0; offset < slotStats.length; offset++) {
-      const stat = slotStats[(targetIndex + offset) % slotStats.length];
-      if (!claimed.has(stat.cardName)) {
-        claimed.add(stat.cardName);
-        picks.push({ slot, cardName: stat.cardName, lastUpdated: "2026-06-10T00:00:00Z" });
-        break;
-      }
-    }
-  });
-  return picks;
-}
 
 function generateSyntheticRatings(mockCards: Card[], setCode: string): RatingsSnapshot {
   let seed = 137;

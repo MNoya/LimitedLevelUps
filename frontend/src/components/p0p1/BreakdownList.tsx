@@ -4,7 +4,7 @@ import { ManaCost } from "../ManaPips";
 import { SectionLabel } from "../SectionLabel";
 import { SlotPip, breakdownStripAccent } from "./slotVisuals";
 import { CardImagePreview } from "./CardImagePreview";
-import { SLOTS } from "../../data/p0p1Slots";
+import { slotsForSet } from "../../data/p0p1Slots";
 import type { Card, SlotDefinition, SlotKey } from "../../types/p0p1";
 
 export interface BreakdownRow {
@@ -26,6 +26,7 @@ export function BreakdownList({
   bySlot: Map<SlotKey, BreakdownRow[]>;
   setCode?: string;
 }) {
+  const slots = slotsForSet(setCode ?? "");
   return (
     <div className="flex flex-col gap-1.5 lg:gap-3">
       <div className="relative flex items-center justify-center">
@@ -36,7 +37,7 @@ export function BreakdownList({
       </div>
 
       <div className="hidden lg:grid grid-cols-2 xl:grid-cols-3 gap-3 items-start">
-        {SLOTS.map((slot) => (
+        {slots.map((slot) => (
           <BreakdownPanel
             key={slot.key}
             slot={slot}
@@ -47,7 +48,7 @@ export function BreakdownList({
       </div>
 
       <div className="lg:hidden flex flex-col gap-2">
-        {SLOTS.map((slot) => (
+        {slots.map((slot) => (
           <BreakdownPanel
             key={slot.key}
             slot={slot}

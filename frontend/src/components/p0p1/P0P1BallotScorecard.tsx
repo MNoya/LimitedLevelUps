@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { HelpCircle } from "lucide-react";
 import { Tooltip } from "../Tooltip";
 import { groupBySlot, findExtremes, classifyYourPick } from "../../data/p0p1Stats";
-import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
+import { slotsForSet } from "../../data/p0p1Slots";
 import {
   buildRatingsByName,
   bestPossibleTeam,
@@ -38,11 +38,13 @@ const CAT_COLOR: Record<PickState, string> = {
 export function P0P1BallotScorecard({
   pickStats,
   picksBySlot,
+  setCode,
 }: {
   pickStats: P0P1PickStat[];
   picksBySlot: Map<string, string>;
+  setCode: string;
 }) {
-  const picks = ballotPicks(pickStats, picksBySlot);
+  const picks = ballotPicks(pickStats, picksBySlot, setCode);
   if (picks.length === 0) {
     return null;
   }
@@ -89,14 +91,14 @@ export function P0P1BallotScorecard({
   );
 }
 
-export function BallotScorecardSkeleton() {
+export function BallotScorecardSkeleton({ setCode = "" }: { setCode?: string }) {
   return (
     <div className="inline-block" style={{ clipPath: CHAMFER, background: "#3b4458", padding: 1 }}>
       <div className="bg-surface2 w-[clamp(280px,22vw,340px)] px-5 py-2.5 flex flex-col gap-2" style={{ clipPath: CHAMFER }}>
         <div className="h-[15px] w-28 bg-surface animate-pulse" />
         <div className="h-6 w-40 bg-surface animate-pulse" />
         <div className="flex gap-1 -ml-[5px]" aria-hidden>
-          {Array.from({ length: SLOTS.length }, (_, i) => (
+          {Array.from({ length: slotsForSet(setCode).length }, (_, i) => (
             <div key={i} className="h-2.5 flex-1 rounded-[1px] bg-surface animate-pulse" />
           ))}
         </div>
@@ -132,10 +134,10 @@ function LegendRow({ color, term, def }: { color: string; term: string; def: Rea
   );
 }
 
-function ballotPicks(pickStats: P0P1PickStat[], picksBySlot: Map<string, string>): ScoredPick[] {
+function ballotPicks(pickStats: P0P1PickStat[], picksBySlot: Map<string, string>, setCode: string): ScoredPick[] {
   const grouped = groupBySlot(pickStats);
   const picks: ScoredPick[] = [];
-  for (const slot of SLOTS) {
+  for (const slot of slotsForSet(setCode)) {
     const cardName = picksBySlot.get(slot.key);
     if (!cardName) {
       continue;
@@ -188,20 +190,20 @@ export function MidwayBallotScorecard({
   cards: Card[];
   picksBySlot: Map<string, string>;
 }) {
+  const contestSlots = slotsForSet(ratingsSnapshot.setCode);
   const aligned = useMemo(() => {
-    const slots = buildSlots(P0P1_CONTESTS[ratingsSnapshot.setCode]);
     const ratingsByName = buildRatingsByName(ratingsSnapshot);
-    const bestBySlot = slotTopCards(cards, slots, ratingsByName);
+    const bestBySlot = slotTopCards(cards, contestSlots, ratingsByName);
     let count = 0;
-    for (const slot of slots) {
+    for (const slot of contestSlots) {
       const your = picksBySlot.get(slot.key);
       const bestCard = bestBySlot.get(slot.key as SlotKey);
       if (your && bestCard && your === bestCard) count++;
     }
     return count;
-  }, [ratingsSnapshot, cards, picksBySlot]);
+  }, [ratingsSnapshot, cards, picksBySlot, contestSlots]);
 
-  const segments = Array.from({ length: SLOTS.length }, (_, i) => i < aligned);
+  const segments = Array.from({ length: contestSlots.length }, (_, i) => i < aligned);
 
   return (
     <div className="inline-block animate-fadeUpIn" style={{ clipPath: CHAMFER, background: "#3b4458", padding: 1 }}>
@@ -261,7 +263,7 @@ export function FinalBallotScorecard({
 }) {
   const selfPlacement = useP0P1DevSelfPlacement();
   const result = useMemo(() => {
-    const slots = buildSlots(P0P1_CONTESTS[ratingsSnapshot.setCode]);
+    const slots = slotsForSet(ratingsSnapshot.setCode);
     const ratingsByName = buildRatingsByName(ratingsSnapshot);
     const bestTeam = bestPossibleTeam(cards, slots, ratingsByName);
     const rankedBallots = applyDevSelfPlacement(

@@ -5,9 +5,9 @@ Usage:
 
 Safe to run repeatedly at any point in spoiler season; it works out what the set needs.
 
-Writes cards-{code_lower}.ts with common + uncommon cards, excluding rares/mythics, bonus-sheet
-and Special Guest printings. All Scryfall layouts are handled (normal, adventure, saga, transform,
-modal_dfc, split, prepare, class, case).
+Writes cards-{code_lower}.ts with every common, uncommon, rare and mythic, excluding bonus-sheet
+and Special Guest printings. The rares and mythics feed the Best Card slot. All Scryfall layouts
+are handled (normal, adventure, saga, transform, modal_dfc, split, prepare, class, case).
 
 Then decides the contest window in the shared p0p1_contests.json at the repo root, the one file the
 frontend imports and a future bot task can read:
@@ -25,9 +25,9 @@ results) defaults to release + 28 days, independent of the deadline, so an early
 shorten the 17lands data window. Bare dates mean noon ET, matching the release clock in
 ``bot/sets.py``.
 
-``--hybrid-common-slots`` / ``--no-hybrid-common-slots`` lets hybrid cards fill the mono-color
-common slots. Defaults to on for a new contest; an existing contest keeps whatever it already has
-unless the flag is passed explicitly.
+A new contest is written at the current ballot layout, version 2: five color commons, five color
+uncommons, one multicolor uncommon and one Best Card rare/mythic. An existing contest keeps its
+own ``layout``.
 """
 from __future__ import annotations
 
@@ -103,6 +103,9 @@ def extract_card(raw: dict) -> dict:
     }
 
 
+COLORS = ("W", "U", "B", "R", "G")
+LAYOUT_VERSION = 2
+
 _HYBRID_RE = re.compile(r"\{([WUBRG])/([WUBRG])\}")
 
 
@@ -110,37 +113,38 @@ def _is_hybrid_of(mana_cost: str, color: str) -> bool:
     return any(color in (m.group(1), m.group(2)) for m in _HYBRID_RE.finditer(mana_cost))
 
 
-def _color_common_count(playable: list[dict], color: str, *, hybrid: bool) -> int:
+def _color_count(playable: list[dict], color: str, rarity: str) -> int:
     return sum(
         1
         for c in playable
-        if c["rarity"] == "common"
-        and (c["colors"] == [color] or (hybrid and _is_hybrid_of(c.get("manaCost", ""), color)))
+        if c["rarity"] == rarity
+        and (c["colors"] == [color] or _is_hybrid_of(c.get("manaCost", ""), color))
     )
 
 
-def report_pool_coverage(cards: list[dict], *, hybrid_common_slots: bool = False) -> list[str]:
-    """Print what the 8 slots have to draw from and return the shortfalls. Mid-spoiler a set is
-    mostly uncommons, which leaves the mono-color common slots unfillable — the pool has to be
-    complete before voting opens, so say so here instead of on the live ballot."""
+def report_pool_coverage(cards: list[dict]) -> list[str]:
+    """Print what the 12 slots have to draw from and return the shortfalls. Mid-spoiler a set is
+    missing whole slots, so the pool has to be complete before voting opens; say so here instead of
+    on the live ballot. Color slots count mono-color and hybrid-of-color at their rarity."""
     playable = [c for c in cards if not c["typeLine"].startswith("Basic Land")]
     shortfalls: list[str] = []
 
     print("Slot coverage:")
-    for color in ("W", "U", "B", "R", "G"):
-        count = _color_common_count(playable, color, hybrid=hybrid_common_slots)
-        print(f"  {color} common          {count:4}")
-        if count == 0:
-            shortfalls.append(f"no {color} commons")
+    for rarity in ("common", "uncommon"):
+        for color in COLORS:
+            count = _color_count(playable, color, rarity)
+            print(f"  {color} {rarity:8}      {count:4}")
+            if count == 0:
+                shortfalls.append(f"no {color} {rarity}s")
 
     multicolor = sum(1 for c in playable if c["rarity"] == "uncommon" and len(c["colors"]) >= 2)
-    uncommons = sum(1 for c in playable if c["rarity"] == "uncommon")
-    commons = sum(1 for c in playable if c["rarity"] == "common")
-    print(f"  multicolor uncommon {multicolor:4}")
-    print(f"  any common          {commons:4}")
-    print(f"  any uncommon        {uncommons:4}")
+    best_card = sum(1 for c in playable if c["rarity"] in ("rare", "mythic"))
+    print(f"  multicolor uncommon  {multicolor:4}")
+    print(f"  best card rare/myth  {best_card:4}")
     if multicolor == 0:
         shortfalls.append("no multicolor uncommons")
+    if best_card == 0:
+        shortfalls.append("no rares or mythics")
     return shortfalls
 
 
@@ -170,23 +174,22 @@ def read_contests() -> dict[str, dict[str, str]]:
     return json.loads(CONTESTS_JSON.read_text())
 
 
-def resolve_hybrid_common_slots(explicit: bool | None, existing: dict | None) -> bool:
-    """Match buildSlots' falsy read of a missing key: only a brand-new contest defaults to on."""
-    if explicit is not None:
-        return explicit
+def resolve_layout(existing: dict | None) -> int:
+    """A new contest is written at the current layout; an existing one keeps its own. A missing key
+    is layout 1, matching the frontend default for the contests that predate the field."""
     if existing is not None:
-        return existing.get("hybridCommonSlots", False)
-    return True
+        return existing.get("layout", 1)
+    return LAYOUT_VERSION
 
 
 def write_contest(
-    seed: SetSeed, opens: str, deadline: str | None, results: str, hybrid_common_slots: bool
+    seed: SetSeed, opens: str, deadline: str | None, results: str, layout: int
 ) -> None:
     """Upsert this set's window, leaving every other contest byte-identical. Newest release first so
     the live contest is the first thing a maintainer sees when opening the file.
 
-    Every conditional field like ``hybridCommonSlots`` must be written here, explicitly, on every
-    call — this rebuilds the entry from scratch, so anything not passed through is dropped."""
+    Every conditional field like ``layout`` must be written here, explicitly, on every call — this
+    rebuilds the entry from scratch, so anything not passed through is dropped."""
     contests = read_contests()
     entry = {
         "name": seed.name,
@@ -196,7 +199,7 @@ def write_contest(
     if deadline is not None:
         entry["votingDeadline"] = deadline
     entry["scoringDate"] = results
-    entry["hybridCommonSlots"] = hybrid_common_slots
+    entry["layout"] = layout
     contests[seed.code] = entry
 
     ordered = dict(sorted(contests.items(), key=lambda kv: kv[1]["release"], reverse=True))
@@ -220,13 +223,6 @@ def main() -> None:
         help="When results land: YYYY-MM-DD (noon ET) or a full ISO timestamp. "
         "Defaults to release + 28 days, independent of --deadline",
     )
-    parser.add_argument(
-        "--hybrid-common-slots",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Let hybrid cards fill the mono-color common slots. On by default for a new contest; "
-        "an existing contest keeps whatever it already has",
-    )
     args = parser.parse_args()
 
     set_code = args.set_code.upper()
@@ -239,7 +235,7 @@ def main() -> None:
     if scryfall_code != set_code.lower():
         print(f"  WARNING: Scryfall code '{scryfall_code}' may differ from 17lands expansion code")
 
-    query = f"set:{scryfall_code} (r:common OR r:uncommon) -is:bonus -is:extra"
+    query = f"set:{scryfall_code} -is:bonus -is:extra"
     print(f"Querying Scryfall: {query}")
     raw_cards = scryfall_search(query)
     print(f"Received {len(raw_cards)} cards from Scryfall")
@@ -254,7 +250,8 @@ def main() -> None:
 
     commons = sum(1 for c in cards if c["rarity"] == "common")
     uncommons = sum(1 for c in cards if c["rarity"] == "uncommon")
-    print(f"Extracted {len(cards)} cards: {commons} common, {uncommons} uncommon")
+    rares = sum(1 for c in cards if c["rarity"] in ("rare", "mythic"))
+    print(f"Extracted {len(cards)} cards: {commons} common, {uncommons} uncommon, {rares} rare/mythic")
     if any(name != "normal" for name in layout_counts):
         for layout, count in sorted(layout_counts.items()):
             if layout != "normal":
@@ -271,8 +268,8 @@ def main() -> None:
     print(f"Wrote {len(cards)} cards → {output}")
 
     existing = read_contests().get(set_code)
-    hybrid = resolve_hybrid_common_slots(args.hybrid_common_slots, existing)
-    shortfalls = report_pool_coverage(cards, hybrid_common_slots=hybrid)
+    layout = resolve_layout(existing)
+    shortfalls = report_pool_coverage(cards)
 
     if shortfalls:
         print(f"POOL INCOMPLETE: {', '.join(shortfalls)}. Those slots have nothing to pick from.")
@@ -289,7 +286,7 @@ def main() -> None:
         results = contest_instant(args.results) if args.results else (
             (existing.get("scoringDate") if existing else None) or default_results
         )
-        write_contest(matched, opens, deadline, results, hybrid)
+        write_contest(matched, opens, deadline, results, layout)
         print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: opens {opens}, "
               f"closes {deadline or 'at release'}, results {results}")
     elif existing:
@@ -299,7 +296,7 @@ def main() -> None:
               f"Re-run this when the Scryfall gallery is complete.")
     else:
         opens = now_instant()
-        write_contest(matched, opens, None, default_results, hybrid)
+        write_contest(matched, opens, None, default_results, layout)
         print(f"Scheduled {set_code} in {CONTESTS_JSON.name}: voting opens at {opens}, "
               f"so it goes live as soon as this ships. Results {default_results}")
 

@@ -147,9 +147,11 @@ function isBasicLand(card: Card) {
   return card.typeLine.startsWith("Basic Land");
 }
 
-function monoColor(color: string) {
+type Rarity = Card["rarity"];
+
+function monoColor(color: string, rarity: Rarity) {
   return (card: Card, picked: Set<string>) =>
-    card.rarity === "common" &&
+    card.rarity === rarity &&
     card.colors.length === 1 &&
     card.colors[0] === color &&
     !picked.has(card.name);
@@ -164,9 +166,9 @@ function isHybridOf(manaCost: string, color: string): boolean {
   return false;
 }
 
-function monoOrHybridColor(color: string) {
+function monoOrHybridColor(color: string, rarity: Rarity) {
   return (card: Card, picked: Set<string>) =>
-    card.rarity === "common" &&
+    card.rarity === rarity &&
     !picked.has(card.name) &&
     ((card.colors.length === 1 && card.colors[0] === color) ||
       isHybridOf(card.manaCost, color));
@@ -175,35 +177,71 @@ function monoOrHybridColor(color: string) {
 const COLORS = ["W", "U", "B", "R", "G"] as const;
 const COLOR_LABELS: Record<string, string> = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
 
-export function buildSlots(config?: ContestConfig): SlotDefinition[] {
-  const colorFilter = config?.hybridCommonSlots ? monoOrHybridColor : monoColor;
+function multicolorUncommonSlot(label = "Multicolor Uncommon"): SlotDefinition {
+  return {
+    key: "multicolor_uncommon",
+    label,
+    filter: (card, picked) => card.rarity === "uncommon" && card.colors.length >= 2 && !picked.has(card.name),
+  };
+}
+
+// Layout 1: five mono-color commons, the multicolor uncommon, then any-common and any-uncommon
+// wildcards. Frozen for every contest before FRA.
+function buildSlotsV1(): SlotDefinition[] {
   return [
     ...COLORS.map((c) => ({
       key: `${COLOR_LABELS[c].toLowerCase()}_common` as SlotKey,
       label: `${COLOR_LABELS[c]} Common`,
-      filter: colorFilter(c),
+      filter: monoColor(c, "common"),
     })),
-    {
-      key: "multicolor_uncommon",
-      label: "Multicolor Uncommon",
-      filter: (card: Card, picked: Set<string>) =>
-        card.rarity === "uncommon" &&
-        card.colors.length >= 2 &&
-        !picked.has(card.name),
-    },
+    multicolorUncommonSlot(),
     {
       key: "wildcard_common",
       label: "Wildcard Common",
-      filter: (card: Card, picked: Set<string>) =>
-        card.rarity === "common" && !isBasicLand(card) && !picked.has(card.name),
+      filter: (card, picked) => card.rarity === "common" && !isBasicLand(card) && !picked.has(card.name),
     },
     {
       key: "wildcard_uncommon",
       label: "Wildcard Uncommon",
-      filter: (card: Card, picked: Set<string>) =>
-        card.rarity === "uncommon" && !picked.has(card.name),
+      filter: (card, picked) => card.rarity === "uncommon" && !picked.has(card.name),
     },
   ];
 }
 
-export const SLOTS: SlotDefinition[] = buildSlots();
+// Layout 2: each color's common then uncommon (hybrids count for their color at both rarities), the
+// Gold signpost uncommon, and a Best Card rare/mythic. FRA onward. WWUUBBRRGG keeps a color's two
+// slots adjacent in the one-row ballot.
+function buildSlotsV2(): SlotDefinition[] {
+  const colorSlots = COLORS.flatMap((c) => [
+    {
+      key: `${COLOR_LABELS[c].toLowerCase()}_common` as SlotKey,
+      label: `${COLOR_LABELS[c]} Common`,
+      filter: monoOrHybridColor(c, "common"),
+    },
+    {
+      key: `${COLOR_LABELS[c].toLowerCase()}_uncommon` as SlotKey,
+      label: `${COLOR_LABELS[c]} Uncommon`,
+      filter: monoOrHybridColor(c, "uncommon"),
+    },
+  ]);
+  return [
+    ...colorSlots,
+    multicolorUncommonSlot("Gold Uncommon"),
+    {
+      key: "best_card",
+      label: "Best Card",
+      filter: (card, picked) =>
+        (card.rarity === "rare" || card.rarity === "mythic") && !picked.has(card.name),
+    },
+  ];
+}
+
+export function buildSlots(config?: ContestConfig): SlotDefinition[] {
+  return (config?.layout ?? 1) >= 2 ? buildSlotsV2() : buildSlotsV1();
+}
+
+// The slot list for a contest addressed by set code, the per-contest replacement for a global
+// SLOTS constant now that layouts differ across contests.
+export function slotsForSet(setCode: string): SlotDefinition[] {
+  return buildSlots(P0P1_CONTESTS[setCode.toUpperCase()]);
+}

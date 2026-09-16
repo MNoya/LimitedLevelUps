@@ -3,7 +3,7 @@ export interface Card {
   manaCost: string;
   cmc: number;
   colors: string[];
-  rarity: "common" | "uncommon" | "rare";
+  rarity: "common" | "uncommon" | "rare" | "mythic";
   typeLine: string;
   collectorNumber: string;
   imageSmall: string;
@@ -26,17 +26,25 @@ export interface ContestConfig {
   previewsOpen: string;
   votingDeadline?: string;
   scoringDate?: string;
-  hybridCommonSlots?: boolean;
+  layout?: number;
   comingSoon?: boolean;
 }
 
+// The union of both ballot layouts. Layout 1 renders the wildcard slots; layout 2 renders the
+// per-color uncommons and best_card. buildSlots(config) returns the right subset per contest.
 export type SlotKey =
   | "white_common"
   | "blue_common"
   | "black_common"
   | "red_common"
   | "green_common"
+  | "white_uncommon"
+  | "blue_uncommon"
+  | "black_uncommon"
+  | "red_uncommon"
+  | "green_uncommon"
   | "multicolor_uncommon"
+  | "best_card"
   | "wildcard_common"
   | "wildcard_uncommon";
 

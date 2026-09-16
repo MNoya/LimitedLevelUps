@@ -5,7 +5,7 @@
     "previewsOpen": "2026-07-31T16:00:00Z",
     "votingDeadline": "2026-08-05T16:00:00Z",
     "scoringDate": "2026-09-02T16:00:00Z",
-    "hybridCommonSlots": false
+    "layout": 1
   },
   "MSH": {
     "name": "Marvel Super Heroes",
@@ -13,7 +13,7 @@
     "previewsOpen": "2026-06-09T00:00:00Z",
     "votingDeadline": "2026-06-23T15:00:00Z",
     "scoringDate": "2026-07-21T16:00:00Z",
-    "hybridCommonSlots": false
+    "layout": 1
   },
   "FRA": {
     "name": "Reality Fracture",
@@ -21,7 +21,7 @@
     "previewsOpen": "2026-09-18T16:00:00Z",
     "votingDeadline": "2026-09-23T16:00:00Z",
     "scoringDate": "2026-10-21T16:00:00Z",
-    "hybridCommonSlots": false,
+    "layout": 2,
     "comingSoon": true
   }
 }

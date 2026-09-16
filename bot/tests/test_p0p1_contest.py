@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 
-from bot.scripts.fetch_p0p1_cards import resolve_hybrid_common_slots
+from bot.scripts.fetch_p0p1_cards import LAYOUT_VERSION, resolve_layout
 from bot.services.p0p1_contest import SCORING_WINDOW, all_contests
 
 
@@ -43,15 +43,7 @@ def test_an_explicit_scoring_date_is_honored_over_the_release_default(tmp_path, 
     assert contest.scoring_date == datetime(2026, 9, 2, 16, tzinfo=timezone.utc)
 
 
-def test_resolve_hybrid_common_slots():
-    existing_off = {"hybridCommonSlots": False}
-    existing_missing_key = {"name": "The Hobbit"}
-
-    # A reschedule with no explicit flag preserves what the existing entry already has.
-    assert resolve_hybrid_common_slots(None, existing_off) is False
-    # An existing entry that predates the field reads as off, matching buildSlots' falsy default.
-    assert resolve_hybrid_common_slots(None, existing_missing_key) is False
-    # No existing entry at all: brand-new contest, documented default is on.
-    assert resolve_hybrid_common_slots(None, None) is True
-    # An explicit flag always wins, regardless of what's on disk.
-    assert resolve_hybrid_common_slots(True, existing_off) is True
+def test_resolve_layout():
+    assert resolve_layout(None) == LAYOUT_VERSION
+    assert resolve_layout({"layout": 2}) == 2
+    assert resolve_layout({"name": "The Hobbit"}) == 1

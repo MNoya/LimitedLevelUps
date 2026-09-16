@@ -23,7 +23,7 @@ import { FinalResults } from "./FinalResults";
 import type { useP0P1Ballot } from "../../data/useP0P1Ballot";
 import type { P0P1Phase } from "../../data/p0p1Results";
 import type { ContestChipInfo, FeaturedContest } from "../../data/p0p1Slots";
-import { SLOTS } from "../../data/p0p1Slots";
+import { slotsForSet } from "../../data/p0p1Slots";
 import { groupBySlot, findExtremes, classifyYourPick, pickPctLabel } from "../../data/p0p1Stats";
 import { SITE_LINKS } from "../../data/site";
 import { p0p1Now } from "../../data/p0p1DevState";
@@ -69,9 +69,11 @@ export function P0P1MobileSelector({
     phase,
     ratingsSnapshot,
     ballots,
+    contestSlots,
   } = ballot;
 
   const loginBarVisible = !authLoading && !user && phase !== "comingSoon";
+  const mobileChipCols = contestSlots.length > 8 ? "grid-cols-4" : "grid-cols-4 landscape:grid-cols-8";
   const groupedStats = hasParticipated && pickStats ? groupBySlot(pickStats) : undefined;
   const isCompleteEntrant = isPastDeadline && Boolean(user) && isComplete;
   const didNotVote = isPastDeadline && Boolean(user) && !isComplete;
@@ -93,7 +95,7 @@ export function P0P1MobileSelector({
               <div className="mb-1.5">
                 <P0P1ProgressBar
                   filled={scoringFilled}
-                  total={SLOTS.length}
+                  total={contestSlots.length}
                   isComplete={isComplete}
                   doneLabel="PICKS SAVED"
                   doneHint="Edit anytime before deadline"
@@ -102,8 +104,8 @@ export function P0P1MobileSelector({
             )}
             {!isPastDeadline && (
               <div className="sticky top-0 z-20 -mx-3 px-2 pt-3 pb-2 bg-bg/95 backdrop-blur border-b border-border">
-                <div className="grid grid-cols-4 landscape:grid-cols-8 gap-1.5">
-                  {SLOTS.map((slot) => {
+                <div className={`grid ${mobileChipCols} gap-1.5`}>
+                  {contestSlots.map((slot) => {
                     const cardName = picksBySlot.get(slot.key);
                     const slotStats = groupedStats?.get(slot.key);
                     const yourStat = cardName && slotStats ? slotStats.find((s) => s.cardName === cardName) : undefined;
@@ -125,7 +127,7 @@ export function P0P1MobileSelector({
             )}
 
             {phase === "loading" ? (
-              <MobileResultsSkeleton />
+              <MobileResultsSkeleton setCode={featured?.code} />
             ) : showMidway ? (
               resultsDataReady && ratingsSnapshot && cards && pickStats ? (
                 <MidwayResults
@@ -167,7 +169,7 @@ export function P0P1MobileSelector({
                             <SectionLabel size={22} className="text-white">YOUR PICKS</SectionLabel>
                           </div>
                           <PickGrid
-                            entries={SLOTS.map((slot) => {
+                            entries={contestSlots.map((slot) => {
                               const cardName = picksBySlot.get(slot.key);
                               const slotStats = groupedStats?.get(slot.key) ?? [];
                               const yourStat = cardName ? slotStats.find((s) => s.cardName === cardName) : undefined;
@@ -227,8 +229,8 @@ export function P0P1MobileSelector({
         ) : (
           <>
             <div className="h-2 w-full bg-surface2 animate-pulse mb-3 rounded-full" />
-            <div className="grid grid-cols-4 landscape:grid-cols-8 gap-1.5">
-              {Array.from({ length: SLOTS.length }, (_, i) => (
+            <div className={`grid ${mobileChipCols} gap-1.5`}>
+              {Array.from({ length: contestSlots.length }, (_, i) => (
                 <div key={i} className="aspect-[5/4] landscape:aspect-auto landscape:h-14 bg-surface2 animate-pulse border border-border2" />
               ))}
             </div>
@@ -404,7 +406,7 @@ function MobileIntro({
       </div>
       {open && (
         <p className="text-subtle text-[13.5px] leading-[1.5]">
-          <P0P1IntroText phase={phase} dateRange={dateRange} setName={featured?.name ?? ""} />
+          <P0P1IntroText phase={phase} dateRange={dateRange} setName={featured?.name ?? ""} setCode={featured?.code ?? ""} />
         </p>
       )}
     </section>
@@ -414,10 +416,10 @@ function MobileIntro({
 const SKEL_LABEL_W = [90, 75, 85, 65, 80, 120, 100, 110, 130];
 const SKEL_NAME_W = [120, 100, 110, 95, 105, 130, 115, 125, 140];
 
-export function SlotsListSkeleton() {
+export function SlotsListSkeleton({ setCode = "" }: { setCode?: string }) {
   return (
     <div className="flex flex-col gap-1.5">
-      {Array.from({ length: SLOTS.length }, (_, i) => (
+      {Array.from({ length: slotsForSet(setCode).length }, (_, i) => (
         <div key={i} className="w-full flex items-center gap-4 px-4 py-3 bg-surface border border-border2">
           <div className="w-20 h-12 bg-surface2 animate-pulse shrink-0" />
           <div className="flex-1 flex flex-col gap-1.5">
@@ -430,14 +432,14 @@ export function SlotsListSkeleton() {
   );
 }
 
-function MobileResultsSkeleton() {
+function MobileResultsSkeleton({ setCode = "" }: { setCode?: string }) {
   return (
     <div className="flex flex-col gap-3 mt-3">
       <div className="flex flex-col items-center gap-2">
         <div className="h-4 w-40 bg-surface2 animate-pulse" />
         <div className="h-3 w-56 bg-surface2 animate-pulse" />
       </div>
-      <SlotsListSkeleton />
+      <SlotsListSkeleton setCode={setCode} />
     </div>
   );
 }

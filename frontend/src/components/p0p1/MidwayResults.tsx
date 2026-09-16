@@ -5,7 +5,7 @@ import { cn } from "../../lib/utils";
 import { PickGrid } from "./CommunityGrid";
 import { MidwayBreakdownList } from "./MidwayBreakdownList";
 import { useMidwayVersusPager, MidwayVersusModal } from "./MidwayVersusCard";
-import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
+import { slotsForSet } from "../../data/p0p1Slots";
 import {
   buildRatingsByName,
   scoreBallot,
@@ -27,7 +27,7 @@ function gihwrLabel(gihwr: number): string {
 
 function teamToEntries(picks: TeamPick[], setCode: string): PickEntry[] {
   const bySlot = new Map(picks.map((p) => [p.slot, p]));
-  return SLOTS.map((slot) => {
+  return slotsForSet(setCode).map((slot) => {
     const pick = bySlot.get(slot.key);
     if (!pick?.cardName) return { slotKey: slot.key, label: slot.label, stats: [] };
     return {
@@ -44,7 +44,7 @@ function yourPicksEntries(
   setCode: string,
   ratingsByName: Map<string, CardRating>,
 ): PickEntry[] {
-  return SLOTS.map((slot) => {
+  return slotsForSet(setCode).map((slot) => {
     const cardName = picksBySlot.get(slot.key);
     if (!cardName) return { slotKey: slot.key, label: slot.label, stats: [] };
     const rating = ratingsByName.get(cardName);
@@ -77,7 +77,7 @@ export function MidwayResults({
   hasParticipated: boolean;
 }) {
   const { setCode } = ratingsSnapshot;
-  const contestSlots = useMemo(() => buildSlots(P0P1_CONTESTS[setCode]), [setCode]);
+  const contestSlots = useMemo(() => slotsForSet(setCode), [setCode]);
   const ratingsByName = useMemo(() => buildRatingsByName(ratingsSnapshot), [ratingsSnapshot]);
   const bounds = useMemo(() => gihwrBounds(pickStats, ratingsByName), [pickStats, ratingsByName]);
   const crowdTeam = useMemo(
@@ -110,7 +110,7 @@ export function MidwayResults({
   const pager = useMidwayVersusPager(versusList);
 
   const onSlotOpen = (slotKey: SlotKey) => {
-    const idx = SLOTS.findIndex((s) => s.key === slotKey);
+    const idx = contestSlots.findIndex((s) => s.key === slotKey);
     if (idx !== -1) pager.open(idx);
   };
 

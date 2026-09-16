@@ -7,7 +7,7 @@ import { CardImagePreview } from "./CardImagePreview";
 import { usePreloaded } from "../../lib/imageReveal";
 import { breakdownStripAccent } from "./slotVisuals";
 import { CHAMFER, MEDAL_COLOR } from "./P0P1BallotScorecard";
-import { SLOTS, buildSlots, P0P1_CONTESTS } from "../../data/p0p1Slots";
+import { slotsForSet } from "../../data/p0p1Slots";
 import {
   buildRatingsByName,
   bestPossibleTeam,
@@ -89,7 +89,7 @@ function BallotAvatar({
 
 function teamToEntries(picks: TeamPick[], setCode: string): PickEntry[] {
   const bySlot = new Map(picks.map((p) => [p.slot, p]));
-  return SLOTS.map((slot) => {
+  return slotsForSet(setCode).map((slot) => {
     const pick = bySlot.get(slot.key);
     if (!pick?.cardName) return { slotKey: slot.key, label: slot.label, stats: [] };
     return {
@@ -102,7 +102,7 @@ function teamToEntries(picks: TeamPick[], setCode: string): PickEntry[] {
 }
 
 function ballotToEntries(ballot: RankedBallot, setCode: string, ratingsByName: Map<string, CardRating>): PickEntry[] {
-  return SLOTS.map((slot) => {
+  return slotsForSet(setCode).map((slot) => {
     const cardName = ballot.picks.get(slot.key);
     if (!cardName) return { slotKey: slot.key, label: slot.label, stats: [] };
     const rating = ratingsByName.get(cardName);
@@ -130,10 +130,11 @@ interface SlotContrib {
 
 function ballotContributions(
   ballot: RankedBallot,
+  setCode: string,
   ratingsByName: Map<string, CardRating>,
   cardsByName: Map<string, Card>,
 ): SlotContrib[] {
-  return SLOTS.map((slot) => {
+  return slotsForSet(setCode).map((slot) => {
     const cardName = ballot.picks.get(slot.key) ?? null;
     const card = cardName ? cardsByName.get(cardName) : undefined;
     const rating = cardName ? ratingsByName.get(cardName) : undefined;
@@ -173,12 +174,14 @@ function SegTooltipContent({ seg }: { seg: SlotContrib }) {
 
 function ContributionBar({
   ballot,
+  setCode,
   maxScore,
   ratingsByName,
   cardsByName,
   stickyTop = 0,
 }: {
   ballot: RankedBallot;
+  setCode: string;
   maxScore: number;
   ratingsByName: Map<string, CardRating>;
   cardsByName: Map<string, Card>;
@@ -186,8 +189,8 @@ function ContributionBar({
   stickyTop?: number;
 }) {
   const contribs = useMemo(
-    () => ballotContributions(ballot, ratingsByName, cardsByName),
-    [ballot, ratingsByName, cardsByName],
+    () => ballotContributions(ballot, setCode, ratingsByName, cardsByName),
+    [ballot, setCode, ratingsByName, cardsByName],
   );
   const activeContribs = contribs.filter((c) => c.points > 0);
   const fillPct = maxScore > 0 ? (ballot.score / maxScore) * 100 : 0;
@@ -344,6 +347,7 @@ function SyntheticRow({
 
         <ContributionBar
           ballot={ballot}
+          setCode={setCode}
           maxScore={maxScore}
           ratingsByName={ratingsByName}
           cardsByName={cardsByName}
@@ -670,6 +674,7 @@ function MedalRow({
 
         <ContributionBar
           ballot={ballot}
+          setCode={setCode}
           maxScore={maxScore}
           ratingsByName={ratingsByName}
           cardsByName={cardsByName}
@@ -759,6 +764,7 @@ function LeaderboardRow({
         {/* bar lives here in the flex row — self-stretch fills full row height */}
         <ContributionBar
           ballot={ballot}
+          setCode={setCode}
           maxScore={maxScore}
           ratingsByName={ratingsByName}
           cardsByName={cardsByName}
@@ -832,6 +838,7 @@ function FloatingSelfRow({
 
         <ContributionBar
           ballot={ballot}
+          setCode={setCode}
           maxScore={maxScore}
           ratingsByName={ratingsByName}
           cardsByName={cardsByName}
@@ -1301,7 +1308,7 @@ export function FinalResults({
   stickyTop?: number;
 }) {
   const { setCode } = ratingsSnapshot;
-  const contestSlots = useMemo(() => buildSlots(P0P1_CONTESTS[setCode]), [setCode]);
+  const contestSlots = useMemo(() => slotsForSet(setCode), [setCode]);
   const ratingsByName = useMemo(
     () => buildRatingsByName(ratingsSnapshot),
     [ratingsSnapshot],

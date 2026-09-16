@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { Crossfade } from "../components/Crossfade";
@@ -26,7 +27,7 @@ import { P0P1BallotScorecard, MidwayBallotScorecard, FinalBallotScorecard, Ballo
 import { PickGrid } from "../components/p0p1/CommunityGrid";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { useP0P1Ballot } from "../data/useP0P1Ballot";
-import { SLOTS, resolveAllContestChips, resolveFeaturedContest } from "../data/p0p1Slots";
+import { slotsForSet, resolveAllContestChips, resolveFeaturedContest } from "../data/p0p1Slots";
 import { groupBySlot, findExtremes, classifyYourPick } from "../data/p0p1Stats";
 import type { Card, SlotDefinition, SlotKey } from "../types/p0p1";
 import { SITE_LINKS } from "../data/site";
@@ -62,6 +63,7 @@ export function P0P1Page() {
     phase,
     ratingsSnapshot,
     ballots,
+    contestSlots,
   } = ballot;
 
   const { user: authUser } = useAuth();
@@ -88,7 +90,10 @@ export function P0P1Page() {
 
   const isDesktop = !useIsMobile(1024);
   const heroRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const [heroHeight, setHeroHeight] = useState(0);
+  const [rosterExpanded, setRosterExpanded] = useState(false);
+  const [rosterStuck, setRosterStuck] = useState(false);
   useEffect(() => {
     const el = heroRef.current;
     if (!el) return;
@@ -98,6 +103,26 @@ export function P0P1Page() {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setRosterStuck(entry.intersectionRatio < 1),
+      { threshold: [1], rootMargin: `-${Math.round(heroHeight) + 1}px 0px 0px 0px` },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [heroHeight]);
+
+  useEffect(() => {
+    if (!cards) return;
+    const preloaded = cards.map((c) => {
+      const img = new Image();
+      img.src = c.imageArtCrop;
+      return img;
+    });
+    return () => preloaded.forEach((img) => { img.src = ""; });
+  }, [cards]);
 
   if (!featured) return <NotFoundPage />;
   if (featured.status === "pre" && !featured.comingSoon && !canPreviewPre) {
@@ -166,13 +191,13 @@ export function P0P1Page() {
       ) : phase === "midway" && resultsDataReady && ratingsSnapshot && cards ? (
         <MidwayBallotScorecard ratingsSnapshot={ratingsSnapshot} cards={cards} picksBySlot={picksBySlot} />
       ) : (
-        <P0P1BallotScorecard pickStats={pickStats} picksBySlot={picksBySlot} />
+        <P0P1BallotScorecard pickStats={pickStats} picksBySlot={picksBySlot} setCode={featured?.code ?? ""} />
       )
     ) : null;
   const didNotVoteCard = didNotVote ? <DidNotVoteCard /> : null;
   const ctaPending = isPastDeadline && (authLoading || (Boolean(user) && !ballotReady));
   const heroCta = ctaPending ? (
-    <BallotScorecardSkeleton />
+    <BallotScorecardSkeleton setCode={featured?.code ?? ""} />
   ) : (
     loginCta ||
     (user && !isPastDeadline ? <AutoSaveBadge complete={isComplete} /> : null) ||
@@ -181,11 +206,21 @@ export function P0P1Page() {
   );
 
   const belowIntro = isPastDeadline ? null : (
-    <div className="flex items-center gap-3 w-full max-w-[420px]">
+    <div className="relative flex items-center gap-3 w-full max-w-[420px]">
       <SectionLabel size={13}>PICKS</SectionLabel>
       <div className="flex-1">
-        <P0P1ProgressBar filled={scoringFilled} total={SLOTS.length} isComplete={isComplete} />
+        <P0P1ProgressBar filled={scoringFilled} total={contestSlots.length} isComplete={isComplete} />
       </div>
+      {contestSlots.length > 8 && (
+        <button
+          type="button"
+          onClick={() => setRosterExpanded((v) => !v)}
+          className="absolute left-1/2 top-full -translate-x-1/2 z-10 flex items-center gap-1 bg-transparent border-0 p-0 cursor-pointer text-subtle hover:text-green font-display text-[13px] tracking-[0.1em] whitespace-nowrap"
+        >
+          {rosterExpanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
+          {rosterExpanded ? "COLLAPSE" : "EXPAND"}
+        </button>
+      )}
     </div>
   );
 
@@ -194,22 +229,31 @@ export function P0P1Page() {
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
       {featured && <P0P1Hero featured={featured} contests={visibleContests} onContestChange={handleContestChange} innerRef={heroRef} cta={heroCta} belowIntro={belowIntro} phase={phase} dateRange={ratingsSnapshot?.dateRange} isCurrent={isCurrentContest} />}
 
-      <main className="flex-1 px-10 pb-5 pt-5">
+      <main className="flex-1 px-5 pt-5">
         {!isPastDeadline &&
           (dataReady ? (
-            <RosterStrip
-              activeSlotKey={activeSlotKey}
-              picksBySlot={picksBySlot}
-              cardsByName={cardsByName}
-              setCode={featured?.code}
-              onSelect={(key) => setEditingSlotKey(key)}
-            />
+            <div
+              ref={stripRef}
+              className={`-mx-5 px-5 mb-3 bg-bg/95 border-b border-border ${
+                rosterExpanded ? "relative pb-5" : `sticky z-20 ${rosterStuck ? "pb-2" : "pb-5"} backdrop-blur`
+              }`}
+              style={rosterExpanded ? undefined : { top: heroHeight }}
+            >
+              <RosterStrip
+                expanded={rosterExpanded}
+                activeSlotKey={activeSlotKey}
+                picksBySlot={picksBySlot}
+                cardsByName={cardsByName}
+                setCode={featured?.code}
+                onSelect={(key) => setEditingSlotKey(key)}
+              />
+            </div>
           ) : (
-            <RosterStripSkeleton />
+            <RosterStripSkeleton setCode={featured?.code} />
           ))}
 
         {phase === "loading" ? (
-          <ResultsSkeleton />
+          <ResultsSkeleton setCode={featured?.code} />
         ) : showMidway ? (
           resultsDataReady && ratingsSnapshot && cards && pickStats ? (
             <MidwayResults
@@ -222,7 +266,7 @@ export function P0P1Page() {
               hasParticipated={hasParticipated}
             />
           ) : (
-            <ResultsSkeleton />
+            <ResultsSkeleton setCode={featured?.code} />
           )
         ) : phase === "final" ? (
           resultsDataReady && ratingsSnapshot && cards && pickStats && ballots ? (
@@ -238,7 +282,7 @@ export function P0P1Page() {
               stickyTop={heroHeight}
             />
           ) : (
-            <ResultsSkeleton />
+            <ResultsSkeleton setCode={featured?.code} />
           )
         ) : phase === "postVoting" ? (
           pickStats && pickStats.length > 0 && (
@@ -257,7 +301,7 @@ export function P0P1Page() {
                       cardsByName={cardsByName}
                       picksBySlot={picksBySlot}
                       setCode={featured?.code}
-                      entries={SLOTS.map((slot) => {
+                      entries={contestSlots.map((slot) => {
                         const cardName = picksBySlot.get(slot.key);
                         const slotStats = groupedStats?.get(slot.key) ?? [];
                         const yourStat = cardName ? slotStats.find((s) => s.cardName === cardName) : undefined;
@@ -343,17 +387,23 @@ function RosterStrip({
   picksBySlot,
   cardsByName,
   setCode,
+  expanded,
   onSelect,
 }: {
   activeSlotKey: SlotKey;
   picksBySlot: Map<string, string>;
   cardsByName: Map<string, Card>;
   setCode?: string;
+  expanded: boolean;
   onSelect: (key: SlotKey) => void;
 }) {
+  const slots = slotsForSet(setCode ?? "");
+  const wide = slots.length > 8;
+  const compact = wide && !expanded;
+  const cols = !wide ? "grid-cols-8" : expanded ? "grid-cols-6" : "grid-cols-12";
   return (
-    <div className="grid grid-cols-8 gap-2">
-      {SLOTS.map((slot) => {
+    <div className={`grid ${cols} gap-2`}>
+      {slots.map((slot) => {
         const cardName = picksBySlot.get(slot.key);
         return (
           <RosterTile
@@ -362,6 +412,7 @@ function RosterStrip({
             card={cardName ? cardsByName.get(cardName) : undefined}
             active={activeSlotKey === slot.key}
             setCode={setCode}
+            compact={compact}
             onClick={() => onSelect(slot.key)}
           />
         );
@@ -375,15 +426,20 @@ function RosterTile({
   card,
   active,
   setCode,
+  compact = false,
   onClick,
 }: {
   slot: SlotDefinition;
   card: Card | undefined;
   active: boolean;
   setCode?: string;
+  compact?: boolean;
   onClick: () => void;
 }) {
   const accent = SLOT_ACCENT[slot.key];
+  const tileLabel = slot.label.toUpperCase();
+  const pipCount = card ? (card.manaCost.match(/\{/g) ?? []).length : 0;
+  const manaSize = pipCount >= 5 ? 8 : pipCount === 4 ? 9 : pipCount === 3 ? 10 : 11;
   return (
     <button
       type="button"
@@ -400,24 +456,33 @@ function RosterTile({
         {card ? (
           <img src={card.imageArtCrop} alt={card.name} className="w-full h-full object-cover" />
         ) : (
-          <SlotPip slotKey={slot.key} size={48} setCode={setCode} />
+          <>
+            <SlotPip slotKey={slot.key} size={compact ? 34 : 48} setCode={setCode} />
+            {compact && (
+              <span className="absolute inset-x-0 bottom-1.5 px-1 text-muted text-[14px] tracking-[0.08em] font-display text-center leading-tight">
+                {tileLabel}
+              </span>
+            )}
+          </>
         )}
       </div>
-      <div className="px-2 pt-2 pb-1.5 shrink-0">
-        <div className="text-subtle text-[12px] tracking-[0.12em] font-display truncate mb-1">
-          {slot.label.toUpperCase()}
-        </div>
-        {card ? (
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-text text-[14px] truncate min-w-0">{card.name}</span>
-            <span className="ml-auto shrink-0">
-              <ManaCost cost={card.manaCost} size={13} />
-            </span>
+      {!compact && (
+        <div className="px-2 pt-2 pb-1.5 shrink-0">
+          <div className="text-subtle text-[13px] tracking-[0.1em] font-display truncate min-w-0 mb-1">
+            {tileLabel}
           </div>
-        ) : (
-          <span className="italic text-dim text-[13px]">Select a card</span>
-        )}
-      </div>
+          {card ? (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-text text-[14px] truncate min-w-0">{card.name}</span>
+              <span className="ml-auto shrink-0">
+                <ManaCost cost={card.manaCost} size={manaSize} />
+              </span>
+            </div>
+          ) : (
+            <span className="italic text-dim text-[13px]">Select a card</span>
+          )}
+        </div>
+      )}
     </button>
   );
 }
@@ -435,25 +500,27 @@ function SkeletonTile() {
   );
 }
 
-function RosterStripSkeleton() {
+function RosterStripSkeleton({ setCode = "" }: { setCode?: string }) {
+  const slots = slotsForSet(setCode);
   return (
-    <div className="grid grid-cols-8 gap-2">
-      {Array.from({ length: SLOTS.length }, (_, i) => (
+    <div className={`grid ${slots.length > 8 ? "grid-cols-6" : "grid-cols-8"} gap-2`}>
+      {Array.from({ length: slots.length }, (_, i) => (
         <SkeletonTile key={i} />
       ))}
     </div>
   );
 }
 
-function ResultsSkeleton() {
+function ResultsSkeleton({ setCode = "" }: { setCode?: string }) {
+  const slots = slotsForSet(setCode);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col items-center gap-2">
         <div className="h-5 w-52 bg-surface2 animate-pulse" />
         <div className="h-3 w-72 bg-surface2 animate-pulse" />
       </div>
-      <div className="grid grid-cols-8 gap-2">
-        {Array.from({ length: SLOTS.length }, (_, i) => (
+      <div className={`grid ${slots.length > 8 ? "grid-cols-6" : "grid-cols-8"} gap-2`}>
+        {Array.from({ length: slots.length }, (_, i) => (
           <SkeletonTile key={i} />
         ))}
       </div>

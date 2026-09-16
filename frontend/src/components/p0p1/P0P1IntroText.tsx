@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from "react";
-import { SLOTS } from "../../data/p0p1Slots";
+import { slotsForSet } from "../../data/p0p1Slots";
 import type { P0P1Phase } from "../../data/p0p1Results";
 
 const SEVENTEEN_LANDS_URL = "https://www.17lands.com/card_data";
@@ -28,17 +28,19 @@ const dataLink = (
 
 export function P0P1IntroText({
   setName: setNameProp,
+  setCode = "",
   phase,
   dateRange,
   multiline = false,
 }: {
   setName: string;
+  setCode?: string;
   phase: P0P1Phase;
   dateRange?: { start: string; end: string } | null;
   multiline?: boolean;
 }) {
   const setName = <span className="font-semibold text-text">{setNameProp}</span>;
-  const cardCount = spellOut(SLOTS.length);
+  const cardCount = spellOut(slotsForSet(setCode).length);
   const formattedRange = dateRange ? formatDateRange(dateRange.start, dateRange.end) : null;
 
   const sentences: ReactNode[] = buildSentences(phase, setName, cardCount, formattedRange);
@@ -71,7 +73,7 @@ function buildSentences(
     case "voting":
       return [
         <>Put together a team of {cardCount} cards from {setName}</>,
-        <>Four weeks after voting, teams are ranked by their total {winRateLink}</>,
+        <>4 weeks after voting, teams are ranked by their total {winRateLink}</>,
       ];
     case "postVoting":
       return [
