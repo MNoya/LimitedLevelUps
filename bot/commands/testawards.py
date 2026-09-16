@@ -112,7 +112,6 @@ _IMAGE_HOTTEST = f"{_CDN}/1532089472231936020/9a8qlidvl7gh1.png"
 _IMAGE_ACCEPTABLE = f"{_CDN}/1532169425388830800/59dpajjv49gh1.png"
 _IMAGE_JURY = f"{_CDN}/1532089250928136209/n5vdcvv6l7gh1.png"
 _IMAGE_TRASH = f"{_CDN}/1532378613108834314/skgzb0s6bdgh1.png"
-_IMAGE_COMEDY = "https://cdn.discordapp.com/attachments/775822803328040961/1531373624928501810/image.png"
 _IMAGE_FLAVOR_WIN = f"{_CDN}/1531714154849632336/image0.png"
 
 _POST_DEEP_LINK = "https://discord.com/channels/1465844083107827745/1505053484976836720"
@@ -124,7 +123,7 @@ def _awards_fixture(guild: discord.Guild | None) -> AwardsData:
     """Header follows the newest preview window, not `active_set_code()`: previews run weeks before a
     set's Arena release, so the set being spoiled is not yet the active one."""
     window = _latest_preview_window()
-    channels = [c for c in guild.text_channels if "preview-season" in c.name] if guild else []
+    channels = [c for c in guild.text_channels if "preview-season-images" in c.name] if guild else []
     return AwardsData(
         set_code=window.set_code,
         window_label=window_label(window),
@@ -140,11 +139,6 @@ def _awards_fixture(guild: discord.Guild | None) -> AwardsData:
         ),
         trash=AwardWinner(
             _POST_DEEP_LINK, _IMAGE_TRASH, (("🥀", 22), ("🤔", 2), ("🔥", 1)), caption="Mirkwood Meditator",
-        ),
-        comedy=AwardWinner(
-            _POST_DEEP_LINK, _IMAGE_COMEDY, (("😂", 8),),
-            caption="man even the heron's flavor text is pro-thrush propaganda",
-            author="MemeSmith",
         ),
         flavor=AwardWinner(
             _POST_DEEP_LINK, _IMAGE_FLAVOR_WIN, (("🐻", 25), ("😂", 6), ("😆", 2), ("🔥", 2)),

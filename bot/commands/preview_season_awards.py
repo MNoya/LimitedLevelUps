@@ -51,8 +51,6 @@ SUBTEXT_START = f"-# {ZWSP}"
 
 BAR_SLOTS = 10
 CAPTION_MAX_CHARS = 100
-CREDIT_NBSP_PER_CHAR = 2.0
-CREDIT_LINE_CHARS = 32
 FOOTER_MAX_EMOJIS = 12
 FOOTER_MIN_EXTRA_COUNT = 12
 REVEAL_DELAY_SECONDS = 5
@@ -80,7 +78,6 @@ class AwardWinner:
     image_url: str
     recounts: tuple[tuple[str, int], ...]
     caption: str | None = None
-    author: str | None = None
 
 
 @dataclass(frozen=True)
@@ -92,14 +89,13 @@ class AwardsData:
     acceptable: AwardWinner | None
     jury: AwardWinner | None
     trash: AwardWinner | None
-    comedy: AwardWinner | None
     flavor: AwardWinner | None
     totals: tuple[tuple[str, int], ...]
     hot_pct: int | None
 
     @property
     def award_count(self) -> int:
-        winners = (self.hottest, self.acceptable, self.jury, self.trash, self.comedy, self.flavor)
+        winners = (self.hottest, self.acceptable, self.jury, self.trash, self.flavor)
         return sum(winner is not None for winner in winners)
 
 
@@ -108,7 +104,6 @@ class ScoredPost:
     jump_url: str
     image_url: str
     content: str
-    author: str
     created_at: datetime
     reactions: dict[str, int]
 
@@ -131,7 +126,6 @@ def build_awards_view(data: AwardsData, reveal: int | None = None, scanned_pct: 
         ("### 👍 Voted Most Acceptable", "Playable", data.acceptable),
         ("### 🤔 The Jury is Still Out", "Ask Again in Two Weeks", data.jury),
         ("### 🗑️ Last-Pick Material", "Leave in the Sideboard", data.trash),
-        ("### 😂 Comedy Gold", "No Notes", data.comedy),
         ("### ⭐ Flavor Win", "The Eyes Have It", data.flavor),
     )
     awarded_rows = [(heading, tagline, winner) for heading, tagline, winner in rows if winner is not None]
@@ -142,7 +136,7 @@ def build_awards_view(data: AwardsData, reveal: int | None = None, scanned_pct: 
     else:
         shown_rows = awarded_rows[:reveal]
     for i, (heading, tagline, winner) in enumerate(shown_rows):
-        award_text = _award_text(heading, tagline, winner, caption_replaces=winner is data.comedy)
+        award_text = _award_text(heading, tagline, winner)
         container.add_item(ui.Section(
             ui.TextDisplay(award_text),
             accessory=ui.Thumbnail(media=winner.image_url, spoiler=True),
@@ -188,29 +182,14 @@ def _suspense_line(reveal: int, award_total: int) -> str:
     return SUSPENSE_FINAL
 
 
-def _award_text(heading: str, tagline: str, winner: AwardWinner, caption_replaces: bool = False) -> str:
-    if winner.caption and caption_replaces:
-        line = f"[_{winner.caption}_]({winner.jump_url})"
-    elif winner.caption:
+def _award_text(heading: str, tagline: str, winner: AwardWinner) -> str:
+    if winner.caption:
         line = f"_{tagline} -_ [{winner.caption}]({winner.jump_url})"
     else:
         line = f"[{tagline}]({winner.jump_url})"
     recount = (GAP * 2).join(_emoji_count(emoji, count) for emoji, count in winner.recounts)
     subtext = f"{SUBTEXT_START}{GAP}{recount}"
-    if winner.caption and caption_replaces and winner.author:
-        subtext += _credit_suffix(winner.caption, recount, winner.author)
     return f"{heading}\n{GAP}{line}\n{subtext}"
-
-
-def _credit_suffix(caption: str, recount: str, author: str) -> str:
-    """Push the credit toward the end of the quote above, approximately: Discord has no real alignment, so
-    pad with NBSPs by what the recount and the credit did not spend of the caption's width. A caption wider
-    than the line already wrapped, so it counts as no wider: chasing its full width runs the credit off the
-    end and breaks the name in half on a phone, which is where the line runs out first."""
-    credit = f"~{author}"
-    spent = len(recount) + len(credit)
-    pad_chars = round((min(len(caption), CREDIT_LINE_CHARS) - spent) * CREDIT_NBSP_PER_CHAR)
-    return f"{NBSP * max(pad_chars, 0)}{credit}"
 
 
 def _hype_meter_text(hot_pct: int) -> str:
@@ -254,7 +233,7 @@ class PreviewSeasonAwards(commands.Cog):
             return
 
         window = next(w for w in PREVIEW_WINDOWS if w.set_code == set)
-        channels = [c for c in interaction.guild.text_channels if "preview-season" in c.name]
+        channels = [c for c in interaction.guild.text_channels if "preview-season-images" in c.name]
         if not channels:
             await interaction.response.send_message(MSG_NO_CHANNELS, ephemeral=True)
             return
@@ -263,7 +242,7 @@ class PreviewSeasonAwards(commands.Cog):
             set_code=set,
             window_label=window_label(window),
             channel_label=channel_label(channels),
-            hottest=None, acceptable=None, jury=None, trash=None, comedy=None, flavor=None,
+            hottest=None, acceptable=None, jury=None, trash=None, flavor=None,
             totals=(), hot_pct=None,
         )
         await interaction.response.send_message(view=build_awards_view(empty_data, scanned_pct=0))
@@ -329,8 +308,8 @@ def _tally_fields(posts: list[ScoredPost]) -> dict:
 
     pool = list(posts)
 
-    def claim_category(emojis: tuple[str, ...], candidates: list[ScoredPost] | None = None) -> AwardWinner | None:
-        post = _category_best(pool if candidates is None else candidates, emojis)
+    def claim_category(emojis: tuple[str, ...]) -> AwardWinner | None:
+        post = _category_best(pool, emojis)
         if post is None:
             return None
         pool.remove(post)
@@ -340,8 +319,6 @@ def _tally_fields(posts: list[ScoredPost]) -> dict:
     acceptable = claim_category((THUMBS_UP,))
     jury = claim_category((THINKING,))
     trash = claim_category((WASTEBASKET, WILTED_ROSE))
-    comedy_pool = [post for post in pool if not re.search(r"https?://(?:www\.)?(?:x|twitter)\.com/", post.content)]
-    comedy = claim_category((JOY,), candidates=comedy_pool)
 
     flavor = None
     flavor_best = _flavor_best(pool)
@@ -355,7 +332,6 @@ def _tally_fields(posts: list[ScoredPost]) -> dict:
         acceptable=acceptable,
         jury=jury,
         trash=trash,
-        comedy=comedy,
         flavor=flavor,
         totals=_footer_totals(totals, extra_totals, posts_using),
         hot_pct=hot_pct,
@@ -410,7 +386,6 @@ def _winner_from_post(post: ScoredPost, recounts: tuple[tuple[str, int], ...]) -
         image_url=post.image_url,
         recounts=recounts,
         caption=_trim_caption(post.content),
-        author=post.author,
     )
 
 
@@ -467,7 +442,6 @@ async def _collect_posts(
                 jump_url=message.jump_url,
                 image_url=image_url,
                 content=message.content,
-                author=message.author.display_name,
                 created_at=message.created_at,
                 reactions=reactions,
             ))
