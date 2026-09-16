@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "../../lib/utils";
@@ -13,7 +13,7 @@ import { useDraftRates } from "../../data/trackerDrafts";
 import {
   fetchCollection,
   fetchSetEconomy,
-  saveCollectionCount,
+  saveCollectionCounts,
   saveSetEconomy,
   EMPTY_ECONOMY,
   type CollectionCount,
@@ -79,10 +79,11 @@ export function Collection({
   const { data: counts } = useQuery({
     queryKey: ["tracker-collection", setCode],
     queryFn: () => fetchCollection(setCode),
+    staleTime: 60_000,
   });
 
   const lookup = useMemo(() => collectionLookup(counts), [counts]);
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["tracker-collection", setCode] });
+  const { setCount, syncFailed } = useCollectionSync(setCode);
 
   const allCards = useMemo(
     () => [...(lists?.rares ?? []), ...(lists?.mythics ?? [])]
@@ -100,6 +101,12 @@ export function Collection({
     qc.invalidateQueries({ queryKey: ["tracker-economy", setCode] });
   };
   const [preview, setPreview] = useState<{ sources: string[]; anchor: PreviewAnchor } | null>(null);
+  const clearPreview = useCallback(() => setPreview(null), []);
+  const showPreview = useCallback(
+    (el: HTMLElement, card: string) =>
+      setPreview({ sources: cardImageSources(card, setCode, cardImages), anchor: previewAnchorFor(el) }),
+    [setCode, cardImages],
+  );
   const draftRates = useDraftRates(slug, setCode, accountId);
   const [copiesMode, setCopiesMode] = useState<"playset" | "singles">("playset");
   const [shownRarity, setShownRarity] = useState<"rare" | "mythic">("rare");
@@ -142,6 +149,11 @@ export function Collection({
 
   return (
     <div className="p-4">
+      {syncFailed && (
+        <div className="border border-red/40 bg-red/10 text-red text-[13px] px-3 py-1.5 mb-3">
+          Some counts failed to save and reverted to the last saved value
+        </div>
+      )}
       <div className="border border-border bg-surface mb-4">
         <div className="grid gap-[1px] bg-border auto-rows-fr"
              style={{ gridTemplateColumns: "2fr 1fr 2fr 1fr" }}>
@@ -221,11 +233,9 @@ export function Collection({
                           owned={lookup(card)}
                           cost={isMobile ? lists.costs[card] : undefined}
                           touch={isMobile}
-                          onSet={async (n) => { await saveCollectionCount(setCode, card, n); invalidate(); }}
-                          onHover={isMobile ? undefined : (el) =>
-                            setPreview({ sources: cardImageSources(card, setCode, cardImages),
-                                         anchor: previewAnchorFor(el) })}
-                          onLeave={() => setPreview(null)}
+                          onSet={setCount}
+                          onHover={isMobile ? undefined : showPreview}
+                          onLeave={clearPreview}
                         />
                       ))}
                     </div>
@@ -239,6 +249,56 @@ export function Collection({
       {preview && <CardPreview {...preview} />}
     </div>
   );
+}
+
+const COLLECTION_SYNC_DELAY_MS = 700;
+
+// A click updates the cached count immediately and queues a background upsert, so a burst of edits
+// flushes as one batch after the clicks stop
+function useCollectionSync(setCode: string) {
+  const qc = useQueryClient();
+  const pending = useRef(new Map<string, number>());
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [syncFailed, setSyncFailed] = useState(false);
+
+  const flush = useCallback(async () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (pending.current.size === 0) return;
+    const batch = [...pending.current].map(([cardName, owned]) => ({ cardName, owned }));
+    pending.current.clear();
+    try {
+      await saveCollectionCounts(setCode, batch);
+      setSyncFailed(false);
+    } catch {
+      setSyncFailed(true);
+      qc.invalidateQueries({ queryKey: ["tracker-collection", setCode] });
+    }
+  }, [setCode, qc]);
+
+  const setCount = useCallback((card: string, owned: number) => {
+    qc.setQueryData<CollectionCount[]>(["tracker-collection", setCode], (old) => {
+      const next = (old ?? []).filter((c) => c.cardName !== card);
+      next.push({ cardName: card, owned });
+      return next;
+    });
+    pending.current.set(card, owned);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => { void flush(); }, COLLECTION_SYNC_DELAY_MS);
+  }, [setCode, qc, flush]);
+
+  useEffect(() => {
+    const flushOnHide = () => { if (document.hidden) void flush(); };
+    document.addEventListener("visibilitychange", flushOnHide);
+    return () => {
+      document.removeEventListener("visibilitychange", flushOnHide);
+      void flush();
+    };
+  }, [flush]);
+
+  return { setCount, syncFailed };
 }
 
 function CardPreview({ sources, anchor }: { sources: string[]; anchor: PreviewAnchor }) {
@@ -365,7 +425,7 @@ function DerivedCell({ label, value, tooltip }: { label: string; value: number; 
   );
 }
 
-function CardRow({
+const CardRow = memo(function CardRow({
   card, owned, cost, touch = false, onSet, onHover, onLeave,
 }: {
   card: string; owned: number;
@@ -373,8 +433,8 @@ function CardRow({
   cost?: string;
   /** a tap is the only gesture on a phone, so the count wraps 4 → 0 and the target grows */
   touch?: boolean;
-  onSet: (n: number) => Promise<void>;
-  onHover?: (el: HTMLElement) => void; onLeave: () => void;
+  onSet: (card: string, n: number) => void;
+  onHover?: (el: HTMLElement, card: string) => void; onLeave: () => void;
 }) {
   const nameRef = useShrinkToFit(frontFace(card), NAME_MAX_PX, NAME_MIN_PX);
   const nextCount = () => {
@@ -384,7 +444,7 @@ function CardRow({
 
   return (
     <div
-      onMouseEnter={onHover && ((e) => onHover(e.currentTarget))}
+      onMouseEnter={onHover && ((e) => onHover(e.currentTarget, card))}
       onMouseLeave={onLeave}
       className="bg-surface flex items-stretch"
     >
@@ -405,8 +465,8 @@ function CardRow({
         aria-label={touch
           ? `${frontFace(card)}, ${owned} owned. Tap to add, tap again past four to clear`
           : `${frontFace(card)}, ${owned} owned. Click to add, right click to remove`}
-        onClick={() => { const n = nextCount(); if (n != null) void onSet(n); }}
-        onContextMenu={(e) => { e.preventDefault(); if (owned > 0) void onSet(owned - 1); }}
+        onClick={() => { const n = nextCount(); if (n != null) onSet(card, n); }}
+        onContextMenu={(e) => { e.preventDefault(); if (owned > 0) onSet(card, owned - 1); }}
         className={cn(
           "font-display tabular-nums text-[16px] shrink-0 text-center select-none",
           touch ? "w-11" : "w-9",
@@ -418,7 +478,7 @@ function CardRow({
       </button>
     </div>
   );
-}
+});
 
 const NAME_MAX_PX = 15;
 const NAME_MIN_PX = 10;

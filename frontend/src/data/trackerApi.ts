@@ -47,11 +47,24 @@ function client() {
   return supabase;
 }
 
+let cachedUserId: Promise<string> | null = null;
+supabase?.auth.onAuthStateChange(() => { cachedUserId = null; });
+
 async function userId(): Promise<string> {
   if (DEV_AUTH_USER) return DEV_AUTH_USER.id;
-  const { data } = await client().auth.getUser();
-  if (!data.user) throw new Error("Not authenticated");
-  return data.user.id;
+  if (!cachedUserId) {
+    cachedUserId = client().auth.getUser().then(
+      ({ data }) => {
+        if (!data.user) {
+          cachedUserId = null;
+          throw new Error("Not authenticated");
+        }
+        return data.user.id;
+      },
+      (err) => { cachedUserId = null; throw err; },
+    );
+  }
+  return cachedUserId;
 }
 
 // The tracker reads the event view itself so it can select account_id, which the shared
@@ -184,19 +197,20 @@ export async function fetchCollection(setCode: string): Promise<CollectionCount[
   return (data ?? []).map((r) => ({ cardName: r.card_name as string, owned: r.owned as number }));
 }
 
-export async function saveCollectionCount(setCode: string, cardName: string, owned: number) {
+export async function saveCollectionCounts(setCode: string, counts: CollectionCount[]) {
+  if (counts.length === 0) return;
+  const uid = await userId();
+  const updatedAt = new Date().toISOString();
+  const rows = counts.map((c) => ({
+    user_id: uid,
+    set_code: setCode,
+    card_name: c.cardName,
+    owned: c.owned,
+    updated_at: updatedAt,
+  }));
   const { error } = await client()
     .from("tracker_collection")
-    .upsert(
-      {
-        user_id: await userId(),
-        set_code: setCode,
-        card_name: cardName,
-        owned,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,set_code,card_name" },
-    );
+    .upsert(rows, { onConflict: "user_id,set_code,card_name" });
   if (error) throw error;
 }
 
