@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
@@ -131,7 +132,7 @@ def build_awards_view(data: AwardsData, reveal: int | None = None, scanned_pct: 
         ("### 🤔 The Jury is Still Out", "Ask Again in Two Weeks", data.jury),
         ("### 🗑️ Last-Pick Material", "Leave in the Sideboard", data.trash),
         ("### 😂 Comedy Gold", "No Notes", data.comedy),
-        ("### ⭐ Flavor Win", "Unbearable", data.flavor),
+        ("### ⭐ Flavor Win", "The Eyes Have It", data.flavor),
     )
     awarded_rows = [(heading, tagline, winner) for heading, tagline, winner in rows if winner is not None]
     if scanned_pct is not None:
@@ -328,8 +329,8 @@ def _tally_fields(posts: list[ScoredPost]) -> dict:
 
     pool = list(posts)
 
-    def claim_category(emojis: tuple[str, ...]) -> AwardWinner | None:
-        post = _category_best(pool, emojis)
+    def claim_category(emojis: tuple[str, ...], candidates: list[ScoredPost] | None = None) -> AwardWinner | None:
+        post = _category_best(pool if candidates is None else candidates, emojis)
         if post is None:
             return None
         pool.remove(post)
@@ -339,7 +340,8 @@ def _tally_fields(posts: list[ScoredPost]) -> dict:
     acceptable = claim_category((THUMBS_UP,))
     jury = claim_category((THINKING,))
     trash = claim_category((WASTEBASKET, WILTED_ROSE))
-    comedy = claim_category((JOY,))
+    comedy_pool = [post for post in pool if not re.search(r"https?://(?:www\.)?(?:x|twitter)\.com/", post.content)]
+    comedy = claim_category((JOY,), candidates=comedy_pool)
 
     flavor = None
     flavor_best = _flavor_best(pool)
@@ -417,7 +419,8 @@ def _extra_reactions(post: ScoredPost, category_emojis: tuple[str, ...]) -> int:
 
 
 def _trim_caption(content: str) -> str | None:
-    caption = " ".join(content.split())
+    first_line = content.split("\n", 1)[0]
+    caption = " ".join(re.sub(r"https?://\S+", "", first_line).split())
     if not caption:
         return None
     if len(caption) > CAPTION_MAX_CHARS:
