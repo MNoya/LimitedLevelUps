@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -41,8 +41,7 @@ from bot.tasks.pod_daily_poll import (
 )
 
 
-DAYS_TO_FRIDAY = ((4 - datetime.now(SCHEDULE_TZ).date().weekday()) % 7) or 7
-FRIDAY = datetime.now(SCHEDULE_TZ).date() + timedelta(days=DAYS_TO_FRIDAY)
+FRIDAY = date(2026, 10, 9)
 SATURDAY = FRIDAY + timedelta(days=1)
 FRIDAY_AFTERNOON = datetime.combine(FRIDAY, time(16, 0), tzinfo=SCHEDULE_TZ)
 THRESHOLD = settings.pod_signal_fire_threshold
