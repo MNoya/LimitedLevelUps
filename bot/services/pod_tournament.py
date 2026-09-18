@@ -1441,6 +1441,33 @@ async def refresh_round_pairing_messages(manager) -> None:
             log.warning(f"could not refresh round {round_num} pairings after arena link", exc_info=True)
 
 
+async def refresh_round_pairing_dms(manager, linked_discord_id: str) -> None:
+    """Re-notify the linked player's opponents after a mid-round /link-arena, so each open match's DM
+    carries the fresh Arena handle. The linked player is fed to _dm_changed_opponents as the updated
+    opponent; reported and placeholder matches are skipped, and a player not seated here is a no-op."""
+    event_id = manager.event_id
+    dm_info = await asyncio.to_thread(load_dm_info_sync, event_id)
+    linked_key = next((key for key, info in dm_info.items() if info.discord_id == linked_discord_id), None)
+    if linked_key is None:
+        return
+    for round_num in sorted(manager.round_messages):
+        states = await asyncio.to_thread(
+            render_round_states, event_id, round_num, bracket=manager.pairing_mode == "bracket",
+        )
+        changed: list[tuple[str, str]] = []
+        for state in states:
+            if state.get("winner_name") or state.get("placeholder"):
+                continue
+            if linked_key == normalize_player_name(state.get("a_name") or ""):
+                changed.append((state["b_name"], state["a_name"]))
+            elif linked_key == normalize_player_name(state.get("b_name") or ""):
+                changed.append((state["a_name"], state["b_name"]))
+        if not changed:
+            continue
+        pairings_url = await asyncio.to_thread(_resolve_pairings_url, event_id, round_num)
+        await _dm_changed_opponents(manager.bot, event_id, round_num, changed, pairings_url)
+
+
 ResultSubmit = Callable[[discord.Interaction, str], Awaitable[None]]
 """Commits a `match_id|winner|score` pick. Every reporting surface encodes the same value, but a pod's
 pairing mode decides which fan-out has to run, so the surface takes the handler as an argument instead

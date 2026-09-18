@@ -1584,15 +1584,11 @@ def participant_dm_info(session: Session, event_id: str) -> dict[str, Participan
     """Map normalized draftmancer_name → ParticipantDmInfo for every participant in the event.
 
     display_name prefers Player.display_name (the resolved Discord server nickname) over the
-    participant row's display_name, which can carry a stale Arena-style handle. Pod DMs have no
-    guild context, so the opponent line renders this name as text rather than a `<@id>` mention —
-    a mention would resolve to the global username instead of the LLU server nickname.
+    participant row's display_name, which can carry a stale Arena-style handle.
 
-    arena_name prefers PodDraftParticipant.draftmancer_name — the handle the player actually set in
-    the Draftmancer client for THIS session. For multi-account users this can differ from
-    Player.arena_name (their stored display primary); the opponent DM should report the session-
-    specific name so they look for the right Arena handle. A Draftmancer name carrying no `#NNNNN`
-    discriminator is a nickname, not an Arena handle, so the linked Player.arena_name stands in.
+    arena_name prefers the linked Player.arena_name (what /link-arena writes) over the Draftmancer
+    session handle, so a player on a shared or borrowed account shows the account they linked. The
+    session handle stands in only when no full Arena handle is linked.
     """
     rows = session.execute(
         select(
@@ -1614,7 +1610,7 @@ def participant_dm_info(session: Session, event_id: str) -> dict[str, Participan
             participant_id=participant_id,
             discord_id=discord_id,
             display_name=strip_arena_suffix(raw) if raw else raw,
-            arena_name=dm_name if has_arena_suffix(dm_name) else (player_arena or dm_name),
+            arena_name=player_arena if full_arena_handle(player_arena) else dm_name,
         )
     return info
 

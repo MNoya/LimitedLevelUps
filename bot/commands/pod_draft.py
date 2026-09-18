@@ -23,7 +23,12 @@ from bot.services import championship as championship_service
 from bot.services import pod_event_settings
 from bot.services import pod_format
 from bot.services.lobby_embed import guard_ready_check, open_settings_panel
-from bot.services.pod_active import ACTIVE_POD_MANAGERS, set_card_phase_hook, set_pod_card_hook
+from bot.services.pod_active import (
+    ACTIVE_POD_MANAGERS,
+    set_card_phase_hook,
+    set_pod_card_hook,
+    set_rsvp_roster_hook,
+)
 from bot.services.pod_draft_manager import (
     cancel_pod_event,
     post_format_vote,
@@ -92,6 +97,7 @@ from bot.services.pod_tournament import (
     is_pod_organizer,
     open_manage_rounds,
     post_trophy_hype_for_event,
+    refresh_round_pairing_dms,
     refresh_round_pairing_messages,
     round_picker_options,
 )
@@ -380,6 +386,7 @@ class PodDraft(commands.Cog):
         for manager in list(ACTIVE_POD_MANAGERS.values()):
             asyncio.create_task(manager.refresh_lobby_now())
             asyncio.create_task(refresh_round_pairing_messages(manager))
+            asyncio.create_task(refresh_round_pairing_dms(manager, user_id))
 
     async def _warn_if_no_lobby_match(
         self, interaction: discord.Interaction, arena_name: str, player_id: str
@@ -1205,4 +1212,5 @@ async def setup(bot: commands.Bot) -> None:
     set_card_refresh_hook(refresh_card_embed)
     set_card_phase_hook(refresh_card_embed)
     set_pod_card_hook(post_pod_card)
+    set_rsvp_roster_hook(pod_launch.lobby_rosters_for_event)
     await bot.add_cog(PodDraft(bot))

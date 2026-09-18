@@ -469,7 +469,7 @@ def test_get_participant_deck_state_signals_not_in_pod(session):
     assert color is None
 
 
-def test_participant_dm_info_prefers_server_nickname_and_session_handle(session):
+def test_participant_dm_info_prefers_server_nickname_and_linked_arena(session):
     event_id, _ = _seed_pod_for_deck_color_tests(session)
     participant = session.execute(
         select(PodDraftParticipant)
@@ -487,7 +487,7 @@ def test_participant_dm_info_prefers_server_nickname_and_session_handle(session)
     alice = info["alice"]
     assert alice.discord_id == "42"
     assert alice.display_name == "AliceServerNick"
-    assert alice.arena_name == "Alice#1234"
+    assert alice.arena_name == "AliceMain#9999"
 
 
 def test_participant_dm_info_strips_arena_suffix_from_unlinked_fallback(session):

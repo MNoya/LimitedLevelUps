@@ -81,6 +81,7 @@ from bot.services.pod_format import settings_notice_markers
 from bot.services.ping_roles import grant_mock_draft_role
 from bot.services.pod_active import (
     ACTIVE_POD_MANAGERS,
+    lobby_rosters_for,
     notify_card_phase,
     notify_pod_complete,
     notify_pod_drafting,
@@ -1419,6 +1420,26 @@ class PodDraftManager:
             self._repost_lobby_card = False
         return self.lobby_status_message is not None
 
+    async def _reload_rsvp_rosters(self) -> None:
+        """Re-derive the Yes / unconfirmed / Maybe rosters from the live signal, so a player who pressed
+        Leave after the room opened stops being one it waits on. No-op once the check is live or the draft
+        is under way, and for a pod with no signal behind it, which keeps a fixture-seeded lobby on the
+        roster it was handed."""
+        if self.ready_check_active or self.drafting or self.draft_complete:
+            return
+        rosters = await lobby_rosters_for(self.event_id)
+        if rosters is None:
+            return
+        yes = [name for _, name in rosters.seated]
+        unconfirmed = [name for _, name in rosters.unconfirmed]
+        maybe = [name for _, name in rosters.maybe]
+        if (yes, unconfirmed, maybe) == (self.rsvps_yes, self.rsvps_unconfirmed, self.rsvps_maybe):
+            return
+        self.rsvps_yes = yes
+        self.rsvps_unconfirmed = unconfirmed
+        self.rsvps_maybe = maybe
+        self._rsvp_new_drafters = None
+
     async def _resolve_rsvp_mentions(self, guild: discord.Guild | None) -> dict[int, str]:
         """Resolve `<@id>` mentions in rsvps_yes/rsvps_maybe to guild member display names.
         Used by render_lobby_embed for dedup against in-session display names. Plain-text
@@ -1490,6 +1511,7 @@ class PodDraftManager:
         if thread is None:
             return
         async with self._lobby_post_lock:
+            await self._reload_rsvp_rosters()
             if self.draft_complete and self.tournament_roster:
                 names = list(self.tournament_roster)
             else:
@@ -2799,6 +2821,7 @@ class PodDraftManager:
         thread = await self._fetch_thread()
         if thread is None:
             return
+        await self._reload_rsvp_rosters()
         mention_map = await self._resolve_rsvp_mentions(thread.guild)
         waiting = waiting_roster(self.rsvps_yes, classified, mention_map)
         if ready_check_strands_nobody(len(classified), self.max_players, len(waiting)):
@@ -3030,6 +3053,7 @@ class PodDraftManager:
         """Roster mentions with nobody matching them in the Draftmancer lobby, Yes and unconfirmed only.
 
         A maybe is never a player the room waits on, so a pod short of a table is never told to chase one."""
+        await self._reload_rsvp_rosters()
         thread = await self._fetch_thread()
         guild = thread.guild if thread is not None else None
         classified = await self._classify_users(self.non_bot_session_names())

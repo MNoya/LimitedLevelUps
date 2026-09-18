@@ -2122,14 +2122,12 @@ async def open_ondemand_lobby(
         bot, event_id, event_time, thread_id, roster,
     ):
         return
-    if single_table:
-        roster = await asyncio.to_thread(championship_seeds.playing_roster_sync, event_id, roster)
-    rsvps = await asyncio.to_thread(signal_rsvps_sync, event_id)
-    maybe_names = [] if single_table else (rsvps[1] if rsvps else [])
-    maybe_roster = [] if single_table else await asyncio.to_thread(maybe_roster_for_event_sync, event_id)
-    seated, unconfirmed = await _seated_and_unconfirmed(event_id, roster, single_table)
+    rosters = await _lobby_rosters(event_id, roster, single_table)
+    roster = rosters.roster
+    seated, unconfirmed, maybe_roster = rosters.seated, rosters.unconfirmed, rosters.maybe
     display_names = [name for _, name in seated]
     unconfirmed_names = [name for _, name in unconfirmed]
+    maybe_names = [name for _, name in maybe_roster]
     riders = unconfirmed + maybe_roster if split else []
     draftmancer_url = draftmancer_url_for(session_id)
 
@@ -2222,6 +2220,38 @@ async def _seated_and_unconfirmed(
         (signup.discord_id, signup.display_name) for signup in signups if not signup.confirmed
     ]
     return seated, unconfirmed
+
+
+@dataclass
+class LobbyRosters:
+    """The rosters an open lobby reads off the signal: the seated Yes players it holds a seat for, the
+    ones who said Yes and never confirmed, and the Maybes. `roster` is the full Yes list after any
+    championship playing-roster override, for the mentions and DMs the open still sends."""
+    roster: list[tuple[str, str]]
+    seated: list[tuple[str, str]]
+    unconfirmed: list[tuple[str, str]]
+    maybe: list[tuple[str, str]]
+
+
+async def _lobby_rosters(
+    event_id: str, roster: list[tuple[str, str]], single_table: bool,
+) -> LobbyRosters:
+    if single_table:
+        roster = await asyncio.to_thread(championship_seeds.playing_roster_sync, event_id, roster)
+    maybe = [] if single_table else await asyncio.to_thread(maybe_roster_for_event_sync, event_id)
+    seated, unconfirmed = await _seated_and_unconfirmed(event_id, roster, single_table)
+    return LobbyRosters(roster, seated, unconfirmed, maybe)
+
+
+async def lobby_rosters_for_event(event_id: str) -> LobbyRosters | None:
+    """The lobby rosters re-derived live from the signal, so a player who left after the room opened
+    stops being one it waits on. None when no signal backs the event, which keeps a fixture-seeded lobby
+    on the roster it was handed."""
+    if await asyncio.to_thread(signal_rsvps_sync, event_id) is None:
+        return None
+    roster = await asyncio.to_thread(roster_for_event_sync, event_id)
+    single_table = await asyncio.to_thread(championship_seeds.rank_override_sync, event_id) is not None
+    return await _lobby_rosters(event_id, roster, single_table)
 
 
 def _mentions(roster: list[tuple[str, str]]) -> list[str]:

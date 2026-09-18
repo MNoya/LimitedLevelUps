@@ -20,6 +20,7 @@ _POD_DRAFTING_HOOK = None
 _POD_COMPLETE_HOOK = None
 _POD_CARD_HOOK = None
 _PODIUM_POSTED_HOOK = None
+_RSVP_ROSTER_HOOK = None
 
 
 def set_card_phase_hook(callback) -> None:
@@ -56,6 +57,21 @@ def set_pod_card_hook(callback) -> None:
     without importing the command module."""
     global _POD_CARD_HOOK
     _POD_CARD_HOOK = callback
+
+
+def set_rsvp_roster_hook(callback) -> None:
+    """pod_launch registers the live signal re-derivation here so a manager can refresh the roster it
+    waits on without importing pod_launch, which imports the manager back."""
+    global _RSVP_ROSTER_HOOK
+    _RSVP_ROSTER_HOOK = callback
+
+
+async def lobby_rosters_for(event_id: str):
+    """The pod's seated / unconfirmed / Maybe rosters re-derived from the live signal, or None when the
+    hook is unset or no signal backs the event."""
+    if _RSVP_ROSTER_HOOK is None:
+        return None
+    return await _RSVP_ROSTER_HOOK(event_id)
 
 
 async def post_pod_card(channel, *, name: str, event_time, set_code: str, roster=None):
