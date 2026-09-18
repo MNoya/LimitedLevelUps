@@ -668,11 +668,12 @@ function GamesGrid({
 }) {
   const isMobile = useIsCompact();
   if (playerGames.length === 0 && opponentGames.length === 0) {
+    if (!podFinalized) {
+      return null;
+    }
     return (
       <div className="px-4 md:px-5 xl:px-8 py-4 text-muted text-[13px] font-body">
-        {podFinalized
-          ? "No replays were captured for either seat this round."
-          : "Replays post once the pod finishes."}
+        No replays were captured for either seat this round
       </div>
     );
   }
