@@ -111,10 +111,14 @@ AWARD_SPECS: tuple[AwardSpec, ...] = (
     AwardSpec("revel_in_riches", "📦", "Revel in Riches", "Most Arena Direct boxes won",
               custom_emoji="8000gems", you_verb="won",
               miss="No Arena Direct boxes this set"),
-    AwardSpec("mvp", "🚀", "Most Valuable Pod-Drafter", "Most pod drafts played",
-              you_verb="played",
-              miss="No pod drafts this set"),
 )
+
+DISPLAYED_AWARD_KEYS = frozenset(spec.key for spec in AWARD_SPECS)
+
+MVP_SPEC = AwardSpec("mvp", "🚀", "Most Valuable Pod-Drafter", "Most pod drafts played",
+                     you_verb="played", miss="No pod drafts this set")
+
+SCORECARD_SPECS: tuple[AwardSpec, ...] = (*AWARD_SPECS, MVP_SPEC)
 
 
 def build_set_awards_view(data: SetAwardsData) -> ui.LayoutView:
@@ -185,7 +189,7 @@ def build_my_awards_view(
     container.add_item(ui.TextDisplay(f"## 🏆 Your {set_code} Set Awards"))
     container.add_item(ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
-    for spec in AWARD_SPECS:
+    for spec in SCORECARD_SPECS:
         rank, _total, mine = _standing(ranked.get(spec.key, []), discord_id)
         container.add_item(ui.TextDisplay(_my_award_line(spec, rank, mine)))
 
@@ -354,9 +358,10 @@ async def run_set_awards_ceremony(
         return None
 
     recipients = _award_recipients(winners, runners)
+    shown_recipients = {key: ids for key, ids in recipients.items() if key in DISPLAYED_AWARD_KEYS}
     champion_ids = _champion_ids(champion)
     if mention:
-        ping_ids = _ping_ids(recipients, champion_ids)
+        ping_ids = _ping_ids(shown_recipients, champion_ids)
         allowed = discord.AllowedMentions(users=[discord.Object(id=uid) for uid in ping_ids])
     else:
         allowed = discord.AllowedMentions.none()
