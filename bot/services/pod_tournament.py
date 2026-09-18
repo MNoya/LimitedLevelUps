@@ -4921,8 +4921,10 @@ def name_with_arena(display: str, arena: str | None) -> str:
 
 
 def match_displays(m: dict) -> tuple[str, str]:
-    """Both players of a match state as they should be shown, Discord display preferred over handle."""
-    return m.get("a_display") or m["a_name"], m.get("b_display") or m["b_name"]
+    """Both players shown as Discord display over handle, markdown escaped"""
+    a = m.get("a_display") or m["a_name"]
+    b = m.get("b_display") or m["b_name"]
+    return escape_italics(a), escape_italics(b)
 
 
 def format_reported_result(m: dict) -> str:

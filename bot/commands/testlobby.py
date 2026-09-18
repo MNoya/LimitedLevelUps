@@ -1306,15 +1306,16 @@ def _round1_preview_states(seated: bool) -> list[dict]:
     `_LIVE_TEST_ARENA` (Bram diverges → 'arena (discord)'; the rest collapse to the handle). Seated
     cross-pairs 1v5/2v6/...; `seated=False` previews the random header. Use `podswiss` to drive rounds."""
     roster = _LIVE_TEST_ROSTER
+    underline_display = {"Bram": "Bram (u/Sliver__Legion)"}
     states: list[dict] = []
     for offset in range(4):
         a, b = roster[offset], roster[offset + 4]
         a_arena = _LIVE_TEST_ARENA.get(a) or f"{a}#10001"
         b_arena = _LIVE_TEST_ARENA.get(b) or f"{b}#10005"
         states.append({
-            "a_name": a, "a_display": a, "a_arena": a_arena,
+            "a_name": a, "a_display": underline_display.get(a, a), "a_arena": a_arena,
             "a_record": "0-0", "a_seat": offset + 1 if seated else None,
-            "b_name": b, "b_display": b, "b_arena": b_arena,
+            "b_name": b, "b_display": underline_display.get(b, b), "b_arena": b_arena,
             "b_record": "0-0", "b_seat": offset + 5 if seated else None,
             "winner_name": None, "score": None,
         })
