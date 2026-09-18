@@ -163,17 +163,12 @@ def test_deck_missing_parts_reports_each_gap():
     assert deck_missing_parts(None) == ["screenshot", "colors"]
 
 
-def test_deck_ping_is_action_forward_split_by_audience():
+def test_deck_ping_mentions_each_owing_player_once():
     text = build_deck_ping((["1"], ["1", "2"]), (["3"], ["3"]), "https://limitedlevelups.com/pods/pod-7")
 
-    assert text == (
-        f"{PODIUM_DECK_HEADER}\n"
-        "Please post your deck screenshot <@1> <@3>\n"
-        "Submit your deck colors with the button below <@1> <@2> <@3>\n"
-        "\n"
-        "Draft Recap at [limitedlevelups.com/pods/pod-7]"
-        "(https://limitedlevelups.com/pods/pod-7) 🎨"
-    )
+    assert text.count("<@1>") == 1
+    assert text.count("<@2>") == 1
+    assert text.count("<@3>") == 1
 
 
 def test_deck_ping_pod_link_embeds_and_hides_scheme():

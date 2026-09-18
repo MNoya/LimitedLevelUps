@@ -201,26 +201,45 @@ DeckPingAudience = tuple[list[str], list[str]]  # (owes-screenshot ids, owes-col
 
 
 def build_deck_ping(blocking: DeckPingAudience, other: DeckPingAudience, pod_url: str) -> str:
-    """Compose the R3 deck-chase ping action-forward. Everyone who owes a screenshot or colors is
-    pinged on one line each — blocking and non-blocking players merged so the ask isn't repeated.
-    The "waiting" header only shows when a top finisher is actually blocking the podium post;
-    once it's clear to go up the ping is just the pod-page nudge. Returns "" when nobody owes."""
+    """Compose the R3 deck-chase ping, one line per owe-group so nobody is pinged twice"""
     block_shots, block_colors = blocking
     other_shots, other_colors = other
     screenshot_ids = block_shots + other_shots
     colors_ids = block_colors + other_colors
     if not screenshot_ids and not colors_ids:
         return ""
+    both, only_shots, only_colors = _split_deck_owers(block_shots, block_colors, other_shots, other_colors)
     lines = []
     if block_shots or block_colors:
         lines.append(PODIUM_DECK_HEADER)
-    if screenshot_ids:
-        lines.append(f"Please post your deck screenshot {_mention_run(screenshot_ids)}")
-    if colors_ids:
-        lines.append(f"Submit your deck colors with the button below {_mention_run(colors_ids)}")
+    if both:
+        both_mentions = _mention_run(both)
+        lines.append(f"Please post your deck screenshot {both_mentions} and submit your colors with the button below")
+    if only_shots:
+        lines.append(f"Please post your deck screenshot {_mention_run(only_shots)}")
+    if only_colors:
+        lines.append(f"Submit your deck colors with the button below {_mention_run(only_colors)}")
     lines.append("")
     lines.append(_pod_page_deck_line(pod_url))
     return "\n".join(lines)
+
+
+def _split_deck_owers(block_shots, block_colors, other_shots, other_colors):
+    shot_set = set(block_shots) | set(other_shots)
+    color_set = set(block_colors) | set(other_colors)
+    both, only_shots, only_colors = [], [], []
+    seen = set()
+    for discord_id in block_shots + block_colors + other_shots + other_colors:
+        if discord_id in seen:
+            continue
+        seen.add(discord_id)
+        if discord_id in shot_set and discord_id in color_set:
+            both.append(discord_id)
+        elif discord_id in shot_set:
+            only_shots.append(discord_id)
+        else:
+            only_colors.append(discord_id)
+    return both, only_shots, only_colors
 
 
 def _pod_page_deck_line(pod_url: str) -> str:
