@@ -56,7 +56,7 @@ FRONT_FACE_NAME_LAYOUTS = {"adventure", "transform", "modal_dfc", "prepare", "fl
 def scryfall_search(query: str) -> list[dict]:
     """Paginate through Scryfall search results."""
     cards: list[dict] = []
-    url = f"{SCRYFALL_SEARCH}?q={urllib.parse.quote(query)}&order=set"
+    url = f"{SCRYFALL_SEARCH}?q={urllib.parse.quote(query)}&order=name"
     while url:
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
         with urllib.request.urlopen(req) as resp:
