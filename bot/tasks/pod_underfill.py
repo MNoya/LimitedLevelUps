@@ -14,6 +14,10 @@ On fire the message is not deleted: `hand_slot_nudge_to_card` rewrites it agains
 message carries a pod from its first signup to its lobby. That is the moment the pod most needs a status
 up, since reaching the floor means the draft is on and still short of a full table.
 
+A fresh nudge posts only once a pod holds at least NUDGE_MIN_SIGNUPS: a lone signup asking for five more
+players is noise, so the first post waits until the pod is within four of its floor. An existing nudge keeps
+editing down past that as players drop, since it already earned its place in the channel.
+
 The copy asks for one number at a time (`build_recruiting_message`): the floor while the draft is not yet
 on, the aim once it is, and its Yes and Maybe counts once it is full. It is never deleted on a player
 count, so an 8 -> 7 drop flips the text back to asking for one more instead of vanishing. It is deleted
@@ -62,6 +66,7 @@ from bot.tasks.pod_draft_reminder import event_rsvps
 
 NUDGE_SEARCH_LIMIT = 100
 CATCH_UP_DELAY_S = 5
+NUDGE_MIN_SIGNUPS = 2
 
 log = logging.getLogger(__name__)
 
@@ -184,14 +189,15 @@ async def fire_underfill(event_id: str, hours_before: int, resurface: bool = Fal
         return
 
     nudge = await _find_nudge(channel, jump_url)
+    show = yes_count >= NUDGE_MIN_SIGNUPS
 
     body = build_recruiting_message(name, yes_count, floor, aim, event_time, jump_url, maybe_count)
-    if resurface and nudge is not None:
+    if resurface and nudge is not None and show:
         await _safe_delete(nudge)
         nudge = None
     if nudge is not None:
         await _safe_edit(nudge, body)
-    else:
+    elif show:
         signal_id = await asyncio.to_thread(_scheduled_signal_id, event_id)
         role = await _claimed_ping_role(channel, signal_id, event_time, yes_count, floor, aim, hours_before)
         post_body = f"{body} {role.mention}" if role is not None else body
@@ -202,8 +208,9 @@ async def fire_underfill(event_id: str, hours_before: int, resurface: bool = Fal
 async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool = False) -> None:
     """The launcher-slot twin of `fire_underfill`, running while the slot is still open: same two numbers,
     with the launcher as the signup link. A fired or expired slot is skipped — a fired slot's message has
-    already been handed to its card, whose own checks carry it from there. An empty slot stays silent: there
-    is no pod-in-waiting to rally around, and the launcher already advertises the open slot."""
+    already been handed to its card, whose own checks carry it from there. A slot under two signups stays
+    silent: one lone player is not a pod-in-waiting to rally around, and the launcher already advertises the
+    open slot."""
     if _bot is None:
         log.error(f"fire_slot_underfill for {signal_id}: bot reference is not initialised")
         return
@@ -220,9 +227,6 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
         return
     floor = settings.pod_signal_fire_threshold
     aim = settings.pod_draft_target_players
-    if slot.count == 0:
-        log.info(f"fire_slot_underfill: slot {signal_id} has no signups; skipping")
-        return
 
     channel = await _nudge_channel()
     if channel is None:
@@ -230,14 +234,15 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
         return
 
     nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
+    show = slot.count >= NUDGE_MIN_SIGNUPS
 
     body = build_recruiting_message(slot.name, slot.count, floor, aim, slot.slot_time, slot.jump_url)
-    if resurface and nudge is not None:
+    if resurface and nudge is not None and show:
         await _safe_delete(nudge)
         nudge = None
     if nudge is not None:
         await _safe_edit(nudge, body)
-    else:
+    elif show:
         role = await _claimed_ping_role(
             channel, signal_id, slot.slot_time, slot.count, floor, aim, hours_before,
         )
