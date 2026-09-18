@@ -24,10 +24,13 @@ import {
   Swords,
   Trophy,
 } from "lucide-react";
+import { Play } from "../components/Icons";
 import { GiRoundTable } from "react-icons/gi";
 import { PageShell } from "../components/PageShell";
 import { DiscordIcon } from "../components/BrandIcons";
 import { Container } from "../components/Container";
+import { EpisodeThumbnail } from "../components/EpisodeThumbnail";
+import { PlayBadge } from "../components/PlayBadge";
 import { Tooltip } from "../components/Tooltip";
 import { SetGlyph, Trophy as TrophyGlyph, fmtPts } from "../components/Brand";
 import { compareStandings } from "../components/pod/PodStandings";
@@ -39,11 +42,13 @@ import {
 import { DeckScreenshotModal } from "../components/pod/DeckScreenshotModal";
 import {
   useSets,
+  useMediaFeed,
   usePodEvents,
   usePodEventParticipants,
   usePodDraftArtifact,
   usePodSeasonResults,
 } from "../data/hooks";
+import { categorySlug, findEpisodeBySlug } from "../data/episodes";
 import { aggregatePodStandings, currentSeason } from "../data/podSeasons";
 import { usePodDecklistAccess } from "../data/podDecklistAccess";
 import { resolveDeck } from "../data/draft-artifact";
@@ -78,7 +83,7 @@ const DIVIDE_BEFORE = "organizers";
 const PANEL = "rounded-xl border border-border bg-surface";
 const DRAFTMANCER_URL = "https://draftmancer.com";
 
-const WALKTHROUGH_EPISODE_SLUG = "";
+const WALKTHROUGH_EPISODE_SLUG = "how-to-draft-for-free-with-the-llu-community";
 const SECTION_BY_ID = new Map(SECTIONS.map((s) => [s.id, s]));
 
 export function PodGuidePage() {
@@ -292,8 +297,9 @@ function GuideBody() {
               <Bullet>Report your result in Discord after each match</Bullet>
             </Step>
           </div>
-          <WalkthroughLink />
         </Block>
+
+        <WalkthroughCta />
 
         <Block id="signup" aside={<LauncherCard />}>
           <Bullets className="mt-2 lg:mt-6">
@@ -1228,18 +1234,55 @@ function SeasonBoardCard() {
   );
 }
 
-function WalkthroughLink() {
+function WalkthroughCta() {
+  const { data } = useMediaFeed();
   if (!WALKTHROUGH_EPISODE_SLUG) {
+    return null;
+  }
+  const episode = data ? findEpisodeBySlug(data, WALKTHROUGH_EPISODE_SLUG) : null;
+  if (!episode) {
     return null;
   }
   return (
     <Link
-      to={`/episodes/${WALKTHROUGH_EPISODE_SLUG}`}
-      className="mt-6 inline-flex items-center gap-2.5 rounded-lg border border-green/30 bg-green/10 px-4 py-2.5 font-display text-[14px] tracking-[0.04em] text-green no-underline transition-colors hover:bg-green/20"
+      to={`/episodes/${categorySlug(episode.category)}/${episode.slug}`}
+      aria-label={episode.title}
+      className={cn(
+        PANEL,
+        "group/cta flex flex-col overflow-hidden p-3 no-underline md:p-4",
+        "lg:flex-row lg:items-stretch lg:pl-6",
+        "transition-[border-color,box-shadow] duration-150 hover:border-green hover:shadow-[0_0_8px_1px_rgba(46,232,92,0.32)]",
+        "lg:max-w-[1260px]",
+      )}
     >
-      <PlayCircle size={18} strokeWidth={2} className="shrink-0" />
-      Watch the walkthrough
-      <ArrowRight size={15} strokeWidth={2} className="shrink-0" />
+      <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-lg border border-border bg-surface2 lg:w-[40%] lg:max-w-[320px]">
+        <EpisodeThumbnail
+          src={episode.image}
+          className="transition-transform duration-300 group-hover/cta:scale-[1.07]"
+        />
+        {episode.durationLabel ? (
+          <span className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+            {episode.durationLabel}
+          </span>
+        ) : null}
+        <span className="absolute inset-0 flex items-center justify-center bg-bg/30 opacity-0 transition-opacity group-hover/cta:opacity-100">
+          <PlayBadge>
+            <Play size={32} />
+          </PlayBadge>
+        </span>
+      </div>
+      <div className="mt-3 flex min-w-0 flex-1 justify-center lg:mt-0 min-[1400px]:pr-[7%]">
+        <div className="grid w-fit max-w-full lg:grid-rows-[1fr_auto_1fr] text-center">
+          <h3 className="row-start-2 font-display text-text text-[22px] md:text-[28px] xl:text-[32px] leading-[1.05] tracking-[0.02em] transition-colors group-hover/cta:text-green">
+            {episode.title}
+          </h3>
+          <span className="row-start-3 mt-2 flex items-center justify-center gap-2 self-start font-display text-[14px] tracking-[0.16em] text-green transition-colors group-hover/cta:text-green-2">
+            <PlayCircle size={16} strokeWidth={2} className="relative -top-[1px] shrink-0" />
+            WATCH THE WALKTHROUGH
+            <ArrowRight size={14} strokeWidth={2} className="relative -top-px shrink-0" />
+          </span>
+        </div>
+      </div>
     </Link>
   );
 }
