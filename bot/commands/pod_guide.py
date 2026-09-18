@@ -14,6 +14,7 @@ from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME
 GUIDE_PATH = Path(__file__).resolve().parents[1] / "pod-draft-guide.md"
 GUIDE_MARKER = "Pod Draft Guide"
 GUIDE_SIGNOFF = "Thank you for playing!"
+GUIDE_AFTER_DRAFTING = "**After Drafting:**"
 
 
 def render_pod_guide(pod_drafters_mention: str) -> str:
@@ -21,8 +22,11 @@ def render_pod_guide(pod_drafters_mention: str) -> str:
     return text.replace(":mtga:", emojis.get("mtga")).replace(f"@{POD_DRAFTERS_ROLE_NAME}", pod_drafters_mention)
 
 
-def render_pod_guide_embed_body(pod_drafters_mention: str) -> str:
-    guide = render_pod_guide(pod_drafters_mention).replace(GUIDE_SIGNOFF, "").rstrip()
+def render_pod_guide_embed_body(pod_drafters_mention: str, setup_only: bool = False) -> str:
+    guide = render_pod_guide(pod_drafters_mention)
+    if setup_only:
+        guide = guide.split(GUIDE_AFTER_DRAFTING, 1)[0]
+    guide = guide.replace(GUIDE_SIGNOFF, "").rstrip()
     return f"{guide} {emojis.get('chordo_love')}"
 
 
@@ -37,10 +41,12 @@ class PodGuide(commands.Cog):
         is_owner = await self.bot.is_owner(interaction.user)
         audit.event("pod_guide_invoked", user_id=str(interaction.user.id))
         mention = self._resolve_pod_drafters_mention(interaction.guild)
+        public = interaction.guild is not None and is_owner
+        body = render_pod_guide_embed_body(mention, setup_only=public)
         await interaction.response.send_message(
-            embed=discord.Embed(description=render_pod_guide_embed_body(mention), color=discord.Color.green()),
+            embed=discord.Embed(description=body, color=discord.Color.green()),
             allowed_mentions=discord.AllowedMentions.none(),
-            ephemeral=(interaction.guild is not None and not is_owner),
+            ephemeral=not public,
         )
 
     def _resolve_pod_drafters_mention(self, guild: discord.Guild | None) -> str:
