@@ -27,6 +27,15 @@ export const AuthContext = createContext<AuthContextValue>({
   signOut: noop,
 });
 
+function stripOAuthParams() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("code") && !params.has("state")) return;
+  params.delete("code");
+  params.delete("state");
+  const search = params.toString();
+  window.history.replaceState(null, "", window.location.pathname + (search ? `?${search}` : "") + window.location.hash);
+}
+
 function mapSessionUser(session: Session | null): AuthUser | null {
   if (!session?.user) return null;
   const meta = session.user.user_metadata;
@@ -56,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(mapSessionUser(session));
+      stripOAuthParams();
     });
 
     return () => subscription.unsubscribe();

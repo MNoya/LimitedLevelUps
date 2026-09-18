@@ -1668,12 +1668,21 @@ function ChapterNav({
           ))
         : chapters.map((chapter) => {
             const isActive = chapter.t === activeT;
+            const slug = chapterSlug(chapter.heading);
+            const jump = (event: ReactMouseEvent) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+                return;
+              }
+              event.preventDefault();
+              onJump(chapter.t);
+              window.history.replaceState(null, "", `#${slug}`);
+            };
             if (compact) {
               return (
-                <button
+                <a
                   key={chapter.t}
-                  type="button"
-                  onClick={() => onJump(chapter.t)}
+                  href={`#${slug}`}
+                  onClick={jump}
                   title={chapter.heading}
                   className="group flex cursor-pointer items-center justify-center border-t border-border/40 py-2.5 leading-snug first:border-t-0"
                 >
@@ -1685,14 +1694,14 @@ function ChapterNav({
                   >
                     {chapter.heading.trim().charAt(0)}
                   </span>
-                </button>
+                </a>
               );
             }
             return (
-              <button
+              <a
                 key={chapter.t}
-                type="button"
-                onClick={() => onJump(chapter.t)}
+                href={`#${slug}`}
+                onClick={jump}
                 className="group flex cursor-pointer items-baseline justify-between gap-3 border-t border-border/40 py-2.5 text-left first:border-t-0"
               >
                 <span
@@ -1706,7 +1715,7 @@ function ChapterNav({
                 {hideTime ? null : (
                   <span className="font-num shrink-0 text-[12px] text-green">{formatTimestamp(chapter.t)}</span>
                 )}
-              </button>
+              </a>
             );
           })}
     </nav>
@@ -2795,6 +2804,7 @@ function EpisodeTranscript({
           }
           if (item.kind === "chapter") {
             const isChapterCollapsed = collapsedChapters.has(item.t);
+            const slug = chapterSlug(item.heading);
             return (
               <div
                 key={index}
@@ -2804,10 +2814,13 @@ function EpisodeTranscript({
                   index === firstChapterIndex ? "mt-0" : "mt-8",
                 )}
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    const slug = chapterSlug(item.heading);
+                <a
+                  href={`#${slug}`}
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+                      return;
+                    }
+                    e.preventDefault();
                     handledHash.current = slug;
                     window.history.replaceState(null, "", `#${slug}`);
                     onToggleChapter(item.t);
@@ -2823,7 +2836,7 @@ function EpisodeTranscript({
                   <h3 className="font-display text-text text-[19px] tracking-[0.02em] leading-none transition-colors group-hover:text-green">
                     {item.heading}
                   </h3>
-                </button>
+                </a>
                 {articleMode ? null : onSeek ? (
                   <button
                     type="button"
