@@ -92,6 +92,8 @@ def test_every_player_is_seated_or_waiting_at_a_real_pod():
     (8, 8),
     (9, 10),
     (11, 10),
+    (12, 10),
+    (16, 10),
     (6, 8),
     (0, 8),
 ])
