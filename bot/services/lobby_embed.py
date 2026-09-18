@@ -686,10 +686,13 @@ def render(
     Unrecognized bucket, `/link-arena`, and `/report-results` all go.
 
     `new_drafters` marks the seats and the waiting roster for players yet to finish a pod, so the room
-    knows who to walk through it before the draft starts.
+    knows who to walk through it before the draft starts. A mock draft drops the marker: it is practice,
+    not a first finished pod.
 
     `voice_url` adds a voice-chat link under the header while the pod is gathering, dropped once the
     draft starts since the draft-end offer takes over there."""
+    if mock:
+        new_drafters = frozenset()
     in_draftmancer = [(arena, dn) for arena, dn in in_session if dn is not None]
     unrecognized = [arena for arena, dn in in_session if dn is None]
     mention_map = display_name_by_mention_id or {}
@@ -725,7 +728,7 @@ def render(
         elif mock:
             embed.add_field(
                 name=seat_label,
-                value=quote_block(_mock_seat_labels(in_session, new_drafters)),
+                value=quote_block(_mock_seat_labels(in_session)),
                 inline=False,
             )
         else:
@@ -1001,12 +1004,10 @@ def stopped_reason(actor: str | None) -> str:
 _ARENA_SUFFIX_RE = re.compile(r"#[0-9?]+$")
 
 
-def _mock_seat_labels(
-    in_session: list[tuple[str, str | None]], new_drafters: frozenset[str] = frozenset(),
-) -> list[str]:
+def _mock_seat_labels(in_session: list[tuple[str, str | None]]) -> list[str]:
     """One name per mock-draft seat: the linked player when known, else the Draftmancer name itself.
     A mock never links Arena handles, so an unmatched seat is ordinary and needs no marker or column."""
-    return [marked_new(dn or arena, new_drafters) for arena, dn in in_session]
+    return [dn or arena for arena, dn in in_session]
 
 
 def _seat_rows(in_session: list[tuple[str, str | None]], *, mock: bool = False) -> list[tuple[str, str]]:
