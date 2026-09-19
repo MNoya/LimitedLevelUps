@@ -84,13 +84,13 @@ def format_deck_color_emojis(code: str | None) -> str:
     """Render deck color string as Mana font application emojis.
 
     Main colors render first using guild-pair / pentacolor / WUBRG-order rules. Splash colors
-    (lowercase in `code`) render after, separated by '/'.
+    (lowercase in `code`) render after as half-size bottom-left glyphs nestled against the main.
 
     - "WR"   → :manarw:                        (guild pair, no splash)
     - "URG"  → :manau::manar::manag:           (3 main, no splash)
     - "WUBRG"→ :manawubrg:                     (5 main, no splash)
-    - "BGw"  → :manab::manag:/:manaw:          (BG main, W splash)
-    - "URw"  → :manaur:/:manaw:                (UR guild pair main, W splash)
+    - "BGw"  → :manab::manag::manaws:          (BG main, small W splash)
+    - "URw"  → :manaur::manaws:                (UR guild pair main, small W splash)
     """
     if not code:
         return ""
@@ -109,24 +109,25 @@ def format_deck_color_emojis(code: str | None) -> str:
     main_glyph = _emojis_for_color_set(main)
     if not splash:
         return main_glyph
-    return f"{main_glyph}/{_emojis_for_color_set(splash)}"
+    return f"{main_glyph}{_emojis_for_color_set(splash, small=True)}"
 
 
-def _emojis_for_color_set(colors: set[str]) -> str:
+def _emojis_for_color_set(colors: set[str], *, small: bool = False) -> str:
+    suffix = "s" if small else ""
     if len(colors) == 2:
         emoji_name = PAIR_EMOJI_NAME.get(frozenset(colors))
         if emoji_name:
-            glyph = emojis.get(emoji_name)
+            glyph = emojis.get(f"{emoji_name}{suffix}")
             if glyph:
                 return glyph
     if len(colors) == 5:
-        glyph = emojis.get("manawubrg")
+        glyph = emojis.get(f"manawubrg{suffix}")
         if glyph:
             return glyph
     out = []
     for c in "WUBRG":
         if c in colors:
-            glyph = emojis.get(f"mana{c.lower()}") or c
+            glyph = emojis.get(f"mana{c.lower()}{suffix}") or c
             out.append(glyph)
     return "".join(out)
 

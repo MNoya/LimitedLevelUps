@@ -1,9 +1,11 @@
 """Generate and upload Discord application emojis from the keyrune / mana icon fonts or a local PNG.
 
-Each argument is ``source:glyph[:name]`` — source is ``keyrune``, ``mana`` or ``file``. For a font
-source, glyph is the icon's filename in that font's ``svg/`` directory; the glyph is recolored white
-and rasterized like the site's set symbols. For ``file``, glyph is a path to a PNG that is trimmed,
-fit into a 128px transparent square, and uploaded as is. Name defaults to the glyph basename with
+Each argument is ``source:glyph[:name]`` — source is ``keyrune``, ``mana``, ``appsplash`` or ``file``.
+For a font source, glyph is the icon's filename in that font's ``svg/`` directory; the glyph is
+recolored white and rasterized like the site's set symbols. ``appsplash`` takes the name of an
+already-uploaded emoji as glyph and re-uploads it scaled down and anchored bottom-left, the splash
+variant, so its disc and color match the full pip. For ``file``, glyph is a path to a PNG that is
+trimmed, fit into a 128px transparent square, and uploaded as is. Name defaults to the glyph basename with
 non-alphanumeric characters stripped. Uploads target the application DISCORD_BOT_TOKEN belongs to,
 so the same invocation seeds the test and production apps. An emoji whose name already exists is
 skipped; pass ``--force`` to replace it.
@@ -34,6 +36,7 @@ SVG_URLS = {
     "mana": "https://cdn.jsdelivr.net/gh/andrewgioia/mana@latest/svg/{glyph}.svg",
 }
 EMOJI_PX = 128
+SPLASH_SCALE = 0.6
 
 
 def upload(specs: list[tuple[str, str, str]], force: bool) -> int:
@@ -56,7 +59,10 @@ def upload(specs: list[tuple[str, str, str]], force: bool) -> int:
                 print(f"{name}: already exists, skipped (use --force to replace)")
                 continue
             requests.delete(f"{emoji_url}/{existing[name]}", headers=headers, timeout=20)
-        png = _render_glyph(source, glyph, name)
+        if source == "appsplash":
+            png = _render_app_splash(glyph, existing)
+        else:
+            png = _render_glyph(source, glyph, name)
         if png is None:
             print(f"{name}: no {source} glyph named {glyph!r}", file=sys.stderr)
             failures += 1
@@ -90,6 +96,18 @@ def _render_glyph(source: str, glyph: str, name: str) -> bytes | None:
         return png_path.read_bytes()
 
 
+def _render_app_splash(source_emoji: str, existing: dict[str, str]) -> bytes | None:
+    """Derive a small bottom-left splash from an already-uploaded colored emoji, so the disc and
+    color match the full pip exactly. `source_emoji` is the existing emoji's name (e.g. `manag`)."""
+    emoji_id = existing.get(source_emoji)
+    if emoji_id is None:
+        return None
+    response = requests.get(f"https://cdn.discordapp.com/emojis/{emoji_id}.png?size=128", timeout=20)
+    if not response.ok:
+        return None
+    return anchor_bottom_left_png(response.content, EMOJI_PX, SPLASH_SCALE)
+
+
 def _render_file(path: str) -> bytes | None:
     src = Path(path)
     if not src.is_file():
@@ -114,9 +132,27 @@ def fit_square_png(raw: bytes, size: int) -> bytes:
     return out.getvalue()
 
 
+def anchor_bottom_left_png(raw: bytes, size: int, scale: float) -> bytes:
+    """Trim, downscale to `scale` of `size`, and anchor to the bottom-left of a transparent square."""
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(raw)).convert("RGBA")
+    bbox = image.getbbox()
+    if bbox is not None:
+        image = image.crop(bbox)
+    target = max(1, round(size * scale))
+    factor = target / max(image.width, image.height)
+    resized = image.resize((max(1, round(image.width * factor)), max(1, round(image.height * factor))), Image.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.paste(resized, (0, size - resized.height), resized)
+    out = io.BytesIO()
+    canvas.save(out, format="PNG", optimize=True)
+    return out.getvalue()
+
+
 def parse_spec(arg: str) -> tuple[str, str, str] | None:
     parts = arg.split(":")
-    if len(parts) not in (2, 3) or (parts[0] not in SVG_URLS and parts[0] != "file"):
+    if len(parts) not in (2, 3) or (parts[0] not in SVG_URLS and parts[0] not in ("file", "appsplash")):
         return None
     source, glyph = parts[0], parts[1]
     default_name = re.sub(r"[^A-Za-z0-9_]", "", Path(glyph).stem if source == "file" else glyph)
@@ -134,10 +170,10 @@ def main(argv: list[str]) -> int:
     for arg in args:
         spec = parse_spec(arg)
         if spec is None:
-            print(f"bad spec {arg!r}; expected source:glyph[:name] with source keyrune|mana|file", file=sys.stderr)
+            print(f"bad spec {arg!r}; expected source:glyph[:name] (keyrune|mana|appsplash|file)", file=sys.stderr)
             return 1
         specs.append(spec)
-    if any(source != "file" for source, _glyph, _name in specs) and shutil.which("inkscape") is None:
+    if any(source in SVG_URLS for source, _glyph, _name in specs) and shutil.which("inkscape") is None:
         print("inkscape not found on PATH", file=sys.stderr)
         return 1
     return upload(specs, force)

@@ -744,15 +744,16 @@ def _organizer_deck_panel_preview() -> OrganizerDeckPanel:
 
 
 def _review_preview_roster() -> list[dict]:
-    """Fixture roster for the `!test review` preview — fictional seats with varied colors, records, slugs."""
-    colors = ["WU", "BRg", "UG", "R", "WUBRG", "BR", "WGu", "UB"]
-    records = ["3-0", "2-1", "2-1", "2-1", "1-2", "1-2", "1-2", "0-3"]
+    """Fixture roster for the `!test review` preview — one seat per main/splash shape so the splash emoji
+    sizing can be eyeballed across every combination."""
+    colors = ["R", "Rg", "Rwu", "Rwub", "WU", "WUb", "WUbr", "WUB", "WUBg", "WUBRG"]
+    records = ["3-0", "2-1", "2-1", "2-1", "1-2", "1-2", "1-2", "0-3", "0-3", "0-3"]
     return [
         {
-            "seat_index": i, "name": name, "colors": colors[i % len(colors)],
-            "result": records[i % len(records)], "slug": slugify(name),
+            "seat_index": i, "name": name, "colors": colors[i],
+            "result": records[i], "slug": slugify(name),
         }
-        for i, name in enumerate(_LIVE_TEST_ROSTER[:8])
+        for i, name in enumerate(_LIVE_TEST_ROSTER[:len(colors)])
     ]
 
 
