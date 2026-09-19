@@ -19,6 +19,7 @@ from bot.discord_helpers import NBSP
 from bot.services.championship import rank_override
 from bot.services.ping_roles import pod_champion_glyph
 from bot.services.player_stats import CHAMPIONSHIP_SEATS, SeededAttendee, seed_attendees
+from bot.services.pod_confirm import CONFIRMED
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
 from bot.services.seeding_table import attendee_rnk
 
@@ -76,18 +77,22 @@ def championship_roster_for_event_sync(
 ) -> ChampionshipRoster | None:
     """The three columns for a Set Championship card, its RSVP names placed against the seed snapshot
     frozen at creation. None for every other pod, which keeps the plain name columns. Players outside the
-    snapshot fall back to their live rank, the same as the in-thread seeding table."""
+    snapshot fall back to their live rank, the same as the in-thread seeding table.
+
+    A confirmed Yes seats the same as a plain Yes: `signal_rsvp_rosters_sync` files a confirmation under
+    its own bucket for the reading aid on the general card, so this folds it back into the Yes list rather
+    than dropping every player who pressed Confirm out of the seat count."""
     if event_id is None:
         return None
     with SessionLocal() as session:
         override = rank_override(session, event_id)
         if override is None:
             return None
-        seeded = {
-            state: seed_attendees(session, rosters.get(state) or [], override)
-            for state in (RSVP_YES, RSVP_MAYBE, RSVP_NO)
-        }
-    return championship_roster(seeded[RSVP_YES], seeded[RSVP_MAYBE], seeded[RSVP_NO])
+        yes_names = (rosters.get(CONFIRMED) or []) + (rosters.get(RSVP_YES) or [])
+        yes = seed_attendees(session, yes_names, override)
+        maybe = seed_attendees(session, rosters.get(RSVP_MAYBE) or [], override)
+        declined = seed_attendees(session, rosters.get(RSVP_NO) or [], override)
+    return championship_roster(yes, maybe, declined)
 
 
 def add_championship_roster_fields(embed: discord.Embed, roster: ChampionshipRoster) -> None:

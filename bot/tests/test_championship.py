@@ -217,6 +217,27 @@ def test_frozen_seed_holds_when_the_live_board_no_longer_carries_the_player(sess
     assert [(a.display_name, a.rank) for a in seeded] == [("Dropped", 1), ("Alice", 2)]
 
 
+def test_championship_card_seats_a_confirmed_player(session, monkeypatch):
+    from bot.services import championship_roster_card as card
+    from bot.services.pod_confirm import CONFIRMED
+    from bot.services.pod_signals import RSVP_YES
+
+    monkeypatch.setattr(championship, "SessionLocal", _session_factory(session))
+    monkeypatch.setattr(card, "SessionLocal", _session_factory(session))
+    magic_set = _seed_set(session, "MSH")
+    bob = _seed_player(session, "Bob", "1")
+    alice = _seed_player(session, "Alice", "2")
+    _seed_stats(session, bob, magic_set, trophies=5, events=8)
+    _seed_stats(session, alice, magic_set, trophies=2, events=4)
+    event = _seed_event(session)
+    session.commit()
+    championship.freeze_seeds_sync(event.id, "MSH")
+
+    roster = card.championship_roster_for_event_sync(event.id, {CONFIRMED: ["Bob"], RSVP_YES: ["Alice"]})
+
+    assert [a.display_name for a in roster.playing] == ["Bob", "Alice"]
+
+
 def test_the_override_is_the_frozen_snapshot_for_a_championship_and_nothing_for_a_pod(session):
     """Every surface that ranks a championship roster resolves through one override, so the seeding card,
     the launcher pointer and the seats the draft is dealt in cannot read different scales. A player absent
