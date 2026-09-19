@@ -67,12 +67,12 @@ def test_the_championship_closes_its_own_early_slot():
     champs = date(2026, 9, 19)
 
     assert schedule.formats_on(champs, SLOT_EARLY) == ()
-    assert schedule.formats_on(champs, SLOT_LATE) == ("HOB",)
+    assert schedule.formats_on(champs, SLOT_LATE) == (PEASANT_CODE,)
 
 
 @pytest.mark.parametrize("day, opens, planned", [
     (date(2026, 9, 18), ("HOB",), ("HOB",)),
-    (date(2026, 9, 19), ("HOB",), ("HOB",)),
+    (date(2026, 9, 19), (PEASANT_CODE,), (PEASANT_CODE,)),
     (date(2026, 9, 20), (PEASANT_CODE,), (PEASANT_CODE,)),
     (date(2026, 9, 21), (), (schedule.FLASHBACK,)),
     (date(2026, 9, 26), (PEASANT_CODE,), (PEASANT_CODE,)),

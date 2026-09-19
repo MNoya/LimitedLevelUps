@@ -150,11 +150,11 @@ def scheduled_formats(day: date) -> tuple[str, ...]:
 
 
 def default_formats(day: date) -> tuple[str, ...]:
-    """A day no overlay row names. Inside a set's run every pod drafts that set. From the day after its
-    championship the latest-set pods stop, so the days left before the rotation run cube on the weekend and
-    flashback in the week, where no set is chosen yet."""
+    """A day no overlay row names. Inside a set's run every pod drafts that set. From its championship day
+    the latest-set pods stop, so the championship evening and the days before the rotation run cube on the
+    weekend and flashback in the week, where no set is chosen yet."""
     championship = championship_date_for(day)
-    if championship is None or day <= championship:
+    if championship is None or day < championship:
         return (LATEST,)
     return (PEASANT_CODE,) if is_weekend(day) else (FLASHBACK,)
 
