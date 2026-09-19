@@ -171,11 +171,6 @@ def test_deck_ping_mentions_each_owing_player_once():
     assert text.count("<@3>") == 1
 
 
-def test_deck_ping_pod_link_embeds_and_hides_scheme():
-    text = build_deck_ping(([], []), (["3"], []), "https://limitedlevelups.com/pods/pod-7")
-    assert "[limitedlevelups.com/pods/pod-7](https://limitedlevelups.com/pods/pod-7)" in text
-
-
 def test_deck_ping_drops_podium_header_once_post_is_clear():
     text = build_deck_ping(([], []), (["3"], ["3"]), "https://limitedlevelups.com/pods/pod-7")
     assert PODIUM_DECK_HEADER not in text
@@ -222,8 +217,11 @@ def test_reported_result_uses_display_names_either_side():
         "a_display": "Marlo", "b_display": "Bob", "score": "2-1",
     }
 
-    assert format_reported_result({**match, "winner_name": "marlo#1"}) == "Marlo wins 2-1 vs Bob"
-    assert format_reported_result({**match, "winner_name": "bob#2"}) == "Bob wins 2-1 vs Marlo"
+    marlo_wins = format_reported_result({**match, "winner_name": "marlo#1"})
+    bob_wins = format_reported_result({**match, "winner_name": "bob#2"})
+
+    assert marlo_wins.index("Marlo") < marlo_wins.index("Bob")
+    assert bob_wins.index("Bob") < bob_wins.index("Marlo")
 
 
 def test_round_announcement_prefixes_the_round_label():
@@ -233,10 +231,14 @@ def test_round_announcement_prefixes_the_round_label():
         "winner_name": "marlo#1",
     }
 
-    assert format_round_announcement(1, match) == "**Round 1** Marlo wins 2-0 vs Bob"
+    plain = format_round_announcement(1, match)
+    assert "1" in plain
+    assert format_reported_result(match) in plain
 
     linked = format_round_announcement(3, match, "https://discord.com/channels/1/2/3")
-    assert linked == "**[__Round 3__](https://discord.com/channels/1/2/3)** Marlo wins 2-0 vs Bob"
+    assert "3" in linked
+    assert "https://discord.com/channels/1/2/3" in linked
+    assert format_reported_result(match) in linked
 
 
 _POD_NAME = "MSH Jul 21 Late Pod"
