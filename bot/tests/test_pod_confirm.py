@@ -166,7 +166,7 @@ def test_reminder_yes_seat_carries_the_confirm_state_when_asked(confirming, stat
 def test_the_roster_card_closes_its_seats_at_the_start_time(minutes_out, closed):
     event_time = datetime.now(timezone.utc) + timedelta(minutes=minutes_out)
 
-    view = reminder._build_reminder_view("evt-1", None, event_time)
+    view = reminder._build_reminder_view("evt-1", event_time)
 
     buttons = [item.item for item in view.children if hasattr(item, "item")]
     seats = [button for button in buttons if button.custom_id.startswith("podreminderrsvp:")]

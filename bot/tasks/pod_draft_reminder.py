@@ -221,7 +221,7 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
     embed = reminder_embed(
         event_name, event_time, rosters, roster_interests, championship_roster, set_code, new_drafters,
     )
-    view = _build_reminder_view(event_id, championship_roster, event_time)
+    view = _build_reminder_view(event_id, event_time)
     existing = await _find_roster_reminder(thread, event_id) or await _scan_for_roster_reminder(thread)
     try:
         posted = await thread.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
@@ -274,19 +274,19 @@ def reminder_embed(
 
 
 def _build_reminder_view(
-    event_id: str, championship_roster: ChampionshipRoster | None, event_time: datetime,
+    event_id: str, event_time: datetime,
 ) -> "discord.ui.View | None":
-    """The reminder's buttons. The seat button is Confirm on every pod that has a roster to confirm, busy
-    or not: the ask is what turns a signup from days ago into a seat somebody has answered for, and a pod
-    of six needs that answer as much as a pod of thirteen. A championship runs its own invite wave and is
-    never asked to confirm.
+    """The reminder's buttons. The seat button is Confirm on every pod, busy or not: the ask is what turns
+    a signup from days ago into a seat somebody has answered for, and a pod of six needs that answer as much
+    as a pod of thirteen. A championship confirms here too, matching the Confirm its invite waves already
+    offered the seeded players.
 
     A pod past its start time renders the pair greyed. Nothing is scheduled to grey them: the card is
     left as whatever render last touched it, and the press itself is refused."""
     if _reminder_view_builder is None:
         return None
     return _reminder_view_builder(
-        event_id, championship_roster is None, gathering_is_over(event_time),
+        event_id, True, gathering_is_over(event_time),
     )
 
 
@@ -307,7 +307,7 @@ async def _edit_roster_reminder(
     embed = reminder_embed(
         event_name, event_time, rosters, roster_interests, championship_roster, set_code, new_drafters,
     )
-    view = _build_reminder_view(event_id, championship_roster, event_time)
+    view = _build_reminder_view(event_id, event_time)
     try:
         await reminder.edit(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:
