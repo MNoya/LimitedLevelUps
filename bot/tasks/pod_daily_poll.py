@@ -597,13 +597,12 @@ def _column_value(
 ) -> str:
     """One slot_key column: the pods it offers, then the championship it points at. A championship is read-only
     and carries its own header, so it renders as a block below the column's own pods and never replaces
-    them: on the eve of a championship the column still shows the pod it offers that day."""
+    them: on the eve of a championship the column still shows the pod it offers that day. A championship whose
+    draft has started leaves the board like any started pod, its record kept on the retired board."""
     pods = [slot for slot in bucket_slots if not slot.championship]
     blocks = _pod_blocks(pods, guild)
-    blocks += [
-        block for block in (_championship_block(slot, guild) for slot in bucket_slots if slot.championship)
-        if block
-    ]
+    upcoming_championships = [slot for slot in bucket_slots if slot.championship and not slot.locked]
+    blocks += [block for block in (_championship_block(slot, guild) for slot in upcoming_championships) if block]
     return f"\n{NBSP}\n".join(blocks) if blocks else "-"
 
 

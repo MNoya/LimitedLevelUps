@@ -324,6 +324,15 @@ def test_a_championship_slot_keeps_the_pod_its_column_still_offers():
     assert "/555/777" in value
 
 
+def test_a_started_championship_leaves_the_board():
+    started = replace(_committed_championship(), locked=True)
+
+    value = _column_value([_gathering_with_roster(4), started], guild=None)
+
+    assert HALL_OF_FAME[0] in value
+    assert "/555/777" not in value
+
+
 def test_a_board_leave_never_reaches_a_championship_seat(monkeypatch):
     """The launcher only points at a championship, which is answered on its own card. A Leave pressed to get
     off tonight's pod must not withdraw a seat, and a board carrying nothing else needs no Leave at all."""
