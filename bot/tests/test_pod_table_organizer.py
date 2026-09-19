@@ -1,9 +1,5 @@
-from datetime import datetime, timedelta, timezone
-
 import pytest
 
-from bot.services.pod_format import PICK_2_SETS
-from bot.services.pod_signals import fire_threshold_for
 from bot.services.pod_table_organizer import (
     CALL_MISSING,
     NOTHING,
@@ -15,10 +11,6 @@ from bot.services.pod_table_organizer import (
 )
 
 
-NOW = datetime(2026, 8, 18, 18, 0, tzinfo=timezone.utc)
-DEFAULT_THRESHOLD = 6
-
-
 def _snapshot(**overrides) -> TableSnapshot:
     fields = dict(
         in_draftmancer=0, ceiling=8, minutes_to_start=-5, settled_minutes=5,
@@ -26,22 +18,6 @@ def _snapshot(**overrides) -> TableSnapshot:
     )
     fields.update(overrides)
     return TableSnapshot(**fields)
-
-
-@pytest.mark.parametrize("minutes_out, code, expected", [
-    (30, PICK_2_SETS[0], 4),
-    (90, PICK_2_SETS[0], DEFAULT_THRESHOLD),
-    (-5, PICK_2_SETS[0], DEFAULT_THRESHOLD),
-    (30, "SOS", DEFAULT_THRESHOLD),
-])
-def test_a_pick_2_slot_opens_at_four_inside_the_last_hour(minutes_out, code, expected):
-    slot_time = NOW + timedelta(minutes=minutes_out)
-
-    assert fire_threshold_for(slot_time, code, NOW, DEFAULT_THRESHOLD) == expected
-
-
-def test_a_slot_with_no_time_keeps_the_normal_threshold():
-    assert fire_threshold_for(None, PICK_2_SETS[0], NOW, DEFAULT_THRESHOLD) == DEFAULT_THRESHOLD
 
 
 @pytest.mark.parametrize("overrides, expected", [

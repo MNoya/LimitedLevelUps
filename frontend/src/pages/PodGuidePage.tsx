@@ -268,7 +268,7 @@ function GuideBody() {
               <Bullet>
                 Choose <B>Early</B> ({early}) or <B>Late</B> ({late})
               </Bullet>
-              <Bullet>Pod event thread opens at 6 players</Bullet>
+              <Bullet>Pod event thread opens at 5 players</Bullet>
             </Step>
             <Step
               n={2}

@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     pod_draft_fallback_tz: str = "America/New_York"
     pod_draft_skip_reminder_wait: bool = False
     pod_draft_end_watchdog_minutes: int = 90
-    pod_signal_fire_threshold: int = 6
+    pod_signal_fire_threshold: int = 5
     pod_queue_inactivity_minutes: int = 180
     pod_idle_offer_minutes: int = 30
     pod_self_destruct_grace_minutes: int = 5

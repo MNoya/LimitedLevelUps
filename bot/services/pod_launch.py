@@ -967,10 +967,7 @@ def claim_slot_fire_sync(signal_id: str) -> bool:
         signal = session.get(PodSignal, signal_id)
         if signal is None:
             return False
-        threshold = pod_signals.fire_threshold_for(
-            signal.slot_time, signal.set_code, datetime.now(timezone.utc), settings.pod_signal_fire_threshold,
-        )
-        if not pod_signals.should_fire(len(signal.members), threshold):
+        if not pod_signals.should_fire(len(signal.members), settings.pod_signal_fire_threshold):
             return False
         claimed = claim_fire(session, signal_id)
         session.commit()
