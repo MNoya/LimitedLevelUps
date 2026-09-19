@@ -212,13 +212,18 @@ def build_deck_ping(blocking: DeckPingAudience, other: DeckPingAudience, pod_url
     lines = []
     if block_shots or block_colors:
         lines.append(PODIUM_DECK_HEADER)
-    lines.append("Still owed:")
+    if screenshot_ids and colors_ids:
+        lines.append("\nPlease post your deck screenshot, and submit colors with the button below")
+    elif screenshot_ids:
+        lines.append("\nPlease post your deck screenshot")
+    else:
+        lines.append("\nSubmit colors with the button below")
     if both:
-        lines.append(f"📸 Screenshot + 🎨 colors (button below): {_mention_run(both)}")
+        lines.append(f"📸+🎨 {_mention_run(both)}")
     if only_shots:
-        lines.append(f"📸 Screenshot: {_mention_run(only_shots)}")
+        lines.append(f"📸 {_mention_run(only_shots)}")
     if only_colors:
-        lines.append(f"🎨 Colors (button below): {_mention_run(only_colors)}")
+        lines.append(f"🎨 {_mention_run(only_colors)}")
     lines.append("")
     lines.append(_pod_page_deck_line(pod_url))
     return "\n".join(lines)
@@ -244,7 +249,7 @@ def _split_deck_owers(block_shots, block_colors, other_shots, other_colors):
 
 def _pod_page_deck_line(pod_url: str) -> str:
     label = pod_url.split("://", 1)[-1]
-    return f"Draft Recap at [{label}]({pod_url}) 🎨"
+    return f"Draft Recap at [__**{label}**__]({pod_url}) ➡️"
 
 
 def _mention_run(discord_ids: list[str]) -> str:
