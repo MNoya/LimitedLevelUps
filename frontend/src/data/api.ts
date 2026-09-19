@@ -51,6 +51,7 @@ export const fetchPodEventReplays = impl.fetchPodEventReplays;
 export const fetchPodLeaderboard = impl.fetchPodLeaderboard;
 export const fetchPodSetCodes = impl.fetchPodSetCodes;
 export const fetchPodEventDates = impl.fetchPodEventDates;
+export const fetchPodCalendar = impl.fetchPodCalendar;
 export const fetchP0P1Cards = impl.fetchP0P1Cards;
 export const fetchP0P1Picks = impl.fetchP0P1Picks;
 export const upsertP0P1Pick = impl.upsertP0P1Pick;

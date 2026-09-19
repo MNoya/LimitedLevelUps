@@ -16,6 +16,7 @@ from discord.ext import commands
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import resolve_pod_chat_channel
+from bot.services.pod_calendar import persist_calendar
 from bot.services.pod_format_allocator import run_allocation
 from bot.services.pod_schedule_card import refresh_schedule_post
 from bot.services.pod_schedule import SCHEDULE_TZ
@@ -65,5 +66,6 @@ async def fire_schedule_post() -> None:
 def _sweep(today) -> int:
     with SessionLocal() as session:
         assignments = run_allocation(session, today, rewrite=True)
+        persist_calendar(session, today)
         session.commit()
         return len(assignments)

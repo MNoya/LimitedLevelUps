@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { BookOpen, ChevronDown } from "lucide-react";
+import { ArrowUpRight, BookOpen, ChevronDown } from "lucide-react";
 
 import { PodPage } from "./PodPage";
 
@@ -39,7 +39,8 @@ import {
 } from "../components/LeaderboardTable";
 import { useNow } from "../lib/countdown";
 import { useIsMobile } from "../lib/use-is-mobile";
-import { POD_SLOTS, easternHourInLocalTime } from "../lib/podSlots";
+import { POD_SLOTS, easternHourInLocalTime, viewerTimeZoneAbbr } from "../lib/podSlots";
+import { cubeCobraUrl } from "../data/podFormats";
 import { cn } from "../lib/utils";
 import {
   cleanPodEventName,
@@ -64,6 +65,7 @@ import {
   usePodEventParticipants,
   usePodEvents,
   usePodResultsForSet,
+  usePodCalendar,
   usePodSeasonEvents,
   usePodSeasonResults,
   usePodSetCodes,
@@ -87,6 +89,8 @@ import { resolveDeck } from "../data/draft-artifact";
 import { usePodDecklistAccess } from "../data/podDecklistAccess";
 import { hasCardData } from "../data/podCards";
 import type {
+  PodCalendarDayRow,
+  PodCalendarEntry,
   PodEventParticipantRow,
   PodEventSummary,
   PodLeaderboardRow,
@@ -541,6 +545,7 @@ export function PodDraftsPage({
   ) : null;
 
   const cardDataHref = hasCardData(activeSet) ? `/pods/${activeSet}/data` : null;
+  const cubeCobraHref = !allSeasons && !bySetCode ? cubeCobraUrl(activeSet) : null;
 
   // Under a cube filter each row already carries its own cube board code, so a name lands on that profile
   const profileSetFor = (row: LeaderboardTableRow) => {
@@ -592,6 +597,7 @@ export function PodDraftsPage({
                 loading={events === undefined}
                 nowMs={nowMs}
                 activeSet={activeSet}
+                cubeCobraHref={cubeCobraHref}
               />
             ) : (
               <>
@@ -757,18 +763,193 @@ function EventsBlock({ events, nowMs }: { events: PodEventSummary[]; nowMs: numb
   );
 }
 
+// The labelled grid needs room; below this the column is too narrow, so cells fall back to glyphs alone
+const CALENDAR_LABEL_WIDTH = 1400;
+
 function UpcomingBlock() {
+  const iconsOnly = useIsMobile(CALENDAR_LABEL_WIDTH);
   return (
     <div>
       <SectionHeading label="UPCOMING" meta={<SlotSchedule />} />
       <div className="flex flex-col lg:gap-2">
         <PodActionRow />
+        <UpcomingCalendar iconsOnly={iconsOnly} />
       </div>
     </div>
   );
 }
 
+const CALENDAR_WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+
+// The pod format calendar, weeks Mon-Sun through the week of the next rotation, resolved by the bot to
+// match the Discord card. Today is outlined, a new set's arrival and the championship each fill their band.
+// Mobile drops the codes to glyphs alone, where a labelled grid has no room.
+const CALENDAR_COLLAPSED_WEEKS = 2;
+
+function UpcomingCalendar({ iconsOnly = false, mobile = false }: { iconsOnly?: boolean; mobile?: boolean }) {
+  const { data: rows } = usePodCalendar();
+  const weeks = useMemo(() => chunkWeeks(rows), [rows]);
+  const [expanded, setExpanded] = useState(false);
+  if (weeks.length === 0) {
+    return null;
+  }
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayColumn = (new Date().getDay() + 6) % 7;
+  const canToggle = weeks.length > CALENDAR_COLLAPSED_WEEKS;
+  const shown = expanded ? weeks : weeks.slice(0, CALENDAR_COLLAPSED_WEEKS);
+  return (
+    <div className="relative bg-surface border-b border-border px-3 pt-2 pb-3 lg:px-4 lg:pt-2.5 lg:pb-5">
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {CALENDAR_WEEKDAYS.map((name, i) => (
+          <div
+            key={name}
+            className={cn(
+              "text-center font-display tracking-[0.12em] leading-none text-[12px]",
+              i === todayColumn ? "text-green" : "text-muted",
+            )}
+          >
+            {name}
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col gap-1">
+        {shown.map((week) => (
+          <div key={week[0].day} className="grid grid-cols-7 gap-1">
+            {week.map((day) => (
+              <CalendarCell
+                key={day.day}
+                day={day}
+                today={day.day === todayIso}
+                past={day.day < todayIso}
+                iconsOnly={iconsOnly}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      {canToggle && (
+        <Tooltip label={expanded ? "Collapse Calendar" : "Expand Calendar"} side="top" delayDuration={ROW_TOOLTIP_DELAY}>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? "Collapse calendar" : "Expand calendar"}
+            className={cn(
+              "group absolute inset-x-0 bottom-0 flex items-end justify-center text-muted hover:text-green transition-colors",
+              mobile ? "translate-y-1.5" : "translate-y-1",
+            )}
+          >
+            <ChevronDown
+              size={18}
+              className={cn("transition-transform group-hover:translate-y-0.5", expanded && "rotate-180 group-hover:-translate-y-0.5")}
+            />
+          </button>
+        </Tooltip>
+      )}
+    </div>
+  );
+}
+
+function chunkWeeks(rows: PodCalendarDayRow[] | undefined): PodCalendarDayRow[][] {
+  if (!rows) {
+    return [];
+  }
+  const weeks: PodCalendarDayRow[][] = [];
+  for (let i = 0; i < rows.length; i += 7) {
+    weeks.push(rows.slice(i, i + 7));
+  }
+  return weeks;
+}
+
+const BAND_CLASS: Record<string, string> = {
+  arrival: "bg-green/20 text-green",
+  championship: "bg-gold/20 text-gold",
+};
+
+function CalendarCell({
+  day,
+  today,
+  past,
+  iconsOnly,
+}: {
+  day: PodCalendarDayRow;
+  today: boolean;
+  past: boolean;
+  iconsOnly: boolean;
+}) {
+  const { month, day: dayNum } = parseMonthDay(day.day);
+  const label = dayNum === 1 ? `${month} 1` : String(dayNum);
+  const band = day.band ? BAND_CLASS[day.band] : past ? "bg-surface2/30 text-dim" : "bg-surface2/60 text-text";
+  return (
+    <div
+      className={cn(
+        "flex flex-col bg-bg border",
+        iconsOnly ? "min-h-[58px]" : "min-h-[76px]",
+        today ? "border-green" : "border-border",
+      )}
+    >
+      <div
+        className={cn(
+          "text-center font-display tabular-nums tracking-[0.04em] leading-none py-1",
+          iconsOnly ? "text-[13px]" : "text-[15px]",
+          band,
+        )}
+      >
+        {label}
+      </div>
+      <div className="flex-1 flex flex-col items-center justify-evenly px-1 py-0.5">
+        {day.entries.map((entry, i) => (
+          <CalendarEntryRow key={`${entry.label}-${i}`} entry={entry} past={past} iconsOnly={iconsOnly} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const ROLE_CLASS: Record<PodCalendarEntry["role"], string> = {
+  latest: "text-text",
+  cube: "text-text",
+  flashback: "text-blue",
+  arrival: "text-green",
+  championship: "text-gold",
+};
+
+function CalendarEntryRow({
+  entry,
+  past,
+  iconsOnly,
+}: {
+  entry: PodCalendarEntry;
+  past: boolean;
+  iconsOnly: boolean;
+}) {
+  const glyph =
+    entry.glyph === "FLASHBACK" ? "FLASHBACK" : setGlyphCode({ code: entry.glyph, custom: !!cubeCobraUrl(entry.glyph) });
+  const glyphColor = past
+    ? "text-dim"
+    : entry.role === "championship"
+      ? "text-gold"
+      : entry.role === "flashback"
+        ? "text-blue"
+        : "text-white";
+  return (
+    <span className={cn("flex items-center gap-1.5 min-w-0 max-w-full", past && "opacity-60")}>
+      <SetGlyph code={glyph} size={iconsOnly ? 26 : 22} className={cn("shrink-0", glyphColor)} />
+      {!iconsOnly && (
+        <span
+          className={cn(
+            "font-display tracking-[0.02em] leading-none text-[15px] truncate",
+            past ? "text-dim" : ROLE_CLASS[entry.role],
+          )}
+        >
+          {entry.label}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function SlotSchedule() {
+  const tz = viewerTimeZoneAbbr();
   return (
     <span className="flex items-center gap-3 whitespace-nowrap">
       <span
@@ -792,6 +973,11 @@ function SlotSchedule() {
           >
             {easternHourInLocalTime(slot.easternHour)}
           </span>
+          {tz && (
+            <span className="font-display text-subtle tracking-[0.08em] leading-none" style={{ fontSize: 13 }}>
+              {tz}
+            </span>
+          )}
         </span>
       ))}
     </span>
@@ -1386,11 +1572,13 @@ function MobileEventsBlock({
   loading,
   nowMs,
   activeSet,
+  cubeCobraHref,
 }: {
   played: PodEventSummary[];
   loading: boolean;
   nowMs: number;
   activeSet: string;
+  cubeCobraHref: string | null;
 }) {
   const [tab, setTab] = useState<EventsTab>("upcoming");
   const disclosure = useRowDisclosure(undefined);
@@ -1407,7 +1595,17 @@ function MobileEventsBlock({
       {tab === "upcoming" ? (
         <>
           <PodActionRow />
-          {(loading || played[0]) && <SectionHeading label="LAST EVENT" compact />}
+          <div className="px-3 py-2.5 border-b border-border bg-surface flex justify-center">
+            <SlotSchedule />
+          </div>
+          <UpcomingCalendar iconsOnly mobile />
+          {(loading || played[0]) && (
+            <SectionHeading
+              label="LAST EVENT"
+              compact
+              meta={cubeCobraHref ? <CubeListLink href={cubeCobraHref} /> : undefined}
+            />
+          )}
           {loading ? (
             <EventRowSkeleton index={0} stacked />
           ) : (
@@ -1484,6 +1682,21 @@ function MobileFilterBar({
       {formatSelector && <div className="flex-1 min-w-0 flex">{formatSelector}</div>}
       {cardDataLink && <div className="flex-1 min-w-0 flex">{cardDataLink}</div>}
     </div>
+  );
+}
+
+// Compact CubeCobra link for the mobile LAST EVENT heading, where the hero label link has no home
+function CubeListLink({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1.5 no-underline text-green transition-colors hover:text-green/70 font-display text-[12px] tracking-[0.14em] leading-none"
+    >
+      VIEW CUBECOBRA LIST
+      <ArrowUpRight size={14} className="shrink-0" />
+    </a>
   );
 }
 
@@ -1567,9 +1780,10 @@ function SetHero({
           <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
             {allSeasons ? "POD DRAFTS" : activeSet}
           </span>
-          <span className="font-display text-[22px] text-muted tracking-[0.06em]">
-            {allSeasons ? "ALL SEASONS" : (setMeta?.name?.toUpperCase() ?? "")}
-          </span>
+          <HeroFormatLabel
+            label={allSeasons ? "ALL SEASONS" : (setMeta?.name?.toUpperCase() ?? "")}
+            cubeHref={!allSeasons && !bySet ? cubeCobraUrl(activeSet) : null}
+          />
         </div>
         <div className="font-mono text-[11px] text-muted mt-1 flex items-center justify-between gap-4 h-4">
           {!allSeasons && !bySet && (
@@ -1589,5 +1803,27 @@ function SetHero({
         />
       )}
     </div>
+  );
+}
+
+// The format name beside the hero title. On a cube board it opens the CubeCobra card list, hovering green
+// with an external-link mark; on a set board it stays plain text.
+function HeroFormatLabel({ label, cubeHref }: { label: string; cubeHref: string | null }) {
+  const className = "font-display text-[22px] text-muted tracking-[0.06em]";
+  if (!cubeHref) {
+    return <span className={className}>{label}</span>;
+  }
+  return (
+    <Tooltip label="View in CubeCobra" side="top" delayDuration={ROW_TOOLTIP_DELAY}>
+      <a
+        href={cubeHref}
+        target="_blank"
+        rel="noreferrer"
+        className={cn(className, "group inline-flex items-center gap-1 no-underline transition-colors hover:text-green")}
+      >
+        {label}
+        <ArrowUpRight size={18} className="shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+      </a>
+    </Tooltip>
   );
 }

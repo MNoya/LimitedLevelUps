@@ -601,6 +601,16 @@ class PodScheduleSlot(Base):
     )
 
 
+class PodCalendarDay(Base):
+    """The resolved pod format calendar the site renders, one row per day, rebuilt by the schedule tick from
+    the same planned_on/championship logic that draws the Discord card. Entries are ordered display cells."""
+    __tablename__ = "pod_calendar_days"
+
+    day     = Column(Date, primary_key=True)
+    entries = Column(JSONB, nullable=False, server_default="[]")
+    band    = Column(String, nullable=True)
+
+
 class PodFormatVote(Base):
     __tablename__ = "pod_format_votes"
 

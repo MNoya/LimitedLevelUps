@@ -13,6 +13,13 @@ export function easternHourInLocalTime(hour: number): string {
   return formatLocalTime(podSlotInstant(hour).toISOString());
 }
 
+// The viewer's own timezone as the browser names it: an abbreviation like UYT or EST where the zone has
+// one, else a GMT offset like GMT-3. Best effort, so times read as local rather than some fixed zone.
+export function viewerTimeZoneAbbr(): string {
+  const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" }).formatToParts(new Date());
+  return parts.find((p) => p.type === "timeZoneName")?.value ?? "";
+}
+
 export function podSlotInstant(hour: number, base: Date = new Date()): Date {
   const asIfUtc = Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), hour);
   return new Date(asIfUtc + easternOffsetMs(asIfUtc));

@@ -25,6 +25,18 @@ export interface PodSetCode {
   firstEvent?: string; // earliest pod event date under this code, for chronological sorting
 }
 
+export interface PodCalendarEntry {
+  label: string; // display code, e.g. HOB / PEASANT / CHAMPS / TBD
+  glyph: string; // set/cube glyph code, FLASHBACK for the placeholder
+  role: "latest" | "cube" | "flashback" | "arrival" | "championship";
+}
+
+export interface PodCalendarDayRow {
+  day: string; // ISO date
+  entries: PodCalendarEntry[];
+  band: "arrival" | "championship" | null;
+}
+
 export interface CubeSeason {
   setCode: string; // virtual code, e.g. "CUBE-SOS" or "CUBE-PLANAR"
   kind: "season" | "variant"; // a set window of the seasoned cube, or a whole cube

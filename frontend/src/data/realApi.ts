@@ -52,6 +52,7 @@ import type {
   PodEventSummary,
   PodLeaderboardRow,
   PodSeasonResultRow,
+  PodCalendarDayRow,
   PodSetCode,
   RecentTrophy,
   SetPlayed,
@@ -169,6 +170,22 @@ export async function fetchCubeSeasons(): Promise<CubeSeason[]> {
       lastEvent: r.last_event as string,
       events: (r.events as number) ?? 0,
       players: (r.players as number) ?? 0,
+    };
+  });
+}
+
+export async function fetchPodCalendar(): Promise<PodCalendarDayRow[]> {
+  const { data, error } = await client()
+    .from("public_pod_calendar")
+    .select("day, entries, band")
+    .order("day", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((raw) => {
+    const r = raw as Record<string, unknown>;
+    return {
+      day: r.day as string,
+      entries: (r.entries as PodCalendarDayRow["entries"] | null) ?? [],
+      band: (r.band as PodCalendarDayRow["band"]) ?? null,
     };
   });
 }

@@ -41,6 +41,7 @@ import {
   fetchPodEvents,
   fetchPodLeaderboard,
   fetchPodEventDates,
+  fetchPodCalendar,
   fetchPodSeasonEvents,
   fetchPodSeasonResults,
   fetchPodResultsForSet,
@@ -619,6 +620,14 @@ export function usePodSetCodes() {
   return useQuery({
     queryKey: ["pod-set-codes"],
     queryFn: fetchPodSetCodes,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function usePodCalendar() {
+  return useQuery({
+    queryKey: ["pod-calendar"],
+    queryFn: fetchPodCalendar,
     staleTime: THIRTY_MINUTES,
   });
 }

@@ -27,6 +27,7 @@ import type {
   PodEventSummary,
   PodLeaderboardRow,
   PodSeasonResultRow,
+  PodCalendarDayRow,
   PodSetCode,
   RecentTrophy,
   SetSummary,
@@ -606,6 +607,48 @@ export const fetchPodEventDates = (): Promise<string[]> =>
   wait(podEventsFixture.map((e) => e.eventDate));
 
 export const fetchPodSetCodes = (): Promise<PodSetCode[]> => wait(podSetCodesFixture);
+
+// Mon-start weeks up to the week of the next rotation, mirroring the bot-resolved window: a championship
+// the Saturday before a Monday rotation, then the new set alone. The site shows two weeks, expands to all.
+export const fetchPodCalendar = (): Promise<PodCalendarDayRow[]> => {
+  const FLASHBACKS = ["TLA", "KHM", "IKO", "NEO", "MOM", "WOE", "DFT"];
+  const CHAMPS_DAY = 33;
+  const ROTATION_DAY = 35;
+  const monday = new Date();
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const rows: PodCalendarDayRow[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + i);
+    const day = d.toISOString().slice(0, 10);
+    if (i === CHAMPS_DAY) {
+      rows.push({ day, entries: [{ label: "CHAMPS", glyph: "HOB", role: "championship" }], band: "championship" });
+    } else if (i === ROTATION_DAY) {
+      rows.push({ day, entries: [{ label: "FRA", glyph: "FRA", role: "arrival" }], band: "arrival" });
+    } else if (i > ROTATION_DAY) {
+      rows.push({ day, entries: [{ label: "FRA", glyph: "FRA", role: "latest" }], band: null });
+    } else if (i % 2 === 0) {
+      rows.push({
+        day,
+        entries: [
+          { label: "MEMA", glyph: "MEMA", role: "cube" },
+          { label: FLASHBACKS[i % FLASHBACKS.length], glyph: FLASHBACKS[i % FLASHBACKS.length], role: "flashback" },
+        ],
+        band: null,
+      });
+    } else {
+      rows.push({
+        day,
+        entries: [
+          { label: "HOB", glyph: "HOB", role: "latest" },
+          { label: "PEASANT", glyph: "PEASANT", role: "cube" },
+        ],
+        band: null,
+      });
+    }
+  }
+  return wait(rows);
+};
 
 // --- P0P1 contest ---
 
