@@ -85,12 +85,7 @@ from bot.services.bot_log import BotLog
 from bot.services.lobby_embed import LobbyReadyButtonView, ReadyCheckAnswerView
 from bot.services.pod_draft_manager import rehydrate_active_lobbies
 from bot.services.pod_team_board import TeamReportButton, TeamRevealReportButton
-from bot.services.pod_hold_view import (
-    AttendeesButton,
-    FeaturePlayersButton,
-    MovePlayersButton,
-    OpenTablesButton,
-)
+from bot.services.pod_hold_view import AttendeesButton, OpenTablesButton
 from bot.services.pod_join_button import JoinDraftButton, MockJoinDraftButton
 from bot.services.pod_link_dm import DmLinkArenaButton
 from bot.services.pod_disconnect import DisconnectVoteButton
@@ -328,8 +323,6 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(JoinDraftButton)
         bot.add_dynamic_items(AttendeesButton)
         bot.add_dynamic_items(OpenTablesButton)
-        bot.add_dynamic_items(FeaturePlayersButton)
-        bot.add_dynamic_items(MovePlayersButton)
         bot.add_dynamic_items(SandboxButton)
         bot.add_dynamic_items(MockJoinDraftButton)
         bot.add_dynamic_items(DmLinkArenaButton)

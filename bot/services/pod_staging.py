@@ -387,56 +387,6 @@ def _family_pod(event: PodDraftEvent, roster: list[tuple[str, str, str]]) -> Fam
     )
 
 
-def move_players_sync(family_event_ids: list[str], target_event_id: str, discord_ids: list[str]) -> int:
-    """Put these players on one table of a family and take them off every other, and say how many moved.
-
-    The organizer's answer, not a player's, so it lands as confirmed: they are being placed on a table
-    because somebody in the room knows they are coming to it. Display names are carried across from the
-    row being taken away, so a move never invents a name the pod has not seen."""
-    wanted = set(discord_ids)
-    if not wanted:
-        return 0
-    now = datetime.now(timezone.utc)
-    with SessionLocal() as session:
-        signals = session.execute(
-            select(PodSignal).where(PodSignal.event_id.in_(family_event_ids))
-        ).scalars().all()
-        target = next((signal for signal in signals if signal.event_id == target_event_id), None)
-        if target is None:
-            return 0
-        moved = 0
-        names: dict[str, str] = {}
-        for signal in signals:
-            members = session.execute(
-                select(PodSignalMember).where(
-                    PodSignalMember.signal_id == signal.id,
-                    PodSignalMember.discord_user_id.in_(wanted),
-                )
-            ).scalars().all()
-            for member in members:
-                names[member.discord_user_id] = member.display_name
-                if signal.id == target.id:
-                    member.rsvp = RSVP_YES
-                    member.confirmed_at = member.confirmed_at or now
-                else:
-                    session.delete(member)
-                    moved += 1
-        session.flush()
-        seated = {
-            row[0] for row in session.execute(
-                select(PodSignalMember.discord_user_id)
-                .where(PodSignalMember.signal_id == target.id)
-            ).all()
-        }
-        for discord_id in wanted - seated:
-            session.add(PodSignalMember(
-                signal_id=target.id, discord_user_id=discord_id,
-                display_name=names.get(discord_id, discord_id), rsvp=RSVP_YES, confirmed_at=now,
-            ))
-        session.commit()
-        return moved
-
-
 def set_feature_sync(event_id: str, discord_ids: list[str]) -> None:
     """Pin exactly these players to Table 1, clear it from everyone else on the pod, and confirm the pinned"""
     wanted = set(discord_ids)

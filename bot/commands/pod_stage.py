@@ -30,7 +30,6 @@ from bot.services.pod_launch import (
     register_stage_pods,
     scheduled_card_ref_sync,
 )
-from bot.services.pod_hold_view import build_tables_map_items
 from bot.services.pod_link_dm import pod_thread_link
 from bot.services.pod_reminder_copy import STAGED_TABLES_ROW, STAGED_TABLES_TITLE
 from bot.services.pod_schedule import build_staged_table_message
@@ -231,11 +230,8 @@ async def _point_at_the_tables(
         description="\n".join([STAGED_TABLES_TITLE.format(count=len(family))] + rows),
         color=discord.Color.green(),
     )
-    view = discord.ui.View(timeout=None)
-    for item in build_tables_map_items(source_event_id):
-        view.add_item(item)
     try:
-        await thread.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
+        await thread.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:
         log.warning(f"pod-stage: could not point at the tables off {source_event_id}", exc_info=True)
 

@@ -1,12 +1,13 @@
-"""The organizer's controls on a busy pod: two while it holds, one after it has split.
+"""The organizer's controls on a busy pod that holds for attendance.
 
 📋 on the held card opens a private tick list of the roster, so someone in the room can record what the
-buttons could not. Open Tables ends the wait early, which is the same release the start time would
-have run. 📋 on the overview card moves players between the tables the split made.
+buttons could not, and while the pod is holding it also carries a Feature On Table 1 picker that pins a
+player to the first table the split opens. Open Tables ends the wait early, which is the same release the
+start time would have run.
 
-All three carry the event id in their custom_id, so they keep working after a restart. The hold pair is
-rendered greyed out once the tables open, and a press that slips through the moment before that edit
-lands is acknowledged and dropped.
+Both carry the event id in their custom_id, so they keep working after a restart. They are rendered greyed
+out once the tables open, and a press that slips through the moment before that edit lands is acknowledged
+and dropped.
 
 What a picker records is news the channel sends itself. A followup would post as a reply to the private
 picker, which the room reads as a reply to a deleted message.
@@ -14,7 +15,6 @@ picker, which the room reads as a reply to a deleted message.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import re
 
@@ -28,36 +28,20 @@ from bot.commands.messages import (
     MSG_ATTENDEES_SAVED,
     MSG_DECLINE_DONE,
     MSG_DECLINE_PLACEHOLDER,
-    MSG_FEATURE_BUTTON,
-    MSG_FEATURE_CLEARED,
     MSG_FEATURE_DONE,
-    MSG_FEATURE_LEAD,
-    MSG_FEATURE_PLAYERS_BUTTON,
+    MSG_FEATURE_PLACEHOLDER,
     MSG_NOT_ORGANIZER_ATTENDEES,
     MSG_NOT_ORGANIZER_TABLES,
-    MSG_MOVE_BUTTON,
-    MSG_MOVE_DONE,
-    MSG_MOVE_LEAD,
-    MSG_MOVE_NOTHING_PICKED,
-    MSG_MOVE_PLAYERS_BUTTON,
-    MSG_MOVE_PLAYERS_PLACEHOLDER,
-    MSG_MOVE_TABLE_PLACEHOLDER,
-    MSG_NOT_ORGANIZER_MOVE,
     MSG_OPEN_TABLES_BUTTON,
     MSG_OPEN_TABLES_DONE,
-    MSG_STAGED_POD_SEATS,
-    MSG_TABLE_SEATED,
 )
 from bot.discord_helpers import run_detached
 from bot.services.pod_confirm import decline_players_sync, set_confirmations_sync
 from bot.services.pod_launch import cancel_release, is_holding, release_attendance_hold
 from bot.services.pod_staging import (
-    FamilyPod,
     Signup,
     confirmed_first_roster_sync,
     is_featured,
-    move_players_sync,
-    pod_family_sync,
     set_feature_sync,
     unfeatured_name,
 )
@@ -67,8 +51,6 @@ from bot.tasks.pod_draft_reminder import refresh_or_repost_roster_reminder
 
 ATTENDEES_BUTTON_PREFIX = "podattendees"
 OPEN_TABLES_BUTTON_PREFIX = "podopentables"
-FEATURE_BUTTON_PREFIX = "podfeature"
-MOVE_BUTTON_PREFIX = "podmoveplayers"
 SELECT_LIMIT = 25
 
 log = logging.getLogger(__name__)
@@ -102,7 +84,9 @@ class AttendeesButton(ui.DynamicItem[ui.Button], template=rf"{ATTENDEES_BUTTON_P
             await interaction.followup.send(MSG_ATTENDEES_EMPTY, ephemeral=True)
             return
         await interaction.followup.send(
-            MSG_ATTENDEES_LEAD, view=_AttendeesView(self.event_id, roster), ephemeral=True,
+            MSG_ATTENDEES_LEAD,
+            view=_AttendeesView(self.event_id, roster, featuring=is_holding(self.event_id)),
+            ephemeral=True,
         )
 
 
@@ -142,51 +126,20 @@ class OpenTablesButton(
         log.info(f"attendance hold on {self.event_id}: opened early by {interaction.user}")
 
 
-class FeaturePlayersButton(
-    ui.DynamicItem[ui.Button], template=rf"{FEATURE_BUTTON_PREFIX}:(?P<event_id>.+)",
-):
-    """Pin a player to Table 1 before the split, so the release seats them at the first table it opens"""
-
-    def __init__(self, event_id: str, disabled: bool = False) -> None:
-        super().__init__(ui.Button(
-            style=discord.ButtonStyle.secondary, emoji="📌", label=MSG_FEATURE_PLAYERS_BUTTON,
-            disabled=disabled, custom_id=f"{FEATURE_BUTTON_PREFIX}:{event_id}",
-        ))
-        self.event_id = event_id
-
-    @classmethod
-    async def from_custom_id(cls, interaction: discord.Interaction, item: ui.Button, match: re.Match):
-        return cls(match["event_id"])
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        if not await is_pod_organizer(interaction.client, interaction.user):
-            await interaction.response.send_message(MSG_NOT_ORGANIZER_MOVE, ephemeral=True)
-            return
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        roster = await asyncio.to_thread(confirmed_first_roster_sync, self.event_id)
-        if not roster:
-            await interaction.followup.send(MSG_ATTENDEES_EMPTY, ephemeral=True)
-            return
-        await interaction.followup.send(
-            MSG_FEATURE_LEAD, view=_FeatureView(self.event_id, roster), ephemeral=True,
-        )
-
-
 def build_hold_items(
     event_id: str, *, confirming: bool, held: bool, holding: bool,
 ) -> list[ui.Item]:
     """The organizer controls a roster card carries beyond its RSVP row.
 
-    The tick list spans the whole confirmation window; opening the tables is the hold's own act and needs
-    a hold to end, and featuring a player to Table 1 only matters while that release is still to come. All
-    grey out afterwards rather than vanishing, and Discord refuses a disabled press, so none needs copy
-    saying the moment has passed."""
+    The tick list spans the whole confirmation window and carries the Feature On Table 1 picker while the
+    pod is holding; opening the tables is the hold's own act and needs a hold to end. Both grey out
+    afterwards rather than vanishing, and Discord refuses a disabled press, so neither needs copy saying
+    the moment has passed."""
     items: list[ui.Item] = []
     if confirming or held:
         items.append(AttendeesButton(event_id, disabled=held and not holding))
     if held:
         items.append(OpenTablesButton(event_id, disabled=not holding))
-        items.append(FeaturePlayersButton(event_id, disabled=not holding))
     return items
 
 
@@ -194,11 +147,13 @@ class _AttendeesView(ui.View):
     """The private tick list. It is ephemeral and short-lived, so it holds the roster in memory rather
     than in a custom_id, and a stale copy left open simply writes what it was showing."""
 
-    def __init__(self, event_id: str, roster: list[Signup]) -> None:
+    def __init__(self, event_id: str, roster: list[Signup], *, featuring: bool) -> None:
         super().__init__(timeout=600)
-        self.names = {signup.discord_id: signup.display_name for signup in roster}
+        self.names = {signup.discord_id: unfeatured_name(signup.display_name) for signup in roster}
         self.add_item(_AttendeesSelect(event_id, roster))
         self.add_item(_DeclineSelect(event_id, roster))
+        if featuring:
+            self.add_item(_FeatureSelect(event_id, roster))
 
 
 def _named(view: ui.View, discord_ids: list[str]) -> str:
@@ -208,12 +163,21 @@ def _named(view: ui.View, discord_ids: list[str]) -> str:
     return ", ".join(view.names.get(discord_id, discord_id) for discord_id in discord_ids)
 
 
+def _and_named(view: ui.View, discord_ids: list[str]) -> str:
+    """Like _named, joined for a sentence: one name alone, two with 'and', more with commas and a final 'and'"""
+    names = [view.names.get(discord_id, discord_id) for discord_id in discord_ids]
+    if len(names) <= 1:
+        return names[0] if names else ""
+    return f"{', '.join(names[:-1])} and {names[-1]}"
+
+
 class _AttendeesSelect(ui.Select):
     def __init__(self, event_id: str, roster: list[Signup]) -> None:
         shown = roster[:SELECT_LIMIT]
         options = [
             discord.SelectOption(
-                label=signup.display_name[:100], value=signup.discord_id, default=signup.confirmed,
+                label=unfeatured_name(signup.display_name)[:100], value=signup.discord_id,
+                default=signup.confirmed,
             )
             for signup in shown
         ]
@@ -248,165 +212,14 @@ class _AttendeesSelect(ui.Select):
         )
 
 
-class MovePlayersButton(
-    ui.DynamicItem[ui.Button], template=rf"{MOVE_BUTTON_PREFIX}:(?P<event_id>.+)",
-):
-    """The overview card's one control, once a pod has split. The tick list on the held card decided who
-    was coming; this one decides where they sit, which is only a question once there is more than one
-    table to sit at. Labelled, since an unlabelled 📋 on a card of finished tables reads as decoration."""
-
-    def __init__(self, event_id: str) -> None:
-        super().__init__(ui.Button(
-            style=discord.ButtonStyle.secondary, emoji="📋", label=MSG_MOVE_PLAYERS_BUTTON,
-            custom_id=f"{MOVE_BUTTON_PREFIX}:{event_id}",
-        ))
-        self.event_id = event_id
-
-    @classmethod
-    async def from_custom_id(cls, interaction: discord.Interaction, item: ui.Button, match: re.Match):
-        return cls(match["event_id"])
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        if not await is_pod_organizer(interaction.client, interaction.user):
-            await interaction.response.send_message(MSG_NOT_ORGANIZER_MOVE, ephemeral=True)
-            return
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        family = await asyncio.to_thread(pod_family_sync, self.event_id)
-        seated = await asyncio.gather(*(
-            asyncio.to_thread(confirmed_first_roster_sync, pod.event_id) for pod in family
-        ))
-        players = [
-            (signup, pod.index) for pod, roster in zip(family, seated) for signup in roster
-        ]
-        if len(family) < 2 or not players:
-            await interaction.followup.send(MSG_ATTENDEES_EMPTY, ephemeral=True)
-            return
-        await interaction.followup.send(
-            MSG_MOVE_LEAD, view=_MoveView(family, players), ephemeral=True,
-        )
-
-
-def build_tables_map_items(event_id: str) -> list[ui.Item]:
-    """Move Players, carried by the map of the tables in the thread everybody is in. It sat on the
-    overview card in the channel, a scroll away from the tables it moves people between."""
-    return [MovePlayersButton(event_id)]
-
-
-class _MoveView(ui.View):
-    """Players, then a table, then Move. Two selects cannot answer together, so each one records what it
-    was given and the button is what reads both."""
-
-    def __init__(self, family: list[FamilyPod], players: list[tuple[Signup, int]]) -> None:
-        super().__init__(timeout=600)
-        self.family = family
-        self.names = {signup.discord_id: signup.display_name for signup, _ in players}
-        self.chosen_players: list[str] = []
-        self.chosen_table: str | None = None
-        self.add_item(_MovePlayerSelect(players))
-        self.add_item(_MoveTableSelect(family))
-        self.add_item(_MoveApplyButton())
-
-
-class _MovePlayerSelect(ui.Select):
-    def __init__(self, players: list[tuple[Signup, int]]) -> None:
-        super().__init__(
-            placeholder=MSG_MOVE_PLAYERS_PLACEHOLDER,
-            options=[
-                discord.SelectOption(
-                    label=signup.display_name[:100], value=signup.discord_id,
-                    description=MSG_TABLE_SEATED.format(index=index),
-                )
-                for signup, index in players[:SELECT_LIMIT]
-            ],
-            min_values=1, max_values=min(len(players), SELECT_LIMIT),
-        )
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        self.view.chosen_players = list(self.values)
-        await interaction.response.defer()
-
-
-class _MoveTableSelect(ui.Select):
-    def __init__(self, family: list[FamilyPod]) -> None:
-        super().__init__(
-            placeholder=MSG_MOVE_TABLE_PLACEHOLDER,
-            options=[
-                discord.SelectOption(label=pod.name[:100], value=pod.event_id)
-                for pod in family[:SELECT_LIMIT]
-            ],
-        )
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        self.view.chosen_table = self.values[0]
-        await interaction.response.defer()
-
-
-class _MoveApplyButton(ui.Button):
-    def __init__(self) -> None:
-        super().__init__(style=discord.ButtonStyle.primary, label=MSG_MOVE_BUTTON)
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        view: _MoveView = self.view
-        if not view.chosen_players or view.chosen_table is None:
-            await interaction.response.send_message(MSG_MOVE_NOTHING_PICKED, ephemeral=True)
-            return
-        await interaction.response.defer()
-        target = next(pod for pod in view.family if pod.event_id == view.chosen_table)
-        await asyncio.to_thread(
-            move_players_sync, [pod.event_id for pod in view.family], target.event_id,
-            view.chosen_players,
-        )
-        await interaction.channel.send(
-            MSG_MOVE_DONE.format(
-                actor=interaction.user.display_name, players=_named(view, view.chosen_players),
-                index=target.index,
-            ),
-            allowed_mentions=discord.AllowedMentions.none(),
-        )
-        run_detached(
-            _tell_the_table_who_joined(interaction, target, view.chosen_players),
-            f"the move onto table {target.index}",
-        )
-
-
-async def _tell_the_table_who_joined(
-    interaction: discord.Interaction, target: FamilyPod, discord_ids: list[str],
-) -> None:
-    """Name the moved players in the table they now belong to, which both tells them and subscribes them
-    to its thread. A move nobody is told about is a roster edit the players never act on."""
-    if not target.thread_id:
-        return
-    thread = interaction.client.get_channel(int(target.thread_id))
-    if not isinstance(thread, discord.Thread):
-        return
-    mentions = " ".join(f"<@{discord_id}>" for discord_id in discord_ids if discord_id.isdigit())
-    if not mentions:
-        return
-    with contextlib.suppress(discord.HTTPException):
-        await thread.send(
-            MSG_STAGED_POD_SEATS.format(index=target.index, mentions=mentions),
-            allowed_mentions=discord.AllowedMentions(users=True),
-        )
-
-
-class _FeatureView(ui.View):
-    """Pick who leads Table 1 off. One multi-select of the roster and a button, so an organizer who opens
-    it and presses without touching the select leaves the current picks as they are."""
+class _FeatureSelect(ui.Select):
+    """Pin players to Table 1 so the release seats them at the first table it opens. Carried by the tick
+    list only while the pod is holding, since a pod that will not split has one table to seat everyone."""
 
     def __init__(self, event_id: str, roster: list[Signup]) -> None:
-        super().__init__(timeout=600)
-        self.event_id = event_id
-        self.names = {signup.discord_id: unfeatured_name(signup.display_name) for signup in roster}
-        self.chosen = [signup.discord_id for signup in roster if is_featured(signup.display_name)]
-        self.add_item(_FeatureSelect(roster))
-        self.add_item(_FeatureApplyButton())
-
-
-class _FeatureSelect(ui.Select):
-    def __init__(self, roster: list[Signup]) -> None:
         shown = roster[:SELECT_LIMIT]
         super().__init__(
-            placeholder=MSG_MOVE_PLAYERS_PLACEHOLDER,
+            placeholder=MSG_FEATURE_PLACEHOLDER,
             options=[
                 discord.SelectOption(
                     label=unfeatured_name(signup.display_name)[:100], value=signup.discord_id,
@@ -416,30 +229,22 @@ class _FeatureSelect(ui.Select):
             ],
             min_values=0, max_values=len(shown),
         )
+        self.event_id = event_id
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        self.view.chosen = list(self.values)
         await interaction.response.defer()
-
-
-class _FeatureApplyButton(ui.Button):
-    def __init__(self) -> None:
-        super().__init__(style=discord.ButtonStyle.primary, label=MSG_FEATURE_BUTTON)
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        view: _FeatureView = self.view
-        await interaction.response.defer()
-        await asyncio.to_thread(set_feature_sync, view.event_id, view.chosen)
-        if view.chosen:
-            message = MSG_FEATURE_DONE.format(
-                actor=interaction.user.display_name, players=_named(view, view.chosen),
-            )
-        else:
-            message = MSG_FEATURE_CLEARED.format(actor=interaction.user.display_name)
-        await interaction.channel.send(message, allowed_mentions=discord.AllowedMentions.none())
+        await asyncio.to_thread(set_feature_sync, self.event_id, self.values)
+        if not self.values:
+            return
+        await interaction.channel.send(
+            MSG_FEATURE_DONE.format(
+                actor=interaction.user.display_name, players=_and_named(self.view, self.values),
+            ),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
         run_detached(
-            refresh_or_repost_roster_reminder(view.event_id),
-            f"the roster card after a feature edit on {view.event_id}",
+            refresh_or_repost_roster_reminder(self.event_id),
+            f"the roster card after a feature edit on {self.event_id}",
         )
 
 
@@ -454,7 +259,7 @@ class _DeclineSelect(ui.Select):
         super().__init__(
             placeholder=MSG_DECLINE_PLACEHOLDER,
             options=[
-                discord.SelectOption(label=signup.display_name[:100], value=signup.discord_id)
+                discord.SelectOption(label=unfeatured_name(signup.display_name)[:100], value=signup.discord_id)
                 for signup in roster[:SELECT_LIMIT]
             ],
             min_values=0, max_values=min(len(roster), SELECT_LIMIT),
