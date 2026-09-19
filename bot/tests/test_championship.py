@@ -203,6 +203,20 @@ def test_frozen_override_seeds_against_live_standings(session):
     assert [(a.display_name, a.rank, a.score) for a in seeded] == [("Alice", 1, 40.0), ("Bob", 2, 30.0)]
 
 
+def test_frozen_seed_holds_when_the_live_board_no_longer_carries_the_player(session):
+    magic_set = _seed_set(session, "MSH")
+    alice = _seed_player(session, "Alice", "1")
+    dropped = _seed_player(session, "Dropped", "2")
+    _seed_stats(session, alice, magic_set, trophies=2, events=4)
+    session.commit()
+
+    frozen = {alice.id: FrozenSeed(2, 30.0), dropped.id: FrozenSeed(1, 40.0)}
+
+    seeded = seed_attendees(session, ["Alice", "Dropped"], frozen)
+
+    assert [(a.display_name, a.rank) for a in seeded] == [("Dropped", 1), ("Alice", 2)]
+
+
 def test_the_override_is_the_frozen_snapshot_for_a_championship_and_nothing_for_a_pod(session):
     """Every surface that ranks a championship roster resolves through one override, so the seeding card,
     the launcher pointer and the seats the draft is dealt in cannot read different scales. A player absent

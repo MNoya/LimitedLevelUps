@@ -237,28 +237,52 @@ async def catch_up_daily_poll(bot: commands.Bot) -> None:
 
     A board that stands is repainted on the way out, so a deploy that changes what the board says lands on the
     message already posted: it is edited in place all day and nothing else redraws it until the next signup,
-    which can be hours later. A board this just posted is already current and is left alone."""
+    which can be hours later. A board this just posted is already current and is left alone.
+
+    Whether the day's post is owed is read off the channel, never the signal rows: a board whose every slot is
+    covered by an existing pod binds no row, so a fresh post is invisible to a DB lookup and every deploy
+    would re-post it. The channel is the truth for what is on screen."""
     now = datetime.now(SCHEDULE_TZ)
     today = now.date()
+    channel = _poll_channel(bot)
     if now.hour >= POST_HOUR_ET:
-        ref = await asyncio.to_thread(pod_launch.launcher_ref_for_date_sync, today)
-        if ref is None or _posted_before_the_post_hour(ref[1], now):
+        if channel is None:
+            log.warning("catch_up_daily_poll: coordination channel unresolved")
+            return
+        post_hour = now.replace(hour=POST_HOUR_ET, minute=0, second=0, microsecond=0)
+        existing = await _launcher_posted_since(channel, post_hour, bot)
+        if existing is None:
             log.info(f"catching up the daily launcher for {today}, missed at the post hour")
             await fire_daily_poll()
             return
+        log.info(f"launcher {existing.id} already up for {today}; graduating and re-rendering at startup")
+        await _graduate_held_slots(bot, str(existing.id), today)
+        await _rerender_poll(bot, str(existing.id), today, channel)
+        return
     board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
     if board is None:
         return
     _guild_id, _channel_id, message_id, board_date = board
-    if now.hour >= POST_HOUR_ET:
-        await _graduate_held_slots(bot, message_id, today)
     log.info(f"re-rendering the live launcher {message_id} for {board_date} at startup")
     await _rerender_poll(bot, message_id, board_date)
 
 
-def _posted_before_the_post_hour(message_id: str, now: datetime) -> bool:
-    """Whether a board went up before today's post hour, read off the message's own id."""
-    return _posted_before(message_id, now.replace(hour=POST_HOUR_ET, minute=0, second=0, microsecond=0))
+async def _launcher_posted_since(
+    channel: "discord.abc.Messageable", moment: datetime, bot: commands.Bot,
+) -> "discord.Message | None":
+    """The bot's own launcher board posted in this channel at or after `moment`, or None. Read off the
+    channel so a board that bound no signal row is still found."""
+    async for message in channel.history(after=moment, limit=None):
+        if message.author == bot.user and _has_launcher_embed(message):
+            return message
+    return None
+
+
+def _has_launcher_embed(message: "discord.Message") -> bool:
+    for embed in message.embeds:
+        if embed.description and POLL_TITLE in embed.description:
+            return True
+    return False
 
 
 def _posted_before(message_id: str, moment: datetime) -> bool:

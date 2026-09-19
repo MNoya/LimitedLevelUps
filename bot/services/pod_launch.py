@@ -2903,11 +2903,18 @@ def _newest_signup_per_format(primaries: list[PodDraftEvent]) -> list[PodDraftEv
     """The pods the format's most recent signup left at this slot, oldest first: every numbered table a
     split made, and the one pod where nothing split. Keyed on the name the family shares, so the tables of
     one signup stay together where a key of one pod would keep the last table and drop the pod it came
-    from, while a later signup at the same slot still replaces the earlier one."""
+    from, while a later signup at the same slot still replaces the earlier one.
+
+    A championship is never collapsed against a regular pod of its own set: it is a separate event a mod
+    stands up beside the day's draft, so a hand-made pod of the same format sits next to it rather than
+    evicting it."""
+    championships = [event for event in primaries if is_championship(event.name)]
+    regular = [event for event in primaries if not is_championship(event.name)]
     newest_family: dict[str | None, str] = {}
-    for event in primaries:
+    for event in regular:
         newest_family[event.set_code] = pod_base_name(event.name)
-    return [event for event in primaries if pod_base_name(event.name) == newest_family.get(event.set_code)]
+    kept = [event for event in regular if pod_base_name(event.name) == newest_family.get(event.set_code)]
+    return championships + kept
 
 
 def _event_formats_for_slot(session: Session, slot_time: datetime) -> set[str]:

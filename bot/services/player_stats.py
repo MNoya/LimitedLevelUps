@@ -374,6 +374,10 @@ def seed_attendees(
     deadline, so they trail the players who did instead of being placed among them on a live rank the
     deadline never saw. A seed frozen before trophies were stored keeps showing the live count, which is
     closer to the truth than a blank.
+
+    A player in the frozen snapshot keeps their seed and their wildcard even when the live board no longer
+    carries them, so this reads the same roster `championship.playing_roster` seats the draft with: both
+    order off the frozen seed alone, and neither drops a seeded player who slipped off today's board.
     """
     active = resolve_active_set(session)
     set_id = active.id if active else None
@@ -387,17 +391,14 @@ def seed_attendees(
                 continue
             seen.add(player.id)
         rp = ranked.get(player.id) if player is not None else None
-        if rp is not None:
-            frozen = rank_override.get(player.id) if rank_override else None
-            if frozen is not None:
-                trophies = frozen.trophies if frozen.trophies is not None else rp.trophies
-                seeded.append(SeededAttendee(
-                    rp.slug, rp.display_name, frozen.rank, frozen.score, trophies, frozen.wildcard,
-                ))
-            elif rank_override:
-                seeded.append(SeededAttendee(rp.slug, rp.display_name, None, None, None))
-            else:
-                seeded.append(SeededAttendee(rp.slug, rp.display_name, rp.rank, rp.score, rp.trophies))
+        frozen = rank_override.get(player.id) if (rank_override and player is not None) else None
+        if frozen is not None:
+            trophies = frozen.trophies if frozen.trophies is not None else (rp.trophies if rp else None)
+            seeded.append(SeededAttendee(
+                player.slug, player.display_name, frozen.rank, frozen.score, trophies, frozen.wildcard,
+            ))
+        elif rp is not None and not rank_override:
+            seeded.append(SeededAttendee(rp.slug, rp.display_name, rp.rank, rp.score, rp.trophies))
         else:
             slug = player.slug if player is not None else None
             display = player.display_name if player is not None else name
