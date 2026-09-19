@@ -882,8 +882,9 @@ def champion_role_mention(role: discord.Role | None) -> str:
 
 async def swap_set_champion_role(guild: discord.Guild | None, champion_ids: Iterable[str]) -> None:
     """Hand the crown to the new Set Champion once the championship post is up, and move the outgoing
-    holder to Prior Set Champion. The two roles are exclusive: a champion who held Prior from an earlier
-    set drops it while the crown is theirs, and takes it back when the next champion is crowned."""
+    holder to Prior Set Champion. Prior holds exactly this ceremony's dethroned champion: whoever held it
+    before is dropped, so it never accumulates and always names the single previous set's champion. A
+    repeat winner keeps the crown and produces no Prior holder."""
     champions = {str(user_id) for user_id in champion_ids}
     if guild is None or not champions:
         return
@@ -891,17 +892,22 @@ async def swap_set_champion_role(guild: discord.Guild | None, champion_ids: Iter
     if champion_role is None:
         log.warning(f"no {SET_CHAMPION_ROLE_NAME!r} role in {guild.name}, crown not handed over")
         return
-    prior_role = find_role(guild, PRIOR_SET_CHAMPION_ROLE_NAME)
     holders = {str(member.id): member for member in champion_role.members}
     outgoing, incoming = plan_set_champion_swap(holders, champions)
     for user_id in outgoing:
-        await _step_down_champion(holders[user_id], champion_role, prior_role)
+        await _drop_award_role(holders[user_id], champion_role, "set championship ended")
     for user_id in incoming:
         member = guild.get_member(int(user_id))
         if member is None:
             log.info(f"champion {user_id} is not a member of {guild.name}, crown not granted")
             continue
-        await _crown_champion(member, champion_role, prior_role)
+        await _grant_award_role(member, champion_role, "set championship won")
+    prior_role = find_role(guild, PRIOR_SET_CHAMPION_ROLE_NAME)
+    if prior_role is not None and outgoing:
+        await _hand_over_role(
+            guild, prior_role, sorted(outgoing),
+            grant_reason="set championship ended", drop_reason="no longer the previous set champion",
+        )
 
 
 def set_champion_title_name(set_code: str) -> str:
@@ -1019,30 +1025,6 @@ async def _file_above_earlier_titles(role: discord.Role) -> None:
         log.info(f"filed {role.name!r} at position {target} in {role.guild.name}")
     except discord.HTTPException:
         log.warning(f"could not reorder {role.name!r} in {role.guild.name}", exc_info=True)
-
-
-async def _crown_champion(
-    member: discord.Member, champion_role: discord.Role, prior_role: discord.Role | None,
-) -> None:
-    try:
-        await member.add_roles(champion_role, reason="set championship won")
-        if prior_role is not None and prior_role in member.roles:
-            await member.remove_roles(prior_role, reason="set championship won")
-        log.info(f"granted {champion_role.name!r} to {member}")
-    except discord.HTTPException:
-        log.warning(f"could not grant {champion_role.name!r} to {member}", exc_info=True)
-
-
-async def _step_down_champion(
-    member: discord.Member, champion_role: discord.Role, prior_role: discord.Role | None,
-) -> None:
-    try:
-        await member.remove_roles(champion_role, reason="set championship ended")
-        if prior_role is not None and prior_role not in member.roles:
-            await member.add_roles(prior_role, reason="set championship ended")
-        log.info(f"moved {member} from {champion_role.name!r} to {PRIOR_SET_CHAMPION_ROLE_NAME!r}")
-    except discord.HTTPException:
-        log.warning(f"could not step {member} down from {champion_role.name!r}", exc_info=True)
 
 
 async def apply_award_roles(guild: discord.Guild | None, awarded: dict[str, Sequence[str]]) -> None:
