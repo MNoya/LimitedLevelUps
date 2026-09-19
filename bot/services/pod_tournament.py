@@ -212,13 +212,13 @@ def build_deck_ping(blocking: DeckPingAudience, other: DeckPingAudience, pod_url
     lines = []
     if block_shots or block_colors:
         lines.append(PODIUM_DECK_HEADER)
+    lines.append("Still owed:")
     if both:
-        both_mentions = _mention_run(both)
-        lines.append(f"Please post your deck screenshot {both_mentions} and submit your colors with the button below")
+        lines.append(f"📸 Screenshot + 🎨 colors (button below): {_mention_run(both)}")
     if only_shots:
-        lines.append(f"Please post your deck screenshot {_mention_run(only_shots)}")
+        lines.append(f"📸 Screenshot: {_mention_run(only_shots)}")
     if only_colors:
-        lines.append(f"Submit your deck colors with the button below {_mention_run(only_colors)}")
+        lines.append(f"🎨 Colors (button below): {_mention_run(only_colors)}")
     lines.append("")
     lines.append(_pod_page_deck_line(pod_url))
     return "\n".join(lines)

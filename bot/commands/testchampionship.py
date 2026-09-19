@@ -204,12 +204,14 @@ async def setup(bot: commands.Bot) -> None:
         """Owner-only. Preview both deck-chase messages in order: the gentle screenshot reminder that
         goes out while the last tables play, then the ping that follows the round."""
         me = ctx.author.id
+        owes_shot_only = 111111111111111111
+        owes_colors_only = 222222222222222222
         view = ui.View(timeout=None)
         view.add_item(build_live_submit_deck_button())
         view.add_item(build_live_deck_description_button())
         await ctx.send(DECK_NUDGE_MSG, allowed_mentions=discord.AllowedMentions.none())
         await ctx.send(
-            build_deck_ping(([me, me], [me, me]), ([me], [me, me]), pod_page_url("Sample Pod 7")),
+            build_deck_ping(([me, owes_shot_only], [me]), ([], [owes_colors_only]), pod_page_url("Sample Pod 7")),
             allowed_mentions=discord.AllowedMentions(users=True),
             view=view,
         )
