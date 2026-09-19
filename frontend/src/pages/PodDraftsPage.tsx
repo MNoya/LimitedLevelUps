@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, BookOpen, ChevronDown } from "lucide-react";
 
@@ -60,14 +60,9 @@ import { useAuth } from "../auth/useAuth";
 import {
   usePlayerSlugByDiscordId,
   usePodDraftArtifact,
-  usePodEventDates,
   usePodEventMatches,
   usePodEventParticipants,
-  usePodEvents,
-  usePodResultsForSet,
   usePodCalendar,
-  usePodSeasonEvents,
-  usePodSeasonResults,
   usePodSetCodes,
   useSets,
   useAllPodEvents,
@@ -215,18 +210,21 @@ export function PodDraftsPage({
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: allSets } = useSets();
   const { data: podSetCodes } = usePodSetCodes();
-  const { data: podEventDates } = usePodEventDates();
+  // The whole pod history in two reads; every scope is derived from these client-side, so switching
+  // season / board / format never fires another request
+  const { data: allEvents } = useAllPodEvents(true);
+  const { data: allResults } = useAllPodResults(true);
 
   // A season lists once it holds a pod, inside its window or drafting its own set
   const seasons = useMemo<SetSummary[]>(() => {
-    if (!allSets || !podEventDates || !podSetCodes) return [];
+    if (!allSets || !allEvents || !podSetCodes) return [];
     const played = new Set(podSetCodes.map((p) => p.code));
-    for (const date of podEventDates) {
-      const season = seasonForDate(allSets, date);
+    for (const e of allEvents) {
+      const season = seasonForDate(allSets, e.eventDate);
       if (season) played.add(season.code);
     }
     return podSeasons(allSets).filter((s) => played.has(s.code));
-  }, [allSets, podEventDates, podSetCodes]);
+  }, [allSets, allEvents, podSetCodes]);
 
   const seasonAxis = searchParams.get(AXIS_PARAM_SEASON);
   // Every season at once, the one window a route cannot name
@@ -264,26 +262,26 @@ export function PodDraftsPage({
     navigate(code === homeCode ? "/pods" : `/pods/${code}`);
   };
 
-  const seasonEvents = usePodSeasonEvents(season).data;
-  const seasonResults = usePodSeasonResults(season).data;
-  const boardEvents = usePodEvents(setCode).data;
-  const boardResults = usePodResultsForSet(setCode).data;
-  const lifetimeEvents = useAllPodEvents(allSeasons || !!bySetCode).data;
-  const lifetimeResults = useAllPodResults(allSeasons || !!bySetCode).data;
-
-  const setScopedEvents = useMemo(
-    () => (bySetCode ? lifetimeEvents?.filter((e) => e.setCode === bySetCode) : undefined),
-    [bySetCode, lifetimeEvents],
+  const boardEvents = useMemo(
+    () => (setCode ? allEvents?.filter((e) => e.setCode === setCode) : undefined),
+    [setCode, allEvents],
   );
 
-  const scopeEvents = allSeasons
-    ? lifetimeEvents
-    : bySetCode
-      ? setScopedEvents
-      : setCode
-        ? boardEvents
-        : seasonEvents;
-  const scopeResults = allSeasons || bySetCode ? lifetimeResults : setCode ? boardResults : seasonResults;
+  // A season's candidates mirror the old windowed + own-set scan; the leaderboard narrows results by
+  // event id, so scopeResults can stay the full set
+  const scopeEvents = useMemo(() => {
+    if (!allEvents) return undefined;
+    if (allSeasons) return allEvents;
+    if (bySetCode) return allEvents.filter((e) => e.setCode === bySetCode);
+    if (setCode) return boardEvents;
+    if (season) {
+      return allEvents.filter(
+        (e) => e.setCode === season.code || (e.kind !== "mock" && inSeasonWindow(season, e.eventDate)),
+      );
+    }
+    return allEvents;
+  }, [allEvents, allSeasons, bySetCode, setCode, boardEvents, season]);
+  const scopeResults = allResults;
 
   // A set below the board threshold still resolves its name when opened directly by code
   const directPod = podSetCodes?.find((p) => p.code === activeSet);
@@ -362,10 +360,10 @@ export function PodDraftsPage({
 
   // Held whole until the query lands: a switcher that grows from one chip to six reads as broken
   const switcherSets = useMemo(() => {
-    if (!podEventDates || !podSetCodes) return [];
+    if (!allEvents || !podSetCodes) return [];
     const seasonCodes = new Set(seasons.map((s) => s.code));
     return [...seasons, ...legacySets.filter((s) => !seasonCodes.has(s.code))];
-  }, [podEventDates, podSetCodes, seasons, legacySets]);
+  }, [allEvents, podSetCodes, seasons, legacySets]);
 
   const [sort, setSort] = useState<SortState>(defaultSortFor("pod"));
   const sortedLeaderboard = useMemo(() => {
@@ -738,8 +736,37 @@ function useRowDisclosure(defaultOpenId: string | undefined) {
   return { isOpen, toggle };
 }
 
+// Big pod lists render in batches, revealing more as a sentinel scrolls into view, so a busy season paints
+// its first rows fast instead of mounting every EventRow at once
+const EVENTS_INITIAL = 20;
+const EVENTS_BATCH = 20;
+
+function useIncrementalReveal(total: number) {
+  const [count, setCount] = useState(EVENTS_INITIAL);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  useEffect(() => setCount(EVENTS_INITIAL), [total]);
+  // Callback ref so the observer attaches whenever the sentinel mounts, including a tab switch that mounts
+  // the list after the first render
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      observerRef.current?.disconnect();
+      if (!node) return;
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) setCount((c) => Math.min(c + EVENTS_BATCH, total));
+        },
+        { rootMargin: "600px" },
+      );
+      observerRef.current.observe(node);
+    },
+    [total],
+  );
+  return { count, sentinelRef };
+}
+
 function EventsBlock({ events, nowMs }: { events: PodEventSummary[]; nowMs: number }) {
   const disclosure = useRowDisclosure(events[0]?.eventId);
+  const { count, sentinelRef } = useIncrementalReveal(events.length);
   return (
     <div>
       <SectionHeading
@@ -748,7 +775,7 @@ function EventsBlock({ events, nowMs }: { events: PodEventSummary[]; nowMs: numb
         unit={events.length === 1 ? "EVENT" : "EVENTS"}
       />
       <div className="flex flex-col lg:gap-2">
-        {events.map((e, i) => (
+        {events.slice(0, count).map((e, i) => (
           <EventRow
             key={e.eventId}
             event={e}
@@ -758,6 +785,7 @@ function EventsBlock({ events, nowMs }: { events: PodEventSummary[]; nowMs: numb
             onToggle={() => disclosure.toggle(e.eventId)}
           />
         ))}
+        {count < events.length && <div ref={sentinelRef} className="h-1" aria-hidden />}
       </div>
     </div>
   );
@@ -1582,6 +1610,7 @@ function MobileEventsBlock({
 }) {
   const [tab, setTab] = useState<EventsTab>("upcoming");
   const disclosure = useRowDisclosure(undefined);
+  const { count, sentinelRef } = useIncrementalReveal(played.length);
   return (
     <div>
       <div className="flex border-b border-border">
@@ -1631,7 +1660,7 @@ function MobileEventsBlock({
         <EmptyHint>No pod drafts recorded yet for {activeSet}</EmptyHint>
       ) : (
         <div className="flex flex-col">
-          {played.map((e, i) => (
+          {played.slice(0, count).map((e, i) => (
             <EventRow
               key={e.eventId}
               event={e}
@@ -1642,6 +1671,7 @@ function MobileEventsBlock({
               onToggle={() => disclosure.toggle(e.eventId)}
             />
           ))}
+          {count < played.length && <div ref={sentinelRef} className="h-1" aria-hidden />}
         </div>
       )}
     </div>

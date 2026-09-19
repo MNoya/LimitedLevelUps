@@ -1770,11 +1770,22 @@ export async function fetchPodResultsForSet(setCode: string): Promise<PodSeasonR
   return podResultsForEvents(data ?? []);
 }
 
+// The whole history in two ordered range-paged reads run in parallel, so the pods page holds every scope
+// client-side and never chains an events read into a per-event participants read
 export async function fetchAllPodResults(): Promise<PodSeasonResultRow[]> {
-  const rows = await pagedRows<Record<string, unknown>>((from, to) =>
-    client().from("public_pod_draft_events").select(POD_RESULT_EVENT_COLUMNS).range(from, to),
-  );
-  return podResultsForEvents(rows);
+  const [eventRows, participants] = await Promise.all([
+    pagedRows<Record<string, unknown>>((from, to) =>
+      client().from("public_pod_draft_events").select(POD_RESULT_EVENT_COLUMNS).order("event_id").range(from, to),
+    ),
+    pagedRows<Record<string, unknown>>((from, to) =>
+      client()
+        .from("public_pod_draft_event_participants")
+        .select("event_id, player_slug, player_display_name, avatar_url, record, placement")
+        .order("event_id")
+        .range(from, to),
+    ),
+  ]);
+  return mapParticipantsToResults(participants, eventMapFromRows(eventRows));
 }
 
 // The window and the season's own set are separate scans, so a pod in both is returned once
@@ -1803,16 +1814,26 @@ async function podSeasonRows(
 
 // Mock drafts are dropped: they play no rounds, so they carry no record to rank or score
 async function podResultsForEvents(rows: unknown[]): Promise<PodSeasonResultRow[]> {
+  const eventById = eventMapFromRows(rows);
+  if (eventById.size === 0) return [];
+  const participants = await podParticipantsForEvents(Array.from(eventById.keys()));
+  return mapParticipantsToResults(participants, eventById);
+}
+
+function eventMapFromRows(rows: unknown[]): Map<string, { setCode: string; eventTime: string }> {
   const eventById = new Map<string, { setCode: string; eventTime: string }>();
   for (const raw of rows) {
     const row = raw as { event_id: string; set_code: string; event_time: string; kind: string };
     if (row.kind === "mock") continue;
     eventById.set(row.event_id, { setCode: row.set_code, eventTime: row.event_time });
   }
-  if (eventById.size === 0) return [];
+  return eventById;
+}
 
-  const participants = await podParticipantsForEvents(Array.from(eventById.keys()));
-
+function mapParticipantsToResults(
+  participants: Record<string, unknown>[],
+  eventById: Map<string, { setCode: string; eventTime: string }>,
+): PodSeasonResultRow[] {
   const results: PodSeasonResultRow[] = [];
   for (const r of participants) {
     const slug = (r.player_slug as string | null) ?? null;
@@ -1836,12 +1857,20 @@ async function podResultsForEvents(rows: unknown[]): Promise<PodSeasonResultRow[
 const PARTICIPANT_EVENT_CHUNK = 50;
 
 async function podParticipantsForEvents(eventIds: string[]): Promise<Record<string, unknown>[]> {
-  const participants: Record<string, unknown>[] = [];
+  const chunks: string[][] = [];
   for (let i = 0; i < eventIds.length; i += PARTICIPANT_EVENT_CHUNK) {
-    const { data, error } = await client()
-      .from("public_pod_draft_event_participants")
-      .select("event_id, player_slug, player_display_name, avatar_url, record, placement")
-      .in("event_id", eventIds.slice(i, i + PARTICIPANT_EVENT_CHUNK));
+    chunks.push(eventIds.slice(i, i + PARTICIPANT_EVENT_CHUNK));
+  }
+  const responses = await Promise.all(
+    chunks.map((ids) =>
+      client()
+        .from("public_pod_draft_event_participants")
+        .select("event_id, player_slug, player_display_name, avatar_url, record, placement")
+        .in("event_id", ids),
+    ),
+  );
+  const participants: Record<string, unknown>[] = [];
+  for (const { data, error } of responses) {
     if (error) throw error;
     participants.push(...((data ?? []) as Record<string, unknown>[]));
   }
