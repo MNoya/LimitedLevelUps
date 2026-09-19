@@ -9,6 +9,7 @@ import discord
 
 from bot.commands.messages import (
     MSG_NEW_DRAFTER_SEAT,
+    MSG_PINNED_SEAT,
     MSG_TABLE_COLUMN,
     MSG_TABLE_COLUMN_ONLY,
     MSG_TABLE_SEAT,
@@ -95,6 +96,13 @@ def marked_new(name: str, new_drafters: frozenset[str]) -> str:
     return name
 
 
+def marked_seat(name: str, new_drafters: frozenset[str], pinned: frozenset[str]) -> str:
+    """`name` with both render-only markers a gathering pod's seat can carry: the new-drafter badge and the
+    Table 1 pin. Both test the plain name, so the pin never becomes part of the name a split table carries."""
+    label = marked_new(name, new_drafters)
+    return MSG_PINNED_SEAT.format(name=label) if name in pinned else label
+
+
 def _add_playing_field(
     embed: discord.Embed, names: list[str], new_drafters: frozenset[str] = frozenset(),
 ) -> None:
@@ -144,13 +152,14 @@ def add_table_plan_fields(
     if seat_pending:
         seats += [(name, False) for name in attendance.yes]
     new_drafters = attendance.new_drafters
+    pinned = attendance.pinned
     cursor = 0
     alone = len(plan.tables) == 1
     columns = 0
     for index, table in enumerate(plan.tables, start=1):
         _add_seat_field(embed, _table_header(index, table, alone=alone, set_code=set_code),
                         seats[cursor:cursor + table.seated], open_seats=table.empty_seats,
-                        marks_odd_one_out=True, new_drafters=new_drafters)
+                        marks_odd_one_out=True, new_drafters=new_drafters, pinned=pinned)
         cursor += table.seated
         columns += 1
     if columns > 1:
@@ -161,7 +170,7 @@ def add_table_plan_fields(
         columns += 1
     if plan.waiting:
         _add_seat_field(embed, MSG_TABLE_WAITING_COLUMN, seats[cursor:cursor + plan.waiting],
-                        new_drafters=new_drafters)
+                        new_drafters=new_drafters, pinned=pinned)
         columns += 1
     answered = {RSVP_MAYBE: list(attendance.maybe), RSVP_NO: list(attendance.declined)}
     answers = [(column, answered[column[0]]) for column in _ANSWER_COLUMNS if answered[column[0]]]
@@ -192,6 +201,7 @@ def _table_header(index: int, table: Table, *, alone: bool, set_code: str = "") 
 def _add_seat_field(
     embed: discord.Embed, header: str, seats: list[tuple[str, bool]], open_seats: int = 0,
     marks_odd_one_out: bool = False, new_drafters: frozenset[str] = frozenset(),
+    pinned: frozenset[str] = frozenset(),
 ) -> None:
     """One row per seat: who holds it and how firmly, then a row for each seat still to fill. An empty row
     is the ask made concrete, so a reader counts gaps instead of subtracting numbers in a header.
@@ -201,7 +211,7 @@ def _add_seat_field(
     once the table could actually fire: five confirmed is a pod nobody drops from, it is one short."""
     lines = [
         (MSG_TABLE_SEAT_CONFIRMED if confirmed else MSG_TABLE_SEAT)
-        .format(name=marked_new(name, new_drafters))
+        .format(name=marked_seat(name, new_drafters, pinned))
         for name, confirmed in seats
     ]
     held = [index for index, (_, confirmed) in enumerate(seats) if confirmed]

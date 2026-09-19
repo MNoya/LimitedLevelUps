@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
+from bot.services import pod_active
 from bot.services.pod_confirm import (
     POD_SIZES,
     SESSION_SEATS,
@@ -37,11 +38,13 @@ POD_INDEX_RE = re.compile(r"\s(\d+)$")
 
 @dataclass(frozen=True)
 class Signup:
-    """One person on a pod's roster, with whether they have confirmed."""
+    """One person on a pod's roster, with whether they have confirmed and whether they are pinned to
+    Table 1."""
 
     discord_id: str
     display_name: str
     confirmed: bool
+    pinned: bool = False
 
 
 def deal_into_plan(roster: list[Signup], plan: TablePlan) -> list[list[Signup]]:
@@ -133,29 +136,12 @@ def pod_is_numbered(name: str) -> bool:
     return POD_INDEX_RE.search(name or "") is not None
 
 
-FEATURE_EMOJI = "📌"
-
-
-def is_featured(display_name: str) -> bool:
-    return display_name.startswith(FEATURE_EMOJI)
-
-
-def featured_name(display_name: str) -> str:
-    return display_name if is_featured(display_name) else f"{FEATURE_EMOJI} {display_name}"
-
-
-def unfeatured_name(display_name: str) -> str:
-    return display_name[len(FEATURE_EMOJI):].lstrip() if is_featured(display_name) else display_name
-
-
-def carry_feature(old_name: str, new_name: str) -> str:
-    return featured_name(new_name) if is_featured(old_name) else new_name
-
-
 def confirmed_first_roster_sync(event_id: str) -> list[Signup]:
     """The pod's signups in the order the plan seats them: everyone an organizer pinned to Table 1, then
     everyone who confirmed, then everyone who said Yes and has not. Maybes are left out, since the plan
-    never seats them."""
+    never seats them. A pinned player always seats confirmed, since pinning is the organizer answering the
+    seat for them."""
+    pins = pod_active.pins(event_id)
     with SessionLocal() as session:
         signal = session.execute(
             select(PodSignal).where(PodSignal.event_id == event_id)
@@ -164,16 +150,15 @@ def confirmed_first_roster_sync(event_id: str) -> list[Signup]:
             return []
         rows = session.execute(
             select(
-                PodSignalMember.discord_user_id, PodSignalMember.display_name,
-                PodSignalMember.rsvp, PodSignalMember.confirmed_at,
+                PodSignalMember.discord_user_id, PodSignalMember.display_name, PodSignalMember.confirmed_at,
             )
             .where(PodSignalMember.signal_id == signal.id, PodSignalMember.rsvp == RSVP_YES)
             .order_by(PodSignalMember.created_at)
         ).all()
-    featured = [Signup(row[0], row[1], True) for row in rows if is_featured(row[1])]
-    confirmed = [Signup(row[0], row[1], True) for row in rows if not is_featured(row[1]) and row[3] is not None]
-    unconfirmed = [Signup(row[0], row[1], False) for row in rows if not is_featured(row[1]) and row[3] is None]
-    return featured + confirmed + unconfirmed
+    pinned = [Signup(row[0], row[1], True, True) for row in rows if row[0] in pins]
+    confirmed = [Signup(row[0], row[1], True) for row in rows if row[0] not in pins and row[2] is not None]
+    unconfirmed = [Signup(row[0], row[1], False) for row in rows if row[0] not in pins and row[2] is None]
+    return pinned + confirmed + unconfirmed
 
 
 @dataclass(frozen=True)
@@ -387,9 +372,12 @@ def _family_pod(event: PodDraftEvent, roster: list[tuple[str, str, str]]) -> Fam
     )
 
 
-def set_feature_sync(event_id: str, discord_ids: list[str]) -> None:
-    """Pin exactly these players to Table 1, clear it from everyone else on the pod, and confirm the pinned"""
+def pin_to_table_one_sync(event_id: str, discord_ids: list[str]) -> None:
+    """Pin exactly these players to Table 1 and confirm them. The pin is a plan hint held in memory, so it
+    leaves the stored names alone and drops off once the tables open. Confirming is the durable part: the
+    organizer is answering the seat on the player's behalf."""
     wanted = set(discord_ids)
+    pod_active.set_pins(event_id, wanted)
     now = datetime.now(timezone.utc)
     with SessionLocal() as session:
         signal = session.execute(
@@ -398,15 +386,14 @@ def set_feature_sync(event_id: str, discord_ids: list[str]) -> None:
         if signal is None:
             return
         members = session.execute(
-            select(PodSignalMember).where(PodSignalMember.signal_id == signal.id)
+            select(PodSignalMember).where(
+                PodSignalMember.signal_id == signal.id,
+                PodSignalMember.discord_user_id.in_(wanted),
+            )
         ).scalars().all()
         for member in members:
-            if member.discord_user_id in wanted:
-                member.display_name = featured_name(member.display_name)
-                member.rsvp = RSVP_YES
-                member.confirmed_at = member.confirmed_at or now
-            else:
-                member.display_name = unfeatured_name(member.display_name)
+            member.rsvp = RSVP_YES
+            member.confirmed_at = member.confirmed_at or now
         session.commit()
 
 

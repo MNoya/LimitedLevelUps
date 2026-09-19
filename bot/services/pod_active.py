@@ -7,6 +7,10 @@ post all re-render the scheduled card, and those call sites span both modules.
 ACTIVE_TABLE_VIEWS holds the live second-table claim card per source event, keyed the same way. It sits
 next to the managers because a forming table has no event row yet, so a reader outside the command layer
 has nowhere else to find one.
+
+TABLE_ONE_PINS holds the players an organizer pinned to Table 1 for a pod still gathering, keyed the same
+way. It is a plan hint that lives for the few minutes before the tables open, so it stays in memory and
+never touches the roster's stored names: a restart drops it, the confirmations it stamped persist.
 """
 from __future__ import annotations
 
@@ -14,6 +18,23 @@ import asyncio
 
 ACTIVE_POD_MANAGERS = {}
 ACTIVE_TABLE_VIEWS = {}
+TABLE_ONE_PINS: dict[str, set[str]] = {}
+
+
+def set_pins(event_id: str, discord_ids) -> None:
+    TABLE_ONE_PINS[event_id] = set(discord_ids)
+
+
+def pins(event_id: str) -> set[str]:
+    return TABLE_ONE_PINS.get(event_id, set())
+
+
+def is_pinned(event_id: str, discord_id: str) -> bool:
+    return discord_id in TABLE_ONE_PINS.get(event_id, set())
+
+
+def clear_pins(event_id: str) -> None:
+    TABLE_ONE_PINS.pop(event_id, None)
 
 _CARD_PHASE_HOOK = None
 _POD_DRAFTING_HOOK = None

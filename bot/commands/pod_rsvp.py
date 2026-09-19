@@ -619,7 +619,7 @@ async def move_pod_to_its_own_card(
     channel = await fetch_channel(bot, card[1])
     if not isinstance(channel, discord.TextChannel):
         return None
-    rosters, roster_interests, new_drafters = await event_rsvp_rosters(event_id)
+    rosters, roster_interests, new_drafters, _ = await event_rsvp_rosters(event_id)
     starts_now = pod_is_numbered(name)
     try:
         message = await channel.send(
@@ -1425,7 +1425,7 @@ async def _resolve_event_thread(bot: commands.Bot, event_id: str | None) -> disc
 async def _render_channel_card_fresh(bot: commands.Bot, event_id: str) -> None:
     """The channel card off the roster it holds now. The queued render runs after the press that asked
     for it, so it reads the roster rather than carrying that press's copy of it."""
-    rosters, roster_interests, new_drafters = await event_rsvp_rosters(event_id)
+    rosters, roster_interests, new_drafters, _ = await event_rsvp_rosters(event_id)
     await _render_channel_card(bot, event_id, rosters, roster_interests, new_drafters)
 
 

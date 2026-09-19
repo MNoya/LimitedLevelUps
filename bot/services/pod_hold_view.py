@@ -41,9 +41,7 @@ from bot.services.pod_launch import cancel_release, is_holding, release_attendan
 from bot.services.pod_staging import (
     Signup,
     confirmed_first_roster_sync,
-    is_featured,
-    set_feature_sync,
-    unfeatured_name,
+    pin_to_table_one_sync,
 )
 from bot.services.pod_tournament import is_pod_organizer
 from bot.tasks.pod_draft_reminder import refresh_or_repost_roster_reminder
@@ -149,7 +147,7 @@ class _AttendeesView(ui.View):
 
     def __init__(self, event_id: str, roster: list[Signup], *, featuring: bool) -> None:
         super().__init__(timeout=600)
-        self.names = {signup.discord_id: unfeatured_name(signup.display_name) for signup in roster}
+        self.names = {signup.discord_id: signup.display_name for signup in roster}
         self.add_item(_AttendeesSelect(event_id, roster))
         self.add_item(_DeclineSelect(event_id, roster))
         if featuring:
@@ -176,7 +174,7 @@ class _AttendeesSelect(ui.Select):
         shown = roster[:SELECT_LIMIT]
         options = [
             discord.SelectOption(
-                label=unfeatured_name(signup.display_name)[:100], value=signup.discord_id,
+                label=signup.display_name[:100], value=signup.discord_id,
                 default=signup.confirmed,
             )
             for signup in shown
@@ -222,8 +220,8 @@ class _FeatureSelect(ui.Select):
             placeholder=MSG_FEATURE_PLACEHOLDER,
             options=[
                 discord.SelectOption(
-                    label=unfeatured_name(signup.display_name)[:100], value=signup.discord_id,
-                    default=is_featured(signup.display_name),
+                    label=signup.display_name[:100], value=signup.discord_id,
+                    default=signup.pinned,
                 )
                 for signup in shown
             ],
@@ -233,7 +231,7 @@ class _FeatureSelect(ui.Select):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
-        await asyncio.to_thread(set_feature_sync, self.event_id, self.values)
+        await asyncio.to_thread(pin_to_table_one_sync, self.event_id, self.values)
         if not self.values:
             return
         await interaction.channel.send(
@@ -259,7 +257,7 @@ class _DeclineSelect(ui.Select):
         super().__init__(
             placeholder=MSG_DECLINE_PLACEHOLDER,
             options=[
-                discord.SelectOption(label=unfeatured_name(signup.display_name)[:100], value=signup.discord_id)
+                discord.SelectOption(label=signup.display_name[:100], value=signup.discord_id)
                 for signup in roster[:SELECT_LIMIT]
             ],
             min_values=0, max_values=min(len(roster), SELECT_LIMIT),

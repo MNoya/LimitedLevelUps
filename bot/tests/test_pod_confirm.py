@@ -429,7 +429,7 @@ def test_a_featured_player_leads_the_roster_into_table_one(session, monkeypatch)
     monkeypatch.setattr(pod_staging, "SessionLocal", _session_factory(session))
     event = _signal_with_members(session, "8100", [("u1", "Finkel"), ("u2", "LSV"), ("u3", "Reid")])
 
-    pod_staging.set_feature_sync(event.id, ["u3"])
+    pod_staging.pin_to_table_one_sync(event.id, ["u3"])
 
     roster = pod_staging.confirmed_first_roster_sync(event.id)
     assert [signup.discord_id for signup in roster] == ["u3", "u1", "u2"]
@@ -438,7 +438,7 @@ def test_a_featured_player_leads_the_roster_into_table_one(session, monkeypatch)
 def test_a_feature_survives_a_re_rsvp(session, monkeypatch):
     monkeypatch.setattr(pod_staging, "SessionLocal", _session_factory(session))
     event = _signal_with_members(session, "8101", [("u1", "Finkel"), ("u2", "LSV")])
-    pod_staging.set_feature_sync(event.id, ["u2"])
+    pod_staging.pin_to_table_one_sync(event.id, ["u2"])
 
     set_rsvp(session, "8101", "u2", "LSV", pod_signals.RSVP_YES)
 

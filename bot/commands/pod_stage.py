@@ -21,7 +21,7 @@ from bot.commands.pod_rsvp import (
 from bot.database import SessionLocal
 from bot.discord_helpers import resolve_pod_chat_channel
 from bot.models import PodDraftEvent
-from bot.services import pod_event_settings
+from bot.services import pod_active, pod_event_settings
 from bot.services.pod_drafts import load_event_thread_id_sync
 from bot.services.pod_confirm import seating_plan, table_capacity_for
 from bot.services.pod_launch import (
@@ -102,6 +102,7 @@ async def stage_pods(bot: commands.Bot, event_id: str) -> None:
                 moved[offset - 1], maybes if last else [], unconfirmed if last else [],
             )
         await _reclaim_source_roster(event_id, groups, unconfirmed, maybes)
+        pod_active.clear_pins(event_id)
     if signup_card is not None:
         await render_pod_overview(bot, event_id, signup_card[2])
     family = await asyncio.to_thread(pod_family_sync, event_id)

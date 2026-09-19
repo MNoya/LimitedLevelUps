@@ -20,6 +20,7 @@ from bot.commands.messages import (
 )
 from bot.database import SessionLocal
 from bot.models import Player, PodDraftEvent, PodSignal, PodSignalMember
+from bot.services import pod_active
 from bot.services.pod_drafts import PRE_LAUNCH_STATUSES, new_drafter_column
 from bot.services.pod_signals import KIND_SCHEDULED, RSVP_MAYBE, RSVP_NO, RSVP_YES
 
@@ -44,6 +45,7 @@ class Attendance:
     maybe: tuple[str, ...] = ()
     declined: tuple[str, ...] = ()
     new_drafters: frozenset[str] = frozenset()
+    pinned: frozenset[str] = frozenset()
 
     @property
     def expected(self) -> int:
@@ -64,7 +66,7 @@ class Attendance:
         it could still have."""
         return Attendance(
             confirmed=self.confirmed + self.yes, maybe=self.maybe, declined=self.declined,
-            new_drafters=self.new_drafters,
+            new_drafters=self.new_drafters, pinned=self.pinned,
         )
 
 
@@ -163,6 +165,7 @@ def table_capacity_for(seatable: int) -> int:
 
 def attendance_of(
     rosters: dict[str, list[str]], new_drafters: frozenset[str] = frozenset(),
+    pinned: frozenset[str] = frozenset(),
 ) -> Attendance:
     """A rendered roster read as the four answers the confirmation window cares about."""
     return Attendance(
@@ -171,6 +174,7 @@ def attendance_of(
         maybe=tuple(rosters.get(RSVP_MAYBE) or ()),
         declined=tuple(rosters.get(RSVP_NO) or ()),
         new_drafters=new_drafters,
+        pinned=pinned,
     )
 
 
@@ -196,30 +200,40 @@ def roster_attendance_for_event_sync(event_id: str) -> Attendance | None:
         rows = session.execute(
             select(
                 PodSignalMember.rsvp, PodSignalMember.display_name, PodSignalMember.confirmed_at,
-                new_drafter_column(),
+                PodSignalMember.discord_user_id, new_drafter_column(),
             )
             .outerjoin(Player, Player.discord_id == PodSignalMember.discord_user_id)
             .where(PodSignalMember.signal_id == signal.id)
             .order_by(PodSignalMember.created_at)
         ).all()
+    pins = pod_active.pins(event_id)
     buckets: dict[str, list[str]] = {CONFIRMED: [], RSVP_YES: [], RSVP_MAYBE: [], RSVP_NO: []}
     new_drafters: set[str] = set()
-    for state, name, confirmed_at, new_drafter in rows:
+    pinned: set[str] = set()
+    for state, name, confirmed_at, discord_id, new_drafter in rows:
         if state == RSVP_NO:
             bucket = RSVP_NO
-        elif confirmed_at is not None:
+        elif discord_id in pins or confirmed_at is not None:
             bucket = CONFIRMED
         else:
             bucket = state
         if bucket in buckets:
             buckets[bucket].append(name)
+        if discord_id in pins and state != RSVP_NO:
+            pinned.add(name)
         if new_drafter:
             new_drafters.add(name)
     return Attendance(
-        confirmed=tuple(buckets[CONFIRMED]), yes=tuple(buckets[RSVP_YES]),
+        confirmed=tuple(_pinned_first(buckets[CONFIRMED], pinned)), yes=tuple(buckets[RSVP_YES]),
         maybe=tuple(buckets[RSVP_MAYBE]), declined=tuple(buckets[RSVP_NO]),
-        new_drafters=frozenset(new_drafters),
+        new_drafters=frozenset(new_drafters), pinned=frozenset(pinned),
     )
+
+
+def _pinned_first(confirmed: list[str], pinned: set[str]) -> list[str]:
+    """Confirmed names with the pinned ones floated to the front, each half in signup order, so Table 1
+    seats the players an organizer moved there before anyone else."""
+    return [name for name in confirmed if name in pinned] + [name for name in confirmed if name not in pinned]
 
 
 def confirm_present_players_sync(event_id: str, discord_ids: Iterable[str]) -> int:

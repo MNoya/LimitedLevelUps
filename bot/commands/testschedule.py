@@ -213,7 +213,9 @@ def _table_plan_shapes() -> tuple[tuple[str, Attendance], ...]:
     """(pod name, attendance) for each layout the roster card can take. Confirmed and Yes fill the table
     columns, Maybe and No sit on a row of their own below them.
 
-    Every shape carries a couple of new drafters so the marker shows in a seat, in Pending and in Maybe."""
+    Every shape carries a couple of new drafters so the marker shows in a seat, in Pending and in Maybe.
+    The split shape also pins two late signups to Table 1, so the pin marker and the float onto the first
+    table both show."""
     return (
         ("Quiet Pod", Attendance(
             confirmed=HALL_OF_FAME[0:4], yes=HALL_OF_FAME[4:6],
@@ -221,9 +223,9 @@ def _table_plan_shapes() -> tuple[tuple[str, Attendance], ...]:
             new_drafters=PREVIEW_NEW_DRAFTERS,
         )),
         ("Split Pod", Attendance(
-            confirmed=HALL_OF_FAME[0:9], yes=HALL_OF_FAME[9:13],
+            confirmed=HALL_OF_FAME[7:9] + HALL_OF_FAME[0:7], yes=HALL_OF_FAME[9:13],
             maybe=HALL_OF_FAME[13:15], declined=HALL_OF_FAME[15:18],
-            new_drafters=PREVIEW_NEW_DRAFTERS,
+            new_drafters=PREVIEW_NEW_DRAFTERS, pinned=frozenset(HALL_OF_FAME[7:9]),
         )),
         ("11th Player Pod", Attendance(
             confirmed=HALL_OF_FAME[0:11], declined=HALL_OF_FAME[11:12],
