@@ -48,7 +48,7 @@ def test_recruiting_message_carries_the_short_name_the_relative_time_and_the_sig
     event_time = datetime(2026, 6, 24, 0, 0, tzinfo=timezone.utc)
     jump_url = "https://discord.com/channels/1/2/3"
 
-    body = build_recruiting_message("FIN Pod Draft #1 - Jun 24", 4, FLOOR, AIM, event_time, jump_url)
+    body = build_recruiting_message("FIN Pod Draft #1 - Jun 24", 4, AIM, event_time, jump_url)
 
     assert "FIN Pod Draft #1" in body
     assert "Jun 24" not in body
@@ -60,7 +60,7 @@ def test_recruiting_message_carries_the_short_name_the_relative_time_and_the_sig
 def test_recruiting_message_never_pings_a_role():
     event_time = datetime(2026, 6, 24, 0, 0, tzinfo=timezone.utc)
 
-    body = build_recruiting_message("Pod", 7, FLOOR, AIM, event_time, "url")
+    body = build_recruiting_message("Pod", 7, AIM, event_time, "url")
 
     assert "<@&" not in body
 
@@ -69,7 +69,7 @@ def test_recruiting_message_never_pings_a_role():
 def test_recruiting_message_never_counts_down_past_a_number_already_reached(count):
     event_time = datetime(2026, 6, 24, 0, 0, tzinfo=timezone.utc)
 
-    body = build_recruiting_message("Pod", count, FLOOR, AIM, event_time, "url")
+    body = build_recruiting_message("Pod", count, AIM, event_time, "url")
 
     assert "-1" not in body
     assert " 0 " not in body
@@ -80,7 +80,7 @@ def test_recruiting_message_reads_differently_below_the_floor_above_it_and_at_th
     jump_url = "https://discord.com/channels/1/2/3"
 
     bodies = [
-        build_recruiting_message("Pod", count, FLOOR, AIM, event_time, jump_url)
+        build_recruiting_message("Pod", count, AIM, event_time, jump_url)
         for count in (FLOOR - 2, FLOOR, AIM)
     ]
 
@@ -91,8 +91,8 @@ def test_recruiting_message_reads_differently_below_the_floor_above_it_and_at_th
 def test_recruiting_message_calls_out_a_second_table_only_once_yes_plus_maybe_reach_two():
     event_time = datetime(2026, 6, 24, 0, 0, tzinfo=timezone.utc)
 
-    one_short = build_recruiting_message("Pod", 9, FLOOR, AIM, event_time, "url", maybe_count=6)
-    two_tables = build_recruiting_message("Pod", 10, FLOOR, AIM, event_time, "url", maybe_count=6)
+    one_short = build_recruiting_message("Pod", 9, AIM, event_time, "url", maybe_count=6)
+    two_tables = build_recruiting_message("Pod", 10, AIM, event_time, "url", maybe_count=6)
 
     assert RECRUITING_SECOND_TABLE not in one_short
     assert RECRUITING_SECOND_TABLE in two_tables

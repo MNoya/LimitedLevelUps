@@ -179,7 +179,7 @@ async def fire_underfill(event_id: str, hours_before: int, resurface: bool = Fal
     nudge = await _find_nudge(channel, jump_url)
     show = yes_count >= NUDGE_MIN_SIGNUPS
 
-    body = build_recruiting_message(name, yes_count, floor, aim, event_time, jump_url, maybe_count)
+    body = build_recruiting_message(name, yes_count, aim, event_time, jump_url, maybe_count)
     if resurface and nudge is not None and show:
         await _safe_delete(nudge)
         nudge = None
@@ -222,7 +222,7 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
     nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
     show = slot.count >= NUDGE_MIN_SIGNUPS
 
-    body = build_recruiting_message(slot.name, slot.count, floor, aim, slot.slot_time, slot.jump_url)
+    body = build_recruiting_message(slot.name, slot.count, aim, slot.slot_time, slot.jump_url)
     if resurface and nudge is not None and show:
         await _safe_delete(nudge)
         nudge = None
@@ -316,8 +316,7 @@ async def refresh_slot_nudge(bot: commands.Bot, signal_id: str) -> None:
     if nudge is None:
         return
     body = build_recruiting_message(
-        slot.name, slot.count, settings.pod_signal_fire_threshold, settings.pod_draft_target_players,
-        slot.slot_time, slot.jump_url,
+        slot.name, slot.count, settings.pod_draft_target_players, slot.slot_time, slot.jump_url,
     )
     await _safe_edit(nudge, body)
 
@@ -357,8 +356,7 @@ async def _card_status_body(event_id: str) -> str | None:
     yes_count = len(rsvps[0])
     maybe_count = len(rsvps[1])
     return build_recruiting_message(
-        name, yes_count, settings.pod_signal_fire_threshold, settings.pod_draft_target_players,
-        event_time, jump_url, maybe_count,
+        name, yes_count, settings.pod_draft_target_players, event_time, jump_url, maybe_count,
     )
 
 
@@ -394,8 +392,7 @@ async def _sync_nudge(
         return
 
     body = build_recruiting_message(
-        name, yes_count, settings.pod_signal_fire_threshold, settings.pod_draft_target_players,
-        event_time, jump_url, maybe_count,
+        name, yes_count, settings.pod_draft_target_players, event_time, jump_url, maybe_count,
     )
     await _safe_edit(nudge, body)
 

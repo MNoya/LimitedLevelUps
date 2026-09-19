@@ -38,6 +38,8 @@ SLOT_EMOJI_SATURDAY = "🪐"
 
 CHAT_ANNOUNCE_MARKER = "used `/draft`"
 
+TEAM_DRAFT_PLAYERS = 6
+
 POD_DRAFTERS_ROLE_NAME = "Pod Drafters"
 EARLY_POD_ROLE_NAME = "Early Pod"
 LATE_POD_ROLE_NAME = "Late Pod"
@@ -127,7 +129,6 @@ def render_pod_name(name: str) -> str:
 def build_recruiting_message(
     thread_name: str,
     count: int,
-    floor: int,
     aim: int,
     event_time: datetime,
     jump_url: str,
@@ -151,8 +152,8 @@ def build_recruiting_message(
         "hello": emojis.prefix("chordoHello"), "name": name, "count": count, "unix": unix,
         "jump_url": jump_url, "manat": emojis.get("manat"),
     }
-    if count < floor:
-        needed = floor - count
+    if count < TEAM_DRAFT_PLAYERS:
+        needed = TEAM_DRAFT_PLAYERS - count
         return RECRUITING_BELOW_FLOOR.format(to_floor=needed, plural=plural(needed), **shared).rstrip()
     if count < aim:
         needed = aim - count

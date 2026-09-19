@@ -31,6 +31,7 @@ from bot.services.pod_reminder_copy import SLOT_FIRE_PING
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import (
     SCHEDULE_TZ,
+    TEAM_DRAFT_PLAYERS,
     build_recruiting_message,
     build_underfill_fired_message,
     slots_for_week,
@@ -57,8 +58,7 @@ async def setup(bot: commands.Bot) -> None:
         """Owner-only. Post a sample underfill nudge in this channel — no DB or sesh lookup."""
         name = ctx.channel.name if isinstance(ctx.channel, discord.Thread) else "Sample Pod Draft - Jun 25"
         body = build_recruiting_message(
-            name, yes_count, settings.pod_signal_fire_threshold, settings.pod_draft_target_players,
-            _next_slot(), ctx.message.jump_url,
+            name, yes_count, settings.pod_draft_target_players, _next_slot(), ctx.message.jump_url,
         )
         await ctx.send(body, allowed_mentions=discord.AllowedMentions.none())
 
@@ -68,9 +68,8 @@ async def setup(bot: commands.Bot) -> None:
         """Owner-only. Post a sample launcher-slot nudge in this channel — no DB or signals lookup."""
         slot = _next_slot()
         name = ondemand_event_name_sync(active_set_code(), slot)
-        threshold = settings.pod_signal_fire_threshold
         body = build_recruiting_message(
-            name, threshold - 1, threshold, settings.pod_draft_target_players, slot, ctx.message.jump_url,
+            name, TEAM_DRAFT_PLAYERS - 1, settings.pod_draft_target_players, slot, ctx.message.jump_url,
         )
         await ctx.send(body, allowed_mentions=discord.AllowedMentions.none())
 
@@ -92,8 +91,8 @@ async def setup(bot: commands.Bot) -> None:
         counts at the trigger boundary (10 Yes + 6 Maybe = 16) three hours out."""
         event_time = datetime.now(SCHEDULE_TZ) + timedelta(hours=3)
         body = build_recruiting_message(
-            "MSH Jul 21 Early Pod", 10, settings.pod_signal_fire_threshold,
-            settings.pod_draft_target_players, event_time, ctx.message.jump_url, maybe_count=6,
+            "MSH Jul 21 Early Pod", 10, settings.pod_draft_target_players,
+            event_time, ctx.message.jump_url, maybe_count=6,
         )
         await ctx.send(body, allowed_mentions=discord.AllowedMentions.none())
 
@@ -282,7 +281,7 @@ def _reminder_timeline(
     names the constant(s) in pod_reminder_copy.py so the copy can be edited straight from the preview."""
     slot = _next_slot()
     unix = int(slot.timestamp())
-    floor = settings.pod_signal_fire_threshold
+    floor = TEAM_DRAFT_PLAYERS
     target = settings.pod_draft_target_players
     url = ctx.message.jump_url
     pod_name = ondemand_event_name_sync(set_code, slot)
@@ -305,15 +304,15 @@ def _reminder_timeline(
 
     return [
         text("RECRUITING_BELOW_FLOOR", "short of the floor",
-             build_recruiting_message(pod_name, floor - 2, floor, target, slot, url)),
+             build_recruiting_message(pod_name, floor - 2, target, slot, url)),
         text("RECRUITING_BELOW_FLOOR", "one short of the floor",
-             build_recruiting_message(pod_name, floor - 1, floor, target, slot, url)),
+             build_recruiting_message(pod_name, floor - 1, target, slot, url)),
         text("RECRUITING_SHORT", "the draft is on, short of the aim",
-             build_recruiting_message(pod_name, floor, floor, target, slot, url)),
+             build_recruiting_message(pod_name, floor, target, slot, url)),
         text("RECRUITING_READY", "full pod",
-             build_recruiting_message(pod_name, target, floor, target, slot, url, maybe_count=2)),
+             build_recruiting_message(pod_name, target, target, slot, url, maybe_count=2)),
         text("RECRUITING_READY + RECRUITING_SECOND_TABLE", "second table",
-             build_recruiting_message(pod_name, 10, floor, target, slot, url, maybe_count=6)),
+             build_recruiting_message(pod_name, 10, target, slot, url, maybe_count=6)),
         text("SLOT_FIRE_PING", "launcher slot fires", SLOT_FIRE_PING.format(unix=unix, mention=mention)),
         ("`ROSTER_REMINDER_TITLE` + `ROSTER_REMINDER_LINE` (T-60 reminder)", None, roster_embed),
         text("LOBBY_OPEN + LOBBY_OPEN_HEADLINE", "Draftmancer link posted",

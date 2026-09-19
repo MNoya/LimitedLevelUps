@@ -156,7 +156,7 @@ def build_rally_line(target: RallyTarget) -> str:
         return build_underfill_fired_message(target.name, target.seated, target.url)
     if target.kind == KIND_GATHERING:
         return build_recruiting_message(
-            target.name, target.yes, floor, aim, target.event_time, target.url, target.maybe,
+            target.name, target.yes, aim, target.event_time, target.url, target.maybe,
         )
     if target.kind == KIND_QUEUE_SIGNAL:
         needed = max(1, floor - target.yes)
