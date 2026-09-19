@@ -133,9 +133,29 @@ def pod_is_numbered(name: str) -> bool:
     return POD_INDEX_RE.search(name or "") is not None
 
 
+FEATURE_EMOJI = "📌"
+
+
+def is_featured(display_name: str) -> bool:
+    return display_name.startswith(FEATURE_EMOJI)
+
+
+def featured_name(display_name: str) -> str:
+    return display_name if is_featured(display_name) else f"{FEATURE_EMOJI} {display_name}"
+
+
+def unfeatured_name(display_name: str) -> str:
+    return display_name[len(FEATURE_EMOJI):].lstrip() if is_featured(display_name) else display_name
+
+
+def carry_feature(old_name: str, new_name: str) -> str:
+    return featured_name(new_name) if is_featured(old_name) else new_name
+
+
 def confirmed_first_roster_sync(event_id: str) -> list[Signup]:
-    """The pod's signups in the order the plan seats them: everyone who confirmed, then everyone who said
-    Yes and has not. Maybes are left out, since the plan never seats them."""
+    """The pod's signups in the order the plan seats them: everyone an organizer pinned to Table 1, then
+    everyone who confirmed, then everyone who said Yes and has not. Maybes are left out, since the plan
+    never seats them."""
     with SessionLocal() as session:
         signal = session.execute(
             select(PodSignal).where(PodSignal.event_id == event_id)
@@ -150,9 +170,10 @@ def confirmed_first_roster_sync(event_id: str) -> list[Signup]:
             .where(PodSignalMember.signal_id == signal.id, PodSignalMember.rsvp == RSVP_YES)
             .order_by(PodSignalMember.created_at)
         ).all()
-    confirmed = [Signup(row[0], row[1], True) for row in rows if row[3] is not None]
-    unconfirmed = [Signup(row[0], row[1], False) for row in rows if row[3] is None]
-    return confirmed + unconfirmed
+    featured = [Signup(row[0], row[1], True) for row in rows if is_featured(row[1])]
+    confirmed = [Signup(row[0], row[1], True) for row in rows if not is_featured(row[1]) and row[3] is not None]
+    unconfirmed = [Signup(row[0], row[1], False) for row in rows if not is_featured(row[1]) and row[3] is None]
+    return featured + confirmed + unconfirmed
 
 
 @dataclass(frozen=True)
@@ -414,6 +435,29 @@ def move_players_sync(family_event_ids: list[str], target_event_id: str, discord
             ))
         session.commit()
         return moved
+
+
+def set_feature_sync(event_id: str, discord_ids: list[str]) -> None:
+    """Pin exactly these players to Table 1, clear it from everyone else on the pod, and confirm the pinned"""
+    wanted = set(discord_ids)
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        signal = session.execute(
+            select(PodSignal).where(PodSignal.event_id == event_id)
+        ).scalar_one_or_none()
+        if signal is None:
+            return
+        members = session.execute(
+            select(PodSignalMember).where(PodSignalMember.signal_id == signal.id)
+        ).scalars().all()
+        for member in members:
+            if member.discord_user_id in wanted:
+                member.display_name = featured_name(member.display_name)
+                member.rsvp = RSVP_YES
+                member.confirmed_at = member.confirmed_at or now
+            else:
+                member.display_name = unfeatured_name(member.display_name)
+        session.commit()
 
 
 def hand_over_members_sync(source_event_id: str, moved: list[Signup]) -> int:

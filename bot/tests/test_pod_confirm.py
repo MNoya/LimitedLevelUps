@@ -404,6 +404,48 @@ def _pod_signed_up_for(
     return event
 
 
+def _signal_with_members(session, message_id, members):
+    event = _pod_starting_in(session, minutes=30)
+    signal = PodSignal(
+        kind=pod_signals.KIND_SCHEDULED, bucket=pod_signals.SCHEDULED_BUCKET,
+        guild_id="1", channel_id="2", message_id=message_id,
+        signal_date=datetime.now(SCHEDULE_TZ).date(), slot_time=event.event_time,
+        status=pod_signals.STATUS_FIRED, event_id=event.id,
+    )
+    session.add(signal)
+    session.flush()
+    base = datetime.now(timezone.utc)
+    for offset, (discord_id, name) in enumerate(members):
+        stamp = base + timedelta(seconds=offset)
+        session.add(PodSignalMember(
+            signal_id=signal.id, discord_user_id=discord_id, display_name=name,
+            rsvp=pod_signals.RSVP_YES, created_at=stamp, confirmed_at=stamp,
+        ))
+    session.flush()
+    return event
+
+
+def test_a_featured_player_leads_the_roster_into_table_one(session, monkeypatch):
+    monkeypatch.setattr(pod_staging, "SessionLocal", _session_factory(session))
+    event = _signal_with_members(session, "8100", [("u1", "Finkel"), ("u2", "LSV"), ("u3", "Reid")])
+
+    pod_staging.set_feature_sync(event.id, ["u3"])
+
+    roster = pod_staging.confirmed_first_roster_sync(event.id)
+    assert [signup.discord_id for signup in roster] == ["u3", "u1", "u2"]
+
+
+def test_a_feature_survives_a_re_rsvp(session, monkeypatch):
+    monkeypatch.setattr(pod_staging, "SessionLocal", _session_factory(session))
+    event = _signal_with_members(session, "8101", [("u1", "Finkel"), ("u2", "LSV")])
+    pod_staging.set_feature_sync(event.id, ["u2"])
+
+    set_rsvp(session, "8101", "u2", "LSV", pod_signals.RSVP_YES)
+
+    roster = pod_staging.confirmed_first_roster_sync(event.id)
+    assert roster[0].discord_id == "u2"
+
+
 @pytest.mark.parametrize("signed, confirmed", [
     (13, 13), (13, 8), (20, 12), (20, 20), (12, 6), (11, 11), (6, 4), (8, 0),
 ])

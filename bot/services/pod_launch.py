@@ -38,6 +38,7 @@ from bot.services import pod_signals
 from bot.services import pod_team
 from bot.services.pod_confirm import CONFIRM_WINDOW_MINUTES, SESSION_SEATS, attendance_for_event_sync
 from bot.services.pod_staging import (
+    carry_feature,
     confirmed_first_roster_sync,
     pod_base_name,
     pod_index,
@@ -488,7 +489,7 @@ def join_slot_signal_sync(
             return False
         if existing is not None:
             existing.rsvp = pod_signals.RSVP_YES
-            existing.display_name = display_name
+            existing.display_name = carry_feature(existing.display_name, display_name)
         else:
             session.add(PodSignalMember(
                 signal_id=signal_id, discord_user_id=discord_user_id, display_name=display_name,
@@ -761,7 +762,7 @@ def set_rsvp(
             existing.confirmed_at = confirmed_at
         elif rsvp in (pod_signals.RSVP_MAYBE, pod_signals.RSVP_NO):
             existing.confirmed_at = None
-        existing.display_name = display_name
+        existing.display_name = carry_feature(existing.display_name, display_name)
     elif rsvp != pod_signals.RSVP_NO:
         session.add(PodSignalMember(
             signal_id=signal.id, discord_user_id=discord_user_id, display_name=display_name, rsvp=rsvp,
@@ -861,7 +862,7 @@ def set_membership(
     joined = changed = False
     if add and declined:
         existing.rsvp = pod_signals.RSVP_YES
-        existing.display_name = display_name
+        existing.display_name = carry_feature(existing.display_name, display_name)
         signal.last_activity_at = datetime.now(timezone.utc)
         joined = changed = True
     elif add and existing is None:

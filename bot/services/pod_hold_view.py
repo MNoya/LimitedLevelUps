@@ -28,6 +28,11 @@ from bot.commands.messages import (
     MSG_ATTENDEES_SAVED,
     MSG_DECLINE_DONE,
     MSG_DECLINE_PLACEHOLDER,
+    MSG_FEATURE_BUTTON,
+    MSG_FEATURE_CLEARED,
+    MSG_FEATURE_DONE,
+    MSG_FEATURE_LEAD,
+    MSG_FEATURE_PLAYERS_BUTTON,
     MSG_NOT_ORGANIZER_ATTENDEES,
     MSG_NOT_ORGANIZER_TABLES,
     MSG_MOVE_BUTTON,
@@ -50,8 +55,11 @@ from bot.services.pod_staging import (
     FamilyPod,
     Signup,
     confirmed_first_roster_sync,
+    is_featured,
     move_players_sync,
     pod_family_sync,
+    set_feature_sync,
+    unfeatured_name,
 )
 from bot.services.pod_tournament import is_pod_organizer
 from bot.tasks.pod_draft_reminder import refresh_or_repost_roster_reminder
@@ -59,6 +67,7 @@ from bot.tasks.pod_draft_reminder import refresh_or_repost_roster_reminder
 
 ATTENDEES_BUTTON_PREFIX = "podattendees"
 OPEN_TABLES_BUTTON_PREFIX = "podopentables"
+FEATURE_BUTTON_PREFIX = "podfeature"
 MOVE_BUTTON_PREFIX = "podmoveplayers"
 SELECT_LIMIT = 25
 
@@ -133,19 +142,51 @@ class OpenTablesButton(
         log.info(f"attendance hold on {self.event_id}: opened early by {interaction.user}")
 
 
+class FeaturePlayersButton(
+    ui.DynamicItem[ui.Button], template=rf"{FEATURE_BUTTON_PREFIX}:(?P<event_id>.+)",
+):
+    """Pin a player to Table 1 before the split, so the release seats them at the first table it opens"""
+
+    def __init__(self, event_id: str, disabled: bool = False) -> None:
+        super().__init__(ui.Button(
+            style=discord.ButtonStyle.secondary, emoji="📌", label=MSG_FEATURE_PLAYERS_BUTTON,
+            disabled=disabled, custom_id=f"{FEATURE_BUTTON_PREFIX}:{event_id}",
+        ))
+        self.event_id = event_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item: ui.Button, match: re.Match):
+        return cls(match["event_id"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if not await is_pod_organizer(interaction.client, interaction.user):
+            await interaction.response.send_message(MSG_NOT_ORGANIZER_MOVE, ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        roster = await asyncio.to_thread(confirmed_first_roster_sync, self.event_id)
+        if not roster:
+            await interaction.followup.send(MSG_ATTENDEES_EMPTY, ephemeral=True)
+            return
+        await interaction.followup.send(
+            MSG_FEATURE_LEAD, view=_FeatureView(self.event_id, roster), ephemeral=True,
+        )
+
+
 def build_hold_items(
     event_id: str, *, confirming: bool, held: bool, holding: bool,
 ) -> list[ui.Item]:
     """The organizer controls a roster card carries beyond its RSVP row.
 
     The tick list spans the whole confirmation window; opening the tables is the hold's own act and needs
-    a hold to end. Both grey out afterwards rather than vanishing, and Discord refuses a disabled press,
-    so neither needs copy saying the moment has passed."""
+    a hold to end, and featuring a player to Table 1 only matters while that release is still to come. All
+    grey out afterwards rather than vanishing, and Discord refuses a disabled press, so none needs copy
+    saying the moment has passed."""
     items: list[ui.Item] = []
     if confirming or held:
         items.append(AttendeesButton(event_id, disabled=held and not holding))
     if held:
         items.append(OpenTablesButton(event_id, disabled=not holding))
+        items.append(FeaturePlayersButton(event_id, disabled=not holding))
     return items
 
 
@@ -345,6 +386,60 @@ async def _tell_the_table_who_joined(
         await thread.send(
             MSG_STAGED_POD_SEATS.format(index=target.index, mentions=mentions),
             allowed_mentions=discord.AllowedMentions(users=True),
+        )
+
+
+class _FeatureView(ui.View):
+    """Pick who leads Table 1 off. One multi-select of the roster and a button, so an organizer who opens
+    it and presses without touching the select leaves the current picks as they are."""
+
+    def __init__(self, event_id: str, roster: list[Signup]) -> None:
+        super().__init__(timeout=600)
+        self.event_id = event_id
+        self.names = {signup.discord_id: unfeatured_name(signup.display_name) for signup in roster}
+        self.chosen = [signup.discord_id for signup in roster if is_featured(signup.display_name)]
+        self.add_item(_FeatureSelect(roster))
+        self.add_item(_FeatureApplyButton())
+
+
+class _FeatureSelect(ui.Select):
+    def __init__(self, roster: list[Signup]) -> None:
+        shown = roster[:SELECT_LIMIT]
+        super().__init__(
+            placeholder=MSG_MOVE_PLAYERS_PLACEHOLDER,
+            options=[
+                discord.SelectOption(
+                    label=unfeatured_name(signup.display_name)[:100], value=signup.discord_id,
+                    default=is_featured(signup.display_name),
+                )
+                for signup in shown
+            ],
+            min_values=0, max_values=len(shown),
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self.view.chosen = list(self.values)
+        await interaction.response.defer()
+
+
+class _FeatureApplyButton(ui.Button):
+    def __init__(self) -> None:
+        super().__init__(style=discord.ButtonStyle.primary, label=MSG_FEATURE_BUTTON)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: _FeatureView = self.view
+        await interaction.response.defer()
+        await asyncio.to_thread(set_feature_sync, view.event_id, view.chosen)
+        if view.chosen:
+            message = MSG_FEATURE_DONE.format(
+                actor=interaction.user.display_name, players=_named(view, view.chosen),
+            )
+        else:
+            message = MSG_FEATURE_CLEARED.format(actor=interaction.user.display_name)
+        await interaction.channel.send(message, allowed_mentions=discord.AllowedMentions.none())
+        run_detached(
+            refresh_or_repost_roster_reminder(view.event_id),
+            f"the roster card after a feature edit on {view.event_id}",
         )
 
 
