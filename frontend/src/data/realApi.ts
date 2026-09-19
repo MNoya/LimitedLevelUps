@@ -1524,18 +1524,6 @@ export async function fetchPodEvents(setCode: string): Promise<PodEventSummary[]
   return (data ?? []).map((r) => adaptPodEvent(r as Record<string, unknown>));
 }
 
-// The window it was played in, plus every pod that drafted the season's own set whenever it happened
-export async function fetchPodSeasonEvents(
-  startDate: string,
-  endDate: string,
-  seasonCode: string,
-): Promise<PodEventSummary[]> {
-  const rows = await podSeasonRows(startDate, endDate, seasonCode, "*");
-  return rows
-    .map((r) => adaptPodEvent(r as Record<string, unknown>))
-    .sort((a, b) => (a.eventTime < b.eventTime ? 1 : a.eventTime > b.eventTime ? -1 : 0));
-}
-
 export async function fetchAllPodEvents(): Promise<PodEventSummary[]> {
   const rows = await pagedRows<Record<string, unknown>>((from, to) =>
     client()
@@ -1761,15 +1749,6 @@ export async function fetchPodSeasonResults(
 
 const POD_RESULT_EVENT_COLUMNS = "event_id, set_code, event_time, kind";
 
-export async function fetchPodResultsForSet(setCode: string): Promise<PodSeasonResultRow[]> {
-  const { data, error } = await client()
-    .from("public_pod_draft_events")
-    .select(POD_RESULT_EVENT_COLUMNS)
-    .eq("set_code", setCode);
-  if (error) throw error;
-  return podResultsForEvents(data ?? []);
-}
-
 // The whole history in two ordered range-paged reads run in parallel, so the pods page holds every scope
 // client-side and never chains an events read into a per-event participants read
 export async function fetchAllPodResults(): Promise<PodSeasonResultRow[]> {
@@ -1875,14 +1854,6 @@ async function podParticipantsForEvents(eventIds: string[]): Promise<Record<stri
     participants.push(...((data ?? []) as Record<string, unknown>[]));
   }
   return participants;
-}
-
-export async function fetchPodEventDates(): Promise<string[]> {
-  const { data, error } = await client()
-    .from("public_pod_draft_events")
-    .select("event_date");
-  if (error) throw error;
-  return (data ?? []).map((r) => (r as { event_date: string }).event_date);
 }
 
 export async function fetchPodSetCodes(): Promise<PodSetCode[]> {

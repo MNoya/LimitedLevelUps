@@ -40,11 +40,8 @@ import {
   fetchPodEventReplays,
   fetchPodEvents,
   fetchPodLeaderboard,
-  fetchPodEventDates,
   fetchPodCalendar,
-  fetchPodSeasonEvents,
   fetchPodSeasonResults,
-  fetchPodResultsForSet,
   fetchPodSetCodes,
   fetchAllPodEvents,
   fetchAllPodResults,
@@ -505,17 +502,6 @@ export function usePodEvents(setCode: string | undefined) {
   });
 }
 
-export function usePodSeasonEvents(
-  season: { code: string; startDate: string; endDate: string } | undefined,
-) {
-  return useQuery({
-    queryKey: ["pod-season-events", season?.code, season?.startDate, season?.endDate],
-    queryFn: () => fetchPodSeasonEvents(season!.startDate, season!.endDate, season!.code),
-    enabled: !!season,
-    staleTime: THIRTY_MINUTES,
-  });
-}
-
 export function usePodSeasonResults(
   season: { code: string; startDate: string; endDate: string } | undefined,
 ) {
@@ -523,15 +509,6 @@ export function usePodSeasonResults(
     queryKey: ["pod-season-results", season?.code, season?.startDate, season?.endDate],
     queryFn: () => fetchPodSeasonResults(season!.startDate, season!.endDate, season!.code),
     enabled: !!season,
-    staleTime: THIRTY_MINUTES,
-  });
-}
-
-export function usePodResultsForSet(setCode: string | undefined) {
-  return useQuery({
-    queryKey: ["pod-results-for-set", setCode],
-    queryFn: () => fetchPodResultsForSet(setCode!),
-    enabled: !!setCode,
     staleTime: THIRTY_MINUTES,
   });
 }
@@ -604,14 +581,6 @@ export function usePodLeaderboard(setCode: string | undefined) {
     queryKey: ["pod-leaderboard", setCode],
     queryFn: () => fetchPodLeaderboard(setCode!),
     enabled: !!setCode,
-    staleTime: THIRTY_MINUTES,
-  });
-}
-
-export function usePodEventDates() {
-  return useQuery({
-    queryKey: ["pod-event-dates"],
-    queryFn: fetchPodEventDates,
     staleTime: THIRTY_MINUTES,
   });
 }
