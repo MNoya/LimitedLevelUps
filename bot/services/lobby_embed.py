@@ -846,6 +846,8 @@ def render_ready_check_progress(
     looks this card up by title, unlike the lobby and round cards."""
     title = event_title(set_code, title)
     roster = _seat_rows(in_session, mock=mock)
+    if mock:
+        new_drafters = frozenset()
 
     closed = state == "notready"
     if closed:
