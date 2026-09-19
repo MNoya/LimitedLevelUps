@@ -38,7 +38,8 @@ export const FORMAT_RAW_GROUPS: Record<string, string[]> = {
 export function matchesFormatFilter(rawFormat: string, filter: string): boolean {
   if (filter === "ALL") return true;
   if (filter === "Sealed" && rawFormat.startsWith("OpenSealed")) return true;
-  if (filter === "Trad" && rawFormat.startsWith("OpenDraft")) return true;
+  // Arena Open Bo3 drafts score as Trad; the _Bo1 variants (HOB Sep 2026) are Champ Qualifier
+  if (filter === "Trad" && rawFormat.startsWith("OpenDraft") && !rawFormat.endsWith("_Bo1")) return true;
   const group = FORMAT_RAW_GROUPS[filter];
   if (group) return group.includes(rawFormat);
   return rawFormat.toLowerCase().includes(filter.toLowerCase());
