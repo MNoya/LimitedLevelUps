@@ -51,7 +51,3 @@ Editorial/marketing register ("the nicer way to keep"); contrastive X-not-Y / "r
 - Guide capped at `max-w-[1600px]` for the How-to-play and Organizers cards, `1260px` for the aside blocks. Two-column aside kicks in at `min-[1180px]`, restores the roomy 580/600 layout at `min-[1520px]`.
 - Deck screenshots were dropped from the guide by request.
 - **Organizers columns are JS-distributed, not CSS.** `useOrganizerColumns` (in `lib/use-is-mobile.ts`, same matchMedia pattern as `useEpisodeGridColumns`) returns the count; `chunkColumns` slices `ORGANIZER_ITEMS` into that many real flex columns. This was chosen over CSS `columns-*` (rebalances on expand, items hop) and CSS grid (shared row heights leave holes when one cell expands). `Acc` takes a `divider` prop; only the mobile single-column stack draws horizontal rules.
-
-## Kept elsewhere
-
-`docs/guide/pod-coordination.md` is the plain-language player guide of live pod behavior (kept current per the repo CLAUDE.md); unrelated to this page's build.

@@ -57,5 +57,5 @@ Tests use [`testcontainers[postgres]`](https://testcontainers.com/modules/postgr
 ## Further reading
 
 - `CLAUDE.md` — architecture, conventions, operational notes
-- `docs/guide/pod-coordination.md` — how pod drafts work, for players
+- `spec/pod-coordination.md` — the pod-draft workflow end to end, reference for agents
 - `spec/archive/` — how features were designed at the time they were built; the code is the truth now
