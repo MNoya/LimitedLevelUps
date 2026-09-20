@@ -1364,10 +1364,19 @@ async def advance_to_round(manager: "PodDraftManager", round_num: int) -> None:
 
     pending_rows = await asyncio.to_thread(insert_pending_matches, manager.event_id, round_num, pairings)
     manager.current_round = round_num
+    await _post_round_message(manager, round_num, pending_rows, players, prior, seats)
 
+
+async def _post_round_message(
+    manager: "PodDraftManager", round_num: int, pending_rows: list[tuple[str, str, str]],
+    players, prior, seats: dict[str, int],
+) -> discord.Message | None:
+    """Render and post a round's pairings message, then run the follow-on (pin, pairing DMs, submit-deck
+    DMs, nav link, auto-forfeits). Shared by first-time advancement and the restart-sweep re-post, so a
+    round that landed in the database but never reached the thread heals the same way it was born."""
     thread = await manager._fetch_thread()
     if thread is None:
-        return
+        return None
 
     standings_by_id = {s.player_id: s for s in pod_swiss.compute_standings(players, prior)}
     displays = await asyncio.to_thread(load_participant_displays, manager.event_id)
@@ -1381,21 +1390,36 @@ async def advance_to_round(manager: "PodDraftManager", round_num: int) -> None:
         _attach_seats(match_states, seats)
     embed = round_embed(round_num, match_states)
     view = RoundResultsView(match_states, round_num=round_num)
-    posted: discord.Message | None = None
-    try:
-        posted = await thread.send(embed=embed, view=view)
-    except Exception:
-        log.warning("could not post round %d message", round_num, exc_info=True)
+    posted = await _send_round_message(thread, embed, view, round_num)
+    if posted is None:
+        return None
 
-    if posted is not None:
-        manager.round_messages[round_num] = posted
-        await _pin_round_message(posted, round_num)
-        await _dm_round_pairings(manager.bot, manager.event_id, round_num, pending_rows, posted.jump_url)
-        if round_num == 1:
-            asyncio.create_task(send_submit_deck_dms(manager.bot, manager.event_id))
-        await _attach_round_link(manager, round_num - 1)
-        await settle_auto_forfeits(manager.bot, manager.event_id, [mid for mid, _, _ in pending_rows])
-        await on_final_round_posted(manager, round_num)
+    manager.round_messages[round_num] = posted
+    await _pin_round_message(posted, round_num)
+    await _dm_round_pairings(manager.bot, manager.event_id, round_num, pending_rows, posted.jump_url)
+    if round_num == 1:
+        asyncio.create_task(send_submit_deck_dms(manager.bot, manager.event_id))
+    await _attach_round_link(manager, round_num - 1)
+    await settle_auto_forfeits(manager.bot, manager.event_id, [mid for mid, _, _ in pending_rows])
+    await on_final_round_posted(manager, round_num)
+    return posted
+
+
+async def _send_round_message(thread, embed, view, round_num: int) -> discord.Message | None:
+    """Post the round message, retrying the Cloudflare 5xx that discord.py's own retry skips. A 503 at
+    post time otherwise strands the whole round with no card to report on until the next restart."""
+    for attempt in range(3):
+        try:
+            return await thread.send(embed=embed, view=view)
+        except discord.DiscordServerError:
+            if attempt == 2:
+                log.warning("could not post round %d message", round_num, exc_info=True)
+                return None
+            await asyncio.sleep(2 ** attempt)
+        except Exception:
+            log.warning("could not post round %d message", round_num, exc_info=True)
+            return None
+    return None
 
 
 async def persist_round_entry_artifacts(manager: "PodDraftManager", round_num: int) -> None:
@@ -3737,6 +3761,17 @@ def _load_pairings_for_round(event_id: str, round_num: int) -> list[tuple[str, s
     return [(a, b) for a, b in rows]
 
 
+def _load_pending_rows_for_round(event_id: str, round_num: int) -> list[tuple[str, str, str]]:
+    """(match_id, player_a, player_b) for a round in pairing order, the shape the round poster wants."""
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(PodDraftMatch.id, PodDraftMatch.player_a_name, PodDraftMatch.player_b_name)
+            .where(PodDraftMatch.event_id == event_id, PodDraftMatch.round == round_num)
+            .order_by(PodDraftMatch.pairing_index)
+        ).all()
+    return [(mid, a, b) for mid, a, b in rows]
+
+
 def _dm_refs_for_rounds_sync(event_id: str, rounds) -> dict[tuple[int, str], tuple[str, str]]:
     """(round, participant_id) → (dm_channel_id, dm_message_id) for the pairing DMs already delivered.
 
@@ -4650,8 +4685,29 @@ async def rehydrate_active_tournaments(bot) -> None:
             f"[LIFECYCLE] rehydrate.restored event={event_id} round={manager.current_round} "
             f"rounds_found={sorted(manager.round_messages)} pairing={manager.pairing_mode}"
         )
+        await _repost_dropped_round(manager)
     if restored:
         log.info(f"startup sweep rehydrated {restored} in-progress tournament(s)")
+
+
+async def _repost_dropped_round(manager) -> None:
+    """Post a started round whose thread message never landed: a Discord 5xx at post time persists the
+    pending rows and current_round but leaves players no card to report on. The restart sweep heals it,
+    guarded so a round that posted normally, or already has a reported result, is never duplicated."""
+    if manager.pairing_mode == "team":
+        return
+    round_num = manager.current_round
+    if round_num < 1 or round_num in manager.round_messages:
+        return
+    rows = await asyncio.to_thread(_load_pending_rows_for_round, manager.event_id, round_num)
+    if not rows:
+        return
+    prior = await asyncio.to_thread(load_matches, manager.event_id)
+    if any(outcome.round_num == round_num for outcome in prior):
+        return
+    seats = await asyncio.to_thread(load_seat_indexes, manager.event_id)
+    log.warning(f"[LIFECYCLE] repost_dropped_round event={manager.event_id} round={round_num}")
+    await _post_round_message(manager, round_num, rows, manager.tournament_players, prior, seats)
 
 
 async def post_championship_for_event(
