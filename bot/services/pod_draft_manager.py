@@ -3827,15 +3827,14 @@ async def handle_team_vote_click(interaction: "discord.Interaction", event_id: s
     runs an hour before the lobby opens. Serialized per pod so rapid clicks can't race.
 
     Registered as the vote-button handler at import, keeping pod_team_vote free of a manager import."""
+    await interaction.response.defer()
     lock = _team_vote_click_locks.setdefault(event_id, asyncio.Lock())
     async with lock:
         if not interaction.message.embeds:
-            await interaction.response.defer()
             return
         embed = interaction.message.embeds[0]
         manager = ACTIVE_POD_MANAGERS.get(event_id)
         if manager is not None and (manager.drafting or manager.draft_complete):
-            await interaction.response.defer()
             return
         if manager is not None:
             already_team = manager.pairing_mode == "team"
@@ -3844,7 +3843,7 @@ async def handle_team_vote_click(interaction: "discord.Interaction", event_id: s
         team = team_voters_from_embed(embed)
         wait = wait_voters_from_embed(embed)
         if already_team:
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 embed=build_team_vote_locked_embed(team, wait), view=None)
             return
         needed = needed_from_embed(embed)
@@ -3860,21 +3859,20 @@ async def handle_team_vote_click(interaction: "discord.Interaction", event_id: s
             err = await set_event_pairing_mode(event_id, "team")
             if err:
                 log.warning(f"[TEAM_VOTE] lock_failed event={event_id} err={err}")
-                await interaction.response.defer()
                 return
             log.info(f"[TEAM_VOTE] locked team event={event_id} voters={team}")
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 embed=build_team_vote_locked_embed(team, wait), view=None)
             return
         if needed is not None and len(wait) >= needed:
             if manager is not None:
                 manager.team_vote_message = None
             log.info(f"[TEAM_VOTE] waited event={event_id} voters={wait}")
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 embed=build_team_vote_waited_embed(team, wait), view=None)
             return
         try:
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 embed=rerender_gathering(embed, team, wait), view=build_team_vote_view(event_id))
         except discord.HTTPException:
             log.warning(f"[TEAM_VOTE] edit_failed event={event_id}", exc_info=True)
@@ -3890,16 +3888,16 @@ async def handle_disconnect_vote_click(interaction: "discord.Interaction", event
     """Move the clicker to their side of the disconnect offer against the card message, which holds the
     tally, and act the moment one side reaches a majority of the players still at the table. Serialized per
     pod so two clicks landing together can't both read the card as one short of the decision."""
+    await interaction.response.defer()
     lock = _disconnect_vote_click_locks.setdefault(event_id, asyncio.Lock())
     async with lock:
         embed = interaction.message.embeds[0] if interaction.message.embeds else None
         manager = ACTIVE_POD_MANAGERS.get(event_id)
         needed = pod_disconnect.needed_from_embed(embed) if embed is not None else None
         if embed is None or needed is None or manager is None:
-            await interaction.response.defer()
             return
         if not manager.drafting or manager.draft_complete or not manager.disconnected_names:
-            await interaction.response.edit_message(view=None)
+            await interaction.edit_original_response(view=None)
             return
         mention = interaction.user.mention
         for_bot = [voter for voter in pod_disconnect.bot_voters_from_embed(embed) if voter != mention]
@@ -3908,7 +3906,7 @@ async def handle_disconnect_vote_click(interaction: "discord.Interaction", event
         if len(for_bot) >= needed:
             error = await manager.replace_disconnected_with_bots()
             if error:
-                await interaction.response.send_message(f"⚠️ {error}", ephemeral=True)
+                await interaction.followup.send(f"⚠️ {error}", ephemeral=True)
                 return
             log.info(f"[DROP_VOTE] replaced event={event_id} voters={for_bot}")
             await _close_disconnect_vote(
@@ -3922,7 +3920,7 @@ async def handle_disconnect_vote_click(interaction: "discord.Interaction", event
                 await manager.restart_draft(thread)
             return
         try:
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 embed=pod_disconnect.rerender_offer(embed, for_bot, for_restart),
                 view=pod_disconnect.build_offer_view(event_id))
         except discord.HTTPException:
@@ -3935,7 +3933,7 @@ async def _close_disconnect_vote(interaction: "discord.Interaction", manager, bo
     the outcome goes out as its own plain message. A restart passes no notice, since reopening the lobby
     posts its own card for every path that reaches it."""
     manager.clear_disconnect_state()
-    await interaction.response.edit_message(
+    await interaction.edit_original_response(
         embed=pod_disconnect.rerender_offer(interaction.message.embeds[0], bot_votes, restart_votes),
         view=None)
     if notice is not None:
@@ -3995,12 +3993,12 @@ async def handle_round_robin_vote_click(interaction: "discord.Interaction", even
     Every player has to agree, so the card has one outcome and no deadline: Wait keeps it open, and a player
     who wanted to wait can move to Pick 2 once nobody else arrives. Serialized per pod so rapid clicks can't
     race."""
+    await interaction.response.defer()
     lock = _round_robin_vote_click_locks.setdefault(event_id, asyncio.Lock())
     async with lock:
         manager = ACTIVE_POD_MANAGERS.get(event_id)
         card = interaction.message.embeds[0] if interaction.message.embeds else None
         if card is None or manager is None or manager.drafting or manager.draft_complete:
-            await interaction.response.defer()
             return
         mention = interaction.user.mention
         for_rr = [voter for voter in pod_round_robin_vote.round_robin_voters_from_embed(card) if voter != mention]
@@ -4010,11 +4008,11 @@ async def handle_round_robin_vote_click(interaction: "discord.Interaction", even
             manager.round_robin_vote_message = None
             await manager.apply_round_robin_outcome()
             log.info(f"[RR_VOTE] locked round_robin event={event_id} voters={for_rr}")
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 embed=pod_round_robin_vote.build_locked_embed(for_rr, for_wait), view=None)
             return
         try:
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 embed=pod_round_robin_vote.rerender_gathering(card, for_rr, for_wait),
                 view=pod_round_robin_vote.build_vote_view(event_id),
             )
@@ -4108,20 +4106,19 @@ async def handle_format_poll_click(interaction: "discord.Interaction", event_id:
     manager backs the pod. Serialized per pod so rapid clicks can't race.
 
     Registered as the poll-button handler at import, keeping pod_format_poll free of a manager import."""
+    await interaction.response.defer()
     lock = _format_poll_click_locks.setdefault(event_id, asyncio.Lock())
     async with lock:
         if not interaction.message.embeds:
-            await interaction.response.defer()
             return
         manager = ACTIVE_POD_MANAGERS.get(event_id)
         if manager is not None and (manager.drafting or manager.draft_complete):
-            await interaction.response.defer()
             return
         new_embed, new_view = _apply_format_poll_vote(
             event_id, interaction.message.embeds[0], interaction.user.mention, code,
         )
         try:
-            await interaction.response.edit_message(embed=new_embed, view=new_view)
+            await interaction.edit_original_response(embed=new_embed, view=new_view)
         except discord.HTTPException:
             log.warning(f"[FORMAT_POLL] edit_failed event={event_id}", exc_info=True)
             return
@@ -4160,29 +4157,30 @@ async def handle_format_poll_add(
 ) -> None:
     """Add one or more player-typed set codes to the poll and vote the player for each, then re-render the
     card. Codes can be comma or space separated. Unparseable input is refused ephemerally."""
+    await interaction.response.defer(ephemeral=True, thinking=True)
     codes = pod_format_poll.normalize_write_ins(raw_code)
     if not codes:
-        await interaction.response.send_message("Enter set codes like DSK FIN MH3", ephemeral=True)
+        await interaction.followup.send("Enter set codes like DSK FIN MH3", ephemeral=True)
         return
     lock = _format_poll_click_locks.setdefault(event_id, asyncio.Lock())
     async with lock:
         if not message.embeds:
-            await interaction.response.send_message("This poll is no longer active", ephemeral=True)
+            await interaction.followup.send("This poll is no longer active", ephemeral=True)
             return
         new_embed, new_view, applied = _apply_format_poll_write_ins(
             event_id, message.embeds[0], interaction.user.mention, codes, interaction.user.display_name,
         )
         if not applied:
             full = "This poll already has the most formats it can hold."
-            await interaction.response.send_message(full, ephemeral=True)
+            await interaction.followup.send(full, ephemeral=True)
             return
         try:
             await message.edit(embed=new_embed, view=new_view)
         except discord.HTTPException:
             log.warning(f"[FORMAT_POLL] add_edit_failed event={event_id}", exc_info=True)
-            await interaction.response.send_message("Could not update the poll", ephemeral=True)
+            await interaction.followup.send("Could not update the poll", ephemeral=True)
             return
-        await interaction.response.send_message(f"Voted for {', '.join(applied)}", ephemeral=True)
+        await interaction.followup.send(f"Voted for {', '.join(applied)}", ephemeral=True)
 
 
 pod_format_poll.register_format_poll_click_handler(handle_format_poll_click)
