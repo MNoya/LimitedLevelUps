@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     pod_queue_inactivity_minutes: int = 180
     pod_idle_offer_minutes: int = 30
     pod_self_destruct_grace_minutes: int = 5
+    pod_orphan_reaper_minutes: int = 15
+    pod_orphan_close_after_minutes: int = 180
     pod_underfill_check_hours: str = "3,2,1"
     pod_underfill_ping_hours: str = "1"
     pod_underfill_ping_close_gap: int = 2

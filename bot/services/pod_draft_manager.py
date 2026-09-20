@@ -365,6 +365,8 @@ class PodDraftManager:
         self.ownership_ready = asyncio.Event()
         self._closed = False
         self.abandoned = False
+        self._reconnect_task: asyncio.Task | None = None
+        self._reconnect_cycles = 0
         self.ready_check_active = False
         self.ready_check_generation = 0
         self.ready_check_joined_ids: set[str] = set()
@@ -512,6 +514,7 @@ class PodDraftManager:
             f"complete={self.draft_complete} finalized={self.finalized}"
         )
         self._closed = True
+        self._cancel_reconnect()
         self._cancel_end_watchdog()
         self._cancel_idle_timer()
         self._cancel_lobby_refresh()
@@ -549,30 +552,57 @@ class PodDraftManager:
     async def _on_disconnect(self) -> None:
         in_flight = self.drafting or (self.draft_complete and not self.finalized)
         was_closed_intentionally = self._closed
-        self._closed = True
-        decision = "keep" if in_flight else "drop"
+        decision = "teardown" if was_closed_intentionally else ("keep" if in_flight else "reconnect")
         log.warning(
             f"[LIFECYCLE] socket_disconnect event={self.event_id} sid={self.session_id} "
             f"closed_intentionally={was_closed_intentionally} drafting={self.drafting} "
             f"complete={self.draft_complete} finalized={self.finalized} "
             f"decision={decision} registry_size={len(ACTIVE_POD_MANAGERS)}"
         )
-        if in_flight:
-            if not was_closed_intentionally:
-                await bot_log_mod.get(self.bot).post(
-                    f"Socket dropped mid-flight for event `{self.event_id}` "
-                    f"(drafting={self.drafting}, complete={self.draft_complete}).",
-                    fingerprint=f"socket_drop_in_flight:{self.event_id}",
-                    tag="LIFECYCLE",
-                )
+        if was_closed_intentionally:
             return
-        removed = ACTIVE_POD_MANAGERS.pop(self.event_id, None) is not None
-        log.info(
-            f"[LIFECYCLE] socket_disconnect.evict event={self.event_id} "
-            f"removed={removed} registry_size={len(ACTIVE_POD_MANAGERS)}"
-        )
+        if in_flight:
+            self._closed = True
+            await bot_log_mod.get(self.bot).post(
+                f"Socket dropped mid-flight for event `{self.event_id}` "
+                f"(drafting={self.drafting}, complete={self.draft_complete}).",
+                fingerprint=f"socket_drop_in_flight:{self.event_id}",
+                tag="LIFECYCLE",
+            )
+            return
+        self._schedule_open_lobby_reconnect()
+
+    def _schedule_open_lobby_reconnect(self) -> None:
+        if self._reconnect_task is not None and not self._reconnect_task.done():
+            return
+        self._reconnect_task = asyncio.create_task(self._reconnect_open_lobby())
+
+    def _cancel_reconnect(self) -> None:
+        task = self._reconnect_task
+        self._reconnect_task = None
+        if task is not None and not task.done() and task is not asyncio.current_task():
+            task.cancel()
+
+    async def _reconnect_open_lobby(self) -> None:
+        """An open lobby lost its socket with nobody closing it: a redeploy flap or a Draftmancer restart.
+        Reconnect on the same session so the card and its Join button keep working, and close the lobby
+        only once the retries give up, so a session that is genuinely gone leaves no orphaned card behind.
+        `_on_session_users` resets the cycle count, so only a session that keeps dropping runs out of tries."""
+        if self._closed or self.abandoned or self._lobby_closed():
+            return
+        self._reconnect_cycles += 1
+        if self._reconnect_cycles > _BACKOFF_MAX_RETRIES:
+            log.warning(f"[LIFECYCLE] reconnect.flapping event={self.event_id} cycles={self._reconnect_cycles}")
+            await cancel_pod_event(self.event_id, idle=True)
+            return
+        if await self.connect():
+            log.info(f"[LIFECYCLE] reconnect.restored event={self.event_id} cycle={self._reconnect_cycles}")
+            return
+        log.warning(f"[LIFECYCLE] reconnect.gave_up event={self.event_id} sid={self.session_id}")
+        await cancel_pod_event(self.event_id, idle=True)
 
     async def _on_session_users(self, users) -> None:
+        self._reconnect_cycles = 0
         self.session_users = list(users) if isinstance(users, list) else []
         slim = [{k: v for k, v in u.items() if k != "collection"} for u in self.session_users]
         log.info(f"draftmancer sessionUsers for {self.session_id}: {slim}")
@@ -1933,23 +1963,27 @@ class PodDraftManager:
         return self.canceled_by is not None or self.canceled_idle
 
     async def stand_down_idle_lobby(self) -> None:
-        """Retire a lobby that went quiet: the mock card names the window that closed it, the thread says
-        so, then archives so a lobby nobody answered leaves the sidebar. Archiving is reversible, so a
-        later reply reopens the thread; the event row is deleted by the caller either way."""
-        await self.mark_canceled(idle=True)
+        """Retire a lobby that went quiet: name the window that closed it, then archive so a lobby nobody
+        answered leaves the sidebar. Archiving is reversible, so a later reply reopens the thread; the event
+        row is deleted by the caller either way. A mock goes through `retire_idle_mock`, the same path the
+        orphan reaper takes, so a lobby closes identically whether or not a manager still holds it."""
+        self.canceled_idle = True
+        self._cancel_idle_timer()
+        if self.kind == "mock":
+            await retire_idle_mock(
+                self.bot, event_id=self.event_id, thread_id=self.thread_id,
+                event_name=self.event_name, set_code=self.set_code, session_id=self.session_id,
+            )
+            return
         thread = await self._fetch_thread()
         if thread is None:
             return
         window = inactivity_window_text(settings.pod_idle_offer_minutes)
-        notice = MSG_MOCK_CLOSED_IDLE if self.kind == "mock" else MSG_POD_CLOSED_IDLE
         try:
-            await thread.send(notice.format(window=window))
-        except discord.HTTPException:
-            log.info(f"[POD] idle_notice_failed event={self.event_id}", exc_info=True)
-        try:
+            await thread.send(MSG_POD_CLOSED_IDLE.format(window=window))
             await thread.edit(archived=True, reason="Pod lobby closed after inactivity")
         except discord.HTTPException:
-            log.info(f"[POD] idle_archive_failed event={self.event_id}", exc_info=True)
+            log.info(f"[POD] idle_teardown_failed event={self.event_id}", exc_info=True)
 
     def _mock_card_state(self) -> str:
         """A lobby the bot does not hold reads as opening, not open: the card's link and Join button are
@@ -1981,13 +2015,13 @@ class PodDraftManager:
             return None
         return self._mock_anchor_message
 
-    async def mark_canceled(self, actor: str | None = None, *, idle: bool = False) -> None:
+    async def mark_canceled(self, actor: str | None = None) -> None:
         """Flip a mock draft's anchor card to canceled before the event row goes away. Tournament pods
-        retire their RSVP card through the cancel hook instead, so this is mock-only."""
+        retire their RSVP card through the cancel hook instead, so this is mock-only. The idle close takes
+        `retire_idle_mock` instead, so a lobby nobody answered stands down the same with or without a manager."""
         if self.kind != "mock":
             return
         self.canceled_by = actor
-        self.canceled_idle = idle
         self._cancel_idle_timer()
         roster = await self.classified_session_users()
         await self._update_mock_anchor(roster)
@@ -4292,6 +4326,113 @@ def _count_participants_sync(event_id: str) -> int:
             select(func.count()).select_from(PodDraftParticipant)
             .where(PodDraftParticipant.event_id == event_id)
         ).scalar_one()
+
+
+async def reap_orphan_mock_lobbies(bot) -> None:
+    """Backstop sweep for a mock lobby no manager holds: a hard crash or a Draftmancer session that never
+    came back leaves an open card with a working Join button and a live event row that nothing will ever
+    close. The manager's own idle watch and reconnect cover the common cases, so this only touches a lobby
+    old enough that it cannot still be gathering, and skips any event still in the live registry."""
+    rows = await asyncio.to_thread(_load_orphan_mock_lobbies_sync, settings.pod_orphan_close_after_minutes)
+    reaped = 0
+    for row in rows:
+        if row["id"] in ACTIVE_POD_MANAGERS:
+            continue
+        log.warning(f"[LIFECYCLE] orphan_reap event={row['id']} sid={row['draftmancer_session']}")
+        await retire_idle_mock(
+            bot, event_id=row["id"], thread_id=int(row["discord_thread_id"]),
+            event_name=row["name"], set_code=row["set_code"], session_id=row["draftmancer_session"],
+        )
+        await cancel_pod_event(row["id"], idle=True)
+        reaped += 1
+    if reaped:
+        log.info(f"orphan reaper closed {reaped} mock lobby/lobbies with no live manager")
+
+
+async def retire_idle_mock(bot, *, event_id: str, thread_id: int, event_name: str, set_code: str,
+                           session_id: str) -> None:
+    """Stand a mock lobby's surfaces down without a live manager: grey the anchor card to idle-canceled,
+    drop any repost, then notice and archive the thread. The mock analog of `retire_canceled_pod`, so a
+    lobby closes the same whether the manager is still in memory or long gone."""
+    thread = await _fetch_thread_by_id(bot, thread_id)
+    await _grey_idle_mock_card(
+        thread, event_id=event_id, thread_id=thread_id, event_name=event_name,
+        set_code=set_code, session_id=session_id,
+    )
+    await _retire_mock_repost_message(bot, event_id)
+    if thread is None:
+        return
+    window = inactivity_window_text(settings.pod_idle_offer_minutes)
+    try:
+        await thread.send(MSG_MOCK_CLOSED_IDLE.format(window=window))
+        await thread.edit(archived=True, reason="Mock lobby closed after inactivity")
+    except discord.HTTPException:
+        log.info(f"[LIFECYCLE] retire_idle_mock.thread_failed event={event_id}", exc_info=True)
+
+
+async def _grey_idle_mock_card(thread, *, event_id: str, thread_id: int, event_name: str, set_code: str,
+                               session_id: str) -> None:
+    if thread is None or thread.parent is None:
+        return
+    try:
+        anchor = await thread.parent.fetch_message(thread_id)
+    except discord.HTTPException:
+        return
+    content, embed, view = build_mock_card(
+        event_name=event_name, set_code=set_code, session_id=session_id,
+        session_url="", site_url="", roster=[], max_players=0, role_mention="",
+        state=STATE_CANCELED, canceled_idle=True,
+    )
+    try:
+        await anchor.edit(content=content, embed=embed, view=view)
+    except discord.HTTPException:
+        log.info(f"[LIFECYCLE] retire_idle_mock.card_failed event={event_id}", exc_info=True)
+
+
+async def _retire_mock_repost_message(bot, event_id: str) -> None:
+    recorded = await asyncio.to_thread(mock_repost_sync, event_id)
+    if recorded is None:
+        return
+    channel_id, message_id = recorded
+    channel = bot.get_channel(int(channel_id))
+    if channel is not None:
+        try:
+            await (await channel.fetch_message(int(message_id))).delete()
+        except discord.HTTPException:
+            log.info(f"[LIFECYCLE] retire_idle_mock.repost_failed event={event_id}", exc_info=True)
+    await asyncio.to_thread(record_mock_repost_sync, event_id, None, None)
+
+
+async def _fetch_thread_by_id(bot, thread_id: int):
+    try:
+        channel = await bot.fetch_channel(thread_id)
+    except discord.HTTPException:
+        return None
+    return channel if isinstance(channel, discord.Thread) else None
+
+
+def _load_orphan_mock_lobbies_sync(max_age_minutes: int) -> list[dict]:
+    """Mock events open long past when they could still be gathering: no finished draft, no tournament
+    round, older than the age cap. The reaper filters the live registry out in memory, so a lobby a
+    manager still holds is never touched even when its row matches here."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(
+                PodDraftEvent.id,
+                PodDraftEvent.draftmancer_session,
+                PodDraftEvent.discord_thread_id,
+                PodDraftEvent.set_code,
+                PodDraftEvent.name,
+            ).where(
+                PodDraftEvent.kind == "mock",
+                PodDraftEvent.socket_status != "draft_done",
+                PodDraftEvent.finalized_at.is_(None),
+                PodDraftEvent.current_round.is_(None),
+                PodDraftEvent.created_at < cutoff,
+            )
+        ).all()
+    return [dict(row._mapping) for row in rows]
 
 
 async def _find_pinned_lobby_card(thread, bot_user, event_name: str) -> "discord.Message | None":
