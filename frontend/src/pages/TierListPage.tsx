@@ -59,6 +59,10 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
   const filtersReady = Boolean(tierData?.length);
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [setCode]);
+
+  useEffect(() => {
     setFilters(EMPTY_FILTERS);
   }, [effectiveUid]);
 

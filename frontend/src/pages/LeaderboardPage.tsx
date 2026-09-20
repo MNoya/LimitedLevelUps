@@ -100,6 +100,11 @@ export function LeaderboardPage() {
       navigate({ pathname: leaderboardPath(routeSet), search: searchParams.toString() }, { replace: true });
     }
   }, [params.setCode, routeSet, liveSetCode, cubeBoard, navigate, searchParams]);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeSet]);
+
   const format = searchParams.get("format") ?? "ALL";
   const colors = searchParams.get("colors") ?? "ALL";
   const colorsMode = colors !== "ALL";

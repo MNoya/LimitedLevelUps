@@ -215,6 +215,10 @@ export function PodDraftsPage({
   const { data: allEvents } = useAllPodEvents(true);
   const { data: allResults } = useAllPodResults(true);
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [setCode, seasonCode]);
+
   // A season lists once it holds a pod, inside its window or drafting its own set
   const seasons = useMemo<SetSummary[]>(() => {
     if (!allSets || !allEvents || !podSetCodes) return [];

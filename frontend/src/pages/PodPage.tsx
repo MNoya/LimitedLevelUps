@@ -210,6 +210,10 @@ export function PodPage() {
   );
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [slug]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (deckTarget) return;
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;

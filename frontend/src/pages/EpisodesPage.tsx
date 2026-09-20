@@ -253,6 +253,10 @@ export function EpisodesPage() {
 
   const transcriptArticleView = transcriptsView && Boolean(openEpisode || (looksLikeEpisodeTarget && isPending));
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const openEpisodeId = openEpisode?.id;
   useEffect(() => {
     if (openEpisodeId) {
