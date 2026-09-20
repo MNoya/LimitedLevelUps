@@ -865,9 +865,11 @@ async function aggregateColorsFromEvents(
   const formatAllowed = formatGroup ? new Set(formatGroup) : null;
 
   const season = isCubeSeasonCode(setCode);
+  const baseColumns = "slug, format, wins, losses, is_trophy, finished_at, main_colors, is_multi";
+  const eventColumns = season ? `${baseColumns}, display_name, avatar_url` : baseColumns;
   let query = client()
     .from("public_color_events")
-    .select("slug, format, wins, losses, is_trophy, finished_at, display_name, avatar_url, main_colors, is_multi")
+    .select(eventColumns)
     .eq("set_code", setCode);
   // One bucket narrows server-side; a mixed request falls back to the whole board and inBucket.
   if (bucket.includeMulti && bucket.combos.length === 0) {
