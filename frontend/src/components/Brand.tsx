@@ -2,9 +2,8 @@ import React from "react";
 import { cubeBoardCode, CUBE_VARIANTS } from "../data/cubeVariants";
 import { cn } from "../lib/utils";
 
-// LLU brand mark — the user-supplied logo PNG. Bypasses Vite's asset pipeline
-// by living in /public so the public URL is deterministic across dev / prod.
-export const LLU_LOGO_SRC = `${import.meta.env.BASE_URL}llu-logo-transparent.png`;
+// LLU brand mark in /public so the public URL is deterministic across dev / prod
+export const LLU_LOGO_SRC = `${import.meta.env.BASE_URL}llu-logo.svg`;
 
 export function ALogo({ size = 32 }: { size?: number }) {
   return (
