@@ -70,6 +70,25 @@ POD_HELP_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
 ]
 
 
+PREFIX_HELP_TITLE = "❔ Text Commands"
+
+PREFIX_HELP_COMMANDS: list[tuple[str, str]] = [
+    ("!llu", "Link the Website"),
+    ("!leaderboard", "Link the Leaderboard"),
+    ("!tier-list", "Link the Tier List"),
+    ("!pods", "Link the Pods page"),
+    ("!evergreen", "Link the Evergreen Episodes"),
+    ("!teams", "How Team Draft works"),
+    ("!pod", "Rally players for a Pod Draft"),
+    ("!confirm", "Confirm your seat in a Pod thread"),
+    ("!voice", "Share a Voice Chat Link"),
+    ("!peasant", "Peasant Cube on CubeCobra"),
+    ("!sampcube", "samp's Cube on CubeCobra"),
+    ("!mema", "Middle-Earth Masters on CubeCobra"),
+    ("!nephew", "What is a Nephew?"),
+]
+
+
 # command → blockquote usage examples, each kept to one line
 HELP_EXAMPLES: dict[str, list[list[str]]] = {
     "/leaderboard": [
@@ -105,6 +124,31 @@ def render_help_embed(sections: list[tuple[str, list[tuple[str, str]]]] = HELP_S
         inline=False,
     )
     return embed
+
+
+def render_prefix_help_embed() -> discord.Embed:
+    lines = [command_line(cmd, blurb) for cmd, blurb in PREFIX_HELP_COMMANDS]
+    return discord.Embed(title=PREFIX_HELP_TITLE, description="\n".join(lines), color=discord.Color.green())
+
+
+class PrefixHelpCommand(commands.HelpCommand):
+    async def _send(self) -> None:
+        await self.get_destination().send(embed=render_prefix_help_embed())
+
+    async def send_bot_help(self, mapping) -> None:
+        await self._send()
+
+    async def send_command_help(self, command) -> None:
+        await self._send()
+
+    async def send_group_help(self, group) -> None:
+        await self._send()
+
+    async def send_cog_help(self, cog) -> None:
+        await self._send()
+
+    async def send_error_message(self, error) -> None:
+        await self._send()
 
 
 class Help(commands.Cog):

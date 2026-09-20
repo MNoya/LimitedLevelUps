@@ -22,7 +22,7 @@ from bot.commands.advertise import setup as setup_advertise
 from bot.commands.delete_account import setup as setup_delete_account
 from bot.commands.event_scribe import setup as setup_event_scribe
 from bot.commands.guide import setup as setup_guide
-from bot.commands.help import setup as setup_help
+from bot.commands.help import PrefixHelpCommand, setup as setup_help
 from bot.commands.link_17lands import setup as setup_link_17lands
 from bot.commands.messages import MSG_TOKEN_INVALIDATED
 from bot.commands.leaderboard_visibility import setup as setup_leaderboard_visibility
@@ -220,7 +220,9 @@ def build_bot(guild_id: int) -> commands.Bot:
     intents.message_content = True
     intents.dm_messages = True
     intents.members = True
-    bot = commands.Bot(command_prefix="!", intents=intents, tree_cls=LoggingCommandTree)
+    bot = commands.Bot(
+        command_prefix="!", intents=intents, tree_cls=LoggingCommandTree, help_command=PrefixHelpCommand()
+    )
     guild = discord.Object(id=guild_id)
 
     @bot.event
