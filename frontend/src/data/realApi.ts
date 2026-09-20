@@ -871,10 +871,12 @@ async function aggregateColorsFromEvents(
     .from("public_color_events")
     .select(eventColumns)
     .eq("set_code", setCode);
-  // One bucket narrows server-side; a mixed request falls back to the whole board and inBucket.
-  if (bucket.includeMulti && bucket.combos.length === 0) {
+  // Every bucket narrows server-side so no request scans the whole board
+  if (bucket.includeMulti && bucket.combos.length > 0) {
+    query = query.or(`is_multi.eq.true,main_colors.in.(${bucket.combos.join(",")})`);
+  } else if (bucket.includeMulti) {
     query = query.eq("is_multi", true);
-  } else if (!bucket.includeMulti && bucket.combos.length > 0) {
+  } else if (bucket.combos.length > 0) {
     query = query.in("main_colors", bucket.combos);
   }
   const { data, error } = await query;

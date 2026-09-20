@@ -167,6 +167,7 @@ def refresh_player(
     player: Player,
     drafts: list[dict] | None = None,
     fetch_start: date | None = None,
+    sets: Sequence[MagicSet] | None = None,
 ) -> dict:
     if drafts is None:
         try:
@@ -198,7 +199,8 @@ def refresh_player(
             logger.warning(f"refresh: network error for player {player.id}: {e}")
             return {"status": "error", "error": str(e)}
 
-    sets = session.execute(select(MagicSet)).scalars().all()
+    if sets is None:
+        sets = session.execute(select(MagicSet)).scalars().all()
 
     upsert = bulk_upsert_draft_events(session, player.id, drafts, sets)
     touched_set_ids = {set_id for (_pid, set_id) in upsert["touched_pairs"]}
@@ -332,7 +334,7 @@ def refresh_one_player_for_all_sets(session: Session, client: _DraftClient, play
     sets = session.execute(select(MagicSet).order_by(MagicSet.start_date.asc())).scalars().all()
     if not sets:
         return {"status": "no_sets"}
-    return refresh_player(session, client, player, fetch_start=sets[0].start_date)
+    return refresh_player(session, client, player, fetch_start=sets[0].start_date, sets=sets)
 
 
 def refresh_active_players(session: Session, client: _DraftClient) -> dict:
@@ -406,7 +408,8 @@ def _refresh_matview(session: Session, name: str) -> None:
 
 
 def _refresh_player_retrying_transient(
-    session: Session, client: _DraftClient, player: Player, fetch_start: date, idx: int, n_total: int
+    session: Session, client: _DraftClient, player: Player, fetch_start: date, idx: int, n_total: int,
+    sets: Sequence[MagicSet] | None = None,
 ) -> dict:
     """Refresh one player, treating 403s and dropped connections as a run-wide cooldown signal.
 
@@ -416,7 +419,7 @@ def _refresh_player_retrying_transient(
     can recover on the next tick.
     """
     for attempt in range(TRANSIENT_MAX_RETRIES + 1):
-        result = refresh_player(session, client, player, fetch_start=fetch_start)
+        result = refresh_player(session, client, player, fetch_start=fetch_start, sets=sets)
         if result.get("status") != "transient":
             return result
         if attempt == TRANSIENT_MAX_RETRIES:
@@ -437,6 +440,7 @@ def _refresh_active_with_window(session: Session, client: _DraftClient, fetch_st
             Player.seventeenlands_token.isnot(None),
         )
     ).scalars().all()
+    sets = session.execute(select(MagicSet)).scalars().all()
 
     summary: dict = {
         "updated": 0,
@@ -454,7 +458,7 @@ def _refresh_active_with_window(session: Session, client: _DraftClient, fetch_st
     t_total = _time.monotonic()
     for idx, player in enumerate(players, start=1):
         t0 = _time.monotonic()
-        result = _refresh_player_retrying_transient(session, client, player, fetch_start, idx, n_total)
+        result = _refresh_player_retrying_transient(session, client, player, fetch_start, idx, n_total, sets)
         # Commit per-player so a mid-run crash keeps fetched data and the token_invalid flag persists
         session.commit()
         elapsed = _time.monotonic() - t0
