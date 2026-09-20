@@ -89,6 +89,7 @@ def format_deck_color_emojis(code: str | None) -> str:
     - "WR"   → :manarw:                        (guild pair, no splash)
     - "URG"  → :manau::manar::manag:           (3 main, no splash)
     - "WUBRG"→ :manawubrg:                     (5 main, no splash)
+    - "WRgbu"→ :manawubrg:                     (5 distinct colors always collapse to soup)
     - "BGw"  → :manab::manag::manaws:          (BG main, small W splash)
     - "URw"  → :manaur::manaws:                (UR guild pair main, small W splash)
     """
@@ -105,6 +106,11 @@ def format_deck_color_emojis(code: str | None) -> str:
         main, splash = splash, set()
     if not main:
         return ""
+
+    if len(main | splash) == 5:
+        soup = emojis.get("manawubrg")
+        if soup:
+            return soup
 
     main_glyph = _emojis_for_color_set(main)
     if not splash:

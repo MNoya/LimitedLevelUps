@@ -677,7 +677,7 @@ async def setup(bot: commands.Bot) -> None:
             ctx.channel, name=name, event_time=event_time, set_code=set_code,
             roster=[_roster_name(i) for i in range(8)],
         )
-        colors = ["WU", "BR", "URg", "WBg", "GW", "UB", "RG", "WUBRG"]
+        colors = ["WU", "BR", "URg", "WBg", "WRgbu", "UB", "RG", "WUBRG"]
         records = ["3-0", "2-1", "2-1", "2-1", "1-2", "1-2", "1-2", "0-3"]
 
         started = [DraftedPlayer(display_name=_roster_name(i), seat_index=i) for i in range(8)]
