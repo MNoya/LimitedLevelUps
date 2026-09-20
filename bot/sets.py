@@ -326,6 +326,16 @@ def flashback_picker_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:
     return tuple(out)
 
 
+PREVIEW_PICKER_CODES: frozenset[str] = frozenset({"FRA"})
+
+
+def preview_picker_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:
+    """Upcoming sets explicitly allowed as a draftable preview format, newest first"""
+    out = [seed for seed in upcoming_sets(when) if seed.code in PREVIEW_PICKER_CODES]
+    out.sort(key=lambda seed: seed.start_date, reverse=True)
+    return tuple(out)
+
+
 def seed_for_code(code: str) -> SetSeed | None:
     for seed in ALL_SETS:
         if seed.code == code.upper():

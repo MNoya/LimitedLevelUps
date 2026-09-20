@@ -22,7 +22,7 @@ from bot.services.pod_format import (
     is_write_in_cube,
     resolve_write_in,
 )
-from bot.sets import active_set_code, flashback_picker_sets
+from bot.sets import active_set_code, flashback_picker_sets, preview_picker_sets, set_name_for
 
 
 ApplyFormatCallback = Callable[[discord.Interaction, str], Awaitable[str | None]]
@@ -58,15 +58,16 @@ def write_in_cube_option(current_code: str, label_prefix: str = "Format") -> dis
 
 
 def format_options(current_code: str | None) -> list[discord.SelectOption]:
-    """The format dropdown options (active set + custom cubes + the curated flashback sets + a write-in
-    launcher), with the current one defaulted. Custom cubes sit right under the active set, matching
-    the /draft set picker. Labels are prefixed with 'Format:' so the collapsed dropdown reads e.g.
-    'Format: SOS', matching the Pairings and Seats dropdowns and the lobby footer. Any set not in the
-    curated list is still reachable through the write-in option."""
+    """The format dropdown options (active set + curated preview set + custom cubes + the curated
+    flashback sets + a write-in launcher), with the current one defaulted. Preview sets and cubes sit
+    right under the active set, matching the /draft set picker. Labels are prefixed with 'Format:' so the
+    collapsed dropdown reads e.g. 'Format: SOS', matching the Pairings and Seats dropdowns and the lobby
+    footer. Any set not in the curated list is still reachable through the write-in option."""
     cur = (current_code or "").upper()
     active = active_set_code()
+    preview = preview_picker_sets()
     recent = flashback_picker_sets()
-    known = {active} | {seed.code for seed in recent} | set(CUSTOM_FORMATS)
+    known = {active} | {seed.code for seed in preview} | {seed.code for seed in recent} | set(CUSTOM_FORMATS)
     options = [write_in_option("Format")]
     if is_write_in_cube(current_code):
         options.append(write_in_cube_option(current_code))
@@ -76,8 +77,13 @@ def format_options(current_code: str | None) -> list[discord.SelectOption]:
         ))
     options.append(set_select_option(
         active, label=f"Format: {active}",
-        description=f"Draft the latest set ({active})", default=cur in ("", active),
+        description=f"Latest Set: {set_name_for(active)}", default=cur in ("", active),
     ))
+    for seed in preview:
+        options.append(set_select_option(
+            seed.code, label=f"Format: {seed.code}",
+            description=f"Draft {seed.name}", default=(cur == seed.code),
+        ))
     for fmt in custom_formats():
         options.append(discord.SelectOption(
             label=f"Format: {fmt.label}",

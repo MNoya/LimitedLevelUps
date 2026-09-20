@@ -20,6 +20,7 @@ from bot.services.pod_format_select import format_options
 from bot.sets import (
     active_set_code,
     is_known_set,
+    preview_picker_sets,
     preview_set_code,
     recent_released_sets,
     upcoming_sets,
@@ -93,14 +94,14 @@ def test_preview_set_code_prefers_the_set_in_spoiler_season():
     assert preview_set_code(after_the_last_registered_set) == active_set_code(after_the_last_registered_set)
 
 
-def test_format_options_excludes_unreleased_sets():
+def test_format_options_offers_curated_preview_sets_without_defaulting_them():
     options = format_options(None)
     values = [opt.value for opt in options]
-    upcoming_codes = [s.code for s in upcoming_sets()]
+    preview_codes = [s.code for s in preview_picker_sets()]
 
     assert [opt.value for opt in options if opt.default] == [active_set_code()]
-    assert upcoming_codes
-    assert all(code not in values for code in upcoming_codes)
+    assert preview_codes
+    assert all(code in values for code in preview_codes)
 
 
 def test_build_mock_session_numbers_per_set(session, monkeypatch):
