@@ -1,6 +1,6 @@
 import asyncio
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -16,9 +16,11 @@ from bot.services.pod_drafts import (
     record_mock_event,
     reroll_session_suffix,
 )
+from bot.services.pod_format import resolve_format_code
 from bot.services.pod_format_select import format_options
 from bot.sets import (
     active_set_code,
+    is_draftable_set,
     is_known_set,
     preview_picker_sets,
     preview_set_code,
@@ -86,12 +88,25 @@ def test_recent_released_sets_honors_limit():
     assert len(recent_released_sets(limit=3, when=when)) == 3
 
 
-def test_preview_set_code_prefers_the_set_in_spoiler_season():
-    before_msh_rotates = datetime(2026, 6, 20, 12, tzinfo=timezone.utc)
+def test_preview_set_code_follows_the_preview_window():
+    now = datetime(2026, 9, 20, 12, tzinfo=timezone.utc)
     after_the_last_registered_set = datetime(2099, 1, 1, tzinfo=timezone.utc)
 
-    assert preview_set_code(before_msh_rotates) == "MSH"
+    in_the_window = preview_picker_sets(now)
+
+    assert in_the_window
+    assert preview_set_code(now) == in_the_window[0].code
     assert preview_set_code(after_the_last_registered_set) == active_set_code(after_the_last_registered_set)
+
+
+def test_upcoming_set_opens_two_weeks_before_release():
+    fra_releases = datetime(2026, 9, 29, 16, tzinfo=timezone.utc)
+    three_weeks_out = fra_releases - timedelta(days=21)
+    one_week_out = fra_releases - timedelta(days=7)
+
+    assert is_draftable_set("FRA", three_weeks_out) is False
+    assert is_draftable_set("FRA", one_week_out) is True
+    assert resolve_format_code("TRE") is None
 
 
 def test_format_options_offers_curated_preview_sets_without_defaulting_them():

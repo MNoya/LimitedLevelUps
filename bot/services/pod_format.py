@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from bot.sets import ALL_SETS, active_set_code, is_known_set, set_name_for
+from bot.sets import ALL_SETS, active_set_code, is_draftable_set, is_known_set, set_name_for
 
 
 CUBECOBRA_LIST_URL = "https://cubecobra.com/cube/list/{cube_id}"
@@ -151,7 +151,7 @@ def format_choices() -> list[tuple[str, str]]:
     active = active_set_code()
     choices = [(f"{active} (current)", active)]
     for seed in reversed(ALL_SETS):
-        if seed.code != active:
+        if seed.code != active and is_draftable_set(seed.code):
             choices.append((f"{seed.code} — {seed.name}", seed.code))
     for fmt in custom_formats():
         choices.append((fmt.label, fmt.code))
@@ -163,7 +163,9 @@ def resolve_format_code(value: str | None) -> str | None:
     if is_write_in_cube(value):
         return value
     code = (value or active_set_code()).strip().upper()
-    if is_known_set(code) or is_custom(code):
+    if is_custom(code):
+        return code
+    if is_known_set(code) and is_draftable_set(code):
         return code
     return None
 

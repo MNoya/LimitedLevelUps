@@ -288,12 +288,10 @@ def upcoming_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:
 
 
 def preview_set_code(when: datetime | None = None) -> str:
-    """The set mock drafts are for: the nearest set still in preview season, falling back to the active
-    set once nothing newer is registered. Drives the mock-draft card preview and the Mock Draft role
-    symbol, so both rotate with spoiler season on their own."""
-    upcoming = upcoming_sets(when)
-    if upcoming:
-        return upcoming[0].code
+    """The mock-draft default: the nearest set open for preview, else the active set"""
+    preview = preview_picker_sets(when)
+    if preview:
+        return preview[0].code
     return active_set_code(when)
 
 
@@ -326,14 +324,28 @@ def flashback_picker_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:
     return tuple(out)
 
 
-PREVIEW_PICKER_CODES: frozenset[str] = frozenset({"FRA"})
+PREVIEW_DRAFT_LEAD = timedelta(days=14)
 
 
 def preview_picker_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:
-    """Upcoming sets explicitly allowed as a draftable preview format, newest first"""
-    out = [seed for seed in upcoming_sets(when) if seed.code in PREVIEW_PICKER_CODES]
+    """Upcoming sets within PREVIEW_DRAFT_LEAD of their Arena release, newest first"""
+    now = when or datetime.now(timezone.utc)
+    out = [seed for seed in upcoming_sets(when)
+           if release_instant(seed.start_date) - PREVIEW_DRAFT_LEAD <= now]
     out.sort(key=lambda seed: seed.start_date, reverse=True)
     return tuple(out)
+
+
+def is_draftable_set(code: str, when: datetime | None = None) -> bool:
+    """Whether a set can be drafted as a pod/mock format now: released, active, or an upcoming set in preview"""
+    upper = code.upper()
+    if not is_known_set(upper):
+        return False
+    preview = {seed.code for seed in preview_picker_sets(when)}
+    for seed in upcoming_sets(when):
+        if seed.code == upper and upper not in preview:
+            return False
+    return True
 
 
 def seed_for_code(code: str) -> SetSeed | None:

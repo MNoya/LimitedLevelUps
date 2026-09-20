@@ -3,8 +3,8 @@
 Unlike pod drafts (scheduled through sesh, then run as a Swiss tournament), a mock draft is started
 straight from the command: the bot opens a Draftmancer lobby, creates a thread, mirrors the lobby
 live, and once the draft ends it records the seating + draft logs to the site. No ready windows are
-required, no matches are paired. Anyone can run it; any registered set (including an unreleased one
-like MSH) can be drafted.
+required, no matches are paired. Anyone can run it; any released set can be drafted, plus an upcoming
+one once it reaches its preview window (see `is_draftable_set`).
 
 `!mock` reposts the open lobby's card at the bottom of the channel, for when chat buries it.
 
