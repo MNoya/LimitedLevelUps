@@ -526,7 +526,7 @@ async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_p
     actually fire."""
     blocker = manager.ready_check_blocker()
     if blocker:
-        await reply_public(interaction, content=f"⚠️ {blocker}")
+        await reply_private(interaction, content=f"⚠️ {blocker}")
         return True
     unlinked = [] if manager.kind == "mock" else await manager.unrecognized_lobby_names()
     team_offer = manager.offers_team_draft()
@@ -545,13 +545,6 @@ async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_p
         )
         return True
     return False
-
-
-async def reply_public(interaction: discord.Interaction, **kwargs) -> None:
-    if interaction.response.is_done():
-        await interaction.followup.send(**kwargs)
-    else:
-        await interaction.response.send_message(**kwargs)
 
 
 async def reply_private(interaction: discord.Interaction, **kwargs) -> None:

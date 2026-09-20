@@ -1018,7 +1018,7 @@ class PodDraftManager:
         if self.drafting or self.draft_complete:
             return "The draft has already started"
         if not self.player_session_users():
-            return "Nobody in the Draftmancer lobby yet"
+            return "Nobody in the Draftmancer lobby yet!\nJoin and wait for the table to fill before Ready Check"
         return None
 
     def ready_check_floor(self, min_players: int | None = None) -> int:
