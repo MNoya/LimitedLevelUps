@@ -42,7 +42,7 @@ from bot.commands.messages import (
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import NBSP, extract_avatar_hash, run_detached
-from bot.models import Player, PodDraftEvent, PodDraftParticipant
+from bot.models import PodDraftEvent, PodDraftParticipant
 from bot.scripts.draftmancer_log import build_compact
 from bot.services.pod_card_extract import tracks_card_data, rebuild_pod_card_facts
 from bot.services import bot_log as bot_log_mod
@@ -145,7 +145,6 @@ from bot.services.pod_voice import (
     build_voice_offer_message, free_voice_rooms, pod_voice_channel, pod_voice_channel_url,
 )
 from bot.services.player_stats import leaderboard_seat_order
-from bot.slug import disambiguate_slug, slugify
 
 
 log = logging.getLogger(__name__)
@@ -1303,13 +1302,11 @@ class PodDraftManager:
         return None
 
     async def _classify_users(self, names: list[str]) -> list[tuple[str, str | None]]:
-        """Classify Draftmancer usernames against linked players, falling back to guild members
-        whose Discord display_name (or username) matches the Draftmancer name's prefix.
-        For guild-member matches without a Player row, lazily create one so the participant is
-        recorded toward the pod leaderboard at draft completion.
+        """Classify Draftmancer usernames against linked players, labelling an unmatched seat with a
+        guild member whose Discord name matches. The guild-member label is display only: it creates no
+        player row and drives no thread invite or attribution, so a name coincidence never persists.
 
-        Leaves `self.new_drafters` holding the seats yet to finish a pod, which the lobby card marks. A
-        seat resolved through the guild fallback is one of them: it had no player row a moment ago."""
+        Leaves `self.new_drafters` holding the seats yet to finish a pod, which the lobby card marks."""
         classified, self.new_drafters = await asyncio.to_thread(_classify_names_sync, names)
         if not any(dn is None for _, dn in classified):
             return classified
@@ -1317,7 +1314,6 @@ class PodDraftManager:
         guild = thread.guild if thread is not None else None
         if guild is None:
             return classified
-        unresolved: list[tuple[str, discord.Member]] = []
         out: list[tuple[str, str | None]] = []
         fresh: set[str] = set(self.new_drafters)
         for arena, dn in classified:
@@ -1328,11 +1324,8 @@ class PodDraftManager:
             if member is None:
                 out.append((arena, None))
                 continue
-            unresolved.append((arena, member))
             out.append((arena, member.display_name))
             fresh.add(member.display_name)
-        if unresolved:
-            await asyncio.to_thread(_ensure_players_for_members_sync, unresolved)
         self.new_drafters = frozenset(fresh)
         return out
 
@@ -2027,8 +2020,9 @@ class PodDraftManager:
         await self._update_mock_anchor(roster)
 
     async def _sync_thread_membership(self) -> None:
-        """Admit Draftmancer joiners we recognize as guild members, so the people drafting see the thread
-        without being manually invited."""
+        """Admit Draftmancer joiners we resolve to a linked player, so the people drafting see the thread
+        without being manually invited. A seat that only matches a guild member by name is not admitted:
+        inviting and granting the pod role are sticky, so they wait for a real link or an admin bind."""
         thread = await self._fetch_thread()
         guild = thread.guild if thread is not None else None
         if guild is None:
@@ -2039,7 +2033,7 @@ class PodDraftManager:
         discord_id_by_name = await asyncio.to_thread(discord_ids_for_names_sync, names)
         for name in names:
             discord_id = discord_id_by_name.get(name)
-            member = guild.get_member(int(discord_id)) if discord_id else _find_guild_member_for_arena(guild, name)
+            member = guild.get_member(int(discord_id)) if discord_id else None
             if member is not None:
                 await self.admit_to_thread(member)
 
@@ -4502,41 +4496,3 @@ def _find_guild_member_for_arena(guild: discord.Guild, arena_name: str) -> disco
             if matches(arena_name, member.display_name) or matches(arena_name, member.name):
                 return member
     return None
-
-
-def _ensure_players_for_members_sync(pairs: list[tuple[str, discord.Member]]) -> None:
-    """For each (arena_name, member) pair, find or lazily create a Player row keyed by discord_id.
-    Only a full ArenaID#12345 handle is stored as `arena_name` — a bare Draftmancer nickname goes to
-    aliases only — and a stored full handle is never overwritten here."""
-    if not pairs:
-        return
-    with SessionLocal() as session:
-        taken_slugs = set(session.execute(select(Player.slug)).scalars().all())
-        for arena_name, member in pairs:
-            discord_id = str(member.id)
-            normalized = normalize_player_name(arena_name)
-            existing = session.execute(
-                select(Player).where(Player.discord_id == discord_id)
-            ).scalar_one_or_none()
-            if existing is not None:
-                if full_arena_handle(arena_name) and not full_arena_handle(existing.arena_name):
-                    existing.arena_name = arena_name
-                    log.info(f"backfilled arena_name for {member.display_name} → {arena_name}")
-                if normalized and normalized not in existing.arena_aliases:
-                    existing.arena_aliases = [*existing.arena_aliases, normalized]
-                continue
-            slug = disambiguate_slug(slugify(member.display_name), taken_slugs)
-            taken_slugs.add(slug)
-            session.add(Player(
-                slug=slug,
-                discord_id=discord_id,
-                discord_username=member.name,
-                display_name=member.display_name,
-                avatar_hash=extract_avatar_hash(member),
-                arena_name=arena_name if full_arena_handle(arena_name) else None,
-                arena_aliases=[normalized] if normalized else [],
-                active=True,
-                leaderboard_opt_in=False,
-            ))
-            log.info(f"auto-created Player row for guild member {member.display_name} (arena={arena_name})")
-        session.commit()
