@@ -3148,11 +3148,8 @@ SET_CHAMPION_TITLE_GLYPH = "👑"
 def _format_champion_title(
     names_with_colors: list[tuple[str, str | None]], short_event: str, champion_mention: str | None = None,
 ) -> str:
-    """Headline-style title — single: `Name takes {event} with {colors}`; multi: `A {colors} and
-    B {colors} share {event}`. A Set Championship wears the crown instead of the trophy and drops the
-    one its pod name already carries, so the headline never shows two glyphs. It names the winner as the
-    set's new champion instead of taking the event, and carries no deck colors: the crown and the role
-    are the headline, and the colors read on the standings row below."""
+    """Single: `Name takes {event} with {colors}`; multi: colorless `A and B take {event}`. A Set
+    Championship crowns instead: `👑 Name is the new {SET} @Champion`, colors on the standings row."""
     championship = is_championship(short_event)
     glyph = SET_CHAMPION_TITLE_GLYPH if championship else CHAMPION_TITLE_GLYPH
     event = _stripped_event_title(short_event) if championship else short_event
@@ -3169,8 +3166,8 @@ def _format_champion_title(
         suffix = f" with {emoji_run}" if emoji_run else ""
         return f"{glyph} {name} takes {article}{event}{suffix}"
 
-    names = _join_champion_names(names_with_colors, colors=not championship)
-    return f"{glyph} {names} share {article}{event}"
+    names = _join_champion_names(names_with_colors, colors=False)
+    return f"{glyph} {names} take {article}{event}"
 
 
 def _event_set_code(event: str) -> str:
@@ -3192,7 +3189,7 @@ def _format_champion_result_line(names_with_colors: list[tuple[str, str | None]]
         suffix = f" with {emoji_run}" if emoji_run else ""
         return f"{name} wins the draft{suffix}"
 
-    return f"{_join_champion_names(names_with_colors)} share the draft"
+    return f"{_join_champion_names(names_with_colors)} take the draft"
 
 
 def _join_champion_names(names_with_colors: list[tuple[str, str | None]], *, colors: bool = True) -> str:
