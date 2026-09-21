@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams } from "react-router-dom";
 import { SlidersHorizontal } from "lucide-react";
@@ -85,6 +85,20 @@ export function PodCardDataPage() {
   const [search, setSearch] = useState("");
   const [preview, setPreview] = useState<{ sources: string[]; anchor: PreviewAnchor } | null>(null);
   const [modal, setModal] = useState<string[] | null>(null);
+
+  const chromeRef = useRef<HTMLDivElement>(null);
+  const [chromeHeight, setChromeHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = chromeRef.current;
+    if (!el) {
+      return;
+    }
+    const measure = () => setChromeHeight(el.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const hovering = useRef(false);
   const hoverCard = (card: PodCard, el: HTMLElement) => {
@@ -194,7 +208,7 @@ export function PodCardDataPage() {
       <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
         <AppHeader subtitle={label.toUpperCase()} />
 
-        <div className="sticky top-0 z-30">
+        <div ref={chromeRef} className="sticky top-0 z-30">
         <div className="relative z-10 px-4 py-3 border-b border-border bg-surface flex items-center gap-3">
           <SetGlyph code="CUBE" size={40} className="text-text shrink-0" />
           <span className="min-w-0 truncate font-display tracking-[0.04em]" style={{ fontSize: 24, lineHeight: 0.9 }}>
@@ -263,7 +277,7 @@ export function PodCardDataPage() {
               <PodRecentTrophies setCode={boardCode} season={season} sets={sets} />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto" style={{ maxHeight: `calc(100dvh - ${chromeHeight}px)` }}>
               <table className="table-fixed border-collapse text-[13px]" style={{ width: MOBILE_TABLE_W }}>
                 <colgroup>
                   <col style={{ width: MOBILE_ART_W }} />
@@ -273,9 +287,14 @@ export function PodCardDataPage() {
                   ))}
                 </colgroup>
                 <thead>
-                  <tr className="border-b border-border text-left">
-                    <th className="sticky left-0 z-10 bg-bg pl-2 py-2" aria-hidden />
-                    <th className="p-0 text-left font-normal font-display tracking-[0.2em] text-[11px] text-muted">
+                  <tr className="text-left">
+                    <th
+                      className="sticky left-0 top-0 z-30 bg-bg pl-2 py-2 border-b border-border"
+                      aria-hidden
+                    />
+                    <th
+                      className="sticky top-0 z-20 bg-bg border-b border-border p-0 text-left font-normal font-display tracking-[0.2em] text-[11px] text-muted"
+                    >
                       <SortHeaderButton
                         label="CARD NAME"
                         active={sortKey === "name"}
@@ -289,7 +308,7 @@ export function PodCardDataPage() {
                     {POD_CARD_COLUMNS.map((col, i) => (
                       <th
                         key={col.key}
-                        className="whitespace-nowrap p-0 text-right font-normal font-display tracking-[0.2em] text-[11px] text-muted"
+                        className="sticky top-0 z-20 bg-bg border-b border-border whitespace-nowrap p-0 text-right font-normal font-display tracking-[0.2em] text-[11px] text-muted"
                       >
                         <MetricHeader
                           col={col}
@@ -375,7 +394,7 @@ export function PodCardDataPage() {
       </div>
 
       <main className="relative flex-1 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-        <div className="min-w-0 overflow-x-auto">
+        <div className="min-w-0">
           <table className="w-full table-fixed border-collapse text-[13px]">
             <colgroup>
               <col style={{ width: "34%" }} />
@@ -384,8 +403,8 @@ export function PodCardDataPage() {
               ))}
             </colgroup>
             <thead>
-              <tr className="border-b border-border text-left">
-                <th className="p-0 text-left font-normal font-display tracking-[0.2em] text-[11px] text-muted">
+              <tr className="text-left">
+                <th className="sticky top-0 z-20 bg-bg border-b border-border p-0 text-left font-normal font-display tracking-[0.2em] text-[11px] text-muted">
                   <SortHeaderButton
                     label="CARD NAME"
                     active={sortKey === "name"}
@@ -399,7 +418,7 @@ export function PodCardDataPage() {
                 {POD_CARD_COLUMNS.map((col, i) => (
                   <th
                     key={col.key}
-                    className="whitespace-nowrap p-0 text-right font-normal font-display tracking-[0.2em] text-[11px] text-muted"
+                    className="sticky top-0 z-20 bg-bg border-b border-border whitespace-nowrap p-0 text-right font-normal font-display tracking-[0.2em] text-[11px] text-muted"
                   >
                     <MetricHeader
                       col={col}
@@ -433,7 +452,7 @@ export function PodCardDataPage() {
           </table>
         </div>
 
-        <aside className="flex flex-col gap-4 p-4 border-t border-border lg:border-t-0">
+        <aside className="flex flex-col gap-4 p-4 border-t border-border lg:border-t-0 lg:sticky lg:top-4 lg:self-start">
           <ArchetypePanel setCode={boardCode} season={season} sets={sets} />
           <PodRecentTrophies setCode={boardCode} season={season} sets={sets} />
         </aside>

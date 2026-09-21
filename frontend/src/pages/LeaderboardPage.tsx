@@ -378,7 +378,7 @@ function MtgoBoard({
       </div>
       <div className="px-5 md:px-10 py-4 grid gap-6 lg:grid-cols-[1fr_320px]">
         <TrophyLeaderboard rows={rows} loading={loading} />
-        <div className="lg:pt-4">
+        <div className="lg:pt-4 lg:self-start lg:sticky lg:top-4">
           <MtgoSidebar rows={rows} setCode={activeSet} />
         </div>
       </div>
@@ -463,7 +463,7 @@ function Desktop({
             />
           )}
         />
-        <div className="pt-4">
+        <div className="pt-4 self-start sticky top-4">
           <LeaderboardSidebar
             setCode={activeSet}
             playerSetCode={profileSet}
