@@ -73,6 +73,7 @@ type RouteMeta = {
   siteName: string | null;
   description: string | null;
   image: ImageIntent;
+  noImagePreview?: boolean;
 };
 
 const page = (label: string, description: string | null, image: ImageIntent = null): RouteMeta => ({
@@ -251,7 +252,7 @@ const playerMeta = (name: string, slug: string): RouteMeta => ({
 const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) {
-    return HOME_META;
+    return { ...HOME_META, noImagePreview: true };
   }
   const [section, ...rest] = segments;
 
@@ -439,6 +440,12 @@ export const onRequest: PagesFunction = async (context) => {
     .on('meta[name="description"]', descriptionHandler)
     .on('meta[property="og:description"]', descriptionHandler)
     .on('meta[name="twitter:description"]', descriptionHandler);
+
+  if (meta.noImagePreview) {
+    rewriter = rewriter.on("head", {
+      element: (el) => el.append('<meta name="robots" content="max-image-preview:none">', { html: true }),
+    });
+  }
 
   const dimensionHandler = isMetaCrawler ? setContent(String(META_CRAWLER_THUMB_SIZE)) : remove;
 
