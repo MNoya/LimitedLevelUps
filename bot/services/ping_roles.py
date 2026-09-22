@@ -361,7 +361,7 @@ class _PodButtonCard(discord.ui.LayoutView):
             row.add_item(_Link17LandsButton())
         if show_guide_button:
             row.add_item(_PodGuideButton())
-        row.add_item(_ManageRolesButton())
+        row.add_item(ManageRolesButton())
         if show_format_button:
             row.add_item(_FormatPreferenceButton())
         self.add_item(container)
@@ -446,7 +446,7 @@ class _PodGuideButton(discord.ui.Button):
         )
 
 
-class _ManageRolesButton(discord.ui.Button):
+class ManageRolesButton(discord.ui.Button):
     def __init__(self) -> None:
         super().__init__(
             label="Notifications", style=discord.ButtonStyle.primary, emoji="🔔", custom_id=MANAGE_ROLES_BUTTON_ID,
@@ -470,7 +470,7 @@ def _welcome_button_row(*, show_link_17lands: bool) -> discord.ui.View:
     if show_link_17lands:
         view.add_item(_Link17LandsButton())
     view.add_item(_PodGuideButton())
-    view.add_item(_ManageRolesButton())
+    view.add_item(ManageRolesButton())
     return view
 
 

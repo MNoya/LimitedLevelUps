@@ -23,7 +23,12 @@ from bot.commands.messages import (
 from bot.database import SessionLocal
 from bot.discord_helpers import run_detached
 from bot.models import PodDraftEvent
-from bot.services.ping_roles import build_link_arena_view, format_join_line, send_mock_welcome_card
+from bot.services.ping_roles import (
+    ManageRolesButton,
+    build_link_arena_view,
+    format_join_line,
+    send_mock_welcome_card,
+)
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
 from bot.services.pod_drafts import player_arena_handle
 from bot.services.pod_link_dm import pod_thread_link
@@ -140,6 +145,7 @@ def build_join_view(session_id: str) -> ui.View:
 def build_mock_join_view(session_id: str) -> ui.View:
     view = ui.View(timeout=None)
     view.add_item(MockJoinDraftButton(session_id))
+    view.add_item(ManageRolesButton())
     return view
 
 
