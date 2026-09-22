@@ -32,7 +32,6 @@ from discord.ext import commands
 
 from bot import emojis
 from bot.commands.messages import (
-    MSG_DRAFT_STARTS,
     MSG_FORMAT_PREFERENCE_BUTTON,
     MSG_POD_ADDED,
     MSG_YOUR_CUBES_LINE,
@@ -43,6 +42,8 @@ from bot.commands.pod_rsvp import (
     REMINDER_CONFIRM_STATE,
     ReminderRsvpButton,
     apply_card_rsvp,
+    draft_start_lines,
+    headline_embed,
     pod_already_on_embed,
     pod_removed_embed,
     post_scheduled_card,
@@ -72,6 +73,7 @@ from bot.services.ping_roles import (
 )
 from bot.services.pod_launcher_copy import (
     ARCHIVE_INTRO,
+    BOARD_LEAVE_ALL_LABEL,
     BOARD_LEAVE_EMOJI,
     BOARD_LEAVE_LABEL,
     CUBE_SELECT_PLACEHOLDER,
@@ -80,6 +82,7 @@ from bot.services.pod_launcher_copy import (
     INTEREST_PLACEHOLDER,
     MSG_INTEREST_PROMPT,
     MSG_INTEREST_SAVED,
+    MSG_LEAVE_WHICH_POD,
     MSG_POD_THAT_NEEDS_YOU,
     MSG_ON_BOTH_PODS,
     MSG_ON_NO_POD,
@@ -1509,9 +1512,9 @@ async def _confirm_slot_join(
         ),
         pod_card_state(str(interaction.user.id)),
     )
-    lead = _slot_effect_lead(bucket_key, slot_time, on_formats)
     await send_join_confirmation_card(
-        interaction, lead=lead, accent=discord.Color.green(), state=card_state,
+        interaction, lead=_slot_effect_lead(bucket_key, slot_time), accent=discord.Color.green(),
+        state=card_state, note=_several_pods_note(bucket_key, on_formats),
     )
 
 
@@ -1582,24 +1585,77 @@ async def _handle_slot_signup_click(interaction: discord.Interaction, bucket_key
 
 
 async def _handle_board_leave_click(interaction: discord.Interaction) -> None:
-    """Take the presser off every pod the board carries: the rows still gathering in one write, then No on
-    the card of each pod that already fired. The answer names what it undid and goes out on the writes the
-    board owns; the cards and the re-render settle after. A press with nothing to undo says so, instead of
-    reading as a click that failed."""
+    """Take the presser off the one pod the board holds them on: the gathering row in the same write that
+    finds it, or No on the card of a pod that already fired. A presser on several pods is asked which one
+    instead. A press with nothing to undo says so, instead of reading as a click that failed."""
     await interaction.response.defer(ephemeral=True, thinking=True)
     launcher_message = interaction.message
     signal_date = await _launcher_signal_date(launcher_message)
     message_id = str(launcher_message.id)
     user_id = str(interaction.user.id)
-    left = await asyncio.to_thread(pod_launch.leave_board_slots_sync, message_id, user_id)
     slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, message_id, signal_date)
     cards = await asyncio.to_thread(_cards_holding_user, slots, user_id)
-    names = [_gathering_pod_name(slot.bucket_key, slot.slot_time) for slot in left]
-    names += [_gathering_pod_name(slot.bucket_key, slot.slot_time) for slot in cards]
-    await interaction.followup.send(embed=_left_pods_embed(names), ephemeral=True)
+    gathering_allowed = 1 - len(cards)
+    leave = await asyncio.to_thread(pod_launch.leave_board_slots_sync, message_id, user_id, gathering_allowed)
+    if not leave.removed:
+        picker = BoardLeavePicker(launcher_message, signal_date, leave.slots, cards)
+        picker_embed = headline_embed(MSG_LEAVE_WHICH_POD, discord.Color.greyple())
+        await interaction.followup.send(embed=picker_embed, view=picker, ephemeral=True)
+        return
+    await interaction.followup.send(embed=_left_pods_embed(_left_pod_names(leave.slots, cards)), ephemeral=True)
     run_detached(
-        _settle_board_leave(interaction, launcher_message, signal_date, left, cards), "board leave",
+        _settle_board_leave(interaction, launcher_message, signal_date, leave.slots, cards), "board leave",
     )
+
+
+class BoardLeavePicker(discord.ui.View):
+    """One button per pod the presser is on, plus Leave all. A press answers with what it removed, then
+    writes and repaints the same way a single-pod Leave does."""
+
+    def __init__(
+        self, launcher_message: discord.Message, signal_date: date,
+        gathering: list[pod_launch.LeftSlot], cards: list[pod_launch.LauncherSlot],
+    ) -> None:
+        super().__init__(timeout=600)
+        self.launcher_message = launcher_message
+        self.signal_date = signal_date
+        for slot in gathering:
+            self._add_choice(_gathering_pod_name(slot.bucket_key, slot.slot_time), [slot], [])
+        for slot in cards:
+            self._add_choice(_gathering_pod_name(slot.bucket_key, slot.slot_time), [], [slot])
+        self._add_choice(BOARD_LEAVE_ALL_LABEL, gathering, cards)
+
+    def _add_choice(
+        self, label: str, gathering: list[pod_launch.LeftSlot], cards: list[pod_launch.LauncherSlot],
+    ) -> None:
+        button = discord.ui.Button(label=label, style=discord.ButtonStyle.secondary, emoji=BOARD_LEAVE_EMOJI)
+
+        async def callback(interaction: discord.Interaction) -> None:
+            await self._leave(interaction, gathering, cards)
+
+        button.callback = callback
+        self.add_item(button)
+
+    async def _leave(
+        self, interaction: discord.Interaction,
+        gathering: list[pod_launch.LeftSlot], cards: list[pod_launch.LauncherSlot],
+    ) -> None:
+        self.stop()
+        embed = _left_pods_embed(_left_pod_names(gathering, cards))
+        await interaction.response.edit_message(embed=embed, view=None)
+        run_detached(
+            _leave_picked_pods(interaction, self.launcher_message, self.signal_date, gathering, cards),
+            "board leave pick",
+        )
+
+
+async def _leave_picked_pods(
+    interaction: discord.Interaction, launcher_message: discord.Message, signal_date: date,
+    gathering: list[pod_launch.LeftSlot], cards: list[pod_launch.LauncherSlot],
+) -> None:
+    signal_ids = [slot.signal_id for slot in gathering]
+    await asyncio.to_thread(pod_launch.leave_slots_sync, signal_ids, str(interaction.user.id))
+    await _settle_board_leave(interaction, launcher_message, signal_date, gathering, cards)
 
 
 async def _settle_board_leave(
@@ -1633,15 +1689,21 @@ def _cards_holding_user(
     return held
 
 
+def _left_pod_names(
+    gathering: list[pod_launch.LeftSlot], cards: list[pod_launch.LauncherSlot],
+) -> list[str]:
+    names = [_gathering_pod_name(slot.bucket_key, slot.slot_time) for slot in gathering]
+    names += [_gathering_pod_name(slot.bucket_key, slot.slot_time) for slot in cards]
+    return names
+
+
 def _left_pods_embed(names: list[str]) -> discord.Embed:
     """The answer to a Leave: the one pod it removed, the several it removed, or that there was none."""
     if not names:
-        return discord.Embed(title=MSG_ON_NO_POD, color=discord.Color.greyple())
+        return headline_embed(MSG_ON_NO_POD, discord.Color.greyple())
     if len(names) == 1:
         return pod_removed_embed(names[0])
-    return discord.Embed(
-        title=MSG_REMOVED_FROM_PODS, description="\n".join(names), color=discord.Color.red(),
-    )
+    return headline_embed(MSG_REMOVED_FROM_PODS, discord.Color.red(), "\n".join(names))
 
 
 def _slot_by_key(
@@ -1662,20 +1724,21 @@ def _slot_by_key(
     return pressed
 
 
-def _slot_effect_lead(
-    bucket_key: str, slot_time: datetime | None, on_formats: list[str] | None = None,
-) -> str:
+def _slot_effect_lead(bucket_key: str, slot_time: datetime | None) -> str:
     """The join confirmation as card text: folded into the grant card when a fresh role grant rides
-    the same click, else the lead of the plain confirmation card.
-
-    A clicker now on more than one pod of that slot is told which ones and what happens next. Nothing else on
-    the surface explains what signing up twice does, and the click that just did it is when it matters."""
+    the same click, else the lead of the plain confirmation card."""
     lead = f"### {MSG_POD_ADDED.format(name=_gathering_pod_name(bucket_key, slot_time))}"
     if slot_time is not None:
-        lead = f"{lead}\n{MSG_DRAFT_STARTS.format(unix=int(slot_time.timestamp()))}"
-    if on_formats and len(on_formats) > 1:
-        lead = f"{lead}\n{_several_pods_line(bucket_key, on_formats)}"
+        lead = f"{lead}\n{draft_start_lines(slot_time)}"
     return lead
+
+
+def _several_pods_note(bucket_key: str, on_formats: list[str]) -> str | None:
+    """A clicker now on more than one pod of that slot is told which ones and what happens next. Nothing else on
+    the surface explains what signing up twice does, and the click that just did it is when it matters."""
+    if len(on_formats) < 2:
+        return None
+    return _several_pods_line(bucket_key, on_formats)
 
 
 def _organizer_notice(template: str, guild: discord.Guild | None) -> str:

@@ -349,11 +349,14 @@ class _PodButtonCard(discord.ui.LayoutView):
     def __init__(
         self, text: str, *, accent: discord.Color | None = None, show_link_button: bool = True,
         show_format_button: bool = False, show_link_17lands_button: bool = False,
-        show_guide_button: bool = True,
+        show_guide_button: bool = True, note: str | None = None,
     ) -> None:
         super().__init__(timeout=None)
         container = discord.ui.Container(accent_colour=accent or discord.Color.green())
         container.add_item(discord.ui.TextDisplay(text))
+        if note is not None:
+            container.add_item(discord.ui.Separator())
+            container.add_item(discord.ui.TextDisplay(note))
         row = discord.ui.ActionRow()
         if show_link_button:
             row.add_item(_LinkArenaButton())
@@ -752,6 +755,7 @@ async def announce_pod_grant(interaction: discord.Interaction, *, first_pod: boo
 
 async def send_join_confirmation_card(
     interaction: discord.Interaction, *, lead: str, accent: discord.Color, state: PodCardState,
+    note: str | None = None,
 ) -> None:
     """A join acknowledgement (RSVP Yes/Maybe, launcher slot add, picker Confirm) as a full pod card:
     the confirmation lead over the Link Arena / Pod Guide / Notifications row, so every join click offers
@@ -766,7 +770,7 @@ async def send_join_confirmation_card(
         _card_body(lead, arena_name=state.arena_name),
         accent=accent, show_link_button=state.arena_name is None,
         show_link_17lands_button=not state.has_token,
-        show_guide_button=not state.drafted_before,
+        show_guide_button=not state.drafted_before, note=note,
     )
     await interaction.followup.send(view=card, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 

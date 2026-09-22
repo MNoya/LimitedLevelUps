@@ -158,6 +158,7 @@ MSG_POD_NO_MATCH_TO_REPORT = (
 MSG_POD_RESULT_ALREADY_RECORDED = "Round {round_num} recorded. Nothing else to report right now"
 MSG_FORMAT_PREFERENCE_BUTTON = "Format Preference"
 MSG_DRAFT_STARTS = "Scheduled for <t:{unix}:F> (<t:{unix}:R>)"
+MSG_LOBBY_OPENS_EARLY = "-# Lobby opens {lead} minutes before! Draft starts as soon as everyone joins"
 MSG_POD_ADDED = "✅ Added to {name}"
 MSG_POD_MAYBE = "🤷 Maybe for {name}"
 MSG_POD_REMOVED = "❌ Removed from {name}"

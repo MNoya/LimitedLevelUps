@@ -39,6 +39,7 @@ from bot.commands.messages import (
     MSG_CONFIRM_POD_STARTED,
     MSG_DRAFT_STARTS,
     MSG_DRAFTMANCER_LINK_LEAD,
+    MSG_LOBBY_OPENS_EARLY,
     MSG_LINK_ARENA_PROMPT,
     MSG_POD_ADDED,
     MSG_POD_BOARD_COLUMN,
@@ -1315,17 +1316,22 @@ def _is_card_surface(message: discord.Message) -> bool:
 def pod_removed_embed(pod_name: str) -> discord.Embed:
     """The bare red note for leaving a pod, named after the pod itself. The start time and the pod controls
     are moot once you're not in, so an add answers with the full card and a removal with this."""
-    return discord.Embed(title=MSG_POD_REMOVED.format(name=pod_name), color=discord.Color.red())
+    return headline_embed(MSG_POD_REMOVED.format(name=pod_name), discord.Color.red())
 
 
 def pod_already_on_embed(pod_name: str) -> discord.Embed:
     """The answer to a sign up by someone the pod already holds. A press that changed nothing gets the bare
     note, not the full card: the presser is asking whether the first press landed, and the hint names the one
     press that would change it. ❌ is the launcher's Leave and the card's Can't, so one line serves both."""
-    return discord.Embed(
-        title=MSG_POD_ALREADY_ON.format(name=pod_name), description=MSG_POD_ALREADY_ON_HINT,
-        color=discord.Color.green(),
+    return headline_embed(
+        MSG_POD_ALREADY_ON.format(name=pod_name), discord.Color.green(), MSG_POD_ALREADY_ON_HINT,
     )
+
+
+def headline_embed(headline: str, color: discord.Color, body: str | None = None) -> discord.Embed:
+    """A title-less embed led by a heading, which keeps a leading emoji aligned with its text"""
+    description = f"### {headline}" if body is None else f"### {headline}\n{body}"
+    return discord.Embed(description=description, color=color)
 
 
 def _decline_embed(result: pod_launch.RsvpResult) -> discord.Embed:
@@ -1342,7 +1348,13 @@ def _confirmation_lead_text(result: pod_launch.RsvpResult) -> str:
     lead = f"### {_rsvp_headline(result.rsvp, name)}"
     if event_time is None:
         return lead
-    return f"{lead}\n{MSG_DRAFT_STARTS.format(unix=int(event_time.timestamp()))}"
+    return f"{lead}\n{draft_start_lines(event_time)}"
+
+
+def draft_start_lines(event_time: datetime) -> str:
+    """A join confirmation's start time over the note that the lobby opens ahead of it"""
+    starts = MSG_DRAFT_STARTS.format(unix=int(event_time.timestamp()))
+    return f"{starts}\n{MSG_LOBBY_OPENS_EARLY.format(lead=REMINDER_LEAD_MIN)}"
 
 
 def _rsvp_headline(rsvp: str, pod_name: str) -> str:

@@ -667,11 +667,29 @@ def test_leaving_the_board_drops_the_player_from_every_pod_still_gathering(sessi
         _join(session, slot, "stayer", "LSV")
     session.commit()
 
-    left = pod_launch.leave_board_slots_sync("today", "leaver")
+    leave = pod_launch.leave_board_slots_sync("today", "leaver")
 
-    assert [slot.signal_id for slot in left] == [early_latest.id, early_peasant.id, late_slot.id]
+    assert [slot.signal_id for slot in leave.slots] == [early_latest.id, early_peasant.id, late_slot.id]
     assert _member_ids(session, early_latest) == ["stayer"]
     assert _member_ids(session, late_slot) == ["stayer"]
+
+
+def test_a_player_on_several_pods_keeps_them_all_until_they_pick_one(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    early = _seed_signal(session, bucket_for_slot(FRIDAY, SLOT_EARLY).key, FRIDAY, message_id="today")
+    late = _seed_signal(session, bucket_for_slot(FRIDAY, SLOT_LATE).key, FRIDAY, message_id="today")
+    for slot in (early, late):
+        _join(session, slot, "leaver", "Finkel")
+    session.commit()
+
+    leave = pod_launch.leave_board_slots_sync("today", "leaver", at_most=1)
+    kept = (_member_ids(session, early), _member_ids(session, late))
+    pod_launch.leave_slots_sync([late.id], "leaver")
+
+    assert not leave.removed
+    assert kept == (["leaver"], ["leaver"])
+    assert _member_ids(session, early) == ["leaver"]
+    assert _member_ids(session, late) == []
 
 
 def test_leaving_one_board_leaves_another_boards_signups_alone(session, monkeypatch, latest_only):
@@ -683,9 +701,9 @@ def test_leaving_one_board_leaves_another_boards_signups_alone(session, monkeypa
     _join(session, tomorrow, "leaver", "Finkel")
     session.commit()
 
-    left = pod_launch.leave_board_slots_sync("today", "leaver")
+    leave = pod_launch.leave_board_slots_sync("today", "leaver")
 
-    assert left == []
+    assert leave.slots == []
     assert _member_ids(session, fired) == ["leaver"]
     assert _member_ids(session, tomorrow) == ["leaver"]
 

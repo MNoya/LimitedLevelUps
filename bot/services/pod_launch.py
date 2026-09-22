@@ -155,6 +155,13 @@ class LeftSlot:
 
 
 @dataclass(frozen=True)
+class BoardLeave:
+    """The gathering pods a board Leave found the player on, and whether it dropped them"""
+    slots: list[LeftSlot]
+    removed: bool
+
+
+@dataclass(frozen=True)
 class LeaveResolution:
     """Outcome of the last-player Leave confirmation. `cancelled` when the confirmer was still the only
     member and the queue was closed; `left` when others joined during the prompt so the confirmer was
@@ -499,11 +506,12 @@ def join_slot_signal_sync(
         return True
 
 
-def leave_board_slots_sync(message_id: str, discord_user_id: str) -> list[LeftSlot]:
-    """Drop the player from every pod still gathering on one board, newest slot last. The board's Leave
-    button is the one place a signup is taken back, so it acts on the whole board: a player on two formats of
-    one slot means two rows, and leaving one of them while the other still holds them is not what the button
-    says. A pod that already fired is not touched here — its roster lives on its card."""
+def leave_board_slots_sync(
+    message_id: str, discord_user_id: str, at_most: int | None = None,
+) -> BoardLeave:
+    """Drop the player from every pod still gathering on one board, newest slot last. When the player holds
+    more than `at_most` of them nothing is dropped, so the caller can ask which one the Leave meant.
+    A pod that already fired is not touched here — its roster lives on its card."""
     with SessionLocal() as session:
         rows = session.execute(
             select(PodSignal, PodSignalMember)
@@ -515,11 +523,28 @@ def leave_board_slots_sync(message_id: str, discord_user_id: str) -> list[LeftSl
                 PodSignalMember.discord_user_id == discord_user_id,
             )
         ).all()
-        left = [LeftSlot(signal.id, signal.bucket, signal.slot_time) for signal, _member in rows]
+        slots = [LeftSlot(signal.id, signal.bucket, signal.slot_time) for signal, _member in rows]
+        slots.sort(key=lambda slot: (slot.slot_time is None, slot.slot_time))
+        if at_most is not None and len(rows) > at_most:
+            return BoardLeave(slots, removed=False)
         for _signal, member in rows:
             session.delete(member)
         session.commit()
-    return sorted(left, key=lambda slot: (slot.slot_time is None, slot.slot_time))
+    return BoardLeave(slots, removed=True)
+
+
+def leave_slots_sync(signal_ids: list[str], discord_user_id: str) -> None:
+    """Drop the player from the gathering pods they picked off a board"""
+    if not signal_ids:
+        return
+    with SessionLocal() as session:
+        session.execute(
+            delete(PodSignalMember).where(
+                PodSignalMember.signal_id.in_(signal_ids),
+                PodSignalMember.discord_user_id == discord_user_id,
+            )
+        )
+        session.commit()
 
 
 def open_slot_for_bucket_sync(bucket_key: str, now: datetime) -> tuple[str, str, datetime] | None:
