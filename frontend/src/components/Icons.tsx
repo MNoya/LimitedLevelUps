@@ -24,7 +24,11 @@ import {
 import { MdPause as R_MdPause, MdVideoLibrary as R_MdVideoLibrary } from "react-icons/md";
 import { TbCards as R_TbCards, TbListNumbers as R_TbListNumbers } from "react-icons/tb";
 import { LuScrollText as R_LuScrollText } from "react-icons/lu";
-import { GiCardPick as R_GiCardPick, GiRoundTable as R_GiRoundTable } from "react-icons/gi";
+import {
+  GiArcheryTarget as R_GiArcheryTarget,
+  GiCardPick as R_GiCardPick,
+  GiRoundTable as R_GiRoundTable,
+} from "react-icons/gi";
 import { GoSidebarCollapse as R_GoSidebarCollapse } from "react-icons/go";
 import {
   BsAsterisk as R_BsAsterisk,
@@ -93,6 +97,7 @@ export const TbListNumbers = withShrink(R_TbListNumbers);
 export const LuScrollText = withShrink(R_LuScrollText);
 export const GiCardPick = withShrink(R_GiCardPick);
 export const GiRoundTable = withShrink(R_GiRoundTable);
+export const GiArcheryTarget = withShrink(R_GiArcheryTarget);
 export const GoSidebarCollapse = withShrink(R_GoSidebarCollapse);
 export const BsAsterisk = withShrink(R_BsAsterisk);
 export const BsPaletteFill = withShrink(R_BsPaletteFill);

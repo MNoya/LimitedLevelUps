@@ -14,7 +14,7 @@ import { type InlineFilterOption } from "../components/InlineFilterSelect";
 import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
 import { SetFilterDropdown, type SetFilterOption } from "../components/SetFilterDropdown";
 import { AAvatar, setGlyphCode, SetGlyph, Trophy } from "../components/Brand";
-import { ArrowRight, BsAsterisk, CalendarRange, GiCardPick, GiRoundTable, TbCards, TbListNumbers } from "../components/Icons";
+import { ArrowRight, BsAsterisk, CalendarRange, GiCardPick, GiArcheryTarget, GiRoundTable, TbListNumbers } from "../components/Icons";
 import { DiscordIcon } from "../components/BrandIcons";
 import { Tooltip } from "../components/Tooltip";
 import { DeckScreenshotModal } from "../components/pod/DeckScreenshotModal";
@@ -77,6 +77,7 @@ import {
   currentSeason,
   podSeasons,
   podFormatBuckets,
+  POD_FORMAT_BUCKETS,
   seasonForDate,
   type PodFormatBucket,
 } from "../data/podSeasons";
@@ -124,12 +125,10 @@ const AXIS_PARAM_SEASON = "season";
 const AXIS_PARAM_SET = "set";
 const SCOPE_SET_PREFIX = "set:";
 
-const FORMAT_BUCKETS: PodFormatBucket[] = ["set", "flashback", "cube"];
-
 function formatBucketLabel(bucket: PodFormatBucket, season: SetSummary | undefined): string {
   if (bucket === "set") return season ? `${season.code} Only` : "Live Sets";
   if (bucket === "flashback") return "Flashbacks";
-  return bucket === "cube" ? "Peasant Cube" : "Mock";
+  return bucket === "cube" ? "Peasant Cube" : "Mock Drafts";
 }
 
 const POD_DESKTOP_WIDTH = 900;
@@ -307,7 +306,7 @@ export function PodDraftsPage({
   );
 
   // Held until the events land, so a format the new season never played does not filter to nothing
-  const requestedFormat = FORMAT_BUCKETS.find((bucket) => bucket === searchParams.get(AXIS_PARAM_FORMAT));
+  const requestedFormat = POD_FORMAT_BUCKETS.find((bucket) => bucket === searchParams.get(AXIS_PARAM_FORMAT));
   const format =
     !scopeEvents || formatBuckets.some((b) => b.key === requestedFormat) ? requestedFormat : undefined;
 
@@ -396,6 +395,8 @@ export function PodDraftsPage({
   }, [events, nowMs]);
 
   usePodEventParticipants(played[0]?.eventId);
+
+  const showingMocks = format === "mock";
 
   const showUpcoming = true;
 
@@ -512,7 +513,9 @@ export function PodDraftsPage({
     const icon = formatOptions.find((o) => o.value === option.value)?.icon;
     return (
       <span className="flex items-center gap-2 min-w-0">
-        {icon}
+        <span className="flex justify-center shrink-0" style={{ width: iconSize }}>
+          {icon}
+        </span>
         <span className="truncate">{option.label}</span>
       </span>
     );
@@ -593,7 +596,9 @@ export function PodDraftsPage({
       <main className="flex-1 lg:pl-5 lg:pr-8 lg:pb-10">
         <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-x-6 lg:gap-y-8">
           <section className="order-1 lg:order-2 min-w-0 flex flex-col">
-            {isMobile ? (
+            {showingMocks ? (
+              <MockDraftsBlock events={mock} stacked={isMobile} />
+            ) : isMobile ? (
               <MobileEventsBlock
                 played={played}
                 loading={events === undefined}
@@ -658,7 +663,7 @@ export function PodDraftsPage({
             />
           </section>
 
-          {isMobile && mock.length > 0 && (
+          {isMobile && !showingMocks && mock.length > 0 && (
             <section className="order-3">
               <MockDraftsBlock events={mock} stacked />
             </section>
@@ -1769,7 +1774,7 @@ function ChipIcon({
   className: string;
   size?: number;
 }) {
-  if (bucket === "mock") return <TbCards size={size} className={className} />;
+  if (bucket === "mock") return <GiArcheryTarget size={Math.round(size * 1.15)} className={className} />;
   if (bucket === "set") {
     if (!seasonMeta) return <GiCardPick size={size} className={className} />;
     return <SetGlyph code={setGlyphCode(seasonMeta)} size={size} className={className} />;

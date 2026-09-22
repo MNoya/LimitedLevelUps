@@ -86,6 +86,8 @@ export function aggregatePodStandings(
 
 export type PodFormatBucket = "set" | "flashback" | "cube" | "mock";
 
+export const POD_FORMAT_BUCKETS: PodFormatBucket[] = ["set", "flashback", "cube", "mock"];
+
 interface BucketableEvent {
   setCode: string;
   formatLabel: string | null;
@@ -135,8 +137,7 @@ export function podFormatBuckets<E>(
     const bucket = bucketFor(e);
     counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
   }
-  const order: PodFormatBucket[] = ["set", "flashback", "cube"];
-  return order
+  return POD_FORMAT_BUCKETS
     .filter((key) => (counts.get(key) ?? 0) > 0)
     .map((key) => ({ key, count: counts.get(key)! }));
 }
