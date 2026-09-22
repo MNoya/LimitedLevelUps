@@ -63,6 +63,10 @@ export const TIER_LIST_GRADERS: Record<
   string,
   Array<{ name: string; uid: string }>
 > = {
+  FRA: [
+    { name: "Alex", uid: "3ceeafffe39348e6824ea8605b3e6e89" },
+    { name: "Marc", uid: "e95fd9365a86464cae2451e34c39102a" },
+  ],
   MSH: [
     { name: "Alex", uid: "b07c077b8c8145288f75d71bf4f90d65" },
     { name: "Marc", uid: "e0c4c50e90914ac390a1f792e0717ed2" },
@@ -110,6 +114,7 @@ export const TIER_LIST_PREVIEW_SETS: Record<
   string,
   { name: string; startDate: string }
 > = {
+  FRA: { name: "Reality Fracture", startDate: "2026-09-29" },
   HOB: { name: "The Hobbit", startDate: "2026-08-11" },
   MSH: { name: "Marvel Super Heroes", startDate: "2026-06-23" },
   MH3: { name: "Modern Horizons 3", startDate: "2024-06-11" },

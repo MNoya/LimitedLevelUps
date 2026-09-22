@@ -172,7 +172,7 @@ function PairStepper({
       className="mt-4 flex w-full shrink-0 items-center gap-2 self-center rounded-2xl border border-border bg-surface px-2 py-2 shadow-lg md:mt-8 md:w-auto md:gap-3 md:px-3"
     >
       {showArrows && <ModalNavButton dir="prev" srLabel="Previous color pair" onClick={onPrev} />}
-      <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:gap-2">
+      <div className="grid w-full grid-cols-5 gap-1.5 md:flex md:w-auto md:min-w-0 md:flex-1 md:items-center md:justify-center md:gap-2 md:overflow-x-auto md:[-ms-overflow-style:none] md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden">
         {skeletons.map((skeleton, i) => (
           <button
             key={skeleton.colors}
@@ -181,7 +181,7 @@ function PairStepper({
             aria-label={skeleton.colors}
             aria-current={i === index}
             className={cn(
-              "flex h-9 flex-1 cursor-pointer items-center justify-center rounded-full border px-2 transition-colors md:h-10 md:flex-none md:shrink-0 md:px-3",
+              "flex h-9 w-full cursor-pointer items-center justify-center rounded-full border px-2 transition-colors md:h-10 md:w-auto md:flex-none md:shrink-0 md:px-3",
               i === index ? "border-green/50 bg-green/15" : "border-border bg-surface2 hover:border-border2",
             )}
           >

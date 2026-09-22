@@ -278,12 +278,9 @@ function SkeletonsButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="relative flex h-10 shrink-0 items-center rounded border border-border2 px-2 font-display text-[14px] leading-none tracking-[0.14em] text-text transition-colors hover:border-green hover:text-green md:h-9 md:px-2.5"
+      className="flex h-10 shrink-0 items-center rounded border border-border2 px-2 font-display text-[14px] leading-none tracking-[0.14em] text-text transition-colors hover:border-green hover:text-green md:h-9 md:px-2.5"
     >
       <span className="-translate-y-px">ARCHETYPES</span>
-      <span className="absolute -right-1.5 -top-2.5 z-10 rounded-full border border-green bg-green px-1.5 py-0.5 font-sans text-[9px] font-bold leading-none tracking-wide text-bg">
-        NEW
-      </span>
     </button>
   );
 }
