@@ -6,7 +6,15 @@ import { ToggleSwitch } from "../../ToggleSwitch";
 import { Pips } from "../../ManaPips";
 import { Tooltip } from "../../Tooltip";
 import { ArrowRight, GoSidebarCollapse, TbCards } from "../../Icons";
-import { CardImage, CardImageMapProvider, CardPreviewProvider, ReviewSetProvider, StackColumn } from "./ReviewCard";
+import {
+  CARD_FRAME,
+  CARD_FRAME_HOVER,
+  CardImage,
+  CardImageMapProvider,
+  CardPreviewProvider,
+  ReviewSetProvider,
+  StackColumn,
+} from "./ReviewCard";
 import { cardImageSources, useCardImageMap } from "../../../data/cardImages";
 import { highlightEventLabel } from "../EventLabel";
 import { AAvatar } from "../../Brand";
@@ -938,7 +946,8 @@ function BoosterCard({ card, picked }: { card: ArtifactCard; picked: boolean }) 
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-[4.5%/3.2%] [outline-style:solid] outline-1 -outline-offset-1 outline-white/10 shadow-[0_-2px_6px_rgba(0,0,0,0.6)] transition-transform duration-150 hover:z-10 hover:scale-[1.04]",
+        CARD_FRAME,
+        "transition-transform duration-150 hover:z-10 hover:scale-[1.04]",
         picked && "p0p1-card-selected z-10 scale-[1.03] hover:scale-[1.05]",
       )}
     >
@@ -1584,7 +1593,7 @@ function SideboardPane({
           count={cards.length}
           reveal={reveal}
           width={cardWidth}
-          cardClassName={POOL_CARD_CLASS}
+          cardClassName={CARD_FRAME_HOVER}
           glowIndexes={lastIndexes(cards.length, markCount)}
           cardAt={(i) => cards[i]}
           renderCard={(i) => <CardImage card={cards[i]} />}
@@ -1730,7 +1739,8 @@ function OrderStrip({
               <div
                 key={di}
                 className={cn(
-                  "absolute w-full overflow-hidden rounded-[4.5%/3.2%] [outline-style:solid] outline-1 -outline-offset-1 outline-white/10 shadow-[0_-2px_6px_rgba(0,0,0,0.6)]",
+                  "absolute w-full",
+                  CARD_FRAME,
                   ri === lastRow && glowCols.includes(i) && "review-last-pick z-10",
                 )}
                 style={{ top: di * reveal }}
@@ -1751,7 +1761,8 @@ function OrderStrip({
             <div
               key={di}
               className={cn(
-                "absolute w-full overflow-hidden rounded-[4.5%/3.2%] [outline-style:solid] outline-1 -outline-offset-1 outline-white/10 shadow-[0_-2px_6px_rgba(0,0,0,0.6)]",
+                "absolute w-full",
+                CARD_FRAME,
                 glowSide.includes(di) && "review-last-pick z-10",
               )}
               style={{ top: di * reveal }}
@@ -1770,8 +1781,6 @@ type PoolEntry = { card: ArtifactCard; idx: number };
 const POOL_PAD = 8;
 const POOL_GAP = 4;
 const SIDE_COLUMN_GAP_RATIO = 0.1;
-const POOL_CARD_CLASS =
-  "overflow-hidden rounded-[4.5%/3.2%] [outline-style:solid] outline-1 -outline-offset-1 outline-white/10 shadow-[0_-2px_6px_rgba(0,0,0,0.6)] transition-[outline-color] group-hover:outline-white/50 hover:outline-white/50";
 
 function Pool({
   cards,
@@ -1810,7 +1819,7 @@ function Pool({
       reveal={reveal}
       width={cardWidth}
       className="shrink-0"
-      cardClassName={POOL_CARD_CLASS}
+      cardClassName={CARD_FRAME_HOVER}
       glowIndexes={group.flatMap((e, i) => (glowing.includes(e.idx) ? [i] : []))}
       cardAt={(i) => group[i].card}
       renderCard={(i) => <CardImage card={group[i].card} />}

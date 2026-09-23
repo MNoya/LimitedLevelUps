@@ -15,11 +15,11 @@ const RECENT_PAGE = 8;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function podShortName(e: PodEventSummary): string {
-  const raw = e.eventDate.includes("T") ? e.eventDate : `${e.eventDate}T12:00:00`;
+export function podShortName(eventDate: string, name: string): string {
+  const raw = eventDate.includes("T") ? eventDate : `${eventDate}T12:00:00`;
   const date = new Date(raw);
   const datePart = Number.isNaN(date.getTime()) ? "" : `${MONTHS[date.getMonth()]} ${date.getDate()}`;
-  const slot = /early/i.test(e.name) ? "Early" : /late/i.test(e.name) ? "Late" : "";
+  const slot = /early/i.test(name) ? "Early" : /late/i.test(name) ? "Late" : "";
   return [datePart, slot].filter(Boolean).join(" ").toUpperCase();
 }
 
@@ -93,7 +93,7 @@ export function PodRecentTrophies({
                     {stripDiscriminator(e.championDisplayName ?? "").toUpperCase()}
                   </span>
                   <span className="font-mono text-[11px] text-subtle whitespace-nowrap text-left">
-                    {podShortName(e)}
+                    {podShortName(e.eventDate, e.name)}
                   </span>
                   <span className="flex items-center justify-end gap-1 font-mono text-[11px] text-muted tabular-nums whitespace-nowrap">
                     {relativeTime(e.eventTime)}

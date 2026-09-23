@@ -53,6 +53,7 @@ import { peasantPodCardsFixture } from "./fixtures/pod-cards-peasant";
 import { peasantArchetypesFixture } from "./fixtures/pod-archetypes-peasant";
 import type { PodCardStatRow } from "./podCards";
 import type { PodArchetypeRow } from "./podArchetypes";
+import type { PodCardDeckRow, PodDeckCardRow } from "./podCardDecks";
 import { leaderboardSosFixture } from "./fixtures/leaderboard-sos";
 import { selfReportedTrophiesSosFixture } from "./fixtures/self-reported-sos";
 import { mergeSelfReportedTrophies } from "./selfReported";
@@ -110,6 +111,10 @@ export const fetchCubeSeasons = (): Promise<CubeSeason[]> => wait([]);
 export const fetchPodCardStats = (_boardCode: string): Promise<PodCardStatRow[]> => wait(peasantPodCardsFixture);
 
 export const fetchPodArchetypes = (_boardCode: string): Promise<PodArchetypeRow[]> => wait(peasantArchetypesFixture);
+
+export const fetchPodCardDecks = (_boardCode: string, _cardName: string): Promise<PodCardDeckRow[]> => wait([]);
+
+export const fetchPodDeckCards = (_eventIds: string[]): Promise<PodDeckCardRow[]> => wait([]);
 
 export const fetchDbEpisodes = (): Promise<Episode[]> => wait([]);
 

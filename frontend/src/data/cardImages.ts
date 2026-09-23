@@ -11,6 +11,7 @@ export interface CardImageItem {
 export interface CardImages {
   images: Map<string, string>;
   ready: boolean;
+  settled?: ReadonlySet<string>;
 }
 
 function frontFaceName(name: string): string {
@@ -98,14 +99,7 @@ export function useCardImageMap(items: CardImageItem[]): CardImages {
   );
   const { isFetching } = useQuery({
     queryKey: ["card-images", missingSignature],
-    queryFn: async () => {
-      const fetched = await fetchCardImages(missing);
-      for (const [key, url] of Object.entries(fetched)) {
-        memoryMap.set(key, url);
-      }
-      persist();
-      return fetched;
-    },
+    queryFn: () => resolveIntoMap(missing),
     enabled: missing.length > 0,
     staleTime: Infinity,
     gcTime: Infinity,
@@ -114,6 +108,53 @@ export function useCardImageMap(items: CardImageItem[]): CardImages {
     () => ({ images: new Map(memoryMap), ready: missing.length === 0 || !isFetching }),
     [missing.length, isFetching],
   );
+}
+
+// Resolves the on-screen cards in a small request first, then the whole board in one request the edge caches for every visitor
+export function useBoardCardImages(board: CardImageItem[], visible: CardImageItem[]): CardImages {
+  hydrate();
+  const boardIds = useMemo(() => dedupeIdentifiers(board), [board]);
+  const boardSignature = useMemo(() => boardIds.map((id) => mapKey(id.set, id.name)).sort().join(","), [boardIds]);
+  const boardMissing = boardIds.some((id) => !memoryMap.has(mapKey(id.set, id.name)));
+  const visibleIds = dedupeIdentifiers(visible);
+  const visibleMissing = visibleIds.filter((id) => !memoryMap.has(mapKey(id.set, id.name)));
+  const visibleSignature = visibleMissing.map((id) => mapKey(id.set, id.name)).sort().join(",");
+
+  const onScreen = useQuery({
+    queryKey: ["card-images", visibleSignature],
+    queryFn: () => resolveIntoMap(visibleMissing),
+    enabled: visibleMissing.length > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  const wholeBoard = useQuery({
+    queryKey: ["card-images-board", boardSignature],
+    queryFn: () => resolveIntoMap(boardIds),
+    enabled: boardMissing,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
+  const boardSettled = !boardMissing || wholeBoard.status !== "pending";
+  const onScreenSettled = onScreen.fetchStatus !== "fetching";
+  return useMemo(() => {
+    const settled = new Set<string>();
+    if (onScreenSettled) {
+      for (const id of visibleIds) {
+        settled.add(mapKey(id.set, id.name));
+      }
+    }
+    return { images: new Map(memoryMap), ready: boardSettled, settled: boardSettled ? undefined : settled };
+  }, [boardSettled, onScreenSettled, visibleSignature, onScreen.dataUpdatedAt]);
+}
+
+async function resolveIntoMap(identifiers: { name: string; set: string }[]): Promise<Record<string, string>> {
+  const fetched = await fetchCardImages(identifiers);
+  for (const [key, url] of Object.entries(fetched)) {
+    memoryMap.set(key, url);
+  }
+  persist();
+  return fetched;
 }
 
 // <img> src candidates for a card, best first: the mapped CDN URL, then Scryfall's named endpoint
@@ -132,7 +173,8 @@ export function cardImageSources(
   if (mapped) {
     return [mapped, ...fallback];
   }
-  const ready = cardImages?.ready ?? true;
+  const settled = cardImages?.settled;
+  const ready = settled ? settled.has(mapKey(set, name)) : (cardImages?.ready ?? true);
   return ready ? fallback : [];
 }
 

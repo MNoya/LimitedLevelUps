@@ -15,6 +15,8 @@ import {
   fetchCubeSeasons,
   fetchPodCardStats,
   fetchPodArchetypes,
+  fetchPodCardDecks,
+  fetchPodDeckCards,
   fetchP0P1Cards,
   fetchP0P1Ballots,
   fetchP0P1PickStats,
@@ -187,6 +189,24 @@ export function usePodCardStats(boardCode: string | undefined) {
     queryKey: ["pod-card-stats", boardCode],
     queryFn: () => fetchPodCardStats(boardCode!),
     enabled: !!boardCode,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function usePodCardDecks(boardCode: string | undefined, cardName: string | undefined) {
+  return useQuery({
+    queryKey: ["pod-card-decks", boardCode, cardName],
+    queryFn: () => fetchPodCardDecks(boardCode!, cardName!),
+    enabled: !!boardCode && !!cardName,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function usePodDeckCards(eventIds: string[]) {
+  return useQuery({
+    queryKey: ["pod-deck-cards", eventIds],
+    queryFn: () => fetchPodDeckCards(eventIds),
+    enabled: eventIds.length > 0,
     staleTime: THIRTY_MINUTES,
   });
 }

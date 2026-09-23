@@ -37,6 +37,7 @@ _ALLOWED_VIEWS = {
     "public_colors_summary",
     "public_pod_archetype_stats",
     "public_pod_card_stats",
+    "public_pod_card_decks",
     "public_cube_seasons",
     "public_cube_season_breakdown",
     "public_cube_season_events",

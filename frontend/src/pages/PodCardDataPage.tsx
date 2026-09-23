@@ -1,6 +1,6 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { SlidersHorizontal } from "lucide-react";
 
 import { AppHeader } from "../components/AppHeader";
@@ -15,10 +15,14 @@ import { BoardWindowSelector, type BoardWindowOption } from "../components/Board
 import { TabButton } from "../components/TabButton";
 import { CalendarRange } from "../components/Icons";
 import { AVATAR_CLIP, SetGlyph } from "../components/Brand";
+import { CardArt, CardImageStack, cardDataHref } from "../components/pod/cardData/CardDetailParts";
+import { CardDetailRow } from "../components/pod/cardData/CardDetailRow";
+import { useCursorTooltip, type CursorTooltipBinding } from "../components/CursorTooltip";
+import { cardSlug } from "../data/podCardDecks";
 import { winRateColor } from "../data/winRate";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
-import { cardArtSources, cardImageSources, useCardImageMap } from "../data/cardImages";
+import { cardArtSources, cardImageSources, useBoardCardImages } from "../data/cardImages";
 import { usePodCardStats, useSets } from "../data/hooks";
 import type { SetSummary } from "../types/leaderboard";
 import {
@@ -66,9 +70,11 @@ function orderedSeasons(rows: PodCardStatRow[], sets: SetSummary[] | undefined):
 }
 
 export function PodCardDataPage() {
-  const { board } = useParams<{ board: string }>();
+  const { board, card: cardParam } = useParams<{ board: string; card: string }>();
   const boardCode = (board ?? "PEASANT").toUpperCase();
   const label = cardDataLabel(boardCode);
+  const navigate = useNavigate();
+  const { search } = useLocation();
 
   const { data, isPending } = usePodCardStats(boardCode);
   const allRows = useMemo(() => data ?? [], [data]);
@@ -82,9 +88,8 @@ export function PodCardDataPage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [minDrafts, setMinDrafts] = useState(1);
   const [filters, setFilters] = useState<PodCardFilters>(EMPTY_POD_CARD_FILTERS);
-  const [search, setSearch] = useState("");
+  const [cardSearch, setCardSearch] = useState("");
   const [preview, setPreview] = useState<{ sources: string[]; anchor: PreviewAnchor } | null>(null);
-  const [modal, setModal] = useState<string[] | null>(null);
 
   const chromeRef = useRef<HTMLDivElement>(null);
   const [chromeHeight, setChromeHeight] = useState(0);
@@ -102,7 +107,7 @@ export function PodCardDataPage() {
 
   const hovering = useRef(false);
   const hoverCard = (card: PodCard, el: HTMLElement) => {
-    if (isMobile) {
+    if (isMobile || openSet.has(card.name)) {
       return;
     }
     hovering.current = true;
@@ -125,37 +130,18 @@ export function PodCardDataPage() {
     hovering.current = false;
     setPreview(null);
   };
-  const openCard = (card: PodCard) => {
-    const sources = cardImageSources(card.name, card.set, cardImages);
-    if (sources.length > 0) {
-      setModal(sources);
-    }
+  const [openNames, setOpenNames] = useState<string[]>([]);
+  const clickedCard = useRef<string | null>(null);
+  const toggleCard = (card: PodCard) => {
+    leaveCard();
+    const withoutCard = openNames.filter((name) => name !== card.name);
+    const closing = openSet.has(card.name);
+    const next = closing ? withoutCard : [...withoutCard, card.name];
+    const urlCard = next[next.length - 1] ?? null;
+    setOpenNames(next);
+    clickedCard.current = urlCard;
+    navigate(cardDataHref(boardCode, urlCard, search), { replace: true });
   };
-  const overlays = (
-    <>
-      {preview
-        ? createPortal(
-            <PreviewShell anchor={preview.anchor}>
-              <CardImageStack sources={preview.sources} />
-            </PreviewShell>,
-            document.body,
-          )
-        : null}
-      {modal
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6"
-              onClick={() => setModal(null)}
-            >
-              <div className="w-[min(360px,80vw)]">
-                <CardImageStack sources={modal} />
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
-    </>
-  );
 
   const seasons = useMemo(() => orderedSeasons(allRows, sets), [allRows, sets]);
   const cards = useMemo(() => {
@@ -163,7 +149,6 @@ export function PodCardDataPage() {
     return aggregatePodCards(scoped);
   }, [allRows, season]);
 
-  // Resolve art for the whole board once (stable across season filters) so the shared image cache isn't re-queried
   const imageItems = useMemo(() => {
     const seen = new Set<string>();
     const items: { name: string; set: string | null }[] = [];
@@ -176,17 +161,129 @@ export function PodCardDataPage() {
     }
     return items;
   }, [allRows]);
-  const cardImages = useCardImageMap(imageItems);
+  const [visibleKeys, setVisibleKeys] = useState<ReadonlySet<string>>(() => new Set());
 
   const options = useMemo(() => podCardFilterOptions(cards), [cards]);
 
   const rows = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+    const needle = cardSearch.trim().toLowerCase();
     const kept = cards.filter(
       (c) => c.drafts >= minDrafts && cardMatchesFilters(c, filters) && (!needle || c.name.toLowerCase().includes(needle)),
     );
     return sortPodCards(kept, sortKey, sortDir);
-  }, [cards, minDrafts, filters, search, sortKey, sortDir]);
+  }, [cards, minDrafts, filters, cardSearch, sortKey, sortDir]);
+
+  const selected = useMemo(() => {
+    if (!cardParam) {
+      return null;
+    }
+    const slug = cardParam.toLowerCase();
+    for (const card of cards) {
+      if (cardSlug(card.name) === slug) {
+        return card;
+      }
+    }
+    for (const card of aggregatePodCards(allRows)) {
+      if (cardSlug(card.name) === slug) {
+        return card;
+      }
+    }
+    return null;
+  }, [cardParam, cards, allRows]);
+
+  const openSet = useMemo(
+    () => new Set(selected ? [...openNames, selected.name] : openNames),
+    [openNames, selected],
+  );
+
+  const visibleItems = useMemo(() => {
+    const items: { name: string; set: string | null }[] = selected ? [{ name: selected.name, set: selected.set }] : [];
+    for (const item of imageItems) {
+      if (visibleKeys.has(rowImageKey(item.name, item.set))) {
+        items.push(item);
+      }
+    }
+    return items;
+  }, [visibleKeys, selected, imageItems]);
+  const cardImages = useBoardCardImages(imageItems, visibleItems);
+
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const mobileScrollerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const body = tableBodyRef.current;
+    if (!body) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const seen: string[] = [];
+        for (const entry of entries) {
+          const key = (entry.target as HTMLElement).dataset.imageKey;
+          if (entry.isIntersecting && key) {
+            seen.push(key);
+          }
+        }
+        setVisibleKeys((prev) => (seen.every((key) => prev.has(key)) ? prev : new Set([...prev, ...seen])));
+      },
+      { root: isMobile ? mobileScrollerRef.current : null, rootMargin: "400px 0px" },
+    );
+    for (const row of body.querySelectorAll<HTMLElement>("tr[data-image-key]")) {
+      observer.observe(row);
+    }
+    return () => observer.disconnect();
+  }, [rows, isMobile]);
+
+  const selectedRowRef = useRef<HTMLTableRowElement>(null);
+  const handledCard = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const name = selected?.name ?? null;
+    if (name === handledCard.current) {
+      return;
+    }
+    const fromUrl = name != null && name !== clickedCard.current;
+    if (fromUrl) {
+      const row = selectedRowRef.current;
+      if (!row) {
+        return;
+      }
+      pinRowBelowStickyHeader(row, isMobile ? mobileScrollerRef.current : null, chromeHeight);
+      setOpenNames((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    }
+    handledCard.current = name;
+    clickedCard.current = null;
+  });
+
+  const rowTooltip = useCursorTooltip();
+  const rowTooltipFor = (card: PodCard) =>
+    isMobile ? undefined : rowTooltip.bind(openSet.has(card.name) ? "Close Breakdown" : "Open Card Breakdown");
+
+  const overlays = (
+    <>
+      {preview
+        ? createPortal(
+            <PreviewShell anchor={preview.anchor}>
+              <CardImageStack sources={preview.sources} />
+            </PreviewShell>,
+            document.body,
+          )
+        : null}
+      {rowTooltip.layer}
+    </>
+  );
+
+  const detailRow = (card: PodCard, mobile: boolean) =>
+    openSet.has(card.name) ? (
+      <CardDetailRow
+        boardCode={boardCode}
+        card={card}
+        imageSources={cardImageSources(card.name, card.set, cardImages)}
+        artSources={cardArtSources(card.name, card.set, cardImages)}
+        season={season}
+        search={search}
+        colSpan={POD_CARD_COLUMNS.length + (mobile ? 2 : 1)}
+        mobile={mobile}
+      />
+    ) : null;
 
   const onSort = (key: keyof PodCard) => {
     if (key === sortKey) {
@@ -262,8 +359,8 @@ export function PodCardDataPage() {
                 setFilters={setFilters}
                 minDrafts={minDrafts}
                 setMinDrafts={setMinDrafts}
-                search={search}
-                setSearch={setSearch}
+                search={cardSearch}
+                setSearch={setCardSearch}
               />
             </div>
           )}
@@ -277,7 +374,7 @@ export function PodCardDataPage() {
               <PodRecentTrophies setCode={boardCode} season={season} sets={sets} />
             </div>
           ) : (
-            <div className="overflow-auto" style={{ maxHeight: `calc(100dvh - ${chromeHeight}px)` }}>
+            <div ref={mobileScrollerRef} className="overflow-auto" style={{ maxHeight: `calc(100dvh - ${chromeHeight}px)` }}>
               <table className="table-fixed border-collapse text-[13px]" style={{ width: MOBILE_TABLE_W }}>
                 <colgroup>
                   <col style={{ width: MOBILE_ART_W }} />
@@ -322,22 +419,26 @@ export function PodCardDataPage() {
                     ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody ref={tableBodyRef}>
                   {isPending ? (
                     <SkeletonRows sticky />
                   ) : rows.length === 0 ? (
                     <StateRow text={cards.length === 0 ? "No cube drafts on record yet" : "No cards match these filters"} />
                   ) : (
                     rows.map((card) => (
-                      <CardRow
-                        key={`${card.name}|${card.set}`}
-                        card={card}
-                        sources={cardArtSources(card.name, card.set, cardImages)}
-                        onHover={hoverCard}
-                        onLeave={leaveCard}
-                        onOpen={openCard}
-                        sticky
-                      />
+                      <Fragment key={`${card.name}|${card.set}`}>
+                        <CardRow
+                          card={card}
+                          sources={cardArtSources(card.name, card.set, cardImages)}
+                          rowRef={selected?.name === card.name ? selectedRowRef : undefined}
+                          active={openSet.has(card.name)}
+                          onHover={hoverCard}
+                          onLeave={leaveCard}
+                          onOpen={toggleCard}
+                          sticky
+                        />
+                        {detailRow(card, true)}
+                      </Fragment>
                     ))
                   )}
                 </tbody>
@@ -388,8 +489,8 @@ export function PodCardDataPage() {
           setFilters={setFilters}
           minDrafts={minDrafts}
           setMinDrafts={setMinDrafts}
-          search={search}
-          setSearch={setSearch}
+          search={cardSearch}
+          setSearch={setCardSearch}
         />
       </div>
 
@@ -431,21 +532,26 @@ export function PodCardDataPage() {
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody ref={tableBodyRef}>
               {isPending ? (
                 <SkeletonRows />
               ) : rows.length === 0 ? (
                 <StateRow text={cards.length === 0 ? "No cube drafts on record yet" : "No cards match these filters"} />
               ) : (
                 rows.map((card) => (
-                  <CardRow
-                    key={`${card.name}|${card.set}`}
-                    card={card}
-                    sources={cardArtSources(card.name, card.set, cardImages)}
-                    onHover={hoverCard}
-                    onLeave={leaveCard}
-                    onOpen={openCard}
-                  />
+                  <Fragment key={`${card.name}|${card.set}`}>
+                    <CardRow
+                      card={card}
+                      sources={cardArtSources(card.name, card.set, cardImages)}
+                      rowRef={selected?.name === card.name ? selectedRowRef : undefined}
+                      active={openSet.has(card.name)}
+                      tooltip={rowTooltipFor(card)}
+                      onHover={hoverCard}
+                      onLeave={leaveCard}
+                      onOpen={toggleCard}
+                    />
+                    {detailRow(card, false)}
+                  </Fragment>
                 ))
               )}
             </tbody>
@@ -539,6 +645,9 @@ function CardRow({
   card,
   sources,
   sticky = false,
+  rowRef,
+  active,
+  tooltip,
   onHover,
   onLeave,
   onOpen,
@@ -546,26 +655,37 @@ function CardRow({
   card: PodCard;
   sources: string[];
   sticky?: boolean;
+  rowRef?: RefObject<HTMLTableRowElement>;
+  active: boolean;
+  tooltip?: CursorTooltipBinding;
   onHover: (card: PodCard, el: HTMLElement) => void;
   onLeave: () => void;
   onOpen: (card: PodCard) => void;
 }) {
+  const nameClass = cn("truncate font-display text-[18px] tracking-[0.02em]", active ? "text-green" : "text-text");
   return (
     <tr
-      className={cn("bg-surface border-b border-bg cursor-pointer", sticky ? "group hover:bg-surface2" : "hover:bg-surface2")}
+      ref={rowRef}
+      {...tooltip}
+      data-image-key={rowImageKey(card.name, card.set)}
+      className={cn(
+        "border-b border-bg cursor-pointer",
+        active ? "bg-surface2" : "bg-surface",
+        sticky ? "group hover:bg-surface2" : "hover:bg-surface2",
+      )}
       onClick={() => onOpen(card)}
     >
       {sticky ? (
         <>
           <td
-            className="sticky left-0 z-10 bg-surface group-hover:bg-surface2 pl-2 pr-1 py-2"
+            className={cn("sticky left-0 z-10 group-hover:bg-surface2 pl-2 pr-1 py-2", active ? "bg-surface2" : "bg-surface")}
             onMouseEnter={(e) => onHover(card, e.currentTarget)}
             onMouseLeave={onLeave}
           >
             <CardArt sources={sources} name={card.name} />
           </td>
           <td className="pr-2 py-2">
-            <div className="truncate font-display text-[18px] tracking-[0.02em] text-text">{card.name}</div>
+            <div className={nameClass}>{card.name}</div>
           </td>
         </>
       ) : (
@@ -576,7 +696,7 @@ function CardRow({
         >
           <div className="flex items-center gap-2.5">
             <CardArt sources={sources} name={card.name} />
-            <div className="min-w-0 truncate font-display text-[18px] tracking-[0.02em] text-text">{card.name}</div>
+            <div className={cn("min-w-0", nameClass)}>{card.name}</div>
           </div>
         </td>
       )}
@@ -610,41 +730,24 @@ function CardRow({
   );
 }
 
-function CardArt({ sources, name }: { sources: string[]; name: string }) {
-  const [index, setIndex] = useState(0);
-  const src = sources[index] ?? null;
-  if (!src) {
-    return <div className="h-9 w-12 shrink-0 bg-surface2" style={{ clipPath: AVATAR_CLIP }} aria-hidden />;
-  }
-  return (
-    <img
-      src={src}
-      alt={name}
-      loading="lazy"
-      decoding="async"
-      onError={() => setIndex((i) => i + 1)}
-      className="h-9 w-12 shrink-0 object-cover object-center"
-      style={{ clipPath: AVATAR_CLIP }}
-    />
-  );
+function rowImageKey(name: string, set: string | null): string {
+  return `${set ?? ""}|${name}`;
 }
 
-function CardImageStack({ sources }: { sources: string[] }) {
-  const [index, setIndex] = useState(0);
-  const src = sources[index] ?? null;
-  if (!src) {
-    return <div className="w-full rounded-[10px] bg-surface2" style={{ aspectRatio: "488 / 680" }} aria-hidden />;
+function pinRowBelowStickyHeader(
+  row: HTMLTableRowElement,
+  scroller: HTMLElement | null,
+  chromeHeight: number,
+): void {
+  const headHeight = row.closest("table")?.querySelector("thead")?.getBoundingClientRect().height ?? 0;
+  if (!scroller) {
+    window.scrollTo({ top: row.getBoundingClientRect().top + window.scrollY - headHeight });
+    return;
   }
-  return (
-    <img
-      src={src}
-      alt=""
-      decoding="async"
-      onError={() => setIndex((i) => i + 1)}
-      className="w-full rounded-[10px]"
-      style={{ aspectRatio: "488 / 680" }}
-    />
-  );
+  const scrollerRect = scroller.getBoundingClientRect();
+  const rowOffset = row.getBoundingClientRect().top - scrollerRect.top + scroller.scrollTop;
+  scroller.scrollTo({ top: rowOffset - headHeight });
+  window.scrollTo({ top: scrollerRect.top + window.scrollY - chromeHeight });
 }
 
 function StateRow({ text }: { text: string }) {

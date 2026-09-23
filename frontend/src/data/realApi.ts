@@ -18,6 +18,7 @@ import type { TranscriptSegment } from "./transcript";
 import type { TranscriptIndex } from "./transcriptStatus";
 import type { PodCardStatRow } from "./podCards";
 import type { PodArchetypeRow } from "./podArchetypes";
+import type { PodCardDeckRow, PodDeckCardRow } from "./podCardDecks";
 import {
   aggregate,
   boxesForEvent,
@@ -193,6 +194,29 @@ export async function fetchPodCalendar(): Promise<PodCalendarDayRow[]> {
 export async function fetchPodCardStats(boardCode: string): Promise<PodCardStatRow[]> {
   return pagedRows<PodCardStatRow>((from, to) =>
     client().from("public_pod_card_stats").select("*").eq("set_code", boardCode).range(from, to),
+  );
+}
+
+export async function fetchPodCardDecks(boardCode: string, cardName: string): Promise<PodCardDeckRow[]> {
+  const { data, error } = await client()
+    .from("public_pod_card_decks")
+    .select("*")
+    .eq("set_code", boardCode)
+    .eq("card_name", cardName);
+  if (error) throw error;
+  return (data ?? []) as PodCardDeckRow[];
+}
+
+export async function fetchPodDeckCards(eventIds: string[]): Promise<PodDeckCardRow[]> {
+  if (eventIds.length === 0) return [];
+  return pagedRows<PodDeckCardRow>((from, to) =>
+    client()
+      .from("public_pod_card_decks")
+      .select("event_id,seat,card_name,card_set")
+      .in("event_id", eventIds)
+      .eq("maindecked", true)
+      .order("event_id")
+      .range(from, to),
   );
 }
 

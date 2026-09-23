@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { ModalNavButton } from "./ModalNavButton";
 import { Pips } from "./ManaPips";
-import { CardImage, CardImageMapProvider, CardPreviewProvider, StackColumn } from "./pod/review/ReviewCard";
+import { CARD_FRAME_HOVER, CardImage, CardImageMapProvider, CardPreviewProvider, StackColumn } from "./pod/review/ReviewCard";
 import { useCardImageMap } from "../data/cardImages";
 import { skeletonLayout, type Skeleton } from "../data/skeletons";
 import { useIsMobile } from "../lib/use-is-mobile";
@@ -13,8 +13,6 @@ import type { ArtifactCard } from "../types/leaderboard";
 const CARD_WIDTH = 180;
 const REVEAL = 31;
 const MOBILE_REVEAL = 28;
-const CARD_CLASS =
-  "overflow-hidden rounded-[4.5%/3.2%] [outline-style:solid] outline-1 -outline-offset-1 outline-white/10 shadow-[0_-2px_6px_rgba(0,0,0,0.6)] transition-[outline-color] group-hover:outline-white/50 hover:outline-white/50";
 
 export function SkeletonsModal({
   skeletons,
@@ -143,7 +141,7 @@ function SkeletonColumn({ cards, reveal }: { cards: ArtifactCard[]; reveal: numb
     <StackColumn
       count={cards.length}
       reveal={reveal}
-      cardClassName={CARD_CLASS}
+      cardClassName={CARD_FRAME_HOVER}
       cardAt={(i) => cards[i]}
       tapToPreview
       renderCard={(i) => <CardImage card={cards[i]} />}

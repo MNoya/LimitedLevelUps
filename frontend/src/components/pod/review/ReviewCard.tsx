@@ -29,6 +29,11 @@ function useCardImageSources(card: ArtifactCard): string[] {
   return useMemo(() => cardImageSources(card.n, set, cardImages), [card.n, set, cardImages]);
 }
 
+export const CARD_FRAME =
+  "overflow-hidden rounded-[4.5%/3.2%] [outline-style:solid] outline-1 -outline-offset-1 outline-white/10 shadow-[0_-2px_6px_rgba(0,0,0,0.6)]";
+
+export const CARD_FRAME_HOVER = `${CARD_FRAME} transition-[outline-color] group-hover:outline-white/50 hover:outline-white/50`;
+
 // Walk the src candidates: start at the first, and on load error advance to the next. Resetting when the
 // candidate list changes re-tries from the top for a re-keyed card.
 export function useFallbackImage(sources: string[]): { src: string | null; onError: () => void } {

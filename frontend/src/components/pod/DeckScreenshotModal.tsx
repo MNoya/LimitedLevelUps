@@ -7,7 +7,13 @@ import { ChamferedButton } from "../ChamferedButton";
 import { Pips } from "../ManaPips";
 import { Record } from "../Record";
 import { cn } from "../../lib/utils";
-import { CardImageMapProvider, StackColumn, useCardImageMapContext, useFallbackImage } from "./review/ReviewCard";
+import {
+  CARD_FRAME_HOVER,
+  CardImageMapProvider,
+  StackColumn,
+  useCardImageMapContext,
+  useFallbackImage,
+} from "./review/ReviewCard";
 import { cardImageSources, useCardImageMap, type CardImages } from "../../data/cardImages";
 import { useIsMobile } from "../../lib/use-is-mobile";
 import { useResolvedDeckUrl } from "../../data/refresh-deck-url";
@@ -554,8 +560,6 @@ function DecklistView({ mainboard, warmedImages }: { mainboard: Mainboard; warme
   );
 }
 
-const CARD_CLASS =
-  "w-full overflow-hidden rounded-[4.5%/3.2%] [outline-style:solid] outline-1 -outline-offset-1 outline-white/10 shadow-[0_-2px_6px_rgba(0,0,0,0.6)] transition-[outline-color] group-hover:outline-white/50 hover:outline-white/50";
 
 // Cards fan top-to-bottom with each one absolutely overlapping the previous, so only a revealed sliver
 // of the upper cards shows and their bottom edge is covered — the bottom card sits in normal flow and
@@ -569,7 +573,7 @@ function Pile({ cards, deckSet }: { cards: DeckCard[]; deckSet: string | null })
       <StackColumn
         count={cards.length}
         reveal={STRIP_H}
-        cardClassName={CARD_CLASS}
+        cardClassName={`w-full ${CARD_FRAME_HOVER}`}
         renderCard={(i) => <PileCard card={cards[i]} deckSet={deckSet} />}
       />
     </div>
