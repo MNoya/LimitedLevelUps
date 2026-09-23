@@ -84,8 +84,8 @@ export function CardDetailRow({
             <div className="relative flex flex-col gap-4">
               {decks}
               {curve}
-              {colors}
-              {playedTogether(6, 2)}
+              {(isPending || summary.colorPairs.length > 0) && colors}
+              {(coPlayed.isPending || coPlayed.cards.length > 0) && playedTogether(6, 2)}
             </div>
           ) : (
             <div
