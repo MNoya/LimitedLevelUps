@@ -2753,22 +2753,15 @@ async def rearm_signals(bot: commands.Bot) -> None:
     teardowns from the DB so a restart loses nothing. Past-due opens fire immediately; past-due open
     signals are expired, their standing nudges dropped, and their launcher column rolled forward."""
     now = datetime.now(timezone.utc)
-    with SessionLocal() as session:
-        signals = session.execute(
-            select(PodSignal).where(PodSignal.status.in_([pod_signals.STATUS_OPEN, pod_signals.STATUS_FIRED]))
-        ).scalars().all()
-        pending = [
-            (s.id, s.kind, s.status, s.slot_time, s.last_activity_at, s.event_id, s.created_at)
-            for s in signals
-        ]
+    open_signals, prelaunch_pods = await asyncio.to_thread(_load_rearm_rows_sync)
 
-    for signal_id, kind, status, slot_time, last_activity, event_id, created_at in pending:
-        if status == pod_signals.STATUS_FIRED and event_id is not None:
-            scheduled = kind == pod_signals.KIND_SCHEDULED
-            if _rearm_open_if_pending(bot, event_id, with_fill_jobs=scheduled):
-                continue
-        if status != pod_signals.STATUS_OPEN:
-            continue
+    for event_id, kind, event_time, created_at in prelaunch_pods:
+        if kind == pod_signals.KIND_SCHEDULED:
+            arm_scheduled_pod_jobs(bot, event_id, event_time, created_at)
+        else:
+            _arm_open(bot, event_id, event_time)
+
+    for signal_id, kind, slot_time, last_activity, created_at in open_signals:
         if kind == pod_signals.KIND_POLL and slot_time is not None:
             if slot_time <= now:
                 if await asyncio.to_thread(expire_signal_sync, signal_id):
@@ -2785,20 +2778,22 @@ async def rearm_signals(bot: commands.Bot) -> None:
                 arm_queue_teardown(bot, signal_id, teardown)
 
 
-def _rearm_open_if_pending(bot: commands.Bot, event_id: str, with_fill_jobs: bool = False) -> bool:
-    """`with_fill_jobs` re-arms the underfill and roster-reminder jobs a scheduled card carries on
-    top of the lobby open; poll and queue pods fire full by construction and skip them."""
+def _load_rearm_rows_sync() -> tuple[list[tuple], list[tuple]]:
+    """Open signals, and the fired signals whose pod has not launched yet with that pod's timing"""
     with SessionLocal() as session:
-        event = session.get(PodDraftEvent, event_id)
-        if event is None or event.socket_status not in PRE_LAUNCH_STATUSES:
-            return False
-        event_time = event.event_time
-        created_at = event.created_at
-    if with_fill_jobs:
-        arm_scheduled_pod_jobs(bot, event_id, event_time, created_at)
-    else:
-        _arm_open(bot, event_id, event_time)
-    return True
+        open_signals = session.execute(
+            select(PodSignal.id, PodSignal.kind, PodSignal.slot_time, PodSignal.last_activity_at, PodSignal.created_at)
+            .where(PodSignal.status == pod_signals.STATUS_OPEN)
+        ).all()
+        prelaunch_pods = session.execute(
+            select(PodDraftEvent.id, PodSignal.kind, PodDraftEvent.event_time, PodDraftEvent.created_at)
+            .join(PodDraftEvent, PodDraftEvent.id == PodSignal.event_id)
+            .where(
+                PodSignal.status == pod_signals.STATUS_FIRED,
+                PodDraftEvent.socket_status.in_(PRE_LAUNCH_STATUSES),
+            )
+        ).all()
+    return [tuple(row) for row in open_signals], [tuple(row) for row in prelaunch_pods]
 
 
 _bot: commands.Bot | None = None

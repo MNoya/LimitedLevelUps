@@ -486,7 +486,7 @@ class PodDraftManager:
             try:
                 await self.sio.connect(self._connect_url, transports=["websocket"], wait_timeout=10)
                 return True
-            except (socketio.exceptions.ConnectionError, OSError) as e:
+            except (socketio.exceptions.ConnectionError, OSError, ValueError) as e:
                 if attempt >= _BACKOFF_MAX_RETRIES:
                     log.error(
                         f"[LIFECYCLE] connect.gave_up event={self.event_id} attempts={attempt} err={e!s}"
@@ -549,9 +549,9 @@ class PodDraftManager:
         await self._mark_socket_status("connected")
 
     async def _on_disconnect(self) -> None:
-        in_flight = self.drafting or (self.draft_complete and not self.finalized)
+        awaiting_finalize = self.draft_complete and not self.finalized
         was_closed_intentionally = self._closed
-        decision = "teardown" if was_closed_intentionally else ("keep" if in_flight else "reconnect")
+        decision = "teardown" if was_closed_intentionally else ("keep" if awaiting_finalize else "reconnect")
         log.warning(
             f"[LIFECYCLE] socket_disconnect event={self.event_id} sid={self.session_id} "
             f"closed_intentionally={was_closed_intentionally} drafting={self.drafting} "
@@ -560,21 +560,16 @@ class PodDraftManager:
         )
         if was_closed_intentionally:
             return
-        if in_flight:
+        if awaiting_finalize:
             self._closed = True
-            await bot_log_mod.get(self.bot).post(
-                f"Socket dropped mid-flight for event `{self.event_id}` "
-                f"(drafting={self.drafting}, complete={self.draft_complete}).",
-                fingerprint=f"socket_drop_in_flight:{self.event_id}",
-                tag="LIFECYCLE",
-            )
+            await self._alert_socket_lost()
             return
-        self._schedule_open_lobby_reconnect()
+        self._schedule_reconnect()
 
-    def _schedule_open_lobby_reconnect(self) -> None:
+    def _schedule_reconnect(self) -> None:
         if self._reconnect_task is not None and not self._reconnect_task.done():
             return
-        self._reconnect_task = asyncio.create_task(self._reconnect_open_lobby())
+        self._reconnect_task = asyncio.create_task(self._reconnect())
 
     def _cancel_reconnect(self) -> None:
         task = self._reconnect_task
@@ -582,23 +577,38 @@ class PodDraftManager:
         if task is not None and not task.done() and task is not asyncio.current_task():
             task.cancel()
 
-    async def _reconnect_open_lobby(self) -> None:
-        """An open lobby lost its socket with nobody closing it: a redeploy flap or a Draftmancer restart.
-        Reconnect on the same session so the card and its Join button keep working, and close the lobby
-        only once the retries give up, so a session that is genuinely gone leaves no orphaned card behind.
-        `_on_session_users` resets the cycle count, so only a session that keeps dropping runs out of tries."""
+    async def _reconnect(self) -> None:
+        """Rejoin the same session after an unplanned drop; a lobby out of tries closes, a draft only alerts"""
         if self._closed or self.abandoned or self._lobby_closed():
             return
         self._reconnect_cycles += 1
         if self._reconnect_cycles > _BACKOFF_MAX_RETRIES:
             log.warning(f"[LIFECYCLE] reconnect.flapping event={self.event_id} cycles={self._reconnect_cycles}")
-            await cancel_pod_event(self.event_id, idle=True)
+            await self._give_up_reconnect()
             return
         if await self.connect():
-            log.info(f"[LIFECYCLE] reconnect.restored event={self.event_id} cycle={self._reconnect_cycles}")
+            log.info(
+                f"[LIFECYCLE] reconnect.restored event={self.event_id} cycle={self._reconnect_cycles} "
+                f"drafting={self.drafting}"
+            )
             return
         log.warning(f"[LIFECYCLE] reconnect.gave_up event={self.event_id} sid={self.session_id}")
+        await self._give_up_reconnect()
+
+    async def _give_up_reconnect(self) -> None:
+        if self.drafting:
+            self._closed = True
+            await self._alert_socket_lost()
+            return
         await cancel_pod_event(self.event_id, idle=True)
+
+    async def _alert_socket_lost(self) -> None:
+        await bot_log_mod.get(self.bot).post(
+            f"Socket lost for event `{self.event_id}` "
+            f"(drafting={self.drafting}, complete={self.draft_complete}).",
+            fingerprint=f"socket_lost:{self.event_id}",
+            tag="LIFECYCLE",
+        )
 
     async def _on_session_users(self, users) -> None:
         self._reconnect_cycles = 0
