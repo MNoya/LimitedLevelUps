@@ -366,6 +366,7 @@ class PodDraftManager:
         self.abandoned = False
         self._reconnect_task: asyncio.Task | None = None
         self._reconnect_cycles = 0
+        self._duplicate_connection = False
         self.ready_check_active = False
         self.ready_check_generation = 0
         self.ready_check_joined_ids: set[str] = set()
@@ -459,6 +460,7 @@ class PodDraftManager:
         self.sio = socketio.AsyncClient(reconnection=False, logger=False, engineio_logger=False)
         self.sio.on("connect", self._on_connect)
         self.sio.on("disconnect", self._on_disconnect)
+        self.sio.on("alreadyConnected", self._on_already_connected)
         self.sio.on("sessionUsers", self._on_session_users)
         self.sio.on("sessionSpectators", self._on_session_spectators)
         self.sio.on("updateUser", self._on_update_user)
@@ -546,7 +548,17 @@ class PodDraftManager:
 
     async def _on_connect(self) -> None:
         log.info(f"[LIFECYCLE] socket_connect event={self.event_id} sid={self.session_id}")
+        self._duplicate_connection = False
         await self._mark_socket_status("connected")
+
+    async def _on_already_connected(self, assigned_user_id) -> None:
+        """A container still alive from before a deploy holds the bot's userID, so leave and retry later"""
+        log.warning(
+            f"[LIFECYCLE] duplicate_connection event={self.event_id} sid={self.session_id} "
+            f"assigned_user={assigned_user_id}"
+        )
+        self._duplicate_connection = True
+        await self.sio.disconnect()
 
     async def _on_disconnect(self) -> None:
         awaiting_finalize = self.draft_complete and not self.finalized
@@ -586,6 +598,7 @@ class PodDraftManager:
             log.warning(f"[LIFECYCLE] reconnect.flapping event={self.event_id} cycles={self._reconnect_cycles}")
             await self._give_up_reconnect()
             return
+        await asyncio.sleep(min(_BACKOFF_BASE_S * 2 ** (self._reconnect_cycles - 1), _BACKOFF_MAX_S))
         if await self.connect():
             log.info(
                 f"[LIFECYCLE] reconnect.restored event={self.event_id} cycle={self._reconnect_cycles} "
@@ -611,6 +624,8 @@ class PodDraftManager:
         )
 
     async def _on_session_users(self, users) -> None:
+        if self._duplicate_connection:
+            return
         self._reconnect_cycles = 0
         self.session_users = list(users) if isinstance(users, list) else []
         slim = [{k: v for k, v in u.items() if k != "collection"} for u in self.session_users]
@@ -619,7 +634,7 @@ class PodDraftManager:
             return
         if self.bot_user_id is None:
             for u in self.session_users:
-                if u.get("userName") == BOT_USER_NAME:
+                if u.get("userID") == self._connect_user_id:
                     self.bot_user_id = u.get("userID")
                     log.info(f"found bot userID={self.bot_user_id} for {self.session_id}")
                     break
