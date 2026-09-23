@@ -121,6 +121,14 @@ def test_a_slot_offering_two_formats_carries_one_button_per_pod():
     ]
 
 
+def test_a_rolled_column_still_open_today_carries_one_button_per_pod():
+    view = PodPollView([_lazy("LATE", STATUS_OPEN), _lazy("LATE", STATUS_OPEN)])
+
+    pod_ids = [cid for cid in _child_ids(view) if cid not in FOOTER_IDS]
+
+    assert pod_ids == [f"pod_poll:{named_bucket_key('LATE', LATEST)}"]
+
+
 def test_the_board_carries_one_leave_for_every_pod_on_it():
     view = PodPollView([
         _lazy("EARLY", STATUS_OPEN),

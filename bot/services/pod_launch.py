@@ -449,6 +449,25 @@ def roll_slot_forward_sync(
     return rolled
 
 
+def expire_open_slot_signals_sync(*, slot_key: str, day: date) -> list[str]:
+    """Expire the day's still-gathering formats of a slot_key the column is rolling past, returning their ids"""
+    with SessionLocal() as session:
+        signals = session.execute(
+            select(PodSignal).where(
+                PodSignal.kind == pod_signals.KIND_POLL,
+                PodSignal.signal_date == day,
+                PodSignal.status == pod_signals.STATUS_OPEN,
+            )
+        ).scalars().all()
+        expired = []
+        for signal in signals:
+            if pod_signals.slot_of(signal.bucket) == slot_key:
+                signal.status = pod_signals.STATUS_EXPIRED
+                expired.append(signal.id)
+        session.commit()
+        return expired
+
+
 def joined_formats_at_slot_sync(
     message_id: str, slot_time: datetime | None, discord_user_id: str,
 ) -> list[str]:

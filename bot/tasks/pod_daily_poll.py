@@ -145,6 +145,7 @@ from bot.sets import active_set_code, set_name_for
 from bot.slug import slugify
 from bot.tasks.pod_draft_reminder import register_reminder_view_builder
 from bot.tasks.pod_underfill import (
+    clear_slot_nudge,
     hand_slot_nudge_to_card,
     refresh_slot_nudge,
     schedule_slot_underfill_checks,
@@ -984,13 +985,15 @@ class PodPollView(discord.ui.View):
     ) -> None:
         super().__init__(timeout=None)
         pods = 0
+        custom_ids: set[str] = set()
         for slot_key in _ordered_slots(slots):
             key_slots = _key_slots(slots, slot_key)
             for slot in key_slots:
                 item = _slot_item(slot, guild, key_slots)
-                if item is not None:
-                    self.add_item(item)
-                    pods += 1
+                if item is None or _repeats_custom_id(item, custom_ids):
+                    continue
+                self.add_item(item)
+                pods += 1
         footer_row = min(4, pods // BUTTONS_PER_ROW + 1)
         if any(_leavable(slot) for slot in slots):
             self.add_item(BoardLeaveButton(row=footer_row))
@@ -1000,6 +1003,17 @@ class PodPollView(discord.ui.View):
 
 
 BUTTONS_PER_ROW = 5
+
+
+def _repeats_custom_id(item: "discord.ui.Item", seen: set[str]) -> bool:
+    """Whether an earlier button on the board carries this custom_id, a repeat Discord rejects with the whole edit"""
+    custom_id = getattr(item, "custom_id", None)
+    if custom_id is None:
+        return False
+    if custom_id in seen:
+        return True
+    seen.add(custom_id)
+    return False
 
 
 def _leavable(slot: pod_launch.LauncherSlot) -> bool:
@@ -2067,11 +2081,16 @@ async def _roll_slot(
     if board is None:
         return []
     guild_id, channel_id, message_id, board_date = board
+    passed_over = await asyncio.to_thread(
+        pod_launch.expire_open_slot_signals_sync, slot_key=slot_key, day=from_day,
+    )
     rolled = await asyncio.to_thread(
         pod_launch.roll_slot_forward_sync,
         slot_key=slot_key, from_day=from_day, guild_id=guild_id, channel_id=channel_id, message_id=message_id,
     )
     await _rerender_poll(bot, message_id, board_date)
+    for signal_id in passed_over:
+        await clear_slot_nudge(bot, signal_id)
     opened: list[tuple[str, datetime]] = []
     for signal_id, bucket_key, slot_time in rolled:
         pod_launch.arm_slot_expiry(bot, signal_id, slot_time)

@@ -496,6 +496,26 @@ def test_a_rolled_slot_and_todays_slot_share_the_message_and_the_snapshot_stacks
     assert _slot_order(slots) == [SLOT_EARLY, SLOT_LATE]
 
 
+def test_rolling_a_column_expires_only_that_columns_open_formats_of_that_day(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    late = bucket_for_slot(FRIDAY, SLOT_LATE).key
+    early = bucket_for_slot(FRIDAY, SLOT_EARLY).key
+    passed_over = [
+        _seed_signal(session, late, FRIDAY, message_id="today"),
+        _seed_signal(session, late, FRIDAY, message_id="today", set_code="PEASANT"),
+    ]
+    untouched = [
+        _seed_signal(session, early, FRIDAY, message_id="today"),
+        _seed_signal(session, bucket_for_slot(SATURDAY, SLOT_LATE).key, SATURDAY, message_id="today"),
+    ]
+    session.commit()
+
+    expired = pod_launch.expire_open_slot_signals_sync(slot_key=SLOT_LATE, day=FRIDAY)
+
+    assert sorted(expired) == sorted(signal.id for signal in passed_over)
+    assert [signal.status for signal in untouched] == [STATUS_OPEN, STATUS_OPEN]
+
+
 def test_the_board_day_ignores_the_days_its_columns_rolled_to(session, monkeypatch, latest_only):
     monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
     create_poll_signals(session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY)
