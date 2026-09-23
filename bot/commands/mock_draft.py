@@ -50,6 +50,8 @@ from bot.sets import preview_set_code
 
 log = logging.getLogger(__name__)
 
+MSG_MOCK_BUMPED = "Bumped {message_id}"
+
 
 class MockDraft(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
@@ -132,6 +134,13 @@ def latest_mock_manager() -> PodDraftManager | None:
     return latest
 
 
+def mock_manager_for_thread(channel_id: int) -> PodDraftManager | None:
+    for manager in ACTIVE_POD_MANAGERS.values():
+        if manager.kind == "mock" and manager.thread_id == channel_id:
+            return manager
+    return None
+
+
 async def _delete_invocation(ctx: commands.Context) -> None:
     """Remove the `!mock` message once the card is up. The point of the command is to leave the card at
     the bottom of the channel, which the invocation sitting under it would undo."""
@@ -190,7 +199,8 @@ async def setup(bot: commands.Bot) -> None:
         """Repost the newest open mock draft's card at the bottom of the channel, for a lobby that chat
         has buried. The thread and its anchor card stay put, an earlier repost is retired, and no role
         is pinged: the lobby was announced when it opened."""
-        running = latest_mock_manager()
+        thread_manager = mock_manager_for_thread(ctx.channel.id)
+        running = thread_manager or latest_mock_manager()
         if running is None:
             await ctx.send(MSG_MOCK_NONE_RUNNING)
             return
@@ -198,5 +208,8 @@ async def setup(bot: commands.Bot) -> None:
         if reposted is None:
             await ctx.send(MSG_MOCK_REPOST_FAILED)
             return
-        await _delete_invocation(ctx)
+        if thread_manager is not None:
+            await ctx.reply(MSG_MOCK_BUMPED.format(message_id=reposted.id), mention_author=False)
+        else:
+            await _delete_invocation(ctx)
         log.info(f"mock: {ctx.author} reposted the card for event {running.event_id}")
