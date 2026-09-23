@@ -1,4 +1,4 @@
-"""Diarize podcast-only episodes with whisperx and label each speaker by first name"""
+"""Diarize episodes with whisperx and label each speaker by first name"""
 from __future__ import annotations
 
 import argparse
@@ -15,9 +15,12 @@ from sqlalchemy import select
 from bot.database import SessionLocal
 from bot.models import Episode, EpisodeTranscript
 from bot.scripts.generate_transcripts import (
+    _annotate_structure,
     _apply_known_terms,
     _claude_json,
+    _download_audio,
     _download_audio_url,
+    _tag_cards,
     _upsert,
 )
 
@@ -55,61 +58,74 @@ def main() -> None:
         if target is None:
             log.info("no episodes left to diarize")
             return
-        guid, title, audio_url = target
-        log.info(f"[{guid}] {title}")
+        key, title, audio_url, set_code = target
+        log.info(f"[{key}] {title}")
         try:
             with SessionLocal() as session:
-                _process(session, guid, title, audio_url, args)
+                _process(session, key, title, audio_url, set_code, args)
         except Exception as exc:
-            log.warning(f"[{guid}] failed, skipping: {exc}")
-            failed.add(guid)
+            log.warning(f"[{key}] failed, skipping: {exc}")
+            failed.add(key)
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Diarize audio-only episodes (no youtube_id) with whisperx, then name speakers with a cheap "
-        "Claude pass over the intro. Needs the whisperx venv (WHISPERX_BIN) and a HuggingFace token "
-        "(HF_TOKEN_FILE) whose account accepted pyannote/speaker-diarization-community-1. Writes to prod.",
+        "Claude pass over the intro. With --youtube, diarize episodes from their YouTube audio and add chapters "
+        "and card links. Needs the whisperx venv (WHISPERX_BIN) and a HuggingFace token (HF_TOKEN_FILE) whose "
+        "account accepted pyannote/speaker-diarization-community-1. Writes to DATABASE_URL.",
     )
     parser.add_argument("--category", default="Guest", help="Episode category to diarize")
-    parser.add_argument("--youtube-id", help="Diarize this guid only")
+    parser.add_argument("--youtube-id", help="Diarize this episode only: its guid, or its youtube id with --youtube")
+    parser.add_argument("--youtube", action="store_true", help="Diarize episodes that have a YouTube video")
     parser.add_argument("--max-minutes", type=int, default=DEFAULT_MAX_MINUTES, help="Skip episodes longer than this")
     parser.add_argument("--redo", action="store_true", help="Re-diarize episodes already transcribed")
     parser.add_argument("--no-attribution", action="store_true", help="Keep generic Host/Guest labels, skip Claude")
+    parser.add_argument("--no-card-fix", action="store_true", help="With --youtube, skip the Claude card-name pass")
     return parser.parse_args()
 
 
-def _next_target(session, args: argparse.Namespace, failed: set[str]) -> tuple[str, str, str] | None:
-    done = set(session.execute(select(EpisodeTranscript.youtube_id)).scalars())
-    query = select(Episode.guid, Episode.title, Episode.audio_url).where(
-        Episode.youtube_id.is_(None), Episode.audio_url.isnot(None), Episode.audio_url != ""
-    )
+def _next_target(session, args: argparse.Namespace, failed: set[str]) -> tuple[str, str, str, str | None] | None:
+    if args.youtube:
+        key = Episode.youtube_id
+        done_query = select(EpisodeTranscript.youtube_id).where(EpisodeTranscript.source == SOURCE)
+        query = select(key, Episode.title, Episode.audio_url, Episode.set_code).where(key.isnot(None))
+    else:
+        key = Episode.guid
+        done_query = select(EpisodeTranscript.youtube_id)
+        query = select(key, Episode.title, Episode.audio_url, Episode.set_code).where(
+            Episode.youtube_id.is_(None), Episode.audio_url.isnot(None), Episode.audio_url != ""
+        )
     if args.youtube_id:
-        query = query.where(Episode.guid == args.youtube_id)
+        query = query.where(key == args.youtube_id)
     else:
         query = query.where(Episode.category == args.category, Episode.duration_seconds <= args.max_minutes * 60)
     query = query.order_by(Episode.duration_seconds)
-    for guid, title, audio_url in session.execute(query):
-        if guid in failed:
+    done = set(session.execute(done_query).scalars())
+    for episode_key, title, audio_url, set_code in session.execute(query):
+        if episode_key in failed:
             continue
-        if guid in done and not args.redo:
+        if episode_key in done and not args.redo:
             continue
-        return guid, title, audio_url
+        return episode_key, title, audio_url, set_code
     return None
 
 
-def _process(session, guid: str, title: str, audio_url: str, args: argparse.Namespace) -> None:
+def _process(session, key: str, title: str, audio_url: str, set_code: str | None, args: argparse.Namespace) -> None:
     with tempfile.TemporaryDirectory(prefix="diarize-") as tmp:
         workdir = Path(tmp)
-        audio = _download_audio_url(audio_url, workdir)
+        audio = _download_audio(key, workdir, []) if args.youtube else _download_audio_url(audio_url, workdir)
         whisper = _run_whisperx(audio, workdir)
     segments = _build_segments(whisper["segments"])
     if not args.no_attribution:
-        _attribute_names(guid, title, segments)
+        _attribute_names(key, title, segments)
+    if args.youtube:
+        _annotate_structure(segments, key)
+        _tag_cards(key, segments, set_code, args)
     _apply_known_terms(segments)
     word_count = sum(len(segment["text"].split()) for segment in segments)
-    _upsert(session, guid, segments, word_count, SOURCE)
-    log.info(f"[{guid}] wrote {len(segments)} paragraphs, {word_count} words")
+    _upsert(session, key, segments, word_count, SOURCE)
+    log.info(f"[{key}] wrote {len(segments)} paragraphs, {word_count} words")
 
 
 def _run_whisperx(audio: Path, workdir: Path) -> dict:

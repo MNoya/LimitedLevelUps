@@ -700,10 +700,8 @@ def _read_cache(youtube_id) -> dict:
 def _tag_cards(youtube_id: str, segments: list[dict], set_code: str | None, args) -> None:
     basic = getattr(args, "basic", False)
     refresh = getattr(args, "refresh_cards", False)
-    if set_code:
-        card_names = _fetch_cards_safe(set_code, refresh)
-        if not card_names:
-            return
+    card_names = _fetch_cards_safe(set_code, refresh) if set_code else []
+    if card_names:
         if not args.no_card_fix and not basic:
             card_names = _correct_card_names(youtube_id, segments, card_names, None)
         _link_cards(segments, card_names)

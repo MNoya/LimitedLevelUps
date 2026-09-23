@@ -18,7 +18,7 @@
 "0a160e5a-4852-44e8-9726-bc1ba6b8ebeb": "Draft",
 "0ac1d791fc654b96859319ea697f3d9f": "Evergreen",
 "0acc79f3-3ced-44b9-b0b4-5ea3983a69d7": "Draft",
-"0d6bba81-f271-40e7-b4a5-eb1f220b4673": "Guest",
+"0d6bba81-f271-40e7-b4a5-eb1f220b4673": {"category": "Guest", "audio_only": true},
 "0dfb2b40-7e9f-44c7-a131-b96dbdb3a879": "Guest",
 "0fcd5ecd-93b2-4915-8e36-7dd01b926bf1": "Evergreen",
 "100b1f6d-8c65-4038-8ded-9545a2016dd9": "Guest",

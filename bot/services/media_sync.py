@@ -30,12 +30,13 @@ log = logging.getLogger(__name__)
 
 # Per-guid classification seed: a one-time LLM pass over the back catalog plus hand-corrections,
 # consulted before the rules so a resync reproduces it. Each value is a category string, or
-# {"category"?, "set"?} when an episode also needs a manual set the title can't yield.
-_SEED_RAW: dict[str, str | dict[str, str]] = json.loads(
+# {"category"?, "set"?, "audio_only"?} when an episode needs a manual set or must never pair with a video.
+_SEED_RAW: dict[str, str | dict[str, str | bool]] = json.loads(
     Path(__file__).with_name("episode_category_seed.json").read_text(encoding="utf-8")
 )
 _SEED_CATEGORY: dict[str, str] = {}
 _SEED_SET: dict[str, str] = {}
+_SEED_AUDIO_ONLY: set[str] = set()
 for _guid, _value in _SEED_RAW.items():
     if isinstance(_value, str):
         _SEED_CATEGORY[_guid] = _value
@@ -44,6 +45,8 @@ for _guid, _value in _SEED_RAW.items():
             _SEED_CATEGORY[_guid] = _value["category"]
         if "set" in _value:
             _SEED_SET[_guid] = _value["set"]
+        if _value.get("audio_only"):
+            _SEED_AUDIO_ONLY.add(_guid)
 
 _MATCH_WINDOW_S = 3 * 24 * 60 * 60
 _DURATION_MATCH_RATIO = 0.1
@@ -160,6 +163,8 @@ def _default_category(kind: str) -> str:
 def _merge(podcasts: list[_Item], videos: list[YouTubeVideo]) -> list[_Item]:
     claimed: set[str] = set()
     for podcast in podcasts:
+        if podcast.guid in _SEED_AUDIO_ONLY:
+            continue
         match = _find_match(podcast, videos, claimed)
         if not match:
             continue
