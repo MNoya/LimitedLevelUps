@@ -65,7 +65,7 @@ export const TIER_LIST_GRADERS: Record<
   Array<{ name: string; uid: string }>
 > = {
   FRA: [
-    { name: "Alex", uid: "3ceeafffe39348e6824ea8605b3e6e89" },
+    { name: "Alex", uid: "24d7fb5b20194808834be19680ae0d8d" },
     { name: "Marc", uid: "e95fd9365a86464cae2451e34c39102a" },
   ],
   MSH: [
