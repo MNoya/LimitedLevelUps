@@ -484,12 +484,12 @@ def test_a_seat_already_given_to_a_bot_is_not_waited_on_again(monkeypatch):
 
 def test_replacing_the_missing_seats_emits_and_records_them(monkeypatch):
     mgr = _drafting_manager(monkeypatch)
-    mgr.disconnected_names = ["Finkel"]
+    mgr.disconnected_users = {"u1": "Finkel"}
 
     err = asyncio.run(mgr.replace_disconnected_with_bots())
 
     assert err is None
-    assert mgr.sio.emitted == ["replaceDisconnectedPlayers"]
+    assert mgr.sio.emitted == ["removePlayer"]
     assert mgr.bot_filled_names == {"Finkel"}
 
 

@@ -415,7 +415,7 @@ class PodDraftManager:
         self.max_players = settings.pod_draft_max_players
         self.packs_per_player: int | None = None
         self.cards_per_pack: int | None = None
-        self.disconnected_names: list[str] = []
+        self.disconnected_users: dict[str, str] = {}
         self.stall_names: set[str] = set()
         self.bot_filled_names: set[str] = set()
         self._disconnect_message: "discord.Message | None" = None
@@ -2374,6 +2374,10 @@ class PodDraftManager:
         log.info(f"[DRAFT] resumed event={self.event_id}")
         return None
 
+    @property
+    def disconnected_names(self) -> list[str]:
+        return sorted(self.disconnected_users.values())
+
     async def _on_user_disconnected(self, payload) -> None:
         """Draftmancer broadcasts the whole disconnected set on every drop and on every partial return, so
         the payload is the state and not a change. A seat already handed to a bot stays in that set, and
@@ -2381,19 +2385,20 @@ class PodDraftManager:
         if not self.drafting or self.draft_complete:
             return
         entries = (payload or {}).get("disconnectedUsers") or {}
-        waiting = sorted(
-            name for name in (user.get("userName") for user in entries.values())
-            if name and name not in self.bot_filled_names
-        )
-        if waiting == self.disconnected_names:
+        waiting = {}
+        for user_id, user in entries.items():
+            name = user.get("userName")
+            if name and name not in self.bot_filled_names:
+                waiting[user_id] = name
+        if waiting == self.disconnected_users:
             return
         if not waiting:
             await self._end_stall_on_return()
             return
-        first_drop = not self.disconnected_names
-        self.disconnected_names = waiting
-        self.stall_names.update(waiting)
-        log.warning(f"[DRAFT] players_disconnected event={self.event_id} names={waiting}")
+        first_drop = not self.disconnected_users
+        self.disconnected_users = waiting
+        self.stall_names.update(waiting.values())
+        log.warning(f"[DRAFT] players_disconnected event={self.event_id} names={self.disconnected_names}")
         if first_drop:
             self._disconnect_at = int(datetime.now(timezone.utc).timestamp())
             self._disconnect_watch_task = asyncio.create_task(self._open_disconnect_watch())
@@ -2486,7 +2491,7 @@ class PodDraftManager:
         for task in tasks:
             if task is not None:
                 task.cancel()
-        self.disconnected_names = []
+        self.disconnected_users = {}
         self.stall_names = set()
         self._disconnect_at = None
         offer = self._disconnect_offer_message
@@ -2534,8 +2539,8 @@ class PodDraftManager:
             log.info(f"[DRAFT] disconnect_flap_cleanup_failed event={self.event_id}")
 
     async def replace_disconnected_with_bots(self) -> str | None:
-        """Hand every seat still missing to a Draftmancer bot so the draft runs on. Their picks so far
-        stay in the draft, and the bot takes it from there. Returns an error string or None."""
+        """Hand every seat still missing to a Draftmancer bot so the draft runs on, through the same removal
+        Draftmancer's own UI uses mid-draft. Their picks so far stay in the draft. Returns an error string or None."""
         if not self.sio.connected:
             return "Draftmancer session is not connected"
         if not self.drafting or self.draft_complete:
@@ -2544,7 +2549,8 @@ class PodDraftManager:
         if not names:
             return "Nobody is disconnected right now"
         try:
-            await self.sio.emit("replaceDisconnectedPlayers")
+            for user_id in self.disconnected_users:
+                await self.sio.emit("removePlayer", user_id)
         except Exception:
             log.exception(f"[DRAFT] replace_disconnected_failed event={self.event_id}")
             return "Could not replace the disconnected players, see logs"
