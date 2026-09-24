@@ -24,7 +24,7 @@ count, so an 8 -> 7 drop flips the text back to asking for one more instead of v
 when the draft starts and `mark_underfill_fired` reposts it as a fired record at the bottom of the channel,
 when the pod is canceled via `clear_underfill_nudge`, or when a launcher slot expires
 unfired via `clear_slot_nudge`. An edit re-carries any role mention the message
-already holds so a player pinged at T-1h still sees why when the text later flips; the edit never re-pings.
+already holds and keeps it highlighted, so a player pinged at T-1h still sees why when the text later flips.
 The message is located by scanning channel history for the bot's own post carrying the signup link (plus
 the pod name for launcher slots, which share one launcher URL) — nothing is persisted.
 
@@ -524,14 +524,21 @@ async def _safe_post(
         log.warning("could not post underfill nudge", exc_info=True)
 
 
-_ROLE_MENTION = re.compile(r"<@&\d+>")
+_ROLE_MENTION = re.compile(r"<@&(\d+)>")
 
 
 async def _safe_edit(message: discord.Message, body: str) -> None:
     match = _ROLE_MENTION.search(message.content)
-    new_content = f"{body} {match.group()}" if match is not None else body
+    if match is None:
+        new_content = body
+        allowed = discord.AllowedMentions.none()
+    else:
+        new_content = f"{body} {match.group()}"
+        allowed = discord.AllowedMentions(roles=[discord.Object(int(match.group(1)))])
+    if new_content == message.content:
+        return
     try:
-        await message.edit(content=new_content, allowed_mentions=discord.AllowedMentions.none())
+        await message.edit(content=new_content, allowed_mentions=allowed)
     except discord.HTTPException:
         log.warning(f"could not edit underfill nudge {message.id}", exc_info=True)
 
