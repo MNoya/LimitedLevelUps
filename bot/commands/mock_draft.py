@@ -50,7 +50,7 @@ from bot.sets import preview_set_code
 
 log = logging.getLogger(__name__)
 
-MSG_MOCK_BUMPED = "Bumped {message_id}"
+MSG_MOCK_BUMPED = "Bumped {message_url}"
 
 
 class MockDraft(commands.Cog):
@@ -209,7 +209,7 @@ async def setup(bot: commands.Bot) -> None:
             await ctx.send(MSG_MOCK_REPOST_FAILED)
             return
         if thread_manager is not None:
-            await ctx.reply(MSG_MOCK_BUMPED.format(message_id=reposted.id), mention_author=False)
+            await ctx.reply(MSG_MOCK_BUMPED.format(message_url=reposted.jump_url), mention_author=False)
         else:
             await _delete_invocation(ctx)
         log.info(f"mock: {ctx.author} reposted the card for event {running.event_id}")
