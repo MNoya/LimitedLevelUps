@@ -3564,14 +3564,21 @@ class PodDraftManager:
             log.warning(f"[READY] overdue_notice_failed event={self.event_id}", exc_info=True)
 
     async def _missing_mentions(self, missing_ids: set[str]) -> list[str]:
-        """Seats that still owe an answer, as pings where the player is known and as their handle where not"""
+        """Seats that still owe an answer, pinging a linked player or a guild member matching the handle"""
         names = [name for name in (self.seat_name(uid) for uid in sorted(missing_ids)) if name]
         if not names:
             return []
         discord_id_by_name = await asyncio.to_thread(discord_ids_for_names_sync, names)
+        guild = None
+        if not all(discord_id_by_name.get(name) for name in names):
+            thread = await self._fetch_thread()
+            guild = thread.guild if thread is not None else None
         mentions = []
         for name in names:
             discord_id = discord_id_by_name.get(name)
+            if not discord_id and guild is not None:
+                member = _find_guild_member_for_arena(guild, name)
+                discord_id = str(member.id) if member is not None else None
             mentions.append(f"<@{discord_id}>" if discord_id else name)
         return mentions
 

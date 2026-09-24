@@ -2002,7 +2002,7 @@ async def setup(bot: commands.Bot) -> None:
                 for embed, view in _build_ready_progress(card_state):
                     await ctx.send(embed=embed, view=view)
                 if card_state == "overdue":
-                    await ctx.send(ready_check_overdue_text([name for _, name in _LINKED_EIGHT[7:]]))
+                    await ctx.send(ready_check_overdue_text([ctx.author.mention]))
             return
 
         if state == "titles":
