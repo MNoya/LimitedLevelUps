@@ -108,6 +108,7 @@ from bot.services.championship_roster_card import (
 )
 from bot.services.pod_pairing_select import pairing_label
 from bot.services.pod_roster_fields import add_roster_fields
+from bot.services.pod_settings_view import description_notice
 from bot.services import pod_team
 from bot.services.pod_team_board import TeamBoardMember, load_team_board_data, team_result_headline
 from bot.services.pod_schedule import LATE_POD_ROLE_NAME, SCHEDULE_TZ
@@ -942,7 +943,8 @@ async def post_scheduled_card(
             )
             await asyncio.to_thread(pod_launch.set_thread_message_sync, signal_id, str(registered.id))
         if description:
-            await thread.send(description)
+            actor = opener.display_name if opener is not None else None
+            await thread.send(description_notice(actor, description))
     except discord.HTTPException:
         log.warning(f"could not post the registered embed in thread {thread.id}", exc_info=True)
 

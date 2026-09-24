@@ -81,6 +81,7 @@ CARDS_PER_PACK_MAX = 30
 MAX_PLAYERS_OPTIONS = (6, 8, 10)
 
 DESCRIPTION_MAX_LEN = 300
+DESCRIPTION_PLACEHOLDER = "Optional note shown on the Pod thread"
 
 EVENT_NAME_MAX_LEN = 100
 
@@ -605,14 +606,14 @@ class _ClosedDecklistButton(ui.Button):
         await self.view._apply_closed_decklist(interaction, not self.view.current_closed_decklist)
 
 
-class PodDescriptionModal(ui.Modal, title="Pod description"):
+class PodDescriptionModal(ui.Modal, title="Pod Description"):
     """The organizer's note held by the /draft launcher until the pod exists. The live Settings panel
     edits the note through PodDetailsModal, which also renames the pod."""
 
     text = ui.TextInput(
         label="Description", style=discord.TextStyle.paragraph, required=False,
         max_length=DESCRIPTION_MAX_LEN,
-        placeholder="Optional note shown on the pod card and its discussion thread")
+        placeholder=DESCRIPTION_PLACEHOLDER)
 
     def __init__(self, current: str | None, apply: DescriptionApply) -> None:
         super().__init__()
@@ -633,7 +634,7 @@ class _DetailsButton(ui.Button):
         await interaction.response.send_modal(PodDetailsModal(view))
 
 
-class PodDetailsModal(ui.Modal, title="Pod details"):
+class PodDetailsModal(ui.Modal, title="Pod Details"):
     """Rename a pod and edit its note before the draft starts. The discussion thread follows the name."""
 
     def __init__(self, view: "PodSettingsView") -> None:
@@ -649,7 +650,7 @@ class PodDetailsModal(ui.Modal, title="Pod details"):
         self.description = ui.TextInput(
             label="Description", style=discord.TextStyle.paragraph, required=False,
             max_length=DESCRIPTION_MAX_LEN, default=view.current_description or None,
-            placeholder="Optional note shown on the pod card and its discussion thread")
+            placeholder=DESCRIPTION_PLACEHOLDER)
         self.add_item(self.description)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
