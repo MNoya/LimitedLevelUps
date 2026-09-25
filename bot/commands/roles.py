@@ -193,11 +193,15 @@ class Roles(commands.Cog):
         self.bot = bot
 
     @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member) -> None:
+        """A role-granting invite attaches Pod Drafters at join, so on_member_update never sees it arrive"""
+        if POD_DRAFTERS_ROLE_NAME in {role.name for role in member.roles}:
+            log.info(f"{member} joined holding {POD_DRAFTERS_ROLE_NAME}; posting onboarding welcome")
+            await announce_onboarding_welcome(self.bot, member)
+
+    @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
-        """Pod Drafters gained through Discord's onboarding question bypasses every interaction path,
-        so its welcome fires here; bot-mediated gains are left to the path that granted them. Losing
-        the umbrella means leaving pod notifications entirely: it carries the one name color for pod
-        players, so the slot roles go with it instead of surviving as a colored back door."""
+        """Welcomes an onboarding-question Pod Drafters gain and clears the slot roles when the umbrella goes"""
         before_names = {role.name for role in before.roles}
         after_names = {role.name for role in after.roles}
         if POD_DRAFTERS_ROLE_NAME not in before_names and POD_DRAFTERS_ROLE_NAME in after_names:

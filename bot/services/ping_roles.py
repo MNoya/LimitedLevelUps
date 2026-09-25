@@ -776,10 +776,7 @@ async def send_join_confirmation_card(
 
 
 async def announce_onboarding_welcome(client: discord.Client, member: discord.Member) -> None:
-    """The welcome for a drafter who picked up Pod Drafters through Discord's onboarding question,
-    which bypasses every interaction path. Posted publicly in pod-draft-chat with no slot role to fold
-    in, since onboarding grants only the umbrella. Anyone already linked is skipped — they found pods
-    on their own, and with no interaction there's no ephemeral to fall back to."""
+    """Public pod-draft-chat welcome for a Pod Drafters gain from onboarding or an invite, skipped once linked"""
     if await _linked_arena_handle(str(member.id)) is not None:
         log.info(f"onboarding welcome skipped for {member}: already linked")
         return
