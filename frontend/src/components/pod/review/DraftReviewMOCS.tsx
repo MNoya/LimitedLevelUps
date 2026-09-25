@@ -1812,19 +1812,22 @@ function Pool({
     observer.observe(el);
     return () => observer.disconnect();
   }, [groupByType]);
-  const column = (key: string, group: PoolEntry[], glowing: number[]) => (
-    <StackColumn
-      key={key}
-      count={group.length}
-      reveal={reveal}
-      width={cardWidth}
-      className="shrink-0"
-      cardClassName={CARD_FRAME_HOVER}
-      glowIndexes={group.flatMap((e, i) => (glowing.includes(e.idx) ? [i] : []))}
-      cardAt={(i) => group[i].card}
-      renderCard={(i) => <CardImage card={group[i].card} />}
-    />
-  );
+  const column = (key: string, entries: PoolEntry[], glowing: number[]) => {
+    const group = lastPicksAtBottom(entries, glowing);
+    return (
+      <StackColumn
+        key={key}
+        count={group.length}
+        reveal={reveal}
+        width={cardWidth}
+        className="shrink-0"
+        cardClassName={CARD_FRAME_HOVER}
+        glowIndexes={group.flatMap((e, i) => (glowing.includes(e.idx) ? [i] : []))}
+        cardAt={(i) => group[i].card}
+        renderCard={(i) => <CardImage card={group[i].card} />}
+      />
+    );
+  };
   const entries = cards.map((card, idx) => ({ card, idx }));
   const glowMain = lastIndexes(cards.length, lastPicks.main);
   const glowSide = lastIndexes(sideboard.length, lastPicks.side);
@@ -1891,6 +1894,19 @@ function Pool({
       </div>
     </div>
   );
+}
+
+function lastPicksAtBottom(entries: PoolEntry[], glowing: number[]): PoolEntry[] {
+  const earlier: PoolEntry[] = [];
+  const latest: PoolEntry[] = [];
+  for (const entry of entries) {
+    if (glowing.includes(entry.idx)) {
+      latest.push(entry);
+    } else {
+      earlier.push(entry);
+    }
+  }
+  return [...earlier, ...latest];
 }
 
 function creatureCurveColumns(entries: PoolEntry[]): PoolEntry[][] {
