@@ -286,7 +286,7 @@ function GuideBody() {
               <Bullet>
                 Set your{" "}
                 <Tooltip label="ArenaID#12345">
-                  <strong className="cursor-help font-medium text-text">Arena name</strong>
+                  <strong className="cursor-default font-medium text-text">Arena name</strong>
                 </Tooltip>{" "}
                 in Draftmancer
               </Bullet>

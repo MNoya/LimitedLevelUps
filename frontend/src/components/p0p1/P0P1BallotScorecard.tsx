@@ -179,7 +179,7 @@ function ScorecardShell({
       <Tooltip label={legend} side="bottom" align="start" hideArrow className="max-w-[320px]">
         <button
           type="button"
-          className="group inline-flex items-center gap-1.5 self-start bg-transparent border-0 p-0"
+          className="group inline-flex items-center gap-1.5 self-start cursor-default bg-transparent border-0 p-0"
         >
           <HelpCircle size={15} strokeWidth={2} className="text-white transition-colors" />
           <span className="font-display text-white" style={{ fontSize: 15, letterSpacing: "0.22em" }}>{title}</span>
