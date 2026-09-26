@@ -16,10 +16,12 @@ import {
   IDENTITY_VIEWS,
   SITE_NAME as SITE,
   TIER_LIST_PREVIEW_SETS,
+  TIER_LIST_UIDS,
   TITLE_SEPARATOR,
   hasTierList,
 } from "../frontend/src/data/constants";
-import { cardDataLabel, hasCardData } from "../frontend/src/data/podCards";
+import { type PodCardStatRow, aggregatePodCards, cardDataLabel, hasCardData } from "../frontend/src/data/podCards";
+import { cardSlug } from "../frontend/src/lib/cardSlug";
 import { isMtgoFlashbackCode, mtgoSetName } from "../frontend/src/data/mtgoSets";
 import {
   type FeaturedContest,
@@ -444,6 +446,12 @@ const tierListRoute = async (rest: string[]): Promise<RouteResolution> => {
   const symbol: ImageIntent = { kind: "setSymbol", code: setCode };
   const notFound = !hasTierList(setCode);
   const cardPath = rest.length === 2 && rest[1].toLowerCase() !== "archetypes";
+  if (cardPath) {
+    const slug = rest[1].toLowerCase();
+    const cardMeta = await tierCardMeta(setCode, slug);
+    const setMeta = page(`${setCode} Tier List`, `Check updated Set Review grades for ${setName}`, symbol);
+    return resolved(cardMeta ?? setMeta, `/tier-list/${setCode}/${slug}`, notFound);
+  }
   if (rest.length > 1 && !cardPath && skeletonsFor(setCode).length > 0) {
     const archetypesPath = `/tier-list/${setCode}/archetypes`;
     const description = `Check the cards at the core of every color pair in ${setName}`;
@@ -455,9 +463,38 @@ const tierListRoute = async (rest: string[]): Promise<RouteResolution> => {
   }
   return resolved(
     page(`${setCode} Tier List`, `Check updated Set Review grades for ${setName}`, symbol),
-    cardPath ? `/tier-list/${setCode}/${rest[1].toLowerCase()}` : `/tier-list/${setCode}`,
+    `/tier-list/${setCode}`,
     notFound,
   );
+};
+
+type TierListRating = { name: string; tier: string; trend?: number | null; trend_from?: string | null; url: string };
+
+const tierCardMeta = async (setCode: string, slug: string): Promise<RouteMeta | null> => {
+  const uid = TIER_LIST_UIDS[setCode];
+  if (!uid) {
+    return null;
+  }
+  try {
+    const resp = await fetch(`https://www.17lands.com/data/tier_list/${uid}`, {
+      headers: { accept: "application/json" },
+      cf: { cacheTtl: META_CACHE_TTL, cacheEverything: true },
+    });
+    if (!resp.ok) {
+      return null;
+    }
+    const payload = (await resp.json()) as { ratings?: TierListRating[] };
+    for (const card of payload.ratings ?? []) {
+      if (cardSlug(card.name) === slug) {
+        const gap = "\u00a0\u00a0";
+        const grade = card.trend && card.trend_from ? `${card.trend_from}${gap}→${gap}${card.tier}` : card.tier;
+        return page(card.name, `Set Review Grade: ${grade}`, { kind: "url", url: card.url });
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
 };
 
 const podsRoute = async (rest: string[]): Promise<RouteResolution> => {
@@ -469,16 +506,53 @@ const podsRoute = async (rest: string[]): Promise<RouteResolution> => {
     const board = first.toUpperCase();
     const label = cardDataLabel(board);
     const boardPath = `/pods/${board}/data`;
-    return resolved(
-      page(`${label} Cube Card Data`, `Card stats from every ${label} Cube pod draft`),
-      third ? `${boardPath}/${third}` : boardPath,
-      !hasCardData(board),
-    );
+    const boardMeta = page(`${label} Cube Card Data`, `Card stats from every ${label} Cube pod draft`);
+    const cardMeta = third ? await podCardMeta(board, label, third.toLowerCase()) : null;
+    return resolved(cardMeta ?? boardMeta, third ? `${boardPath}/${third}` : boardPath, !hasCardData(board));
   }
   if (rest.length === 1 && first.toLowerCase() === "guide") {
     return resolved(page("Pod Drafts Guide", "How to play on our community Pod Drafts"), "/pods/guide");
   }
   return podSlugRoute(first, rest.slice(1));
+};
+
+const podCardMeta = async (board: string, label: string, slug: string): Promise<RouteMeta | null> => {
+  const namePattern = queryValue(slug.replace(/-/g, "*"));
+  const query = `public_pod_card_stats?select=*&set_code=eq.${queryValue(board)}&card_name=ilike.${namePattern}`;
+  const rows = await viewRows<PodCardStatRow>(query);
+  const matching = (rows ?? []).filter((row) => cardSlug(row.card_name) === slug);
+  const [card] = aggregatePodCards(matching);
+  if (!card || (card.ata === null && card.winRate === null)) {
+    return null;
+  }
+  const stats: string[] = [];
+  if (card.ata !== null) {
+    stats.push(`ATA ${card.ata.toFixed(2)}`);
+  }
+  if (card.winRate !== null) {
+    stats.push(`GP WR ${(card.winRate * 100).toFixed(1)}% over ${card.gamesPlayed} games`);
+  }
+  const image = await scryfallImageUrl(card.name, card.set);
+  return page(card.name, `${label} Cube ${stats.join(", ")}`, image ? { kind: "url", url: image } : null);
+};
+
+type ScryfallCard = { image_uris?: { large?: string }; card_faces?: { image_uris?: { large?: string } }[] };
+
+const scryfallImageUrl = async (name: string, set: string | null): Promise<string | null> => {
+  const printing = set ? `&set=${encodeURIComponent(set)}` : "";
+  try {
+    const resp = await fetch(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}${printing}`, {
+      headers: { accept: "application/json", "user-agent": "LimitedLevelUps/1.0" },
+      cf: { cacheTtl: 604800, cacheEverything: true },
+    });
+    if (!resp.ok) {
+      return null;
+    }
+    const card = (await resp.json()) as ScryfallCard;
+    return card.image_uris?.large ?? card.card_faces?.[0]?.image_uris?.large ?? null;
+  } catch {
+    return null;
+  }
 };
 
 const podSlugRoute = async (rawSlug: string, tail: string[]): Promise<RouteResolution> => {
