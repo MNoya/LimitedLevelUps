@@ -1,11 +1,27 @@
-import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  Fragment,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
-import { RefreshCw } from "./Icons";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { LuScrollText, Maximize2, Minimize2, Play, RefreshCw } from "./Icons";
 import { GradeLabel } from "./TierGuide";
 import { ModalNavButton } from "./ModalNavButton";
+import { Tooltip } from "./Tooltip";
+import { cardSlug } from "../lib/cardSlug";
+import { OPENED_IN_APP, useCloseModal } from "../lib/modal-history";
 import { cn } from "../lib/utils";
+import { useSetReviewMention, useTranscript } from "../data/hooks";
+import { cardDiscussion, type SetReviewMention } from "../data/transcript";
 import { isImageLoaded, markImageLoaded, preloadImage, useImageReveal } from "../lib/imageReveal";
-import { TEXT_OUTLINE } from "../lib/text-styles";
+import { SPEAKER_LANES, TEXT_OUTLINE } from "../lib/text-styles";
+import { speakerTurns } from "../lib/transcriptText";
 import { useIsMobile } from "../lib/use-is-mobile";
 import {
   cardFlags,
@@ -54,6 +70,7 @@ export function columnPipClass(code: string): string {
 const ComparisonContext = createContext(false);
 
 export function TierGrid({
+  setCode,
   uid,
   graders,
   comparison = false,
@@ -61,6 +78,7 @@ export function TierGrid({
   hideArt,
   stickyTop,
 }: {
+  setCode: string;
   uid: string;
   graders: Grader[];
   comparison?: boolean;
@@ -106,9 +124,9 @@ export function TierGrid({
   return (
     <ComparisonContext.Provider value={comparison}>
       {isMobile ? (
-        <MobileTiers byKey={byKey} filters={filters} hideArt={hideArt} />
+        <MobileTiers setCode={setCode} byKey={byKey} filters={filters} hideArt={hideArt} />
       ) : (
-        <DesktopGrid byKey={byKey} filters={filters} hideArt={hideArt} stickyTop={stickyTop} />
+        <DesktopGrid setCode={setCode} byKey={byKey} filters={filters} hideArt={hideArt} stickyTop={stickyTop} />
       )}
     </ComparisonContext.Provider>
   );
@@ -221,18 +239,20 @@ function SkeletonBar() {
 }
 
 function DesktopGrid({
+  setCode,
   byKey,
   filters,
   hideArt,
   stickyTop,
 }: {
+  setCode: string;
   byKey: Map<string, TierCard[]>;
   filters: TierFilters;
   hideArt: boolean;
   stickyTop: number;
 }) {
   const filtering = hasActiveFilters(filters);
-  const pager = useCardPager(byKey, filters);
+  const pager = useCardPager(setCode, byKey, filters);
   const columnHasHit = (code: string) => {
     if (!filtering) return true;
     return TIER_ORDER.some((tier) =>
@@ -327,16 +347,18 @@ function DesktopGrid({
 }
 
 function MobileTiers({
+  setCode,
   byKey,
   filters,
   hideArt,
 }: {
+  setCode: string;
   byKey: Map<string, TierCard[]>;
   filters: TierFilters;
   hideArt: boolean;
 }) {
   const filtering = hasActiveFilters(filters);
-  const pager = useCardPager(byKey, filters);
+  const pager = useCardPager(setCode, byKey, filters);
   const visibleTiers = TIER_ORDER.map((tier) => ({
     tier,
     colors: COLUMN_CODES.filter((code) => {
@@ -426,8 +448,10 @@ function parseCollectorNumber(num?: string | null) {
 
 // Click-to-open card modal with Prev/Next over the visible cards, in pager order.
 // Selecting a card filtered out of view collapses to no selection, closing the modal.
-function useCardPager(byKey: Map<string, TierCard[]>, filters: TierFilters) {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+function useCardPager(setCode: string, byKey: Map<string, TierCard[]>, filters: TierFilters) {
+  const { card: cardParam } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const visibleCards = useMemo(() => {
     const cards: TierCard[] = [];
     for (const bucket of byKey.values()) {
@@ -437,14 +461,22 @@ function useCardPager(byKey: Map<string, TierCard[]>, filters: TierFilters) {
     }
     return cards.sort(comparePagerOrder);
   }, [byKey, filters]);
-  const selectedIndex = visibleCards.findIndex((card) => card.card_id === selectedId);
+  const selectedIndex = cardParam ? visibleCards.findIndex((card) => cardSlug(card.name) === cardParam) : -1;
+  const setPath = `/tier-list/${setCode}`;
+  const closeCard = useCloseModal(setPath);
+  const cardPath = (card: TierCard) => `${setPath}/${cardSlug(card.name)}${location.search}`;
   return {
     visibleCards,
     selectedIndex,
     selectedCard: selectedIndex === -1 ? null : visibleCards[selectedIndex],
-    open: (cardId: number) => setSelectedId(cardId),
-    close: () => setSelectedId(null),
-    stepTo: (index: number) => setSelectedId(visibleCards[index].card_id),
+    open: (cardId: number) => {
+      const card = visibleCards.find((candidate) => candidate.card_id === cardId);
+      if (card) {
+        navigate(cardPath(card), { state: OPENED_IN_APP });
+      }
+    },
+    close: closeCard,
+    stepTo: (index: number) => navigate(cardPath(visibleCards[index]), { replace: true, state: location.state }),
   };
 }
 
@@ -454,6 +486,7 @@ function CardPagerModal({ pager }: { pager: ReturnType<typeof useCardPager> }) {
   return createPortal(
     <CardModal
       card={selectedCard}
+      linkReview
       onClose={close}
       onPrev={selectedIndex > 0 ? () => stepTo(selectedIndex - 1) : undefined}
       onNext={selectedIndex < visibleCards.length - 1 ? () => stepTo(selectedIndex + 1) : undefined}
@@ -803,6 +836,7 @@ export function neighborCardUrls(cards: TierCard[], index: number): string[] {
 
 export function CardModal({
   card,
+  linkReview = false,
   onClose,
   onPrev,
   onNext,
@@ -810,6 +844,7 @@ export function CardModal({
   neighborUrls = [],
 }: {
   card: TierCard;
+  linkReview?: boolean;
   onClose: () => void;
   onPrev?: () => void;
   onNext?: () => void;
@@ -818,7 +853,15 @@ export function CardModal({
 }) {
   const [flipped, setFlipped] = useState(false);
   const [displayed, setDisplayed] = useState(card);
+  const [views, setViews] = usePersistedReviewViews(linkReview);
+  const [renderedViews, setRenderedViews] = useState(views);
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+  }, []);
+  const wide = !useIsMobile(1024);
   const flippable = Boolean(card.url_back);
+  const { setIndexed, mention } = useSetReviewMention(card.expansion, card.name);
 
   useEffect(() => {
     setFlipped(false);
@@ -836,6 +879,9 @@ export function CardModal({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        (document.activeElement as HTMLElement | null)?.blur();
+      }
       if (e.key === "ArrowLeft") onPrev?.();
       else if (e.key === "ArrowRight") onNext?.();
       else if (e.key === "Escape") onClose();
@@ -844,17 +890,76 @@ export function CardModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onPrev, onNext, onClose]);
 
+  const mobileView = singleReviewView(views);
+  const toggleView = (view: ReviewView) => {
+    const next = wide ? { ...views, [view]: !views[view] } : { ...NO_REVIEW_VIEWS, [view]: mobileView !== view };
+    setViews(next);
+    revealViews(next);
+  };
+  const revealViews = (shown: ReviewViews) =>
+    setRenderedViews((prev) => ({ transcript: prev.transcript || shown.transcript, video: prev.video || shown.video }));
+  const hideRenderedView = (view: ReviewView) => setRenderedViews((prev) => ({ ...prev, [view]: false }));
+  const found = Boolean(mention);
+  const lastMention = useRef(mention);
+  if (mention) {
+    lastMention.current = mention;
+  }
+  const panelMention = lastMention.current;
+  const viewPressed = (view: ReviewView) => found && (wide ? views[view] : mobileView === view);
+  const reviewToggle = (view: ReviewView, showTip: string, hideTip: string) => ({
+    pressed: viewPressed(view),
+    disabled: !found,
+    tooltip: found ? (viewPressed(view) ? hideTip : showTip) : "Card not found in the Set Review",
+    onClick: () => toggleView(view),
+  });
+  const transcriptToggle = reviewToggle("transcript", "Read about this card", "Hide the transcript");
+  const videoToggle = reviewToggle("video", "Jump to this card in the video", "Hide the video");
+  const reviewShown = setIndexed && found && (views.transcript || views.video);
+  const panelOpen = wide && reviewShown;
+  const mobilePanel = !wide && reviewShown;
+
+  useEffect(() => {
+    if (panelOpen) {
+      revealViews(views);
+    }
+  }, [panelOpen]);
+  const [fullScreen, setFullScreen] = usePersistedFullScreen();
+  const enlarged = panelOpen && fullScreen;
+  const panelSpan = "calc(var(--panel-w) + 16px)";
+  const modalSizes = {
+    "--card-w": enlarged ? "min(calc((90dvh - 150px) / 1.4), 34vw)" : "320px",
+    "--panel-w": enlarged ? "calc(90vw - var(--card-w) - 16px)" : "min(520px, calc(50vw - 200px))",
+  } as React.CSSProperties;
+  const sideTranscript = renderedViews.transcript;
+  const cappedVideo = cn(enlarged && sideTranscript && "mx-auto w-full max-w-[calc(55dvh*16/9)]");
+
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-start justify-center bg-black/70 p-6 pt-[max(24px,calc((100dvh-620px)/2))]"
+      className={cn(
+        "fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-black/70",
+        "transition-[padding] duration-300 ease-out",
+        mobilePanel && "p-3",
+        !mobilePanel && (enlarged ? "p-6 pt-[5dvh]" : "p-6 pt-[max(24px,calc((100dvh-620px)/2))]"),
+      )}
+      style={modalSizes}
       onClick={(e) => {
         e.stopPropagation();
         onClose();
       }}
     >
-      <div className="flex w-full max-w-[320px] flex-col items-center">
+      <div
+        className={cn(
+          "flex w-full shrink-0 flex-col items-center transition-[transform,max-width] duration-300 ease-out",
+          mobilePanel && "h-full max-w-[480px]",
+          !mobilePanel && (wide ? "max-w-[var(--card-w)]" : "max-w-[320px]"),
+        )}
+        style={{ transform: panelOpen ? `translateX(calc(${panelSpan} / -2))` : undefined }}
+      >
         <div
-          className="relative w-full rounded-xl border border-white/15 p-[6px] shadow-2xl sm:border-white/60"
+          className={cn(
+            "relative w-full shrink-0 rounded-xl border border-white/15 p-[6px] shadow-2xl sm:border-white/60",
+            !wide && "max-w-[320px]",
+          )}
           style={{ backgroundColor: PREVIEW_MAT }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -869,6 +974,7 @@ export function CardModal({
             className={cn(
               "flex items-center justify-between px-3 py-3.5",
               !displayed.comment && "-mb-[6px]",
+              mobilePanel && "hidden",
             )}
           >
             <ModalNavButton dir="prev" srLabel="Previous card" onClick={onPrev} />
@@ -884,25 +990,403 @@ export function CardModal({
               {displayed.comment}
             </p>
           )}
+          {panelOpen && (
+            <div className="absolute left-full top-full flex justify-end pt-4" style={{ width: panelSpan }}>
+              <ModalActionButton
+                tooltip={fullScreen ? "Use compact size" : "Use the full screen"}
+                onClick={() => setFullScreen(!fullScreen)}
+              >
+                {fullScreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+                {fullScreen ? "Collapse" : "Expand"}
+              </ModalActionButton>
+            </div>
+          )}
+          {wide && (
+            <div
+              className={cn(
+                "absolute -top-px left-full flex max-h-[calc(100%+2px)] justify-end overflow-hidden",
+                "transition-[width] duration-300 ease-out",
+              )}
+              style={{ width: panelOpen ? panelSpan : 0 }}
+              onTransitionEnd={(e) => {
+                if (e.target === e.currentTarget && !panelOpen) {
+                  setRenderedViews(NO_REVIEW_VIEWS);
+                }
+              }}
+            >
+              {setIndexed && panelMention && (
+                <div className="flex w-[var(--panel-w)] shrink-0 flex-col transition-[width] duration-300 ease-out">
+                  {renderedViews.video && (
+                    <Collapse
+                      open={views.video}
+                      animateIn={mountedRef.current}
+                      onClosed={() => hideRenderedView("video")}
+                      className="shrink-0"
+                    >
+                      <div className="pb-3">
+                        <ReviewBox className={cappedVideo}>
+                          <SetReviewVideo mention={panelMention} />
+                        </ReviewBox>
+                      </div>
+                    </Collapse>
+                  )}
+                  {sideTranscript && (
+                    <Collapse
+                      open={views.transcript}
+                      animateIn={mountedRef.current}
+                      onClosed={() => hideRenderedView("transcript")}
+                      className="min-h-0"
+                    >
+                      <ReviewBox className="min-h-0">
+                        <ReviewPanel view="transcript" mention={panelMention} cardName={card.name} />
+                      </ReviewBox>
+                    </Collapse>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        {flippable && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setFlipped((prev) => !prev);
-            }}
-            className="mt-4 flex items-center gap-2 rounded-lg border border-white/40 px-4 py-2 text-[13px] font-medium text-text shadow-lg transition-colors hover:bg-white/10"
-            style={{ backgroundColor: PREVIEW_MAT }}
+        {(flippable || setIndexed) && !mobilePanel && (
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            {flippable && (
+              <ModalActionButton onClick={() => setFlipped((prev) => !prev)}>
+                <RefreshCw size={15} />
+                Turn Over
+              </ModalActionButton>
+            )}
+            {setIndexed && (
+              <>
+                <ModalActionButton {...transcriptToggle}>
+                  <LuScrollText size={15} />
+                  Transcript
+                </ModalActionButton>
+                <ModalActionButton {...videoToggle}>
+                  <Play size={15} />
+                  Video
+                </ModalActionButton>
+              </>
+            )}
+          </div>
+        )}
+        {mobilePanel && (
+          <Collapse
+            open
+            animateIn={mountedRef.current}
+            className={cn("w-full", mobileView === "transcript" && "min-h-0 flex-1")}
           >
-            <RefreshCw size={15} />
-            Turn Over
-          </button>
+            <div
+              className={cn(
+                "mt-3 flex min-h-0 w-full flex-col overflow-hidden rounded-lg border border-white/40 shadow-2xl",
+                mobileView === "transcript" && "flex-1",
+              )}
+              style={{ backgroundColor: PREVIEW_MAT }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex shrink-0 items-center gap-2 border-b border-white/15 p-2">
+                <ModalNavButton dir="prev" srLabel="Previous card" onClick={onPrev} />
+                <ModalActionButton compact grow {...transcriptToggle}>
+                  <LuScrollText size={15} />
+                  Transcript
+                </ModalActionButton>
+                <ModalActionButton compact grow {...videoToggle}>
+                  <Play size={15} />
+                  Video
+                </ModalActionButton>
+                {flippable && (
+                  <ModalActionButton compact onClick={() => setFlipped((prev) => !prev)}>
+                    <RefreshCw size={15} />
+                  </ModalActionButton>
+                )}
+                <ModalNavButton dir="next" srLabel="Next card" onClick={onNext} />
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col p-3">
+                {mobileView && mention && (
+                  <ReviewPanel view={mobileView} mention={mention} cardName={card.name} />
+                )}
+              </div>
+            </div>
+          </Collapse>
         )}
       </div>
     </div>
   );
 }
+
+type ReviewView = "transcript" | "video";
+type ReviewViews = Record<ReviewView, boolean>;
+
+const NO_REVIEW_VIEWS: ReviewViews = { transcript: false, video: false };
+
+function usePersistedReviewViews(linkReview: boolean): [ReviewViews, (next: ReviewViews) => void] {
+  const storageKey = "tierCardReviewPanel";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedReview = searchParams.get("review");
+  const [views, setViews] = useState<ReviewViews>(() => {
+    const linked = linkReview && linkedReview !== null ? decodeReviewViews(linkedReview) : null;
+    return linked ?? decodeReviewViews(window.localStorage.getItem(storageKey) ?? "");
+  });
+  const encoded = encodeReviewViews(views);
+
+  useEffect(() => {
+    if (!linkReview || (linkedReview ?? "") === encoded) {
+      return;
+    }
+    const params = new URLSearchParams(searchParams);
+    if (encoded) {
+      params.set("review", encoded);
+    } else {
+      params.delete("review");
+    }
+    setSearchParams(params, { replace: true });
+  }, [linkReview, linkedReview, encoded]);
+
+  const update = (next: ReviewViews) => {
+    setViews(next);
+    window.localStorage.setItem(storageKey, encodeReviewViews(next));
+  };
+  return [views, update];
+}
+
+function usePersistedFullScreen(): [boolean, (next: boolean) => void] {
+  const storageKey = "tierCardReviewFullScreen";
+  const [fullScreen, setFullScreen] = useState(() => window.localStorage.getItem(storageKey) === "1");
+  const update = (next: boolean) => {
+    setFullScreen(next);
+    window.localStorage.setItem(storageKey, next ? "1" : "0");
+  };
+  return [fullScreen, update];
+}
+
+function singleReviewView(views: ReviewViews): ReviewView | null {
+  if (views.transcript) {
+    return "transcript";
+  }
+  return views.video ? "video" : null;
+}
+
+function encodeReviewViews(views: ReviewViews): string {
+  if (views.transcript && views.video) {
+    return "both";
+  }
+  if (views.transcript) {
+    return "transcript";
+  }
+  return views.video ? "video" : "";
+}
+
+function decodeReviewViews(value: string): ReviewViews {
+  return { transcript: value === "transcript" || value === "both", video: value === "video" || value === "both" };
+}
+
+function Collapse({
+  open,
+  animateIn,
+  onClosed,
+  className,
+  children,
+}: {
+  open: boolean;
+  animateIn: boolean;
+  onClosed?: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(open && !animateIn);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setExpanded(open));
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
+  return (
+    <div
+      className={cn("grid transition-[grid-template-rows] duration-300 ease-out", className)}
+      style={{ gridTemplateRows: expanded ? "minmax(0, 1fr)" : "minmax(0, 0fr)" }}
+      onTransitionEnd={(e) => {
+        if (e.target === e.currentTarget && !open) {
+          onClosed?.();
+        }
+      }}
+    >
+      <div className="flex min-h-0 flex-col overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
+function ReviewBox({ className, children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col overflow-hidden rounded-xl border border-white/15 p-3 shadow-2xl sm:border-white/60",
+        className,
+      )}
+      style={{ backgroundColor: PREVIEW_MAT }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ModalActionButton({
+  onClick,
+  pressed,
+  compact,
+  grow,
+  disabled = false,
+  tooltip,
+  children,
+}: {
+  onClick: () => void;
+  pressed?: boolean;
+  compact?: boolean;
+  grow?: boolean;
+  disabled?: boolean;
+  tooltip?: string;
+  children: React.ReactNode;
+}) {
+  const toggle = pressed !== undefined;
+  const button = (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      aria-disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) {
+          onClick();
+        }
+      }}
+      className={cn(
+        "flex items-center gap-2 rounded-lg border text-[13px] font-medium text-text shadow-lg",
+        compact ? "px-3 py-1.5" : "px-4 py-2",
+        grow && "flex-1 justify-center",
+        "transition-colors",
+        !toggle && "border-white/40 hover:bg-white/10",
+        toggle && !disabled && "hover:border-green hover:text-green",
+        disabled && "cursor-not-allowed opacity-40",
+        toggle && (pressed ? "border-white/80" : "border-white/40"),
+      )}
+      style={{ backgroundColor: pressed ? PREVIEW_TAB : PREVIEW_MAT }}
+    >
+      {children}
+    </button>
+  );
+  if (!tooltip) {
+    return button;
+  }
+  return (
+    <Tooltip label={tooltip} side="top" className="z-[250]">
+      {button}
+    </Tooltip>
+  );
+}
+
+function ReviewPanel({
+  view,
+  mention,
+  cardName,
+}: {
+  view: ReviewView;
+  mention: SetReviewMention;
+  cardName: string;
+}) {
+  if (view === "video") {
+    return <SetReviewVideo mention={mention} />;
+  }
+  return <SetReviewTranscript mention={mention} cardName={cardName} />;
+}
+
+function SetReviewVideo({ mention }: { mention: SetReviewMention }) {
+  const playerRef = useRef<HTMLIFrameElement>(null);
+  const [origin] = useState(mention);
+  const cuedRef = useRef(mention);
+  const playingRef = useRef(false);
+
+  const command = (func: string, args: unknown[] = []) =>
+    playerRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: "command", func, args }),
+      "https://www.youtube.com",
+    );
+
+  useEffect(() => {
+    const listen = () =>
+      playerRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ event: "listening", id: 1, channel: "widget" }),
+        "https://www.youtube.com",
+      );
+    const timers = [500, 1200, 2500].map((delay) => window.setTimeout(listen, delay));
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== "https://www.youtube.com" || event.source !== playerRef.current?.contentWindow) {
+        return;
+      }
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event === "infoDelivery" && typeof data.info?.playerState === "number") {
+          playingRef.current = data.info.playerState === 1 || data.info.playerState === 3;
+        }
+      } catch {
+        return;
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => {
+      timers.forEach(window.clearTimeout);
+      window.removeEventListener("message", onMessage);
+    };
+  }, [origin]);
+
+  useEffect(() => {
+    const current = cuedRef.current;
+    cuedRef.current = mention;
+    if (current.youtubeId === mention.youtubeId && current.t === mention.t) {
+      return;
+    }
+    const target = { videoId: mention.youtubeId, startSeconds: mention.t };
+    if (!playingRef.current) {
+      command("cueVideoById", [target]);
+    } else if (current.youtubeId === mention.youtubeId) {
+      command("seekTo", [mention.t, true]);
+    } else {
+      command("loadVideoById", [target]);
+    }
+  }, [mention]);
+
+  const params = `start=${origin.t}&autoplay=1&playsinline=1&rel=0&cc_load_policy=0&enablejsapi=1`;
+  return (
+    <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-lg bg-black">
+      <iframe
+        ref={playerRef}
+        src={`https://www.youtube.com/embed/${origin.youtubeId}?${params}`}
+        title={origin.title}
+        className="absolute inset-0 h-full w-full"
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        allowFullScreen
+      />
+    </div>
+  );
+}
+
+function SetReviewTranscript({ mention, cardName }: { mention: SetReviewMention; cardName: string }) {
+  const { transcript } = useTranscript(mention.youtubeId);
+  if (!transcript) {
+    return <div className="h-24 shrink-0 animate-pulse rounded bg-white/5" />;
+  }
+  const discussion = cardDiscussion(transcript, mention.segmentIndex, cardName);
+  const turns = speakerTurns(transcript.slice(0, mention.segmentIndex), discussion);
+  return (
+    <div className="min-h-0 space-y-3 overflow-y-auto pr-1 text-[14px] leading-snug text-text">
+      {turns.map((turn, index) => (
+        <div key={index} className={cn("space-y-2 border-l-2 pl-3", SPEAKER_LANES[turn.lane].border)}>
+          {turn.paragraphs.map((text, paragraphIndex) => (
+            <p key={paragraphIndex}>{text}</p>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 
 function FlipCardImage({
   front,

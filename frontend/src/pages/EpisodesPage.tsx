@@ -100,6 +100,7 @@ import {
 import { useCardImageMap } from "../data/cardImages";
 import { TranscriptCardLink } from "../components/TranscriptCardLink";
 import { LISTEN_ON } from "../data/site";
+import { SPEAKER_LANES } from "../lib/text-styles";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { TOGGLE_ACTIVE, TOGGLE_INACTIVE } from "../lib/toggle-styles";
@@ -2157,13 +2158,6 @@ type TranscriptItem =
   | { kind: "chapter"; t: number; heading: string }
   | { kind: "section"; t: number; title: string; paras: ParaLine[] }
   | { kind: "para"; t: number; text: string; speaker?: string; showName?: boolean; lane?: number };
-
-const SPEAKER_LANES = [
-  { border: "border-[#2ee85c]", name: "text-[#2ee85c]" },
-  { border: "border-[#5ab0ff]", name: "text-[#5ab0ff]" },
-  { border: "border-[#f0b74a]", name: "text-[#f0b74a]" },
-  { border: "border-[#f087c0]", name: "text-[#f087c0]" },
-];
 
 const HOST_PRIORITY = ["Alex", "Marc", "Abram"];
 

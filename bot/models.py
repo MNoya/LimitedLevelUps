@@ -715,3 +715,15 @@ class EpisodeTranscript(Base):
     word_count  = Column(Integer, nullable=False, server_default="0")
     source      = Column(String, nullable=False, server_default="whisper-large-v3")
     generated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class TranscriptCardMention(Base):
+    __tablename__ = "transcript_card_mentions"
+
+    youtube_id     = Column(
+        String, ForeignKey("episode_transcripts.youtube_id", ondelete="CASCADE"), primary_key=True,
+    )
+    segment_index  = Column(Integer, primary_key=True)
+    card_name      = Column(String, primary_key=True)
+    t              = Column(Integer, nullable=False)
+    opens_subtopic = Column(Boolean, nullable=False)

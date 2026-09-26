@@ -14,7 +14,7 @@ import {
   adaptSet,
 } from "./adapter";
 import { adaptDbEpisode, type DbEpisodeRow, type Episode } from "./episodes";
-import type { TranscriptSegment } from "./transcript";
+import { setReviewMentionKey, type SetReviewMentions, type TranscriptSegment } from "./transcript";
 import type { TranscriptIndex } from "./transcriptStatus";
 import type { PodCardStatRow } from "./podCards";
 import type { PodArchetypeRow } from "./podArchetypes";
@@ -126,6 +126,25 @@ export async function fetchEpisodeTranscript(youtubeId: string): Promise<Transcr
   }
   return (data?.segments as TranscriptSegment[] | undefined) ?? null;
 }
+
+export async function fetchSetReviewMentions(setCode: string): Promise<SetReviewMentions> {
+  const { data, error } = await client()
+    .from("public_set_review_card_mentions")
+    .select("card_name, youtube_id, title, segment_index, t")
+    .eq("set_code", setCode);
+  if (error) {
+    throw error;
+  }
+  const rows = (data ?? []) as SetReviewMentionRow[];
+  const mentions: SetReviewMentions = new Map();
+  for (const row of rows) {
+    const mention = { youtubeId: row.youtube_id, title: row.title, segmentIndex: row.segment_index, t: row.t };
+    mentions.set(setReviewMentionKey(row.card_name), mention);
+  }
+  return mentions;
+}
+
+type SetReviewMentionRow = { card_name: string; youtube_id: string; title: string; segment_index: number; t: number };
 
 export async function fetchTranscriptIndex(): Promise<TranscriptIndex> {
   const { data, error } = await client()

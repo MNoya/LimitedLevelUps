@@ -17,17 +17,11 @@ from sqlalchemy.orm import sessionmaker
 
 from bot.config import OWNER_DISCORD_ID
 
-from bot.models import DraftEvent, EpisodeTranscript, MagicSet, Player
+from bot.models import DraftEvent, MagicSet, Player
 from bot.services.refresh import refresh_player
 from bot.services.seventeenlands import SeventeenLandsClient
 from bot.services.tracker_detail import DRAFT_GAP_S, present_detail, summarise_draft
-from bot.services.transcript_cards import build_card_tagger
-from bot.services.transcript_edit import (
-    TranscriptEditError,
-    merge_transcript_segments,
-    relink_changed_segments,
-    word_count,
-)
+from bot.services.transcript_cards import apply_transcript_edit
 
 
 log = logging.getLogger(__name__)
@@ -57,6 +51,7 @@ _ALLOWED_VIEWS = {
     "public_pod_scoring",
     "public_recent_trophies",
     "public_self_reported_events",
+    "public_set_review_card_mentions",
     "public_sets",
 }
 
@@ -286,21 +281,7 @@ async def _handle_refresh(request: web.Request) -> web.Response:
 
 def _save_transcript(sessions: sessionmaker, key: str, incoming: list[dict]) -> tuple[str, int] | list[dict]:
     with sessions() as session:
-        row = session.get(EpisodeTranscript, key)
-        if row is None:
-            return ("transcript not found", 404)
-        stored = row.segments
-        try:
-            merged = merge_transcript_segments(stored, incoming)
-        except TranscriptEditError as exc:
-            return (str(exc), 400)
-        tagger = build_card_tagger(session, key)
-        if tagger is not None:
-            relink_changed_segments(stored, merged, tagger)
-        row.segments = merged
-        row.word_count = word_count(merged)
-        session.commit()
-    return merged
+        return apply_transcript_edit(session, key, incoming)
 
 
 async def _handle_transcript_edit(request: web.Request) -> web.Response:

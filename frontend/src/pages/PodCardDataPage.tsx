@@ -27,7 +27,7 @@ import { AVATAR_CLIP, SetGlyph } from "../components/Brand";
 import { CardArt, CardImageStack, cardDataHref } from "../components/pod/cardData/CardDetailParts";
 import { CardDetailRow } from "../components/pod/cardData/CardDetailRow";
 import { useCursorTooltip, type CursorTooltipBinding } from "../components/CursorTooltip";
-import { cardSlug } from "../data/podCardDecks";
+import { cardSlug } from "../lib/cardSlug";
 import { winRateColor } from "../data/winRate";
 import { isPlainClick } from "../lib/plain-click";
 import { cn } from "../lib/utils";

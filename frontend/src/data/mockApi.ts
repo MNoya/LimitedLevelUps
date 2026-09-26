@@ -35,7 +35,7 @@ import type {
 } from "../types/leaderboard";
 import type { Card, P0P1BallotRow, P0P1Pick, P0P1PickStat, SlotKey } from "../types/p0p1";
 import type { Episode } from "./episodes";
-import type { TranscriptSegment } from "./transcript";
+import type { SetReviewMentions, TranscriptSegment } from "./transcript";
 import type { TranscriptIndex } from "./transcriptStatus";
 import {
   podDraftArtifactFixture,
@@ -122,6 +122,7 @@ export const fetchRecentDbEpisodes = (_limit = 8): Promise<Episode[]> => wait([]
 
 export const fetchEpisodeTranscript = (_youtubeId: string): Promise<TranscriptSegment[] | null> => wait(null);
 export const fetchTranscriptIndex = (): Promise<TranscriptIndex> => wait(new Map());
+export const fetchSetReviewMentions = (_setCode: string): Promise<SetReviewMentions> => wait(new Map());
 
 export const fetchAvailableFormats = (_setCode: string): Promise<string[]> =>
   wait(["Premier", "Trad", "Sealed", "Quick", "LCQ Draft 1", "LCQ Draft 2"]);

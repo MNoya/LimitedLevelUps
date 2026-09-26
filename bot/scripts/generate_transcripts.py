@@ -21,6 +21,7 @@ from sqlalchemy import and_, or_, select
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import Episode, EpisodeTranscript
+from bot.services.transcript_cards import sync_card_mentions
 from bot.services.transcript_edit import word_count
 from bot.scripts import card_index
 from bot.scripts.card_links import tag_text
@@ -108,6 +109,11 @@ STRUCTURE_PROMPT = (
     "and never mark two within a short span.\n"
     "Return ONLY JSON: {\"subtopics\": [{\"start\": <int>, \"title\": <str>, \"section\": <bool>}], "
     "\"paragraphs\": [<int>, ...]}. Sentence 0 starts both.\n\n"
+)
+
+STRUCTURE_CARD_LIST = (
+    "The sentences come from auto-captions that misspell card names. When a title names a card, spell it exactly "
+    "as in this card list, or as the same short reference spelled correctly.\n\nCARD LIST:\n{cards}\n\nSENTENCES:\n"
 )
 
 RESTORE_MIN_WORDS = 40
@@ -628,7 +634,9 @@ def _build_segments(youtube_id, units, chapters, set_code, args) -> list[dict]:
     elif args.no_structure:
         segments = [{"t": unit["t"], "text": unit["text"]} for unit in units]
     else:
-        segments = _structure(units, chapters, youtube_id)
+        refresh = getattr(args, "refresh_cards", False)
+        title_cards = _fetch_cards_safe(set_code, refresh) if set_code and not args.no_cards else []
+        segments = _structure(units, chapters, youtube_id, title_cards)
         headings = sum(1 for s in segments if s.get("heading"))
         subheadings = sum(1 for s in segments if s.get("subheading"))
         log.info(f"[{youtube_id}] {len(segments)} paragraphs, {headings} chapters, {subheadings} subtopics")
@@ -1173,9 +1181,9 @@ def _fetch_chapters(youtube_id: str, cookie_args: list[str]) -> list[dict]:
     return json.loads(raw)
 
 
-def _structure(units: list[dict], chapters: list[dict], youtube_id: str) -> list[dict]:
+def _structure(units: list[dict], chapters: list[dict], youtube_id: str, card_names: list[str]) -> list[dict]:
     heads = _chapter_heads(units, chapters)
-    subtopics, paragraphs, sections = _subtopics_and_paragraphs(units, youtube_id)
+    subtopics, paragraphs, sections = _subtopics_and_paragraphs(units, youtube_id, card_names)
     if not subtopics:
         _flag_structure_failure(youtube_id, len(units))
     if not heads:
@@ -1248,9 +1256,12 @@ def _merge_short_paragraphs(segments: list[dict], min_words: int = 6) -> list[di
     return merged
 
 
-def _subtopics_and_paragraphs(units: list[dict], youtube_id: str) -> tuple[dict[int, str], set[int], set[int]]:
+def _subtopics_and_paragraphs(
+    units: list[dict], youtube_id: str, card_names: list[str] | None = None,
+) -> tuple[dict[int, str], set[int], set[int]]:
     numbered = "\n".join(f"{i}: {unit['text']}" for i, unit in enumerate(units))
-    output = _claude_json(STRUCTURE_PROMPT + numbered, "structure", youtube_id)
+    card_list = STRUCTURE_CARD_LIST.replace("{cards}", "\n".join(card_names)) if card_names else ""
+    output = _claude_json(STRUCTURE_PROMPT + card_list + numbered, "structure", youtube_id)
     match = re.search(r"\{.*\}", output, re.DOTALL) if output else None
     if not match:
         return {}, {0}, set()
@@ -1322,6 +1333,7 @@ def _upsert(session, youtube_id: str, segments: list[dict], word_count: int, sou
     row.segments = segments
     row.word_count = word_count
     row.source = source
+    sync_card_mentions(session, youtube_id, segments)
     session.commit()
 
 

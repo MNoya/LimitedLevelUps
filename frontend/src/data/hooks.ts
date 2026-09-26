@@ -53,6 +53,7 @@ import {
   fetchRecentDbEpisodes,
   fetchEpisodeTranscript,
   fetchTranscriptIndex,
+  fetchSetReviewMentions,
   upsertP0P1Pick,
   deleteAllP0P1Picks,
   fetchP0P1Ratings,
@@ -60,7 +61,7 @@ import {
 import { fetchDiscordStats } from "./discord";
 import { fetchYouTubeVideos, overlayLiveMedia, toVideoEpisode, type YouTubeVideo } from "./youtube";
 import { assignEpisodeSlugs, type Episode } from "./episodes";
-import type { TranscriptSegment } from "./transcript";
+import { setReviewMentionKey, type SetReviewMention, type TranscriptSegment } from "./transcript";
 import type { P0P1BallotRow, P0P1Pick, SlotKey } from "../types/p0p1";
 import type { FeaturedContest } from "./p0p1Slots";
 import { resolveContestByCode, resolveFeaturedContest } from "./p0p1Slots";
@@ -96,14 +97,33 @@ export function useDbEpisodes() {
 }
 
 export function useEpisodeTranscript(episode: Episode): { transcript: TranscriptSegment[] | null; settled: boolean } {
-  const transcriptKey = episode.youtubeId ?? episode.id;
+  return useTranscript(episode.youtubeId ?? episode.id);
+}
+
+export function useTranscript(transcriptKey: string | undefined): {
+  transcript: TranscriptSegment[] | null;
+  settled: boolean;
+} {
   const query = useQuery({
     queryKey: ["episode-transcript", transcriptKey],
-    queryFn: () => fetchEpisodeTranscript(transcriptKey),
+    queryFn: () => fetchEpisodeTranscript(transcriptKey!),
     enabled: Boolean(transcriptKey),
     staleTime: ONE_HOUR,
   });
   return { transcript: query.data ?? null, settled: !transcriptKey || query.isFetched };
+}
+
+export function useSetReviewMention(
+  setCode: string,
+  cardName: string,
+): { setIndexed: boolean; mention: SetReviewMention | undefined } {
+  const query = useQuery({
+    queryKey: ["set-review-mentions", setCode],
+    queryFn: () => fetchSetReviewMentions(setCode),
+    staleTime: ONE_HOUR,
+  });
+  const mentions = query.data;
+  return { setIndexed: (mentions?.size ?? 0) > 0, mention: mentions?.get(setReviewMentionKey(cardName)) };
 }
 
 export function useTranscriptIndex() {

@@ -381,6 +381,7 @@ const matchesAppRoute = (segments: string[]): boolean => {
     "/tier-list/:setCode",
     "/tier-list/:setCode/archetypes",
     "/tier-list/:setCode/archetypes/:pair",
+    "/tier-list/:setCode/:card",
     "/p0p1",
     "/p0p1/:setCode",
     "/banner",
@@ -442,7 +443,8 @@ const tierListRoute = async (rest: string[]): Promise<RouteResolution> => {
   const setName = setNameFor(await fetchSets(), setCode);
   const symbol: ImageIntent = { kind: "setSymbol", code: setCode };
   const notFound = !hasTierList(setCode);
-  if (rest.length > 1 && skeletonsFor(setCode).length > 0) {
+  const cardPath = rest.length === 2 && rest[1].toLowerCase() !== "archetypes";
+  if (rest.length > 1 && !cardPath && skeletonsFor(setCode).length > 0) {
     const archetypesPath = `/tier-list/${setCode}/archetypes`;
     const description = `Check the cards at the core of every color pair in ${setName}`;
     return resolved(
@@ -453,7 +455,7 @@ const tierListRoute = async (rest: string[]): Promise<RouteResolution> => {
   }
   return resolved(
     page(`${setCode} Tier List`, `Check updated Set Review grades for ${setName}`, symbol),
-    `/tier-list/${setCode}`,
+    cardPath ? `/tier-list/${setCode}/${rest[1].toLowerCase()}` : `/tier-list/${setCode}`,
     notFound,
   );
 };

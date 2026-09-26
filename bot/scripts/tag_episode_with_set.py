@@ -18,6 +18,7 @@ from bot.database import SessionLocal
 from bot.models import Episode, EpisodeTranscript
 from bot.scripts import card_index
 from bot.scripts.card_links import tag_text
+from bot.services.transcript_cards import sync_card_mentions
 from bot.services.transcript_edit import word_count
 
 BACKUP_DIR = Path("cache/transcript_backups")
@@ -53,6 +54,7 @@ def main() -> None:
         _backup(key, row.segments)
         row.segments = tagged
         row.word_count = word_count(tagged)
+        sync_card_mentions(session, key, tagged)
         session.commit()
         print(f"\nwritten to prod; backup under {BACKUP_DIR}")
 

@@ -216,6 +216,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
 
           {effectiveUid ? (
             <TierGrid
+              setCode={current}
               uid={effectiveUid}
               graders={graders}
               comparison={comparison}

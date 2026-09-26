@@ -13,6 +13,7 @@ import { onPlainClick, podDeckHref, podDraftLogHref, podSeatHref } from "../podL
 import { CARD_FRAME } from "../review/ReviewCard";
 import { RevealImage } from "../../RevealImage";
 import { useCursorTooltip, type CursorTooltipBinding } from "../../CursorTooltip";
+import { cardSlug } from "../../../lib/cardSlug";
 import { cn } from "../../../lib/utils";
 import { cardArtSources, useCardImageMap } from "../../../data/cardImages";
 import { colorsDisplayName } from "../../../data/filters";
@@ -22,7 +23,6 @@ import { usePodCardDecks, usePodDeckCards, usePodDraftArtifact } from "../../../
 import {
   PICKS_PER_PACK,
   adaptPodCardDeck,
-  cardSlug,
   coPlayedCards,
   sortDecksRecentFirst,
   summarizeCardDecks,
