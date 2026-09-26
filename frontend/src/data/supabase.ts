@@ -35,3 +35,5 @@ export const supabase: SupabaseClient | null = config
   : null;
 
 export const useSupabase = supabase !== null;
+
+export const servesEdgeCachedReads = import.meta.env.PROD && config?.url === PUBLIC_SUPABASE_URL;

@@ -219,7 +219,8 @@ export const onRequest: PagesFunction = async (context) => {
   const lastSegment = url.pathname.split("/").pop() ?? "";
   if (lastSegment.includes(".") || url.pathname.startsWith("/api/")) return context.next();
 
-  const route = await resolveRoute(url.pathname.split("/").filter(Boolean));
+  const userAgent = context.request.headers.get("user-agent") ?? "";
+  const route = await resolveRoute(url.pathname.split("/").filter(Boolean), isLinkPreviewCrawler(userAgent));
   if (route.kind === "redirect") {
     return Response.redirect(`${url.origin}${route.location}${url.search}`, route.status);
   }
@@ -229,7 +230,7 @@ export const onRequest: PagesFunction = async (context) => {
   const indexResp = await context.env.ASSETS.fetch(indexUrl.toString());
 
   const ogUrl = `${url.origin}${route.canonicalPath}`;
-  const isMetaCrawler = /whatsapp|facebookexternalhit/i.test(context.request.headers.get("user-agent") ?? "");
+  const isMetaCrawler = /whatsapp|facebookexternalhit/i.test(userAgent);
   const image = isMetaCrawler ? metaCrawlerImage(meta.image, url.origin) : meta.image;
   const imageUrl = await resolveImageUrl(image, url.origin, context.env.ASSETS);
 
@@ -286,6 +287,9 @@ export const onRequest: PagesFunction = async (context) => {
   return rewriter.transform(baseResponse);
 };
 
+const isLinkPreviewCrawler = (userAgent: string): boolean =>
+  /discordbot|twitterbot|slackbot|facebookexternalhit|whatsapp|telegrambot|linkedinbot|applebot/i.test(userAgent);
+
 type RouteResolution =
   | { kind: "page"; meta: RouteMeta; canonicalPath: string; notFound: boolean }
   | { kind: "redirect"; location: string; status: 301 | 302 };
@@ -299,7 +303,7 @@ const resolved = (meta: RouteMeta, canonicalPath: string, notFound = false): Rou
 
 const redirect = (location: string, status: 301 | 302): RouteResolution => ({ kind: "redirect", location, status });
 
-const resolveRoute = async (segments: string[]): Promise<RouteResolution> => {
+const resolveRoute = async (segments: string[], wantsCardMeta: boolean): Promise<RouteResolution> => {
   if (segments.length === 0) {
     return resolved({ ...HOME_META, noImagePreview: true }, "/");
   }
@@ -320,10 +324,10 @@ const resolveRoute = async (segments: string[]): Promise<RouteResolution> => {
     return leaderboardRoute(rest[0]);
   }
   if (section === "tier-list") {
-    return tierListRoute(rest);
+    return tierListRoute(rest, wantsCardMeta);
   }
   if (section === "pods") {
-    return podsRoute(rest);
+    return podsRoute(rest, wantsCardMeta);
   }
   if (section === "p0p1") {
     return p0p1Route(rest[0]);
@@ -436,7 +440,7 @@ const leaderboardRoute = async (rawCode: string | undefined): Promise<RouteResol
   return resolved(meta, `/leaderboard/${setCode}`, boardExists === false);
 };
 
-const tierListRoute = async (rest: string[]): Promise<RouteResolution> => {
+const tierListRoute = async (rest: string[], wantsCardMeta: boolean): Promise<RouteResolution> => {
   const [rawCode, , rawPair] = rest;
   if (rawCode === undefined) {
     return resolved(page("Tier List", "Check updated Set Review grades for every set"), "/tier-list");
@@ -448,7 +452,7 @@ const tierListRoute = async (rest: string[]): Promise<RouteResolution> => {
   const cardPath = rest.length === 2 && rest[1].toLowerCase() !== "archetypes";
   if (cardPath) {
     const slug = rest[1].toLowerCase();
-    const cardMeta = await tierCardMeta(setCode, slug);
+    const cardMeta = wantsCardMeta ? await tierCardMeta(setCode, slug) : null;
     const setMeta = page(`${setCode} Tier List`, `Check updated Set Review grades for ${setName}`, symbol);
     return resolved(cardMeta ?? setMeta, `/tier-list/${setCode}/${slug}`, notFound);
   }
@@ -475,10 +479,11 @@ const tierCardMeta = async (setCode: string, slug: string): Promise<RouteMeta | 
   if (!uid) {
     return null;
   }
+  const sixHours = 6 * 60 * 60;
   try {
     const resp = await fetch(`https://www.17lands.com/data/tier_list/${uid}`, {
       headers: { accept: "application/json" },
-      cf: { cacheTtl: META_CACHE_TTL, cacheEverything: true },
+      cf: { cacheTtl: sixHours, cacheEverything: true },
     });
     if (!resp.ok) {
       return null;
@@ -497,7 +502,7 @@ const tierCardMeta = async (setCode: string, slug: string): Promise<RouteMeta | 
   return null;
 };
 
-const podsRoute = async (rest: string[]): Promise<RouteResolution> => {
+const podsRoute = async (rest: string[], wantsCardMeta: boolean): Promise<RouteResolution> => {
   const [first, second, third] = rest;
   if (first === undefined) {
     return resolved(page("Pod Drafts", "Check community pod draft results and standings"), "/pods");
@@ -507,7 +512,7 @@ const podsRoute = async (rest: string[]): Promise<RouteResolution> => {
     const label = cardDataLabel(board);
     const boardPath = `/pods/${board}/data`;
     const boardMeta = page(`${label} Cube Card Data`, `Card stats from every ${label} Cube pod draft`);
-    const cardMeta = third ? await podCardMeta(board, label, third.toLowerCase()) : null;
+    const cardMeta = third && wantsCardMeta ? await podCardMeta(board, label, third.toLowerCase()) : null;
     return resolved(cardMeta ?? boardMeta, third ? `${boardPath}/${third}` : boardPath, !hasCardData(board));
   }
   if (rest.length === 1 && first.toLowerCase() === "guide") {

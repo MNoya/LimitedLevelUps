@@ -5,7 +5,7 @@
 // contract). The adapter converts snake_case rows to camelCase. The anon key
 // only has SELECT on these views; base tables stay locked under RLS.
 
-import { supabase } from "./supabase";
+import { servesEdgeCachedReads, supabase } from "./supabase";
 import {
   adaptDraftEvent,
   adaptFormatBreakdown,
@@ -251,6 +251,14 @@ export async function fetchPodArchetypes(boardCode: string): Promise<PodArchetyp
 // ─── public_sets ───────────────────────────────────────────────────────────
 
 export async function fetchSets(): Promise<SetSummary[]> {
+  if (servesEdgeCachedReads) {
+    const resp = await fetch("/api/sets");
+    if (!resp.ok) {
+      throw new Error(`Set list failed with ${resp.status}`);
+    }
+    const rows = (await resp.json()) as Record<string, unknown>[];
+    return rows.map(adaptSet);
+  }
   const { data, error } = await client()
     .from("public_sets")
     .select("*")
