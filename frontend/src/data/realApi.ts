@@ -116,6 +116,10 @@ const DB_EPISODE_COLUMNS =
   "guid, kind, number, title, link, image, published_at, duration_seconds, audio_url, youtube_id, category, set_code, set_name, set_released_at, has_transcript";
 
 export async function fetchEpisodeTranscript(youtubeId: string): Promise<TranscriptSegment[] | null> {
+  if (servesEdgeCachedReads) {
+    const [row] = await fetchEdgeRows<{ segments: TranscriptSegment[] }>(`/api/transcript/${youtubeId}`);
+    return row?.segments ?? null;
+  }
   const { data, error } = await client()
     .from("public_episode_transcripts")
     .select("segments")
@@ -128,14 +132,9 @@ export async function fetchEpisodeTranscript(youtubeId: string): Promise<Transcr
 }
 
 export async function fetchSetReviewMentions(setCode: string): Promise<SetReviewMentions> {
-  const { data, error } = await client()
-    .from("public_set_review_card_mentions")
-    .select("card_name, youtube_id, title, segment_index, t")
-    .eq("set_code", setCode);
-  if (error) {
-    throw error;
-  }
-  const rows = (data ?? []) as SetReviewMentionRow[];
+  const rows = servesEdgeCachedReads
+    ? await fetchEdgeRows<SetReviewMentionRow>(`/api/set-review-mentions/${setCode}`)
+    : await fetchSetReviewMentionRows(setCode);
   const mentions: SetReviewMentions = new Map();
   for (const row of rows) {
     const mention = { youtubeId: row.youtube_id, title: row.title, segmentIndex: row.segment_index, t: row.t };
@@ -145,6 +144,25 @@ export async function fetchSetReviewMentions(setCode: string): Promise<SetReview
 }
 
 type SetReviewMentionRow = { card_name: string; youtube_id: string; title: string; segment_index: number; t: number };
+
+async function fetchSetReviewMentionRows(setCode: string): Promise<SetReviewMentionRow[]> {
+  const { data, error } = await client()
+    .from("public_set_review_card_mentions")
+    .select("card_name, youtube_id, title, segment_index, t")
+    .eq("set_code", setCode);
+  if (error) {
+    throw error;
+  }
+  return (data ?? []) as SetReviewMentionRow[];
+}
+
+async function fetchEdgeRows<T>(path: string): Promise<T[]> {
+  const resp = await fetch(path);
+  if (!resp.ok) {
+    throw new Error(`${path} failed with ${resp.status}`);
+  }
+  return (await resp.json()) as T[];
+}
 
 export async function fetchTranscriptIndex(): Promise<TranscriptIndex> {
   const { data, error } = await client()
@@ -252,11 +270,7 @@ export async function fetchPodArchetypes(boardCode: string): Promise<PodArchetyp
 
 export async function fetchSets(): Promise<SetSummary[]> {
   if (servesEdgeCachedReads) {
-    const resp = await fetch("/api/sets");
-    if (!resp.ok) {
-      throw new Error(`Set list failed with ${resp.status}`);
-    }
-    const rows = (await resp.json()) as Record<string, unknown>[];
+    const rows = await fetchEdgeRows<Record<string, unknown>>("/api/sets");
     return rows.map(adaptSet);
   }
   const { data, error } = await client()

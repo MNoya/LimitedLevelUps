@@ -45,6 +45,17 @@ export const restRows = async <T>(query: string, cacheTtl: number): Promise<T[] 
   }
 };
 
+export const restPassthrough = async (query: string, cacheTtl: number): Promise<Response> => {
+  const upstream = await restGet(query, cacheTtl);
+  if (!upstream.ok) {
+    return new Response("Upstream error", { status: 502 });
+  }
+  return new Response(upstream.body, {
+    status: 200,
+    headers: { "content-type": "application/json", "cache-control": `public, max-age=${cacheTtl}` },
+  });
+};
+
 export const toSetSummary = (set: SetRow): SetSummary => ({
   code: set.code,
   name: set.name,
