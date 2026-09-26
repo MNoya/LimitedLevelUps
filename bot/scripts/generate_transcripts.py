@@ -16,8 +16,9 @@ from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
+from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import Episode, EpisodeTranscript
 from bot.services.transcript_edit import word_count
@@ -292,7 +293,7 @@ def _select_targets(session, args: argparse.Namespace) -> list[tuple[str, str]]:
         query = query.where(Episode.youtube_id.in_(args.youtube_id))
     else:
         if not args.basic:
-            query = query.where(Episode.category.notin_(SKIP_CATEGORIES))
+            query = query.where(_transcribable_category())
         cutoff = _since_cutoff(args)
         if cutoff:
             query = query.where(Episode.published_at >= cutoff)
@@ -310,6 +311,11 @@ def _select_targets(session, args: argparse.Namespace) -> list[tuple[str, str]]:
     return targets
 
 
+def _transcribable_category():
+    prerelease_guide = and_(Episode.category == "Sealed", Episode.title.op("~*")("pre-?release"))
+    return or_(Episode.category.notin_(SKIP_CATEGORIES), prerelease_guide)
+
+
 def _select_audio_targets(session, args: argparse.Namespace) -> list[tuple[str, str, str, str | None]]:
     done = set(session.execute(select(EpisodeTranscript.youtube_id)).scalars())
     if args.shortest_first:
@@ -321,7 +327,7 @@ def _select_audio_targets(session, args: argparse.Namespace) -> list[tuple[str, 
     query = (
         select(Episode.guid, Episode.title, Episode.audio_url, Episode.set_code)
         .where(Episode.youtube_id.is_(None), Episode.audio_url.isnot(None), Episode.audio_url != "")
-        .where(Episode.category.notin_(SKIP_CATEGORIES))
+        .where(_transcribable_category())
         .order_by(order)
     )
     cap_minutes = args.max_minutes or AUDIO_MAX_MINUTES
@@ -506,8 +512,12 @@ def _run_enhance(args: argparse.Namespace) -> None:
     if not targets:
         log.info("no basic rows to enhance")
         return
+    _enhance_all(targets, args)
+
+
+def _enhance_all(targets: list[tuple[str, str]], args: argparse.Namespace) -> None:
     log.info(f"enhancing {len(targets)} basic row(s)")
-    for index, youtube_id in enumerate(targets):
+    for index, (youtube_id, _title) in enumerate(targets):
         if not _wait_for_usage(args):
             log.info("session usage at or above the limit, stopping (resume next run)")
             return
@@ -521,40 +531,63 @@ def _run_auto(args: argparse.Namespace) -> None:
     args.basic = False
     with SessionLocal() as session:
         caption_targets = _select_targets(session, args)
-    fetched = 0
+    fetched: list[tuple[str, str]] = []
     still_missing = 0
     if caption_targets:
         args.basic = True
         _run_basic_sweep(caption_targets, args)
         args.basic = False
         with SessionLocal() as session:
-            still_missing = len(_select_targets(session, args))
-        fetched = len(caption_targets) - still_missing
+            missing_after = _select_targets(session, args)
+        fetched = [target for target in caption_targets if target not in missing_after]
+        still_missing = len(caption_targets) - len(fetched)
 
     args.enhance = True
     with SessionLocal() as session:
         enhance_targets = _enhance_targets(session, args)
-    enhanced = 0
+    enhanced: list[tuple[str, str]] = []
     if enhance_targets:
-        _run_enhance(args)
+        _enhance_all(enhance_targets, args)
         with SessionLocal() as session:
-            enhanced = len(enhance_targets) - len(_enhance_targets(session, args))
+            basic_after = _enhance_targets(session, args)
+        enhanced = [target for target in enhance_targets if target not in basic_after]
 
     _report_auto(len(caption_targets), fetched, still_missing, len(enhance_targets), enhanced)
 
 
-def _report_auto(caption_pending: int, fetched: int, still_missing: int, enhance_pending: int, enhanced: int) -> None:
+def _report_auto(
+    caption_pending: int,
+    fetched: list[tuple[str, str]],
+    still_missing: int,
+    enhance_pending: int,
+    enhanced: list[tuple[str, str]],
+) -> None:
     if not caption_pending and not enhance_pending:
         log.info("transcribe auto: nothing pending, no-op")
         return
     log.info("=== transcribe auto summary ===")
-    log.info(f"captions: {fetched} fetched of {caption_pending} pending, {still_missing} still without a caption")
-    log.info(f"enhance: {enhanced} upgraded of {enhance_pending} basic row(s)")
+    log.info(f"captions: {len(fetched)} fetched of {caption_pending} pending, {still_missing} still without a caption")
+    for _youtube_id, title in fetched:
+        log.info(f"  fetched: {_transcript_url(title)}")
+    log.info(f"enhance: {len(enhanced)} upgraded of {enhance_pending} basic row(s)")
+    for _youtube_id, title in enhanced:
+        log.info(f"  enhanced: {_transcript_url(title)}")
 
 
-def _enhance_targets(session, args: argparse.Namespace) -> list[str]:
+def _transcript_url(title: str) -> str:
+    return f"{settings.public_site_url}/episodes/transcripts/{_episode_slug(title)}"
+
+
+def _episode_slug(title: str) -> str:
+    cleaned = re.sub(r"^(?:llu|limited level-?ups)\s*#?\s*\d+\s*[:\-–]\s*", "", title, flags=re.I).strip() or title
+    slug = cleaned.lower().replace("'", "").replace("’", "").replace("&", " and ")
+    slug = re.sub(r"[^a-z0-9]+", "-", slug).strip("-")[:80].rstrip("-")
+    return slug or "episode"
+
+
+def _enhance_targets(session, args: argparse.Namespace) -> list[tuple[str, str]]:
     query = (
-        select(EpisodeTranscript.youtube_id)
+        select(EpisodeTranscript.youtube_id, Episode.title)
         .join(Episode, Episode.youtube_id == EpisodeTranscript.youtube_id)
         .where(EpisodeTranscript.source.like(f"%{BASIC_SUFFIX}"))
         .order_by(Episode.published_at.desc())
@@ -562,11 +595,11 @@ def _enhance_targets(session, args: argparse.Namespace) -> list[str]:
     if args.youtube_id:
         query = query.where(EpisodeTranscript.youtube_id.in_(args.youtube_id))
     else:
-        query = query.where(Episode.category.notin_(SKIP_CATEGORIES))
+        query = query.where(_transcribable_category())
         cutoff = _since_cutoff(args)
         if cutoff:
             query = query.where(Episode.published_at >= cutoff)
-    targets = list(session.execute(query).scalars())
+    targets = [(youtube_id, title) for youtube_id, title in session.execute(query)]
     if args.latest:
         targets = targets[: args.latest]
     return targets

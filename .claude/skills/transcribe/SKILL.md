@@ -1,6 +1,6 @@
 ---
 name: transcribe
-description: Run the LLU episode transcript pipeline on demand from the local box against the latest episodes. Fetches YouTube auto-captions, then runs the Claude structure + card-fix enhance pass, then reports a summary. Writes to prod. Defaults to the 3 most recent episodes; pass a count for more, or a youtube_id for one. Does not drain the backlog. Same pipeline the nightly systemd timer runs.
+description: Run the LLU episode transcript pipeline on demand from the local box against the latest episodes. Fetches YouTube auto-captions, then runs the Claude structure + card-fix enhance pass, then reports a summary. Writes to prod. Defaults to episodes published in the last 30 days; pass a day count for another window, or a youtube_id for one episode. Does not drain the backlog.
 ---
 
 # transcribe
@@ -13,11 +13,11 @@ Captions can only be fetched from a **residential IP**. YouTube blocks datacente
 
 `$ARGUMENTS` is optional:
 
-- **empty** — the 3 most recent episodes: fetch any missing captions, then enhance them.
-- **an integer N** — the N most recent episodes instead of 3.
-- **an 11-char YouTube id** — process just that episode (fetch its caption if missing, then enhance it).
+- **empty**: episodes published in the last 30 days. Fetch any missing captions, then enhance every basic transcript
+- **an integer N**: the last N days instead of 30
+- **an 11-char YouTube id**: just that episode. Fetch its caption if missing, then enhance it
 
-This skill never drains the whole backlog. It always works on the newest episodes by count, whatever their age. The historical backlog is handled separately.
+This skill never drains the whole backlog. It touches only episodes inside the day window, the same window the nightly timer uses. Draft, Guest and Sealed episodes are skipped, except Sealed titles that match `pre-?release`, so the Prerelease Guides are included. The historical backlog is handled separately.
 
 ## Workflow
 
@@ -45,11 +45,11 @@ Safe to repeat; the feeds are the source of truth. If a brand-new episode still 
 
 Unset `ANTHROPIC_API_KEY` so the `claude` CLI structure pass bills the subscription, not the API. Pick the invocation from `$ARGUMENTS`:
 
-Default (empty) or an integer count N — the N most recent episodes, 3 when empty. No usage throttle: this only touches a few latest episodes, and the caption fetch runs only for episodes actually missing a transcript.
+Default (empty) or an integer day count N: pass N in place of 30 when given. No usage throttle: the window holds only a few pending episodes, and the caption fetch runs only for episodes missing a transcript.
 
 ```bash
 unset ANTHROPIC_API_KEY
-.venv/bin/python -u -m bot.scripts.generate_transcripts --auto --latest 3
+.venv/bin/python -u -m bot.scripts.generate_transcripts --auto --since-days 30
 ```
 
 Single episode (`$ARGUMENTS` is an 11-char id):
@@ -63,11 +63,15 @@ The run is safe to repeat: it is a no-op when nothing is pending, and it skips r
 
 ### 4. Report
 
-Read the `=== transcribe auto summary ===` block from the output back to the user: how many captions were fetched, how many are still without a caption (YouTube has not produced auto-captions yet — they land within a day of publish, picked up on a later run), and how many rows were enhanced.
+Read the `=== transcribe auto summary ===` block from the output back to the user: how many captions were fetched, how many are still without a caption because YouTube has not produced auto-captions yet, and how many rows were enhanced. Auto-captions land within a day of publish and a later run picks them up.
+
+Name each fetched or enhanced episode by the site URL the summary prints under its count, `https://limitedlevelups.com/episodes/transcripts/<slug>`. Never show the YouTube id.
+
+Leave out the `$` figures on the `structure:` and `card-fix:` log lines. They are the `claude` CLI's API-equivalent estimate, and with `ANTHROPIC_API_KEY` unset the run draws on the Claude subscription's usage. Nothing is billed.
 
 If the caption phase logged repeated rate-limit blocks, the local IP is temporarily banned by YouTube; report that and suggest rerunning later.
 
 ## Notes
 
 - Enhanced rows publish to the site immediately through the `public_episode_transcripts` view; no deploy needed.
-- The nightly timer (`systemctl --user list-timers llu-transcribe.timer`) runs this same pipeline at 09:00 local, capped to episodes published in the last 30 days (`--since-days 30`), so recent drops land on their own. Reach for this skill to transcribe a new episode now instead of waiting for 09:00.
+- The nightly timer (`systemctl --user list-timers llu-transcribe.timer`) runs `~/.local/bin/llu-nightly-transcripts.sh` at 09:00 local. That script runs only the caption phase, `--basic --since-days 30`, so new episodes get a basic transcript on their own and stay basic until this skill enhances them.
