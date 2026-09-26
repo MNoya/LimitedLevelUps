@@ -8,14 +8,30 @@ export type SetRow = { code: string; name: string; start_date: string; end_date:
 
 export const SET_ROWS_QUERY = "public_sets?select=code,name,start_date,end_date,is_active&order=code";
 
-export const restGet = (query: string, cacheTtl: number): Promise<Response> =>
-  fetch(`${PUBLIC_SUPABASE_URL}/rest/v1/${query}`, {
+export const restGet = async (query: string, cacheTtl: number): Promise<Response> => {
+  const url = `${PUBLIC_SUPABASE_URL}/rest/v1/${query}`;
+  const cacheKey = new Request(url);
+  const hit = await caches.default.match(cacheKey);
+  if (hit) {
+    return hit;
+  }
+
+  const upstream = await fetch(url, {
     headers: {
       apikey: PUBLIC_SUPABASE_PUBLISHABLE_KEY,
       authorization: `Bearer ${PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
     },
-    cf: { cacheTtl, cacheEverything: true },
   });
+  if (!upstream.ok) {
+    return upstream;
+  }
+  const response = new Response(upstream.body, {
+    status: upstream.status,
+    headers: { "content-type": "application/json", "cache-control": `public, max-age=${cacheTtl}` },
+  });
+  await caches.default.put(cacheKey, response.clone());
+  return response;
+};
 
 export const restRows = async <T>(query: string, cacheTtl: number): Promise<T[] | null> => {
   try {
