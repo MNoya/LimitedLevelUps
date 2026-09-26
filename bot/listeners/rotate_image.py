@@ -36,6 +36,9 @@ ROTATED_LINES = (
     "{mention} the technology to rotate this exists on your end too, just saying ♻️",
     "{mention} image rotation has been a solved problem for decades, but here we are ♻️",
     "{mention} every device made this century can do this, but I got you ♻️",
+    "{mention} the rotate button on your phone is two taps away ♻️",
+    "{mention} half the channel tilted their heads for this one ♻️",
+    "{mention} you are supposed to turn your creatures sideways, not your deck image ♻️",
 )
 HINT_CORRECT_OR_DISMISS = "-# react ⤴️ to rotate it 90°, 🔄 to flip it 180°, or ❌ to dismiss this message"
 HINT_DISMISS = "-# react ❌ to dismiss this message"
