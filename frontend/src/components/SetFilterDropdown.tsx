@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { To } from "react-router-dom";
 import { SetGlyph, setGlyphCode } from "./Brand";
 import { FilterDropdown, type FilterOption } from "./FilterDropdown";
 import { isCubeCode } from "../data/utils";
@@ -47,6 +48,7 @@ export function SetFilterDropdown({
   value,
   options,
   onChange,
+  hrefFor,
   variant,
   align,
   searchable,
@@ -59,7 +61,8 @@ export function SetFilterDropdown({
   label?: string;
   value: string;
   options: SetFilterOption[];
-  onChange: (next: string) => void;
+  onChange?: (next: string) => void;
+  hrefFor?: (value: string) => To;
   variant?: "desktop" | "mobile";
   align?: "left" | "right";
   searchable?: boolean;
@@ -118,6 +121,7 @@ export function SetFilterDropdown({
       value={value}
       options={options}
       onChange={onChange}
+      hrefFor={hrefFor}
       variant={variant}
       align={align}
       renderValue={renderValue}

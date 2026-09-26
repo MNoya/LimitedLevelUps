@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { Link, useLocation, useNavigate, type To } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { ModalNavButton } from "./ModalNavButton";
@@ -17,14 +18,21 @@ const MOBILE_REVEAL = 28;
 export function SkeletonsModal({
   skeletons,
   setCode,
+  activePair,
+  pairHref,
   onClose,
 }: {
   skeletons: Skeleton[];
   setCode: string;
+  activePair: string | undefined;
+  pairHref: (colors: string) => To;
   onClose: () => void;
 }) {
   const isMobile = useIsMobile();
-  const [index, setIndex] = useState(0);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const pairIndex = skeletons.findIndex((s) => s.colors.toLowerCase() === activePair?.toLowerCase());
+  const index = Math.max(0, pairIndex);
   const skeleton = skeletons[index];
   const images = useCardImageMap(
     skeletons.flatMap((s) => [...s.cards, ...s.splitCards].map((c) => ({ name: c.n, set: c.s }))),
@@ -32,22 +40,21 @@ export function SkeletonsModal({
 
   const { columns, splitColumns } = skeletonLayout(skeleton);
   const hasSplit = skeleton.splitCards.length > 0;
-  const step = (by: number) => () => setIndex((i) => (i + by + skeletons.length) % skeletons.length);
+  const stepHref = (by: number) => pairHref(skeletons[(index + by + skeletons.length) % skeletons.length].colors);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
       } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        // Stepping the pairs owns the arrows here; the default would scroll the panel under them
         e.preventDefault();
         const by = e.key === "ArrowLeft" ? -1 : 1;
-        setIndex((i) => (i + by + skeletons.length) % skeletons.length);
+        navigate(stepHref(by), { replace: true, state: location.state });
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose, skeletons.length]);
+  });
 
   return createPortal(
     <div
@@ -98,9 +105,9 @@ export function SkeletonsModal({
               skeletons={skeletons}
               index={index}
               showArrows={!isMobile}
-              onPick={setIndex}
-              onPrev={step(-1)}
-              onNext={step(1)}
+              pairHref={pairHref}
+              prevHref={stepHref(-1)}
+              nextHref={stepHref(1)}
             />
           </div>
         </CardPreviewProvider>
@@ -153,41 +160,43 @@ function PairStepper({
   skeletons,
   index,
   showArrows,
-  onPick,
-  onPrev,
-  onNext,
+  pairHref,
+  prevHref,
+  nextHref,
 }: {
   skeletons: Skeleton[];
   index: number;
   showArrows: boolean;
-  onPick: (index: number) => void;
-  onPrev: () => void;
-  onNext: () => void;
+  pairHref: (colors: string) => To;
+  prevHref: To;
+  nextHref: To;
 }) {
+  const location = useLocation();
   return (
     <div
       onClick={(e) => e.stopPropagation()}
       className="mt-4 flex w-full shrink-0 items-center gap-2 self-center rounded-2xl border border-border bg-surface px-2 py-2 shadow-lg md:mt-8 md:w-auto md:gap-3 md:px-3"
     >
-      {showArrows && <ModalNavButton dir="prev" srLabel="Previous color pair" onClick={onPrev} />}
+      {showArrows && <ModalNavButton dir="prev" srLabel="Previous color pair" to={prevHref} />}
       <div className="grid w-full grid-cols-5 gap-1.5 md:flex md:w-auto md:min-w-0 md:flex-1 md:items-center md:justify-center md:gap-2 md:overflow-x-auto md:[-ms-overflow-style:none] md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden">
         {skeletons.map((skeleton, i) => (
-          <button
+          <Link
             key={skeleton.colors}
-            type="button"
-            onClick={() => onPick(i)}
+            to={pairHref(skeleton.colors)}
+            replace
+            state={location.state}
             aria-label={skeleton.colors}
             aria-current={i === index}
             className={cn(
-              "flex h-9 w-full cursor-pointer items-center justify-center rounded-full border px-2 transition-colors md:h-10 md:w-auto md:flex-none md:shrink-0 md:px-3",
+              "flex h-9 w-full cursor-pointer items-center justify-center rounded-full border px-2 transition-colors no-underline md:h-10 md:w-auto md:flex-none md:shrink-0 md:px-3",
               i === index ? "border-green/50 bg-green/15" : "border-border bg-surface2 hover:border-border2",
             )}
           >
             <Pips colors={skeleton.colors} size={14} />
-          </button>
+          </Link>
         ))}
       </div>
-      {showArrows && <ModalNavButton dir="next" srLabel="Next color pair" onClick={onNext} />}
+      {showArrows && <ModalNavButton dir="next" srLabel="Next color pair" to={nextHref} />}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { cn } from "../../../lib/utils";
 import { ToggleSwitch } from "../../ToggleSwitch";
@@ -19,6 +19,7 @@ import { cardImageSources, useCardImageMap } from "../../../data/cardImages";
 import { highlightEventLabel } from "../EventLabel";
 import { AAvatar } from "../../Brand";
 import { DeckScreenshotModal, type DeckLike } from "../DeckScreenshotModal";
+import { onPlainClick, podDeckHref, podDraftPickHref, type InPlaceLink } from "../podLinks";
 import { picksPerTurn, poolBefore, poolByPack, reconstructDraft, resolveDeck, seatHandle, type DraftPickView } from "../../../data/draft-artifact";
 import { cleanPodEventName, stripDiscriminator } from "../../../data/utils";
 import type { ArtifactCard, PodDraftArtifact } from "../../../types/leaderboard";
@@ -36,6 +37,7 @@ interface DraftReviewMeta {
 // deck button stays hidden.
 export interface ReviewSeatInfo {
   seatIndex: number;
+  playerSlug: string | null;
   displayName: string;
   participantDisplayName: string;
   avatarUrl: string | null;
@@ -48,19 +50,30 @@ export interface ReviewSeatInfo {
 interface DraftReviewMOCSProps {
   artifact: PodDraftArtifact;
   meta: DraftReviewMeta;
-  initialSeat?: number;
-  initialPack?: number;
-  initialPick?: number;
-  onClose?: () => void;
-  backHref?: string;
-  onNavigate?: (seatIndex: number, pack: number, pick: number) => void;
+  seat: number;
+  pack: number;
+  pick: number;
+  backHref: string;
+  eventSlug: string;
   eventId?: string;
   seatInfo?: ReviewSeatInfo[];
   // Pin the review to one seat in scroll-only mode: no seat switching, no table, no other-seat decks.
   soloSeat?: number;
 }
 
-export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack = 0, initialPick = 0, onClose, backHref, onNavigate, eventId, seatInfo, soloSeat }: DraftReviewMOCSProps) {
+export function DraftReviewMOCS({
+  artifact,
+  meta,
+  seat,
+  pack: requestedPack,
+  pick: requestedPick,
+  backHref,
+  eventSlug,
+  eventId,
+  seatInfo,
+  soloSeat,
+}: DraftReviewMOCSProps) {
+  const navigate = useNavigate();
   const solo = soloSeat != null;
   const setSymbol = `/set-symbols/${meta.setCode.toLowerCase()}.png`;
   const eventTitle = useMemo(() => cleanPodEventName(meta.name, meta.setCode), [meta]);
@@ -89,18 +102,14 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
     [artifact, seatInfoMap],
   );
 
-  const startPack = Math.min(2, Math.max(0, initialPack));
-  const startPickSize = views[initialSeat]?.[startPack]?.length ?? 1;
-  const startPick = Math.min(startPickSize - 1, Math.max(0, initialPick));
-  const [seat, setSeat] = useState(initialSeat);
-  const [pack, setPack] = useState(startPack);
-  const [pick, setPick] = useState(startPick);
+  const pack = Math.min(2, Math.max(0, requestedPack));
+  const pick = Math.min(views[seat][pack].length - 1, Math.max(0, requestedPick));
   const [viewMode, setViewMode] = usePersistentState<"step" | "scroll">("draftReviewViewMode", defaultViewMode());
   const effectiveViewMode = solo ? "scroll" : viewMode;
   const [showTable, setShowTable] = usePersistentBool("draftReviewShowTable", false);
   const [deckLayout, setDeckLayout] = usePersistentState<"order" | "columns">("draftReviewDeckLayout", "columns");
   const [revealMode, setRevealMode] = usePersistentState<RevealMode>("draftReviewRevealMode", "revealed");
-  const [revealed, setRevealed] = useState(false);
+  const [revealedAt, setRevealedAt] = useState<string | null>(null);
   const [splitSideboard, setSplitSideboard] = usePersistentBool("draftReviewSplitSideboard", false);
   const [deckPopupSeat, setDeckPopupSeat] = useState<number | null>(null);
   const viewportHeight = useViewportHeight();
@@ -117,55 +126,38 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
   }, []);
 
   const packTurns = views[seat][pack].length;
-  const totalPicks = views[seat].reduce((sum, p) => sum + p.length, 0);
-  const linearIndex = views[seat].slice(0, pack).reduce((sum, p) => sum + p.length, 0) + pick;
+  const position = `${seat}/${pack}/${pick}`;
+  const revealed = revealedAt === position;
+  const reveal = () => setRevealedAt(position);
 
   const pickShown = revealMode === "revealed" || revealed;
   const awaitingReveal = revealMode === "click" && !revealed;
 
-  const onNavigateRef = useRef(onNavigate);
-  onNavigateRef.current = onNavigate;
-  const lastNavSig = useRef(`${initialSeat}/${startPack}/${startPick}`);
-  useEffect(() => {
-    const sig = `${seat}/${pack}/${pick}`;
-    if (sig === lastNavSig.current) {
-      return;
-    }
-    lastNavSig.current = sig;
-    onNavigateRef.current?.(seat, pack, pick);
-  }, [seat, pack, pick]);
-
-  const goTo = (nextPack: number, nextPick: number) => {
-    setPack(nextPack);
-    setPick(nextPick);
-    setRevealed(false);
+  const pickHref = (seatIndex: number, p: number, k: number) => {
+    const playerSlug = seatInfoMap.get(seatIndex)?.playerSlug ?? null;
+    return podDraftPickHref(eventSlug, { playerSlug, seatIndex }, p, k);
   };
+  const jumpHref = (p: number, k: number) => pickHref(seat, p, k);
+  const goTo = (p: number, k: number) => navigate(jumpHref(p, k), { replace: true });
+  const prev = prevCoord(views, seat, pack, pick);
+  const next = nextCoord(views, seat, pack, pick);
+  const prevHref = prev ? jumpHref(prev.pack, prev.pick) : null;
+  const nextHref = next ? jumpHref(next.pack, next.pick) : null;
   const handlePrev = () => {
-    if (pick > 0) {
-      goTo(pack, pick - 1);
-    } else if (pack > 0) {
-      goTo(pack - 1, views[seat][pack - 1].length - 1);
+    if (prev) {
+      goTo(prev.pack, prev.pick);
     }
   };
   const handleNext = () => {
-    const next = nextCoord(views, seat, pack, pick);
     if (next) {
       goTo(next.pack, next.pick);
     }
   };
   const changeReveal = (m: RevealMode) => {
     setRevealMode(m);
-    setRevealed(false);
+    setRevealedAt(null);
   };
-  const changeSeat = (i: number) => {
-    if (solo) return;
-    if (linearIndex === totalPicks - 1) {
-      setPack(0);
-      setPick(0);
-    }
-    setSeat(i);
-    setRevealed(false);
-  };
+  const seatHref = (i: number) => (next ? pickHref(i, pack, pick) : pickHref(i, 0, 0));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -186,7 +178,7 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         if (awaitingReveal) {
-          setRevealed(true);
+          reveal();
         } else {
           handleNext();
         }
@@ -200,11 +192,11 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
   }, [handlePrev, handleNext, awaitingReveal, changeReveal, revealMode, deckPopupSeat]);
 
   useEffect(() => {
-    const next = nextCoord(views, seat, pack, pick);
-    if (!next) {
+    const upcoming = nextCoord(views, seat, pack, pick);
+    if (!upcoming) {
       return;
     }
-    for (const idx of views[seat][next.pack][next.pick].booster) {
+    for (const idx of views[seat][upcoming.pack][upcoming.pick].booster) {
       const card = artifact.cards[idx];
       const url = cardImageSources(card.n, card.s ?? artifact.set, cardImages)[0];
       if (url) {
@@ -231,6 +223,13 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
 
   const activeInfo = seatInfoMap.get(seat);
   const canOpenDeck = !!activeInfo && (activeInfo.deckScreenshotUrl != null || (deck?.main.length ?? 0) > 0);
+  const deckLink: InPlaceLink | undefined =
+    activeInfo && canOpenDeck
+      ? {
+          href: podDeckHref(eventSlug, activeInfo.displayName, activeInfo.displayName),
+          open: () => setDeckPopupSeat(seat),
+        }
+      : undefined;
   const deckPopup = deckPopupSeat == null ? null : buildDeckLike(deckPopupSeat);
 
   function buildDeckLike(s: number): DeckLike | null {
@@ -277,9 +276,8 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
         active={active}
         right={seats[right]}
         passRight={dir === 1}
-        onSelectLeft={() => changeSeat(left)}
-        onSelectRight={() => changeSeat(right)}
-        onClose={onClose}
+        leftHref={seatHref(left)}
+        rightHref={seatHref(right)}
         backHref={backHref}
         scrollOn={effectiveViewMode === "scroll"}
         onToggleScroll={() => setViewMode(viewMode === "scroll" ? "step" : "scroll")}
@@ -288,19 +286,16 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
       <Header
         setSymbol={setSymbol}
         eventTitle={eventTitle}
-        onClose={onClose}
         backHref={backHref}
         pack={pack}
         pick={pick}
         turns={packTurns}
         perTurn={perTurn}
-        onJump={goTo}
-        onPrev={handlePrev}
-        onNext={handleNext}
-        atStart={linearIndex === 0}
-        atEnd={linearIndex === totalPicks - 1}
+        jumpHref={jumpHref}
+        prevHref={prevHref}
+        nextHref={nextHref}
         awaitingReveal={awaitingReveal}
-        onReveal={() => setRevealed(true)}
+        onReveal={reveal}
         revealMode={revealMode}
         onRevealMode={changeReveal}
         showTable={showTable}
@@ -329,8 +324,9 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
                 initialPack={pack}
                 initialPick={pick}
                 onActivePick={(p, k) => {
-                  setPack(p);
-                  setPick(k);
+                  if (p !== pack || k !== pick) {
+                    goTo(p, k);
+                  }
                 }}
               />
             </>
@@ -346,13 +342,11 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
                 pack={pack}
                 pick={pick}
                 perTurn={perTurn}
-                onJump={goTo}
-                onPrev={handlePrev}
-                onNext={handleNext}
-                atStart={linearIndex === 0}
-                atEnd={linearIndex === totalPicks - 1}
+                jumpHref={jumpHref}
+                prevHref={prevHref}
+                nextHref={nextHref}
                 awaitingReveal={awaitingReveal}
-                onReveal={() => setRevealed(true)}
+                onReveal={reveal}
                 revealMode={revealMode}
                 onRevealMode={changeReveal}
               />
@@ -366,7 +360,7 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
                 canSplit={hasSideboard}
                 splitSideboard={splitSideboard}
                 onToggleSplit={() => setSplitSideboard((v) => !v)}
-                onOpenDeck={canOpenDeck ? () => setDeckPopupSeat(seat) : undefined}
+                deckLink={deckLink}
               />
             </>
           )}
@@ -382,7 +376,7 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
               <PlayerGrid
                 seats={seats}
                 activeSeat={seat}
-                onSelect={changeSeat}
+                seatHref={seatHref}
                 passRight={dir === 1}
               />
             </div>
@@ -403,7 +397,7 @@ export function DraftReviewMOCS({ artifact, meta, initialSeat = 0, initialPack =
           canSplit={hasSideboard}
           splitSideboard={splitSideboard}
           onToggleSplit={() => setSplitSideboard((v) => !v)}
-          onOpenDeck={canOpenDeck ? () => setDeckPopupSeat(seat) : undefined}
+          deckLink={deckLink}
           left={seats[left]}
           right={seats[right]}
           passRight={dir === 1}
@@ -438,6 +432,16 @@ function nextCoord(views: DraftPickView[][][], seat: number, pack: number, pick:
   }
   return null;
 }
+
+const prevCoord = (views: DraftPickView[][][], seat: number, pack: number, pick: number) => {
+  if (pick > 0) {
+    return { pack, pick: pick - 1 };
+  }
+  if (pack > 0) {
+    return { pack: pack - 1, pick: views[seat][pack - 1].length - 1 };
+  }
+  return null;
+};
 
 const DESKTOP_MIN_WIDTH = 1024;
 
@@ -556,9 +560,8 @@ function MobileTopBar({
   active,
   right,
   passRight,
-  onSelectLeft,
-  onSelectRight,
-  onClose,
+  leftHref,
+  rightHref,
   backHref,
   scrollOn,
   onToggleScroll,
@@ -570,43 +573,31 @@ function MobileTopBar({
   active: Seat;
   right: Seat;
   passRight: boolean;
-  onSelectLeft: () => void;
-  onSelectRight: () => void;
-  onClose?: () => void;
-  backHref?: string;
+  leftHref: string;
+  rightHref: string;
+  backHref: string;
   scrollOn: boolean;
   onToggleScroll: () => void;
   solo?: boolean;
 }) {
   const arrow = passRight ? "»" : "«";
-  const name = "truncate font-display text-[13px] tracking-[0.04em] text-subtle [-webkit-tap-highlight-color:transparent] active:text-text";
+  const name = "truncate font-display text-[13px] tracking-[0.04em] text-subtle no-underline [-webkit-tap-highlight-color:transparent] active:text-text";
   const backClass = "flex shrink-0 items-center gap-1 text-subtle [-webkit-tap-highlight-color:transparent] active:text-text";
-  const backContent = (
-    <>
-      <ChevronIcon dir="left" />
-      <SetSymbol src={setSymbol} className="h-5 w-5" />
-      <span className="max-w-[84px] truncate font-display text-[13px] tracking-[0.04em]">
-        {highlightEventLabel(eventTitle)}
-      </span>
-    </>
-  );
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-surface px-2 lg:hidden">
-      {backHref ? (
-        <Link to={backHref} aria-label="Back to pod" className={backClass}>
-          {backContent}
-        </Link>
-      ) : (
-        <button onClick={onClose} aria-label="Back to pod" className={backClass}>
-          {backContent}
-        </button>
-      )}
+      <Link to={backHref} aria-label="Back to pod" className={backClass}>
+        <ChevronIcon dir="left" />
+        <SetSymbol src={setSymbol} className="h-5 w-5" />
+        <span className="max-w-[84px] truncate font-display text-[13px] tracking-[0.04em]">
+          {highlightEventLabel(eventTitle)}
+        </span>
+      </Link>
       <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5">
         {!solo && (
           <>
-            <button onClick={onSelectLeft} className={cn(name, "max-w-[78px]")}>
+            <Link to={leftHref} replace className={cn(name, "max-w-[78px]")}>
               {left.name}
-            </button>
+            </Link>
             <span className="shrink-0 font-mono text-[13px] text-subtle">{arrow}</span>
           </>
         )}
@@ -616,9 +607,9 @@ function MobileTopBar({
         {!solo && (
           <>
             <span className="shrink-0 font-mono text-[13px] text-subtle">{arrow}</span>
-            <button onClick={onSelectRight} className={cn(name, "max-w-[78px]")}>
+            <Link to={rightHref} replace className={cn(name, "max-w-[78px]")}>
               {right.name}
-            </button>
+            </Link>
           </>
         )}
       </div>
@@ -649,17 +640,14 @@ function MobileToggle({ label, on, onToggle, ariaLabel }: { label: string; on: b
 function Header({
   setSymbol,
   eventTitle,
-  onClose,
   backHref,
   pack,
   pick,
   turns,
   perTurn,
-  onJump,
-  onPrev,
-  onNext,
-  atStart,
-  atEnd,
+  jumpHref,
+  prevHref,
+  nextHref,
   awaitingReveal,
   onReveal,
   revealMode,
@@ -672,17 +660,14 @@ function Header({
 }: {
   setSymbol: string;
   eventTitle: string;
-  onClose?: () => void;
-  backHref?: string;
+  backHref: string;
   pack: number;
   pick: number;
   turns: number;
   perTurn: number;
-  onJump: (pack: number, pick: number) => void;
-  onPrev: () => void;
-  onNext: () => void;
-  atStart: boolean;
-  atEnd: boolean;
+  jumpHref: (pack: number, pick: number) => string;
+  prevHref: string | null;
+  nextHref: string | null;
   awaitingReveal: boolean;
   onReveal: () => void;
   revealMode: RevealMode;
@@ -705,7 +690,7 @@ function Header({
       </button>
     </Tooltip>
   ) : (
-    <NavArrow dir="next" onClick={onNext} disabled={atEnd} />
+    <NavArrow dir="next" href={nextHref} />
   );
 
   const showPicksToggle = (
@@ -715,49 +700,40 @@ function Header({
     />
   );
 
-  const backClass = "flex min-w-0 items-center gap-2.5 text-left transition-colors hover:text-green";
-  const backContent = (
-    <>
-      <ChevronIcon dir="left" />
-      <SetSymbol src={setSymbol} className="h-7 w-7 shrink-0" />
-      <span className="truncate font-display text-[19px] tracking-[0.08em]">
-        {highlightEventLabel(eventTitle)}
-      </span>
-    </>
-  );
-
   return (
     <header className="hidden h-[60px] shrink-0 items-center gap-5 border-b border-border bg-surface px-5 lg:flex">
       <div className="flex min-w-0 flex-1 items-center">
-        {backHref ? (
-          <Link to={backHref} className={backClass} aria-label="Back to pod">
-            {backContent}
-          </Link>
-        ) : (
-          <button onClick={onClose} className={backClass} aria-label="Back to pod">
-            {backContent}
-          </button>
-        )}
+        <Link
+          to={backHref}
+          className="flex min-w-0 items-center gap-2.5 text-left transition-colors hover:text-green"
+          aria-label="Back to pod"
+        >
+          <ChevronIcon dir="left" />
+          <SetSymbol src={setSymbol} className="h-7 w-7 shrink-0" />
+          <span className="truncate font-display text-[19px] tracking-[0.08em]">
+            {highlightEventLabel(eventTitle)}
+          </span>
+        </Link>
       </div>
 
       {viewMode === "step" && (
         <div className="flex items-center gap-5">
           <ChipRow label="PACK">
             {[0, 1, 2].map((p) => (
-              <Chip key={p} active={p === pack} onClick={() => onJump(p, 0)}>
+              <Chip key={p} active={p === pack} href={jumpHref(p, 0)}>
                 {p + 1}
               </Chip>
             ))}
           </ChipRow>
           <ChipRow label="PICK">
             {Array.from({ length: turns }, (_, k) => (
-              <Chip key={k} active={k === pick} onClick={() => onJump(pack, k)}>
+              <Chip key={k} active={k === pick} href={jumpHref(pack, k)}>
                 {pickLabel(k, perTurn)}
               </Chip>
             ))}
           </ChipRow>
           <div className="flex items-center gap-2">
-            <NavArrow dir="prev" onClick={onPrev} disabled={atStart} />
+            <NavArrow dir="prev" href={prevHref} />
             {revealControl}
           </div>
         </div>
@@ -777,13 +753,13 @@ function Header({
             tooltip={showTable ? "Hide table" : "Show table"}
           />
         )}
-        <button
-          onClick={onClose}
+        <Link
+          to={backHref}
           aria-label="Close"
-          className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface2 text-muted transition-colors hover:border-white/40 hover:bg-white/10 hover:text-text"
+          className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface2 text-muted no-underline transition-colors hover:border-white/40 hover:bg-white/10 hover:text-text"
         >
           ✕
-        </button>
+        </Link>
       </div>
     </header>
   );
@@ -879,19 +855,21 @@ function ChipRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function Chip({ active, href, children }: { active: boolean; href: string; children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
+    <Link
+      to={href}
+      replace
+      aria-current={active || undefined}
       className={cn(
-        "flex h-8 min-w-[32px] items-center justify-center rounded border px-2 font-display text-[16px] tracking-[0.04em] tabular-nums transition-colors",
+        "flex h-8 min-w-[32px] items-center justify-center rounded border px-2 font-display text-[16px] tracking-[0.04em] tabular-nums no-underline transition-colors",
         active
           ? "border-green/60 bg-green/15 text-green"
           : "border-border bg-surface2 text-subtle hover:border-white/40 hover:bg-white/10 hover:text-text",
       )}
     >
       {children}
-    </button>
+    </Link>
   );
 }
 
@@ -1198,7 +1176,7 @@ function PoolBar({
   canSplit,
   splitSideboard,
   onToggleSplit,
-  onOpenDeck,
+  deckLink,
 }: {
   cards: ArtifactCard[];
   rows: ArtifactCard[][];
@@ -1209,7 +1187,7 @@ function PoolBar({
   canSplit: boolean;
   splitSideboard: boolean;
   onToggleSplit: () => void;
-  onOpenDeck?: () => void;
+  deckLink?: InPlaceLink;
 }) {
   const order = deckLayout === "order";
   return (
@@ -1219,7 +1197,7 @@ function PoolBar({
           canSplit={canSplit}
           splitSideboard={splitSideboard}
           onToggleSplit={onToggleSplit}
-          onOpenDeck={onOpenDeck}
+          deckLink={deckLink}
           deckLayout={deckLayout}
           onToggleDeckLayout={onToggleDeckLayout}
         />
@@ -1300,7 +1278,7 @@ function BottomPanel({
   canSplit,
   splitSideboard,
   onToggleSplit,
-  onOpenDeck,
+  deckLink,
   left,
   right,
   passRight,
@@ -1320,7 +1298,7 @@ function BottomPanel({
   canSplit: boolean;
   splitSideboard: boolean;
   onToggleSplit: () => void;
-  onOpenDeck?: () => void;
+  deckLink?: InPlaceLink;
   left: Seat;
   right: Seat;
   passRight: boolean;
@@ -1377,7 +1355,7 @@ function BottomPanel({
                 canSplit={canSplit}
                 splitSideboard={splitSideboard}
                 onToggleSplit={onToggleSplit}
-                onOpenDeck={onOpenDeck}
+                deckLink={deckLink}
                 deckLayout={deckLayout}
                 onToggleDeckLayout={onToggleDeckLayout}
               />
@@ -1530,14 +1508,14 @@ function PoolControls({
   canSplit,
   splitSideboard,
   onToggleSplit,
-  onOpenDeck,
+  deckLink,
   deckLayout,
   onToggleDeckLayout,
 }: {
   canSplit: boolean;
   splitSideboard: boolean;
   onToggleSplit: () => void;
-  onOpenDeck?: () => void;
+  deckLink?: InPlaceLink;
   deckLayout: "order" | "columns";
   onToggleDeckLayout: () => void;
 }) {
@@ -1546,13 +1524,17 @@ function PoolControls({
   const active = "border-green/60 bg-surface2 text-green [background-image:linear-gradient(rgba(46,232,92,0.15),rgba(46,232,92,0.15))]";
   return (
     <div className="flex flex-col items-stretch gap-1.5">
-      {(onOpenDeck || canSplit) && (
+      {(deckLink || canSplit) && (
         <div className="flex w-full gap-1.5">
-          {onOpenDeck && (
-            <button onClick={onOpenDeck} className={cn(pill, idle, "flex-1")}>
+          {deckLink && (
+            <Link
+              to={deckLink.href}
+              onClick={onPlainClick(deckLink.open)}
+              className={cn(pill, idle, "flex-1 no-underline")}
+            >
               DECK
               <TbCards size={14} aria-hidden="true" />
-            </button>
+            </Link>
           )}
           {canSplit && (
             <Tooltip label={splitSideboard ? "Merge the sideboard into the deck column" : "Split the sideboard into its own panel"} side="top">
@@ -1609,11 +1591,9 @@ function MobileNavDivider({
   pack,
   pick,
   perTurn,
-  onJump,
-  onPrev,
-  onNext,
-  atStart,
-  atEnd,
+  jumpHref,
+  prevHref,
+  nextHref,
   awaitingReveal,
   onReveal,
   revealMode,
@@ -1622,56 +1602,65 @@ function MobileNavDivider({
   pack: number;
   pick: number;
   perTurn: number;
-  onJump: (pack: number, pick: number) => void;
-  onPrev: () => void;
-  onNext: () => void;
-  atStart: boolean;
-  atEnd: boolean;
+  jumpHref: (pack: number, pick: number) => string;
+  prevHref: string | null;
+  nextHref: string | null;
   awaitingReveal: boolean;
   onReveal: () => void;
   revealMode: RevealMode;
   onRevealMode: (m: RevealMode) => void;
 }) {
   const arrow = "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-[transform,background-color,border-color,color] duration-150 ease-out touch-manipulation [-webkit-tap-highlight-color:transparent]";
+  const arrowIdle =
+    "border-white/40 bg-surface2 text-text active:scale-90 active:bg-white/20 motion-reduce:active:scale-100";
+  const arrowDisabled = "border-border text-dim opacity-40";
   return (
     <div className="flex h-12 shrink-0 items-center justify-between gap-1.5 border-t border-border bg-surface px-2 lg:hidden">
       <div className="flex gap-1">
         {[0, 1, 2].map((p) => (
-          <button
+          <Link
             key={p}
-            onClick={() => onJump(p, 0)}
+            to={jumpHref(p, 0)}
+            replace
+            aria-current={p === pack || undefined}
             className={cn(
-              "flex h-8 min-w-[30px] items-center justify-center rounded border px-1.5 font-display text-[15px] tracking-[0.04em] tabular-nums transition-colors",
+              "flex h-8 min-w-[30px] items-center justify-center rounded border px-1.5 font-display text-[15px] tracking-[0.04em] tabular-nums no-underline transition-colors",
               p === pack
                 ? "border-green/60 bg-green/15 text-green"
                 : "border-border bg-surface2 text-subtle hover:border-white/40 hover:bg-white/10 hover:text-text",
             )}
           >
             {p + 1}
-          </button>
+          </Link>
         ))}
       </div>
 
       <div className="flex items-center gap-1.5">
-        <button
-          onClick={onPrev}
-          disabled={atStart}
-          aria-label="Previous pick"
-          className={cn(arrow, atStart ? "border-border text-dim opacity-40" : "border-white/40 bg-surface2 text-text active:scale-90 active:bg-white/20 motion-reduce:active:scale-100")}
-        >
-          <ChevronIcon dir="left" />
-        </button>
+        {prevHref ? (
+          <Link to={prevHref} replace aria-label="Previous pick" className={cn(arrow, arrowIdle)}>
+            <ChevronIcon dir="left" />
+          </Link>
+        ) : (
+          <button disabled aria-label="Previous pick" className={cn(arrow, arrowDisabled)}>
+            <ChevronIcon dir="left" />
+          </button>
+        )}
         <span className="min-w-[56px] text-center font-display text-[17px] tracking-[0.06em] text-text">
           P{pack + 1}P{pickLabel(pick, perTurn)}
         </span>
-        <button
-          onClick={awaitingReveal ? onReveal : onNext}
-          disabled={!awaitingReveal && atEnd}
-          aria-label={awaitingReveal ? "Reveal picked card" : "Next pick"}
-          className={cn(arrow, !awaitingReveal && atEnd ? "border-border text-dim opacity-40" : "border-white/40 bg-surface2 text-text active:scale-90 active:bg-white/20 motion-reduce:active:scale-100")}
-        >
-          {awaitingReveal ? <EyeIcon off={false} /> : <ChevronIcon dir="right" />}
-        </button>
+        {awaitingReveal ? (
+          <button onClick={onReveal} aria-label="Reveal picked card" className={cn(arrow, arrowIdle)}>
+            <EyeIcon off={false} />
+          </button>
+        ) : nextHref ? (
+          <Link to={nextHref} replace aria-label="Next pick" className={cn(arrow, arrowIdle)}>
+            <ChevronIcon dir="right" />
+          </Link>
+        ) : (
+          <button disabled aria-label="Next pick" className={cn(arrow, arrowDisabled)}>
+            <ChevronIcon dir="right" />
+          </button>
+        )}
       </div>
 
       <ShowPicksToggle
@@ -2004,12 +1993,12 @@ function buildRing(n: number): RingRow[] {
 function PlayerGrid({
   seats,
   activeSeat,
-  onSelect,
+  seatHref,
   passRight,
 }: {
   seats: Seat[];
   activeSeat: number;
-  onSelect: (i: number) => void;
+  seatHref: (i: number) => string;
   passRight: boolean;
 }) {
   const ring = buildRing(seats.length);
@@ -2022,7 +2011,7 @@ function PlayerGrid({
     i == null || !seats[i] ? (
       <div className="flex-1" />
     ) : (
-      <PlayerTile seat={seats[i]} active={i === activeSeat} onClick={() => onSelect(i)} />
+      <PlayerTile seat={seats[i]} active={i === activeSeat} href={seatHref(i)} />
     );
   return (
     <div className="flex h-full flex-col px-1.5 py-2">
@@ -2059,17 +2048,19 @@ function PlayerGrid({
 function PlayerTile({
   seat,
   active,
-  onClick,
+  href,
 }: {
   seat: Seat;
   active: boolean;
-  onClick: () => void;
+  href: string;
 }) {
   return (
-    <button
-      onClick={onClick}
+    <Link
+      to={href}
+      replace
+      aria-current={active || undefined}
       className={cn(
-        "flex h-full w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-lg px-2 transition-colors",
+        "flex h-full w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-lg px-2 no-underline transition-colors",
         active ? "bg-white/[0.06]" : "hover:bg-white/[0.04]",
       )}
     >
@@ -2083,36 +2074,45 @@ function PlayerTile({
         {seat.name}
       </span>
       <Pips colors={seat.colors} size={14} />
-    </button>
+    </Link>
   );
 }
 
-function NavArrow({ dir, onClick, disabled }: { dir: "prev" | "next"; onClick?: () => void; disabled?: boolean }) {
+function NavArrow({ dir, href }: { dir: "prev" | "next"; href: string | null }) {
   const primary = dir === "next";
   const label = primary ? "Next Pick" : "Previous Pick";
   const tooltip = primary ? "Next Pick (Arrow Right)" : "Previous Pick (Arrow Left)";
   const [hover, setHover] = useState(false);
+  const className = cn(
+    "flex h-9 items-center justify-center rounded-md border bg-surface2",
+    primary ? "min-w-[84px] gap-1.5 px-3 font-display text-[13px] tracking-[0.12em]" : "w-9",
+    "transition-[transform,background-color,border-color,color] duration-150 ease-out",
+    "touch-manipulation [-webkit-tap-highlight-color:transparent]",
+    href
+      ? "border-white/40 text-text no-underline hover:border-white/60 hover:bg-white/10 active:scale-90 active:bg-white/20 motion-reduce:active:scale-100"
+      : "border-border text-dim opacity-40",
+  );
+  const content = (
+    <>
+      {primary && <span>NEXT</span>}
+      <ChevronIcon dir={primary ? "right" : "left"} />
+    </>
+  );
+  const hoverTracking = {
+    onPointerEnter: (e: React.PointerEvent) => e.pointerType === "mouse" && setHover(true),
+    onPointerLeave: () => setHover(false),
+  };
   return (
-    <Tooltip label={tooltip} side="bottom" open={hover && !disabled}>
-      <button
-        onClick={onClick}
-        onPointerEnter={(e) => e.pointerType === "mouse" && setHover(true)}
-        onPointerLeave={() => setHover(false)}
-        disabled={disabled}
-        aria-label={label}
-        className={cn(
-          "flex h-9 items-center justify-center rounded-md border bg-surface2",
-          primary ? "min-w-[84px] gap-1.5 px-3 font-display text-[13px] tracking-[0.12em]" : "w-9",
-          "transition-[transform,background-color,border-color,color] duration-150 ease-out",
-          "touch-manipulation [-webkit-tap-highlight-color:transparent]",
-          disabled
-            ? "border-border text-dim opacity-40"
-            : "border-white/40 text-text hover:border-white/60 hover:bg-white/10 active:scale-90 active:bg-white/20 motion-reduce:active:scale-100",
-        )}
-      >
-        {primary && <span>NEXT</span>}
-        <ChevronIcon dir={primary ? "right" : "left"} />
-      </button>
+    <Tooltip label={tooltip} side="bottom" open={hover && !!href}>
+      {href ? (
+        <Link to={href} replace {...hoverTracking} aria-label={label} className={className}>
+          {content}
+        </Link>
+      ) : (
+        <button disabled {...hoverTracking} aria-label={label} className={className}>
+          {content}
+        </button>
+      )}
     </Tooltip>
   );
 }

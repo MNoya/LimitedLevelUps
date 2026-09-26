@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, type To } from "react-router-dom";
 import { BsAsterisk, BsPaletteFill, ChevronDown, ExternalLink } from "./Icons";
 import { cn } from "../lib/utils";
 
@@ -37,14 +37,14 @@ export function LeaderboardSidebar({
   colors = "ALL",
   format = "ALL",
   otherCombos = [],
-  onColorsSelect,
+  colorsHref,
   searchParams,
   stats,
   updated,
   maxColors = 5,
   maxRecent = 10,
 }: InsightsParams & {
-  onColorsSelect?: (code: string) => void;
+  colorsHref?: (code: string) => To;
   searchParams?: URLSearchParams;
   stats?: { players: number; events: string };
   updated?: string | null;
@@ -104,7 +104,7 @@ export function LeaderboardSidebar({
           topColors={d.topColors}
           maxColors={maxColors}
           colors={colors}
-          onColorsSelect={onColorsSelect}
+          colorsHref={colorsHref}
           lcqScope={d.lcqScope}
         />
       </SurfaceCard>
@@ -159,12 +159,12 @@ export function LeaderboardInsightsStrip({
   colors = "ALL",
   format = "ALL",
   otherCombos = [],
-  onColorsSelect,
+  colorsHref,
   searchParams,
   maxColors = 12,
   maxRecent = 25,
 }: InsightsParams & {
-  onColorsSelect?: (code: string) => void;
+  colorsHref?: (code: string) => To;
   searchParams?: URLSearchParams;
   maxColors?: number;
 }) {
@@ -212,12 +212,8 @@ export function LeaderboardInsightsStrip({
               topColors={d.topColors}
               maxColors={maxColors}
               colors={colors}
-              onColorsSelect={
-                onColorsSelect && ((code) => {
-                  onColorsSelect(code);
-                  setOpen(null);
-                })
-              }
+              colorsHref={colorsHref}
+              onPick={() => setOpen(null)}
               lcqScope={d.lcqScope}
             />
           ) : (
@@ -268,13 +264,15 @@ function TopColorsRows({
   topColors,
   maxColors,
   colors,
-  onColorsSelect,
+  colorsHref,
+  onPick,
   lcqScope,
 }: {
   topColors: ColorsSummary[] | undefined;
   maxColors: number;
   colors: string;
-  onColorsSelect?: (code: string) => void;
+  colorsHref?: (code: string) => To;
+  onPick?: () => void;
   lcqScope: boolean;
 }) {
   const [limit, setLimit] = useState(maxColors);
@@ -296,7 +294,7 @@ function TopColorsRows({
           "gap-2 items-center py-2 -mx-1 px-1 text-left transition-colors " +
           (i ? "border-t border-border" : "") +
           (isActive ? " text-green" : "") +
-          (onColorsSelect ? " cursor-pointer hover:bg-surface2" : "");
+          (colorsHref ? " cursor-pointer hover:bg-surface2 no-underline" : "");
         const inner = (
           <>
             <span className="font-num text-[13px] text-muted pl-1 leading-none">{i + 1}</span>
@@ -318,16 +316,16 @@ function TopColorsRows({
             <TrophyCount count={row.trophies} size="md" display />
           </>
         );
-        return onColorsSelect ? (
-          <button
+        return colorsHref ? (
+          <Link
             key={row.colors}
-            type="button"
-            onClick={() => onColorsSelect(isActive ? "ALL" : row.colors)}
-            aria-pressed={isActive}
-            className={cls + " bg-transparent border-0 w-full"}
+            to={colorsHref(isActive ? "ALL" : row.colors)}
+            onClick={onPick}
+            aria-current={isActive}
+            className={cls + " w-full"}
           >
             {inner}
-          </button>
+          </Link>
         ) : (
           <div key={row.colors} className={cls}>
             {inner}

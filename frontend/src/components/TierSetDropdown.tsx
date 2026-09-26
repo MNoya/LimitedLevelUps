@@ -1,4 +1,5 @@
 import React from "react";
+import { Link, type To } from "react-router-dom";
 import { SetGlyph, setGlyphCode } from "./Brand";
 import { ChevronDown, ChevronRight } from "./Icons";
 import { cn } from "../lib/utils";
@@ -13,6 +14,7 @@ export function TierSetDropdown({
   isMobile,
   loading = false,
   onChange,
+  hrefFor,
   compact = false,
   menuAlign = "left",
   openOnHover = false,
@@ -24,7 +26,8 @@ export function TierSetDropdown({
   label: string;
   isMobile: boolean;
   loading?: boolean;
-  onChange: (code: string) => void;
+  onChange?: (code: string) => void;
+  hrefFor?: (code: string) => To;
   compact?: boolean;
   menuAlign?: "left" | "right" | "center" | "side-right";
   openOnHover?: boolean;
@@ -157,22 +160,13 @@ export function TierSetDropdown({
           <div className="menu-scrollbar min-h-0 flex-1 overflow-y-auto">
             {filtered.map((s, i) => {
               const active = s.code === activeCode;
-              return (
-                <button
-                  key={s.code}
-                  type="button"
-                  onClick={() => {
-                    onChange(s.code);
-                    close();
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-3 border-l-2 px-3.5 py-2.5 text-left font-display tracking-[0.06em] transition-colors",
-                    i > 0 && "border-t border-border",
-                    active
-                      ? "border-l-green bg-surface2 text-green"
-                      : "border-l-transparent text-text hover:bg-surface2",
-                  )}
-                >
+              const optionClass = cn(
+                "flex w-full items-center gap-3 border-l-2 px-3.5 py-2.5 text-left font-display tracking-[0.06em] transition-colors",
+                i > 0 && "border-t border-border",
+                active ? "border-l-green bg-surface2 text-green" : "border-l-transparent text-text hover:bg-surface2",
+              );
+              const optionContent = (
+                <>
                   <SetGlyph code={setGlyphCode(s)} size={24} />
                   <span className="flex-1 truncate text-[17px] leading-none">{s.name.toUpperCase()}</span>
                   {s.isActive ? (
@@ -186,6 +180,26 @@ export function TierSetDropdown({
                       </span>
                     )
                   )}
+                </>
+              );
+              if (hrefFor) {
+                return (
+                  <Link key={s.code} to={hrefFor(s.code)} onClick={close} className={cn(optionClass, "no-underline")}>
+                    {optionContent}
+                  </Link>
+                );
+              }
+              return (
+                <button
+                  key={s.code}
+                  type="button"
+                  onClick={() => {
+                    onChange?.(s.code);
+                    close();
+                  }}
+                  className={optionClass}
+                >
+                  {optionContent}
                 </button>
               );
             })}

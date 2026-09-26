@@ -1,3 +1,4 @@
+import type { To } from "react-router-dom";
 import { isCubeSeasonCode } from "../data/utils";
 import {
   cubeBoardCode, cubeForBoard, cubeSeasonBoardLabel, cubeSeasonRows, SEASONED_CUBE_VARIANT,
@@ -17,12 +18,12 @@ const seasonOption = (season: CubeSeason): BoardWindowOption => ({
 export function CubeSeasonSelector({
   activeSet,
   seasons,
-  onSelect,
+  hrefFor,
   variant = "hero",
 }: {
   activeSet: string;
   seasons: CubeSeason[] | undefined;
-  onSelect: (setCode: string) => void;
+  hrefFor: (setCode: string) => To;
   variant?: "hero" | "mobile";
 }) {
   const cube = cubeForBoard(activeSet) ?? SEASONED_CUBE_VARIANT;
@@ -40,7 +41,7 @@ export function CubeSeasonSelector({
     { value: wholeBoard, label: "ALL SEASONS", icon: <CalendarRange size={20} className="text-white shrink-0" /> },
     ...windows,
   ];
-  return <BoardWindowSelector value={value} options={options} onSelect={onSelect} variant={variant} />;
+  return <BoardWindowSelector value={value} options={options} hrefFor={hrefFor} variant={variant} />;
 }
 
 // True for a cube that splits into declared runs, and for those runs themselves, which carry a run

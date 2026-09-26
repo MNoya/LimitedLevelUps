@@ -13,16 +13,31 @@
 // when they have none), a set's white symbol on set routes, the LLU logo everywhere else.
 
 import {
-  PUBLIC_SUPABASE_URL,
-  PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-} from "../frontend/src/data/public-supabase-config";
-import { SITE_NAME as SITE, TITLE_SEPARATOR, TIER_LIST_PREVIEW_SETS } from "../frontend/src/data/constants";
-import { cardDataLabel } from "../frontend/src/data/podCards";
-import { mtgoSetName } from "../frontend/src/data/mtgoSets";
-import { resolveContestByCode, resolveFeaturedContest } from "../frontend/src/data/p0p1Slots";
+  IDENTITY_VIEWS,
+  SITE_NAME as SITE,
+  TIER_LIST_PREVIEW_SETS,
+  TITLE_SEPARATOR,
+  hasTierList,
+} from "../frontend/src/data/constants";
+import { cardDataLabel, hasCardData } from "../frontend/src/data/podCards";
+import { isMtgoFlashbackCode, mtgoSetName } from "../frontend/src/data/mtgoSets";
+import {
+  type FeaturedContest,
+  resolveContestByCode,
+  resolveFeaturedContest,
+} from "../frontend/src/data/p0p1Slots";
 import { categoryFromSlug, episodeSlugBase } from "../frontend/src/data/episodes";
-import { cubeVariantForBoard } from "../frontend/src/data/cubeVariants";
+import { cubeForBoard, cubeVariantForBoard } from "../frontend/src/data/cubeVariants";
+import { CUBE_LIFETIME, isCubeSeasonCode } from "../frontend/src/data/utils";
+import { podSeasons } from "../frontend/src/data/podSeasons";
 import { skeletonsFor } from "../frontend/src/data/skeletons";
+import {
+  SET_ROWS_QUERY,
+  type SetRow,
+  restGet,
+  restRows,
+  toSetSummary,
+} from "./_shared/public-data";
 
 const EPISODE_CATEGORY_DESCRIPTIONS: Record<string, string> = {
   "Set Review": "Card-by-card set reviews and first impressions for MTG limited",
@@ -47,10 +62,10 @@ const P0P1_PICK_SENTENCE = "Pick a team of eight cards you think will perform be
 
 // A bare /p0p1 unfurls whichever contest is featured; /p0p1/<code> unfurls that one, so an archive
 // link carries its own set symbol instead of the live contest's.
-const p0p1Meta = (routeCode: string | undefined): RouteMeta => {
-  const now = Date.now();
-  const contest = routeCode ? resolveContestByCode(routeCode, now) : resolveFeaturedContest(now);
-  if (contest === null) return page("P0P1 Challenge", P0P1_PICK_SENTENCE);
+const p0p1Meta = (contest: FeaturedContest | null, now: number): RouteMeta => {
+  if (contest === null) {
+    return page("P0P1 Challenge", P0P1_PICK_SENTENCE);
+  }
 
   let description = P0P1_PICK_SENTENCE;
   if (now > contest.votingDeadline.getTime()) {
@@ -98,44 +113,14 @@ const titleCaseSlug = (slug: string, setCodes: Set<string>): string =>
     })
     .join(" ");
 
-const restGet = (query: string): Promise<Response> =>
-  fetch(`${PUBLIC_SUPABASE_URL}/rest/v1/${query}`, {
-    headers: {
-      apikey: PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-      authorization: `Bearer ${PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
-    },
-    cf: { cacheTtl: 600, cacheEverything: true },
-  });
-
-const fetchSetCodes = async (): Promise<Set<string>> => {
-  try {
-    const resp = await restGet("public_sets?select=code");
-    if (!resp.ok) return new Set();
-    const rows = (await resp.json()) as Array<{ code: string }>;
-    return new Set(rows.map((r) => r.code.toUpperCase()));
-  } catch {
-    return new Set();
-  }
-};
-
-const fetchSetName = async (code: string): Promise<string> => {
-  try {
-    const resp = await restGet(`public_sets?code=eq.${encodeURIComponent(code)}&select=name&limit=1`);
-    if (resp.ok) {
-      const rows = (await resp.json()) as Array<{ name: string }>;
-      if (rows[0]?.name) return rows[0].name;
-    }
-  } catch {
-    // fall through
-  }
-  return TIER_LIST_PREVIEW_SETS[code]?.name ?? mtgoSetName(code);
-};
+const META_CACHE_TTL = 600;
 
 // Episodes span sets that never reached the leaderboard, so resolve their display name
 // from public_episodes instead of public_sets. Null means no episode carries that code.
 const fetchEpisodeSetName = async (code: string): Promise<string | null> => {
   try {
-    const resp = await restGet(`public_episodes?set_code=eq.${encodeURIComponent(code)}&select=set_name&limit=1`);
+    const query = `public_episodes?set_code=eq.${encodeURIComponent(code)}&select=set_name&limit=1`;
+    const resp = await restGet(query, META_CACHE_TTL);
     if (resp.ok) {
       const rows = (await resp.json()) as Array<{ set_name: string | null }>;
       if (rows.length > 0) return rows[0].set_name ?? code;
@@ -148,7 +133,7 @@ const fetchEpisodeSetName = async (code: string): Promise<string | null> => {
 
 const episodeSlugMeta = async (slug: string): Promise<RouteMeta | null> => {
   try {
-    const resp = await restGet("public_episodes?select=title,youtube_id,summary");
+    const resp = await restGet("public_episodes?select=title,youtube_id,summary", META_CACHE_TTL);
     if (!resp.ok) return null;
     const rows = (await resp.json()) as Array<{ title: string; youtube_id: string | null; summary: string | null }>;
     for (const row of rows) {
@@ -213,34 +198,6 @@ const episodeProseFromLine = (line: string): string => {
   return text.replace(/[.\s]+$/, "").trim();
 };
 
-// Pod-only custom formats never reach public_sets; their display name lives on the pod events
-const fetchPodFormatLabel = async (code: string): Promise<string | null> => {
-  try {
-    const query = `public_pod_draft_events?set_code=eq.${encodeURIComponent(code)}&format_label=not.is.null&select=format_label&limit=1`;
-    const resp = await restGet(query);
-    if (resp.ok) {
-      const rows = (await resp.json()) as Array<{ format_label: string | null }>;
-      if (rows[0]?.format_label) return rows[0].format_label;
-    }
-  } catch {
-    // fall through
-  }
-  return null;
-};
-
-const fetchPlayerName = async (slug: string): Promise<string> => {
-  try {
-    const resp = await restGet(`public_leaderboard?slug=eq.${encodeURIComponent(slug)}&select=display_name&limit=1`);
-    if (resp.ok) {
-      const rows = (await resp.json()) as Array<{ display_name: string }>;
-      if (rows[0]?.display_name) return rows[0].display_name;
-    }
-  } catch {
-    // fall through to the slug
-  }
-  return slugToName(slug);
-};
-
 const playerMeta = (name: string, slug: string): RouteMeta => ({
   ogTitle: `${name}'s Profile`,
   tabTitle: `${name}${TITLE_SEPARATOR}${SITE}`,
@@ -248,151 +205,6 @@ const playerMeta = (name: string, slug: string): RouteMeta => ({
   description: `View ${name}'s drafts on the Limited Level-Ups community website`,
   image: { kind: "avatarProxy", slug },
 });
-
-const resolveMeta = async (pathname: string): Promise<RouteMeta> => {
-  const segments = pathname.split("/").filter(Boolean);
-  if (segments.length === 0) {
-    return { ...HOME_META, noImagePreview: true };
-  }
-  const [section, ...rest] = segments;
-
-  if (section === "player" && rest[0]) {
-    return playerMeta(await fetchPlayerName(rest[0]), rest[0]);
-  }
-
-  if (section === "leaderboard") {
-    if (rest.length === 0) {
-      return page("Leaderboard", LEADERBOARD_DESCRIPTION);
-    }
-    if (rest[0] === "about") {
-      return page("About", "Learn how the community leaderboard works");
-    }
-    if (rest[0] === "player" && rest[1]) {
-      return playerMeta(await fetchPlayerName(rest[1]), rest[1]);
-    }
-    const setCode = rest[0].toUpperCase();
-    if (rest[1] === "player" && rest[2]) {
-      return playerMeta(await fetchPlayerName(rest[2]), rest[2]);
-    }
-    // CUBE is a word, not an acronym, and its boards are virtual CUBE-<SET|VARIANT> codes; render
-    // "Cube" / "Cube SOS" / the cube's own name, resolving the symbol from the base CUBE set.
-    const baseCode = setCode.startsWith("CUBE-") ? "CUBE" : setCode;
-    const variant = cubeVariantForBoard(setCode);
-    const label = setCode === "CUBE" ? "Cube"
-      : variant ? variant.name
-      : setCode.startsWith("CUBE-") ? `Cube ${setCode.slice("CUBE-".length)}`
-      : setCode;
-    const setName = variant?.name ?? await fetchSetName(baseCode);
-    return page(
-      `${label} Leaderboard`,
-      `Check ${setName} ranks and trophies on the leaderboard`,
-      { kind: "setSymbol", code: baseCode },
-    );
-  }
-
-  if (section === "tier-list") {
-    if (rest[0]) {
-      const setCode = rest[0].toUpperCase();
-      const setName = await fetchSetName(setCode);
-      if (rest[1] === "archetypes" && skeletonsFor(setCode).length > 0) {
-        return page(
-          `${setCode} Archetype Skeletons`,
-          `Check the cards at the core of every color pair in ${setName}`,
-          { kind: "setSymbol", code: setCode },
-        );
-      }
-      return page(
-        `${setCode} Tier List`,
-        `Check updated Set Review grades for ${setName}`,
-        { kind: "setSymbol", code: setCode },
-      );
-    }
-    return page("Tier List", "Check updated Set Review grades for every set");
-  }
-
-  if (section === "pods") {
-    if (rest[0] === "guide") {
-      return page("Pod Drafts Guide", "How to play on our community Pod Drafts");
-    }
-    if (rest[0] && rest[1] === "data") {
-      const label = cardDataLabel(rest[0].toUpperCase());
-      return page(`${label} Cube Card Data`, `Card stats from every ${label} Cube pod draft`);
-    }
-    if (rest[0]) {
-      const setCodes = await fetchSetCodes();
-      const code = rest[0].toUpperCase();
-      if (setCodes.has(code)) {
-        const setName = await fetchSetName(code);
-        return page(`${code} Pod Drafts`, `${setName} pod draft results and standings`, { kind: "setSymbol", code });
-      }
-      const formatLabel = await fetchPodFormatLabel(code);
-      if (formatLabel) {
-        return page(`${code} Pod Drafts`, `${formatLabel} pod draft results and standings`, { kind: "setSymbol", code });
-      }
-      return page(titleCaseSlug(rest[0], setCodes), "Check seats, logs & replays for this pod draft");
-    }
-    return page("Pod Drafts", "Check community pod draft results and standings");
-  }
-
-  if (section === "p0p1") {
-    return p0p1Meta(rest[0]);
-  }
-  if (section === "episodes") {
-    const slug = rest[0];
-    if (!slug) {
-      return page("Episodes", "Check out the latest episodes, or search the archive");
-    }
-    if (slug === "transcripts") {
-      if (!rest[1]) {
-        return {
-          ogTitle: "Episode Transcripts",
-          tabTitle: `Transcripts${TITLE_SEPARATOR}${SITE}`,
-          siteName: SITE,
-          description: "Read the episode library",
-          image: null,
-        };
-      }
-      const base = await episodeSlugMeta(rest[1]);
-      if (base) {
-        return { ...base, description: TRANSCRIPT_READ_DESCRIPTION };
-      }
-      return page(titleCaseSlug(rest[1], new Set()), TRANSCRIPT_READ_DESCRIPTION);
-    }
-    if (rest[1]) {
-      const meta = await episodeSlugMeta(rest[1]);
-      return meta ?? page(titleCaseSlug(rest[1], new Set()), EPISODE_WATCH_FALLBACK);
-    }
-    if (slug === "shorts") {
-      return page("Shorts", "Quick limited tips and highlights in under two minutes");
-    }
-    if (slug === "audio") {
-      return page("Audio", "Listen to the podcast archive");
-    }
-    const category = categoryFromSlug(slug);
-    if (category) {
-      return page(`${category} Episodes`, EPISODE_CATEGORY_DESCRIPTIONS[category]);
-    }
-    const setCode = slug.toUpperCase();
-    const setName = await fetchEpisodeSetName(setCode);
-    if (setName) {
-      return page(
-        `${setCode} Episodes`,
-        `Episodes, set reviews and draft guides for ${setName}`,
-        { kind: "setSymbol", code: setCode },
-      );
-    }
-    const episodeMeta = await episodeSlugMeta(slug);
-    return episodeMeta ?? page(titleCaseSlug(slug, new Set()), EPISODE_WATCH_FALLBACK);
-  }
-  if (section === "community") {
-    return page("Community", "Learn about us, the show and the community behind it");
-  }
-  if (section === "about") {
-    return page("About", "Learn how the community leaderboard works");
-  }
-
-  return { ...HOME_META, description: null };
-};
 
 export const onRequest: PagesFunction = async (context) => {
   const url = new URL(context.request.url);
@@ -405,11 +217,16 @@ export const onRequest: PagesFunction = async (context) => {
   const lastSegment = url.pathname.split("/").pop() ?? "";
   if (lastSegment.includes(".") || url.pathname.startsWith("/api/")) return context.next();
 
+  const route = await resolveRoute(url.pathname.split("/").filter(Boolean));
+  if (route.kind === "redirect") {
+    return Response.redirect(`${url.origin}${route.location}${url.search}`, route.status);
+  }
+  const { meta } = route;
+
   const indexUrl = new URL("/index.html", url.origin);
   const indexResp = await context.env.ASSETS.fetch(indexUrl.toString());
 
-  const meta = await resolveMeta(url.pathname);
-  const ogUrl = `${url.origin}${url.pathname}`;
+  const ogUrl = `${url.origin}${route.canonicalPath}`;
   const isMetaCrawler = /whatsapp|facebookexternalhit/i.test(context.request.headers.get("user-agent") ?? "");
   const image = isMetaCrawler ? metaCrawlerImage(meta.image, url.origin) : meta.image;
   const imageUrl = await resolveImageUrl(image, url.origin, context.env.ASSETS);
@@ -428,7 +245,7 @@ export const onRequest: PagesFunction = async (context) => {
   const headers = new Headers(indexResp.headers);
   headers.set("Cache-Control", "public, max-age=0, must-revalidate");
   headers.set("Vary", "User-Agent");
-  const baseResponse = new Response(indexResp.body, { status: 200, headers });
+  const baseResponse = new Response(indexResp.body, { status: route.notFound ? 404 : 200, headers });
 
   let rewriter = new HTMLRewriter()
     .on("title", { element: (el) => el.setInnerContent(meta.tabTitle) })
@@ -447,6 +264,12 @@ export const onRequest: PagesFunction = async (context) => {
     });
   }
 
+  if (route.notFound) {
+    rewriter = rewriter.on("head", {
+      element: (el) => el.append('<meta name="robots" content="noindex">', { html: true }),
+    });
+  }
+
   const dimensionHandler = isMetaCrawler ? setContent(String(META_CRAWLER_THUMB_SIZE)) : remove;
 
   if (imageUrl) {
@@ -459,6 +282,309 @@ export const onRequest: PagesFunction = async (context) => {
   }
 
   return rewriter.transform(baseResponse);
+};
+
+type RouteResolution =
+  | { kind: "page"; meta: RouteMeta; canonicalPath: string; notFound: boolean }
+  | { kind: "redirect"; location: string; status: 301 | 302 };
+
+const resolved = (meta: RouteMeta, canonicalPath: string, notFound = false): RouteResolution => ({
+  kind: "page",
+  meta,
+  canonicalPath,
+  notFound,
+});
+
+const redirect = (location: string, status: 301 | 302): RouteResolution => ({ kind: "redirect", location, status });
+
+const resolveRoute = async (segments: string[]): Promise<RouteResolution> => {
+  if (segments.length === 0) {
+    return resolved({ ...HOME_META, noImagePreview: true }, "/");
+  }
+  const legacyPath = legacyRedirectPath(segments);
+  if (legacyPath) {
+    return redirect(legacyPath, 301);
+  }
+  if (!matchesAppRoute(segments)) {
+    return resolved({ ...HOME_META, description: null }, `/${segments.join("/")}`, true);
+  }
+  const section = segments[0].toLowerCase();
+  const rest = segments.slice(1);
+
+  if (section === "player") {
+    return playerRoute(rest[0], rest[1]);
+  }
+  if (section === "leaderboard") {
+    return leaderboardRoute(rest[0]);
+  }
+  if (section === "tier-list") {
+    return tierListRoute(rest);
+  }
+  if (section === "pods") {
+    return podsRoute(rest);
+  }
+  if (section === "p0p1") {
+    return p0p1Route(rest[0]);
+  }
+  if (section === "episodes") {
+    return resolved(await episodesMeta(rest), `/${segments.join("/").toLowerCase()}`);
+  }
+  if (section === "community") {
+    return resolved(page("Community", "Learn about us, the show and the community behind it"), "/community");
+  }
+  return resolved({ ...HOME_META, description: null }, `/${section}`);
+};
+
+const legacyRedirectPath = (segments: string[]): string | null => {
+  const section = segments[0].toLowerCase();
+  const rest = segments.slice(1).map((segment) => segment.toLowerCase());
+  if (rest.length === 0 && section === "about") {
+    return "/leaderboard/about";
+  }
+  if (rest.length === 0 && section === "players") {
+    return "/leaderboard";
+  }
+  if (section !== "leaderboard") {
+    return null;
+  }
+  if (rest.length === 2 && rest[0] === "player") {
+    return `/player/${rest[1]}`;
+  }
+  if (rest.length === 3 && rest[1] === "player") {
+    return `/player/${rest[2]}/${rest[0].toUpperCase()}`;
+  }
+  if (rest[0] === "archetypes" || rest[1] === "archetypes") {
+    return "/leaderboard";
+  }
+  return null;
+};
+
+const matchesAppRoute = (segments: string[]): boolean => {
+  const appRoutes = [
+    "/episodes",
+    "/episodes/:categorySlug",
+    "/episodes/:categorySlug/:episodeSlug",
+    "/community",
+    "/leaderboard",
+    "/leaderboard/about",
+    "/leaderboard/:setCode",
+    "/player/:slug",
+    "/player/:slug/:setCode",
+    "/pods/guide",
+    "/pods",
+    "/pods/:board/data",
+    "/pods/:board/data/:card",
+    "/pods/:slug",
+    "/pods/:slug/:who",
+    "/pods/:slug/:who/:pack/:pick",
+    "/tier-list",
+    "/tier-list/:setCode",
+    "/tier-list/:setCode/archetypes",
+    "/tier-list/:setCode/archetypes/:pair",
+    "/p0p1",
+    "/p0p1/:setCode",
+    "/banner",
+  ];
+  for (const route of appRoutes) {
+    const parts = route.split("/").filter(Boolean);
+    const matches = parts.every((part, i) => part.startsWith(":") || part === segments[i]?.toLowerCase());
+    if (matches && parts.length === segments.length) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const playerRoute = async (rawSlug: string, rawSetCode: string | undefined): Promise<RouteResolution> => {
+  const slug = rawSlug.toLowerCase();
+  const player = await lookupPlayer(slug);
+  const name = player.status === "found" ? player.name : slugToName(slug);
+  const canonicalPath = rawSetCode ? `/player/${slug}/${rawSetCode.toUpperCase()}` : `/player/${slug}`;
+  return resolved(playerMeta(name, slug), canonicalPath, player.status === "missing");
+};
+
+const leaderboardRoute = async (rawCode: string | undefined): Promise<RouteResolution> => {
+  if (rawCode === undefined) {
+    return resolved(page("Leaderboard", LEADERBOARD_DESCRIPTION), "/leaderboard");
+  }
+  if (rawCode.toLowerCase() === "about") {
+    return resolved(page("About", "Learn how the community leaderboard works"), "/leaderboard/about");
+  }
+  const setCode = rawCode.toUpperCase();
+  const sets = await fetchSets();
+  if (sets?.some((set) => set.is_active && set.code === setCode)) {
+    return redirect("/leaderboard", 302);
+  }
+  // CUBE is a word, not an acronym, and its boards are virtual CUBE-<SET|VARIANT> codes; render
+  // "Cube" / "Cube SOS" / the cube's own name, resolving the symbol from the base CUBE set.
+  const baseCode = setCode.startsWith("CUBE-") ? "CUBE" : setCode;
+  const variant = cubeVariantForBoard(setCode);
+  const label = setCode === "CUBE" ? "Cube"
+    : variant ? variant.name
+    : setCode.startsWith("CUBE-") ? `Cube ${setCode.slice("CUBE-".length)}`
+    : setCode;
+  const setName = variant?.name ?? setNameFor(sets, baseCode);
+  const meta = page(
+    `${label} Leaderboard`,
+    `Check ${setName} ranks and trophies on the leaderboard`,
+    { kind: "setSymbol", code: baseCode },
+  );
+  const boardExists = await leaderboardBoardExists(setCode, sets);
+  return resolved(meta, `/leaderboard/${setCode}`, boardExists === false);
+};
+
+const tierListRoute = async (rest: string[]): Promise<RouteResolution> => {
+  const [rawCode, , rawPair] = rest;
+  if (rawCode === undefined) {
+    return resolved(page("Tier List", "Check updated Set Review grades for every set"), "/tier-list");
+  }
+  const setCode = rawCode.toUpperCase();
+  const setName = setNameFor(await fetchSets(), setCode);
+  const symbol: ImageIntent = { kind: "setSymbol", code: setCode };
+  const notFound = !hasTierList(setCode);
+  if (rest.length > 1 && skeletonsFor(setCode).length > 0) {
+    const archetypesPath = `/tier-list/${setCode}/archetypes`;
+    const description = `Check the cards at the core of every color pair in ${setName}`;
+    return resolved(
+      page(`${setCode} Archetype Skeletons`, description, symbol),
+      rawPair ? `${archetypesPath}/${rawPair.toLowerCase()}` : archetypesPath,
+      notFound,
+    );
+  }
+  return resolved(
+    page(`${setCode} Tier List`, `Check updated Set Review grades for ${setName}`, symbol),
+    `/tier-list/${setCode}`,
+    notFound,
+  );
+};
+
+const podsRoute = async (rest: string[]): Promise<RouteResolution> => {
+  const [first, second, third] = rest;
+  if (first === undefined) {
+    return resolved(page("Pod Drafts", "Check community pod draft results and standings"), "/pods");
+  }
+  if (second?.toLowerCase() === "data" && rest.length <= 3) {
+    const board = first.toUpperCase();
+    const label = cardDataLabel(board);
+    const boardPath = `/pods/${board}/data`;
+    return resolved(
+      page(`${label} Cube Card Data`, `Card stats from every ${label} Cube pod draft`),
+      third ? `${boardPath}/${third}` : boardPath,
+      !hasCardData(board),
+    );
+  }
+  if (rest.length === 1 && first.toLowerCase() === "guide") {
+    return resolved(page("Pod Drafts Guide", "How to play on our community Pod Drafts"), "/pods/guide");
+  }
+  return podSlugRoute(first, rest.slice(1));
+};
+
+const podSlugRoute = async (rawSlug: string, tail: string[]): Promise<RouteResolution> => {
+  const code = rawSlug.toUpperCase();
+  const split = rawSlug.lastIndexOf("-");
+  const boardQuery = (setCode: string) =>
+    `public_pod_draft_events?select=set_code,format_label&set_code=ilike.${queryValue(setCode)}`;
+  const [sets, boards, events, windowBoards] = await Promise.all([
+    fetchSets(),
+    viewRows<PodBoardRow>(`${boardQuery(rawSlug)}&order=format_label.nullslast&limit=1`),
+    viewRows<{ slug: string }>(`public_pod_draft_events?select=slug&slug=ilike.${queryValue(rawSlug)}&limit=1`),
+    split > 0 ? viewRows<PodBoardRow>(`${boardQuery(rawSlug.slice(0, split))}&limit=1`) : [],
+  ]);
+  const meta = podSlugMeta(rawSlug, sets, boards?.[0]?.format_label ?? null);
+  const event = events?.[0];
+  if (tail.length > 0) {
+    return resolved(meta, `/pods/${event?.slug ?? rawSlug}/${tail.join("/")}`, events !== null && !event);
+  }
+
+  const seasons = podSeasons((sets ?? []).map(toSetSummary));
+  const season = seasons.find((s) => s.code === code);
+  if (season) {
+    return resolved(meta, `/pods/${season.code}`);
+  }
+  if (boards?.[0]) {
+    return resolved(meta, `/pods/${boards[0].set_code}`);
+  }
+  const windowSeasonCode = rawSlug.slice(split + 1).toUpperCase();
+  if (windowBoards?.[0] && seasons.some((s) => s.code === windowSeasonCode)) {
+    return resolved(meta, `/pods/${rawSlug.toLowerCase()}`);
+  }
+  if (event) {
+    return resolved(meta, `/pods/${event.slug}`);
+  }
+  const lookupFailed = sets === null || boards === null || events === null || windowBoards === null;
+  return resolved(meta, `/pods/${rawSlug}`, !lookupFailed);
+};
+
+const podSlugMeta = (rawSlug: string, sets: SetRow[] | null, formatLabel: string | null): RouteMeta => {
+  const code = rawSlug.toUpperCase();
+  const set = sets?.find((s) => s.code === code);
+  if (set) {
+    return page(`${code} Pod Drafts`, `${set.name} pod draft results and standings`, { kind: "setSymbol", code });
+  }
+  // Pod-only custom formats never reach public_sets; their display name lives on the pod events
+  if (formatLabel) {
+    return page(`${code} Pod Drafts`, `${formatLabel} pod draft results and standings`, { kind: "setSymbol", code });
+  }
+  const setCodes = new Set((sets ?? []).map((s) => s.code));
+  return page(titleCaseSlug(rawSlug, setCodes), "Check seats, logs & replays for this pod draft");
+};
+
+const p0p1Route = (rawCode: string | undefined): RouteResolution => {
+  const now = Date.now();
+  if (rawCode === undefined) {
+    return resolved(p0p1Meta(resolveFeaturedContest(now), now), "/p0p1");
+  }
+  const contest = resolveContestByCode(rawCode, now);
+  const hidden = contest === null || (contest.status === "pre" && !contest.comingSoon);
+  return resolved(p0p1Meta(contest, now), `/p0p1/${rawCode.toLowerCase()}`, hidden);
+};
+
+const episodesMeta = async (rest: string[]): Promise<RouteMeta> => {
+  const slug = rest[0];
+  if (!slug) {
+    return page("Episodes", "Check out the latest episodes, or search the archive");
+  }
+  if (slug === "transcripts") {
+    if (!rest[1]) {
+      return {
+        ogTitle: "Episode Transcripts",
+        tabTitle: `Transcripts${TITLE_SEPARATOR}${SITE}`,
+        siteName: SITE,
+        description: "Read the episode library",
+        image: null,
+      };
+    }
+    const base = await episodeSlugMeta(rest[1]);
+    if (base) {
+      return { ...base, description: TRANSCRIPT_READ_DESCRIPTION };
+    }
+    return page(titleCaseSlug(rest[1], new Set()), TRANSCRIPT_READ_DESCRIPTION);
+  }
+  if (rest[1]) {
+    const meta = await episodeSlugMeta(rest[1]);
+    return meta ?? page(titleCaseSlug(rest[1], new Set()), EPISODE_WATCH_FALLBACK);
+  }
+  if (slug === "shorts") {
+    return page("Shorts", "Quick limited tips and highlights in under two minutes");
+  }
+  if (slug === "audio") {
+    return page("Audio", "Listen to the podcast archive");
+  }
+  const category = categoryFromSlug(slug);
+  if (category) {
+    return page(`${category} Episodes`, EPISODE_CATEGORY_DESCRIPTIONS[category]);
+  }
+  const setCode = slug.toUpperCase();
+  const setName = await fetchEpisodeSetName(setCode);
+  if (setName) {
+    return page(
+      `${setCode} Episodes`,
+      `Episodes, set reviews and draft guides for ${setName}`,
+      { kind: "setSymbol", code: setCode },
+    );
+  }
+  const episodeMeta = await episodeSlugMeta(slug);
+  return episodeMeta ?? page(titleCaseSlug(slug, new Set()), EPISODE_WATCH_FALLBACK);
 };
 
 // Untapped's value; a small declared square makes WhatsApp render the compact thumbnail instead of a full-bleed square
@@ -480,5 +606,57 @@ const resolveImageUrl = async (image: ImageIntent, origin: string, assets: Fetch
     return resp.ok ? candidate : null;
   } catch {
     return null;
+  }
+};
+
+type PodBoardRow = { set_code: string; format_label: string | null };
+
+type PlayerLookup = { status: "found"; name: string } | { status: "missing" } | { status: "failed" };
+
+const lookupPlayer = async (slug: string): Promise<PlayerLookup> => {
+  const results = await Promise.all(
+    IDENTITY_VIEWS.map((view) =>
+      viewRows<{ display_name: string | null }>(`${view}?slug=eq.${queryValue(slug)}&select=display_name&limit=1`),
+    ),
+  );
+  for (const rows of results) {
+    if (rows?.[0]) {
+      return { status: "found", name: rows[0].display_name ?? slugToName(slug) };
+    }
+  }
+  return results.includes(null) ? { status: "failed" } : { status: "missing" };
+};
+
+const leaderboardBoardExists = async (setCode: string, sets: SetRow[] | null): Promise<boolean | null> => {
+  if (setCode === CUBE_LIFETIME || isMtgoFlashbackCode(setCode) || cubeForBoard(setCode)) {
+    return true;
+  }
+  if (sets === null) {
+    return null;
+  }
+  if (sets.some((set) => set.code === setCode)) {
+    return true;
+  }
+  if (!isCubeSeasonCode(setCode)) {
+    return false;
+  }
+  const rows = await viewRows<{ set_code: string }>(
+    `public_cube_seasons?set_code=eq.${queryValue(setCode)}&select=set_code&limit=1`,
+  );
+  return rows === null ? null : rows.length > 0;
+};
+
+const setNameFor = (sets: SetRow[] | null, code: string): string =>
+  sets?.find((set) => set.code === code)?.name ?? TIER_LIST_PREVIEW_SETS[code]?.name ?? mtgoSetName(code);
+
+const fetchSets = (): Promise<SetRow[] | null> => viewRows<SetRow>(SET_ROWS_QUERY);
+
+const viewRows = <T>(query: string): Promise<T[] | null> => restRows<T>(query, META_CACHE_TTL);
+
+const queryValue = (segment: string): string => {
+  try {
+    return encodeURIComponent(decodeURIComponent(segment));
+  } catch {
+    return encodeURIComponent(segment);
   }
 };

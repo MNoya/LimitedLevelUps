@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import { Trophy } from "../Brand";
 import { ChevronLeft } from "../Icons";
@@ -13,6 +14,7 @@ import {
   TEAM_STANDING_COLS_CLASS,
   TEAM_TONE,
 } from "./PodStandingRow";
+import { podDeckHref, podDraftLogHref, podSeatHref } from "./podLinks";
 import type { PodEventParticipantRow, PodSeat } from "../../types/leaderboard";
 
 export { recordParts } from "./PodStandingRow";
@@ -36,7 +38,6 @@ export interface PodStandingsActions {
   eventSlug: string;
   hasDraftLog: boolean;
   canViewSeat: (avatarUrl: string | null | undefined) => boolean;
-  onShowDeck: (seat: PodSeat) => void;
 }
 
 export function PodStandings({
@@ -44,7 +45,6 @@ export function PodStandings({
   teamDraft = false,
   finalized,
   selectedSeat,
-  onSelect,
   onHover,
   actions,
 }: {
@@ -52,7 +52,6 @@ export function PodStandings({
   teamDraft?: boolean;
   finalized: boolean;
   selectedSeat: number | null;
-  onSelect: (seat: number) => void;
   onHover?: (seat: number | null) => void;
   actions: PodStandingsActions;
 }) {
@@ -66,13 +65,9 @@ export function PodStandings({
         rank={rank}
         cols={cols}
         selected={seat.seatIndex === selectedSeat}
-        logHref={
-          actions.hasDraftLog && viewable
-            ? `/pods/${actions.eventSlug}/${seat.playerSlug ?? seat.seatIndex}`
-            : null
-        }
-        onShowDeck={hasDeck ? () => actions.onShowDeck(seat) : undefined}
-        onRowClick={() => onSelect(seat.seatIndex)}
+        rowHref={podSeatHref(actions.eventSlug, seat.discordName)}
+        deckHref={hasDeck ? podDeckHref(actions.eventSlug, null, seat.discordName) : null}
+        logHref={actions.hasDraftLog && viewable ? podDraftLogHref(actions.eventSlug, seat) : null}
         onHover={(hovering) => onHover?.(hovering ? seat.seatIndex : null)}
       />
     );
@@ -134,15 +129,15 @@ const BAR_LABEL_SIZE = 16;
 const CHEVRON_SLOT = 22;
 const CHEVRON_INSET = "pl-[22px]";
 
-export function StandingsBackBar({ onClick }: { onClick: () => void }) {
+export function StandingsBackBar({ to }: { to: string }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      to={to}
+      replace
       className={cn(
         BAR_CHROME,
         STANDING_ROW_PAD_X,
-        "flex items-center w-full text-left text-muted hover:text-text transition-colors cursor-pointer",
+        "flex items-center w-full text-left text-muted hover:text-text transition-colors cursor-pointer no-underline",
       )}
       style={{ height: BAR_HEIGHT }}
     >
@@ -150,7 +145,7 @@ export function StandingsBackBar({ onClick }: { onClick: () => void }) {
       <span className={cn(BAR_LABEL, "ml-1.5")} style={{ fontSize: BAR_LABEL_SIZE }}>
         BACK TO STANDINGS
       </span>
-    </button>
+    </Link>
   );
 }
 

@@ -103,6 +103,7 @@ import { LISTEN_ON } from "../data/site";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { TOGGLE_ACTIVE, TOGGLE_INACTIVE } from "../lib/toggle-styles";
+import { isPlainClick } from "../lib/plain-click";
 
 const SORT_OPTIONS: { value: SortKey; label: string; icon: LucideIcon }[] = [
   { value: "newest", label: "Newest", icon: CalendarArrowDown },
@@ -317,38 +318,37 @@ export function EpisodesPage() {
     return root ? root.getBoundingClientRect().top + window.scrollY : 0;
   };
 
-  const navTo = (pathname: string, querySet: string | null) => {
+  const searchWithSet = (querySet: string | null) => {
     const next = new URLSearchParams(params);
     next.delete("set");
     if (querySet) {
       next.set("set", querySet);
     }
-    navigate({ pathname, search: next.toString() });
+    return next.toString();
+  };
+  const hrefTo = (pathname: string, querySet: string | null) => {
+    const search = searchWithSet(querySet);
+    return search ? `${pathname}?${search}` : pathname;
+  };
+  const navTo = (pathname: string, querySet: string | null) => {
+    navigate({ pathname, search: searchWithSet(querySet) });
     setVisible(PAGE_SIZE);
     const contentTop = contentTopOffset();
     if (window.scrollY > contentTop) {
       window.scrollTo({ top: contentTop });
     }
   };
-  const railLink = (pathname: string, querySet: string | null) => {
-    const next = new URLSearchParams(params);
-    next.delete("set");
-    if (querySet) {
-      next.set("set", querySet);
-    }
-    const search = next.toString();
-    return {
-      href: search ? `${pathname}?${search}` : pathname,
-      onClick: (event: ReactMouseEvent) => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-          return;
-        }
-        event.preventDefault();
-        navTo(pathname, querySet);
-        setDrawerOpen(false);
-      },
-    };
-  };
+  const railLink = (pathname: string, querySet: string | null) => ({
+    href: hrefTo(pathname, querySet),
+    onClick: (event: ReactMouseEvent) => {
+      if (!isPlainClick(event)) {
+        return;
+      }
+      event.preventDefault();
+      navTo(pathname, querySet);
+      setDrawerOpen(false);
+    },
+  });
   const updateQuery = (value: string) => {
     setQuery(value);
     setVisible(PAGE_SIZE);
@@ -360,15 +360,17 @@ export function EpisodesPage() {
     }
     navigate({ pathname: location.pathname, search: next.toString() }, { replace: true });
   };
-  const chooseSet = (code: string | null) => {
+  const setTarget = (code: string | null): [string, string | null] => {
     if (!code) {
-      navTo(categoryPath ?? "/episodes", null);
-    } else if (categoryPath) {
-      navTo(categoryPath, code);
-    } else {
-      navTo(setLandingPath(code), null);
+      return [categoryPath ?? "/episodes", null];
     }
+    if (categoryPath) {
+      return [categoryPath, code];
+    }
+    return [setLandingPath(code), null];
   };
+  const chooseSet = (code: string | null) => navTo(...setTarget(code));
+  const setHref = (code: string | null) => hrefTo(...setTarget(code));
 
   const transcriptKey = (ep: Episode) => ep.youtubeId ?? ep.id;
   const statusOf = (ep: Episode) => transcriptIndex?.get(transcriptKey(ep));
@@ -482,6 +484,7 @@ export function EpisodesPage() {
       value={activeSet ?? ""}
       options={setFilterOptions}
       onChange={(v) => chooseSet(v || null)}
+      hrefFor={(v) => setHref(v || null)}
       renderValue={renderSetValue}
       renderOption={renderSetOption}
       searchPlaceholder="Search sets or codes…"
@@ -1674,7 +1677,7 @@ function ChapterNav({
             const isActive = chapter.t === activeT;
             const slug = chapterSlug(chapter.heading);
             const jump = (event: ReactMouseEvent) => {
-              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+              if (!isPlainClick(event)) {
                 return;
               }
               event.preventDefault();
@@ -2821,7 +2824,7 @@ function EpisodeTranscript({
                 <a
                   href={`#${slug}`}
                   onClick={(e) => {
-                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+                    if (!isPlainClick(e)) {
                       return;
                     }
                     e.preventDefault();

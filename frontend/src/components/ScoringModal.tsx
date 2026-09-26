@@ -1,23 +1,16 @@
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { X } from "lucide-react";
 import { ScoringExplainer } from "./ScoringExplainer";
+import { useCloseModal } from "../lib/modal-history";
 
-// The scoring explanation is a deep-linkable modal: it opens whenever the URL
-// hash is #points and closes by stripping the hash, so it survives reloads and
-// is shareable. Mounted once at the app root; any ScoringInfoButton just adds
-// the hash.
 export const SCORING_HASH = "#about";
 
 export function ScoringModalHost() {
   const location = useLocation();
-  const navigate = useNavigate();
   const open = location.hash === SCORING_HASH;
-
-  const close = useCallback(() => {
-    navigate({ pathname: location.pathname, search: location.search }, { replace: true });
-  }, [navigate, location.pathname, location.search]);
+  const close = useCloseModal({ pathname: location.pathname, search: location.search });
 
   useEffect(() => {
     if (!open) {

@@ -7,6 +7,7 @@ import { ErrorState } from "./ErrorState";
 import { ScoringInfoButton } from "./ScoringInfoButton";
 import { winPct } from "../data/utils";
 import { cn } from "../lib/utils";
+import { isPlainClick } from "../lib/plain-click";
 
 // Shared table powering the set leaderboard and the per-archetype board, on
 // both desktop and mobile. Owns the expanded-row state internally; expanded
@@ -463,28 +464,15 @@ function DesktopRow({
       {mode === "direct" && <BoxesCell boxes={row.boxes ?? 0} large />}
     </>
   );
-  if (rowLinked) {
-    return (
-      <Link
-        to={href!}
-        className="group/row grid items-center gap-x-5 py-2.5 pl-2 pr-5 cursor-pointer no-underline text-inherit"
-        style={{ gridTemplateColumns: cols }}
-      >
-        {body}
-      </Link>
-    );
-  }
   return (
-    <div
-      onClick={onToggle}
-      className={cn(
-        "grid items-center gap-x-5 py-2.5 pl-2 pr-5",
-        onToggle && "cursor-pointer",
-      )}
+    <RowShell
+      href={href}
+      onToggle={onToggle}
+      className="grid items-center gap-x-5 py-2.5 pl-2 pr-5"
       style={{ gridTemplateColumns: cols }}
     >
       {body}
-    </div>
+    </RowShell>
   );
 }
 
@@ -535,30 +523,56 @@ function MobileRow({
       )}
     </>
   );
-  if (rowLinked) {
-    return (
-      <Link
-        to={href!}
-        className="group/row py-[9px] pl-2 pr-3.5 grid gap-3 items-center cursor-pointer no-underline text-inherit"
-        style={{ gridTemplateColumns: cols }}
-      >
-        {body}
-      </Link>
-    );
-  }
   return (
-    <div
-      onClick={onToggle}
-      className={cn(
-        "py-[9px] pl-2 pr-3.5 grid gap-3 items-center",
-        onToggle && "cursor-pointer",
-      )}
+    <RowShell
+      href={href}
+      onToggle={onToggle}
+      className="py-[9px] pl-2 pr-3.5 grid gap-3 items-center"
       style={{ gridTemplateColumns: cols }}
     >
       {body}
-    </div>
+    </RowShell>
   );
 }
+
+const RowShell = ({
+  href,
+  onToggle,
+  className,
+  style,
+  children,
+}: {
+  href?: string | null;
+  onToggle?: () => void;
+  className: string;
+  style: React.CSSProperties;
+  children: React.ReactNode;
+}) => {
+  if (!href) {
+    return (
+      <div onClick={onToggle} className={cn(className, onToggle && "cursor-pointer")} style={style}>
+        {children}
+      </div>
+    );
+  }
+  const expandOnPlainClick = (event: React.MouseEvent) => {
+    if (!onToggle || !isPlainClick(event)) {
+      return;
+    }
+    event.preventDefault();
+    onToggle();
+  };
+  return (
+    <Link
+      to={href}
+      onClick={expandOnPlainClick}
+      className={cn(className, "cursor-pointer no-underline text-inherit", !onToggle && "group/row")}
+      style={style}
+    >
+      {children}
+    </Link>
+  );
+};
 
 // ─── Subcells ──────────────────────────────────────────────────────────────
 

@@ -1,13 +1,10 @@
 import { HelpCircle } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Tooltip } from "./Tooltip";
 import { SCORING_HASH } from "./ScoringModal";
 import { cn } from "../lib/utils";
+import { OPENED_IN_APP } from "../lib/modal-history";
 
-// Opens the scoring explanation by adding the #points hash; the modal itself is
-// rendered once by <ScoringModalHost>. Icon-only by default (with an "About
-// Points" tooltip); pass `label` for the text-label variant used in the points
-// breakdown, which drops the tooltip since the label is self-explanatory.
 export function ScoringInfoButton({
   className,
   size = 14,
@@ -17,17 +14,15 @@ export function ScoringInfoButton({
   size?: number;
   label?: string;
 }) {
-  const navigate = useNavigate();
   const location = useLocation();
-  const open = () => navigate(`${location.pathname}${location.search}${SCORING_HASH}`);
 
   const button = (
-    <button
-      type="button"
-      onClick={open}
+    <Link
+      to={{ pathname: location.pathname, search: location.search, hash: SCORING_HASH }}
+      state={OPENED_IN_APP}
       aria-label={label ?? "About Points"}
       className={cn(
-        "inline-flex items-center justify-center cursor-pointer transition-colors",
+        "inline-flex items-center justify-center cursor-pointer transition-colors no-underline",
         label
           ? "gap-1.5 text-muted hover:text-green font-display tracking-[0.10em] text-[12px] leading-none whitespace-nowrap"
           : "text-muted hover:text-green",
@@ -36,7 +31,7 @@ export function ScoringInfoButton({
     >
       <HelpCircle size={size} strokeWidth={2} />
       {label ? <span>{label}</span> : null}
-    </button>
+    </Link>
   );
 
   if (label) {

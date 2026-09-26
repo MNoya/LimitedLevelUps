@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams, type To } from "react-router-dom";
 import React, { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { AppHeader } from "../components/AppHeader";
@@ -56,6 +56,7 @@ import { FMT_COLORS, FMT_DEFAULT_COLOR, renderFormatOption, shortFormat } from "
 import { guildLogoTransform, guildSvgUrl } from "../data/guild-art";
 import { ACTIVE_SET_CODE } from "../data/constants";
 import { cn } from "../lib/utils";
+import { useSearchParamHref } from "../lib/search-param-href";
 import type { CubeSeason, LeaderboardRow, PlayerDraftEvent, PlayerFormatBreakdown, SetSummary, TrophyLeaderboardRow } from "../types/leaderboard";
 import type { LeaderboardTableRow } from "../components/LeaderboardTable";
 
@@ -113,22 +114,9 @@ export function LeaderboardPage() {
   const formatOnlyMode = formatMode && !colorsMode;
   const colorsOnlyMode = colorsMode && !formatMode;
 
-  const setFormat = (v: string) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (v === "ALL") next.delete("format");
-      else next.set("format", v);
-      return next;
-    });
-  };
-  const setColors = (v: string) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (v === "ALL") next.delete("colors");
-      else next.set("colors", v);
-      return next;
-    });
-  };
+  const filterHref = useSearchParamHref("ALL");
+  const formatHref = (v: string) => filterHref("format", v);
+  const colorsHref = (v: string) => filterHref("colors", v);
 
   const { chips: colorChips, otherCombos, loading: colorChipsLoading } = useColorChips(activeSet);
   const { data: availableFormatLabels } = useAvailableFormats(activeSet);
@@ -213,7 +201,16 @@ export function LeaderboardPage() {
   };
 
   const updated = setMeta?.lastRefreshedAt ? lastUpdated(setMeta.lastRefreshedAt) : null;
-  const filterProps: FilterRowProps = { format, setFormat, colors, setColors, colorChips, colorChipsLoading, formatOptions, updated };
+  const filterProps: FilterRowProps = {
+    format,
+    formatHref,
+    colors,
+    colorsHref,
+    colorChips,
+    colorChipsLoading,
+    formatOptions,
+    updated,
+  };
 
   const { user } = useAuth();
   const { data: mySlug } = usePlayerSlugByDiscordId(user?.discordId);
@@ -290,9 +287,9 @@ function readSortFromParams(searchParams: URLSearchParams): SortState {
 
 interface FilterRowProps {
   format: string;
-  setFormat: (v: string) => void;
+  formatHref: (v: string) => To;
   colors: string;
-  setColors: (v: string) => void;
+  colorsHref: (v: string) => To;
   colorChips: string[];
   colorChipsLoading: boolean;
   formatOptions: typeof FORMAT_OPTIONS;
@@ -319,9 +316,8 @@ function MtgoBoard({
   cubeEntryBoard?: string;
   cubeSeasons?: CubeSeason[];
 }) {
-  const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const onSelectSet = (c: string) => goToSet(navigate, c, sets, searchParams, cubeEntryBoard, cubeSeasons);
+  const setHref = (c: string) => setBoardHref(c, sets, searchParams, cubeEntryBoard, cubeSeasons);
   const releaseDate = sets?.find((s) => s.code === activeSet)?.startDate;
   const blockGlyphs = MTGO_BLOCK_GLYPHS[activeSet];
   return (
@@ -369,10 +365,10 @@ function MtgoBoard({
         {sets && (
           isMobile ? (
             <div className="w-[150px] shrink-0">
-              <SetSwitcherMobile sets={sets} activeCode={activeSet} onChange={onSelectSet} />
+              <SetSwitcherMobile sets={sets} activeCode={activeSet} hrefFor={setHref} />
             </div>
           ) : (
-            <SetSwitcherDesktop sets={sets} activeCode={activeSet} onChange={onSelectSet} />
+            <SetSwitcherDesktop sets={sets} activeCode={activeSet} hrefFor={setHref} />
           )
         )}
       </div>
@@ -421,7 +417,6 @@ function Desktop({
   onSort: (key: SortKey) => void;
   mySlug?: string;
 }) {
-  const navigate = useNavigate();
   const { prefetchSet, prefetchPlayer } = usePrefetchers();
   const profileSet = baseSetCode(activeSet);
   return (
@@ -432,8 +427,8 @@ function Desktop({
         setMeta={setMeta}
         sets={sets}
         cubeSeasons={cubeSeasons}
-        onSelectSet={(c) => goToSet(navigate, c, sets, searchParams, cubeEntryBoard, cubeSeasons)}
-        onSelectSeason={(c) => navigate({ pathname: leaderboardPath(c), search: searchParams.toString() })}
+        setHref={(c) => setBoardHref(c, sets, searchParams, cubeEntryBoard, cubeSeasons)}
+        seasonHref={(c) => boardHref(c, searchParams)}
         onPrefetchSet={prefetchSet}
         format={filters.format}
         colors={filters.colors}
@@ -470,7 +465,7 @@ function Desktop({
             colors={filters.colors}
             format={filters.format}
             otherCombos={otherCombos}
-            onColorsSelect={filters.setColors}
+            colorsHref={filters.colorsHref}
             searchParams={searchParams}
             updated={filters.updated}
             stats={{
@@ -489,8 +484,8 @@ function SetHero({
   setMeta,
   sets,
   cubeSeasons,
-  onSelectSet,
-  onSelectSeason,
+  setHref,
+  seasonHref,
   onPrefetchSet,
   format,
   colors,
@@ -499,8 +494,8 @@ function SetHero({
   setMeta: SetSummary | undefined;
   sets: SetSummary[] | undefined;
   cubeSeasons: CubeSeason[] | undefined;
-  onSelectSet: (code: string) => void;
-  onSelectSeason: (code: string) => void;
+  setHref: (code: string) => To;
+  seasonHref: (code: string) => To;
   onPrefetchSet?: (code: string) => void;
   format: string;
   colors: string;
@@ -553,7 +548,7 @@ function SetHero({
             {/* Zero height holds the hero to a normal set's while the selector keeps its width */}
             {cubeBoardHasSeasons(activeSet) && (
               <div className="h-0 shrink-0 flex items-center">
-                <CubeSeasonSelector activeSet={activeSet} seasons={cubeSeasons} onSelect={onSelectSeason} />
+                <CubeSeasonSelector activeSet={activeSet} seasons={cubeSeasons} hrefFor={seasonHref} />
               </div>
             )}
             {/* Nudged onto the selector's baseline: the two sit in one line box at 11px and 20px, so
@@ -572,7 +567,7 @@ function SetHero({
         <SetSwitcherDesktop
           sets={sets}
           activeCode={isCubeCode(activeSet) ? cubeBoardGlyphCode(activeSet) : base}
-          onChange={onSelectSet}
+          hrefFor={setHref}
           onPrefetch={onPrefetchSet}
           extraHide={filterActive ? (tightHero ? 3 : 2) : 0}
         />
@@ -698,9 +693,9 @@ function FilterHero({ format, colors, setCode }: { format: string; colors: strin
 
 function FilterRow({
   format,
-  setFormat,
+  formatHref,
   colors,
-  setColors,
+  colorsHref,
   colorChips,
   colorChipsLoading,
   formatOptions,
@@ -710,12 +705,12 @@ function FilterRow({
       <FilterDropdown
         value={format}
         options={formatOptions}
-        onChange={setFormat}
+        hrefFor={formatHref}
         renderValue={renderFormatOption}
         renderOption={renderFormatOption}
       />
       <SectionLabel size={11}>COLORS</SectionLabel>
-      <ColorsSwitcher activeCode={colors} onChange={setColors} chips={colorChips} loading={colorChipsLoading} />
+      <ColorsSwitcher activeCode={colors} hrefFor={colorsHref} chips={colorChips} loading={colorChipsLoading} />
       <Link
         to="/leaderboard/about"
         className="ml-auto inline-flex items-center gap-1.5 font-display text-[15px] leading-none tracking-[0.08em] text-green hover:text-green-2 transition-colors no-underline whitespace-nowrap"
@@ -760,7 +755,6 @@ function Mobile({
   sort: SortState;
   onSort: (key: SortKey) => void;
 }) {
-  const navigate = useNavigate();
   const { prefetchPlayer } = usePrefetchers();
   const profileSet = baseSetCode(activeSet);
   const setMeta = sets?.find((s) => s.code === profileSet);
@@ -792,7 +786,7 @@ function Mobile({
             <FilterDropdown
               value={filters.format}
               options={filters.formatOptions}
-              onChange={filters.setFormat}
+              hrefFor={filters.formatHref}
               variant="mobile"
               renderValue={renderFormatOption}
               renderOption={renderFormatOption}
@@ -804,7 +798,7 @@ function Mobile({
               <SetFilterDropdown
                 value={isCubeCode(activeSet) ? cubeBoardGlyphCode(activeSet) : profileSet}
                 options={setOptions}
-                onChange={(code) => goToSet(navigate, code, sets, searchParams, cubeEntryBoard, cubeSeasons)}
+                hrefFor={(code) => setBoardHref(code, sets, searchParams, cubeEntryBoard, cubeSeasons)}
                 variant="mobile"
                 align="right"
                 searchable
@@ -818,7 +812,7 @@ function Mobile({
             <CubeSeasonSelector
               activeSet={activeSet}
               seasons={cubeSeasons}
-              onSelect={(c) => navigate({ pathname: leaderboardPath(c), search: searchParams.toString() })}
+              hrefFor={(c) => boardHref(c, searchParams)}
               variant="mobile"
             />
           </div>
@@ -826,7 +820,7 @@ function Mobile({
         <div className="px-3 py-1.5 border-b border-border bg-bg">
           <ColorsSwitcher
             activeCode={filters.colors}
-            onChange={filters.setColors}
+            hrefFor={filters.colorsHref}
             chips={filters.colorChips}
             loading={filters.colorChipsLoading}
             variant="mobile"
@@ -838,7 +832,7 @@ function Mobile({
           colors={filters.colors}
           format={filters.format}
           otherCombos={otherCombos}
-          onColorsSelect={filters.setColors}
+          colorsHref={filters.colorsHref}
           searchParams={searchParams}
         />
         {/* Column header is part of the sticky chrome so it stays pinned with the
@@ -932,11 +926,8 @@ function DesktopExpandedRow({
   );
 
   return (
-    <Link
-      to={to}
-      aria-label={`View ${row.displayName}'s profile`}
-      className="pt-3 pb-2 pr-4 pl-[76px] border-t border-dashed border-border2 flex items-start gap-6 cursor-pointer transition-colors hover:bg-green/5 no-underline text-inherit"
-    >
+    <div className="relative pt-3 pb-2 pr-4 pl-[76px] border-t border-dashed border-border2 flex items-start gap-6 transition-colors hover:bg-green/5">
+      <Link to={to} aria-label={`View ${row.displayName}'s profile`} className="absolute inset-0" />
       <div className="flex-1 min-w-0 overflow-hidden"><FormatBreakdownPreview breakdown={profile?.formatBreakdown} /></div>
       <div className="flex-1 min-w-0 overflow-hidden"><MostPlayedDecks events={events} /></div>
       <div className="flex-1 min-w-0 overflow-hidden"><LastTrophyPanel data={trophiesToShow} decks={scopedDecks} loading={!events} activeFormat={activeFormat} activeColors={activeColors} /></div>
@@ -947,7 +938,7 @@ function DesktopExpandedRow({
           <ArrowRight size={12} />
         </span>
       </ChamferedButton>
-    </Link>
+    </div>
   );
 }
 
@@ -1207,22 +1198,17 @@ function LastTrophyPanel({
             const href = e.seventeenlandsEventId
               ? `https://www.17lands.com/deck/${e.seventeenlandsEventId}`
               : null;
-            const onClick = href
-              ? (ev: React.MouseEvent) => {
-                  ev.preventDefault();
-                  ev.stopPropagation();
-                  window.open(href, "_blank", "noopener,noreferrer");
-                }
-              : undefined;
+            const Row = href ? "a" : "div";
             return (
-              <div
+              <Row
                 key={e.eventId}
-                onClick={onClick}
-                role={href ? "link" : undefined}
+                href={href ?? undefined}
+                target={href ? "_blank" : undefined}
+                rel={href ? "noopener noreferrer" : undefined}
                 title={href ? "Open deck on 17lands" : undefined}
                 className={cn(
                   "grid items-center gap-x-3 px-1.5 -mx-1.5 rounded transition-colors w-fit",
-                  href && "hover:bg-surface2 cursor-pointer",
+                  href && "relative hover:bg-surface2 cursor-pointer no-underline",
                 )}
                 style={{ gridTemplateColumns: "auto auto auto auto 12px" }}
               >
@@ -1240,7 +1226,7 @@ function LastTrophyPanel({
                 <span className="flex justify-center text-subtle">
                   {href && <ExternalLink size={10} aria-hidden="true" />}
                 </span>
-              </div>
+              </Row>
             );
           })
         ) : (
@@ -1360,22 +1346,23 @@ function MobileExpandedRow({
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-// The one CUBE row now covers every cube Arena has run, so its set name reads too narrow in a picker
-function goToSet(
-  navigate: ReturnType<typeof useNavigate>,
+const setBoardHref = (
   code: string,
   sets: SetSummary[] | undefined,
   searchParams: URLSearchParams,
   cubeEntryBoard?: string,
   cubeSeasons?: CubeSeason[],
-) {
-  // The CUBE chip drops into the newest season; LIFETIME (CUBE-ALL) is reached
-  // only from the in-header season selector.
-  if (code === CUBE_BASE && cubeEntryBoard) code = cubeEntryBoard;
-  code = latestWindowFor(code, cubeSeasons);
+): To => {
+  const entryCode = code === CUBE_BASE && cubeEntryBoard ? cubeEntryBoard : code;
+  const boardCode = latestWindowFor(entryCode, cubeSeasons);
   const activeCode = sets?.find((s) => s.isActive)?.code;
-  navigate({
-    pathname: code === activeCode ? leaderboardPath() : leaderboardPath(code),
+  return {
+    pathname: boardCode === activeCode ? leaderboardPath() : leaderboardPath(boardCode),
     search: searchParams.toString(),
-  });
-}
+  };
+};
+
+const boardHref = (code: string, searchParams: URLSearchParams): To => ({
+  pathname: leaderboardPath(code),
+  search: searchParams.toString(),
+});

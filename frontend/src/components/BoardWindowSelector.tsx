@@ -1,4 +1,5 @@
 import type React from "react";
+import type { To } from "react-router-dom";
 import { SetGlyph } from "./Brand";
 import { ChevronDown } from "./Icons";
 import { FilterDropdown, type FilterOption } from "./FilterDropdown";
@@ -19,11 +20,13 @@ export function BoardWindowSelector({
   value,
   options,
   onSelect,
+  hrefFor,
   variant = "hero",
 }: {
   value: string;
   options: BoardWindowOption[];
-  onSelect: (value: string) => void;
+  onSelect?: (value: string) => void;
+  hrefFor?: (value: string) => To;
   variant?: "hero" | "mobile";
 }) {
   const byValue = new Map(options.map((o) => [o.value, o]));
@@ -43,6 +46,7 @@ export function BoardWindowSelector({
       value={value}
       options={options}
       onChange={onSelect}
+      hrefFor={hrefFor}
       variant={variant === "hero" ? "desktop" : "mobile"}
       renderValue={render}
       renderOption={render}

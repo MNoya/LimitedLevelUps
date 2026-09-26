@@ -1,21 +1,14 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Link, useNavigate, type To } from "react-router-dom";
 import { cn } from "../lib/utils";
+import { isPlainClick } from "../lib/plain-click";
 import { useWheelTrap } from "../lib/use-wheel-trap";
 import { ChevronDown } from "./Icons";
-
-// Custom click-to-open dropdown — same family as SetSwitcherMobile so styled
-// content (color swatches, mana pips, etc) renders cleanly in both the closed
-// trigger and the open option list. Replaces the previous native <select>
-// which couldn't host React content in its menu.
-//
-// Both `renderValue` and `renderOption` are optional and default to the option's
-// plain label.
 
 export interface FilterOption {
   value: string;
   label: string;
-  // Options sharing a section render under a divider + header when the section changes. Options with
-  // no section render flush; give a trailing group (e.g. MTGO flashbacks) a section to set it apart.
+  // Options sharing a section render under a divider and header when the section changes
   section?: string;
 }
 
@@ -26,6 +19,7 @@ export function FilterDropdown({
   value,
   options,
   onChange,
+  hrefFor,
   variant = "desktop",
   align = "left",
   renderValue,
@@ -40,7 +34,8 @@ export function FilterDropdown({
   label?: string;
   value: string;
   options: FilterOption[];
-  onChange: (next: string) => void;
+  onChange?: (next: string) => void;
+  hrefFor?: (value: string) => To;
   variant?: "desktop" | "mobile";
   align?: "left" | "right";
   renderValue?: (option: FilterOption) => React.ReactNode;
@@ -61,8 +56,18 @@ export function FilterDropdown({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useWheelTrap<HTMLDivElement>(open);
 
+  const navigate = useNavigate();
+
   const showSearch = searchable ?? options.length > SEARCH_THRESHOLD;
   const toggle = () => setOpen((o) => !o);
+  const select = (next: string) => {
+    if (onChange) {
+      onChange(next);
+    } else if (hrefFor) {
+      navigate(hrefFor(next));
+    }
+    setOpen(false);
+  };
 
   useLayoutEffect(() => {
     if (!open || !mobileCentered) {
@@ -155,8 +160,7 @@ export function FilterDropdown({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && filtered.length > 0) {
                     e.preventDefault();
-                    onChange(filtered[0].value);
-                    setOpen(false);
+                    select(filtered[0].value);
                   }
                 }}
                 placeholder={searchPlaceholder}
@@ -177,14 +181,10 @@ export function FilterDropdown({
                       <span className="h-px flex-1 bg-border2" />
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChange(o.value);
-                      setOpen(false);
-                    }}
-                    role="option"
-                    aria-selected={isSelected}
+                  <OptionItem
+                    href={hrefFor?.(o.value)}
+                    onSelect={() => select(o.value)}
+                    selected={isSelected}
                     className={cn(
                       "w-full text-left flex items-center gap-2 border-l-2 font-display cursor-pointer transition-colors whitespace-nowrap",
                       isMobile
@@ -197,7 +197,7 @@ export function FilterDropdown({
                     )}
                   >
                     {renderOption ? renderOption(o) : o.label}
-                  </button>
+                  </OptionItem>
                 </React.Fragment>
               );
             })}
@@ -210,3 +210,42 @@ export function FilterDropdown({
     </div>
   );
 }
+
+const OptionItem = ({
+  href,
+  onSelect,
+  selected,
+  className,
+  children,
+}: {
+  href?: To;
+  onSelect: () => void;
+  selected: boolean;
+  className: string;
+  children: React.ReactNode;
+}) => {
+  if (href === undefined) {
+    return (
+      <button type="button" onClick={onSelect} role="option" aria-selected={selected} className={className}>
+        {children}
+      </button>
+    );
+  }
+  return (
+    <Link
+      to={href}
+      onClick={(event) => {
+        if (!isPlainClick(event)) {
+          return;
+        }
+        event.preventDefault();
+        onSelect();
+      }}
+      role="option"
+      aria-selected={selected}
+      className={cn(className, "no-underline")}
+    >
+      {children}
+    </Link>
+  );
+};

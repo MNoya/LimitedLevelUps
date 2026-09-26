@@ -1887,15 +1887,15 @@ async function podParticipantsForEvents(eventIds: string[]): Promise<Record<stri
 export async function fetchPodSetCodes(): Promise<PodSetCode[]> {
   const { data, error } = await client()
     .from("public_pod_draft_events")
-    .select("set_code, format_label, kind, event_date");
+    .select("set_code, format_label, kind");
   if (error) throw error;
-  const byCode = new Map<string, { label: string | null; events: number; firstEvent: string }>();
+  const byCode = new Map<string, { label: string | null; events: number; mocks: number }>();
   for (const r of data ?? []) {
-    const row = r as { set_code: string; format_label: string | null; kind: string; event_date: string };
-    const entry = byCode.get(row.set_code) ?? { label: null, events: 0, firstEvent: "" };
+    const row = r as { set_code: string; format_label: string | null; kind: string };
+    const entry = byCode.get(row.set_code) ?? { label: null, events: 0, mocks: 0 };
     entry.label = entry.label ?? row.format_label ?? null;
-    if (row.kind !== "mock") entry.events += 1;
-    if (!entry.firstEvent || row.event_date < entry.firstEvent) entry.firstEvent = row.event_date;
+    if (row.kind === "mock") entry.mocks += 1;
+    else entry.events += 1;
     byCode.set(row.set_code, entry);
   }
   return Array.from(byCode, ([code, entry]) => ({ code, ...entry }));

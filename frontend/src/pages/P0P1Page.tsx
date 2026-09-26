@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { Crossfade } from "../components/Crossfade";
 import { CtaPill } from "../components/CtaPill";
@@ -69,24 +69,14 @@ export function P0P1Page() {
   const { user: authUser } = useAuth();
   const canPreviewPre = p0p1DevEnabled || isP0P1Previewer(authUser?.discordId);
 
-  const navigate = useNavigate();
   const currentContest = resolveFeaturedContest(p0p1Now(featured?.scoringDate));
   const isCurrentContest = !currentContest || !featured || currentContest.code === featured.code;
   const allContests = resolveAllContestChips(p0p1Now(featured?.scoringDate));
   const visibleContests = canPreviewPre
     ? allContests
     : allContests.filter((c) => c.status !== "pre");
-  const handleContestChange = useCallback(
-    (code: string) => {
-      const featuredContest = resolveFeaturedContest(p0p1Now(featured?.scoringDate));
-      if (featuredContest && code === featuredContest.code) {
-        navigate("/p0p1");
-      } else {
-        navigate(`/p0p1/${code.toLowerCase()}`);
-      }
-    },
-    [navigate, featured?.scoringDate],
-  );
+  const contestHref = (code: string) =>
+    currentContest && code === currentContest.code ? "/p0p1" : `/p0p1/${code.toLowerCase()}`;
 
   const isDesktop = !useIsMobile(1024);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -136,7 +126,12 @@ export function P0P1Page() {
   if (!isDesktop) {
     return (
       <>
-        <P0P1MobileSelector ballot={ballot} contests={visibleContests} onContestChange={handleContestChange} isCurrent={isCurrentContest} />
+        <P0P1MobileSelector
+          ballot={ballot}
+          contests={visibleContests}
+          contestHref={contestHref}
+          isCurrent={isCurrentContest}
+        />
         <P0P1DevPanel />
       </>
     );
@@ -149,7 +144,7 @@ export function P0P1Page() {
         <P0P1Hero
           featured={featured}
           contests={visibleContests}
-          onContestChange={handleContestChange}
+          contestHref={contestHref}
           innerRef={heroRef}
           cta={null}
           belowIntro={
@@ -227,7 +222,19 @@ export function P0P1Page() {
   return (
     <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
-      {featured && <P0P1Hero featured={featured} contests={visibleContests} onContestChange={handleContestChange} innerRef={heroRef} cta={heroCta} belowIntro={belowIntro} phase={phase} dateRange={ratingsSnapshot?.dateRange} isCurrent={isCurrentContest} />}
+      {featured && (
+        <P0P1Hero
+          featured={featured}
+          contests={visibleContests}
+          contestHref={contestHref}
+          innerRef={heroRef}
+          cta={heroCta}
+          belowIntro={belowIntro}
+          phase={phase}
+          dateRange={ratingsSnapshot?.dateRange}
+          isCurrent={isCurrentContest}
+        />
+      )}
 
       <main className="flex-1 px-5 pt-5">
         {!isPastDeadline &&

@@ -1,14 +1,15 @@
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Pips } from "../ManaPips";
 import { Record } from "../Record";
 import { SetGlyph, setGlyphCode, Trophy } from "../Brand";
 import { cn } from "../../lib/utils";
 import { HeroSection } from "../HeroSection";
-import { type DeckTab } from "./DeckScreenshotModal";
 import { highlightEventLabel } from "./EventLabel";
 import { PlayerSeatPanel } from "./PlayerSeatPanel";
 import { PodStandings, PodStandingsSkeleton, recordParts, StandingsBackBar, type PodStandingsActions } from "./PodStandings";
 import { isPodTrophyRecord } from "../../data/utils";
+import { podSeatHref } from "./podLinks";
 import type { PodEventMatchRow, PodEventReplayRow, PodSeat } from "../../types/leaderboard";
 
 interface Props {
@@ -17,8 +18,6 @@ interface Props {
   matches: PodEventMatchRow[];
   replays: PodEventReplayRow[];
   selectedSeat: number | null;
-  onSelect: (seat: number | null) => void;
-  onShowDeck: (p: PodSeat, tab?: DeckTab) => void;
   canViewSeat?: (playerSlug: string | null | undefined) => boolean;
   podFinalized?: boolean;
   eventLabel: string;
@@ -152,8 +151,6 @@ export function MobileSeatStack({
   matches,
   replays,
   selectedSeat,
-  onSelect,
-  onShowDeck,
   canViewSeat = () => true,
   podFinalized = true,
   eventLabel,
@@ -178,7 +175,7 @@ export function MobileSeatStack({
         <TileGrid
           participants={sorted}
           selectedSeat={selectedSeat}
-          onSelect={onSelect}
+          eventSlug={eventSlug}
           eventLabel={eventLabel}
           setCode={setCode}
           formatLabel={formatLabel}
@@ -197,7 +194,6 @@ export function MobileSeatStack({
                 teamDraft={teamDraft}
                 finalized={podFinalized}
                 selectedSeat={selectedSeat}
-                onSelect={onSelect}
                 actions={standingsActions}
               />
             </div>
@@ -212,7 +208,7 @@ export function MobileSeatStack({
         <div className="overflow-hidden">
           {selected && (
             <div className="bg-surface">
-              {standingsAvailable && <StandingsBackBar onClick={() => onSelect(null)} />}
+              {standingsAvailable && <StandingsBackBar to={podSeatHref(eventSlug, null)} />}
               <PlayerSeatPanel
                 key={selected.displayName}
                 participant={selected}
@@ -224,7 +220,6 @@ export function MobileSeatStack({
                 hasDraftLog={hasDraftLog}
                 canViewSeat={canViewSeat}
                 podFinalized={podFinalized}
-                onShowDeck={onShowDeck}
                 isMock={isMock}
               />
             </div>
@@ -238,14 +233,14 @@ export function MobileSeatStack({
 function TileGrid({
   participants,
   selectedSeat,
-  onSelect,
+  eventSlug,
   eventLabel,
   setCode,
   formatLabel,
 }: {
   participants: PodSeat[];
   selectedSeat: number | null;
-  onSelect: (seat: number | null) => void;
+  eventSlug: string;
   eventLabel: string;
   setCode: string;
   formatLabel?: string | null;
@@ -281,7 +276,7 @@ function TileGrid({
         tiles={topRow}
         arrowDir="right"
         selectedSeat={selectedSeat}
-        onSelect={onSelect}
+        eventSlug={eventSlug}
         scale={scale}
       />
       <div
@@ -313,7 +308,7 @@ function TileGrid({
         tiles={bottomRow}
         arrowDir="left"
         selectedSeat={selectedSeat}
-        onSelect={onSelect}
+        eventSlug={eventSlug}
         scale={scale}
       />
     </div>
@@ -324,13 +319,13 @@ function TileRow({
   tiles,
   arrowDir,
   selectedSeat,
-  onSelect,
+  eventSlug,
   scale,
 }: {
   tiles: PodSeat[];
   arrowDir: "right" | "left";
   selectedSeat: number | null;
-  onSelect: (seat: number | null) => void;
+  eventSlug: string;
   scale: number;
 }) {
   return (
@@ -340,7 +335,8 @@ function TileRow({
           <PlayerTile
             participant={p}
             selected={selectedSeat === p.seatIndex}
-            onClick={() => onSelect(p.seatIndex)}
+            href={podSeatHref(eventSlug, p.discordName)}
+            replace={selectedSeat != null}
             scale={scale}
           />
           {i < tiles.length - 1 && <PassChevron direction={arrowDir} scale={scale} />}
@@ -389,12 +385,14 @@ function PassChevron({
 function PlayerTile({
   participant,
   selected,
-  onClick,
+  href,
+  replace,
   scale,
 }: {
   participant: PodSeat;
   selected: boolean;
-  onClick: () => void;
+  href: string;
+  replace: boolean;
   scale: number;
 }) {
   const { wins, losses, played: hasRecord } = recordParts(participant.record);
@@ -403,13 +401,13 @@ function PlayerTile({
   const h = REF_TILE.h * scale;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
+    <Link
+      to={href}
+      replace={replace}
+      aria-current={selected || undefined}
       aria-label={`Seat ${participant.seatIndex + 1}: ${participant.discordName}${hasRecord ? `, ${participant.record}` : ""}`}
       className={cn(
-        "block p-0 m-0 bg-surface border transition-colors text-left",
+        "block p-0 m-0 bg-surface border transition-colors text-left no-underline",
         selected
           ? "border-green bg-surface2"
           : isWinner
@@ -464,7 +462,7 @@ function PlayerTile({
           <div style={{ height: Math.round(12 * scale) }} />
         )}
       </div>
-    </button>
+    </Link>
   );
 }
 

@@ -1,4 +1,5 @@
 import React from "react";
+import { Link, type To } from "react-router-dom";
 import { setGlyphCode, SetGlyph } from "./Brand";
 import { ChevronDown } from "./Icons";
 import { FilterDropdown, type FilterOption } from "./FilterDropdown";
@@ -16,7 +17,7 @@ const NO_RELEASE_RANK = "";
 const MAX_NEWER_CONTEXT = 2;
 
 function releaseRank(s: SetSummary): string {
-  return s.startDate || (s.custom ? NO_RELEASE_RANK : FUTURE_RELEASE_RANK);
+  return s.startDate || (s.early ? FUTURE_RELEASE_RANK : NO_RELEASE_RANK);
 }
 
 function byDateDesc(a: SetSummary, b: SetSummary): number {
@@ -26,18 +27,8 @@ function byDateDesc(a: SetSummary, b: SetSummary): number {
   return releaseRank(b).localeCompare(releaseRank(a));
 }
 
-function partitionSets(sets: SetSummary[], selectedCode: string, cap: number) {
-  const leadPins: SetSummary[] = [];
-  const live = sets.find((s) => s.isActive);
-  const cube = sets.find((s) => s.code === CUBE_BASE);
-  const early = sets.filter((s) => s.early && s.code !== CUBE_BASE && !s.isActive).sort(byDateDesc);
-  leadPins.push(...early);
-  if (live) leadPins.push(live);
-  if (cube && cube.code !== live?.code) leadPins.push(cube);
-  leadPins.push(...sets.filter((s) => s.custom));
-
-  const pinnedCodes = new Set(leadPins.map((s) => s.code));
-  const history = sets.filter((s) => !pinnedCodes.has(s.code)).sort(byDateDesc);
+function partitionSets(sets: SetSummary[], selectedCode: string, cap: number, pins: string[] | undefined) {
+  const { leadPins, history } = pins ? pinnedByCode(sets, pins) : pinnedByRelease(sets);
 
   const windowSize = Math.max(1, cap - leadPins.length);
   if (history.length <= windowSize) {
@@ -56,21 +47,51 @@ function partitionSets(sets: SetSummary[], selectedCode: string, cap: number) {
   return { visible: [...leadPins, ...window], overflow };
 }
 
+function pinnedByRelease(sets: SetSummary[]) {
+  const leadPins: SetSummary[] = [];
+  const live = sets.find((s) => s.isActive);
+  const cube = sets.find((s) => s.code === CUBE_BASE);
+  const early = sets.filter((s) => s.early && s.code !== CUBE_BASE && !s.isActive).sort(byDateDesc);
+  leadPins.push(...early);
+  if (live) leadPins.push(live);
+  if (cube && cube.code !== live?.code) leadPins.push(cube);
+  const pinnedCodes = new Set(leadPins.map((s) => s.code));
+  const history = sets.filter((s) => !pinnedCodes.has(s.code)).sort(byDateDesc);
+  return { leadPins, history };
+}
+
+export function orderByPins(sets: SetSummary[], pins: string[]): SetSummary[] {
+  const { leadPins, history } = pinnedByCode(sets, pins);
+  return [...leadPins, ...history];
+}
+
+function pinnedByCode(sets: SetSummary[], pins: string[]) {
+  const leadPins: SetSummary[] = [];
+  for (const code of pins) {
+    const pinned = sets.find((s) => s.code === code);
+    if (pinned && !leadPins.includes(pinned)) leadPins.push(pinned);
+  }
+  const history = sets.filter((s) => !leadPins.includes(s)).sort(byDateDesc);
+  return { leadPins, history };
+}
+
 export function SetSwitcherDesktop({
   sets,
   activeCode,
-  onChange,
+  hrefFor,
   onPrefetch,
   extraHide = 0,
+  pins,
 }: {
   sets: SetSummary[];
   activeCode: string;
-  onChange: (code: string) => void;
+  hrefFor: (code: string) => To;
   onPrefetch?: (code: string) => void;
   extraHide?: number;
+  pins?: string[];
 }) {
   const cap = useSetVisibleCap(sets.length, extraHide);
-  const { visible, overflow } = partitionSets(sets, activeCode, cap);
+  const { visible, overflow } = partitionSets(sets, activeCode, cap, pins);
   return (
     <div className="flex gap-1.5">
       {visible.map((s) => (
@@ -78,11 +99,11 @@ export function SetSwitcherDesktop({
           key={s.code}
           set={s}
           active={s.code === activeCode}
-          onClick={() => onChange(s.code)}
+          href={hrefFor(s.code)}
           onHover={onPrefetch ? () => onPrefetch(s.code) : undefined}
         />
       ))}
-      {overflow.length > 0 && <SetOverflow sets={overflow} activeCode={activeCode} onChange={onChange} />}
+      {overflow.length > 0 && <SetOverflow sets={overflow} activeCode={activeCode} hrefFor={hrefFor} />}
     </div>
   );
 }
@@ -101,21 +122,58 @@ function chipDateLabel(set: SetSummary): string {
 function SetChip({
   set,
   active,
-  onClick,
+  href,
   onHover,
 }: {
   set: SetSummary;
   active: boolean;
-  onClick: () => void;
+  href: To;
   onHover?: () => void;
+}) {
+  const caption = set.early ? (
+    <span className="absolute left-0 right-0 top-full mt-1 font-mono flex flex-col items-center text-[10px] leading-[1.15] tracking-[0.12em] text-green">
+      <span>EARLY</span>
+      <span>ACCESS</span>
+    </span>
+  ) : (
+    <span className="absolute left-0 right-0 top-full mt-1 font-mono text-center text-[10px] leading-none tracking-[0.06em] text-muted">
+      {chipDateLabel(set)}
+    </span>
+  );
+  return (
+    <SwitcherChip
+      icon={<SetGlyph code={setGlyphCode(set)} size={22} className={active ? "text-bg" : "text-text"} />}
+      label={set.shortCode ?? set.code}
+      active={active}
+      href={href}
+      onHover={onHover}
+      caption={caption}
+    />
+  );
+}
+
+export function SwitcherChip({
+  icon,
+  label,
+  active,
+  href,
+  onHover,
+  caption,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  href: To;
+  onHover?: () => void;
+  caption?: React.ReactNode;
 }) {
   return (
     <div className="relative">
-      <button
-        onClick={onClick}
+      <Link
+        to={href}
         onMouseEnter={onHover}
         onFocus={onHover}
-        className="group block cursor-pointer"
+        className="group block cursor-pointer no-underline"
         style={{
           clipPath: CHAMFER,
           background: active ? "#2ee85c" : "#3b4458",
@@ -130,20 +188,11 @@ function SetChip({
           )}
           style={{ clipPath: CHAMFER, minHeight: 40 }}
         >
-          <SetGlyph code={setGlyphCode(set)} size={22} className={active ? "text-bg" : "text-text"} />
-          <span className="text-[20px] tracking-[0.06em] leading-none">{set.shortCode ?? set.code}</span>
+          {icon}
+          <span className="text-[20px] tracking-[0.06em] leading-none">{label}</span>
         </span>
-      </button>
-      {set.early ? (
-        <span className="absolute left-0 right-0 top-full mt-1 font-mono flex flex-col items-center text-[10px] leading-[1.15] tracking-[0.12em] text-green">
-          <span>EARLY</span>
-          <span>ACCESS</span>
-        </span>
-      ) : (
-        <span className="absolute left-0 right-0 top-full mt-1 font-mono text-center text-[10px] leading-none tracking-[0.06em] text-muted">
-          {chipDateLabel(set)}
-        </span>
-      )}
+      </Link>
+      {caption}
     </div>
   );
 }
@@ -151,11 +200,11 @@ function SetChip({
 function SetOverflow({
   sets,
   activeCode,
-  onChange,
+  hrefFor,
 }: {
   sets: SetSummary[];
   activeCode: string;
-  onChange: (code: string) => void;
+  hrefFor: (code: string) => To;
 }) {
   const options: FilterOption[] = sets.map((s) => ({
     value: s.code,
@@ -179,7 +228,7 @@ function SetOverflow({
     <FilterDropdown
       value={activeCode}
       options={options}
-      onChange={onChange}
+      hrefFor={hrefFor}
       align="right"
       searchable
       renderOption={renderOption}
@@ -208,16 +257,15 @@ function SetOverflow({
   );
 }
 
-// Mobile: a single button that opens a sheet of options.
 export function SetSwitcherMobile({
   sets,
   activeCode,
-  onChange,
+  hrefFor,
   onPrefetch,
 }: {
   sets: SetSummary[];
   activeCode: string;
-  onChange: (code: string) => void;
+  hrefFor: (code: string) => To;
   onPrefetch?: (code: string) => void;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -260,16 +308,14 @@ export function SetSwitcherMobile({
       {open && (
         <div className="absolute left-0 right-0 top-[calc(100%+4px)] bg-surface border border-border2 z-20">
           {sets.map((s) => (
-            <button
+            <Link
               key={s.code}
-              onClick={() => {
-                onChange(s.code);
-                setOpen(false);
-              }}
+              to={hrefFor(s.code)}
+              onClick={() => setOpen(false)}
               onTouchStart={onPrefetch ? () => onPrefetch(s.code) : undefined}
               onFocus={onPrefetch ? () => onPrefetch(s.code) : undefined}
               className={cn(
-                "w-full py-[9px] px-2.5 flex items-center gap-2 border-none border-b border-border text-text font-display text-[13px] tracking-[0.1em] cursor-pointer text-left transition-colors",
+                "w-full py-[9px] px-2.5 flex items-center gap-2 border-none border-b border-border text-text font-display text-[13px] tracking-[0.1em] cursor-pointer text-left transition-colors no-underline",
                 s.code === activeCode ? "bg-surface2" : "bg-transparent hover:bg-surface2",
               )}
             >
@@ -278,7 +324,7 @@ export function SetSwitcherMobile({
               {!isCubeCode(s.code) && (
                 <span className="text-muted text-[10px] tracking-[0.06em] flex-1">{s.name}</span>
               )}
-            </button>
+            </Link>
           ))}
         </div>
       )}

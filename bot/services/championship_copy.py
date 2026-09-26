@@ -30,7 +30,7 @@ def standings_url(set_code: str) -> str:
 
 
 def pod_standings_url(set_code: str) -> str:
-    return f"{settings.public_site_url.rstrip('/')}/pods/{set_code.upper()}"
+    return f"{settings.public_site_url.rstrip('/')}/pods?season={set_code.upper()}"
 
 
 def champion_mention_for_wave(wave_index: int, role: discord.Role | None) -> str:

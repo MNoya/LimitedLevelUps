@@ -1,4 +1,5 @@
 import React from "react";
+import type { To } from "react-router-dom";
 import { cn } from "../lib/utils";
 import { SetGlyph } from "./Brand";
 import { BsAsterisk, ChevronDown } from "./Icons";
@@ -15,13 +16,15 @@ export function SetCodeDropdown({
   sets,
   activeCode,
   onChange,
+  hrefFor,
   size = "md",
   chamfer = true,
   includeLifetime = false,
 }: {
   sets: SetSummary[];
   activeCode: string;
-  onChange: (code: string) => void;
+  onChange?: (code: string) => void;
+  hrefFor?: (code: string) => To;
   size?: "sm" | "md";
   chamfer?: boolean;
   includeLifetime?: boolean;
@@ -77,6 +80,7 @@ export function SetCodeDropdown({
       value={activeCode}
       options={options}
       onChange={onChange}
+      hrefFor={hrefFor}
       searchable
       searchPlaceholder="Search sets or codes…"
       mobileCentered

@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { AAvatar, AVATAR_CLIP, Trophy } from "../Brand";
 import { LuScrollText, TbCards } from "../Icons";
@@ -6,7 +6,9 @@ import { Pips } from "../ManaPips";
 import { Record } from "../Record";
 import { Tooltip } from "../Tooltip";
 import { cn } from "../../lib/utils";
+import { OPENED_IN_APP } from "../../lib/modal-history";
 import { orderedDeckColors, podDiscordName } from "../../data/utils";
+import { DeckLink, onPlainClick } from "./podLinks";
 import type { PodEventParticipantRow } from "../../types/leaderboard";
 
 export const STANDING_COLS_CLASS =
@@ -50,9 +52,10 @@ export function PodStandingRow({
   selected = false,
   trophy = false,
   nameHref,
+  rowHref,
+  deckHref,
   logHref,
   onShowDeck,
-  onRowClick,
   onHover,
 }: {
   p: PodEventParticipantRow;
@@ -66,36 +69,41 @@ export function PodStandingRow({
   selected?: boolean;
   trophy?: boolean;
   nameHref?: string | null;
+  rowHref?: string | null;
+  deckHref?: string | null;
   logHref?: string | null;
   onShowDeck?: () => void;
-  onRowClick?: () => void;
   onHover?: (hovering: boolean) => void;
 }) {
-  const navigate = useNavigate();
   const avatarSize = compact ? 26 : 28;
   const { wins, losses, played } = recordParts(p.record);
   const name = podDiscordName(p);
-  const hasDeck = !!onShowDeck;
-  const draftLog = !hasDeck ? (logHref ?? null) : null;
-  const interactive = !!onRowClick || hasDeck || !!draftLog;
-  const handleRowClick = () => {
-    if (onRowClick) onRowClick();
-    else if (onShowDeck) onShowDeck();
-    else if (draftLog) navigate(draftLog);
-  };
+  const draftLog = !deckHref ? (logHref ?? null) : null;
+  const rowTarget = rowHref ?? deckHref ?? draftLog;
+  const showDeckInPlace = onPlainClick(onShowDeck);
+  const rowOpensDeck = !rowHref && !!deckHref;
   return (
     <div
-      onClick={interactive ? handleRowClick : undefined}
       onMouseEnter={() => onHover?.(true)}
       onMouseLeave={() => onHover?.(false)}
       className={cn(
-        "group/row grid items-center gap-x-2 lg:gap-x-3 transition-colors",
+        "group/row relative isolate grid items-center gap-x-2 lg:gap-x-3 transition-colors",
         dense ? `py-1.5 ${padX}` : compact ? `py-[7px] ${padX}` : `py-2.5 ${padX}`,
         cols,
         selected ? "bg-green/10" : "bg-surface",
-        interactive && "cursor-pointer hover:bg-surface2",
+        rowTarget && "cursor-pointer hover:bg-surface2",
       )}
     >
+      {rowTarget && (
+        <Link
+          to={rowTarget}
+          state={rowOpensDeck ? OPENED_IN_APP : undefined}
+          onClick={rowOpensDeck ? showDeckInPlace : undefined}
+          aria-label={name}
+          aria-current={selected || undefined}
+          className="absolute inset-0 z-10"
+        />
+      )}
       <span className="font-num text-center tabular-nums text-muted text-[13px]">
         {rank ?? ""}
       </span>
@@ -103,8 +111,7 @@ export function PodStandingRow({
         <Tooltip label={`View ${name}'s Profile`} side="top" align="start" delayDuration={0}>
           <Link
             to={nameHref}
-            onClick={(e) => e.stopPropagation()}
-            className="group/name peer/name flex items-center gap-2 lg:gap-2.5 min-w-0 max-w-full justify-self-start w-fit no-underline text-text hover:text-green transition-colors"
+            className="group/name peer/name relative z-20 flex items-center gap-2 lg:gap-2.5 min-w-0 max-w-full justify-self-start w-fit no-underline text-text hover:text-green transition-colors"
           >
             <SeatAvatar name={name} avatarUrl={p.avatarUrl} size={avatarSize} teamSide={teamSide} />
             <PlayerName name={name} compact={compact} />
@@ -134,24 +141,21 @@ export function PodStandingRow({
       ) : (
         <span className={cn("font-num text-center text-dim", compact ? "text-[13px]" : "text-[13px]")}>—</span>
       )}
-      {hasDeck ? (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onShowDeck?.();
-          }}
-          className={cn(ACTION_CLASS, iconOnly && "justify-self-end")}
+      {deckHref ? (
+        <DeckLink
+          to={deckHref}
+          onClick={showDeckInPlace}
+          aria-label={compact || iconOnly ? "View Deck" : undefined}
+          className={cn(ACTION_CLASS, "relative z-20 no-underline", iconOnly && "justify-self-end")}
           style={{ height: dense ? 28 : compact ? 30 : 34 }}
         >
           {!compact && !iconOnly && <ActionLabel>VIEW DECK</ActionLabel>}
           <TbCards size={compact ? 16 : 17} aria-hidden="true" className="transition-colors" />
-        </button>
+        </DeckLink>
       ) : draftLog ? (
         <Link
           to={draftLog}
-          onClick={(e) => e.stopPropagation()}
-          className={cn(ACTION_CLASS, "no-underline", iconOnly && "justify-self-end")}
+          className={cn(ACTION_CLASS, "relative z-20 no-underline", iconOnly && "justify-self-end")}
           style={{ height: dense ? 28 : compact ? 30 : 34 }}
         >
           {!compact && !iconOnly && <ActionLabel>DRAFT LOG</ActionLabel>}

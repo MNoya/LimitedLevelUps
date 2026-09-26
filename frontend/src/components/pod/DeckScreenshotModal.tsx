@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Check, ChevronLeft, ChevronRight, Copy, X, ZoomIn, ZoomOut } from "lucide-react";
 import { ArrowRight, GiRoundTable, ImageIcon, LuScrollText, SiDiscord, TbCards } from "../Icons";
 import { ChamferedButton } from "../ChamferedButton";
@@ -17,6 +17,7 @@ import {
 import { cardImageSources, useCardImageMap, type CardImages } from "../../data/cardImages";
 import { useIsMobile } from "../../lib/use-is-mobile";
 import { useResolvedDeckUrl } from "../../data/refresh-deck-url";
+import { onPlainClick } from "./podLinks";
 import type { Mainboard } from "../../types/leaderboard";
 
 const BREAKDOWN_CAPTION = "Seats, logs & replays";
@@ -42,6 +43,8 @@ export type DeckTab = "screenshot" | "decklist";
 interface Props {
   participant: DeckLike;
   initialTab?: DeckTab;
+  tab?: DeckTab;
+  onTabChange?: (tab: DeckTab) => void;
   breakdownHref?: string;
   hideDraftLog?: boolean;
   draftLogHref?: string | null;
@@ -50,11 +53,26 @@ interface Props {
   onClose: () => void;
   onPrev?: () => void;
   onNext?: () => void;
+  prevHref?: string;
+  nextHref?: string;
 }
 
-export function DeckScreenshotModal({ participant, initialTab = "screenshot", breakdownHref, hideDraftLog = false, draftLogHref, cardImages, onClose, onPrev, onNext }: Props) {
+export function DeckScreenshotModal({
+  participant,
+  initialTab = "screenshot",
+  tab: controlledTab,
+  onTabChange,
+  breakdownHref,
+  hideDraftLog = false,
+  draftLogHref,
+  cardImages,
+  onClose,
+  onPrev,
+  onNext,
+  prevHref,
+  nextHref,
+}: Props) {
   const isMobile = useIsMobile();
-  const navigate = useNavigate();
 
   const hasScreenshot = participant.deckScreenshotUrl !== null;
   const recordWins = Number((participant.record ?? "").split("-")[0] || 0);
@@ -62,7 +80,12 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
   const hasRecord = participant.record != null && recordWins + recordLosses > 0;
   const hasDecklist = (participant.mainboard?.cards.length ?? 0) > 0;
   const deckKey = `${participant.eventId ?? ""}::${participant.participantDisplayName ?? participant.displayName}`;
-  const [tab, setTab] = useState<DeckTab>(initialTab);
+  const [ownTab, setOwnTab] = useState<DeckTab>(initialTab);
+  const tab = controlledTab ?? ownTab;
+  const selectTab = (next: DeckTab) => {
+    setOwnTab(next);
+    onTabChange?.(next);
+  };
   const effectiveTab: DeckTab =
     hasScreenshot && hasDecklist ? tab : hasDecklist ? "decklist" : "screenshot";
   const showPanelToggle = hasScreenshot && hasDecklist;
@@ -210,17 +233,23 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
         </div>
 
         {breakdownHref && (
-          <Link to={breakdownHref} className="hidden lg:block no-underline border-t border-border shrink-0">
-            <div className="flex items-center justify-between gap-4 px-4 py-3 bg-surface hover:bg-green/5 transition-colors cursor-pointer">
+          <div className="hidden lg:block border-t border-border shrink-0">
+            <div className="relative flex items-center justify-between gap-4 px-4 py-3 bg-surface hover:bg-green/5 transition-colors cursor-pointer">
               <div className="flex flex-1 items-center gap-3 min-w-0 pl-5">
                 {participant.deckScreenshotCaption && (
                   <span className="text-muted text-[15px] font-body italic leading-snug min-w-0 truncate">
                     {participant.deckScreenshotCaption}
                   </span>
                 )}
-                {hasDecklist && <CopyDeckButton mainboard={participant.mainboard!} className="ml-auto" />}
+                {hasDecklist && <CopyDeckButton mainboard={participant.mainboard!} className="relative z-10 ml-auto" />}
               </div>
-              <div className="flex items-center gap-4 shrink-0">
+              <Link
+                to={breakdownHref}
+                className={cn(
+                  "flex items-center gap-4 shrink-0 no-underline",
+                  "after:absolute after:inset-0 after:content-['']",
+                )}
+              >
                 <span className="text-muted text-[13px] font-body">
                   {BREAKDOWN_CAPTION}
                 </span>
@@ -231,9 +260,9 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
                      <ArrowRight size={14} />
                   </span>
                 </ChamferedButton>
-              </div>
+              </Link>
             </div>
-          </Link>
+          </div>
         )}
         {(participant.deckScreenshotCaption || hasDecklist) && (
           <div
@@ -262,7 +291,11 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
               : "justify-center gap-2 lg:gap-3",
           )}
         >
-          {onPrev ? <PanelChevron side="left" onClick={onPrev} /> : hasTabs ? <span className="w-10 shrink-0" /> : null}
+          {onPrev ? (
+            <PanelChevron side="left" onClick={onPrev} href={prevHref} />
+          ) : hasTabs ? (
+            <span className="w-10 shrink-0" />
+          ) : null}
           <div className="flex items-center gap-1.5">
             {hasSourceLink && (
               <a
@@ -279,7 +312,7 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
             {showPanelToggle && (
               <PanelTab
                 active={effectiveTab === "screenshot"}
-                onClick={() => setTab("screenshot")}
+                onClick={() => selectTab("screenshot")}
                 icon={<ImageIcon size={16} />}
               >
                 IMAGE
@@ -288,7 +321,7 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
             {showPanelToggle && (
               <PanelTab
                 active={effectiveTab === "decklist"}
-                onClick={() => setTab("decklist")}
+                onClick={() => selectTab("decklist")}
                 icon={<TbCards size={17} />}
               >
                 <span className="lg:hidden">POOL</span>
@@ -298,7 +331,7 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
             {!hideDraftLog && (
               <PanelTab
                 disabled={!draftLogHref}
-                onClick={draftLogHref ? () => navigate(draftLogHref) : undefined}
+                href={draftLogHref ?? undefined}
                 icon={<LuScrollText size={16} />}
               >
                 <span className="lg:hidden">LOG</span>
@@ -306,7 +339,11 @@ export function DeckScreenshotModal({ participant, initialTab = "screenshot", br
               </PanelTab>
             )}
           </div>
-          {onNext ? <PanelChevron side="right" onClick={onNext} /> : hasTabs ? <span className="w-10 shrink-0" /> : null}
+          {onNext ? (
+            <PanelChevron side="right" onClick={onNext} href={nextHref} />
+          ) : hasTabs ? (
+            <span className="w-10 shrink-0" />
+          ) : null}
         </div>
         )}
         {breakdownHref && (
@@ -383,8 +420,19 @@ function arenaCardLine(card: DeckCard, deckSet: string | null): string {
   return `${line} (${set.toUpperCase()}) ${card.cn}`;
 }
 
-function PanelChevron({ side, onClick }: { side: "left" | "right"; onClick: () => void }) {
+function PanelChevron({ side, onClick, href }: { side: "left" | "right"; onClick: () => void; href?: string }) {
   const Chevron = side === "left" ? ChevronLeft : ChevronRight;
+  const label = side === "left" ? "Previous deck" : "Next deck";
+  const className =
+    "shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-surface2 border border-border text-muted hover:text-text hover:border-border2 transition-colors cursor-pointer outline-none focus:outline-none focus-visible:outline-none";
+  const icon = <Chevron size={22} strokeWidth={2.25} />;
+  if (href) {
+    return (
+      <Link to={href} replace onClick={onPlainClick(onClick)} aria-label={label} className={className}>
+        {icon}
+      </Link>
+    );
+  }
   return (
     <button
       type="button"
@@ -392,10 +440,10 @@ function PanelChevron({ side, onClick }: { side: "left" | "right"; onClick: () =
         e.stopPropagation();
         onClick();
       }}
-      aria-label={side === "left" ? "Previous deck" : "Next deck"}
-      className="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-surface2 border border-border text-muted hover:text-text hover:border-border2 transition-colors cursor-pointer outline-none focus:outline-none focus-visible:outline-none"
+      aria-label={label}
+      className={className}
     >
-      <Chevron size={22} strokeWidth={2.25} />
+      {icon}
     </button>
   );
 }
@@ -403,34 +451,29 @@ function PanelChevron({ side, onClick }: { side: "left" | "right"; onClick: () =
 function PanelTab({
   active = false,
   onClick,
+  href,
   disabled = false,
   icon,
   children,
 }: {
   active?: boolean;
   onClick?: () => void;
+  href?: string;
   disabled?: boolean;
   icon?: ReactNode;
   children: ReactNode;
 }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 lg:px-4 lg:py-2.5 font-display tracking-[0.14em] leading-none transition-colors",
-        "outline-none focus:outline-none focus-visible:outline-none",
-        disabled
-          ? "bg-surface2 text-subtle border-border opacity-50 cursor-not-allowed"
-          : active
-            ? "bg-green/15 text-green border-green/50 cursor-pointer"
-            : "bg-surface2 text-muted border-border hover:text-text cursor-pointer",
-      )}
-      style={{ fontSize: 14 }}
-    >
+  const className = cn(
+    "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 lg:px-4 lg:py-2.5 font-display tracking-[0.14em] leading-none transition-colors",
+    "outline-none focus:outline-none focus-visible:outline-none",
+    disabled
+      ? "bg-surface2 text-subtle border-border opacity-50 cursor-not-allowed"
+      : active
+        ? "bg-green/15 text-green border-green/50 cursor-pointer"
+        : "bg-surface2 text-muted border-border hover:text-text cursor-pointer",
+  );
+  const content = (
+    <>
       <span className="relative inline-flex items-center justify-center">
         {icon}
         {disabled && (
@@ -441,6 +484,26 @@ function PanelTab({
         )}
       </span>
       {children}
+    </>
+  );
+  if (href && !disabled) {
+    return (
+      <Link to={href} className={cn(className, "no-underline")} style={{ fontSize: 14 }}>
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      disabled={disabled}
+      onClick={onClick}
+      className={className}
+      style={{ fontSize: 14 }}
+    >
+      {content}
     </button>
   );
 }

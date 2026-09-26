@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { SetGlyph } from "../Brand";
 import { ChevronDown } from "../Icons";
 import { cn } from "../../lib/utils";
 import { useWheelTrap } from "../../lib/use-wheel-trap";
 import type { ContestChipInfo } from "../../data/p0p1Slots";
-
-// TierSetDropdown-style contest selector, rendered as the P0P1 title. Desktop
-// shows code + name; mobile shows glyph + code. Both open the same searchable
-// option list.
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
@@ -28,12 +25,12 @@ function statusBadge(contest: ContestChipInfo): { text: string; className: strin
 export function P0P1ContestDropdown({
   contests,
   activeCode,
-  onSelect,
+  hrefFor,
   isMobile = false,
 }: {
   contests: ContestChipInfo[];
   activeCode: string;
-  onSelect: (code: string) => void;
+  hrefFor: (code: string) => string;
   isMobile?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -130,15 +127,12 @@ export function P0P1ContestDropdown({
               const activeRow = c.code === activeCode;
               const badge = statusBadge(c);
               return (
-                <button
+                <Link
                   key={c.code}
-                  type="button"
-                  onClick={() => {
-                    onSelect(c.code);
-                    close();
-                  }}
+                  to={hrefFor(c.code)}
+                  onClick={close}
                   className={cn(
-                    "flex w-full items-center gap-3 border-l-2 px-3.5 py-2.5 text-left font-display tracking-[0.06em] transition-colors",
+                    "flex w-full items-center gap-3 border-l-2 px-3.5 py-2.5 text-left font-display tracking-[0.06em] transition-colors no-underline",
                     i > 0 && "border-t border-border",
                     activeRow
                       ? "border-l-green bg-surface2 text-green"
@@ -152,7 +146,7 @@ export function P0P1ContestDropdown({
                   <span className={cn("text-[13px] self-baseline leading-none tracking-[0.04em] mono shrink-0", activeRow ? "text-green" : badge.className)}>
                     {badge.text}
                   </span>
-                </button>
+                </Link>
               );
             })}
             {filtered.length === 0 && (

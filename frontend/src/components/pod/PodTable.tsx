@@ -6,6 +6,7 @@ import { Tooltip } from "../Tooltip";
 import { highlightEventLabel } from "./EventLabel";
 import { PlayerShield, ShieldFrame } from "./PlayerShield";
 import { cn } from "../../lib/utils";
+import { DeckLink, podDeckHref, podDraftLogHref, podSeatHref } from "./podLinks";
 import type { PodSeat } from "../../types/leaderboard";
 import type { RoundOutcome } from "./PlayerSeatPanel";
 
@@ -15,8 +16,6 @@ interface Props {
   highlightedSeat?: number | null;
   highlightedRound?: number | null;
   highlightedOutcome?: RoundOutcome | null;
-  onSelect: (seat: number | null) => void;
-  onShowDeck?: (p: PodSeat) => void;
   canViewDeck?: (playerSlug: string | null | undefined) => boolean;
   eventLabel: string;
   teamDraft?: boolean;
@@ -44,8 +43,6 @@ export function PodTable({
   highlightedSeat = null,
   highlightedRound = null,
   highlightedOutcome = null,
-  onSelect,
-  onShowDeck,
   canViewDeck = () => true,
   eventLabel,
   teamDraft = false,
@@ -143,15 +140,15 @@ export function PodTable({
                 selected={isSelected}
                 highlighted={!isSelected && highlightedSeat === p.seatIndex}
                 highlightedOutcome={highlightedOutcome}
-                onClick={() => onSelect(isSelected ? null : p.seatIndex)}
+                href={podSeatHref(eventSlug, isSelected ? null : p.discordName)}
+                replace={selectedSeat != null}
                 scale={scale}
               />
             </div>
-            {isSelected && onShowDeck && (
+            {isSelected && (
               <ShieldActions
                 angle={angle}
                 participant={p}
-                onShowDeck={onShowDeck}
                 eventSlug={eventSlug}
                 hasDraftLog={hasDraftLog}
                 canViewDeck={canViewDeck(p.avatarUrl)}
@@ -168,7 +165,6 @@ export function PodTable({
 function ShieldActions({
   angle,
   participant,
-  onShowDeck,
   eventSlug,
   hasDraftLog,
   canViewDeck,
@@ -176,16 +172,13 @@ function ShieldActions({
 }: {
   angle: number;
   participant: PodSeat;
-  onShowDeck: (p: PodSeat) => void;
   eventSlug: string;
   hasDraftLog: boolean;
   canViewDeck: boolean;
   scale: number;
 }) {
   const hasDeck = canViewDeck && (!!participant.deckScreenshotUrl || !!participant.hasDeckList);
-  const logInternalHref = hasDraftLog && canViewDeck
-    ? `/pods/${eventSlug}/${participant.playerSlug ?? participant.seatIndex}`
-    : null;
+  const logInternalHref = hasDraftLog && canViewDeck ? podDraftLogHref(eventSlug, participant) : null;
   const showLog = logInternalHref !== null;
   if (!hasDeck && !showLog) return null;
 
@@ -209,11 +202,10 @@ function ShieldActions({
       <div className="flex flex-col gap-2">
         {hasDeck && (
           <Tooltip label="View Deck" side="right">
-            <button
-              type="button"
-              onClick={() => onShowDeck(participant)}
+            <DeckLink
+              to={podDeckHref(eventSlug, participant.discordName, participant.discordName)}
               aria-label="View Deck"
-              className="group flex items-center justify-center rounded-full bg-bg border border-border hover:border-green/60 hover:bg-green/10 transition-colors cursor-pointer shadow-[0_4px_10px_rgba(0,0,0,0.55)]"
+              className="group flex items-center justify-center rounded-full bg-bg border border-border hover:border-green/60 hover:bg-green/10 transition-colors cursor-pointer no-underline shadow-[0_4px_10px_rgba(0,0,0,0.55)]"
               style={{ width: btnSize, height: btnSize }}
             >
               <TbCards
@@ -221,7 +213,7 @@ function ShieldActions({
                 aria-hidden="true"
                 className="text-text group-hover:text-green transition-colors"
               />
-            </button>
+            </DeckLink>
           </Tooltip>
         )}
         {showLog && (

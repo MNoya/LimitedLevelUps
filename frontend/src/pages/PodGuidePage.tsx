@@ -40,6 +40,7 @@ import {
   SeatAvatar,
 } from "../components/pod/PodStandingRow";
 import { DeckScreenshotModal } from "../components/pod/DeckScreenshotModal";
+import { podDeckHref, podDraftLogHref, podSeatHref } from "../components/pod/podLinks";
 import {
   useSets,
   useMediaFeed,
@@ -63,6 +64,7 @@ import {
   POD_DRAFT_CHANNEL_URL,
   SITE_LINKS,
 } from "../data/site";
+import { isPlainClick } from "../lib/plain-click";
 import { POD_SLOTS, easternHourInLocalTime, nextPodSlotInstant } from "../lib/podSlots";
 import { cn } from "../lib/utils";
 import { useOrganizerColumns } from "../lib/use-is-mobile";
@@ -129,6 +131,9 @@ export function PodGuidePage() {
   }, [location.hash]);
 
   const jumpTo = (id: string) => (e: ReactMouseEvent) => {
+    if (!isPlainClick(e)) {
+      return;
+    }
     e.preventDefault();
     const el = document.getElementById(id);
     if (!el) {
@@ -1130,6 +1135,7 @@ function RecapCard() {
                     iconOnly
                     cols={RECAP_COLS}
                     padX={RECAP_PAD}
+                    deckHref={podDeckHref(pod.slug, podDiscordName(p), podDiscordName(p))}
                     onShowDeck={() => setDeckTarget(p)}
                   />
                 );
@@ -1153,10 +1159,10 @@ function RecapCard() {
           }}
           draftLogHref={
             draftArtifact && decklistAccess.canViewSeat(deckTarget.avatarUrl)
-              ? `/pods/${pod.slug}/${deckTarget.playerSlug ?? deckTarget.seatIndex}`
+              ? podDraftLogHref(pod.slug, deckTarget)
               : null
           }
-          breakdownHref={`/pods/${pod.slug}?player=${encodeURIComponent(podDiscordName(deckTarget))}`}
+          breakdownHref={podSeatHref(pod.slug, podDiscordName(deckTarget))}
           onClose={() => setDeckTarget(null)}
           onPrev={() => cycleDeck(-1)}
           onNext={() => cycleDeck(1)}

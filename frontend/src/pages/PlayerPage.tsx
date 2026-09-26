@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, useHref, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams, type To } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
 import { useAuth } from "../auth/useAuth";
@@ -38,7 +38,7 @@ import { ErrorState } from "../components/ErrorState";
 import { TrophyCount } from "../components/TrophyCount";
 import { ArenaChampBadge, isArenaChampionshipFormat } from "../components/ArenaChampBadge";
 import { LIFETIME_SET_CODE, SetCodeDropdown } from "../components/SetCodeDropdown";
-import { MobilePageHeader } from "../components/PageNav";
+import { BackButton, MobilePageHeader } from "../components/PageNav";
 import { RankBadge } from "../components/RankBadge";
 import { ArenaRankIcon } from "../components/ArenaRankIcon";
 import { GoToTopButton } from "../components/GoToTopButton";
@@ -63,6 +63,8 @@ import {
 } from "../data/filters";
 import { FMT_COLORS, renderColorOption, renderFormatOption, shortFormat } from "../data/format-display";
 import { cn } from "../lib/utils";
+import { OPENED_IN_APP, useCloseModal } from "../lib/modal-history";
+import { useSearchParamHref } from "../lib/search-param-href";
 import type {
   LifetimeEventStats,
   PlayerDraftEvent,
@@ -177,10 +179,10 @@ export function PlayerPage() {
     return params.toString();
   };
 
-  const onChangeSet = (newCode: string) => {
+  const setHref = (newCode: string): To => {
     const toLifetime = newCode === LIFETIME_SET_CODE;
     const pathname = toLifetime ? `/player/${slug}` : playerPath(slug, newCode);
-    navigate({ pathname, search: toLifetime ? topQs : perSetQs() });
+    return { pathname, search: toLifetime ? topQs : perSetQs() };
   };
 
   useEffect(() => {
@@ -217,8 +219,7 @@ export function PlayerPage() {
         fetchNextPage={lifetimeEvents.fetchNextPage}
         sets={dropdownSets}
         isMobile={isMobile}
-        onChangeSet={onChangeSet}
-        navigate={navigate}
+        setHref={setHref}
         qs={perSetQs()}
       />
     );
@@ -228,7 +229,7 @@ export function PlayerPage() {
     return (
       <div className="bg-bg text-text min-h-screen page-fade">
         {isMobile ? (
-          <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={perSetQs()} />
+          <MobilePlayerHeader sibling={sibling} qs={perSetQs()} />
         ) : (
           <AppHeader subtitle="PLAYER PROFILE" />
         )}
@@ -241,7 +242,7 @@ export function PlayerPage() {
     return (
       <div className="bg-bg text-text min-h-screen page-fade">
         {isMobile ? (
-          <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={perSetQs()} />
+          <MobilePlayerHeader sibling={sibling} qs={perSetQs()} />
         ) : (
           <AppHeader subtitle="PLAYER PROFILE" />
         )}
@@ -255,9 +256,8 @@ export function PlayerPage() {
       <NoSetData
         sets={dropdownSets}
         setCode={setCode}
-        onChangeSet={onChangeSet}
+        setHref={setHref}
         sibling={sibling}
-        navigate={navigate}
         qs={perSetQs()}
         isMobile={isMobile}
         identity={identity ?? null}
@@ -269,9 +269,9 @@ export function PlayerPage() {
     <>
       {showLoadingBar && <TopLoadingBar />}
       {isMobile ? (
-        <Mobile profile={profile} events={events ?? []} sibling={sibling} sets={dropdownSets} onChangeSet={onChangeSet} />
+        <Mobile profile={profile} events={events ?? []} sibling={sibling} sets={dropdownSets} setHref={setHref} />
       ) : (
-        <Desktop profile={profile} events={events ?? []} sibling={sibling} sets={dropdownSets} onChangeSet={onChangeSet} />
+        <Desktop profile={profile} events={events ?? []} sibling={sibling} sets={dropdownSets} setHref={setHref} />
       )}
     </>
   );
@@ -320,8 +320,7 @@ function LifetimePlayer({
   fetchNextPage,
   sets,
   isMobile,
-  onChangeSet,
-  navigate,
+  setHref,
   qs,
 }: {
   profile: PlayerProfile | null;
@@ -334,11 +333,10 @@ function LifetimePlayer({
   fetchNextPage: () => void;
   sets: SetSummary[] | undefined;
   isMobile: boolean;
-  onChangeSet: (code: string) => void;
-  navigate: ReturnType<typeof useNavigate>;
+  setHref: (code: string) => To;
   qs: string;
 }) {
-  const toLeaderboard = () => navigate({ pathname: leaderboardPath(), search: qs });
+  const leaderboardTo = { pathname: leaderboardPath(), search: qs };
   const [searchParams, setSearchParams] = useSearchParams();
   const [mobileTab, setMobileTab] = useState<"sets" | "events">("sets");
   const formatFilter = searchParams.get("format") ?? "ALL";
@@ -365,7 +363,7 @@ function LifetimePlayer({
   if (error) {
     return (
       <div className="bg-bg text-text min-h-screen page-fade">
-        {isMobile ? <LifetimeMobileHeader onBack={toLeaderboard} /> : <AppHeader subtitle="PLAYER PROFILE" />}
+        {isMobile ? <LifetimeMobileHeader backTo={leaderboardTo} /> : <AppHeader subtitle="PLAYER PROFILE" />}
         <ErrorState error={error} compact={isMobile} />
       </div>
     );
@@ -373,7 +371,7 @@ function LifetimePlayer({
   if (isLoading || !profile) {
     return (
       <div className="bg-bg text-text min-h-screen page-fade">
-        {isMobile ? <LifetimeMobileHeader onBack={toLeaderboard} /> : <AppHeader subtitle="PLAYER PROFILE" />}
+        {isMobile ? <LifetimeMobileHeader backTo={leaderboardTo} /> : <AppHeader subtitle="PLAYER PROFILE" />}
         {isLoading ? (
           isMobile ? <LifetimeMobileSkeleton /> : <LifetimeSkeleton />
         ) : (
@@ -398,7 +396,7 @@ function LifetimePlayer({
   if (isMobile) {
     return (
       <div className="bg-bg text-text min-h-screen page-fade">
-        <LifetimeMobileHeader onBack={toLeaderboard} />
+        <LifetimeMobileHeader backTo={leaderboardTo} />
         <section
           className="px-[18px] pt-5 pb-4 border-b border-border"
           style={{ background: "linear-gradient(180deg, #14181f 0%, #0a0c10 100%)" }}
@@ -415,7 +413,14 @@ function LifetimePlayer({
               <ManualTrophiesBlock trophies={profile.selfReportedEvents} mobile className="absolute bottom-0 left-0" />
             </div>
             {sets ? (
-              <SetCodeDropdown sets={sets} activeCode={LIFETIME_SET_CODE} onChange={onChangeSet} size="sm" chamfer={false} includeLifetime />
+              <SetCodeDropdown
+                sets={sets}
+                activeCode={LIFETIME_SET_CODE}
+                hrefFor={setHref}
+                size="sm"
+                chamfer={false}
+                includeLifetime
+              />
             ) : (
               <span className="shrink-0 font-display text-[16px] tracking-[0.18em] text-muted">ALL SETS</span>
             )}
@@ -465,7 +470,7 @@ function LifetimePlayer({
         style={{ background: "linear-gradient(180deg, #14181f 0%, #0a0c10 100%)" }}
       >
         <div className="flex items-center justify-between mb-4">
-          <BackButton onClick={toLeaderboard} inline />
+          <BackButton to={leaderboardTo} inline />
         </div>
         <div className="flex items-end gap-7">
           <AAvatar displayName={profile.displayName} avatarUrl={profile.avatarUrl} size={120} green />
@@ -478,7 +483,7 @@ function LifetimePlayer({
             </h1>
             <div className="mt-2 flex items-center gap-3 font-display tracking-[0.18em]">
               {sets ? (
-                <SetCodeDropdown sets={sets} activeCode={LIFETIME_SET_CODE} onChange={onChangeSet} includeLifetime />
+                <SetCodeDropdown sets={sets} activeCode={LIFETIME_SET_CODE} hrefFor={setHref} includeLifetime />
               ) : (
                 <span className="text-muted text-[22px]">ALL SETS</span>
               )}
@@ -518,8 +523,8 @@ function LifetimePlayer({
   );
 }
 
-function LifetimeMobileHeader({ onBack }: { onBack: () => void }) {
-  return <MobilePageHeader backOnClick={onBack} prevTo={null} nextTo={null} />;
+function LifetimeMobileHeader({ backTo }: { backTo: To }) {
+  return <MobilePageHeader backTo={backTo} prevTo={null} nextTo={null} />;
 }
 
 type SetSortKey = "release" | "set" | "trophies" | "events" | "winrate";
@@ -734,6 +739,7 @@ function LifetimeEventLog({
   isMobile?: boolean;
 }) {
   const compact = useIsMobile(1240);
+  const filterHref = useSearchParamHref("ALL");
   const sentinelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const node = sentinelRef.current;
@@ -785,6 +791,7 @@ function LifetimeEventLog({
           <FilterDropdown
             value={seasonFilter}
             onChange={setSeasonFilter}
+            hrefFor={(v) => filterHref("season", v)}
             options={seasonOptions}
             renderValue={renderSeasonOption}
             renderOption={renderSeasonOption}
@@ -794,6 +801,7 @@ function LifetimeEventLog({
           <FilterDropdown
             value={formatFilter}
             onChange={setFormatFilter}
+            hrefFor={(v) => filterHref("format", v)}
             options={FORMAT_OPTIONS}
             renderValue={renderFormatOption}
             renderOption={renderFormatOption}
@@ -803,6 +811,7 @@ function LifetimeEventLog({
           <FilterDropdown
             value={colorsFilter}
             onChange={setColorsFilter}
+            hrefFor={(v) => filterHref("colors", v)}
             options={colorOptions}
             renderValue={renderColorOption}
             renderOption={renderColorOption}
@@ -837,6 +846,7 @@ function LifetimeEventLog({
           <FilterDropdown
             value={seasonFilter}
             onChange={setSeasonFilter}
+            hrefFor={(v) => filterHref("season", v)}
             options={seasonOptions}
             renderValue={renderSeasonOption}
             renderOption={renderSeasonOption}
@@ -846,6 +856,7 @@ function LifetimeEventLog({
           <FilterDropdown
             value={formatFilter}
             onChange={setFormatFilter}
+            hrefFor={(v) => filterHref("format", v)}
             options={FORMAT_OPTIONS}
             renderValue={renderFormatOption}
             renderOption={renderFormatOption}
@@ -855,6 +866,7 @@ function LifetimeEventLog({
           <FilterDropdown
             value={colorsFilter}
             onChange={setColorsFilter}
+            hrefFor={(v) => filterHref("colors", v)}
             options={colorOptions}
             renderValue={renderColorOption}
             renderOption={renderColorOption}
@@ -917,45 +929,42 @@ function useUrlFilters(): [
   ];
 }
 
-// The open deck modal is URL state (?deck=<sourceMessageId>) so a profile link opens straight to a
-// deck. Opening pushes a history entry (browser Back closes the modal); closing replaces it away.
-function useSharedDeck(
-  selfReportedEvents: SelfReportedEvent[],
-): [SelfReportedEvent | null, (trophy: SelfReportedEvent | null) => void] {
+function useSharedDeck(selfReportedEvents: SelfReportedEvent[]) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const deckId = searchParams.get("deck");
   const shotTrophy = useMemo(() => {
     if (!deckId) return null;
     return selfReportedEvents.find((t) => t.sourceMessageId === deckId) ?? null;
   }, [deckId, selfReportedEvents]);
-  const setShotTrophy = useCallback(
-    (trophy: SelfReportedEvent | null) => {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        if (trophy) next.set("deck", trophy.sourceMessageId);
-        else next.delete("deck");
-        return next;
-      }, { replace: !trophy });
-    },
-    [setSearchParams],
-  );
-  return [shotTrophy, setShotTrophy];
+  const searchWithDeck = (id: string | null) => {
+    const next = new URLSearchParams(searchParams);
+    if (id) {
+      next.set("deck", id);
+    } else {
+      next.delete("deck");
+    }
+    return next.toString();
+  };
+  const trophyHref = (trophy: SelfReportedEvent) => `${location.pathname}?${searchWithDeck(trophy.sourceMessageId)}`;
+  const selectTrophy = (trophy: SelfReportedEvent) =>
+    setSearchParams(searchWithDeck(trophy.sourceMessageId), { replace: true, state: location.state });
+  const closeTrophy = useCloseModal({ pathname: location.pathname, search: searchWithDeck(null) });
+  return { shotTrophy, trophyHref, selectTrophy, closeTrophy };
 }
 
 function MobilePlayerHeader({
   sibling,
-  navigate,
   qs = "",
 }: {
   sibling: SiblingNav;
-  navigate: ReturnType<typeof useNavigate>;
   qs?: string;
 }) {
   const toFor = (s: string | null) =>
     s ? { pathname: playerPath(s, sibling.setCode), search: qs } : null;
   return (
     <MobilePageHeader
-      backOnClick={() => navigate({ pathname: leaderboardPath(sibling.setCode), search: qs })}
+      backTo={{ pathname: leaderboardPath(sibling.setCode), search: qs }}
       prevTo={toFor(sibling.prevSlug)}
       nextTo={toFor(sibling.nextSlug)}
       prevAriaLabel="Previous player"
@@ -967,31 +976,36 @@ function MobilePlayerHeader({
 function NoSetData({
   sets,
   setCode,
-  onChangeSet,
+  setHref,
   sibling,
-  navigate,
   qs,
   isMobile,
   identity,
 }: {
   sets: SetSummary[] | undefined;
   setCode: string;
-  onChangeSet: (code: string) => void;
+  setHref: (code: string) => To;
   sibling: SiblingNav;
-  navigate: ReturnType<typeof useNavigate>;
   qs: string;
   isMobile: boolean;
   identity: PlayerIdentity | null;
 }) {
   const setSwitcher = sets ? (
-    <SetCodeDropdown sets={sets} activeCode={setCode} onChange={onChangeSet} size={isMobile ? "sm" : "md"} chamfer={!isMobile} includeLifetime />
+    <SetCodeDropdown
+      sets={sets}
+      activeCode={setCode}
+      hrefFor={setHref}
+      size={isMobile ? "sm" : "md"}
+      chamfer={!isMobile}
+      includeLifetime
+    />
   ) : (
     <span className="text-[22px]">{setCode}</span>
   );
   return (
     <div className="bg-bg text-text min-h-screen page-fade">
       {isMobile ? (
-        <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={qs} />
+        <MobilePlayerHeader sibling={sibling} qs={qs} />
       ) : (
         <AppHeader subtitle="PLAYER PROFILE" />
       )}
@@ -1001,7 +1015,7 @@ function NoSetData({
       >
         {!isMobile && (
           <div className="flex items-center justify-between mb-4">
-            <BackButton onClick={() => navigate({ pathname: leaderboardPath(setCode), search: qs })} inline />
+            <BackButton to={{ pathname: leaderboardPath(setCode), search: qs }} inline />
             <SiblingNavButtons sibling={sibling} qs={qs} />
           </div>
         )}
@@ -1382,16 +1396,14 @@ function Desktop({
   events,
   sibling,
   sets,
-  onChangeSet,
+  setHref,
 }: {
   profile: PlayerProfile;
   events: PlayerDraftEvent[];
   sibling: SiblingNav;
   sets: SetSummary[] | undefined;
-  onChangeSet: (code: string) => void;
+  setHref: (code: string) => To;
 }) {
-  const navigate = useNavigate();
-
   const [formatFilter, setFormatFilter, colorsFilter, setColorsFilter, qs] =
     useUrlFilters();
 
@@ -1444,7 +1456,7 @@ function Desktop({
     [events, matchesFilters]
   );
   const displayRows = useMemo(() => mergeTrophyRows(filtered, profile, matchesFilters), [filtered, profile, matchesFilters]);
-  const [shotTrophy, setShotTrophy] = useSharedDeck(profile.selfReportedEvents);
+  const { shotTrophy, trophyHref, selectTrophy, closeTrophy } = useSharedDeck(profile.selfReportedEvents);
 
   const filtersActive = formatFilter !== "ALL" || colorsFilter !== "ALL";
   // The headline points and its breakdown popover follow the format filter only, selecting the
@@ -1498,7 +1510,7 @@ function Desktop({
         style={{ background: "linear-gradient(180deg, #14181f 0%, #0a0c10 100%)" }}
       >
         <div className="flex items-center justify-between mb-4">
-          <BackButton onClick={() => navigate({ pathname: leaderboardPath(profile.setCode), search: qs })} inline />
+          <BackButton to={{ pathname: leaderboardPath(profile.setCode), search: qs }} inline />
           <SiblingNavButtons sibling={sibling} qs={qs} />
         </div>
         <div className="flex items-end gap-7">
@@ -1512,7 +1524,7 @@ function Desktop({
             </h1>
             <div className="mt-2 flex items-center gap-3 font-display tracking-[0.18em]">
               {sets ? (
-                <SetCodeDropdown sets={sets} activeCode={profile.setCode} onChange={onChangeSet} includeLifetime />
+                <SetCodeDropdown sets={sets} activeCode={profile.setCode} hrefFor={setHref} includeLifetime />
               ) : (
                 <span className="text-[22px]">{profile.setCode}</span>
               )}
@@ -1577,7 +1589,7 @@ function Desktop({
           filtered={filtered}
           rows={displayRows}
           summary={eventLogSummaryParts(events.length, profile.selfReportedEvents, displayRows.length, filtersActive)}
-          onOpenTrophy={setShotTrophy}
+          trophyHref={trophyHref}
           formatFilter={formatFilter}
           setFormatFilter={setFormatFilter}
           colorsFilter={colorsFilter}
@@ -1604,8 +1616,9 @@ function Desktop({
           trophy={shotTrophy}
           trophies={profile.selfReportedEvents}
           displayName={profile.displayName}
-          onSelect={setShotTrophy}
-          onClose={() => setShotTrophy(null)}
+          trophyHref={trophyHref}
+          onSelect={selectTrophy}
+          onClose={closeTrophy}
         />
       )}
     </div>
@@ -1689,12 +1702,14 @@ function TrophyDeckModal({
   trophy,
   trophies,
   displayName,
+  trophyHref,
   onSelect,
   onClose,
 }: {
   trophy: SelfReportedEvent;
   trophies: SelfReportedEvent[];
   displayName: string;
+  trophyHref: (trophy: SelfReportedEvent) => string;
   onSelect: (trophy: SelfReportedEvent) => void;
   onClose: () => void;
 }) {
@@ -1719,6 +1734,8 @@ function TrophyDeckModal({
       onClose={onClose}
       onPrev={prev ? () => onSelect(prev) : undefined}
       onNext={next ? () => onSelect(next) : undefined}
+      prevHref={prev ? trophyHref(prev) : undefined}
+      nextHref={next ? trophyHref(next) : undefined}
     />
   );
 }
@@ -2086,7 +2103,7 @@ function DraftLogDesktop({
   filtered,
   rows,
   summary,
-  onOpenTrophy,
+  trophyHref,
   formatFilter,
   setFormatFilter,
   colorsFilter,
@@ -2101,7 +2118,7 @@ function DraftLogDesktop({
   filtered: PlayerDraftEvent[];
   rows: LogEntry[];
   summary: string[];
-  onOpenTrophy: (t: SelfReportedEvent) => void;
+  trophyHref: (t: SelfReportedEvent) => string;
   formatFilter: string;
   setFormatFilter: (v: string) => void;
   colorsFilter: string;
@@ -2113,6 +2130,7 @@ function DraftLogDesktop({
   updated: string | null;
 }) {
   const compact = useIsMobile(1240);
+  const filterHref = useSearchParamHref("ALL");
   const sectionRef = useRef<HTMLElement>(null);
   const scrollToTop = () =>
     sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2139,6 +2157,7 @@ function DraftLogDesktop({
           <FilterDropdown
             value={formatFilter}
             onChange={setFormatFilter}
+            hrefFor={(v) => filterHref("format", v)}
             options={formatOptions}
             renderValue={renderFormatOption}
             renderOption={renderFormatOption}
@@ -2148,6 +2167,7 @@ function DraftLogDesktop({
           <FilterDropdown
             value={colorsFilter}
             onChange={setColorsFilter}
+            hrefFor={(v) => filterHref("colors", v)}
             options={colorOptions}
             renderValue={renderColorOption}
             renderOption={renderColorOption}
@@ -2171,7 +2191,14 @@ function DraftLogDesktop({
           return (
             <React.Fragment key={e.eventId}>
               {showBoundary && <FlashbackDivider variant="desktop" />}
-              <EventLogRow event={e} variant="desktop" hideBottomBorder={hideBottomBorder} playerDisplayName={playerDisplayName} onOpenTrophy={onOpenTrophy} compact={compact} />
+              <EventLogRow
+                event={e}
+                variant="desktop"
+                hideBottomBorder={hideBottomBorder}
+                playerDisplayName={playerDisplayName}
+                trophyHref={trophyHref}
+                compact={compact}
+              />
             </React.Fragment>
           );
         })}
@@ -2372,7 +2399,7 @@ function EventLogRow({
   variant,
   hideBottomBorder = false,
   playerDisplayName,
-  onOpenTrophy,
+  trophyHref,
   setColumn = false,
   setHref,
   compact = false,
@@ -2381,7 +2408,7 @@ function EventLogRow({
   variant: "desktop" | "mobile";
   hideBottomBorder?: boolean;
   playerDisplayName?: string;
-  onOpenTrophy?: (t: SelfReportedEvent) => void;
+  trophyHref?: (t: SelfReportedEvent) => string;
   setColumn?: boolean;
   setHref?: string;
   compact?: boolean;
@@ -2393,8 +2420,6 @@ function EventLogRow({
   const podLinkTo = podSlug
     ? `/pods/${podSlug}${playerDisplayName ? `?player=${encodeURIComponent(playerDisplayName)}` : ""}`
     : null;
-  const podFullHref = useHref(podLinkTo ?? "/");
-  const podNewTabHref = podLinkTo ? podFullHref : null;
   const rowInternal = isPod && !!podSlug;
   const rowExternal = !isPod && !!href;
   const linkClass = (rowInternal || rowExternal || trophy) ? "group cursor-pointer transition-colors hover:bg-surface2 no-underline text-inherit" : "";
@@ -2492,28 +2517,17 @@ function EventLogRow({
             />
           </span>
         ) : isPod ? (
-          podNewTabHref ? (
-            <Tooltip label="Open in new tab">
-              <button
-                type="button"
-                onClick={(ev) => {
-                  ev.preventDefault();
-                  ev.stopPropagation();
-                  window.open(podNewTabHref, "_blank", "noopener,noreferrer");
-                }}
-                aria-label="Open event in new tab"
-                className="inline-flex items-center justify-end gap-3 text-dim group-hover:text-text transition-colors bg-transparent border-none p-0 cursor-pointer"
-              >
-                <Record
-                  mono
-                  wins={e.wins}
-                  losses={e.losses}
-                  color={recordColor}
-                  className="text-right font-display text-[22px]"
-                />
-                <ExternalLink size={18} aria-hidden="true" />
-              </button>
-            </Tooltip>
+          podLinkTo ? (
+            <span className="inline-flex items-center justify-end gap-3 text-dim group-hover:text-text transition-colors">
+              <Record
+                mono
+                wins={e.wins}
+                losses={e.losses}
+                color={recordColor}
+                className="text-right font-display text-[22px]"
+              />
+              <ExternalLink size={18} aria-hidden="true" />
+            </span>
           ) : (
             <span className="inline-flex items-center justify-end">
               <Record
@@ -2547,16 +2561,11 @@ function EventLogRow({
       linkClass,
     );
     const style = { gridTemplateColumns: "subgrid" };
-    if (trophy) {
+    if (trophy && trophyHref) {
       return (
-        <button
-          type="button"
-          onClick={() => onOpenTrophy?.(trophy)}
-          className={cn("text-left w-full bg-transparent border-0", cls)}
-          style={style}
-        >
+        <Link to={trophyHref(trophy)} state={OPENED_IN_APP} className={cn("text-left w-full", cls)} style={style}>
           {inner}
-        </button>
+        </Link>
       );
     }
     if (rowInternal && podLinkTo) {
@@ -2616,28 +2625,17 @@ function EventLogRow({
       ) : isPod ? (
         <span className="inline-flex items-center gap-2.5">
           {podSlug && <PodEventButton size="sm" />}
-          {podNewTabHref ? (
-            <Tooltip label="Open in new tab">
-              <button
-                type="button"
-                onClick={(ev) => {
-                  ev.preventDefault();
-                  ev.stopPropagation();
-                  window.open(podNewTabHref, "_blank", "noopener,noreferrer");
-                }}
-                aria-label="Open event in new tab"
-                className="inline-flex items-center gap-1.5 text-dim group-hover:text-text transition-colors bg-transparent border-none p-0 cursor-pointer"
-              >
-                <Record
-                  mono
-                  wins={e.wins}
-                  losses={e.losses}
-                  color={recordColor}
-                  className="font-display text-[22px]"
-                />
-                <ExternalLink size={16} aria-hidden="true" />
-              </button>
-            </Tooltip>
+          {podLinkTo ? (
+            <span className="inline-flex items-center gap-1.5 text-dim group-hover:text-text transition-colors">
+              <Record
+                mono
+                wins={e.wins}
+                losses={e.losses}
+                color={recordColor}
+                className="font-display text-[22px]"
+              />
+              <ExternalLink size={16} aria-hidden="true" />
+            </span>
           ) : (
             <Record
               mono
@@ -2671,16 +2669,16 @@ function EventLogRow({
     linkClass,
   );
   const style = { gridTemplateColumns: "20px 1fr auto" };
-  if (trophy) {
+  if (trophy && trophyHref) {
     return (
-      <button
-        type="button"
-        onClick={() => onOpenTrophy?.(trophy)}
-        className={cn("text-left bg-transparent border-0 w-[calc(100%+36px)]", cls)}
+      <Link
+        to={trophyHref(trophy)}
+        state={OPENED_IN_APP}
+        className={cn("text-left w-[calc(100%+36px)]", cls)}
         style={style}
       >
         {inner}
-      </button>
+      </Link>
     );
   }
   if (rowInternal && podLinkTo) {
@@ -2697,6 +2695,9 @@ function EventLogRow({
       </a>
     );
   }
+  if (setHref) {
+    return <Link to={setHref} className={cls} style={style}>{inner}</Link>;
+  }
   return <div className={cls} style={style}>{inner}</div>;
 }
 
@@ -2707,18 +2708,17 @@ function Mobile({
   events,
   sibling,
   sets,
-  onChangeSet,
+  setHref,
 }: {
   profile: PlayerProfile;
   events: PlayerDraftEvent[];
   sibling: SiblingNav;
   sets: SetSummary[] | undefined;
-  onChangeSet: (code: string) => void;
+  setHref: (code: string) => To;
 }) {
-  const navigate = useNavigate();
-
   const [formatFilter, setFormatFilter, colorsFilter, setColorsFilter, qs] =
     useUrlFilters();
+  const filterHref = useSearchParamHref("ALL");
 
   const { chips: colorChips, otherCombos } = useColorChips(profile.setCode);
   const cube = isCubeCode(profile.setCode);
@@ -2769,7 +2769,7 @@ function Mobile({
     [events, matchesFilters]
   );
   const displayRows = useMemo(() => mergeTrophyRows(filtered, profile, matchesFilters), [filtered, profile, matchesFilters]);
-  const [shotTrophy, setShotTrophy] = useSharedDeck(profile.selfReportedEvents);
+  const { shotTrophy, trophyHref, selectTrophy, closeTrophy } = useSharedDeck(profile.selfReportedEvents);
 
   const filtersActive = formatFilter !== "ALL" || colorsFilter !== "ALL";
   // The headline points and its breakdown popover follow the format filter only, selecting the
@@ -2819,7 +2819,7 @@ function Mobile({
 
   return (
     <div className="bg-bg text-text min-h-screen page-fade">
-      <MobilePlayerHeader sibling={sibling} navigate={navigate} qs={qs} />
+      <MobilePlayerHeader sibling={sibling} qs={qs} />
 
       <section
         className="px-[18px] pt-5 pb-4 border-b border-border"
@@ -2847,7 +2847,14 @@ function Mobile({
               </span>
             )}
             {sets ? (
-              <SetCodeDropdown sets={sets} activeCode={profile.setCode} onChange={onChangeSet} size="sm" chamfer={false} includeLifetime />
+              <SetCodeDropdown
+                sets={sets}
+                activeCode={profile.setCode}
+                hrefFor={setHref}
+                size="sm"
+                chamfer={false}
+                includeLifetime
+              />
             ) : (
               <span className="text-[18px]">{profile.setCode}</span>
             )}
@@ -2918,6 +2925,7 @@ function Mobile({
             <FilterDropdown
               value={formatFilter}
               onChange={setFormatFilter}
+              hrefFor={(v) => filterHref("format", v)}
               options={formatOptions}
               variant="mobile"
               renderValue={renderFormatOption}
@@ -2928,6 +2936,7 @@ function Mobile({
             <FilterDropdown
               value={colorsFilter}
               onChange={setColorsFilter}
+              hrefFor={(v) => filterHref("colors", v)}
               options={colorOptions}
               variant="mobile"
               renderValue={renderColorOption}
@@ -2947,7 +2956,13 @@ function Mobile({
             return (
               <React.Fragment key={e.eventId}>
                 {showBoundary && <FlashbackDivider variant="mobile" />}
-                <EventLogRow event={e} variant="mobile" hideBottomBorder={hideBottomBorder} playerDisplayName={profile.displayName} onOpenTrophy={setShotTrophy} />
+                <EventLogRow
+                  event={e}
+                  variant="mobile"
+                  hideBottomBorder={hideBottomBorder}
+                  playerDisplayName={profile.displayName}
+                  trophyHref={trophyHref}
+                />
               </React.Fragment>
             );
           });
@@ -2974,8 +2989,9 @@ function Mobile({
           trophy={shotTrophy}
           trophies={profile.selfReportedEvents}
           displayName={profile.displayName}
-          onSelect={setShotTrophy}
-          onClose={() => setShotTrophy(null)}
+          trophyHref={trophyHref}
+          onSelect={selectTrophy}
+          onClose={closeTrophy}
         />
       )}
     </div>
@@ -3302,30 +3318,6 @@ function MobileManaPipsTab({ events, selfReported }: { events: PlayerDraftEvent[
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
-
-function BackButton({
-  onClick,
-  compact = false,
-  inline = false,
-}: {
-  onClick: () => void;
-  compact?: boolean;
-  /** When true, drop the bottom margin so the button can sit in a flex row alongside other controls. */
-  inline?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "bg-transparent border-none text-muted font-display leading-none cursor-pointer flex items-center transition-colors hover:text-text",
-        compact ? "text-[13px] tracking-[0.15em] gap-1.5" : "text-[14px] tracking-[0.18em] gap-1.5",
-        !compact && !inline && "mb-3.5",
-      )}
-    >
-      <ChevronLeft size={compact ? 14 : 16} className="shrink-0" /> {compact ? "BACK" : "BACK TO LEADERBOARD"}
-    </button>
-  );
-}
 
 function SiblingNavButtons({
   sibling,

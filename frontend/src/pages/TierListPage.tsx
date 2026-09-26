@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { ExternalLink } from "../components/Icons";
 import { setGlyphCode } from "../components/Brand";
@@ -15,6 +15,7 @@ import { useSets } from "../data/hooks";
 import { relativeTime } from "../data/utils";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
+import { OPENED_IN_APP, useCloseModal } from "../lib/modal-history";
 import { ACTIVE_SET_CODE, TIER_LIST_PREVIEW_SETS } from "../data/constants";
 import {
   activeFilterCount,
@@ -31,8 +32,7 @@ import {
 export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolean }) {
   const { data: sets } = useSets();
   const isMobile = useIsMobile();
-  const navigate = useNavigate();
-  const { setCode } = useParams();
+  const { setCode, pair } = useParams();
   const [filters, setFilters] = useState<TierFilters>(EMPTY_FILTERS);
   const [hideArt, setHideArt] = useHideArt();
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -45,7 +45,9 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
   const liveSet = sets?.find((s) => s.isActive)?.code ?? ACTIVE_SET_CODE;
   const tierListSets = useMemo(() => buildTierListSets(sets), [sets]);
   const current = setCode?.toUpperCase() ?? tierListSets[0]?.code ?? liveSet;
-  const pickSet = (code: string) => navigate(`/tier-list/${code}`);
+  const setHref = (code: string) => `/tier-list/${code}`;
+  const archetypesHref = `/tier-list/${current}/archetypes`;
+  const closeSkeletons = useCloseModal(setHref(current));
   const setMeta = tierListSets.find((s) => s.code === current);
   const { uid, graders, comparison, effectiveUid } = resolveTierList(current);
   const glyphCode = setMeta ? setGlyphCode(setMeta) : current;
@@ -98,12 +100,12 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                       label={setMeta?.name?.toUpperCase() ?? current}
                       isMobile
                       loading={!sets}
-                      onChange={pickSet}
+                      hrefFor={setHref}
                       triggerClassName="h-10 px-2.5"
                     />
                   </h1>
 
-                  {skeletons.length > 0 && <SkeletonsButton onClick={() => navigate(`/tier-list/${current}/archetypes`)} />}
+                  {skeletons.length > 0 && <SkeletonsButton href={archetypesHref} />}
 
                   {effectiveUid && (
                     <button
@@ -182,10 +184,10 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                       label={setMeta?.name?.toUpperCase() ?? current}
                       isMobile={false}
                       loading={!sets}
-                      onChange={pickSet}
+                      hrefFor={setHref}
                     />
                     {skeletons.length > 0 && (
-                      <SkeletonsButton onClick={() => navigate(`/tier-list/${current}/archetypes`)} />
+                      <SkeletonsButton href={archetypesHref} />
                     )}
                   </h1>
                   <ListMeta lastUpdated={lastUpdated} className="mt-1 pl-[2px] text-[11px]" />
@@ -265,7 +267,9 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
           <SkeletonsModal
             skeletons={skeletons}
             setCode={current}
-            onClose={() => navigate(`/tier-list/${current}`)}
+            activePair={pair}
+            pairHref={(colors) => `${archetypesHref}/${colors.toLowerCase()}`}
+            onClose={closeSkeletons}
           />
         )}
       </div>
@@ -273,15 +277,15 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
   );
 }
 
-function SkeletonsButton({ onClick }: { onClick: () => void }) {
+function SkeletonsButton({ href }: { href: string }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex h-10 shrink-0 items-center rounded border border-border2 px-2 font-display text-[14px] leading-none tracking-[0.14em] text-text transition-colors hover:border-green hover:text-green md:h-9 md:px-2.5"
+    <Link
+      to={href}
+      state={OPENED_IN_APP}
+      className="flex h-10 shrink-0 items-center rounded border border-border2 px-2 font-display text-[14px] leading-none tracking-[0.14em] text-text transition-colors no-underline hover:border-green hover:text-green md:h-9 md:px-2.5"
     >
       <span className="-translate-y-px">ARCHETYPES</span>
-    </button>
+    </Link>
   );
 }
 

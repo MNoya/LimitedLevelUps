@@ -1,6 +1,15 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { SlidersHorizontal } from "lucide-react";
 
 import { AppHeader } from "../components/AppHeader";
@@ -20,6 +29,7 @@ import { CardDetailRow } from "../components/pod/cardData/CardDetailRow";
 import { useCursorTooltip, type CursorTooltipBinding } from "../components/CursorTooltip";
 import { cardSlug } from "../data/podCardDecks";
 import { winRateColor } from "../data/winRate";
+import { isPlainClick } from "../lib/plain-click";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { cardArtSources, cardImageSources, useBoardCardImages } from "../data/cardImages";
@@ -429,6 +439,7 @@ export function PodCardDataPage() {
                       <Fragment key={`${card.name}|${card.set}`}>
                         <CardRow
                           card={card}
+                          href={cardDataHref(boardCode, card.name, search)}
                           sources={cardArtSources(card.name, card.set, cardImages)}
                           rowRef={selected?.name === card.name ? selectedRowRef : undefined}
                           active={openSet.has(card.name)}
@@ -542,6 +553,7 @@ export function PodCardDataPage() {
                   <Fragment key={`${card.name}|${card.set}`}>
                     <CardRow
                       card={card}
+                      href={cardDataHref(boardCode, card.name, search)}
                       sources={cardArtSources(card.name, card.set, cardImages)}
                       rowRef={selected?.name === card.name ? selectedRowRef : undefined}
                       active={openSet.has(card.name)}
@@ -643,6 +655,7 @@ function MetricHeader({
 
 function CardRow({
   card,
+  href,
   sources,
   sticky = false,
   rowRef,
@@ -653,6 +666,7 @@ function CardRow({
   onOpen,
 }: {
   card: PodCard;
+  href: string;
   sources: string[];
   sticky?: boolean;
   rowRef?: RefObject<HTMLTableRowElement>;
@@ -662,7 +676,18 @@ function CardRow({
   onLeave: () => void;
   onOpen: (card: PodCard) => void;
 }) {
-  const nameClass = cn("truncate font-display text-[18px] tracking-[0.02em]", active ? "text-green" : "text-text");
+  const nameClass = cn(
+    "block truncate font-display text-[18px] tracking-[0.02em] no-underline",
+    active ? "text-green" : "text-text",
+  );
+  const toggleInPlace = (e: MouseEvent) => {
+    e.stopPropagation();
+    if (!isPlainClick(e)) {
+      return;
+    }
+    e.preventDefault();
+    onOpen(card);
+  };
   return (
     <tr
       ref={rowRef}
@@ -685,7 +710,9 @@ function CardRow({
             <CardArt sources={sources} name={card.name} />
           </td>
           <td className="pr-2 py-2">
-            <div className={nameClass}>{card.name}</div>
+            <Link to={href} onClick={toggleInPlace} className={nameClass}>
+              {card.name}
+            </Link>
           </td>
         </>
       ) : (
@@ -696,7 +723,9 @@ function CardRow({
         >
           <div className="flex items-center gap-2.5">
             <CardArt sources={sources} name={card.name} />
-            <div className={cn("min-w-0", nameClass)}>{card.name}</div>
+            <Link to={href} onClick={toggleInPlace} className={cn("min-w-0", nameClass)}>
+              {card.name}
+            </Link>
           </div>
         </td>
       )}

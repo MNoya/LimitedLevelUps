@@ -1,3 +1,4 @@
+import { Link, type To } from "react-router-dom";
 import { BsAsterisk, BsPaletteFill } from "./Icons";
 
 import { Pip } from "./ManaPips";
@@ -7,14 +8,14 @@ import { TOGGLE_ACTIVE, TOGGLE_INACTIVE } from "../lib/toggle-styles";
 
 export function ColorsSwitcher({
   activeCode,
-  onChange,
+  hrefFor,
   chips,
   includeAll = true,
   variant = "desktop",
   loading = false,
 }: {
   activeCode: string;
-  onChange: (code: string) => void;
+  hrefFor: (code: string) => To;
   chips: string[];
   includeAll?: boolean;
   variant?: "desktop" | "mobile";
@@ -34,7 +35,7 @@ export function ColorsSwitcher({
           key={code}
           code={code}
           active={code === activeCode}
-          onClick={() => onChange(code === activeCode && code !== "ALL" ? "ALL" : code)}
+          href={hrefFor(code === activeCode && code !== "ALL" ? "ALL" : code)}
           pipSize={isMobile ? 12 : 12}
         />
       ))}
@@ -55,12 +56,12 @@ const SKELETON_CHIP_WIDTHS = [44, 60, 60, 44, 44, 60, 44, 52];
 function Chip({
   code,
   active,
-  onClick,
+  href,
   pipSize,
 }: {
   code: string;
   active: boolean;
-  onClick: () => void;
+  href: To;
   pipSize: number;
 }) {
   if (code === "ALL" || code === MULTI || code === OTHER) {
@@ -68,10 +69,10 @@ function Chip({
     const activeAll = active && code === "ALL";
     const activeAccent = active && code !== "ALL";
     return (
-      <button
-        onClick={onClick}
+      <Link
+        to={href}
         className={cn(
-          "shrink-0 h-[26px] px-2.5 border inline-flex items-center gap-1.5 cursor-pointer transition-colors font-display tracking-[0.18em] text-[13px]",
+          "shrink-0 h-[26px] px-2.5 border inline-flex items-center gap-1.5 cursor-pointer transition-colors no-underline font-display tracking-[0.18em] text-[13px]",
           activeAccent && TOGGLE_ACTIVE,
           activeAll && "border-border2 bg-surface text-text",
           !active && TOGGLE_INACTIVE,
@@ -80,14 +81,14 @@ function Chip({
         {code === MULTI && <BsPaletteFill size={pipSize} aria-hidden="true" />}
         {code === OTHER && <BsAsterisk size={pipSize - 1} aria-hidden="true" />}
         {label}
-      </button>
+      </Link>
     );
   }
   return (
-    <button
-      onClick={onClick}
+    <Link
+      to={href}
       className={cn(
-        "shrink-0 h-[26px] px-[7px] border inline-flex items-center gap-0.5 cursor-pointer transition-colors",
+        "shrink-0 h-[26px] px-[7px] border inline-flex items-center gap-0.5 cursor-pointer transition-colors no-underline",
         active ? TOGGLE_ACTIVE : TOGGLE_INACTIVE,
       )}
       aria-label={code}
@@ -95,7 +96,7 @@ function Chip({
       {[...code].map((c) => (
         <Pip key={c} c={c as "W" | "U" | "B" | "R" | "G"} size={pipSize} />
       ))}
-    </button>
+    </Link>
   );
 }
 

@@ -1,9 +1,7 @@
-import { Link } from "react-router-dom";
+import { Link, type To } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "./Icons";
 import { cn } from "../lib/utils";
 import { ALogo } from "./Brand";
-
-type To = string | { pathname: string; search?: string };
 
 const baseLinkCls =
   "bg-transparent border-none font-display leading-none flex items-center transition-colors";

@@ -12,7 +12,7 @@ import type { P0P1Phase, RatingsSnapshot } from "../../data/p0p1Results";
 export function P0P1Hero({
   featured,
   contests,
-  onContestChange,
+  contestHref,
   cta,
   innerRef,
   belowIntro,
@@ -22,7 +22,7 @@ export function P0P1Hero({
 }: {
   featured: FeaturedContest;
   contests: ContestChipInfo[];
-  onContestChange: (code: string) => void;
+  contestHref: (code: string) => string;
   cta: ReactNode;
   innerRef?: Ref<HTMLDivElement>;
   belowIntro?: ReactNode;
@@ -41,7 +41,7 @@ export function P0P1Hero({
             <P0P1ContestDropdown
               contests={contests}
               activeCode={featured.code}
-              onSelect={onContestChange}
+              hrefFor={contestHref}
             />
           ) : (
             <>

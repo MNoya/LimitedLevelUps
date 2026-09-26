@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams, type To } from "react-router-dom";
 import { ArrowUpRight, BookOpen, ChevronDown } from "lucide-react";
 
 import { PodPage } from "./PodPage";
@@ -9,7 +9,7 @@ import { Footer } from "../components/Footer";
 import { SectionHeading } from "../components/SectionHeading";
 import { SectionLabel } from "../components/SectionLabel";
 import { TabButton } from "../components/TabButton";
-import { SetSwitcherDesktop } from "../components/SetSwitcher";
+import { orderByPins, SetSwitcherDesktop, SwitcherChip } from "../components/SetSwitcher";
 import { type InlineFilterOption } from "../components/InlineFilterSelect";
 import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
 import { SetFilterDropdown, type SetFilterOption } from "../components/SetFilterDropdown";
@@ -27,6 +27,7 @@ import {
   PodStandingRowSkeleton,
   SeatAvatar,
 } from "../components/pod/PodStandingRow";
+import { podDeckHref, podDraftLogHref, podSeatHref } from "../components/pod/podLinks";
 import { Pips } from "../components/ManaPips";
 import {
   defaultSortFor,
@@ -42,6 +43,7 @@ import { useIsMobile } from "../lib/use-is-mobile";
 import { POD_SLOTS, easternHourInLocalTime, viewerTimeZoneAbbr } from "../lib/podSlots";
 import { cubeCobraUrl } from "../data/podFormats";
 import { cn } from "../lib/utils";
+import { useSearchParamHref } from "../lib/search-param-href";
 import {
   cleanPodEventName,
   colorsOf,
@@ -105,9 +107,10 @@ function synthesizePodSet(p: PodSetCode): SetSummary {
   return {
     code: p.code,
     name: p.label ?? p.code,
-    startDate: p.firstEvent ?? "",
+    startDate: "",
     endDate: "",
     isActive: false,
+    early: !custom && p.mocks > 0,
     custom,
     shortCode: custom && p.code.length > POD_CHIP_CODE_MAX ? CUBE_BASE : undefined,
   };
@@ -159,8 +162,11 @@ function toLeaderboardRow(r: PodLeaderboardRow): LeaderboardTableRow {
 
 export function PodsRoute() {
   const { slug } = useParams<{ slug: string }>();
+  const [searchParams] = useSearchParams();
   const { data: podSetCodes } = usePodSetCodes();
   const { data: allSets } = useSets();
+  const legacyBoard = searchParams.get(AXIS_PARAM_SET);
+  if (!slug && legacyBoard) return <Navigate to={boardPath(legacyBoard)} replace />;
   if (!slug) return <PodDraftsPage />;
   if (podSetCodes === undefined || allSets === undefined) {
     return (
@@ -169,15 +175,14 @@ export function PodsRoute() {
       </div>
     );
   }
-  const season = podSeasons(allSets).find((s) => s.code.toLowerCase() === slug.toLowerCase());
-  if (season) {
-    if (slug !== season.code) return <Navigate to={`/pods/${season.code}`} replace />;
-    return <PodDraftsPage seasonCode={season.code} />;
-  }
   const match = podSetCodes.find((p) => p.code.toLowerCase() === slug.toLowerCase());
   if (match) {
     if (slug !== match.code) return <Navigate to={`/pods/${match.code}`} replace />;
     return <PodDraftsPage setCode={match.code} />;
+  }
+  const season = podSeasons(allSets).find((s) => s.code.toLowerCase() === slug.toLowerCase());
+  if (season) {
+    return <Navigate to={`/pods?${AXIS_PARAM_SEASON}=${season.code}`} replace />;
   }
   const window = boardWindowFromSlug(slug, podSetCodes, allSets);
   if (window) {
@@ -198,15 +203,11 @@ function boardWindowFromSlug(
   return board && season ? { board: board.code, season: season.code } : null;
 }
 
-export function PodDraftsPage({
-  setCode,
-  seasonCode,
-}: { setCode?: string; seasonCode?: string } = {}) {
+export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
   // Below the two-column grid's own breakpoint, so a phone asking for the desktop site gets the
   // desktop chrome stacked in one column instead of the mobile layout
   const isMobile = useIsMobile(POD_DESKTOP_WIDTH);
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { data: allSets } = useSets();
   const { data: podSetCodes } = usePodSetCodes();
   // The whole pod history in two reads; every scope is derived from these client-side, so switching
@@ -216,7 +217,7 @@ export function PodDraftsPage({
 
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [setCode, seasonCode]);
+  }, [setCode]);
 
   // A season lists once it holds a pod, inside its window or drafting its own set
   const seasons = useMemo<SetSummary[]>(() => {
@@ -232,15 +233,12 @@ export function PodDraftsPage({
   const seasonAxis = searchParams.get(AXIS_PARAM_SEASON);
   // Every season at once, the one window a route cannot name
   const allSeasons = !setCode && seasonAxis === AXIS_ALL;
-  const bySetCode =
-    !setCode && !seasonCode && seasonAxis !== AXIS_ALL ? searchParams.get(AXIS_PARAM_SET) : null;
 
   const season = useMemo<SetSummary | undefined>(() => {
-    if (setCode || allSeasons || bySetCode) return undefined;
-    const wanted = seasonCode ?? (seasonAxis === AXIS_ALL ? null : seasonAxis);
-    if (wanted) return seasons.find((s) => s.code === wanted) ?? podSeasons(allSets).find((s) => s.code === wanted);
-    return currentSeason(allSets) ?? seasons[0];
-  }, [setCode, allSeasons, bySetCode, seasonCode, seasonAxis, seasons, allSets]);
+    if (setCode || allSeasons) return undefined;
+    const wanted = podSeasons(allSets).find((s) => s.code === seasonAxis);
+    return wanted ?? currentSeason(allSets) ?? seasons[0];
+  }, [setCode, allSeasons, seasonAxis, seasons, allSets]);
 
   const legacySets = useMemo<SetSummary[]>(() => {
     if (!allSets || !podSetCodes) return [];
@@ -260,30 +258,25 @@ export function PodDraftsPage({
     return seasons[0]?.code ?? ACTIVE_SET_CODE;
   }, [allSets, seasons]);
 
-  const activeSet = season?.code ?? setCode ?? bySetCode ?? homeCode;
-  const onSelectSet = (code: string) => {
-    navigate(code === homeCode ? "/pods" : `/pods/${code}`);
-  };
+  const activeSet = season?.code ?? setCode ?? homeCode;
 
   const boardEvents = useMemo(
     () => (setCode ? allEvents?.filter((e) => e.setCode === setCode) : undefined),
     [setCode, allEvents],
   );
 
-  // A season's candidates mirror the old windowed + own-set scan; the leaderboard narrows results by
-  // event id, so scopeResults can stay the full set
+  // A season holds the pods inside its window, matching the Pod Wildcard ranking, plus its own set's preview mocks
   const scopeEvents = useMemo(() => {
     if (!allEvents) return undefined;
     if (allSeasons) return allEvents;
-    if (bySetCode) return allEvents.filter((e) => e.setCode === bySetCode);
     if (setCode) return boardEvents;
     if (season) {
-      return allEvents.filter(
-        (e) => e.setCode === season.code || (e.kind !== "mock" && inSeasonWindow(season, e.eventDate)),
+      return allEvents.filter((e) =>
+        e.kind === "mock" ? e.setCode === season.code : inSeasonWindow(season, e.eventDate),
       );
     }
     return allEvents;
-  }, [allEvents, allSeasons, bySetCode, setCode, boardEvents, season]);
+  }, [allEvents, allSeasons, setCode, boardEvents, season]);
   const scopeResults = allResults;
 
   // A set below the board threshold still resolves its name when opened directly by code
@@ -295,10 +288,10 @@ export function PodDraftsPage({
   // A format board is already one format, so only a season board buckets. Across every season an
   // event is a set draft against the season it was played in, not against the one on screen.
   const bucketFor = useMemo(() => {
-    if (setCode || bySetCode) return undefined;
+    if (setCode) return undefined;
     if (season) return (e: PodEventSummary) => bucketOf(e, season.code);
     return (e: PodEventSummary) => lifetimeBucketOf(e, allSets);
-  }, [setCode, bySetCode, season, allSets]);
+  }, [setCode, season, allSets]);
 
   const formatBuckets = useMemo(
     () => (bucketFor ? podFormatBuckets(scopeEvents, bucketFor) : []),
@@ -307,51 +300,28 @@ export function PodDraftsPage({
 
   // Held until the events land, so a format the new season never played does not filter to nothing
   const requestedFormat = POD_FORMAT_BUCKETS.find((bucket) => bucket === searchParams.get(AXIS_PARAM_FORMAT));
-  const format =
-    !scopeEvents || formatBuckets.some((b) => b.key === requestedFormat) ? requestedFormat : undefined;
+  const boardHasMocks = !!setCode && !!scopeEvents?.some((e) => e.kind === "mock");
+  const seasonHasFormat = formatBuckets.some((b) => b.key === requestedFormat);
+  const formatHeld = setCode ? boardHasMocks && requestedFormat === "mock" : seasonHasFormat;
+  const format = !scopeEvents || formatHeld ? requestedFormat : undefined;
 
   const boardWindow = useMemo(
     () => (setCode ? boardSeasons.find(({ season: s }) => s.code === seasonAxis)?.season : undefined),
     [setCode, seasonAxis, boardSeasons],
   );
 
-  const setAxisParam = (param: string, value: string | null) => {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set(param, value);
-    else next.delete(param);
-    setSearchParams(next);
-  };
-
-  // A format board keeps its window in the query; a season board is a route, so only "all" is a param
-  const onSelectSeason = (value: string) => {
-    if (setCode) {
-      setAxisParam(AXIS_PARAM_SEASON, value === AXIS_ALL ? null : value);
-      return;
-    }
-    const next = new URLSearchParams(searchParams);
-    if (value === AXIS_ALL) {
-      next.set(AXIS_PARAM_SEASON, AXIS_ALL);
-      navigate({ pathname: "/pods", search: next.toString() });
-      return;
-    }
-    next.delete(AXIS_PARAM_SEASON);
-    navigate({ pathname: value === homeCode ? "/pods" : `/pods/${value}`, search: next.toString() });
-  };
-
-  const onSelectFormat = (value: string) => {
-    setAxisParam(AXIS_PARAM_FORMAT, value === AXIS_ALL ? null : value);
-  };
+  const axisHref = useSearchParamHref(AXIS_ALL);
 
   const events = useMemo(() => {
     if (!scopeEvents) return undefined;
     if (setCode) {
-      return boardWindow ? scopeEvents.filter((e) => inSeasonWindow(boardWindow, e.eventDate)) : scopeEvents;
+      if (format === "mock") return scopeEvents.filter((e) => e.kind === "mock");
+      const boardPods = setMeta?.early ? scopeEvents : scopeEvents.filter((e) => e.kind !== "mock");
+      return boardWindow ? boardPods.filter((e) => inSeasonWindow(boardWindow, e.eventDate)) : boardPods;
     }
-    // A format carries every pod it holds, so the set's own bucket reaches past the season it sits in
     if (format && bucketFor) return scopeEvents.filter((e) => bucketFor(e) === format);
-    if (season) return scopeEvents.filter((e) => e.kind !== "mock" && inSeasonWindow(season, e.eventDate));
     return scopeEvents.filter((e) => e.kind !== "mock");
-  }, [scopeEvents, setCode, boardWindow, format, bucketFor, season]);
+  }, [scopeEvents, setCode, setMeta, boardWindow, format, bucketFor]);
 
   // Scoped by event id, since `event_time` is UTC and a late pod crosses a boundary its ET date does not
   const eventIds = useMemo(() => events && new Set(events.map((e) => e.eventId)), [events]);
@@ -362,11 +332,14 @@ export function PodDraftsPage({
   }, [scopeResults, eventIds]);
 
   // Held whole until the query lands: a switcher that grows from one chip to six reads as broken
-  const switcherSets = useMemo(() => {
-    if (!allEvents || !podSetCodes) return [];
-    const seasonCodes = new Set(seasons.map((s) => s.code));
-    return [...seasons, ...legacySets.filter((s) => !seasonCodes.has(s.code))];
-  }, [allEvents, podSetCodes, seasons, legacySets]);
+  const { switcherSets, switcherPins } = useMemo(() => {
+    if (!allEvents || !podSetCodes) return { switcherSets: [], switcherPins: [] };
+    const pins = legacySets.filter((s) => s.early).map((s) => s.code);
+    pins.push("PEASANT");
+    const liveCode = currentSeason(allSets)?.code;
+    if (liveCode) pins.push(liveCode);
+    return { switcherSets: orderByPins(legacySets, pins), switcherPins: pins };
+  }, [allEvents, podSetCodes, allSets, legacySets]);
 
   const [sort, setSort] = useState<SortState>(defaultSortFor("pod"));
   const sortedLeaderboard = useMemo(() => {
@@ -400,19 +373,19 @@ export function PodDraftsPage({
 
   const showUpcoming = true;
 
-  // Any season prints the set's own run, so it reads the same whether one pod happened in it or
-  // twenty. Only a whole board, which spans no single set, falls back to the pods it actually holds.
+  const liveSeason = currentSeason(allSets);
+  const liveSeasonCode = liveSeason?.code;
+
+  // A season, and a board for the upcoming or live set, print the set's own run; any other board prints its pods
   const boardRange = useMemo(() => {
-    const window = season ?? boardWindow;
+    const isCurrentSet = !!setMeta?.endDate && (!!setMeta.early || setMeta.code === liveSeasonCode);
+    const window = season ?? boardWindow ?? (setCode && isCurrentSet ? setMeta : undefined);
     if (window) {
       return fmtRange(window.startDate, window.endDate);
     }
     const dates = (events ?? []).filter((e) => e.kind !== "mock").map((e) => e.eventDate).sort();
     return dates.length > 0 ? fmtRange(dates[0], dates[dates.length - 1]) : null;
-  }, [season, boardWindow, events]);
-
-  const liveSeason = currentSeason(allSets);
-  const liveSeasonCode = liveSeason?.code;
+  }, [season, boardWindow, setCode, setMeta, liveSeasonCode, events]);
   const iconSize = isMobile ? 16 : 18;
 
   const scopeOptions = useMemo<SetFilterOption[]>(() => {
@@ -422,30 +395,6 @@ export function PodDraftsPage({
       triggerLabel: "All Seasons",
       icon: <GiRoundTable size={20} className="text-white shrink-0" />,
     };
-    const setRow = (s: SetSummary): SetFilterOption => ({
-      value: `${SCOPE_SET_PREFIX}${s.code}`,
-      label: s.name,
-      triggerLabel: s.name,
-      code: s.code,
-      glyphCode: setGlyphCode(s),
-      section: "By Set",
-    });
-    const recencyKey = (s: SetSummary) => (s.code === "PEASANT" ? "9999-99-99" : s.startDate || "");
-    const bySetRows = [...switcherSets]
-      .sort((a, b) => {
-        const ak = recencyKey(a);
-        const bk = recencyKey(b);
-        return ak < bk ? 1 : ak > bk ? -1 : 0;
-      })
-      .map(setRow);
-    if (setCode) {
-      const windowRow = (s: SetSummary): SetFilterOption => {
-        const label = `${s.code} Season`;
-        return { value: s.code, label, triggerLabel: label, glyphCode: setGlyphCode(s) };
-      };
-      const windows = boardSeasons.length >= MIN_BOARD_SEASONS ? boardSeasons.map((b) => windowRow(b.season)) : [];
-      return [all, ...windows, ...bySetRows];
-    }
     const seasonRow = (s: SetSummary): SetFilterOption => {
       const label = `${s.code} Season`;
       const meta =
@@ -454,38 +403,55 @@ export function PodDraftsPage({
         ) : undefined;
       return { value: s.code, label, triggerLabel: label, glyphCode: setGlyphCode(s), meta };
     };
-    return [all, ...seasons.map(seasonRow), ...bySetRows];
-  }, [setCode, boardSeasons, seasons, switcherSets, liveSeasonCode]);
+    const setRow = (s: SetSummary): SetFilterOption => ({
+      value: `${SCOPE_SET_PREFIX}${s.code}`,
+      label: s.name,
+      triggerLabel: s.name,
+      code: s.code,
+      glyphCode: setGlyphCode(s),
+      section: "By Set",
+    });
+    return [all, ...seasons.map(seasonRow), ...switcherSets.map(setRow)];
+  }, [seasons, switcherSets, liveSeasonCode]);
 
-  const routeToSet = (code: string) => {
-    if (isCubeCode(code) || switcherSets.find((s) => s.code === code)?.custom) {
-      onSelectSet(code);
-      return;
-    }
-    navigate({ pathname: "/pods", search: `?${AXIS_PARAM_SET}=${code}` });
+  const scopeHref = (value: string): To => {
+    if (value.startsWith(SCOPE_SET_PREFIX)) return boardPath(value.slice(SCOPE_SET_PREFIX.length));
+    const next = new URLSearchParams(setCode ? "" : searchParams);
+    if (value === liveSeasonCode) next.delete(AXIS_PARAM_SEASON);
+    else next.set(AXIS_PARAM_SEASON, value);
+    return { pathname: POD_DRAFTS_PATH, search: next.toString() };
   };
 
-  const onSelectScope = (value: string) => {
-    if (value === AXIS_ALL) {
-      onSelectSeason(AXIS_ALL);
-      return;
-    }
-    if (value.startsWith(SCOPE_SET_PREFIX)) {
-      routeToSet(value.slice(SCOPE_SET_PREFIX.length));
-      return;
-    }
-    onSelectSet(value);
-  };
-
-  const onSelectBoardScope = (value: string) => {
-    if (value.startsWith(SCOPE_SET_PREFIX)) {
-      routeToSet(value.slice(SCOPE_SET_PREFIX.length));
-      return;
-    }
-    onSelectSeason(value);
-  };
+  const windowOptions = useMemo<SetFilterOption[]>(() => {
+    if (!setCode || boardSeasons.length < MIN_BOARD_SEASONS) return [];
+    const all: SetFilterOption = {
+      value: AXIS_ALL,
+      label: "All Seasons",
+      triggerLabel: "All Seasons",
+      icon: <GiRoundTable size={20} className="text-white shrink-0" />,
+    };
+    const windowRow = ({ season: s }: { season: SetSummary }): SetFilterOption => {
+      const label = `${s.code} Season`;
+      return { value: s.code, label, triggerLabel: label, glyphCode: setGlyphCode(s) };
+    };
+    return [all, ...boardSeasons.map(windowRow)];
+  }, [setCode, boardSeasons]);
 
   const formatOptions = useMemo<InlineFilterOption[]>(() => {
+    if (boardHasMocks) {
+      return [
+        {
+          value: AXIS_ALL,
+          label: "Pod Drafts",
+          icon: <GiRoundTable size={iconSize + 2} className="text-white shrink-0" />,
+        },
+        {
+          value: "mock",
+          label: formatBucketLabel("mock", undefined),
+          icon: <ChipIcon bucket="mock" seasonMeta={setMeta} className="text-white shrink-0" size={iconSize} />,
+        },
+      ];
+    }
     if (!bucketFor || formatBuckets.length < MIN_BOARD_FORMATS) return [];
     return [
       {
@@ -506,7 +472,7 @@ export function PodDraftsPage({
         ),
       })),
     ];
-  }, [bucketFor, formatBuckets, season, liveSeason, iconSize]);
+  }, [boardHasMocks, setMeta, bucketFor, formatBuckets, season, liveSeason, iconSize]);
 
   const selectorVariant = isMobile ? "mobile" : "desktop";
   const renderScopeFormat = (option: FilterOption) => {
@@ -520,18 +486,12 @@ export function PodDraftsPage({
       </span>
     );
   };
-  const scopeValue = setCode
-    ? boardWindow?.code ?? AXIS_ALL
-    : allSeasons
-      ? AXIS_ALL
-      : bySetCode
-        ? `${SCOPE_SET_PREFIX}${bySetCode}`
-        : activeSet;
-  const scopeSelector = scopeOptions.length > 1 ? (
+  const scopeValue = setCode ? `${SCOPE_SET_PREFIX}${setCode}` : allSeasons ? AXIS_ALL : activeSet;
+  const scopeSelector = switcherSets.length > 0 ? (
     <SetFilterDropdown
       value={scopeValue}
       options={scopeOptions}
-      onChange={setCode ? onSelectBoardScope : onSelectScope}
+      hrefFor={scopeHref}
       variant={selectorVariant}
       triggerClassName={isMobile ? undefined : "!min-w-0"}
       searchable
@@ -541,16 +501,33 @@ export function PodDraftsPage({
     <FilterDropdown
       value={format ?? AXIS_ALL}
       options={formatOptions}
-      onChange={onSelectFormat}
+      hrefFor={(value) => axisHref(AXIS_PARAM_FORMAT, value)}
       variant={selectorVariant}
       triggerClassName={isMobile ? undefined : "!min-w-0"}
       renderValue={renderScopeFormat}
       renderOption={renderScopeFormat}
     />
   ) : null;
+  const windowSelector = windowOptions.length > 0 ? (
+    <SetFilterDropdown
+      value={boardWindow?.code ?? AXIS_ALL}
+      options={windowOptions}
+      hrefFor={(value) => axisHref(AXIS_PARAM_SEASON, value)}
+      variant={selectorVariant}
+      triggerClassName={isMobile ? undefined : "!min-w-0"}
+    />
+  ) : null;
+
+  const standingsControls = (
+    <div className="flex items-center gap-3 ml-4">
+      {scopeSelector}
+      {windowSelector}
+      {formatSelector}
+    </div>
+  );
 
   const cardDataHref = hasCardData(activeSet) ? `/pods/${activeSet}/data` : null;
-  const cubeCobraHref = !allSeasons && !bySetCode ? cubeCobraUrl(activeSet) : null;
+  const cubeCobraHref = setCode ? cubeCobraUrl(setCode) : null;
 
   // Under a cube filter each row already carries its own cube board code, so a name lands on that profile
   const profileSetFor = (row: LeaderboardTableRow) => {
@@ -574,6 +551,7 @@ export function PodDraftsPage({
           <MobileFilterBar
             scopeSelector={scopeSelector}
             formatSelector={formatSelector}
+            windowSelector={windowSelector}
             cardDataLink={cardDataHref ? <CardDataLink href={cardDataHref} variant="mobile" /> : undefined}
           />
         </div>
@@ -581,14 +559,13 @@ export function PodDraftsPage({
         <>
           <AppHeader subtitle="POD DRAFTS" />
           <SetHero
-            activeSet={activeSet}
-            setMeta={setMeta}
+            board={setCode}
+            boardMeta={setMeta}
+            season={season}
+            liveSeasonCode={liveSeasonCode}
             sets={switcherSets}
-            onSelectSet={onSelectSet}
+            pins={switcherPins}
             range={boardRange}
-            isSeason={!!season}
-            allSeasons={allSeasons}
-            bySet={!!bySetCode}
           />
         </>
       )}
@@ -597,7 +574,11 @@ export function PodDraftsPage({
         <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-x-6 lg:gap-y-8">
           <section className="order-1 lg:order-2 min-w-0 flex flex-col">
             {showingMocks ? (
-              <MockDraftsBlock events={mock} stacked={isMobile} />
+              isMobile ? (
+                <MockDraftsBlock events={mock} stacked />
+              ) : (
+                <UpcomingBlock />
+              )
             ) : isMobile ? (
               <MobileEventsBlock
                 played={played}
@@ -626,42 +607,45 @@ export function PodDraftsPage({
             )}
           </section>
 
-          <section className="order-2 lg:order-1 min-w-0">
-            {/* Mobile folds the column header into the sticky chrome, desktop leaves it in the table */}
-            {isMobile ? (
-              <div ref={standingsHeadRef} className="sticky z-[9] bg-bg" style={{ top: chromeHeight }}>
-                <StandingsHeading leaderboard={leaderboard} events={events} compact />
-                {leaderboard !== undefined && leaderboard.length > 0 && (
-                  <LeaderboardColumnHeader variant="mobile" mode="pod" sort={sort} onSort={onSort} />
-                )}
-              </div>
-            ) : (
-              <StandingsHeading
-                leaderboard={leaderboard}
-                events={events}
-                center={cardDataHref ? <CardDataLink href={cardDataHref} variant="center" /> : undefined}
-                controls={
-                  <div className="flex items-center gap-3 ml-4">
-                    {scopeSelector}
-                    {formatSelector}
-                  </div>
-                }
+          {showingMocks ? (
+            !isMobile && (
+              <section className="order-2 lg:order-1 min-w-0">
+                <MockDraftsBlock events={mock} controls={standingsControls} />
+              </section>
+            )
+          ) : (
+            <section className="order-2 lg:order-1 min-w-0">
+              {/* Mobile folds the column header into the sticky chrome, desktop leaves it in the table */}
+              {isMobile ? (
+                <div ref={standingsHeadRef} className="sticky z-[9] bg-bg" style={{ top: chromeHeight }}>
+                  <StandingsHeading leaderboard={leaderboard} events={events && played} compact />
+                  {leaderboard !== undefined && leaderboard.length > 0 && (
+                    <LeaderboardColumnHeader variant="mobile" mode="pod" sort={sort} onSort={onSort} />
+                  )}
+                </div>
+              ) : (
+                <StandingsHeading
+                  leaderboard={leaderboard}
+                  events={events}
+                  center={cardDataHref ? <CardDataLink href={cardDataHref} variant="center" /> : undefined}
+                  controls={standingsControls}
+                />
+              )}
+              <LeaderboardTable
+                rows={sortedLeaderboard}
+                loading={leaderboard === undefined}
+                variant={isMobile ? "mobile" : "desktop"}
+                mode="pod"
+                showHeader={!isMobile}
+                sort={sort}
+                onSort={onSort}
+                stickyTop={chromeHeight + standingsHeadHeight}
+                highlightSlug={mySlug ?? undefined}
+                emptyMessage={allSeasons ? "No player stats yet" : `No player stats yet for ${activeSet}`}
+                playerHref={(row) => playerPath(row.slug, profileSetFor(row))}
               />
-            )}
-            <LeaderboardTable
-              rows={sortedLeaderboard}
-              loading={leaderboard === undefined}
-              variant={isMobile ? "mobile" : "desktop"}
-              mode="pod"
-              showHeader={!isMobile}
-              sort={sort}
-              onSort={onSort}
-              stickyTop={chromeHeight + standingsHeadHeight}
-              highlightSlug={mySlug ?? undefined}
-              emptyMessage={allSeasons ? "No player stats yet." : `No player stats yet for ${activeSet}.`}
-              playerHref={(row) => playerPath(row.slug, profileSetFor(row))}
-            />
-          </section>
+            </section>
+          )}
 
           {isMobile && !showingMocks && mock.length > 0 && (
             <section className="order-3">
@@ -1088,7 +1072,15 @@ function RowTitle({ stacked, children }: { stacked: boolean; children: React.Rea
   );
 }
 
-function MockDraftsBlock({ events, stacked = false }: { events: PodEventSummary[]; stacked?: boolean }) {
+function MockDraftsBlock({
+  events,
+  stacked = false,
+  controls,
+}: {
+  events: PodEventSummary[];
+  stacked?: boolean;
+  controls?: React.ReactNode;
+}) {
   return (
     <div>
       <SectionHeading
@@ -1096,6 +1088,7 @@ function MockDraftsBlock({ events, stacked = false }: { events: PodEventSummary[
         count={events.length}
         unit={events.length === 1 ? "DRAFT" : "DRAFTS"}
         compact={stacked}
+        controls={controls}
       />
       <div className="flex flex-col lg:gap-2">
         {events.map((e, i) => (
@@ -1528,15 +1521,14 @@ function EventStandings({ event }: { event: PodEventSummary }) {
                   teamSide={event.isTeamDraft ? seatSide(p.seatIndex) : null}
                   nameHref={p.playerSlug ? playerPath(p.playerSlug, event.setCode) : null}
                   logHref={
-                    draftArtifact && decklistAccess.canViewSeat(p.avatarUrl)
-                      ? `/pods/${event.slug}/${p.playerSlug ?? p.seatIndex}`
+                    draftArtifact && decklistAccess.canViewSeat(p.avatarUrl) ? podDraftLogHref(event.slug, p) : null
+                  }
+                  deckHref={
+                    p.deckScreenshotUrl && decklistAccess.canViewSeat(p.avatarUrl)
+                      ? podDeckHref(event.slug, podDiscordName(p), podDiscordName(p))
                       : null
                   }
-                  onShowDeck={
-                    p.deckScreenshotUrl && decklistAccess.canViewSeat(p.avatarUrl)
-                      ? () => setDeckTarget(p)
-                      : undefined
-                  }
+                  onShowDeck={() => setDeckTarget(p)}
                 />
               ))}
         </div>
@@ -1555,10 +1547,10 @@ function EventStandings({ event }: { event: PodEventSummary }) {
           }}
           draftLogHref={
             draftArtifact && decklistAccess.canViewSeat(deckTarget.avatarUrl)
-              ? `/pods/${event.slug}/${deckTarget.playerSlug ?? deckTarget.seatIndex}`
+              ? podDraftLogHref(event.slug, deckTarget)
               : null
           }
-          breakdownHref={`/pods/${event.slug}?player=${encodeURIComponent(podDiscordName(deckTarget))}`}
+          breakdownHref={podSeatHref(event.slug, podDiscordName(deckTarget))}
           onClose={() => setDeckTarget(null)}
           onPrev={() => cycleDeck(-1)}
           onNext={() => cycleDeck(1)}
@@ -1698,10 +1690,12 @@ function EmptyHint({ children }: { children: React.ReactNode }) {
 function MobileFilterBar({
   scopeSelector,
   formatSelector,
+  windowSelector,
   cardDataLink,
 }: {
   scopeSelector?: React.ReactNode;
   formatSelector?: React.ReactNode;
+  windowSelector?: React.ReactNode;
   cardDataLink?: React.ReactNode;
 }) {
   if (!scopeSelector) {
@@ -1718,6 +1712,7 @@ function MobileFilterBar({
   return (
     <div className="px-3 py-2 border-b border-border bg-surface flex items-stretch gap-2">
       <div className="flex-1 min-w-0 flex">{scopeSelector}</div>
+      {windowSelector && <div className="flex-1 min-w-0 flex">{windowSelector}</div>}
       {formatSelector && <div className="flex-1 min-w-0 flex">{formatSelector}</div>}
       {cardDataLink && <div className="flex-1 min-w-0 flex">{cardDataLink}</div>}
     </div>
@@ -1786,46 +1781,45 @@ function ChipIcon({
 }
 
 function SetHero({
-  activeSet,
-  setMeta,
+  board,
+  boardMeta,
+  season,
+  liveSeasonCode,
   sets,
-  onSelectSet,
+  pins,
   range,
-  isSeason,
-  allSeasons,
-  bySet,
 }: {
-  activeSet: string;
-  setMeta: SetSummary | undefined;
+  board?: string;
+  boardMeta: SetSummary | undefined;
+  season: SetSummary | undefined;
+  liveSeasonCode: string | undefined;
   sets: SetSummary[];
-  onSelectSet: (code: string) => void;
+  pins: string[];
   range?: string | null;
-  isSeason: boolean;
-  allSeasons: boolean;
-  bySet: boolean;
 }) {
-  const week = isSeason && !allSeasons ? weekOfSet(setMeta) : null;
-  const isActive = !allSeasons && !bySet && (setMeta?.isActive ?? false);
+  const week = season ? weekOfSet(season) : null;
+  const isLive = (board ?? season?.code) === liveSeasonCode;
+  const seasonLabel = season ? `${season.code} SEASON` : "ALL SEASONS";
   return (
     <div className="relative px-10 py-5 border-b border-border bg-surface flex items-center gap-6">
-      {allSeasons ? (
-        <GiRoundTable size={84} className="text-text" />
+      {board ? (
+        <SetGlyph code={boardMeta ? setGlyphCode(boardMeta) : board} size={84} />
       ) : (
-        <SetGlyph code={setMeta ? setGlyphCode(setMeta) : activeSet} size={84} />
+        <GiRoundTable size={84} className="text-text" />
       )}
       <div>
-        <SectionLabel size={13} className={cn("text-green", !isActive && "invisible")}>LIVE</SectionLabel>
+        <SectionLabel size={13} className={cn("text-green", !isLive && "invisible")}>LIVE</SectionLabel>
         <div className="flex items-baseline gap-3.5 mt-0.5">
           <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
-            {allSeasons ? "POD DRAFTS" : activeSet}
+            {board ?? "POD DRAFTS"}
           </span>
           <HeroFormatLabel
-            label={allSeasons ? "ALL SEASONS" : (setMeta?.name?.toUpperCase() ?? "")}
-            cubeHref={!allSeasons && !bySet ? cubeCobraUrl(activeSet) : null}
+            label={board ? (boardMeta?.name?.toUpperCase() ?? "") : seasonLabel}
+            cubeHref={board ? cubeCobraUrl(board) : null}
           />
         </div>
         <div className="font-mono text-[11px] text-muted mt-1 flex items-center justify-between gap-4 h-4">
-          {!allSeasons && !bySet && (
+          {(board || season) && (
             <>
               <span>{range || " "}</span>
               {week && <span>{week}</span>}
@@ -1835,15 +1829,23 @@ function SetHero({
       </div>
       <div className="flex-1" />
       {sets.length > 0 && (
-        <SetSwitcherDesktop
-          sets={sets}
-          activeCode={allSeasons || bySet ? "" : activeSet}
-          onChange={onSelectSet}
-        />
+        <div className="flex gap-1.5">
+          <SwitcherChip
+            icon={<GiRoundTable size={22} />}
+            label="ALL"
+            active={!board}
+            href={POD_DRAFTS_PATH}
+          />
+          <SetSwitcherDesktop sets={sets} pins={pins} activeCode={board ?? ""} hrefFor={boardPath} extraHide={1} />
+        </div>
       )}
     </div>
   );
 }
+
+const POD_DRAFTS_PATH = "/pods";
+
+const boardPath = (code: string) => `${POD_DRAFTS_PATH}/${code}`;
 
 // The format name beside the hero title. On a cube board it opens the CubeCobra card list, hovering green
 // with an external-link mark; on a set board it stays plain text.

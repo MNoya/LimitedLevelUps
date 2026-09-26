@@ -34,12 +34,12 @@ type Ballot = ReturnType<typeof useP0P1Ballot>;
 export function P0P1MobileSelector({
   ballot,
   contests,
-  onContestChange,
+  contestHref,
   isCurrent,
 }: {
   ballot: Ballot;
   contests: ContestChipInfo[];
-  onContestChange: (code: string) => void;
+  contestHref: (code: string) => string;
   isCurrent: boolean;
 }) {
   const {
@@ -84,7 +84,14 @@ export function P0P1MobileSelector({
       <AppHeader subtitle="P0 P1 Challenge" subtitleShort="P0 P1" />
 
       <main className={`flex-1 flex flex-col w-full px-3 pt-3 ${loginBarVisible ? "pb-24" : "pb-4"}`}>
-        <MobileIntro featured={featured} phase={phase} dateRange={ratingsSnapshot?.dateRange} contests={contests} onContestChange={onContestChange} isCurrent={isCurrent} />
+        <MobileIntro
+          featured={featured}
+          phase={phase}
+          dateRange={ratingsSnapshot?.dateRange}
+          contests={contests}
+          contestHref={contestHref}
+          isCurrent={isCurrent}
+        />
         {phase === "comingSoon" ? (
           <div className="flex-1 flex items-center justify-center py-20">
             <span className="font-display tracking-[0.12em] text-muted text-[32px]">COMING SOON</span>
@@ -348,14 +355,14 @@ function MobileIntro({
   phase,
   dateRange,
   contests,
-  onContestChange,
+  contestHref,
   isCurrent,
 }: {
   featured: FeaturedContest | undefined;
   phase: P0P1Phase;
   dateRange?: { start: string; end: string } | null;
   contests?: ContestChipInfo[];
-  onContestChange?: (code: string) => void;
+  contestHref?: (code: string) => string;
   isCurrent: boolean;
 }) {
   const [open, setOpen] = useState(true);
@@ -368,11 +375,11 @@ function MobileIntro({
   return (
     <section className="bg-surface border border-border rounded-xl p-4 mb-3 flex flex-col gap-2.5">
       <div className="flex w-full items-center gap-3">
-        {contests && contests.length > 1 && onContestChange ? (
+        {contests && contests.length > 1 && contestHref ? (
           <P0P1ContestDropdown
             contests={contests}
             activeCode={setCode}
-            onSelect={onContestChange}
+            hrefFor={contestHref}
             isMobile
           />
         ) : (

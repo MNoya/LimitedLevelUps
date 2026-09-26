@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
 import { DraftReviewMOCS, type ReviewSeatInfo } from "../components/pod/review/DraftReviewMOCS";
 import { SectionLabel } from "../components/SectionLabel";
 import { BackButton, MobilePageHeader, PrevNextNav } from "../components/PageNav";
+import { useCloseModal } from "../lib/modal-history";
 import { useIsLandscapePhone, useIsMobile } from "../lib/use-is-mobile";
 import { cn } from "../lib/utils";
 import { PodTable, PodTableSkeleton } from "../components/pod/PodTable";
@@ -12,6 +13,7 @@ import { PlayerSeatPanel } from "../components/pod/PlayerSeatPanel";
 import type { RoundOutcome } from "../components/pod/PlayerSeatPanel";
 import { MobileSeatStack, MobileSeatStackSkeleton } from "../components/pod/MobileSeatStack";
 import { DeckScreenshotModal, type DeckTab } from "../components/pod/DeckScreenshotModal";
+import { podDeckHref, podDraftLogHref, podSeatHref } from "../components/pod/podLinks";
 import {
   compareStandings,
   hasStandings,
@@ -79,70 +81,22 @@ function findSeatByName(seats: PodSeat[], name: string): PodSeat | undefined {
 export function PodPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const preselectName = searchParams.get("player");
-  const deckParam = searchParams.get("deck");
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const seatParam = searchParams.get("player");
+  const { deckOwnerName, deckTab } = readDeckParams(searchParams, seatParam);
   const isMobile = useIsMobile();
   const isLandscapePhone = useIsLandscapePhone();
-  const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
   const [highlightedSeat, setHighlightedSeat] = useState<number | null>(null);
   const [highlightedRound, setHighlightedRound] = useState<number | null>(null);
   const [highlightedOutcome, setHighlightedOutcome] = useState<RoundOutcome | null>(null);
   const [animateLayout, setAnimateLayout] = useState(false);
-  const [deckTarget, setDeckTarget] = useState<PodSeat | null>(null);
-  const [deckInitialTab, setDeckInitialTab] = useState<DeckTab>("screenshot");
-
-  const openDeck = (seat: PodSeat, tab: DeckTab = "screenshot") => {
-    if (!decklistAccess.canViewSeat(seat.avatarUrl)) return;
-    setDeckInitialTab(tab);
-    setDeckTarget(seat);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("player", seat.discordName);
-        next.set("deck", tab);
-        return next;
-      },
-      { replace: true },
-    );
-  };
-
-  const closeDeck = () => {
-    setDeckTarget(null);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete("deck");
-        return next;
-      },
-      { replace: true },
-    );
-  };
+  const closeDeck = useCloseModal(podSeatHref(slug ?? "", seatParam));
 
   const handleRoundHover = (seat: number | null, round: number | null, outcome: RoundOutcome | null) => {
     setHighlightedSeat(seat);
     setHighlightedRound(round);
     setHighlightedOutcome(outcome);
-  };
-
-  const handleSelectSeat = (seat: number | null) => {
-    if (seat == null && isMobile && !standingsAvailable) return;
-    const openingFromStandings = seat != null && selectedSeat == null;
-    setSelectedSeat(seat);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (seat == null) {
-          next.delete("player");
-        } else {
-          const participant = seats.find((p) => p.seatIndex === seat);
-          if (participant) next.set("player", participant.discordName);
-          else next.delete("player");
-        }
-        return next;
-      },
-      { replace: !openingFromStandings },
-    );
   };
 
   const { data: event, isLoading: eventLoading } = usePodEventBySlug(slug);
@@ -155,26 +109,51 @@ export function PodPage() {
     [draftArtifact],
   );
   const warmedImages = useCardImageMap(warmImageItems);
-  const deckTargetMainboard = useMemo(
-    () => (draftArtifact && deckTarget ? resolveDeck(draftArtifact, deckTarget.seatIndex) : null),
-    [draftArtifact, deckTarget],
-  );
-  const cycleDeck = (direction: number) => {
-    if (!deckTarget || seats.length === 0) return;
-    const index = seats.findIndex((s) => s.seatIndex === deckTarget.seatIndex);
-    if (index === -1) return;
-    for (let step = 1; step <= seats.length; step++) {
-      const next = seats[(((index + direction * step) % seats.length) + seats.length) % seats.length];
-      if (decklistAccess.canViewSeat(next.avatarUrl)) {
-        setDeckTarget(next);
-        return;
-      }
-    }
-  };
   const { data: matches, isLoading: matchesLoading } = usePodEventMatches(eventId);
   const { data: replays, isLoading: replaysLoading } = usePodEventReplays(eventId);
   const { data: setEvents } = usePodEvents(event?.setCode);
   const decklistAccess = usePodDecklistAccess(event);
+
+  const seats = useMemo<PodSeat[]>(() => {
+    if (!participantRows) return [];
+    return assignSeats(participantRows).map((s) => ({
+      ...s,
+      deckColors: decklistAccess.canViewSeat(s.avatarUrl) ? s.deckColors : null,
+      ...(draftArtifact ? { hasDeckList: resolveDeck(draftArtifact, s.seatIndex) !== null } : {}),
+    }));
+  }, [participantRows, draftArtifact, decklistAccess]);
+
+  const participantsBySeatName = useMemo(() => {
+    const m = new Map<string, PodSeat>();
+    for (const s of seats) m.set(podSeatName(s), s);
+    return m;
+  }, [seats]);
+
+  const standingsAvailable = hasStandings(seats);
+  const selectedParticipant = useMemo(
+    () => resolveSelectedSeat(seats, seatParam, isMobile && !standingsAvailable),
+    [seats, seatParam, isMobile, standingsAvailable],
+  );
+  const selectedSeat = selectedParticipant?.seatIndex ?? null;
+
+  const deckOwner = deckOwnerName ? findSeatByName(seats, deckOwnerName) : undefined;
+  const deckTarget = deckOwner && decklistAccess.canViewSeat(deckOwner.avatarUrl) ? deckOwner : null;
+  const deckTargetMainboard = useMemo(
+    () => (draftArtifact && deckTarget ? resolveDeck(draftArtifact, deckTarget.seatIndex) : null),
+    [draftArtifact, deckTarget],
+  );
+  const neighbourDeck = (direction: number): PodSeat | null => {
+    if (!deckTarget) return null;
+    const index = seats.findIndex((s) => s.seatIndex === deckTarget.seatIndex);
+    if (index === -1) return null;
+    for (let step = 1; step <= seats.length; step++) {
+      const next = seats[(((index + direction * step) % seats.length) + seats.length) % seats.length];
+      if (decklistAccess.canViewSeat(next.avatarUrl)) {
+        return next;
+      }
+    }
+    return null;
+  };
 
   const { prevSlug, nextSlug } = useMemo(() => {
     if (!setEvents || !event) return { prevSlug: null, nextSlug: null };
@@ -233,34 +212,15 @@ export function PodPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [prevTo, nextTo, navigate, deckTarget]);
 
-  const seats = useMemo<PodSeat[]>(() => {
-    if (!participantRows) return [];
-    return assignSeats(participantRows).map((s) => ({
-      ...s,
-      deckColors: decklistAccess.canViewSeat(s.avatarUrl) ? s.deckColors : null,
-      ...(draftArtifact ? { hasDeckList: resolveDeck(draftArtifact, s.seatIndex) !== null } : {}),
-    }));
-  }, [participantRows, draftArtifact, decklistAccess]);
-
-  const participantsBySeatName = useMemo(() => {
-    const m = new Map<string, PodSeat>();
-    for (const s of seats) m.set(podSeatName(s), s);
-    return m;
-  }, [seats]);
-
-  const selectedParticipant =
-    selectedSeat == null ? null : seats.find((p) => p.seatIndex === selectedSeat) ?? null;
-
-  const standingsAvailable = hasStandings(seats);
-
-  const [displayParticipant, setDisplayParticipant] = useState<PodSeat | null>(selectedParticipant);
+  const [lingeringParticipant, setLingeringParticipant] = useState<PodSeat | null>(selectedParticipant);
+  const displayParticipant = selectedParticipant ?? lingeringParticipant;
 
   useEffect(() => {
     if (selectedParticipant) {
-      setDisplayParticipant(selectedParticipant);
+      setLingeringParticipant(selectedParticipant);
       return;
     }
-    const t = setTimeout(() => setDisplayParticipant(null), ANIMATION_MS);
+    const t = setTimeout(() => setLingeringParticipant(null), ANIMATION_MS);
     return () => clearTimeout(t);
   }, [selectedParticipant]);
 
@@ -270,48 +230,10 @@ export function PodPage() {
     return () => window.cancelAnimationFrame(id);
   }, [event, animateLayout]);
 
-  const [preselectChecked, setPreselectChecked] = useState(false);
+  const isMock = event ? event.kind === "mock" : isMockDraftSlug(slug);
+  const railOpensOnLoad = !isMock || seatParam !== null;
 
-  useEffect(() => {
-    setPreselectChecked(false);
-    setSelectedSeat(null);
-  }, [slug]);
-
-  useEffect(() => {
-    if (preselectChecked) return;
-    if (!participantRows) return;
-    if (seats.length === 0) {
-      setPreselectChecked(true);
-      return;
-    }
-    let target: PodSeat | undefined;
-    if (preselectName) {
-      target = findSeatByName(seats, preselectName);
-    } else if (isMobile && !standingsAvailable) {
-      target = seats.find((p) => p.placement === 1) ?? seats[0];
-    }
-    if (target) setSelectedSeat(target.seatIndex);
-    if (target && deckParam) {
-      openDeck(target, deckParam === "decklist" ? "decklist" : "screenshot");
-    }
-    setPreselectChecked(true);
-  }, [seats, preselectName, deckParam, isMobile, preselectChecked, participantRows]);
-
-  // Browser Back and Forward move ?player=, so the open seat follows the URL and not only the click
-  useEffect(() => {
-    if (!preselectChecked || !standingsAvailable) return;
-    if (preselectName == null) {
-      setSelectedSeat(null);
-      return;
-    }
-    const target = findSeatByName(seats, preselectName);
-    if (target) setSelectedSeat(target.seatIndex);
-  }, [preselectName, preselectChecked, standingsAvailable, seats]);
-
-  const preselectPending = (!!preselectName || isMobile) && !preselectChecked;
-  const railOpensOnLoad = event ? event.kind !== "mock" : true;
-
-  if (eventLoading || (event && participantsLoading) || (event && preselectPending)) {
+  if (eventLoading || (event && participantsLoading)) {
     if (isMobile) {
       return (
         <div className="bg-bg text-text min-h-screen flex flex-col">
@@ -323,7 +245,7 @@ export function PodPage() {
             nextAriaLabel="Next pod"
           />
           <MobileSeatStackSkeleton
-            variant={preselectName ? "player" : "standings"}
+            variant={seatParam || isMock ? "player" : "standings"}
             finalized={event?.isFinalized ?? true}
             teamDraft={event?.isTeamDraft ?? false}
           />
@@ -349,7 +271,7 @@ export function PodPage() {
               <div className="min-w-0 shrink-0 self-start max-h-full" style={{ width: "45%" }}>
                 <PodPanelSkeleton
                   minWidth={panelMinWidth}
-                  variant={preselectName ? "player" : "standings"}
+                  variant={seatParam ? "player" : "standings"}
                   finalized={event?.isFinalized ?? true}
                 />
               </div>
@@ -386,10 +308,6 @@ export function PodPage() {
   }
 
   const eventLabel = podEventTitle(event).toUpperCase();
-  const deckLogHref =
-    draftArtifact && deckTarget && decklistAccess.canViewSeat(deckTarget.avatarUrl)
-      ? `/pods/${event.slug}/${deckTarget.playerSlug ?? deckTarget.seatIndex}`
-      : null;
   const open = selectedParticipant !== null || standingsAvailable;
   const detailOpen = selectedParticipant !== null;
   const tableMaxPx = open ? TABLE_MAX_SHRUNK : TABLE_MAX_WIDE;
@@ -400,8 +318,36 @@ export function PodPage() {
     eventSlug: event.slug,
     hasDraftLog: !!draftArtifact,
     canViewSeat: decklistAccess.canViewSeat,
-    onShowDeck: (seat: PodSeat) => openDeck(seat),
   };
+  const deckHrefFor = (owner: PodSeat, tab: DeckTab) => podDeckHref(event.slug, seatParam, owner.discordName, tab);
+  const replaceDeck = (href: string) => navigate(href, { replace: true, state: location.state });
+  const prevDeck = neighbourDeck(-1);
+  const nextDeck = neighbourDeck(1);
+  const prevDeckHref = prevDeck ? deckHrefFor(prevDeck, deckTab) : undefined;
+  const nextDeckHref = nextDeck ? deckHrefFor(nextDeck, deckTab) : undefined;
+  const deckModal = deckTarget && (
+    <DeckScreenshotModal
+      participant={{
+        eventId: deckTarget.eventId,
+        displayName: deckTarget.discordName,
+        participantDisplayName: deckTarget.displayName,
+        deckColors: deckTarget.deckColors,
+        deckScreenshotUrl: deckTarget.deckScreenshotUrl,
+        deckScreenshotCaption: deckTarget.deckScreenshotCaption,
+        mainboard: deckTargetMainboard,
+        record: deckTarget.record,
+      }}
+      tab={deckTab}
+      onTabChange={(tab) => replaceDeck(deckHrefFor(deckTarget, tab))}
+      draftLogHref={draftArtifact ? podDraftLogHref(event.slug, deckTarget) : null}
+      cardImages={warmedImages}
+      onClose={closeDeck}
+      onPrev={prevDeckHref ? () => replaceDeck(prevDeckHref) : undefined}
+      onNext={nextDeckHref ? () => replaceDeck(nextDeckHref) : undefined}
+      prevHref={prevDeckHref}
+      nextHref={nextDeckHref}
+    />
+  );
 
   if (isMobile) {
     return (
@@ -419,8 +365,6 @@ export function PodPage() {
           matches={loadedMatches}
           replays={loadedReplays}
           selectedSeat={selectedSeat}
-          onSelect={handleSelectSeat}
-          onShowDeck={openDeck}
           canViewSeat={decklistAccess.canViewSeat}
           podFinalized={event.isFinalized}
           eventLabel={eventLabel}
@@ -428,31 +372,12 @@ export function PodPage() {
           eventSlug={event.slug}
           hasDraftLog={!!draftArtifact}
           formatLabel={event.formatLabel}
-          isMock={event.kind === "mock"}
+          isMock={isMock}
           standingsAvailable={standingsAvailable}
           teamDraft={event.isTeamDraft ?? false}
           standingsActions={standingsActions}
         />
-        {deckTarget && (
-          <DeckScreenshotModal
-            participant={{
-              eventId: deckTarget.eventId,
-              displayName: deckTarget.discordName,
-              participantDisplayName: deckTarget.displayName,
-              deckColors: deckTarget.deckColors,
-              deckScreenshotUrl: deckTarget.deckScreenshotUrl,
-              deckScreenshotCaption: deckTarget.deckScreenshotCaption,
-              mainboard: deckTargetMainboard,
-              record: deckTarget.record,
-            }}
-            initialTab={deckInitialTab}
-            draftLogHref={deckLogHref}
-            cardImages={warmedImages}
-            onClose={closeDeck}
-            onPrev={() => cycleDeck(-1)}
-            onNext={() => cycleDeck(1)}
-          />
-        )}
+        {deckModal}
       </div>
     );
   }
@@ -488,8 +413,6 @@ export function PodPage() {
               highlightedSeat={highlightedSeat}
               highlightedRound={highlightedRound}
               highlightedOutcome={highlightedOutcome}
-              onSelect={handleSelectSeat}
-              onShowDeck={openDeck}
               canViewDeck={decklistAccess.canViewSeat}
               eventLabel={eventLabel}
               teamDraft={event.isTeamDraft ?? false}
@@ -520,14 +443,13 @@ export function PodPage() {
                       teamDraft={event.isTeamDraft ?? false}
                       finalized={event.isFinalized}
                       selectedSeat={selectedSeat}
-                      onSelect={handleSelectSeat}
                       onHover={(seat) => handleRoundHover(seat, null, null)}
                       actions={standingsActions}
                     />
                   </RailLayer>
                 )}
                 <RailLayer shown={detailOpen || !standingsAvailable} hiddenShift="translate-x-6">
-                  {standingsAvailable && <StandingsBackBar onClick={() => handleSelectSeat(null)} />}
+                  {standingsAvailable && <StandingsBackBar to={podSeatHref(event.slug, null)} />}
                   {displayParticipant && (
                     <PlayerSeatPanel
                       key={displayParticipant.displayName}
@@ -541,8 +463,7 @@ export function PodPage() {
                       canViewSeat={decklistAccess.canViewSeat}
                       podFinalized={event.isFinalized}
                       onRoundHover={handleRoundHover}
-                      onShowDeck={openDeck}
-                      isMock={event.kind === "mock"}
+                      isMock={isMock}
                     />
                   )}
                   {displayParticipant && auxLoading && (
@@ -556,32 +477,34 @@ export function PodPage() {
           </div>
         </div>
       </main>
-      {deckTarget && (
-        <DeckScreenshotModal
-          participant={{
-            eventId: deckTarget.eventId,
-            displayName: deckTarget.discordName,
-            participantDisplayName: deckTarget.displayName,
-            deckColors: deckTarget.deckColors,
-            deckScreenshotUrl: deckTarget.deckScreenshotUrl,
-            deckScreenshotCaption: deckTarget.deckScreenshotCaption,
-            mainboard: deckTargetMainboard,
-            record: deckTarget.record,
-          }}
-          initialTab={deckInitialTab}
-          draftLogHref={deckLogHref}
-          onClose={closeDeck}
-          onPrev={() => cycleDeck(-1)}
-          onNext={() => cycleDeck(1)}
-        />
-      )}
+      {deckModal}
     </div>
   );
 }
 
+const readDeckParams = (params: URLSearchParams, seatParam: string | null) => {
+  const deck = params.get("deck");
+  const poolView = params.get("view") === "pool";
+  const legacyTab = deck === "screenshot" || deck === "decklist";
+  const deckTab: DeckTab = poolView || deck === "decklist" ? "decklist" : "screenshot";
+  return { deckOwnerName: legacyTab ? seatParam : deck, deckTab };
+};
+
+const isMockDraftSlug = (slug: string | undefined) => slug?.includes("-mock-draft-") ?? false;
+
+const resolveSelectedSeat = (seats: PodSeat[], seatName: string | null, alwaysSelect: boolean) => {
+  const named = seatName ? findSeatByName(seats, seatName) : undefined;
+  if (named) {
+    return named;
+  }
+  if (!alwaysSelect) {
+    return null;
+  }
+  return seats.find((p) => p.placement === 1) ?? seats[0] ?? null;
+};
+
 export function PodDraftLogRoute() {
   const { slug, who, pack, pick } = useParams<{ slug: string; who?: string; pack?: string; pick?: string }>();
-  const navigate = useNavigate();
   const { data: event, isLoading: eventLoading } = usePodEventBySlug(slug);
   const eventId = event?.eventId;
   const { data: participantRows, isLoading: participantsLoading } = usePodEventParticipants(eventId);
@@ -605,11 +528,10 @@ export function PodDraftLogRoute() {
   }
 
   const resolved = resolveLogSeat(seats, who);
-  const initialSeat = resolved != null && resolved < artifact.seats.length ? resolved : 0;
-  const initialPack = pack ? Number(pack) - 1 : 0;
-  const initialPick = pick ? Number(pick) - 1 : 0;
+  const seatIndex = resolved != null && resolved < artifact.seats.length ? resolved : 0;
   const seatInfo: ReviewSeatInfo[] = seats.map((s) => ({
     seatIndex: s.seatIndex,
+    playerSlug: s.playerSlug,
     displayName: s.discordName,
     participantDisplayName: s.displayName,
     avatarUrl: s.avatarUrl,
@@ -620,7 +542,7 @@ export function PodDraftLogRoute() {
   }));
 
   const current = resolved != null ? seats.find((s) => s.seatIndex === resolved) : null;
-  const backHref = `/pods/${slug}${current ? `?player=${encodeURIComponent(current.discordName)}` : ""}`;
+  const backHref = podSeatHref(event.slug, current?.discordName ?? null);
 
   // While the pod is closed a player gets their own draft in scroll-only mode; only organizers and
   // finished pods open the whole-table review.
@@ -633,26 +555,16 @@ export function PodDraftLogRoute() {
     <DraftReviewMOCS
       artifact={artifact}
       meta={{ setCode: event.setCode, name: event.name }}
-      initialSeat={initialSeat}
-      initialPack={initialPack}
-      initialPick={initialPick}
-      onClose={() => navigate(backHref)}
+      seat={seatIndex}
+      pack={pack ? Number(pack) - 1 : 0}
+      pick={pick ? Number(pick) - 1 : 0}
       backHref={backHref}
-      onNavigate={(seatIndex, p, pk) => {
-        const target = seats.find((s) => s.seatIndex === seatIndex);
-        if (target) {
-          navigate(`/pods/${slug}/${seatIdentifier(target)}/${p + 1}/${pk + 1}`, { replace: true });
-        }
-      }}
+      eventSlug={event.slug}
       eventId={event.eventId}
       seatInfo={seatInfo}
-      soloSeat={soloOwnSeat ? initialSeat : undefined}
+      soloSeat={soloOwnSeat ? seatIndex : undefined}
     />
   );
-}
-
-function seatIdentifier(seat: PodSeat): string {
-  return seat.playerSlug ?? String(seat.seatIndex);
 }
 
 function resolveLogSeat(seats: PodSeat[], who: string): number | null {

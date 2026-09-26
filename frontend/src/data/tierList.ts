@@ -6,13 +6,9 @@ import {
   TIER_LIST_GRADERS,
   TIER_LIST_PREVIEW_SETS,
   TIER_LIST_UIDS,
+  hasTierList,
 } from "./constants";
 import type { SetSummary } from "../types/leaderboard";
-
-// A set has a tier list if it has a consensus list of its own or grader lists to compare.
-export function hasTierList(code: string): boolean {
-  return Boolean(TIER_LIST_UIDS[code]) || (TIER_LIST_GRADERS[code]?.length ?? 0) > 0;
-}
 
 export interface ResolvedTierList {
   uid: string | undefined;

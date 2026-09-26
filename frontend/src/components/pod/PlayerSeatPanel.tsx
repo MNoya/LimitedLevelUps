@@ -14,7 +14,7 @@ import { useIsCompact, useIsLandscapePhone } from "../../lib/use-is-mobile";
 import { isPodTrophyRecord, playerPath, podSeatName, stripDiscriminator } from "../../data/utils";
 import { recordParts } from "./PodStandingRow";
 import { useResolvedDeckUrl } from "../../data/refresh-deck-url";
-import type { DeckTab } from "./DeckScreenshotModal";
+import { DeckLink, podDeckHref, podDraftLogHref } from "./podLinks";
 import type { PodEventMatchRow, PodEventReplayRow, PodSeat } from "../../types/leaderboard";
 
 const SKIPPED_SENTINEL = "(skipped)";
@@ -33,7 +33,6 @@ interface Props {
   canViewSeat?: (playerSlug: string | null | undefined) => boolean;
   podFinalized?: boolean;
   onRoundHover?: (opponentSeatIndex: number | null, round: number | null, outcome: RoundOutcome | null) => void;
-  onShowDeck: (p: PodSeat, tab?: DeckTab) => void;
   isMock?: boolean;
 }
 
@@ -48,7 +47,6 @@ export function PlayerSeatPanel({
   canViewSeat = () => true,
   podFinalized = true,
   onRoundHover,
-  onShowDeck,
   isMock = false,
 }: Props) {
   const canViewOwnDeck = canViewSeat(participant.avatarUrl);
@@ -60,9 +58,8 @@ export function PlayerSeatPanel({
   const profileHref = (slug: string | null | undefined): string | null =>
     slug ? playerPath(slug, setCode) : null;
 
-  const draftLogHref = hasDraftLog && canViewOwnDeck
-    ? `/pods/${eventSlug}/${participant.playerSlug ?? participant.seatIndex}`
-    : null;
+  const draftLogHref = hasDraftLog && canViewOwnDeck ? podDraftLogHref(eventSlug, participant) : null;
+  const deckHref = (owner: PodSeat) => podDeckHref(eventSlug, participant.discordName, owner.discordName);
 
   return (
     <div className="flex flex-col min-h-0 flex-1">
@@ -71,13 +68,15 @@ export function PlayerSeatPanel({
         profileHref={profileHref(participant.playerSlug)}
         draftLogHref={draftLogHref}
         deckHidden={!isMock && !canViewOwnDeck}
-        onViewDeck={() => onShowDeck(participant)}
-        onViewCardPool={() => onShowDeck(participant, "decklist")}
+        deckHref={deckHref(participant)}
+        cardPoolHref={
+          canViewOwnDeck ? podDeckHref(eventSlug, participant.discordName, participant.discordName, "decklist") : null
+        }
         isMock={isMock}
       />
       <div className="flex flex-col flex-1 min-h-0 overflow-y-auto themed-scrollbar">
         {isMock ? (
-          <MockDeckPreview participant={participant} onShowDeck={onShowDeck} />
+          <MockDeckPreview participant={participant} deckHref={canViewOwnDeck ? deckHref(participant) : null} />
         ) : (
           playerMatches.map((match) => {
             const opponentName =
@@ -95,7 +94,7 @@ export function PlayerSeatPanel({
                 canViewOpponentDeck={canViewSeat(opponent?.avatarUrl)}
                 podFinalized={podFinalized}
                 onHover={onRoundHover}
-                onViewDeck={onShowDeck}
+                opponentDeckHref={opponent ? deckHref(opponent) : null}
               />
             );
           })
@@ -105,7 +104,7 @@ export function PlayerSeatPanel({
   );
 }
 
-function MockDeckPreview({ participant, onShowDeck }: { participant: PodSeat; onShowDeck: (p: PodSeat) => void }) {
+function MockDeckPreview({ participant, deckHref }: { participant: PodSeat; deckHref: string | null }) {
   const { url, resolving } = useResolvedDeckUrl({
     deckScreenshotUrl: participant.deckScreenshotUrl,
     eventId: participant.eventId,
@@ -119,20 +118,25 @@ function MockDeckPreview({ participant, onShowDeck }: { participant: PodSeat; on
       </div>
     );
   }
+  const deckImage =
+    resolving || !url ? (
+      <div className="w-full min-h-[240px] bg-surface2 animate-pulse" />
+    ) : (
+      <img src={url} alt={`${participant.discordName}'s deck`} className="block w-full h-auto" />
+    );
   return (
     <>
-      <button
-        type="button"
-        onClick={() => onShowDeck(participant)}
-        className="block w-full p-0 m-0 border-0 bg-transparent cursor-zoom-in"
-        aria-label={`${participant.discordName}'s deck — click to enlarge`}
-      >
-        {resolving || !url ? (
-          <div className="w-full min-h-[240px] bg-surface2 animate-pulse" />
-        ) : (
-          <img src={url} alt={`${participant.discordName}'s deck`} className="block w-full h-auto" />
-        )}
-      </button>
+      {deckHref ? (
+        <DeckLink
+          to={deckHref}
+          className="block w-full p-0 m-0 border-0 bg-transparent cursor-zoom-in"
+          aria-label={`${participant.discordName}'s deck — click to enlarge`}
+        >
+          {deckImage}
+        </DeckLink>
+      ) : (
+        deckImage
+      )}
       {participant.deckScreenshotCaption && (
         <div className="px-4 md:px-5 xl:px-8 py-3 border-t border-border text-muted font-body text-[13px]">
           {participant.deckScreenshotCaption}
@@ -147,16 +151,16 @@ function SeatHeader({
   profileHref,
   draftLogHref,
   deckHidden = false,
-  onViewDeck,
-  onViewCardPool,
+  deckHref,
+  cardPoolHref,
   isMock = false,
 }: {
   participant: PodSeat;
   profileHref: string | null;
   draftLogHref: string | null;
   deckHidden?: boolean;
-  onViewDeck: () => void;
-  onViewCardPool: () => void;
+  deckHref: string;
+  cardPoolHref: string | null;
   isMock?: boolean;
 }) {
   const isMobile = useIsCompact();
@@ -242,15 +246,14 @@ function SeatHeader({
           ) : (
             <>
               {!isMock && (hasDeck ? (
-                <button
-                  type="button"
-                  onClick={onViewDeck}
-                  className="inline-flex items-center justify-center gap-2 bg-bg border border-border hover:border-green/60 hover:bg-green/10 hover:text-green text-text font-display tracking-[0.14em] px-4 cursor-pointer transition-colors flex-1"
+                <DeckLink
+                  to={deckHref}
+                  className="inline-flex items-center justify-center gap-2 bg-bg border border-border hover:border-green/60 hover:bg-green/10 hover:text-green text-text font-display tracking-[0.14em] px-4 cursor-pointer transition-colors no-underline flex-1"
                   style={{ fontSize: 14, height: 38 }}
                 >
                   <span>VIEW DECK</span>
                   <TbCards size={16} aria-hidden="true" />
-                </button>
+                </DeckLink>
               ) : (
                 <span
                   className="inline-flex items-center justify-center gap-2 bg-bg border border-border text-dim font-display tracking-[0.14em] px-4 cursor-not-allowed flex-1"
@@ -265,8 +268,8 @@ function SeatHeader({
                 internalHref={draftLogHref}
                 variant="mobile"
               />
-              {isMock && participant.hasDeckList && (
-                <CardPoolButton onClick={onViewCardPool} variant="mobile" />
+              {isMock && participant.hasDeckList && cardPoolHref && (
+                <CardPoolButton href={cardPoolHref} variant="mobile" />
               )}
             </>
           )}
@@ -288,15 +291,14 @@ function SeatHeader({
         ) : (
           <>
             {!isMock && (hasDeck ? (
-              <button
-                type="button"
-                onClick={onViewDeck}
-                className="inline-flex items-center justify-end gap-5 bg-bg border border-border hover:border-green/60 hover:bg-green/10 hover:text-green text-text font-display tracking-[0.12em] px-5 cursor-pointer transition-colors leading-none"
+              <DeckLink
+                to={deckHref}
+                className="inline-flex items-center justify-end gap-5 bg-bg border border-border hover:border-green/60 hover:bg-green/10 hover:text-green text-text font-display tracking-[0.12em] px-5 cursor-pointer transition-colors no-underline leading-none"
                 style={{ fontSize: 17, height: 44, paddingTop: 2 }}
               >
                 <span>VIEW DECK</span>
                 <TbCards size={20} aria-hidden="true" />
-              </button>
+              </DeckLink>
             ) : (
               <span
                 className="inline-flex items-center justify-end gap-5 bg-bg border border-border text-dim font-display tracking-[0.12em] px-5 cursor-not-allowed leading-none"
@@ -311,8 +313,8 @@ function SeatHeader({
               internalHref={draftLogHref}
               variant="desktop"
             />
-            {isMock && participant.hasDeckList && (
-              <CardPoolButton onClick={onViewCardPool} variant="desktop" />
+            {isMock && participant.hasDeckList && cardPoolHref && (
+              <CardPoolButton href={cardPoolHref} variant="desktop" />
             )}
           </>
         )}
@@ -377,22 +379,21 @@ function DraftLogButton({
   );
 }
 
-function CardPoolButton({ onClick, variant }: { onClick: () => void; variant: "mobile" | "desktop" }) {
+function CardPoolButton({ href, variant }: { href: string; variant: "mobile" | "desktop" }) {
   const mobile = variant === "mobile";
   const base = mobile
     ? "inline-flex items-center justify-center gap-2 font-display tracking-[0.14em] px-4 flex-1"
     : "inline-flex items-center justify-end gap-5 font-display tracking-[0.12em] px-5 leading-none";
   const style = mobile ? { fontSize: 14, height: 38 } : { fontSize: 17, height: 44, paddingTop: 2 };
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(base, "bg-bg border border-border hover:border-green/60 hover:bg-green/10 hover:text-green text-text transition-colors cursor-pointer")}
+    <DeckLink
+      to={href}
+      className={cn(base, "bg-bg border border-border hover:border-green/60 hover:bg-green/10 hover:text-green text-text transition-colors cursor-pointer no-underline")}
       style={style}
     >
       <span>{mobile ? "CARD POOL" : "VIEW CARD POOL"}</span>
       <TbCards size={mobile ? 15 : 20} aria-hidden="true" />
-    </button>
+    </DeckLink>
   );
 }
 
@@ -420,7 +421,7 @@ function RoundRow({
   canViewOpponentDeck,
   podFinalized,
   onHover,
-  onViewDeck,
+  opponentDeckHref,
 }: {
   match: PodEventMatchRow;
   participant: PodSeat;
@@ -431,7 +432,7 @@ function RoundRow({
   canViewOpponentDeck: boolean;
   podFinalized: boolean;
   onHover?: (opponentSeatIndex: number | null, round: number | null, outcome: RoundOutcome | null) => void;
-  onViewDeck: (participant: PodSeat) => void;
+  opponentDeckHref: string | null;
 }) {
   const isMobile = useIsCompact();
   const isSkipped = match.winnerName === SKIPPED_SENTINEL;
@@ -511,15 +512,11 @@ function RoundRow({
 
   const opponentHasDeck = canViewOpponentDeck && (!!opponent?.deckScreenshotUrl || !!opponent?.hasDeckList);
   const deckButton = opponent && canViewOpponentDeck ? (
-    opponentHasDeck ? (
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onViewDeck(opponent);
-        }}
+    opponentHasDeck && opponentDeckHref ? (
+      <DeckLink
+        to={opponentDeckHref}
         title={`View ${opponentDisplay}'s deck`}
-        className="group/deck inline-flex items-center gap-2 bg-bg border border-border hover:border-green/60 hover:bg-green/10 transition-colors px-3 cursor-pointer shrink-0"
+        className="group/deck inline-flex items-center gap-2 bg-bg border border-border hover:border-green/60 hover:bg-green/10 transition-colors px-3 cursor-pointer no-underline shrink-0"
         style={{ height: 34 }}
       >
         <span
@@ -533,7 +530,7 @@ function RoundRow({
           aria-hidden="true"
           className="text-text group-hover/deck:text-green transition-colors"
         />
-      </button>
+      </DeckLink>
     ) : (
       <span
         className="inline-flex items-center gap-2 bg-bg border border-border text-dim leading-none cursor-not-allowed shrink-0 px-3"

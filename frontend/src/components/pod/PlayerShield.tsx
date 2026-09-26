@@ -1,4 +1,5 @@
 import { type CSSProperties, useId, useLayoutEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import { Pips } from "../ManaPips";
 import { useIsLandscapePhone } from "../../lib/use-is-mobile";
 import { Record } from "../Record";
@@ -97,13 +98,22 @@ interface Props {
   selected: boolean;
   highlighted?: boolean;
   highlightedOutcome?: RoundOutcome | null;
-  onClick: () => void;
+  href: string;
+  replace: boolean;
   scale?: number;
 }
 
 const REF = { w: 118, h: 144, nameMax: 17, nameMin: 10, pip: 13, rec: 20 };
 
-export function PlayerShield({ participant, selected, highlighted = false, highlightedOutcome = null, onClick, scale = 1 }: Props) {
+export function PlayerShield({
+  participant,
+  selected,
+  highlighted = false,
+  highlightedOutcome = null,
+  href,
+  replace,
+  scale = 1,
+}: Props) {
   const { wins, losses, played: hasRecord } = recordParts(participant.record);
   const isWinner = isPodTrophyRecord(participant.record) || participant.placement === 1;
   const raiseForName = useIsLandscapePhone();
@@ -124,10 +134,10 @@ export function PlayerShield({ participant, selected, highlighted = false, highl
       : null;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
+    <Link
+      to={href}
+      replace={replace}
+      aria-current={selected || undefined}
       aria-label={`Seat ${participant.seatIndex + 1}: ${participant.discordName}${hasRecord ? `, ${participant.record}` : ""}`}
       className={cn(
         "group relative block p-0 m-0 border-0 bg-transparent cursor-pointer outline-none",
@@ -177,7 +187,7 @@ export function PlayerShield({ participant, selected, highlighted = false, highl
         )}
       </div>
       <ShieldFrame metal={metal} ring={ring} layer="border" />
-    </button>
+    </Link>
   );
 }
 
