@@ -51,6 +51,7 @@ import {
   fmtRange,
   isCubeCode,
   orderedDeckColors,
+  PLAYER_BASE,
   playerPath,
   podDiscordName,
   stripDiscriminator,
@@ -529,10 +530,11 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
   const cardDataHref = hasCardData(activeSet) ? `/pods/${activeSet}/data` : null;
   const cubeCobraHref = setCode ? cubeCobraUrl(setCode) : null;
 
-  // Under a cube filter each row already carries its own cube board code, so a name lands on that profile
-  const profileSetFor = (row: LeaderboardTableRow) => {
-    if (format === "cube") return row.setCode;
-    return allSeasons ? homeCode : activeSet;
+  // The season view spans every set, so a name lands on the lifetime profile's pods
+  const profileHref = (row: LeaderboardTableRow) => {
+    if (setCode) return playerPath(row.slug, setCode);
+    if (format === "cube") return playerPath(row.slug, row.setCode);
+    return `${PLAYER_BASE}/${row.slug}?format=Pod`;
   };
 
   const { user } = useAuth();
@@ -642,7 +644,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
                 stickyTop={chromeHeight + standingsHeadHeight}
                 highlightSlug={mySlug ?? undefined}
                 emptyMessage={allSeasons ? "No player stats yet" : `No player stats yet for ${activeSet}`}
-                playerHref={(row) => playerPath(row.slug, profileSetFor(row))}
+                playerHref={profileHref}
               />
             </section>
           )}
