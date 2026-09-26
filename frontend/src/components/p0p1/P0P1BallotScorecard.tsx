@@ -1,6 +1,7 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { HelpCircle } from "lucide-react";
 import { Tooltip } from "../Tooltip";
+import { CUT_CORNER_CHAMFER } from "../ChamferCta";
 import { groupBySlot, findExtremes, classifyYourPick } from "../../data/p0p1Stats";
 import { slotsForSet } from "../../data/p0p1Slots";
 import {
@@ -17,6 +18,9 @@ import {
 import type { RatingsSnapshot } from "../../data/p0p1Results";
 import type { Card, P0P1BallotRow, P0P1PickStat, SlotKey } from "../../types/p0p1";
 import { p0p1DevEnabled, useP0P1DevSelfPlacement } from "../../data/p0p1DevState";
+import type { useP0P1Ballot } from "../../data/useP0P1Ballot";
+
+type Ballot = ReturnType<typeof useP0P1Ballot>;
 
 type PickState = "fav" | "pack" | "rogue";
 type ScoredPick = { state: PickState; cardName: string; pickCount: number };
@@ -28,6 +32,7 @@ export const MEDAL_COLOR: Record<1 | 2 | 3, string> = {
   3: "#c87941",
 };
 const GREEN = "#2ee85c";
+const FRAME_COLOR = "#3b4458";
 const CELL_ORDER: Record<PickState, number> = { fav: 0, pack: 1, rogue: 2 };
 const CAT_COLOR: Record<PickState, string> = {
   fav: GREEN,
@@ -35,14 +40,44 @@ const CAT_COLOR: Record<PickState, string> = {
   rogue: "#a98eff",
 };
 
-export function P0P1BallotScorecard({
+export function yourBallotScorecard(ballot: Ballot, compact = false): ReactNode {
+  const { user, isPastDeadline, isComplete, pickStats, phase, resultsDataReady, ratingsSnapshot, cards, ballots } = ballot;
+  const { picksBySlot, featured } = ballot;
+  if (!user || !isPastDeadline || !isComplete || !pickStats || pickStats.length === 0) {
+    return null;
+  }
+  if (phase === "final" && resultsDataReady && ratingsSnapshot && cards && ballots) {
+    return (
+      <FinalBallotScorecard
+        ratingsSnapshot={ratingsSnapshot}
+        pickStats={pickStats}
+        ballots={ballots}
+        cards={cards}
+        picksBySlot={picksBySlot}
+        discordId={user.discordId}
+      />
+    );
+  }
+  if (phase === "midway" && resultsDataReady && ratingsSnapshot && cards) {
+    return (
+      <MidwayBallotScorecard ratingsSnapshot={ratingsSnapshot} cards={cards} picksBySlot={picksBySlot} compact={compact} />
+    );
+  }
+  return (
+    <P0P1BallotScorecard pickStats={pickStats} picksBySlot={picksBySlot} setCode={featured?.code ?? ""} compact={compact} />
+  );
+}
+
+function P0P1BallotScorecard({
   pickStats,
   picksBySlot,
   setCode,
+  compact,
 }: {
   pickStats: P0P1PickStat[];
   picksBySlot: Map<string, string>;
   setCode: string;
+  compact: boolean;
 }) {
   const picks = ballotPicks(pickStats, picksBySlot, setCode);
   if (picks.length === 0) {
@@ -55,63 +90,183 @@ export function P0P1BallotScorecard({
   const sorted = [...picks].sort((a, b) => CELL_ORDER[a.state] - CELL_ORDER[b.state]);
 
   return (
-    <div className="inline-block animate-fadeUpIn" style={{ clipPath: CHAMFER, background: "#3b4458", padding: 1 }}>
-      <div className="bg-surface2 w-[clamp(280px,22vw,340px)] px-5 py-2.5 flex flex-col gap-2" style={{ clipPath: CHAMFER }}>
-        <Tooltip label={<BallotLegend />} side="bottom" align="start" hideArrow className="max-w-[320px]">
-          <button
-            type="button"
-            className="group inline-flex items-center gap-1.5 self-start cursor-help bg-transparent border-0 p-0"
-          >
-            <HelpCircle size={15} strokeWidth={2} className="text-white transition-colors" />
-            <span className="font-display text-white" style={{ fontSize: 15, letterSpacing: "0.22em" }}>YOUR BALLOT</span>
-          </button>
-        </Tooltip>
-
-        <div className="flex items-center justify-between">
-          <StatInline n={favs} label="CROWD" color={CAT_COLOR.fav} />
-          <StatInline n={mids} label="SPLIT" color={CAT_COLOR.pack} />
-          <StatInline n={rogues.length} label="ROGUE" color={CAT_COLOR.rogue} className="mr-[5px]" />
-        </div>
-
-        <div className="flex gap-1 -ml-[5px]" aria-hidden>
+    <ScorecardShell
+      title="YOUR BALLOT"
+      legend={<BallotLegend />}
+      compact={compact}
+      stats={
+        <>
+          <StatInline n={favs} label="CROWD" color={CAT_COLOR.fav} compact={compact} />
+          <StatInline n={mids} label="SPLIT" color={CAT_COLOR.pack} compact={compact} />
+          <StatInline
+            n={rogues.length}
+            label="ROGUE"
+            color={CAT_COLOR.rogue}
+            compact={compact}
+            className={compact ? undefined : "mr-[5px]"}
+          />
+        </>
+      }
+      bar={
+        <div className={`flex gap-1 ${barOffset(compact)}`} aria-hidden>
           {sorted.map((pick, i) => (
-            <div key={i} className="h-2.5 flex-1 rounded-[1px]" style={{ background: CAT_COLOR[pick.state] }} />
+            <div key={i} className={`${barHeight(compact)} flex-1 rounded-[1px]`} style={{ background: CAT_COLOR[pick.state] }} />
           ))}
         </div>
-
-        {boldest && (
-          <p className="font-body text-subtle text-[12px] leading-snug -ml-[10px]">
+      }
+      footnote={
+        boldest && (
+          <p className={`font-body text-subtle text-[12px] leading-snug ${compact ? "" : "-ml-[10px]"}`}>
             <span className="mr-1">🌶️</span>
             {rarityPrefix(boldest.pickCount)}{" "}
             <span className="text-text">{boldest.cardName}</span>
           </p>
-        )}
+        )
+      }
+    />
+  );
+}
+
+function ScorecardShell({
+  title,
+  legend,
+  stats,
+  bar,
+  footnote,
+  frameColor,
+  compact,
+}: {
+  title: string;
+  legend: ReactNode;
+  stats: ReactNode;
+  bar: ReactNode;
+  footnote?: ReactNode;
+  frameColor?: string;
+  compact: boolean;
+}) {
+  const [legendOpen, setLegendOpen] = useState(false);
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={() => setLegendOpen((o) => !o)}
+        aria-expanded={legendOpen}
+        className="block w-full bg-transparent border-0 p-0 text-left cursor-pointer"
+      >
+        <ScorecardFrame compact frameColor={frameColor} animate>
+          <div className="w-full flex items-center gap-3">
+            <span className="flex items-center gap-1 shrink-0">
+              <HelpCircle size={12} strokeWidth={2} className="text-white" />
+              <span className="font-display text-white" style={{ fontSize: 12, letterSpacing: "0.22em" }}>{title}</span>
+            </span>
+            <div className="flex-1 min-w-0 flex items-baseline justify-end gap-3">{stats}</div>
+          </div>
+          {bar}
+          {legendOpen && (
+            <div className="flex flex-col gap-1.5 pt-1 text-[12px]">
+              {legend}
+              {footnote}
+            </div>
+          )}
+        </ScorecardFrame>
+      </button>
+    );
+  }
+
+  return (
+    <ScorecardFrame compact={false} frameColor={frameColor} animate>
+      <Tooltip label={legend} side="bottom" align="start" hideArrow className="max-w-[320px]">
+        <button
+          type="button"
+          className="group inline-flex items-center gap-1.5 self-start bg-transparent border-0 p-0"
+        >
+          <HelpCircle size={15} strokeWidth={2} className="text-white transition-colors" />
+          <span className="font-display text-white" style={{ fontSize: 15, letterSpacing: "0.22em" }}>{title}</span>
+        </button>
+      </Tooltip>
+      <div className="flex items-baseline justify-between">{stats}</div>
+      {bar}
+      {footnote}
+    </ScorecardFrame>
+  );
+}
+
+export function ScorecardFrame({
+  compact,
+  frameColor = FRAME_COLOR,
+  animate = false,
+  children,
+}: {
+  compact: boolean;
+  frameColor?: string;
+  animate?: boolean;
+  children: ReactNode;
+}) {
+  const clipPath = compact ? CUT_CORNER_CHAMFER : CHAMFER;
+  const outer = compact ? "block w-full" : "inline-block";
+  const inner = compact
+    ? "px-4 py-2 flex flex-col gap-1.5"
+    : "w-[clamp(280px,22vw,340px)] px-5 py-2.5 flex flex-col gap-2";
+  return (
+    <div className={`${outer} ${animate ? "animate-fadeUpIn" : ""}`} style={{ clipPath, background: frameColor, padding: 1 }}>
+      <div className={`bg-surface2 ${inner}`} style={{ clipPath }}>
+        {children}
       </div>
     </div>
   );
 }
 
-export function BallotScorecardSkeleton({ setCode = "" }: { setCode?: string }) {
-  return (
-    <div className="inline-block" style={{ clipPath: CHAMFER, background: "#3b4458", padding: 1 }}>
-      <div className="bg-surface2 w-[clamp(280px,22vw,340px)] px-5 py-2.5 flex flex-col gap-2" style={{ clipPath: CHAMFER }}>
-        <div className="h-[15px] w-28 bg-surface animate-pulse" />
-        <div className="h-6 w-40 bg-surface animate-pulse" />
-        <div className="flex gap-1 -ml-[5px]" aria-hidden>
-          {Array.from({ length: slotsForSet(setCode).length }, (_, i) => (
-            <div key={i} className="h-2.5 flex-1 rounded-[1px] bg-surface animate-pulse" />
-          ))}
+function barHeight(compact: boolean): string {
+  return compact ? "h-1.5" : "h-2.5";
+}
+
+function barOffset(compact: boolean): string {
+  return compact ? "" : "-ml-[5px]";
+}
+
+export function BallotScorecardSkeleton({ setCode = "", compact = false }: { setCode?: string; compact?: boolean }) {
+  if (compact) {
+    return (
+      <ScorecardFrame compact>
+        <div className="flex items-center justify-between gap-3">
+          <div className="h-3 w-24 bg-surface animate-pulse" />
+          <div className="h-4 w-36 bg-surface animate-pulse" />
         </div>
+        <div className="h-1.5 w-full bg-surface animate-pulse rounded-[1px]" />
+      </ScorecardFrame>
+    );
+  }
+  return (
+    <ScorecardFrame compact={false}>
+      <div className="h-[15px] w-28 bg-surface animate-pulse" />
+      <div className="h-6 w-40 bg-surface animate-pulse" />
+      <div className="flex gap-1 -ml-[5px]" aria-hidden>
+        {Array.from({ length: slotsForSet(setCode).length }, (_, i) => (
+          <div key={i} className="h-2.5 flex-1 rounded-[1px] bg-surface animate-pulse" />
+        ))}
       </div>
-    </div>
+    </ScorecardFrame>
   );
 }
 
-function StatInline({ n, label, color, className }: { n: number; label: string; color: string; className?: string }) {
+function StatInline({
+  n,
+  label,
+  color,
+  compact,
+  className,
+}: {
+  n: number | string;
+  label: string;
+  color: string;
+  compact: boolean;
+  className?: string;
+}) {
   return (
-    <span className={`flex items-baseline gap-1.5 ${className ?? ""}`}>
-      <span className="font-display leading-none" style={{ fontSize: 24, color }}>{n}</span>
-      <span className="font-body text-[12px] leading-none" style={{ color }}>{label}</span>
+    <span className={`flex items-baseline ${compact ? "gap-1" : "gap-1.5"} ${className ?? ""}`}>
+      <span className="font-display leading-none" style={{ fontSize: compact ? 17 : 24, color }}>{n}</span>
+      <span className={`font-body leading-none ${compact ? "text-[11px]" : "text-[12px]"}`} style={{ color }}>{label}</span>
     </span>
   );
 }
@@ -181,14 +336,16 @@ function rarityPrefix(pickCount: number): string {
 
 // ── Midway variant ─────────────────────────────────────────────────────────────
 
-export function MidwayBallotScorecard({
+function MidwayBallotScorecard({
   ratingsSnapshot,
   cards,
   picksBySlot,
+  compact,
 }: {
   ratingsSnapshot: RatingsSnapshot;
   cards: Card[];
   picksBySlot: Map<string, string>;
+  compact: boolean;
 }) {
   const contestSlots = slotsForSet(ratingsSnapshot.setCode);
   const aligned = useMemo(() => {
@@ -206,30 +363,19 @@ export function MidwayBallotScorecard({
   const segments = Array.from({ length: contestSlots.length }, (_, i) => i < aligned);
 
   return (
-    <div className="inline-block animate-fadeUpIn" style={{ clipPath: CHAMFER, background: "#3b4458", padding: 1 }}>
-      <div className="bg-surface2 w-[clamp(280px,22vw,340px)] px-5 py-2.5 flex flex-col gap-2" style={{ clipPath: CHAMFER }}>
-        <Tooltip label={<MidwayBallotLegend />} side="bottom" align="start" hideArrow className="max-w-[320px]">
-          <button
-            type="button"
-            className="group inline-flex items-center gap-1.5 self-start cursor-help bg-transparent border-0 p-0"
-          >
-            <HelpCircle size={15} strokeWidth={2} className="text-white transition-colors" />
-            <span className="font-display text-white" style={{ fontSize: 15, letterSpacing: "0.22em" }}>YOUR BALLOT</span>
-          </button>
-        </Tooltip>
-
-        <div className="flex items-baseline gap-1.5">
-          <span className="font-display leading-none" style={{ fontSize: 24, color: GREEN }}>{aligned}</span>
-          <span className="font-body text-[12px] leading-none" style={{ color: GREEN }}>BEST POSSIBLE PICKS</span>
-        </div>
-
-        <div className="flex gap-1 -ml-[5px]" aria-hidden>
+    <ScorecardShell
+      title="YOUR BALLOT"
+      legend={<MidwayBallotLegend />}
+      compact={compact}
+      stats={<StatInline n={aligned} label="BEST POSSIBLE PICKS" color={GREEN} compact={compact} />}
+      bar={
+        <div className={`flex gap-1 ${barOffset(compact)}`} aria-hidden>
           {segments.map((hit, i) => (
-            <div key={i} className="h-2.5 flex-1 rounded-[1px]" style={{ background: hit ? GREEN : "#3b4458" }} />
+            <div key={i} className={`${barHeight(compact)} flex-1 rounded-[1px]`} style={{ background: hit ? GREEN : FRAME_COLOR }} />
           ))}
         </div>
-      </div>
-    </div>
+      }
+    />
   );
 }
 
@@ -237,7 +383,7 @@ function MidwayBallotLegend() {
   return (
     <div className="text-left leading-snug">
       <span className="font-semibold" style={{ color: GREEN }}>Best possible picks</span>{" "}
-      <span className="text-subtle">— the top card for a given slot based on GIH win rate</span>
+      <span className="text-subtle">- the top card for a given slot based on GIH win rate</span>
     </div>
   );
 }
@@ -246,7 +392,7 @@ function MidwayBallotLegend() {
 
 const MEDAL_EMOJI: Record<1 | 2 | 3, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
-export function FinalBallotScorecard({
+function FinalBallotScorecard({
   ratingsSnapshot,
   pickStats,
   ballots,
@@ -297,22 +443,13 @@ export function FinalBallotScorecard({
   const crowdPct = barPct(result.crowdScore);
 
   return (
-    <div
-      className="inline-block animate-fadeUpIn"
-      style={{ clipPath: CHAMFER, background: medal ? `${accent}8c` : "#3b4458", padding: 1 }}
-    >
-      <div className="bg-surface2 w-[clamp(280px,22vw,340px)] px-5 py-2.5 flex flex-col gap-2" style={{ clipPath: CHAMFER }}>
-        <Tooltip label={<FinalBallotLegend />} side="bottom" align="start" hideArrow className="max-w-[320px]">
-          <button
-            type="button"
-            className="group inline-flex items-center gap-1.5 self-start cursor-help bg-transparent border-0 p-0"
-          >
-            <HelpCircle size={15} strokeWidth={2} className="text-white transition-colors" />
-            <span className="font-display text-white" style={{ fontSize: 15, letterSpacing: "0.22em" }}>YOUR RESULT</span>
-          </button>
-        </Tooltip>
-
-        <div className="flex items-baseline justify-between">
+    <ScorecardShell
+      title="YOUR RESULT"
+      legend={<FinalBallotLegend />}
+      compact={false}
+      frameColor={medal ? `${accent}8c` : undefined}
+      stats={
+        <>
           <span className="flex items-baseline gap-1.5">
             <span className="font-num tabular-nums leading-none" style={{ fontSize: 24, color: accent }}>
               {result.score.toFixed(1)}
@@ -327,17 +464,18 @@ export function FinalBallotScorecard({
               {medal ? `${MEDAL_EMOJI[medal]} ` : ""}#{result.rank} of {result.total}
             </span>
           )}
-        </div>
-
-        <div className="h-2.5 rounded-[1px] relative -ml-[5px]" style={{ background: "#3b4458" }} aria-hidden>
+        </>
+      }
+      bar={
+        <div className="h-2.5 rounded-[1px] relative -ml-[5px]" style={{ background: FRAME_COLOR }} aria-hidden>
           <div
             className="absolute top-0 left-0 h-full rounded-[1px]"
             style={{ width: `${fillPct}%`, background: accent }}
           />
           <div className="absolute top-0 h-full w-px bg-white/50" style={{ left: `${crowdPct}%` }} />
         </div>
-      </div>
-    </div>
+      }
+    />
   );
 }
 
@@ -346,7 +484,7 @@ function FinalBallotLegend() {
     <div className="flex flex-col gap-1.5 text-left leading-snug">
       <div>
         <span className="font-semibold" style={{ color: GREEN }}>Score</span>{" "}
-        <span className="text-subtle">— your ballot's summed <b className="font-semibold text-text">GIH win rate</b></span>
+        <span className="text-subtle">- your ballot's summed <b className="font-semibold text-text">GIH win rate</b></span>
       </div>
       <div className="text-subtle">
         The bar spans the <b className="font-semibold text-text">lowest completed ballot</b> to

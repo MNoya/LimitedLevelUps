@@ -244,7 +244,7 @@ function ScoreDisplay({ score, scoreColor, showHelp }: { score: number; scoreCol
       </span>
       {showHelp && (
         <Tooltip label="Game In Hand Win Rate" side="top">
-          <button type="button" className="inline-flex cursor-help items-center self-center border-0 bg-transparent p-0 text-muted">
+          <button type="button" className="inline-flex items-center self-center border-0 bg-transparent p-0 text-muted">
             <HelpCircle size={16} />
           </button>
         </Tooltip>

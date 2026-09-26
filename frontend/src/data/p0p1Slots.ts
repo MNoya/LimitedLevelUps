@@ -85,6 +85,15 @@ export function resolveContestByCode(code: string, now: number): FeaturedContest
   return describeContest(match, [], now);
 }
 
+export function votingDeadlineForScoringDate(scoringDate: number): number | null {
+  for (const contest of resolveContests()) {
+    if (contest.scoringDate === scoringDate) {
+      return contest.votingDeadline;
+    }
+  }
+  return null;
+}
+
 function describeContest(
   contest: ResolvedContest,
   contests: ResolvedContest[],
@@ -242,6 +251,10 @@ export function buildSlots(config?: ContestConfig): SlotDefinition[] {
 
 // The slot list for a contest addressed by set code, the per-contest replacement for a global
 // SLOTS constant now that layouts differ across contests.
+export function isWideBallot(slotCount: number): boolean {
+  return slotCount > 8;
+}
+
 export function slotsForSet(setCode: string): SlotDefinition[] {
   return buildSlots(P0P1_CONTESTS[setCode.toUpperCase()]);
 }

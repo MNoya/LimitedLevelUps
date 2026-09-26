@@ -6,7 +6,7 @@ import { PickVersusModal, usePickVersusPager } from "./PickVersusCard";
 import { SectionLabel } from "../SectionLabel";
 import { ManaCost } from "../ManaPips";
 import { groupBySlot, findExtremes, buildPickVersus, pickPctLabel } from "../../data/p0p1Stats";
-import { slotsForSet } from "../../data/p0p1Slots";
+import { slotsForSet, isWideBallot } from "../../data/p0p1Slots";
 import type { Card, P0P1PickStat, PickVersus, SlotKey } from "../../types/p0p1";
 
 export function CommunityGrid({
@@ -14,11 +14,13 @@ export function CommunityGrid({
   cardsByName,
   picksBySlot,
   setCode,
+  compact = false,
 }: {
   pickStats: P0P1PickStat[];
   cardsByName: Map<string, Card>;
   picksBySlot?: Map<string, string>;
   setCode?: string;
+  compact?: boolean;
 }) {
   const grouped = groupBySlot(pickStats);
 
@@ -32,6 +34,7 @@ export function CommunityGrid({
       cardsByName={cardsByName}
       picksBySlot={picksBySlot}
       setCode={setCode}
+      compact={compact}
     />
   );
 }
@@ -52,12 +55,14 @@ function PickRow({
   cardsByName,
   picksBySlot,
   setCode,
+  compact,
 }: {
   title: string;
   entries: PickEntry[];
   cardsByName: Map<string, Card>;
   picksBySlot?: Map<string, string>;
   setCode?: string;
+  compact: boolean;
 }) {
   return (
     <div>
@@ -66,7 +71,13 @@ function PickRow({
           {title}
         </SectionLabel>
       </div>
-      <PickGrid entries={entries} cardsByName={cardsByName} picksBySlot={picksBySlot} setCode={setCode} />
+      <PickGrid
+        entries={entries}
+        cardsByName={cardsByName}
+        picksBySlot={picksBySlot}
+        setCode={setCode}
+        compact={compact}
+      />
     </div>
   );
 }
@@ -77,12 +88,14 @@ export function PickGrid({
   picksBySlot,
   onTileOpen,
   setCode,
+  compact = false,
 }: {
   entries: PickEntry[];
   cardsByName: Map<string, Card>;
   picksBySlot?: Map<string, string>;
   onTileOpen?: (slotKey: SlotKey) => void;
   setCode?: string;
+  compact?: boolean;
 }) {
   const versusList: PickVersus[] = [];
   const pagerIndexBySlot = new Map<SlotKey, number>();
@@ -99,7 +112,10 @@ export function PickGrid({
     }
   }
   const pager = usePickVersusPager(versusList);
-  const lgCols = entries.length > 8 ? "lg:grid-cols-6" : "lg:grid-cols-8";
+  let lgCols = isWideBallot(entries.length) ? "lg:grid-cols-6" : "lg:grid-cols-8";
+  if (compact) {
+    lgCols = "lg:grid-cols-12";
+  }
 
   return (
     <div className={`grid grid-cols-4 ${lgCols} gap-2`}>
@@ -119,6 +135,7 @@ export function PickGrid({
             cardsByName={cardsByName}
             onOpenVersus={onOpen}
             setCode={setCode}
+            compact={compact}
           />
         );
       })}
@@ -136,6 +153,7 @@ function PickTile({
   badge,
   pctLabel,
   setCode,
+  compact,
 }: {
   slotKey: SlotKey;
   label: string;
@@ -145,6 +163,7 @@ function PickTile({
   badge?: string;
   pctLabel?: string;
   setCode?: string;
+  compact: boolean;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const hasStats = stats.length > 0;
@@ -201,7 +220,7 @@ function PickTile({
         {hasStats && (
           <div className="px-1.5 py-1.5 min-w-0 flex items-center gap-1.5">
             <span className="text-subtle text-[11px] lg:text-[13px] truncate min-w-0">{stats[0].cardName}</span>
-            {card && <span className="ml-auto shrink-0 hidden lg:flex"><ManaCost cost={card.manaCost} size={12} /></span>}
+            {card && !compact && <span className="ml-auto shrink-0 hidden lg:flex"><ManaCost cost={card.manaCost} size={12} /></span>}
           </div>
         )}
       </div>

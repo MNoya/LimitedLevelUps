@@ -43,53 +43,56 @@ export function P0P1IntroText({
   const cardCount = spellOut(slotsForSet(setCode).length);
   const formattedRange = dateRange ? formatDateRange(dateRange.start, dateRange.end) : null;
 
-  const sentences: ReactNode[] = buildSentences(phase, setName, cardCount, formattedRange);
+  const sentences = buildSentences(phase, setName, cardCount, formattedRange);
 
   return (
     <>
       {sentences.map((sentence, i) => (
         <Fragment key={i}>
           {i > 0 && (multiline ? <br /> : " ")}
-          {sentence}
+          {sentence.body}
+          {sentence.mark ?? (multiline ? "" : ".")}
         </Fragment>
       ))}
     </>
   );
 }
 
+type Sentence = { body: ReactNode; mark?: string };
+
 function buildSentences(
   phase: P0P1Phase,
   setName: ReactNode,
   cardCount: string,
   formattedRange: string | null,
-): ReactNode[] {
+): Sentence[] {
   switch (phase) {
     case "loading":
       return [
-        <span className="inline-block h-3.5 w-64 bg-surface2 animate-pulse align-middle" />,
-        <span className="inline-block h-3.5 w-80 bg-surface2 animate-pulse align-middle" />,
+        { body: <span className="inline-block h-3.5 w-64 bg-surface2 animate-pulse align-middle" />, mark: "" },
+        { body: <span className="inline-block h-3.5 w-80 bg-surface2 animate-pulse align-middle" />, mark: "" },
       ];
     case "comingSoon":
     case "voting":
       return [
-        <>Put together a team of {cardCount} cards from {setName}</>,
-        <>4 weeks after voting, teams are ranked by their total {winRateLink}</>,
+        { body: <>Put together a team of {cardCount} cards from {setName}</> },
+        { body: <>4 weeks after voting, teams are ranked by their total {winRateLink}</> },
       ];
     case "postVoting":
       return [
-        <>Participants have put in their predictions for {setName}</>,
-        <>Check out the most popular picks, then come back once they're ranked by {winRateLink}, four weeks after voting</>,
+        { body: <>Participants have put in their predictions for {setName}</> },
+        { body: <>Check out the most popular picks, then come back once they're ranked by {winRateLink}, four weeks after voting</> },
       ];
     case "midway":
       return [
-        <>{setName} season is underway</>,
-        <>Check out the <strong>preliminary data</strong>{formattedRange && <> from {formattedRange}</>}</>,
-        <>Final results coming soon</>
+        { body: <>{setName} season is underway</> },
+        { body: <>Check out the <strong>preliminary data</strong>{formattedRange && <> from {formattedRange}</>}</> },
+        { body: <>Final results coming soon</> },
       ];
     case "final":
       return [
-        <>After four weeks, {setName} results are in!</>,
-        <>Check out the final standings based on {dataLink}</>,
+        { body: <>After four weeks, {setName} results are in</>, mark: "!" },
+        { body: <>Check out the final standings based on {dataLink}</> },
       ];
   }
 }

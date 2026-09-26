@@ -3,10 +3,10 @@ import { AppHeader } from "../AppHeader";
 import { CtaPill } from "../CtaPill";
 import { DiscordIcon } from "../BrandIcons";
 import { SetGlyph } from "../Brand";
-import { SectionLabel } from "../SectionLabel";
 import { CardSelectionGrid } from "./CardSelectionGrid";
 import { PostVotingStats } from "./PostVotingStats";
-import { PickGrid } from "./CommunityGrid";
+import { YourPicks } from "./YourPicks";
+import { yourBallotScorecard, BallotScorecardSkeleton } from "./P0P1BallotScorecard";
 import { P0P1IntroText } from "./P0P1IntroText";
 import { P0P1ContestDropdown } from "./P0P1ContestDropdown";
 import { SlotPip, SLOT_ACCENT } from "./slotVisuals";
@@ -23,7 +23,7 @@ import { FinalResults } from "./FinalResults";
 import type { useP0P1Ballot } from "../../data/useP0P1Ballot";
 import type { P0P1Phase } from "../../data/p0p1Results";
 import type { ContestChipInfo, FeaturedContest } from "../../data/p0p1Slots";
-import { slotsForSet } from "../../data/p0p1Slots";
+import { slotsForSet, isWideBallot } from "../../data/p0p1Slots";
 import { groupBySlot, findExtremes, classifyYourPick, pickPctLabel } from "../../data/p0p1Stats";
 import { SITE_LINKS } from "../../data/site";
 import { p0p1Now } from "../../data/p0p1DevState";
@@ -60,6 +60,7 @@ export function P0P1MobileSelector({
     hasParticipated,
     pickStats,
     ballotReady,
+    ballotPending,
     handleClearAll,
     clearPending,
     activeSlotKey,
@@ -73,11 +74,12 @@ export function P0P1MobileSelector({
   } = ballot;
 
   const loginBarVisible = !authLoading && !user && phase !== "comingSoon";
-  const mobileChipCols = contestSlots.length > 8 ? "grid-cols-4" : "grid-cols-4 landscape:grid-cols-8";
+  const mobileChipCols = isWideBallot(contestSlots.length) ? "grid-cols-4" : "grid-cols-4 landscape:grid-cols-8";
   const groupedStats = hasParticipated && pickStats ? groupBySlot(pickStats) : undefined;
   const isCompleteEntrant = isPastDeadline && Boolean(user) && isComplete;
   const didNotVote = isPastDeadline && Boolean(user) && !isComplete;
   const showMidway = phase === "midway";
+  const showBallotStrip = phase !== "final";
 
   return (
     <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
@@ -92,6 +94,11 @@ export function P0P1MobileSelector({
           contestHref={contestHref}
           isCurrent={isCurrent}
         />
+        {showBallotStrip && (
+          <div className="mb-3 empty:hidden">
+            {ballotPending ? <BallotScorecardSkeleton compact /> : yourBallotScorecard(ballot, true)}
+          </div>
+        )}
         {phase === "comingSoon" ? (
           <div className="flex-1 flex items-center justify-center py-20">
             <span className="font-display tracking-[0.12em] text-muted text-[32px]">COMING SOON</span>
@@ -171,30 +178,13 @@ export function P0P1MobileSelector({
                     setCode={featured?.code}
                     yourPicks={
                       isCompleteEntrant ? (
-                        <div>
-                          <div className="flex items-baseline justify-center gap-2 mb-1.5">
-                            <SectionLabel size={22} className="text-white">YOUR PICKS</SectionLabel>
-                          </div>
-                          <PickGrid
-                            entries={contestSlots.map((slot) => {
-                              const cardName = picksBySlot.get(slot.key);
-                              const slotStats = groupedStats?.get(slot.key) ?? [];
-                              const yourStat = cardName ? slotStats.find((s) => s.cardName === cardName) : undefined;
-                              const extremes = findExtremes(slotStats);
-                              const cls = yourStat ? classifyYourPick(yourStat, extremes.most, extremes.least) : undefined;
-                              return {
-                                slotKey: slot.key,
-                                label: slot.label,
-                                stats: yourStat ? [yourStat] : [],
-                                slotStats,
-                                badge: cls?.state === "rogue" ? cls.qualifier : undefined,
-                              };
-                            })}
-                            cardsByName={cardsByName}
-                            picksBySlot={picksBySlot}
-                            setCode={featured?.code}
-                          />
-                        </div>
+                        <YourPicks
+                          contestSlots={contestSlots}
+                          pickStats={pickStats}
+                          cardsByName={cardsByName}
+                          picksBySlot={picksBySlot}
+                          setCode={featured?.code}
+                        />
                       ) : null
                     }
                   />

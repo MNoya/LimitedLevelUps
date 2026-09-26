@@ -1,7 +1,9 @@
 import { useSyncExternalStore } from "react";
+import { votingDeadlineForScoringDate } from "./p0p1Slots";
 
 export type P0P1DevPreset =
   | "live"
+  | "voting"
   | "closedLoggedOut"
   | "closedComplete"
   | "closedDidNotVote"
@@ -12,6 +14,7 @@ export type P0P1DevPreset =
 
 export const P0P1_DEV_PRESETS: { value: P0P1DevPreset; group: string; label: string }[] = [
   { value: "live", group: "Live", label: "Live" },
+  { value: "voting", group: "Voting", label: "Open ballot" },
   { value: "closedLoggedOut", group: "Post-voting", label: "Logged out" },
   { value: "closedComplete", group: "Post-voting", label: "Complete entry" },
   { value: "closedDidNotVote", group: "Post-voting", label: "Didn't vote" },
@@ -92,10 +95,15 @@ export function useP0P1DevSelfPlacement(): P0P1DevSelfPlacement {
 
 const DEV_RESULTS_REMAINING_MS = (20 * 24 + 1) * 60 * 60 * 1000;
 const DEV_PAST_SCORING_MS = 60 * 60 * 1000;
+const DEV_VOTING_REMAINING_MS = 24 * 60 * 60 * 1000;
 
 export function p0p1Now(scoringDate?: Date): number {
   if (!p0p1DevEnabled || current === "live") return Date.now();
   const anchor = scoringDate?.getTime() ?? Date.now();
+  if (current === "voting") {
+    const votingDeadline = votingDeadlineForScoringDate(anchor) ?? anchor;
+    return votingDeadline - DEV_VOTING_REMAINING_MS;
+  }
   if (current === "finalScoring" || current === "finalLoggedOut") {
     return anchor + DEV_PAST_SCORING_MS;
   }
