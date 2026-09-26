@@ -87,7 +87,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
     <GradeGuideProvider>
       <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
         <AppHeader subtitle="TIER LIST" />
-        <main className="flex flex-col w-full px-2 md:px-[15px] pb-4 overflow-x-clip">
+        <main className="flex flex-col w-full px-2 md:px-[15px] pb-10 overflow-x-clip">
           <div ref={headerRef} className="sticky top-0 z-20 bg-bg py-2 md:py-3">
             {isMobile ? (
               <>
@@ -243,16 +243,11 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                 </div>
               )}
               {uid && (
-                <div className="flex items-center gap-x-2">
-                  <span className="font-mono text-[10px] md:text-[12px] text-muted">
-                    {graders.length > 0 ? "Live:" : "Set Review List:"}
-                  </span>
-                  <SourceLink uid={uid} label="LLU" />
-                </div>
+                <SourceLink uid={uid} label={graders.length > 0 ? "Live: LLU" : "Set Review List: LLU"} />
               )}
             </div>
             <a
-              href={`https://www.17lands.com/tier_list/${effectiveUid ?? ""}`}
+              href="https://www.17lands.com/tier_lists"
               target="_blank"
               rel="noreferrer"
               className="font-mono text-[10px] md:text-[12px] text-muted hover:text-green transition-colors no-underline whitespace-nowrap"
