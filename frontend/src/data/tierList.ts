@@ -548,6 +548,7 @@ export function useTierList(uid: string | undefined, graders: Grader[] = []) {
 export interface CardStatsLookup {
   statsFor: (name: string) => CardStats | undefined;
   gradesFor: (name: string) => CardGrades | undefined;
+  hasStats: boolean;
   hasGrades: boolean;
   updatedAt: string;
 }
@@ -585,6 +586,7 @@ function buildCardStatsLookup(file: CardStatsFile): CardStatsLookup {
   return {
     statsFor: (name) => stats.get(normalizeName(name)),
     gradesFor: (name) => grades.get(normalizeName(name)),
+    hasStats: stats.size > 0,
     hasGrades,
     updatedAt: file.updatedAt,
   };

@@ -1,13 +1,10 @@
 import { CARD_STATS_SETS } from "../../../frontend/src/data/constants";
-import { type CardStatsFile, fetchCardStatsFile } from "../../../frontend/src/data/cardStats";
 import { serveStaleWhileRefreshing } from "../../_shared/stale-cache";
 
 interface Env {
   ASSETS: Fetcher;
   CARD_STATS?: KVNamespace;
 }
-
-const ONE_HOUR = 60 * 60;
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const setCode = String(context.params.setCode).toUpperCase();
@@ -24,25 +21,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   const shared = context.env.CARD_STATS;
-  const localFreshSeconds = shared ? 15 * 60 : ONE_HOUR;
-  return serveStaleWhileRefreshing(context, `/api/card-stats/${setCode}`, localFreshSeconds, async (previous) => {
-    if (!shared) {
-      const previousFile = previous ? ((await previous.json()) as CardStatsFile) : null;
-      return JSON.stringify(await fetchCardStatsFile(setCode, previousFile));
-    }
-    return sharedCardStats(shared, setCode);
+  const fifteenMinutes = 15 * 60;
+  return serveStaleWhileRefreshing(context, `/api/card-stats/${setCode}`, fifteenMinutes, async () => {
+    const stored = shared ? await shared.get(setCode) : null;
+    return stored ?? JSON.stringify({ set: setCode, updatedAt: new Date().toISOString(), cards: {} });
   });
-};
-
-const sharedCardStats = async (shared: KVNamespace, setCode: string): Promise<string> => {
-  const stored = await shared.getWithMetadata<{ fetchedAt: number }>(setCode);
-  const fetchedAt = stored.metadata?.fetchedAt ?? 0;
-  if (stored.value !== null && Date.now() - fetchedAt < ONE_HOUR * 1000) {
-    return stored.value;
-  }
-
-  const previousFile = stored.value === null ? null : (JSON.parse(stored.value) as CardStatsFile);
-  const body = JSON.stringify(await fetchCardStatsFile(setCode, previousFile));
-  await shared.put(setCode, body, { metadata: { fetchedAt: Date.now() } });
-  return body;
 };

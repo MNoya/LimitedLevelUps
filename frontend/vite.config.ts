@@ -33,14 +33,16 @@ export default defineConfig(({ mode }) => {
   };
 });
 
-// Dev-only stand-in for functions/api/card-stats: a local override in cache/card-stats, then the baked file, then a live build
+// Dev-only stand-in for functions/api/card-stats: a local override in cache/card-stats, then the baked file; ?bake=1 builds live
 function cardStatsDevApi(): Plugin {
   return {
     name: "card-stats-dev-api",
     configureServer(server) {
       server.middlewares.use("/api/card-stats", async (req, res) => {
         res.setHeader("content-type", "application/json");
-        const setCode = (req.url ?? "").replace(/^\//, "").toUpperCase();
+        const url = new URL(req.url ?? "", "http://localhost");
+        const setCode = url.pathname.replace(/^\//, "").toUpperCase();
+        const bake = url.searchParams.has("bake");
         if (!CARD_STATS_SETS.includes(setCode)) {
           res.statusCode = 404;
           res.end("{}");
@@ -51,7 +53,9 @@ function cardStatsDevApi(): Plugin {
           const localOverride = await readFile(path.resolve(__dirname, `../cache/card-stats/${fileName}`), "utf8")
             .catch(() => null);
           const baked = await readFile(path.resolve(__dirname, `public/card-stats/${fileName}`), "utf8").catch(() => null);
-          res.end(localOverride ?? baked ?? JSON.stringify(await fetchCardStatsFile(setCode, null)));
+          const empty = { set: setCode, updatedAt: new Date().toISOString(), cards: {} };
+          const file = bake ? await fetchCardStatsFile(setCode, null) : empty;
+          res.end(localOverride ?? baked ?? JSON.stringify(file));
         } catch {
           res.statusCode = 502;
           res.end("{}");

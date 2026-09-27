@@ -1,3 +1,5 @@
+import cardStatsSets from "../../../card_stats_sets.json";
+
 // The frontend's single source of truth for values the backend owns elsewhere — keep them in sync when they change.
 
 // Active set fallback when the live set isn't yet known from the network
@@ -113,7 +115,9 @@ export const TIER_LIST_GRADERS: Record<
 export const hasTierList = (code: string): boolean =>
   Boolean(TIER_LIST_UIDS[code]) || (TIER_LIST_GRADERS[code]?.length ?? 0) > 0;
 
-export const CARD_STATS_SETS = ["FRA", "HOB", "MSH"];
+export const CARD_STATS_SETS: string[] = cardStatsSets.sets;
+
+export const THREE_COLOR_SETS: string[] = cardStatsSets.threeColorSets;
 
 // Name/date for tier-list sets absent from the live feed; future startDate shows a PREVIEW badge
 export const TIER_LIST_PREVIEW_SETS: Record<

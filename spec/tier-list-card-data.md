@@ -4,28 +4,28 @@
 
 ## Design decisions
 
-- **Recent sets only.** `CARD_STATS_SETS` in `frontend/src/data/constants.ts` lists the sets that get card data. Old sets are not backfilled.
+- **Tier-listed sets.** `card_stats_sets.json` at the repo root lists the sets that get card data, and the three-color sets (`threeColorSets`) that also get the ten three-color decks. The bot and the site both read it.
 - **Premier Draft only.** One cut of the data per set, the one players quote. No Traditional or top-player split.
 - **Source is 17Lands `api/card_data` directly.**
 - **Percentile grading.** Per deck, a normal distribution is fitted to GIH WR over cards with at least 100 games in hand, and a card's percentile maps to A+ through F with fixed cutoffs (A+ 99, A 95, A- 90, B+ 85, B 76, B- 68, C+ 57, C 45, C- 36, D+ 27, D 17, D- 5). Only cards over 500 games in hand get a grade.
 - **Raw stats in the file, grading in the browser.** A baked file stays valid if the grading changes, and the grading lives in one TypeScript module.
-- **Two-color pairs only.** Three-color decks would double the 17Lands calls per refresh; the pips and wedge names already support them if that changes.
+- **Decks.** Every set gets the ten two-color pairs; sets built around three-color decks (TDM, KTK, SNC) also get the ten three-color combinations, in WUBRG order as 17Lands expects.
 - **The data grade is labelled "17L" / "17LANDS".** It never says "Data grade" in the UI.
 
 ## Data
 
-`frontend/src/data/cardStats.ts` owns everything: the file shape (`CardStatsFile`, keyed by card name, one overall block plus a GIH WR and games-in-hand pair per color pair), `fetchCardStatsFile` (one overall call plus ten per-pair calls), `gradeCardStats`, and the 17Lands URL helpers. Cards join to the Tier List by name; 17Lands' `card_id` on its card detail page is the `mtga_id` stored in the file.
+The file shape (`CardStatsFile`, keyed by card name: one overall block plus a GIH WR and games-in-hand pair per deck) is built in two places that must stay in sync: `bot/services/card_stats.py` for the live set and `frontend/src/data/cardStats.ts` for baking, which also owns `gradeCardStats` and the 17Lands URL helpers. Cards join to the Tier List by name; 17Lands' `card_id` on its card detail page is the `mtga_id` stored in the file.
 
-A refresh fetches the overall list first and reuses the previous per-pair data when every card's game count is unchanged, so a quiet hour costs one 17Lands call.
+Every 17Lands call is sequential, 7 seconds apart, matching the bot's leaderboard limiter. Parallel calls got this machine rate-limited for an hour during the first backfill. A refresh fetches the overall list first and reuses the previous per-deck data when every card's game count is unchanged, so a quiet refresh costs one call.
 
 ## Serving
 
 `/api/card-stats/<SET>` (`functions/api/card-stats/[setCode].ts`) is the one URL the site reads.
 
 - **Rotated sets** are baked to `frontend/public/card-stats/<set>.json` and served from the CDN with a one-day browser cache. They never reach 17Lands.
-- **The live set** is built from 17Lands and shared through Cloudflare KV (binding `CARD_STATS`), so one refresh serves every data center: 17Lands sees one to eleven calls per hour in total, and only when someone visits. The KV copy counts as fresh for an hour. Each data center also keeps a local Cache API copy, fresh for 15 minutes, which it refreshes from KV rather than from 17Lands. A stale copy is still served instantly while the refresh runs in the background (`functions/_shared/stale-cache.ts`); only the very first visitor, before any copy exists, waits for the build, about 1 to 2 seconds. The namespace is `llu-card-stats` on the chordocoach Cloudflare account, bound to the `limitedlevelups` Pages project for Production and Preview. Without the binding the Function falls back to refreshing from 17Lands once per data center per hour. KV's free tier covers this with room to spare: about 24 writes a day per live set against 1,000 allowed.
-- **Before release** 17Lands returns no cards, so the live set's file is empty and the Data button shows disabled. The first background refresh after games exist fills it in; nothing needs to be switched on.
-- **Local dev** has a Vite stand-in (`cardStatsDevApi` in `frontend/vite.config.ts`) that reads a gitignored override in `cache/card-stats/<set>.json` first, then the baked file, then builds live.
+- **The live set** is refreshed at the start of each scheduled leaderboard refresh, ahead of the player fetches that take tens of minutes, by the `refresh-cron` Railway service (`bot/scripts/refresh_periodic.py`, cron `0 1,5,9,13,17,21 * * *` UTC), using the same 7-second limiter, and written to Cloudflare KV through the API (`CardStatsKv` in `bot/services/card_stats.py`). The Function never calls 17Lands: it reads KV (binding `CARD_STATS`), keeping a local Cache API copy in each data center that is fresh for 15 minutes and served instantly while it refreshes. The namespace is `llu-card-stats` on the chordocoach Cloudflare account, bound to the `limitedlevelups` Pages project for Production and Preview. The in-bot tick (`AUTO_REFRESH_TIMES`, only when `AUTO_REFRESH_ENABLED`, which is off in production) does the same. Both need `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_KV_NAMESPACE_ID` and `CLOUDFLARE_KV_TOKEN`, set on `refresh-cron`; the token is a KV-only chordocoach account token. Without them the refresh is skipped.
+- **Before release** 17Lands returns no cards, so the live set's file is empty and the Data button shows disabled. The first cron refresh after games exist fills it in; nothing needs to be switched on.
+- **Local dev** has a Vite stand-in (`cardStatsDevApi` in `frontend/vite.config.ts`) that reads a gitignored override in `cache/card-stats/<set>.json` first, then the baked file, and builds live from 17Lands only when called with `?bake=1`.
 
 ## UI
 
@@ -55,5 +55,5 @@ Measured on production before and after, fresh browser contexts:
 
 ## Adding a set
 
-1. Add the code to `CARD_STATS_SETS` when the set's Tier List is added. The live Function serves it from then on.
-2. After the set rotates, bake it: delete any old `frontend/public/card-stats/<set>.json` and any local override in `cache/card-stats/<set>.json` (the dev server serves the override first), fetch `/api/card-stats/<SET>` from the local dev server, save the response there, and commit it.
+1. Add the code to `sets` in `card_stats_sets.json` when the set's Tier List is added, and to `threeColorSets` if its decks are three-color. The bot starts refreshing it once it's the active set.
+2. After the set rotates, bake it: delete any old `frontend/public/card-stats/<set>.json` and any local override in `cache/card-stats/<set>.json` (the dev server serves the override first), fetch `/api/card-stats/<SET>?bake=1` from the local dev server, save the response there, and commit it.

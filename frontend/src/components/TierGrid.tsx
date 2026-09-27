@@ -903,6 +903,7 @@ export function CardModal({
   const stats = cardStats?.statsFor(card.name);
   const grades = cardStats?.gradesFor(card.name);
   const hasData = Boolean(stats && stats.gihGames > 0);
+  const setHasStats = Boolean(cardStats?.hasStats);
 
   useEffect(() => {
     setFlipped(false);
@@ -1116,7 +1117,7 @@ export function CardModal({
             </div>
           )}
         </div>
-        {(flippable || setIndexed || cardStats) && !mobilePanel && (
+        {(flippable || setIndexed || setHasStats) && !mobilePanel && (
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             {flippable && (
               <ModalActionButton onClick={() => setFlipped((prev) => !prev)}>
@@ -1136,7 +1137,7 @@ export function CardModal({
                 </ModalActionButton>
               </>
             )}
-            {cardStats && (
+            {setHasStats && (
               <ModalActionButton {...dataToggle}>
                 <ChartColumn size={15} />
                 Data
@@ -1173,7 +1174,7 @@ export function CardModal({
                     </ModalActionButton>
                   </>
                 )}
-                {cardStats && (
+                {setHasStats && (
                   <ModalActionButton compact grow={setIndexed} {...dataToggle}>
                     <ChartColumn size={15} />
                     Data

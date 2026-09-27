@@ -1,11 +1,10 @@
 import {
   cardDataUrl,
   cardDetailsUrl,
-  COLOR_PAIRS,
   MIN_GAMES_FOR_INFERENCE,
   type CardGrades,
   type CardStats,
-  type ColorPair,
+  type DeckColors,
 } from "../data/cardStats";
 import { tierColor } from "../data/tierList";
 import { cn } from "../lib/utils";
@@ -59,7 +58,7 @@ const DOCKED_GRID = cn(
 
 interface DeckRow {
   key: string;
-  pair: ColorPair | null;
+  pair: DeckColors | null;
   gihWr: number;
   gihGames: number;
   grade: string | undefined;
@@ -67,8 +66,7 @@ interface DeckRow {
 
 function deckRows(stats: CardStats, grades: CardGrades | undefined): DeckRow[] {
   const rows: DeckRow[] = [];
-  for (const pair of COLOR_PAIRS) {
-    const pairStats = stats.pairs[pair];
+  for (const [pair, pairStats] of Object.entries(stats.pairs)) {
     if (pairStats?.gihWr != null && pairStats.gihGames >= MIN_GAMES_FOR_INFERENCE) {
       rows.push({ key: pair, pair, gihWr: pairStats.gihWr, gihGames: pairStats.gihGames, grade: grades?.pairs[pair] });
     }

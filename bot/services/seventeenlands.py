@@ -251,6 +251,7 @@ class SeventeenLandsClient:
         expansion: str,
         event_type: str = "PremierDraft",
         time_period: str = "ALL_TIME",
+        colors: str | None = None,
     ) -> list[dict]:
         """Return card rating records from the public 17lands card ratings endpoint.
 
@@ -259,6 +260,8 @@ class SeventeenLandsClient:
         """
         url = f"{self.base_url}/api/card_data"
         params = {"expansion": expansion, "event_type": event_type, "time_period": time_period}
+        if colors:
+            params["colors"] = colors
         self.limiter.wait()
         resp = self.session.get(url, params=params, timeout=self.timeout_s)
         resp.raise_for_status()

@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_anon_key: str = ""
     tracker_http_port: int | None = None
+    cloudflare_account_id: str = ""
+    cloudflare_kv_namespace_id: str = ""
+    cloudflare_kv_token: SecretStr | None = None
 
     @property
     def tracker_discord_ids_set(self) -> frozenset[str]:

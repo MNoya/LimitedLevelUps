@@ -1,5 +1,6 @@
-export const COLOR_PAIRS = ["WU", "UB", "BR", "RG", "WG", "WB", "UR", "BG", "WR", "UG"] as const;
-export type ColorPair = (typeof COLOR_PAIRS)[number];
+import { THREE_COLOR_SETS } from "./constants";
+
+export type DeckColors = string;
 
 export interface PairStats {
   gihWr: number | null;
@@ -20,7 +21,7 @@ export interface CardStats {
   gihWr: number | null;
   gnsWr: number | null;
   iwd: number | null;
-  pairs: Partial<Record<ColorPair, PairStats>>;
+  pairs: Record<DeckColors, PairStats>;
 }
 
 export interface CardStatsFile {
@@ -53,19 +54,26 @@ export async function fetchCardStatsFile(setCode: string, previous: CardStatsFil
   }
   const updatedAt = new Date().toISOString();
 
+  if (overall.length === 0) {
+    return { set: setCode, updatedAt, cards };
+  }
   if (previous && sameGameCounts(previous, cards)) {
     return { ...previous, updatedAt };
   }
 
-  const pairResponses = await Promise.all(COLOR_PAIRS.map((pair) => fetchCardData(setCode, pair)));
-  COLOR_PAIRS.forEach((pair, i) => {
-    for (const card of pairResponses[i]) {
+  const colorPairs = ["WU", "UB", "BR", "RG", "WG", "WB", "UR", "BG", "WR", "UG"];
+  const colorTrios = ["WUB", "WUR", "WUG", "WBR", "WBG", "WRG", "UBR", "UBG", "URG", "BRG"];
+  const decks = THREE_COLOR_SETS.includes(setCode) ? [...colorPairs, ...colorTrios] : colorPairs;
+  const secondsBetweenCalls = 7;
+  for (const pair of decks) {
+    await pause(secondsBetweenCalls);
+    for (const card of await fetchCardData(setCode, pair)) {
       const stats = cards[card.name];
       if (stats && card.ever_drawn_game_count > 0) {
         stats.pairs[pair] = { gihWr: rounded(card.ever_drawn_win_rate, 4), gihGames: card.ever_drawn_game_count };
       }
     }
-  });
+  }
   return { set: setCode, updatedAt, cards };
 }
 
@@ -73,7 +81,7 @@ export type Grade = string;
 
 export interface CardGrades {
   all: Grade | null;
-  pairs: Partial<Record<ColorPair, Grade>>;
+  pairs: Record<DeckColors, Grade>;
 }
 
 export function gradeCardStats(file: CardStatsFile): Map<string, CardGrades> {
@@ -86,7 +94,13 @@ export function gradeCardStats(file: CardStatsFile): Map<string, CardGrades> {
   for (const [name, grade] of percentileGrades(overallSamples)) {
     grades.get(name)!.all = grade;
   }
-  for (const pair of COLOR_PAIRS) {
+  const deckKeys = new Set<DeckColors>();
+  for (const stats of Object.values(file.cards)) {
+    for (const deck of Object.keys(stats.pairs)) {
+      deckKeys.add(deck);
+    }
+  }
+  for (const pair of deckKeys) {
     const samples = Object.entries(file.cards).map(([name, s]) => ({
       name,
       wr: s.pairs[pair]?.gihWr ?? null,
@@ -116,7 +130,7 @@ interface ApiCard {
   drawn_improvement_win_rate: number | null;
 }
 
-async function fetchCardData(setCode: string, pair: ColorPair | null): Promise<ApiCard[]> {
+async function fetchCardData(setCode: string, pair: DeckColors | null): Promise<ApiCard[]> {
   const params = new URLSearchParams({ expansion: setCode, event_type: "PremierDraft", time_period: "ALL_TIME" });
   if (pair) {
     params.set("colors", pair);
@@ -158,6 +172,8 @@ function sameGameCounts(previous: CardStatsFile, cards: Record<string, CardStats
   }
   return true;
 }
+
+const pause = (seconds: number) => new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 
 function rounded(value: number | null, digits: number): number | null {
   if (value === null) {

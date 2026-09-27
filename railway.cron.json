@@ -12,6 +12,7 @@
       "bot/database.py",
       "bot/commands/messages.py",
       "scoring_buckets.json",
+      "card_stats_sets.json",
       "requirements.txt",
       "railway.cron.json"
     ]

@@ -18,6 +18,7 @@ from bot.commands.messages import MSG_TOKEN_INVALIDATED
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import Player
+from bot.services.card_stats import refresh_live_card_stats_if_configured
 from bot.services.discord_rest import DiscordRest
 from bot.services.refresh import refresh_active_players
 from bot.services.refresh_report import build_refresh_report
@@ -34,6 +35,7 @@ def main() -> None:
         raise SystemExit("DISCORD_BOT_TOKEN must be set for the refresh cron job")
 
     client = SeventeenLandsClient(limiter=MinIntervalLimiter(min_interval_s=REFRESH_17L_INTERVAL_S))
+    refresh_live_card_stats_if_configured(client, settings)
     with SessionLocal() as session:
         log.info("starting periodic refresh (windowed)")
         summary = refresh_active_players(session, client)

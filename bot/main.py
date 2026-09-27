@@ -51,6 +51,7 @@ from bot.commands.signup import setup as setup_signup
 from bot.commands.stats import setup as setup_stats
 from bot.commands.trophy import setup as setup_trophy
 from bot.config import settings
+from bot.services.card_stats import refresh_live_card_stats_if_configured
 from bot.database import SessionLocal, run_migrations
 from bot.discord_helpers import refresh_player_profiles
 from bot import emojis
@@ -454,6 +455,8 @@ def build_bot(guild_id: int) -> commands.Bot:
                 if trigger == "auto" else None
             )
             client = SeventeenLandsClient(limiter=limiter)
+            if trigger == "auto":
+                refresh_live_card_stats_if_configured(client, settings)
             with SessionLocal() as session:
                 # Full-history rebuilds live in bot/scripts/refresh_stats.py — too slow for a live command
                 return refresh_active_players(session, client)
