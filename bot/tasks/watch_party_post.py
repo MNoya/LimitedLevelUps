@@ -7,11 +7,18 @@ import discord
 from discord.ext import commands
 from discord.utils import format_dt
 
-from bot.commands.event_scribe import coverage_emoji, date_range
+from bot.commands.event_scribe import (
+    COVERAGE_SCOPE,
+    build_coverage_payload,
+    coverage_emoji,
+    date_range,
+    schedule_title_marker,
+)
 from bot.commands.messages import MSG_EVENT_LIVE
 from bot.config import settings
 from bot.discord_helpers import message_text
 from bot.services import mtgscribe
+from bot.tasks.format_schedule_post import create_pinned_schedule, pinned_schedule
 from bot.services.watch_party import (
     CHANNEL_TZ,
     HEADLINER_ORDER,
@@ -60,8 +67,10 @@ async def fire_watch_party() -> None:
         log.debug(f"watch-party: channel {settings.watch_party_channel_id} unavailable; skipping tick")
         return
     now = datetime.now(timezone.utc)
-    windows = upcoming_windows(mtgscribe.load_events(arena_only=False), now.astimezone(CHANNEL_TZ).date())
+    events = mtgscribe.load_events(arena_only=False)
+    windows = upcoming_windows(events, now.astimezone(CHANNEL_TZ).date())
     await _sync_channel(channel, windows, now.astimezone(CHANNEL_TZ).date())
+    await _refresh_coverage_pin(channel, events)
     if not windows:
         return
     await _post_window_embed(channel, windows[0], now)
@@ -155,6 +164,23 @@ async def _sync_channel(channel: discord.TextChannel, windows: list[CoverageWind
         log.info(f"watch-party: channel now {name}")
     except discord.HTTPException:
         log.warning(f"watch-party: could not rename the channel to {name}", exc_info=True)
+
+
+async def _refresh_coverage_pin(channel: discord.TextChannel, events: list) -> None:
+    emojis = {emoji.name: emoji for emoji in await _bot.fetch_application_emojis()}
+    payload = build_coverage_payload(events, emojis)
+    message = await pinned_schedule(channel, schedule_title_marker(COVERAGE_SCOPE))
+    if message is None:
+        await create_pinned_schedule(channel, COVERAGE_SCOPE, payload)
+        log.info("watch-party: posted and pinned the Coverage schedule")
+        return
+    current = message.embeds[0].description if message.embeds else None
+    if current == payload["embed"].description:
+        return
+    try:
+        await message.edit(**payload)
+    except discord.HTTPException:
+        log.warning("watch-party: could not edit the Coverage pin", exc_info=True)
 
 
 async def _post_window_embed(channel: discord.TextChannel, window: CoverageWindow, now: datetime) -> None:

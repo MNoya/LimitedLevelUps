@@ -384,7 +384,7 @@ async def _pin_already_archival(channel: discord.TextChannel, scope: str) -> boo
     """Whether the archival write has already happened, read off the pin instead of tracked state: an
     archival board carries no ``<t:`` relative timestamp, a live one always does. Keeps the final write
     to exactly once without a table, and survives a restart."""
-    message = await _pinned_schedule(channel, schedule_title_marker(scope))
+    message = await pinned_schedule(channel, schedule_title_marker(scope))
     if message is None:
         return False
     if RELATIVE_TIMESTAMP in message_text(message):
@@ -423,10 +423,10 @@ async def _refresh_pin(channel: discord.TextChannel, scope: str, in_progress: li
     a matching pin is left alone. ``create_if_missing`` would post and pin the schedule itself instead;
     no pin enables it today, reserved for when the bot should seed a channel's pin."""
     payload = build_schedule_payload(in_progress, upcoming, emojis, scope, archival=archival, url=url)
-    message = await _pinned_schedule(channel, schedule_title_marker(scope))
+    message = await pinned_schedule(channel, schedule_title_marker(scope))
     if message is None:
         if create_if_missing:
-            await _create_pinned_schedule(channel, scope, payload)
+            await create_pinned_schedule(channel, scope, payload)
         return
     try:
         await message.edit(**payload)
@@ -434,8 +434,8 @@ async def _refresh_pin(channel: discord.TextChannel, scope: str, in_progress: li
         log.warning(f"format-schedule: could not edit the '{scope}' pin in #{channel.name}", exc_info=True)
 
 
-async def _create_pinned_schedule(channel: discord.TextChannel, scope: str, payload: dict) -> None:
-    """Post and pin a fresh schedule. ``_pinned_schedule`` only finds pinned posts, so an unpinned one
+async def create_pinned_schedule(channel: discord.TextChannel, scope: str, payload: dict) -> None:
+    """Post and pin a fresh schedule. ``pinned_schedule`` only finds pinned posts, so an unpinned one
     would be re-created every tick — if the pin fails, the post is removed so creation stays atomic."""
     try:
         message = await channel.send(**payload)
@@ -457,7 +457,7 @@ async def _delete_quietly(message: discord.Message) -> None:
         log.warning("format-schedule: could not remove the unpinned schedule post", exc_info=True)
 
 
-async def _pinned_schedule(channel: discord.TextChannel, marker: str) -> discord.Message | None:
+async def pinned_schedule(channel: discord.TextChannel, marker: str) -> discord.Message | None:
     try:
         async for message in channel.pins():
             if _bot.user is not None and message.author.id == _bot.user.id and marker in message_text(message):

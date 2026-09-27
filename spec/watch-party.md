@@ -7,6 +7,7 @@ The watch party channel is where the server talks about pro-level Magic events w
 - The channel's name and topic follow the calendar: the event running now, or the next one.
 - A Discord Scheduled Event for each World Championship, Pro Tour and Arena Championship, so it shows in the server's Events list with an Interested button.
 - A green embed for each weekend of events: "upcoming" when the channel moves to it, and "is live!" when its headliner starts. Both lead with the headliner and list the rest of the weekend.
+- A pinned Coverage schedule, the same card as `/event-scribe format:Coverage`. The bot posts and pins it once, then edits it in place whenever the calendar changes.
 - An announcement post for Pro Tour and World Championship events only, in the shape of the post template mods use today.
 
 Out of scope: per-round coverage and results. Nothing here pings anyone.
