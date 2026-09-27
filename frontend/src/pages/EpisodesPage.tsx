@@ -105,6 +105,7 @@ import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { TOGGLE_ACTIVE, TOGGLE_INACTIVE } from "../lib/toggle-styles";
 import { isPlainClick } from "../lib/plain-click";
+import { useStickyScrollPadding } from "../lib/use-sticky-scroll-padding";
 
 const SORT_OPTIONS: { value: SortKey; label: string; icon: LucideIcon }[] = [
   { value: "newest", label: "Newest", icon: CalendarArrowDown },
@@ -2233,16 +2234,6 @@ const chapterSlug = (heading: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-
-function useStickyScrollPadding(headerHeight: number): void {
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.scrollPaddingTop = headerHeight ? `${headerHeight + 12}px` : "";
-    return () => {
-      root.style.scrollPaddingTop = "";
-    };
-  }, [headerHeight]);
-}
 
 const PATREON_URL = "https://www.patreon.com/limitedlevelups";
 const PATREON_PHRASE = /patreon(?:\.com|\s+dot\s+com)?\s*(?:\/|\s+slash\s+)\s*limited[-\s]*level[-\s]*ups/gi;

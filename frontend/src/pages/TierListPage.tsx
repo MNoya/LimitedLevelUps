@@ -15,6 +15,7 @@ import { useSets } from "../data/hooks";
 import { relativeTime } from "../data/utils";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
+import { useStickyScrollPadding } from "../lib/use-sticky-scroll-padding";
 import { OPENED_IN_APP, useCloseModal } from "../lib/modal-history";
 import { ACTIVE_SET_CODE, TIER_LIST_PREVIEW_SETS } from "../data/constants";
 import {
@@ -82,6 +83,9 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
     setHeaderHeight(header.offsetHeight);
     return () => ro.disconnect();
   }, []);
+
+  const columnHeaderHeight = 40;
+  useStickyScrollPadding(headerHeight + columnHeaderHeight);
 
   return (
     <GradeGuideProvider>
