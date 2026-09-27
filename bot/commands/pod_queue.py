@@ -254,11 +254,8 @@ def role_mention_for(guild: discord.Guild | None, role_name: str | None) -> str 
     return role.mention if role else None
 
 
-def derived_notify_role(scheduled_time: datetime | None, notify: bool) -> str | None:
-    """Who a launched pod pings, derived from its time rather than a free choice so a slot always
-    reaches the people who subscribed to it: nobody when the bell is off, the slot's role when the
-    scheduled time lands on a named slot, otherwise the general Pod Draft Queue role."""
-    if not notify:
+def creation_ping_role(scheduled_time: datetime | None, ping_on_creation: bool) -> str | None:
+    if not ping_on_creation:
         return None
     if scheduled_time is None:
         return POD_QUEUE_ROLE_NAME
@@ -428,32 +425,22 @@ async def _apply_queue_presets(event_id: str, presets) -> None:
 
 
 class DraftLauncherView(discord.ui.View):
-    """Ephemeral pre-draft config for /draft: set, when, and pairings as dropdowns plus a notify bell,
-    pick-timer, and description buttons, all on one panel, then Start Draft. Rebuilds itself on each
-    choice so every control shows the current selection, like the lobby Settings panel. The chosen set
-    rides into the pod name and Draftmancer session when the queue fires; the default is the active
-    set. Notify is a plain on/off bell; the ping role follows the pod's time via derived_notify_role,
-    so a slot always reaches the people who subscribed to it.
-
-    The bell starts off. /draft is open to every player, so a default-on ping lets someone who does not
-    know the slot roles wake a few hundred people at a bad hour on their first try. Turning it on is one
-    click for whoever means it, and a quiet pod still reaches the channel through the one-short nudge and
-    the underfill reminder once it needs players."""
+    """Ephemeral /draft panel that rebuilds on each choice so every control shows the current selection"""
 
     def __init__(self, *, set_code: str | None = None, pairing_mode: str | None = None,
                  pick_timer: int | None = None, scheduled_time: datetime | None = None,
-                 notify: bool = False, description: str | None = None) -> None:
+                 ping_on_creation: bool = False, description: str | None = None) -> None:
         super().__init__(timeout=300)
         self.set_code = set_code
         self.pairing_mode = pairing_mode
         self.pick_timer = pick_timer
         self.scheduled_time = scheduled_time
-        self.notify = notify
+        self.ping_on_creation = ping_on_creation
         self.description = description
         self.add_item(_LauncherSetSelect(set_code, row=0))
         self.add_item(_LauncherWhenSelect(scheduled_time, row=1))
         self.add_item(_LauncherPairingSelect(pairing_mode, row=2))
-        self.add_item(_LauncherNotifyButton(notify, row=4))
+        self.add_item(_LauncherCreationPingButton(ping_on_creation, row=4))
         self.add_item(_LauncherTimerButton(pick_timer, row=4))
         self.add_item(_LauncherDescriptionButton(description, row=4))
         self.add_item(_LauncherStartButton(scheduled=scheduled_time is not None, row=4))
@@ -467,7 +454,7 @@ class DraftLauncherView(discord.ui.View):
         await interaction.response.edit_message(view=DraftLauncherView(
             set_code=self.set_code, pairing_mode=self.pairing_mode,
             pick_timer=self.pick_timer, scheduled_time=self.scheduled_time,
-            notify=self.notify, description=self.description,
+            ping_on_creation=self.ping_on_creation, description=self.description,
         ))
 
 
@@ -630,14 +617,14 @@ class _LauncherPairingSelect(discord.ui.Select):
         await self.view.rerender(interaction)
 
 
-class _LauncherNotifyButton(discord.ui.Button):
-    def __init__(self, notify: bool, row: int | None = None) -> None:
-        label = "Notify: On" if notify else "Notify: Off"
-        emoji = "🔔" if notify else "🔕"
+class _LauncherCreationPingButton(discord.ui.Button):
+    def __init__(self, ping_on_creation: bool, row: int | None = None) -> None:
+        label = "Notify: On" if ping_on_creation else "Notify: Off"
+        emoji = "🔔" if ping_on_creation else "🔕"
         super().__init__(label=label, emoji=emoji, style=discord.ButtonStyle.grey, row=row)
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        self.view.notify = not self.view.notify
+        self.view.ping_on_creation = not self.view.ping_on_creation
         await self.view.rerender(interaction)
 
 
@@ -704,22 +691,22 @@ class _LauncherStartButton(discord.ui.Button):
         if scheduled:
             await _schedule_pod(
                 interaction, view.set_code, view.pairing_mode, view.pick_timer,
-                view.scheduled_time, view.notify, view.description,
+                view.scheduled_time, view.ping_on_creation, view.description,
             )
             return
         await _open_queue(
             interaction, view.set_code, view.pairing_mode, view.pick_timer,
-            view.notify, view.description,
+            view.ping_on_creation, view.description,
         )
 
 
 async def _open_queue(
     interaction: discord.Interaction, set_code: str | None, pairing_mode: str | None,
-    pick_timer: int | None, notify: bool, description: str | None,
+    pick_timer: int | None, ping_on_creation: bool, description: str | None,
 ) -> None:
     """Post the public queue card from the launcher and wire its signal, carrying the chosen set and
     presets. Dismisses the ephemeral launcher and runs the opener's own join through the normal path."""
-    role = derived_notify_role(None, notify)
+    role = creation_ping_role(None, ping_on_creation)
     mention = role_mention_for(interaction.guild, role)
     message = await interaction.channel.send(
         view=PodQueueView(
@@ -833,16 +820,14 @@ async def _remove_from_discussion_thread(
 
 async def _schedule_pod(
     interaction: discord.Interaction, set_code: str | None, pairing_mode: str | None,
-    pick_timer: int | None, when: datetime, notify: bool, description: str | None,
+    pick_timer: int | None, when: datetime, ping_on_creation: bool, description: str | None,
 ) -> None:
-    """Post a scheduled RSVP card in the coordination channel for a future pod, carrying the launcher's
-    set and presets, with the opener seeded as the first Yes. The bell picks the slot's ping role off
-    the pod's time; Notify off silences the card."""
+    """Post a scheduled RSVP card for a future pod with the launcher's presets and the opener as the first Yes"""
     channel = interaction.client.get_channel(settings.pod_draft_channel_id)
     if not isinstance(channel, discord.TextChannel):
         await interaction.edit_original_response(content=LAUNCHER_SCHEDULE_NO_CHANNEL, view=None)
         return
-    role = derived_notify_role(when, notify)
+    role = creation_ping_role(when, ping_on_creation)
     raw_set = set_code or active_set_code()
     resolved_set = raw_set if is_write_in_cube(raw_set) else raw_set.upper()
     name = await asyncio.to_thread(pod_launch.ondemand_event_name_sync, resolved_set, when)
