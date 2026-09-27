@@ -17,6 +17,7 @@ import discord
 from discord.ext import commands
 from sqlalchemy import func, select
 
+from bot.commands.craft import pin_craft_link
 from bot.commands.event_scribe import (
     build_announcement,
     build_competitive_reminder,
@@ -128,14 +129,16 @@ def _guild() -> discord.Guild | None:
 
 
 async def fire_rotation() -> None:
-    """The outgoing set's send-off standings, on their own cron at the noon-ET release instant. Archiving
-    is a separate job ``ARCHIVE_DELAY`` later, so the final boards sit in the channel players are already
-    reading for an hour before it moves out of MTG Strategy."""
+    """The outgoing set's send-off standings and, on release day, the incoming set's pinned craft link, on their
+    own cron at the noon-ET release instant. Archiving is a separate job ``ARCHIVE_DELAY`` later, so the final
+    boards sit in the channel players are already reading for an hour before it moves out of MTG Strategy."""
     guild = _guild()
     if guild is None:
         return
     for channel in archive_candidates(guild.text_channels):
         await _post_send_off(channel)
+    if datetime.now(RELEASE_TZ).date() == active_set_seed().start_date:
+        await pin_craft_link(guild)
 
 
 async def fire_archive() -> None:

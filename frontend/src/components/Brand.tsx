@@ -204,6 +204,18 @@ export function setGlyphCode(set: { code: string; custom?: boolean; glyphCode?: 
   return set.code;
 }
 
+export type Rarity = "common" | "uncommon" | "rare" | "mythic";
+
+export function RaritySetGlyph({ code, rarity, size }: { code: string; rarity: Rarity; size: number }) {
+  const isCommon = rarity === "common";
+  return (
+    <i
+      className={cn("ss", `ss-${keyruneClass(code)}`, !isCommon && `ss-${rarity} ss-grad`)}
+      style={{ fontSize: size, color: isCommon ? "#fff" : undefined }}
+    />
+  );
+}
+
 export function SetGlyph({ code, size = 18, className = "text-white" }: { code: string; size?: number | string; className?: string }) {
   const glyph = glyphSpec(code);
   const fontSize = typeof size === "number" ? size * glyph.scale : `calc(${size} * ${glyph.scale})`;

@@ -163,6 +163,12 @@ const resolvePageTitle = (
   if (section === "community") {
     return "Community";
   }
+  if (section === "tools") {
+    if (!rest[0]) {
+      return "Tools";
+    }
+    return rest[1] ? `${rest[1].toUpperCase()} Bulk Crafting` : "Bulk Crafting";
+  }
   if (section === "about") {
     return "About";
   }

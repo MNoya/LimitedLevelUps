@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { cn } from "../lib/utils";
-import { keyruneClass } from "./Brand";
+import { keyruneClass, RaritySetGlyph, type Rarity } from "./Brand";
 import { columnPipClass } from "./TierGrid";
 import { Tooltip } from "./Tooltip";
 import {
@@ -12,7 +12,7 @@ import {
   type TierFilters,
 } from "../data/tierList";
 
-const RARITY_KEYRUNE: Record<string, string> = { C: "common", U: "uncommon", R: "rare", M: "mythic" };
+const RARITY_KEYRUNE: Record<string, Rarity> = { C: "common", U: "uncommon", R: "rare", M: "mythic" };
 
 export function TierFilterBar({
   filters,
@@ -98,7 +98,6 @@ export function TierFilterBar({
   const rarityGroup = (
     <FilterGroup label="RARITY" stacked={stacked} joined>
       {options.rarities.map((r) => {
-        const isCommon = r.value === "C";
         return (
           <IconToggle
             key={r.value}
@@ -107,14 +106,7 @@ export function TierFilterBar({
             label={`${r.name} (${r.count})`}
             roomy
           >
-            <i
-              className={cn(
-                "ss",
-                `ss-${keyruneClass(setCode)}`,
-                isCommon ? "" : `ss-${RARITY_KEYRUNE[r.value]} ss-grad`,
-              )}
-              style={{ fontSize: 22, color: isCommon ? "#fff" : undefined }}
-            />
+            <RaritySetGlyph code={setCode} rarity={RARITY_KEYRUNE[r.value]} size={22} />
           </IconToggle>
         );
       })}

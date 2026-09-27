@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, Copy, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from "lucide-react";
 import { ArrowRight, GiRoundTable, ImageIcon, LuScrollText, SiDiscord, TbCards } from "../Icons";
 import { ChamferedButton } from "../ChamferedButton";
+import { CopyTextButton } from "../CopyTextButton";
 import { Pips } from "../ManaPips";
 import { Record } from "../Record";
 import { cn } from "../../lib/utils";
@@ -365,41 +366,13 @@ export function DeckScreenshotModal({
 }
 
 function CopyDeckButton({ mainboard, className }: { mainboard: Mainboard; className?: string }) {
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) {
-      return;
-    }
-    const timer = window.setTimeout(() => setCopied(false), 2000);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
-
-  const copy = async (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(arenaDeckText(mainboard));
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  };
-
   return (
-    <button
-      type="button"
-      onClick={copy}
-      aria-label="Copy deck to clipboard"
-      className={cn(
-        "shrink-0 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface2 px-3 py-1.5 font-display tracking-[0.14em] leading-none text-subtle hover:text-text hover:border-green/50 transition-colors cursor-pointer outline-none focus:outline-none focus-visible:outline-none",
-        className,
-      )}
-      style={{ fontSize: 13 }}
-    >
-      {copied ? <Check size={14} /> : <Copy size={14} />}
-      {copied ? "COPIED" : "COPY DECK"}
-    </button>
+    <CopyTextButton
+      text={() => arenaDeckText(mainboard)}
+      label="COPY DECK"
+      ariaLabel="Copy deck to clipboard"
+      className={className}
+    />
   );
 }
 

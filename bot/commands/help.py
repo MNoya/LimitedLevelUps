@@ -85,6 +85,7 @@ PREFIX_HELP_COMMANDS: list[tuple[str, str]] = [
     ("!peasant", "Peasant Cube on CubeCobra"),
     ("!sampcube", "samp's Cube on CubeCobra"),
     ("!mema", "Middle-Earth Masters on CubeCobra"),
+    ("!craft", "Decklists for Bulk Crafting the current set"),
     ("!nephew", "What is a Nephew?"),
 ]
 

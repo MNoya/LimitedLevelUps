@@ -4,12 +4,13 @@ import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { CARD_STATS_SETS } from "./src/data/constants";
 import { fetchCardStatsFile } from "./src/data/cardStats";
+import { fetchCraftLists, isCraftSetCode } from "./src/data/craftListBuilder";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
     base: "/",
-    plugins: [react(), youtubeDevApi(env.YOUTUBE_API_KEY), cardImagesDevApi(), cardStatsDevApi()],
+    plugins: [react(), youtubeDevApi(env.YOUTUBE_API_KEY), cardImagesDevApi(), cardStatsDevApi(), craftListsDevApi()],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
@@ -59,6 +60,32 @@ function cardStatsDevApi(): Plugin {
         } catch {
           res.statusCode = 502;
           res.end("{}");
+        }
+      });
+    },
+  };
+}
+
+function craftListsDevApi(): Plugin {
+  const cached = new Map<string, string>();
+  return {
+    name: "craft-lists-dev-api",
+    configureServer(server) {
+      server.middlewares.use("/api/craft-lists", async (req, res) => {
+        res.setHeader("content-type", "application/json");
+        const setCode = new URL(req.url ?? "", "http://localhost").pathname.replace(/^\//, "").toUpperCase();
+        if (!isCraftSetCode(setCode)) {
+          res.statusCode = 400;
+          res.end("[]");
+          return;
+        }
+        try {
+          const body = cached.get(setCode) ?? JSON.stringify(await fetchCraftLists(setCode));
+          cached.set(setCode, body);
+          res.end(body);
+        } catch {
+          res.statusCode = 502;
+          res.end("[]");
         }
       });
     },

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronDown, LogOut, User } from "lucide-react";
-import { GiCardPick, GiRoundTable, House, MdVideoLibrary, Rocket, TbListNumbers, Trophy } from "./Icons";
+import { GiCardPick, GiRoundTable, Hammer, House, MdVideoLibrary, Rocket, TbListNumbers, Trophy } from "./Icons";
 import { DiscordIcon } from "./BrandIcons";
 import { ALogo, AWordmark, SetGlyph } from "./Brand";
 import { cn } from "../lib/utils";
@@ -25,6 +25,7 @@ const NAV: Array<{ label: string; icon: NavIcon; iconSize?: number; badge?: (pro
   { label: "LEADERBOARD", icon: Trophy, to: "/leaderboard", match: (p) => p === "/leaderboard" || p.startsWith("/leaderboard/") || p.startsWith("/player/") },
   { label: "POD DRAFTS", icon: GiRoundTable, iconSize: 23, to: "/pods", match: (p) => p.startsWith("/pods") },
   { label: "COMMUNITY", icon: Rocket, to: "/community", match: (p) => p.startsWith("/community") },
+  { label: "TOOLS", icon: Hammer, to: "/tools", match: (p) => p.startsWith("/tools") },
 ];
 
 const HOME_ITEM: (typeof NAV)[number] = { label: "HOME", icon: House, to: "/", match: (p) => p === "/" };

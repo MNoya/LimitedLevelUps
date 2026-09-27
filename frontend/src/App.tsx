@@ -17,6 +17,8 @@ import { TierListPage } from "./pages/TierListPage";
 import { PodCardDataPage } from "./pages/PodCardDataPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { P0P1Page } from "./pages/P0P1Page";
+import { CraftToolPage } from "./pages/CraftToolPage";
+import { ToolsPage } from "./pages/ToolsPage";
 import { BannerLab } from "./pages/BannerLab";
 import { preloadGuildLogos } from "./data/guild-art";
 
@@ -78,6 +80,10 @@ export function App() {
 
       <Route path="/p0p1" element={<P0P1Page />} />
       <Route path="/p0p1/:setCode" element={<P0P1Page />} />
+
+      <Route path="/tools" element={<ToolsPage />} />
+      <Route path="/tools/craft" element={<CraftToolPage />} />
+      <Route path="/tools/craft/:setCode" element={<CraftToolPage />} />
 
       <Route path="/banner" element={<BannerLab />} />
 

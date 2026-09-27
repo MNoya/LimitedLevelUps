@@ -203,7 +203,7 @@ export function EventCard({ event, className }: { event: CommunityLink; classNam
 
 type GlyphIcon = LucideIcon | IconType;
 
-function PanelShell({
+export function PanelShell({
   watermark: Watermark,
   watermarkClassName,
   href,

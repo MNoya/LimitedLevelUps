@@ -24,6 +24,7 @@ import { type PodCardStatRow, aggregatePodCards, cardDataLabel, hasCardData } fr
 import { cardSlug } from "../frontend/src/lib/cardSlug";
 import { isMtgoFlashbackCode, mtgoSetName } from "../frontend/src/data/mtgoSets";
 import {
+  P0P1_CONTESTS,
   type FeaturedContest,
   resolveContestByCode,
   resolveFeaturedContest,
@@ -82,6 +83,7 @@ type ImageIntent =
   | { kind: "url"; url: string }
   | { kind: "setSymbol"; code: string }
   | { kind: "avatarProxy"; slug: string }
+  | { kind: "asset"; path: string }
   | null;
 
 type RouteMeta = {
@@ -335,6 +337,9 @@ const resolveRoute = async (segments: string[], wantsCardMeta: boolean): Promise
   if (section === "episodes") {
     return resolved(await episodesMeta(rest), `/${segments.join("/").toLowerCase()}`);
   }
+  if (section === "tools") {
+    return toolsRoute(rest);
+  }
   if (section === "community") {
     return resolved(page("Community", "Learn about us, the show and the community behind it"), "/community");
   }
@@ -390,6 +395,9 @@ const matchesAppRoute = (segments: string[]): boolean => {
     "/tier-list/:setCode/:card",
     "/p0p1",
     "/p0p1/:setCode",
+    "/tools",
+    "/tools/craft",
+    "/tools/craft/:setCode",
     "/banner",
   ];
   for (const route of appRoutes) {
@@ -681,6 +689,7 @@ const resolveImageUrl = async (image: ImageIntent, origin: string, assets: Fetch
   if (image === null) return null;
   if (image.kind === "url") return image.url;
   if (image.kind === "avatarProxy") return `${origin}/api/avatar/${encodeURIComponent(image.slug)}.png`;
+  if (image.kind === "asset") return `${origin}${image.path}`;
   const candidate = `${origin}/set-symbols/${image.code.toLowerCase()}.png`;
   try {
     const resp = await assets.fetch(candidate);
@@ -725,6 +734,25 @@ const leaderboardBoardExists = async (setCode: string, sets: SetRow[] | null): P
     `public_cube_seasons?set_code=eq.${queryValue(setCode)}&select=set_code&limit=1`,
   );
   return rows === null ? null : rows.length > 0;
+};
+
+const toolsRoute = async (rest: string[]): Promise<RouteResolution> => {
+  if (rest.length === 0) {
+    return resolved(page("Tools", "Community tools for MTG limited players"), "/tools");
+  }
+  const craftDescription = "Importable Decklists for Bulk Crafting";
+  const craftImage: ImageIntent = { kind: "asset", path: "/wildcards/mythic-card.png" };
+  const rawCode = rest[1];
+  if (rawCode === undefined) {
+    return resolved(page("Bulk Crafting", craftDescription, craftImage), "/tools/craft");
+  }
+  const setCode = rawCode.toUpperCase();
+  const setName = P0P1_CONTESTS[setCode]?.name ?? setNameFor(await fetchSets(), setCode);
+  const meta: RouteMeta = {
+    ...page(setName, craftDescription, craftImage),
+    tabTitle: `${setCode} Bulk Crafting${TITLE_SEPARATOR}${SITE}`,
+  };
+  return resolved(meta, `/tools/craft/${setCode}`);
 };
 
 const setNameFor = (sets: SetRow[] | null, code: string): string =>

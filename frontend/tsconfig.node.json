@@ -10,5 +10,5 @@
     "allowSyntheticDefaultImports": true,
     "strict": true
   },
-  "include": ["vite.config.ts", "src/data/constants.ts", "src/data/cardStats.ts"]
+  "include": ["vite.config.ts", "src/data/constants.ts", "src/data/cardStats.ts", "src/data/craftListBuilder.ts"]
 }

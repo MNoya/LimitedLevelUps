@@ -19,6 +19,7 @@ from discord.ext import commands, tasks
 from sqlalchemy import func, select
 
 from bot.commands.advertise import setup as setup_advertise
+from bot.commands.craft import setup as setup_craft
 from bot.commands.delete_account import setup as setup_delete_account
 from bot.commands.event_scribe import setup as setup_event_scribe
 from bot.commands.guide import setup as setup_guide
@@ -63,6 +64,7 @@ from bot.commands.testawards import setup as setup_testawards
 from bot.commands.testchampcard import setup as setup_testchampcard
 from bot.commands.testchampionship import setup as setup_testchampionship
 from bot.commands.testcomponent import setup as setup_testcomponent
+from bot.commands.testcraft import setup as setup_testcraft
 from bot.commands.testlobby import setup as setup_testlobby
 from bot.commands.testmockcard import setup as setup_testmockcard
 from bot.commands.testsandbox import SandboxButton, setup as setup_testsandbox
@@ -273,6 +275,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_p0p1_poll(bot)
         await setup_help(bot)
         await setup_event_scribe(bot)
+        await setup_craft(bot)
         await setup_link_17lands(bot)
         await setup_leaderboard_visibility(bot)
         await setup_pod_draft(bot)
@@ -310,6 +313,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testthreadintro(bot)
         await setup_testpolls(bot)
         await setup_testscribe(bot)
+        await setup_testcraft(bot)
         await setup_testformatschedule(bot)
         await setup_testchampionship(bot)
         await setup_testchampcard(bot)

@@ -11,6 +11,7 @@ import {
   Clock as LR_Clock,
   ExternalLink as LR_ExternalLink,
   Globe as LR_Globe,
+  Hammer as LR_Hammer,
   Headphones as LR_Headphones,
   House as LR_House,
   Image as LR_Image,
@@ -72,6 +73,7 @@ export const Maximize2 = withShrink(LR_Maximize2);
 export const Minimize2 = withShrink(LR_Minimize2);
 export const ExternalLink = withShrink(LR_ExternalLink);
 export const Globe = withShrink(LR_Globe);
+export const Hammer = withShrink(LR_Hammer);
 export const Headphones = withShrink(LR_Headphones);
 export const House = withShrink(LR_House);
 export const ImageIcon = withShrink(LR_Image);
