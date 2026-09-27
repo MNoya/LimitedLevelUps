@@ -2154,11 +2154,12 @@ function MoreEpisodeRow({ episode }: { episode: Episode }) {
   );
 }
 
-type ParaLine = { t: number; text: string; speaker?: string; showName?: boolean; lane?: number };
+type ParaLine = { t: number; text: string; segment: number; speaker?: string; showName?: boolean; lane?: number };
+type TextPiece = { text: string; segment: number };
 type TranscriptItem =
-  | { kind: "chapter"; t: number; heading: string }
-  | { kind: "section"; t: number; title: string; paras: ParaLine[] }
-  | { kind: "para"; t: number; text: string; speaker?: string; showName?: boolean; lane?: number };
+  | { kind: "chapter"; t: number; heading: string; segment: number }
+  | { kind: "section"; t: number; title: string; segment: number; paras: ParaLine[] }
+  | (ParaLine & { kind: "para"; pieces: TextPiece[] });
 
 const HOST_PRIORITY = ["Alex", "Marc", "Abram"];
 
@@ -2249,6 +2250,10 @@ type TranscriptFeatures = {
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
+type EditTarget = { segment: number; field: EditField; top: number; dx: number; dy: number };
+
+type EditField = "text" | "heading" | "subheading";
+
 interface TranscriptEdit {
   canEdit: boolean;
   editing: boolean;
@@ -2261,7 +2266,7 @@ interface TranscriptEdit {
   discard: () => void;
   save: () => void;
   dismiss: () => void;
-  editBlock: (index: number, field: "text" | "heading" | "subheading", value: string) => void;
+  editBlock: (index: number, field: EditField, value: string) => void;
   dropSubheading: (index: number) => void;
 }
 
@@ -2286,7 +2291,7 @@ function useTranscriptEdit(episodeKey: string | undefined, segments: TranscriptS
     setStatus("idle");
     setMessage(null);
   };
-  const editBlock = (index: number, field: "text" | "heading" | "subheading", value: string) => {
+  const editBlock = (index: number, field: EditField, value: string) => {
     setWorking((prev) => {
       const next = prev.slice();
       const segment = { ...next[index] };
@@ -2516,30 +2521,33 @@ function EpisodeTranscript({
   const items = useMemo<TranscriptItem[]>(() => {
     const out: TranscriptItem[] = [];
     let section: Extract<TranscriptItem, { kind: "section" }> | null = null;
-    for (const segment of segments) {
+    segments.forEach((segment, index) => {
       const text = stripSpeakerTurns(segment.text);
       if (!text.trim()) {
-        continue;
+        return;
       }
       const speaker = segment.speaker;
+      const line = { t: segment.t, text, segment: index, speaker };
+      const para = () => ({ ...line, kind: "para" as const, pieces: [{ text, segment: index }] });
       if (segment.heading) {
         section = null;
-        out.push({ kind: "chapter", t: segment.t, heading: segment.heading });
-        out.push({ kind: "para", t: segment.t, text, speaker });
+        out.push({ kind: "chapter", t: segment.t, heading: segment.heading, segment: index });
+        out.push(para());
       } else if (segment.subheading) {
-        section = { kind: "section", t: segment.t, title: segment.subheading, paras: [{ t: segment.t, text, speaker }] };
+        section = { kind: "section", t: segment.t, title: segment.subheading, segment: index, paras: [line] };
         out.push(section);
       } else if (section) {
-        section.paras.push({ t: segment.t, text, speaker });
+        section.paras.push(line);
       } else {
         const prev = out[out.length - 1];
         if (speaker && prev && prev.kind === "para" && prev.speaker === speaker) {
           prev.text = `${prev.text}\n\n${text}`;
+          prev.pieces.push({ text, segment: index });
         } else {
-          out.push({ kind: "para", t: segment.t, text, speaker });
+          out.push(para());
         }
       }
-    }
+    });
     annotateSpeakers(out);
     return out;
   }, [segments]);
@@ -2603,6 +2611,49 @@ function EpisodeTranscript({
     }
     return best;
   }, [items, currentTime]);
+
+  const activeEditIndex = useMemo(() => {
+    if (!edit?.editing || !highlight || !(currentTime > 0)) {
+      return -1;
+    }
+    let best = -1;
+    let bestT = -1;
+    edit.working.forEach((segment, index) => {
+      if (segment.t <= currentTime + 0.5 && segment.t > bestT) {
+        best = index;
+        bestT = segment.t;
+      }
+    });
+    return best;
+  }, [edit?.editing, edit?.working, highlight, currentTime]);
+
+  const editRef = useRef<HTMLDivElement>(null);
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const editOnDoubleClick = (segment: number, field: EditField) => {
+    if (!edit?.canEdit) {
+      return undefined;
+    }
+    return (e: ReactMouseEvent<HTMLElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setEditTarget({ segment, field, top: rect.top, dx: e.clientX - rect.left, dy: e.clientY - rect.top });
+      edit.enterEdit();
+    };
+  };
+  useLayoutEffect(() => {
+    if (!edit?.editing || !editTarget) {
+      return;
+    }
+    setEditTarget(null);
+    const selector = `[data-idx="${editTarget.segment}"][data-field="${editTarget.field}"]`;
+    const field = editRef.current?.querySelector<HTMLElement>(selector);
+    if (!field) {
+      return;
+    }
+    window.scrollBy({ top: field.getBoundingClientRect().top - editTarget.top, behavior: "instant" });
+    field.focus();
+    const rect = field.getBoundingClientRect();
+    placeCaretNear(field, rect.left + editTarget.dx, rect.top + editTarget.dy);
+  }, [edit?.editing, editTarget]);
 
   useEffect(() => {
     if (!autoScroll || !highlight) {
@@ -2774,12 +2825,13 @@ function EpisodeTranscript({
         </button>
       ) : null}
       {edit?.editing ? (
-        <div className="w-full" style={{ ["--tsize" as string]: `${textPx}px` }}>
+        <div ref={editRef} className="w-full" style={{ ["--tsize" as string]: `${textPx}px` }}>
           {edit.working.map((segment, index) => (
             <EditableSegment
               key={index}
               index={index}
               segment={segment}
+              active={index === activeEditIndex}
               onEdit={edit.editBlock}
               onDropSubheading={edit.dropSubheading}
             />
@@ -2825,7 +2877,10 @@ function EpisodeTranscript({
                     strokeWidth={2.5}
                     className={cn("shrink-0 text-green transition-transform", isChapterCollapsed ? "" : "rotate-90")}
                   />
-                  <h3 className="font-display text-text text-[19px] tracking-[0.02em] leading-none transition-colors group-hover:text-green">
+                  <h3
+                    onDoubleClick={editOnDoubleClick(item.segment, "heading")}
+                    className="font-display text-text text-[19px] tracking-[0.02em] leading-none transition-colors group-hover:text-green"
+                  >
                     {item.heading}
                   </h3>
                 </a>
@@ -2860,7 +2915,10 @@ function EpisodeTranscript({
                       strokeWidth={2.5}
                       className={cn("shrink-0 text-green transition-transform", isCollapsed ? "" : "rotate-90")}
                     />
-                    <span className="font-display text-text/90 text-[17px] tracking-[0.02em] leading-none transition-colors group-hover:text-green">
+                    <span
+                      onDoubleClick={editOnDoubleClick(item.segment, "subheading")}
+                      className="font-display text-text/90 text-[17px] tracking-[0.02em] leading-none transition-colors group-hover:text-green"
+                    >
                       {item.title}
                     </span>
                   </button>
@@ -2898,6 +2956,7 @@ function EpisodeTranscript({
                             <p
                               key={paraIndex}
                               data-active={highlight && para.t === activeParaT}
+                              onDoubleClick={editOnDoubleClick(para.segment, "text")}
                               className="text-[length:var(--tsize,15px)] leading-[1.6] mt-2 first:mt-0 text-subtle"
                             >
                               {renderText(para.text, linkable.get(`${index}:${paraIndex}`))}
@@ -2913,6 +2972,7 @@ function EpisodeTranscript({
                     <p
                       key={runIndex}
                       data-active={active}
+                      onDoubleClick={editOnDoubleClick(para.segment, "text")}
                       className={cn(
                         "text-[length:var(--tsize,15px)] leading-[1.6] mt-2 transition-colors",
                         active ? "-ml-4 border-l-2 border-green pl-4 text-text" : "text-subtle",
@@ -2937,15 +2997,18 @@ function EpisodeTranscript({
                   </span>
                 ) : null}
                 <div className={cn("border-l-2 pl-4", lane.border)}>
-                  {item.text.split("\n\n").map((para, paraIndex) => (
-                    <p
-                      key={paraIndex}
-                      data-active={isActive && paraIndex === 0}
-                      className="text-[length:var(--tsize,15px)] leading-[1.6] mt-2 first:mt-0 text-subtle"
-                    >
-                      {renderText(para, linked)}
-                    </p>
-                  ))}
+                  {item.pieces.map((piece, pieceIndex) =>
+                    piece.text.split("\n\n").map((para, paraIndex) => (
+                      <p
+                        key={`${pieceIndex}:${paraIndex}`}
+                        data-active={isActive && pieceIndex === 0 && paraIndex === 0}
+                        onDoubleClick={editOnDoubleClick(piece.segment, "text")}
+                        className="text-[length:var(--tsize,15px)] leading-[1.6] mt-2 first:mt-0 text-subtle"
+                      >
+                        {renderText(para, linked)}
+                      </p>
+                    )),
+                  )}
                 </div>
               </div>
             );
@@ -2954,6 +3017,7 @@ function EpisodeTranscript({
             <p
               key={index}
               data-active={isActive}
+              onDoubleClick={editOnDoubleClick(item.segment, "text")}
               className={cn(
                 "text-[length:var(--tsize,15px)] leading-[1.6] mt-2 transition-colors",
                 isActive ? "-ml-4 border-l-2 border-green pl-4 text-text" : "text-subtle",
@@ -2972,12 +3036,14 @@ function EpisodeTranscript({
 function EditableSegment({
   index,
   segment,
+  active,
   onEdit,
   onDropSubheading,
 }: {
   index: number;
   segment: TranscriptSegment;
-  onEdit: (index: number, field: "text" | "heading" | "subheading", value: string) => void;
+  active: boolean;
+  onEdit: (index: number, field: EditField, value: string) => void;
   onDropSubheading: (index: number) => void;
 }) {
   const box =
@@ -3032,19 +3098,50 @@ function EditableSegment({
           </div>
         </div>
       ) : null}
-      <div
-        contentEditable
-        suppressContentEditableWarning
-        data-idx={index}
-        data-field="text"
-        onKeyDown={commitOnEnter}
-        onBlur={(e) => onEdit(index, "text", e.currentTarget.innerText)}
-        className={cn("text-[length:var(--tsize,15px)] leading-[1.6] text-subtle", box)}
-      >
-        {segment.text}
+      <div className={cn(active && "-ml-4 border-l-2 border-green pl-4")}>
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          data-idx={index}
+          data-field="text"
+          data-active={active}
+          onKeyDown={commitOnEnter}
+          onBlur={(e) => onEdit(index, "text", e.currentTarget.innerText)}
+          className={cn("text-[length:var(--tsize,15px)] leading-[1.6]", active ? "text-text" : "text-subtle", box)}
+        >
+          {segment.text}
+        </div>
       </div>
     </div>
   );
+}
+
+function placeCaretNear(field: HTMLElement, x: number, y: number) {
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+  let range = caretRangeAt(x, y);
+  if (!range || !field.contains(range.startContainer)) {
+    range = document.createRange();
+    range.selectNodeContents(field);
+    range.collapse(false);
+  }
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function caretRangeAt(x: number, y: number): Range | null {
+  if (document.caretPositionFromPoint) {
+    const position = document.caretPositionFromPoint(x, y);
+    if (!position) {
+      return null;
+    }
+    const range = document.createRange();
+    range.setStart(position.offsetNode, position.offset);
+    return range;
+  }
+  return document.caretRangeFromPoint(x, y);
 }
 
 function animateScrollTo(top: number, duration = 240) {
