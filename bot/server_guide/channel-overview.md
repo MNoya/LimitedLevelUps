@@ -6,14 +6,15 @@ General Magic talk and News
 • {#magic-and-chill} - hang out and chat about Magic or other things!
 • {#preview-season} - discuss cards from upcoming sets
 
-**Events**
-Daily Pod Drafts and Tournament discussion
+**Pod Drafts**
+Daily community drafts with a [**Leaderboard**]({site}/leaderboard)
 • {#pod-draft-coordination} - sign up to play with us
 • {#pod-draft-chat} - results and upcoming events
+• {#peasant-cube} - talk about the Peasant Cube format
 
 **Limited Level-Ups & Stream**
 Discussion around the podcast, stream and related content
-• {#recent-episode-and-video-discussion} - talk about the latest episode here
+• {#recent-episode-discussion} - talk about the latest episode here
 
 **MTG Strategy**
 Talk about the latest Limited formats and improving your game

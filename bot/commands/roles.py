@@ -33,7 +33,7 @@ from bot.services.pod_drafts import (
 )
 from bot.services.pod_link_dm import dm_pref_embed
 from bot.services.pod_roles import (
-    consume_bot_umbrella_grant,
+    consume_bot_grant,
     find_role,
     grant_pod_drafters,
     grant_role,
@@ -51,6 +51,7 @@ MSG_ROLE_TOGGLE_FAILED = "Couldn't update that role. The bot is missing the Mana
 MSG_DM_PREF_LABEL = "Draft Link DMs"
 MSG_DM_PREF_LINE = "**Draft Link DMs:** your Draftmancer link when Pod is ready to start"
 DM_PREF_CUSTOM_ID = "pod_dm_draft_link"
+SUB_PING_ROLE_NAMES = frozenset(spec.name for spec in PING_ROLES if spec.name != POD_DRAFTERS_ROLE_NAME)
 
 
 class _RoleToggleButton(discord.ui.Button):
@@ -194,27 +195,38 @@ class Roles(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member) -> None:
-        """A role-granting invite attaches Pod Drafters at join, so on_member_update never sees it arrive"""
-        if POD_DRAFTERS_ROLE_NAME in {role.name for role in member.roles}:
+        """A role-granting invite attaches pod roles at join, so on_member_update never sees them arrive"""
+        held = {role.name for role in member.roles}
+        if POD_DRAFTERS_ROLE_NAME in held:
             log.info(f"{member} joined holding {POD_DRAFTERS_ROLE_NAME}; posting onboarding welcome")
             await announce_onboarding_welcome(self.bot, member)
+            return
+        if held & SUB_PING_ROLE_NAMES:
+            await _enroll_onboarding_pod_player(self.bot, member, held & SUB_PING_ROLE_NAMES)
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
-        """Welcomes an onboarding-question Pod Drafters gain and clears the slot roles when the umbrella goes"""
+        """Welcomes a pod role gained through onboarding and clears the other ping roles when the umbrella goes"""
         before_names = {role.name for role in before.roles}
         after_names = {role.name for role in after.roles}
-        if POD_DRAFTERS_ROLE_NAME not in before_names and POD_DRAFTERS_ROLE_NAME in after_names:
-            if consume_bot_umbrella_grant(after.id):
-                log.info(f"{after} gained {POD_DRAFTERS_ROLE_NAME} via a bot path; welcome left to that path")
-            else:
+        gained = after_names - before_names
+        onboarding_gains = {
+            name for name in gained & (SUB_PING_ROLE_NAMES | {POD_DRAFTERS_ROLE_NAME})
+            if not consume_bot_grant(after.id, name)
+        }
+        if POD_DRAFTERS_ROLE_NAME in gained:
+            if POD_DRAFTERS_ROLE_NAME in onboarding_gains:
                 log.info(f"{after} gained {POD_DRAFTERS_ROLE_NAME} outside the bot; posting onboarding welcome")
                 await announce_onboarding_welcome(self.bot, after)
+            else:
+                log.info(f"{after} gained {POD_DRAFTERS_ROLE_NAME} via a bot path; welcome left to that path")
+            return
+        if onboarding_gains and POD_DRAFTERS_ROLE_NAME not in after_names:
+            await _enroll_onboarding_pod_player(self.bot, after, onboarding_gains)
             return
         if POD_DRAFTERS_ROLE_NAME not in before_names or POD_DRAFTERS_ROLE_NAME in after_names:
             return
-        other_ping_roles = {spec.name for spec in PING_ROLES if spec.name != POD_DRAFTERS_ROLE_NAME}
-        held = [role for role in after.roles if role.name in other_ping_roles]
+        held = [role for role in after.roles if role.name in SUB_PING_ROLE_NAMES]
         if not held:
             return
         try:
@@ -238,6 +250,12 @@ class Roles(commands.Cog):
             ephemeral=(interaction.guild is not None),
             allowed_mentions=discord.AllowedMentions.none(),
         )
+
+
+async def _enroll_onboarding_pod_player(bot: commands.Bot, member: discord.Member, gained: set[str]) -> None:
+    log.info(f"{member} gained {sorted(gained)} outside the bot; granting {POD_DRAFTERS_ROLE_NAME} and welcoming")
+    if await grant_pod_drafters(member):
+        await announce_onboarding_welcome(bot, member)
 
 
 async def setup(bot: commands.Bot) -> None:

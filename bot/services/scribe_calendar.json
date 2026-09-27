@@ -285,54 +285,6 @@
     "end_date": "2026-09-06 11:00:00"
   },
   {
-    "title": "Premier Draft: Mixed-Up",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "flashback"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "mixed-up"
-      },
-      {
-        "slug": "premier-draft"
-      }
-    ],
-    "utc_start_date": "2026-09-04 15:00:00",
-    "utc_end_date": "2026-09-18 15:00:00",
-    "start_date": "2026-09-04 11:00:00",
-    "end_date": "2026-09-18 11:00:00"
-  },
-  {
-    "title": "Premier Draft: Modern Horizons 3",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "flashback"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "modern-horizons-3"
-      },
-      {
-        "slug": "premier-draft"
-      }
-    ],
-    "utc_start_date": "2026-09-08 15:00:00",
-    "utc_end_date": "2026-09-15 15:00:00",
-    "start_date": "2026-09-08 11:00:00",
-    "end_date": "2026-09-15 11:00:00"
-  },
-  {
     "title": "Arena Powered Cube",
     "tags": [
       {
@@ -355,54 +307,6 @@
     "utc_end_date": "2026-09-29 15:00:00",
     "start_date": "2026-09-08 11:00:00",
     "end_date": "2026-09-29 11:00:00"
-  },
-  {
-    "title": "US Regional Championship: Baltimore &#8211; Modern",
-    "tags": [
-      {
-        "slug": "constructed"
-      },
-      {
-        "slug": "modern"
-      },
-      {
-        "slug": "regional-championship"
-      },
-      {
-        "slug": "star-city-games"
-      },
-      {
-        "slug": "tabletop"
-      }
-    ],
-    "utc_start_date": "2026-09-11 04:00:00",
-    "utc_end_date": "2026-09-14 03:59:59",
-    "start_date": "2026-09-11 00:00:00",
-    "end_date": "2026-09-13 23:59:59"
-  },
-  {
-    "title": "China Regional Championship: Hangzhou &#8211; Modern",
-    "tags": [
-      {
-        "slug": "constructed"
-      },
-      {
-        "slug": "kadou"
-      },
-      {
-        "slug": "modern"
-      },
-      {
-        "slug": "regional-championship"
-      },
-      {
-        "slug": "tabletop"
-      }
-    ],
-    "utc_start_date": "2026-09-11 04:00:00",
-    "utc_end_date": "2026-09-14 03:59:59",
-    "start_date": "2026-09-11 00:00:00",
-    "end_date": "2026-09-13 23:59:59"
   },
   {
     "title": "Arena Open: The Hobbit",
@@ -454,81 +358,6 @@
     "utc_end_date": "2026-09-13 10:00:00",
     "start_date": "2026-09-12 09:00:00",
     "end_date": "2026-09-13 06:00:00"
-  },
-  {
-    "title": "Premier Draft: Dominaria United",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "dominaria-united"
-      },
-      {
-        "slug": "flashback"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "premier-draft"
-      }
-    ],
-    "utc_start_date": "2026-09-15 15:00:00",
-    "utc_end_date": "2026-09-22 15:00:00",
-    "start_date": "2026-09-15 11:00:00",
-    "end_date": "2026-09-22 11:00:00"
-  },
-  {
-    "title": "Arena Direct: Aetherdrift Play Boosters",
-    "tags": [
-      {
-        "slug": "aetherdrift"
-      },
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "arena-direct"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "play-boosters"
-      },
-      {
-        "slug": "sealed"
-      }
-    ],
-    "utc_start_date": "2026-09-15 15:00:00",
-    "utc_end_date": "2026-09-20 15:00:00",
-    "start_date": "2026-09-15 11:00:00",
-    "end_date": "2026-09-20 11:00:00"
-  },
-  {
-    "title": "Midweek Magic: The Hobbit Phantom Quick Draft",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "midweek-magic"
-      },
-      {
-        "slug": "phantom"
-      },
-      {
-        "slug": "quick-draft"
-      }
-    ],
-    "utc_start_date": "2026-09-15 21:00:00",
-    "utc_end_date": "2026-09-17 21:00:00",
-    "start_date": "2026-09-15 17:00:00",
-    "end_date": "2026-09-17 17:00:00"
   },
   {
     "title": "ACQ Play-In: Bo3 The Hobbit Sealed",
@@ -606,30 +435,6 @@
     "end_date": "2026-09-29 11:00:00"
   },
   {
-    "title": "Midweek Magic: The Hobbit Phantom Sealed",
-    "tags": [
-      {
-        "slug": "arena"
-      },
-      {
-        "slug": "limited"
-      },
-      {
-        "slug": "midweek-magic"
-      },
-      {
-        "slug": "phantom"
-      },
-      {
-        "slug": "sealed"
-      }
-    ],
-    "utc_start_date": "2026-09-22 21:00:00",
-    "utc_end_date": "2026-09-24 21:00:00",
-    "start_date": "2026-09-22 17:00:00",
-    "end_date": "2026-09-24 17:00:00"
-  },
-  {
     "title": "Reality Fracture Prerelease Weekend",
     "tags": [
       {
@@ -702,10 +507,160 @@
     "end_date": "2026-09-29 23:59:59"
   },
   {
+    "title": "Premier Draft: Reality Fracture",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
+      },
+      {
+        "slug": "reality-fracture"
+      }
+    ],
+    "utc_start_date": "2026-09-29 15:00:00",
+    "utc_end_date": "2026-11-10 16:00:00",
+    "start_date": "2026-09-29 11:00:00",
+    "end_date": "2026-11-10 11:00:00"
+  },
+  {
+    "title": "Pick-Two Draft: Reality Fracture",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "pick-2-draft"
+      },
+      {
+        "slug": "reality-fracture"
+      }
+    ],
+    "utc_start_date": "2026-09-29 15:00:00",
+    "utc_end_date": "2026-11-10 16:00:00",
+    "start_date": "2026-09-29 11:00:00",
+    "end_date": "2026-11-10 11:00:00"
+  },
+  {
+    "title": "Traditional Draft: Reality Fracture",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "reality-fracture"
+      },
+      {
+        "slug": "traditional-draft"
+      }
+    ],
+    "utc_start_date": "2026-09-29 15:00:00",
+    "utc_end_date": "2026-11-10 16:00:00",
+    "start_date": "2026-09-29 11:00:00",
+    "end_date": "2026-11-10 11:00:00"
+  },
+  {
+    "title": "Quick Draft: Wilds of Eldraine",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "quick-draft"
+      },
+      {
+        "slug": "wilds-of-eldraine"
+      }
+    ],
+    "utc_start_date": "2026-09-29 15:00:00",
+    "utc_end_date": "2026-10-07 15:00:00",
+    "start_date": "2026-09-29 11:00:00",
+    "end_date": "2026-10-07 11:00:00"
+  },
+  {
+    "title": "Sealed: Reality Fracture",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "reality-fracture"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-09-29 15:00:00",
+    "utc_end_date": "2026-10-28 15:00:00",
+    "start_date": "2026-09-29 11:00:00",
+    "end_date": "2026-10-28 11:00:00"
+  },
+  {
+    "title": "Traditional Sealed: Reality Fracture",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "reality-fracture"
+      },
+      {
+        "slug": "traditional-sealed"
+      }
+    ],
+    "utc_start_date": "2026-09-29 15:00:00",
+    "utc_end_date": "2026-10-14 15:00:00",
+    "start_date": "2026-09-29 11:00:00",
+    "end_date": "2026-10-14 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: Historic",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "historic"
+      },
+      {
+        "slug": "midweek-magic"
+      }
+    ],
+    "utc_start_date": "2026-09-29 21:00:00",
+    "utc_end_date": "2026-10-01 21:00:00",
+    "start_date": "2026-09-29 17:00:00",
+    "end_date": "2026-10-01 17:00:00"
+  },
+  {
     "title": "Canada Regional Championship: Ottawa &#8211; Modern",
     "tags": [
       {
         "slug": "constructed"
+      },
+      {
+        "slug": "coverage"
       },
       {
         "slug": "face2face"
@@ -735,6 +690,9 @@
         "slug": "constructed"
       },
       {
+        "slug": "coverage"
+      },
+      {
         "slug": "modern"
       },
       {
@@ -750,10 +708,130 @@
     "end_date": "2026-10-04 23:59:59"
   },
   {
+    "title": "Arena Direct: Reality Fracture Collector Booster Boxes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-direct"
+      },
+      {
+        "slug": "collector-booster"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "reality-fracture"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-10-02 15:00:00",
+    "utc_end_date": "2026-10-12 15:00:00",
+    "start_date": "2026-10-02 11:00:00",
+    "end_date": "2026-10-12 11:00:00"
+  },
+  {
+    "title": "Metagame Challenge: Pioneer",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "metagame-challenge"
+      },
+      {
+        "slug": "pioneer"
+      }
+    ],
+    "utc_start_date": "2026-10-02 15:00:00",
+    "utc_end_date": "2026-10-05 15:00:00",
+    "start_date": "2026-10-02 11:00:00",
+    "end_date": "2026-10-05 11:00:00"
+  },
+  {
+    "title": "Historic Pauper Challenge",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "challenge"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "historic-pauper"
+      }
+    ],
+    "utc_start_date": "2026-10-06 15:00:00",
+    "utc_end_date": "2026-10-13 15:00:00",
+    "start_date": "2026-10-06 11:00:00",
+    "end_date": "2026-10-13 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: Historic Pauper",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "historic"
+      },
+      {
+        "slug": "historic-pauper"
+      },
+      {
+        "slug": "midweek-magic"
+      },
+      {
+        "slug": "pauper"
+      }
+    ],
+    "utc_start_date": "2026-10-06 21:00:00",
+    "utc_end_date": "2026-10-08 21:00:00",
+    "start_date": "2026-10-06 17:00:00",
+    "end_date": "2026-10-08 17:00:00"
+  },
+  {
+    "title": "Quick Draft: Reality Fracture",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "quick-draft"
+      },
+      {
+        "slug": "reality-fracture"
+      }
+    ],
+    "utc_start_date": "2026-10-08 15:00:00",
+    "utc_end_date": "2026-10-19 15:00:00",
+    "start_date": "2026-10-08 11:00:00",
+    "end_date": "2026-10-19 11:00:00"
+  },
+  {
     "title": "US Regional Championship: Los Angeles &#8211; Modern",
     "tags": [
       {
         "slug": "constructed"
+      },
+      {
+        "slug": "coverage"
       },
       {
         "slug": "modern"
@@ -780,6 +858,9 @@
         "slug": "constructed"
       },
       {
+        "slug": "coverage"
+      },
+      {
         "slug": "fanfinity"
       },
       {
@@ -804,6 +885,9 @@
         "slug": "constructed"
       },
       {
+        "slug": "coverage"
+      },
+      {
         "slug": "modern"
       },
       {
@@ -822,10 +906,238 @@
     "end_date": "2026-10-12 23:59:59"
   },
   {
+    "title": "Premier Draft: Reality Fracture Alchemy",
+    "tags": [
+      {
+        "slug": "alchemy"
+      },
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
+      },
+      {
+        "slug": "reality-fracture"
+      }
+    ],
+    "utc_start_date": "2026-10-13 15:00:00",
+    "utc_end_date": "2026-11-03 16:00:00",
+    "start_date": "2026-10-13 11:00:00",
+    "end_date": "2026-11-03 11:00:00"
+  },
+  {
+    "title": "Contender Draft: Reality Fracture",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "contender-draft"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "reality-fracture"
+      }
+    ],
+    "utc_start_date": "2026-10-13 15:00:00",
+    "utc_end_date": "2026-11-10 16:00:00",
+    "start_date": "2026-10-13 11:00:00",
+    "end_date": "2026-11-10 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: Brawl Builder Challenge",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "brawl"
+      },
+      {
+        "slug": "builder-challenge"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "midweek-magic"
+      }
+    ],
+    "utc_start_date": "2026-10-13 21:00:00",
+    "utc_end_date": "2026-10-15 21:00:00",
+    "start_date": "2026-10-13 17:00:00",
+    "end_date": "2026-10-15 17:00:00"
+  },
+  {
+    "title": "All Alchemy Deck Duels",
+    "tags": [
+      {
+        "slug": "alchemy"
+      },
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "deck-duels"
+      }
+    ],
+    "utc_start_date": "2026-10-15 15:00:00",
+    "utc_end_date": "2026-10-18 15:00:00",
+    "start_date": "2026-10-15 11:00:00",
+    "end_date": "2026-10-18 11:00:00"
+  },
+  {
+    "title": "Arena Limited Championship Qualifier: Reality Fracture",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-limited-championship-qualifier"
+      },
+      {
+        "slug": "draft"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "reality-fracture"
+      }
+    ],
+    "utc_start_date": "2026-10-16 04:00:00",
+    "utc_end_date": "2026-10-19 03:59:59",
+    "start_date": "2026-10-16 00:00:00",
+    "end_date": "2026-10-18 23:59:59"
+  },
+  {
+    "title": "Quick Draft: Reality Fracture Alchemy",
+    "tags": [
+      {
+        "slug": "alchemy"
+      },
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "quick-draft"
+      },
+      {
+        "slug": "reality-fracture"
+      }
+    ],
+    "utc_start_date": "2026-10-18 15:00:00",
+    "utc_end_date": "2026-10-20 15:00:00",
+    "start_date": "2026-10-18 11:00:00",
+    "end_date": "2026-10-20 11:00:00"
+  },
+  {
+    "title": "Quick Draft: Aetherdrift",
+    "tags": [
+      {
+        "slug": "aetherdrift"
+      },
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "quick-draft"
+      }
+    ],
+    "utc_start_date": "2026-10-19 15:00:00",
+    "utc_end_date": "2026-10-27 15:00:00",
+    "start_date": "2026-10-19 11:00:00",
+    "end_date": "2026-10-27 11:00:00"
+  },
+  {
+    "title": "Premier Draft: Innistrad: Crimson Vow",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "flashback"
+      },
+      {
+        "slug": "innistrad-crimson-vow"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
+      }
+    ],
+    "utc_start_date": "2026-10-20 15:00:00",
+    "utc_end_date": "2026-10-27 15:00:00",
+    "start_date": "2026-10-20 11:00:00",
+    "end_date": "2026-10-27 11:00:00"
+  },
+  {
+    "title": "Arena Powered Cube",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-powered-cube"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
+      }
+    ],
+    "utc_start_date": "2026-10-20 15:00:00",
+    "utc_end_date": "2026-11-10 16:00:00",
+    "start_date": "2026-10-20 11:00:00",
+    "end_date": "2026-11-10 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: Gift Bag Standard",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "gift-bag"
+      },
+      {
+        "slug": "midweek-magic"
+      },
+      {
+        "slug": "standard"
+      }
+    ],
+    "utc_start_date": "2026-10-20 21:00:00",
+    "utc_end_date": "2026-10-22 21:00:00",
+    "start_date": "2026-10-20 17:00:00",
+    "end_date": "2026-10-22 17:00:00"
+  },
+  {
     "title": "Spotlight Series Hartford: Standard",
     "tags": [
       {
         "slug": "constructed"
+      },
+      {
+        "slug": "coverage"
       },
       {
         "slug": "magic-spotlight-series"
@@ -852,6 +1164,9 @@
         "slug": "constructed"
       },
       {
+        "slug": "coverage"
+      },
+      {
         "slug": "devir-brasil"
       },
       {
@@ -876,6 +1191,9 @@
         "slug": "constructed"
       },
       {
+        "slug": "coverage"
+      },
+      {
         "slug": "lets-play-games"
       },
       {
@@ -894,6 +1212,54 @@
     "end_date": "2026-10-25 23:59:59"
   },
   {
+    "title": "Arena Direct: Reality Fracture Play Booster Boxes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-direct"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "play-boosters"
+      },
+      {
+        "slug": "reality-fracture"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-10-23 15:00:00",
+    "utc_end_date": "2026-11-02 16:00:00",
+    "start_date": "2026-10-23 11:00:00",
+    "end_date": "2026-11-02 11:00:00"
+  },
+  {
+    "title": "Metagame Challenge: Competitive Brawl",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "competitive-brawl"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "metagame-challenge"
+      }
+    ],
+    "utc_start_date": "2026-10-23 15:00:00",
+    "utc_end_date": "2026-10-26 15:00:00",
+    "start_date": "2026-10-23 11:00:00",
+    "end_date": "2026-10-26 11:00:00"
+  },
+  {
     "title": "Arena Championship 13: Standard",
     "tags": [
       {
@@ -906,6 +1272,9 @@
         "slug": "constructed"
       },
       {
+        "slug": "coverage"
+      },
+      {
         "slug": "standard"
       }
     ],
@@ -915,10 +1284,256 @@
     "end_date": "2026-10-25 23:59:59"
   },
   {
+    "title": "ACQ Bo1 Play-In: Standard",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "best-of-one"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "play-in"
+      },
+      {
+        "slug": "qualifier"
+      },
+      {
+        "slug": "standard"
+      }
+    ],
+    "utc_start_date": "2026-10-24 13:00:00",
+    "utc_end_date": "2026-10-25 10:00:00",
+    "start_date": "2026-10-24 09:00:00",
+    "end_date": "2026-10-25 06:00:00"
+  },
+  {
+    "title": "ACQ Bo1 Play-In (Bonus): Reality Fracture Sealed",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "best-of-one"
+      },
+      {
+        "slug": "play-in"
+      },
+      {
+        "slug": "qualifier"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-10-25 13:00:00",
+    "utc_end_date": "2026-10-26 10:00:00",
+    "start_date": "2026-10-25 09:00:00",
+    "end_date": "2026-10-26 06:00:00"
+  },
+  {
+    "title": "Premier Draft: Innistrad: Midnight Hunt",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "flashback"
+      },
+      {
+        "slug": "innistrad-midnight-hunt"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "premier-draft"
+      }
+    ],
+    "utc_start_date": "2026-10-27 15:00:00",
+    "utc_end_date": "2026-11-03 16:00:00",
+    "start_date": "2026-10-27 11:00:00",
+    "end_date": "2026-11-03 11:00:00"
+  },
+  {
+    "title": "Quick Draft: Reality Fracture",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "quick-draft"
+      },
+      {
+        "slug": "reality-fracture"
+      }
+    ],
+    "utc_start_date": "2026-10-27 15:00:00",
+    "utc_end_date": "2026-11-07 16:00:00",
+    "start_date": "2026-10-27 11:00:00",
+    "end_date": "2026-11-07 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: Cascade Brawl",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "brawl"
+      },
+      {
+        "slug": "cascade"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "midweek-magic"
+      }
+    ],
+    "utc_start_date": "2026-10-27 21:00:00",
+    "utc_end_date": "2026-10-29 21:00:00",
+    "start_date": "2026-10-27 17:00:00",
+    "end_date": "2026-10-29 17:00:00"
+  },
+  {
+    "title": "ACQ Bo3 Play-In: Standard",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "best-of-three"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "play-in"
+      },
+      {
+        "slug": "qualifier"
+      },
+      {
+        "slug": "standard"
+      }
+    ],
+    "utc_start_date": "2026-10-30 13:00:00",
+    "utc_end_date": "2026-10-31 10:00:00",
+    "start_date": "2026-10-30 09:00:00",
+    "end_date": "2026-10-31 06:00:00"
+  },
+  {
+    "title": "Omniscience Draft: Reality Fracture",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "draft"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "omniscience"
+      },
+      {
+        "slug": "reality-fracture"
+      }
+    ],
+    "utc_start_date": "2026-10-30 15:00:00",
+    "utc_end_date": "2026-11-02 16:00:00",
+    "start_date": "2026-10-30 11:00:00",
+    "end_date": "2026-11-02 11:00:00"
+  },
+  {
+    "title": "ACQ Weekend: Standard",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-championship"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "qualifier"
+      },
+      {
+        "slug": "standard"
+      }
+    ],
+    "utc_start_date": "2026-10-31 04:00:00",
+    "utc_end_date": "2026-11-02 04:59:59",
+    "start_date": "2026-10-31 00:00:00",
+    "end_date": "2026-11-01 23:59:59"
+  },
+  {
+    "title": "Premier Draft: Pioneer Masters",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "flashback"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "pioneer-masters"
+      },
+      {
+        "slug": "premier-draft"
+      }
+    ],
+    "utc_start_date": "2026-11-03 16:00:00",
+    "utc_end_date": "2026-11-10 16:00:00",
+    "start_date": "2026-11-03 11:00:00",
+    "end_date": "2026-11-10 11:00:00"
+  },
+  {
+    "title": "Midweek Magic: Reality Fracture Bot Draft",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "midweek-magic"
+      },
+      {
+        "slug": "quick-draft"
+      },
+      {
+        "slug": "reality-fracture"
+      }
+    ],
+    "utc_start_date": "2026-11-03 22:00:00",
+    "utc_end_date": "2026-11-05 22:00:00",
+    "start_date": "2026-11-03 17:00:00",
+    "end_date": "2026-11-05 17:00:00"
+  },
+  {
     "title": "Spotlight Series Beijing: Standard",
     "tags": [
       {
         "slug": "constructed"
+      },
+      {
+        "slug": "coverage"
       },
       {
         "slug": "kadou"
@@ -937,6 +1552,54 @@
     "utc_end_date": "2026-11-09 04:59:59",
     "start_date": "2026-11-06 00:00:00",
     "end_date": "2026-11-08 23:59:59"
+  },
+  {
+    "title": "Arena Direct: Edge of Eternities Play Booster Boxes",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-direct"
+      },
+      {
+        "slug": "edge-of-eternities"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "play-boosters"
+      },
+      {
+        "slug": "sealed"
+      }
+    ],
+    "utc_start_date": "2026-11-06 16:00:00",
+    "utc_end_date": "2026-11-09 16:00:00",
+    "start_date": "2026-11-06 11:00:00",
+    "end_date": "2026-11-09 11:00:00"
+  },
+  {
+    "title": "Metagame Challenge: Standard",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "constructed"
+      },
+      {
+        "slug": "metagame-challenge"
+      },
+      {
+        "slug": "standard"
+      }
+    ],
+    "utc_start_date": "2026-11-06 16:00:00",
+    "utc_end_date": "2026-11-09 16:00:00",
+    "start_date": "2026-11-06 11:00:00",
+    "end_date": "2026-11-09 11:00:00"
   },
   {
     "title": "Star Trek Prerelease Weekend",
@@ -963,10 +1626,16 @@
     "end_date": "2026-11-15 23:59:59"
   },
   {
-    "title": "World Championship 32: Format TBA",
+    "title": "World Championship 32: Standard &#038; Star Trek Draft",
     "tags": [
       {
+        "slug": "coverage"
+      },
+      {
         "slug": "magic-world-championship"
+      },
+      {
+        "slug": "star-trek"
       },
       {
         "slug": "tabletop"

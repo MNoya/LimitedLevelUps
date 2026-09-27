@@ -56,6 +56,8 @@ class Settings(BaseSettings):
         return f"{self.public_site_url.rstrip('/')}/player"
 
     format_schedule_enabled: bool = True
+    watch_party_enabled: bool = True
+    watch_party_channel_id: int = 1007375760484470984
 
     pod_draft_channel_id: int = 1028072146645295125
     discord_botlog_channel_name: str = "bot-spam"

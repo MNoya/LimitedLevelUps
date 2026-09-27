@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import discord
 import pytest
 
+from bot.commands.roles import Roles
 from bot.services.ping_roles import (
     EARLY_POD_ROLE_NAME,
     MANAGED_ROLES,
@@ -23,7 +24,7 @@ from bot.services.ping_roles import (
     grant_mock_draft_role,
     grant_pod_roles,
 )
-from bot.services.pod_roles import consume_bot_umbrella_grant, grant_role
+from bot.services.pod_roles import consume_bot_grant, grant_role
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
 
 
@@ -62,29 +63,44 @@ def test_first_welcome_fires_once_until_forgotten():
     assert _first_welcome_for(member_id) is True
 
 
-def test_consume_bot_umbrella_grant_is_a_one_shot_flag():
-    grant_role_marks_umbrella_grant()
-
-    assert consume_bot_umbrella_grant(4242) is True
-    assert consume_bot_umbrella_grant(4242) is False
-
-
-def test_bot_mediated_umbrella_grant_is_marked_so_the_listener_skips_it():
-    member = _FakeMember(4343)
-    umbrella = SimpleNamespace(name=POD_DRAFTERS_ROLE_NAME)
-
-    asyncio.run(grant_role(member, umbrella))
-
-    assert consume_bot_umbrella_grant(4343) is True
-
-
-def test_slot_role_grant_leaves_the_umbrella_unmarked():
-    member = _FakeMember(4444)
+def test_a_bot_grant_is_marked_once_per_role():
+    member = _FakeMember(4242)
     slot_role = SimpleNamespace(name=EARLY_POD_ROLE_NAME)
 
     asyncio.run(grant_role(member, slot_role))
 
-    assert consume_bot_umbrella_grant(4444) is False
+    assert consume_bot_grant(4242, POD_DRAFTERS_ROLE_NAME) is False
+    assert consume_bot_grant(4242, EARLY_POD_ROLE_NAME) is True
+    assert consume_bot_grant(4242, EARLY_POD_ROLE_NAME) is False
+
+
+@pytest.mark.parametrize("member_id, gained, granted_by_bot, expected_roles, expect_welcome", [
+    (4545, EARLY_POD_ROLE_NAME, False, [EARLY_POD_ROLE_NAME, POD_DRAFTERS_ROLE_NAME], True),
+    (4546, EARLY_POD_ROLE_NAME, True, [EARLY_POD_ROLE_NAME], False),
+    (4547, POD_DRAFTERS_ROLE_NAME, False, [POD_DRAFTERS_ROLE_NAME], True),
+    (4548, POD_DRAFTERS_ROLE_NAME, True, [POD_DRAFTERS_ROLE_NAME], False),
+])
+def test_role_listener_welcomes_only_onboarding_gains(
+    monkeypatch, member_id, gained, granted_by_bot, expected_roles, expect_welcome,
+):
+    welcomed = []
+
+    async def record_welcome(bot, member):
+        welcomed.append(member.id)
+
+    monkeypatch.setattr("bot.commands.roles.announce_onboarding_welcome", record_welcome)
+    before = _FakeMember(member_id)
+    after = _FakeMember(member_id)
+    role = SimpleNamespace(name=gained)
+    if granted_by_bot:
+        asyncio.run(grant_role(after, role))
+    else:
+        after.roles.append(role)
+
+    asyncio.run(Roles(bot=None).on_member_update(before, after))
+
+    assert [held.name for held in after.roles] == expected_roles
+    assert bool(welcomed) is expect_welcome
 
 
 def test_the_slot_role_is_skipped_when_the_player_switched_it_off(monkeypatch):
@@ -146,12 +162,6 @@ def test_every_ping_role_carries_a_distinct_key():
 class _FakeGuild:
     def __init__(self):
         self.roles = [SimpleNamespace(name=spec.name) for spec in PING_ROLES]
-
-
-def grant_role_marks_umbrella_grant():
-    member = _FakeMember(4242)
-    umbrella = SimpleNamespace(name=POD_DRAFTERS_ROLE_NAME)
-    asyncio.run(grant_role(member, umbrella))
 
 
 class _FakeMember:

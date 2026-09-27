@@ -42,6 +42,7 @@ from bot.commands.messages import (
     MSG_MOCK_WELCOME,
     MSG_POD_WELCOME_BODY,
     MSG_POD_WELCOME_LEAD,
+    MSG_REPLAY_LINK_PROMPT,
 )
 from bot.commands.pod_guide import render_pod_guide_embed_body
 from bot.database import SessionLocal
@@ -57,6 +58,7 @@ from bot.services.pod_drafts import (
     full_arena_handle,
     player_arena_handle,
 )
+from bot.services.pod_replays import unlinked_first_finishers_sync
 from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role, role_mention
 from bot.services.pod_schedule import (
     EARLY_POD_ROLE_NAME,
@@ -349,7 +351,7 @@ class _PodButtonCard(discord.ui.LayoutView):
     def __init__(
         self, text: str, *, accent: discord.Color | None = None, show_link_button: bool = True,
         show_format_button: bool = False, show_link_17lands_button: bool = False,
-        show_guide_button: bool = True, note: str | None = None,
+        show_guide_button: bool = True, show_roles_button: bool = True, note: str | None = None,
     ) -> None:
         super().__init__(timeout=None)
         container = discord.ui.Container(accent_colour=accent or discord.Color.green())
@@ -364,7 +366,8 @@ class _PodButtonCard(discord.ui.LayoutView):
             row.add_item(_Link17LandsButton())
         if show_guide_button:
             row.add_item(_PodGuideButton())
-        row.add_item(ManageRolesButton())
+        if show_roles_button:
+            row.add_item(ManageRolesButton())
         if show_format_button:
             row.add_item(_FormatPreferenceButton())
         self.add_item(container)
@@ -787,6 +790,24 @@ async def announce_onboarding_welcome(client: discord.Client, member: discord.Me
     welcome = build_welcome_view(member.guild, member.mention, show_link_17lands=not has_token)
     posted = await send_welcome(client, member, welcome)
     log.info(f"onboarding welcome {'posted' if posted else 'failed to post'} for {member}")
+
+
+async def post_replay_link_prompt(thread: discord.abc.Messageable | None, event_id: str) -> None:
+    discord_ids = await asyncio.to_thread(unlinked_first_finishers_sync, event_id)
+    if thread is None or not discord_ids:
+        return
+    await thread.send(
+        view=replay_link_card(" ".join(f"<@{discord_id}>" for discord_id in discord_ids)),
+        allowed_mentions=discord.AllowedMentions(users=True, roles=False),
+    )
+    log.info(f"replay link prompt posted for {len(discord_ids)} unlinked player(s) in event {event_id}")
+
+
+def replay_link_card(mentions: str) -> discord.ui.LayoutView:
+    return _PodButtonCard(
+        MSG_REPLAY_LINK_PROMPT.format(mentions=mentions), show_link_button=False,
+        show_link_17lands_button=True, show_guide_button=False, show_roles_button=False,
+    )
 
 
 async def send_mock_welcome_card(

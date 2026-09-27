@@ -72,6 +72,7 @@ from bot.commands.testschedule import setup as setup_testschedule
 from bot.commands.testthreadintro import setup as setup_testthreadintro
 from bot.commands.testpolls import setup as setup_testpolls
 from bot.commands.testformatschedule import setup as setup_testformatschedule
+from bot.commands.testwatchparty import setup as setup_testwatchparty
 from bot.commands.testscribe import setup as setup_testscribe
 from bot.listeners.auto_link_listener import setup as setup_auto_link_listener
 from bot.listeners.profile_sync_listener import setup as setup_profile_sync_listener
@@ -139,6 +140,7 @@ from bot.services.pod_format_vote import (
     VotersItem,
 )
 from bot.tasks.set_awards_post import init_set_awards_schedule
+from bot.tasks.watch_party_post import init_watch_party
 from bot.tasks.championship_post import init_championship_schedule
 from bot.tasks.p0p1_reminder_post import init_p0p1_reminder
 from bot.tasks.p0p1_ceremony_post import init_p0p1_ceremony
@@ -251,6 +253,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         init_format_schedule(bot)
         init_pod_schedule_post(bot)
         init_set_awards_schedule(bot)
+        init_watch_party(bot)
         init_championship_schedule(bot)
         init_p0p1_reminder(bot)
         init_p0p1_ceremony(bot)
@@ -315,6 +318,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testscribe(bot)
         await setup_testcraft(bot)
         await setup_testformatschedule(bot)
+        await setup_testwatchparty(bot)
         await setup_testchampionship(bot)
         await setup_testchampcard(bot)
         await setup_testmockcard(bot)

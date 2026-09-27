@@ -30,9 +30,9 @@ PRODUCTION_SAFE_TESTS = frozenset({
     "ads", "archiveplan", "awards", "cardformat", "ceremony", "champcard", "component", "craft", "deckping",
     "firenudge", "formatschedule",
     "lifecycle", "lockroster", "mockcard", "myset", "named", "overflow", "p0p1podium", "pollnudge", "queueclosed",
-    "p2vote", "rally", "reminder", "reminders", "rolegrant", "rolling", "scribe", "sendoff", "setawards",
-    "tables", "teamcard",
-    "thread-intro", "tiebreakers", "underfill", "welcome", "welcomes",
+    "p2vote", "rally", "reminder", "reminders", "replayprompt", "rolegrant", "rolling", "scribe", "sendoff",
+    "setawards", "tables", "teamcard",
+    "thread-intro", "tiebreakers", "underfill", "watchparty", "welcome", "welcomes",
 })
 
 MSG_TEST_PRODUCTION_BLOCKED = (

@@ -7,7 +7,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Sequence
 from uuid import uuid4
 
-from sqlalchemy import or_, select
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import func, or_, select
 
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent, PodDraftMatch, PodDraftParticipant, PodDraftReplay, Player
@@ -93,6 +95,29 @@ def schedule_recent_pod_replay_capture(
             log.warning(f"recent pod replay capture failed for player {player_id}", exc_info=True)
 
     asyncio.create_task(_run())
+
+
+def unlinked_first_finishers_sync(event_id: str) -> list[str]:
+    prompt_start = datetime(2026, 9, 28, tzinfo=ZoneInfo("America/New_York"))
+    with SessionLocal() as session:
+        finished_since_start = (
+            select(PodDraftParticipant.player_id, func.count().label("finished"))
+            .join(PodDraftEvent, PodDraftEvent.id == PodDraftParticipant.event_id)
+            .where(PodDraftEvent.finalized_at >= prompt_start, PodDraftEvent.kind != "mock")
+            .group_by(PodDraftParticipant.player_id)
+            .subquery()
+        )
+        rows = session.execute(
+            select(Player.discord_id)
+            .join(PodDraftParticipant, PodDraftParticipant.player_id == Player.id)
+            .join(finished_since_start, finished_since_start.c.player_id == Player.id)
+            .where(
+                PodDraftParticipant.event_id == event_id,
+                Player.seventeenlands_token.is_(None),
+                finished_since_start.c.finished == 1,
+            )
+        ).scalars().all()
+    return list(rows)
 
 
 def _event_replay_targets_sync(event_id: str) -> list[tuple[str, str, str]]:

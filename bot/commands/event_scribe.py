@@ -13,10 +13,12 @@ from discord.utils import format_dt
 
 from bot import audit
 from bot.commands import descriptions as desc
+from bot.commands.messages import MSG_EVENT_LIVE
 from bot.discord_helpers import NBSP, posts_publicly
 from bot.services import mtgscribe
 from bot.services.format_schedule import season_archived
 from bot.services.scribe_formats import short_format
+from bot.services.watch_party import ARENA_CHAMPIONSHIP, CHANNEL_TZ, WORLDS, CoveredEvent, upcoming_windows
 from bot.sets import ALL_SETS
 
 logger = logging.getLogger(__name__)
@@ -47,7 +49,10 @@ PACKAGE_EMOJI = "📦"
 COLLECTOR_EMOJI_NAME = "8000gems"
 ARENA_CHAMP_EXPANSIONS = {"Arena Championship": "", "ACQ": "Qualifier"}
 ARENA_CHAMP_EMOJI_NAME = "arenachamp"
-MSG_EVENT_LIVE = "is live!"
+COVERAGE_FILTER = "coverage"
+COVERAGE_SCOPE = "Coverage"
+WORLDS_EMOJI = "🌐"
+MSG_NO_COVERAGE = "No pro events on the calendar right now"
 MSG_QUALIFIER_OPEN = "is now open"
 
 SCRIBE_EMOJI_NAME = "scribe"
@@ -79,6 +84,7 @@ class EventScribe(commands.Cog):
         app_commands.Choice(name="Sealed (incl. Arena Direct)", value="sealed"),
         app_commands.Choice(name="Midweek", value="midweek"),
         app_commands.Choice(name="Competitive (play-in, qualifiers)", value="competitive"),
+        app_commands.Choice(name="Coverage (pro events on stream)", value=COVERAGE_FILTER),
     ])
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=False)
     @app_commands.allowed_installs(guilds=True, users=False)
@@ -88,10 +94,15 @@ class EventScribe(commands.Cog):
         await interaction.response.defer(ephemeral=not posts_publicly(interaction))
         selected = format.value if format else None
         try:
-            events = mtgscribe.load_events()
+            events = mtgscribe.load_events(arena_only=selected != COVERAGE_FILTER)
         except Exception:
             logger.exception("event-scribe could not read the bundled MTG Scribe calendar")
             await interaction.followup.send("MTG Scribe events are unavailable right now. Try again later")
+            return
+        if selected == COVERAGE_FILTER:
+            emojis = {emoji.name: emoji for emoji in await self.bot.fetch_application_emojis()}
+            audit.event("event_scribe_invoked", user_id=str(interaction.user.id), format=selected, set="all")
+            await interaction.followup.send(**build_coverage_payload(events, emojis))
             return
         archival = archives_set_query(set)
         if archival:
@@ -221,6 +232,39 @@ def build_schedule_embed(in_progress: list, upcoming: list, emojis: dict, scope:
         description=f"{_title_text(emojis, scope)}\n{body}",
         color=discord.Color.green(),
     )
+
+
+def build_coverage_payload(events: list, emojis: dict) -> dict:
+    today = datetime.now(CHANNEL_TZ).date()
+    covered = [event for window in upcoming_windows(events, today) for event in window.events]
+    running = [event for event in covered if event.first_day <= today]
+    ahead = [event for event in covered if event.first_day > today]
+    sections: list[str] = []
+    if running:
+        sections.append(f"### {IN_PROGRESS_EMOJI} In Progress")
+        sections.extend(_coverage_block(event, emojis) for event in running)
+    if ahead:
+        sections.append(f"### {COMING_UP_EMOJI} Coming Up")
+        sections.extend(_coverage_block(event, emojis) for event in ahead)
+    body = "\n".join(sections) if sections else MSG_NO_COVERAGE
+    embed = discord.Embed(description=f"{_title_text(emojis, COVERAGE_SCOPE)}\n{body}", color=discord.Color.green())
+    return {"embed": embed, "view": build_scribe_view(emojis)}
+
+
+def _coverage_block(covered: CoveredEvent, emojis: dict) -> str:
+    dates = date_range(covered.event.start_local, covered.event.end_local)
+    emoji = coverage_emoji(covered, emojis)
+    lead = f"{emoji} " if emoji else ""
+    return f"{lead}**{covered.name}**\n{NBSP}└{NBSP}{NBSP}{covered.details}, {dates}"
+
+
+def coverage_emoji(covered: CoveredEvent, emojis: dict) -> str | None:
+    if covered.kind is WORLDS:
+        return WORLDS_EMOJI
+    if covered.kind is ARENA_CHAMPIONSHIP:
+        emoji = emojis.get(ARENA_CHAMP_EMOJI_NAME)
+        return str(emoji) if emoji else None
+    return None
 
 
 def _title_text(emojis: dict, scope: str) -> str:
@@ -549,9 +593,9 @@ def _midweek_overflows(label: str, group: mtgscribe.EventGroup, *, upcoming: boo
 def _timing(group: mtgscribe.EventGroup, *, upcoming: bool, compact: bool = False,
             archival: bool = False) -> str:
     if archival:
-        return _date_range(group.start_local, group.end_local)
+        return date_range(group.start_local, group.end_local)
     if upcoming:
-        window = _date_range(group.start_local, group.end_local)
+        window = date_range(group.start_local, group.end_local)
         countdown = format_dt(group.start, "R")
         if compact:
             return f"{window} · {countdown}"
@@ -580,7 +624,7 @@ def _fit_timing(group: mtgscribe.EventGroup, lead_cols: int, *, upcoming: bool,
         if group.competitive:
             if lead_cols + _text_cols(with_range) <= LINE_MAX_WIDTH:
                 return with_range
-            return _date_range(group.start_local, group.end_local)
+            return date_range(group.start_local, group.end_local)
         with_starts = _timing(group, upcoming=True, compact=False)
         if lead_cols + _text_cols(with_starts) <= SAFE_STARTS_WIDTH:
             return with_starts
@@ -645,7 +689,7 @@ def _join_formats(formats: list) -> str:
     return f"{joined} Draft"
 
 
-def _date_range(start: datetime, end: datetime) -> str:
+def date_range(start: datetime, end: datetime) -> str:
     if (start.year, start.month) == (end.year, end.month):
         return f"{start:%B %-d}–{end:%-d}"
     return f"{start:%b %-d}–{end:%b %-d}"

@@ -60,6 +60,7 @@ from bot.services.ping_roles import (
     SYNTHETIC_CHAMPION_TAG,
     champion_role_mention,
     grant_set_champion_title,
+    post_replay_link_prompt,
     swap_set_champion_role,
 )
 from bot.services.pod_roles import find_role
@@ -2895,6 +2896,7 @@ async def finalize_tournament(manager: "PodDraftManager") -> None:
         await manager.share_draft_log()
 
     asyncio.create_task(capture_event_replays(SeventeenLandsClient(), manager.event_id))
+    asyncio.create_task(post_replay_link_prompt(await manager._fetch_thread(), manager.event_id))
 
 
 def _load_participant_slugs(event_id: str) -> dict[str, str]:

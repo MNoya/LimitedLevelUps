@@ -30,6 +30,7 @@ from bot.services.pod_drafts import (
     normalize_player_name,
 )
 from bot.services.pod_replays import capture_event_replays
+from bot.services.ping_roles import post_replay_link_prompt
 from bot.services.pod_team_board import (
     TeamBoardData,
     build_opponent_summary,
@@ -344,6 +345,7 @@ async def finalize_team_tournament(manager: "PodDraftManager") -> None:
     )
     await manager.share_draft_log()
     asyncio.create_task(capture_event_replays(SeventeenLandsClient(), event_id))
+    asyncio.create_task(post_replay_link_prompt(thread, event_id))
     await pod_team_showcase.maybe_post_team_trophy_hype(manager)
     await pod_team_showcase.maybe_post_team_championship(manager)
     if manager.championship_task is None:

@@ -64,6 +64,7 @@ from bot.services.ping_roles import (
     build_welcome_view,
     forget_welcome,
     post_welcome_card,
+    replay_link_card,
     slot_grant_ping,
     spec_named,
     strip_pod_roles,
@@ -595,6 +596,13 @@ async def setup(bot: commands.Bot) -> None:
         for mention in [*newcomers, ctx.author.mention]:
             welcome = build_welcome_view(ctx.guild, mention, show_link_17lands=True)
             await post_welcome_card(ctx.channel, welcome, mentions=pinging)
+
+    @test_group.command(name="replayprompt")
+    @commands.is_owner()
+    async def test_replay_prompt(ctx: commands.Context) -> None:
+        mentions = " ".join([*(f"**{name}**" for name in HALL_OF_FAME[:2]), ctx.author.mention])
+        pinging = discord.AllowedMentions(users=[ctx.author], roles=False, everyone=False)
+        await ctx.send(view=replay_link_card(mentions), allowed_mentions=pinging)
 
     @test_group.command(name="rsvp")
     @commands.is_owner()

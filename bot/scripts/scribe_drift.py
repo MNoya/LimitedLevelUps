@@ -22,12 +22,13 @@ from pathlib import Path
 from bot.commands.event_scribe import BOOSTER_LABELS, DRAFT_FORMATS, _seed_for_label, _slugify
 from bot.services import mtgscribe
 from bot.services.scribe_formats import FORMAT_SHORT_NAMES
+from bot.services.watch_party import PREMIER_SCHEDULES, covered_events
 from bot.sets import ALL_SETS, CUBE_CODE
 
 SET_SYMBOL_DIR = Path(__file__).resolve().parents[2] / "frontend" / "public" / "set-symbols"
 COMPETITIVE_HINTS = ("qualifier", "play-in", "championship", "arena-open")
 FLASHBACK_FORMATS = ("Premier Draft", "Traditional Draft", "Sealed", "Traditional Sealed")
-ACCEPTED_LONG_FORMATS = ("Contender Draft", "Alchemy Draft", "Remix Draft")
+ACCEPTED_LONG_FORMATS = ("Contender Draft", "Alchemy Draft", "Remix Draft", "Omniscience Draft")
 
 
 def main() -> None:
@@ -44,6 +45,7 @@ def main() -> None:
     findings.extend(_unlisted_competitive_tags(events))
     findings.extend(_missing_set_symbols(events))
     findings.extend(_encoded_titles(events))
+    findings.extend(_untimed_premier_events(mtgscribe.load_events(arena_only=False)))
     if args.previous is not None:
         findings.extend(_new_since(events, args.previous))
 
@@ -55,6 +57,15 @@ def main() -> None:
         print(f"  {finding}")
     print(f"\n{len(findings)} item(s) need a look before committing")
     raise SystemExit(1)
+
+
+def _untimed_premier_events(events: list) -> list[str]:
+    findings = []
+    for covered in covered_events(events):
+        if covered.kind.scheduled_event and covered.name not in PREMIER_SCHEDULES:
+            findings.append(f"premier event {covered.name!r} has no PREMIER_SCHEDULES entry; its Scheduled Event "
+                            f"falls back to 9 AM–6 PM ET")
+    return findings
 
 
 def _unmapped_format_labels(events: list) -> list[str]:
