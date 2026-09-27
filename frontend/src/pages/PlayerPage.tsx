@@ -813,6 +813,7 @@ function LifetimeEventLog({
             onChange={setColorsFilter}
             hrefFor={(v) => filterHref("colors", v)}
             options={colorOptions}
+            align="right"
             renderValue={renderColorOption}
             renderOption={renderColorOption}
             className="w-full min-w-0"
@@ -868,6 +869,7 @@ function LifetimeEventLog({
             onChange={setColorsFilter}
             hrefFor={(v) => filterHref("colors", v)}
             options={colorOptions}
+            align="right"
             renderValue={renderColorOption}
             renderOption={renderColorOption}
             className="min-w-0 max-w-[200px]"
@@ -2169,6 +2171,7 @@ function DraftLogDesktop({
             onChange={setColorsFilter}
             hrefFor={(v) => filterHref("colors", v)}
             options={colorOptions}
+            align="right"
             renderValue={renderColorOption}
             renderOption={renderColorOption}
             className="min-w-0 max-w-[200px]"
@@ -2938,6 +2941,7 @@ function Mobile({
               onChange={setColorsFilter}
               hrefFor={(v) => filterHref("colors", v)}
               options={colorOptions}
+            align="right"
               variant="mobile"
               renderValue={renderColorOption}
               renderOption={renderColorOption}
