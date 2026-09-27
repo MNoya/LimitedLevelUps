@@ -9,9 +9,11 @@ import { ArrowRight, GoSidebarCollapse, TbCards } from "../../Icons";
 import {
   CARD_FRAME,
   CARD_FRAME_HOVER,
+  CardGradeOverlay,
   CardImage,
   CardImageMapProvider,
   CardPreviewProvider,
+  KEEPS_PREVIEW,
   ReviewSetProvider,
   StackColumn,
 } from "./ReviewCard";
@@ -111,6 +113,7 @@ export function DraftReviewMOCS({
   const [revealMode, setRevealMode] = usePersistentState<RevealMode>("draftReviewRevealMode", "revealed");
   const [revealedAt, setRevealedAt] = useState<string | null>(null);
   const [splitSideboard, setSplitSideboard] = usePersistentBool("draftReviewSplitSideboard", false);
+  const [showGrades, setShowGrades] = usePersistentBool("draftReviewShowGrades", false);
   const [deckPopupSeat, setDeckPopupSeat] = useState<number | null>(null);
   const viewportHeight = useViewportHeight();
   const [maxBoosterHeight, setMaxBoosterHeight] = useState(0);
@@ -208,6 +211,8 @@ export function DraftReviewMOCS({
   const view = views[seat][pack][pick];
   const boosterCards = view.booster.map((idx) => artifact.cards[idx]);
   const active = seats[seat];
+  const followsPick = effectiveViewMode === "step" && pickShown;
+  const pickedCard = followsPick ? boosterCards[view.takenPositions[0]] : null;
 
   const deck = artifact.decks?.[seat];
   const sideSet = useMemo(() => new Set(deck?.side ?? []), [deck]);
@@ -267,11 +272,10 @@ export function DraftReviewMOCS({
   return (
     <ReviewSetProvider value={artifact.set}>
     <CardImageMapProvider value={cardImages}>
-    <CardPreviewProvider setCode={meta.setCode}>
+    <CardPreviewProvider setCode={meta.setCode} followKey={`${position}/${followsPick}`} followCard={pickedCard}>
     <div className="fixed inset-0 z-50 flex select-none flex-col bg-bg text-text">
       <MobileTopBar
         setSymbol={setSymbol}
-        eventTitle={eventTitle}
         left={seats[left]}
         active={active}
         right={seats[right]}
@@ -281,9 +285,17 @@ export function DraftReviewMOCS({
         backHref={backHref}
         scrollOn={effectiveViewMode === "scroll"}
         onToggleScroll={() => setViewMode(viewMode === "scroll" ? "step" : "scroll")}
+        showGrades={showGrades}
+        onToggleGrades={() => setShowGrades((v) => !v)}
         solo={solo}
       />
       <Header
+        left={seats[left]}
+        active={active}
+        right={seats[right]}
+        passRight={dir === 1}
+        leftHref={seatHref(left)}
+        rightHref={seatHref(right)}
         setSymbol={setSymbol}
         eventTitle={eventTitle}
         backHref={backHref}
@@ -298,6 +310,8 @@ export function DraftReviewMOCS({
         onReveal={reveal}
         revealMode={revealMode}
         onRevealMode={changeReveal}
+        showGrades={showGrades}
+        onToggleGrades={() => setShowGrades((v) => !v)}
         showTable={showTable}
         onToggleTable={() => setShowTable((v) => !v)}
         viewMode={effectiveViewMode}
@@ -310,17 +324,19 @@ export function DraftReviewMOCS({
             <>
               <div className="absolute right-2 top-1 z-20 lg:hidden">
                 <MobileToggle
-                  label="SHOW PICKS"
+                  label="PICKS"
                   ariaLabel="Show picks"
                   on={revealMode === "revealed"}
                   onToggle={() => changeReveal(revealMode === "revealed" ? "click" : "revealed")}
                 />
               </div>
               <DraftScrollRecap
+                key={seat}
                 packs={views[seat]}
                 cards={artifact.cards}
                 perTurn={perTurn}
                 revealMode={revealMode}
+                showGrades={showGrades}
                 initialPack={pack}
                 initialPick={pick}
                 onActivePick={(p, k) => {
@@ -335,6 +351,7 @@ export function DraftReviewMOCS({
               <BoosterPanel
                 cards={boosterCards}
                 pickedPositions={pickShown ? view.takenPositions : []}
+                showGrades={showGrades}
                 fadeKey={`${seat}-${pack}-${pick}`}
                 onNaturalHeight={reportBoosterHeight}
               />
@@ -555,7 +572,6 @@ function SetSymbol({ src, className }: { src: string; className?: string }) {
 // switches seats so you can walk the table.
 function MobileTopBar({
   setSymbol,
-  eventTitle,
   left,
   active,
   right,
@@ -565,10 +581,11 @@ function MobileTopBar({
   backHref,
   scrollOn,
   onToggleScroll,
+  showGrades,
+  onToggleGrades,
   solo = false,
 }: {
   setSymbol: string;
-  eventTitle: string;
   left: Seat;
   active: Seat;
   right: Seat;
@@ -578,43 +595,86 @@ function MobileTopBar({
   backHref: string;
   scrollOn: boolean;
   onToggleScroll: () => void;
+  showGrades: boolean;
+  onToggleGrades: () => void;
   solo?: boolean;
 }) {
-  const arrow = passRight ? "»" : "«";
-  const name = "truncate font-display text-[13px] tracking-[0.04em] text-subtle no-underline [-webkit-tap-highlight-color:transparent] active:text-text";
   const backClass = "flex shrink-0 items-center gap-1 text-subtle [-webkit-tap-highlight-color:transparent] active:text-text";
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-surface px-2 lg:hidden">
       <Link to={backHref} aria-label="Back to pod" className={backClass}>
         <ChevronIcon dir="left" />
         <SetSymbol src={setSymbol} className="h-5 w-5" />
-        <span className="max-w-[84px] truncate font-display text-[13px] tracking-[0.04em]">
-          {highlightEventLabel(eventTitle)}
-        </span>
       </Link>
-      <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5">
-        {!solo && (
-          <>
-            <Link to={leftHref} replace className={cn(name, "max-w-[78px]")}>
-              {left.name}
-            </Link>
-            <span className="shrink-0 font-mono text-[13px] text-subtle">{arrow}</span>
-          </>
-        )}
-        <span className="max-w-[96px] shrink truncate text-center font-display text-[15px] tracking-[0.06em] text-green">
-          {active.name}
-        </span>
-        {!solo && (
-          <>
-            <span className="shrink-0 font-mono text-[13px] text-subtle">{arrow}</span>
-            <Link to={rightHref} replace className={cn(name, "max-w-[78px]")}>
-              {right.name}
-            </Link>
-          </>
-        )}
-      </div>
+      <SeatSwitcher
+        left={left}
+        active={active}
+        right={right}
+        passRight={passRight}
+        leftHref={leftHref}
+        rightHref={rightHref}
+        solo={solo}
+        size="mobile"
+      />
+      <MobileToggle label="GRADES" ariaLabel="Show grades" on={showGrades} onToggle={onToggleGrades} />
       {!solo && (
         <MobileToggle label="SCROLL" ariaLabel="Scroll the whole draft" on={scrollOn} onToggle={onToggleScroll} />
+      )}
+    </div>
+  );
+}
+
+const SEAT_SWITCHER_SIZES = {
+  mobile: { neighbor: "max-w-[78px] text-[13px]", arrow: "text-[13px]", active: "max-w-[96px] text-[15px]" },
+  desktop: { neighbor: "max-w-[180px] text-[16px] hover:text-text", arrow: "text-[16px]", active: "max-w-[240px] text-[19px]" },
+};
+
+function SeatSwitcher({
+  left,
+  active,
+  right,
+  passRight,
+  leftHref,
+  rightHref,
+  solo,
+  size,
+}: {
+  left: Seat;
+  active: Seat;
+  right: Seat;
+  passRight: boolean;
+  leftHref: string;
+  rightHref: string;
+  solo: boolean;
+  size: keyof typeof SEAT_SWITCHER_SIZES;
+}) {
+  const sizes = SEAT_SWITCHER_SIZES[size];
+  const arrow = <span className={cn("shrink-0 font-mono text-subtle", sizes.arrow)}>{passRight ? "»" : "«"}</span>;
+  const neighbor = cn(
+    "truncate font-display tracking-[0.04em] text-subtle no-underline transition-colors",
+    "[-webkit-tap-highlight-color:transparent] active:text-text",
+    sizes.neighbor,
+  );
+  return (
+    <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5">
+      {!solo && (
+        <>
+          <Link to={leftHref} replace className={neighbor}>
+            {left.name}
+          </Link>
+          {arrow}
+        </>
+      )}
+      <span className={cn("shrink truncate text-center font-display tracking-[0.06em] text-green", sizes.active)}>
+        {active.name}
+      </span>
+      {!solo && (
+        <>
+          {arrow}
+          <Link to={rightHref} replace className={neighbor}>
+            {right.name}
+          </Link>
+        </>
       )}
     </div>
   );
@@ -638,6 +698,12 @@ function MobileToggle({ label, on, onToggle, ariaLabel }: { label: string; on: b
 }
 
 function Header({
+  left,
+  active,
+  right,
+  passRight,
+  leftHref,
+  rightHref,
   setSymbol,
   eventTitle,
   backHref,
@@ -652,12 +718,20 @@ function Header({
   onReveal,
   revealMode,
   onRevealMode,
+  showGrades,
+  onToggleGrades,
   showTable,
   onToggleTable,
   viewMode,
   onViewMode,
   solo = false,
 }: {
+  left: Seat;
+  active: Seat;
+  right: Seat;
+  passRight: boolean;
+  leftHref: string;
+  rightHref: string;
   setSymbol: string;
   eventTitle: string;
   backHref: string;
@@ -672,6 +746,8 @@ function Header({
   onReveal: () => void;
   revealMode: RevealMode;
   onRevealMode: (m: RevealMode) => void;
+  showGrades: boolean;
+  onToggleGrades: () => void;
   showTable: boolean;
   onToggleTable: () => void;
   viewMode: "step" | "scroll";
@@ -683,15 +759,20 @@ function Header({
       <button
         onClick={onReveal}
         aria-label="Reveal picked card"
-        className="flex h-9 min-w-[84px] items-center justify-center gap-1.5 rounded-md border border-white/40 bg-surface2 px-3 font-display text-[13px] tracking-[0.12em] text-text transition-[transform,background-color,border-color,color] duration-150 ease-out touch-manipulation [-webkit-tap-highlight-color:transparent] hover:border-white/60 hover:bg-white/10 active:scale-90 active:bg-white/20 motion-reduce:active:scale-100"
+        className="flex h-9 w-9 items-center justify-center gap-1.5 rounded-md border border-white/40 bg-surface2 font-display min-[1500px]:w-auto min-[1500px]:min-w-[84px] min-[1500px]:px-3 text-[13px] tracking-[0.12em] text-text transition-[transform,background-color,border-color,color] duration-150 ease-out touch-manipulation [-webkit-tap-highlight-color:transparent] hover:border-white/60 hover:bg-white/10 active:scale-90 active:bg-white/20 motion-reduce:active:scale-100"
       >
-        REVEAL
+        <span className="hidden min-[1500px]:inline">REVEAL</span>
         <EyeIcon off={false} />
       </button>
     </Tooltip>
   ) : (
     <NavArrow dir="next" href={nextHref} />
   );
+
+  const pickChipsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    pickChipsRef.current?.querySelector("[aria-current]")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [pack, pick, viewMode]);
 
   const showPicksToggle = (
     <ShowPicksToggle
@@ -701,8 +782,8 @@ function Header({
   );
 
   return (
-    <header className="hidden h-[60px] shrink-0 items-center gap-5 border-b border-border bg-surface px-5 lg:flex">
-      <div className="flex min-w-0 flex-1 items-center">
+    <header {...KEEPS_PREVIEW} className="hidden h-[60px] shrink-0 items-center gap-3 border-b border-border bg-surface px-5 lg:flex">
+      <div className="flex min-w-[54px] flex-1 items-center">
         <Link
           to={backHref}
           className="flex min-w-0 items-center gap-2.5 text-left transition-colors hover:text-green"
@@ -717,7 +798,7 @@ function Header({
       </div>
 
       {viewMode === "step" && (
-        <div className="flex items-center gap-5">
+        <div className="flex min-w-0 items-center gap-3 min-[1500px]:gap-5">
           <ChipRow label="PACK">
             {[0, 1, 2].map((p) => (
               <Chip key={p} active={p === pack} href={jumpHref(p, 0)}>
@@ -725,22 +806,42 @@ function Header({
               </Chip>
             ))}
           </ChipRow>
-          <ChipRow label="PICK">
+          <ChipRow label="PICK" chipsRef={pickChipsRef}>
             {Array.from({ length: turns }, (_, k) => (
               <Chip key={k} active={k === pick} href={jumpHref(pack, k)}>
                 {pickLabel(k, perTurn)}
               </Chip>
             ))}
           </ChipRow>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <NavArrow dir="prev" href={prevHref} />
             {revealControl}
           </div>
         </div>
       )}
 
-      <div className="flex flex-1 items-center justify-end gap-2">
+      {viewMode === "scroll" && (
+        <SeatSwitcher
+          left={left}
+          active={active}
+          right={right}
+          passRight={passRight}
+          leftHref={leftHref}
+          rightHref={rightHref}
+          solo={solo}
+          size="desktop"
+        />
+      )}
+
+      <div className="flex min-w-max flex-1 items-center justify-end gap-2">
         {showPicksToggle}
+        <SwitchToggle
+          label="GRADES"
+          on={showGrades}
+          onToggle={onToggleGrades}
+          ariaLabel="Show grades"
+          tooltip={showGrades ? "Hide 17Lands grades on the packs" : "Show 17Lands grades on the packs"}
+        />
         {!solo && (
           <ScrollToggle on={viewMode === "scroll"} onToggle={() => onViewMode(viewMode === "scroll" ? "step" : "scroll")} />
         )}
@@ -846,11 +947,21 @@ function ScrollToggle({ on, onToggle, block = false }: { on: boolean; onToggle: 
   );
 }
 
-function ChipRow({ label, children }: { label: string; children: React.ReactNode }) {
+function ChipRow({
+  label,
+  chipsRef,
+  children,
+}: {
+  label: string;
+  chipsRef?: React.Ref<HTMLDivElement>;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex items-center gap-2">
+    <div className={cn("flex items-center gap-2", chipsRef ? "min-w-0" : "shrink-0")}>
       <span className="font-display text-[14px] tracking-[0.18em] text-subtle">{label}</span>
-      <div className="flex gap-1">{children}</div>
+      <div ref={chipsRef} className="no-scrollbar flex min-w-0 gap-1 overflow-x-auto">
+        {children}
+      </div>
     </div>
   );
 }
@@ -862,7 +973,7 @@ function Chip({ active, href, children }: { active: boolean; href: string; child
       replace
       aria-current={active || undefined}
       className={cn(
-        "flex h-8 min-w-[32px] items-center justify-center rounded border px-2 font-display text-[16px] tracking-[0.04em] tabular-nums no-underline transition-colors",
+        "flex h-8 min-w-[32px] shrink-0 items-center justify-center rounded border px-2 font-display text-[16px] tracking-[0.04em] tabular-nums no-underline transition-colors",
         active
           ? "border-green/60 bg-green/15 text-green"
           : "border-border bg-surface2 text-subtle hover:border-white/40 hover:bg-white/10 hover:text-text",
@@ -879,11 +990,13 @@ const BOOSTER_PAD = 12;
 function BoosterPanel({
   cards,
   pickedPositions,
+  showGrades,
   fadeKey,
   onNaturalHeight,
 }: {
   cards: ArtifactCard[];
   pickedPositions: number[];
+  showGrades: boolean;
   fadeKey: string;
   onNaturalHeight?: (height: number) => void;
 }) {
@@ -902,34 +1015,44 @@ function BoosterPanel({
   return (
     <div ref={scrollRef} className="themed-scrollbar min-h-0 flex-1 overflow-y-auto" style={{ padding: BOOSTER_PAD }}>
       <div key={fadeKey} className="animate-fadeUpIn">
-        <BoosterGrid cards={cards} pickedPositions={pickedPositions} />
+        <BoosterGrid cards={cards} pickedPositions={pickedPositions} showGrades={showGrades} />
       </div>
     </div>
   );
 }
 
-function BoosterGrid({ cards, pickedPositions }: { cards: ArtifactCard[]; pickedPositions: number[] }) {
+function BoosterGrid({
+  cards,
+  pickedPositions,
+  showGrades,
+}: {
+  cards: ArtifactCard[];
+  pickedPositions: number[];
+  showGrades: boolean;
+}) {
   return (
     <div className="flex flex-wrap content-start justify-center" style={{ gap: BOOSTER_GAP }}>
       {cards.map((card, i) => (
         <div key={i} className="w-[calc((100%-16px)/3)] sm:w-[calc((100%-24px)/4)] lg:w-[210px]">
-          <BoosterCard card={card} picked={pickedPositions.includes(i)} />
+          <BoosterCard card={card} picked={pickedPositions.includes(i)} showGrades={showGrades} />
         </div>
       ))}
     </div>
   );
 }
 
-function BoosterCard({ card, picked }: { card: ArtifactCard; picked: boolean }) {
+function BoosterCard({ card, picked, showGrades }: { card: ArtifactCard; picked: boolean; showGrades: boolean }) {
   return (
     <div
       className={cn(
         CARD_FRAME,
+        "relative",
         "transition-transform duration-150 hover:z-10 hover:scale-[1.04]",
         picked && "p0p1-card-selected z-10 scale-[1.03] hover:scale-[1.05]",
       )}
     >
       <CardImage card={card} />
+      {showGrades && <CardGradeOverlay card={card} />}
     </div>
   );
 }
@@ -942,6 +1065,7 @@ function DraftScrollRecap({
   cards,
   perTurn,
   revealMode,
+  showGrades,
   initialPack,
   initialPick,
   onActivePick,
@@ -950,6 +1074,7 @@ function DraftScrollRecap({
   cards: ArtifactCard[];
   perTurn: number;
   revealMode: RevealMode;
+  showGrades: boolean;
   initialPack: number;
   initialPick: number;
   onActivePick: (pack: number, pick: number) => void;
@@ -958,10 +1083,13 @@ function DraftScrollRecap({
   const onActivePickRef = useRef(onActivePick);
   onActivePickRef.current = onActivePick;
   useLayoutEffect(() => {
-    const target = ref.current?.querySelector(`[data-pick="${initialPack}-${initialPick}"]`);
-    if (target instanceof HTMLElement) {
-      target.scrollIntoView({ block: "start" });
+    const root = ref.current;
+    const target = root?.querySelector(`[data-pick="${initialPack}-${initialPick}"]`);
+    if (!root || !(target instanceof HTMLElement)) {
+      return;
     }
+    const offset = target.getBoundingClientRect().top - root.getBoundingClientRect().top;
+    root.scrollTop += offset - parseFloat(getComputedStyle(root).paddingTop);
   }, []);
   useEffect(() => {
     const root = ref.current;
@@ -989,10 +1117,19 @@ function DraftScrollRecap({
     return () => observer.disconnect();
   }, []);
   return (
-    <div ref={ref} className="themed-scrollbar min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1 lg:px-8 lg:py-6">
+    <div ref={ref} className="themed-scrollbar min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1 lg:px-8 lg:pb-6 lg:pt-3">
       {packs.map((pickViews, p) =>
         pickViews.map((view, k) => (
-          <RecapSection key={`${p}-${k}`} pack={p} pick={k} perTurn={perTurn} view={view} cards={cards} revealMode={revealMode} />
+          <RecapSection
+            key={`${p}-${k}`}
+            pack={p}
+            pick={k}
+            perTurn={perTurn}
+            view={view}
+            cards={cards}
+            revealMode={revealMode}
+            showGrades={showGrades}
+          />
         )),
       )}
     </div>
@@ -1006,6 +1143,7 @@ function RecapSection({
   view,
   cards,
   revealMode,
+  showGrades,
 }: {
   pack: number;
   pick: number;
@@ -1013,16 +1151,21 @@ function RecapSection({
   view: DraftPickView;
   cards: ArtifactCard[];
   revealMode: RevealMode;
+  showGrades: boolean;
 }) {
   const [clicked, setClicked] = useState(false);
   const shown = revealMode === "revealed" || clicked;
   const boosterCards = view.booster.map((idx) => cards[idx]);
-  const takenNames = view.takenPositions.map((pos) => boosterCards[pos]?.n ?? "").join(", ");
+  const takenNames = view.takenPositions.map((pos) => frontFace(boosterCards[pos]?.n ?? "")).join(", ");
   return (
-    <section data-pick={`${pack}-${pick}`} className="mb-7 scroll-mt-3 lg:mb-9">
+    <section data-pick={`${pack}-${pick}`} className="mb-7 lg:mb-9">
       <div className="mb-2 flex h-9 items-center gap-3 border-b border-border lg:mb-3 lg:h-10">
-        <span className="font-display text-[15px] tracking-[0.16em] text-subtle">PACK {pack + 1}</span>
-        <span className="font-display text-[15px] tracking-[0.16em] text-subtle">PICK {pickLabel(pick, perTurn)}</span>
+        <span className="shrink-0 whitespace-nowrap font-display text-[15px] tracking-[0.16em] text-subtle">
+          PACK {pack + 1}
+        </span>
+        <span className="shrink-0 whitespace-nowrap font-display text-[15px] tracking-[0.16em] text-subtle">
+          PICK {pickLabel(pick, perTurn)}
+        </span>
         {shown ? (
           <span className="flex min-w-0 items-center gap-2">
             <ArrowRight size={16} className="shrink-0 text-subtle" aria-hidden="true" />
@@ -1039,12 +1182,14 @@ function RecapSection({
       </div>
       <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(104px,1fr))] lg:[grid-template-columns:repeat(auto-fill,minmax(148px,1fr))]">
         {boosterCards.map((card, i) => (
-          <BoosterCard key={i} card={card} picked={shown && view.takenPositions.includes(i)} />
+          <BoosterCard key={i} card={card} picked={shown && view.takenPositions.includes(i)} showGrades={showGrades} />
         ))}
       </div>
     </section>
   );
 }
+
+const frontFace = (name: string) => name.split(" // ")[0];
 
 const PANEL_DRAG_THRESHOLD = 4;
 const PANEL_MIN_HEIGHT = 64;
@@ -1615,7 +1760,7 @@ function MobileNavDivider({
     "border-white/40 bg-surface2 text-text active:scale-90 active:bg-white/20 motion-reduce:active:scale-100";
   const arrowDisabled = "border-border text-dim opacity-40";
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between gap-1.5 border-t border-border bg-surface px-2 lg:hidden">
+    <div {...KEEPS_PREVIEW} className="flex h-12 shrink-0 items-center justify-between gap-1.5 border-t border-border bg-surface px-2 lg:hidden">
       <div className="flex gap-1">
         {[0, 1, 2].map((p) => (
           <Link
@@ -1663,8 +1808,10 @@ function MobileNavDivider({
         )}
       </div>
 
-      <ShowPicksToggle
-        showPicks={revealMode === "revealed"}
+      <MobileToggle
+        label="PICKS"
+        ariaLabel="Show picks"
+        on={revealMode === "revealed"}
         onToggle={() => onRevealMode(revealMode === "revealed" ? "click" : "revealed")}
       />
     </div>
@@ -2085,7 +2232,9 @@ function NavArrow({ dir, href }: { dir: "prev" | "next"; href: string | null }) 
   const [hover, setHover] = useState(false);
   const className = cn(
     "flex h-9 items-center justify-center rounded-md border bg-surface2",
-    primary ? "min-w-[84px] gap-1.5 px-3 font-display text-[13px] tracking-[0.12em]" : "w-9",
+    primary
+      ? "w-9 gap-1.5 font-display text-[13px] tracking-[0.12em] min-[1500px]:w-auto min-[1500px]:min-w-[84px] min-[1500px]:px-3"
+      : "w-9",
     "transition-[transform,background-color,border-color,color] duration-150 ease-out",
     "touch-manipulation [-webkit-tap-highlight-color:transparent]",
     href
@@ -2094,7 +2243,7 @@ function NavArrow({ dir, href }: { dir: "prev" | "next"; href: string | null }) 
   );
   const content = (
     <>
-      {primary && <span>NEXT</span>}
+      {primary && <span className="hidden min-[1500px]:inline">NEXT</span>}
       <ChevronIcon dir={primary ? "right" : "left"} />
     </>
   );
@@ -2125,7 +2274,7 @@ function ChevronIcon({ dir }: { dir: "up" | "down" | "left" | "right" }) {
     right: "M9 6l6 6-6 6",
   }[dir];
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg className="shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <path d={path} />
     </svg>
   );

@@ -1,12 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { cn } from "../../../lib/utils";
+import { CUT_CORNER_CHAMFER } from "../../ChamferCta";
 import { cardImageSources, type CardImages } from "../../../data/cardImages";
 import {
+  cardNameKey,
   resolveTierList,
   tierColor,
   TREND_COLOR,
   trendGlyphStack,
+  useCardStats,
   useTierList,
   type TierCard,
 } from "../../../data/tierList";
@@ -147,14 +150,43 @@ export function StackColumn({
 }
 
 // Draftmancer-style right-click preview: right-clicking any review card slides a card image in from
-// the right edge of the viewport, with the card's Limited grade if the set has a tier list.
+// the right edge of the viewport, with the card's Tier List and 17Lands grades where the set has them.
 const CardPreviewContext = createContext<((card: ArtifactCard) => void) | null>(null);
 
-export function CardPreviewProvider({ setCode, children }: { setCode: string; children: React.ReactNode }) {
-  const grades = useReviewGrades(setCode);
+interface ReviewGrades {
+  tierCard: TierCard | undefined;
+  dataGrade: string | null;
+}
+
+const CardGradesContext = createContext<(card: ArtifactCard) => ReviewGrades>(() => ({
+  tierCard: undefined,
+  dataGrade: null,
+}));
+
+// Clicks inside an element carrying this attribute keep the preview open, so pick navigation can move it along
+export const KEEPS_PREVIEW = { "data-keeps-preview": "" };
+
+export function CardPreviewProvider({
+  setCode,
+  followKey,
+  followCard,
+  children,
+}: {
+  setCode: string;
+  followKey?: string;
+  followCard?: ArtifactCard | null;
+  children: React.ReactNode;
+}) {
+  const gradesFor = useReviewGrades(setCode);
   const [preview, setPreview] = useState<ArtifactCard | null>(null);
 
   const openPreview = useMemo(() => (card: ArtifactCard) => setPreview(card), []);
+
+  useEffect(() => {
+    if (followCard) {
+      setPreview((open) => (open ? followCard : open));
+    }
+  }, [followKey, followCard]);
 
   useEffect(() => {
     if (!preview) {
@@ -167,7 +199,8 @@ export function CardPreviewProvider({ setCode, children }: { setCode: string; ch
       }
     };
     const onPointerDown = (e: PointerEvent) => {
-      if (e.button === 0) {
+      const keepsPreview = e.target instanceof Element && e.target.closest("[data-keeps-preview]");
+      if (e.button === 0 && !keepsPreview) {
         close();
       }
     };
@@ -179,31 +212,59 @@ export function CardPreviewProvider({ setCode, children }: { setCode: string; ch
     };
   }, [preview]);
 
-  const grade = preview ? grades.get(normalizeCardName(preview.n)) : undefined;
   return (
     <CardPreviewContext.Provider value={openPreview}>
-      {children}
-      {preview && <CardPreviewOverlay card={preview} grade={grade} />}
+      <CardGradesContext.Provider value={gradesFor}>
+        {children}
+        {preview && <CardPreviewOverlay card={preview} grades={gradesFor(preview)} />}
+      </CardGradesContext.Provider>
     </CardPreviewContext.Provider>
   );
 }
 
-const normalizeCardName = (name: string | null | undefined) => (name ?? "").trim().toLowerCase();
-
-function useReviewGrades(setCode: string): Map<string, TierCard> {
-  const resolved = resolveTierList(setCode);
-  const { data } = useTierList(resolved.effectiveUid, resolved.graders);
-  return useMemo(() => {
-    const byName = new Map<string, TierCard>();
-    for (const card of data ?? []) {
-      byName.set(normalizeCardName(card.name), card);
-    }
-    return byName;
-  }, [data]);
+export function CardGradeOverlay({ card }: { card: ArtifactCard }) {
+  const { tierCard, dataGrade } = useContext(CardGradesContext)(card);
+  const grade = dataGrade ?? tierCard?.tier;
+  if (!grade || grade === "TBD") {
+    return null;
+  }
+  const hasModifier = /[+-]$/.test(grade);
+  const chamfer = "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)";
+  return (
+    <div className="pointer-events-none absolute bottom-[44%] right-[8%]">
+      <div
+        className={cn(
+          "bg-black/80 px-1.5 py-0.5 backdrop-blur-sm lg:px-2 lg:py-1",
+          hasModifier && "pr-0.5 lg:pr-1",
+        )}
+        style={{ clipPath: chamfer }}
+      >
+        <GradeLetter tier={grade} className="text-[15px] lg:text-[20px]" />
+      </div>
+    </div>
+  );
 }
 
-function CardPreviewOverlay({ card, grade }: { card: ArtifactCard; grade: TierCard | undefined }) {
+function useReviewGrades(setCode: string): (card: ArtifactCard) => ReviewGrades {
+  const resolved = resolveTierList(setCode);
+  const { data } = useTierList(resolved.effectiveUid, resolved.graders);
+  const cardStats = useCardStats(setCode);
+  return useMemo(() => {
+    const tierCards = new Map<string, TierCard>();
+    for (const card of data ?? []) {
+      tierCards.set(cardNameKey(card.name), card);
+    }
+    return (card: ArtifactCard) => {
+      const name = card.n ?? "";
+      const dataGrade = cardStats?.gradesFor(name)?.all ?? null;
+      return { tierCard: tierCards.get(cardNameKey(name)), dataGrade };
+    };
+  }, [data, cardStats]);
+}
+
+function CardPreviewOverlay({ card, grades }: { card: ArtifactCard; grades: ReviewGrades }) {
   const { src, onError } = useFallbackImage(useCardImageSources(card));
+  const hasGrades = grades.tierCard || grades.dataGrade;
   return (
     <div className="pointer-events-none fixed inset-x-0 top-1/2 z-[70] flex -translate-y-1/2 justify-center md:inset-x-auto md:right-10 md:block">
       <div className="relative" style={{ animation: "card-preview-in-right 180ms ease-out" }}>
@@ -221,35 +282,60 @@ function CardPreviewOverlay({ card, grade }: { card: ArtifactCard; grade: TierCa
             <span className="font-body text-sm text-subtle">{card.n}</span>
           </div>
         )}
-        {grade && <GradeBadge card={grade} />}
+        {hasGrades && <GradeBadge grades={grades} />}
       </div>
     </div>
   );
 }
 
-function GradeBadge({ card }: { card: TierCard }) {
+function GradeBadge({ grades }: { grades: ReviewGrades }) {
+  const { tierCard, dataGrade } = grades;
+  const labelClass = "text-[12px] font-semibold uppercase leading-none tracking-[0.1em] text-white";
   return (
-    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-      <div className="flex items-center gap-2.5 rounded-lg bg-black/80 px-3 py-2 backdrop-blur-sm">
-        <span className="flex flex-col text-[12px] font-semibold uppercase leading-none tracking-[0.1em] text-white">
-          <span>Tier</span>
-          <span>List</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="font-display text-[26px] leading-none" style={{ color: tierColor(card.tier) }}>
-            {card.tier}
-          </span>
-          {card.trend && (
-            <span className="flex flex-col items-center" style={{ color: TREND_COLOR[card.trend] }}>
-              {trendGlyphStack(card).map((char, i, stack) => (
-                <span key={i} className={cn("text-[11px] leading-none", i > 0 && "-mt-[5px]")} style={{ zIndex: stack.length - i }}>
-                  {char}
-                </span>
-              ))}
+    <div className="pointer-events-none absolute bottom-[44%] right-[8%]">
+      <div
+        className="flex items-center gap-4 bg-black/80 px-3 py-2 backdrop-blur-sm"
+        style={{ clipPath: CUT_CORNER_CHAMFER }}
+      >
+        {tierCard && (
+          <span className="flex items-center gap-2.5">
+            <span className={cn("flex flex-col", labelClass)}>
+              <span>Tier</span>
+              <span>List</span>
             </span>
-          )}
-        </span>
+            <span className="flex items-center gap-1.5">
+              <GradeLetter tier={tierCard.tier} className="text-[26px]" />
+              {tierCard.trend && (
+                <span className="flex flex-col items-center" style={{ color: TREND_COLOR[tierCard.trend] }}>
+                  {trendGlyphStack(tierCard).map((char, i, stack) => (
+                    <span
+                      key={i}
+                      className={cn("text-[11px] leading-none", i > 0 && "-mt-[5px]")}
+                      style={{ zIndex: stack.length - i }}
+                    >
+                      {char}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </span>
+          </span>
+        )}
+        {dataGrade && (
+          <span className="flex items-center gap-2.5">
+            <span className={labelClass}>17L</span>
+            <GradeLetter tier={dataGrade} className="text-[26px]" />
+          </span>
+        )}
       </div>
     </div>
+  );
+}
+
+function GradeLetter({ tier, className }: { tier: string; className: string }) {
+  return (
+    <span className={cn("font-display leading-none", className)} style={{ color: tierColor(tier) }}>
+      {tier}
+    </span>
   );
 }

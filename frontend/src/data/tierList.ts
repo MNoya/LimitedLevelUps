@@ -458,7 +458,7 @@ export function useDataGradeView(): [boolean, (value: boolean) => void] {
 
 const ONE_HOUR = 60 * 60 * 1000;
 
-const normalizeName = (name: string) => name.trim().toLowerCase();
+export const cardNameKey = (name: string) => name.split(" // ")[0].trim().toLowerCase();
 
 interface TierListPayload {
   cards: TierCard[];
@@ -522,7 +522,7 @@ export function useTierList(uid: string | undefined, graders: Grader[] = []) {
     const gradesByName = graderResults.map((result) => {
       const byName = new Map<string, string>();
       for (const card of result.data?.cards ?? []) {
-        byName.set(normalizeName(card.name), card.tier);
+        byName.set(cardNameKey(card.name), card.tier);
       }
       return byName;
     });
@@ -531,7 +531,7 @@ export function useTierList(uid: string | undefined, graders: Grader[] = []) {
       graders: graders
         .map((grader, i) => ({
           name: grader.name,
-          tier: gradesByName[i].get(normalizeName(card.name)),
+          tier: gradesByName[i].get(cardNameKey(card.name)),
         }))
         .filter((grade): grade is GraderGrade => Boolean(grade.tier)),
     }));
@@ -575,17 +575,17 @@ async function fetchCardStats(setCode: string): Promise<CardStatsFile> {
 function buildCardStatsLookup(file: CardStatsFile): CardStatsLookup {
   const stats = new Map<string, CardStats>();
   for (const [name, cardStats] of Object.entries(file.cards)) {
-    stats.set(normalizeName(name), cardStats);
+    stats.set(cardNameKey(name), cardStats);
   }
   const grades = new Map<string, CardGrades>();
   let hasGrades = false;
   for (const [name, cardGrades] of gradeCardStats(file)) {
-    grades.set(normalizeName(name), cardGrades);
+    grades.set(cardNameKey(name), cardGrades);
     hasGrades ||= cardGrades.all !== null;
   }
   return {
-    statsFor: (name) => stats.get(normalizeName(name)),
-    gradesFor: (name) => grades.get(normalizeName(name)),
+    statsFor: (name) => stats.get(cardNameKey(name)),
+    gradesFor: (name) => grades.get(cardNameKey(name)),
     hasStats: stats.size > 0,
     hasGrades,
     updatedAt: file.updatedAt,
