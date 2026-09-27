@@ -7,7 +7,7 @@ import { TierFilterBar } from "../components/TierFilterBar";
 import { TierGrid } from "../components/TierGrid";
 import { TierCardSearch } from "../components/TierCardSearch";
 import { GradeGuideIcon, GradeGuideProvider, GradeGuideTrigger } from "../components/TierGuide";
-import { TierSetDropdown } from "../components/TierSetDropdown";
+import { SetGlyphDropdown } from "../components/SetGlyphDropdown";
 import { Tooltip } from "../components/Tooltip";
 import { SkeletonsModal } from "../components/SkeletonsModal";
 import { skeletonsFor } from "../data/skeletons";
@@ -105,7 +105,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
               <>
                 <div className="flex items-center gap-2">
                   <h1 className="font-display tracking-[0.12em] flex flex-1 items-center gap-2 leading-none min-w-0">
-                    <TierSetDropdown
+                    <SetGlyphDropdown
                       sets={tierListSets}
                       activeCode={current}
                       glyphCode={glyphCode}
@@ -191,7 +191,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
               <div className="grid items-center gap-x-[clamp(0.75rem,2.5vw,2.5rem)] grid-cols-[minmax(0,1fr)_auto] min-[1500px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
                 <div className="w-fit min-w-0 max-w-full">
                   <h1 className="font-display tracking-[0.12em] flex items-center gap-3 leading-none min-w-0">
-                    <TierSetDropdown
+                    <SetGlyphDropdown
                       sets={tierListSets}
                       activeCode={current}
                       glyphCode={glyphCode}

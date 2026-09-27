@@ -27,7 +27,11 @@ export function FilterDropdown({
   renderTrigger,
   searchable,
   searchPlaceholder = "Search…",
+  emptyText = "No matches",
+  openOnHover = false,
   triggerClassName,
+  menuClassName,
+  optionClassName,
   className,
   mobileCentered = false,
 }: {
@@ -43,13 +47,18 @@ export function FilterDropdown({
   renderTrigger?: (state: { open: boolean; selected: FilterOption; toggle: () => void }) => React.ReactNode;
   searchable?: boolean;
   searchPlaceholder?: string;
+  emptyText?: string;
+  openOnHover?: boolean;
   triggerClassName?: string;
+  menuClassName?: string;
+  optionClassName?: string;
   className?: string;
   mobileCentered?: boolean;
 }) {
   const isMobile = variant === "mobile";
   const selected = options.find((o) => o.value === value) ?? options[0];
   const [open, setOpen] = useState(false);
+  const [locked, setLocked] = useState(false);
   const [query, setQuery] = useState("");
   const [menuTop, setMenuTop] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
@@ -59,7 +68,16 @@ export function FilterDropdown({
   const navigate = useNavigate();
 
   const showSearch = searchable ?? options.length > SEARCH_THRESHOLD;
-  const toggle = () => setOpen((o) => !o);
+  const toggle = () => {
+    if (!openOnHover) {
+      setOpen((o) => !o);
+    } else if (locked) {
+      setOpen(false);
+    } else {
+      setLocked(true);
+      setOpen(true);
+    }
+  };
   const select = (next: string) => {
     if (onChange) {
       onChange(next);
@@ -82,6 +100,7 @@ export function FilterDropdown({
   useEffect(() => {
     if (!open) {
       setQuery("");
+      setLocked(false);
       return;
     }
     const onClickOutside = (e: MouseEvent) => {
@@ -106,7 +125,12 @@ export function FilterDropdown({
     : options;
 
   return (
-    <div ref={ref} className={cn("relative", isMobile ? "flex-1 min-w-0" : "", className)}>
+    <div
+      ref={ref}
+      className={cn("relative", isMobile ? "flex-1 min-w-0" : "", className)}
+      onMouseEnter={openOnHover ? () => setOpen(true) : undefined}
+      onMouseLeave={openOnHover && !locked ? () => setOpen(false) : undefined}
+    >
       {renderTrigger ? (
         renderTrigger({ open, selected, toggle })
       ) : (
@@ -147,6 +171,7 @@ export function FilterDropdown({
             align === "right" ? "right-0" : "left-0",
             mobileCentered &&
               "max-sm:!fixed max-sm:!left-1/2 max-sm:!right-auto max-sm:!-translate-x-1/2 max-sm:!top-[var(--menu-top)]",
+            menuClassName,
           )}
           style={mobileCentered ? ({ "--menu-top": `${menuTop}px` } as React.CSSProperties) : undefined}
           role="listbox"
@@ -194,6 +219,7 @@ export function FilterDropdown({
                       isSelected
                         ? "border-l-green bg-surface2 text-green"
                         : "border-l-transparent bg-transparent text-text hover:bg-surface2",
+                      optionClassName,
                     )}
                   >
                     {renderOption ? renderOption(o) : o.label}
@@ -202,7 +228,7 @@ export function FilterDropdown({
               );
             })}
             {filtered.length === 0 && (
-              <div className="px-3.5 py-3 font-body text-[14px] text-muted">No matches</div>
+              <div className="px-3.5 py-3 font-body text-[14px] text-muted">{emptyText}</div>
             )}
           </div>
         </div>

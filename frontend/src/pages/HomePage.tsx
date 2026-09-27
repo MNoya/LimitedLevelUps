@@ -17,7 +17,7 @@ import type { IconType } from "react-icons";
 import { Tooltip } from "../components/Tooltip";
 import { AAvatar, fmtPts, SetGlyph, setGlyphCode } from "../components/Brand";
 import { TcgPlayerLogo } from "../components/TcgPlayerLogo";
-import { TierSetDropdown } from "../components/TierSetDropdown";
+import { SetGlyphDropdown } from "../components/SetGlyphDropdown";
 import { boardModeFor, type BoardMode } from "../components/LeaderboardTable";
 import {
   CardModal,
@@ -297,7 +297,7 @@ function TierPanel() {
   };
 
   const tierDropdown = (
-    <TierSetDropdown
+    <SetGlyphDropdown
       sets={tierSets}
       activeCode={current}
       glyphCode={setMeta ? setGlyphCode(setMeta) : current}
@@ -745,14 +745,14 @@ function LeaderboardPanel({ setCode }: { setCode: string }) {
   }, [liveKey, data, maxRows]);
 
   const setDropdown = (
-    <TierSetDropdown
+    <SetGlyphDropdown
       sets={lbSets}
       activeCode={set}
       glyphCode={setMeta ? setGlyphCode(setMeta) : set}
       label={set}
       isMobile={false}
       compact
-      menuAlign="right"
+      align="right"
       triggerClassName="w-[92px]"
       loading={!sets}
       onChange={setPickedSet}
