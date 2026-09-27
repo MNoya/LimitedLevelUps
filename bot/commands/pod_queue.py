@@ -57,8 +57,8 @@ from bot.services.pod_signals import (
     inactivity_window_text,
     next_bonus_start,
     next_slot_start,
+    pod_ping_role_name,
     should_fire,
-    slot_role_name_for_event_time,
     teardown_at,
 )
 from bot.sets import active_set_code, flashback_picker_sets, preview_picker_sets, set_name_for
@@ -262,7 +262,7 @@ def derived_notify_role(scheduled_time: datetime | None, notify: bool) -> str | 
         return None
     if scheduled_time is None:
         return POD_QUEUE_ROLE_NAME
-    return slot_role_name_for_event_time(scheduled_time) or POD_QUEUE_ROLE_NAME
+    return pod_ping_role_name(scheduled_time)
 
 
 async def _handle_click(interaction: discord.Interaction, action: str) -> None:

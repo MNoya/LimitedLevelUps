@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from bot.services.pod_schedule import EARLY_POD_ROLE_NAME, LATE_POD_ROLE_NAME, SCHEDULE_TZ
+from bot.services.pod_schedule import EARLY_POD_ROLE_NAME, LATE_POD_ROLE_NAME, POD_QUEUE_ROLE_NAME, SCHEDULE_TZ
 
 
 SATURDAY = 5
@@ -175,14 +175,17 @@ def bucket_role_name(key: str) -> str | None:
 
 
 def slot_role_name_for_event_time(event_time: datetime) -> str | None:
-    """The slot ping role owning a pod at this instant, keyed on weekend and time-of-day off the poll
-    buckets — the one source of truth for who a pod pings. An off-grid custom time matches no bucket
-    and returns None, so such a pod pings nobody rather than mis-resolving to a neighbouring slot."""
+    """The role of the poll slot starting exactly at this time, or None off the slot times"""
     local = event_time.astimezone(SCHEDULE_TZ)
     for bucket in poll_buckets_for(local.date()):
         if bucket.start.hour == local.hour and bucket.start.minute == local.minute:
             return bucket.role_name
     return None
+
+
+def pod_ping_role_name(event_time: datetime) -> str:
+    """The slot role for a pod on a slot time, else the Pod Draft Queue role"""
+    return slot_role_name_for_event_time(event_time) or POD_QUEUE_ROLE_NAME
 
 
 def slot_event_time(signal_date: date, bucket_key: str) -> datetime | None:

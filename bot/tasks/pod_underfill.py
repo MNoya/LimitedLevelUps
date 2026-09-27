@@ -4,7 +4,7 @@ jobs and by RSVP changes as they land.
 The check offsets live in POD_UNDERFILL_CHECK_HOURS (default 3, 2, 1). T-3h posts a silent status in the
 pod-draft-chat channel carrying the signup link back to the RSVP message; T-2h is the catch-up beat for
 a pod born after T-3h; T-1h (the min offset) deletes and reposts it so it resurfaces near the event, and
-pings the slot role when the pod is close to the number it is chasing — see `_nudge_ping_role`. Every
+pings the pod's ping role when the pod is close to the number it is chasing — see `_nudge_ping_role`. Every
 other post stays silent. Each check re-reads the Yes list off the pod's signal at fire time.
 
 Unfired launcher slots run the same beats through `fire_slot_underfill`, linking to the launcher, which is
@@ -29,7 +29,7 @@ The message is located by scanning channel history for the bot's own post carryi
 the pod name for launcher slots, which share one launcher URL) — nothing is persisted.
 
 A pod pushes at most one last-call ping, claimed on `pod_signals.last_call_pinged_at`, so a caught-up
-T-1h beat after a restart can never ping the slot role twice.
+T-1h beat after a restart can never ping the pod's ping role twice.
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ from bot.services.pod_schedule import (
     build_underfill_fired_message,
     short_event_name,
 )
-from bot.services.pod_signals import KIND_SCHEDULED, STATUS_OPEN, slot_role_name_for_event_time
+from bot.services.pod_signals import KIND_SCHEDULED, STATUS_OPEN, pod_ping_role_name
 from bot.services.pod_slot import pod_display_name
 from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import event_rsvps
@@ -471,25 +471,15 @@ def _nudge_ping_role(
     channel: discord.abc.Messageable, event_time: datetime, yes_count: int, floor: int, aim: int,
     hours_before: int,
 ) -> discord.Role | None:
-    """The slot role to ping on a fresh nudge, or None to stay silent.
-
-    Pinging is gated to the check hours in POD_UNDERFILL_PING_HOURS and to a pod that is close to the
-    number it is currently chasing — the floor while the draft is not yet on, the aim once it is. It needs
-    at most POD_UNDERFILL_PING_CLOSE_GAP more to get there. A pod still far from that number, or one already
-    past the aim, stays silent. The role resolves off the daily poll buckets, so weekly and launcher slots
-    both ping; an off-grid custom time resolves no role and stays silent.
-    """
+    """The role a fresh nudge pings at a ping hour when the pod is close to the floor or aim, else None"""
     if hours_before not in settings.pod_underfill_ping_hours_set:
         return None
     chasing = floor if yes_count < floor else aim
     needed = chasing - yes_count
     if needed <= 0 or needed > settings.pod_underfill_ping_close_gap:
         return None
-    role_name = slot_role_name_for_event_time(event_time)
-    if role_name is None:
-        return None
     guild = getattr(channel, "guild", None)
-    return find_role(guild, role_name)
+    return find_role(guild, pod_ping_role_name(event_time))
 
 
 def claim_last_call_ping_sync(signal_id: str) -> bool:

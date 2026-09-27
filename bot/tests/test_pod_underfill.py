@@ -9,7 +9,8 @@ from bot.tasks.pod_underfill import _arm_underfill_beats, _nudge_ping_role
 
 ET = ZoneInfo("America/New_York")
 WEDNESDAY_LATE = datetime(2026, 6, 24, 21, 0, tzinfo=ET)
-WEDNESDAY_OFF_GRID = datetime(2026, 6, 24, 9, 0, tzinfo=ET)
+WEDNESDAY_BONUS = datetime(2026, 6, 24, 17, 0, tzinfo=ET)
+WEDNESDAY_NEAR_LATE = datetime(2026, 6, 24, 20, 30, tzinfo=ET)
 FLOOR = 6
 AIM = 8
 
@@ -59,12 +60,17 @@ def test_nudge_ping_role_pings_only_close_to_the_number_the_pod_is_chasing(monke
     assert (role is not None) is pings
 
 
-def test_nudge_ping_role_silent_for_an_off_grid_event(monkeypatch):
+@pytest.mark.parametrize("event_time, role_name", [
+    (WEDNESDAY_LATE, "Late Pod"),
+    (WEDNESDAY_BONUS, "Pod Draft Queue"),
+    (WEDNESDAY_NEAR_LATE, "Pod Draft Queue"),
+])
+def test_nudge_ping_role_resolves_the_role_owning_the_pod_time(monkeypatch, event_time, role_name):
     monkeypatch.setattr(settings, "pod_underfill_ping_hours", "1")
 
-    role = _nudge_ping_role(_channel("Late Pod"), WEDNESDAY_OFF_GRID, 7, FLOOR, AIM, hours_before=1)
+    role = _nudge_ping_role(_channel("Late Pod", "Pod Draft Queue"), event_time, 7, FLOOR, AIM, hours_before=1)
 
-    assert role is None
+    assert role.name == role_name
 
 
 class _FakeScheduler:
