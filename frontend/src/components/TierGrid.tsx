@@ -1080,7 +1080,7 @@ export function CardModal({
               {dataSliding && stats && (
                 <div className="flex w-[var(--panel-w)] shrink-0 flex-col">
                   <ReviewBox className="min-h-0 p-0">
-                    <CardDataPanel setCode={card.expansion} stats={stats} grades={grades} docked />
+                    <CardDataPanel key={card.name} setCode={card.expansion} stats={stats} grades={grades} docked />
                   </ReviewBox>
                 </div>
               )}
@@ -1190,7 +1190,13 @@ export function CardModal({
               </div>
               <div className="flex min-h-0 flex-1 flex-col p-3">
                 {mobileView === "data" && stats && (
-                  <CardDataPanel setCode={card.expansion} stats={stats} grades={grades} docked={false} />
+                  <CardDataPanel
+                    key={card.name}
+                    setCode={card.expansion}
+                    stats={stats}
+                    grades={grades}
+                    docked={false}
+                  />
                 )}
                 {mobileView && mobileView !== "data" && mention && (
                   <ReviewPanel view={mobileView} mention={mention} cardName={card.name} />
@@ -1409,7 +1415,7 @@ function ReviewPanel({
   if (view === "video") {
     return <SetReviewVideo mention={mention} />;
   }
-  return <SetReviewTranscript mention={mention} cardName={cardName} />;
+  return <SetReviewTranscript key={cardName} mention={mention} cardName={cardName} />;
 }
 
 function SetReviewVideo({ mention }: { mention: SetReviewMention }) {
