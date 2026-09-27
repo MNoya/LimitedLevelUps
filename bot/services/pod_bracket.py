@@ -21,7 +21,7 @@ from __future__ import annotations
 from bot.services.pod_swiss import BYE_NAME, MatchOutcome, Player
 
 
-BRACKET_POD_SIZES = (8, 10)
+BRACKET_POD_SIZES = (6, 8, 10)
 PADDED_ROUNDS = (2, 3)
 
 

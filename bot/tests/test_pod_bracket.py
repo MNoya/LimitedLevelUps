@@ -1,13 +1,11 @@
+import random
+
 import pytest
 
 from bot.services import pod_bracket
 from bot.services.pod_tournament import format_result_change
 from bot.services.pod_swiss import BYE_NAME, BYE_SCORE
 from bot.tests.pod_helpers import match, pairset, players
-
-
-def _seat(player_id: str) -> int:
-    return int(player_id[1:])
 
 
 def _ten_player_round1() -> list:
@@ -17,37 +15,11 @@ def _ten_player_round1() -> list:
     ]
 
 
-def _play_bracket(roster, pick_winner) -> tuple[list, dict[int, list[tuple[str, str]]]]:
-    """Play three rounds the way the bot does: report one match at a time and pair the next round
-    after each result, so the pairer only ever sees a partly-finished source round."""
-    half = len(roster) // 2
-    pairings = {1: [(roster[i].id, roster[i + half].id) for i in range(half)], 2: [], 3: []}
-    completed: list = []
-    for round_num in (1, 2, 3):
-        for index, (a, b) in enumerate(pairings[round_num]):
-            completed.append(match(round_num, a, b, pick_winner(a, b)))
-            if round_num < 3:
-                pairings[round_num + 1] += pod_bracket.incremental_pairings(
-                    roster, completed, pairings[round_num + 1], round_num + 1,
-                    source_round_complete=index == half - 1,
-                )
-    return completed, pairings
-
-
-_WINNER_PICKS = {
-    "lower seat wins": lambda a, b: min((a, b), key=_seat),
-    "higher seat wins": lambda a, b: max((a, b), key=_seat),
-    "alternating": lambda a, b: (min if (_seat(a) + _seat(b)) % 2 else max)((a, b), key=_seat),
-}
-
-
 # --- supports -------------------------------------------------------------
 
-def test_supports_the_two_table_sizes():
-    assert pod_bracket.supports(8) is True
-    assert pod_bracket.supports(10) is True
-    assert pod_bracket.supports(6) is False
-    assert pod_bracket.supports(4) is False
+@pytest.mark.parametrize("size,supported", [(4, False), (6, True), (8, True), (10, True), (12, False)])
+def test_supports_the_table_sizes(size, supported):
+    assert pod_bracket.supports(size) is supported
 
 
 # --- incremental_pairings -------------------------------------------------
@@ -122,6 +94,18 @@ def test_round3_trophy_opens_after_the_floor_slack_went_to_a_lower_group():
     assert frozenset({"p0", "p2"}) in pairset(round3)
 
 
+def test_round3_trophy_at_six_opens_while_the_losers_match_is_still_playing():
+    roster = players(6)
+    completed = [
+        match(1, "p0", "p1", "p0"), match(1, "p2", "p3", "p2"), match(1, "p4", "p5", "p4"),
+        match(2, "p4", "p1", "p4"), match(2, "p0", "p2", "p0"),
+    ]
+
+    new = pod_bracket.incremental_pairings(roster, completed, [], 3, source_round_complete=False)
+
+    assert pairset(new) == {frozenset({"p0", "p4"})}
+
+
 def test_a_rematch_only_group_plays_across_records_instead():
     roster = players(4)
     completed = [
@@ -170,16 +154,80 @@ def test_round3_holds_one_one_group_until_no_avoidable_rematch():
     assert {pid for pair in one_one_pairs for pid in pair} == one_one
 
 
-@pytest.mark.parametrize("pick_winner", _WINNER_PICKS.values(), ids=list(_WINNER_PICKS))
+def test_bracket_at_six_never_repeats_a_match_in_any_report_order():
+    roster = players(6)
+
+    finished = list(_every_finished_bracket(roster))
+
+    assert len(finished) > 1
+    for pairings in finished:
+        _assert_full_rounds_without_rematch(roster, pairings)
+
+
+@pytest.mark.parametrize("seed", range(300))
 @pytest.mark.parametrize("size", (8, 10))
-def test_bracket_fills_every_round_and_never_repeats_a_match(size, pick_winner):
+def test_bracket_never_repeats_a_match_in_a_random_report_order(size, seed):
     roster = players(size)
 
-    _, pairings = _play_bracket(roster, pick_winner)
+    pairings = _play_bracket_in_random_order(roster, random.Random(seed))
 
+    _assert_full_rounds_without_rematch(roster, pairings)
+
+
+def _every_finished_bracket(roster, pairings=None, completed=()):
+    """Every way the bot can see a pod finish: any open match of any round reports next, either
+    player wins it, and the next round pairs after each result"""
+    if pairings is None:
+        half = len(roster) // 2
+        pairings = {1: [(roster[i].id, roster[i + half].id) for i in range(half)], 2: [], 3: []}
+    open_matches = _open_matches(pairings, completed)
+    if not open_matches:
+        yield pairings
+        return
+    for round_num, (a, b) in open_matches:
+        for winner in (a, b):
+            reported = [*completed, match(round_num, a, b, winner)]
+            yield from _every_finished_bracket(roster, _pair_after(roster, pairings, reported, round_num), reported)
+
+
+def _play_bracket_in_random_order(roster, rng: random.Random) -> dict[int, list[tuple[str, str]]]:
+    half = len(roster) // 2
+    pairings = {1: [(roster[i].id, roster[i + half].id) for i in range(half)], 2: [], 3: []}
+    completed: list = []
+    while open_matches := _open_matches(pairings, completed):
+        round_num, (a, b) = rng.choice(open_matches)
+        completed.append(match(round_num, a, b, rng.choice((a, b))))
+        pairings = _pair_after(roster, pairings, completed, round_num)
+    return pairings
+
+
+def _open_matches(pairings, completed) -> list[tuple[int, tuple[str, str]]]:
+    reported = {(m.round_num, frozenset((m.player_a_id, m.player_b_id))) for m in completed}
+    open_matches = []
+    for round_num in (1, 2, 3):
+        for pair in pairings[round_num]:
+            if (round_num, frozenset(pair)) not in reported:
+                open_matches.append((round_num, pair))
+    return open_matches
+
+
+def _pair_after(roster, pairings, completed, source_round: int) -> dict[int, list[tuple[str, str]]]:
+    if source_round >= 3:
+        return pairings
+    half = len(roster) // 2
+    target = source_round + 1
+    reported_in_source = sum(1 for m in completed if m.round_num == source_round)
+    source_complete = len(pairings[source_round]) == half and reported_in_source == half
+    new = pod_bracket.incremental_pairings(
+        roster, completed, pairings[target], target, source_round_complete=source_complete,
+    )
+    return {**pairings, target: pairings[target] + new}
+
+
+def _assert_full_rounds_without_rematch(roster, pairings) -> None:
     everyone = {p.id for p in roster}
     for round_num in (2, 3):
-        assert len(pairings[round_num]) == size // 2
+        assert len(pairings[round_num]) == len(roster) // 2
         assert {pid for pair in pairings[round_num] for pid in pair} == everyone
     played = [frozenset(pair) for round_num in (1, 2, 3) for pair in pairings[round_num]]
     assert len(played) == len(set(played))
