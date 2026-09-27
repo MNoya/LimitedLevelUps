@@ -71,7 +71,7 @@ function deckRows(stats: CardStats, grades: CardGrades | undefined): DeckRow[] {
       rows.push({ key: pair, pair, gihWr: pairStats.gihWr, gihGames: pairStats.gihGames, grade: grades?.pairs[pair] });
     }
   }
-  rows.sort((a, b) => b.gihWr - a.gihWr);
+  rows.sort((a, b) => b.gihGames - a.gihGames);
   if (stats.gihWr === null) {
     return rows;
   }
