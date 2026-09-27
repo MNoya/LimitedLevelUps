@@ -628,9 +628,9 @@ function HeroEpisodeCard({
       </div>
       {compact ? (
         <div className="shrink-0 flex items-center justify-between gap-1.5 pl-2">
-          <span className="flex-1 min-w-0 text-[10px] font-medium text-white truncate">
-            {relativeAgeShort(episode.pubDate)}
-            {episode.durationSeconds ? ` · ${formatDurationShort(episode.durationSeconds)}` : ""}
+          <span className="flex flex-1 min-w-0 gap-x-2 text-[10px] font-medium text-white truncate">
+            <span>{relativeAgeShort(episode.pubDate)}</span>
+            {episode.durationSeconds ? <span>{formatDurationShort(episode.durationSeconds)}</span> : null}
           </span>
           <EpisodeTag episode={episode} glyphSize={14} className="gap-1" />
         </div>

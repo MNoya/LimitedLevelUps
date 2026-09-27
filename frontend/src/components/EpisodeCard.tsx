@@ -15,9 +15,6 @@ export function EpisodeCard({
   audioMode?: boolean;
   detailBase?: string;
 }) {
-  const meta = [episode.publishedLabel.toUpperCase(), episode.number ? `EP ${episode.number}` : null]
-    .filter(Boolean)
-    .join(" · ");
   const internalHref = episode.slug ? `${detailBase}/${episode.slug}` : null;
   const titleHref = episodeTitleHref(episode, audioMode);
 
@@ -32,12 +29,12 @@ export function EpisodeCard({
       />
       {internalHref ? (
         <Link to={internalHref} className="block shrink-0 mt-3 no-underline">
-          <TitleBlock episode={episode} meta={meta} />
+          <TitleBlock episode={episode} />
         </Link>
       ) : (
         <EpisodeLinkTooltip episode={episode} audioMode={audioMode}>
           <a href={titleHref} target="_blank" rel="noreferrer" className="block shrink-0 mt-3 no-underline">
-            <TitleBlock episode={episode} meta={meta} />
+            <TitleBlock episode={episode} />
           </a>
         </EpisodeLinkTooltip>
       )}
@@ -45,11 +42,20 @@ export function EpisodeCard({
   );
 }
 
-function TitleBlock({ episode, meta }: { episode: Episode; meta: string }) {
+export function EpisodeMeta({ episode }: { episode: Episode }) {
+  return (
+    <span className="flex gap-x-3 font-num text-[11px] tracking-[0.06em] text-muted">
+      <span>{episode.publishedLabel.toUpperCase()}</span>
+      {episode.number ? <span>EP {episode.number}</span> : null}
+    </span>
+  );
+}
+
+function TitleBlock({ episode }: { episode: Episode }) {
   return (
     <>
       <div className="flex items-center justify-between gap-2">
-        <span className="font-num text-[11px] tracking-[0.06em] text-muted">{meta}</span>
+        <EpisodeMeta episode={episode} />
         <EpisodeTag episode={episode} />
       </div>
       <span className="block font-body text-text text-[15px] md:text-[16px] font-medium leading-snug mt-1.5 line-clamp-2 transition-colors group-hover:text-green sm:min-h-[2.75rem]">

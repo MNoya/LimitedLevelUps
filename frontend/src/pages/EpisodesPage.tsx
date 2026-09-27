@@ -47,7 +47,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PageShell } from "../components/PageShell";
-import { EpisodeCard } from "../components/EpisodeCard";
+import { EpisodeCard, EpisodeMeta } from "../components/EpisodeCard";
 import { EpisodeEmbed } from "../components/PlayableThumbnail";
 import { PodcastAudioPlayer, type AudioControls } from "../components/PodcastAudioPlayer";
 import { ChevronRight } from "lucide-react";
@@ -2118,9 +2118,6 @@ function MoreEpisodes({ episodes }: { episodes: Episode[] }) {
 
 function MoreEpisodeRow({ episode }: { episode: Episode }) {
   const href = episode.slug ? `/episodes/${categorySlug(episode.category)}/${episode.slug}` : null;
-  const meta = [episode.publishedLabel.toUpperCase(), episode.number ? `EP ${episode.number}` : null]
-    .filter(Boolean)
-    .join(" · ");
   const body = (
     <>
       <div className="relative aspect-video w-36 shrink-0 overflow-hidden rounded-md border border-border bg-surface sm:w-44">
@@ -2131,7 +2128,7 @@ function MoreEpisodeRow({ episode }: { episode: Episode }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <span className="font-num text-[11px] tracking-[0.06em] text-muted">{meta}</span>
+          <EpisodeMeta episode={episode} />
           <EpisodeTag episode={episode} className="mt-0.5" />
         </div>
         <span className="mt-1 block font-body text-text text-[14px] md:text-[15px] font-medium leading-snug line-clamp-2 transition-colors group-hover/row:text-green">
