@@ -196,16 +196,16 @@ function GradeMark({ grade }: { grade: string | undefined }) {
 }
 
 function GradeChip({ deck }: { deck: DeckRow }) {
-  const color = deck.grade ? tierColor(deck.grade) : "rgba(255,255,255,0.2)";
+  const color = deck.grade ? tierColor(deck.grade) : "#454951";
   return (
-    <span className="flex h-11 flex-1 items-stretch overflow-hidden rounded-md border-2" style={{ borderColor: color }}>
-      <span
-        className="flex w-14 items-center justify-center font-display text-[24px] leading-none text-bg pr-1"
-        style={{ backgroundColor: color }}
-      >
+    <span
+      className="flex h-11 flex-1 items-stretch overflow-hidden rounded-md border-2"
+      style={{ borderColor: color, backgroundColor: color }}
+    >
+      <span className="flex w-14 items-center justify-center font-display text-[24px] leading-none text-bg pr-1">
         <GradeMark grade={deck.grade} />
       </span>
-      <span className="flex flex-1 items-center justify-center font-num text-[20px] leading-none">
+      <span className="flex flex-1 items-center justify-center bg-[#161b26] font-num text-[20px] leading-none">
         {pct(deck.gihWr)}
       </span>
     </span>

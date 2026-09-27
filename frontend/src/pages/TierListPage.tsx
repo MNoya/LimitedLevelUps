@@ -68,6 +68,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
     [tierData],
   );
   const filtersReady = Boolean(tierData?.length);
+  const filterBarLayout = useCenteredFilterBar(current, isMobile, filtersReady);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -188,8 +189,16 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                 )}
               </>
             ) : (
-              <div className="grid items-center gap-x-[clamp(0.75rem,2.5vw,2.5rem)] grid-cols-[minmax(0,1fr)_auto] min-[1500px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-                <div className="w-fit min-w-0 max-w-full">
+              <div
+                ref={filterBarLayout.rowRef}
+                className={cn(
+                  "grid items-center gap-x-[clamp(0.75rem,2.5vw,2.5rem)]",
+                  filterBarLayout.centered
+                    ? "grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
+                    : "grid-cols-[minmax(0,max-content)_auto_minmax(0,1fr)]",
+                )}
+              >
+                <div ref={filterBarLayout.headingRef} className="w-fit min-w-0 max-w-full">
                   <h1 className="font-display tracking-[0.12em] flex items-center gap-3 leading-none min-w-0">
                     <SetGlyphDropdown
                       sets={tierListSets}
@@ -199,6 +208,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                       isMobile={false}
                       loading={!sets}
                       hrefFor={setHref}
+                      labelRef={filterBarLayout.labelRef}
                     />
                     {skeletons.length > 0 && (
                       <SkeletonsButton href={archetypesHref} />
@@ -208,7 +218,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                 </div>
 
                 {effectiveUid && filtersReady ? (
-                  <div className="justify-self-center -translate-y-1">
+                  <div ref={filterBarLayout.filterRef} className="justify-self-center -translate-y-1">
                     <TierFilterBar
                       filters={filters}
                       setFilters={setFilters}
@@ -224,7 +234,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                   <div />
                 )}
 
-                <div className="hidden min-[1500px]:block" />
+                <div />
               </div>
             )}
           </div>
@@ -287,6 +297,40 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
       </div>
     </GradeGuideProvider>
   );
+}
+
+function useCenteredFilterBar(setCode: string, isMobile: boolean, filtersReady: boolean) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
+  const [centered, setCentered] = useState(false);
+
+  useEffect(() => {
+    const row = rowRef.current;
+    const heading = headingRef.current;
+    if (!row || !heading) {
+      return;
+    }
+    const measure = () => {
+      const label = labelRef.current;
+      const truncatedWidth = label ? label.scrollWidth - label.clientWidth : 0;
+      const fullHeadingWidth = heading.offsetWidth + truncatedWidth;
+      const filterWidth = filterRef.current?.offsetWidth ?? 0;
+      const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+      setCentered(2 * (fullHeadingWidth + gap) + filterWidth <= row.clientWidth);
+    };
+    const observer = new ResizeObserver(measure);
+    for (const element of [row, heading, filterRef.current]) {
+      if (element) {
+        observer.observe(element);
+      }
+    }
+    document.fonts.ready.then(measure);
+    return () => observer.disconnect();
+  }, [setCode, isMobile, filtersReady]);
+
+  return { rowRef, headingRef, labelRef, filterRef, centered };
 }
 
 function SkeletonsButton({ href }: { href: string }) {

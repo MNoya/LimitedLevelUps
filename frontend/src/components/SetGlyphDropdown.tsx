@@ -1,3 +1,4 @@
+import type { Ref } from "react";
 import type { To } from "react-router-dom";
 import { SetGlyph, setGlyphCode } from "./Brand";
 import { FilterDropdown, type FilterOption } from "./FilterDropdown";
@@ -18,6 +19,7 @@ export function SetGlyphDropdown({
   align = "left",
   openOnHover = false,
   triggerClassName,
+  labelRef,
 }: {
   sets: SetSummary[];
   activeCode: string;
@@ -31,6 +33,7 @@ export function SetGlyphDropdown({
   align?: "left" | "right";
   openOnHover?: boolean;
   triggerClassName?: string;
+  labelRef?: Ref<HTMLSpanElement>;
 }) {
   const glyphSize = compact ? 20 : isMobile ? 26 : 38;
   const labelSize = compact ? "text-[18px]" : "text-[17px] md:text-[30px]";
@@ -80,7 +83,9 @@ export function SetGlyphDropdown({
           )}
         >
           <SetGlyph code={glyphCode} size={glyphSize} />
-          <span className={cn("flex-1 min-w-0 truncate font-display tracking-[0.06em]", labelSize)}>{label}</span>
+          <span ref={labelRef} className={cn("flex-1 min-w-0 truncate font-display tracking-[0.06em]", labelSize)}>
+            {label}
+          </span>
           <ChevronDown
             strokeWidth={2.5}
             className={cn("text-muted transition-transform", chevronSize, open && "rotate-180")}
