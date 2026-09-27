@@ -22,6 +22,8 @@ export function TierFilterBar({
   hideArt,
   setHideArt,
   onSearch,
+  dataGrades,
+  setDataGrades,
   stacked = false,
 }: {
   filters: TierFilters;
@@ -31,6 +33,8 @@ export function TierFilterBar({
   hideArt: boolean;
   setHideArt: (value: boolean) => void;
   onSearch: () => void;
+  dataGrades?: boolean;
+  setDataGrades?: (value: boolean) => void;
   stacked?: boolean;
 }) {
   const toggle = (key: keyof TierFilters, value: string) => {
@@ -216,6 +220,22 @@ export function TierFilterBar({
     </FilterGroup>
   );
 
+  const gradesGroup = setDataGrades ? (
+    <FilterGroup label="GRADES" stacked={stacked} joined>
+      <IconToggle active={!dataGrades} onClick={() => setDataGrades(false)} label="Show cards by LLU grade" narrow>
+        <span className="px-1 text-[12px] font-semibold">LLU</span>
+      </IconToggle>
+      <IconToggle
+        active={Boolean(dataGrades)}
+        onClick={() => setDataGrades(true)}
+        label="Show cards by 17Lands stats"
+        narrow
+      >
+        <span className="px-1 text-[12px] font-semibold">17L</span>
+      </IconToggle>
+    </FilterGroup>
+  ) : null;
+
   const searchGroup = (
     <FilterGroup label="SEARCH" stacked={stacked} joined>
       <IconToggle active={false} onClick={onSearch} label="Search" tooltip={false} narrow>
@@ -237,6 +257,7 @@ export function TierFilterBar({
           {manaValueGroup}
           {setGroup}
           {trendGroup}
+          {gradesGroup}
           {artGroup}
           {colorRow}
         </div>
@@ -251,6 +272,7 @@ export function TierFilterBar({
       {manaValueGroup}
       {setGroup}
       {trendGroup}
+      {gradesGroup}
       {artGroup}
       {searchGroup}
     </div>

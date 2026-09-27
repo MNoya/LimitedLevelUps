@@ -113,6 +113,8 @@ export const TIER_LIST_GRADERS: Record<
 export const hasTierList = (code: string): boolean =>
   Boolean(TIER_LIST_UIDS[code]) || (TIER_LIST_GRADERS[code]?.length ?? 0) > 0;
 
+export const CARD_STATS_SETS = ["FRA", "HOB", "MSH"];
+
 // Name/date for tier-list sets absent from the live feed; future startDate shows a PREVIEW badge
 export const TIER_LIST_PREVIEW_SETS: Record<
   string,

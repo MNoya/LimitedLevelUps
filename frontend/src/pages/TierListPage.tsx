@@ -11,6 +11,7 @@ import { TierSetDropdown } from "../components/TierSetDropdown";
 import { Tooltip } from "../components/Tooltip";
 import { SkeletonsModal } from "../components/SkeletonsModal";
 import { skeletonsFor } from "../data/skeletons";
+import { cardDataUrl } from "../data/cardStats";
 import { useSets } from "../data/hooks";
 import { relativeTime } from "../data/utils";
 import { cn } from "../lib/utils";
@@ -25,6 +26,8 @@ import {
   hasActiveFilters,
   resolveTierList,
   tierFilterOptions,
+  useCardStats,
+  useDataGradeView,
   useHideArt,
   useTierList,
   type TierFilters,
@@ -36,6 +39,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
   const { setCode, pair } = useParams();
   const [filters, setFilters] = useState<TierFilters>(EMPTY_FILTERS);
   const [hideArt, setHideArt] = useHideArt();
+  const [dataGrades, setDataGrades] = useDataGradeView();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
@@ -55,6 +59,10 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
   const skeletons = useMemo(() => skeletonsFor(current), [current]);
 
   const { data: tierData, lastUpdated } = useTierList(effectiveUid);
+  const cardStats = useCardStats(current);
+  const gradeToggle = cardStats?.hasGrades ? { dataGrades, setDataGrades } : {};
+  const placeByData = Boolean(cardStats?.hasGrades) && dataGrades;
+  const dataSource = placeByData && cardStats ? { setCode: current, updatedAt: cardStats.updatedAt } : null;
   const filterOptions = useMemo(
     () => tierFilterOptions(tierData ?? []),
     [tierData],
@@ -159,6 +167,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
 
                 <ListMeta
                   lastUpdated={lastUpdated}
+                  dataSource={dataSource}
                   className="mt-1.5 whitespace-nowrap text-[clamp(8px,2.8vw,11px)]"
                 />
 
@@ -172,6 +181,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                       hideArt={hideArt}
                       setHideArt={setHideArt}
                       onSearch={() => setSearchOpen(true)}
+                      {...gradeToggle}
                       stacked
                     />
                   </div>
@@ -194,7 +204,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                       <SkeletonsButton href={archetypesHref} />
                     )}
                   </h1>
-                  <ListMeta lastUpdated={lastUpdated} className="mt-1 pl-[2px] text-[11px]" />
+                  <ListMeta lastUpdated={lastUpdated} dataSource={dataSource} className="mt-1 pl-[2px] text-[11px]" />
                 </div>
 
                 {effectiveUid && filtersReady ? (
@@ -207,6 +217,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                       hideArt={hideArt}
                       setHideArt={setHideArt}
                       onSearch={() => setSearchOpen(true)}
+                      {...gradeToggle}
                     />
                   </div>
                 ) : (
@@ -226,6 +237,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
               comparison={comparison}
               filters={filters}
               hideArt={hideArt}
+              dataGrades={placeByData}
               stickyTop={headerHeight}
             />
           ) : (
@@ -307,18 +319,36 @@ function SourceLink({ uid, label }: { uid: string; label: string }) {
 
 function ListMeta({
   lastUpdated,
+  dataSource,
   className,
 }: {
   lastUpdated: string | null;
+  dataSource: { setCode: string; updatedAt: string } | null;
   className?: string;
 }) {
-  const updated = lastUpdated ? lastUpdatedLabel(lastUpdated) : null;
+  const shownUpdate = dataSource?.updatedAt ?? lastUpdated;
+  const updated = shownUpdate ? lastUpdatedLabel(shownUpdate) : null;
   return (
     <div className={cn("font-mono flex w-full items-center justify-between gap-x-4 text-muted", className)}>
-      <GradeGuideTrigger className="tracking-[0.16em]">
-        SET REVIEW GRADES
-        <GradeGuideIcon className="ml-1.5" />
-      </GradeGuideTrigger>
+      {dataSource ? (
+        <a
+          href={cardDataUrl(dataSource.setCode)}
+          target="_blank"
+          rel="noreferrer"
+          className={cn(
+            "flex items-center gap-1.5 tracking-[0.16em] text-muted no-underline",
+            "transition-colors hover:text-green",
+          )}
+        >
+          17LANDS DATA
+          <ExternalLink size={11} />
+        </a>
+      ) : (
+        <GradeGuideTrigger className="tracking-[0.16em]">
+          SET REVIEW GRADES
+          <GradeGuideIcon className="ml-1.5" />
+        </GradeGuideTrigger>
+      )}
       {updated && <span className="tracking-[0.06em]">{updated}</span>}
     </div>
   );

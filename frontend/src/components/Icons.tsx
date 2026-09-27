@@ -2,6 +2,7 @@ import React from "react";
 import {
   ArrowRight as LR_ArrowRight,
   ArrowUp as LR_ArrowUp,
+  ChartColumn as LR_ChartColumn,
   ChevronDown as LR_ChevronDown,
   ChevronLeft as LR_ChevronLeft,
   ChevronRight as LR_ChevronRight,
@@ -59,6 +60,7 @@ export function ArrowRight(
   return <_ArrowRight strokeWidth={3} {...props} />;
 }
 export const ArrowUp = withShrink(LR_ArrowUp);
+export const ChartColumn = withShrink(LR_ChartColumn);
 export const ChevronDown = withShrink(LR_ChevronDown);
 export const ChevronLeft = withShrink(LR_ChevronLeft);
 export const ChevronRight = withShrink(LR_ChevronRight);

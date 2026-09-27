@@ -1,12 +1,15 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import { readFile } from "node:fs/promises";
+import { CARD_STATS_SETS } from "./src/data/constants";
+import { fetchCardStatsFile } from "./src/data/cardStats";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
     base: "/",
-    plugins: [react(), youtubeDevApi(env.YOUTUBE_API_KEY), cardImagesDevApi()],
+    plugins: [react(), youtubeDevApi(env.YOUTUBE_API_KEY), cardImagesDevApi(), cardStatsDevApi()],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
@@ -29,6 +32,34 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
+
+// Dev-only stand-in for functions/api/card-stats: a local override in cache/card-stats, then the baked file, then a live build
+function cardStatsDevApi(): Plugin {
+  return {
+    name: "card-stats-dev-api",
+    configureServer(server) {
+      server.middlewares.use("/api/card-stats", async (req, res) => {
+        res.setHeader("content-type", "application/json");
+        const setCode = (req.url ?? "").replace(/^\//, "").toUpperCase();
+        if (!CARD_STATS_SETS.includes(setCode)) {
+          res.statusCode = 404;
+          res.end("{}");
+          return;
+        }
+        try {
+          const fileName = `${setCode.toLowerCase()}.json`;
+          const localOverride = await readFile(path.resolve(__dirname, `../cache/card-stats/${fileName}`), "utf8")
+            .catch(() => null);
+          const baked = await readFile(path.resolve(__dirname, `public/card-stats/${fileName}`), "utf8").catch(() => null);
+          res.end(localOverride ?? baked ?? JSON.stringify(await fetchCardStatsFile(setCode, null)));
+        } catch {
+          res.statusCode = 502;
+          res.end("{}");
+        }
+      });
+    },
+  };
+}
 
 // Dev-only stand-in for functions/api/card-images.ts, which serves the same map in production (mirrors
 // that logic, the same way the youtube dev/prod endpoints do).

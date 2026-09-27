@@ -10,7 +10,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { LuScrollText, Maximize2, Minimize2, Play, RefreshCw } from "./Icons";
+import { ChartColumn, LuScrollText, Maximize2, Minimize2, Play, RefreshCw } from "./Icons";
+import { CardDataPanel } from "./CardDataPanel";
 import { GradeLabel } from "./TierGuide";
 import { ModalNavButton } from "./ModalNavButton";
 import { Tooltip } from "./Tooltip";
@@ -36,6 +37,7 @@ import {
   TREND_COLOR,
   TREND_LABEL,
   trendGlyphStack,
+  useCardStats,
   useTierList,
   type Grader,
   type TierCard,
@@ -68,6 +70,7 @@ export function columnPipClass(code: string): string {
 // When a set has no consensus list, the grid is built from grader lists alone: the popup
 // compares each grader's grade instead of showing a single consensus grade.
 const ComparisonContext = createContext(false);
+const DataPlacementContext = createContext(false);
 
 export function TierGrid({
   setCode,
@@ -76,6 +79,7 @@ export function TierGrid({
   comparison = false,
   filters,
   hideArt,
+  dataGrades = false,
   stickyTop,
 }: {
   setCode: string;
@@ -84,9 +88,11 @@ export function TierGrid({
   comparison?: boolean;
   filters: TierFilters;
   hideArt: boolean;
+  dataGrades?: boolean;
   stickyTop: number;
 }) {
   const { data, isLoading, isError } = useTierList(uid, graders);
+  const cardStats = useCardStats(setCode);
   const isMobile = useIsMobile();
 
   if (isLoading || !data) {
@@ -100,9 +106,11 @@ export function TierGrid({
     return <TierGridSkeleton isMobile={isMobile} stickyTop={stickyTop} />;
   }
 
+  const placeByData = dataGrades && cardStats?.hasGrades;
+  const placedTier = (card: TierCard) => (placeByData ? (cardStats!.gradesFor(card.name)?.all ?? "TBD") : card.tier);
   const byKey = new Map<string, TierCard[]>();
   for (const card of data) {
-    const key = `${columnOf(card.color)}|${card.tier}`;
+    const key = `${columnOf(card.color)}|${placedTier(card)}`;
     const bucket = byKey.get(key);
     if (bucket) {
       bucket.push(card);
@@ -112,6 +120,9 @@ export function TierGrid({
   }
   for (const bucket of byKey.values()) {
     bucket.sort((a, b) => {
+      if (placeByData) {
+        return (cardStats!.statsFor(b.name)?.gihWr ?? 0) - (cardStats!.statsFor(a.name)?.gihWr ?? 0);
+      }
       const ra = inclusionRank(a.inclusion_type);
       const rb = inclusionRank(b.inclusion_type);
       if (ra !== rb) return ra - rb;
@@ -123,11 +134,13 @@ export function TierGrid({
 
   return (
     <ComparisonContext.Provider value={comparison}>
+      <DataPlacementContext.Provider value={Boolean(placeByData)}>
       {isMobile ? (
         <MobileTiers setCode={setCode} byKey={byKey} filters={filters} hideArt={hideArt} />
       ) : (
         <DesktopGrid setCode={setCode} byKey={byKey} filters={filters} hideArt={hideArt} stickyTop={stickyTop} />
       )}
+      </DataPlacementContext.Provider>
     </ComparisonContext.Provider>
   );
 }
@@ -586,6 +599,7 @@ function CardBar({
   const trendLabel = card.trend
     ? `${TREND_LABEL[card.trend]}${card.trend_from ? ` (${card.trend_from} → ${card.tier})` : ""}`
     : "";
+  const trend = useContext(DataPlacementContext) ? null : card.trend;
 
   const enterPreview = () => {
     hovering.current = true;
@@ -634,13 +648,13 @@ function CardBar({
         )}
         <div className="relative flex min-h-[28px] items-center justify-between gap-1 px-2 py-0.5">
           <span className="flex min-w-0 flex-1 items-center gap-1">
-            {card.trend && (
+            {trend && (
               <span
                 className={cn(
                   "flex shrink-0 flex-col items-center",
                   TEXT_OUTLINE,
                 )}
-                style={{ color: TREND_COLOR[card.trend] }}
+                style={{ color: TREND_COLOR[trend] }}
                 title={trendLabel}
                 aria-label={trendLabel}
               >
@@ -670,6 +684,7 @@ function CardBar({
           {badges && (
             <span className="shrink-0 text-[14px] leading-none">{badges}</span>
           )}
+
         </div>
       </div>
       {anchor &&
@@ -681,15 +696,25 @@ function CardBar({
   );
 }
 
-function GradesPanel({ card }: { card: TierCard }) {
+function GradesPanel({
+  card,
+  dataGrade,
+  dataGradeHidden = false,
+}: {
+  card: TierCard;
+  dataGrade?: string | null;
+  dataGradeHidden?: boolean;
+}) {
   const comparison = useContext(ComparisonContext);
   const graders = (card.graders ?? []).filter((grade) => grade.tier !== "TBD");
+  const dataCell = dataGrade ? <GradeCell caption="17LANDS" tier={dataGrade} collapsed={dataGradeHidden} /> : null;
   if (comparison && graders.length > 0) {
     return (
       <div className="flex items-stretch px-3 py-2.5">
         {graders.map((grade) => (
           <GradeCell key={grade.name} caption={grade.name} tier={grade.tier} />
         ))}
+        {dataCell}
       </div>
     );
   }
@@ -725,6 +750,7 @@ function GradesPanel({ card }: { card: TierCard }) {
           </span>
         )
       )}
+      {dataCell}
     </div>
   );
 }
@@ -733,14 +759,22 @@ function GradeCell({
   caption,
   tier,
   trendCard,
+  collapsed = false,
 }: {
   caption: string;
   tier: string;
   trendCard?: TierCard;
+  collapsed?: boolean;
 }) {
   const stack = trendCard?.trend ? trendGlyphStack(trendCard) : [];
   return (
-    <span className="flex flex-1 flex-col items-center gap-2">
+    <span
+      className={cn(
+        "flex basis-0 flex-col items-center gap-2 overflow-hidden",
+        "transition-[flex-grow,opacity] duration-300 ease-out",
+        collapsed ? "grow-0 opacity-0" : "grow opacity-100",
+      )}
+    >
       <span
         className={cn(
           "text-[12px] font-semibold uppercase tracking-[0.1em] leading-none text-white",
@@ -749,7 +783,7 @@ function GradeCell({
       >
         {caption}
       </span>
-      <span className="flex items-center gap-1.5">
+      <span className="relative flex items-center">
         <span
           className={cn("font-display text-[26px] leading-none", TEXT_OUTLINE)}
           style={{ color: tierColor(tier) }}
@@ -758,7 +792,10 @@ function GradeCell({
         </span>
         {trendCard?.trend && (
           <span
-            className={cn("flex flex-col items-center", TEXT_OUTLINE)}
+            className={cn(
+              "absolute left-full top-1/2 ml-1.5 flex -translate-y-1/2 flex-col items-center",
+              TEXT_OUTLINE,
+            )}
             style={{ color: TREND_COLOR[trendCard.trend] }}
           >
             {stack.map((char, i, arr) => (
@@ -862,6 +899,10 @@ export function CardModal({
   const wide = !useIsMobile(1024);
   const flippable = Boolean(card.url_back);
   const { setIndexed, mention } = useSetReviewMention(card.expansion, card.name);
+  const cardStats = useCardStats(card.expansion);
+  const stats = cardStats?.statsFor(card.name);
+  const grades = cardStats?.gradesFor(card.name);
+  const hasData = Boolean(stats && stats.gihGames > 0);
 
   useEffect(() => {
     setFlipped(false);
@@ -892,12 +933,16 @@ export function CardModal({
 
   const mobileView = singleReviewView(views);
   const toggleView = (view: ReviewView) => {
-    const next = wide ? { ...views, [view]: !views[view] } : { ...NO_REVIEW_VIEWS, [view]: mobileView !== view };
+    const next = wide ? toggledWideViews(views, view) : { ...NO_REVIEW_VIEWS, [view]: mobileView !== view };
     setViews(next);
     revealViews(next);
   };
   const revealViews = (shown: ReviewViews) =>
-    setRenderedViews((prev) => ({ transcript: prev.transcript || shown.transcript, video: prev.video || shown.video }));
+    setRenderedViews((prev) => ({
+      transcript: prev.transcript || shown.transcript,
+      video: prev.video || shown.video,
+      data: prev.data || shown.data,
+    }));
   const hideRenderedView = (view: ReviewView) => setRenderedViews((prev) => ({ ...prev, [view]: false }));
   const found = Boolean(mention);
   const lastMention = useRef(mention);
@@ -905,18 +950,22 @@ export function CardModal({
     lastMention.current = mention;
   }
   const panelMention = lastMention.current;
-  const viewPressed = (view: ReviewView) => found && (wide ? views[view] : mobileView === view);
-  const reviewToggle = (view: ReviewView, showTip: string, hideTip: string) => ({
+  const available = (view: ReviewView) => (view === "data" ? hasData : found);
+  const viewPressed = (view: ReviewView) => available(view) && (wide ? views[view] : mobileView === view);
+  const reviewToggle = (view: ReviewView, showTip: string, hideTip: string, missingTip: string) => ({
     pressed: viewPressed(view),
-    disabled: !found,
-    tooltip: found ? (viewPressed(view) ? hideTip : showTip) : "Card not found in the Set Review",
+    disabled: !available(view),
+    tooltip: available(view) ? (viewPressed(view) ? hideTip : showTip) : missingTip,
     onClick: () => toggleView(view),
   });
-  const transcriptToggle = reviewToggle("transcript", "Read about this card", "Hide the transcript");
-  const videoToggle = reviewToggle("video", "Jump to this card in the video", "Hide the video");
+  const missingReview = "Card not found in the Set Review";
+  const transcriptToggle = reviewToggle("transcript", "Read about this card", "Hide the transcript", missingReview);
+  const videoToggle = reviewToggle("video", "Jump to this card in the video", "Hide the video", missingReview);
+  const dataToggle = reviewToggle("data", "Show 17Lands data", "Hide 17Lands data", "No 17Lands data yet");
   const reviewShown = setIndexed && found && (views.transcript || views.video);
-  const panelOpen = wide && reviewShown;
-  const mobilePanel = !wide && reviewShown;
+  const dataShown = hasData && views.data;
+  const panelOpen = wide && (reviewShown || dataShown);
+  const mobilePanel = !wide && (reviewShown || dataShown);
 
   useEffect(() => {
     if (panelOpen) {
@@ -924,11 +973,13 @@ export function CardModal({
     }
   }, [panelOpen]);
   const [fullScreen, setFullScreen] = usePersistedFullScreen();
-  const enlarged = panelOpen && fullScreen;
+  const reviewPanelOpen = wide && reviewShown && !dataShown;
+  const dataSliding = views.data || (!panelOpen && renderedViews.data);
+  const enlarged = reviewPanelOpen && fullScreen;
   const panelSpan = "calc(var(--panel-w) + 16px)";
   const modalSizes = {
     "--card-w": enlarged ? "min(calc((90dvh - 150px) / 1.4), 34vw)" : "320px",
-    "--panel-w": enlarged ? "calc(90vw - var(--card-w) - 16px)" : "min(520px, calc(50vw - 200px))",
+    "--panel-w": panelWidth(enlarged, dataSliding && wide),
   } as React.CSSProperties;
   const sideTranscript = renderedViews.transcript;
   const cappedVideo = cn(enlarged && sideTranscript && "mx-auto w-full max-w-[calc(55dvh*16/9)]");
@@ -964,7 +1015,11 @@ export function CardModal({
           onClick={(e) => e.stopPropagation()}
         >
           <CardFlagTabs card={displayed} />
-          <GradesPanel card={displayed} />
+          <GradesPanel
+            card={displayed}
+            dataGrade={cardStats?.gradesFor(displayed.name)?.all}
+            dataGradeHidden={dataShown}
+          />
           {flippable ? (
             <FlipCardImage front={card.url} back={card.url_back!} name={card.name} flipped={flipped} />
           ) : (
@@ -990,8 +1045,14 @@ export function CardModal({
               {displayed.comment}
             </p>
           )}
-          {panelOpen && (
-            <div className="absolute left-full top-full flex justify-end pt-4" style={{ width: panelSpan }}>
+          {wide && (
+            <div
+              className={cn(
+                "absolute left-full top-full flex justify-end overflow-hidden pt-4",
+                reviewPanelOpen ? "transition-[width] duration-300 ease-out" : "invisible",
+              )}
+              style={{ width: reviewPanelOpen ? panelSpan : 0 }}
+            >
               <ModalActionButton
                 tooltip={fullScreen ? "Use compact size" : "Use the full screen"}
                 onClick={() => setFullScreen(!fullScreen)}
@@ -1004,7 +1065,8 @@ export function CardModal({
           {wide && (
             <div
               className={cn(
-                "absolute -top-px left-full flex max-h-[calc(100%+2px)] justify-end overflow-hidden",
+                "absolute -top-px left-full flex justify-end overflow-hidden",
+                !dataSliding && "max-h-[calc(100%+2px)]",
                 "transition-[width] duration-300 ease-out",
               )}
               style={{ width: panelOpen ? panelSpan : 0 }}
@@ -1014,7 +1076,14 @@ export function CardModal({
                 }
               }}
             >
-              {setIndexed && panelMention && (
+              {dataSliding && stats && (
+                <div className="flex w-[var(--panel-w)] shrink-0 flex-col">
+                  <ReviewBox className="min-h-0 p-0">
+                    <CardDataPanel setCode={card.expansion} stats={stats} grades={grades} docked />
+                  </ReviewBox>
+                </div>
+              )}
+              {setIndexed && panelMention && !dataSliding && (
                 <div className="flex w-[var(--panel-w)] shrink-0 flex-col transition-[width] duration-300 ease-out">
                   {renderedViews.video && (
                     <Collapse
@@ -1047,7 +1116,7 @@ export function CardModal({
             </div>
           )}
         </div>
-        {(flippable || setIndexed) && !mobilePanel && (
+        {(flippable || setIndexed || cardStats) && !mobilePanel && (
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             {flippable && (
               <ModalActionButton onClick={() => setFlipped((prev) => !prev)}>
@@ -1057,15 +1126,21 @@ export function CardModal({
             )}
             {setIndexed && (
               <>
-                <ModalActionButton {...transcriptToggle}>
-                  <LuScrollText size={15} />
-                  Transcript
-                </ModalActionButton>
                 <ModalActionButton {...videoToggle}>
                   <Play size={15} />
                   Video
                 </ModalActionButton>
+                <ModalActionButton {...transcriptToggle}>
+                  <LuScrollText size={15} />
+                  Transcript
+                </ModalActionButton>
               </>
+            )}
+            {cardStats && (
+              <ModalActionButton {...dataToggle}>
+                <ChartColumn size={15} />
+                Data
+              </ModalActionButton>
             )}
           </div>
         )}
@@ -1073,35 +1148,50 @@ export function CardModal({
           <Collapse
             open
             animateIn={mountedRef.current}
-            className={cn("w-full", mobileView === "transcript" && "min-h-0 flex-1")}
+            className={cn("w-full", mobileView !== "video" && "min-h-0 flex-1")}
           >
             <div
               className={cn(
-                "mt-3 flex min-h-0 w-full flex-col overflow-hidden rounded-lg border border-white/40 shadow-2xl",
-                mobileView === "transcript" && "flex-1",
+                "mt-3 flex min-h-0 w-full flex-col overflow-hidden rounded-lg border border-white/15 shadow-2xl",
+                mobileView !== "video" && "flex-1",
               )}
               style={{ backgroundColor: PREVIEW_MAT }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex shrink-0 items-center gap-2 border-b border-white/15 p-2">
                 <ModalNavButton dir="prev" srLabel="Previous card" onClick={onPrev} />
-                <ModalActionButton compact grow {...transcriptToggle}>
-                  <LuScrollText size={15} />
-                  Transcript
-                </ModalActionButton>
-                <ModalActionButton compact grow {...videoToggle}>
-                  <Play size={15} />
-                  Video
-                </ModalActionButton>
+                <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
+                {setIndexed && (
+                  <>
+                    <ModalActionButton compact grow {...videoToggle}>
+                      <Play size={15} />
+                      Video
+                    </ModalActionButton>
+                    <ModalActionButton compact grow {...transcriptToggle}>
+                      <LuScrollText size={15} />
+                      Transcript
+                    </ModalActionButton>
+                  </>
+                )}
+                {cardStats && (
+                  <ModalActionButton compact grow={setIndexed} {...dataToggle}>
+                    <ChartColumn size={15} />
+                    Data
+                  </ModalActionButton>
+                )}
                 {flippable && (
                   <ModalActionButton compact onClick={() => setFlipped((prev) => !prev)}>
                     <RefreshCw size={15} />
                   </ModalActionButton>
                 )}
+                </div>
                 <ModalNavButton dir="next" srLabel="Next card" onClick={onNext} />
               </div>
               <div className="flex min-h-0 flex-1 flex-col p-3">
-                {mobileView && mention && (
+                {mobileView === "data" && stats && (
+                  <CardDataPanel setCode={card.expansion} stats={stats} grades={grades} docked={false} />
+                )}
+                {mobileView && mobileView !== "data" && mention && (
                   <ReviewPanel view={mobileView} mention={mention} cardName={card.name} />
                 )}
               </div>
@@ -1113,10 +1203,24 @@ export function CardModal({
   );
 }
 
-type ReviewView = "transcript" | "video";
+type ReviewView = "transcript" | "video" | "data";
 type ReviewViews = Record<ReviewView, boolean>;
 
-const NO_REVIEW_VIEWS: ReviewViews = { transcript: false, video: false };
+const NO_REVIEW_VIEWS: ReviewViews = { transcript: false, video: false, data: false };
+
+function panelWidth(enlarged: boolean, dataPanel: boolean): string {
+  if (enlarged) {
+    return "calc(90vw - var(--card-w) - 16px)";
+  }
+  return dataPanel ? "min(590px, calc(100vw - var(--card-w) - 96px))" : "min(520px, calc(50vw - 200px))";
+}
+
+function toggledWideViews(views: ReviewViews, view: ReviewView): ReviewViews {
+  if (view === "data") {
+    return { ...NO_REVIEW_VIEWS, data: !views.data };
+  }
+  return { ...views, [view]: !views[view], data: false };
+}
 
 function usePersistedReviewViews(linkReview: boolean): [ReviewViews, (next: ReviewViews) => void] {
   const storageKey = "tierCardReviewPanel";
@@ -1159,6 +1263,9 @@ function usePersistedFullScreen(): [boolean, (next: boolean) => void] {
 }
 
 function singleReviewView(views: ReviewViews): ReviewView | null {
+  if (views.data) {
+    return "data";
+  }
   if (views.transcript) {
     return "transcript";
   }
@@ -1166,6 +1273,9 @@ function singleReviewView(views: ReviewViews): ReviewView | null {
 }
 
 function encodeReviewViews(views: ReviewViews): string {
+  if (views.data) {
+    return "data";
+  }
   if (views.transcript && views.video) {
     return "both";
   }
@@ -1176,7 +1286,11 @@ function encodeReviewViews(views: ReviewViews): string {
 }
 
 function decodeReviewViews(value: string): ReviewViews {
-  return { transcript: value === "transcript" || value === "both", video: value === "video" || value === "both" };
+  return {
+    transcript: value === "transcript" || value === "both",
+    video: value === "video" || value === "both",
+    data: value === "data",
+  };
 }
 
 function Collapse({

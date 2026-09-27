@@ -44,9 +44,6 @@ design/
 frontend/dist/
 frontend/node_modules/
 frontend/*.tsbuildinfo
-# Vite reads vite.config.ts directly; the .js/.d.ts emitted by tsc -b is noise
-frontend/vite.config.js
-frontend/vite.config.d.ts
 
 design/fold-1-bento.png
 

@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { type CardGrades, type CardStats, type CardStatsFile, gradeCardStats } from "./cardStats";
 import {
+  CARD_STATS_SETS,
   TIER_LIST_DATA_BASE,
   TIER_LIST_DATA_BASE_OVERRIDES,
   TIER_LIST_GRADERS,
@@ -444,6 +446,16 @@ export function useHideArt(): [boolean, (value: boolean) => void] {
   return [hideArt, setHideArt];
 }
 
+export function useDataGradeView(): [boolean, (value: boolean) => void] {
+  const storageKey = "tierListDataGrades";
+  const [dataGrades, setDataGrades] = useState(() => window.localStorage.getItem(storageKey) === "1");
+  const update = (value: boolean) => {
+    setDataGrades(value);
+    window.localStorage.setItem(storageKey, value ? "1" : "0");
+  };
+  return [dataGrades, update];
+}
+
 const ONE_HOUR = 60 * 60 * 1000;
 
 const normalizeName = (name: string) => name.trim().toLowerCase();
@@ -530,5 +542,50 @@ export function useTierList(uid: string | undefined, graders: Grader[] = []) {
     lastUpdated: consensus.data?.lastUpdated ?? null,
     isLoading: consensus.isLoading,
     isError: consensus.isError,
+  };
+}
+
+export interface CardStatsLookup {
+  statsFor: (name: string) => CardStats | undefined;
+  gradesFor: (name: string) => CardGrades | undefined;
+  hasGrades: boolean;
+  updatedAt: string;
+}
+
+export function useCardStats(setCode: string): CardStatsLookup | null {
+  const query = useQuery({
+    queryKey: ["card-stats", setCode],
+    queryFn: () => fetchCardStats(setCode),
+    enabled: CARD_STATS_SETS.includes(setCode),
+    staleTime: ONE_HOUR,
+  });
+  const file = query.data;
+  return useMemo(() => (file ? buildCardStatsLookup(file) : null), [file]);
+}
+
+async function fetchCardStats(setCode: string): Promise<CardStatsFile> {
+  const res = await fetch(`/api/card-stats/${setCode}`);
+  if (!res.ok) {
+    throw new Error(`Card stats fetch failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+function buildCardStatsLookup(file: CardStatsFile): CardStatsLookup {
+  const stats = new Map<string, CardStats>();
+  for (const [name, cardStats] of Object.entries(file.cards)) {
+    stats.set(normalizeName(name), cardStats);
+  }
+  const grades = new Map<string, CardGrades>();
+  let hasGrades = false;
+  for (const [name, cardGrades] of gradeCardStats(file)) {
+    grades.set(normalizeName(name), cardGrades);
+    hasGrades ||= cardGrades.all !== null;
+  }
+  return {
+    statsFor: (name) => stats.get(normalizeName(name)),
+    gradesFor: (name) => grades.get(normalizeName(name)),
+    hasGrades,
+    updatedAt: file.updatedAt,
   };
 }
