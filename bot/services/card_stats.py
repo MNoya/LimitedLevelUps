@@ -4,18 +4,20 @@ import json
 import logging
 import math
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
 
 from bot.config import Settings
 from bot.services.seventeenlands import SeventeenLandsClient
-from bot.sets import active_set_code
+from bot.sets import active_set_code, seed_for_code
 
 logger = logging.getLogger(__name__)
 
-CARD_STATS_SETS_JSON = Path(__file__).resolve().parents[2] / "card_stats_sets.json"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CARD_STATS_SETS_JSON = REPO_ROOT / "card_stats_sets.json"
+BAKED_CARD_STATS_DIR = REPO_ROOT / "frontend" / "public" / "card-stats"
 
 _REGISTRY = json.loads(CARD_STATS_SETS_JSON.read_text())
 CARD_STATS_SETS: tuple[str, ...] = tuple(_REGISTRY["sets"])
@@ -66,12 +68,23 @@ def refresh_live_card_stats_if_configured(client: SeventeenLandsClient, settings
 
 def refresh_live_card_stats(client: SeventeenLandsClient, kv: CardStatsKv) -> str | None:
     set_code = active_set_code()
-    if set_code not in CARD_STATS_SETS:
+    if set_code not in CARD_STATS_SETS or (BAKED_CARD_STATS_DIR / f"{set_code.lower()}.json").exists():
         return None
     previous = kv.read(set_code)
+    seed = seed_for_code(set_code)
+    if seed and not refresh_due(seed.start_date, previous, datetime.now(timezone.utc)):
+        logger.info(f"Card stats for {set_code} refreshed within the day, skipping")
+        return None
     kv.write(set_code, build_card_stats_file(client, set_code, previous))
     logger.info(f"Card stats for {set_code} written to KV")
     return set_code
+
+
+def refresh_due(start_date: date, previous: dict | None, now: datetime) -> bool:
+    if previous is None or now.date() - start_date <= timedelta(days=30):
+        return True
+    updated_at = datetime.fromisoformat(previous["updatedAt"].replace("Z", "+00:00"))
+    return now - updated_at > timedelta(hours=20)
 
 
 def build_card_stats_file(client: SeventeenLandsClient, set_code: str, previous: dict | None) -> dict:

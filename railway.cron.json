@@ -13,6 +13,7 @@
       "bot/commands/messages.py",
       "scoring_buckets.json",
       "card_stats_sets.json",
+      "frontend/public/card-stats/**",
       "requirements.txt",
       "railway.cron.json"
     ]

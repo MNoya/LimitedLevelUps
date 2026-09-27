@@ -1,6 +1,8 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
-from bot.services.card_stats import build_card_stats_file
+from bot.services.card_stats import build_card_stats_file, refresh_due
 
 
 class FakeClient:
@@ -33,3 +35,16 @@ def test_unchanged_game_counts_reuse_previous_decks(previous_games: int, expecte
     build_card_stats_file(client, "HOB", previous)
 
     assert len(client.calls) == expected_calls
+
+
+@pytest.mark.parametrize(
+    ("days_since_start", "hours_since_update", "due"),
+    [(10, 1, True), (40, 1, False), (40, 21, True)],
+)
+def test_refresh_daily_after_first_month(days_since_start: int, hours_since_update: int, due: bool) -> None:
+    now = datetime(2026, 11, 1, 12, tzinfo=timezone.utc)
+    previous = {"updatedAt": (now - timedelta(hours=hours_since_update)).isoformat()}
+
+    result = refresh_due(now.date() - timedelta(days=days_since_start), previous, now)
+
+    assert result is due
