@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Integer, case, func, select
+from sqlalchemy import Integer, case, delete, func, select
 from sqlalchemy.orm import Session
 
 from bot.models import MagicSet, Player, SelfReportedEvent
@@ -113,6 +113,17 @@ def upsert_event(
     event.source_url = source_url
     session.flush()
     return event
+
+
+def delete_event(session: Session, *, discord_id: str, source_message_id: str) -> bool:
+    owned_by_author = select(Player.id).where(Player.discord_id == discord_id)
+    result = session.execute(
+        delete(SelfReportedEvent).where(
+            SelfReportedEvent.player_id.in_(owned_by_author),
+            SelfReportedEvent.source_message_id == source_message_id,
+        )
+    )
+    return result.rowcount > 0
 
 
 def _resolve_set_id(session: Session, set_code: str) -> str | None:

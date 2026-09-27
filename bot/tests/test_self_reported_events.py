@@ -4,7 +4,7 @@ import pytest
 
 from bot.discord_helpers import parse_message_link
 from bot.models import MagicSet, Player, SelfReportedEvent
-from bot.services.self_reported_events import get_or_create_player, is_trophy_record, upsert_event
+from bot.services.self_reported_events import delete_event, get_or_create_player, is_trophy_record, upsert_event
 
 
 @pytest.mark.parametrize(
@@ -88,6 +88,28 @@ def test_upsert_resolves_set_id_from_code(session):
     assert event.caption == "finally hit it"
     assert session.get(MagicSet, event.set_id).code == "SOS"
 
+
+
+@pytest.mark.parametrize(
+    "discord_id, message_id, expected_removed",
+    [
+        ("111", "m1", True),
+        ("111", "other", False),
+        ("222", "m1", False),
+    ],
+)
+def test_delete_event_removes_only_the_authors_saved_post(session, discord_id, message_id, expected_removed):
+    player = _seed_player(session, discord_id="111")
+    upsert_event(
+        session, player_id=player.id, set_code="SOS", record="3-0", is_trophy=True, colors="WR",
+        platform="Paper", format="Prerelease", caption=None, screenshot_url=None,
+        source_channel_id="c1", source_message_id="m1", source_url="u1",
+    )
+
+    removed = delete_event(session, discord_id=discord_id, source_message_id=message_id)
+
+    assert removed is expected_removed
+    assert session.query(SelfReportedEvent).count() == (0 if expected_removed else 1)
 
 def test_upsert_persists_is_trophy_flag(session):
     player = _seed_player(session)

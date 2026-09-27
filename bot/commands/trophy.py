@@ -38,7 +38,7 @@ from bot.services.pod_deck_color import GUILDS, PAIR_EMOJI_NAME, color_label, fo
 from bot.services.pod_drafts import parse_caption_record
 from bot.services.pod_thread_backfill import parse_caption_colors
 from bot.services.pod_tournament import TROPHY_HYPE_HISTORY_LIMIT
-from bot.services.self_reported_events import get_or_create_player, is_trophy_record, upsert_event
+from bot.services.self_reported_events import delete_event, get_or_create_player, is_trophy_record, upsert_event
 from bot.sets import active_set_code, parse_caption_set_code, prereleased_sets
 
 logger = logging.getLogger(__name__)
@@ -67,6 +67,8 @@ MSG_BAD_LINK = "That doesn't look like a Discord message link. Right-click a mes
 MSG_LINK_NOT_FOUND = "Couldn't find that message. Check the link and try again"
 MSG_NOT_YOUR_POST = "You can only save your own trophy posts"
 MSG_NO_IMAGE = "That post has no image. Save the message that shows your trophy screenshot"
+MSG_REMOVED = "Removed from {whose_profile}"
+MSG_NOTHING_TO_REMOVE = "This post has no saved deck"
 
 
 @dataclass
@@ -199,6 +201,8 @@ class TrophyConfirmView(ui.View):
         self.add_item(_RecordButton(self.draft.record))
         self.add_item(_TrophyToggleButton(self.draft.is_trophy))
         self.add_item(_ConfirmButton(disabled=not self.draft.can_confirm))
+        if self.draft.already_logged:
+            self.add_item(_RemoveButton())
         self.add_item(_CancelButton())
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -419,6 +423,31 @@ class _CancelButton(ui.Button):
         await interaction.response.edit_message(content="Canceled", embed=None, view=None)
 
 
+class _RemoveButton(ui.Button):
+    def __init__(self) -> None:
+        super().__init__(label="Remove", style=discord.ButtonStyle.danger, emoji="🗑️")
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        view: TrophyConfirmView = self.view
+        draft = view.draft
+        with SessionLocal() as session:
+            removed = delete_event(session, discord_id=draft.discord_id, source_message_id=draft.source_message_id)
+            session.commit()
+        audit.event("trophy_removed", user_id=view.user_id, set_code=draft.set_code, removed=removed)
+        logger.info(f"trophy: {view.user_id} removed post {draft.source_message_id} (found={removed})")
+        whose_profile = f"{draft.display_name}'s profile" if draft.on_behalf else "your profile"
+        reply = MSG_REMOVED.format(whose_profile=whose_profile) if removed else MSG_NOTHING_TO_REMOVE
+        await interaction.edit_original_response(content=reply, embed=None, view=None)
+        if removed:
+            oversight = (
+                f"🗑️ **{draft.display_name}** (`{draft.discord_username}`) removed a saved "
+                f"{draft.set_code} deck: [post]({draft.source_url})"
+            )
+            run_detached(bot_log.get(interaction.client).post_plain(oversight), label="trophy_oversight")
+        run_detached(_unmark_post_logged(view.message, interaction.client.user), label="trophy_unmark_logged")
+
+
 class _PlatformWriteInModal(ui.Modal, title="Platform"):
     platform = ui.TextInput(label="Platform", placeholder="e.g. LGS Friday Night Magic", max_length=60, required=True)
 
@@ -587,6 +616,16 @@ async def _mark_post_logged(message: discord.Message, set_code: str, platform: s
         await message.add_reaction(emoji)
     except discord.HTTPException:
         logger.warning(f"trophy: could not react to post {message.id}", exc_info=True)
+
+
+async def _unmark_post_logged(message: discord.Message, bot_user: discord.ClientUser) -> None:
+    for reaction in message.reactions:
+        if not reaction.me:
+            continue
+        try:
+            await message.remove_reaction(reaction.emoji, bot_user)
+        except discord.HTTPException:
+            logger.warning(f"trophy: could not clear reaction on post {message.id}", exc_info=True)
 
 
 async def setup(bot: commands.Bot) -> None:
