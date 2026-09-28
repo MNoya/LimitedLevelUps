@@ -1,6 +1,6 @@
 import pytest
 
-from bot.listeners.usedta import says_the_line
+from bot.listeners.usedta import calls_a_worst_card_ever, says_the_line
 
 CASES = [
     ("they don't make em like they used ta", True),
@@ -15,3 +15,14 @@ CASES = [
 @pytest.mark.parametrize("text,expected", CASES)
 def test_line_detection(text, expected):
     assert says_the_line(text) is expected
+
+
+WORST_CARD_CASES = [
+    ("Is this the worst card they've EVER printed?", True),
+    ("worst card in the set", False),
+]
+
+
+@pytest.mark.parametrize("text,expected", WORST_CARD_CASES)
+def test_worst_card_ever_detection(text, expected):
+    assert calls_a_worst_card_ever(text) is expected
