@@ -32,7 +32,7 @@ import {
 import { categoryFromSlug, episodeSlugBase } from "../frontend/src/data/episodes";
 import { cubeForBoard, cubeVariantForBoard } from "../frontend/src/data/cubeVariants";
 import { CUBE_LIFETIME, isCubeSeasonCode } from "../frontend/src/data/utils";
-import { podSeasons } from "../frontend/src/data/podSeasons";
+import { POD_SEASON_PARAM, podSeasons } from "../frontend/src/data/podSeasons";
 import { skeletonsFor } from "../frontend/src/data/skeletons";
 import {
   SET_ROWS_QUERY,
@@ -222,7 +222,8 @@ export const onRequest: PagesFunction = async (context) => {
   if (lastSegment.includes(".") || url.pathname.startsWith("/api/")) return context.next();
 
   const userAgent = context.request.headers.get("user-agent") ?? "";
-  const route = await resolveRoute(url.pathname.split("/").filter(Boolean), isLinkPreviewCrawler(userAgent));
+  const segments = url.pathname.split("/").filter(Boolean);
+  const route = await resolveRoute(segments, url.searchParams, isLinkPreviewCrawler(userAgent));
   if (route.kind === "redirect") {
     return Response.redirect(`${url.origin}${route.location}${url.search}`, route.status);
   }
@@ -305,7 +306,11 @@ const resolved = (meta: RouteMeta, canonicalPath: string, notFound = false): Rou
 
 const redirect = (location: string, status: 301 | 302): RouteResolution => ({ kind: "redirect", location, status });
 
-const resolveRoute = async (segments: string[], wantsCardMeta: boolean): Promise<RouteResolution> => {
+const resolveRoute = async (
+  segments: string[],
+  searchParams: URLSearchParams,
+  wantsCardMeta: boolean,
+): Promise<RouteResolution> => {
   if (segments.length === 0) {
     return resolved({ ...HOME_META, noImagePreview: true }, "/");
   }
@@ -329,7 +334,7 @@ const resolveRoute = async (segments: string[], wantsCardMeta: boolean): Promise
     return tierListRoute(rest, wantsCardMeta);
   }
   if (section === "pods") {
-    return podsRoute(rest, wantsCardMeta);
+    return podsRoute(rest, searchParams, wantsCardMeta);
   }
   if (section === "p0p1") {
     return p0p1Route(rest[0]);
@@ -510,18 +515,18 @@ const tierCardMeta = async (setCode: string, slug: string): Promise<RouteMeta | 
   return null;
 };
 
-const podsRoute = async (rest: string[], wantsCardMeta: boolean): Promise<RouteResolution> => {
+const podsRoute = async (
+  rest: string[],
+  searchParams: URLSearchParams,
+  wantsCardMeta: boolean,
+): Promise<RouteResolution> => {
   const [first, second, third] = rest;
   if (first === undefined) {
     return resolved(page("Pod Drafts", "Check community pod draft results and standings"), "/pods");
   }
   if (second?.toLowerCase() === "data" && rest.length <= 3) {
-    const board = first.toUpperCase();
-    const label = cardDataLabel(board);
-    const boardPath = `/pods/${board}/data`;
-    const boardMeta = page(`${label} Cube Card Data`, `Card stats from every ${label} Cube pod draft`);
-    const cardMeta = third && wantsCardMeta ? await podCardMeta(board, label, third.toLowerCase()) : null;
-    return resolved(cardMeta ?? boardMeta, third ? `${boardPath}/${third}` : boardPath, !hasCardData(board));
+    const requestedSeason = wantsCardMeta ? searchParams.get(POD_SEASON_PARAM) : null;
+    return podCardDataRoute(first.toUpperCase(), third, requestedSeason, wantsCardMeta);
   }
   if (rest.length === 1 && first.toLowerCase() === "guide") {
     return resolved(page("Pod Drafts Guide", "How to play on our community Pod Drafts"), "/pods/guide");
@@ -529,11 +534,39 @@ const podsRoute = async (rest: string[], wantsCardMeta: boolean): Promise<RouteR
   return podSlugRoute(first, rest.slice(1));
 };
 
-const podCardMeta = async (board: string, label: string, slug: string): Promise<RouteMeta | null> => {
+const podCardDataRoute = async (
+  board: string,
+  card: string | undefined,
+  requestedSeason: string | null,
+  wantsCardMeta: boolean,
+): Promise<RouteResolution> => {
+  const label = cardDataLabel(board);
+  const boardPath = `/pods/${board}/data`;
+  const cardPath = card ? `${boardPath}/${card}` : boardPath;
+  const season = requestedSeason && (await boardHasSeason(board, requestedSeason)) ? requestedSeason : null;
+  const canonicalPath = season ? `${cardPath}?${POD_SEASON_PARAM}=${encodeURIComponent(season)}` : cardPath;
+  const boardTitle = season ? `${label} Cube Card Data: ${season} Season` : `${label} Cube Card Data`;
+  const boardMeta = page(boardTitle, `Card stats from every ${label} Cube pod draft`);
+  const cardMeta = card && wantsCardMeta ? await podCardMeta(board, label, card.toLowerCase(), season) : null;
+  return resolved(cardMeta ?? boardMeta, canonicalPath, !hasCardData(board));
+};
+
+const boardHasSeason = async (board: string, season: string): Promise<boolean> => {
+  const query = `public_pod_card_stats?select=season&set_code=eq.${queryValue(board)}&season=eq.${queryValue(season)}`;
+  const rows = await viewRows<{ season: string }>(`${query}&limit=1`);
+  return (rows ?? []).length > 0;
+};
+
+const podCardMeta = async (
+  board: string,
+  label: string,
+  slug: string,
+  season: string | null,
+): Promise<RouteMeta | null> => {
   const namePattern = queryValue(slug.replace(/-/g, "*"));
   const query = `public_pod_card_stats?select=*&set_code=eq.${queryValue(board)}&card_name=ilike.${namePattern}`;
   const rows = await viewRows<PodCardStatRow>(query);
-  const matching = (rows ?? []).filter((row) => cardSlug(row.card_name) === slug);
+  const matching = (rows ?? []).filter((row) => cardSlug(row.card_name) === slug && (!season || row.season === season));
   const [card] = aggregatePodCards(matching);
   if (!card || (card.ata === null && card.winRate === null)) {
     return null;
@@ -546,7 +579,8 @@ const podCardMeta = async (board: string, label: string, slug: string): Promise<
     stats.push(`GP WR ${(card.winRate * 100).toFixed(1)}% over ${card.gamesPlayed} games`);
   }
   const image = await scryfallImageUrl(card.name, card.set);
-  return page(card.name, `${label} Cube ${stats.join(", ")}`, image ? { kind: "url", url: image } : null);
+  const title = season ? `${card.name}: ${season} Season` : card.name;
+  return page(title, `${label} Cube ${stats.join(", ")}`, image ? { kind: "url", url: image } : null);
 };
 
 type ScryfallCard = { image_uris?: { large?: string }; card_faces?: { image_uris?: { large?: string } }[] };
