@@ -1471,7 +1471,7 @@ _PREVIEW_HOLD_HINT = roster_hold_hint([], [_PREVIEW_LEFT_SEAT[0]])
 _PREVIEW_NOT_READY = {_LINKED_EIGHT[6][0]}
 
 
-def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
+def _build(state: str, guild: discord.Guild | None) -> tuple[discord.Embed, discord.ui.View | None]:
     """Returns (embed, view) for a lobby-state preview."""
     if state == "empty":
         in_session: list[tuple[str, str | None]] = []
@@ -1498,6 +1498,7 @@ def _build(state: str) -> tuple[discord.Embed, discord.ui.View | None]:
         spectators=_SPECTATORS,
         new_drafters=_NEW_DRAFTERS,
         voice_url=_VOICE_URL,
+        guild=guild,
         **_preview_settings_labels(),
     )
     spectate_url = f"{_DRAFTMANCER_URL}&spectate=preview"
@@ -1707,7 +1708,7 @@ class _PreviewDisconnectVoteView(discord.ui.View):
             await interaction.followup.send(pod_disconnect.BOT_NOTICE)
             return
         await interaction.followup.send(MSG_POD_RESTARTING)
-        embed, view = _build("partial")
+        embed, view = _build("partial", interaction.guild)
         await interaction.followup.send(embed=embed, view=view)
 
 
@@ -1973,17 +1974,17 @@ async def setup(bot: commands.Bot) -> None:
             return
 
         if state == "readyunlinked":
-            embed, _ = _build("unlinked")
+            embed, _ = _build("unlinked", ctx.guild)
             await ctx.send(embed=embed, view=_ReadyCheckPreviewView())
             return
 
         if state == "readyteam":
-            embed, _ = _build("six")
+            embed, _ = _build("six", ctx.guild)
             await ctx.send(embed=embed, view=_ReadyCheckPreviewView(team_offer=True))
             return
 
         if state == "readypick2":
-            embed, _ = _build("four")
+            embed, _ = _build("four", ctx.guild)
             await ctx.send(embed=embed, view=_ReadyCheckPreviewView(pick_2_offer=True))
             return
 
@@ -2147,17 +2148,17 @@ async def setup(bot: commands.Bot) -> None:
             return
 
         if state == "round1":
-            await ctx.send(embed=round_embed(1, _round1_preview_states(seated=extra != "random")))
+            await ctx.send(embed=round_embed(1, _round1_preview_states(seated=extra != "random"), ctx.guild))
             return
 
         if state == "round2" and extra == "bye":
-            await ctx.send(embed=round_embed(2, _bye_round_preview_states()))
+            await ctx.send(embed=round_embed(2, _bye_round_preview_states(), ctx.guild))
             return
 
         if state in ("round2", "round3"):
             round_num = int(state[-1])
             size = 10 if extra == "10" else 8
-            await ctx.send(embed=round_embed(round_num, _later_round_preview_states(round_num, size)))
+            await ctx.send(embed=round_embed(round_num, _later_round_preview_states(round_num, size), ctx.guild))
             return
 
         if state == "voicelink":
@@ -2197,7 +2198,7 @@ async def setup(bot: commands.Bot) -> None:
                 labels = {**_preview_settings_labels(), "set_code": code, "format_label": format_display(code)}
                 embed = render_lobby_embed(
                     _THREAD_NAME, _RSVPS_YES, _RSVPS_MAYBE, list(_LINKED_EIGHT),
-                    state="linked", draftmancer_url=_DRAFTMANCER_URL, **labels,
+                    state="linked", draftmancer_url=_DRAFTMANCER_URL, guild=inter.guild, **labels,
                 )
                 await inter.channel.send(embed=embed)
                 return None
@@ -2208,7 +2209,7 @@ async def setup(bot: commands.Bot) -> None:
             state = "empty"
 
         await _evict_test_managers_for_channel(ctx.channel.id)
-        embed, view = _build(state)
+        embed, view = _build(state, ctx.guild)
         _LAST_MESSAGE[ctx.channel.id] = await ctx.send(embed=embed, view=view)
         posted = [await ctx.send(embed=e, view=v) for e, v in _build_ready_progress(state)]
         _LAST_PROGRESS_MESSAGES[ctx.channel.id] = posted

@@ -21,7 +21,7 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from bot import emojis
-from bot.commands.messages import MSG_POD_NO_MATCH_TO_REPORT, MSG_POD_RESULT_ALREADY_RECORDED
+from bot.commands.messages import MSG_ORGANIZER_HELP, MSG_POD_NO_MATCH_TO_REPORT, MSG_POD_RESULT_ALREADY_RECORDED
 from bot.config import settings
 from bot.discord_helpers import (
     NBSP,
@@ -59,6 +59,7 @@ from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
     SYNTHETIC_CHAMPION_TAG,
     champion_role_mention,
+    organizer_mention,
     grant_set_champion_title,
     post_replay_link_prompt,
     swap_set_champion_role,
@@ -1389,7 +1390,7 @@ async def _post_round_message(
             m["allow_skip"] = round_num == TOTAL_ROUNDS
     if round_num == 1 and seats and manager.pairing_mode != "random":
         _attach_seats(match_states, seats)
-    embed = round_embed(round_num, match_states)
+    embed = round_embed(round_num, match_states, guild=thread.guild)
     view = RoundResultsView(match_states, round_num=round_num)
     posted = await _send_round_message(thread, embed, view, round_num)
     if posted is None:
@@ -1483,7 +1484,7 @@ async def refresh_round_pairing_messages(manager) -> None:
         url, label = _round_nav_link(manager, round_num)
         try:
             await msg.edit(
-                embed=round_embed(round_num, states),
+                embed=round_embed(round_num, states, guild=msg.guild),
                 view=RoundResultsView(states, round_num=round_num, link_url=url, link_label=label),
             )
         except discord.HTTPException:
@@ -2163,7 +2164,7 @@ async def _refresh_round_message_after_edit(
         try:
             await round_message.edit(
                 content=None,
-                embed=round_embed(round_num, states),
+                embed=round_embed(round_num, states, guild=round_message.guild),
                 view=RoundResultsView(states, round_num=round_num, link_url=url, link_label=label),
             )
         except discord.HTTPException:
@@ -2242,7 +2243,7 @@ async def _handle_result_submission(interaction: discord.Interaction, value: str
                     url, label = _round_nav_link(manager, round_num)
                     await interaction.edit_original_response(
                         content=None,
-                        embed=round_embed(round_num, match_states),
+                        embed=round_embed(round_num, match_states, guild=interaction.guild),
                         view=RoundResultsView(match_states, round_num=round_num, link_url=url, link_label=label),
                     )
             except Exception:
@@ -2281,7 +2282,7 @@ async def _handle_result_submission(interaction: discord.Interaction, value: str
                 url, label = _round_nav_link(manager, round_num)
                 await interaction.edit_original_response(
                     content=None,
-                    embed=round_embed(round_num, match_states),
+                    embed=round_embed(round_num, match_states, guild=interaction.guild),
                     view=RoundResultsView(match_states, round_num=round_num, link_url=url, link_label=label),
                 )
         except Exception:
@@ -2545,7 +2546,7 @@ async def _propagate_match_to_other_surfaces(
     try:
         await thread_msg.edit(
             content=None,
-            embed=round_embed(round_num, match_states),
+            embed=round_embed(round_num, match_states, guild=thread_msg.guild),
             view=RoundResultsView(match_states, round_num=round_num, link_url=url, link_label=label),
         )
     except discord.HTTPException:
@@ -5143,11 +5144,12 @@ REPORT_NOTICE = f"🎯{NBSP}{NBSP}Opponent DM'd. Use `/report-results` or the me
 DECK_IMAGE_NOTICE = f"🚨{NBSP}{NBSP}Change your MTGA deck image before you play, or it leaks your P1P1"
 
 
-def _round_notice_lines(round_num: int) -> list[str]:
-    """Report prompt + P1P1 deck-image warning, on the whole of round 1 whatever is already reported"""
+def _round_notice_lines(round_num: int, guild: discord.Guild | None) -> list[str]:
+    """Report prompt, P1P1 deck-image warning and Organizer contact, on the whole of round 1 whatever is reported"""
     if round_num != 1:
         return []
-    return ["", REPORT_NOTICE, DECK_IMAGE_NOTICE]
+    organizer_notice = f"🆘{NBSP}{NBSP}{MSG_ORGANIZER_HELP.format(organizer=organizer_mention(guild))}"
+    return ["", REPORT_NOTICE, DECK_IMAGE_NOTICE, organizer_notice]
 
 
 def round_groups(round_num: int, match_states: list[dict]) -> list[tuple[str, list[dict]]]:
@@ -5241,7 +5243,7 @@ def _waiting_footer_line(match_states: list[dict]) -> str | None:
     return None
 
 
-def round_embed(round_num: int, match_states: list[dict]) -> discord.Embed:
+def round_embed(round_num: int, match_states: list[dict], guild: discord.Guild | None = None) -> discord.Embed:
     all_done = all(m["winner_name"] for m in match_states)
     if round_num == 1:
         seated = bool(match_states) and all(m.get("a_seat") and m.get("b_seat") for m in match_states)
@@ -5251,7 +5253,7 @@ def round_embed(round_num: int, match_states: list[dict]) -> discord.Embed:
         # Rounds 2+ group by record (1-0/0-1, then Trophy/1-1/Last Chance), waiting slots included
         title = round_header(round_num, all_done)
         lines = _grouped_lines(round_num, match_states)
-    lines = lines + _round_notice_lines(round_num)
+    lines = lines + _round_notice_lines(round_num, guild)
     footer = _waiting_footer_line(match_states)
     if footer is not None:
         lines = lines + ["", footer]

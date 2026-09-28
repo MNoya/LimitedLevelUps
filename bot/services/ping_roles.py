@@ -169,7 +169,7 @@ MANAGED_ROLES: tuple[ManagedRole, ...] = (
     ManagedRole(SET_CHAMPION_ROLE_NAME, "#82CBFF", unicode_emoji="👑"),
     ManagedRole(PRIOR_SET_CHAMPION_ROLE_NAME, "#F1C40F", unicode_emoji="🎖️"),
     POD_CHAMPION_ROLE,
-    ManagedRole(ORGANIZER_ROLE_NAME, "#4CD4A9"),
+    ManagedRole(ORGANIZER_ROLE_NAME, "#F38300"),
     ManagedRole(TOP_P0P1_CHALLENGER_ROLE_NAME, P0P1_COLOR),
     ManagedRole(REMINDER_ROLE_NAME, REMINDER_COLOR, aliases=("P0P1 Reminder",)),
 ) + tuple(ManagedRole(spec.name, unicode_emoji=spec.icon) for spec in AWARD_ROLES)

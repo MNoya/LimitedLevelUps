@@ -14,10 +14,11 @@ import discord
 
 from bot import emojis
 from bot.commands import descriptions as desc
+from bot.commands.messages import MSG_ORGANIZER_HELP
 from bot.discord_helpers import add_two_column_field, command_line, plural, quote_block
 from bot.services import pod_team
 from bot.services.pod_active import active_manager_for_channel
-from bot.services.ping_roles import format_join_line
+from bot.services.ping_roles import format_join_line, organizer_mention
 from bot.services.pod_drafts import load_event_id_by_thread_sync, normalize_player_name
 from bot.services.pod_roster_fields import marked_new
 from bot.services.pod_team_board import TeamBoardMember, add_team_roster_fields
@@ -658,6 +659,7 @@ def render(
     mock: bool = False,
     new_drafters: frozenset[str] = frozenset(),
     voice_url: str | None = None,
+    guild: discord.Guild | None = None,
 ) -> discord.Embed:
     """Lobby embed. `title` is the thread/event name; `rsvps_yes` / `rsvps_maybe` are sesh display
     names by RSVP type; `in_session` is Draftmancer sessionUsers as (arena_name,
@@ -773,6 +775,8 @@ def render(
         if voice_url and state != "drafting":
             lines.append("​")
             lines.append(VOICE_CARD_LINK.format(url=voice_url))
+        lines.append("​")
+        lines.append(f"🆘 {MSG_ORGANIZER_HELP.format(organizer=organizer_mention(guild))}")
         embed.add_field(name="🤖 Commands", value="\n".join(lines), inline=False)
     return embed
 

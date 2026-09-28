@@ -1588,6 +1588,7 @@ class PodDraftManager:
                 teams=teams,
                 new_drafters=await self._lobby_new_drafters(mention_map),
                 voice_url=pod_voice_channel_url(thread.guild),
+                guild=thread.guild,
                 **self._settings_labels(),
             )
             self._maybe_schedule_lobby_full_prompt(classified)
