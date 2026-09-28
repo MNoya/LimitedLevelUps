@@ -932,7 +932,7 @@ function DesktopExpandedRow({
       <div className="flex-1 min-w-0 overflow-hidden"><MostPlayedDecks events={events} /></div>
       <div className="flex-1 min-w-0 overflow-hidden"><LastTrophyPanel data={trophiesToShow} decks={scopedDecks} loading={!events} activeFormat={activeFormat} activeColors={activeColors} /></div>
       <div className="flex-[0.4] min-w-0 overflow-hidden self-stretch -ml-6"><BiggestStreakPanel data={biggestStreak} loading={!events} /></div>
-      <ChamferedButton className="!pt-[10px] !pb-[10px] self-center">
+      <ChamferedButton className="!pt-[10px] !pb-[10px] self-center pointer-events-none">
         <span className="inline-flex items-center gap-2">
           VIEW PROFILE
           <ArrowRight size={12} />
