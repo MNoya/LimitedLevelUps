@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { ManaCost } from "../ManaPips";
 import { SectionLabel } from "../SectionLabel";
@@ -47,17 +47,51 @@ export function BreakdownList({
         ))}
       </div>
 
-      <div className="lg:hidden flex flex-col gap-2">
-        {slots.map((slot) => (
-          <BreakdownPanel
-            key={slot.key}
-            slot={slot}
-            rows={bySlot.get(slot.key) ?? []}
-            setCode={setCode}
-            collapsible
-          />
-        ))}
-      </div>
+      <CollapsiblePanels slots={slots} bySlot={bySlot} setCode={setCode} />
+    </div>
+  );
+}
+
+function CollapsiblePanels({
+  slots,
+  bySlot,
+  setCode,
+}: {
+  slots: SlotDefinition[];
+  bySlot: Map<SlotKey, BreakdownRow[]>;
+  setCode?: string;
+}) {
+  const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<SlotKey>>(new Set());
+  const closedHeader = useRef<HTMLElement | null>(null);
+
+  const toggle = (key: SlotKey, header: HTMLElement) => {
+    const next = new Set(expandedKeys);
+    if (next.has(key)) {
+      closedHeader.current = header;
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
+    setExpandedKeys(next);
+  };
+
+  useLayoutEffect(() => {
+    closedHeader.current?.scrollIntoView({ block: "start" });
+    closedHeader.current = null;
+  }, [expandedKeys]);
+
+  return (
+    <div className="lg:hidden flex flex-col gap-2">
+      {slots.map((slot) => (
+        <BreakdownPanel
+          key={slot.key}
+          slot={slot}
+          rows={bySlot.get(slot.key) ?? []}
+          setCode={setCode}
+          expanded={expandedKeys.has(slot.key)}
+          onToggle={(header) => toggle(slot.key, header)}
+        />
+      ))}
     </div>
   );
 }
@@ -66,14 +100,16 @@ function BreakdownPanel({
   slot,
   rows,
   setCode,
-  collapsible = false,
+  expanded = false,
+  onToggle,
 }: {
   slot: SlotDefinition;
   rows: BreakdownRow[];
   setCode?: string;
-  collapsible?: boolean;
+  expanded?: boolean;
+  onToggle?: (header: HTMLElement) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const collapsible = onToggle !== undefined;
   const accent = breakdownStripAccent(slot.key);
   const showRows = !collapsible || expanded;
   const wide = slot.key === "wildcard_uncommon";
@@ -102,8 +138,8 @@ function BreakdownPanel({
       {collapsible ? (
         <button
           type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className={`flex items-stretch bg-surface2 text-left cursor-pointer ${showRows ? "border-b border-border2" : ""}`}
+          onClick={(e) => onToggle(e.currentTarget)}
+          className={`flex items-stretch bg-surface2 text-left cursor-pointer scroll-mt-2 ${showRows ? "border-b border-border2" : ""}`}
         >
           {header}
         </button>
