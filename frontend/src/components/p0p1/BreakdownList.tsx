@@ -62,12 +62,12 @@ function CollapsiblePanels({
   setCode?: string;
 }) {
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<SlotKey>>(new Set());
-  const closedHeader = useRef<HTMLElement | null>(null);
+  const closedHeader = useRef<{ el: HTMLElement; top: number } | null>(null);
 
   const toggle = (key: SlotKey, header: HTMLElement) => {
     const next = new Set(expandedKeys);
     if (next.has(key)) {
-      closedHeader.current = header;
+      closedHeader.current = { el: header, top: header.getBoundingClientRect().top };
       next.delete(key);
     } else {
       next.add(key);
@@ -76,12 +76,16 @@ function CollapsiblePanels({
   };
 
   useLayoutEffect(() => {
-    closedHeader.current?.scrollIntoView({ block: "start" });
+    const closed = closedHeader.current;
+    if (!closed) {
+      return;
+    }
     closedHeader.current = null;
+    window.scrollBy(0, closed.el.getBoundingClientRect().top - closed.top);
   }, [expandedKeys]);
 
   return (
-    <div className="lg:hidden flex flex-col gap-2">
+    <div className="lg:hidden flex flex-col gap-2 [overflow-anchor:none]">
       {slots.map((slot) => (
         <BreakdownPanel
           key={slot.key}
@@ -139,7 +143,7 @@ function BreakdownPanel({
         <button
           type="button"
           onClick={(e) => onToggle(e.currentTarget)}
-          className={`flex items-stretch bg-surface2 text-left cursor-pointer scroll-mt-2 ${showRows ? "border-b border-border2" : ""}`}
+          className={`flex items-stretch bg-surface2 text-left cursor-pointer ${showRows ? "border-b border-border2" : ""}`}
         >
           {header}
         </button>
