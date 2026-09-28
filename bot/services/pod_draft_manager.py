@@ -127,6 +127,7 @@ from bot.services.pod_drafts import (
     mock_repost_sync,
     name_token_match,
     new_drafters_in_roster_sync,
+    new_drafters_in_signup_sync,
     player_for_name,
     pod_page_url,
     record_mock_repost_sync,
@@ -1511,13 +1512,16 @@ class PodDraftManager:
         return out
 
     async def _lobby_new_drafters(self, mention_map: dict[int, str]) -> frozenset[str]:
-        """The lobby's new-drafter set: the in-session seats plus the rsvp roster entries yet to finish a pod.
-        The rsvp half is keyed by the same string the Waiting on / Unconfirmed / Maybe columns render, so a
-        plain-text and a mention roster both mark, and it is resolved once since the roster is fixed."""
+        """The in-session seats plus the rsvp entries yet to finish a pod, keyed by the string each column renders"""
         if self._rsvp_new_drafters is None:
+            entries = (*self.rsvps_yes, *self.rsvps_unconfirmed, *self.rsvps_maybe)
+            signup_new = await asyncio.to_thread(new_drafters_in_signup_sync, self.event_id)
+            if signup_new is not None:
+                self._rsvp_new_drafters = frozenset(entry for entry in entries if entry in signup_new)
+                return self.new_drafters | self._rsvp_new_drafters
             resolved: dict[str, str] = {}
             complete = True
-            for entry in (*self.rsvps_yes, *self.rsvps_unconfirmed, *self.rsvps_maybe):
+            for entry in entries:
                 name = _rsvp_display_name(entry, mention_map)
                 if name is None:
                     complete = False

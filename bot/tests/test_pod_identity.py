@@ -510,17 +510,33 @@ def test_alias_match_independent_of_primary_arena_name(session):
     assert player_for_name(session, "secondhandle#22222").discord_id == "11"
 
 
-def test_longest_alias_prefix_wins(session):
+@pytest.mark.parametrize("name, expected_discord_id", [
+    ("dragonslayer#1234", "13"),
+    ("Drag_36659", "12"),
+    ("drag@36659", "12"),
+    ("drag#36659 ", "12"),
+    ("Drag (Alex)", "12"),
+    ("drag#36659 (u/Sliver__Legion)", "12"),
+    ("dragfoo#9999", None),
+    ("DancingSamurai", "15"),
+])
+def test_alias_matches_only_the_whole_normalized_name(session, name, expected_discord_id):
     _seed_player(
         session, discord_id="12", username="a", display_name="A",
-        arena_aliases=["drag"],
+        arena_aliases=["drag", "dan"],
     )
     _seed_player(
         session, discord_id="13", username="b", display_name="B",
         arena_aliases=["dragonslayer"],
     )
-    assert player_for_name(session, "dragonslayer99#1234").discord_id == "13"
-    assert player_for_name(session, "dragfoo#9999").discord_id == "12"
+    _seed_player(
+        session, discord_id="15", username="dancingsamurai_ca", display_name="DancingSamurai",
+        arena_name=None,
+    )
+
+    player = player_for_name(session, name)
+
+    assert (player.discord_id if player else None) == expected_discord_id
 
 
 def test_alias_no_match_falls_back_to_display_name(session):

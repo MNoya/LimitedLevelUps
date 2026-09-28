@@ -100,15 +100,17 @@ def _session_id_off_base(session: Session, base: str) -> str:
             return candidate
 
 
-_ARENA_ID_RE = re.compile(r"#[0-9?]+$")
-_ARENA_ID_SQL = r"#[0-9?]+$"
+_TRAILING_NICKNAME_SQL = r"\s*\([^()]*\)\s*$|\s+$"
+_ARENA_ID_SQL = r"(#[0-9?]+|[_@][0-9]{5})$"
+_TRAILING_NICKNAME_RE = re.compile(_TRAILING_NICKNAME_SQL)
+_ARENA_ID_RE = re.compile(_ARENA_ID_SQL)
 _NAME_TOKEN_RE = re.compile(r"[\s()/\\,|-]+")
 
 
 def normalize_player_name(name: str) -> str:
-    """Strip markdown escape backslashes and the trailing MTG Arena suffix, lowercase for matching.
-    The suffix may be a `#?????` placeholder typed by players who don't know their Arena number."""
-    return _ARENA_ID_RE.sub("", name.replace("\\", "")).lower()
+    """Lowercased name without escape backslashes, a trailing `(nickname)` or the Arena number after `#`, `_` or `@`"""
+    lowered = name.replace("\\", "").lower()
+    return _ARENA_ID_RE.sub("", _TRAILING_NICKNAME_RE.sub("", lowered, count=1))
 
 
 _ARENA_TOKEN_RE = re.compile(r"\s*#[0-9?]+(?=$|\s|\))")
@@ -195,8 +197,9 @@ def suggest_lobby_name(declared: str, live_names: Sequence[str]) -> str | None:
 
 
 def _normalized_column(col):
-    """SQL expression: lowercase a column and strip the trailing MTG Arena suffix."""
-    return func.regexp_replace(func.lower(col), _ARENA_ID_SQL, "")
+    """SQL twin of normalize_player_name"""
+    lowered = func.lower(func.replace(col, "\\", ""))
+    return func.regexp_replace(func.regexp_replace(lowered, _TRAILING_NICKNAME_SQL, ""), _ARENA_ID_SQL, "")
 
 
 def classify_lobby_names(
@@ -233,6 +236,22 @@ def new_drafters_in_roster_sync(names: Sequence[str]) -> frozenset[str]:
         return new_drafters_in_roster(session, names)
 
 
+def new_drafters_in_signup_sync(event_id: str) -> frozenset[str] | None:
+    """Signup display names yet to finish a pod, resolved by Discord ID; None for a pod with no signup roster"""
+    with SessionLocal() as session:
+        signal_id = session.execute(
+            select(PodSignal.id).where(PodSignal.event_id == event_id)
+        ).scalar_one_or_none()
+        if signal_id is None:
+            return None
+        rows = session.execute(
+            select(PodSignalMember.display_name, new_drafter_column())
+            .outerjoin(Player, Player.discord_id == PodSignalMember.discord_user_id)
+            .where(PodSignalMember.signal_id == signal_id)
+        ).all()
+    return frozenset(name for name, new_drafter in rows if new_drafter)
+
+
 def players_for_names(session: Session, names: Sequence[str]) -> list[tuple[str, Player | None]]:
     """Resolve each sesh attendee name to its Player (or None if unmatched), preserving order."""
     return [(n, player_for_name(session, n)) for n in names]
@@ -247,9 +266,8 @@ def player_for_name(session: Session, name: str) -> Player | None:
 
     Matching tiers (first hit wins):
       1. Exact match against any arena_aliases entry (normalized).
-      2. Longest-prefix match against arena_aliases.
-      3. Exact normalized display_name or discord_username.
-      4. norm is a word token within display_name or discord_username
+      2. Exact normalized display_name or discord_username.
+      3. norm is a word token within display_name or discord_username
          (e.g. display "Alice (Wonderland)" matches Draftmancer name "Wonderland#12345").
     """
     norm = normalize_player_name(name)
@@ -267,17 +285,6 @@ def _match_player(session: Session, norm: str, active_filter) -> Player | None:
     if found is not None:
         return found
 
-    candidates = session.execute(select(Player).where(active_filter)).scalars().all()
-
-    best: tuple[Player, str] | None = None
-    for p in candidates:
-        for alias in (p.arena_aliases or []):
-            if alias and norm.startswith(alias):
-                if best is None or len(alias) > len(best[1]):
-                    best = (p, alias)
-    if best is not None:
-        return best[0]
-
     found = session.execute(
         select(Player).where(
             active_filter,
@@ -287,6 +294,8 @@ def _match_player(session: Session, norm: str, active_filter) -> Player | None:
     ).scalar_one_or_none()
     if found is not None:
         return found
+
+    candidates = session.execute(select(Player).where(active_filter)).scalars().all()
 
     for p in candidates:
         for field in (p.display_name or "", p.discord_username or ""):
@@ -1194,9 +1203,7 @@ def _name_identifies_player(player: Player, norm: str) -> bool:
 def _player_already_seated(
     rows: list[PodDraftParticipant], player_id, exclude: PodDraftParticipant,
 ) -> bool:
-    """Whether another seat in this event already holds `player_id`. Two Draftmancer names can resolve
-    to one Player (e.g. a prefix-alias match), but uq_pod_participant_event_player allows a player a
-    single seat; the second name stays unlinked instead of crashing the tournament seed."""
+    """Whether another seat in this event holds `player_id`, so a second name resolving to it stays unlinked"""
     return any(row is not exclude and row.player_id == player_id for row in rows)
 
 
