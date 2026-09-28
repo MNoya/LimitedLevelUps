@@ -145,6 +145,12 @@ class CoverageWindow:
     def last_day(self) -> date:
         return max(covered.last_day for covered in self.events)
 
+    def ends_at(self) -> datetime:
+        latest = self.events[0].ends_at()
+        for covered in self.events[1:]:
+            latest = max(latest, covered.ends_at())
+        return latest
+
     @property
     def headliner(self) -> CoveredEvent:
         best = self.events[0]

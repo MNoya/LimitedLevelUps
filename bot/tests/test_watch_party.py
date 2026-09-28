@@ -3,7 +3,8 @@ from datetime import date, datetime, timezone
 import pytest
 
 from bot.services.mtgscribe import ScribeEvent
-from bot.services.watch_party import channel_name, covered_events, upcoming_windows
+from bot.services.watch_party import channel_name, covered_events, coverage_windows, upcoming_windows
+from bot.tasks.watch_party_post import TICK, window_embed_state
 
 
 def _event(title, tags, first_day, last_day):
@@ -59,3 +60,15 @@ def test_the_channel_holds_the_headliner_until_the_day_after_its_window(today, e
     name = channel_name(windows[0] if windows else None)
 
     assert name == expected
+
+
+def test_each_window_posts_its_upcoming_and_live_embeds_on_exactly_one_tick():
+    windows = coverage_windows(CALENDAR)
+    ticks = [datetime(2026, 10, 1, tzinfo=timezone.utc) + TICK * step for step in range(60 * 24 * 4)]
+
+    posts = []
+    for previous, window in zip([None, *windows], windows):
+        states = [window_embed_state(window, previous, tick) for tick in ticks]
+        posts.append([state for state in states if state is not None])
+
+    assert posts == [[False, True]] * len(windows)

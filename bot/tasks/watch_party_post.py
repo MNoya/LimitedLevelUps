@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import discord
 from discord.ext import commands
@@ -16,7 +16,6 @@ from bot.commands.event_scribe import (
 )
 from bot.commands.messages import MSG_EVENT_LIVE
 from bot.config import settings
-from bot.discord_helpers import message_text
 from bot.services import mtgscribe
 from bot.tasks.format_schedule_post import create_pinned_schedule, pinned_schedule
 from bot.services.watch_party import (
@@ -28,7 +27,9 @@ from bot.services.watch_party import (
     upcoming_windows,
 )
 
-HISTORY_SCAN_LIMIT = 50
+TICK_MINUTES = 15
+TICK = timedelta(minutes=TICK_MINUTES)
+UPCOMING_LEAD = timedelta(days=7)
 
 MSG_TOPIC_LEAD = "Discuss the latest pro-level events"
 MSG_TOPIC_NOW = "Now: {names} - {dates}"
@@ -57,8 +58,9 @@ def init_watch_party(bot: commands.Bot) -> None:
     if not settings.watch_party_enabled:
         log.info("WATCH_PARTY_ENABLED=false; watch party tick disabled")
         return
-    bot.pod_scheduler.add_job(fire_watch_party, "cron", minute="*/15", id="watch-party", replace_existing=True)
-    log.info("watch-party armed every 15 minutes")
+    every_tick = f"*/{TICK_MINUTES}"
+    bot.pod_scheduler.add_job(fire_watch_party, "cron", minute=every_tick, id="watch-party", replace_existing=True)
+    log.info(f"watch-party armed every {TICK_MINUTES} minutes")
 
 
 async def fire_watch_party() -> None:
@@ -73,9 +75,10 @@ async def fire_watch_party() -> None:
     await _refresh_coverage_pin(channel, events)
     if not windows:
         return
-    await _post_window_embed(channel, windows[0], now)
+    tick = tick_start(now)
+    await _post_window_embeds(channel, windows, tick)
     await _create_scheduled_events(channel, windows[0], now)
-    await _announce_started_events(channel, windows[0], now)
+    await _announce_started_events(channel, windows[0], tick)
 
 
 def channel_topic(windows: list[CoverageWindow], today: date) -> str:
@@ -104,12 +107,19 @@ def announcement_candidates(window: CoverageWindow) -> list[CoveredEvent]:
     return [covered for covered in window.events if covered.kind.announced]
 
 
-def window_embed_state(window: CoverageWindow, now: datetime) -> bool | None:
-    headliner = window.headliner
-    if window.first_day > now.astimezone(CHANNEL_TZ).date():
-        return False
-    if headliner.starts_at() <= now < headliner.ends_at():
+def tick_start(now: datetime) -> datetime:
+    return now.replace(minute=now.minute - now.minute % TICK_MINUTES, second=0, microsecond=0)
+
+
+def window_embed_state(window: CoverageWindow, previous: CoverageWindow | None, tick: datetime) -> bool | None:
+    starts_at = window.headliner.starts_at()
+    if _is_due(starts_at, tick):
         return True
+    upcoming_at = starts_at - UPCOMING_LEAD
+    if previous is not None:
+        upcoming_at = max(upcoming_at, previous.ends_at())
+    if _is_due(upcoming_at, tick):
+        return False
     return None
 
 
@@ -183,13 +193,16 @@ async def _refresh_coverage_pin(channel: discord.TextChannel, events: list) -> N
         log.warning("watch-party: could not edit the Coverage pin", exc_info=True)
 
 
-async def _post_window_embed(channel: discord.TextChannel, window: CoverageWindow, now: datetime) -> None:
-    live = window_embed_state(window, now)
-    if live is None or await _already_posted(channel, window_marker(window, live=live)):
-        return
-    emojis = {emoji.name: emoji for emoji in await _bot.fetch_application_emojis()}
-    await channel.send(embed=build_window_embed(window, emojis, live=live))
-    log.info(f"watch-party: posted {window_marker(window, live=live)}")
+async def _post_window_embeds(channel: discord.TextChannel, windows: list[CoverageWindow], tick: datetime) -> None:
+    previous = None
+    for window in windows:
+        live = window_embed_state(window, previous, tick)
+        previous = window
+        if live is None:
+            continue
+        emojis = {emoji.name: emoji for emoji in await _bot.fetch_application_emojis()}
+        await channel.send(embed=build_window_embed(window, emojis, live=live))
+        log.info(f"watch-party: posted {window_marker(window, live=live)}")
 
 
 async def _create_scheduled_events(channel: discord.TextChannel, window: CoverageWindow, now: datetime) -> None:
@@ -212,21 +225,16 @@ async def _create_scheduled_events(channel: discord.TextChannel, window: Coverag
             log.warning(f"watch-party: could not create the {covered.name} scheduled event", exc_info=True)
 
 
-async def _announce_started_events(channel: discord.TextChannel, window: CoverageWindow, now: datetime) -> None:
+async def _announce_started_events(channel: discord.TextChannel, window: CoverageWindow, tick: datetime) -> None:
     for covered in announcement_candidates(window):
-        if not covered.starts_at() <= now < covered.first_day_ends_at():
-            continue
-        if await _already_posted(channel, announcement_marker(covered)):
+        if not _is_due(covered.starts_at(), tick):
             continue
         await channel.send(build_announcement(covered), allowed_mentions=discord.AllowedMentions.none())
         log.info(f"watch-party: announced {covered.name}")
 
 
-async def _already_posted(channel: discord.TextChannel, marker: str) -> bool:
-    async for message in channel.history(limit=HISTORY_SCAN_LIMIT):
-        if message.author.id == channel.guild.me.id and marker in message_text(message):
-            return True
-    return False
+def _is_due(moment: datetime, tick: datetime) -> bool:
+    return tick - TICK < moment <= tick
 
 
 def _names(window: CoverageWindow) -> str:

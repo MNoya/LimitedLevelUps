@@ -10,6 +10,7 @@ from bot.commands.test_group import test_group
 from bot.services import mtgscribe
 from bot.services.watch_party import CHANNEL_TZ, channel_name, upcoming_windows
 from bot.tasks.watch_party_post import (
+    UPCOMING_LEAD,
     announcement_candidates,
     build_announcement,
     build_window_embed,
@@ -30,7 +31,7 @@ async def setup(bot: commands.Bot) -> None:
         if current is None:
             return
         emojis = {emoji.name: emoji for emoji in await ctx.bot.fetch_application_emojis()}
-        await ctx.send("__**Posts the day after the previous event ends**__",
+        await ctx.send(f"__**Posts {UPCOMING_LEAD.days} days before it starts or when the previous event ends**__",
                        embed=build_window_embed(current, emojis, live=False))
         await ctx.send(f"__**Posts at {format_dt(current.headliner.starts_at(), 'f')}**__",
                        embed=build_window_embed(current, emojis, live=True))
