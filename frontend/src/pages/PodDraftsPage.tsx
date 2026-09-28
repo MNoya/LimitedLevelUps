@@ -81,6 +81,7 @@ import {
   podSeasons,
   podFormatBuckets,
   POD_FORMAT_BUCKETS,
+  POD_SEASON_PARAM,
   seasonForDate,
   type PodFormatBucket,
 } from "../data/podSeasons";
@@ -125,7 +126,6 @@ const MIN_BOARD_FORMATS = 2;
 
 const AXIS_ALL = "all";
 const AXIS_PARAM_FORMAT = "format";
-const AXIS_PARAM_SEASON = "season";
 const AXIS_PARAM_SET = "set";
 const SCOPE_SET_PREFIX = "set:";
 
@@ -183,11 +183,11 @@ export function PodsRoute() {
   }
   const season = podSeasons(allSets).find((s) => s.code.toLowerCase() === slug.toLowerCase());
   if (season) {
-    return <Navigate to={`/pods?${AXIS_PARAM_SEASON}=${season.code}`} replace />;
+    return <Navigate to={`/pods?${POD_SEASON_PARAM}=${season.code}`} replace />;
   }
   const window = boardWindowFromSlug(slug, podSetCodes, allSets);
   if (window) {
-    return <Navigate to={`/pods/${window.board}?${AXIS_PARAM_SEASON}=${window.season}`} replace />;
+    return <Navigate to={`/pods/${window.board}?${POD_SEASON_PARAM}=${window.season}`} replace />;
   }
   return <PodPage />;
 }
@@ -231,7 +231,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
     return podSeasons(allSets).filter((s) => played.has(s.code));
   }, [allSets, allEvents, podSetCodes]);
 
-  const seasonAxis = searchParams.get(AXIS_PARAM_SEASON);
+  const seasonAxis = searchParams.get(POD_SEASON_PARAM);
   // Every season at once, the one window a route cannot name
   const allSeasons = !setCode && seasonAxis === AXIS_ALL;
 
@@ -418,8 +418,8 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
   const scopeHref = (value: string): To => {
     if (value.startsWith(SCOPE_SET_PREFIX)) return boardPath(value.slice(SCOPE_SET_PREFIX.length));
     const next = new URLSearchParams(setCode ? "" : searchParams);
-    if (value === liveSeasonCode) next.delete(AXIS_PARAM_SEASON);
-    else next.set(AXIS_PARAM_SEASON, value);
+    if (value === liveSeasonCode) next.delete(POD_SEASON_PARAM);
+    else next.set(POD_SEASON_PARAM, value);
     return { pathname: POD_DRAFTS_PATH, search: next.toString() };
   };
 
@@ -513,7 +513,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
     <SetFilterDropdown
       value={boardWindow?.code ?? AXIS_ALL}
       options={windowOptions}
-      hrefFor={(value) => axisHref(AXIS_PARAM_SEASON, value)}
+      hrefFor={(value) => axisHref(POD_SEASON_PARAM, value)}
       variant={selectorVariant}
       triggerClassName={isMobile ? undefined : "!min-w-0"}
     />
@@ -527,7 +527,8 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
     </div>
   );
 
-  const cardDataHref = hasCardData(activeSet) ? `/pods/${activeSet}/data` : null;
+  const cardDataSearch = boardWindow ? `?${POD_SEASON_PARAM}=${boardWindow.code}` : "";
+  const cardDataHref = hasCardData(activeSet) ? `/pods/${activeSet}/data${cardDataSearch}` : null;
   const cubeCobraHref = setCode ? cubeCobraUrl(setCode) : null;
 
   // The season view spans every set, so a name lands on the lifetime profile's pods

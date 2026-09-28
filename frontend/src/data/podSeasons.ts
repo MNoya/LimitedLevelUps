@@ -88,6 +88,8 @@ export type PodFormatBucket = "set" | "flashback" | "cube" | "mock";
 
 export const POD_FORMAT_BUCKETS: PodFormatBucket[] = ["set", "flashback", "cube", "mock"];
 
+export const POD_SEASON_PARAM = "season";
+
 interface BucketableEvent {
   setCode: string;
   formatLabel: string | null;

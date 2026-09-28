@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams, type To } from "react-router-dom";
 import { SlidersHorizontal } from "lucide-react";
 
 import { AppHeader } from "../components/AppHeader";
@@ -32,8 +32,10 @@ import { winRateColor } from "../data/winRate";
 import { isPlainClick } from "../lib/plain-click";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
+import { useSearchParamHref } from "../lib/search-param-href";
 import { cardArtSources, cardImageSources, useBoardCardImages } from "../data/cardImages";
 import { usePodCardStats, useSets } from "../data/hooks";
+import { POD_SEASON_PARAM } from "../data/podSeasons";
 import type { SetSummary } from "../types/leaderboard";
 import {
   POD_CARD_COLUMNS,
@@ -52,7 +54,7 @@ import {
 
 type CardDataTab = "cards" | "archetypes";
 
-const ALL_SEASONS = null;
+const ALL_SEASONS = "ALL";
 
 const NUM_CLASS = "font-num font-medium text-[15px] text-text";
 
@@ -85,6 +87,8 @@ export function PodCardDataPage() {
   const label = cardDataLabel(boardCode);
   const navigate = useNavigate();
   const { search } = useLocation();
+  const [searchParams] = useSearchParams();
+  const seasonHref = useSearchParamHref(ALL_SEASONS);
 
   const { data, isPending } = usePodCardStats(boardCode);
   const allRows = useMemo(() => data ?? [], [data]);
@@ -93,7 +97,6 @@ export function PodCardDataPage() {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<CardDataTab>("cards");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [season, setSeason] = useState<string | null>(ALL_SEASONS);
   const [sortKey, setSortKey] = useState<keyof PodCard>("alsa");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [minDrafts, setMinDrafts] = useState(1);
@@ -154,6 +157,8 @@ export function PodCardDataPage() {
   };
 
   const seasons = useMemo(() => orderedSeasons(allRows, sets), [allRows, sets]);
+  const seasonParam = searchParams.get(POD_SEASON_PARAM);
+  const season = seasonParam && (!data || seasons.includes(seasonParam)) ? seasonParam : null;
   const cards = useMemo(() => {
     const scoped = season == null ? allRows : allRows.filter((r) => r.season === season);
     return aggregatePodCards(scoped);
@@ -306,9 +311,8 @@ export function PodCardDataPage() {
 
   if (isMobile) {
     const filterCount = activePodCardFilterCount(filters);
-    const seasonAll = "ALL";
     const seasonOptions: BoardWindowOption[] = [
-      { value: seasonAll, label: "ALL SEASONS", icon: <CalendarRange size={20} className="text-white shrink-0" /> },
+      { value: ALL_SEASONS, label: "ALL SEASONS", icon: <CalendarRange size={20} className="text-white shrink-0" /> },
       ...seasons.map((code) => ({ value: code, label: `${code} SEASON`, glyph: code })),
     ];
     return (
@@ -343,9 +347,9 @@ export function PodCardDataPage() {
             )}
             <div className="w-[150px]">
               <BoardWindowSelector
-                value={season ?? seasonAll}
+                value={season ?? ALL_SEASONS}
                 options={seasonOptions}
-                onSelect={(v) => setSeason(v === seasonAll ? ALL_SEASONS : v)}
+                hrefFor={(v) => seasonHref(POD_SEASON_PARAM, v)}
                 variant="mobile"
               />
             </div>
@@ -479,14 +483,19 @@ export function PodCardDataPage() {
         <div className="flex-1" />
         {seasons.length > 0 && (
           <div className="hidden md:flex flex-wrap items-center justify-end gap-1.5">
-            <SeasonChip code="CUBE" label="ALL" active={season == null} onClick={() => setSeason(ALL_SEASONS)} />
+            <SeasonChip
+              code="CUBE"
+              label="ALL"
+              active={season == null}
+              to={seasonHref(POD_SEASON_PARAM, ALL_SEASONS)}
+            />
             {seasons.map((code) => (
               <SeasonChip
                 key={code}
                 code={code}
                 label={code}
                 active={season === code}
-                onClick={() => setSeason(code)}
+                to={seasonHref(POD_SEASON_PARAM, code)}
               />
             ))}
           </div>
@@ -589,18 +598,17 @@ function SeasonChip({
   code,
   label,
   active,
-  onClick,
+  to,
 }: {
   code?: string;
   label: string;
   active: boolean;
-  onClick: () => void;
+  to: To;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group block cursor-pointer"
+    <Link
+      to={to}
+      className="group block cursor-pointer no-underline"
       style={{ clipPath: CHIP_CHAMFER, background: active ? "#2ee85c" : "#3b4458", padding: 1, minHeight: 42 }}
     >
       <span
@@ -613,7 +621,7 @@ function SeasonChip({
         {code ? <SetGlyph code={code} size={22} className={active ? "text-bg" : "text-text"} /> : null}
         <span className="text-[20px] tracking-[0.06em] leading-none">{label}</span>
       </span>
-    </button>
+    </Link>
   );
 }
 
