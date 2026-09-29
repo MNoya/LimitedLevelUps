@@ -16,7 +16,6 @@ from bot.services.pod_drafts import (
     record_mock_event,
     reroll_session_suffix,
 )
-from bot.services.pod_format import resolve_format_code
 from bot.services.pod_format_select import format_options
 from bot.sets import (
     active_set_code,
@@ -106,15 +105,17 @@ def test_upcoming_set_opens_two_weeks_before_release():
 
     assert is_draftable_set("FRA", three_weeks_out) is False
     assert is_draftable_set("FRA", one_week_out) is True
-    assert resolve_format_code("TRE") is None
+    assert is_draftable_set("TRE", one_week_out) is False
 
 
 def test_format_options_offers_curated_preview_sets_without_defaulting_them():
-    options = format_options(None)
-    values = [opt.value for opt in options]
-    preview_codes = [s.code for s in preview_picker_sets()]
+    week_before_fra = datetime(2026, 9, 22, 12, tzinfo=timezone.utc)
 
-    assert [opt.value for opt in options if opt.default] == [active_set_code()]
+    options = format_options(None, week_before_fra)
+    values = [opt.value for opt in options]
+    preview_codes = [s.code for s in preview_picker_sets(week_before_fra)]
+
+    assert [opt.value for opt in options if opt.default] == [active_set_code(week_before_fra)]
     assert preview_codes
     assert all(code in values for code in preview_codes)
 

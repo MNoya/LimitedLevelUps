@@ -34,7 +34,6 @@ from bot.services.pod_format_schedule import (
     manual_slots,
     set_slot,
 )
-from bot.services.pod_format_vote import season_code
 from bot.services.pod_signals import KIND_POLL, SLOT_EARLY, SLOT_LATE
 from bot.sets import is_known_set, previous_set_code, seed_for_code
 
@@ -46,6 +45,7 @@ HORIZON_CAP_DAYS = 70
 FLASHBACK_REVEAL_DELAY = timedelta(hours=24)
 
 FEATURED_BY_SEASON: dict[str, str] = {"HOB": MEMA_CODE}
+SEASON_STARTS: dict[str, date] = {"HOB": date(2026, 8, 30)}
 
 
 def featured_format(season: str) -> str | None:
@@ -101,10 +101,13 @@ def run_allocation(
     launched = _launched_days(session, days[0], days[-1])
     if rewrite:
         clear_auto_slots(session, days[0], days[-1], except_days=frozenset(launched))
+    days = _season_days(days)
+    if not days:
+        return {}
     reserved = manual_slots(session, days[0], days[-1])
     kept = reserved if rewrite else reserved | auto_slots(session, days[0], days[-1])
     latest = latest_on(days[0])
-    season = season_code()
+    season = latest
     featured = featured_format(season)
     revealed = _flashback_revealed(session, season, now or datetime.now(timezone.utc))
     scores = _flashback_scores(session, season, latest) if revealed else {}
@@ -131,7 +134,7 @@ def vote_results(session: Session, start: date) -> list[tuple[str, int, int]]:
     if not days:
         return []
     latest = latest_on(days[0])
-    votes = _flashback_scores(session, season_code(), latest)
+    votes = _flashback_scores(session, latest, latest)
     _, per_set_days = _season_allocation(session, days[0], votes)
     kept = [(code, int(count), per_set_days.get(code, 0)) for code, count in votes.items()]
     kept.sort(key=lambda row: (row[2], row[1]), reverse=True)
@@ -144,7 +147,7 @@ def _season_allocation(
     """The flashback pick for each still-open day, and each set's total season days. A set's budget is its vote
     share of the season's flashback days; the days it already played or has locked are subtracted, and only the
     deficit is laid onto the open days, so no set exceeds its budget across the season."""
-    days = _horizon(today)
+    days = _season_days(_horizon(today))
     if not days:
         return {}, {}
     latest = latest_on(today)
@@ -208,6 +211,15 @@ def _horizon(start: date) -> list[date]:
         days.append(day)
         day += timedelta(days=1)
     return days
+
+
+def _season_days(days: list[date]) -> list[date]:
+    if not days:
+        return []
+    start = SEASON_STARTS.get(latest_on(days[0]))
+    if start is None:
+        return []
+    return [day for day in days if day >= start]
 
 
 def _launched_days(session: Session, start: date, end: date) -> set[date]:

@@ -357,7 +357,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_view(RolesView())
         bot.add_view(persistent_pod_card_view())
         bot.add_view(PodQueueView())
-        bot.add_view(PodScheduleView())
+        bot.add_view(PodScheduleView(with_vote=True))
         bot.add_view(PodRsvpView())
 
         log.info("setup_hook: cogs loaded; run `!sync` to publish slash commands to Discord")

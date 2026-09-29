@@ -46,9 +46,11 @@ _SLOT_LABELS = {SLOT_EARLY: "Early Pod", SLOT_LATE: "Late Pod", SLOT_BOTH: "both
 
 
 class PodScheduleView(ui.View):
-    def __init__(self) -> None:
+    def __init__(self, *, with_vote: bool | None = None) -> None:
         super().__init__(timeout=None)
         self.results.emoji = fi.flashback_emoji()
+        if not (voting_open() if with_vote is None else with_vote):
+            self.remove_item(self.vote)
 
     @ui.button(label="Vote Formats", emoji="🗳️", style=discord.ButtonStyle.primary, custom_id="pod_schedule:vote")
     async def vote(self, interaction: discord.Interaction, button: ui.Button) -> None:

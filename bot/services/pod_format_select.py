@@ -6,6 +6,7 @@ and the in-memory testlobby sandbox. Format definitions live in the pure `pod_fo
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Awaitable, Callable
 
 import discord
@@ -57,16 +58,12 @@ def write_in_cube_option(current_code: str, label_prefix: str = "Format") -> dis
     )
 
 
-def format_options(current_code: str | None) -> list[discord.SelectOption]:
-    """The format dropdown options (active set + curated preview set + custom cubes + the curated
-    flashback sets + a write-in launcher), with the current one defaulted. Preview sets and cubes sit
-    right under the active set, matching the /draft set picker. Labels are prefixed with 'Format:' so the
-    collapsed dropdown reads e.g. 'Format: SOS', matching the Pairings and Seats dropdowns and the lobby
-    footer. Any set not in the curated list is still reachable through the write-in option."""
+def format_options(current_code: str | None, when: datetime | None = None) -> list[discord.SelectOption]:
+    """The format dropdown: active set, preview sets, cubes, flashback sets and a write-in, current one defaulted"""
     cur = (current_code or "").upper()
-    active = active_set_code()
-    preview = preview_picker_sets()
-    recent = flashback_picker_sets()
+    active = active_set_code(when)
+    preview = preview_picker_sets(when)
+    recent = flashback_picker_sets(when)
     known = {active} | {seed.code for seed in preview} | {seed.code for seed in recent} | set(CUSTOM_FORMATS)
     options = [write_in_option("Format")]
     if is_write_in_cube(current_code):

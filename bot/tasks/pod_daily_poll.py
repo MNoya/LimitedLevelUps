@@ -455,7 +455,7 @@ def _offered_formats(slots: list[pod_launch.LauncherSlot]) -> list[str]:
     schedules can put different formats on one board, so every one is collected."""
     codes = []
     for slot in slots:
-        if slot.championship or slot.locked or not slot.set_code or slot.set_code in codes:
+        if slot.championship or slot.locked or _slot_closed(slot) or not slot.set_code or slot.set_code in codes:
             continue
         codes.append(slot.set_code)
     latest = active_set_code()

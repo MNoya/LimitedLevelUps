@@ -19,7 +19,7 @@ from bot.config import PRODUCTION_GUILD_ID, settings
 from bot.database import SessionLocal
 from bot.discord_helpers import EM_SPACE, NBSP, message_text
 from bot.services import pod_format_interest as fi
-from bot.services.championship_dates import championship_on
+from bot.services.championship_dates import championship_on, voting_open
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
 from bot.services.pod_format_allocator import vote_results
 from bot.services.pod_format_schedule import (
@@ -41,10 +41,8 @@ log = logging.getLogger(__name__)
 MSG_HEADING = "## 🗓️ [Pod Draft Format Schedule]({url}) 🚀"
 MSG_SLOT = "{emoji} {role} **<t:{unix}:t>**"
 MSG_DAILY_SET = "{symbol} {role} **every day**"
-MSG_FLASHBACK_SEASON = (
-    "{flashback} {role} season is on! Two formats each day\n"
-    "🗳️ **Vote Formats** to put yours on the calendar"
-)
+MSG_FLASHBACK_SEASON = "{flashback} {role} season is on! Two formats each day"
+MSG_VOTE_PROMPT = "🗳️ **Vote Formats** to put yours on the calendar"
 MSG_CHAMPIONSHIP = "👑 {role} <t:{unix}:R>"
 MSG_ARRIVAL = "{symbol} **{name}** <t:{unix}:R>"
 MSG_NO_VOTES = "No votes yet"
@@ -128,7 +126,7 @@ async def _post_fresh(
 
 def build_schedule_embed(guild: discord.Guild | None, now: datetime, weeks: int) -> discord.Embed:
     days = calendar_days(now.date(), weeks)
-    lines = [slot_line(guild, now), formats_line(guild, days)]
+    lines = [slot_line(guild, now), formats_line(guild, days, now.date())]
     arrival = arrival_line(guild, days, now)
     if arrival:
         lines.append(arrival)
@@ -184,15 +182,14 @@ def slot_line(guild: discord.Guild | None, now: datetime) -> str:
     return COLUMN_GAP.join(slots)
 
 
-def formats_line(guild: discord.Guild | None, days: list[date]) -> str:
-    """What a day carries. Inside a set's own run every day drafts the latest set, named by its ping role so
-    the line survives a rotation. Once the community schedule fills days with a second format the line states
-    the two-a-day shape and leaves which formats to the calendar image."""
+def formats_line(guild: discord.Guild | None, days: list[date], today: date) -> str:
+    """The two-a-day line once a day from today on carries a second format, else the latest set every day"""
     for day in days:
-        if len(scheduled_formats(day)) > 1:
-            return MSG_FLASHBACK_SEASON.format(
+        if day >= today and len(scheduled_formats(day)) > 1:
+            season = MSG_FLASHBACK_SEASON.format(
                 flashback=fi.flashback_emoji(), role=role_mention(guild, fi.FLASHBACK_ROLE_NAME),
             )
+            return f"{season}\n{MSG_VOTE_PROMPT}" if voting_open() else season
     code = active_set_code()
     return MSG_DAILY_SET.format(symbol=fi.format_emoji(code), role=role_mention(guild, fi.LATEST_SET_ROLE_NAME))
 

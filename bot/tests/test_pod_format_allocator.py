@@ -26,7 +26,7 @@ def _user(uid):
 
 def _seed_floor_votes(session, code):
     for uid in range(1, 7):
-        vote.toggle_vote(session, _user(uid), vote.season_code(), code)
+        vote.toggle_vote(session, _user(uid), latest_on(MON), code)
 
 
 def _flashback_days(count, start=MON):
@@ -107,12 +107,25 @@ def test_run_allocation_holds_flashbacks_until_a_day_after_the_first_vote(sessio
 
 
 def test_run_allocation_ignores_a_set_below_the_vote_floor(session):
-    vote.toggle_vote(session, _user(1), vote.season_code(), "NEO")
+    vote.toggle_vote(session, _user(1), latest_on(MON), "NEO")
     session.commit()
 
     assignments = run_allocation(session, MON, rewrite=True, now=REVEALED)
 
     assert assignments[(MON, SLOT_EARLY)] == (MEMA_CODE, FLASHBACK)
+
+
+def test_a_season_with_no_start_stays_on_the_latest_set(session):
+    fra_release = date(2026, 9, 29)
+    stale = fra_release + timedelta(days=2)
+    set_slot(session, stale, SLOT_EARLY, (FLASHBACK,), source="auto")
+    session.commit()
+
+    assignments = run_allocation(session, fra_release, rewrite=True, now=REVEALED)
+    session.commit()
+
+    assert assignments == {}
+    assert session.query(PodScheduleSlot).filter_by(day=stale).count() == 0
 
 
 def test_run_allocation_leaves_a_day_already_on_the_launcher_alone(session):

@@ -96,7 +96,9 @@ class MockDraft(commands.Cog):
         starter = await channel.send(
             content=content, embed=embed, view=view, allowed_mentions=MOCK_CARD_PING,
         )
-        thread = await starter.create_thread(name=event_name, reason=f"Mock draft started by {interaction.user}")
+        thread = await starter.create_thread(
+            name=event_name, auto_archive_duration=60, reason=f"Mock draft started by {interaction.user}",
+        )
 
         with SessionLocal() as session:
             session.get(PodDraftEvent, event_id).discord_thread_id = str(thread.id)
