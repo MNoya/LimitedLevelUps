@@ -384,7 +384,10 @@ async def _pin_already_archival(channel: discord.TextChannel, scope: str) -> boo
     """Whether the archival write has already happened, read off the pin instead of tracked state: an
     archival board carries no ``<t:`` relative timestamp, a live one always does. Keeps the final write
     to exactly once without a table, and survives a restart."""
-    message = await pinned_schedule(channel, schedule_title_marker(scope))
+    try:
+        message = await pinned_schedule(channel, schedule_title_marker(scope))
+    except discord.HTTPException:
+        return False
     if message is None:
         return False
     if RELATIVE_TIMESTAMP in message_text(message):
@@ -423,7 +426,10 @@ async def _refresh_pin(channel: discord.TextChannel, scope: str, in_progress: li
     a matching pin is left alone. ``create_if_missing`` would post and pin the schedule itself instead;
     no pin enables it today, reserved for when the bot should seed a channel's pin."""
     payload = build_schedule_payload(in_progress, upcoming, emojis, scope, archival=archival, url=url)
-    message = await pinned_schedule(channel, schedule_title_marker(scope))
+    try:
+        message = await pinned_schedule(channel, schedule_title_marker(scope))
+    except discord.HTTPException:
+        return
     if message is None:
         if create_if_missing:
             await create_pinned_schedule(channel, scope, payload)
@@ -464,6 +470,7 @@ async def pinned_schedule(channel: discord.TextChannel, marker: str) -> discord.
                 return message
     except discord.HTTPException:
         log.warning(f"format-schedule: could not read pins in #{channel.name}", exc_info=True)
+        raise
     return None
 
 

@@ -179,7 +179,10 @@ async def _sync_channel(channel: discord.TextChannel, windows: list[CoverageWind
 async def _refresh_coverage_pin(channel: discord.TextChannel, events: list) -> None:
     emojis = {emoji.name: emoji for emoji in await _bot.fetch_application_emojis()}
     payload = build_coverage_payload(events, emojis)
-    message = await pinned_schedule(channel, schedule_title_marker(COVERAGE_SCOPE))
+    try:
+        message = await pinned_schedule(channel, schedule_title_marker(COVERAGE_SCOPE))
+    except discord.HTTPException:
+        return
     if message is None:
         await create_pinned_schedule(channel, COVERAGE_SCOPE, payload)
         log.info("watch-party: posted and pinned the Coverage schedule")

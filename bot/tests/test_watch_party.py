@@ -1,9 +1,14 @@
+import asyncio
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
+import discord
 import pytest
 
 from bot.services.mtgscribe import ScribeEvent
 from bot.services.watch_party import channel_name, covered_events, coverage_windows, upcoming_windows
+from bot.tasks import watch_party_post
 from bot.tasks.watch_party_post import TICK, window_embed_state
 
 
@@ -72,3 +77,24 @@ def test_each_window_posts_its_upcoming_and_live_embeds_on_exactly_one_tick():
         posts.append([state for state in states if state is not None])
 
     assert posts == [[False, True]] * len(windows)
+
+
+def test_an_unreadable_pin_list_posts_no_new_coverage_pin(monkeypatch):
+    monkeypatch.setattr(watch_party_post, "_bot", SimpleNamespace(fetch_application_emojis=AsyncMock(return_value=[])))
+    channel = _UnreachablePinsChannel()
+
+    asyncio.run(watch_party_post._refresh_coverage_pin(channel, CALENDAR))
+
+    channel.send.assert_not_awaited()
+
+
+class _UnreachablePinsChannel:
+    name = "watch-party"
+
+    def __init__(self):
+        self.send = AsyncMock()
+
+    async def pins(self):
+        outage = SimpleNamespace(status=503, reason="Service Unavailable")
+        raise discord.DiscordServerError(outage, "upstream connect error")
+        yield
