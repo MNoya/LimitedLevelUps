@@ -350,11 +350,8 @@ class _PodButtonCard(discord.ui.LayoutView):
         self, text: str, *, accent: discord.Color | None = None, show_link_button: bool = True,
         show_format_button: bool = False, show_link_17lands_button: bool = False,
         show_guide_button: bool = True, show_roles_button: bool = True, note: str | None = None,
-        lead: str | None = None,
     ) -> None:
         super().__init__(timeout=None)
-        if lead is not None:
-            self.add_item(discord.ui.TextDisplay(lead))
         container = discord.ui.Container(accent_colour=accent or discord.Color.green())
         container.add_item(discord.ui.TextDisplay(text))
         if note is not None:
@@ -381,6 +378,7 @@ POD_GUIDE_BUTTON_ID = "pod_welcome_guide"
 MANAGE_ROLES_BUTTON_ID = "pod_welcome_roles"
 FORMAT_PREFERENCE_BUTTON_ID = "pod_welcome_format"
 MSG_PICKER_UNAVAILABLE = "The preference picker is not available right now"
+MSG_17LANDS_ALREADY_LINKED = "Your 17lands profile is already linked"
 _ARENA_HANDLE_RE = re.compile(r"^.+#\d+$")
 
 FormatPreferenceOpener = Callable[[discord.Interaction], Awaitable[None]]
@@ -433,7 +431,20 @@ class _Link17LandsButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        audit.event("rsvp_link_17lands_clicked", user_id=str(interaction.user.id))
+        user_id = str(interaction.user.id)
+        audit.event("rsvp_link_17lands_clicked", user_id=user_id)
+        if await asyncio.to_thread(_has_seventeenlands_token, user_id):
+            await interaction.response.send_message(
+                MSG_17LANDS_ALREADY_LINKED, view=_Relink17LandsView(), ephemeral=True,
+            )
+            return
+        await start_link_17lands_flow(interaction.client, interaction)
+
+
+class _Relink17LandsView(discord.ui.View):
+    @discord.ui.button(label="Link Again", style=discord.ButtonStyle.primary)
+    async def relink(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        audit.event("rsvp_relink_17lands_clicked", user_id=str(interaction.user.id))
         await start_link_17lands_flow(interaction.client, interaction)
 
 
@@ -797,18 +808,14 @@ async def post_replay_link_prompt(thread: discord.abc.Messageable | None, event_
     discord_ids = await asyncio.to_thread(unlinked_first_finishers_sync, event_id)
     if thread is None or not discord_ids:
         return
-    await thread.send(
-        view=replay_link_card(" ".join(f"<@{discord_id}>" for discord_id in discord_ids)),
-        allowed_mentions=discord.AllowedMentions(users=True, roles=False),
-    )
+    await send_replay_link_card(thread)
     log.info(f"replay link prompt posted for {len(discord_ids)} unlinked player(s) in event {event_id}")
 
 
-def replay_link_card(mentions: str) -> discord.ui.LayoutView:
-    return _PodButtonCard(
-        MSG_REPLAY_LINK_PROMPT, lead=mentions, show_link_button=False,
-        show_link_17lands_button=True, show_guide_button=False, show_roles_button=False,
-    )
+async def send_replay_link_card(channel: discord.abc.Messageable) -> None:
+    view = discord.ui.View(timeout=None)
+    view.add_item(_Link17LandsButton())
+    await channel.send(embed=discord.Embed(description=MSG_REPLAY_LINK_PROMPT, color=discord.Color.green()), view=view)
 
 
 async def send_mock_welcome_card(
