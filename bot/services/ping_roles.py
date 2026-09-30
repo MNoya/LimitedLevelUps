@@ -344,16 +344,17 @@ def persistent_pod_card_view() -> discord.ui.LayoutView:
 
 
 class _PodButtonCard(discord.ui.LayoutView):
-    """The shared Components V2 card behind both the welcome and the returning grant notice: a text
-    block over the Link Arena / Pod Guide / Notifications / Format Preference button row. The accent
-    defaults to green; the grant card overrides it with the granted role's color."""
+    """Shared Components V2 card behind the welcome, grant and replay-link notices"""
 
     def __init__(
         self, text: str, *, accent: discord.Color | None = None, show_link_button: bool = True,
         show_format_button: bool = False, show_link_17lands_button: bool = False,
         show_guide_button: bool = True, show_roles_button: bool = True, note: str | None = None,
+        lead: str | None = None,
     ) -> None:
         super().__init__(timeout=None)
+        if lead is not None:
+            self.add_item(discord.ui.TextDisplay(lead))
         container = discord.ui.Container(accent_colour=accent or discord.Color.green())
         container.add_item(discord.ui.TextDisplay(text))
         if note is not None:
@@ -805,7 +806,7 @@ async def post_replay_link_prompt(thread: discord.abc.Messageable | None, event_
 
 def replay_link_card(mentions: str) -> discord.ui.LayoutView:
     return _PodButtonCard(
-        MSG_REPLAY_LINK_PROMPT.format(mentions=mentions), show_link_button=False,
+        MSG_REPLAY_LINK_PROMPT, lead=mentions, show_link_button=False,
         show_link_17lands_button=True, show_guide_button=False, show_roles_button=False,
     )
 
