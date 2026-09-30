@@ -516,6 +516,18 @@ def test_rolling_a_column_expires_only_that_columns_open_formats_of_that_day(ses
     assert [signal.status for signal in untouched] == [STATUS_OPEN, STATUS_OPEN]
 
 
+def test_an_override_reopens_the_format_it_restores_and_closes_the_one_it_drops(session, monkeypatch, latest_only):
+    monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
+    late = bucket_for_slot(FRIDAY, SLOT_LATE).key
+    restored = _seed_signal(session, late, FRIDAY, message_id="today", status=STATUS_EXPIRED)
+    dropped = _seed_signal(session, late, FRIDAY, message_id="today", set_code="PEASANT")
+    session.commit()
+
+    pod_launch.retarget_poll_signals_sync(FRIDAY)
+
+    assert (restored.status, dropped.status) == (STATUS_OPEN, STATUS_EXPIRED)
+
+
 def test_the_board_day_ignores_the_days_its_columns_rolled_to(session, monkeypatch, latest_only):
     monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
     create_poll_signals(session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY)

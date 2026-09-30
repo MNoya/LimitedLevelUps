@@ -1865,7 +1865,7 @@ async def retarget_launcher_day(bot: commands.Bot, signal_date: date) -> bool:
     guild_id, channel_id, message_id, board_date = board
     if signal_date < board_date:
         return False
-    await asyncio.to_thread(pod_launch.expire_dropped_poll_signals_sync, signal_date)
+    await asyncio.to_thread(pod_launch.retarget_poll_signals_sync, signal_date)
     bound = await asyncio.to_thread(
         pod_launch.create_poll_signals_sync,
         guild_id=guild_id, channel_id=channel_id, message_id=message_id, signal_date=signal_date,

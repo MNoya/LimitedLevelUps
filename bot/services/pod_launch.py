@@ -300,11 +300,10 @@ def create_poll_signals_sync(
         return created
 
 
-def expire_dropped_poll_signals_sync(signal_date: date) -> list[str]:
-    """Expire the still-gathering poll rows for a day whose format the schedule no longer offers, and return
-    their ids. An organizer retargeting a live day drops the formats the new schedule leaves out; a fired pod's
-    row is left alone, its draft already made."""
-    expired: list[str] = []
+def retarget_poll_signals_sync(signal_date: date) -> None:
+    """Match a live day's unfired poll rows to its schedule after an override: expire the formats it drops and
+    reopen the ones it restores before their slot starts, so a format put back is not left closed"""
+    now = datetime.now(timezone.utc)
     with SessionLocal() as session, schedule_overlay(session, signal_date, signal_date):
         wanted: set[tuple[str, str]] = set()
         for bucket in pod_signals.poll_buckets_for(signal_date):
@@ -314,15 +313,24 @@ def expire_dropped_poll_signals_sync(signal_date: date) -> list[str]:
             select(PodSignal).where(
                 PodSignal.kind == pod_signals.KIND_POLL,
                 PodSignal.signal_date == signal_date,
-                PodSignal.status == pod_signals.STATUS_OPEN,
+                PodSignal.status.in_((pod_signals.STATUS_OPEN, pod_signals.STATUS_EXPIRED)),
+                PodSignal.event_id.is_(None),
             )
         ).scalars().all()
+        gathering: set[str] = set()
         for signal in signals:
-            if (pod_signals.time_key_of(signal.bucket), signal.set_code) not in wanted:
+            offered = (pod_signals.time_key_of(signal.bucket), signal.set_code) in wanted
+            if signal.status == pod_signals.STATUS_OPEN and not offered:
                 signal.status = pod_signals.STATUS_EXPIRED
-                expired.append(signal.id)
+            elif signal.status == pod_signals.STATUS_OPEN:
+                gathering.add(signal.bucket)
+        for signal in signals:
+            offered = (pod_signals.time_key_of(signal.bucket), signal.set_code) in wanted
+            restorable = signal.status == pod_signals.STATUS_EXPIRED and signal.slot_time > now
+            if offered and restorable and signal.bucket not in gathering:
+                signal.status = pod_signals.STATUS_OPEN
+                gathering.add(signal.bucket)
         session.commit()
-    return expired
 
 
 def rebind_launcher_rows_sync(old_message_id: str, new_message_id: str) -> int:
