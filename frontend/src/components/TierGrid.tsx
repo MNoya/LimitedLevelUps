@@ -700,19 +700,23 @@ function GradesPanel({
   card,
   dataGrade,
   dataGradeHidden = false,
+  compact = false,
 }: {
   card: TierCard;
   dataGrade?: string | null;
   dataGradeHidden?: boolean;
+  compact?: boolean;
 }) {
   const comparison = useContext(ComparisonContext);
   const graders = (card.graders ?? []).filter((grade) => grade.tier !== "TBD");
-  const dataCell = dataGrade ? <GradeCell caption="17LANDS" tier={dataGrade} collapsed={dataGradeHidden} /> : null;
+  const dataCell = dataGrade ? (
+    <GradeCell caption="17LANDS" tier={dataGrade} collapsed={dataGradeHidden} compact={compact} />
+  ) : null;
   if (comparison && graders.length > 0) {
     return (
       <div className="flex items-stretch px-3 py-2.5">
         {graders.map((grade) => (
-          <GradeCell key={grade.name} caption={grade.name} tier={grade.tier} />
+          <GradeCell key={grade.name} caption={grade.name} tier={grade.tier} compact={compact} />
         ))}
         {dataCell}
       </div>
@@ -720,9 +724,9 @@ function GradesPanel({
   }
   return (
     <div className="flex items-stretch px-3 py-2.5">
-      <GradeCell caption="Set review" tier={card.trend_from ?? card.tier} />
+      <GradeCell caption="Set review" tier={card.trend_from ?? card.tier} compact={compact} />
       {card.trend ? (
-        <GradeCell caption="Updated" tier={card.tier} trendCard={card} />
+        <GradeCell caption="Updated" tier={card.tier} trendCard={card} compact={compact} />
       ) : (
         graders.length > 0 && (
           <span className="grid flex-1 grid-cols-[auto_auto] content-center items-center justify-center gap-x-4 gap-y-1.5">
@@ -760,11 +764,13 @@ function GradeCell({
   tier,
   trendCard,
   collapsed = false,
+  compact = false,
 }: {
   caption: string;
   tier: string;
   trendCard?: TierCard;
   collapsed?: boolean;
+  compact?: boolean;
 }) {
   const stack = trendCard?.trend ? trendGlyphStack(trendCard) : [];
   return (
@@ -777,7 +783,8 @@ function GradeCell({
     >
       <span
         className={cn(
-          "text-[12px] font-semibold uppercase tracking-[0.1em] leading-none text-white",
+          "whitespace-nowrap text-[12px] font-semibold uppercase leading-none text-white",
+          compact ? "tracking-[0.03em]" : "tracking-[0.1em]",
           TEXT_OUTLINE,
         )}
       >
@@ -844,10 +851,11 @@ export function CardPreview({
   card: TierCard;
   anchor: PreviewAnchor;
 }) {
+  const dataGrade = useCardStats(card.expansion)?.gradesFor(card.name)?.all;
   return (
     <PreviewShell anchor={anchor}>
       <CardFlagTabs card={card} />
-      <GradesPanel card={card} />
+      <GradesPanel card={card} dataGrade={dataGrade} compact />
       <CardImage src={card.url} alt="" />
       {card.comment && (
         <p className="whitespace-pre-line px-3 py-2.5 text-center text-[14px] leading-snug text-text">
