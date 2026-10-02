@@ -22,6 +22,7 @@ from bot.commands.authorization import organizer_authorized_interaction
 from bot.database import SessionLocal
 from bot.discord_helpers import RenderQueue, extract_avatar_hash, resolve_pod_chat_channel, run_detached
 from bot.models import PodFormatVote, Player
+from bot.services.championship_dates import plan_for, vote_opens_at, voting_open
 from bot.services.pod_format import custom_formats, is_custom
 from bot.services.pod_format_poll import (
     MAX_ROWED_OPTIONS,
@@ -40,6 +41,8 @@ from bot.sets import active_set_code, flashback_picker_sets, released_sets, seed
 
 log = logging.getLogger(__name__)
 
+MSG_VOTE_SOON = "Format voting opens soon"
+MSG_VOTE_OPENS_AT = "Format voting opens <t:{unix}:R>"
 MSG_VOTE_OPEN = "{role} Vote for any formats you'd be interested in playing this season!"
 MSG_VOTE_HEADING = "## 🗳️ Flashback Format Vote - {name} Edition"
 MSG_VOTE_INTRO = "Select or add any formats you would be interested in playing this season"
@@ -422,9 +425,20 @@ def request_public_repaint(client: discord.Client) -> None:
 
 
 async def send_vote_panel(interaction: discord.Interaction) -> None:
+    if not voting_open():
+        await interaction.response.send_message(_vote_closed_message(), ephemeral=True)
+        return
     await interaction.response.defer(ephemeral=True, thinking=True)
     embed, view = await asyncio.to_thread(voter_panel, season_code(), interaction.user)
     await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+
+def _vote_closed_message() -> str:
+    plan = plan_for()
+    opens_at = vote_opens_at(plan) if plan is not None else None
+    if opens_at is None:
+        return MSG_VOTE_SOON
+    return MSG_VOTE_OPENS_AT.format(unix=int(opens_at.timestamp()))
 
 
 async def _existing_card(channel: discord.abc.Messageable) -> discord.Message | None:

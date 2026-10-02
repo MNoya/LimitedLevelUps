@@ -18,7 +18,7 @@ from bot.commands.messages import MSG_ORGANIZER_ONLY_SETTINGS
 from bot.database import SessionLocal
 from bot.discord_helpers import run_detached
 from bot.services import pod_format_interest as fi
-from bot.services.championship_dates import plan_for, vote_opens_at, voting_open
+from bot.services.championship_dates import voting_open
 from bot.services.pod_format import custom_formats
 from bot.services.pod_format_poll import normalize_write_ins
 from bot.services.pod_format_schedule import LATEST, set_slot
@@ -33,8 +33,6 @@ from bot.sets import active_set_code, flashback_picker_sets, set_name_for
 log = logging.getLogger(__name__)
 
 SLOT_BOTH = "BOTH"
-MSG_VOTE_SOON = "Format voting opens soon"
-MSG_VOTE_OPENS_AT = "Format voting opens <t:{unix}:R>"
 MSG_OVERRIDE_PROMPT = "Override the schedule for a pod"
 MSG_OVERRIDE_WITH_WRITE_INS = "{prompt}\nWrite-ins: {codes}"
 MSG_PICK_DAY_POD = "Choose a day and a pod first"
@@ -51,12 +49,10 @@ class PodScheduleView(ui.View):
         self.results.emoji = fi.flashback_emoji()
         if not (voting_open() if with_vote is None else with_vote):
             self.remove_item(self.vote)
+            self.remove_item(self.results)
 
     @ui.button(label="Vote Formats", emoji="🗳️", style=discord.ButtonStyle.primary, custom_id="pod_schedule:vote")
     async def vote(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        if not voting_open():
-            await interaction.response.send_message(_vote_closed_message(), ephemeral=True)
-            return
         await send_vote_panel(interaction)
 
     @ui.button(label="Results", style=discord.ButtonStyle.secondary, custom_id="pod_schedule:results")
@@ -76,13 +72,6 @@ class PodScheduleView(ui.View):
         await interaction.response.send_message(
             MSG_OVERRIDE_PROMPT, view=PodScheduleOverrideView(), ephemeral=True,
         )
-
-
-def _vote_closed_message() -> str:
-    plan = plan_for()
-    if plan is None:
-        return MSG_VOTE_SOON
-    return MSG_VOTE_OPENS_AT.format(unix=int(vote_opens_at(plan).timestamp()))
 
 
 async def _is_organizer(interaction: discord.Interaction) -> bool:

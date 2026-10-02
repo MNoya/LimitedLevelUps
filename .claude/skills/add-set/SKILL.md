@@ -57,7 +57,7 @@ Rotation is automatic: `active_set_code()` flips to whichever released set holds
 
 1. Locate the current newest entry in `ALL_SETS` (the last one). Change its `end_date` to `(new release date - 1 day)` — it currently holds an *anticipated* rotation date that the real successor now replaces.
 2. Append a new `SetSeed(...)` row immediately after it, carrying `prerelease_date=`. Give it an **anticipated** `end_date` (never `None`): the next set's announced Arena release minus a day if known, otherwise roughly 7 weeks after this release. This keeps the new set inside an active window until its own successor arrives.
-3. Bump the frontend fallback `ACTIVE_SET_CODE` in `frontend/src/data/constants.ts` to the new code. This is only a fallback for when the live set feed hasn't loaded — the site reads the real active set from the network — but keep it current.
+3. Bump both `ACTIVE_SET_CODE` and `ACTIVE_SET_NAME` in `frontend/src/data/constants.ts` to the new set's code and official name. Most pages fall back to them only until the live set loads, but the Pod Guide page reads them directly to skip a database read, so a stale pair points its season standings, events and profile links at the previous set. Bumping before the Arena release is fine: the board already moves to the new set at prerelease.
 
 #### Mode OLD (backfill)
 

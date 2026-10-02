@@ -116,12 +116,12 @@ def test_run_allocation_ignores_a_set_below_the_vote_floor(session):
 
 
 def test_a_season_with_no_start_stays_on_the_latest_set(session):
-    fra_release = date(2026, 9, 29)
-    stale = fra_release + timedelta(days=2)
+    tre_release = date(2026, 11, 10)
+    stale = tre_release + timedelta(days=2)
     set_slot(session, stale, SLOT_EARLY, (FLASHBACK,), source="auto")
     session.commit()
 
-    assignments = run_allocation(session, fra_release, rewrite=True, now=REVEALED)
+    assignments = run_allocation(session, tre_release, rewrite=True, now=REVEALED)
     session.commit()
 
     assert assignments == {}

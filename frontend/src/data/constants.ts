@@ -3,8 +3,8 @@ import cardStatsSets from "../../../card_stats_sets.json";
 // The frontend's single source of truth for values the backend owns elsewhere — keep them in sync when they change.
 
 // Active set fallback when the live set isn't yet known from the network
-export const ACTIVE_SET_CODE = "HOB";
-export const ACTIVE_SET_NAME = "The Hobbit";
+export const ACTIVE_SET_CODE = "FRA";
+export const ACTIVE_SET_NAME = "Reality Fracture";
 
 // Site name and the title separator. functions/_middleware.ts imports these too, so the
 // browser tab (set by DocumentTitle) and the link-unfurl title render the exact same string.

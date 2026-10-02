@@ -19,9 +19,11 @@ SATURDAY = 5
 CHAMPIONSHIP_TIME = time(14, 0)
 CREATION_LEAD_DAYS = 5
 CREATION_HOUR_ET = 12
-BALLOT_LEAD_DAYS = 21
+BALLOT_LEAD_DAYS = 3
+BALLOT_OPENS_AT = time(13, 0)
 PARALLEL_LEAD_DAYS = 14
 VOTE_REMINDER_LAG_DAYS = 2
+SEASON_STARTS: dict[str, date] = {"HOB": date(2026, 8, 30), "FRA": date(2026, 10, 19)}
 
 
 @dataclass(frozen=True)
@@ -92,9 +94,12 @@ def plan_due_for_creation(when: datetime) -> ChampionshipPlan | None:
     return plan if when.astimezone(RELEASE_TZ).date() == plan.create_on else None
 
 
-def vote_opens_at(plan: ChampionshipPlan) -> datetime:
-    """When the community format vote opens: `BALLOT_LEAD_DAYS` before the championship."""
-    return plan.event_at - timedelta(days=BALLOT_LEAD_DAYS)
+def vote_opens_at(plan: ChampionshipPlan) -> datetime | None:
+    """An hour before the Early Pod `BALLOT_LEAD_DAYS` ahead of the season start; None when no start is set"""
+    start = SEASON_STARTS.get(plan.set_code)
+    if start is None:
+        return None
+    return datetime.combine(start - timedelta(days=BALLOT_LEAD_DAYS), BALLOT_OPENS_AT, tzinfo=RELEASE_TZ)
 
 
 def voting_open(when: datetime | None = None) -> bool:
@@ -102,23 +107,28 @@ def voting_open(when: datetime | None = None) -> bool:
     plan = plan_for(when)
     if plan is None:
         return False
+    opens_at = vote_opens_at(plan)
+    if opens_at is None:
+        return False
     now = when if when is not None else datetime.now(RELEASE_TZ)
-    return vote_opens_at(plan) <= now < plan.next_release_at
+    return opens_at <= now < plan.next_release_at
 
 
 def vote_ping_due(when: datetime) -> ChampionshipPlan | None:
     """The plan whose ballot opens on the ET date of `when`, for the one opening ping, else None."""
     plan = plan_for(when)
-    if plan is None:
+    opens_at = vote_opens_at(plan) if plan is not None else None
+    if opens_at is None:
         return None
-    return plan if when.astimezone(RELEASE_TZ).date() == vote_opens_at(plan).date() else None
+    return plan if when.astimezone(RELEASE_TZ).date() == opens_at.date() else None
 
 
 def vote_reminder_due(when: datetime) -> ChampionshipPlan | None:
     """The plan whose ballot opened `VOTE_REMINDER_LAG_DAYS` before the ET date of `when`, for the single
     reminder ping, else None."""
     plan = plan_for(when)
-    if plan is None:
+    opens_at = vote_opens_at(plan) if plan is not None else None
+    if opens_at is None:
         return None
-    reminder_date = vote_opens_at(plan).date() + timedelta(days=VOTE_REMINDER_LAG_DAYS)
+    reminder_date = opens_at.date() + timedelta(days=VOTE_REMINDER_LAG_DAYS)
     return plan if when.astimezone(RELEASE_TZ).date() == reminder_date else None

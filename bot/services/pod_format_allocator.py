@@ -24,7 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bot.models import PodDraftEvent, PodDraftParticipant, PodFormatVote, PodScheduleSlot, PodSignal
-from bot.services.championship_dates import championship_date_for
+from bot.services.championship_dates import SEASON_STARTS, championship_date_for
 from bot.services.pod_format import MEMA_CODE, PEASANT_CODE, is_custom
 from bot.services.pod_format_schedule import (
     FLASHBACK,
@@ -45,7 +45,6 @@ HORIZON_CAP_DAYS = 70
 FLASHBACK_REVEAL_DELAY = timedelta(hours=24)
 
 FEATURED_BY_SEASON: dict[str, str] = {"HOB": MEMA_CODE}
-SEASON_STARTS: dict[str, date] = {"HOB": date(2026, 8, 30)}
 
 
 def featured_format(season: str) -> str | None:
