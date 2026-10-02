@@ -41,6 +41,7 @@ from bot.commands.messages import (
     MSG_CONFIRM_LOCK_IN,
     MSG_CONFIRM_MORE_TO_ADD,
     MSG_CONFIRM_MORE_TO_FILL,
+    MSG_CONFIRM_MORE_TO_RESHAPE,
     MSG_CONFIRM_MORE_TO_SPLIT,
     MSG_CONFIRM_TALLY_ALL,
     MSG_CONFIRM_TALLY_CONFIRMED,
@@ -53,6 +54,7 @@ from bot.services.pod_confirm import (
     attendance_of,
     card_tables,
     Attendance,
+    Table,
     TablePlan,
     seating_plan,
     plan_tables,
@@ -611,13 +613,23 @@ def _next_table_ask(attendance: Attendance, plan: TablePlan) -> str:
     if len(plan.tables) > 1 and outstanding:
         for table in plan.tables:
             if table.empty_seats:
-                return MSG_CONFIRM_MORE_TO_FILL.format(count=table.empty_seats, size=table.capacity)
+                return _fill_ask(attendance.confirmed + outstanding[:table.empty_seats], plan, table)
     for more in range(1, len(outstanding) + 1):
         grown = seating_plan(Attendance(confirmed=attendance.confirmed + outstanding[:more]))
         if len([table for table in grown.tables if table.seated >= MIN_TABLE]) > len(seated):
             template = MSG_CONFIRM_MORE_TO_SPLIT if len(seated) == 1 else MSG_CONFIRM_MORE_TO_ADD
             return template.format(count=more)
     return ""
+
+
+def _fill_ask(filled: tuple[str, ...], plan: TablePlan, table: Table) -> str:
+    grown = seating_plan(Attendance(confirmed=filled))
+    grown_sizes = [grown_table.capacity for grown_table in grown.tables]
+    current_sizes = [current_table.capacity for current_table in plan.tables]
+    if sorted(grown_sizes) == sorted(current_sizes):
+        return MSG_CONFIRM_MORE_TO_FILL.format(count=table.empty_seats, size=table.capacity)
+    sizes = "+".join(str(size) for size in grown_sizes)
+    return MSG_CONFIRM_MORE_TO_RESHAPE.format(count=table.empty_seats, sizes=sizes)
 
 
 def build_table_plan_embed(
