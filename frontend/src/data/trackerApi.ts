@@ -84,14 +84,16 @@ export async function fetchTrackerDrafts(slug: string, setCode: string): Promise
   if (error) throw error;
   return (data ?? []).map((r) => {
     const row = r as unknown as Record<string, unknown>;
+    const matchResults = (row.match_results ?? null) as PlayerDraftEvent["matchResults"];
+    const record = liveRecord((row.wins ?? 0) as number, (row.losses ?? 0) as number, matchResults);
     return {
       slug: row.slug as string,
       setCode: row.set_code as string,
       eventId: row.event_id as string,
       format: row.format as string,
       expansion: row.expansion as string,
-      wins: (row.wins ?? 0) as number,
-      losses: (row.losses ?? 0) as number,
+      wins: record.wins,
+      losses: record.losses,
       isTrophy: Boolean(row.is_trophy),
       colors: (row.colors ?? "") as string,
       startedAt: (row.started_at ?? null) as string | null,
@@ -104,9 +106,23 @@ export async function fetchTrackerDrafts(slug: string, setCode: string): Promise
       poolRares: (row.pool_rares ?? null) as number | null,
       poolMythics: (row.pool_mythics ?? null) as number | null,
       deckCards: (row.deck_cards ?? null) as PlayerDraftEvent["deckCards"],
-      matchResults: (row.match_results ?? null) as PlayerDraftEvent["matchResults"],
+      matchResults,
     };
   });
+}
+
+/** A single-draft refetch stores matches before the event log catches up, so the newer of the two wins */
+function liveRecord(wins: number, losses: number, matches: PlayerDraftEvent["matchResults"]) {
+  if (!matches || matches.length <= wins + losses) {
+    return { wins, losses };
+  }
+  let won = 0;
+  for (const match of matches) {
+    if (match.won) {
+      won += 1;
+    }
+  }
+  return { wins: won, losses: matches.length - won };
 }
 
 /** Only ever the signed-in player's own Arena accounts; the view filters on the caller's JWT */
@@ -215,11 +231,8 @@ export async function saveCollectionCounts(setCode: string, counts: CollectionCo
 }
 
 /** Server-side 17lands fetch: pulls new drafts into the event log, then fills deck and match detail */
-export async function refreshDraftData(
-  setCode: string,
-  force = false,
-): Promise<{ ingested: number; filled: number; missed: number }> {
-  return trackerRefresh(`set_code=${encodeURIComponent(setCode)}${force ? "&force=1" : ""}`);
+export async function refreshDraftData(setCode: string): Promise<{ ingested: number; filled: number; missed: number }> {
+  return trackerRefresh(`set_code=${encodeURIComponent(setCode)}`);
 }
 
 /** Refetches one draft's deck and match detail, skipping the event-log pull */

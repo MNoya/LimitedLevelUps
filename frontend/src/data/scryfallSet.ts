@@ -51,7 +51,7 @@ function group(cards: ScryfallCard[]): ColorSection[] {
 }
 
 export async function fetchSetRaresAndMythics(setCode: string): Promise<SetCardLists> {
-  const q = encodeURIComponent(`set:${setCode.toLowerCase()} (rarity:rare or rarity:mythic)`);
+  const q = encodeURIComponent(`set:${setCode.toLowerCase()} game:arena (rarity:rare or rarity:mythic)`);
   let url: string | null = `https://api.scryfall.com/cards/search?q=${q}&unique=cards&order=review`;
   const cards: ScryfallCard[] = [];
 

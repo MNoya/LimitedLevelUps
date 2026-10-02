@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "../../lib/utils";
 import { useIsMobile } from "../../lib/use-is-mobile";
 import { Tooltip } from "../Tooltip";
+import { CardImageModal } from "../CardImageModal";
 import { ManaCost } from "../ManaPips";
 import { PreviewShell, previewAnchorFor, type PreviewAnchor } from "../TierGrid";
 import { useFallbackImage } from "../pod/review/ReviewCard";
@@ -20,10 +21,10 @@ import {
 } from "../../data/trackerApi";
 import {
   draftsToRareComplete,
-  masteryTrackFor,
   packsToRareComplete,
   projectCompletion,
   remainingMasteryPacks,
+  setPackRulesFor,
 } from "../../data/collectionProjection";
 const SUBLABEL_CLS = "font-display text-[13px] tracking-[0.08em] text-muted";
 
@@ -107,6 +108,15 @@ export function Collection({
       setPreview({ sources: cardImageSources(card, setCode, cardImages), anchor: previewAnchorFor(el) }),
     [setCode, cardImages],
   );
+  const [opened, setOpened] = useState<{ card: string; sources: string[] } | null>(null);
+  const closeOpened = useCallback(() => setOpened(null), []);
+  const openCard = useCallback(
+    (card: string) => {
+      setPreview(null);
+      setOpened({ card, sources: cardImageSources(card, setCode, cardImages) });
+    },
+    [setCode, cardImages],
+  );
   const draftRates = useDraftRates(slug, setCode, accountId);
   const [copiesMode, setCopiesMode] = useState<"playset" | "singles">("playset");
   const [shownRarity, setShownRarity] = useState<"rare" | "mythic">("rare");
@@ -117,13 +127,14 @@ export function Collection({
   const rare = tallySections(lists.rares, lookup);
   const myth = tallySections(lists.mythics, lookup);
   const eco = economy ?? EMPTY_ECONOMY;
-  const masteryTrack = masteryTrackFor(setCode);
-  const projection = projectCompletion(eco, { owned: rare.owned, cards: rare.cards },
-                                       { owned: myth.owned, cards: myth.cards }, masteryTrack);
+  const packRules = setPackRulesFor(setCode);
+  const projection = packRules && projectCompletion(eco, rare, myth, packRules);
   // Side by side the way the spreadsheet tab held them, stacked on a phone
   const columnsCls = isMobile ? "grid-cols-1" : narrow ? "grid-cols-2" : "grid-cols-2 xl:grid-cols-4";
   const sectionsCls = isMobile || narrow ? "grid-cols-1" : "grid-cols-1 xl:grid-cols-2";
-  const passPacksLeft = remainingMasteryPacks(eco.masteryLevel, masteryTrack);
+  const passPacksLeft = packRules && remainingMasteryPacks(eco.masteryLevel, packRules.track);
+  const futurePacks = passPacksLeft == null ? null : passPacksLeft + eco.rankedSeasonPacks;
+  const packsToOpen = futurePacks == null ? null : eco.packsOwned + futurePacks;
   const playsets = copiesMode === "playset";
   const toggleCopiesMode = () => setCopiesMode(playsets ? "singles" : "playset");
   const columns = [
@@ -132,16 +143,16 @@ export function Collection({
       owned: playsets ? rare.owned : rare.held,
       total: playsets ? rare.cards * 4 : rare.cards,
       pct: playsets ? rare.pct : rare.heldPct,
-      projected: playsets ? projection.rarePct : null,
+      projected: playsets ? projection?.rarePct ?? null : null,
       missing: rare.cards - rare.held,
-      extraLine: `${draftsToRareComplete(eco, rare, draftRates, masteryTrack)} drafts to complete`,
+      extraLine: packRules && `${draftsToRareComplete(eco, rare, draftRates, packRules)} drafts to complete`,
     },
     {
       key: "mythic" as const, label: "MYTHICS", sections: lists.mythics, rarity: RARITY_STYLE.mythic,
       owned: playsets ? myth.owned : myth.held,
       total: playsets ? myth.cards * 4 : myth.cards,
       pct: playsets ? myth.pct : myth.heldPct,
-      projected: playsets ? projection.mythicPct : null,
+      projected: playsets ? projection?.mythicPct ?? null : null,
       missing: myth.cards - myth.held,
       extraLine: null,
     },
@@ -159,7 +170,7 @@ export function Collection({
              style={{ gridTemplateColumns: "2fr 1fr 2fr 1fr" }}>
           <EconomyCell label="PACKS OWNED" value={eco.packsOwned} tooltip="Unopened Packs you own"
                        onCommit={(n) => saveEconomy({ packsOwned: n })} />
-          <EconomyCell label="GOLDEN PACKS" value={eco.goldenPacks} tooltip="Golden Packs you own, about 4.4 Rares each"
+          <EconomyCell label="GOLDEN PACKS" value={eco.goldenPacks} tooltip="Golden Packs you own, about 4.3 Rares each"
                        onCommit={(n) => saveEconomy({ goldenPacks: n })} />
           <EconomyCell label="PASS LVL" value={eco.masteryLevel}
                        tooltip="Your Mastery Pass level"
@@ -169,11 +180,11 @@ export function Collection({
                        onCommit={(n) => saveEconomy({ rankedSeasonPacks: n })} />
           <DerivedCell label="PASS PACKS" value={passPacksLeft}
                        tooltip="Pass Packs left on the track" />
-          <DerivedCell label="FUTURE PACKS" value={passPacksLeft + eco.rankedSeasonPacks}
+          <DerivedCell label="FUTURE PACKS" value={futurePacks}
                        tooltip="Pass Packs plus Ranked Packs" />
-          <DerivedCell label="TO OPEN" value={eco.packsOwned + passPacksLeft + eco.rankedSeasonPacks}
+          <DerivedCell label="TO OPEN" value={packsToOpen}
                        tooltip="Packs you own plus every Future Pack" />
-          <DerivedCell label="PACKS NEEDED" value={packsToRareComplete(eco, rare, masteryTrack)}
+          <DerivedCell label="PACKS NEEDED" value={packRules && packsToRareComplete(eco, rare, packRules)}
                        tooltip="Extra Packs you need for a full Rare Playset" />
         </div>
       </div>
@@ -234,6 +245,7 @@ export function Collection({
                           cost={isMobile ? lists.costs[card] : undefined}
                           touch={isMobile}
                           onSet={setCount}
+                          onOpen={openCard}
                           onHover={isMobile ? undefined : showPreview}
                           onLeave={clearPreview}
                         />
@@ -247,6 +259,7 @@ export function Collection({
         ))}
       </div>
       {preview && <CardPreview {...preview} />}
+      {opened && <OpenedCard {...opened} onClose={closeOpened} />}
     </div>
   );
 }
@@ -311,6 +324,11 @@ function CardPreview({ sources, anchor }: { sources: string[]; anchor: PreviewAn
   );
 }
 
+function OpenedCard({ card, sources, onClose }: { card: string; sources: string[]; onClose: () => void }) {
+  const { src, onError } = useFallbackImage(sources);
+  if (!src) return null;
+  return <CardImageModal src={src} alt={frontFace(card)} onError={onError} onClose={onClose} />;
+}
 
 // The faint bar behind the solid one is the spreadsheet's "after packs + future" projection, and the
 // owned count doubles as the playset/singles switch
@@ -412,7 +430,7 @@ function EconomyCell({
 }
 
 /** Computed from the economy inputs, so it carries no input affordance */
-function DerivedCell({ label, value, tooltip }: { label: string; value: number; tooltip: string }) {
+function DerivedCell({ label, value, tooltip }: { label: string; value: number | null; tooltip: string }) {
   return (
     <>
       <CellLabel label={label} tooltip={tooltip} />
@@ -426,7 +444,7 @@ function DerivedCell({ label, value, tooltip }: { label: string; value: number; 
 }
 
 const CardRow = memo(function CardRow({
-  card, owned, cost, touch = false, onSet, onHover, onLeave,
+  card, owned, cost, touch = false, onSet, onOpen, onHover, onLeave,
 }: {
   card: string; owned: number;
   /** Scryfall mana cost, shown only where the row has room for it */
@@ -434,6 +452,7 @@ const CardRow = memo(function CardRow({
   /** a tap is the only gesture on a phone, so the count wraps 4 → 0 and the target grows */
   touch?: boolean;
   onSet: (card: string, n: number) => void;
+  onOpen: (card: string) => void;
   onHover?: (el: HTMLElement, card: string) => void; onLeave: () => void;
 }) {
   const nameRef = useShrinkToFit(frontFace(card), NAME_MAX_PX, NAME_MIN_PX);
@@ -448,19 +467,25 @@ const CardRow = memo(function CardRow({
       onMouseLeave={onLeave}
       className="bg-surface flex items-stretch"
     >
-      <span
-        ref={nameRef}
-        className={cn("flex-1 min-w-0 self-center truncate pl-3 pr-2 font-serif",
-          touch ? "py-2" : "py-[3px]",
-          owned === 0 ? "text-muted" : "text-text")}
+      <button
+        type="button"
+        onClick={() => onOpen(card)}
+        className="flex flex-1 min-w-0 items-center text-left outline-none"
       >
-        {frontFace(card)}
-      </span>
-      {cost && (
-        <span className="self-center shrink-0 pr-2">
-          <ManaCost cost={cost} size={12} />
+        <span
+          ref={nameRef}
+          className={cn("flex-1 min-w-0 truncate pl-3 pr-2 font-serif",
+            touch ? "py-2" : "py-[3px]",
+            owned === 0 ? "text-muted" : "text-text")}
+        >
+          {frontFace(card)}
         </span>
-      )}
+        {cost && (
+          <span className="shrink-0 pr-2">
+            <ManaCost cost={cost} size={12} />
+          </span>
+        )}
+      </button>
       <button
         aria-label={touch
           ? `${frontFace(card)}, ${owned} owned. Tap to add, tap again past four to clear`

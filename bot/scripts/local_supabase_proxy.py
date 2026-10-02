@@ -12,15 +12,12 @@ from collections.abc import Iterable
 from typing import Any
 
 from aiohttp import web
-from sqlalchemy import create_engine, func, select, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from bot.config import OWNER_DISCORD_ID
 
-from bot.models import DraftEvent, MagicSet, Player
-from bot.services.refresh import refresh_player
-from bot.services.seventeenlands import SeventeenLandsClient
-from bot.services.tracker_detail import DRAFT_GAP_S, present_detail, summarise_draft
+from bot.services.tracker_detail import run_tracker_refresh
 from bot.services.transcript_cards import apply_transcript_edit
 
 
@@ -206,77 +203,16 @@ async def _handle_tracker(request: web.Request, table: str) -> web.Response:
     return web.Response(status=204)
 
 
-def _ingest_drafts(sessions: sessionmaker, set_code: str | None) -> int:
-    """Pull the dev player's 17lands drafts into draft_events, returning how many rows are new"""
+def _run_refresh(sessions: sessionmaker, set_code: str | None, event_id: str | None) -> dict:
     with sessions() as session:
-        player = session.execute(
-            select(Player).where(Player.discord_id == DEV_DISCORD_ID)
-        ).scalar_one_or_none()
-        if player is None or not player.seventeenlands_token:
-            return 0
-        window = select(MagicSet.start_date).order_by(MagicSet.start_date.asc())
-        known = (select(func.count()).select_from(DraftEvent)
-                 .join(MagicSet, MagicSet.id == DraftEvent.set_id)
-                 .where(DraftEvent.player_id == player.id))
-        if set_code:
-            window = window.where(MagicSet.code == set_code)
-            known = known.where(MagicSet.code == set_code)
-        before = session.execute(known).scalar_one()
-        refresh_player(session, SeventeenLandsClient(), player,
-                       fetch_start=session.execute(window).scalars().first())
-        session.commit()
-        return session.execute(known).scalar_one() - before
+        return run_tracker_refresh(session, DEV_DISCORD_ID, set_code, event_id)
 
 
 async def _handle_refresh(request: web.Request) -> web.Response:
-    engine = request.app["engine"]
     set_code = request.query.get("set_code")
     event_id = request.query.get("event_id")
-    force = request.query.get("force") == "1" or event_id is not None
-
-    ingested = 0 if event_id else await asyncio.to_thread(_ingest_drafts, request.app["sessions"], set_code)
-
-    where = "de.seventeenlands_event_id IS NOT NULL"
-    params: dict[str, Any] = {"discord_id": DEV_DISCORD_ID}
-    if event_id:
-        where += " AND de.seventeenlands_event_id = :event_id"
-        params["event_id"] = event_id
-    if set_code:
-        where += " AND s.code = :set_code"
-        params["set_code"] = set_code
-    if not force:
-        # A draft whose deck fetch landed but whose match detail did not is still incomplete
-        where += " AND (de.pool_rares IS NULL OR (de.match_results IS NULL AND de.wins + de.losses > 0))"
-
-    with engine.connect() as conn:
-        pending = conn.execute(text(f"""
-            SELECT de.id, de.seventeenlands_event_id
-            FROM draft_events de
-            JOIN players p ON p.id = de.player_id
-            JOIN sets s ON s.id = de.set_id
-            WHERE p.discord_id = :discord_id AND {where}
-            ORDER BY de.finished_at DESC NULLS LAST
-        """), params).mappings().all()
-
-    filled = missed = 0
-    for index, row in enumerate(pending):
-        if index:
-            await asyncio.sleep(DRAFT_GAP_S)
-        log.info(f"tracker refresh: draft {index + 1} of {len(pending)}")
-        summary = await asyncio.to_thread(summarise_draft, row["seventeenlands_event_id"])
-        if summary is None:
-            missed += 1
-            continue
-        present = present_detail(summary)
-        casts = {"deck_cards": "CAST(:deck_cards AS jsonb)", "match_results": "CAST(:match_results AS jsonb)"}
-        assignments = ", ".join(f"{col} = {casts.get(col, f':{col}')}" for col in present)
-        values = {col: json.dumps(present[col]) if col in casts else present[col] for col in present}
-        params = {"id": row["id"], **values}
-        with engine.begin() as conn:
-            conn.execute(text(f"UPDATE draft_events SET {assignments} WHERE id = :id"), params)
-        filled += 1
-
-    return web.json_response({"ingested": ingested, "pending": len(pending), "filled": filled, "missed": missed})
+    result = await asyncio.to_thread(_run_refresh, request.app["sessions"], set_code, event_id)
+    return web.json_response(result)
 
 
 def _save_transcript(sessions: sessionmaker, key: str, incoming: list[dict]) -> tuple[str, int] | list[dict]:

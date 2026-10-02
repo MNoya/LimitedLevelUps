@@ -12,11 +12,14 @@ import time
 import urllib.error
 import urllib.request
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from bot.config import settings
-from bot.models import DraftEvent, MagicSet
+from bot.models import DraftEvent, MagicSet, Player
+from bot.services.active_set import resolve_active_set
+from bot.services.refresh import refresh_player
+from bot.services.seventeenlands import SeventeenLandsClient
 
 log = logging.getLogger(__name__)
 
@@ -55,10 +58,12 @@ def card_rarity(card: dict) -> str | None:
     return card.get("rarity")
 
 
-def summarise_draft(draft_id: str) -> dict | None:
-    """Rarity counts, decklist and match results for one finished draft, or None if 17lands has neither"""
-    deck_body = fetch_17lands(f"/api/deck/draft/?draft_id={draft_id}&deck_index=0")
-    time.sleep(PAIR_GAP_S)
+def summarise_draft(draft_id: str, fetch_deck: bool = True, pair_gap_s: float = PAIR_GAP_S) -> dict | None:
+    """Rarity counts, decklist and match results for one draft, or None if 17lands has neither"""
+    deck_body = None
+    if fetch_deck:
+        deck_body = fetch_17lands(f"/api/deck/draft/?draft_id={draft_id}&deck_index=0")
+        time.sleep(pair_gap_s)
     details = fetch_17lands(f"/data/details/?draft_id={draft_id}")
     deck = (deck_body or {}).get("data") or deck_body or {}
     cards = deck.get("cards") or {}
@@ -93,13 +98,17 @@ def summarise_draft(draft_id: str) -> dict | None:
             "deck_cards": groups or None, "match_results": matches or None}
 
 
-def pending_draft_ids(session: Session, player_id: str, set_code: str | None, cap: int | None) -> list[tuple[str, str]]:
+def pending_draft_ids(
+    session: Session, player_id: str, set_code: str | None, cap: int | None,
+) -> list[tuple[str, str, bool]]:
+    is_array = func.jsonb_typeof(DraftEvent.match_results) == "array"
+    stored_matches = case((is_array, func.jsonb_array_length(DraftEvent.match_results)), else_=0)
     incomplete = or_(
         DraftEvent.pool_rares.is_(None),
-        and_(DraftEvent.match_results.is_(None), (DraftEvent.wins + DraftEvent.losses) > 0),
+        stored_matches < DraftEvent.wins + DraftEvent.losses,
     )
     stmt = (
-        select(DraftEvent.id, DraftEvent.seventeenlands_event_id)
+        select(DraftEvent.id, DraftEvent.seventeenlands_event_id, DraftEvent.deck_cards.isnot(None))
         .join(MagicSet, MagicSet.id == DraftEvent.set_id)
         .where(
             DraftEvent.player_id == player_id,
@@ -112,20 +121,21 @@ def pending_draft_ids(session: Session, player_id: str, set_code: str | None, ca
         stmt = stmt.where(MagicSet.code == set_code)
     if cap:
         stmt = stmt.limit(cap)
-    return [(str(row[0]), row[1]) for row in session.execute(stmt).all()]
+    return [(str(row[0]), row[1], row[2]) for row in session.execute(stmt).all()]
 
 
 def refetch_draft_detail(session: Session, player_id: str, seventeenlands_event_id: str) -> bool:
-    """Force a re-pull of one draft's detail, even if it already has some. True if written"""
-    draft_id = session.execute(
-        select(DraftEvent.id).where(
+    """Re-pull one draft's match detail with no pacing, and its deck only if none is stored. True if written"""
+    row = session.execute(
+        select(DraftEvent.id, DraftEvent.deck_cards.isnot(None)).where(
             DraftEvent.player_id == player_id,
             DraftEvent.seventeenlands_event_id == seventeenlands_event_id,
         )
-    ).scalar_one_or_none()
-    if draft_id is None:
+    ).one_or_none()
+    if row is None:
         return False
-    summary = summarise_draft(seventeenlands_event_id)
+    draft_id, has_deck = row
+    summary = summarise_draft(seventeenlands_event_id, fetch_deck=not has_deck, pair_gap_s=0)
     if summary is None:
         return False
     session.execute(update(DraftEvent).where(DraftEvent.id == draft_id).values(**present_detail(summary)))
@@ -152,21 +162,61 @@ def fill_pending_draft_detail(
     cap: int | None = AUTO_FILL_CAP,
     draft_gap_s: float = DRAFT_GAP_S,
 ) -> dict:
-    """Fetch and store 17lands detail for a player's drafts that still lack it.
-
-    Commits per draft so a mid-run failure keeps what it fetched. Paces requests apart to stay a
-    considerate 17lands consumer. Returns ``{"pending", "filled", "missed"}``.
-    """
+    """Fetch and store 17lands detail for a player's incomplete drafts, committing per draft"""
     pending = pending_draft_ids(session, player_id, set_code, cap)
-    filled = missed = 0
-    for index, (draft_id, seventeenlands_event_id) in enumerate(pending):
+    filled = 0
+    missed_ids = []
+    for index, (draft_id, seventeenlands_event_id, has_deck) in enumerate(pending):
         if index:
             time.sleep(draft_gap_s)
-        summary = summarise_draft(seventeenlands_event_id)
+        summary = summarise_draft(seventeenlands_event_id, fetch_deck=not has_deck)
         if summary is None:
-            missed += 1
+            missed_ids.append(seventeenlands_event_id)
             continue
         session.execute(update(DraftEvent).where(DraftEvent.id == draft_id).values(**present_detail(summary)))
         session.commit()
         filled += 1
-    return {"pending": len(pending), "filled": filled, "missed": missed}
+    return {"pending": len(pending), "filled": filled, "missed": len(missed_ids), "missed_ids": missed_ids}
+
+
+def run_tracker_refresh(session: Session, discord_id: str, set_code: str | None, event_id: str | None) -> dict:
+    """One tracker refresh click: refetch a single draft when given its id, else refresh the whole set"""
+    player = session.execute(select(Player).where(Player.discord_id == discord_id)).scalar_one_or_none()
+    if player is None or not player.seventeenlands_token:
+        return {"ingested": 0, "filled": 0, "missed": 0}
+    if event_id:
+        started = time.monotonic()
+        written = refetch_draft_detail(session, player.id, event_id)
+        elapsed = time.monotonic() - started
+        log.info(f"tracker refetch {player.display_name} {event_id}: {elapsed:.1f}s written={written}")
+        return {"ingested": 0, "filled": int(written), "missed": int(not written)}
+    return refresh_tracker_set(session, player, set_code)
+
+
+def refresh_tracker_set(session: Session, player: Player, set_code: str | None) -> dict:
+    """Pull new drafts for one set into the event log, then fill their missing 17lands detail"""
+    code = set_code or getattr(resolve_active_set(session), "code", None)
+    started = time.monotonic()
+    known_before = _count_set_drafts(session, player.id, code)
+    start_date = session.execute(select(MagicSet.start_date).where(MagicSet.code == code)).scalar_one_or_none()
+    refresh_player(session, SeventeenLandsClient(), player, fetch_start=start_date)
+    session.commit()
+    ingested = _count_set_drafts(session, player.id, code) - known_before
+    ingest_s = time.monotonic() - started
+
+    fill = fill_pending_draft_detail(session, player.id, set_code=code, cap=None)
+    fill_s = time.monotonic() - started - ingest_s
+    log.info(
+        f"tracker refresh {player.display_name} {code}: ingest={ingest_s:.1f}s new={ingested} "
+        f"detail={fill_s:.1f}s pending={fill['pending']} filled={fill['filled']} missed={fill['missed_ids']}"
+    )
+    return {"ingested": ingested, "filled": fill["filled"], "missed": fill["missed"]}
+
+
+def _count_set_drafts(session: Session, player_id: str, set_code: str | None) -> int:
+    return session.execute(
+        select(func.count())
+        .select_from(DraftEvent)
+        .join(MagicSet, MagicSet.id == DraftEvent.set_id)
+        .where(DraftEvent.player_id == player_id, MagicSet.code == set_code)
+    ).scalar_one()

@@ -10,21 +10,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 
 import aiohttp
 from aiohttp import web
-from sqlalchemy import select
 
 from bot.config import is_admin, settings
 from bot.database import SessionLocal
-from bot.models import MagicSet, Player
-from bot.services.active_set import resolve_active_set
-from bot.services.refresh import refresh_player
-from bot.services.seventeenlands import SeventeenLandsClient
-from bot.services.tracker_detail import fill_pending_draft_detail, is_tracker_player, refetch_draft_detail
+from bot.services.tracker_detail import is_tracker_player, run_tracker_refresh
 from bot.services.transcript_cards import apply_transcript_edit
 
 log = logging.getLogger(__name__)
+
+_verified_tokens: dict[str, tuple[str, float]] = {}
 
 
 def _cors_headers() -> dict[str, str]:
@@ -60,22 +58,7 @@ async def _discord_id_for_token(token: str) -> str | None:
 
 def _run_refresh(discord_id: str, set_code: str | None, event_id: str | None) -> dict:
     with SessionLocal() as session:
-        player = session.execute(
-            select(Player).where(Player.discord_id == discord_id)
-        ).scalar_one_or_none()
-        if player is None or not player.seventeenlands_token:
-            return {"ingested": 0, "filled": 0, "missed": 0}
-
-        if event_id:
-            written = refetch_draft_detail(session, player.id, event_id)
-            return {"ingested": 0, "filled": int(written), "missed": int(not written)}
-
-        code = set_code or (resolve_active_set(session).code if resolve_active_set(session) else None)
-        start = session.execute(select(MagicSet.start_date).where(MagicSet.code == code)).scalar_one_or_none()
-        before = refresh_player(session, SeventeenLandsClient(), player, fetch_start=start)
-        session.commit()
-        result = fill_pending_draft_detail(session, player.id, set_code=code, cap=None)
-        return {"ingested": before.get("events", 0), "filled": result["filled"], "missed": result["missed"]}
+        return run_tracker_refresh(session, discord_id, set_code, event_id)
 
 
 async def _handle_refresh(request: web.Request) -> web.Response:
@@ -84,7 +67,7 @@ async def _handle_refresh(request: web.Request) -> web.Response:
     if not token:
         return web.json_response({"error": "missing token"}, status=401, headers=_cors_headers())
 
-    discord_id = await _discord_id_for_token(token)
+    discord_id = await _cached_discord_id_for_token(token)
     if not is_tracker_player(discord_id):
         return web.json_response({"error": "forbidden"}, status=403, headers=_cors_headers())
 
@@ -92,6 +75,19 @@ async def _handle_refresh(request: web.Request) -> web.Response:
     event_id = request.query.get("event_id")
     result = await asyncio.to_thread(_run_refresh, discord_id, set_code, event_id)
     return web.json_response(result, headers=_cors_headers())
+
+
+async def _cached_discord_id_for_token(token: str) -> str | None:
+    now = time.monotonic()
+    cached = _verified_tokens.get(token)
+    if cached and cached[1] > now:
+        return cached[0]
+    discord_id = await _discord_id_for_token(token)
+    if discord_id:
+        for stale in [t for t, (_, expires) in _verified_tokens.items() if expires <= now]:
+            del _verified_tokens[stale]
+        _verified_tokens[token] = (discord_id, now + 300)
+    return discord_id
 
 
 async def _handle_options(request: web.Request) -> web.Response:
@@ -103,7 +99,7 @@ async def _require_admin(request: web.Request) -> str | web.Response:
     token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
     if not token:
         return web.json_response({"error": "missing token"}, status=401, headers=_cors_headers())
-    discord_id = await _discord_id_for_token(token)
+    discord_id = await _cached_discord_id_for_token(token)
     if not is_admin(discord_id):
         return web.json_response({"error": "forbidden"}, status=403, headers=_cors_headers())
     return discord_id

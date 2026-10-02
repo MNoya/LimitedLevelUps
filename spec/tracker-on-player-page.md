@@ -61,7 +61,7 @@ Data helpers live in `data/trackerDrafts.ts` (`arenaDrafts`, `useDraftRates`, `u
 - **The `⟳ 17L` button is dev-only.** `refreshDraftData` posts to `${LOCAL_SUPABASE_URL}/tracker/refresh`, an endpoint that exists only on `bot/scripts/local_supabase_proxy.py`. In a deployed build it will fail. A real deployment needs either a bot HTTP endpoint or a Pages Function with database write access.
 - **The collection is not per-account.** `tracker_collection` has no account column, so switching accounts changes the log and the projections but not the owned card counts.
 - **`PickTwoDraft` filters under `QUICK DRAFT`.** That is deliberate: `scoring_buckets.json` buckets it under Quick, and the filter reads the same source of truth. Not a bug, and not worth a separate option.
-- **The mastery track is per-set data covering five sets** (`MASTERY_TRACKS` in `collectionProjection.ts`). Three different track shapes exist across Arena's history; only the newest is modelled, so an older set falls back to HOB's numbers and will read wrong. Harmless while only current sets are tracked.
+- **Pack rules are per-set data covering six sets** (`SET_PACK_RULES` in `collectionProjection.ts`). A set without an entry shows blank projections. Each new set needs its Mastery track, mythic upgrade rate, bonus slot and pass mythic ICRs read off the Reward Distribution page.
 - **Migration `tr4ck3r0001` is still unpushed** and carries the whole tracker schema, including the `ranked_season_packs` column that was renamed in place from `future_pass_packs`.
 
 ## Verifying
