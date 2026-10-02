@@ -1425,12 +1425,10 @@ async def _send_round_message(thread, embed, view, round_num: int) -> discord.Me
 
 
 async def persist_round_entry_artifacts(manager: "PodDraftManager", round_num: int) -> None:
-    """Round-entry snapshots that must fire once regardless of pairing mode: freeze seating from the
-    draft log as round 1 opens, freeze the post-deckbuild decklists as round 2 opens once round 1 has
-    settled the decks. Bracket and Swiss advancement both call this so neither path can skip it."""
+    """Freeze seating as round 1 opens and re-save deckbuild edits as each later round opens"""
     if round_num == 1:
         await asyncio.to_thread(manager.persist_seat_indexes_from_log)
-    elif round_num == 2:
+    else:
         await asyncio.to_thread(manager.persist_decklists_from_log)
 
 

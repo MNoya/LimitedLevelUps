@@ -639,7 +639,7 @@ def test_persist_decklists_from_log_writes_when_log_present_else_skips():
     assert len(persisted) == 1
 
 
-def test_persist_round_entry_artifacts_dispatches_seats_then_decklists_by_round():
+def test_persist_round_entry_artifacts_saves_seats_at_round_one_then_decklists_each_later_round():
     import asyncio
 
     from bot.services.pod_tournament import persist_round_entry_artifacts
@@ -662,7 +662,7 @@ def test_persist_round_entry_artifacts_dispatches_seats_then_decklists_by_round(
 
     assert round1.calls == ["seats"]
     assert round2.calls == ["decks"]
-    assert round3.calls == []
+    assert round3.calls == ["decks"]
 
 
 @pytest.mark.parametrize(

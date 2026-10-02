@@ -717,6 +717,7 @@ async def sync_round_reveals(
         reveals[round_num] = message
         if manager is not None:
             manager.team_reveal_messages[round_num] = message
+            await asyncio.to_thread(manager.persist_decklists_from_log)
         log.info(f"[TEAM] reveal_posted event={event_id} round={round_num}")
 
 

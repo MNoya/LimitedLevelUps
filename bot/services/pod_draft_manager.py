@@ -2122,13 +2122,7 @@ class PodDraftManager:
         await asyncio.to_thread(self._persist_draft_log_gz, log_payload)
 
     async def _on_share_decklist(self, payload) -> None:
-        """Draftmancer streams shareDecklist to the session owner on every deckbuild edit (card moved
-        main↔side, lands set) after the draft ends — there is no submit gate. Keep the stored log's per-seat
-        decklist current in memory only; persist_decklists_from_log writes the settled result at round 2,
-        by which point round 1 has been played. Mocks disconnect at draft end and are never reviewed, so they
-        are ignored; as a non-player owner the bot receives the full decklist, not hashes-only. A seat that
-        can't be matched means the edit arrived under a reconnected userID the draft log doesn't know, and
-        Draftmancer drops it from the log too — logged so a missing corrected deck can be traced."""
+        """Keep the in-memory log current on each deckbuild edit; the round-entry saves write it out"""
         if self.kind == "mock" or not isinstance(payload, dict):
             return
         user_id = payload.get("userID")
@@ -2151,10 +2145,7 @@ class PodDraftManager:
         )
 
     def persist_decklists_from_log(self) -> bool:
-        """Re-persist the artifact with players' post-draft deckbuild edits as round 2 opens, once round 1
-        has settled the decks. shareDecklist keeps the in-memory log current live; this is the settling write,
-        fired by persist_round_entry_artifacts for both bracket and Swiss pods. Returns False when no draft
-        log is in memory (e.g. after a mid-event bot restart), leaving the draft-end decks in place."""
+        """Re-save the draft log with deckbuild edits; False when no log is in memory after a restart"""
         log_payload = self._full_draft_log()
         if not isinstance(log_payload, dict):
             log.info(f"[DECK] persist_decklists.skip event={self.event_id} reason=no_log_in_memory")
