@@ -8,8 +8,10 @@ import { CardImageModal } from "../CardImageModal";
 import { ManaCost } from "../ManaPips";
 import { PreviewShell, previewAnchorFor, type PreviewAnchor } from "../TierGrid";
 import { useFallbackImage } from "../pod/review/ReviewCard";
-import { cardImageSources, useCardImageMap } from "../../data/cardImages";
-import { fetchSetRaresAndMythics, type ColorSection } from "../../data/scryfallSet";
+import { usePageTitleOverride } from "../DocumentTitle";
+import { cardImageSources, cardImagesFromUrls } from "../../data/cardImages";
+import { useSetCardPool } from "../../data/setCards";
+import type { SetCard, SetCardPool } from "../../data/setCardPool";
 import { useDraftRates } from "../../data/trackerDrafts";
 import {
   fetchCollection,
@@ -71,12 +73,10 @@ export function Collection({
 }: { slug: string | undefined; setCode: string; accountId: number | null; narrow?: boolean }) {
   const qc = useQueryClient();
   const isMobile = useIsMobile();
+  usePageTitleOverride(`Tracker ${setCode}`);
 
-  const { data: lists, isLoading, error } = useQuery({
-    queryKey: ["scryfall-set", setCode],
-    queryFn: () => fetchSetRaresAndMythics(setCode),
-    staleTime: Infinity,
-  });
+  const { data: pool, isLoading, error } = useSetCardPool(setCode);
+  const lists = useMemo(() => pool && collectionLists(pool), [pool]);
   const { data: counts } = useQuery({
     queryKey: ["tracker-collection", setCode],
     queryFn: () => fetchCollection(setCode),
@@ -86,13 +86,10 @@ export function Collection({
   const lookup = useMemo(() => collectionLookup(counts), [counts]);
   const { setCount, syncFailed } = useCollectionSync(setCode);
 
-  const allCards = useMemo(
-    () => [...(lists?.rares ?? []), ...(lists?.mythics ?? [])]
-      .flatMap((section) => section.cards)
-      .map((name) => ({ name, set: setCode })),
-    [lists, setCode],
+  const cardImages = useMemo(
+    () => cardImagesFromUrls(setCode, [...(pool?.cards ?? []), ...(pool?.specialGuests ?? [])]),
+    [pool, setCode],
   );
-  const cardImages = useCardImageMap(allCards);
   const { data: economy } = useQuery({
     queryKey: ["tracker-economy", setCode],
     queryFn: () => fetchSetEconomy(setCode),
@@ -121,8 +118,8 @@ export function Collection({
   const [copiesMode, setCopiesMode] = useState<"playset" | "singles">("playset");
   const [shownRarity, setShownRarity] = useState<"rare" | "mythic">("rare");
 
-  if (isLoading) return <div className="px-5 md:px-10 py-8 text-muted text-[14px]">Loading {setCode} cards from Scryfall</div>;
-  if (error || !lists) return <div className="px-5 md:px-10 py-8 text-red text-[14px]">Scryfall has no rares or mythics for {setCode}</div>;
+  if (isLoading) return <div className="px-5 md:px-10 py-8 text-muted text-[14px]">Loading {setCode} cards</div>;
+  if (error || !lists || lists.rares.length + lists.mythics.length === 0) return <div className="px-5 md:px-10 py-8 text-red text-[14px]">Scryfall has no rares or mythics for {setCode}</div>;
 
   const rare = tallySections(lists.rares, lookup);
   const myth = tallySections(lists.mythics, lookup);
@@ -157,6 +154,17 @@ export function Collection({
       extraLine: null,
     },
   ];
+
+  const sectionProps = {
+    lookup,
+    playsets,
+    costs: isMobile ? lists.costs : undefined,
+    touch: isMobile,
+    onSet: setCount,
+    onOpen: openCard,
+    onHover: isMobile ? undefined : showPreview,
+    onLeave: clearPreview,
+  };
 
   return (
     <div className="p-4">
@@ -221,40 +229,26 @@ export function Collection({
               </div>
             )}
             <div className={cn("grid gap-4", sectionsCls)}>
-              {sections.map((section) => {
-                const sectionOwned = playsets
-                  ? section.cards.reduce((n, c) => n + lookup(c), 0)
-                  : section.cards.reduce((n, c) => n + (lookup(c) > 0 ? 1 : 0), 0);
-                return (
-                  <section key={`${key}-${section.color}`} className="border border-border">
-                    <header
-                      className="flex items-baseline gap-2 px-2.5 py-1.5"
-                      style={{ background: COLOR_HEX[section.color] ?? COLOR_HEX.C }}
-                    >
-                      <span className="font-display text-[15px] tracking-[0.16em] text-bg">{section.label}</span>
-                      <span className="font-display tabular-nums ml-auto text-[15px] text-bg/75">
-                        {sectionOwned}/{section.cards.length * (playsets ? 4 : 1)}
-                      </span>
-                    </header>
-                    <div className="flex flex-col gap-[1px] bg-border">
-                      {section.cards.map((card) => (
-                        <CardRow
-                          key={card}
-                          card={card}
-                          owned={lookup(card)}
-                          cost={isMobile ? lists.costs[card] : undefined}
-                          touch={isMobile}
-                          onSet={setCount}
-                          onOpen={openCard}
-                          onHover={isMobile ? undefined : showPreview}
-                          onLeave={clearPreview}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                );
-              })}
+              {sections.map((section) => (
+                <CardSection
+                  key={`${key}-${section.color}`}
+                  label={section.label}
+                  background={COLOR_HEX[section.color] ?? COLOR_HEX.C}
+                  cards={section.cards}
+                  {...sectionProps}
+                />
+              ))}
             </div>
+            {key === "mythic" && lists.specialGuests.length > 0 && (
+              <div className="mt-4">
+                <CardSection
+                  label="Special Guests"
+                  background={RARITY_STYLE.mythic.gradient}
+                  cards={lists.specialGuests}
+                  {...sectionProps}
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -312,6 +306,47 @@ function useCollectionSync(setCode: string) {
   }, [flush]);
 
   return { setCount, syncFailed };
+}
+
+function CardSection({
+  label, background, cards, lookup, playsets, costs, touch, onSet, onOpen, onHover, onLeave,
+}: {
+  label: string; background: string; cards: string[]; lookup: (name: string) => number; playsets: boolean;
+  costs?: Record<string, string>; touch: boolean;
+  onSet: (card: string, n: number) => void;
+  onOpen: (card: string) => void;
+  onHover?: (el: HTMLElement, card: string) => void; onLeave: () => void;
+}) {
+  let owned = 0;
+  for (const card of cards) {
+    const copies = lookup(card);
+    owned += playsets ? copies : Math.min(copies, 1);
+  }
+  return (
+    <section className="border border-border">
+      <header className="flex items-baseline gap-2 px-2.5 py-1.5" style={{ background }}>
+        <span className="font-display text-[15px] tracking-[0.16em] text-bg">{label}</span>
+        <span className="font-display tabular-nums ml-auto text-[15px] text-bg/75">
+          {owned}/{cards.length * (playsets ? 4 : 1)}
+        </span>
+      </header>
+      <div className="flex flex-col gap-[1px] bg-border">
+        {cards.map((card) => (
+          <CardRow
+            key={card}
+            card={card}
+            owned={lookup(card)}
+            cost={costs?.[card]}
+            touch={touch}
+            onSet={onSet}
+            onOpen={onOpen}
+            onHover={onHover}
+            onLeave={onLeave}
+          />
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function CardPreview({ sources, anchor }: { sources: string[]; anchor: PreviewAnchor }) {
@@ -545,4 +580,60 @@ function useShrinkToFit(text: string, maxPx: number, minPx: number) {
   }, [text, maxPx, minPx]);
 
   return ref;
+}
+
+interface ColorSection {
+  color: "W" | "U" | "B" | "R" | "G" | "M" | "C";
+  label: string;
+  cards: string[];
+}
+
+const SECTION_ORDER: Array<ColorSection["color"]> = ["W", "U", "B", "R", "G", "M", "C"];
+const SECTION_LABELS: Record<ColorSection["color"], string> = {
+  W: "White", U: "Blue", B: "Black", R: "Red", G: "Green", M: "Multicolor", C: "Colorless",
+};
+
+function collectionLists(pool: SetCardPool) {
+  const costs: Record<string, string> = {};
+  for (const card of [...pool.cards, ...pool.specialGuests]) {
+    if (card.manaCost) {
+      costs[card.name] = card.manaCost;
+    }
+  }
+  return {
+    rares: colorSections(pool.cards.filter((card) => card.rarity === "rare")),
+    mythics: colorSections(pool.cards.filter((card) => card.rarity === "mythic")),
+    specialGuests: pool.specialGuests.map((card) => card.name),
+    costs,
+  };
+}
+
+/** Color identity, not casting cost, so the sections match how Arena sorts a collection */
+function colorSections(cards: SetCard[]): ColorSection[] {
+  const bySection = new Map<ColorSection["color"], string[]>();
+  for (const card of cards) {
+    const key = sectionColor(card.colorIdentity);
+    if (!bySection.has(key)) {
+      bySection.set(key, []);
+    }
+    bySection.get(key)!.push(card.name);
+  }
+  const sections: ColorSection[] = [];
+  for (const color of SECTION_ORDER) {
+    const names = bySection.get(color);
+    if (names?.length) {
+      sections.push({ color, label: SECTION_LABELS[color], cards: names });
+    }
+  }
+  return sections;
+}
+
+function sectionColor(identity: string[]): ColorSection["color"] {
+  if (identity.length === 0) {
+    return "C";
+  }
+  if (identity.length > 1) {
+    return "M";
+  }
+  return identity[0] as ColorSection["color"];
 }

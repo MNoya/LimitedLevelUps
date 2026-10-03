@@ -386,6 +386,8 @@ const matchesAppRoute = (segments: string[]): boolean => {
     "/leaderboard/:setCode",
     "/player/:slug",
     "/player/:slug/:setCode",
+    "/player/:slug/:setCode/collection",
+    "/player/:slug/:setCode/breakdown",
     "/pods/guide",
     "/pods",
     "/pods/:board/data",

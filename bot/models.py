@@ -278,6 +278,7 @@ class DraftEvent(Base):
     pool_mythics  = Column(Integer, nullable=True)
     deck_cards    = Column(JSONB, nullable=True)
     match_results = Column(JSONB, nullable=True)
+    detail_checked_at = Column(DateTime(timezone=True), nullable=True)
 
     started_at  = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)

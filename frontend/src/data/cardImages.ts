@@ -56,7 +56,7 @@ async function fetchCardImages(identifiers: { name: string; set: string }[]): Pr
 }
 
 // One app-wide card->URL map shared by every caller, persisted to localStorage; a hook resolves only its missing cards
-const CACHE_KEY = "cardimg:v2";
+const CACHE_KEY = "cardimg:v3";
 const memoryMap = new Map<string, string>();
 let hydrated = false;
 
@@ -155,6 +155,17 @@ async function resolveIntoMap(identifiers: { name: string; set: string }[]): Pro
   }
   persist();
   return fetched;
+}
+
+// A fixed card->URL map from images already known, such as a set pool, so nothing is resolved over the network
+export function cardImagesFromUrls(set: string, cards: { name: string; image: string | null }[]): CardImages {
+  const images = new Map<string, string>();
+  for (const card of cards) {
+    if (card.image) {
+      images.set(mapKey(set, card.name), card.image);
+    }
+  }
+  return { images, ready: true };
 }
 
 // <img> src candidates for a card, best first: the mapped CDN URL, then Scryfall's named endpoint

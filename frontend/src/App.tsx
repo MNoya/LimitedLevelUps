@@ -55,6 +55,7 @@ export function App() {
 
       <Route path="/player/:slug" element={<PlayerPage />} />
       <Route path="/player/:slug/:setCode" element={<PlayerPage />} />
+      <Route path="/player/:slug/:setCode/:trackerTab" element={<PlayerPage />} />
       <Route path="/leaderboard/player/:slug" element={<LegacyPlayerRedirect />} />
       <Route path="/leaderboard/:setCode/player/:slug" element={<LegacyPlayerRedirect />} />
 

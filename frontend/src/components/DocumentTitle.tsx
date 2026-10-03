@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlayerProfile, useSets } from "../data/hooks";
@@ -22,7 +22,8 @@ export function DocumentTitle() {
   const { data: profile } = usePlayerProfile(playerSlug, routeSetCode ?? liveSetCode ?? ACTIVE_SET_CODE);
 
   const episodes = useQueryClient().getQueryData<Episode[]>(["db-episodes"]);
-  const pageTitle = resolvePageTitle(segments, profile?.displayName, setCodes, episodes);
+  const titleOverride = useSyncExternalStore(subscribeToTitleOverride, () => currentTitleOverride);
+  const pageTitle = titleOverride ?? resolvePageTitle(segments, profile?.displayName, setCodes, episodes);
 
   useEffect(() => {
     document.title = pageTitle === SITE_NAME ? SITE_NAME : `${pageTitle}${TITLE_SEPARATOR}${SITE_NAME}`;
@@ -30,6 +31,29 @@ export function DocumentTitle() {
 
   return null;
 }
+
+/** Names the tab after a view the URL can't express, for as long as the calling component is mounted */
+export function usePageTitleOverride(title: string): void {
+  useEffect(() => {
+    setTitleOverride(title);
+    return () => setTitleOverride(null);
+  }, [title]);
+}
+
+let currentTitleOverride: string | null = null;
+const titleOverrideListeners = new Set<() => void>();
+
+const setTitleOverride = (title: string | null): void => {
+  currentTitleOverride = title;
+  for (const listener of titleOverrideListeners) {
+    listener();
+  }
+};
+
+const subscribeToTitleOverride = (listener: () => void): (() => void) => {
+  titleOverrideListeners.add(listener);
+  return () => titleOverrideListeners.delete(listener);
+};
 
 /** The live `/player/<slug>[/<set>]` route and the legacy leaderboard-nested ones */
 const playerRouteFrom = (segments: string[]): { slug?: string; setCode?: string } => {

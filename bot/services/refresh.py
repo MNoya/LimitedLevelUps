@@ -168,12 +168,14 @@ def refresh_player(
     drafts: list[dict] | None = None,
     fetch_start: date | None = None,
     sets: Sequence[MagicSet] | None = None,
+    fetch_end: date | None = None,
 ) -> dict:
     if drafts is None:
         try:
             drafts = client.fetch_drafts(
                 player.seventeenlands_token,
                 start_date=fetch_start,
+                end_date=fetch_end,
             )
         except requests.HTTPError as e:
             status_code = e.response.status_code if e.response is not None else None

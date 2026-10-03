@@ -1,29 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
-import { isCraftSetCode, type CraftList } from "./craftListBuilder";
+import { useMemo } from "react";
+import { buildCraftLists } from "./craftListBuilder";
+import { useSetCardPool } from "./setCards";
 
 export {
   craftListLabel,
   craftListText,
   craftListTitle,
   craftListWildcards,
-  isCraftSetCode,
   type CraftList,
 } from "./craftListBuilder";
+export { isSetCode } from "./setCardPool";
 
 export function useCraftLists(setCode: string) {
-  return useQuery({
-    queryKey: ["craft-lists", setCode],
-    queryFn: () => fetchCraftLists(setCode),
-    staleTime: Infinity,
-    retry: false,
-    enabled: isCraftSetCode(setCode),
-  });
-}
-
-async function fetchCraftLists(setCode: string): Promise<CraftList[]> {
-  const response = await fetch(`/api/craft-lists/${setCode}`);
-  if (!response.ok) {
-    throw new Error(`Craft lists failed with ${response.status}`);
-  }
-  return response.json();
+  const { data: pool, isPending, isError } = useSetCardPool(setCode);
+  const lists = useMemo(() => (pool ? buildCraftLists(setCode, pool.cards) : []), [setCode, pool]);
+  return { lists, isPending, isError };
 }

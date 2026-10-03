@@ -1,6 +1,5 @@
-const SCRYFALL_SEARCH = "https://api.scryfall.com/cards/search";
-const NO_MATCHES_STATUS = 404;
-const PAGE_DELAY_MS = 500;
+import { compareCollectorNumbers, type SetCard } from "./setCardPool";
+
 const ARENA_DECK_LIMIT = 250;
 const COPIES_PER_CARD = 4;
 export type CraftRarity = "common" | "uncommon" | "rare" | "mythic";
@@ -11,14 +10,6 @@ const RARITY_GROUPS: Record<CraftRarity, string> = {
   rare: "Rares",
   mythic: "Mythics",
 };
-
-interface ScryfallPrinting {
-  name: string;
-  collector_number: string;
-  rarity: string;
-  layout: string;
-  type_line?: string;
-}
 
 interface CraftCard {
   name: string;
@@ -56,17 +47,8 @@ export function craftListText(list: CraftList): string {
   return lines.join("\n");
 }
 
-export function isCraftSetCode(setCode: string): boolean {
-  return /^[A-Z0-9]{2,5}$/.test(setCode);
-}
-
-export async function fetchCraftLists(setCode: string): Promise<CraftList[]> {
-  const printings = await scryfallSearch(`game:arena set:${setCode.toLowerCase()}`);
-  return buildCraftLists(setCode.toUpperCase(), printings);
-}
-
-function buildCraftLists(setCode: string, printings: ScryfallPrinting[]): CraftList[] {
-  const cards = firstPrintingPerName(draftable(printings));
+export function buildCraftLists(setCode: string, pool: SetCard[]): CraftList[] {
+  const cards = toCraftCards(pool);
   const lists: CraftList[] = [];
   for (const [rarity, group] of Object.entries(RARITY_GROUPS) as [CraftRarity, string][]) {
     lists.push(...splitLists(setCode, rarity, group, cards.filter((card) => card.rarity === rarity)));
@@ -74,56 +56,21 @@ function buildCraftLists(setCode: string, printings: ScryfallPrinting[]): CraftL
   return lists;
 }
 
-function draftable(printings: ScryfallPrinting[]): ScryfallPrinting[] {
-  let firstBasic = Infinity;
-  for (const printing of printings) {
-    if (isBasicLand(printing)) {
-      firstBasic = Math.min(firstBasic, collectorNumber(printing.collector_number));
+function toCraftCards(pool: SetCard[]): CraftCard[] {
+  const cards: CraftCard[] = [];
+  for (const card of [...pool].sort(compareCollectorNumbers)) {
+    if (card.rarity in RARITY_GROUPS) {
+      cards.push({ name: arenaName(card), collectorNumber: card.collectorNumber, rarity: card.rarity });
     }
   }
-  return printings.filter(
-    (printing) => !isBasicLand(printing) && collectorNumber(printing.collector_number) < firstBasic,
-  );
+  return cards;
 }
 
-function isBasicLand(printing: ScryfallPrinting): boolean {
-  const supertypes = (printing.type_line ?? "").split("—")[0];
-  return supertypes.includes("Basic") && supertypes.includes("Land");
-}
-
-function firstPrintingPerName(printings: ScryfallPrinting[]): CraftCard[] {
-  const first = new Map<string, CraftCard>();
-  for (const printing of printings) {
-    if (!(printing.rarity in RARITY_GROUPS)) {
-      continue;
-    }
-    const card = { name: arenaName(printing), collectorNumber: printing.collector_number, rarity: printing.rarity };
-    const current = first.get(card.name);
-    if (!current || compareCollectorNumbers(card, current) < 0) {
-      first.set(card.name, card);
-    }
+function arenaName(card: SetCard): string {
+  if (card.layout === "split") {
+    return card.name;
   }
-  return [...first.values()].sort(compareCollectorNumbers);
-}
-
-function arenaName(printing: ScryfallPrinting): string {
-  if (printing.layout === "split") {
-    return printing.name;
-  }
-  return printing.name.split(" // ")[0];
-}
-
-function compareCollectorNumbers(a: CraftCard, b: CraftCard): number {
-  const byNumber = collectorNumber(a.collectorNumber) - collectorNumber(b.collectorNumber);
-  if (byNumber !== 0) {
-    return byNumber;
-  }
-  return a.collectorNumber.localeCompare(b.collectorNumber);
-}
-
-function collectorNumber(value: string): number {
-  const digits = value.match(/^\d+/);
-  return digits ? Number(digits[0]) : Infinity;
+  return card.name.split(" // ")[0];
 }
 
 function splitLists(setCode: string, rarity: CraftRarity, group: string, cards: CraftCard[]): CraftList[] {
@@ -142,26 +89,4 @@ function splitLists(setCode: string, rarity: CraftRarity, group: string, cards: 
     start = end;
   }
   return lists;
-}
-
-async function scryfallSearch(query: string): Promise<ScryfallPrinting[]> {
-  const params = new URLSearchParams({ q: query, unique: "prints", order: "set" });
-  let url: string | null = `${SCRYFALL_SEARCH}?${params}`;
-  const printings: ScryfallPrinting[] = [];
-  while (url) {
-    const response = await fetch(url, { headers: { accept: "application/json", "user-agent": "LimitedLevelUps/1.0" } });
-    if (response.status === NO_MATCHES_STATUS) {
-      return printings;
-    }
-    if (!response.ok) {
-      throw new Error(`Scryfall search failed with ${response.status}`);
-    }
-    const page: { data: ScryfallPrinting[]; next_page?: string } = await response.json();
-    printings.push(...page.data);
-    url = page.next_page ?? null;
-    if (url) {
-      await new Promise((resolve) => setTimeout(resolve, PAGE_DELAY_MS));
-    }
-  }
-  return printings;
 }

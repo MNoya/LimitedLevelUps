@@ -11,6 +11,7 @@ import logging
 import time
 import urllib.error
 import urllib.request
+from datetime import timedelta
 
 from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.orm import Session
@@ -26,6 +27,7 @@ log = logging.getLogger(__name__)
 PAIR_GAP_S = 1.5
 DRAFT_GAP_S = 5.0
 AUTO_FILL_CAP = 20
+SETTLE_AFTER_FINISH = timedelta(hours=1)
 
 
 def is_tracker_player(discord_id: str | None) -> bool:
@@ -107,6 +109,11 @@ def pending_draft_ids(
         DraftEvent.pool_rares.is_(None),
         stored_matches < DraftEvent.wins + DraftEvent.losses,
     )
+    unsettled = or_(
+        DraftEvent.finished_at.is_(None),
+        DraftEvent.detail_checked_at.is_(None),
+        DraftEvent.detail_checked_at < DraftEvent.finished_at + SETTLE_AFTER_FINISH,
+    )
     stmt = (
         select(DraftEvent.id, DraftEvent.seventeenlands_event_id, DraftEvent.deck_cards.isnot(None))
         .join(MagicSet, MagicSet.id == DraftEvent.set_id)
@@ -114,6 +121,7 @@ def pending_draft_ids(
             DraftEvent.player_id == player_id,
             DraftEvent.seventeenlands_event_id.isnot(None),
             incomplete,
+            unsettled,
         )
         .order_by(DraftEvent.finished_at.desc().nulls_last())
     )
@@ -136,11 +144,17 @@ def refetch_draft_detail(session: Session, player_id: str, seventeenlands_event_
         return False
     draft_id, has_deck = row
     summary = summarise_draft(seventeenlands_event_id, fetch_deck=not has_deck, pair_gap_s=0)
-    if summary is None:
-        return False
-    session.execute(update(DraftEvent).where(DraftEvent.id == draft_id).values(**present_detail(summary)))
+    store_detail(session, draft_id, summary)
+    return summary is not None
+
+
+def store_detail(session: Session, draft_id: str, summary: dict | None) -> None:
+    """Stamp the check even when 17lands returned nothing, so a draft it can never complete settles"""
+    values = {"detail_checked_at": func.now()}
+    if summary is not None:
+        values.update(present_detail(summary))
+    session.execute(update(DraftEvent).where(DraftEvent.id == draft_id).values(**values))
     session.commit()
-    return True
 
 
 def present_detail(summary: dict) -> dict:
@@ -170,11 +184,10 @@ def fill_pending_draft_detail(
         if index:
             time.sleep(draft_gap_s)
         summary = summarise_draft(seventeenlands_event_id, fetch_deck=not has_deck)
+        store_detail(session, draft_id, summary)
         if summary is None:
             missed_ids.append(seventeenlands_event_id)
             continue
-        session.execute(update(DraftEvent).where(DraftEvent.id == draft_id).values(**present_detail(summary)))
-        session.commit()
         filled += 1
     return {"pending": len(pending), "filled": filled, "missed": len(missed_ids), "missed_ids": missed_ids}
 
@@ -198,8 +211,10 @@ def refresh_tracker_set(session: Session, player: Player, set_code: str | None) 
     code = set_code or getattr(resolve_active_set(session), "code", None)
     started = time.monotonic()
     known_before = _count_set_drafts(session, player.id, code)
-    start_date = session.execute(select(MagicSet.start_date).where(MagicSet.code == code)).scalar_one_or_none()
-    refresh_player(session, SeventeenLandsClient(), player, fetch_start=start_date)
+    window = session.execute(select(MagicSet.start_date, MagicSet.end_date).where(MagicSet.code == code)).one_or_none()
+    start_date, end_date = window or (None, None)
+    fetch_end = end_date + timedelta(days=1) if end_date else None
+    refresh_player(session, SeventeenLandsClient(), player, fetch_start=start_date, fetch_end=fetch_end)
     session.commit()
     ingested = _count_set_drafts(session, player.id, code) - known_before
     ingest_s = time.monotonic() - started

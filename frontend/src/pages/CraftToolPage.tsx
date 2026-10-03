@@ -13,7 +13,7 @@ import { isCubeCode } from "../data/utils";
 import { ACTIVE_SET_CODE } from "../data/constants";
 import { P0P1_CONTESTS } from "../data/p0p1Slots";
 import {
-  isCraftSetCode,
+  isSetCode,
   craftListLabel,
   craftListText,
   craftListTitle,
@@ -44,7 +44,7 @@ export function CraftToolPage() {
   const craftSets = useMemo(() => cardSets(sets), [sets]);
   const current = setCode?.toUpperCase() ?? craftSets[0]?.code ?? ACTIVE_SET_CODE;
   const setMeta = craftSets.find((s) => s.code === current);
-  const { data: lists, isPending, isError } = useCraftLists(current);
+  const { lists, isPending, isError } = useCraftLists(current);
 
   return (
     <PageShell subtitle="TOOLS">
@@ -118,7 +118,7 @@ export function CraftToolPage() {
         </div>
 
         <div className="mt-4 md:mt-3">
-          {!isCraftSetCode(current) ? (
+          {!isSetCode(current) ? (
             <CraftNotice text={`No set with the code ${current}`} />
           ) : isPending ? (
             <CraftListsSkeleton />

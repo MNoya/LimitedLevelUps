@@ -108,7 +108,7 @@ function comboColors(combo: string): string[] {
 // ─── Page entry ────────────────────────────────────────────────────────────
 
 export function PlayerPage() {
-  const params = useParams<{ slug: string; setCode?: string }>();
+  const params = useParams<{ slug: string; setCode?: string; trackerTab?: string }>();
   const slug = params.slug!.toLowerCase();
   const navigate = useNavigate();
   const { data: sets } = useSets();
@@ -181,7 +181,8 @@ export function PlayerPage() {
 
   const setHref = (newCode: string): To => {
     const toLifetime = newCode === LIFETIME_SET_CODE;
-    const pathname = toLifetime ? `/player/${slug}` : playerPath(slug, newCode);
+    const tabSuffix = params.trackerTab ? `/${params.trackerTab}` : "";
+    const pathname = toLifetime ? `/player/${slug}` : `${playerPath(slug, newCode)}${tabSuffix}`;
     return { pathname, search: toLifetime ? topQs : perSetQs() };
   };
 
@@ -1497,7 +1498,11 @@ function Desktop({
   const ranked = profile.rank > 0;
   const hasBreakdown = profile.events > 0 || profile.selfReportedEvents.length > 0;
   const trackerMode = useOwnTrackerProfile(profile.slug);
-  const [leftPane, setLeftPane] = useState<"breakdown" | "collection">("collection");
+  const { trackerTab } = useParams<{ trackerTab?: string }>();
+  const leftPane = trackerTab === "breakdown" ? "breakdown" : "collection";
+  const { search } = useLocation();
+  const profilePath = playerPath(profile.slug, profile.setCode);
+  const tabTo = (tab: typeof leftPane): To => ({ pathname: `${profilePath}/${tab}`, search });
   const { accounts: trackerAccounts, accountId: trackerAccount, setAccountId: setTrackerAccount } =
     useTrackerAccounts(trackerMode);
   const [pointsModalOpen, setPointsModalOpen] = useState(false);
@@ -1560,10 +1565,10 @@ function Desktop({
           <div className="border-b border-border min-[1128px]:border-b-0 min-[1128px]:border-r">
             <div className={cn("flex items-center gap-2 border-b border-border bg-surface pl-8 pr-4",
                                TRACKER_HEADER_H)}>
-              <LeftPaneTab active={leftPane === "breakdown"} onClick={() => setLeftPane("breakdown")}>
+              <LeftPaneTab active={leftPane === "breakdown"} to={tabTo("breakdown")}>
                 BREAKDOWN
               </LeftPaneTab>
-              <LeftPaneTab active={leftPane === "collection"} onClick={() => setLeftPane("collection")}>
+              <LeftPaneTab active={leftPane === "collection"} to={tabTo("collection")}>
                 COLLECTION
               </LeftPaneTab>
               <AccountTabs
@@ -1628,21 +1633,17 @@ function Desktop({
 }
 
 function LeftPaneTab({
-  active, onClick, children, className,
-}: { active: boolean; onClick: () => void; children: React.ReactNode; className?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "font-display text-[14px] tracking-[0.18em] px-4 h-full inline-flex items-center border-b-2 -mb-px",
-        active ? "text-green border-green" : "text-muted border-transparent hover:text-text",
-        className,
-      )}
-    >
-      {children}
-    </button>
+  active, onClick, to, children, className,
+}: { active: boolean; onClick?: () => void; to?: To; children: React.ReactNode; className?: string }) {
+  const cls = cn(
+    "font-display text-[14px] tracking-[0.18em] px-4 h-full inline-flex items-center border-b-2 -mb-px",
+    active ? "text-green border-green" : "text-muted border-transparent hover:text-text",
+    className,
   );
+  if (to) {
+    return <Link to={to} className={cls}>{children}</Link>;
+  }
+  return <button type="button" onClick={onClick} className={cls}>{children}</button>;
 }
 
 /** The tracker is private, so it only ever opens on the allowlisted user's own profile */
