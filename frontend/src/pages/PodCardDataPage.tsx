@@ -34,7 +34,7 @@ import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { useSearchParamHref } from "../lib/search-param-href";
 import { cardArtSources, cardImageSources, useBoardCardImages } from "../data/cardImages";
-import { usePodCardStats, useSets } from "../data/hooks";
+import { useCubeCardNames, usePodCardStats, useSets } from "../data/hooks";
 import { POD_SEASON_PARAM } from "../data/podSeasons";
 import type { SetSummary } from "../types/leaderboard";
 import {
@@ -93,13 +93,15 @@ export function PodCardDataPage() {
   const { data, isPending } = usePodCardStats(boardCode);
   const allRows = useMemo(() => data ?? [], [data]);
   const { data: sets } = useSets();
+  const { data: currentList } = useCubeCardNames(boardCode);
 
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<CardDataTab>("cards");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortKey, setSortKey] = useState<keyof PodCard>("alsa");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [minDrafts, setMinDrafts] = useState(1);
+  const [minDrafts, setMinDrafts] = useState(0);
+  const [currentListOnly, setCurrentListOnly] = useState(true);
   const [filters, setFilters] = useState<PodCardFilters>(EMPTY_POD_CARD_FILTERS);
   const [cardSearch, setCardSearch] = useState("");
   const [preview, setPreview] = useState<{ sources: string[]; anchor: PreviewAnchor } | null>(null);
@@ -182,11 +184,14 @@ export function PodCardDataPage() {
 
   const rows = useMemo(() => {
     const needle = cardSearch.trim().toLowerCase();
-    const kept = cards.filter(
-      (c) => c.drafts >= minDrafts && cardMatchesFilters(c, filters) && (!needle || c.name.toLowerCase().includes(needle)),
-    );
+    const listFilter = currentListOnly ? currentList : null;
+    const kept = cards.filter((c) => {
+      const matchesSearch = !needle || c.name.toLowerCase().includes(needle);
+      const inList = !listFilter || listFilter.has(c.name);
+      return c.drafts >= minDrafts && cardMatchesFilters(c, filters) && inList && matchesSearch;
+    });
     return sortPodCards(kept, sortKey, sortDir);
-  }, [cards, minDrafts, filters, cardSearch, sortKey, sortDir]);
+  }, [cards, minDrafts, filters, currentListOnly, currentList, cardSearch, sortKey, sortDir]);
 
   const selected = useMemo(() => {
     if (!cardParam) {
@@ -375,6 +380,10 @@ export function PodCardDataPage() {
                 setMinDrafts={setMinDrafts}
                 search={cardSearch}
                 setSearch={setCardSearch}
+                hasCurrentList={!!currentList}
+                currentListOnly={currentListOnly}
+                setCurrentListOnly={setCurrentListOnly}
+                compact
               />
             </div>
           )}
@@ -511,6 +520,9 @@ export function PodCardDataPage() {
           setMinDrafts={setMinDrafts}
           search={cardSearch}
           setSearch={setCardSearch}
+          hasCurrentList={!!currentList}
+          currentListOnly={currentListOnly}
+          setCurrentListOnly={setCurrentListOnly}
         />
       </div>
 

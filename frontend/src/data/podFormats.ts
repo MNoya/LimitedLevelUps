@@ -27,3 +27,16 @@ export function cubeCobraUrl(code: string | undefined): string | null {
 export function customFormatLabel(code: string | undefined): string | undefined {
   return customFormat(code)?.label;
 }
+
+export async function fetchCubeCardNames(code: string): Promise<Set<string> | null> {
+  const fmt = customFormat(code);
+  if (!fmt) {
+    return null;
+  }
+  const response = await fetch(`https://cubecobra.com/cube/api/cubelist/${fmt.cubeId}`);
+  if (!response.ok) {
+    throw new Error(`CubeCobra list ${fmt.cubeId}: ${response.status}`);
+  }
+  const names = (await response.text()).split("\n").map((line) => line.trim());
+  return new Set(names.filter(Boolean));
+}

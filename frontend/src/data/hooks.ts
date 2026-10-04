@@ -67,6 +67,7 @@ import type { FeaturedContest } from "./p0p1Slots";
 import { resolveContestByCode, resolveFeaturedContest } from "./p0p1Slots";
 import { MULTI, OTHER } from "./filters";
 import { boardOffersSoup } from "./cubeVariants";
+import { fetchCubeCardNames } from "./podFormats";
 import { useNow } from "../lib/countdown";
 const THIRTY_MINUTES = 30 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
@@ -210,6 +211,14 @@ export function usePodCardStats(boardCode: string | undefined) {
     queryFn: () => fetchPodCardStats(boardCode!),
     enabled: !!boardCode,
     staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function useCubeCardNames(boardCode: string) {
+  return useQuery({
+    queryKey: ["cube-card-names", boardCode],
+    queryFn: () => fetchCubeCardNames(boardCode),
+    staleTime: ONE_HOUR,
   });
 }
 
