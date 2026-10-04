@@ -11,7 +11,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
-.venv/
+.venv
 venv/
 
 # IDE
@@ -42,7 +42,7 @@ design/
 
 # Vite + TypeScript build artifacts
 frontend/dist/
-frontend/node_modules/
+frontend/node_modules
 frontend/*.tsbuildinfo
 
 design/fold-1-bento.png
