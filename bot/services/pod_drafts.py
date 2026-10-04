@@ -29,6 +29,7 @@ from bot.services import pod_format
 from bot.services import pod_format_interest
 from bot.services.pod_schedule import NUM_RE, highest_event_number
 from bot.services.pod_slot import next_collision_index, pod_display_name, pod_event_date
+from bot.sets import release_instant, seed_for_code
 from bot.slug import disambiguate_slug, slugify
 
 
@@ -1669,15 +1670,16 @@ def set_participant_deck_caption(
 
 
 def list_event_participants_sync(event_id: str) -> list[tuple[str, str, str | None]]:
-    """(participant_id, display_name, deck_colors) for a pod, seat order then name — the roster the
-    organizer color panel lists."""
+    """(participant_id, Discord display name, deck_colors) for a pod in seat order"""
+    discord_name = func.coalesce(Player.display_name, PodDraftParticipant.display_name)
     with SessionLocal() as session:
         rows = session.execute(
-            select(PodDraftParticipant.id, PodDraftParticipant.display_name, PodDraftParticipant.deck_colors)
+            select(PodDraftParticipant.id, discord_name, PodDraftParticipant.deck_colors)
+            .outerjoin(Player, Player.id == PodDraftParticipant.player_id)
             .where(PodDraftParticipant.event_id == event_id)
-            .order_by(PodDraftParticipant.seat_index, PodDraftParticipant.display_name)
+            .order_by(PodDraftParticipant.seat_index, discord_name)
         ).all()
-    return [(pid, name, colors) for pid, name, colors in rows]
+    return [(pid, strip_arena_suffix(name), colors) for pid, name, colors in rows]
 
 
 def set_participant_deck_colors_by_id_sync(participant_id: str, deck_colors: str) -> str | None:
@@ -1903,6 +1905,9 @@ def pod_scoring_counts(
     )
     if before is not None:
         query = query.where(PodDraftEvent.event_time < before)
+    scored_from = pod_points_start(set_code)
+    if scored_from is not None:
+        query = query.where(PodDraftEvent.event_time >= scored_from)
     rows = session.execute(query).all()
     by_player: dict[str, list[str | None]] = {}
     for player_id, record in rows:
@@ -1914,7 +1919,7 @@ def pod_scoring_counts(
 def pod_summary_by_set_for_player(session: Session, player_id: str) -> dict[str, PodSetSummary]:
     """One player's pod summary per set_code; no opt-in filter since it's their own stats."""
     rows = session.execute(
-        select(PodDraftEvent.set_code, PodDraftParticipant.record)
+        select(PodDraftEvent.set_code, PodDraftEvent.event_time, PodDraftParticipant.record)
         .join(PodDraftParticipant, PodDraftParticipant.event_id == PodDraftEvent.id)
         .where(
             PodDraftParticipant.player_id == player_id,
@@ -1922,9 +1927,19 @@ def pod_summary_by_set_for_player(session: Session, player_id: str) -> dict[str,
         )
     ).all()
     by_set: dict[str, list[str | None]] = {}
-    for set_code, record in rows:
+    for set_code, event_time, record in rows:
+        scored_from = pod_points_start(set_code)
+        if scored_from is not None and event_time < scored_from:
+            continue
         by_set.setdefault(set_code, []).append(record)
     return {sc: summarize_pod_records(records) for sc, records in by_set.items()}
+
+
+def pod_points_start(set_code: str) -> datetime | None:
+    seed = seed_for_code(set_code)
+    if seed is None or seed.end_date is None:
+        return None
+    return release_instant(seed.start_date)
 
 
 def summarize_pod_records(records: list[str | None]) -> PodSetSummary:

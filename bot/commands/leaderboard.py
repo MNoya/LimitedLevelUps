@@ -8,7 +8,7 @@ from typing import Callable
 import discord
 from discord import app_commands
 from discord.ext import commands
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, true
 from sqlalchemy.orm import Session
 
 from bot import audit, emojis
@@ -30,7 +30,9 @@ from bot.scoring import (
 )
 from bot.services.active_set import resolve_board_set
 from bot.services.pod_deck_color import PAIR_EMOJI_NAME
-from bot.services.pod_drafts import POD_TROPHY_WINS, pod_record_wins, pod_summary_by_set_for_player
+from bot.services.pod_drafts import (
+    POD_TROPHY_WINS, pod_points_start, pod_record_wins, pod_summary_by_set_for_player,
+)
 from bot.services.pod_format import PEASANT_CODE, custom_formats, is_custom, label_for
 from bot.services.refresh import scores_points
 from bot.services.self_reported_events import rank_self_reported_events
@@ -760,6 +762,8 @@ def _pod_board(
     two_win_expr = func.coalesce(func.sum(case((wins == 2, 1), else_=0)), 0)
     one_win_expr = func.coalesce(func.sum(case((wins == 1, 1), else_=0)), 0)
     events_expr = func.count(PodDraftParticipant.id)
+    scored_from = pod_points_start(set_code)
+    played_after_release = PodDraftEvent.event_time >= scored_from if scored_from is not None else true()
 
     rows = session.execute(
         select(
@@ -775,6 +779,7 @@ def _pod_board(
             Player.active.is_(True),
             PodDraftParticipant.record.is_not(None),
             func.upper(PodDraftEvent.set_code) == set_code.upper(),
+            played_after_release,
         )
         .group_by(Player.id, Player.slug, Player.display_name, Player.discord_id)
     ).all()

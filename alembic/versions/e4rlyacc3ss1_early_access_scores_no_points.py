@@ -1,6 +1,7 @@
-"""Early Access drafts score no points
+"""Early Access drafts and pods score no points
 
-Early Access 17lands drafts leave public_color_events, and public_sets reads the board claim from draft_events
+Early Access drafts leave public_color_events, pods played before release leave public_pod_scoring, and
+public_sets reads the board claim from draft_events
 
 Revision ID: e4rlyacc3ss1
 Revises: wk3ndr0l3s01
@@ -242,14 +243,92 @@ OLD_SETS_VIEW = """
     WHERE f.start_date <= CURRENT_DATE OR f.has_results;
 """
 
+POD_SCORING_VIEW = """
+    CREATE OR REPLACE VIEW public_pod_scoring AS
+    SELECT
+        p.slug,
+        p.display_name,
+        CASE WHEN p.avatar_hash IS NOT NULL AND p.discord_id IS NOT NULL
+            THEN 'https://cdn.discordapp.com/avatars/' || p.discord_id || '/' || p.avatar_hash || '.png?size=128'
+            ELSE NULL
+        END AS avatar_url,
+        pde.set_code,
+        COUNT(*) FILTER (
+            WHERE COALESCE(NULLIF(split_part(pdp.record, '-', 1), ''), '0')::int >= 3
+        )::int AS trophies,
+        COUNT(*) FILTER (
+            WHERE COALESCE(NULLIF(split_part(pdp.record, '-', 1), ''), '0')::int = 2
+        )::int AS two_win_finishes,
+        COUNT(*) FILTER (
+            WHERE COALESCE(NULLIF(split_part(pdp.record, '-', 1), ''), '0')::int = 1
+        )::int AS one_win_finishes,
+        COUNT(*)::int AS events,
+        COALESCE(
+            SUM(COALESCE(NULLIF(split_part(pdp.record, '-', 1), ''), '0')::int), 0
+        )::int AS wins,
+        COALESCE(
+            SUM(COALESCE(NULLIF(split_part(pdp.record, '-', 2), ''), '0')::int), 0
+        )::int AS losses,
+        p.leaderboard_opt_in
+    FROM pod_draft_participants pdp
+    JOIN pod_draft_events pde ON pde.id = pdp.event_id
+    JOIN players p ON p.id = pdp.player_id
+    WHERE p.active = true
+      AND pdp.record IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM sets s
+          WHERE s.code = upper(pde.set_code)
+            AND s.end_date IS NOT NULL
+            AND pde.event_time < ((s.start_date + time '12:00') AT TIME ZONE 'America/New_York')
+      )
+    GROUP BY p.slug, p.display_name, p.avatar_hash, p.discord_id, pde.set_code, p.leaderboard_opt_in;
+"""
+
+OLD_POD_SCORING_VIEW = """
+    CREATE OR REPLACE VIEW public_pod_scoring AS
+    SELECT
+        p.slug,
+        p.display_name,
+        CASE WHEN p.avatar_hash IS NOT NULL AND p.discord_id IS NOT NULL
+            THEN 'https://cdn.discordapp.com/avatars/' || p.discord_id || '/' || p.avatar_hash || '.png?size=128'
+            ELSE NULL
+        END AS avatar_url,
+        pde.set_code,
+        COUNT(*) FILTER (
+            WHERE COALESCE(NULLIF(split_part(pdp.record, '-', 1), ''), '0')::int >= 3
+        )::int AS trophies,
+        COUNT(*) FILTER (
+            WHERE COALESCE(NULLIF(split_part(pdp.record, '-', 1), ''), '0')::int = 2
+        )::int AS two_win_finishes,
+        COUNT(*) FILTER (
+            WHERE COALESCE(NULLIF(split_part(pdp.record, '-', 1), ''), '0')::int = 1
+        )::int AS one_win_finishes,
+        COUNT(*)::int AS events,
+        COALESCE(
+            SUM(COALESCE(NULLIF(split_part(pdp.record, '-', 1), ''), '0')::int), 0
+        )::int AS wins,
+        COALESCE(
+            SUM(COALESCE(NULLIF(split_part(pdp.record, '-', 2), ''), '0')::int), 0
+        )::int AS losses,
+        p.leaderboard_opt_in
+    FROM pod_draft_participants pdp
+    JOIN pod_draft_events pde ON pde.id = pdp.event_id
+    JOIN players p ON p.id = pdp.player_id
+    WHERE p.active = true
+      AND pdp.record IS NOT NULL
+    GROUP BY p.slug, p.display_name, p.avatar_hash, p.discord_id, pde.set_code, p.leaderboard_opt_in;
+"""
+
 
 def upgrade() -> None:
     op.execute(COLOR_EVENTS_VIEW)
     op.execute(SETS_VIEW)
+    op.execute(POD_SCORING_VIEW)
     op.execute("REFRESH MATERIALIZED VIEW public_colors_summary;")
 
 
 def downgrade() -> None:
     op.execute(OLD_COLOR_EVENTS_VIEW)
     op.execute(OLD_SETS_VIEW)
+    op.execute(OLD_POD_SCORING_VIEW)
     op.execute("REFRESH MATERIALIZED VIEW public_colors_summary;")

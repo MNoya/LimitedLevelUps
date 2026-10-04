@@ -410,6 +410,21 @@ def test_pod_summary_team_finishes_score_by_record_only(session):
     assert summary["SOS"].two_win_finishes == 1    # a 2-1 without placement stays a two-win finish
 
 
+def test_pod_summary_drops_pods_played_before_the_set_released(session):
+    _seed_set(session, "SOS")
+    player = _seed_player(session, discord_id="780", username="early", display_name="Early")
+    for event_date, record in ((date(2026, 4, 18), "3-0"), (date(2026, 5, 6), "2-1")):
+        event = _make_event(session, set_code="SOS", event_date=event_date, attendees=("Early",))
+        finalize_champion(session, event.id, [
+            FinalStanding("Early", placement=1, record=record, eliminated_round=None),
+        ])
+
+    summary = pod_summary_by_set_for_player(session, player.id)
+
+    assert summary["SOS"].events == 1
+    assert summary["SOS"].trophies == 0
+
+
 def test_pod_summary_empty_for_unknown_player(session):
     assert pod_summary_by_set_for_player(session, "ghost") == {}
 
