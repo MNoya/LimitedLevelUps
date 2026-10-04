@@ -86,11 +86,11 @@ from bot.services.pod_settings_view import PodSettingsView
 from bot.services.pod_tournament import (
     REVIEW_EMOJI,
     actor_label,
-    build_champion_announcement_view_for_event,
     build_draft_review_embed,
     build_draft_review_message,
     build_live_deck_description_button,
     build_live_submit_deck_button,
+    build_podium_view_for_event,
     build_replays_link_button,
     build_standings_embed_for_event,
     build_thread_link_button,
@@ -101,7 +101,6 @@ from bot.services.pod_tournament import (
     refresh_round_pairing_messages,
     round_picker_options,
 )
-from bot.services.pod_team_showcase import build_team_championship_view_for_event
 from bot.services.pod_voice import build_voice_offer_message, pod_voice_channel, pod_voice_channel_url
 
 
@@ -526,11 +525,7 @@ class PodDraft(commands.Cog):
                 return
 
         pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
-        if pairing_mode == "team":
-            view = await build_team_championship_view_for_event(event_id, guild_id=interaction.guild_id)
-        else:
-            view = await build_champion_announcement_view_for_event(
-                event_id, guild_id=interaction.guild_id, guild=interaction.guild)
+        view = await build_podium_view_for_event(event_id, pairing_mode, interaction.guild)
         if view is None:
             await interaction.followup.send(
                 "Champion announcement isn't ready. The trophy match has no winner on record yet",

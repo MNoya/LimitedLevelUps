@@ -30,6 +30,7 @@ from bot.discord_helpers import (
     fetch_dm_user,
     first_image_url,
     player_url,
+    run_detached,
     snowflake_or_none,
 )
 from bot.slug import slugify
@@ -953,6 +954,7 @@ def build_organizer_deck_panel(
             return False
         log.info(f"[{event_id}] {actor_label(interaction)} set deck image for {participant_id}")
         await _refresh_standings_after_deck_change(interaction.client, event_id, thread_id)
+        run_detached(refresh_posted_podium(interaction.client, event_id, thread_id), "podium refresh")
         return True
 
     return OrganizerDeckPanel(roster, color_submit_factory, image_save)
@@ -4726,6 +4728,49 @@ async def post_championship_for_event(
     else:
         await maybe_post_championship(shim, force=force)
     return shim.champion_announced
+
+
+async def refresh_posted_podium(bot, event_id: str, thread_id: str | int) -> None:
+    """Re-render an already posted podium in place so a corrected deck screenshot replaces the wrong one"""
+    posted_at = await asyncio.to_thread(championship_posted_at_sync, event_id)
+    if posted_at is None:
+        return
+    pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
+    shim = _RecoveryManager(bot, event_id, int(thread_id), [], pairing_mode)
+    chat = await resolve_chat_target(shim)
+    guild = getattr(chat, "guild", None)
+    if chat is None or guild is None:
+        log.info(f"[FINALIZE] podium_refresh.skip event={event_id} reason=no_target")
+        return
+    thread_url = f"https://discord.com/channels/{guild.id}/{thread_id}"
+    podium = await _find_podium_message(chat, bot.user, thread_url, posted_at)
+    if podium is None:
+        log.info(f"[FINALIZE] podium_refresh.skip event={event_id} reason=not_found")
+        return
+    view = await build_podium_view_for_event(event_id, pairing_mode, guild)
+    if view is None:
+        return
+    await podium.edit(view=view, allowed_mentions=discord.AllowedMentions.none())
+    log.info(f"[FINALIZE] podium_refresh.edited event={event_id} message={podium.id}")
+
+
+async def build_podium_view_for_event(event_id: str, pairing_mode: str | None, guild) -> ui.LayoutView | None:
+    if pairing_mode == "team":
+        from bot.services.pod_team_showcase import build_team_championship_view_for_event
+
+        return await build_team_championship_view_for_event(event_id, guild_id=guild.id)
+    return await build_champion_announcement_view_for_event(event_id, guild_id=guild.id, guild=guild)
+
+
+async def _find_podium_message(chat, bot_user, thread_url: str, posted_at: datetime):
+    """The bot's Components V2 post in pod-draft-chat linking this pod's thread, posted just before posted_at"""
+    search_from = posted_at - timedelta(minutes=5)
+    async for message in chat.history(limit=50, after=search_from, oldest_first=True):
+        if message.author.id != bot_user.id or not message.flags.components_v2:
+            continue
+        if thread_url in _component_link_urls(message.components):
+            return message
+    return None
 
 
 async def refresh_standings_for_event(bot, event_id: str, thread_id: str | int) -> None:
