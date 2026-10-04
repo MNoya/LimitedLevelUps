@@ -12,12 +12,6 @@ export interface DraftNote {
   deckLabel: string;
 }
 
-export interface TrackerAccount {
-  accountId: number;
-  accountName: string;
-  events: number;
-}
-
 export interface MatchNote {
   draftEventId: string;
   matchNumber: number;
@@ -123,21 +117,6 @@ function liveRecord(wins: number, losses: number, matches: PlayerDraftEvent["mat
     }
   }
   return { wins: won, losses: matches.length - won };
-}
-
-/** Only ever the signed-in player's own Arena accounts; the view filters on the caller's JWT */
-export async function fetchMyAccounts(): Promise<TrackerAccount[]> {
-  const { data, error } = await client()
-    .from("public_my_player_accounts")
-    .select("account_id, account_name, events");
-  if (error) throw error;
-  return (data ?? [])
-    .map((r) => ({
-      accountId: r.account_id as number,
-      accountName: r.account_name as string,
-      events: (r.events ?? 0) as number,
-    }))
-    .sort((a, b) => b.events - a.events);
 }
 
 export async function fetchDraftNotes(): Promise<DraftNote[]> {

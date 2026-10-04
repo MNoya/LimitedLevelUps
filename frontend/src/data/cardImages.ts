@@ -168,6 +168,11 @@ export function cardImagesFromUrls(set: string, cards: { name: string; image: st
   return { images, ready: true };
 }
 
+// Layers known URLs over a resolved map, so a card the pool already names never waits on or loses to a lookup
+export function withKnownImages(resolved: CardImages, known: CardImages): CardImages {
+  return { ...resolved, images: new Map([...resolved.images, ...known.images]) };
+}
+
 // <img> src candidates for a card, best first: the mapped CDN URL, then Scryfall's named endpoint
 export function cardImageSources(
   name: string | null | undefined,

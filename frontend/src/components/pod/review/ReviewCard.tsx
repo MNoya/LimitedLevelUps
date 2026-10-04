@@ -41,7 +41,8 @@ export const CARD_FRAME_HOVER = `${CARD_FRAME} transition-[outline-color] group-
 // candidate list changes re-tries from the top for a re-keyed card.
 export function useFallbackImage(sources: string[]): { src: string | null; onError: () => void } {
   const [index, setIndex] = useState(0);
-  useEffect(() => setIndex(0), [sources]);
+  const sourcesKey = sources.join("\n");
+  useEffect(() => setIndex(0), [sourcesKey]);
   return { src: sources[index] ?? null, onError: () => setIndex((i) => i + 1) };
 }
 

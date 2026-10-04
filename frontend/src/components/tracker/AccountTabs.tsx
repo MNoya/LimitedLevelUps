@@ -1,20 +1,14 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 
 import { cn } from "../../lib/utils";
-import { Tooltip } from "../Tooltip";
-import { fetchMyAccounts, type TrackerAccount } from "../../data/trackerApi";
+import { useAuth } from "../../auth/useAuth";
+import { trackerAccountsFor, type TrackerAccount } from "../../data/trackerUsers";
 
-/** player_accounts names carry an Arena discriminator ("Noya — CA4E"); the tab wants the handle */
-function shortAccountName(name: string): string {
-  return name.split(/[—-]/)[0].trim() || name;
-}
-
-/** One account is always selected, so the tracker opens on the busiest one */
+/** One account is always selected, so the tracker opens on the first listed one */
 export function useTrackerAccounts(enabled: boolean) {
-  const { data } = useQuery({ queryKey: ["tracker-accounts"], queryFn: fetchMyAccounts, enabled });
+  const { user } = useAuth();
   const [chosen, setChosen] = useState<number | null>(null);
-  const accounts = data ?? [];
+  const accounts = enabled ? trackerAccountsFor(user?.discordId) : [];
   return {
     accounts,
     accountId: chosen ?? accounts[0]?.accountId ?? null,
@@ -37,17 +31,16 @@ export function AccountTabs({
   return (
     <span className={cn("flex gap-[1px] bg-border border border-border", className)}>
       {accounts.map((a) => (
-        <Tooltip key={a.accountId} label={`${a.events} drafts`}>
-          <button
-            onClick={() => onChange(a.accountId)}
-            className={cn(
-              "font-display text-[13px] tracking-[0.12em] px-3 py-1",
-              active === a.accountId ? "bg-green text-bg" : "bg-surface text-muted hover:text-text",
-            )}
-          >
-            {shortAccountName(a.accountName)}
-          </button>
-        </Tooltip>
+        <button
+          key={a.accountId}
+          onClick={() => onChange(a.accountId)}
+          className={cn(
+            "font-display text-[13px] tracking-[0.12em] px-3 py-1",
+            active === a.accountId ? "bg-green text-bg" : "bg-surface text-muted hover:text-text",
+          )}
+        >
+          {a.accountName}
+        </button>
       ))}
     </span>
   );

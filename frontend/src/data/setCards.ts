@@ -6,7 +6,6 @@ export function useSetCardPool(setCode: string) {
     queryKey: ["set-cards", setCode],
     queryFn: () => fetchSetCards(setCode),
     staleTime: Infinity,
-    retry: false,
     enabled: isSetCode(setCode),
   });
 }

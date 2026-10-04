@@ -3,14 +3,13 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams, type To } f
 
 import { AppHeader } from "../components/AppHeader";
 import { useAuth } from "../auth/useAuth";
-import { isTrackerUser } from "../data/trackerUsers";
+import { isTrackerUser, type TrackerAccount } from "../data/trackerUsers";
 import { Collection } from "../components/tracker/Collection";
 import { DraftLog, TRACKER_HEADER_H } from "../components/tracker/DraftLog";
 import { TrackerStatsBlock } from "../components/tracker/TrackerStatsBlock";
 import { RefreshButton } from "../components/tracker/RefreshButton";
 import { AccountTabs, useTrackerAccounts } from "../components/tracker/AccountTabs";
 import { useQuery } from "@tanstack/react-query";
-import { fetchMyAccounts, type TrackerAccount } from "../data/trackerApi";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { AAvatar, ALogo, SetGlyph, Trophy, fmtPts } from "../components/Brand";
 import {

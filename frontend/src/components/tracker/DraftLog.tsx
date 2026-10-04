@@ -25,7 +25,14 @@ import {
   type MatchNote,
 } from "../../data/trackerApi";
 import type { PlayerDraftEvent, TrackedCard, TrackedMatch } from "../../types/leaderboard";
-import { cardImageSources, useCardImageMap, type CardImages } from "../../data/cardImages";
+import {
+  cardImageSources,
+  cardImagesFromUrls,
+  useCardImageMap,
+  withKnownImages,
+  type CardImages,
+} from "../../data/cardImages";
+import { useSetCardPool } from "../../data/setCards";
 import { useFallbackImage } from "../pod/review/ReviewCard";
 
 // Shared with the left-pane tab strip so the two headers line up
@@ -170,7 +177,12 @@ export function DraftLog({
       .map((c) => ({ name: c.name, set: setCode })),
     [rows, setCode],
   );
-  const cardImages = useCardImageMap(poolImageCards);
+  const resolvedImages = useCardImageMap(poolImageCards);
+  const { data: setPool } = useSetCardPool(setCode);
+  const cardImages = useMemo(() => {
+    const known = cardImagesFromUrls(setCode, [...(setPool?.cards ?? []), ...(setPool?.specialGuests ?? [])]);
+    return withKnownImages(resolvedImages, known);
+  }, [resolvedImages, setPool, setCode]);
   const toggleSort = (key: TrackerSortKey) =>
     setSort((s) => ({ key, dir: s.key === key && s.dir === "asc" ? "desc" : "asc" }));
   useEffect(() => {
