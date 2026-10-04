@@ -56,6 +56,7 @@ WRITE_IN_EMOJI = "manax"
 WRITE_IN = "__write_in__"
 SET_SELECT_LIMIT = 23
 SET_CODE_RE = re.compile(r"^[A-Z0-9]{2,5}$")
+CAPTION_LIMIT = 500
 
 MSG_NO_CHANNEL = "Run `/trophy` in the channel where you posted your screenshot, or pass `link:` to a post"
 MSG_NO_POST = (
@@ -69,6 +70,7 @@ MSG_NOT_YOUR_POST = "You can only save your own trophy posts"
 MSG_NO_IMAGE = "That post has no image. Save the message that shows your trophy screenshot"
 MSG_REMOVED = "Removed from {whose_profile}"
 MSG_NOTHING_TO_REMOVE = "This post has no saved deck"
+MSG_CAPTION_CUT = f"⚠️ Only the first {CAPTION_LIMIT} characters of your post are saved as the caption"
 
 
 @dataclass
@@ -91,6 +93,7 @@ class TrophyDraft:
     format: str | None = None
     already_logged: bool = False
     on_behalf: bool = False
+    caption_cut: bool = False
 
     @property
     def can_confirm(self) -> bool:
@@ -179,6 +182,8 @@ def _render_embed(draft: TrophyDraft) -> discord.Embed:
     embed.description = f"From [{whose_post}]({draft.source_url})"
     if draft.already_logged:
         embed.description += "\n⚠️ This post was already saved — confirming will update it."
+    if draft.caption_cut:
+        embed.description += f"\n{MSG_CAPTION_CUT}"
     if draft.image_url:
         embed.set_thumbnail(url=draft.image_url)
     return embed
@@ -477,7 +482,7 @@ class _RecordModal(ui.Modal, title="Record"):
     caption = ui.TextInput(
         label="Caption (shown with your deck)",
         style=discord.TextStyle.paragraph,
-        max_length=500,
+        max_length=CAPTION_LIMIT,
         required=False,
     )
 
@@ -497,6 +502,7 @@ class _RecordModal(ui.Modal, title="Record"):
         self._view.draft.record = record
         self._view.draft.is_trophy = is_trophy_record(record)
         self._view.draft.caption = self.caption.value.strip() or None
+        self._view.draft.caption_cut = False
         await self._view.rerender(interaction)
 
 
@@ -567,13 +573,14 @@ async def _present_trophy_draft(
         source_url=message.jump_url,
         event_time=message.created_at,
         image_url=first_image_url(message),
-        caption=caption,
+        caption=caption[:CAPTION_LIMIT].rstrip() if caption else None,
         record=record,
         colors=parse_caption_colors(caption),
         is_trophy=is_trophy_record(record),
         format=_default_format(record),
         already_logged=any(reaction.me for reaction in message.reactions),
         on_behalf=str(author.id) != str(interaction.user.id),
+        caption_cut=caption is not None and len(caption) > CAPTION_LIMIT,
     )
     view = TrophyConfirmView(draft, str(interaction.user.id), message)
     ephemeral = interaction.guild is not None
