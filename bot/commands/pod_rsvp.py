@@ -114,7 +114,7 @@ from bot.services import pod_team
 from bot.services.pod_team_board import TeamBoardMember, load_team_board_data, team_result_headline
 from bot.services.pod_schedule import LATE_POD_ROLE_NAME, SCHEDULE_TZ
 from bot.services.pod_slot import pod_display_name, pod_event_date
-from bot.services.pod_staging import pod_family_sync, pod_is_numbered, pod_numeral
+from bot.services.pod_staging import pod_family_sync, pod_is_numbered, pod_numeral, table_for_rsvp_sync
 from bot.services.pod_signals import RSVP_EMOJI, RSVP_MAYBE, RSVP_NO, RSVP_STATES, RSVP_YES
 from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import (
@@ -229,10 +229,12 @@ def offered_rsvp_states(maybe: bool) -> tuple[str, ...]:
 
 async def _apply_surface_rsvp(
     interaction: discord.Interaction, event_id: str, state: str, confirming: bool = False,
+    route_to_table: bool = False,
 ) -> None:
-    """Record an RSVP from a non-card surface (championship invite wave, roster reminder) by resolving
-    the pod's card from its event id, then routing through the shared card path."""
+    """Record a non-card RSVP against the pod's card; `route_to_table` sends it to the right table of a split pod"""
     await _timed_defer(interaction)
+    if route_to_table:
+        event_id = await asyncio.to_thread(table_for_rsvp_sync, event_id, str(interaction.user.id), state)
     card = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
     if card is None:
         await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
@@ -329,7 +331,9 @@ class ReminderRsvpButton(
         return cls(match["state"], match["event_id"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await _apply_surface_rsvp(interaction, self.event_id, self.state, confirming=self.confirming)
+        await _apply_surface_rsvp(
+            interaction, self.event_id, self.state, confirming=self.confirming, route_to_table=True,
+        )
 
 
 def build_championship_wave_view(event_id: str) -> discord.ui.View:

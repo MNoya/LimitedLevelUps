@@ -273,6 +273,62 @@ def take_seat_sync(session_id: str, discord_id: str, display_name: str) -> SeatO
     return SeatOffer(pod, switched=pod.event_id != clicked_event_id)
 
 
+def table_for_rsvp_sync(event_id: str, discord_id: str, rsvp: str) -> str:
+    family = pod_family_sync(event_id)
+    if len(family) < 2:
+        return event_id
+    if rsvp == RSVP_YES:
+        return _first_seat_for(family, discord_id).event_id
+    for pod in family:
+        if discord_id in pod.member_ids:
+            return pod.event_id
+    return event_id
+
+
+def claim_seated_players_sync(event_id: str, discord_ids: list[str]) -> list[str]:
+    seated = set(discord_ids)
+    family = pod_family_sync(event_id)
+    sibling_ids = [pod.event_id for pod in family if pod.event_id != event_id and pod.member_ids & seated]
+    if not sibling_ids:
+        return []
+    with SessionLocal() as session:
+        signal_rows = session.execute(
+            select(PodSignal.event_id, PodSignal.id).where(PodSignal.event_id.in_([event_id, *sibling_ids]))
+        ).all()
+        signal_by_event = {row_event_id: signal_id for row_event_id, signal_id in signal_rows}
+        home_signal_id = signal_by_event.get(event_id)
+        if home_signal_id is None:
+            return []
+        sibling_signal_ids = [signal_by_event[sibling] for sibling in sibling_ids if sibling in signal_by_event]
+        strays = session.execute(
+            select(PodSignalMember).where(
+                PodSignalMember.signal_id.in_(sibling_signal_ids),
+                PodSignalMember.discord_user_id.in_(seated),
+                PodSignalMember.rsvp == RSVP_YES,
+            )
+        ).scalars().all()
+        home_members = session.execute(
+            select(PodSignalMember).where(
+                PodSignalMember.signal_id == home_signal_id,
+                PodSignalMember.discord_user_id.in_(seated),
+            )
+        ).scalars().all()
+        home_by_id = {member.discord_user_id: member for member in home_members}
+        now = datetime.now(timezone.utc)
+        for stray in strays:
+            home_member = home_by_id.get(stray.discord_user_id)
+            if home_member is None:
+                stray.signal_id = home_signal_id
+                stray.confirmed_at = stray.confirmed_at or now
+                home_by_id[stray.discord_user_id] = stray
+                continue
+            home_member.rsvp = RSVP_YES
+            home_member.confirmed_at = home_member.confirmed_at or now
+            session.delete(stray)
+        session.commit()
+    return sibling_ids
+
+
 def _first_seat_for(family: list[FamilyPod], discord_id: str) -> FamilyPod:
     """The table holding this player, else the first with room once the plan is asked to seat one
     more. Planning for the extra body is what keeps a table of six from turning anyone away while the plan

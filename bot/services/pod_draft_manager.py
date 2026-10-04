@@ -72,7 +72,8 @@ from bot.services.mock_lobby_card import (
     build_mock_card,
     build_mock_complete_view,
 )
-from bot.services.pod_confirm import plan_tables
+from bot.services.pod_confirm import POD_AIM, plan_tables
+from bot.services.pod_staging import claim_seated_players_sync, pod_is_numbered
 from bot.services import pod_disconnect
 from bot.services import pod_self_destruct
 from bot.services import pod_event_settings
@@ -2066,6 +2067,21 @@ class PodDraftManager:
             member = guild.get_member(int(discord_id)) if discord_id else None
             if member is not None:
                 await self.admit_to_thread(member)
+        seated_ids = [discord_id for discord_id in discord_id_by_name.values() if discord_id]
+        await self._claim_from_sibling_tables(seated_ids)
+
+    async def _claim_from_sibling_tables(self, seated_ids: list[str]) -> None:
+        if not seated_ids or self.drafting or not pod_is_numbered(self.event_name):
+            return
+        sibling_ids = await asyncio.to_thread(claim_seated_players_sync, self.event_id, seated_ids)
+        if not sibling_ids:
+            return
+        log.info(f"[LOBBY] claimed_from_siblings event={self.event_id} siblings={sibling_ids}")
+        for sibling_id in sibling_ids:
+            sibling = ACTIVE_POD_MANAGERS.get(sibling_id)
+            if sibling is not None:
+                await sibling.refresh_lobby_now()
+        self._schedule_lobby_refresh()
 
     async def admit_to_thread(self, member: discord.Member) -> tuple[bool, bool]:
         """Put a joiner in the pod thread and on the pod roles, at most once per member. Returns the
@@ -2937,7 +2953,7 @@ class PodDraftManager:
         self._rider_window_task = asyncio.create_task(self._ask_the_riders_in_after())
 
     async def _maybe_lock_planned_table(self) -> None:
-        """Close the rider window once the table holds everyone it planned for, and cap it there.
+        """Close the rider window once the table holds everyone it planned for, capping a full table there.
 
         A room already past the planned size keeps its width: Draftmancer refuses a cap under the players
         seated, and a table that has outgrown its plan wants the seat that makes it even rather than a
@@ -2948,6 +2964,10 @@ class PodDraftManager:
         if seated < self.rider_seats_held:
             return
         planned = self.rider_seats_held
+        if planned < POD_AIM:
+            log.info(f"[LOBBY] rider_window_short event={self.event_id} planned={planned}")
+            await self._ask_the_riders_in()
+            return
         self._close_rider_window()
         if seated > planned:
             log.info(f"[LOBBY] rider_window_outgrown event={self.event_id} seated={seated} planned={planned}")
@@ -2963,19 +2983,22 @@ class PodDraftManager:
             await asyncio.sleep(max(0.0, wait))
         except asyncio.CancelledError:
             return
+        self._rider_window_task = None
+        await self._ask_the_riders_in()
+
+    async def _ask_the_riders_in(self) -> None:
         if not self.rider_seats_held or self.drafting or self.draft_complete:
             return
         mentions = " ".join(self.rider_mentions)
-        short = self.rider_seats_held - len(self.player_session_users())
-        self.rider_seats_held = 0
-        self._rider_window_task = None
+        open_seats = max(self.rider_seats_held, POD_AIM) - len(self.player_session_users())
+        self._close_rider_window()
         thread = await self._fetch_thread()
         if thread is None:
             return
         try:
             await thread.send(
                 MSG_RIDER_SEATS_OPEN.format(
-                    count=emojis.mana_number(max(short, 1)), mentions=mentions,
+                    count=emojis.mana_number(max(open_seats, 1)), mentions=mentions,
                     url=self.draftmancer_url,
                 ),
                 allowed_mentions=discord.AllowedMentions(users=True),
