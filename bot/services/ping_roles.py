@@ -59,7 +59,7 @@ from bot.services.pod_drafts import (
     player_arena_handle,
 )
 from bot.services.pod_replays import unlinked_first_finishers_sync
-from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role, role_mention
+from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role, revoke_roles, role_mention
 from bot.services.pod_schedule import (
     EARLY_POD_ROLE_NAME,
     LATE_POD_ROLE_NAME,
@@ -1164,7 +1164,7 @@ async def strip_pod_roles(member: discord.Member) -> int:
     if not roles:
         return 0
     try:
-        await member.remove_roles(*roles, reason="test reset")
+        await revoke_roles(member, roles, reason="test reset")
     except discord.HTTPException:
         log.warning(f"could not strip pod roles from {member.id} in {member.guild.name}", exc_info=True)
         return 0

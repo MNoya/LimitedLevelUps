@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Iterable
 
 import discord
 from discord import app_commands
@@ -34,9 +35,11 @@ from bot.services.pod_drafts import (
 from bot.services.pod_link_dm import dm_pref_embed
 from bot.services.pod_roles import (
     consume_bot_grant,
+    consume_bot_removal,
     find_role,
     grant_pod_drafters,
     grant_role,
+    revoke_roles,
     toggle_role,
 )
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME
@@ -82,7 +85,10 @@ class _RoleToggleButton(discord.ui.Button):
         if new_state is None:
             await interaction.followup.send(MSG_ROLE_TOGGLE_FAILED, ephemeral=True)
             return
-        _remember_role_choice(member, self.role_name, held=new_state)
+        run_detached(
+            _store_role_choices(member, [self.role_name], held=new_state),
+            f"role choice {self.role_name} for {member.id}",
+        )
         refreshed = guild.get_member(member.id) or member
         held = {held_role.name for held_role in refreshed.roles}
         held.add(self.role_name) if new_state else held.discard(self.role_name)
@@ -160,18 +166,19 @@ async def _resolve_member(
     return member, guild
 
 
-def _remember_role_choice(member: discord.Member, role_name: str, *, held: bool) -> None:
-    """Persist a toggle so the pod auto-grant obeys it, without the panel waiting on the write. Only the
-    auto-granted roles are worth storing: Pod Drafters comes back on the next pod whatever is set here,
-    and no path re-adds the others behind a player's back."""
-    spec = spec_named(role_name)
-    if spec is None or not spec.auto_grant:
+async def _store_role_choices(member: discord.Member, role_names: Iterable[str], *, held: bool) -> None:
+    keys = []
+    for name in role_names:
+        spec = spec_named(name)
+        if spec is not None and spec.auto_grant:
+            keys.append(spec.key)
+    if not keys:
         return
-    run_detached(asyncio.to_thread(
+    await asyncio.to_thread(
         set_pod_roles_declined_sync,
         discord_id=str(member.id), discord_username=member.name, display_name=member.display_name,
-        avatar_hash=extract_avatar_hash(member), keys=[spec.key], declined=not held,
-    ), f"role choice {spec.key} for {member.id}")
+        avatar_hash=extract_avatar_hash(member), keys=keys, declined=not held,
+    )
 
 
 def _dm_opt_in_for(discord_id: str) -> bool:
@@ -206,7 +213,7 @@ class Roles(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
-        """Welcomes a pod role gained through onboarding and clears the other ping roles when the umbrella goes"""
+        """Welcomes onboarding pod roles, remembers a player's own ping-role edits and clears them with the umbrella"""
         before_names = {role.name for role in before.roles}
         after_names = {role.name for role in after.roles}
         gained = after_names - before_names
@@ -214,6 +221,9 @@ class Roles(commands.Cog):
             name for name in gained & (SUB_PING_ROLE_NAMES | {POD_DRAFTERS_ROLE_NAME})
             if not consume_bot_grant(after.id, name)
         }
+        own_removals = {name for name in before_names - after_names if not consume_bot_removal(after.id, name)}
+        await _store_role_choices(after, onboarding_gains, held=True)
+        await _store_role_choices(after, own_removals, held=False)
         if POD_DRAFTERS_ROLE_NAME in gained:
             if POD_DRAFTERS_ROLE_NAME in onboarding_gains:
                 log.info(f"{after} gained {POD_DRAFTERS_ROLE_NAME} outside the bot; posting onboarding welcome")
@@ -230,10 +240,12 @@ class Roles(commands.Cog):
         if not held:
             return
         try:
-            await after.remove_roles(*held, reason="Pod Drafters removed; clearing slot roles with it")
+            await revoke_roles(after, held, reason="Pod Drafters removed; clearing slot roles with it")
             log.info(f"cleared {[role.name for role in held]} from {after} after {POD_DRAFTERS_ROLE_NAME} removal")
         except discord.HTTPException:
             log.warning(f"could not clear slot roles from {after}", exc_info=True)
+            return
+        await _store_role_choices(after, [role.name for role in held], held=False)
 
     @app_commands.command(name="roles", description=desc.ROLES)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=False)

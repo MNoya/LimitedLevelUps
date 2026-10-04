@@ -24,7 +24,7 @@ from bot.services.ping_roles import (
     grant_mock_draft_role,
     grant_pod_roles,
 )
-from bot.services.pod_roles import consume_bot_grant, grant_role
+from bot.services.pod_roles import consume_bot_grant, grant_role, revoke_roles
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
 
 
@@ -81,7 +81,7 @@ def test_a_bot_grant_is_marked_once_per_role():
     (4548, POD_DRAFTERS_ROLE_NAME, True, [POD_DRAFTERS_ROLE_NAME], False),
 ])
 def test_role_listener_welcomes_only_onboarding_gains(
-    monkeypatch, member_id, gained, granted_by_bot, expected_roles, expect_welcome,
+    monkeypatch, stored_choices, member_id, gained, granted_by_bot, expected_roles, expect_welcome,
 ):
     welcomed = []
 
@@ -101,6 +101,40 @@ def test_role_listener_welcomes_only_onboarding_gains(
 
     assert [held.name for held in after.roles] == expected_roles
     assert bool(welcomed) is expect_welcome
+
+
+@pytest.mark.parametrize("member_id, held_before, held_after, revoked_by_bot, expected", [
+    (4646, [POD_DRAFTERS_ROLE_NAME, LATE_POD_ROLE_NAME], [POD_DRAFTERS_ROLE_NAME], False, [(["late"], True)]),
+    (4647, [POD_DRAFTERS_ROLE_NAME, LATE_POD_ROLE_NAME], [POD_DRAFTERS_ROLE_NAME], True, []),
+    (4648, [POD_DRAFTERS_ROLE_NAME], [POD_DRAFTERS_ROLE_NAME, LATE_POD_ROLE_NAME], False, [(["late"], False)]),
+    (4649, [POD_DRAFTERS_ROLE_NAME, LATE_POD_ROLE_NAME], [LATE_POD_ROLE_NAME], False, [(["late"], True)]),
+])
+def test_role_listener_stores_a_players_slot_role_choices(
+    stored_choices, member_id, held_before, held_after, revoked_by_bot, expected,
+):
+    before = _FakeMember(member_id)
+    before.roles = [SimpleNamespace(name=name) for name in held_before]
+    after = _FakeMember(member_id)
+    after.roles = [SimpleNamespace(name=name) for name in held_after]
+    if revoked_by_bot:
+        holder = _FakeMember(member_id)
+        holder.roles = list(before.roles)
+        asyncio.run(revoke_roles(holder, [holder.roles[-1]], reason="test"))
+
+    asyncio.run(Roles(bot=None).on_member_update(before, after))
+
+    assert stored_choices == expected
+
+
+@pytest.fixture
+def stored_choices(monkeypatch):
+    stored = []
+
+    def record_choice(**choice):
+        stored.append((choice["keys"], choice["declined"]))
+
+    monkeypatch.setattr("bot.commands.roles.set_pod_roles_declined_sync", record_choice)
+    return stored
 
 
 def test_the_slot_role_is_skipped_when_the_player_switched_it_off(monkeypatch):
@@ -124,7 +158,7 @@ def test_a_decline_on_one_slot_leaves_the_others_grantable(monkeypatch):
 def test_pod_drafters_is_granted_whatever_the_player_declined(monkeypatch):
     monkeypatch.setattr(
         "bot.services.ping_roles.declined_pod_roles_sync",
-        lambda user_id: {"drafters", "early", "late", "wknd_early", "wknd_late"},
+        lambda user_id: {"drafters", "early", "late"},
     )
     member = _FakeMember(5353)
 
@@ -167,11 +201,17 @@ class _FakeGuild:
 class _FakeMember:
     def __init__(self, member_id):
         self.id = member_id
+        self.name = f"member{member_id}"
+        self.display_name = self.name
         self.roles = []
         self.guild = _FakeGuild()
 
     async def add_roles(self, *roles, reason=None):
         self.roles.extend(roles)
+
+    async def remove_roles(self, *roles, reason=None):
+        for role in roles:
+            self.roles.remove(role)
 
 
 def _spec_named(name):

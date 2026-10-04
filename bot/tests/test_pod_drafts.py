@@ -822,10 +822,10 @@ def test_declines_accumulate_and_clear_one_role_at_a_time(session):
     choice = dict(discord_id="7", discord_username="bo", display_name="Bo", avatar_hash=None)
 
     set_pod_roles_declined(session, **choice, keys=["early"], declined=True)
-    set_pod_roles_declined(session, **choice, keys=["wknd_late"], declined=True)
+    set_pod_roles_declined(session, **choice, keys=["late"], declined=True)
     set_pod_roles_declined(session, **choice, keys=["early"], declined=False)
 
-    assert declined_pod_roles(session, "7") == {"wknd_late"}
+    assert declined_pod_roles(session, "7") == {"late"}
 
 
 def test_declining_a_role_twice_stores_it_once(session):
