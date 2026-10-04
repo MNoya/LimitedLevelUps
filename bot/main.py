@@ -663,13 +663,15 @@ def build_bot(guild_id: int) -> commands.Bot:
         custom_id = data.get("custom_id")
         if not custom_id:
             return
+        arrival_lag_ms = (datetime.now(timezone.utc) - interaction.created_at).total_seconds() * 1000
+        lag = f" lag={arrival_lag_ms:.0f}ms"
         if interaction.type is discord.InteractionType.component:
             values = data.get("values")
             chosen = f" values={values}" if values else ""
             surface = interaction.message.id if interaction.message else "?"
-            log.info(f"component: {custom_id}{chosen} on {surface} by {interaction.user}")
+            log.info(f"component: {custom_id}{chosen} on {surface} by {interaction.user}{lag}")
         elif interaction.type is discord.InteractionType.modal_submit:
-            log.info(f"modal: {custom_id} by {interaction.user}")
+            log.info(f"modal: {custom_id} by {interaction.user}{lag}")
 
     @bot.event
     async def on_ready() -> None:

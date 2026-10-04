@@ -23,6 +23,7 @@ import asyncio
 import copy
 import logging
 import re
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, time as dtime, timedelta, timezone
 from typing import Awaitable, Callable
@@ -231,7 +232,7 @@ async def _apply_surface_rsvp(
 ) -> None:
     """Record an RSVP from a non-card surface (championship invite wave, roster reminder) by resolving
     the pod's card from its event id, then routing through the shared card path."""
-    await interaction.response.defer(ephemeral=True, thinking=True)
+    await _timed_defer(interaction)
     card = await asyncio.to_thread(pod_launch.scheduled_card_ref_sync, event_id)
     if card is None:
         await interaction.followup.send(MSG_CARD_INACTIVE, ephemeral=True)
@@ -1019,7 +1020,7 @@ async def apply_card_rsvp(
     The card state the answer renders with does not depend on the write, so it is read alongside it and not
     after. A press used to wait on three database round trips in a row before anything reached the screen."""
     if not interaction.response.is_done():
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        await _timed_defer(interaction)
     result, card_state = await asyncio.gather(
         asyncio.to_thread(
             pod_launch.set_rsvp_sync,
@@ -1040,6 +1041,14 @@ async def apply_card_rsvp(
         _settle_card_rsvp(interaction, result, refresh_launcher=refresh_launcher),
         f"the RSVP on card {surface_message_id}",
     )
+
+
+async def _timed_defer(interaction: discord.Interaction) -> None:
+    started = time.monotonic()
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    defer_ms = (time.monotonic() - started) * 1000
+    ack_ms = (datetime.now(timezone.utc) - interaction.created_at).total_seconds() * 1000
+    log.info(f"rsvp defer by {interaction.user}: defer={defer_ms:.0f}ms ack={ack_ms:.0f}ms")
 
 
 async def _answer_presser(
