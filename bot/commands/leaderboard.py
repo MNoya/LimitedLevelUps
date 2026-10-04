@@ -32,6 +32,7 @@ from bot.services.active_set import resolve_board_set
 from bot.services.pod_deck_color import PAIR_EMOJI_NAME
 from bot.services.pod_drafts import POD_TROPHY_WINS, pod_record_wins, pod_summary_by_set_for_player
 from bot.services.pod_format import PEASANT_CODE, custom_formats, is_custom, label_for
+from bot.services.refresh import scores_points
 from bot.services.self_reported_events import rank_self_reported_events
 from bot.sets import (
     ALL_SETS,
@@ -460,6 +461,7 @@ def process_leaderboard_for_archetype(
             Player.active.is_(True),
             Player.leaderboard_opt_in.is_(True),
             DraftEvent.set_id == magic_set.id,
+            scores_points(magic_set),
         )
     ).all()
 

@@ -17,7 +17,7 @@ import logging
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from bot.models import MagicSet, PlayerStats, SelfReportedEvent
+from bot.models import DraftEvent, MagicSet, SelfReportedEvent
 from bot.sets import ALL_SETS, active_set_code, upcoming_sets
 
 log = logging.getLogger(__name__)
@@ -58,14 +58,12 @@ def resolve_board_set(session: Session) -> MagicSet | None:
 
 
 def set_has_results(session: Session, code: str) -> bool:
-    """Whether anyone has played a set yet: 17lands aggregates, or any result logged with
-    ``/trophy``. Matches on the set code so a result logged before the set was seeded still
-    counts."""
+    """Whether a set has a 17lands draft, Early Access included, or a ``/trophy`` result filed under its code"""
     return session.execute(
         select(
             or_(
-                select(PlayerStats.id)
-                .join(MagicSet, MagicSet.id == PlayerStats.set_id)
+                select(DraftEvent.id)
+                .join(MagicSet, MagicSet.id == DraftEvent.set_id)
                 .where(MagicSet.code == code)
                 .exists(),
                 select(SelfReportedEvent.id)

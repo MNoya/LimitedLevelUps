@@ -1,6 +1,6 @@
 import pytest
 
-from bot.models import MagicSet, Player, PlayerStats, SelfReportedEvent
+from bot.models import DraftEvent, MagicSet, Player, SelfReportedEvent
 from bot.services import active_set as active_set_service
 from bot.services.active_set import resolve_board_set
 from bot.sets import ALL_SETS
@@ -36,11 +36,11 @@ def _add_self_reported(session, player, set_code):
     session.flush()
 
 
-def _add_player_stats(session, player, set_code):
+def _add_draft_event(session, player, set_code):
     magic_set = session.query(MagicSet).filter_by(code=set_code).one()
-    session.add(PlayerStats(
-        player_id=player.id, set_id=magic_set.id, format="PremierDraft", expansion=set_code,
-        events=1, wins=7, losses=0, trophies=1,
+    session.add(DraftEvent(
+        player_id=player.id, set_id=magic_set.id, seventeenlands_event_id=f"ea-{set_code}",
+        format="PremierDraft", expansion=set_code, wins=7, losses=0, is_trophy=True,
     ))
     session.flush()
 
@@ -68,13 +68,13 @@ def test_board_flips_on_the_next_set_s_first_self_reported_trophy(
     assert board.code == expected
 
 
-def test_board_flips_on_early_access_17lands_rows(session, monkeypatch):
+def test_board_flips_on_early_access_17lands_drafts(session, monkeypatch):
     _seed_sets(session)
     player = _seed_player(session)
     next_seed = next(s for s in ALL_SETS if s.code == NEXT_UP)
     monkeypatch.setattr(active_set_service, "active_set_code", lambda: ACTIVE)
     monkeypatch.setattr(active_set_service, "upcoming_sets", lambda: (next_seed,))
-    _add_player_stats(session, player, NEXT_UP)
+    _add_draft_event(session, player, NEXT_UP)
 
     board = resolve_board_set(session)
 

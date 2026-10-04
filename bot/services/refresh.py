@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import logging
 import time as _time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Iterable, Protocol, Sequence
 
 import requests
-from sqlalchemy import and_, delete, func, or_, select, text, update
+from sqlalchemy import ColumnElement, and_, delete, func, or_, select, text, true, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -34,7 +34,7 @@ from bot.models import (
 from bot.scoring import DEFAULT_QUEUE_GROUPS
 from bot.services.active_set import resolve_active_set
 from bot.services.seventeenlands import SUPPORTED_FORMATS, extract_event_row
-from bot.sets import active_set_code, set_code_for_event
+from bot.sets import active_set_code, release_instant, set_code_for_event
 
 PERIODIC_WINDOW_DAYS = 7
 
@@ -271,18 +271,14 @@ def claim_orphan_drafts(
 
 
 def rebuild_player_stats(session: Session, player_id: str, set_id: str) -> int:
-    """Rebuild ``player_stats`` for one (player, set) from ``draft_events``.
-
-    Source of truth for aggregates is ``draft_events``; this DELETE+INSERT-FROM-SELECT
-    keeps the derived table fully consistent and is the only safe way to recompute
-    after a partial-window fetch. Returns the row count written.
-    """
+    """Rebuild ``player_stats`` for one (player, set) from its ``draft_events`` outside Early Access"""
     session.execute(
         delete(PlayerStats).where(
             PlayerStats.player_id == player_id,
             PlayerStats.set_id == set_id,
         )
     )
+    magic_set = session.get(MagicSet, set_id)
     result = session.execute(
         text(
             f"""
@@ -296,12 +292,26 @@ def rebuild_player_stats(session: Session, player_id: str, set_id: str) -> int:
                    now()
             FROM draft_events
             WHERE player_id = :pid AND set_id = :sid
+              AND (CAST(:scored_from AS timestamptz) IS NULL OR started_at IS NULL OR started_at >= :scored_from)
             GROUP BY player_id, set_id, format, expansion
             """
         ),
-        {"pid": player_id, "sid": set_id},
+        {"pid": player_id, "sid": set_id, "scored_from": early_access_end(magic_set)},
     )
     return result.rowcount or 0
+
+
+def early_access_end(magic_set: MagicSet) -> datetime | None:
+    if magic_set.end_date is None:
+        return None
+    return release_instant(magic_set.start_date)
+
+
+def scores_points(magic_set: MagicSet) -> ColumnElement[bool]:
+    scored_from = early_access_end(magic_set)
+    if scored_from is None:
+        return true()
+    return or_(DraftEvent.started_at.is_(None), DraftEvent.started_at >= scored_from)
 
 
 def trophy_weight_sql(format_column: str = "format", rank_column: str = "end_rank") -> str:

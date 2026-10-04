@@ -1,5 +1,6 @@
 from datetime import date
 
+import pytest
 import requests
 from sqlalchemy import select
 
@@ -68,8 +69,8 @@ class TransientThenOkClient:
         return list(self.drafts)
 
 
-def _seed_set(session, code="ECL", start_date=date(2026, 1, 20)):
-    s = MagicSet(code=code, name=code, start_date=start_date)
+def _seed_set(session, code="ECL", start_date=date(2026, 1, 20), end_date=None):
+    s = MagicSet(code=code, name=code, start_date=start_date, end_date=end_date)
     session.add(s)
     session.flush()
     return s
@@ -272,6 +273,31 @@ def test_rebuild_player_stats_wipes_stale_rows(session):
     rebuild_player_stats(session, p.id, sos.id)
     rows = session.execute(select(PlayerStats).where(PlayerStats.player_id == p.id)).scalars().all()
     assert rows == []
+
+
+@pytest.mark.parametrize("end_date, expected_events, expected_trophies", [
+    (date(2026, 6, 22), 1, 0),
+    (None, 2, 1),
+])
+def test_rebuild_player_stats_drops_early_access_from_released_sets(
+    session, end_date, expected_events, expected_trophies,
+):
+    sos = _seed_set(session, code="SOS", start_date=date(2026, 4, 21), end_date=end_date)
+    p = _seed_player(session)
+    drafts = [
+        _draft("early", wins=7, losses=0, event_wins=7,
+               first_event_server_time="2026-04-21 15:00:00", last_event_server_time="2026-04-21 15:30:00"),
+        _draft("released", wins=2, losses=3,
+               first_event_server_time="2026-04-21 17:00:00", last_event_server_time="2026-04-21 17:30:00"),
+    ]
+    bulk_upsert_draft_events(session, p.id, drafts, [sos])
+    session.flush()
+
+    rebuild_player_stats(session, p.id, sos.id)
+
+    [row] = session.execute(select(PlayerStats).where(PlayerStats.player_id == p.id)).scalars().all()
+    assert row.events == expected_events
+    assert row.trophies == expected_trophies
 
 
 # ---------------------------------------------------------------------------

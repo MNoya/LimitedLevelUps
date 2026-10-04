@@ -37,8 +37,9 @@ def main() -> None:
 
         total_pairs = 0
         for player in players:
+            routed = DraftEvent.set_id.isnot(None)
             set_ids = session.execute(
-                select(distinct(DraftEvent.set_id)).where(DraftEvent.player_id == player.id)
+                select(distinct(DraftEvent.set_id)).where(DraftEvent.player_id == player.id, routed)
             ).scalars().all()
 
             for set_id in set_ids:

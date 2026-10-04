@@ -13,7 +13,7 @@ from bot.discord_helpers import player_url
 from bot.scoring import boxes_for_event, compute_score, compute_score_breakdown, pod_points
 from bot.services.active_set import resolve_active_set
 from bot.services.pod_drafts import PodSetSummary, players_for_names, pod_scoring_counts, pod_summary_by_set_for_player
-from bot.services.refresh import trophy_weight_sql
+from bot.services.refresh import scores_points, trophy_weight_sql
 from bot.sets import CUBE_CODE, CubeVariant, active_set_code, cube_variant_for_expansion
 
 
@@ -530,6 +530,7 @@ def _stats_by_player_asof(session: Session, set_id: str, cutoff: datetime) -> di
             DraftEvent.set_id == set_id,
             DraftEvent.finished_at.isnot(None),
             DraftEvent.finished_at < cutoff,
+            scores_points(session.get(MagicSet, set_id)),
         )
         .group_by(DraftEvent.player_id, DraftEvent.format)
     ).all()
