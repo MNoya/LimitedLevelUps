@@ -136,7 +136,7 @@ export function TierGrid({
     <ComparisonContext.Provider value={comparison}>
       <DataPlacementContext.Provider value={Boolean(placeByData)}>
       {isMobile ? (
-        <MobileTiers setCode={setCode} byKey={byKey} filters={filters} hideArt={hideArt} />
+        <MobileTiers setCode={setCode} byKey={byKey} filters={filters} hideArt={hideArt} stickyTop={stickyTop} />
       ) : (
         <DesktopGrid setCode={setCode} byKey={byKey} filters={filters} hideArt={hideArt} stickyTop={stickyTop} />
       )}
@@ -165,28 +165,24 @@ function TierGridSkeleton({
             <div className="bg-bg border-b border-border py-1.5 text-center font-display text-[18px] leading-none text-muted">
               {tier}
             </div>
-            <div
-              className="border-l-4 border-border"
-              style={{ borderLeftColor: tierColor(tier) }}
-            >
-              {[0, 1, 2].map((col, idx) => (
-                <div
-                  key={col}
-                  className={cn("flex", idx > 0 && "border-t border-border")}
-                >
-                  <div className="w-[44px] shrink-0 flex items-center justify-center">
-                    <span className="h-4 w-4 rounded-full bg-surface2 animate-pulse" />
-                  </div>
-                  <div className="grid min-w-0 flex-1 grid-cols-1 min-[450px]:grid-cols-2 gap-1 px-1 py-2">
-                    {Array.from({ length: skeletonBarCount(row, col) + 1 }).map(
-                      (_, i) => (
-                        <SkeletonBar key={i} />
-                      ),
-                    )}
-                  </div>
+            {[0, 1, 2].map((col, idx) => (
+              <div
+                key={col}
+                className={cn("flex", idx > 0 && "border-t border-border")}
+              >
+                <GradeStripe tier={tier} />
+                <div className="w-[44px] shrink-0 flex items-center justify-center">
+                  <span className="h-4 w-4 rounded-full bg-surface2 animate-pulse" />
                 </div>
-              ))}
-            </div>
+                <div className="grid min-w-0 flex-1 grid-cols-1 min-[450px]:grid-cols-2 gap-1 px-1 py-2">
+                  {Array.from({ length: skeletonBarCount(row, col) + 1 }).map(
+                    (_, i) => (
+                      <SkeletonBar key={i} />
+                    ),
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -364,11 +360,13 @@ function MobileTiers({
   byKey,
   filters,
   hideArt,
+  stickyTop,
 }: {
   setCode: string;
   byKey: Map<string, TierCard[]>;
   filters: TierFilters;
   hideArt: boolean;
+  stickyTop: number;
 }) {
   const filtering = hasActiveFilters(filters);
   const pager = useCardPager(setCode, byKey, filters);
@@ -386,20 +384,23 @@ function MobileTiers({
   return (
     <div className="flex flex-col gap-[5px]">
       {visibleTiers.map(({ tier, colors }) => (
-        <div key={tier} className="border border-border bg-surface">
+        <div key={tier} className="border border-border bg-surface pb-8">
           <GradeLabel
             tier={tier}
-            className="w-full bg-bg border-b border-border py-1.5 text-center font-display text-[18px] leading-none text-text"
+            className={cn(
+              "sticky z-10 -mx-px -mt-px block h-8 w-[calc(100%+2px)] bg-bg border-x border-b border-border",
+              "before:absolute before:inset-x-0 before:top-px before:h-px before:bg-border",
+              "text-center font-display text-[18px] leading-none text-text",
+            )}
+            style={{ top: stickyTop - 1 }}
           />
-          <div
-            className="border-l-4 border-border"
-            style={{ borderLeftColor: tierColor(tier) }}
-          >
+          <div className="-mb-8">
             {colors.map((code, idx) => (
               <div
                 key={code}
                 className={cn("flex", idx > 0 && "border-t border-border")}
               >
+                <GradeStripe tier={tier} />
                 <div className="w-[44px] shrink-0 flex items-center justify-center">
                   <i
                     className={columnPipClass(code)}
@@ -428,6 +429,10 @@ function MobileTiers({
       <CardPagerModal pager={pager} />
     </div>
   );
+}
+
+function GradeStripe({ tier }: { tier: string }) {
+  return <div className="my-px w-1 shrink-0" style={{ backgroundColor: tierColor(tier) }} />;
 }
 
 const COLUMN_INDEX: Record<string, number> = Object.fromEntries(COLUMN_CODES.map((code, i) => [code, i]));
