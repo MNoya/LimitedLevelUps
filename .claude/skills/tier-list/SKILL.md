@@ -31,6 +31,20 @@ The reviewer URLs and pool URLs usually come in the same message. If any are mis
 - `TIER_LIST_GRADERS`: prepend a `<CODE>: [...]` block at the top of the object (map is newest-first). One `{ name, uid }` per reviewer, `uid` is the id from each `tier_list/<uid>` URL. The two reviewers are `Alex` and `Marc`.
 - `TIER_LIST_PREVIEW_SETS`: if the set is not yet live in the DB feed (its Arena start date is in the future, so `/leaderboard` does not list it), add `<CODE>: { name: "<Name>", startDate: "<YYYY-MM-DD>" }` using the name and Arena start date from `bot/sets.py`. A future `startDate` renders a PREVIEW badge. Remove this entry once the set goes live (optional cleanup; a live set overrides the preview).
 - `TIER_LIST_UIDS`: only if a consensus list was given, add `<CODE>: "<uid>"`.
+- `TIER_LIST_SET_GROUPS`: lets the Set Group filter draw before the cards load. Read the placement list (the consensus uid, else the first reviewer's) through the site's cached proxy, never 17lands directly:
+
+  ```bash
+  curl -s https://limitedlevelups.com/api/tier-list/<uid> | python3 -c "
+  import json, sys
+  data = json.load(sys.stdin)
+  cards = data['ratings'] if isinstance(data, dict) else data
+  groups = {}
+  for card in cards:
+      groups.setdefault(card['inclusion_type'], {'glyph': card['expansion'], 'count': 0})['count'] += 1
+  print(groups)"
+  ```
+
+  Add `<CODE>: [{ label, glyph }, ...]` only when there are two or more groups, ordered Main Set, Bonus Sheet, Special Guests, Source Material, then the rest. `label` is the `inclusion_type` and `glyph` its expansion code. A supplemental group spread over many expansions (The List, Praetors) takes a named glyph from `NAMED_GLYPHS` in `frontend/src/components/Brand.tsx` instead; add one there when a new kind appears.
 
 ### 3. Bake the archetype skeletons
 

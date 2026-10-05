@@ -178,6 +178,8 @@ const MANA_GLYPH_SCALE = 0.82;
 // Icons for groupings that are not sets, in the same "<font>:<glyph>" form the cube registry uses
 const NAMED_GLYPHS: Record<string, string> = {
   FLASHBACK: "mana:flashback",
+  THE_LIST: "keyrune:pmtg1",
+  PRAETORS: "mana:p",
 };
 
 export function glyphSpec(code: string): { className: string; scale: number } {

@@ -33,6 +33,7 @@ import {
   inclusionRank,
   isCardFilteredOut,
   tierColor,
+  TIER_LIST_MOBILE_BREAKPOINT,
   TIER_ORDER,
   TREND_COLOR,
   TREND_LABEL,
@@ -43,6 +44,7 @@ import {
   type TierCard,
   type TierFilters,
 } from "../data/tierList";
+import type { CardGrades, CardStats } from "../data/cardStats";
 
 const RARITY_ACCENT: Record<string, string> = {
   C: "#ffffff",
@@ -71,6 +73,7 @@ export function columnPipClass(code: string): string {
 // compares each grader's grade instead of showing a single consensus grade.
 const ComparisonContext = createContext(false);
 const DataPlacementContext = createContext(false);
+const DataDeckContext = createContext<string | null>(null);
 
 export function TierGrid({
   setCode,
@@ -80,6 +83,7 @@ export function TierGrid({
   filters,
   hideArt,
   dataGrades = false,
+  deck = null,
   stickyTop,
 }: {
   setCode: string;
@@ -89,11 +93,12 @@ export function TierGrid({
   filters: TierFilters;
   hideArt: boolean;
   dataGrades?: boolean;
+  deck?: string | null;
   stickyTop: number;
 }) {
   const { data, isLoading, isError } = useTierList(uid, graders);
   const cardStats = useCardStats(setCode);
-  const isMobile = useIsMobile();
+  const isMobile = useIsMobile(TIER_LIST_MOBILE_BREAKPOINT);
 
   if (isLoading || !data) {
     if (isError) {
@@ -107,10 +112,20 @@ export function TierGrid({
   }
 
   const placeByData = dataGrades && cardStats?.hasGrades;
-  const placedTier = (card: TierCard) => (placeByData ? (cardStats!.gradesFor(card.name)?.all ?? "TBD") : card.tier);
+  const placedTier = (card: TierCard) => {
+    if (!placeByData) {
+      return card.tier;
+    }
+    const grade = deckGrade(cardStats!.gradesFor(card.name), deck);
+    return grade ?? (deck ? null : "TBD");
+  };
   const byKey = new Map<string, TierCard[]>();
   for (const card of data) {
-    const key = `${columnOf(card.color)}|${placedTier(card)}`;
+    const tier = placedTier(card);
+    if (tier === null) {
+      continue;
+    }
+    const key = `${columnOf(card.color)}|${tier}`;
     const bucket = byKey.get(key);
     if (bucket) {
       bucket.push(card);
@@ -121,7 +136,7 @@ export function TierGrid({
   for (const bucket of byKey.values()) {
     bucket.sort((a, b) => {
       if (placeByData) {
-        return (cardStats!.statsFor(b.name)?.gihWr ?? 0) - (cardStats!.statsFor(a.name)?.gihWr ?? 0);
+        return deckGihWr(cardStats!.statsFor(b.name), deck) - deckGihWr(cardStats!.statsFor(a.name), deck);
       }
       const ra = inclusionRank(a.inclusion_type);
       const rb = inclusionRank(b.inclusion_type);
@@ -135,15 +150,22 @@ export function TierGrid({
   return (
     <ComparisonContext.Provider value={comparison}>
       <DataPlacementContext.Provider value={Boolean(placeByData)}>
+      <DataDeckContext.Provider value={placeByData ? deck : null}>
       {isMobile ? (
         <MobileTiers setCode={setCode} byKey={byKey} filters={filters} hideArt={hideArt} stickyTop={stickyTop} />
       ) : (
         <DesktopGrid setCode={setCode} byKey={byKey} filters={filters} hideArt={hideArt} stickyTop={stickyTop} />
       )}
+      </DataDeckContext.Provider>
       </DataPlacementContext.Provider>
     </ComparisonContext.Provider>
   );
 }
+
+const MOBILE_CARD_COLUMNS = cn(
+  "grid min-w-0 flex-1 gap-1 px-1 py-2",
+  "grid-cols-1 min-[450px]:grid-cols-2 min-[760px]:grid-cols-3 min-[1100px]:grid-cols-4",
+);
 
 const SKELETON_TIERS = ["A", "B", "C", "D", "F", "SB"];
 
@@ -174,7 +196,7 @@ function TierGridSkeleton({
                 <div className="w-[44px] shrink-0 flex items-center justify-center">
                   <span className="h-4 w-4 rounded-full bg-surface2 animate-pulse" />
                 </div>
-                <div className="grid min-w-0 flex-1 grid-cols-1 min-[450px]:grid-cols-2 gap-1 px-1 py-2">
+                <div className={MOBILE_CARD_COLUMNS}>
                   {Array.from({ length: skeletonBarCount(row, col) + 1 }).map(
                     (_, i) => (
                       <SkeletonBar key={i} />
@@ -384,12 +406,12 @@ function MobileTiers({
   return (
     <div className="flex flex-col gap-[5px]">
       {visibleTiers.map(({ tier, colors }) => (
-        <div key={tier} className="border border-border bg-surface pb-8">
+        <div key={tier} className="border-x border-b border-border bg-surface pb-8 [clip-path:inset(1px_0_0_0)]">
           <GradeLabel
             tier={tier}
             className={cn(
-              "sticky z-10 -mx-px -mt-px block h-8 w-[calc(100%+2px)] bg-bg border-x border-b border-border",
-              "before:absolute before:inset-x-0 before:top-px before:h-px before:bg-border",
+              "sticky z-10 block h-8 w-full bg-bg border-b border-border",
+              "before:absolute before:-inset-x-px before:top-px before:h-px before:bg-border",
               "text-center font-display text-[18px] leading-none text-text",
             )}
             style={{ top: stickyTop - 1 }}
@@ -408,7 +430,7 @@ function MobileTiers({
                     aria-label={COLUMN_NAMES[code]}
                   />
                 </div>
-                <div className="grid min-w-0 flex-1 grid-cols-1 min-[450px]:grid-cols-2 gap-1 px-1 py-2">
+                <div className={MOBILE_CARD_COLUMNS}>
                   {(byKey.get(`${code}|${tier}`) ?? [])
                     .filter((card) => !isCardFilteredOut(card, filters))
                     .map((card) => (
@@ -433,6 +455,14 @@ function MobileTiers({
 
 function GradeStripe({ tier }: { tier: string }) {
   return <div className="my-px w-1 shrink-0" style={{ backgroundColor: tierColor(tier) }} />;
+}
+
+function deckGrade(grades: CardGrades | undefined, deck: string | null): string | undefined {
+  return (deck ? grades?.pairs[deck] : grades?.all) ?? undefined;
+}
+
+function deckGihWr(stats: CardStats | undefined, deck: string | null): number {
+  return (deck ? stats?.pairs[deck]?.gihWr : stats?.gihWr) ?? 0;
 }
 
 const COLUMN_INDEX: Record<string, number> = Object.fromEntries(COLUMN_CODES.map((code, i) => [code, i]));
@@ -481,7 +511,9 @@ function useCardPager(setCode: string, byKey: Map<string, TierCard[]>, filters: 
   }, [byKey, filters]);
   const selectedIndex = cardParam ? visibleCards.findIndex((card) => cardSlug(card.name) === cardParam) : -1;
   const setPath = `/tier-list/${setCode}`;
-  const closeCard = useCloseModal(setPath);
+  const listParams = new URLSearchParams(location.search);
+  listParams.delete("review");
+  const closeCard = useCloseModal({ pathname: setPath, search: listParams.toString() });
   const cardPath = (card: TierCard) => `${setPath}/${cardSlug(card.name)}${location.search}`;
   return {
     visibleCards,
@@ -648,7 +680,7 @@ function CardBar({
               )}
               style={{ objectPosition: "center 22%" }}
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-black/30" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/30" />
           </>
         )}
         <div className="relative flex min-h-[28px] items-center justify-between gap-1 px-2 py-0.5">
@@ -679,7 +711,8 @@ function CardBar({
             )}
             <span
               className={cn(
-                "min-w-0 line-clamp-2 text-[13px] font-medium leading-tight text-white",
+                "min-w-0 line-clamp-2 text-[15px] font-medium leading-tight text-white",
+                "min-[1024px]:max-[1535px]:text-[14px]",
                 TEXT_OUTLINE,
               )}
             >
@@ -734,7 +767,12 @@ function GradesPanel({
         <GradeCell caption="Updated" tier={card.tier} trendCard={card} compact={compact} />
       ) : (
         graders.length > 0 && (
-          <span className="grid flex-1 grid-cols-[auto_auto] content-center items-center justify-center gap-x-4 gap-y-1.5">
+          <span
+            className={cn(
+              "grid flex-1 grid-cols-[auto_auto] content-center items-center justify-center",
+              "gap-x-4 gap-y-1.5 pl-[9px]",
+            )}
+          >
             {graders.map((grade) => (
               <Fragment key={grade.name}>
                 <span
@@ -856,7 +894,8 @@ export function CardPreview({
   card: TierCard;
   anchor: PreviewAnchor;
 }) {
-  const dataGrade = useCardStats(card.expansion)?.gradesFor(card.name)?.all;
+  const deck = useContext(DataDeckContext);
+  const dataGrade = deckGrade(useCardStats(card.expansion)?.gradesFor(card.name), deck);
   return (
     <PreviewShell anchor={anchor}>
       <CardFlagTabs card={card} />
@@ -915,6 +954,7 @@ export function CardModal({
   const cardStats = useCardStats(card.expansion);
   const stats = cardStats?.statsFor(card.name);
   const grades = cardStats?.gradesFor(card.name);
+  const deck = useContext(DataDeckContext);
   const hasData = Boolean(stats && stats.gihGames > 0);
   const setHasStats = Boolean(cardStats?.hasStats);
 
@@ -1031,7 +1071,7 @@ export function CardModal({
           <CardFlagTabs card={displayed} />
           <GradesPanel
             card={displayed}
-            dataGrade={cardStats?.gradesFor(displayed.name)?.all}
+            dataGrade={deckGrade(cardStats?.gradesFor(displayed.name), deck)}
             dataGradeHidden={dataShown}
           />
           {flippable ? (

@@ -15,7 +15,7 @@ export function SetGlyphDropdown({
   loading = false,
   onChange,
   hrefFor,
-  compact = false,
+  size = "large",
   align = "left",
   openOnHover = false,
   triggerClassName,
@@ -29,15 +29,24 @@ export function SetGlyphDropdown({
   loading?: boolean;
   onChange?: (code: string) => void;
   hrefFor?: (code: string) => To;
-  compact?: boolean;
+  size?: "compact" | "toolbar" | "large";
   align?: "left" | "right";
   openOnHover?: boolean;
   triggerClassName?: string;
   labelRef?: Ref<HTMLSpanElement>;
 }) {
-  const glyphSize = compact ? 20 : isMobile ? 26 : 38;
-  const labelSize = compact ? "text-[18px]" : "text-[17px] md:text-[30px]";
-  const chevronSize = compact ? "h-4 w-4" : "h-4 w-4 md:h-5 md:w-5";
+  const glyphSize = { compact: 20, toolbar: 30, large: isMobile ? 26 : 38 }[size];
+  const labelSize = {
+    compact: "text-[18px]",
+    toolbar: "text-[26px]",
+    large: "text-[17px] md:text-[30px]",
+  }[size];
+  const chevronSize = size === "large" ? "h-4 w-4 md:h-5 md:w-5" : "h-4 w-4";
+  const triggerSize = {
+    compact: "h-7 gap-1.5 px-2",
+    toolbar: "h-full gap-2.5 px-3",
+    large: "gap-2 px-3 py-1.5 md:gap-3",
+  }[size];
 
   if (!loading && sets.length <= 1) {
     return (
@@ -64,7 +73,7 @@ export function SetGlyphDropdown({
       searchPlaceholder="Search sets…"
       emptyText="No sets match"
       openOnHover={openOnHover}
-      className="min-w-0"
+      className={cn("min-w-0", size === "toolbar" && "h-full")}
       menuClassName={cn("z-30 max-h-[min(60vh,400px)] max-w-[80vw] overflow-hidden shadow-xl", menuOffset)}
       optionClassName="gap-3"
       renderOption={(option) => <SetOptionRow set={byCode.get(option.value)!} active={option.value === activeCode} />}
@@ -76,7 +85,7 @@ export function SetGlyphDropdown({
           aria-expanded={open}
           className={cn(
             "group flex max-w-full min-w-0 items-center border border-border2 text-text transition-colors",
-            compact ? "h-7 gap-1.5 px-2" : "gap-2 px-3 py-1.5 md:gap-3",
+            triggerSize,
             open && "bg-surface",
             hasOptions && "cursor-pointer hover:bg-surface",
             triggerClassName,

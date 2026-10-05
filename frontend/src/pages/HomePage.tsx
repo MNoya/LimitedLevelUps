@@ -303,7 +303,7 @@ function TierPanel() {
       glyphCode={setMeta ? setGlyphCode(setMeta) : current}
       label={current}
       isMobile={false}
-      compact
+      size="compact"
       triggerClassName="w-[92px]"
       openOnHover
       loading={!sets}
@@ -751,7 +751,7 @@ function LeaderboardPanel({ setCode }: { setCode: string }) {
       glyphCode={setMeta ? setGlyphCode(setMeta) : set}
       label={set}
       isMobile={false}
-      compact
+      size="compact"
       align="right"
       triggerClassName="w-[92px]"
       loading={!sets}

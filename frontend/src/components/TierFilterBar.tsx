@@ -1,7 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { cn } from "../lib/utils";
-import { keyruneClass, RaritySetGlyph, type Rarity } from "./Brand";
+import { RaritySetGlyph, SetGlyph, type Rarity } from "./Brand";
+import { FilterDropdown, type FilterOption } from "./FilterDropdown";
+import { ChevronDown } from "./Icons";
+import { Pips } from "./ManaPips";
 import { columnPipClass } from "./TierGrid";
 import { Tooltip } from "./Tooltip";
 import {
@@ -11,6 +14,7 @@ import {
   type TierFilterOptions,
   type TierFilters,
 } from "../data/tierList";
+import { colorsDisplayName } from "../data/filters";
 
 const RARITY_KEYRUNE: Record<string, Rarity> = { C: "common", U: "uncommon", R: "rare", M: "mythic" };
 
@@ -24,7 +28,12 @@ export function TierFilterBar({
   onSearch,
   dataGrades,
   setDataGrades,
+  decks = [],
+  deck = null,
+  setDeck,
   stacked = false,
+  maxWidth,
+  onMinWidth,
 }: {
   filters: TierFilters;
   setFilters: (f: TierFilters) => void;
@@ -35,7 +44,12 @@ export function TierFilterBar({
   onSearch: () => void;
   dataGrades?: boolean;
   setDataGrades?: (value: boolean) => void;
+  decks?: string[];
+  deck?: string | null;
+  setDeck?: (deck: string | null) => void;
   stacked?: boolean;
+  maxWidth?: number;
+  onMinWidth?: (width: number) => void;
 }) {
   const toggle = (key: keyof TierFilters, value: string) => {
     const arr = filters[key];
@@ -47,6 +61,7 @@ export function TierFilterBar({
     setFilters({ ...filters, colors: filters.colors.includes(value) ? [] : [value] });
   };
 
+  const deckEnabled = decks.length > 0;
   const [trendTipOpen, setTrendTipOpen] = useState(false);
   const trendMode =
     filters.trends.length === 2
@@ -60,39 +75,30 @@ export function TierFilterBar({
     setFilters({ ...filters, trends: next });
     setTrendTipOpen(true);
   };
+  const trends = options.trends;
   const trendCycleLabel =
     trendMode === "off"
-      ? `Show cards that moved (${options.trends.up + options.trends.down})`
+      ? withCount("Show cards that moved", trends && trends.up + trends.down)
       : trendMode === "both"
-        ? `Show only cards that moved up (${options.trends.up})`
+        ? withCount("Show only cards that moved up", trends?.up)
         : trendMode === "up"
-          ? `Show only cards that moved down (${options.trends.down})`
+          ? withCount("Show only cards that moved down", trends?.down)
           : "Show all cards";
 
-  const colorRow = (
-    <div className="relative flex grow items-center justify-center">
-      <div className="relative flex">
-        <span className={cn(LABEL, "absolute right-full top-1/2 mr-2 -translate-y-1/2")}>COLOR</span>
-        <div className={cn("flex", JOINED)}>
-          {options.colors.map((c) => (
-            <IconToggle
-              key={c.value}
-              active={filters.colors.includes(c.value)}
-              onClick={() => pickColor(c.value)}
-              label={`${c.name} (${c.count})`}
-              narrow
-            >
-              <i className={columnPipClass(c.value)} style={{ fontSize: c.value === "M" ? 21 : 15 }} />
-            </IconToggle>
-          ))}
-        </div>
-      </div>
-      <IconToggle active={false} onClick={onSearch} label="Search" tooltip={false} narrow className="absolute right-0">
-        <span className="flex w-[28px] items-center justify-center">
-          <Search size={17} />
-        </span>
-      </IconToggle>
-    </div>
+  const colorGroup = (
+    <FilterGroup label="COLOR" stacked={stacked} joined>
+      {options.colors.map((c) => (
+        <IconToggle
+          key={c.value}
+          active={filters.colors.includes(c.value)}
+          onClick={() => pickColor(c.value)}
+          label={withCount(c.name, c.count)}
+          narrow
+        >
+          <i className={columnPipClass(c.value)} style={{ fontSize: c.value === "M" ? 21 : 15 }} />
+        </IconToggle>
+      ))}
+    </FilterGroup>
   );
 
   const rarityGroup = (
@@ -103,7 +109,7 @@ export function TierFilterBar({
             key={r.value}
             active={filters.rarities.includes(r.value)}
             onClick={() => toggle("rarities", r.value)}
-            label={`${r.name} (${r.count})`}
+            label={withCount(r.name, r.count)}
             roomy
           >
             <RaritySetGlyph code={setCode} rarity={RARITY_KEYRUNE[r.value]} size={22} />
@@ -120,7 +126,7 @@ export function TierFilterBar({
           key={t.value}
           active={filters.cardTypes.includes(t.value)}
           onClick={() => toggle("cardTypes", t.value)}
-          label={`${t.label} (${t.count})`}
+          label={withCount(t.label, t.count)}
           roomy
         >
           <i
@@ -135,7 +141,7 @@ export function TierFilterBar({
   const compact = stacked && options.sets.length >= 3;
 
   const manaValueGroup = (
-    <FilterGroup label="MANA VALUE" stacked={stacked} joined className={stacked ? undefined : "max-[1150px]:hidden"}>
+    <FilterGroup label="MANA VALUE" stacked={stacked} joined>
       {MANA_VALUE_BUCKETS.map((mv) => (
         <IconToggle
           key={mv}
@@ -143,11 +149,8 @@ export function TierFilterBar({
           onClick={() => toggle("manaValues", mv)}
           label={`Mana value ${mv}`}
           narrow
-          compact={compact}
         >
-          <span className={cn("font-display font-bold leading-none", compact ? "text-[15px]" : "text-[18px]")}>
-            {mv}
-          </span>
+          <span className="font-display text-[18px] leading-none">{mv}</span>
         </IconToggle>
       ))}
     </FilterGroup>
@@ -161,10 +164,10 @@ export function TierFilterBar({
             key={s.value}
             active={filters.sets.includes(s.value)}
             onClick={() => toggle("sets", s.value)}
-            label={`${s.label} (${s.count})`}
+            label={withCount(s.label, s.count)}
             compact={compact}
           >
-            <i className={`ss ss-${keyruneClass(s.value)}`} style={{ fontSize: compact ? 16 : 19 }} />
+            <SetGlyph code={s.glyph} size={compact ? 16 : 19} className="" />
           </IconToggle>
         ))}
       </FilterGroup>
@@ -228,6 +231,57 @@ export function TierFilterBar({
     </FilterGroup>
   ) : null;
 
+  const allDecks = "ALL";
+  const deckOptions: FilterOption[] = [
+    { value: allDecks, label: "All decks" },
+    ...decks.map((code) => ({ value: code, label: sentenceCase(colorsDisplayName(code)) })),
+  ];
+  const deckLabel = (option: FilterOption) => (
+    <DeckLabel code={option.value === allDecks ? null : option.value} label={option.label} />
+  );
+  const deckGroup =
+    setDataGrades && setDeck ? (
+      <FilterGroup label="DECK" stacked={stacked}>
+        <FilterDropdown
+          value={deck ?? allDecks}
+          options={deckOptions}
+          onChange={(value) => setDeck(value === allDecks ? null : value)}
+          align="right"
+          searchable={false}
+          menuClassName="z-30 w-full"
+          optionClassName="h-10 py-0 pl-[8.5px] pr-3 font-body text-[14px] font-semibold tracking-normal"
+          renderOption={deckLabel}
+          renderTrigger={({ open, selected, toggle }) => (
+            <button
+              type="button"
+              onClick={toggle}
+              disabled={!deckEnabled}
+              title={deckEnabled ? undefined : "No deck data yet"}
+              aria-expanded={open}
+              className={cn(
+                "flex h-10 items-center gap-2 rounded border px-3 text-[14px] font-semibold transition-colors",
+                deck && "border-green bg-green/10 text-text",
+                !deck && deckEnabled && "border-border2 text-muted hover:bg-surface2 hover:text-text",
+                !deckEnabled && "cursor-not-allowed border-border2 text-muted opacity-50",
+              )}
+            >
+              <span className="grid">
+                {deckOptions.map((option) => (
+                  <span
+                    key={option.value}
+                    className={cn("col-start-1 row-start-1", option.value !== selected.value && "invisible")}
+                  >
+                    {deckLabel(option)}
+                  </span>
+                ))}
+              </span>
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+            </button>
+          )}
+        />
+      </FilterGroup>
+    ) : null;
+
   const searchGroup = (
     <FilterGroup label="SEARCH" stacked={stacked} joined>
       <IconToggle active={false} onClick={onSearch} label="Search" tooltip={false} narrow>
@@ -240,35 +294,138 @@ export function TierFilterBar({
 
   if (stacked) {
     return (
-      <div className="flex w-full flex-col gap-y-3">
-        <div className="grid w-full grid-cols-2 items-end justify-items-center gap-x-1.5">
+      <div
+        className={cn(
+          "flex w-full flex-col items-center gap-y-3",
+          "sm:flex-row sm:flex-wrap sm:items-end sm:justify-center sm:gap-x-6",
+        )}
+      >
+        <div className="grid w-full grid-cols-[max-content_max-content] items-end justify-around gap-y-3 sm:contents">
           {rarityGroup}
           {typeGroup}
+          <div className="col-span-2 flex items-end justify-between sm:contents">
+            {setGroup}
+            {trendGroup}
+            {gradesGroup}
+            {artGroup}
+            {searchGroup}
+          </div>
         </div>
-        <div className="flex w-full flex-wrap items-end justify-between gap-x-1.5 gap-y-3">
-          {manaValueGroup}
-          {setGroup}
-          {trendGroup}
-          {gradesGroup}
-          {artGroup}
-          {colorRow}
+        <div className="flex flex-wrap items-end justify-center gap-x-4 gap-y-3 sm:contents">
+          {colorGroup}
+          {deckGroup}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
-      {rarityGroup}
-      {typeGroup}
-      {manaValueGroup}
-      {setGroup}
-      {trendGroup}
-      {gradesGroup}
-      {artGroup}
-      {searchGroup}
+    <FittedRow
+      maxWidth={maxWidth}
+      onMinWidth={onMinWidth}
+      droppable={{ mv: manaValueGroup, type: typeGroup, set: setGroup }}
+    >
+      {(droppable) => (
+        <>
+          {rarityGroup}
+          {droppable.type}
+          {droppable.mv}
+          {droppable.set}
+          {trendGroup}
+          {gradesGroup}
+          {deckGroup}
+          {artGroup}
+          {searchGroup}
+        </>
+      )}
+    </FittedRow>
+  );
+}
+
+const DROP_ORDER = ["mv", "type", "set"];
+
+function FittedRow({
+  maxWidth,
+  onMinWidth,
+  droppable,
+  children,
+}: {
+  maxWidth?: number;
+  onMinWidth?: (width: number) => void;
+  droppable: Record<string, ReactNode>;
+  children: (droppable: Record<string, ReactNode>) => ReactNode;
+}) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const naturalWidths = useRef(new Map<string, number>());
+  const [dropped, setDropped] = useState<string[]>([]);
+
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (!row) {
+      return;
+    }
+    const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+    let keptWidth = 0;
+    let keptCount = 0;
+    for (const item of row.children) {
+      const key = (item as HTMLElement).dataset.drop;
+      if (key) {
+        naturalWidths.current.set(key, (item as HTMLElement).offsetWidth);
+      } else {
+        keptWidth += (item as HTMLElement).offsetWidth;
+        keptCount += 1;
+      }
+    }
+    const present = DROP_ORDER.filter((key) => droppable[key]);
+    let total = keptWidth + gap * (keptCount - 1);
+    onMinWidth?.(Math.ceil(total));
+    for (const key of present) {
+      total += (naturalWidths.current.get(key) ?? 0) + gap;
+    }
+    const next: string[] = [];
+    for (const key of present) {
+      if (maxWidth === undefined || total <= maxWidth) {
+        break;
+      }
+      next.push(key);
+      total -= (naturalWidths.current.get(key) ?? 0) + gap;
+    }
+    if (next.join() !== dropped.join()) {
+      setDropped(next);
+    }
+  });
+
+  const shown: Record<string, ReactNode> = {};
+  for (const [key, group] of Object.entries(droppable)) {
+    shown[key] =
+      group && !dropped.includes(key) ? (
+        <div key={key} data-drop={key}>
+          {group}
+        </div>
+      ) : null;
+  }
+  return (
+    <div ref={rowRef} className="flex items-end gap-x-5">
+      {children(shown)}
     </div>
   );
+}
+
+function DeckLabel({ code, label }: { code: string | null; label: string }) {
+  return (
+    <span className="flex items-center gap-2 whitespace-nowrap">
+      {code && <Pips colors={code} size={12} />}
+      {label}
+    </span>
+  );
+}
+
+function sentenceCase(text: string): string {
+  return text.charAt(0) + text.slice(1).toLowerCase();
+}
+
+function withCount(label: string, count: number | null | undefined): string {
+  return count == null ? label : `${label} (${count})`;
 }
 
 function ArtIcon({ hidden }: { hidden: boolean }) {
@@ -282,7 +439,7 @@ function ArtIcon({ hidden }: { hidden: boolean }) {
   );
 }
 
-export const LABEL = "font-display text-[13px] tracking-[0.2em] text-muted";
+export const LABEL = "font-display text-[13px] tracking-[0.2em] text-subtle";
 
 export const JOINED = cn(
   "[&>button]:rounded-none",
@@ -304,8 +461,8 @@ export function FilterGroup({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col", stacked ? "items-center gap-1" : "gap-0.5", className)}>
-      <span className={LABEL}>{label}</span>
+    <div className={cn("flex flex-col", stacked ? "items-center gap-1" : "gap-1.5", className)}>
+      <span className={cn(LABEL, !stacked && "[text-box:trim-both_cap_alphabetic]")}>{label}</span>
       <div className={cn("flex", joined ? JOINED : "gap-1.5")}>{children}</div>
     </div>
   );

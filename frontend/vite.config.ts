@@ -24,9 +24,8 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         "/api/tier-list": {
-          target: "https://www.17lands.com",
+          target: "https://limitedlevelups.com",
           changeOrigin: true,
-          rewrite: (p) => p.replace(/^\/api\/tier-list/, "/data/tier_list"),
         },
       },
       allowedHosts: [".ngrok-free.dev", ".ngrok-free.app", ".trycloudflare.com"]
@@ -34,7 +33,7 @@ export default defineConfig(({ mode }) => {
   };
 });
 
-// Dev-only stand-in for functions/api/card-stats: a local override in cache/card-stats, then the baked file; ?bake=1 builds live
+// Dev stand-in for functions/api/card-stats: local override, baked file, ?bake=1 live build, else production
 function cardStatsDevApi(): Plugin {
   return {
     name: "card-stats-dev-api",
@@ -54,9 +53,17 @@ function cardStatsDevApi(): Plugin {
           const localOverride = await readFile(path.resolve(__dirname, `../cache/card-stats/${fileName}`), "utf8")
             .catch(() => null);
           const baked = await readFile(path.resolve(__dirname, `public/card-stats/${fileName}`), "utf8").catch(() => null);
-          const empty = { set: setCode, updatedAt: new Date().toISOString(), cards: {} };
-          const file = bake ? await fetchCardStatsFile(setCode, null) : empty;
-          res.end(localOverride ?? baked ?? JSON.stringify(file));
+          if (localOverride ?? baked) {
+            res.end(localOverride ?? baked);
+            return;
+          }
+          if (bake) {
+            res.end(JSON.stringify(await fetchCardStatsFile(setCode, null)));
+            return;
+          }
+          const production = await fetch(`https://limitedlevelups.com/api/card-stats/${setCode}`);
+          res.statusCode = production.status;
+          res.end(await production.text());
         } catch {
           res.statusCode = 502;
           res.end("{}");

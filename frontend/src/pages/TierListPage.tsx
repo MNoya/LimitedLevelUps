@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type Ref } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { ExternalLink } from "../components/Icons";
 import { setGlyphCode } from "../components/Brand";
-import { TierFilterBar } from "../components/TierFilterBar";
+import { FilterGroup, TierFilterBar } from "../components/TierFilterBar";
 import { TierGrid } from "../components/TierGrid";
 import { TierCardSearch } from "../components/TierCardSearch";
 import { GradeGuideIcon, GradeGuideProvider, GradeGuideTrigger } from "../components/TierGuide";
@@ -22,24 +22,49 @@ import { ACTIVE_SET_CODE, TIER_LIST_PREVIEW_SETS } from "../data/constants";
 import {
   activeFilterCount,
   buildTierListSets,
-  EMPTY_FILTERS,
+  filtersFromParams,
   hasActiveFilters,
   resolveTierList,
   tierFilterOptions,
   useCardStats,
   useDataGradeView,
   useHideArt,
+  TIER_LIST_MOBILE_BREAKPOINT,
   useTierList,
+  withFilterParams,
   type TierFilters,
 } from "../data/tierList";
 
 export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolean }) {
   const { data: sets } = useSets();
-  const isMobile = useIsMobile();
+  const isMobile = useIsMobile(TIER_LIST_MOBILE_BREAKPOINT);
   const { setCode, pair } = useParams();
-  const [filters, setFilters] = useState<TierFilters>(EMPTY_FILTERS);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
+  const setFilters = (next: TierFilters) => {
+    setSearchParams((params) => withFilterParams(params, next), { replace: true });
+  };
   const [hideArt, setHideArt] = useHideArt();
-  const [dataGrades, setDataGrades] = useDataGradeView();
+  const [storedDataGrades, storeDataGrades] = useDataGradeView();
+  const gradesParam = searchParams.get("grades");
+  const dataGrades = gradesParam ? gradesParam === "17l" : storedDataGrades;
+  const setDataGrades = (value: boolean) => {
+    storeDataGrades(value);
+    setSearchParams((params) => {
+      const withGrades = withParam(params, "grades", value ? "17l" : "llu");
+      return withParam(withGrades, "deck", value ? params.get("deck") : null);
+    }, { replace: true });
+  };
+  const chosenDeck = searchParams.get("deck")?.toUpperCase() ?? null;
+  const setDeck = (deck: string | null) => {
+    if (deck) {
+      storeDataGrades(true);
+    }
+    setSearchParams((params) => {
+      const withDeck = withParam(params, "deck", deck?.toLowerCase() ?? null);
+      return deck ? withParam(withDeck, "grades", "17l") : withDeck;
+    }, { replace: true });
+  };
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
@@ -60,29 +85,30 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
 
   const { data: tierData, lastUpdated } = useTierList(effectiveUid);
   const cardStats = useCardStats(current);
-  const gradeToggle = cardStats?.hasGrades ? { dataGrades, setDataGrades } : {};
   const placeByData = Boolean(cardStats?.hasGrades) && dataGrades;
+  const decks = cardStats?.decks ?? [];
+  const deck = placeByData && chosenDeck && decks.includes(chosenDeck) ? chosenDeck : null;
+  const gradeToggle = cardStats?.hasGrades ? { dataGrades, setDataGrades, decks, deck, setDeck } : {};
   const dataSource = placeByData && cardStats ? { setCode: current, updatedAt: cardStats.updatedAt } : null;
-  const filterOptions = useMemo(
-    () => tierFilterOptions(tierData ?? []),
-    [tierData],
-  );
-  const filtersReady = Boolean(tierData?.length);
-  const filterBarLayout = useCenteredFilterBar(current, isMobile, filtersReady);
+  const statsUpdatedAt = cardStats?.hasGrades ? cardStats.updatedAt : undefined;
+  const filterOptions = useMemo(() => tierFilterOptions(current, tierData), [current, tierData]);
+  const filterBarLayout = useCenteredFilterBar(current, isMobile);
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [setCode]);
 
   useEffect(() => {
-    setFilters(EMPTY_FILTERS);
-  }, [effectiveUid]);
-
-  useEffect(() => {
-    if (!isMobile) {
-      setFilters((prev) => (prev.colors.length > 0 ? { ...prev, colors: [] } : prev));
+    const hiddenColors = !isMobile && filters.colors.length > 0;
+    const hiddenManaValues = isMobile && filters.manaValues.length > 0;
+    if (hiddenColors || hiddenManaValues) {
+      setFilters({
+        ...filters,
+        colors: hiddenColors ? [] : filters.colors,
+        manaValues: hiddenManaValues ? [] : filters.manaValues,
+      });
     }
-  }, [isMobile]);
+  }, [isMobile, filters]);
 
   useEffect(() => {
     const header = headerRef.current;
@@ -126,13 +152,11 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                       onClick={() => setFiltersOpen((open) => !open)}
                       aria-expanded={filtersOpen}
                       aria-label="Filters"
-                      disabled={!filtersReady}
                       className={cn(
                         "flex h-10 shrink-0 items-center gap-1.5 rounded border px-2 text-[12px] transition-colors",
                         filtersOpen || hasActiveFilters(filters)
                           ? "border-green text-text"
-                          : "border-border2 text-muted",
-                        !filtersReady && "opacity-50",
+                          : "border-border2 text-subtle",
                       )}
                     >
                       <svg
@@ -169,10 +193,11 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                 <ListMeta
                   lastUpdated={lastUpdated}
                   dataSource={dataSource}
-                  className="mt-1.5 whitespace-nowrap text-[clamp(8px,2.8vw,11px)]"
+                  statsUpdatedAt={statsUpdatedAt}
+                  className="mt-1.5 whitespace-nowrap px-2 text-[clamp(8px,2.8vw,11px)]"
                 />
 
-                {effectiveUid && filtersReady && filtersOpen && (
+                {effectiveUid && filtersOpen && (
                   <div className="pt-3">
                     <TierFilterBar
                       filters={filters}
@@ -192,33 +217,50 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
               <div
                 ref={filterBarLayout.rowRef}
                 className={cn(
-                  "grid items-center gap-x-[clamp(0.75rem,2.5vw,2.5rem)]",
-                  filterBarLayout.centered
-                    ? "grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
-                    : "grid-cols-[minmax(0,max-content)_auto_minmax(0,1fr)]",
+                  "grid items-end gap-x-[clamp(0.75rem,2.5vw,2.5rem)]",
+                  filterBarLayout.twoRows && "grid-cols-[minmax(0,1fr)_max-content] gap-y-3",
+                  !filterBarLayout.twoRows &&
+                    (filterBarLayout.centered
+                      ? "grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
+                      : "grid-cols-[minmax(0,max-content)_minmax(0,1fr)_max-content]"),
                 )}
               >
                 <div ref={filterBarLayout.headingRef} className="w-fit min-w-0 max-w-full">
-                  <h1 className="font-display tracking-[0.12em] flex items-center gap-3 leading-none min-w-0">
-                    <SetGlyphDropdown
-                      sets={tierListSets}
-                      activeCode={current}
-                      glyphCode={glyphCode}
-                      label={setMeta?.name?.toUpperCase() ?? current}
-                      isMobile={false}
-                      loading={!sets}
-                      hrefFor={setHref}
-                      labelRef={filterBarLayout.labelRef}
-                    />
+                  <h1
+                    className={cn(
+                      "grid grid-cols-[minmax(0,auto)_auto] gap-x-1.5",
+                      "font-display leading-none tracking-[0.12em]",
+                    )}
+                  >
+                    <FilterGroup label="SET" stacked={false} className="invisible col-start-1 row-start-1">
+                      <div className="h-10" />
+                    </FilterGroup>
+                    <div className="col-start-1 row-start-1 min-w-0">
+                      <SetGlyphDropdown
+                        sets={tierListSets}
+                        activeCode={current}
+                        glyphCode={glyphCode}
+                        label={setMeta?.name?.toUpperCase() ?? current}
+                        isMobile={false}
+                        size="toolbar"
+                        loading={!sets}
+                        hrefFor={setHref}
+                        labelRef={filterBarLayout.labelRef}
+                      />
+                    </div>
                     {skeletons.length > 0 && (
-                      <SkeletonsButton href={archetypesHref} />
+                      <div className="col-start-2 row-start-1 self-end">
+                        <SkeletonsButton href={archetypesHref} />
+                      </div>
                     )}
                   </h1>
-                  <ListMeta lastUpdated={lastUpdated} dataSource={dataSource} className="mt-1 pl-[2px] text-[11px]" />
                 </div>
 
-                {effectiveUid && filtersReady ? (
-                  <div ref={filterBarLayout.filterRef} className="justify-self-center -translate-y-1">
+                {effectiveUid ? (
+                  <div
+                    ref={filterBarLayout.filterRef}
+                    className={cn("justify-self-center", filterBarLayout.twoRows && "col-span-2 row-start-2")}
+                  >
                     <TierFilterBar
                       filters={filters}
                       setFilters={setFilters}
@@ -228,13 +270,22 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
                       setHideArt={setHideArt}
                       onSearch={() => setSearchOpen(true)}
                       {...gradeToggle}
+                      maxWidth={filterBarLayout.filterSpace}
+                      onMinWidth={filterBarLayout.setMinFilterWidth}
                     />
                   </div>
                 ) : (
                   <div />
                 )}
 
-                <div />
+                <ListMeta
+                  rootRef={filterBarLayout.metaRef}
+                  lastUpdated={lastUpdated}
+                  dataSource={dataSource}
+                  statsUpdatedAt={statsUpdatedAt}
+                  alignEnd
+                  className="w-auto flex-col items-end justify-self-end gap-y-1.5 whitespace-nowrap text-[11px]"
+                />
               </div>
             )}
           </div>
@@ -248,10 +299,11 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
               filters={filters}
               hideArt={hideArt}
               dataGrades={placeByData}
+              deck={deck}
               stickyTop={headerHeight}
             />
           ) : (
-            <div className="flex items-center justify-center border border-border bg-surface text-muted text-[14px] min-h-[300px]">
+            <div className="flex items-center justify-center border border-border bg-surface text-subtle text-[14px] min-h-[300px]">
               No tier list is available for {current} yet.
             </div>
           )}
@@ -260,7 +312,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               {graders.length > 0 && (
                 <div className="flex items-center gap-x-2">
-                  <span className="font-mono text-[10px] md:text-[12px] text-muted">Set Reviews:</span>
+                  <span className="font-mono text-[10px] md:text-[12px] text-subtle">Set Reviews:</span>
                   <div className="flex items-center gap-x-3.5">
                     {graders.map((grader) => (
                       <SourceLink key={grader.uid} uid={grader.uid} label={`${grader.name}'s`} />
@@ -276,7 +328,7 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
               href="https://www.17lands.com/tier_lists"
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-[10px] md:text-[12px] text-muted hover:text-green transition-colors no-underline whitespace-nowrap"
+              className="font-mono text-[10px] md:text-[12px] text-subtle hover:text-green transition-colors no-underline whitespace-nowrap"
             >
               Powered by 17Lands
             </a>
@@ -299,12 +351,26 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
   );
 }
 
-function useCenteredFilterBar(setCode: string, isMobile: boolean, filtersReady: boolean) {
+function withParam(params: URLSearchParams, key: string, value: string | null): URLSearchParams {
+  const next = new URLSearchParams(params);
+  if (value) {
+    next.set(key, value);
+  } else {
+    next.delete(key);
+  }
+  return next;
+}
+
+function useCenteredFilterBar(setCode: string, isMobile: boolean) {
   const rowRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLSpanElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
+  const metaRef = useRef<HTMLDivElement>(null);
   const [centered, setCentered] = useState(false);
+  const [filterSpace, setFilterSpace] = useState<number | undefined>(undefined);
+  const [minFilterWidth, setMinFilterWidth] = useState(0);
+  const [twoRows, setTwoRows] = useState(false);
 
   useEffect(() => {
     const row = rowRef.current;
@@ -318,19 +384,34 @@ function useCenteredFilterBar(setCode: string, isMobile: boolean, filtersReady: 
       const fullHeadingWidth = heading.offsetWidth + truncatedWidth;
       const filterWidth = filterRef.current?.offsetWidth ?? 0;
       const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
-      setCentered(2 * (fullHeadingWidth + gap) + filterWidth <= row.clientWidth);
+      const metaWidth = metaRef.current?.offsetWidth ?? 0;
+      const besideSpace = row.clientWidth - fullHeadingWidth - metaWidth - 2 * gap;
+      const stacked = minFilterWidth > besideSpace;
+      setTwoRows(stacked);
+      setCentered(!stacked && 2 * (fullHeadingWidth + gap) + filterWidth <= row.clientWidth);
+      setFilterSpace(stacked ? row.clientWidth : besideSpace);
     };
     const observer = new ResizeObserver(measure);
-    for (const element of [row, heading, filterRef.current]) {
+    for (const element of [row, heading, filterRef.current, metaRef.current]) {
       if (element) {
         observer.observe(element);
       }
     }
     document.fonts.ready.then(measure);
     return () => observer.disconnect();
-  }, [setCode, isMobile, filtersReady]);
+  }, [setCode, isMobile, minFilterWidth]);
 
-  return { rowRef, headingRef, labelRef, filterRef, centered };
+  return {
+    rowRef,
+    headingRef,
+    labelRef,
+    filterRef,
+    metaRef,
+    centered,
+    twoRows,
+    filterSpace,
+    setMinFilterWidth,
+  };
 }
 
 function SkeletonsButton({ href }: { href: string }) {
@@ -338,7 +419,7 @@ function SkeletonsButton({ href }: { href: string }) {
     <Link
       to={href}
       state={OPENED_IN_APP}
-      className="flex h-10 shrink-0 items-center rounded border border-border2 px-2 font-display text-[14px] leading-none tracking-[0.14em] text-text transition-colors no-underline hover:border-green hover:text-green md:h-9 md:px-2.5"
+      className="flex h-10 shrink-0 items-center rounded border border-border2 px-2 font-display text-[14px] leading-none tracking-[0.14em] text-text transition-colors no-underline hover:border-green hover:text-green md:px-2.5"
     >
       <span className="-translate-y-px">ARCHETYPES</span>
     </Link>
@@ -352,7 +433,7 @@ function SourceLink({ uid, label }: { uid: string; label: string }) {
         href={`https://www.17lands.com/tier_list/${uid}`}
         target="_blank"
         rel="noreferrer"
-        className="font-mono flex items-center gap-1 text-[10px] md:text-[12px] text-muted hover:text-green transition-colors no-underline"
+        className="font-mono flex items-center gap-1 text-[10px] md:text-[12px] text-subtle hover:text-green transition-colors no-underline"
       >
         {label}
         <ExternalLink size={11} />
@@ -364,36 +445,69 @@ function SourceLink({ uid, label }: { uid: string; label: string }) {
 function ListMeta({
   lastUpdated,
   dataSource,
+  statsUpdatedAt,
+  alignEnd = false,
+  rootRef,
   className,
 }: {
   lastUpdated: string | null;
   dataSource: { setCode: string; updatedAt: string } | null;
+  statsUpdatedAt?: string;
+  alignEnd?: boolean;
+  rootRef?: Ref<HTMLDivElement>;
   className?: string;
 }) {
-  const shownUpdate = dataSource?.updatedAt ?? lastUpdated;
-  const updated = shownUpdate ? lastUpdatedLabel(shownUpdate) : null;
+  const listUpdated = lastUpdated ? lastUpdatedLabel(lastUpdated) : null;
+  const statsUpdated = statsUpdatedAt ? lastUpdatedLabel(statsUpdatedAt) : null;
+  const updated = dataSource ? statsUpdated : listUpdated;
+  const otherUpdated = dataSource ? listUpdated : statsUpdated;
+  const dataLabel = (
+    <>
+      17LANDS DATA
+      <ExternalLink size={11} />
+    </>
+  );
+  const reviewLabel = (
+    <>
+      SET REVIEW GRADES
+      <GradeGuideIcon className="ml-1.5" />
+    </>
+  );
   return (
-    <div className={cn("font-mono flex w-full items-center justify-between gap-x-4 text-muted", className)}>
-      {dataSource ? (
-        <a
-          href={cardDataUrl(dataSource.setCode)}
-          target="_blank"
-          rel="noreferrer"
-          className={cn(
-            "flex items-center gap-1.5 tracking-[0.16em] text-muted no-underline",
-            "transition-colors hover:text-green",
-          )}
-        >
-          17LANDS DATA
-          <ExternalLink size={11} />
-        </a>
-      ) : (
-        <GradeGuideTrigger className="tracking-[0.16em]">
-          SET REVIEW GRADES
-          <GradeGuideIcon className="ml-1.5" />
-        </GradeGuideTrigger>
-      )}
-      {updated && <span className="tracking-[0.06em]">{updated}</span>}
+    <div
+      ref={rootRef}
+      className={cn("font-mono flex w-full items-center justify-between gap-x-4 text-subtle", className)}
+    >
+      <span className={cn("grid [&>*]:col-start-1 [&>*]:row-start-1", alignEnd && "justify-items-end")}>
+        {dataSource ? (
+          <a
+            href={cardDataUrl(dataSource.setCode)}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(
+              "flex items-center gap-1.5 tracking-[0.16em] text-subtle no-underline",
+              "transition-colors hover:text-green",
+            )}
+          >
+            {dataLabel}
+          </a>
+        ) : (
+          <GradeGuideTrigger className="tracking-[0.16em]">{reviewLabel}</GradeGuideTrigger>
+        )}
+        <span aria-hidden className={cn("invisible flex items-center tracking-[0.16em]", !dataSource && "gap-1.5")}>
+          {dataSource ? reviewLabel : dataLabel}
+        </span>
+      </span>
+      <span
+        className={cn("grid tracking-[0.06em] [&>*]:col-start-1 [&>*]:row-start-1", alignEnd && "justify-items-end")}
+      >
+        <span className={cn(!updated && "invisible")}>{updated ?? "Last updated"}</span>
+        {otherUpdated && (
+          <span aria-hidden className="invisible">
+            {otherUpdated}
+          </span>
+        )}
+      </span>
     </div>
   );
 }

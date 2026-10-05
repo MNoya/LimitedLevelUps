@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { type CardGrades, type CardStats, type CardStatsFile, gradeCardStats } from "./cardStats";
 import {
@@ -7,9 +7,11 @@ import {
   TIER_LIST_DATA_BASE_OVERRIDES,
   TIER_LIST_GRADERS,
   TIER_LIST_PREVIEW_SETS,
+  TIER_LIST_SET_GROUPS,
   TIER_LIST_UIDS,
   hasTierList,
 } from "./constants";
+import { TRI_COLOR_CODES, TWO_COLOR_CODES } from "./filters";
 import type { SetSummary } from "../types/leaderboard";
 
 export interface ResolvedTierList {
@@ -228,6 +230,7 @@ export const TYPE_GROUPS: Array<{
   label: string;
   ms: string;
   types: string[];
+  onlyWhenPresent?: boolean;
 }> = [
   { key: "creature", label: "Creature", ms: "creature", types: ["creature"] },
   {
@@ -242,7 +245,7 @@ export const TYPE_GROUPS: Array<{
     ms: "enchantment",
     types: ["artifact", "enchantment", "planeswalker"],
   },
-  { key: "battle", label: "Battle", ms: "battle", types: ["battle"] },
+  { key: "battle", label: "Battle", ms: "battle", types: ["battle"], onlyWhenPresent: true },
   { key: "land", label: "Land", ms: "land", types: ["land"] },
 ];
 const TYPE_GROUP_BY_KEY: Record<string, { types: string[] }> =
@@ -274,6 +277,51 @@ export const EMPTY_FILTERS: TierFilters = {
   trends: [],
 };
 
+export const TIER_LIST_MOBILE_BREAKPOINT = 1024;
+
+const FILTER_PARAMS: Record<keyof TierFilters, string> = {
+  rarities: "rarity",
+  cardTypes: "type",
+  manaValues: "mv",
+  sets: "group",
+  trends: "trend",
+  colors: "color",
+};
+
+export function filtersFromParams(params: URLSearchParams): TierFilters {
+  const filters = { ...EMPTY_FILTERS };
+  for (const [key, param] of Object.entries(FILTER_PARAMS) as Array<[keyof TierFilters, string]>) {
+    filters[key] = params.getAll(param).map((value) => decodeFilterValue(key, value));
+  }
+  return filters;
+}
+
+export function withFilterParams(params: URLSearchParams, filters: TierFilters): URLSearchParams {
+  const next = new URLSearchParams(params);
+  for (const [key, param] of Object.entries(FILTER_PARAMS) as Array<[keyof TierFilters, string]>) {
+    next.delete(param);
+    for (const value of filters[key]) {
+      next.append(param, encodeFilterValue(key, value));
+    }
+  }
+  return next;
+}
+
+export function setGroupSlug(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+}
+
+function encodeFilterValue(key: keyof TierFilters, value: string): string {
+  return key === "manaValues" ? value.replace("+", "") : value.toLowerCase();
+}
+
+function decodeFilterValue(key: keyof TierFilters, value: string): string {
+  if (key === "manaValues") {
+    return value === "6" ? "6+" : value;
+  }
+  return key === "rarities" || key === "colors" ? value.toUpperCase() : value;
+}
+
 export function activeFilterCount(f: TierFilters): number {
   return (
     f.sets.length +
@@ -291,7 +339,7 @@ export function hasActiveFilters(f: TierFilters): boolean {
 
 function cardMatchesFilters(card: TierCard, f: TierFilters): boolean {
   if (f.trends.length > 0 && (!card.trend || !f.trends.includes(card.trend))) return false;
-  if (f.sets.length > 0 && !f.sets.includes(card.expansion)) return false;
+  if (f.sets.length > 0 && !f.sets.includes(setGroupSlug(card.inclusion_type))) return false;
   if (f.colors.length > 0 && !f.colors.includes(columnOf(card.color))) return false;
   if (
     f.manaValues.length > 0 &&
@@ -368,15 +416,17 @@ export function inclusionRank(type: string): number {
 }
 
 export interface TierFilterOptions {
-  sets: Array<{ value: string; label: string; count: number }>;
-  colors: Array<{ value: string; name: string; count: number }>;
-  rarities: Array<{ value: string; name: string; count: number }>;
-  types: Array<{ value: string; label: string; ms: string; count: number }>;
-  trends: { up: number; down: number };
+  sets: Array<{ value: string; label: string; glyph: string; count?: number }>;
+  colors: Array<{ value: string; name: string; count?: number }>;
+  rarities: Array<{ value: string; name: string; count?: number }>;
+  types: Array<{ value: string; label: string; ms: string; count?: number }>;
+  trends: { up: number; down: number } | null;
 }
 
-export function tierFilterOptions(cards: TierCard[]): TierFilterOptions {
-  const setInfo = new Map<string, { label: string; count: number }>();
+export function tierFilterOptions(setCode: string, loadedCards: TierCard[] | undefined): TierFilterOptions {
+  const cards = loadedCards ?? [];
+  const countOf = (counts: Map<string, number>, key: string) => (loadedCards ? (counts.get(key) ?? 0) : undefined);
+  const setGroups = new Map<string, { glyph: string; count: number }>();
   const colorCounts = new Map<string, number>();
   const rarityCounts = new Map<string, number>();
   const groupCounts = new Map<string, number>();
@@ -385,11 +435,11 @@ export function tierFilterOptions(cards: TierCard[]): TierFilterOptions {
     if (card.trend) {
       trendCounts[card.trend] += 1;
     }
-    const set = setInfo.get(card.expansion);
-    if (set) {
-      set.count += 1;
+    const setGroup = setGroups.get(card.inclusion_type);
+    if (setGroup) {
+      setGroup.count += 1;
     } else {
-      setInfo.set(card.expansion, { label: card.inclusion_type, count: 1 });
+      setGroups.set(card.inclusion_type, { glyph: card.expansion, count: 1 });
     }
     const column = columnOf(card.color);
     colorCounts.set(column, (colorCounts.get(column) ?? 0) + 1);
@@ -401,59 +451,41 @@ export function tierFilterOptions(cards: TierCard[]): TierFilterOptions {
       }
     }
   }
-  const sets = [...setInfo.entries()]
-    .map(([value, { label, count }]) => ({ value, label, count }))
-    .sort((a, b) => {
-      const ra = INCLUSION_ORDER.indexOf(a.label);
-      const rb = INCLUSION_ORDER.indexOf(b.label);
-      return (
-        (ra === -1 ? INCLUSION_ORDER.length : ra) -
-        (rb === -1 ? INCLUSION_ORDER.length : rb)
-      );
-    });
+  const knownGroups = TIER_LIST_SET_GROUPS[setCode];
+  const sets = knownGroups
+    ? knownGroups.map((group) => ({
+        value: setGroupSlug(group.label),
+        label: group.label,
+        glyph: group.glyph,
+        count: loadedCards ? (setGroups.get(group.label)?.count ?? 0) : undefined,
+      }))
+    : [...setGroups.entries()]
+        .map(([label, { glyph, count }]) => ({ value: setGroupSlug(label), label, glyph, count }))
+        .sort((a, b) => inclusionRank(a.label) - inclusionRank(b.label));
   return {
     sets,
-    colors: COLUMN_CODES.filter((c) => colorCounts.has(c)).map((c) => ({
-      value: c,
-      name: COLUMN_NAMES[c],
-      count: colorCounts.get(c)!,
-    })),
-    rarities: RARITY_ORDER.filter((r) => rarityCounts.has(r)).map((r) => ({
-      value: r,
-      name: RARITY_NAMES[r],
-      count: rarityCounts.get(r)!,
-    })),
-    types: TYPE_GROUPS.filter((g) => groupCounts.has(g.key)).map((g) => ({
+    colors: COLUMN_CODES.map((c) => ({ value: c, name: COLUMN_NAMES[c], count: countOf(colorCounts, c) })),
+    rarities: RARITY_ORDER.map((r) => ({ value: r, name: RARITY_NAMES[r], count: countOf(rarityCounts, r) })),
+    types: TYPE_GROUPS.filter((g) => !g.onlyWhenPresent || groupCounts.has(g.key)).map((g) => ({
       value: g.key,
       label: g.label,
       ms: g.ms,
-      count: groupCounts.get(g.key)!,
+      count: countOf(groupCounts, g.key),
     })),
-    trends: trendCounts,
+    trends: loadedCards ? trendCounts : null,
   };
 }
 
-const HIDE_ART_STORAGE_KEY = "tierListHideArt";
+export const useHideArt = () => usePersistedFlag("tierListHideArt");
+export const useDataGradeView = () => usePersistedFlag("tierListDataGrades");
 
-export function useHideArt(): [boolean, (value: boolean) => void] {
-  const [hideArt, setHideArt] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(HIDE_ART_STORAGE_KEY) === "1";
-  });
-  useEffect(() => {
-    window.localStorage.setItem(HIDE_ART_STORAGE_KEY, hideArt ? "1" : "0");
-  }, [hideArt]);
-  return [hideArt, setHideArt];
-}
-
-export function useDataGradeView(): [boolean, (value: boolean) => void] {
-  const storageKey = "tierListDataGrades";
-  const [dataGrades, setDataGrades] = useState(() => window.localStorage.getItem(storageKey) === "1");
+function usePersistedFlag(storageKey: string): [boolean, (value: boolean) => void] {
+  const [flag, setFlag] = useState(() => window.localStorage.getItem(storageKey) === "1");
   const update = (value: boolean) => {
-    setDataGrades(value);
+    setFlag(value);
     window.localStorage.setItem(storageKey, value ? "1" : "0");
   };
-  return [dataGrades, update];
+  return [flag, update];
 }
 
 const ONE_HOUR = 60 * 60 * 1000;
@@ -550,6 +582,7 @@ export interface CardStatsLookup {
   gradesFor: (name: string) => CardGrades | undefined;
   hasStats: boolean;
   hasGrades: boolean;
+  decks: string[];
   updatedAt: string;
 }
 
@@ -578,16 +611,21 @@ function buildCardStatsLookup(file: CardStatsFile): CardStatsLookup {
     stats.set(cardNameKey(name), cardStats);
   }
   const grades = new Map<string, CardGrades>();
+  const gradedDecks = new Set<string>();
   let hasGrades = false;
   for (const [name, cardGrades] of gradeCardStats(file)) {
     grades.set(cardNameKey(name), cardGrades);
     hasGrades ||= cardGrades.all !== null;
+    for (const deck of Object.keys(cardGrades.pairs)) {
+      gradedDecks.add(deck);
+    }
   }
   return {
     statsFor: (name) => stats.get(cardNameKey(name)),
     gradesFor: (name) => grades.get(cardNameKey(name)),
     hasStats: stats.size > 0,
     hasGrades,
+    decks: [...TWO_COLOR_CODES, ...TRI_COLOR_CODES].filter((deck) => gradedDecks.has(deck)),
     updatedAt: file.updatedAt,
   };
 }

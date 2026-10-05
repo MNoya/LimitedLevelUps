@@ -112,6 +112,99 @@ export const TIER_LIST_GRADERS: Record<
   ],
 };
 
+export const TIER_LIST_SET_GROUPS: Record<string, Array<{ label: string; glyph: string }>> = {
+  FRA: [
+    { label: "Main Set", glyph: "FRA" },
+    { label: "Special Guests", glyph: "SPG" },
+  ],
+  MSH: [
+    { label: "Main Set", glyph: "MSH" },
+    { label: "Source Material", glyph: "MAR" },
+  ],
+  SOS: [
+    { label: "Main Set", glyph: "SOS" },
+    { label: "Bonus Sheet", glyph: "SOA" },
+    { label: "Special Guests", glyph: "SPG" },
+  ],
+  TMT: [
+    { label: "Main Set", glyph: "TMT" },
+    { label: "Source Material", glyph: "PZA" },
+  ],
+  ECL: [
+    { label: "Main Set", glyph: "ECL" },
+    { label: "Special Guests", glyph: "SPG" },
+  ],
+  TLA: [
+    { label: "Main Set", glyph: "TLA" },
+    { label: "Source Material", glyph: "TLE" },
+  ],
+  EOE: [
+    { label: "Main Set", glyph: "EOE" },
+    { label: "Bonus Sheet", glyph: "EOS" },
+    { label: "Special Guests", glyph: "SPG" },
+  ],
+  FIN: [
+    { label: "Main Set", glyph: "FIN" },
+    { label: "Bonus Sheet", glyph: "FCA" },
+  ],
+  TDM: [
+    { label: "Main Set", glyph: "TDM" },
+    { label: "Special Guests", glyph: "SPG" },
+  ],
+  DFT: [
+    { label: "Main Set", glyph: "DFT" },
+    { label: "Special Guests", glyph: "SPG" },
+  ],
+  FDN: [
+    { label: "Main Set", glyph: "FDN" },
+    { label: "Special Guests", glyph: "SPG" },
+  ],
+  DSK: [
+    { label: "Main Set", glyph: "DSK" },
+    { label: "Special Guests", glyph: "SPG" },
+  ],
+  BLB: [
+    { label: "Main Set", glyph: "BLB" },
+    { label: "Special Guests", glyph: "SPG" },
+  ],
+  MH3: [
+    { label: "Main Set", glyph: "MH3" },
+    { label: "Special Guests", glyph: "SPG" },
+    { label: "Commanders", glyph: "M3C" },
+  ],
+  WOE: [
+    { label: "Main Set", glyph: "WOE" },
+    { label: "Bonus Sheet", glyph: "WOT" },
+  ],
+  MOM: [
+    { label: "Main Set", glyph: "MOM" },
+    { label: "Bonus Sheet", glyph: "MUL" },
+  ],
+  STX: [
+    { label: "Main Set", glyph: "STX" },
+    { label: "Bonus Sheet", glyph: "STA" },
+  ],
+  MKM: [
+    { label: "Main Set", glyph: "MKM" },
+    { label: "Special Guests", glyph: "SPG" },
+    { label: "The List", glyph: "THE_LIST" },
+  ],
+  ONE: [
+    { label: "Main Set", glyph: "ONE" },
+    { label: "Praetors", glyph: "PRAETORS" },
+  ],
+  BRO: [
+    { label: "Main Set", glyph: "BRO" },
+    { label: "Bonus Sheet", glyph: "BRR" },
+  ],
+  OTJ: [
+    { label: "Main Set", glyph: "OTJ" },
+    { label: "Bonus Sheet", glyph: "OTP" },
+    { label: "Special Guests", glyph: "SPG" },
+    { label: "The Big Score", glyph: "BIG" },
+  ],
+};
+
 export const hasTierList = (code: string): boolean =>
   Boolean(TIER_LIST_UIDS[code]) || (TIER_LIST_GRADERS[code]?.length ?? 0) > 0;
 
