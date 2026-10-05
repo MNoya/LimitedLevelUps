@@ -94,6 +94,7 @@ export function TierFilterBar({
           onClick={() => pickColor(c.value)}
           label={withCount(c.name, c.count)}
           narrow
+          className="min-w-[32px] px-1"
         >
           <i className={columnPipClass(c.value)} style={{ fontSize: c.value === "M" ? 21 : 15 }} />
         </IconToggle>
@@ -311,7 +312,7 @@ export function TierFilterBar({
             {searchGroup}
           </div>
         </div>
-        <div className="flex flex-wrap items-end justify-center gap-x-4 gap-y-3 sm:contents">
+        <div className="flex flex-wrap items-end justify-center gap-x-3 gap-y-3 sm:contents">
           {colorGroup}
           {deckGroup}
         </div>
