@@ -391,7 +391,7 @@ def _release_handle(session: Session, normalized: str, *, keep_discord_id: str) 
     ).scalars().all()
     for holder in holders:
         holder.arena_aliases = [alias for alias in holder.arena_aliases if alias != normalized]
-        if normalize_player_name(holder.arena_name) == normalized:
+        if holder.arena_name is not None and normalize_player_name(holder.arena_name) == normalized:
             holder.arena_name = None
         log.info(f"arena handle {normalized!r} released from player {holder.id} to discord {keep_discord_id}")
 

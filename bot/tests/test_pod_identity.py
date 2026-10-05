@@ -263,6 +263,20 @@ def test_attach_takes_a_shared_handle_from_its_previous_holder(session):
     assert owner.arena_name is None
 
 
+def test_attach_takes_a_shared_alias_from_a_holder_without_a_stored_handle(session):
+    holder = _seed_player(
+        session, discord_id="37", username="holder", display_name="Holder", arena_aliases=["vortexia"],
+    )
+
+    borrower_id = attach_arena_alias(
+        session, discord_id="38", discord_username="borrower", display_name="Borrower",
+        avatar_hash=None, arena_name="Vortexia#999",
+    )
+
+    assert player_for_name(session, "Vortexia#999").id == borrower_id
+    assert holder.arena_aliases == []
+
+
 def test_a_released_handle_leaves_the_prior_holders_row_intact(session):
     owner = _seed_player(
         session, discord_id="34", username="owner", display_name="Owner",
