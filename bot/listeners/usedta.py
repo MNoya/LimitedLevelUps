@@ -44,13 +44,13 @@ class UsedTaListener(commands.Cog):
         if says_the_line(message.content):
             answer, said = self.answer_the_line, "the line"
         elif calls_a_worst_card_ever(message.content):
-            answer, said = self.post_worst_card, "worst card ever"
+            answer, said = self.reply_worst_card, "worst card ever"
         else:
             return
         if self.answered_at is not None and time.monotonic() - self.answered_at < COOLDOWN_S:
             return
         try:
-            await answer(message.channel)
+            await answer(message)
         except discord.HTTPException as exc:
             log.warning(f"usedta answer failed: {exc}")
         self.answered_at = time.monotonic()
@@ -60,20 +60,23 @@ class UsedTaListener(commands.Cog):
     @commands.command(name="worstcard")
     async def worstcard(self, ctx: commands.Context) -> None:
         try:
-            await self.post_worst_card(ctx.channel)
+            await ctx.send(self.draw_worst_card())
         except discord.HTTPException as exc:
             log.warning(f"worstcard post failed: {exc}")
 
-    async def answer_the_line(self, channel: discord.abc.Messageable) -> None:
+    async def answer_the_line(self, message: discord.Message) -> None:
         if random.random() < 0.2:
-            await channel.send(reference=MEME_FORWARD)
+            await message.channel.send(reference=MEME_FORWARD)
         else:
-            await self.post_worst_card(channel)
+            await self.reply_worst_card(message)
 
-    async def post_worst_card(self, channel: discord.abc.Messageable) -> None:
+    async def reply_worst_card(self, message: discord.Message) -> None:
+        await message.reply(self.draw_worst_card(), mention_author=False)
+
+    def draw_worst_card(self) -> str:
         if not self.undrawn_cards:
             self.undrawn_cards = random.sample(worst_card_urls(), k=len(worst_card_urls()))
-        await channel.send(self.undrawn_cards.pop())
+        return self.undrawn_cards.pop()
 
 
 def says_the_line(text: str) -> bool:
