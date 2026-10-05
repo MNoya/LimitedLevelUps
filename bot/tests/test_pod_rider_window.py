@@ -53,6 +53,26 @@ def test_the_window_closes_once_the_table_holds_everyone_it_planned_for(
     assert bool(thread.sent) is riders_asked
 
 
+@pytest.mark.parametrize("seated, still_open, capped_to", [
+    (9, True, []),
+    (10, False, [10]),
+])
+def test_a_table_planned_at_nine_locks_at_ten(seated, still_open, capped_to):
+    mgr, capped, _ = _rider_manager(seated, planned=0)
+
+    async def _open_then_lock() -> bool:
+        mgr.open_rider_window(9, ["<@1>"])
+        await mgr._maybe_lock_planned_table()
+        window_open = bool(mgr.rider_seats_held)
+        mgr._close_rider_window()
+        return window_open
+
+    window_open = asyncio.run(_open_then_lock())
+
+    assert window_open is still_open
+    assert capped == capped_to
+
+
 @pytest.mark.parametrize("present, room_size, waiting, safe", [
     (8, 10, 1, False),
     (9, 10, 0, True),

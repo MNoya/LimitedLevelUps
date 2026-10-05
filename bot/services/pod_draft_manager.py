@@ -2948,7 +2948,7 @@ class PodDraftManager:
         of leaving it waiting on players nobody is expecting."""
         if planned <= 0 or not rider_mentions:
             return
-        self.rider_seats_held = planned
+        self.rider_seats_held = planned + planned % 2
         self.rider_mentions = list(rider_mentions)
         self._rider_window_task = asyncio.create_task(self._ask_the_riders_in_after())
 
