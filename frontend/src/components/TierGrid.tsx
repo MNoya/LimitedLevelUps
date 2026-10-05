@@ -361,6 +361,7 @@ function DesktopGrid({
                       <CardBar
                         key={card.card_id}
                         card={card}
+                        setCode={setCode}
                         mobile={false}
                         hideArt={hideArt}
                         onOpen={() => pager.open(card.card_id)}
@@ -437,6 +438,7 @@ function MobileTiers({
                       <CardBar
                         key={card.card_id}
                         card={card}
+                        setCode={setCode}
                         mobile
                         hideArt={hideArt}
                         onOpen={() => pager.open(card.card_id)}
@@ -516,6 +518,7 @@ function useCardPager(setCode: string, byKey: Map<string, TierCard[]>, filters: 
   const closeCard = useCloseModal({ pathname: setPath, search: listParams.toString() });
   const cardPath = (card: TierCard) => `${setPath}/${cardSlug(card.name)}${location.search}`;
   return {
+    setCode,
     visibleCards,
     selectedIndex,
     selectedCard: selectedIndex === -1 ? null : visibleCards[selectedIndex],
@@ -531,11 +534,12 @@ function useCardPager(setCode: string, byKey: Map<string, TierCard[]>, filters: 
 }
 
 function CardPagerModal({ pager }: { pager: ReturnType<typeof useCardPager> }) {
-  const { selectedCard, selectedIndex, visibleCards, close, stepTo } = pager;
+  const { setCode, selectedCard, selectedIndex, visibleCards, close, stepTo } = pager;
   if (!selectedCard) return null;
   return createPortal(
     <CardModal
       card={selectedCard}
+      setCode={setCode}
       linkReview
       onClose={close}
       onPrev={selectedIndex > 0 ? () => stepTo(selectedIndex - 1) : undefined}
@@ -617,11 +621,13 @@ export function PreviewShell({ anchor, children }: { anchor: PreviewAnchor; chil
 
 function CardBar({
   card,
+  setCode,
   mobile,
   hideArt = false,
   onOpen,
 }: {
   card: TierCard;
+  setCode: string;
   mobile: boolean;
   hideArt?: boolean;
   onOpen?: () => void;
@@ -727,7 +733,7 @@ function CardBar({
       </div>
       {anchor &&
         createPortal(
-          <CardPreview card={card} anchor={anchor} />,
+          <CardPreview card={card} setCode={setCode} anchor={anchor} />,
           document.body,
         )}
     </div>
@@ -889,13 +895,15 @@ function CardFlagTabs({ card }: { card: TierCard }) {
 
 export function CardPreview({
   card,
+  setCode,
   anchor,
 }: {
   card: TierCard;
+  setCode: string;
   anchor: PreviewAnchor;
 }) {
   const deck = useContext(DataDeckContext);
-  const dataGrade = deckGrade(useCardStats(card.expansion)?.gradesFor(card.name), deck);
+  const dataGrade = deckGrade(useCardStats(setCode)?.gradesFor(card.name), deck);
   return (
     <PreviewShell anchor={anchor}>
       <CardFlagTabs card={card} />
@@ -925,6 +933,7 @@ export function neighborCardUrls(cards: TierCard[], index: number): string[] {
 
 export function CardModal({
   card,
+  setCode,
   linkReview = false,
   onClose,
   onPrev,
@@ -933,6 +942,7 @@ export function CardModal({
   neighborUrls = [],
 }: {
   card: TierCard;
+  setCode: string;
   linkReview?: boolean;
   onClose: () => void;
   onPrev?: () => void;
@@ -950,8 +960,8 @@ export function CardModal({
   }, []);
   const wide = !useIsMobile(1024);
   const flippable = Boolean(card.url_back);
-  const { setIndexed, mention } = useSetReviewMention(card.expansion, card.name);
-  const cardStats = useCardStats(card.expansion);
+  const { setIndexed, mention } = useSetReviewMention(setCode, card.name);
+  const cardStats = useCardStats(setCode);
   const stats = cardStats?.statsFor(card.name);
   const grades = cardStats?.gradesFor(card.name);
   const deck = useContext(DataDeckContext);
@@ -1133,7 +1143,7 @@ export function CardModal({
               {dataSliding && stats && (
                 <div className="flex w-[var(--panel-w)] shrink-0 flex-col">
                   <ReviewBox className="min-h-0 p-0">
-                    <CardDataPanel key={card.name} setCode={card.expansion} stats={stats} grades={grades} docked />
+                    <CardDataPanel key={card.name} setCode={setCode} stats={stats} grades={grades} docked />
                   </ReviewBox>
                 </div>
               )}
@@ -1245,7 +1255,7 @@ export function CardModal({
                 {mobileView === "data" && stats && (
                   <CardDataPanel
                     key={card.name}
-                    setCode={card.expansion}
+                    setCode={setCode}
                     stats={stats}
                     grades={grades}
                     docked={false}

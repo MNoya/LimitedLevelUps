@@ -332,11 +332,12 @@ function TierPanel() {
         <Placeholder lines={4} />
       )}
 
-      {hover ? createPortal(<CardPreview card={hover.card} anchor={hover.anchor} />, document.body) : null}
+      {hover ? createPortal(<CardPreview card={hover.card} setCode={current} anchor={hover.anchor} />, document.body) : null}
       {selectedCard
         ? createPortal(
             <CardModal
               card={selectedCard}
+              setCode={current}
               onClose={() => setSelectedId(null)}
               onPrev={selectedIndex > 0 ? () => setSelectedId(allCards[selectedIndex - 1].card_id) : undefined}
               onNext={

@@ -6,7 +6,15 @@ import { Tooltip } from "./Tooltip";
 import { cn } from "../lib/utils";
 import { columnOf, searchTierCards, tierColor, type TierCard } from "../data/tierList";
 
-export function TierCardSearch({ cards, onClose }: { cards: TierCard[]; onClose: () => void }) {
+export function TierCardSearch({
+  cards,
+  setCode,
+  onClose,
+}: {
+  cards: TierCard[];
+  setCode: string;
+  onClose: () => void;
+}) {
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -131,6 +139,7 @@ export function TierCardSearch({ cards, onClose }: { cards: TierCard[]; onClose:
       {picked !== null && pickedCard && (
         <CardModal
           card={pickedCard}
+          setCode={setCode}
           onClose={() => setPicked(null)}
           onPrev={picked > 0 ? () => setPicked(picked - 1) : undefined}
           onNext={picked < matches.length - 1 ? () => setPicked(picked + 1) : undefined}

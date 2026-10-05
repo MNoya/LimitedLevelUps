@@ -335,7 +335,9 @@ export function TierListPage({ skeletonsOpen = false }: { skeletonsOpen?: boolea
           </div>
         </main>
 
-        {searchOpen && <TierCardSearch cards={tierData ?? []} onClose={() => setSearchOpen(false)} />}
+        {searchOpen && (
+          <TierCardSearch cards={tierData ?? []} setCode={current} onClose={() => setSearchOpen(false)} />
+        )}
 
         {skeletonsOpen && skeletons.length > 0 && (
           <SkeletonsModal
