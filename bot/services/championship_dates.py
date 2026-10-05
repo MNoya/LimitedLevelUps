@@ -24,6 +24,7 @@ BALLOT_OPENS_AT = time(13, 0)
 PARALLEL_LEAD_DAYS = 14
 VOTE_REMINDER_LAG_DAYS = 2
 SEASON_STARTS: dict[str, date] = {"HOB": date(2026, 8, 30), "FRA": date(2026, 10, 19)}
+CHAMPIONSHIP_DATE_OVERRIDES: dict[str, date] = {"FRA": date(2026, 11, 7)}
 
 
 @dataclass(frozen=True)
@@ -53,7 +54,9 @@ def plan_for(when: datetime | None = None) -> ChampionshipPlan | None:
         return None
     current = ALL_SETS[index]
     successor = ALL_SETS[index + 1]
-    event_date = championship_date_before(prerelease_date_for(successor))
+    event_date = CHAMPIONSHIP_DATE_OVERRIDES.get(current.code)
+    if event_date is None:
+        event_date = championship_date_before(prerelease_date_for(successor))
     event_at = datetime.combine(event_date, CHAMPIONSHIP_TIME, tzinfo=RELEASE_TZ)
     return ChampionshipPlan(
         set_code=current.code,

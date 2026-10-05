@@ -126,7 +126,7 @@ async def _post_fresh(
 
 def build_schedule_embed(guild: discord.Guild | None, now: datetime, weeks: int) -> discord.Embed:
     days = calendar_days(now.date(), weeks)
-    lines = [slot_line(guild, now), formats_line(guild, days, now.date())]
+    lines = [slot_line(guild, now), formats_line(guild, now)]
     arrival = arrival_line(guild, days, now)
     if arrival:
         lines.append(arrival)
@@ -182,15 +182,15 @@ def slot_line(guild: discord.Guild | None, now: datetime) -> str:
     return COLUMN_GAP.join(slots)
 
 
-def formats_line(guild: discord.Guild | None, days: list[date], today: date) -> str:
-    """The two-a-day line once a day from today on carries a second format, else the latest set every day"""
-    for day in days:
-        if day >= today and len(scheduled_formats(day)) > 1:
-            season = MSG_FLASHBACK_SEASON.format(
-                flashback=fi.flashback_emoji(), role=role_mention(guild, fi.FLASHBACK_ROLE_NAME),
-            )
-            return f"{season}\n{MSG_VOTE_PROMPT}" if voting_open() else season
-    code = active_set_code()
+def formats_line(guild: discord.Guild | None, now: datetime) -> str:
+    """The two-a-day line once the format vote opens or today carries a second format, else the latest set every day"""
+    vote_open = voting_open(now)
+    if vote_open or len(scheduled_formats(now.date())) > 1:
+        season = MSG_FLASHBACK_SEASON.format(
+            flashback=fi.flashback_emoji(), role=role_mention(guild, fi.FLASHBACK_ROLE_NAME),
+        )
+        return f"{season}\n{MSG_VOTE_PROMPT}" if vote_open else season
+    code = active_set_code(now)
     return MSG_DAILY_SET.format(symbol=fi.format_emoji(code), role=role_mention(guild, fi.LATEST_SET_ROLE_NAME))
 
 
