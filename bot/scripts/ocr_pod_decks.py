@@ -13,13 +13,14 @@ Local tool. Install the OCR extras first (CPU torch):
     DATABASE_URL=... DISCORD_BOT_TOKEN=... python -m bot.scripts.ocr_pod_decks [--commit] [--force] [event_id ...]
 
 Without --commit it reports the AUTO/FLAG/SKIP verdicts and writes nothing. --force re-examines seats that
-already carry a correction marker.
+already carry a correction marker or a cached FLAG/SKIP verdict for the same screenshot.
 """
 from __future__ import annotations
 
 import argparse
 import gzip
 import json
+import os
 import re
 import sys
 import tempfile
@@ -27,6 +28,7 @@ import time
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -43,6 +45,7 @@ MAIN_FLOOR = 20
 MAIN_MIN = 25
 SIDE_LIST_MIN = 5
 MARKER_SOURCE = "ocr-auto"
+SEEN_VERDICTS_PATH = Path("cache/ocr_pod_decks_verdicts.json")
 USER_AGENT = "DiscordBot (https://limitedlevelups.com, 1.0)"
 NX_RE = re.compile(r"^[0-9il|]{1,2}x$")
 
@@ -195,14 +198,14 @@ def target_events(session: Session, event_ids: list[str]) -> list[PodDraftEvent]
 
 
 def run(event_ids: list[str], commit: bool, force: bool) -> None:
-    import easyocr
-    from PIL import Image
-
     token = settings.discord_bot_token.get_secret_value() if settings.discord_bot_token else None
     if not token:
         sys.exit("DISCORD_BOT_TOKEN is required to refresh screenshot URLs")
 
+    seen = {} if force else load_seen_verdicts()
     jobs: list[tuple[str, int, str, str, dict]] = []
+    flags: list[dict] = []
+    already_read = 0
     with SessionLocal() as session:
         for event in target_events(session, event_ids):
             urls = {
@@ -221,11 +224,30 @@ def run(event_ids: list[str], commit: bool, force: bool) -> None:
                     continue
                 if corr and not force:
                     continue
+                prior = seen.get(seat_key(event.id, seat))
+                if prior and prior["url"] == url:
+                    already_read += 1
+                    if prior["action"] == "FLAG":
+                        flags.append({"event_id": event.id, "seat": seat, **prior})
+                    continue
                 jobs.append((event.id, seat, url, event.set_code, event.draft_log))
 
-    if not jobs:
+    if already_read:
+        print(f"skipped {already_read} seats already read with the same screenshot (--force re-reads them)")
+    if jobs:
+        ocr_seats(jobs, token, commit, seen, flags)
+    else:
         print("no seats to process")
-        return
+
+    if flags:
+        print(f"flagged for manual review: {len(flags)}")
+        for f in flags:
+            print(f"  {f['event_id'][:8]}#{f['seat']}  {f['layout']}  {f['note']}")
+
+
+def ocr_seats(jobs: list, token: str, commit: bool, seen: dict, flags: list[dict]) -> None:
+    import easyocr
+    from PIL import Image
 
     fresh = refresh_urls([j[2] for j in jobs], token)
     reader = easyocr.Reader(["en"], gpu=False, verbose=False)
@@ -233,40 +255,56 @@ def run(event_ids: list[str], commit: bool, force: bool) -> None:
     tally = {"AUTO": 0, "FLAG": 0, "SKIP": 0}
     times: list[float] = []
     touched: set[str] = set()
-    flags: list[dict] = []
     for event_id, seat, url, _set_code, compact in jobs:
         path = download(fresh.get(url, url))
         width = Image.open(path).width
         t0 = time.time()
         frags = ocr_boxes(reader, path)
         times.append(time.time() - t0)
+        os.unlink(path)
         v = classify(frags, width, seat_pool(compact, seat))
         tally[v.action] += 1
         tag = f"{event_id[:8]}#{seat}"
         main_n = len(v.main) if v.main is not None else 0
         print(f"{tag:14} {v.action:4} {v.layout:20} main={main_n:2d}  {v.note}")
-        if v.action == "AUTO" and commit:
-            with SessionLocal() as session:
-                event = session.get(PodDraftEvent, event_id)
-                apply_correction(session, event, seat, v.main, v.side)
-                session.commit()
-            touched.add(event_id)
-        elif v.action == "FLAG":
-            flags.append({"event_id": event_id, "seat": seat, "layout": v.layout, "note": v.note})
+        if v.action == "AUTO":
+            if commit:
+                with SessionLocal() as session:
+                    event = session.get(PodDraftEvent, event_id)
+                    apply_correction(session, event, seat, v.main, v.side)
+                    session.commit()
+                touched.add(event_id)
+            continue
+        verdict = {"url": url, "action": v.action, "layout": v.layout, "note": v.note}
+        if commit:
+            seen[seat_key(event_id, seat)] = verdict
+            save_seen_verdicts(seen)
+        if v.action == "FLAG":
+            flags.append({"event_id": event_id, "seat": seat, **verdict})
 
     for event_id in touched:
         reingest_pod_card_facts(event_id)
 
     print(f"\ntally: {tally}   auto-applied: {len(touched)} events" if commit else f"\ntally: {tally}   (dry run)")
-    if times:
-        print(
-            f"per-screenshot OCR: avg {sum(times)/len(times):.1f}s  "
-            f"min {min(times):.1f}s  max {max(times):.1f}s  n={len(times)}"
-        )
-    if flags:
-        print(f"flagged for manual review: {len(flags)}")
-        for f in flags:
-            print(f"  {f['event_id'][:8]}#{f['seat']}  {f['layout']}  {f['note']}")
+    print(
+        f"per-screenshot OCR: avg {sum(times)/len(times):.1f}s  "
+        f"min {min(times):.1f}s  max {max(times):.1f}s  n={len(times)}"
+    )
+
+
+def seat_key(event_id: str, seat: int) -> str:
+    return f"{event_id}#{seat}"
+
+
+def load_seen_verdicts() -> dict:
+    if not SEEN_VERDICTS_PATH.exists():
+        return {}
+    return json.loads(SEEN_VERDICTS_PATH.read_text())
+
+
+def save_seen_verdicts(seen: dict) -> None:
+    SEEN_VERDICTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SEEN_VERDICTS_PATH.write_text(json.dumps(seen, indent=1, sort_keys=True))
 
 
 def main() -> None:
