@@ -1555,9 +1555,9 @@ def _slot_snapshot(
     slot the format schedule closes opens no signal, and that is exactly the day the Set Championship sits on.
     The loop appends nothing for a day carrying neither a pod nor a signal, so this costs an empty read on an
     ordinary day and shows a pod committed ahead of time on the eve, which is when players read the board.
-    The board's own day carries an empty slot before its signals are bound, which is what the first render of
-    a fresh post draws. A day the schedule offers no format on carries none: nothing is going to bind there,
-    so the column would offer a pod that never opens."""
+    The board's own day carries an empty slot per format before its signals are bound, which is what the first
+    render of a fresh post draws, so its join buttons are live from the first frame. A day the schedule offers
+    no format on carries none: nothing is going to bind there, so the column would offer a pod that never opens."""
     slot_signals = [signal for signal in signals if pod_signals.slot_of(signal.bucket) == slot_key]
     rolled_days = {signal.signal_date for signal in slot_signals if signal.signal_date > board_date}
     key_slots: list[LauncherSlot] = []
@@ -1569,11 +1569,13 @@ def _slot_snapshot(
         day_signals = [signal for signal in slot_signals if signal.signal_date == day]
         pods = _slot_pods(session, bucket.key, day, slot_key, day_signals, now)
         key_slots += pods
-        if not pods and day == board_date and formats_on(day, slot_key):
+        if pods or day != board_date:
+            continue
+        for set_code in formats_on(day, slot_key):
             key_slots.append(LauncherSlot(
-                bucket.key, committed=False,
+                pod_signals.named_bucket_key(bucket.key, set_code), committed=False,
                 status=_lazy_status(pod_signals.STATUS_OPEN, slot_time, now),
-                count=0, slot_time=slot_time, names=[], thread_id=None, signal_id=None,
+                count=0, slot_time=slot_time, names=[], thread_id=None, signal_id=None, set_code=set_code,
             ))
     return _without_rolled_past_slots(key_slots)
 
