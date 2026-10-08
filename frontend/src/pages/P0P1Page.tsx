@@ -201,7 +201,7 @@ export function P0P1Page() {
         {collapsible && gridsToggle("top-full")}
       </div>
     );
-  } else if (phase === "postVoting" && collapsible) {
+  } else if ((phase === "postVoting" || showMidway) && collapsible) {
     belowIntro = <div className="relative w-full">{gridsToggle("top-2")}</div>;
   }
 
@@ -257,6 +257,7 @@ export function P0P1Page() {
               picksBySlot={picksBySlot}
               user={user}
               hasParticipated={hasParticipated}
+              compact={compactGrids}
             />
           ) : (
             <ResultsSkeleton setCode={featured?.code} />

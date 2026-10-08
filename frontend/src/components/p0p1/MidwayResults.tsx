@@ -67,6 +67,7 @@ export function MidwayResults({
   picksBySlot,
   user,
   hasParticipated,
+  compact = false,
 }: {
   ratingsSnapshot: RatingsSnapshot;
   pickStats: P0P1PickStat[];
@@ -75,6 +76,7 @@ export function MidwayResults({
   picksBySlot: Map<string, string>;
   user: object | null;
   hasParticipated: boolean;
+  compact?: boolean;
 }) {
   const { setCode } = ratingsSnapshot;
   const contestSlots = useMemo(() => slotsForSet(setCode), [setCode]);
@@ -130,6 +132,7 @@ export function MidwayResults({
         cardsByName={cardsByName}
         setCode={setCode}
         onTileOpen={onSlotOpen}
+        compact={compact}
         aligned={showYourPicks}
         toggle={showYourPicks ? { viewingYours, onClick: () => setTopView(topView === "yours" ? "crowd" : "yours") } : undefined}
       />
@@ -145,6 +148,7 @@ export function MidwayResults({
         cardsByName={cardsByName}
         setCode={setCode}
         onTileOpen={onSlotOpen}
+        compact={compact}
       />
 
       <MidwayVersusModal pager={pager} bounds={bounds} />
@@ -183,6 +187,7 @@ function TeamRow({
   onTileOpen,
   toggle,
   aligned = false,
+  compact,
 }: {
   label: string;
   labelToggle?: boolean;
@@ -196,6 +201,7 @@ function TeamRow({
   onTileOpen: (slotKey: SlotKey) => void;
   toggle?: Toggle;
   aligned?: boolean;
+  compact: boolean;
 }) {
   const labelEl = (
     <span
@@ -231,7 +237,13 @@ function TeamRow({
         </div>
       </div>
 
-      <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} onTileOpen={onTileOpen} />
+      <PickGrid
+        entries={entries}
+        cardsByName={cardsByName}
+        setCode={setCode}
+        onTileOpen={onTileOpen}
+        compact={compact}
+      />
     </div>
   );
 }
