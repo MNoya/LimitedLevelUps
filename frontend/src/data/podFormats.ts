@@ -7,10 +7,11 @@ interface PodCustomFormat {
   code: string;
   label: string;
   cubeId: string;
+  listed?: boolean;
 }
 
 const CUSTOM_FORMATS: PodCustomFormat[] = [
-  { code: "PEASANT", label: "Peasant Cube", cubeId: "DaneeliusPeasantAllStars" },
+  { code: "PEASANT", label: "Peasant Cube", cubeId: "DaneeliusPeasantAllStars", listed: true },
   { code: "MEMA", label: "Middle-Earth Masters", cubeId: "MEMA" },
   { code: "SAMP", label: "samp Cube", cubeId: "samp" },
 ];
@@ -89,7 +90,7 @@ export function withCustomPodBoards(
   }
   const known = new Set(sets.map((s) => s.code));
   const boards = (podSetCodes ?? [])
-    .filter((p) => customFormat(p.code) && !known.has(p.code) && p.events >= MIN_BOARD_PODS)
-    .map(podBoardSet);
+    .filter((p) => customFormat(p.code)?.listed && !known.has(p.code) && p.events >= MIN_BOARD_PODS)
+    .map((p) => ({ ...podBoardSet(p), startDate: p.lastEvent, endDate: p.lastEvent }));
   return [...sets, ...boards];
 }

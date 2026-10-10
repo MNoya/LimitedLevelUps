@@ -12,7 +12,7 @@ import { RefreshButton } from "../components/tracker/RefreshButton";
 import { AccountTabs, useTrackerAccounts } from "../components/tracker/AccountTabs";
 import { useQuery } from "@tanstack/react-query";
 import { PLAYER_PAGE_MOBILE_BREAKPOINT, useIsMobile } from "../lib/use-is-mobile";
-import { AAvatar, ALogo, SetGlyph, Trophy, fmtPts } from "../components/Brand";
+import { AAvatar, ALogo, SetGlyph, setGlyphCode, Trophy, fmtPts } from "../components/Brand";
 import {
   ArrowRight,
   ChevronDown,
@@ -48,7 +48,7 @@ import { Tooltip } from "../components/Tooltip";
 
 import { useAvailableFormats, useColorChips, useCubeSeasons, useDraftEvents, useLeaderboard, useLifetimeDraftEvents, useLifetimeStats, usePlayerIdentity, usePlayerLifetimeProfile, usePlayerProfile, usePlayerSlugByDiscordId, usePodEvents, usePodSetCodes, useSets } from "../data/hooks";
 import { withMtgoSets } from "../data/mtgoSets";
-import { cubeBoardForRoute, setsWithCubeBoards } from "../data/cubeVariants";
+import { cubeBoardForRoute, cubeForBoard, setsWithCubeBoards } from "../data/cubeVariants";
 import { podBoardCode, podBoardWindowFor, withCustomPodBoards } from "../data/podFormats";
 import { AXIS_ALL, MIN_BOARD_SEASONS, POD_SEASON_PARAM, seasonsPlayed } from "../data/podSeasons";
 import { aggregate as scoreAggregate, computeScore, type ScoringStatRow } from "../data/scoring";
@@ -600,9 +600,14 @@ function LifetimeSetsPanel({
   const [sortKey, setSortKey] = useState<SetSortKey>("release");
   const [dir, setDir] = useState<SortDir>("desc");
   const nameFor = useCallback(
-    (code: string) => sets?.find((s) => s.code === code)?.name ?? code,
+    (code: string) => cubeForBoard(code)?.name ?? sets?.find((s) => s.code === code)?.name ?? code,
     [sets],
   );
+  const setFor = (code: string) => sets?.find((s) => s.code === code);
+  const glyphFor = (code: string) => {
+    const set = setFor(code);
+    return set ? setGlyphCode(set) : code;
+  };
   const releaseFor = useCallback(
     (code: string) => sets?.find((s) => s.code === code)?.startDate ?? "",
     [sets],
@@ -656,9 +661,11 @@ function LifetimeSetsPanel({
             style={{ gridTemplateColumns: grid }}
           >
             <span className="flex items-center gap-2 min-w-0">
-              <SetGlyph code={sp.setCode} size={22} className="text-white/85 shrink-0" />
+              <SetGlyph code={glyphFor(sp.setCode)} size={22} className="text-white/85 shrink-0" />
               <span className="flex items-baseline gap-2 min-w-0 flex-1">
-                <span className="font-display text-[18px] leading-none tracking-[0.04em] shrink-0">{sp.setCode}</span>
+                <span className="font-display text-[18px] leading-none tracking-[0.04em] shrink-0">
+                  {setFor(sp.setCode)?.shortCode ?? sp.setCode}
+                </span>
                 <FitText text={shortSetName(nameFor(sp.setCode))} className="font-display text-muted tracking-[0.03em]" max={12} min={9} />
               </span>
             </span>

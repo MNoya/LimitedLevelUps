@@ -34,6 +34,7 @@ import {
 import { mergeSelfReportedTrophies, type SelfReportedTrophyTally } from "./selfReported";
 import { aggregatePodStandings } from "./podSeasons";
 import { podBoardWindowFor, type PodBoardWindow } from "./podFormats";
+import { cubeBoardCode, CUBE_VARIANTS } from "./cubeVariants";
 import { baseSetCode, colorsOf, CUBE_BASE, eventDate, isCubeCode, isCubeSeasonCode, isSoup } from "./utils";
 import { formatsForBucket } from "./format-buckets";
 import { IDENTITY_VIEWS } from "./constants";
@@ -1341,7 +1342,8 @@ function easternDate(iso: string): string {
 // ─── Lifetime (set-agnostic) profile ──────────────────────────────────────
 
 export async function fetchLifetimeProfile(slug: string): Promise<PlayerProfile | null> {
-  const [headlineResp, podResp, trophiesResp] = await Promise.all([
+  const cubeBoards = CUBE_VARIANTS.map((v) => cubeBoardCode(v.slug));
+  const [headlineResp, podResp, trophiesResp, cubeResp] = await Promise.all([
     client().from("public_player").select("*").eq("slug", slug),
     client().from("public_pod_scoring").select("*").eq("slug", slug),
     client()
@@ -1349,10 +1351,12 @@ export async function fetchLifetimeProfile(slug: string): Promise<PlayerProfile 
       .select("*")
       .eq("slug", slug)
       .order("reported_at", { ascending: false }),
+    client().from("public_cube_season_breakdown").select("*").eq("slug", slug).in("set_code", cubeBoards),
   ]);
   if (headlineResp.error) throw headlineResp.error;
   if (podResp.error) throw podResp.error;
   if (trophiesResp.error) throw trophiesResp.error;
+  if (cubeResp.error) throw cubeResp.error;
 
   const headlineRows = (headlineResp.data ?? []) as Record<string, unknown>[];
   const podRows = (podResp.data ?? []) as Record<string, unknown>[];
@@ -1383,6 +1387,14 @@ export async function fetchLifetimeProfile(slug: string): Promise<PlayerProfile 
     trophies17 += t;
     const calc = (r.last_calculated_at as string) ?? "";
     if (calc > lastCalculatedAt) lastCalculatedAt = calc;
+    if (r.set_code === CUBE_BASE) continue;
+    bump(r.set_code as string, (c) => ({ ...c, events: c.events + e, wins: c.wins + w, losses: c.losses + l, trophies: c.trophies + t }));
+  }
+  for (const r of (cubeResp.data ?? []) as Record<string, unknown>[]) {
+    const e = num(r, "events");
+    const w = num(r, "wins");
+    const l = num(r, "losses");
+    const t = num(r, "trophies");
     bump(r.set_code as string, (c) => ({ ...c, events: c.events + e, wins: c.wins + w, losses: c.losses + l, trophies: c.trophies + t }));
   }
   let podTrophies = 0;
@@ -2067,15 +2079,19 @@ async function podParticipantsForEvents(eventIds: string[]): Promise<Record<stri
 export async function fetchPodSetCodes(): Promise<PodSetCode[]> {
   const { data, error } = await client()
     .from("public_pod_draft_events")
-    .select("set_code, format_label, kind");
+    .select("set_code, format_label, kind, event_date");
   if (error) throw error;
-  const byCode = new Map<string, { label: string | null; events: number; mocks: number }>();
+  const byCode = new Map<string, { label: string | null; events: number; mocks: number; lastEvent: string }>();
   for (const r of data ?? []) {
-    const row = r as { set_code: string; format_label: string | null; kind: string };
-    const entry = byCode.get(row.set_code) ?? { label: null, events: 0, mocks: 0 };
+    const row = r as { set_code: string; format_label: string | null; kind: string; event_date: string };
+    const entry = byCode.get(row.set_code) ?? { label: null, events: 0, mocks: 0, lastEvent: "" };
     entry.label = entry.label ?? row.format_label ?? null;
-    if (row.kind === "mock") entry.mocks += 1;
-    else entry.events += 1;
+    if (row.kind === "mock") {
+      entry.mocks += 1;
+    } else {
+      entry.events += 1;
+      if (row.event_date > entry.lastEvent) entry.lastEvent = row.event_date;
+    }
     byCode.set(row.set_code, entry);
   }
   return Array.from(byCode, ([code, entry]) => ({ code, ...entry }));

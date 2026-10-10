@@ -113,7 +113,7 @@ const CHAMFER = "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)";
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 function chipDateLabel(set: SetSummary): string {
-  if (set.isActive || isCubeCode(set.code) || !set.startDate) return "";
+  if (set.isActive || set.custom || isCubeCode(set.code) || !set.startDate) return "";
   const [year, month] = set.startDate.split("-");
   const name = MONTHS[Number(month) - 1];
   return name ? `${name} '${year.slice(2)}` : "";
@@ -167,6 +167,7 @@ export function SwitcherChip({
   onHover?: () => void;
   caption?: React.ReactNode;
 }) {
+  const longLabel = label.length > 6;
   return (
     <div className="relative">
       <Link
@@ -183,13 +184,14 @@ export function SwitcherChip({
       >
         <span
           className={cn(
-            "flex items-center justify-center gap-[7px] w-[98px] px-[17px] font-display h-full",
+            "flex items-center justify-center w-[98px] font-display h-full",
+            longLabel ? "gap-[3px] px-[7px]" : "gap-[7px] px-[17px]",
             active ? "bg-green text-bg" : "bg-surface text-text group-hover:bg-surface2",
           )}
           style={{ clipPath: CHAMFER, minHeight: 40 }}
         >
           {icon}
-          <span className="text-[20px] tracking-[0.06em] leading-none">{label}</span>
+          <span className={cn("tracking-[0.06em] leading-none", longLabel ? "text-[18px]" : "text-[20px]")}>{label}</span>
         </span>
       </Link>
       {caption}

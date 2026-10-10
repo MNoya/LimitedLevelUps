@@ -38,6 +38,7 @@ import {
   useOtherColorsLeaderboard,
   usePlayerProfile,
   usePlayerSlugByDiscordId,
+  usePodSetCodes,
   usePrefetchers,
   useSets,
   useCubeSeasons,
@@ -51,6 +52,7 @@ import {
   latestWindowFor, SEASONED_CUBE_VARIANT, setsWithCubeBoards,
 } from "../data/cubeVariants";
 import { CubeSeasonSelector, cubeBoardHasSeasons } from "../components/CubeSeasonSelector";
+import { podBoardWindowFor, withCustomPodBoards } from "../data/podFormats";
 import { colorsDisplayName, FORMAT_LABEL_GROUPS, FORMAT_OPTIONS, matchesFormatFilter, MULTI, OTHER } from "../data/filters";
 import { FMT_COLORS, FMT_DEFAULT_COLOR, renderFormatOption, shortFormat } from "../data/format-display";
 import { guildLogoTransform, guildSvgUrl } from "../data/guild-art";
@@ -76,9 +78,10 @@ export function LeaderboardPage() {
   const activeSet = cubeBoard ?? routeSet;
   const setMeta = sets?.find((s) => s.code === baseSetCode(activeSet));
   // Every cube is its own entry here; `sets` keeps the real rows for route and metadata lookups
+  const { data: podSetCodes } = usePodSetCodes();
   const dropdownSets = useMemo(
-    () => withMtgoSets(setsWithCubeBoards(sets, cubeSeasons)),
-    [sets, cubeSeasons],
+    () => withMtgoSets(withCustomPodBoards(setsWithCubeBoards(sets, cubeSeasons), podSetCodes)),
+    [sets, cubeSeasons, podSetCodes],
   );
   const isMtgo = isMtgoFlashbackCode(activeSet);
   const trophyLb = useTrophyLeaderboard(isMtgo ? activeSet : undefined);
@@ -1345,6 +1348,9 @@ const setBoardHref = (
   cubeEntryBoard?: string,
   cubeSeasons?: CubeSeason[],
 ): To => {
+  if (podBoardWindowFor(code)) {
+    return { pathname: `/pods/${code}` };
+  }
   const entryCode = code === CUBE_BASE && cubeEntryBoard ? cubeEntryBoard : code;
   const boardCode = latestWindowFor(entryCode, cubeSeasons);
   const activeCode = sets?.find((s) => s.isActive)?.code;

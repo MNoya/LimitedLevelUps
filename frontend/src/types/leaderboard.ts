@@ -23,6 +23,7 @@ export interface PodSetCode {
   // Pods played under this code, so a format tried once does not earn a board
   events: number;
   mocks: number;
+  lastEvent: string;
 }
 
 export interface PodCalendarEntry {
