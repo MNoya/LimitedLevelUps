@@ -12,7 +12,7 @@ import { RefreshButton } from "../components/tracker/RefreshButton";
 import { AccountTabs, useTrackerAccounts } from "../components/tracker/AccountTabs";
 import { useQuery } from "@tanstack/react-query";
 import { PLAYER_PAGE_MOBILE_BREAKPOINT, useIsMobile } from "../lib/use-is-mobile";
-import { AAvatar, ALogo, SetGlyph, setGlyphCode, Trophy, fmtPts } from "../components/Brand";
+import { AAvatar, ALogo, AVATAR_CLIP, SetGlyph, setGlyphCode, Trophy, fmtPts } from "../components/Brand";
 import {
   ArrowRight,
   ChevronDown,
@@ -48,7 +48,7 @@ import { Tooltip } from "../components/Tooltip";
 
 import { useAvailableFormats, useColorChips, useCubeSeasons, useDraftEvents, useLeaderboard, useLifetimeDraftEvents, useLifetimeStats, usePlayerIdentity, usePlayerLifetimeProfile, usePlayerProfile, usePlayerSlugByDiscordId, usePodEvents, usePodSetCodes, useSets } from "../data/hooks";
 import { withMtgoSets } from "../data/mtgoSets";
-import { cubeBoardForRoute, cubeForBoard, setsWithCubeBoards } from "../data/cubeVariants";
+import { CUBE_VARIANTS, cubeBoardCode, cubeBoardForRoute, cubeForBoard, setsWithCubeBoards } from "../data/cubeVariants";
 import { podBoardCode, podBoardWindowFor, withCustomPodBoards } from "../data/podFormats";
 import { AXIS_ALL, MIN_BOARD_SEASONS, POD_SEASON_PARAM, seasonsPlayed } from "../data/podSeasons";
 import { aggregate as scoreAggregate, computeScore, type ScoringStatRow } from "../data/scoring";
@@ -261,7 +261,7 @@ export function PlayerPage() {
         ) : (
           <AppHeader subtitle="PLAYER PROFILE" />
         )}
-        {isMobile ? <MobileSkeleton /> : <DesktopSkeleton />}
+        {isMobile ? <MobileSkeleton setCode={setCode} /> : <DesktopSkeleton />}
       </div>
     );
   }
@@ -395,6 +395,7 @@ function LifetimePlayer({
   const setsPlayed = profile.setsPlayed ?? [];
   const seasonRow = seasonFilter !== "ALL" ? setsPlayed.find((sp) => sp.setCode === seasonFilter) : undefined;
   const filtersActive = formatFilter !== "ALL" || colorsFilter !== "ALL";
+  const recencyEvents = filtersActive || seasonFilter !== "ALL" ? [] : events;
   const base = seasonFilter !== "ALL" ? (seasonRow ?? { trophies: 0, events: 0, wins: 0, losses: 0 }) : profile;
   const filteredStrip = filteredStats ?? statsFromEvents(events);
   const stats: StatStripStats = filtersActive
@@ -448,7 +449,7 @@ function LifetimePlayer({
           <LeftPaneTab active={mobileTab === "events"} onClick={() => setMobileTab("events")} className="flex-1 justify-center">EVENT LOG</LeftPaneTab>
         </div>
         {mobileTab === "sets" ? (
-          <LifetimeSetsPanel setsPlayed={setsPlayed} sets={sets} slug={profile.slug} isMobile />
+          <LifetimeSetsPanel setsPlayed={setsPlayed} recencyEvents={recencyEvents} sets={sets} slug={profile.slug} isMobile />
         ) : (
           <LifetimeEventLog
             events={events}
@@ -510,7 +511,7 @@ function LifetimePlayer({
       </section>
       <div className="grid" style={{ gridTemplateColumns: setsPlayed.length > 0 ? "clamp(360px, 32vw, 460px) minmax(0, 1fr)" : "minmax(0, 1fr)" }}>
         {setsPlayed.length > 0 && (
-          <LifetimeSetsPanel setsPlayed={setsPlayed} sets={sets} slug={profile.slug} />
+          <LifetimeSetsPanel setsPlayed={setsPlayed} recencyEvents={recencyEvents} sets={sets} slug={profile.slug} />
         )}
         <LifetimeEventLog
           events={events}
@@ -538,7 +539,7 @@ function LifetimeMobileHeader({ backTo }: { backTo: To }) {
   return <MobilePageHeader backTo={backTo} prevTo={null} nextTo={null} />;
 }
 
-type SetSortKey = "release" | "set" | "trophies" | "events" | "winrate";
+type SetSortKey = "recent" | "set" | "trophies" | "events" | "winrate";
 
 function FitText({ text, max = 15, min = 9, className }: { text: string; max?: number; min?: number; className?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -588,16 +589,18 @@ function shortSetName(name: string): string {
 
 function LifetimeSetsPanel({
   setsPlayed,
+  recencyEvents,
   sets,
   slug,
   isMobile = false,
 }: {
   setsPlayed: SetPlayed[];
+  recencyEvents: PlayerDraftEvent[];
   sets: SetSummary[] | undefined;
   slug: string;
   isMobile?: boolean;
 }) {
-  const [sortKey, setSortKey] = useState<SetSortKey>("release");
+  const [sortKey, setSortKey] = useState<SetSortKey>("recent");
   const [dir, setDir] = useState<SortDir>("desc");
   const nameFor = useCallback(
     (code: string) => cubeForBoard(code)?.name ?? sets?.find((s) => s.code === code)?.name ?? code,
@@ -608,15 +611,26 @@ function LifetimeSetsPanel({
     const set = setFor(code);
     return set ? setGlyphCode(set) : code;
   };
-  const releaseFor = useCallback(
-    (code: string) => sets?.find((s) => s.code === code)?.startDate ?? "",
-    [sets],
+  const lastPlayed = useMemo(() => lastPlayedByBoard(recencyEvents), [recencyEvents]);
+  const compareRecent = useCallback(
+    (a: SetPlayed, b: SetPlayed) => {
+      const setA = sets?.find((s) => s.code === a.setCode);
+      const setB = sets?.find((s) => s.code === b.setCode);
+      const pinnedA = isPinnedActiveSet(setA);
+      if (pinnedA !== isPinnedActiveSet(setB)) {
+        return pinnedA ? 1 : -1;
+      }
+      const dateA = timelineDate(a.setCode, setA, lastPlayed);
+      const dateB = timelineDate(b.setCode, setB, lastPlayed);
+      return dateA.localeCompare(dateB);
+    },
+    [lastPlayed, sets],
   );
   const sorted = useMemo(() => {
     const arr = [...setsPlayed];
     arr.sort((a, b) => {
       let cmp: number;
-      if (sortKey === "release") cmp = releaseFor(a.setCode).localeCompare(releaseFor(b.setCode));
+      if (sortKey === "recent") cmp = compareRecent(a, b);
       else if (sortKey === "set") cmp = nameFor(a.setCode).localeCompare(nameFor(b.setCode));
       else if (sortKey === "trophies") cmp = a.trophies - b.trophies;
       else if (sortKey === "events") cmp = a.events - b.events;
@@ -624,7 +638,7 @@ function LifetimeSetsPanel({
       return dir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [setsPlayed, sortKey, dir, nameFor, releaseFor]);
+  }, [setsPlayed, sortKey, dir, nameFor, compareRecent]);
   if (setsPlayed.length === 0) return null;
 
   const onSort = (key: SetSortKey) => {
@@ -637,7 +651,7 @@ function LifetimeSetsPanel({
     if (dir === firstDir) {
       setDir(firstDir === "asc" ? "desc" : "asc");
     } else {
-      setSortKey("release");
+      setSortKey("recent");
       setDir("desc");
     }
   };
@@ -681,6 +695,58 @@ function LifetimeSetsPanel({
       </div>
     </section>
   );
+}
+
+interface LastPlayed {
+  byBoard: Map<string, string>;
+  oldestLoaded: string;
+}
+
+function isPinnedActiveSet(set: SetSummary | undefined): boolean {
+  return !!set && set.isActive && isRealSeasonSet(set);
+}
+
+function timelineDate(code: string, set: SetSummary | undefined, lastPlayed: LastPlayed): string {
+  const boardRunDate = set?.startDate ?? "";
+  if (set && isRealSeasonSet(set)) {
+    return boardRunDate;
+  }
+  const played = lastPlayed.byBoard.get(code);
+  if (played) {
+    return played;
+  }
+  if (lastPlayed.oldestLoaded && lastPlayed.oldestLoaded < boardRunDate) {
+    return lastPlayed.oldestLoaded;
+  }
+  return boardRunDate;
+}
+
+function lastPlayedByBoard(newestFirst: PlayerDraftEvent[]): LastPlayed {
+  const byBoard = new Map<string, string>();
+  let oldestLoaded = "";
+  for (const event of newestFirst) {
+    const day = eventDate(event).slice(0, 10);
+    const board = boardCodeForEvent(event);
+    if (!byBoard.has(board)) {
+      byBoard.set(board, day);
+    }
+    if (day) {
+      oldestLoaded = day;
+    }
+  }
+  return { byBoard, oldestLoaded };
+}
+
+function boardCodeForEvent(event: PlayerDraftEvent): string {
+  if (event.setCode !== CUBE_BASE) {
+    return event.setCode;
+  }
+  for (const variant of CUBE_VARIANTS) {
+    if (variant.expansion === event.expansion) {
+      return cubeBoardCode(variant.slug);
+    }
+  }
+  return event.setCode;
 }
 
 function SetSortHeader({
@@ -1088,11 +1154,57 @@ function NoSetData({
   );
 }
 
-function SkeletonBox({ className }: { className?: string }) {
-  return <div className={cn("bg-surface2 animate-pulse", className)} />;
+function SkeletonBox({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={cn("bg-surface2 animate-pulse", className)} style={style} />;
 }
 
-function MobileSkeleton() {
+function SkeletonAvatar({ size }: { size: number | string }) {
+  return <SkeletonBox className="shrink-0" style={{ width: size, height: size, clipPath: AVATAR_CLIP }} />;
+}
+
+function SkeletonIdentity({ ranked }: { ranked: boolean }) {
+  const chamfer = "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)";
+  return (
+    <>
+      <SkeletonAvatar size={STAT_STRIP_HEIGHT} />
+      <div className="shrink-0 pl-[5px]">
+        <SkeletonBox className="w-40" style={{ height: `calc(${HEADER_NAME_SIZE} * 0.95)` }} />
+        <div className="mt-2 flex items-center gap-3">
+          <SkeletonBox className="w-[130px] h-[46px]" style={{ clipPath: chamfer }} />
+          {ranked && <SkeletonBox className="w-[72px] h-[46px]" style={{ clipPath: chamfer }} />}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SkeletonStatStrip({ tileWidths, className }: { tileWidths: number[]; className?: string }) {
+  return (
+    <div
+      className={cn("grid border border-border2 shrink-0", className)}
+      style={{
+        height: STAT_STRIP_HEIGHT,
+        gridTemplateColumns: tileWidths.map((width) => `${width}px`).join(" "),
+      }}
+    >
+      {tileWidths.map((_, i) => (
+        <div
+          key={i}
+          className={cn(
+            "px-3 flex flex-col items-center justify-center gap-3",
+            i < tileWidths.length - 1 && "border-r border-border2",
+          )}
+        >
+          <SkeletonBox className="w-12 h-2.5" />
+          <SkeletonBox className="w-16 h-10" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MobileSkeleton({ setCode }: { setCode: string }) {
+  const tabCount = useSetDates(setCode) ? 4 : 3;
   return (
     <>
       <section
@@ -1100,7 +1212,7 @@ function MobileSkeleton() {
         style={{ background: "linear-gradient(180deg, #14181f 0%, #0a0c10 100%)" }}
       >
         <div className="flex items-center">
-          <SkeletonBox className="w-[84px] h-[84px] rounded-full shrink-0" />
+          <SkeletonAvatar size={84} />
           <div className="flex-1 min-w-0 ml-3 flex items-center min-h-[84px]">
             <SkeletonBox className="w-40 h-9" />
           </div>
@@ -1111,15 +1223,15 @@ function MobileSkeleton() {
         </div>
         <div className="mt-[18px] grid grid-cols-5 gap-[5px]">
           {[0, 1, 2, 3, 4].map((i) => (
-            <SkeletonBox key={i} className="h-12" />
+            <SkeletonBox key={i} className="h-[50px]" />
           ))}
         </div>
       </section>
 
       <section className="border-b border-border">
         <div className="flex border-b border-border">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="flex-1 py-2.5 px-1.5 flex justify-center">
+          {Array.from({ length: tabCount }).map((_, i) => (
+            <div key={i} className="flex-1 h-[35px] px-1.5 flex items-center justify-center">
               <SkeletonBox className="w-3/4 h-3" />
             </div>
           ))}
@@ -1162,33 +1274,13 @@ function DesktopSkeleton() {
         className="px-[clamp(16px,2.2vw,32px)] pt-5 pb-7 border-b border-border"
         style={{ background: "linear-gradient(180deg, #14181f 0%, #0a0c10 100%)" }}
       >
-        <div className="flex items-center justify-between mb-4">
-          <SkeletonBox className="w-48 h-5" />
-          <SkeletonBox className="w-28 h-5" />
+        <div className="h-5 flex items-center justify-between mb-4">
+          <SkeletonBox className="w-[165px] h-3" />
+          <SkeletonBox className="w-[110px] h-3" />
         </div>
-        <div className="flex items-end gap-7">
-          <SkeletonBox className="w-[120px] h-[120px] rounded-full" />
-          <div className="shrink-0 flex flex-col gap-3">
-            <SkeletonBox className="w-72 h-12" />
-            <SkeletonBox className="w-44 h-9" />
-          </div>
-          <div
-            className="ml-auto self-end grid border border-border2"
-            style={{ flex: "0 1 601px", height: "106px", gridTemplateColumns: "1fr 1fr 1.3fr 1fr 0.9fr" }}
-          >
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className={cn(
-                  "px-3 flex flex-col items-center justify-center gap-3",
-                  i < 4 && "border-r border-border2",
-                )}
-              >
-                <SkeletonBox className="w-12 h-2.5" />
-                <SkeletonBox className="w-16 h-10" />
-              </div>
-            ))}
-          </div>
+        <div className="flex items-end gap-[clamp(14px,1.8vw,28px)]">
+          <SkeletonIdentity ranked />
+          <SkeletonStatStrip tileWidths={[96, 96, 125, 96, 102]} className="ml-auto" />
         </div>
       </section>
 
@@ -1214,6 +1306,7 @@ function DesktopSkeleton() {
         <section className="pb-6 px-5 min-w-0">
           <div className="h-[42px] flex items-center justify-between px-5 -mx-5 border-b border-border2">
             <SkeletonBox className="w-40 h-3" />
+            <SkeletonBox className="w-28 h-3" />
             <div className="flex gap-2">
               <SkeletonBox className="w-36 h-8" />
               <SkeletonBox className="w-36 h-8" />
@@ -1246,24 +1339,10 @@ function LifetimeSkeleton() {
         className="px-[clamp(16px,2.2vw,32px)] pt-5 pb-7 border-b border-border"
         style={{ background: "linear-gradient(180deg, #14181f 0%, #0a0c10 100%)" }}
       >
-        <div className="mb-4"><SkeletonBox className="w-48 h-5" /></div>
+        <div className="h-5 mb-4 flex items-center"><SkeletonBox className="w-[165px] h-3" /></div>
         <div className="flex items-end gap-7">
-          <SkeletonBox className="w-[120px] h-[120px] rounded-full" />
-          <div className="flex flex-col gap-3">
-            <SkeletonBox className="w-72 h-12" />
-            <SkeletonBox className="w-40 h-9" />
-          </div>
-          <div
-            className="ml-auto self-end grid border border-border2"
-            style={{ flex: "0 1 596px", height: "106px", gridTemplateColumns: "1fr 1fr 1.3fr 1fr" }}
-          >
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className={cn("px-3 flex flex-col items-center justify-center gap-3", i < 3 && "border-r border-border2")}>
-                <SkeletonBox className="w-12 h-2.5" />
-                <SkeletonBox className="w-16 h-10" />
-              </div>
-            ))}
-          </div>
+          <SkeletonIdentity ranked={false} />
+          <SkeletonStatStrip tileWidths={[96, 96, 125, 96]} className="ml-auto" />
         </div>
       </section>
       <div className="grid" style={{ gridTemplateColumns: "clamp(360px, 32vw, 460px) minmax(0, 1fr)" }}>
@@ -1305,7 +1384,7 @@ function LifetimeMobileSkeleton() {
     <>
       <section className="px-[18px] pt-5 pb-4 border-b border-border" style={{ background: "linear-gradient(180deg, #14181f 0%, #0a0c10 100%)" }}>
         <div className="flex items-center">
-          <SkeletonBox className="w-[84px] h-[84px] rounded-full shrink-0" />
+          <SkeletonAvatar size={84} />
           <div className="flex-1 min-w-0 ml-3 flex items-center min-h-[84px]"><SkeletonBox className="w-40 h-9" /></div>
           <SkeletonBox className="w-[92px] h-[38px] shrink-0" />
         </div>
@@ -1519,7 +1598,6 @@ function Desktop({
   const ranked = profile.rank > 0;
   const hasBreakdown = profile.events > 0 || profile.selfReportedEvents.length > 0;
   const trackerMode = useOwnTrackerProfile(profile.slug);
-  const hasDates = !!useSetDates(profile.setCode);
   const { trackerTab } = useParams<{ trackerTab?: string }>();
   const leftPane = trackerTab === "breakdown" ? "breakdown" : "collection";
   const { search } = useLocation();
@@ -1546,44 +1624,48 @@ function Desktop({
           <SiblingNavButtons sibling={sibling} qs={qs} />
         </div>
         <div ref={headerRowRef} className="flex items-end gap-[clamp(14px,1.8vw,28px)]">
-          <AAvatar displayName={profile.displayName} avatarUrl={profile.avatarUrl} size={HEADER_AVATAR_SIZE} green />
-          <div className="shrink-0">
-            <h1
-              className="font-display tracking-[0.03em] m-0 whitespace-nowrap pl-[5px]"
-              style={{ fontSize: HEADER_NAME_SIZE, lineHeight: 0.95 }}
-            >
-              {profile.displayName.toUpperCase()}
-            </h1>
-            <div className="mt-2 flex items-center gap-3 font-display tracking-[0.18em]">
-              {sets ? (
-                <SetCodeDropdown sets={sets} activeCode={profile.setCode} hrefFor={setHref} includeLifetime />
-              ) : (
-                <span className="text-[22px]">{profile.setCode}</span>
-              )}
-              {ranked && <RankBadge rank={profile.rank} size="lg" />}
-              <ProfileSeasonSelector setCode={profile.setCode} hrefFor={setHref} variant="hero" />
+          <div className="flex-1 basis-0 flex items-end gap-[clamp(14px,1.8vw,28px)]">
+            <AAvatar displayName={profile.displayName} avatarUrl={profile.avatarUrl} size={HEADER_AVATAR_SIZE} green />
+            <div className="shrink-0">
+              <h1
+                className="font-display tracking-[0.03em] m-0 whitespace-nowrap pl-[5px]"
+                style={{ fontSize: HEADER_NAME_SIZE, lineHeight: 0.95 }}
+              >
+                {profile.displayName.toUpperCase()}
+              </h1>
+              <div className="mt-2 flex items-center gap-3 font-display tracking-[0.18em]">
+                {sets ? (
+                  <SetCodeDropdown sets={sets} activeCode={profile.setCode} hrefFor={setHref} includeLifetime />
+                ) : (
+                  <span className="text-[22px]">{profile.setCode}</span>
+                )}
+                {ranked && <RankBadge rank={profile.rank} size="lg" />}
+                <ProfileSeasonSelector setCode={profile.setCode} hrefFor={setHref} variant="hero" />
+              </div>
             </div>
           </div>
-          <SetDatesBlock setCode={profile.setCode} variant="header" className="mx-auto" />
-          <div
-            ref={statsRef}
-            className={cn("flex items-stretch gap-4 min-w-0", !hasDates && "ml-auto")}
-            style={{ zoom: `var(${STAT_SCALE_VAR}, 1)` }}
-          >
-            {trackerMode && (
-              <TrackerStatsBlock slug={profile.slug} setCode={profile.setCode} accountId={trackerAccount} />
-            )}
-            <ManualTrophiesBlock trophies={profile.selfReportedEvents} />
-            {profile.events > 0 && (
-              <StatStrip
-                stats={stats}
-                wp={wp}
-                showPoints={ranked}
-                onPointsClick={() => setPointsModalOpen((o) => !o)}
-                pointsBtnRef={pointsBtnRef}
-                trophiesLabel={profile.selfReportedEvents.some((e) => e.isTrophy) ? "17L TROPHIES" : "TROPHIES"}
-              />
-            )}
+          <SetDatesBlock setCode={profile.setCode} variant="header" />
+          <div className="flex-1 basis-0 flex justify-end">
+            <div
+              ref={statsRef}
+              className="flex items-stretch gap-4 min-w-0"
+              style={{ zoom: `var(${STAT_SCALE_VAR}, 1)` }}
+            >
+              {trackerMode && (
+                <TrackerStatsBlock slug={profile.slug} setCode={profile.setCode} accountId={trackerAccount} />
+              )}
+              <ManualTrophiesBlock trophies={profile.selfReportedEvents} />
+              {profile.events > 0 && (
+                <StatStrip
+                  stats={stats}
+                  wp={wp}
+                  showPoints={ranked}
+                  onPointsClick={() => setPointsModalOpen((o) => !o)}
+                  pointsBtnRef={pointsBtnRef}
+                  trophiesLabel={profile.selfReportedEvents.some((e) => e.isTrophy) ? "17L TROPHIES" : "TROPHIES"}
+                />
+              )}
+            </div>
           </div>
         </div>
       </section>

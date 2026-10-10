@@ -7,7 +7,9 @@ import { ALogo, AWordmark, SetGlyph } from "./Brand";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { useAuth } from "../auth/useAuth";
-import { useP0P1FeaturedContest, useP0P1Picks, useP0P1Ratings, usePlayerSlugByDiscordId } from "../data/hooks";
+import { useP0P1FeaturedContest, useP0P1Picks, useP0P1Ratings, usePlayerSlugByDiscordId, useSets } from "../data/hooks";
+import { ACTIVE_SET_CODE } from "../data/constants";
+import { playerPath } from "../data/utils";
 import { slotsForSet } from "../data/p0p1Slots";
 import { p0p1DevEnabled, p0p1Now, useP0P1DevPreset } from "../data/p0p1DevState";
 import { deriveP0P1Phase } from "../data/useP0P1Ballot";
@@ -215,7 +217,7 @@ export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = fals
 
 function DesktopAuth() {
   const { user, loading, signIn, signOut } = useAuth();
-  const { data: profileSlug } = usePlayerSlugByDiscordId(user?.discordId);
+  const myProfilePath = useMyProfilePath(user?.discordId);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -271,9 +273,9 @@ function DesktopAuth() {
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-2 w-56 bg-surface border border-border2 rounded-lg shadow-xl shadow-black/40 overflow-hidden z-50 animate-fadeUpIn">
-          {profileSlug && (
+          {myProfilePath && (
             <Link
-              to={`/player/${profileSlug}`}
+              to={myProfilePath}
               onClick={() => setOpen(false)}
               className="flex items-center gap-2.5 px-3 py-2.5 font-display text-[15px] tracking-[0.14em] no-underline text-subtle hover:bg-surface2 hover:text-green transition-colors"
             >
@@ -307,7 +309,7 @@ function MobileMenu({
   onClose: () => void;
 }) {
   const { user, loading, signIn, signOut } = useAuth();
-  const { data: profileSlug } = usePlayerSlugByDiscordId(user?.discordId);
+  const myProfilePath = useMyProfilePath(user?.discordId);
 
   const avatarEl = user &&
     (user.avatarUrl ? (
@@ -328,9 +330,9 @@ function MobileMenu({
         role="menu"
       >
         {includeAuth && !loading && user && (
-          profileSlug ? (
+          myProfilePath ? (
             <Link
-              to={`/player/${profileSlug}`}
+              to={myProfilePath}
               onClick={onClose}
               role="menuitem"
               className={cn(MENU_ROW_CLASS, "no-underline text-text bg-transparent hover:bg-surface")}
@@ -395,6 +397,16 @@ function MobileMenu({
       </nav>
     </>
   );
+}
+
+function useMyProfilePath(discordId: string | undefined): string | null {
+  const { data: slug } = usePlayerSlugByDiscordId(discordId);
+  const { data: sets } = useSets();
+  if (!slug) {
+    return null;
+  }
+  const activeSetCode = sets?.find((s) => s.isActive)?.code ?? ACTIVE_SET_CODE;
+  return playerPath(slug, activeSetCode);
 }
 
 function MenuIconSlot({ children }: { children: ReactNode }) {

@@ -28,7 +28,7 @@ import { preloadGuildLogos } from "./data/guild-art";
 //   /                → redirect to /leaderboard
 //   /leaderboard     → leaderboard for the active set
 //   /leaderboard/SOS → leaderboard for SOS
-//   /player/x        → player profile, defaults to active set
+//   /player/x        → lifetime player profile
 //   /player/x/SOS    → player profile (set-scoped)
 //
 // Legacy /leaderboard/[SOS/]player/x links redirect to the new /player paths.
