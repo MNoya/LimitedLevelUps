@@ -92,6 +92,7 @@ def format_deck_color_emojis(code: str | None) -> str:
     - "WRgbu"→ :manawubrg:                     (5 distinct colors always collapse to soup)
     - "BGw"  → :manab::manag::manaws:          (BG main, small W splash)
     - "URw"  → :manaur::manaws:                (UR guild pair main, small W splash)
+    - "Gwub" → :manag::manawus::manabs:        (three splashes fold into a small hybrid plus one pip)
     """
     if not code:
         return ""
@@ -115,7 +116,16 @@ def format_deck_color_emojis(code: str | None) -> str:
     main_glyph = _emojis_for_color_set(main)
     if not splash:
         return main_glyph
-    return f"{main_glyph}{_emojis_for_color_set(splash, small=True)}"
+    return f"{main_glyph}{_splash_emojis(splash)}"
+
+
+def _splash_emojis(splash: set[str]) -> str:
+    if len(splash) != 3:
+        return _emojis_for_color_set(splash, small=True)
+    ordered = [c for c in "WUBRG" if c in splash]
+    hybrid = _emojis_for_color_set(set(ordered[:2]), small=True)
+    leftover = _emojis_for_color_set({ordered[2]}, small=True)
+    return f"{hybrid}{leftover}"
 
 
 def _emojis_for_color_set(colors: set[str], *, small: bool = False) -> str:
