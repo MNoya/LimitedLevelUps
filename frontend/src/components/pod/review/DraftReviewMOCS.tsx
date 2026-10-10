@@ -13,6 +13,7 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { frontFace } from "../../../lib/cardSlug";
 import { cn } from "../../../lib/utils";
 import { wheelPixels } from "../../../lib/use-wheel-trap";
 import { ToggleSwitch } from "../../ToggleSwitch";
@@ -1418,8 +1419,6 @@ function RecapSection({
     </section>
   );
 }
-
-const frontFace = (name: string) => name.split(" // ")[0];
 
 const PANEL_DRAG_THRESHOLD = 4;
 const PANEL_MIN_HEIGHT = 64;

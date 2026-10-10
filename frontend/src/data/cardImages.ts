@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { frontFace } from "../lib/cardSlug";
 
 // Card art resolves through /api/card-images (Scryfall batch → CDN URLs); the browser never hits Scryfall directly
 
@@ -14,18 +15,13 @@ export interface CardImages {
   settled?: ReadonlySet<string>;
 }
 
-function frontFaceName(name: string): string {
-  const separator = name.indexOf("//");
-  return (separator === -1 ? name : name.slice(0, separator)).trim();
-}
-
 function mapKey(set: string | null | undefined, name: string): string {
-  return `${(set ?? "").toLowerCase()}|${frontFaceName(name).toLowerCase()}`;
+  return `${(set ?? "").toLowerCase()}|${frontFace(name).toLowerCase()}`;
 }
 
 function namedImageUrl(name: string, set?: string): string {
   const setParam = set ? `&set=${set.toLowerCase()}` : "";
-  const exact = encodeURIComponent(frontFaceName(name));
+  const exact = encodeURIComponent(frontFace(name));
   return `https://api.scryfall.com/cards/named?exact=${exact}${setParam}&format=image&version=normal`;
 }
 

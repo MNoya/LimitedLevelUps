@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { frontFace } from "../../lib/cardSlug";
 import { cn } from "../../lib/utils";
 import { PLAYER_PAGE_MOBILE_BREAKPOINT, useIsMobile } from "../../lib/use-is-mobile";
 import { Tooltip } from "../Tooltip";
@@ -40,10 +41,6 @@ const RARITY_STYLE = {
 };
 
 type RarityStyle = (typeof RARITY_STYLE)["rare"];
-
-function frontFace(name: string): string {
-  return name.split(" // ")[0].trim();
-}
 
 function collectionLookup(counts: CollectionCount[] | undefined): (name: string) => number {
   const owned = new Map<string, number>();

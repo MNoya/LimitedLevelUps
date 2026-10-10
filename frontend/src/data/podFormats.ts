@@ -1,3 +1,4 @@
+import { frontFace } from "../lib/cardSlug";
 import type { PodSetCode, SetSummary } from "../types/leaderboard";
 
 // Registered custom cube formats, mirrored from CUSTOM_FORMATS in bot/services/pod_format.py.
@@ -40,7 +41,7 @@ export async function fetchCubeCardNames(code: string): Promise<Set<string> | nu
   if (!response.ok) {
     throw new Error(`CubeCobra list ${fmt.cubeId}: ${response.status}`);
   }
-  const names = (await response.text()).split("\n").map((line) => line.trim());
+  const names = (await response.text()).split("\n").map(frontFace);
   return new Set(names.filter(Boolean));
 }
 

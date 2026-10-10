@@ -27,7 +27,7 @@ import { AVATAR_CLIP, SetGlyph } from "../components/Brand";
 import { CardArt, CardImageStack, cardDataHref } from "../components/pod/cardData/CardDetailParts";
 import { CardDetailRow } from "../components/pod/cardData/CardDetailRow";
 import { useCursorTooltip, type CursorTooltipBinding } from "../components/CursorTooltip";
-import { cardSlug } from "../lib/cardSlug";
+import { cardSlug, frontFace } from "../lib/cardSlug";
 import { winRateColor } from "../data/winRate";
 import { isPlainClick } from "../lib/plain-click";
 import { cn } from "../lib/utils";
@@ -187,7 +187,7 @@ export function PodCardDataPage() {
     const listFilter = currentListOnly ? currentList : null;
     const kept = cards.filter((c) => {
       const matchesSearch = !needle || c.name.toLowerCase().includes(needle);
-      const inList = !listFilter || listFilter.has(c.name);
+      const inList = !listFilter || listFilter.has(frontFace(c.name));
       return c.drafts >= minDrafts && cardMatchesFilters(c, filters) && inList && matchesSearch;
     });
     return sortPodCards(kept, sortKey, sortDir);
