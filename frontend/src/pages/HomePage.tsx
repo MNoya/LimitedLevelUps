@@ -24,7 +24,7 @@ import {
   CardPreview,
   comparePagerOrder,
   neighborCardUrls,
-  previewAnchorFor,
+  tierCardPreviewAnchor,
   type PreviewAnchor,
 } from "../components/TierGrid";
 import {
@@ -293,7 +293,7 @@ function TierPanel() {
   const selectedCard = selectedIndex >= 0 ? allCards[selectedIndex] : null;
 
   const showPreview = (el: HTMLElement, card: TierCard) => {
-    setHover({ card, anchor: previewAnchorFor(el) });
+    setHover({ card, anchor: tierCardPreviewAnchor(el) });
   };
 
   const tierDropdown = (

@@ -11,7 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChartColumn, LuScrollText, Maximize2, Minimize2, Play, RefreshCw } from "./Icons";
-import { CardDataPanel } from "./CardDataPanel";
+import { CardDataPanel, CardDeckGrades } from "./CardDataPanel";
 import { GradeLabel } from "./TierGuide";
 import { ModalNavButton } from "./ModalNavButton";
 import { Tooltip } from "./Tooltip";
@@ -44,7 +44,7 @@ import {
   type TierCard,
   type TierFilters,
 } from "../data/tierList";
-import type { CardGrades, CardStats } from "../data/cardStats";
+import { formatWinRate, type CardGrades, type CardStats } from "../data/cardStats";
 
 const RARITY_ACCENT: Record<string, string> = {
   C: "#ffffff",
@@ -136,7 +136,9 @@ export function TierGrid({
   for (const bucket of byKey.values()) {
     bucket.sort((a, b) => {
       if (placeByData) {
-        return deckGihWr(cardStats!.statsFor(b.name), deck) - deckGihWr(cardStats!.statsFor(a.name), deck);
+        const winRateA = deckGihWr(cardStats!.statsFor(a.name), deck) ?? 0;
+        const winRateB = deckGihWr(cardStats!.statsFor(b.name), deck) ?? 0;
+        return winRateB - winRateA;
       }
       const ra = inclusionRank(a.inclusion_type);
       const rb = inclusionRank(b.inclusion_type);
@@ -463,8 +465,8 @@ function deckGrade(grades: CardGrades | undefined, deck: string | null): string 
   return (deck ? grades?.pairs[deck] : grades?.all) ?? undefined;
 }
 
-function deckGihWr(stats: CardStats | undefined, deck: string | null): number {
-  return (deck ? stats?.pairs[deck]?.gihWr : stats?.gihWr) ?? 0;
+function deckGihWr(stats: CardStats | undefined, deck: string | null): number | null {
+  return (deck ? stats?.pairs[deck]?.gihWr : stats?.gihWr) ?? null;
 }
 
 const COLUMN_INDEX: Record<string, number> = Object.fromEntries(COLUMN_CODES.map((code, i) => [code, i]));
@@ -568,7 +570,10 @@ export interface PreviewAnchor {
 
 // Anchors a preview beside the hovered element, flipped to whichever side has room and clamped
 // vertically. Shared so every card hover on the site lands in the same place with the same chrome.
-export function previewAnchorFor(el: HTMLElement, previewH = PREVIEW_W * PREVIEW_RATIO + PREVIEW_EXTRAS_H): PreviewAnchor {
+export function previewAnchorFor(
+  el: HTMLElement,
+  previewH = PREVIEW_W * PREVIEW_RATIO + PREVIEW_EXTRAS_H,
+): PreviewAnchor {
   const rect = el.getBoundingClientRect();
   const centerY = rect.top + rect.height / 2;
   const top = Math.min(
@@ -578,6 +583,10 @@ export function previewAnchorFor(el: HTMLElement, previewH = PREVIEW_W * PREVIEW
   const onRight = rect.right + PREVIEW_GAP + PREVIEW_W <= window.innerWidth - 8;
   const left = onRight ? rect.right + PREVIEW_GAP : rect.left - PREVIEW_GAP - PREVIEW_W;
   return { left, top, onRight, centerY };
+}
+
+export function tierCardPreviewAnchor(el: HTMLElement): PreviewAnchor {
+  return previewAnchorFor(el, PREVIEW_W * PREVIEW_RATIO + PREVIEW_EXTRAS_H + 80);
 }
 
 export function PreviewShell({ anchor, children }: { anchor: PreviewAnchor; children: React.ReactNode }) {
@@ -642,14 +651,18 @@ function CardBar({
   const trendLabel = card.trend
     ? `${TREND_LABEL[card.trend]}${card.trend_from ? ` (${card.trend_from} → ${card.tier})` : ""}`
     : "";
-  const trend = useContext(DataPlacementContext) ? null : card.trend;
+  const placedByData = useContext(DataPlacementContext);
+  const trend = placedByData ? null : card.trend;
+  const deck = useContext(DataDeckContext);
+  const cardStats = useCardStats(setCode);
+  const winRate = mobile && placedByData ? deckGihWr(cardStats?.statsFor(card.name), deck) : null;
 
   const enterPreview = () => {
     hovering.current = true;
     preloadImage(card.url, () => {
       const el = ref.current;
       if (hovering.current && el) {
-        setAnchor(previewAnchorFor(el));
+        setAnchor(tierCardPreviewAnchor(el));
       }
     });
   };
@@ -727,6 +740,11 @@ function CardBar({
           </span>
           {badges && (
             <span className="shrink-0 text-[14px] leading-none">{badges}</span>
+          )}
+          {winRate !== null && (
+            <span className={cn("shrink-0 text-[14px] font-medium tabular-nums text-white", TEXT_OUTLINE)}>
+              {formatWinRate(winRate)}
+            </span>
           )}
 
         </div>
@@ -903,12 +921,16 @@ export function CardPreview({
   anchor: PreviewAnchor;
 }) {
   const deck = useContext(DataDeckContext);
-  const dataGrade = deckGrade(useCardStats(setCode)?.gradesFor(card.name), deck);
+  const cardStats = useCardStats(setCode);
+  const stats = cardStats?.statsFor(card.name);
+  const grades = cardStats?.gradesFor(card.name);
+  const dataGrade = deckGrade(grades, deck);
   return (
     <PreviewShell anchor={anchor}>
       <CardFlagTabs card={card} />
       <GradesPanel card={card} dataGrade={dataGrade} compact />
       <CardImage src={card.url} alt="" />
+      {stats && <CardDeckGrades stats={stats} grades={grades} />}
       {card.comment && (
         <p className="whitespace-pre-line px-3 py-2.5 text-center text-[14px] leading-snug text-text">
           {card.comment}
@@ -1298,7 +1320,7 @@ function usePersistedReviewViews(linkReview: boolean): [ReviewViews, (next: Revi
   const linkedReview = searchParams.get("review");
   const [views, setViews] = useState<ReviewViews>(() => {
     const linked = linkReview && linkedReview !== null ? decodeReviewViews(linkedReview) : null;
-    return linked ?? decodeReviewViews(window.localStorage.getItem(storageKey) ?? "");
+    return linked ?? decodeReviewViews(window.localStorage.getItem(storageKey) ?? "data");
   });
   const encoded = encodeReviewViews(views);
 

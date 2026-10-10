@@ -43,6 +43,8 @@ export const cardDetailsUrl = (setCode: string, mtgaId: number) => {
   return `https://www.17lands.com/card_data/details?${params}`;
 };
 
+export const formatWinRate = (value: number | null) => (value === null ? "–" : `${(value * 100).toFixed(1)}%`);
+
 export const MIN_GAMES_FOR_INFERENCE = 100;
 export const MIN_GAMES_FOR_GRADE = 500;
 

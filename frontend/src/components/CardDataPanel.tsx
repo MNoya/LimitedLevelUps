@@ -1,6 +1,7 @@
 import {
   cardDataUrl,
   cardDetailsUrl,
+  formatWinRate,
   MIN_GAMES_FOR_INFERENCE,
   type CardGrades,
   type CardStats,
@@ -47,6 +48,49 @@ export function CardDataPanel({
       {decks.length > 0 && <DeckChips decks={decks} compact={false} />}
       <StatLedger rows={fullStats(stats)} columns={1} />
     </div>
+  );
+}
+
+export function CardDeckGrades({ stats, grades }: { stats: CardStats; grades: CardGrades | undefined }) {
+  const decks = deckRows(stats, grades)
+    .filter((deck) => deck.pair)
+    .slice(0, 4);
+  if (decks.length === 0) {
+    return null;
+  }
+  return (
+    <div className="grid grid-cols-2 gap-x-3 gap-y-2 pb-1 pt-2.5">
+      {decks.map((deck, i) => (
+        <span
+          key={deck.key}
+          className={cn(
+            "flex items-center gap-1",
+            i % 2 === 0 ? "justify-start" : "justify-end",
+            decks.length === 1 && "col-span-2 justify-center",
+          )}
+        >
+          <Pips colors={deck.pair!} size={14} />
+          <MiniGradeChip deck={deck} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function MiniGradeChip({ deck }: { deck: DeckRow }) {
+  const color = deck.grade ? tierColor(deck.grade) : "#454951";
+  return (
+    <span
+      className="flex h-7 w-[76px] shrink-0 items-stretch overflow-hidden rounded border"
+      style={{ borderColor: color, backgroundColor: color }}
+    >
+      <span className="flex w-6 shrink-0 items-center justify-center font-display text-[17px] leading-none text-bg">
+        {deck.grade ?? "–"}
+      </span>
+      <span className="flex flex-1 items-center justify-center bg-[#161b26] font-num text-[13px] font-semibold leading-none">
+        {formatWinRate(deck.gihWr)}
+      </span>
+    </span>
   );
 }
 
@@ -206,7 +250,7 @@ function GradeChip({ deck }: { deck: DeckRow }) {
         <GradeMark grade={deck.grade} />
       </span>
       <span className="flex flex-1 items-center justify-center bg-[#161b26] font-num text-[20px] leading-none">
-        {pct(deck.gihWr)}
+        {formatWinRate(deck.gihWr)}
       </span>
     </span>
   );
@@ -251,7 +295,7 @@ function fullStats(stats: CardStats): [string, string, string][] {
     gpWr,
     ohWr,
     gdWr,
-    ["Games in hand win rate", pct(stats.gihWr), STAT_DESCRIPTIONS.gihWr],
+    ["Games in hand win rate", formatWinRate(stats.gihWr), STAT_DESCRIPTIONS.gihWr],
     gnsWr,
     ["Improvement when drawn", signedPoints(stats.iwd), STAT_DESCRIPTIONS.iwd],
   ];
@@ -261,10 +305,10 @@ function secondaryStats(stats: CardStats): [string, string, string][] {
   return [
     ["Number of games played", int(stats.gp), STAT_DESCRIPTIONS.gp],
     ["Number of games in hand", int(stats.gihGames), STAT_DESCRIPTIONS.gihGames],
-    ["Games played win rate", pct(stats.gpWr), STAT_DESCRIPTIONS.gpWr],
-    ["Opening hand win rate", pct(stats.ohWr), STAT_DESCRIPTIONS.ohWr],
-    ["Games drawn win rate", pct(stats.gdWr), STAT_DESCRIPTIONS.gdWr],
-    ["Games not drawn win rate", pct(stats.gnsWr), STAT_DESCRIPTIONS.gnsWr],
+    ["Games played win rate", formatWinRate(stats.gpWr), STAT_DESCRIPTIONS.gpWr],
+    ["Opening hand win rate", formatWinRate(stats.ohWr), STAT_DESCRIPTIONS.ohWr],
+    ["Games drawn win rate", formatWinRate(stats.gdWr), STAT_DESCRIPTIONS.gdWr],
+    ["Games not drawn win rate", formatWinRate(stats.gnsWr), STAT_DESCRIPTIONS.gnsWr],
   ];
 }
 
@@ -281,7 +325,6 @@ const STAT_DESCRIPTIONS = {
   iwd: "Difference between Games in hand win rate and Games not drawn win rate",
 };
 
-const pct = (value: number | null) => (value === null ? "–" : `${(value * 100).toFixed(1)}%`);
 const signedPoints = (value: number | null) =>
   value === null ? "–" : `${value >= 0 ? "+" : ""}${(value * 100).toFixed(1)}pp`;
 const dec = (value: number | null) => (value === null ? "–" : value.toFixed(2));
