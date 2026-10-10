@@ -21,8 +21,10 @@ from discord.ext import commands
 
 from bot import audit, emojis
 from bot.commands import descriptions as desc
+from bot.commands.authorization import organizer_authorized_interaction
 from bot.commands.messages import MSG_COLOR_WRITE_IN_HINT
 from bot.database import SessionLocal
+from bot.models import SelfReportedEvent
 from bot.discord_helpers import (
     extract_avatar_hash,
     first_image_url,
@@ -38,7 +40,13 @@ from bot.services.pod_deck_color import GUILDS, PAIR_EMOJI_NAME, color_label, fo
 from bot.services.pod_drafts import parse_caption_record
 from bot.services.pod_thread_backfill import parse_caption_colors
 from bot.services.pod_tournament import TROPHY_HYPE_HISTORY_LIMIT
-from bot.services.self_reported_events import delete_event, get_or_create_player, is_trophy_record, upsert_event
+from bot.services.self_reported_events import (
+    delete_event,
+    find_event,
+    get_or_create_player,
+    is_trophy_record,
+    upsert_event,
+)
 from bot.sets import active_set_code, parse_caption_set_code, prereleased_sets
 
 logger = logging.getLogger(__name__)
@@ -93,6 +101,7 @@ class TrophyDraft:
     format: str | None = None
     already_logged: bool = False
     on_behalf: bool = False
+    remove_only: bool = False
     caption_cut: bool = False
 
     @property
@@ -180,7 +189,7 @@ def _render_embed(draft: TrophyDraft) -> discord.Embed:
         embed.add_field(name="Caption", value=draft.caption, inline=False)
     whose_post = f"{draft.display_name}'s post" if draft.on_behalf else "your post"
     embed.description = f"From [{whose_post}]({draft.source_url})"
-    if draft.already_logged:
+    if draft.already_logged and not draft.remove_only:
         embed.description += "\n⚠️ This post was already saved — confirming will update it."
     if draft.caption_cut:
         embed.description += f"\n{MSG_CAPTION_CUT}"
@@ -199,6 +208,10 @@ class TrophyConfirmView(ui.View):
 
     def _build(self) -> None:
         self.clear_items()
+        if self.draft.remove_only:
+            self.add_item(_RemoveButton())
+            self.add_item(_CancelButton())
+            return
         self.add_item(_SetSelect(self.draft))
         self.add_item(_ColorSelect(self.draft))
         self.add_item(_PlatformSelect(self.draft))
@@ -445,10 +458,12 @@ class _RemoveButton(ui.Button):
         reply = MSG_REMOVED.format(whose_profile=whose_profile) if removed else MSG_NOTHING_TO_REMOVE
         await interaction.edit_original_response(content=reply, embed=None, view=None)
         if removed:
-            oversight = (
-                f"🗑️ **{draft.display_name}** (`{draft.discord_username}`) removed a saved "
-                f"{draft.set_code} deck: [post]({draft.source_url})"
-            )
+            author = f"**{draft.display_name}** (`{draft.discord_username}`)"
+            if draft.on_behalf:
+                action = f"**{interaction.user.display_name}** removed {author}'s saved"
+            else:
+                action = f"{author} removed a saved"
+            oversight = f"🗑️ {action} {draft.set_code} deck: [post]({draft.source_url})"
             run_detached(bot_log.get(interaction.client).post_plain(oversight), label="trophy_oversight")
         run_detached(_unmark_post_logged(view.message, interaction.client.user), label="trophy_unmark_logged")
 
@@ -555,7 +570,7 @@ def _default_format(record: str | None) -> str:
 
 
 async def _present_trophy_draft(
-    bot: commands.Bot, interaction: discord.Interaction, message: discord.Message
+    bot: commands.Bot, interaction: discord.Interaction, message: discord.Message, remove_only: bool = False
 ) -> None:
     """Parse a resolved post into a TrophyDraft and open the confirm view. Shared by the /trophy
     slash command and the Record Event message context menu."""
@@ -578,12 +593,18 @@ async def _present_trophy_draft(
         colors=parse_caption_colors(caption),
         is_trophy=is_trophy_record(record),
         format=_default_format(record),
-        already_logged=any(reaction.me for reaction in message.reactions),
         on_behalf=str(author.id) != str(interaction.user.id),
+        remove_only=remove_only,
         caption_cut=caption is not None and len(caption) > CAPTION_LIMIT,
     )
-    view = TrophyConfirmView(draft, str(interaction.user.id), message)
+    saved = _find_saved_event(message)
+    if saved is not None:
+        _apply_saved_event(draft, saved)
     ephemeral = interaction.guild is not None
+    if remove_only and not draft.already_logged:
+        await interaction.followup.send(MSG_NOTHING_TO_REMOVE, ephemeral=ephemeral)
+        return
+    view = TrophyConfirmView(draft, str(interaction.user.id), message)
     await interaction.followup.send(embed=_render_embed(draft), view=view, ephemeral=ephemeral)
 
 
@@ -595,13 +616,33 @@ async def save_trophy_menu(interaction: discord.Interaction, message: discord.Me
     await interaction.response.defer(ephemeral=ephemeral, thinking=True)
     audit.event("trophy_invoked", user_id=str(interaction.user.id), via="context_menu")
     is_own = message.author.id == interaction.user.id
+    remove_only = False
     if not is_own and not await interaction.client.is_owner(interaction.user):
-        await interaction.followup.send(MSG_NOT_YOUR_POST, ephemeral=ephemeral)
-        return
+        if not await organizer_authorized_interaction(interaction):
+            await interaction.followup.send(MSG_NOT_YOUR_POST, ephemeral=ephemeral)
+            return
+        remove_only = True
     if first_image_url(message) is None:
         await interaction.followup.send(MSG_NO_IMAGE, ephemeral=ephemeral)
         return
-    await _present_trophy_draft(interaction.client, interaction, message)
+    await _present_trophy_draft(interaction.client, interaction, message, remove_only)
+
+
+def _find_saved_event(message: discord.Message) -> SelfReportedEvent | None:
+    with SessionLocal() as session:
+        return find_event(session, discord_id=str(message.author.id), source_message_id=str(message.id))
+
+
+def _apply_saved_event(draft: TrophyDraft, saved: SelfReportedEvent) -> None:
+    draft.already_logged = True
+    draft.set_code = saved.set_code
+    draft.record = saved.record
+    draft.is_trophy = saved.is_trophy
+    draft.colors = saved.colors
+    draft.platform = saved.platform
+    draft.format = saved.format or draft.format
+    draft.caption = saved.caption
+    draft.caption_cut = False
 
 
 def _platform_emoji(platform: str | None) -> discord.Emoji | None:
@@ -626,6 +667,11 @@ async def _mark_post_logged(message: discord.Message, set_code: str, platform: s
 
 
 async def _unmark_post_logged(message: discord.Message, bot_user: discord.ClientUser) -> None:
+    try:
+        message = await message.channel.fetch_message(message.id)
+    except discord.HTTPException:
+        logger.warning(f"trophy: could not fetch post {message.id} to clear its reaction", exc_info=True)
+        return
     for reaction in message.reactions:
         if not reaction.me:
             continue

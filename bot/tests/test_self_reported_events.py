@@ -4,7 +4,13 @@ import pytest
 
 from bot.discord_helpers import parse_message_link
 from bot.models import MagicSet, Player, SelfReportedEvent
-from bot.services.self_reported_events import delete_event, get_or_create_player, is_trophy_record, upsert_event
+from bot.services.self_reported_events import (
+    delete_event,
+    find_event,
+    get_or_create_player,
+    is_trophy_record,
+    upsert_event,
+)
 
 
 @pytest.mark.parametrize(
@@ -106,8 +112,10 @@ def test_delete_event_removes_only_the_authors_saved_post(session, discord_id, m
         source_channel_id="c1", source_message_id="m1", source_url="u1",
     )
 
+    saved = find_event(session, discord_id=discord_id, source_message_id=message_id) is not None
     removed = delete_event(session, discord_id=discord_id, source_message_id=message_id)
 
+    assert saved is expected_removed
     assert removed is expected_removed
     assert session.query(SelfReportedEvent).count() == (0 if expected_removed else 1)
 
