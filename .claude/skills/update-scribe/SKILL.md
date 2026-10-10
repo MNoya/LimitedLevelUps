@@ -53,6 +53,7 @@ Exits 1 when anything needs a look. Each line is one of:
 | `tag 'X' looks competitive but is not in COMPETITIVE_TAGS` | **Fix.** Add it to `COMPETITIVE_TAGS` (`bot/services/mtgscribe.py`). Then check `build_competitive_reminder` names the right format — `_limited_format` reads Sealed-vs-Draft off the tags, so a Draft-tagged event must not be called Sealed. |
 | `set CODE has no frontend/public/set-symbols/...png` | **Fix.** `generate_set_symbols CODE`, then `upload_app_emojis keyrune:code` against **both** the test and prod apps (it targets whichever app `DISCORD_BOT_TOKEN` belongs to). |
 | `premier event 'X' has no PREMIER_SCHEDULES entry` | **Fix.** Look up the event's official schedule on magic.gg, the fact sheet or viewer's guide, and add a `PremierSchedule` to `PREMIER_SCHEDULES` (`bot/services/watch_party.py`): its timezone, each day's start, end and subject, and for a Pro Tour its `ordinal` such as `first PT of 2027`. With no published times, add an estimate and say so in the report. The watch party channel builds its Scheduled Event and announcement from this row. |
+| `Arena Powered Cube <dates> is missing from cube_variants.json` / `has different dates in` | **Fix.** Add or correct the printed row in that cube's `seasons` in `cube_variants.json`. The bot syncs `cube_seasons` from the registry on every startup, so the season board fills in on deploy with no seed step, and a season stays hidden until its first draft. |
 | `title 'X' still carries an HTML entity` | **Investigate.** `_parse_event` unescapes once; a survivor means upstream double-encoded. |
 | `new tag 'X'` / `new format label 'X'` | **Read.** Most are harmless. A rename shows up as one new label plus its old one going quiet, so cross-check against the render in step 5. |
 
@@ -101,7 +102,7 @@ If it prints a window, add the two paste-ready rows it emits — `CollectorBoost
 git add scribe_calendar.json
 ```
 
-Plus any code, fixture, set-symbol and spec file touched. The user reviews before committing — never commit or push here.
+Plus `cube_variants.json` and any code, fixture, set-symbol and spec file touched. The user reviews before committing — never commit or push here.
 
 If `bot/config.py` or another file also holds unrelated working-tree changes, stage only your hunks (write a patch and `git apply --cached`) so the user's other work stays separate.
 

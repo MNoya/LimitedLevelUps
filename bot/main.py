@@ -86,6 +86,7 @@ from bot.listeners.quick_links import setup as setup_quick_links
 from bot.models import LeaderboardMessage, Player, PodDraftEvent
 from bot.services import error_alerts
 from bot.services.bot_log import BotLog
+from bot.services.cube_seasons import sync_cube_seasons
 from bot.services.lobby_embed import LobbyReadyButtonView, ReadyCheckAnswerView
 from bot.services.pod_draft_manager import rehydrate_active_lobbies
 from bot.services.pod_team_board import TeamReportButton, TeamRevealReportButton
@@ -184,6 +185,8 @@ def main() -> None:
     _restart_banner()
     configure_logging()
     run_migrations()
+    with SessionLocal() as session:
+        sync_cube_seasons(session)
 
     signal.signal(signal.SIGTERM, lambda *_: signal.raise_signal(signal.SIGINT))
 

@@ -23,7 +23,7 @@ from bot.commands.event_scribe import BOOSTER_LABELS, DRAFT_FORMATS, _seed_for_l
 from bot.services import mtgscribe
 from bot.services.scribe_formats import FORMAT_SHORT_NAMES
 from bot.services.watch_party import PREMIER_SCHEDULES, covered_events
-from bot.sets import ALL_SETS, CUBE_CODE
+from bot.sets import ALL_SETS, CUBE_CODE, CUBE_VARIANTS, active_set_code
 
 SET_SYMBOL_DIR = Path(__file__).resolve().parents[2] / "frontend" / "public" / "set-symbols"
 COMPETITIVE_HINTS = ("qualifier", "play-in", "championship", "arena-open")
@@ -42,6 +42,7 @@ def main() -> None:
     findings.extend(_ambiguous_set_labels(events))
     findings.extend(_unmatched_set_labels(events))
     findings.extend(_untagged_reruns(events))
+    findings.extend(_undeclared_cube_runs(events))
     findings.extend(_unlisted_competitive_tags(events))
     findings.extend(_missing_set_symbols(events))
     findings.extend(_encoded_titles(events))
@@ -121,6 +122,29 @@ def _untagged_reruns(events: list) -> list[str]:
             continue
         findings.append(f"{event.title!r} ({event.start:%b %-d}) reruns rotated-out {seed.code} "
                         f"with no flashback tag")
+    return findings
+
+
+def _undeclared_cube_runs(events: list) -> list[str]:
+    """A seasoned cube's run with no matching season in cube_variants.json counts only toward the
+    whole-cube board, which is how the HOB Powered Cube run went missing."""
+    findings = []
+    for variant in CUBE_VARIANTS:
+        if not variant.seasoned:
+            continue
+        declared = {season.code: season for season in variant.seasons}
+        for event in events:
+            if event.title != variant.name:
+                continue
+            code = active_set_code(event.start)
+            start, end = event.start_local.date(), event.end_local.date()
+            season = declared.get(code)
+            if season is not None and (season.start_date, season.end_date) == (start, end):
+                continue
+            row = f'{{ "code": "{code}", "start_date": "{start}", "end_date": "{end}" }}'
+            problem = "has different dates in" if season else "is missing from"
+            findings.append(f"{variant.name} {start:%b %-d}–{end:%b %-d} {problem} cube_variants.json; "
+                            f"{variant.slug} seasons need {row}")
     return findings
 
 
