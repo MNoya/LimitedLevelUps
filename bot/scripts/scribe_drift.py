@@ -8,7 +8,7 @@ render depends on and prints what needs a code change:
     .venv/bin/python -m bot.scripts.scribe_drift
     .venv/bin/python -m bot.scripts.scribe_drift --previous /tmp/prev.json
 
-``--previous`` points at the calendar being replaced (``git show HEAD:bot/services/scribe_calendar.json``)
+``--previous`` points at the calendar being replaced (``git show HEAD:scribe_calendar.json``)
 and adds new-since-last-capture reporting for tags and format labels. Read-only; exits 1 when anything
 needs attention so a caller can branch on it.
 """

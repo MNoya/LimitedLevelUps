@@ -18,7 +18,7 @@ import { FilterDropdown } from "../components/FilterDropdown";
 import { SetFilterDropdown, setFilterOptionsFrom, type SetFilterOption } from "../components/SetFilterDropdown";
 import { ColorsSwitcher } from "../components/ColorsSwitcher";
 import { LeaderboardSidebar, LeaderboardInsightsStrip } from "../components/LeaderboardSidebar";
-import { boardModeFor, DEFAULT_SORT, DEFAULT_SORT_NOSCORE, defaultSortFor, LeaderboardColumnHeader, LeaderboardTable, sortRows } from "../components/LeaderboardTable";
+import { boardModeFor, DEFAULT_SORT, defaultSortFor, LeaderboardColumnHeader, LeaderboardTable, sortRows } from "../components/LeaderboardTable";
 import type { SortDir, SortKey, SortState } from "../components/LeaderboardTable";
 import { SectionLabel } from "../components/SectionLabel";
 import { ChamferedButton } from "../components/ChamferedButton";
@@ -45,9 +45,9 @@ import {
 } from "../data/hooks";
 import { isMtgoFlashbackCode, mtgoSetName, withMtgoSets, MTGO_BLOCK_GLYPHS } from "../data/mtgoSets";
 import { useAuth } from "../auth/useAuth";
-import { baseSetCode, canonicalSetCode, colorsOf, CUBE_BASE, CUBE_LIFETIME, cubeSeasonLabel, eventDate, fmtRange, fmtShortDate, isCubeCode, isCubeSeasonCode, isSoup, lastUpdated, leaderboardPath, playerPath, profileSearch, prettyFormat, relativeTime, sumEvents, weekOfSet, winPct } from "../data/utils";
+import { baseSetCode, canonicalSetCode, colorsOf, CUBE_BASE, cubeSeasonLabel, eventDate, fmtRange, fmtShortDate, isCubeCode, isCubeSeasonCode, isSoup, lastUpdated, leaderboardPath, playerPath, profileSearch, prettyFormat, relativeTime, sumEvents, weekOfSet, winPct } from "../data/utils";
 import {
-  cubeBoardCode, cubeBoardGlyphCode, cubeForBoard, isCubeBoardLive, ongoingCubeBoard,
+  cubeBoardForRoute, cubeBoardGlyphCode, cubeForBoard, isCubeBoardLive, ongoingCubeBoard,
   latestWindowFor, SEASONED_CUBE_VARIANT, setsWithCubeBoards,
 } from "../data/cubeVariants";
 import { CubeSeasonSelector, cubeBoardHasSeasons } from "../components/CubeSeasonSelector";
@@ -71,12 +71,8 @@ export function LeaderboardPage() {
   const requestedSet = params.setCode ? canonicalSetCode(params.setCode, sets) : undefined;
   const routeSet = requestedSet ?? liveSetCode ?? ACTIVE_SET_CODE;
   const { data: cubeSeasons } = useCubeSeasons();
-  // Bare CUBE is not a board of its own: it opens whichever cube is running. The retired CUBE-ALL
-  // lifetime sentinel now means the seasoned cube's own board, so old links keep landing somewhere.
   const cubeEntryBoard = ongoingCubeBoard(cubeSeasons);
-  const cubeBoard = routeSet === CUBE_LIFETIME
-    ? cubeBoardCode(SEASONED_CUBE_VARIANT.slug)
-    : (routeSet === CUBE_BASE ? cubeEntryBoard : undefined);
+  const cubeBoard = cubeBoardForRoute(routeSet, cubeSeasons);
   const activeSet = cubeBoard ?? routeSet;
   const setMeta = sets?.find((s) => s.code === baseSetCode(activeSet));
   // Every cube is its own entry here; `sets` keeps the real rows for route and metadata lookups
@@ -172,10 +168,9 @@ export function LeaderboardPage() {
   const error = active.error as Error | null;
 
   const boardMode = boardModeFor(format);
-  const noScoreMode = format === "Pod" || boardMode === "direct";
-  const effectiveDefaultSort: SortState = format === "Pod" ? DEFAULT_SORT_NOSCORE : defaultSortFor(boardMode);
+  const effectiveDefaultSort = defaultSortFor(boardMode);
   const rawSort = readSortFromParams(searchParams);
-  const sort: SortState = noScoreMode && rawSort.key === "score" ? effectiveDefaultSort : rawSort;
+  const sort: SortState = boardMode === "direct" && rawSort.key === "score" ? effectiveDefaultSort : rawSort;
   const rows = useMemo(
     () => (baseRows ? sortRows(baseRows, sort) : baseRows),
     [baseRows, sort.key, sort.dir],
@@ -418,7 +413,6 @@ function Desktop({
   mySlug?: string;
 }) {
   const { prefetchSet, prefetchPlayer } = usePrefetchers();
-  const profileSet = baseSetCode(activeSet);
   return (
     <div className="bg-bg text-text min-h-screen flex flex-col page-fade">
       <AppHeader subtitle="LEADERBOARD" />
@@ -444,14 +438,14 @@ function Desktop({
           mode={boardModeFor(filters.format)}
           sort={sort}
           onSort={onSort}
-          onRowPrefetch={(r) => prefetchPlayer(r.slug, profileSet)}
+          onRowPrefetch={(r) => prefetchPlayer(r.slug, activeSet)}
           highlightSlug={mySlug}
-          playerHref={(r) => playerHrefFor(r, profileSet, searchParams)}
+          playerHref={(r) => playerHrefFor(r, activeSet, searchParams)}
           rowExpandable={(r) => r.events > 0}
           renderExpanded={(r) => (
             <DesktopExpandedRow
               row={r}
-              to={playerHrefFor(r, profileSet, searchParams)}
+              to={playerHrefFor(r, activeSet, searchParams)}
               activeFormat={filters.format}
               activeColors={filters.colors}
               otherCombos={otherCombos}
@@ -461,7 +455,6 @@ function Desktop({
         <div className="pt-4 self-start sticky top-4">
           <LeaderboardSidebar
             setCode={activeSet}
-            playerSetCode={profileSet}
             colors={filters.colors}
             format={filters.format}
             otherCombos={otherCombos}
@@ -756,10 +749,10 @@ function Mobile({
   onSort: (key: SortKey) => void;
 }) {
   const { prefetchPlayer } = usePrefetchers();
-  const profileSet = baseSetCode(activeSet);
-  const setMeta = sets?.find((s) => s.code === profileSet);
+  const baseSet = baseSetCode(activeSet);
+  const setMeta = sets?.find((s) => s.code === baseSet);
   const updated = setMeta?.lastRefreshedAt ? lastUpdated(setMeta.lastRefreshedAt) : null;
-  const isCube = profileSet === CUBE_BASE;
+  const isCube = baseSet === CUBE_BASE;
   const setOptions = useMemo<SetFilterOption[]>(() => (sets ? setFilterOptionsFrom(sets) : []), [sets]);
 
   const chromeRef = useRef<HTMLDivElement>(null);
@@ -796,7 +789,7 @@ function Mobile({
           {sets && (
             <div className="basis-1/2 min-w-0 flex">
               <SetFilterDropdown
-                value={isCubeCode(activeSet) ? cubeBoardGlyphCode(activeSet) : profileSet}
+                value={isCubeCode(activeSet) ? cubeBoardGlyphCode(activeSet) : baseSet}
                 options={setOptions}
                 hrefFor={(code) => setBoardHref(code, sets, searchParams, cubeEntryBoard, cubeSeasons)}
                 variant="mobile"
@@ -828,7 +821,6 @@ function Mobile({
         </div>
         <LeaderboardInsightsStrip
           setCode={activeSet}
-          playerSetCode={profileSet}
           colors={filters.colors}
           format={filters.format}
           otherCombos={otherCombos}
@@ -847,15 +839,15 @@ function Mobile({
         error={error}
         showHeader={false}
         mode={boardModeFor(filters.format)}
-        onRowPrefetch={(r) => prefetchPlayer(r.slug, profileSet)}
+        onRowPrefetch={(r) => prefetchPlayer(r.slug, activeSet)}
         highlightSlug={mySlug}
         stickyTop={chromeHeight}
-        playerHref={(r) => playerHrefFor(r, profileSet, searchParams)}
+        playerHref={(r) => playerHrefFor(r, activeSet, searchParams)}
         rowExpandable={(r) => r.events > 0}
         renderExpanded={(r) => (
           <MobileExpandedRow
             row={r}
-            to={playerHrefFor(r, profileSet, searchParams)}
+            to={playerHrefFor(r, activeSet, searchParams)}
             activeFormat={filters.format}
             activeColors={filters.colors}
             otherCombos={otherCombos}

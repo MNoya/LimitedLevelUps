@@ -6,7 +6,7 @@ Shipped `/event-scribe` (commit `655a441`): an on-demand command that renders th
 
 | File | Role |
 |---|---|
-| `bot/services/scribe_calendar.json` | **The calendar the bot serves.** Captured by `snapshot_scribe`, committed, read on every render. |
+| `scribe_calendar.json` | **The calendar the bot serves.** Captured by `snapshot_scribe`, committed, read on every render. |
 | `bot/scripts/snapshot_scribe.py` | The only code that requests anything from mtgscribe.com. Run it from a clean IP, commit, deploy. |
 | `bot/services/mtgscribe.py` | `load_events` (bundled read) + grouping/partition, plus the REST client the snapshot script drives. |
 | `bot/services/scribe_formats.py` | Standalone format short-name map (`Premier Draft` → `Premier`); vendorable, no bot imports. |

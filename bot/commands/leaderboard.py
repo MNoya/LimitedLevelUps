@@ -902,9 +902,14 @@ def process_personal_standings(
             score = compute_score(b["stats"], groups=groups)
             rank = None if opted_out else _set_rank_for_format(session, groups, set_id, player.id, score)
         else:
+            score = compute_score(b["stats"])
             pod = pod_by_set.get(b["code"])
-            pod_pts = pod_points(pod.trophies, pod.wins_2_1) if pod else 0
-            score = compute_score(b["stats"]) + pod_pts
+            if pod is not None:
+                score += pod_points(pod.trophies, pod.two_win_finishes, pod.one_win_finishes)
+                b["trophies"] += pod.trophies
+                b["events"] += pod.events
+                b["wins"] += pod.wins
+                b["losses"] += pod.losses
             rank = None if opted_out else _set_rank(session, set_id, player.id, score)
         rows.append(PersonalStanding(
             set_code=b["code"], score=score, trophies=b["trophies"],

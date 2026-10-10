@@ -90,6 +90,10 @@ export const POD_FORMAT_BUCKETS: PodFormatBucket[] = ["set", "flashback", "cube"
 
 export const POD_SEASON_PARAM = "season";
 
+export const MIN_BOARD_SEASONS = 2;
+
+export const AXIS_ALL = "all";
+
 interface BucketableEvent {
   setCode: string;
   formatLabel: string | null;

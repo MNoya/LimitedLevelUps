@@ -1,6 +1,6 @@
 import variantsConfig from "../../../cube_variants.json";
 import type { CubeSeason, SetSummary } from "../types/leaderboard";
-import { CUBE_BASE } from "./utils";
+import { CUBE_BASE, CUBE_LIFETIME } from "./utils";
 
 // Arena's cubes, in dropdown order. Same file bot/sets.py reads, so the two never drift.
 export interface CubeVariant {
@@ -98,6 +98,16 @@ export function ongoingCubeBoard(seasons: CubeSeason[] | undefined): string | un
     return undefined;
   }
   return latestWindowFor(newestVariant.setCode, seasons);
+}
+
+export function cubeBoardForRoute(code: string, seasons: CubeSeason[] | undefined): string | undefined {
+  if (code === CUBE_LIFETIME) {
+    return cubeBoardCode(SEASONED_CUBE_VARIANT.slug);
+  }
+  if (code === CUBE_BASE) {
+    return ongoingCubeBoard(seasons);
+  }
+  return undefined;
 }
 
 // A recurring cube opens on its most recent run, live or last played, since that is what the day is

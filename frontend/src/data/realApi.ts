@@ -32,7 +32,9 @@ import {
   type ScoringStatRow,
 } from "./scoring";
 import { mergeSelfReportedTrophies, type SelfReportedTrophyTally } from "./selfReported";
-import { baseSetCode, colorsOf, CUBE_BASE, isCubeCode, isCubeSeasonCode, isSoup } from "./utils";
+import { aggregatePodStandings } from "./podSeasons";
+import { podBoardWindowFor, type PodBoardWindow } from "./podFormats";
+import { baseSetCode, colorsOf, CUBE_BASE, eventDate, isCubeCode, isCubeSeasonCode, isSoup } from "./utils";
 import { formatsForBucket } from "./format-buckets";
 import { IDENTITY_VIEWS } from "./constants";
 import { FORMAT_LABEL_GROUPS, FORMAT_RAW_GROUPS, MULTI, OTHER } from "./filters";
@@ -337,6 +339,8 @@ export async function fetchAvailableFormats(setCode: string): Promise<string[]> 
 
 export async function fetchLeaderboard(setCode: string): Promise<LeaderboardRow[]> {
   if (isCubeSeasonCode(setCode)) return fetchCubeSeasonLeaderboard(setCode);
+  const podWindow = podBoardWindowFor(setCode);
+  if (podWindow) return fetchPodBoardLeaderboard(setCode, podWindow);
   const [leaderboard, breakdown, pod, selfReported] = await Promise.all([
     client()
       .from("public_leaderboard")
@@ -348,7 +352,7 @@ export async function fetchLeaderboard(setCode: string): Promise<LeaderboardRow[
       .eq("set_code", setCode),
     client()
       .from("public_pod_scoring")
-      .select("slug, display_name, avatar_url, trophies, two_win_finishes, one_win_finishes, leaderboard_opt_in")
+      .select("*")
       .eq("set_code", setCode),
     client()
       .from("public_self_reported_events")
@@ -396,24 +400,29 @@ export async function fetchLeaderboard(setCode: string): Promise<LeaderboardRow[
     });
   }
 
-  // Pod points: add to existing rows, or admit pod-only players as entrants. Opted-out
+  // Pod points and counts: add to existing rows, or admit pod-only players as entrants. Opted-out
   // players stay in the pod standings but never rejoin the overall board on pod points.
   for (const raw of pod.data ?? []) {
     const r = raw as Record<string, unknown>;
     if (r.leaderboard_opt_in === false) continue;
     const podTrophies = (r.trophies as number) ?? 0;
+    const podEvents = (r.events as number) ?? 0;
+    const podWins = (r.wins as number) ?? 0;
+    const podLosses = (r.losses as number) ?? 0;
     const bonus = podPoints(
       podTrophies,
       (r.two_win_finishes as number) ?? 0,
       (r.one_win_finishes as number) ?? 0,
     );
-    if (bonus === 0) continue;
     const slug = r.slug as string;
     const existing = bySlug.get(slug);
     if (existing) {
       existing.score = Math.round((existing.score + bonus) * 100) / 100;
       existing.trophies += podTrophies;
-    } else {
+      existing.events += podEvents;
+      existing.wins += podWins;
+      existing.losses += podLosses;
+    } else if (bonus > 0) {
       bySlug.set(slug, {
         setCode,
         slug,
@@ -422,9 +431,9 @@ export async function fetchLeaderboard(setCode: string): Promise<LeaderboardRow[
         rank: 0,
         score: bonus,
         trophies: podTrophies,
-        events: 0,
-        wins: 0,
-        losses: 0,
+        events: podEvents,
+        wins: podWins,
+        losses: podLosses,
         lastCalculatedAt: new Date(0).toISOString(),
       });
     }
@@ -1100,6 +1109,10 @@ export async function fetchPlayerProfile(
   if (isCubeSeasonCode(setCode)) {
     return fetchCubeBoardPlayerProfile(slug, setCode);
   }
+  const podWindow = podBoardWindowFor(setCode);
+  if (podWindow) {
+    return fetchPodBoardPlayerProfile(slug, setCode, podWindow);
+  }
   setCode = baseSetCode(setCode);
   const [headlineResp, breakdownResp, podResp, trophiesResp] = await Promise.all([
     client()
@@ -1199,6 +1212,130 @@ export async function fetchPlayerProfile(
     formatBreakdown: breakdown,
     selfReportedEvents: trophyRows.map((r) => adaptSelfReportedEvent(r)),
   };
+}
+
+async function fetchPodBoardLeaderboard(code: string, window: PodBoardWindow): Promise<LeaderboardRow[]> {
+  const standings = aggregatePodStandings(await fetchPodBoardResults(window)) ?? [];
+  return standings.map((r) => ({
+    setCode: code,
+    slug: r.slug,
+    displayName: r.displayName,
+    avatarUrl: r.avatarUrl,
+    rank: r.rank,
+    score: r.points ?? 0,
+    trophies: r.trophies,
+    events: r.events,
+    wins: r.wins,
+    losses: r.losses,
+    lastCalculatedAt: r.lastFinishedAt ?? new Date(0).toISOString(),
+  }));
+}
+
+async function fetchPodBoardPlayerProfile(
+  slug: string,
+  code: string,
+  window: PodBoardWindow,
+): Promise<PlayerProfile | null> {
+  const results = await fetchPodBoardResults(window);
+  const standing = aggregatePodStandings(results)?.find((r) => r.slug === slug);
+  if (!standing) {
+    return null;
+  }
+  let twoWins = 0;
+  let oneWins = 0;
+  for (const r of results) {
+    if (r.slug !== slug) continue;
+    if (r.wins === 2) twoWins += 1;
+    if (r.wins === 1) oneWins += 1;
+  }
+  const podRow: PlayerFormatBreakdown = {
+    setCode: code,
+    slug,
+    formatLabel: "Pod",
+    events: standing.events,
+    wins: standing.wins,
+    losses: standing.losses,
+    trophies: standing.trophies,
+    twoWins,
+    oneWins,
+    scoreContribution: standing.points ?? 0,
+  };
+  return {
+    slug,
+    displayName: standing.displayName,
+    avatarUrl: standing.avatarUrl,
+    setCode: code,
+    rank: standing.rank,
+    score: standing.points ?? 0,
+    trophies: standing.trophies,
+    events: standing.events,
+    wins: standing.wins,
+    losses: standing.losses,
+    linked17lands: false,
+    lastCalculatedAt: standing.lastFinishedAt ?? undefined,
+    formatBreakdown: [podRow],
+    selfReportedEvents: [],
+  };
+}
+
+async function fetchPodBoardResults(window: PodBoardWindow): Promise<PodSeasonResultRow[]> {
+  let query = client()
+    .from("public_pod_draft_events")
+    .select(POD_RESULT_EVENT_COLUMNS)
+    .eq("set_code", window.board)
+    .neq("kind", "mock");
+  if (window.season) {
+    const span = await seasonSpan(window.season);
+    if (!span) {
+      return [];
+    }
+    query = query.gte("event_date", span.startDate).lte("event_date", span.endDate);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return podResultsForEvents(data ?? []);
+}
+
+async function fetchPodBoardDraftEvents(slug: string, window: PodBoardWindow): Promise<PlayerDraftEvent[]> {
+  const [eventsResp, span] = await Promise.all([
+    client()
+      .from("public_player_draft_events")
+      .select(DRAFT_EVENT_COLUMNS)
+      .eq("slug", slug)
+      .eq("set_code", window.board)
+      .order("finished_at", { ascending: false, nullsFirst: false }),
+    window.season ? seasonSpan(window.season) : Promise.resolve(null),
+  ]);
+  if (eventsResp.error) throw eventsResp.error;
+  const events = (eventsResp.data ?? []).map((r) => adaptDraftEvent(r as unknown as Record<string, unknown>));
+  if (!window.season) {
+    return events;
+  }
+  if (!span) {
+    return [];
+  }
+  return events.filter((e) => {
+    const date = easternDate(eventDate(e));
+    return date >= span.startDate && date <= span.endDate;
+  });
+}
+
+async function seasonSpan(code: string): Promise<{ startDate: string; endDate: string } | null> {
+  const { data, error } = await client()
+    .from("public_sets")
+    .select("start_date, end_date")
+    .eq("code", code)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as { start_date: string; end_date: string | null } | null;
+  return row?.end_date ? { startDate: row.start_date, endDate: row.end_date } : null;
+}
+
+function easternDate(iso: string): string {
+  if (!iso) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(iso));
 }
 
 // ─── Lifetime (set-agnostic) profile ──────────────────────────────────────
@@ -1368,6 +1505,8 @@ export async function fetchPlayerDraftEvents(
   slug: string,
   setCode: string,
 ): Promise<PlayerDraftEvent[]> {
+  const podWindow = podBoardWindowFor(setCode);
+  if (podWindow) return fetchPodBoardDraftEvents(slug, podWindow);
   const { data, error } = await client()
     .from(eventsViewFor(setCode))
     .select(DRAFT_EVENT_COLUMNS)

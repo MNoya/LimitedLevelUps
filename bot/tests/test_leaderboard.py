@@ -397,6 +397,21 @@ def test_personal_standings_unfiltered_aggregates_all_formats(session):
     assert (data.rows[0].events, data.rows[0].trophies) == (6, 3)
 
 
+def test_personal_standings_unfiltered_folds_pods_into_set_totals(session):
+    s = _seed_set(session)
+    alice = _seed_player(session, "Alice", "1", "a")
+    _seed_stats(session, alice, s, trophies=1, events=4, fmt="PremierDraft", wins=5, losses=4)
+    pod = _seed_pod_event(session, s.code, "SOS Pod 1")
+    session.add(PodDraftParticipant(
+        event_id=pod.id, player_id=alice.id, display_name="Alice", placement=1, record="3-0",
+    ))
+    session.commit()
+
+    row = process_personal_standings(session, "1").rows[0]
+
+    assert (row.events, row.wins, row.losses, row.trophies) == (5, 8, 4, 2)
+
+
 def test_personal_standings_format_filter_scopes_to_group(session):
     s = _seed_set(session)
     alice = _seed_player(session, "Alice", "1", "a")

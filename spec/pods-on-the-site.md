@@ -401,7 +401,7 @@ Paste as the opening message. Swap the named feature to pick a different one; th
 > - Screenshots are real and cropped, captured from the test server through the `!test` commands listed in the spec, saved under `frontend/public/guide/`.
 > - Pod seasons shipped in `30bf0c00`. `/pods` is season-framed, Peasant is a board at `/pods/PEASANT` and `/pods/PEASANT-<SET>`, and the pod standings carry points and rank on them.
 > - Pod points stay attributed per `set_code`, decided deliberately: a set's leaderboard means people drafting that set. Do not propose moving them onto seasons.
-> - Cube and pod windows are declared in `cube_variants.json`, never inferred from draft activity. If a run is missing, get its dates from `bot/services/scribe_calendar.json` or the announcement.
+> - Cube and pod windows are declared in `cube_variants.json`, never inferred from draft activity. If a run is missing, get its dates from `scribe_calendar.json` or the announcement.
 > - Feature 3 shipped: the standings tab on `/pods/<slug>`, plus migration `c3e5a7b9d1f4` on the participants view. Tiebreaker percentages were ruled out for the site, so nothing persists them.
 > - Feature 2 was built and then cut on purpose. Do not rebuild the upcoming-pods list. UPCOMING is one CTA row and that is the decision.
 > - The site never writes pod state and never deep-links a Discord message. Every way in is `SITE_LINKS.discordPods`.

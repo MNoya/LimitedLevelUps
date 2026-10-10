@@ -68,7 +68,7 @@ export function AAvatar({
 }: {
   displayName: string;
   avatarUrl?: string | null;
-  size?: number;
+  size?: number | string;
   green?: boolean;
 }) {
   const [failed, setFailed] = React.useState(false);
@@ -84,11 +84,9 @@ export function AAvatar({
       <img
         src={avatarUrl}
         alt={displayName}
-        width={size}
-        height={size}
         onError={() => setFailed(true)}
         className="block shrink-0 object-cover"
-        style={{ clipPath: AVATAR_CLIP }}
+        style={{ width: size, height: size, clipPath: AVATAR_CLIP }}
       />
     );
   }
@@ -101,7 +99,7 @@ export function AAvatar({
       style={{
         width: size,
         height: size,
-        fontSize: size * 0.45,
+        fontSize: `calc(${typeof size === "number" ? `${size}px` : size} * 0.45)`,
         clipPath: AVATAR_CLIP,
       }}
     >

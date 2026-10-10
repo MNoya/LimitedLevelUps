@@ -32,7 +32,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 EVENTS_URL = "https://mtgscribe.com/wp-json/tribe/events/v1/events"
-CALENDAR_PATH = Path(__file__).resolve().parent / "scribe_calendar.json"
+CALENDAR_PATH = Path(__file__).resolve().parents[2] / "scribe_calendar.json"
 STALE_HORIZON = timedelta(days=14)
 PER_PAGE = 50
 REQUEST_TIMEOUT = 15

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "../../lib/utils";
-import { useIsMobile } from "../../lib/use-is-mobile";
+import { PLAYER_PAGE_MOBILE_BREAKPOINT, useIsMobile } from "../../lib/use-is-mobile";
 import { Tooltip } from "../Tooltip";
 import { CardImageModal } from "../CardImageModal";
 import { ManaCost } from "../ManaPips";
@@ -72,7 +72,7 @@ export function Collection({
   slug, setCode, accountId, narrow = false,
 }: { slug: string | undefined; setCode: string; accountId: number | null; narrow?: boolean }) {
   const qc = useQueryClient();
-  const isMobile = useIsMobile();
+  const isMobile = useIsMobile(PLAYER_PAGE_MOBILE_BREAKPOINT);
   usePageTitleOverride(`Tracker ${setCode}`);
 
   const { data: pool, isLoading, error } = useSetCardPool(setCode);

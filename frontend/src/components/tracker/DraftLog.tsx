@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, ChevronUp, RefreshCw } from "../Icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "../../lib/utils";
-import { useIsMobile } from "../../lib/use-is-mobile";
+import { PLAYER_PAGE_MOBILE_BREAKPOINT, useIsMobile } from "../../lib/use-is-mobile";
 import { Pips } from "../ManaPips";
 import { SectionLabel } from "../SectionLabel";
 import { FilterDropdown } from "../FilterDropdown";
@@ -122,7 +122,7 @@ export function DraftLog({
   slug, setCode, accountId, updatedAt = null,
 }: { slug: string | undefined; setCode: string; accountId: number | null; updatedAt?: string | null }) {
   const qc = useQueryClient();
-  const isMobile = useIsMobile();
+  const isMobile = useIsMobile(PLAYER_PAGE_MOBILE_BREAKPOINT);
   const { data: events, isLoading } = useQuery({
     queryKey: ["tracker-drafts", slug, setCode],
     queryFn: () => fetchTrackerDrafts(slug!, setCode),

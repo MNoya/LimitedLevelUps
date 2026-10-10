@@ -48,7 +48,6 @@ export interface SortState {
 }
 
 export const DEFAULT_SORT: SortState = { key: "score", dir: "desc" };
-export const DEFAULT_SORT_NOSCORE: SortState = { key: "trophies", dir: "desc" };
 export const DEFAULT_SORT_DIRECT: SortState = { key: "boxes", dir: "desc" };
 
 export function defaultSortFor(mode: BoardMode): SortState {

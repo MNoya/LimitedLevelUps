@@ -478,7 +478,7 @@ def test_rolling_a_slot_opens_every_format_the_next_day_offers(session, monkeypa
 
 
 def test_a_rolled_slot_and_todays_slot_share_the_message_and_the_snapshot_stacks_them(
-    session, monkeypatch, latest_only,
+    session, monkeypatch, latest_only, friday_afternoon,
 ):
     monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
     create_poll_signals(session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY)
@@ -516,7 +516,9 @@ def test_rolling_a_column_expires_only_that_columns_open_formats_of_that_day(ses
     assert [signal.status for signal in untouched] == [STATUS_OPEN, STATUS_OPEN]
 
 
-def test_an_override_reopens_the_format_it_restores_and_closes_the_one_it_drops(session, monkeypatch, latest_only):
+def test_an_override_reopens_the_format_it_restores_and_closes_the_one_it_drops(
+    session, monkeypatch, latest_only, friday_afternoon,
+):
     monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
     late = bucket_for_slot(FRIDAY, SLOT_LATE).key
     restored = _seed_signal(session, late, FRIDAY, message_id="today", status=STATUS_EXPIRED)
@@ -849,6 +851,17 @@ def latest_only(session):
 @pytest.fixture
 def latest_and_peasant(session):
     _set_slots(session, (FRIDAY, SATURDAY), (schedule.LATEST, "PEASANT"))
+
+
+@pytest.fixture
+def friday_afternoon(monkeypatch):
+    monkeypatch.setattr("bot.services.pod_launch.datetime", _FridayAfternoonClock)
+
+
+class _FridayAfternoonClock(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return FRIDAY_AFTERNOON.astimezone(tz)
 
 
 def _seed_signal(

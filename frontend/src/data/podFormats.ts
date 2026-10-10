@@ -1,3 +1,5 @@
+import type { PodSetCode, SetSummary } from "../types/leaderboard";
+
 // Registered custom cube formats, mirrored from CUSTOM_FORMATS in bot/services/pod_format.py.
 // The bot owns the canonical mapping; keep the cube ids and labels here in sync when it changes.
 
@@ -39,4 +41,55 @@ export async function fetchCubeCardNames(code: string): Promise<Set<string> | nu
   }
   const names = (await response.text()).split("\n").map((line) => line.trim());
   return new Set(names.filter(Boolean));
+}
+
+export interface PodBoardWindow {
+  board: string;
+  season?: string;
+}
+
+export function podBoardWindowFor(code: string): PodBoardWindow | undefined {
+  const whole = customFormat(code);
+  if (whole) {
+    return { board: whole.code };
+  }
+  const split = code.lastIndexOf("-");
+  if (split <= 0) {
+    return undefined;
+  }
+  const board = customFormat(code.slice(0, split));
+  return board ? { board: board.code, season: code.slice(split + 1).toUpperCase() } : undefined;
+}
+
+export function podBoardCode(board: string, season?: string): string {
+  return season ? `${board}-${season}` : board;
+}
+
+export const MIN_BOARD_PODS = 2;
+
+export function podBoardSet(p: PodSetCode): SetSummary {
+  const custom = p.label != null;
+  return {
+    code: p.code,
+    name: p.label ?? p.code,
+    startDate: "",
+    endDate: "",
+    isActive: false,
+    early: !custom && p.mocks > 0,
+    custom,
+  };
+}
+
+export function withCustomPodBoards(
+  sets: SetSummary[] | undefined,
+  podSetCodes: PodSetCode[] | undefined,
+): SetSummary[] | undefined {
+  if (!sets) {
+    return undefined;
+  }
+  const known = new Set(sets.map((s) => s.code));
+  const boards = (podSetCodes ?? [])
+    .filter((p) => customFormat(p.code) && !known.has(p.code) && p.events >= MIN_BOARD_PODS)
+    .map(podBoardSet);
+  return [...sets, ...boards];
 }

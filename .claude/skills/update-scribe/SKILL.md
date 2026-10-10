@@ -21,7 +21,7 @@ Recapture the MTG Scribe calendar and reconcile the code with whatever Scribe ch
 ### 1. Keep the outgoing calendar as a baseline
 
 ```
-git show HEAD:bot/services/scribe_calendar.json > /tmp/scribe_prev.json
+git show HEAD:scribe_calendar.json > /tmp/scribe_prev.json
 ```
 
 If that fails because the file is new to `HEAD`, skip it and run step 3 without `--previous`.
@@ -98,7 +98,7 @@ If it prints a window, add the two paste-ready rows it emits — `CollectorBoost
 ### 8. Stage, do not commit
 
 ```
-git add bot/services/scribe_calendar.json
+git add scribe_calendar.json
 ```
 
 Plus any code, fixture, set-symbol and spec file touched. The user reviews before committing — never commit or push here.

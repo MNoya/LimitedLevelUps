@@ -121,6 +121,10 @@ export function fmtRange(start: string, end: string | null | undefined, today: D
   return e.getFullYear() !== today.getFullYear() ? `${base}, ${e.getFullYear()}` : base;
 }
 
+export function isRealSeasonSet(s: SetSummary): boolean {
+  return !s.custom && !!s.startDate && !!s.endDate && s.code !== "CUBE" && !s.code.includes("-");
+}
+
 export function weekOfSet(set: SetSummary | undefined, today: Date = new Date()): string | null {
   if (!set?.startDate || !set.endDate) return null;
   const start = parseLocalDate(set.startDate).getTime();

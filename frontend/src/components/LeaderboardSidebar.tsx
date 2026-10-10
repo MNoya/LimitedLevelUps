@@ -23,7 +23,6 @@ import type { ColorsSummary, RecentTrophy } from "../types/leaderboard";
 
 interface InsightsParams {
   setCode: string;
-  playerSetCode?: string;
   colors?: string;
   format?: string;
   rank?: string;
@@ -33,7 +32,6 @@ interface InsightsParams {
 
 export function LeaderboardSidebar({
   setCode,
-  playerSetCode,
   colors = "ALL",
   format = "ALL",
   otherCombos = [],
@@ -53,7 +51,7 @@ export function LeaderboardSidebar({
   const [rank, setRank] = useState("ALL");
   const filterActive = format !== "ALL" || colors !== "ALL" || rank !== "ALL";
   const [recentLimit, setRecentLimit] = useState(maxRecent);
-  const d = useInsightsData({ setCode, playerSetCode, colors, format, rank, otherCombos, maxRecent: recentLimit }, searchParams);
+  const d = useInsightsData({ setCode, colors, format, rank, otherCombos, maxRecent: recentLimit }, searchParams);
   const canShowMoreRecent = Boolean(d.recentScoped && d.recentScoped.length >= recentLimit);
 
   return (
@@ -129,7 +127,7 @@ export function LeaderboardSidebar({
           recentEmpty={d.recentEmpty}
           cube={d.cube}
           showRowPips={d.showRowPips}
-          linkSetCode={d.linkSetCode}
+          setCode={d.setCode}
           qs={d.qs}
         />
         {canShowMoreRecent && (
@@ -155,7 +153,6 @@ export function LeaderboardSidebar({
 
 export function LeaderboardInsightsStrip({
   setCode,
-  playerSetCode,
   colors = "ALL",
   format = "ALL",
   otherCombos = [],
@@ -168,7 +165,7 @@ export function LeaderboardInsightsStrip({
   searchParams?: URLSearchParams;
   maxColors?: number;
 }) {
-  const d = useInsightsData({ setCode, playerSetCode, colors, format, otherCombos, maxRecent }, searchParams);
+  const d = useInsightsData({ setCode, colors, format, otherCombos, maxRecent }, searchParams);
   const [open, setOpen] = useState<"colors" | "recent" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -222,7 +219,7 @@ export function LeaderboardInsightsStrip({
               recentEmpty={d.recentEmpty}
               cube={d.cube}
               showRowPips={d.showRowPips}
-              linkSetCode={d.linkSetCode}
+              setCode={d.setCode}
               qs={d.qs}
             />
           )}
@@ -351,14 +348,14 @@ function RecentTrophyRows({
   recentEmpty,
   cube,
   showRowPips,
-  linkSetCode,
+  setCode,
   qs,
 }: {
   recentScoped: RecentTrophy[] | undefined;
   recentEmpty: string;
   cube: boolean;
   showRowPips: boolean;
-  linkSetCode: string;
+  setCode: string;
   qs: string;
 }) {
   if (!recentScoped) {
@@ -426,7 +423,7 @@ function RecentTrophyRows({
             {inner}
           </a>
         ) : (
-          <Link key={key} to={{ pathname: playerPath(t.slug, linkSetCode), search: qs }} className={cls}>
+          <Link key={key} to={{ pathname: playerPath(t.slug, setCode), search: qs }} className={cls}>
             {inner}
           </Link>
         );
@@ -438,10 +435,9 @@ function RecentTrophyRows({
 const RECENT_POOL = 100;
 
 function useInsightsData(
-  { setCode, playerSetCode, colors = "ALL", format = "ALL", rank = "ALL", otherCombos = [], maxRecent = 10 }: InsightsParams,
+  { setCode, colors = "ALL", format = "ALL", rank = "ALL", otherCombos = [], maxRecent = 10 }: InsightsParams,
   searchParams?: URLSearchParams,
 ) {
-  const linkSetCode = playerSetCode ?? setCode;
   const cube = isCubeCode(setCode);
   const qs = profileSearch(searchParams);
   const colorsScoped = colors !== "ALL";
@@ -503,7 +499,7 @@ function useInsightsData(
     recentScoped,
     cube,
     qs,
-    linkSetCode,
+    setCode,
     lcqScope,
     namedScope,
     showRowPips,

@@ -41,7 +41,7 @@ import {
 import { useNow } from "../lib/countdown";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { POD_SLOTS, easternHourInLocalTime, viewerTimeZoneAbbr } from "../lib/podSlots";
-import { cubeCobraUrl } from "../data/podFormats";
+import { cubeCobraUrl, MIN_BOARD_PODS, podBoardCode, podBoardSet, podBoardWindowFor } from "../data/podFormats";
 import { cn } from "../lib/utils";
 import { useSearchParamHref } from "../lib/search-param-href";
 import {
@@ -81,6 +81,8 @@ import {
   podSeasons,
   podFormatBuckets,
   POD_FORMAT_BUCKETS,
+  AXIS_ALL,
+  MIN_BOARD_SEASONS,
   POD_SEASON_PARAM,
   seasonForDate,
   type PodFormatBucket,
@@ -94,37 +96,12 @@ import type {
   PodEventParticipantRow,
   PodEventSummary,
   PodLeaderboardRow,
-  PodSetCode,
   SetSummary,
 } from "../types/leaderboard";
-
-// A format tried once is not a board, so it stays out of the switcher and keeps its pods on the season
-const MIN_BOARD_PODS = 2;
-
-// A custom-format code longer than this overflows the chip and shows the generic CUBE label
-const POD_CHIP_CODE_MAX = 4;
-
-function synthesizePodSet(p: PodSetCode): SetSummary {
-  const custom = p.label != null;
-  return {
-    code: p.code,
-    name: p.label ?? p.code,
-    startDate: "",
-    endDate: "",
-    isActive: false,
-    early: !custom && p.mocks > 0,
-    custom,
-    shortCode: custom && p.code.length > POD_CHIP_CODE_MAX ? CUBE_BASE : undefined,
-  };
-}
-
-// A board that ran in one season has nothing to pick between, so it shows no season selector
-const MIN_BOARD_SEASONS = 2;
 
 // One format plus the "all" entry is the same board twice, so the format selector stays hidden
 const MIN_BOARD_FORMATS = 2;
 
-const AXIS_ALL = "all";
 const AXIS_PARAM_FORMAT = "format";
 const AXIS_PARAM_SET = "set";
 const SCOPE_SET_PREFIX = "set:";
@@ -249,7 +226,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
     const real = allSets.filter((s) => podSetCodes.some((p) => p.code === s.code));
     const synthesized = podSetCodes
       .filter((p) => !byCode.has(p.code) && (p.label == null || p.events >= MIN_BOARD_PODS))
-      .map(synthesizePodSet);
+      .map(podBoardSet);
     return [...real, ...synthesized];
   }, [allSets, podSetCodes]);
 
@@ -283,7 +260,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
   // A set below the board threshold still resolves its name when opened directly by code
   const directPod = podSetCodes?.find((p) => p.code === activeSet);
   const setMeta =
-    season ?? legacySets.find((s) => s.code === activeSet) ?? (directPod ? synthesizePodSet(directPod) : undefined);
+    season ?? legacySets.find((s) => s.code === activeSet) ?? (directPod ? podBoardSet(directPod) : undefined);
   const boardSeasons = useMemo(() => seasonsPlayed(boardEvents, allSets), [boardEvents, allSets]);
 
   // A format board is already one format, so only a season board buckets. Across every season an
@@ -306,12 +283,15 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
   const formatHeld = setCode ? boardHasMocks && requestedFormat === "mock" : seasonHasFormat;
   const format = !scopeEvents || formatHeld ? requestedFormat : undefined;
 
-  const boardWindow = useMemo(
-    () => (setCode ? boardSeasons.find(({ season: s }) => s.code === seasonAxis)?.season : undefined),
-    [setCode, seasonAxis, boardSeasons],
-  );
+  const opensOnLatestSeason = !!setCode && !!podBoardWindowFor(setCode) && boardSeasons.length >= MIN_BOARD_SEASONS;
+  const boardWindow = useMemo(() => {
+    if (!setCode || seasonAxis === AXIS_ALL) return undefined;
+    const requested = boardSeasons.find(({ season: s }) => s.code === seasonAxis)?.season;
+    return requested ?? (opensOnLatestSeason ? boardSeasons[0].season : undefined);
+  }, [setCode, seasonAxis, boardSeasons, opensOnLatestSeason]);
 
   const axisHref = useSearchParamHref(AXIS_ALL);
+  const keptAxisHref = useSearchParamHref("");
 
   const events = useMemo(() => {
     if (!scopeEvents) return undefined;
@@ -513,7 +493,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
     <SetFilterDropdown
       value={boardWindow?.code ?? AXIS_ALL}
       options={windowOptions}
-      hrefFor={(value) => axisHref(POD_SEASON_PARAM, value)}
+      hrefFor={(value) => (opensOnLatestSeason ? keptAxisHref : axisHref)(POD_SEASON_PARAM, value)}
       variant={selectorVariant}
       triggerClassName={isMobile ? undefined : "!min-w-0"}
     />
@@ -533,7 +513,10 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
 
   // The season view spans every set, so a name lands on the lifetime profile's pods
   const profileHref = (row: LeaderboardTableRow) => {
-    if (setCode) return playerPath(row.slug, setCode);
+    if (setCode) {
+      const profileBoard = podBoardWindowFor(setCode) ? podBoardCode(setCode, boardWindow?.code) : setCode;
+      return playerPath(row.slug, profileBoard);
+    }
     if (format === "cube") return playerPath(row.slug, row.setCode);
     return `${PLAYER_BASE}/${row.slug}?format=Pod`;
   };

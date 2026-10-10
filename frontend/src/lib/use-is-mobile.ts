@@ -4,6 +4,8 @@ import React from "react";
 // consult this so layouts stay in sync. Lives in /lib so React Fast Refresh
 // doesn't complain about mixed component+hook exports.
 
+export const PLAYER_PAGE_MOBILE_BREAKPOINT = 1024;
+
 export function useIsMobile(breakpoint = 720): boolean {
   const [isMobile, setIsMobile] = React.useState<boolean>(
     typeof window !== "undefined" ? window.innerWidth < breakpoint : false

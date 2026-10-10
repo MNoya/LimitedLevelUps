@@ -7,10 +7,11 @@ import { isTrackerUser, type TrackerAccount } from "../data/trackerUsers";
 import { Collection } from "../components/tracker/Collection";
 import { DraftLog, TRACKER_HEADER_H } from "../components/tracker/DraftLog";
 import { TrackerStatsBlock } from "../components/tracker/TrackerStatsBlock";
+import { SetDatesBlock, useSetDates } from "../components/SetDatesBlock";
 import { RefreshButton } from "../components/tracker/RefreshButton";
 import { AccountTabs, useTrackerAccounts } from "../components/tracker/AccountTabs";
 import { useQuery } from "@tanstack/react-query";
-import { useIsMobile } from "../lib/use-is-mobile";
+import { PLAYER_PAGE_MOBILE_BREAKPOINT, useIsMobile } from "../lib/use-is-mobile";
 import { AAvatar, ALogo, SetGlyph, Trophy, fmtPts } from "../components/Brand";
 import {
   ArrowRight,
@@ -24,7 +25,7 @@ import {
 } from "../components/Icons";
 import type { SortDir } from "../components/LeaderboardTable";
 import { Pip, Pips } from "../components/ManaPips";
-import { ImageIcon } from "../components/Icons";
+import { CalendarRange, ImageIcon } from "../components/Icons";
 import { DeckScreenshotModal } from "../components/pod/DeckScreenshotModal";
 import { highlightEventLabel } from "../components/pod/EventLabel";
 import { StatChip } from "../components/StatChip";
@@ -38,15 +39,20 @@ import { TrophyCount } from "../components/TrophyCount";
 import { ArenaChampBadge, isArenaChampionshipFormat } from "../components/ArenaChampBadge";
 import { LIFETIME_SET_CODE, SetCodeDropdown } from "../components/SetCodeDropdown";
 import { BackButton, MobilePageHeader } from "../components/PageNav";
+import { CubeSeasonSelector, cubeBoardHasSeasons } from "../components/CubeSeasonSelector";
+import { BoardWindowSelector, type BoardWindowOption } from "../components/BoardWindowSelector";
 import { RankBadge } from "../components/RankBadge";
 import { ArenaRankIcon } from "../components/ArenaRankIcon";
 import { GoToTopButton } from "../components/GoToTopButton";
 import { Tooltip } from "../components/Tooltip";
 
-import { useAvailableFormats, useColorChips, useDraftEvents, useLeaderboard, useLifetimeDraftEvents, useLifetimeStats, usePlayerIdentity, usePlayerLifetimeProfile, usePlayerProfile, usePlayerSlugByDiscordId, useSets } from "../data/hooks";
+import { useAvailableFormats, useColorChips, useCubeSeasons, useDraftEvents, useLeaderboard, useLifetimeDraftEvents, useLifetimeStats, usePlayerIdentity, usePlayerLifetimeProfile, usePlayerProfile, usePlayerSlugByDiscordId, usePodEvents, usePodSetCodes, useSets } from "../data/hooks";
 import { withMtgoSets } from "../data/mtgoSets";
+import { cubeBoardForRoute, setsWithCubeBoards } from "../data/cubeVariants";
+import { podBoardCode, podBoardWindowFor, withCustomPodBoards } from "../data/podFormats";
+import { AXIS_ALL, MIN_BOARD_SEASONS, POD_SEASON_PARAM, seasonsPlayed } from "../data/podSeasons";
 import { aggregate as scoreAggregate, computeScore, type ScoringStatRow } from "../data/scoring";
-import { canonicalSetCode, colorsOf, eventDate, eventDisplayLabel, fmtShortDate, formatTag, isCubeCode, isFlashbackEvent, isSoup, lastUpdated, lcqCashPrize, leaderboardPath, mainColors, playerPath, prettyFormat, winPct } from "../data/utils";
+import { canonicalSetCode, colorsOf, CUBE_BASE, eventDate, eventDisplayLabel, fmtShortDate, formatTag, isCubeCode, isFlashbackEvent, isRealSeasonSet, isSoup, lastUpdated, lcqCashPrize, leaderboardPath, mainColors, playerPath, prettyFormat, winPct } from "../data/utils";
 import { ACTIVE_SET_CODE } from "../data/constants";
 import {
   colorsDisplayName,
@@ -111,13 +117,22 @@ export function PlayerPage() {
   const slug = params.slug!.toLowerCase();
   const navigate = useNavigate();
   const { data: sets } = useSets();
-  const dropdownSets = useMemo(() => withMtgoSets(sets), [sets]);
+  const { data: cubeSeasons } = useCubeSeasons();
+  const { data: podSetCodes } = usePodSetCodes();
+  const dropdownSets = useMemo(
+    () => withMtgoSets(withCustomPodBoards(setsWithCubeBoards(sets, cubeSeasons), podSetCodes)),
+    [sets, cubeSeasons, podSetCodes],
+  );
   const liveSetCode = sets?.find((s) => s.isActive)?.code;
   // Bare /player/<slug> is the set-agnostic lifetime view; a set in the path scopes to that set.
   const lifetime = !params.setCode;
-  const setCode = (params.setCode ? canonicalSetCode(params.setCode, sets) : undefined) ?? liveSetCode ?? ACTIVE_SET_CODE;
-  const { data: profile, isLoading, isFetching, error } = usePlayerProfile(slug, setCode, !lifetime);
-  const { data: events, isFetching: isFetchingEvents } = useDraftEvents(slug, setCode, !lifetime);
+  const routeSet = (params.setCode ? canonicalSetCode(params.setCode, sets) : undefined) ?? liveSetCode ?? ACTIVE_SET_CODE;
+  const setCode = cubeBoardForRoute(routeSet, cubeSeasons) ?? routeSet;
+  const awaitingCubeBoard = setCode === CUBE_BASE && !cubeSeasons;
+  const perSetEnabled = !lifetime && !awaitingCubeBoard;
+  const { data: profile, isLoading: isLoadingProfile, isFetching, error } = usePlayerProfile(slug, setCode, perSetEnabled);
+  const { data: events, isFetching: isFetchingEvents } = useDraftEvents(slug, setCode, perSetEnabled);
+  const isLoading = isLoadingProfile || awaitingCubeBoard;
   const [topSearchParams] = useSearchParams();
   const lifetimeFormat = topSearchParams.get("format") ?? "ALL";
   const lifetimeColors = topSearchParams.get("colors") ?? "ALL";
@@ -136,8 +151,8 @@ export function PlayerPage() {
   // Sibling navigation needs the leaderboard rows so we know who's adjacent
   // by rank. Cached behind TanStack Query — same fetch as the leaderboard
   // page, so navigating between profiles doesn't re-hit the network.
-  const { data: leaderboardRows } = useLeaderboard(setCode);
-  const isMobile = useIsMobile();
+  const { data: leaderboardRows } = useLeaderboard(awaitingCubeBoard ? undefined : setCode);
+  const isMobile = useIsMobile(PLAYER_PAGE_MOBILE_BREAKPOINT);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -280,10 +295,6 @@ export function PlayerPage() {
 // ─── Lifetime (set-agnostic) profile ───────────────────────────────────────
 
 const LIFETIME_ALL_SEASONS = "ALL";
-
-function isRealSeasonSet(s: SetSummary): boolean {
-  return !s.custom && !!s.startDate && !!s.endDate && s.code !== "CUBE" && !s.code.includes("-");
-}
 
 function resolveSeasonWindow(seasonCode: string, sets: SetSummary[] | undefined): { start: string; endExclusive: string } | null {
   if (seasonCode === LIFETIME_ALL_SEASONS) return null;
@@ -466,18 +477,18 @@ function LifetimePlayer({
     <div className="bg-bg text-text min-h-screen page-fade">
       <AppHeader subtitle="PLAYER PROFILE" />
       <section
-        className="px-8 pt-5 pb-7 border-b border-border"
+        className="px-[clamp(16px,2.2vw,32px)] pt-5 pb-7 border-b border-border"
         style={{ background: "linear-gradient(180deg, #14181f 0%, #0a0c10 100%)" }}
       >
         <div className="flex items-center justify-between mb-4">
           <BackButton to={leaderboardTo} inline />
         </div>
         <div className="flex items-end gap-7">
-          <AAvatar displayName={profile.displayName} avatarUrl={profile.avatarUrl} size={120} green />
+          <AAvatar displayName={profile.displayName} avatarUrl={profile.avatarUrl} size={STAT_STRIP_HEIGHT} green />
           <div className="shrink-0">
             <h1
               className="font-display tracking-[0.03em] m-0 whitespace-nowrap pl-[5px]"
-              style={{ fontSize: "clamp(38px, 3.6vw, 64px)", lineHeight: 0.95 }}
+              style={{ fontSize: HEADER_NAME_SIZE, lineHeight: 0.95 }}
             >
               {profile.displayName.toUpperCase()}
             </h1>
@@ -966,7 +977,7 @@ function MobilePlayerHeader({
     s ? { pathname: playerPath(s, sibling.setCode), search: qs } : null;
   return (
     <MobilePageHeader
-      backTo={{ pathname: leaderboardPath(sibling.setCode), search: qs }}
+      backTo={boardTo(sibling.setCode, qs)}
       prevTo={toFor(sibling.prevSlug)}
       nextTo={toFor(sibling.nextSlug)}
       prevAriaLabel="Previous player"
@@ -1017,27 +1028,30 @@ function NoSetData({
       >
         {!isMobile && (
           <div className="flex items-center justify-between mb-4">
-            <BackButton to={{ pathname: leaderboardPath(setCode), search: qs }} inline />
+            <BackButton to={boardTo(setCode, qs)} inline />
             <SiblingNavButtons sibling={sibling} qs={qs} />
           </div>
         )}
         {isMobile ? (
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4 min-w-0">
-              {identity && (
-                <AAvatar displayName={identity.displayName} avatarUrl={identity.avatarUrl} size={84} green />
-              )}
-              {identity && (
-                <h1
-                  className="font-display tracking-[0.03em] m-0 truncate pl-[5px]"
-                  style={{ fontSize: "clamp(20px, 7vw, 44px)", lineHeight: 0.95 }}
-                >
-                  {identity.displayName.toUpperCase()}
-                </h1>
-              )}
+          <>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                {identity && (
+                  <AAvatar displayName={identity.displayName} avatarUrl={identity.avatarUrl} size={84} green />
+                )}
+                {identity && (
+                  <h1
+                    className="font-display tracking-[0.03em] m-0 truncate pl-[5px]"
+                    style={{ fontSize: "clamp(20px, 7vw, 44px)", lineHeight: 0.95 }}
+                  >
+                    {identity.displayName.toUpperCase()}
+                  </h1>
+                )}
+              </div>
+              <div className="shrink-0 flex items-center gap-3 font-display tracking-[0.18em]">{setSwitcher}</div>
             </div>
-            <div className="shrink-0 flex items-center gap-3 font-display tracking-[0.18em]">{setSwitcher}</div>
-          </div>
+            <ProfileSeasonSelector setCode={setCode} hrefFor={setHref} variant="mobile" className="mt-3 flex" />
+          </>
         ) : (
           <div className="flex items-end gap-7">
             {identity && (
@@ -1054,6 +1068,7 @@ function NoSetData({
               )}
               <div className={cn("flex items-center gap-3 font-display tracking-[0.18em]", identity && "mt-2")}>
                 {setSwitcher}
+                <ProfileSeasonSelector setCode={setCode} hrefFor={setHref} variant="hero" />
               </div>
             </div>
           </div>
@@ -1137,7 +1152,7 @@ function DesktopSkeleton() {
   return (
     <>
       <section
-        className="px-8 pt-5 pb-7 border-b border-border"
+        className="px-[clamp(16px,2.2vw,32px)] pt-5 pb-7 border-b border-border"
         style={{ background: "linear-gradient(180deg, #14181f 0%, #0a0c10 100%)" }}
       >
         <div className="flex items-center justify-between mb-4">
@@ -1221,7 +1236,7 @@ function LifetimeSkeleton() {
   return (
     <>
       <section
-        className="px-8 pt-5 pb-7 border-b border-border"
+        className="px-[clamp(16px,2.2vw,32px)] pt-5 pb-7 border-b border-border"
         style={{ background: "linear-gradient(180deg, #14181f 0%, #0a0c10 100%)" }}
       >
         <div className="mb-4"><SkeletonBox className="w-48 h-5" /></div>
@@ -1497,6 +1512,7 @@ function Desktop({
   const ranked = profile.rank > 0;
   const hasBreakdown = profile.events > 0 || profile.selfReportedEvents.length > 0;
   const trackerMode = useOwnTrackerProfile(profile.slug);
+  const hasDates = !!useSetDates(profile.setCode);
   const { trackerTab } = useParams<{ trackerTab?: string }>();
   const leftPane = trackerTab === "breakdown" ? "breakdown" : "collection";
   const { search } = useLocation();
@@ -1506,25 +1522,28 @@ function Desktop({
     useTrackerAccounts(trackerMode);
   const [pointsModalOpen, setPointsModalOpen] = useState(false);
   const pointsBtnRef = useRef<HTMLButtonElement>(null);
+  const headerRowRef = useRef<HTMLDivElement>(null);
+  const statsRef = useRef<HTMLDivElement>(null);
+  useScaleStatsToFit(headerRowRef, statsRef);
 
   return (
     <div className="bg-bg text-text min-h-screen page-fade">
       <AppHeader subtitle="PLAYER PROFILE" />
 
       <section
-        className="px-8 pt-5 pb-7 border-b border-border"
+        className="px-[clamp(16px,2.2vw,32px)] pt-5 pb-7 border-b border-border"
         style={{ background: "linear-gradient(180deg, #14181f 0%, #0a0c10 100%)" }}
       >
         <div className="flex items-center justify-between mb-4">
-          <BackButton to={{ pathname: leaderboardPath(profile.setCode), search: qs }} inline />
+          <BackButton to={boardTo(profile.setCode, qs)} inline />
           <SiblingNavButtons sibling={sibling} qs={qs} />
         </div>
-        <div className="flex items-end gap-7">
-          <AAvatar displayName={profile.displayName} avatarUrl={profile.avatarUrl} size={120} green />
+        <div ref={headerRowRef} className="flex items-end gap-[clamp(14px,1.8vw,28px)]">
+          <AAvatar displayName={profile.displayName} avatarUrl={profile.avatarUrl} size={HEADER_AVATAR_SIZE} green />
           <div className="shrink-0">
             <h1
               className="font-display tracking-[0.03em] m-0 whitespace-nowrap pl-[5px]"
-              style={{ fontSize: "clamp(38px, 3.6vw, 64px)", lineHeight: 0.95 }}
+              style={{ fontSize: HEADER_NAME_SIZE, lineHeight: 0.95 }}
             >
               {profile.displayName.toUpperCase()}
             </h1>
@@ -1535,9 +1554,15 @@ function Desktop({
                 <span className="text-[22px]">{profile.setCode}</span>
               )}
               {ranked && <RankBadge rank={profile.rank} size="lg" />}
+              <ProfileSeasonSelector setCode={profile.setCode} hrefFor={setHref} variant="hero" />
             </div>
           </div>
-          <div className="ml-auto flex items-stretch gap-4 min-w-0">
+          <SetDatesBlock setCode={profile.setCode} variant="header" className="mx-auto" />
+          <div
+            ref={statsRef}
+            className={cn("flex items-stretch gap-4 min-w-0", !hasDates && "ml-auto")}
+            style={{ zoom: `var(${STAT_SCALE_VAR}, 1)` }}
+          >
             {trackerMode && (
               <TrackerStatsBlock slug={profile.slug} setCode={profile.setCode} accountId={trackerAccount} />
             )}
@@ -1629,6 +1654,92 @@ function Desktop({
       )}
     </div>
   );
+}
+
+function ProfileSeasonSelector({
+  setCode, hrefFor, variant, className,
+}: { setCode: string; hrefFor: (code: string) => To; variant: "hero" | "mobile"; className?: string }) {
+  const { data: cubeSeasons } = useCubeSeasons();
+  const { data: sets } = useSets();
+  const podWindow = podBoardWindowFor(setCode);
+  const { data: podBoardEvents } = usePodEvents(podWindow?.board);
+  if (cubeBoardHasSeasons(setCode)) {
+    return (
+      <div className={className}>
+        <CubeSeasonSelector activeSet={setCode} seasons={cubeSeasons} hrefFor={hrefFor} variant={variant} />
+      </div>
+    );
+  }
+  if (!podWindow) {
+    return null;
+  }
+  const boardSeasons = seasonsPlayed(podBoardEvents, sets);
+  if (boardSeasons.length < MIN_BOARD_SEASONS) {
+    return null;
+  }
+  const allSeasons: BoardWindowOption = {
+    value: podWindow.board,
+    label: "ALL SEASONS",
+    icon: <CalendarRange size={20} className="text-white shrink-0" />,
+  };
+  const options = [allSeasons, ...boardSeasons.map(({ season }): BoardWindowOption => ({
+    value: podBoardCode(podWindow.board, season.code),
+    label: `${season.code} SEASON`,
+    glyph: season.code,
+  }))];
+  return (
+    <div className={className}>
+      <BoardWindowSelector value={setCode} options={options} hrefFor={hrefFor} variant={variant} />
+    </div>
+  );
+}
+
+function boardTo(code: string, search: string | undefined): To {
+  const podWindow = podBoardWindowFor(code);
+  if (!podWindow) {
+    return { pathname: leaderboardPath(code), search };
+  }
+  return { pathname: `/pods/${podWindow.board}`, search: `${POD_SEASON_PARAM}=${podWindow.season ?? AXIS_ALL}` };
+}
+
+function useScaleStatsToFit(rowRef: React.RefObject<HTMLElement>, statsRef: React.RefObject<HTMLElement>) {
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    const stats = statsRef.current;
+    if (!row || !stats) {
+      return;
+    }
+    const minStatsHeight = 40;
+    const slackPx = 4;
+    const originalAvatarPx = 120;
+    const fit = () => {
+      row.style.setProperty(STAT_SCALE_VAR, "1");
+      row.style.removeProperty(AVATAR_SIZE_VAR);
+      row.style.removeProperty(AVATAR_RATIO_VAR);
+      const statsHeight = stats.offsetHeight;
+      if (statsHeight < minStatsHeight) {
+        return;
+      }
+      const naturalWidth = statsHeight + stats.scrollWidth;
+      let scale = 1;
+      for (let pass = 0; pass < 3; pass++) {
+        row.style.setProperty(STAT_SCALE_VAR, scale.toFixed(3));
+        row.style.setProperty(AVATAR_SIZE_VAR, `${statsHeight * scale}px`);
+        row.style.setProperty(AVATAR_RATIO_VAR, ((statsHeight * scale) / originalAvatarPx).toFixed(3));
+        const overflow = row.scrollWidth - row.clientWidth;
+        if (overflow <= 0) {
+          return;
+        }
+        const scaledWidth = naturalWidth * scale;
+        scale *= (scaledWidth - overflow - slackPx) / scaledWidth;
+      }
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(row);
+    observer.observe(stats);
+    return () => observer.disconnect();
+  }, [rowRef, statsRef]);
 }
 
 function LeftPaneTab({
@@ -1742,6 +1853,13 @@ function TrophyDeckModal({
   );
 }
 
+const STAT_STRIP_HEIGHT = "calc(clamp(26px,3vw,44px) + 64px)";
+const STAT_SCALE_VAR = "--stat-scale";
+const AVATAR_SIZE_VAR = "--stat-avatar-size";
+const HEADER_AVATAR_SIZE = `var(${AVATAR_SIZE_VAR}, ${STAT_STRIP_HEIGHT})`;
+const AVATAR_RATIO_VAR = "--avatar-ratio";
+const HEADER_NAME_SIZE = `calc(clamp(38px, 3.6vw, 64px) * var(${AVATAR_RATIO_VAR}, 0.9))`;
+
 function StatStrip({
   stats,
   wp,
@@ -1757,7 +1875,7 @@ function StatStrip({
   pointsBtnRef?: React.RefObject<HTMLButtonElement>;
   trophiesLabel?: string;
 }) {
-  const valueCls = "font-display leading-none text-[clamp(26px,3vw,44px)]";
+  const valueCls = "font-display leading-none whitespace-nowrap text-[clamp(26px,3vw,44px)]";
   const tiles: Array<{
     label: string;
     value: React.ReactNode;
@@ -1816,12 +1934,13 @@ function StatStrip({
       className="grid border border-border2 bg-bg self-stretch min-w-0 ml-auto"
       style={{
         flex: "0 1 720px",
-        gridTemplateColumns: showPoints ? "1fr 1fr 1.3fr 1fr 1.05fr" : "1fr 1fr 1.3fr 1fr",
+        gridTemplateColumns: (showPoints ? [1, 1, 1.3, 1, 1.05] : [1, 1, 1.3, 1])
+          .map((weight) => `minmax(max-content, ${weight}fr)`).join(" "),
       }}
     >
       {tiles.map((t, i) => {
         const tileCls = cn(
-          "py-3.5 px-3 flex flex-col items-center text-center min-w-0",
+          "py-3.5 px-3 flex flex-col items-center text-center whitespace-nowrap",
           i < tiles.length - 1 && "border-r border-border2",
         );
         const label = (
@@ -2864,6 +2983,8 @@ function Mobile({
           </div>
         </div>
 
+        <ProfileSeasonSelector setCode={profile.setCode} hrefFor={setHref} variant="mobile" className="mt-3 flex" />
+
         <div className={cn("mt-[18px] grid gap-[5px]", ranked ? "grid-cols-5" : "grid-cols-4")}>
           <StatChip
             label={profile.selfReportedEvents.some((e) => e.isTrophy) ? "17L TROPHIES" : "TROPHIES"}
@@ -2891,6 +3012,7 @@ function Mobile({
           selfReported={profile.selfReportedEvents}
           showPoints={ranked}
           lockedFormats={lockedFormats}
+          setCode={profile.setCode}
           tracker={
             trackerMode
               ? {
@@ -3004,12 +3126,13 @@ function Mobile({
 
 // ─── Mobile breakdown (tabbed) ─────────────────────────────────────────────
 
-type BreakdownTab = "format" | "deckColors" | "manaPips" | "collection" | "games";
+type BreakdownTab = "format" | "deckColors" | "manaPips" | "collection" | "games" | "dates";
 
 const BREAKDOWN_TAB_STORAGE_KEY = "player-breakdown-tab";
 
 function isBreakdownTab(v: unknown): v is BreakdownTab {
-  return v === "format" || v === "deckColors" || v === "manaPips" || v === "collection" || v === "games";
+  return v === "format" || v === "deckColors" || v === "manaPips" || v === "collection" || v === "games"
+    || v === "dates";
 }
 
 interface MobileTracker {
@@ -3027,6 +3150,7 @@ function MobileBreakdown({
   selfReported,
   showPoints,
   lockedFormats,
+  setCode,
   tracker,
 }: {
   breakdown: PlayerFormatBreakdown[];
@@ -3034,6 +3158,7 @@ function MobileBreakdown({
   selfReported: SelfReportedEvent[];
   showPoints: boolean;
   lockedFormats?: string[] | null;
+  setCode: string;
   /** null on every profile but the tracker owner's own */
   tracker: MobileTracker | null;
 }) {
@@ -3045,8 +3170,16 @@ function MobileBreakdown({
   useEffect(() => {
     window.localStorage.setItem(BREAKDOWN_TAB_STORAGE_KEY, tab);
   }, [tab]);
-  const offered = (t: BreakdownTab) =>
-    t === "format" ? showPoints : t === "collection" || t === "games" ? !!tracker : true;
+  const hasDates = !!useSetDates(setCode);
+  const offered = (t: BreakdownTab) => {
+    if (t === "format") {
+      return showPoints;
+    }
+    if (t === "dates") {
+      return hasDates;
+    }
+    return t === "collection" || t === "games" ? !!tracker : true;
+  };
   const activeTab = offered(tab) ? tab : "deckColors";
   const sectionRef = useRef<HTMLElement>(null);
   return (
@@ -3062,6 +3195,11 @@ function MobileBreakdown({
             GAMES
           </BreakdownTabButton>
         )}
+        {hasDates && (
+          <BreakdownTabButton active={activeTab === "dates"} onClick={() => setTab("dates")}>
+            DATES
+          </BreakdownTabButton>
+        )}
         {showPoints && (
           <BreakdownTabButton active={activeTab === "format"} onClick={() => setTab("format")}>
             {tracker ? "POINTS" : "POINTS BY FORMAT"}
@@ -3075,7 +3213,8 @@ function MobileBreakdown({
         </BreakdownTabButton>
       </div>
       {activeTab === "collection" && tracker && <MobileCollectionTab tracker={tracker} />}
-      {activeTab !== "collection" && activeTab !== "games" && (
+      {activeTab === "dates" && <SetDatesBlock setCode={setCode} variant="list" />}
+      {activeTab !== "collection" && activeTab !== "games" && activeTab !== "dates" && (
         <div className="px-[18px] py-4">
           {activeTab === "format" && <MobileFormatTab breakdown={breakdown} lockedFormats={lockedFormats} />}
           {activeTab === "deckColors" && <MobileDeckColorsTab events={events} selfReported={selfReported} />}

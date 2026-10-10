@@ -1,10 +1,13 @@
 import React from "react";
 import type { To } from "react-router-dom";
 import { cn } from "../lib/utils";
-import { SetGlyph } from "./Brand";
+import { SetGlyph, setGlyphCode } from "./Brand";
 import { BsAsterisk, ChevronDown } from "./Icons";
 import { FilterDropdown, type FilterOption } from "./FilterDropdown";
 import { isMtgoFlashbackCode } from "../data/mtgoSets";
+import { cubeBoardGlyphCode, cubeForBoard } from "../data/cubeVariants";
+import { podBoardWindowFor } from "../data/podFormats";
+import { isCubeCode } from "../data/utils";
 import type { SetSummary } from "../types/leaderboard";
 
 const CHAMFER = "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)";
@@ -39,12 +42,19 @@ export function SetCodeDropdown({
       })
       .map((s) => ({
         value: s.code,
-        label: s.name,
+        label: cubeForBoard(s.code)?.name ?? s.name,
         section: isMtgoFlashbackCode(s.code) ? "MTGO FLASHBACKS" : undefined,
       }));
     const lifetime = includeLifetime ? [{ value: LIFETIME_SET_CODE, label: "Lifetime" }] : [];
     return [...lifetime, ...setOptions];
   }, [sets, includeLifetime]);
+  const setByCode = React.useMemo(() => new Map(sets.map((s) => [s.code, s])), [sets]);
+  const glyphFor = (code: string) => {
+    const set = setByCode.get(code);
+    return set ? setGlyphCode(set) : code;
+  };
+  const tagFor = (code: string) => setByCode.get(code)?.shortCode ?? code;
+  const selectedCode = boardCodeFor(activeCode);
 
   const isSm = size === "sm";
   const labelFs = isSm ? "text-[22px]" : "text-[26px]";
@@ -69,15 +79,15 @@ export function SetCodeDropdown({
       </span>
     ) : (
       <span className="flex w-full min-w-0 items-center gap-2.5">
-        <SetGlyph code={option.value} size={glyphSize} />
-        <span className={cn(labelFs, "leading-none")}>{option.value}</span>
+        <SetGlyph code={glyphFor(option.value)} size={glyphSize} />
+        <span className={cn(labelFs, "leading-none")}>{tagFor(option.value)}</span>
         <span className="text-muted text-[13px] tracking-[0.06em] truncate">{option.label}</span>
       </span>
     );
 
   return (
     <FilterDropdown
-      value={activeCode}
+      value={selectedCode}
       options={options}
       onChange={onChange}
       hrefFor={hrefFor}
@@ -106,9 +116,9 @@ export function SetCodeDropdown({
                 <BsAsterisk size={Math.round(glyphSize * 0.62)} />
               </span>
             ) : (
-              <SetGlyph code={activeCode} size={glyphSize} />
+              <SetGlyph code={glyphFor(selectedCode)} size={glyphSize} />
             )}
-            <span className={cn(labelFs, "leading-none")}>{isLifetime ? "ALL" : activeCode}</span>
+            <span className={cn(labelFs, "leading-none")}>{isLifetime ? "ALL" : tagFor(selectedCode)}</span>
             <ChevronDown
               strokeWidth={2.5}
               className={cn(
@@ -122,4 +132,11 @@ export function SetCodeDropdown({
       )}
     />
   );
+}
+
+function boardCodeFor(code: string): string {
+  if (isCubeCode(code)) {
+    return cubeBoardGlyphCode(code);
+  }
+  return podBoardWindowFor(code)?.board ?? code;
 }
