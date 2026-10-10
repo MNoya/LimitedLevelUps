@@ -53,7 +53,7 @@ function findScrollable(shell: HTMLElement): HTMLElement | null {
   return null;
 }
 
-function wheelPixels(e: WheelEvent, list: HTMLElement): number {
+export function wheelPixels(e: WheelEvent, list: HTMLElement): number {
   if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) {
     return e.deltaY * LINE_HEIGHT;
   }

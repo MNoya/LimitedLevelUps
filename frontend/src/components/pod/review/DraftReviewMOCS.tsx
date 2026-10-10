@@ -1,7 +1,20 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Dispatch,
+  type ReactNode,
+  type RefObject,
+  type SetStateAction,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { cn } from "../../../lib/utils";
+import { wheelPixels } from "../../../lib/use-wheel-trap";
 import { ToggleSwitch } from "../../ToggleSwitch";
 import { Pips } from "../../ManaPips";
 import { Tooltip } from "../../Tooltip";
@@ -113,12 +126,29 @@ export function DraftReviewMOCS({
   const [revealMode, setRevealMode] = usePersistentState<RevealMode>("draftReviewRevealMode", "revealed");
   const [revealedAt, setRevealedAt] = useState<string | null>(null);
   const [splitSideboard, setSplitSideboard] = usePersistentBool("draftReviewSplitSideboard", false);
+  const [splitTypes, setSplitTypes] = usePersistentBool("draftReviewSplitTypes", true);
   const [showGrades, setShowGrades] = usePersistentBool("draftReviewShowGrades", false);
   const [deckPopupSeat, setDeckPopupSeat] = useState<number | null>(null);
   const viewportHeight = useViewportHeight();
-  const [maxBoosterHeight, setMaxBoosterHeight] = useState(0);
-  const reportBoosterHeight = useCallback((h: number) => setMaxBoosterHeight((prev) => (h > prev ? h : prev)), []);
-  const deckPanelHeight = deckPanelDefaultHeight(viewportHeight, maxBoosterHeight);
+  const [zoom, setZoom] = usePersistentState<Zoom>("draftReviewBoosterZoom", "fit");
+  const [fitCardWidth, setFitCardWidth] = useState(BOOSTER_CARD_WIDTH);
+  const fitting = zoom === "fit";
+  const boosterCardWidth = fitting ? fitCardWidth : Math.round(BOOSTER_CARD_WIDTH * Number(zoom));
+  const boosterScale = boosterCardWidth / BOOSTER_CARD_WIDTH;
+  const recapScale = fitting ? 1 : boosterScale;
+  const stepZoom = useCallback((dir: 1 | -1) => setZoom(nextZoomStep(boosterScale, dir)), [boosterScale, setZoom]);
+  const toggleFit = () => setZoom(fitting ? "1" : "fit");
+  const shownScale = effectiveViewMode === "scroll" ? recapScale : boosterScale;
+  const shownPercent = Math.round(shownScale * 100);
+  const packFitTooltip = fitting ? `Cards at ${shownPercent}% to fit Pack` : "Fit Pack on screen";
+  const [tallestBooster, setTallestBooster] = useState(0);
+  const [tallestBoosterZoom, setTallestBoosterZoom] = useState(zoom);
+  if (tallestBoosterZoom !== zoom) {
+    setTallestBoosterZoom(zoom);
+    setTallestBooster(0);
+  }
+  const reportBoosterHeight = useCallback((h: number) => setTallestBooster((prev) => (h > prev ? h : prev)), []);
+  const deckPanelHeight = deckPanelDefaultHeight(viewportHeight, fitting ? 0 : tallestBooster);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -320,6 +350,18 @@ export function DraftReviewMOCS({
       />
       <div className="relative flex min-h-0 flex-1">
         <section className="relative flex min-w-0 flex-1 flex-col">
+          <div className="absolute bottom-3 right-4 z-20 hidden lg:block">
+            <ZoomControl
+              label={`${shownPercent}%`}
+              fitting={fitting && effectiveViewMode === "step"}
+              canShrink={shownScale > BOOSTER_MIN_ZOOM}
+              canGrow={shownScale < BOOSTER_MAX_ZOOM}
+              onStep={stepZoom}
+              onToggleFit={effectiveViewMode === "step" ? toggleFit : undefined}
+              fitTooltip={packFitTooltip}
+              className="h-9"
+            />
+          </div>
           {effectiveViewMode === "scroll" ? (
             <>
               <div className="absolute right-2 top-1 z-20 lg:hidden">
@@ -339,6 +381,8 @@ export function DraftReviewMOCS({
                 showGrades={showGrades}
                 initialPack={pack}
                 initialPick={pick}
+                cardWidth={Math.round(RECAP_CARD_WIDTH * recapScale)}
+                onZoomStep={stepZoom}
                 onActivePick={(p, k) => {
                   if (p !== pack || k !== pick) {
                     goTo(p, k);
@@ -353,7 +397,11 @@ export function DraftReviewMOCS({
                 pickedPositions={pickShown ? view.takenPositions : []}
                 showGrades={showGrades}
                 fadeKey={`${seat}-${pack}-${pick}`}
-                onNaturalHeight={reportBoosterHeight}
+                onNaturalHeight={fitting ? undefined : reportBoosterHeight}
+                cardWidth={boosterCardWidth}
+                fitCount={fitting ? largestPackSize(views[seat]) : null}
+                onFitWidth={setFitCardWidth}
+                onZoomStep={stepZoom}
               />
               <MobileNavDivider
                 pack={pack}
@@ -414,6 +462,8 @@ export function DraftReviewMOCS({
           canSplit={hasSideboard}
           splitSideboard={splitSideboard}
           onToggleSplit={() => setSplitSideboard((v) => !v)}
+          splitTypes={splitTypes}
+          onToggleSplitTypes={() => setSplitTypes((v) => !v)}
           deckLink={deckLink}
           left={seats[left]}
           right={seats[right]}
@@ -806,16 +856,18 @@ function Header({
               </Chip>
             ))}
           </ChipRow>
-          <ChipRow label="PICK" chipsRef={pickChipsRef}>
-            {Array.from({ length: turns }, (_, k) => (
-              <Chip key={k} active={k === pick} href={jumpHref(pack, k)}>
-                {pickLabel(k, perTurn)}
-              </Chip>
-            ))}
-          </ChipRow>
-          <div className="flex shrink-0 items-center gap-2">
-            <NavArrow dir="prev" href={prevHref} />
-            {revealControl}
+          <div className="flex min-w-0 items-center gap-2">
+            <ChipRow label="PICK" chipsRef={pickChipsRef}>
+              {Array.from({ length: turns }, (_, k) => (
+                <Chip key={k} active={k === pick} href={jumpHref(pack, k)}>
+                  {pickLabel(k, perTurn)}
+                </Chip>
+              ))}
+            </ChipRow>
+            <div className="flex shrink-0 items-center gap-2">
+              <NavArrow dir="prev" href={prevHref} />
+              {revealControl}
+            </div>
           </div>
         </div>
       )}
@@ -872,20 +924,18 @@ function SwitchToggle({
   onToggle,
   tooltip,
   ariaLabel,
-  block = false,
   disabled = false,
 }: {
-  label: string;
+  label: ReactNode;
   on: boolean;
   onToggle: () => void;
   tooltip: string;
   ariaLabel: string;
-  block?: boolean;
   disabled?: boolean;
 }) {
   const [hover, setHover] = useState(false);
   return (
-    <Tooltip label={tooltip} side={block ? "left" : "bottom"} open={hover && !disabled}>
+    <Tooltip label={tooltip} side="bottom" open={hover && !disabled}>
       <button
         onClick={onToggle}
         onPointerEnter={(e) => e.pointerType === "mouse" && setHover(true)}
@@ -895,9 +945,9 @@ function SwitchToggle({
         aria-checked={on}
         aria-label={ariaLabel}
         className={cn(
-          "flex h-9 items-center gap-2 rounded-md border border-border bg-surface2 px-2.5 transition-colors [-webkit-tap-highlight-color:transparent]",
+          "flex h-9 shrink-0 items-center gap-2 rounded-md border border-border bg-surface2 px-2.5 transition-colors",
+          "[-webkit-tap-highlight-color:transparent]",
           disabled ? "cursor-not-allowed opacity-40" : "hover:border-white/40 hover:bg-white/10",
-          block ? "w-full justify-between" : "shrink-0",
         )}
       >
         <span className={cn("font-display text-[12px] tracking-[0.12em]", on ? "text-green" : "text-subtle")}>
@@ -909,15 +959,90 @@ function SwitchToggle({
   );
 }
 
-function ShowPicksToggle({ showPicks, onToggle, block = false }: { showPicks: boolean; onToggle: () => void; block?: boolean }) {
+function ZoomControl({
+  label,
+  fitting,
+  canShrink,
+  canGrow,
+  onStep,
+  onToggleFit,
+  fitTooltip,
+  className,
+  labelClassName,
+}: {
+  label: string;
+  fitting: boolean;
+  canShrink: boolean;
+  canGrow: boolean;
+  onStep: (dir: 1 | -1) => void;
+  onToggleFit?: () => void;
+  fitTooltip: string;
+  className?: string;
+  labelClassName?: string;
+}) {
+  const stepButton = cn(
+    "flex h-full w-8 items-center justify-center text-[16px] text-subtle transition-colors",
+    "hover:bg-white/10 hover:text-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent",
+  );
+  const labelCell = "flex min-w-[52px] flex-1 items-center justify-center border-x border-border px-1.5";
+  const shown = (
+    <span
+      className={cn(
+        "font-display text-[14px] tracking-[0.12em] tabular-nums [text-box:trim-both_cap_alphabetic]",
+        fitting ? "text-green" : cn("text-subtle", labelClassName),
+      )}
+    >
+      {fitting ? "FIT" : label}
+    </span>
+  );
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 items-stretch overflow-hidden rounded-md border border-border bg-surface2",
+        className,
+      )}
+    >
+      <Tooltip label="Smaller cards (Ctrl+Scroll)" side="top">
+        <button onClick={() => onStep(-1)} disabled={!canShrink} aria-label="Smaller cards" className={stepButton}>
+          −
+        </button>
+      </Tooltip>
+      {onToggleFit ? (
+        <Tooltip label={fitTooltip} side="top">
+          <button
+            onClick={onToggleFit}
+            role="switch"
+            aria-checked={fitting}
+            aria-label="Fit"
+            className={cn(labelCell, "transition-colors hover:bg-white/10")}
+          >
+            {shown}
+          </button>
+        </Tooltip>
+      ) : (
+        <span className={labelCell}>{shown}</span>
+      )}
+      <Tooltip label="Bigger cards (Ctrl+Scroll)" side="top">
+        <button onClick={() => onStep(1)} disabled={!canGrow} aria-label="Bigger cards" className={stepButton}>
+          +
+        </button>
+      </Tooltip>
+    </div>
+  );
+}
+
+function ShowPicksToggle({ showPicks, onToggle }: { showPicks: boolean; onToggle: () => void }) {
   return (
     <SwitchToggle
-      label="SHOW PICKS"
+      label={
+        <>
+          <span className="hidden min-[1500px]:inline">SHOW </span>PICKS
+        </>
+      }
       on={showPicks}
       onToggle={onToggle}
       ariaLabel="Show picks"
       tooltip={showPicks ? "Hide picks to guess before revealing (Space)" : "Reveal picks automatically (Space)"}
-      block={block}
     />
   );
 }
@@ -934,15 +1059,18 @@ function ShowNeighborsToggle({ on, onToggle }: { on: boolean; onToggle: () => vo
   );
 }
 
-function ScrollToggle({ on, onToggle, block = false }: { on: boolean; onToggle: () => void; block?: boolean }) {
+function ScrollToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
     <SwitchToggle
-      label="SCROLL MODE"
+      label={
+        <>
+          SCROLL<span className="hidden min-[1500px]:inline"> MODE</span>
+        </>
+      }
       on={on}
       onToggle={onToggle}
       ariaLabel="Scroll the whole draft"
       tooltip={on ? "Whole draft in one scrollable view" : "One pick at a time"}
-      block={block}
     />
   );
 }
@@ -993,14 +1121,33 @@ function BoosterPanel({
   showGrades,
   fadeKey,
   onNaturalHeight,
+  cardWidth,
+  fitCount,
+  onFitWidth,
+  onZoomStep,
 }: {
   cards: ArtifactCard[];
   pickedPositions: number[];
   showGrades: boolean;
   fadeKey: string;
   onNaturalHeight?: (height: number) => void;
+  cardWidth: number;
+  fitCount: number | null;
+  onFitWidth: (width: number) => void;
+  onZoomStep: (dir: 1 | -1) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  useCtrlWheelZoom(scrollRef, onZoomStep);
+  const area = useElementSize(scrollRef);
+  const measured = fitCount !== null && area.width > 0;
+  const usableWidth = area.width - BOOSTER_PAD * 2;
+  const usableHeight = area.height - BOOSTER_PAD * 2;
+  const fitWidth = measured ? widestFittingCard(fitCount, usableWidth, usableHeight) : null;
+  useLayoutEffect(() => {
+    if (fitWidth !== null) {
+      onFitWidth(fitWidth);
+    }
+  }, [fitWidth, onFitWidth]);
   useLayoutEffect(() => {
     const content = scrollRef.current?.firstElementChild as HTMLElement | null | undefined;
     if (!content || !onNaturalHeight) {
@@ -1015,7 +1162,7 @@ function BoosterPanel({
   return (
     <div ref={scrollRef} className="themed-scrollbar min-h-0 flex-1 overflow-y-auto" style={{ padding: BOOSTER_PAD }}>
       <div key={fadeKey} className="animate-fadeUpIn">
-        <BoosterGrid cards={cards} pickedPositions={pickedPositions} showGrades={showGrades} />
+        <BoosterGrid cards={cards} pickedPositions={pickedPositions} showGrades={showGrades} cardWidth={cardWidth} />
       </div>
     </div>
   );
@@ -1025,15 +1172,18 @@ function BoosterGrid({
   cards,
   pickedPositions,
   showGrades,
+  cardWidth,
 }: {
   cards: ArtifactCard[];
   pickedPositions: number[];
   showGrades: boolean;
+  cardWidth: number;
 }) {
+  const gridStyle = { gap: BOOSTER_GAP, "--booster-card-w": `${cardWidth}px` } as CSSProperties;
   return (
-    <div className="flex flex-wrap content-start justify-center" style={{ gap: BOOSTER_GAP }}>
+    <div className="flex flex-wrap content-start justify-center" style={gridStyle}>
       {cards.map((card, i) => (
-        <div key={i} className="w-[calc((100%-16px)/3)] sm:w-[calc((100%-24px)/4)] lg:w-[210px]">
+        <div key={i} className="w-[calc((100%-16px)/3)] sm:w-[calc((100%-24px)/4)] lg:w-[var(--booster-card-w)]">
           <BoosterCard card={card} picked={pickedPositions.includes(i)} showGrades={showGrades} />
         </div>
       ))}
@@ -1057,6 +1207,72 @@ function BoosterCard({ card, picked, showGrades }: { card: ArtifactCard; picked:
   );
 }
 
+const BOOSTER_CARD_WIDTH = 210;
+const RECAP_CARD_WIDTH = 148;
+const BOOSTER_ZOOM_STEPS = [0.6, 0.7, 0.8, 0.9, 1, 1.15, 1.3];
+const BOOSTER_MIN_ZOOM = BOOSTER_ZOOM_STEPS[0];
+const BOOSTER_MAX_ZOOM = BOOSTER_ZOOM_STEPS[BOOSTER_ZOOM_STEPS.length - 1];
+
+type Zoom = "fit" | `${number}`;
+
+function nextZoomStep(current: number, dir: 1 | -1): Zoom {
+  const steps = dir === 1 ? BOOSTER_ZOOM_STEPS : [...BOOSTER_ZOOM_STEPS].reverse();
+  for (const step of steps) {
+    if ((step - current) * dir > 0.01) {
+      return `${step}`;
+    }
+  }
+  return `${steps[steps.length - 1]}`;
+}
+
+function widestFittingCard(count: number, width: number, height: number): number {
+  const narrowest = Math.round(BOOSTER_CARD_WIDTH * BOOSTER_MIN_ZOOM);
+  const widest = Math.round(BOOSTER_CARD_WIDTH * BOOSTER_MAX_ZOOM);
+  for (let cardWidth = widest; cardWidth > narrowest; cardWidth -= 2) {
+    const columns = Math.floor((width + BOOSTER_GAP) / (cardWidth + BOOSTER_GAP));
+    const rows = Math.ceil(count / Math.max(1, columns));
+    const gridHeight = rows * cardWidth * CARD_ASPECT + (rows - 1) * BOOSTER_GAP;
+    if (columns > 0 && gridHeight <= height) {
+      return cardWidth;
+    }
+  }
+  return narrowest;
+}
+
+function largestPackSize(packs: DraftPickView[][]): number {
+  let largest = 0;
+  for (const pickViews of packs) {
+    largest = Math.max(largest, pickViews[0]?.booster.length ?? 0);
+  }
+  return largest;
+}
+
+function useCtrlWheelZoom(ref: RefObject<HTMLElement | null>, onStep: (dir: 1 | -1) => void) {
+  const onStepRef = useRef(onStep);
+  onStepRef.current = onStep;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) {
+      return;
+    }
+    let pending = 0;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) {
+        return;
+      }
+      e.preventDefault();
+      pending += wheelPixels(e, el);
+      if (Math.abs(pending) < 40) {
+        return;
+      }
+      onStepRef.current(pending < 0 ? 1 : -1);
+      pending = 0;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [ref]);
+}
+
 // Continuous-scroll recap: every pick across all three packs stacked top-to-bottom for one seat, each
 // section showing that pick's booster with the taken card highlighted. No deck/pool state, just the
 // sequence — a fast skim. Honors the reveal mode: "click" hides each pick until its REVEAL is tapped.
@@ -1068,6 +1284,8 @@ function DraftScrollRecap({
   showGrades,
   initialPack,
   initialPick,
+  cardWidth,
+  onZoomStep,
   onActivePick,
 }: {
   packs: DraftPickView[][];
@@ -1077,9 +1295,12 @@ function DraftScrollRecap({
   showGrades: boolean;
   initialPack: number;
   initialPick: number;
+  cardWidth: number;
+  onZoomStep: (dir: 1 | -1) => void;
   onActivePick: (pack: number, pick: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  useCtrlWheelZoom(ref, onZoomStep);
   const onActivePickRef = useRef(onActivePick);
   onActivePickRef.current = onActivePick;
   useLayoutEffect(() => {
@@ -1117,7 +1338,11 @@ function DraftScrollRecap({
     return () => observer.disconnect();
   }, []);
   return (
-    <div ref={ref} className="themed-scrollbar min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1 lg:px-8 lg:pb-6 lg:pt-3">
+    <div
+      ref={ref}
+      className="themed-scrollbar min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1 lg:px-8 lg:pb-6 lg:pt-3"
+      style={{ "--recap-card-w": `${cardWidth}px` } as CSSProperties}
+    >
       {packs.map((pickViews, p) =>
         pickViews.map((view, k) => (
           <RecapSection
@@ -1180,7 +1405,12 @@ function RecapSection({
           </button>
         )}
       </div>
-      <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(104px,1fr))] lg:[grid-template-columns:repeat(auto-fill,minmax(148px,1fr))]">
+      <div
+        className={cn(
+          "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(104px,1fr))]",
+          "lg:[grid-template-columns:repeat(auto-fill,minmax(var(--recap-card-w),1fr))]",
+        )}
+      >
         {boosterCards.map((card, i) => (
           <BoosterCard key={i} card={card} picked={shown && view.takenPositions.includes(i)} showGrades={showGrades} />
         ))}
@@ -1375,8 +1605,9 @@ function PoolCards({
   cardWidth,
   reveal,
   sideReveal,
-  groupByType = false,
+  curve,
   poolAlign,
+  controls,
 }: {
   order: boolean;
   rows: ArtifactCard[][];
@@ -1387,22 +1618,33 @@ function PoolCards({
   cardWidth: number;
   reveal: number;
   sideReveal: number;
-  groupByType?: boolean;
+  curve?: CurveMode;
   poolAlign?: "left" | "right";
+  controls?: ReactNode;
 }) {
   const showPane = splitSideboard && sideboard.length > 0;
   const inlineSideboard = showPane ? [] : sideboard;
+  const paneCardWidth = Math.round(cardWidth * SIDE_PANE_RATIO);
   return (
     <>
       <div className="relative min-w-0 flex-1">
+        {controls}
         {order ? (
           <OrderStrip rows={rows} sideboard={inlineSideboard} lastPicks={lastPicks} cardWidth={cardWidth} reveal={reveal} />
         ) : (
-          <Pool cards={cards} sideboard={inlineSideboard} lastPicks={lastPicks} groupByType={groupByType} align={poolAlign} cardWidth={cardWidth} reveal={reveal} />
+          <Pool
+            cards={cards}
+            sideboard={inlineSideboard}
+            lastPicks={lastPicks}
+            curve={curve}
+            align={poolAlign}
+            cardWidth={cardWidth}
+            reveal={reveal}
+          />
         )}
       </div>
       {showPane && (
-        <SideboardPane cards={sideboard} markCount={lastPicks.side} cardWidth={Math.round(cardWidth * 0.9)} reveal={sideReveal} />
+        <SideboardPane cards={sideboard} markCount={lastPicks.side} cardWidth={paneCardWidth} reveal={sideReveal} />
       )}
     </>
   );
@@ -1423,6 +1665,8 @@ function BottomPanel({
   canSplit,
   splitSideboard,
   onToggleSplit,
+  splitTypes,
+  onToggleSplitTypes,
   deckLink,
   left,
   right,
@@ -1443,6 +1687,8 @@ function BottomPanel({
   canSplit: boolean;
   splitSideboard: boolean;
   onToggleSplit: () => void;
+  splitTypes: boolean;
+  onToggleSplitTypes: () => void;
   deckLink?: InPlaceLink;
   left: Seat;
   right: Seat;
@@ -1456,6 +1702,50 @@ function BottomPanel({
   const order = deckLayout === "order";
   const showSideboard = splitSideboard && sideboard.length > 0;
   const { height, beginResize, dragging } = useResizableHeight(defaultHeight, () => setOpen(false));
+  const [deckZoom, setDeckZoom] = usePersistentState<Zoom>("draftReviewDeckZoom", "fit");
+  const deckAreaRef = useRef<HTMLDivElement>(null);
+  const deckAreaWidth = useElementSize(deckAreaRef).width;
+  const curve: CurveMode = splitTypes ? "split" : "mixed";
+  const track = deckTrack(order, rows, cards, showSideboard ? [] : sideboard, curve);
+  const paneShare = showSideboard ? SIDE_PANE_RATIO : 0;
+  const widthForColumns = (columns: number) => deckCardWidthFor(deckAreaWidth, columns, 0, paneShare);
+  const deckFitting = deckZoom === "fit";
+  const trackFitWidth = deckCardWidthFor(deckAreaWidth, track.cardColumns, track.spacers, paneShare);
+  const chosenWidth = deckFitting ? Math.min(DECK_CARD_WIDTH, trackFitWidth) : widthForColumns(Number(deckZoom));
+  const clampedWidth = Math.min(DECK_MAX_CARD_WIDTH, Math.max(DECK_MIN_CARD_WIDTH, chosenWidth));
+  const deckCardWidth = deckAreaWidth > 0 ? clampedWidth : DECK_CARD_WIDTH;
+  const deckColumns = columnsShowing(deckCardWidth, widthForColumns);
+  const deckScale = deckCardWidth / DECK_CARD_WIDTH;
+  const stepDeckZoom = (dir: 1 | -1) => setDeckZoom(`${Math.max(1, deckColumns - dir)}`);
+  const toggleDeckFit = () => setDeckZoom(deckFitting ? `${columnsShowing(DECK_CARD_WIDTH, widthForColumns)}` : "fit");
+  useCtrlWheelZoom(deckAreaRef, stepDeckZoom);
+  const deckControls = (
+    <div className="absolute bottom-1 right-6 z-20">
+      <PoolControls
+        zoom={
+          <ZoomControl
+            label={`${deckColumns} COLS`}
+            fitting={deckFitting}
+            canShrink={widthForColumns(deckColumns + 1) >= DECK_MIN_CARD_WIDTH}
+            canGrow={deckColumns > 1 && deckCardWidth < DECK_MAX_CARD_WIDTH}
+            onStep={stepDeckZoom}
+            onToggleFit={toggleDeckFit}
+            fitTooltip={deckFitting ? "Cards sized so every column fits" : "Fit Deck to the panel width"}
+            className="h-8"
+            labelClassName="text-[13px]"
+          />
+        }
+        canSplit={canSplit}
+        splitSideboard={splitSideboard}
+        onToggleSplit={onToggleSplit}
+        splitTypes={splitTypes}
+        onToggleSplitTypes={onToggleSplitTypes}
+        deckLink={deckLink}
+        deckLayout={deckLayout}
+        onToggleDeckLayout={onToggleDeckLayout}
+      />
+    </div>
+  );
 
   const activeTab = tab;
   let creatures = 0;
@@ -1490,21 +1780,12 @@ function BottomPanel({
         />
       </PanelBar>
       <div
+        ref={deckAreaRef}
         className="relative shrink-0 overflow-hidden bg-surface/60"
         style={{ height: open ? height : 0, transition: dragging ? "none" : "height 200ms ease" }}
       >
         {activeTab === "deck" ? (
           <div className="relative flex h-full py-1 pl-6">
-            <div className={cn("absolute bottom-2 z-20", showSideboard ? "right-[200px]" : "right-6")}>
-              <PoolControls
-                canSplit={canSplit}
-                splitSideboard={splitSideboard}
-                onToggleSplit={onToggleSplit}
-                deckLink={deckLink}
-                deckLayout={deckLayout}
-                onToggleDeckLayout={onToggleDeckLayout}
-              />
-            </div>
             <PoolCards
               order={order}
               rows={rows}
@@ -1512,10 +1793,11 @@ function BottomPanel({
               lastPicks={lastPicks}
               splitSideboard={splitSideboard}
               sideboard={sideboard}
-              cardWidth={DECK_CARD_WIDTH}
-              reveal={order ? DECK_ORDER_REVEAL : DECK_CURVE_REVEAL}
-              sideReveal={DECK_SIDE_REVEAL}
-              groupByType
+              cardWidth={deckCardWidth}
+              reveal={Math.round((order ? DECK_ORDER_REVEAL : DECK_CURVE_REVEAL) * deckScale)}
+              sideReveal={Math.round(DECK_SIDE_REVEAL * deckScale)}
+              curve={curve}
+              controls={deckControls}
             />
           </div>
         ) : (
@@ -1530,7 +1812,53 @@ const DECK_CARD_WIDTH = 176;
 const DECK_CURVE_REVEAL = 28;
 const DECK_ORDER_REVEAL = 44;
 const DECK_SIDE_REVEAL = 24;
-const CARD_ASPECT = 1.4;
+const DECK_MIN_CARD_WIDTH = 64;
+const DECK_MAX_CARD_WIDTH = 260;
+const SIDE_PANE_RATIO = 0.9;
+
+function deckTrack(
+  order: boolean,
+  rows: ArtifactCard[][],
+  cards: ArtifactCard[],
+  inlineSideboard: ArtifactCard[],
+  curve: CurveMode,
+) {
+  const sideColumns = inlineSideboard.length > 0 ? 1 : 0;
+  if (order) {
+    let positions = 0;
+    for (const row of rows) {
+      positions = Math.max(positions, row.length);
+    }
+    return { cardColumns: positions + sideColumns, spacers: sideColumns };
+  }
+  let cardColumns = sideColumns;
+  let spacers = sideColumns;
+  for (const group of curveColumns(cards.map((card, idx) => ({ card, idx })), curve)) {
+    if (group) {
+      cardColumns++;
+    } else {
+      spacers++;
+    }
+  }
+  return { cardColumns, spacers };
+}
+
+function deckCardWidthFor(areaWidth: number, cardColumns: number, spacers: number, paneShare: number): number {
+  const insetAndScrollbar = 64;
+  const elements = cardColumns + spacers;
+  const fixedWidth = insetAndScrollbar + POOL_PAD * 2 + Math.max(0, elements - 1) * POOL_GAP;
+  const widthUnits = cardColumns + spacers * SIDE_COLUMN_GAP_RATIO + paneShare;
+  return Math.floor((areaWidth - fixedWidth) / Math.max(1, widthUnits));
+}
+
+function columnsShowing(cardWidth: number, widthForColumns: (columns: number) => number): number {
+  let columns = 1;
+  while (widthForColumns(columns + 1) >= cardWidth) {
+    columns++;
+  }
+  return columns;
+}
+const CARD_ASPECT = 680 / 488;
 const DECK_PANEL_MAX_FRACTION = 0.72;
 const DECK_PANEL_FLOOR = 120;
 const DECK_WRAPPER_PAD_Y = 4;
@@ -1545,6 +1873,26 @@ function useViewportHeight() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
   return viewportHeight;
+}
+
+function useElementSize(ref: RefObject<HTMLElement | null>) {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) {
+      return;
+    }
+    const measure = () => {
+      const width = el.clientWidth;
+      const height = el.clientHeight;
+      setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref]);
+  return size;
 }
 
 function deckPanelDefaultHeight(viewportHeight: number, boosterHeight: number) {
@@ -1656,6 +2004,9 @@ function PoolControls({
   deckLink,
   deckLayout,
   onToggleDeckLayout,
+  zoom,
+  splitTypes,
+  onToggleSplitTypes,
 }: {
   canSplit: boolean;
   splitSideboard: boolean;
@@ -1663,12 +2014,16 @@ function PoolControls({
   deckLink?: InPlaceLink;
   deckLayout: "order" | "columns";
   onToggleDeckLayout: () => void;
+  zoom?: ReactNode;
+  splitTypes?: boolean;
+  onToggleSplitTypes?: () => void;
 }) {
   const pill = "flex h-7 items-center justify-center gap-1.5 rounded border px-2.5 font-display text-[11px] tracking-[0.12em] transition-colors lg:h-8 lg:rounded-md lg:px-3 lg:text-[13px]";
   const idle = "border-border bg-surface2 text-subtle hover:border-white/40 hover:text-text";
   const active = "border-green/60 bg-surface2 text-green [background-image:linear-gradient(rgba(46,232,92,0.15),rgba(46,232,92,0.15))]";
   return (
     <div className="flex flex-col items-stretch gap-1.5">
+      {zoom}
       {(deckLink || canSplit) && (
         <div className="flex w-full gap-1.5">
           {deckLink && (
@@ -1695,7 +2050,12 @@ function PoolControls({
           )}
         </div>
       )}
-      <LayoutToggle layout={deckLayout} onToggle={onToggleDeckLayout} />
+      <LayoutToggle
+        layout={deckLayout}
+        onToggle={onToggleDeckLayout}
+        splitTypes={splitTypes}
+        onToggleSplitTypes={onToggleSplitTypes}
+      />
     </div>
   );
 }
@@ -1818,15 +2178,42 @@ function MobileNavDivider({
   );
 }
 
-function LayoutToggle({ layout, onToggle }: { layout: "order" | "columns"; onToggle: () => void }) {
+function LayoutToggle({
+  layout,
+  onToggle,
+  splitTypes = true,
+  onToggleSplitTypes,
+}: {
+  layout: "order" | "columns";
+  onToggle: () => void;
+  splitTypes?: boolean;
+  onToggleSplitTypes?: () => void;
+}) {
+  const onCurve = layout === "columns";
+  const showSplitSwitch = onCurve && onToggleSplitTypes !== undefined;
+  const clickCurve = onCurve ? onToggleSplitTypes : onToggle;
+  const curveButton = (
+    <button
+      onClick={clickCurve}
+      aria-pressed={showSplitSwitch ? splitTypes : undefined}
+      className={cn(
+        "flex flex-1 items-center justify-center gap-2 rounded px-2 py-1 text-center lg:px-3.5 lg:py-1.5",
+        onCurve ? "bg-green/15 text-green" : "text-muted hover:text-subtle",
+      )}
+    >
+      CURVE
+      {showSplitSwitch && <ToggleSwitch on={splitTypes} />}
+    </button>
+  );
   return (
     <div className="flex w-full rounded border border-border bg-surface2 p-0.5 font-display text-[10px] tracking-[0.1em] lg:rounded-md lg:p-1 lg:text-[13px] lg:tracking-[0.12em]">
-      <button
-        onClick={() => layout !== "columns" && onToggle()}
-        className={cn("flex-1 rounded px-2 py-1 text-center lg:px-3.5 lg:py-1.5", layout === "columns" ? "bg-green/15 text-green" : "text-muted hover:text-subtle")}
-      >
-        CURVE
-      </button>
+      {showSplitSwitch ? (
+        <Tooltip label="Split View" side="top">
+          {curveButton}
+        </Tooltip>
+      ) : (
+        curveButton
+      )}
       <button
         onClick={() => layout !== "order" && onToggle()}
         className={cn("flex-1 rounded px-2 py-1 text-center lg:px-3.5 lg:py-1.5", layout === "order" ? "bg-green/15 text-green" : "text-muted hover:text-subtle")}
@@ -1922,7 +2309,7 @@ function Pool({
   cards,
   sideboard = [],
   lastPicks = NO_LAST_PICKS,
-  groupByType = false,
+  curve,
   align = "left",
   cardWidth = 116,
   reveal = 26,
@@ -1930,24 +2317,11 @@ function Pool({
   cards: ArtifactCard[];
   sideboard?: ArtifactCard[];
   lastPicks?: LastPicks;
-  groupByType?: boolean;
+  curve?: CurveMode;
   align?: "left" | "right";
   cardWidth?: number;
   reveal?: number;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [poolWidth, setPoolWidth] = useState(0);
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!groupByType || !el) {
-      return;
-    }
-    const measure = () => setPoolWidth(el.clientWidth);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [groupByType]);
   const column = (key: string, entries: PoolEntry[], glowing: number[]) => {
     const group = lastPicksAtBottom(entries, glowing);
     return (
@@ -1969,38 +2343,17 @@ function Pool({
   const glowSide = lastIndexes(sideboard.length, lastPicks.side);
 
   let track;
-  if (groupByType) {
-    const isCreature = (card: ArtifactCard) => /creature/i.test(card.type ?? "");
-    const isLand = (card: ArtifactCard) => /land/i.test(card.type ?? "");
-    const creatureCols = creatureCurveColumns(entries.filter((e) => isCreature(e.card)));
-    const lands = entries.filter((e) => !isCreature(e.card) && isLand(e.card));
-    let spellCols = cmcColumns(entries.filter((e) => !isCreature(e.card) && !isLand(e.card)));
-    if (spellCols.length > 4) {
-      spellCols = groupLowSpellColumns(spellCols);
-    }
+  if (curve) {
     const spacerWidth = Math.round(cardWidth * SIDE_COLUMN_GAP_RATIO);
-    const landWidth = lands.length > 0 ? cardWidth : spacerWidth;
-    const sideWidth = sideboard.length > 0 ? spacerWidth + cardWidth : 0;
-    const available = poolWidth > 0 ? poolWidth - POOL_PAD * 2 : Infinity;
-    const trackWidth = () => {
-      const elementCount = creatureCols.length + 1 + spellCols.length + (sideboard.length > 0 ? 2 : 0);
-      const columnsWidth = (creatureCols.length + spellCols.length) * cardWidth + landWidth + sideWidth;
-      return columnsWidth + Math.max(0, elementCount - 1) * POOL_GAP;
-    };
-    while (spellCols.length > 1 && trackWidth() > available) {
-      const last = spellCols[spellCols.length - 1];
-      const prev = spellCols[spellCols.length - 2];
-      spellCols = [...spellCols.slice(0, -2), [prev[0], [...prev[1], ...last[1]]]];
-    }
     track = (
       <>
-        {creatureCols.map((group, i) => column(`c${i}`, group, glowMain))}
-        {lands.length > 0 ? (
-          column("lands", lands, glowMain)
-        ) : (
-          <div key="land-gap" className="shrink-0" style={{ width: spacerWidth }} />
+        {curveColumns(entries, curve).map((group, i) =>
+          group ? (
+            column(`g${i}`, group, glowMain)
+          ) : (
+            <div key={`gap${i}`} className="shrink-0" style={{ width: spacerWidth }} />
+          ),
         )}
-        {spellCols.map(([, group], i) => column(`o${i}`, group, glowMain))}
         {sideboard.length > 0 && <div key="side-gap" className="shrink-0" style={{ width: spacerWidth }} />}
         {sideboard.length > 0 &&
           column(
@@ -2024,12 +2377,39 @@ function Pool({
     );
   }
   return (
-    <div ref={scrollRef} className="themed-scrollbar h-full overflow-auto" style={{ padding: POOL_PAD }}>
+    <div className="themed-scrollbar h-full overflow-auto" style={{ padding: POOL_PAD }}>
       <div className={cn("flex w-max items-start", align === "right" && "ml-auto")} style={{ gap: POOL_GAP }}>
         {track}
       </div>
     </div>
   );
+}
+
+type CurveMode = "split" | "mixed";
+
+function curveColumns(entries: PoolEntry[], curve: CurveMode): (PoolEntry[] | null)[] {
+  const creatures: PoolEntry[] = [];
+  const lands: PoolEntry[] = [];
+  const spells: PoolEntry[] = [];
+  for (const entry of entries) {
+    const type = entry.card.type ?? "";
+    if (/creature/i.test(type)) {
+      creatures.push(entry);
+    } else if (/land/i.test(type)) {
+      lands.push(entry);
+    } else {
+      spells.push(entry);
+    }
+  }
+  if (curve === "mixed") {
+    const mixedCols = cmcColumns([...creatures, ...spells]).map(([, group]) => group);
+    return lands.length > 0 ? [...mixedCols, null, lands] : mixedCols;
+  }
+  const creatureCols = creatureCurveColumns(creatures).filter((column) => column.length > 0);
+  const spellsByCost = cmcColumns(spells);
+  const spellCols = spellsByCost.length > 4 ? groupLowSpellColumns(spellsByCost) : spellsByCost;
+  const landsOrGap = lands.length > 0 ? lands : null;
+  return [...creatureCols, landsOrGap, ...spellCols.map(([, group]) => group)];
 }
 
 function lastPicksAtBottom(entries: PoolEntry[], glowing: number[]): PoolEntry[] {
