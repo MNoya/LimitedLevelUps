@@ -1424,10 +1424,20 @@ const PANEL_DRAG_THRESHOLD = 4;
 const PANEL_MIN_HEIGHT = 64;
 const PANEL_COLLAPSE_AT = 40;
 
-function useResizableHeight(baseHeight: number, onCollapse?: () => void) {
-  const [dragHeight, setDragHeight] = useState<number | null>(null);
+function useResizableHeight(baseHeight: number, storageKey: string, onCollapse?: () => void) {
+  const [dragHeight, setDragHeight] = useState<number | null>(() => storedPanelHeight(storageKey));
   const [dragging, setDragging] = useState(false);
   const height = dragHeight ?? baseHeight;
+  useEffect(() => {
+    if (dragging) {
+      return;
+    }
+    if (dragHeight == null) {
+      window.localStorage.removeItem(storageKey);
+    } else {
+      window.localStorage.setItem(storageKey, `${Math.round(dragHeight)}`);
+    }
+  }, [dragHeight, dragging, storageKey]);
   const beginResize = (startY: number, fromHeight?: number) => {
     const startHeight = fromHeight ?? dragHeight ?? baseHeight;
     let collapsible = fromHeight == null;
@@ -1447,7 +1457,7 @@ function useResizableHeight(baseHeight: number, onCollapse?: () => void) {
         return;
       }
       const floor = collapsible ? PANEL_MIN_HEIGHT : 0;
-      setDragHeight(Math.min(window.innerHeight * 0.72, Math.max(floor, next)));
+      setDragHeight(Math.min(window.innerHeight * DECK_PANEL_MAX_FRACTION, Math.max(floor, next)));
     };
     const onUp = () => cleanup();
     function cleanup() {
@@ -1460,6 +1470,17 @@ function useResizableHeight(baseHeight: number, onCollapse?: () => void) {
     window.addEventListener("pointerup", onUp);
   };
   return { height, beginResize, dragging };
+}
+
+function storedPanelHeight(storageKey: string): number | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const stored = Number(window.localStorage.getItem(storageKey));
+  if (!stored) {
+    return null;
+  }
+  return Math.min(stored, window.innerHeight * DECK_PANEL_MAX_FRACTION);
 }
 
 // Thick bar shared by the deck pool and the neighbor band: a tap toggles the panel collapsed, a press
@@ -1696,11 +1717,12 @@ function BottomPanel({
   centerPile: Pile;
   rightPile: Pile;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = usePersistentBool("draftReviewDeckPanelOpen", true);
   const [tab, setTab] = useState<"deck" | "neighbors">("deck");
   const order = deckLayout === "order";
   const showSideboard = splitSideboard && sideboard.length > 0;
-  const { height, beginResize, dragging } = useResizableHeight(defaultHeight, () => setOpen(false));
+  const collapse = () => setOpen(false);
+  const { height, beginResize, dragging } = useResizableHeight(defaultHeight, "draftReviewDeckPanelHeight", collapse);
   const [deckZoom, setDeckZoom] = usePersistentState<Zoom>("draftReviewDeckZoom", "fit");
   const deckAreaRef = useRef<HTMLDivElement>(null);
   const deckAreaWidth = useElementSize(deckAreaRef).width;
