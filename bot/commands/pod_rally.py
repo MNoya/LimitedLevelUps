@@ -108,11 +108,11 @@ async def finish_rally_on_start(bot, event_id: str, player_count: int, thread_ur
     """Rewrite every standing rally for this pod into the fired record once its draft starts. A rally is a
     static post in whichever channel someone called it from, so left alone it would keep asking for players
     for a pod that is already drafting. Editing it in place keeps the caller's own `!pod` message answered
-    instead of deleting the reply and leaving the question hanging with no context above it."""
-    for channel_id, rally in list(_LAST_RALLY.items()):
+    instead of deleting the reply and leaving the question hanging with no context above it. The record stays
+    tracked, so the channel's next rally retires it like any other."""
+    for rally in list(_LAST_RALLY.values()):
         if rally.event_id != event_id:
             continue
-        del _LAST_RALLY[channel_id]
         record = build_underfill_fired_message(rally.name, player_count, thread_url)
         try:
             await rally.message.edit(content=record, view=None, suppress=True,
