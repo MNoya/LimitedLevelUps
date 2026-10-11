@@ -20,6 +20,7 @@ import {
   craftListWildcards,
   useCraftLists,
   type CraftList,
+  type CraftRarity,
 } from "../data/craftLists";
 import type { SetSummary } from "../types/leaderboard";
 
@@ -179,9 +180,13 @@ function CraftListRow({ list, startExpanded }: { list: CraftList; startExpanded:
         ) : (
           <div className="flex items-center gap-2 min-w-0">{title}</div>
         )}
-        <span className="flex items-center gap-1 text-subtle text-[13px] leading-none">
-          <WildcardIcon rarity={list.rarity} size={16} />
-          {craftListWildcards(list)}
+        <span className="flex items-center gap-x-3 text-subtle text-[13px] leading-none">
+          {craftListWildcards(list).map(({ rarity, count }) => (
+            <span key={rarity} className="flex items-center gap-1">
+              <WildcardIcon rarity={rarity} size={16} />
+              {count}
+            </span>
+          ))}
         </span>
         <CopyTextButton
           text={() => text}
@@ -207,20 +212,20 @@ function CraftListRow({ list, startExpanded }: { list: CraftList; startExpanded:
 }
 
 function RarityTotals({ lists }: { lists: CraftList[] }) {
+  const totals = new Map<CraftRarity, number>();
+  for (const list of lists) {
+    for (const { rarity, count } of craftListWildcards(list)) {
+      totals.set(rarity, (totals.get(rarity) ?? 0) + count);
+    }
+  }
   return (
     <>
-      {rarityColumns(lists).map((column) => {
-        let wildcards = 0;
-        for (const list of column) {
-          wildcards += craftListWildcards(list);
-        }
-        return (
-          <span key={column[0].rarity} className="flex items-center gap-1 tracking-normal text-subtle text-[13px]">
-            <WildcardIcon rarity={column[0].rarity} size={16} />
-            {wildcards}
-          </span>
-        );
-      })}
+      {[...totals].map(([rarity, count]) => (
+        <span key={rarity} className="flex items-center gap-1 tracking-normal text-subtle text-[13px]">
+          <WildcardIcon rarity={rarity} size={16} />
+          {count}
+        </span>
+      ))}
     </>
   );
 }

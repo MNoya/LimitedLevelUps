@@ -154,6 +154,7 @@ type BespokeGlyph = { src: string; mode: "image" | "mask" };
 const BESPOKE_GLYPHS: Record<string, BespokeGlyph> = {
   EVG: { src: LLU_LOGO_SRC, mode: "image" },
   MEMA: { src: `${import.meta.env.BASE_URL}set-symbols/mema.png`, mode: "mask" },
+  FRC: { src: `${import.meta.env.BASE_URL}set-symbols/frc.svg`, mode: "mask" },
 };
 
 export function keyruneClass(code: string): string {
@@ -208,6 +209,10 @@ export type Rarity = "common" | "uncommon" | "rare" | "mythic";
 
 export function RaritySetGlyph({ code, rarity, size }: { code: string; rarity: Rarity; size: number }) {
   const isCommon = rarity === "common";
+  const bespoke = BESPOKE_GLYPHS[code];
+  if (bespoke) {
+    return <BespokeGlyphMark glyph={bespoke} size={size} className="block shrink-0" fill={rarityFill(rarity)} />;
+  }
   return (
     <i
       className={cn("ss", `ss-${keyruneClass(code)}`, !isCommon && `ss-${rarity} ss-grad`)}
@@ -234,11 +239,23 @@ export function SetGlyph({ code, size = 18, className = "text-white" }: { code: 
   );
 }
 
+function rarityFill(rarity: Rarity): string {
+  const gradientStops: Record<Rarity, string | null> = {
+    common: null,
+    uncommon: "#5a6572 0%, #9e9e9e 50%, #5a6572 100%",
+    rare: "#876a3b 0%, #dfbd6b 50%, #876a3b 100%",
+    mythic: "#b21f0f 0%, #f38300 50%, #b21f0f 100%",
+  };
+  const stops = gradientStops[rarity];
+  return stops ? `linear-gradient(to right, ${stops})` : "#fff";
+}
+
 function BespokeGlyphMark({
   glyph,
   size,
   className,
-}: { glyph: BespokeGlyph; size: number | string; className: string }) {
+  fill = "currentColor",
+}: { glyph: BespokeGlyph; size: number | string; className: string; fill?: string }) {
   if (glyph.mode === "image") {
     return <img src={glyph.src} alt="" style={{ width: size, height: size }} className="block object-contain" />;
   }
@@ -248,7 +265,7 @@ function BespokeGlyphMark({
       style={{
         width: size,
         height: size,
-        backgroundColor: "currentColor",
+        background: fill,
         WebkitMaskImage: `url(${glyph.src})`,
         maskImage: `url(${glyph.src})`,
         WebkitMaskSize: "contain",

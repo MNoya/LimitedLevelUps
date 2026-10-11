@@ -1,4 +1,4 @@
-import { compareCollectorNumbers, type SetCard } from "./setCardPool";
+import { compareCollectorNumbers, type SetCard, type SetCardPool } from "./setCardPool";
 
 const ARENA_DECK_LIMIT = 250;
 const COPIES_PER_CARD = 4;
@@ -14,7 +14,7 @@ const RARITY_GROUPS: Record<CraftRarity, string> = {
 interface CraftCard {
   name: string;
   collectorNumber: string;
-  rarity: string;
+  rarity: CraftRarity;
 }
 
 export interface CraftList {
@@ -35,8 +35,15 @@ export function craftListTitle(list: CraftList): string {
   return `${list.group}${suffix}`;
 }
 
-export function craftListWildcards(list: CraftList): number {
-  return list.cards.length * COPIES_PER_CARD;
+export function craftListWildcards(list: CraftList): Array<{ rarity: CraftRarity; count: number }> {
+  const wildcards: Array<{ rarity: CraftRarity; count: number }> = [];
+  for (const rarity of Object.keys(RARITY_GROUPS) as CraftRarity[]) {
+    const cards = list.cards.filter((card) => card.rarity === rarity);
+    if (cards.length > 0) {
+      wildcards.push({ rarity, count: cards.length * COPIES_PER_CARD });
+    }
+  }
+  return wildcards;
 }
 
 export function craftListText(list: CraftList): string {
@@ -47,20 +54,35 @@ export function craftListText(list: CraftList): string {
   return lines.join("\n");
 }
 
-export function buildCraftLists(setCode: string, pool: SetCard[]): CraftList[] {
-  const cards = toCraftCards(pool);
+export function buildCraftLists(setCode: string, pool: SetCardPool): CraftList[] {
+  const cards = toCraftCards(pool.cards);
   const lists: CraftList[] = [];
   for (const [rarity, group] of Object.entries(RARITY_GROUPS) as [CraftRarity, string][]) {
     lists.push(...splitLists(setCode, rarity, group, cards.filter((card) => card.rarity === rarity)));
   }
+  if (pool.bonusSheet) {
+    const bonusCards = toCraftCards(pool.bonusSheet.cards);
+    const { setCode: bonusCode, label } = pool.bonusSheet;
+    lists.push(...splitLists(bonusCode, highestRarity(bonusCards), label, bonusCards));
+  }
   return lists;
+}
+
+function highestRarity(cards: CraftCard[]): CraftRarity {
+  const rarities = Object.keys(RARITY_GROUPS) as CraftRarity[];
+  let highest = 0;
+  for (const card of cards) {
+    highest = Math.max(highest, rarities.indexOf(card.rarity));
+  }
+  return rarities[highest];
 }
 
 function toCraftCards(pool: SetCard[]): CraftCard[] {
   const cards: CraftCard[] = [];
   for (const card of [...pool].sort(compareCollectorNumbers)) {
     if (card.rarity in RARITY_GROUPS) {
-      cards.push({ name: arenaName(card), collectorNumber: card.collectorNumber, rarity: card.rarity });
+      const rarity = card.rarity as CraftRarity;
+      cards.push({ name: arenaName(card), collectorNumber: card.collectorNumber, rarity });
     }
   }
   return cards;

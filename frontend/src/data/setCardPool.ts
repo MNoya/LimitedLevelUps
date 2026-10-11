@@ -16,6 +16,13 @@ export interface SetCard {
 export interface SetCardPool {
   cards: SetCard[];
   specialGuests: SetCard[];
+  bonusSheet: BonusSheet | null;
+}
+
+export interface BonusSheet {
+  setCode: string;
+  label: string;
+  cards: SetCard[];
 }
 
 interface ScryfallPrinting {
@@ -36,16 +43,25 @@ export function isSetCode(setCode: string): boolean {
 }
 
 export async function fetchSetCardPool(setCode: string): Promise<SetCardPool> {
+  const bonusSheets: Record<string, { setCode: string; label: string }> = {
+    FRA: { setCode: "FRC", label: "Commander Sheet" },
+  };
   const code = setCode.toLowerCase();
-  const printings = await scryfallSearch(`game:arena (set:${code} or (set:${SPECIAL_GUESTS_SET} date=${code}))`);
+  const bonus = bonusSheets[setCode];
+  const bonusCode = bonus?.setCode.toLowerCase();
+  const bonusClause = bonusCode ? ` or (set:${bonusCode} is:firstprint)` : "";
+  const guestClause = `(set:${SPECIAL_GUESTS_SET} date=${code})`;
+  const printings = await scryfallSearch(`game:arena (set:${code} or ${guestClause}${bonusClause})`);
   const setPrintings = printings.filter((printing) => printing.set === code);
   if (setPrintings.length === 0) {
-    return { cards: [], specialGuests: [] };
+    return { cards: [], specialGuests: [], bonusSheet: null };
   }
   const guestPrintings = printings.filter((printing) => printing.set === SPECIAL_GUESTS_SET);
+  const bonusPrintings = printings.filter((printing) => printing.set === bonusCode);
   return {
     cards: firstPrintingPerName(draftable(setPrintings)),
     specialGuests: firstPrintingPerName(guestPrintings),
+    bonusSheet: bonus ? { ...bonus, cards: firstPrintingPerName(bonusPrintings) } : null,
   };
 }
 
