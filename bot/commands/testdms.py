@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Literal, get_args
 
 import discord
 from discord.ext import commands
@@ -26,20 +27,22 @@ from bot.services.pod_tournament import (
 from bot.services.token_link_flow import INSTRUCTIONS as LINK_17LANDS_INSTRUCTIONS
 from bot.services.token_link_flow import MSG_TIMEOUT as MSG_LINK_TIMEOUT
 
-DM_GROUPS = ("pods", "account")
+DmGroup = Literal["pods", "account"]
+DM_GROUPS = get_args(DmGroup)
 
 
 async def setup(bot: commands.Bot) -> None:
     @test_group.command(name="dms")
     @commands.is_owner()
-    async def test_dms(ctx: commands.Context, group: str = "") -> None:
-        if group and group not in DM_GROUPS:
-            await ctx.send(f"group must be one of: {', '.join(DM_GROUPS)}")
-            return
+    async def test_dms(ctx: commands.Context, group: DmGroup | None = None, to: discord.User | None = None) -> None:
+        target = to or ctx.author
         try:
-            await send_test_dms(ctx.author.send, ctx.message.jump_url, group)
+            await send_test_dms(target.send, ctx.message.jump_url, group or "")
         except discord.Forbidden:
-            await ctx.send("⚠️ Couldn't DM you, open DMs from server members and try again")
+            if to is None:
+                await ctx.send("⚠️ Couldn't DM you, open DMs from server members and try again")
+            else:
+                await ctx.send(f"⚠️ Couldn't DM {to.mention}, they have DMs from server members closed")
             return
         await ctx.message.add_reaction("📬")
 
