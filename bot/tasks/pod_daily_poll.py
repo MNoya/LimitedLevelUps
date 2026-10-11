@@ -129,7 +129,6 @@ from bot.services.pod_signals import (
     bucket_by_key,
     bucket_role_name,
     format_of,
-    offers_daily_bonus,
     slot_of,
     should_fire,
     slot_can_fire,
@@ -386,8 +385,6 @@ def build_poll_embed(
 
 
 def _column_groups(slots: list[pod_launch.LauncherSlot]) -> list[list[list[pod_launch.LauncherSlot]]]:
-    if _bonus_on_grid(slots):
-        return [[_key_slots(slots, slot_key) for slot_key in _slot_order(slots)]]
     pair = [_key_slots(slots, slot_key) for slot_key in _slot_order(slots) if slot_key != SLOT_BONUS]
     bonus = _bonus_columns(slots)
     if bonus and _bonus_placed_first(slots):
@@ -546,19 +543,10 @@ def _slot_order(slots: list[pod_launch.LauncherSlot]) -> list[str]:
 def _ordered_slots(slots: list[pod_launch.LauncherSlot]) -> list[str]:
     """Render order: the Early and Late pair, with Bonus before it when the earliest bonus pod starts before
     Early and after it otherwise, so the rows read in time order."""
-    if _bonus_on_grid(slots):
-        return _slot_order(slots)
     fixed = [slot_key for slot_key in _slot_order(slots) if slot_key != SLOT_BONUS]
     if not any(slot_of(slot.bucket_key) == SLOT_BONUS for slot in slots):
         return fixed
     return [SLOT_BONUS] + fixed if _bonus_placed_first(slots) else fixed + [SLOT_BONUS]
-
-
-def _bonus_on_grid(slots: list[pod_launch.LauncherSlot]) -> bool:
-    for slot in _key_slots(slots, SLOT_BONUS):
-        if slot.slot_time is not None and offers_daily_bonus(slot.slot_time.astimezone(SCHEDULE_TZ).date()):
-            return True
-    return False
 
 
 def _bonus_placed_first(slots: list[pod_launch.LauncherSlot]) -> bool:
