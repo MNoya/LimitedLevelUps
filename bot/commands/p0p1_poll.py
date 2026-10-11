@@ -16,7 +16,7 @@ from discord.utils import format_dt, utcnow
 
 from bot import audit, emojis
 from bot.config import PRODUCTION_GUILD_ID, settings
-from bot.services import p0p1_reminder
+from bot.services import p0p1_reminder, role_ping
 
 POLL_DURATION = timedelta(hours=24)
 CONTEST_SET_CODE = "FRA"
@@ -58,7 +58,7 @@ async def setup(bot: commands.Bot) -> None:
 
         voters = await asyncio.to_thread(p0p1_reminder.all_voter_discord_ids_sync)
         restrict_to = None if guild.id == PRODUCTION_GUILD_ID else ctx.author
-        discord_ids = p0p1_reminder.audience(guild, voters.discord_ids, restrict_to)
+        discord_ids = role_ping.audience(guild, voters.discord_ids, restrict_to)
 
         async def send(role_mention: str) -> None:
             poll = discord.Poll(question=POLL_QUESTION, duration=POLL_DURATION)
@@ -75,7 +75,7 @@ async def setup(bot: commands.Bot) -> None:
             await channel.send(content, poll=poll, allowed_mentions=discord.AllowedMentions(roles=[role]))
 
         started = time.monotonic()
-        pinged, members = await p0p1_reminder.ping_audience(guild, role, discord_ids, send)
+        pinged, members = await role_ping.ping_audience(guild, role, discord_ids, send)
         elapsed = time.monotonic() - started
         audit.event("p0p1_poll", user_id=str(ctx.author.id), channel_id=str(channel.id),
                     targeted=len(discord_ids), pinged=pinged, source=voters.source)

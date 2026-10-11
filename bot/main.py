@@ -133,7 +133,8 @@ from bot.tasks.pod_daily_poll import (
 from bot.services.pod_launch import init_launch, rearm_signals
 from bot.tasks.format_schedule_post import init_format_schedule
 from bot.tasks.pod_schedule_post import fire_schedule_post, init_pod_schedule_post
-from bot.services.pod_schedule_controls import PodScheduleView
+from bot.tasks.format_vote_post import fire_format_vote_tick, init_format_vote
+from bot.services.pod_schedule_controls import PodScheduleView, ViewScheduleButton
 from bot.services.pod_format_vote import (
     AddFormatItem as VoteAddFormatItem,
     ManageVotesItem,
@@ -256,6 +257,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         init_underfill(bot)
         init_format_schedule(bot)
         init_pod_schedule_post(bot)
+        init_format_vote(bot)
         init_set_awards_schedule(bot)
         init_watch_party(bot)
         init_championship_schedule(bot)
@@ -338,6 +340,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(FormatPollButton)
         bot.add_dynamic_items(AddFormatButton)
         bot.add_dynamic_items(VoteOptionItem, VoteAddFormatItem, VotersItem, ManageVotesItem, VoteFormatsButton)
+        bot.add_dynamic_items(ViewScheduleButton)
         bot.add_dynamic_items(JoinDraftButton)
         bot.add_dynamic_items(AttendeesButton)
         bot.add_dynamic_items(OpenTablesButton)
@@ -699,6 +702,7 @@ def build_bot(guild_id: int) -> commands.Bot:
             await catch_up_daily_poll(bot)
             if settings.pod_schedule_enabled:
                 await fire_schedule_post()
+                await fire_format_vote_tick()
             await reconcile_unannounced_championships(bot)
             try:
                 await reconcile_ping_roles(bot)

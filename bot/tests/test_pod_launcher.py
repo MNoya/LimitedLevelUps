@@ -6,7 +6,7 @@ import pytest
 
 from bot.commands.pod_queue import _when_clock, _when_options
 from bot.commands.test_group import HALL_OF_FAME
-from bot.services.ping_roles import build_pod_guide_button
+from bot.services.ping_roles import MANAGE_ROLES_BUTTON_ID, build_pod_guide_button
 from bot.services.pod_format_select import WRITE_IN_VALUE
 from bot.services import pod_launch
 from bot.services.pod_launch import LauncherSlot, _lazy_status
@@ -99,7 +99,7 @@ def _child_ids(view):
     return [getattr(child, "url", None) or child.custom_id for child in view.children]
 
 
-FOOTER_IDS = {BOARD_LEAVE_ID, POD_GUIDE}
+FOOTER_IDS = {BOARD_LEAVE_ID, POD_GUIDE, MANAGE_ROLES_BUTTON_ID}
 
 
 def test_a_closed_slot_carries_no_join_button_while_an_open_one_does():
@@ -118,6 +118,7 @@ def test_a_slot_offering_two_formats_carries_one_button_per_pod():
         f"pod_poll:{named_bucket_key('EARLY', 'PEASANT')}",
         BOARD_LEAVE_ID,
         POD_GUIDE,
+        MANAGE_ROLES_BUTTON_ID,
     ]
 
 
@@ -212,7 +213,7 @@ def test_a_pod_that_started_drafting_carries_no_button():
 
     view = PodPollView([drafting])
 
-    assert _child_ids(view) == [POD_GUIDE]
+    assert _child_ids(view) == [POD_GUIDE, MANAGE_ROLES_BUTTON_ID]
 
 
 @pytest.mark.parametrize(

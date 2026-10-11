@@ -105,7 +105,7 @@ def test_upcoming_set_opens_two_weeks_before_release():
 
     assert is_draftable_set("FRA", three_weeks_out) is False
     assert is_draftable_set("FRA", one_week_out) is True
-    assert is_draftable_set("TRE", one_week_out) is False
+    assert is_draftable_set("TRK", one_week_out) is False
 
 
 def test_format_options_offers_curated_preview_sets_without_defaulting_them():

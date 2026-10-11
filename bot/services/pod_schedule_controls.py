@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta
 
 import discord
@@ -24,7 +25,7 @@ from bot.services.pod_format_poll import normalize_write_ins
 from bot.services.pod_format_schedule import LATEST, set_slot
 from bot.services.pod_format_vote import send_vote_panel
 from bot.services.pod_schedule import ORGANIZER_ROLE_NAME, SCHEDULE_TZ
-from bot.services.pod_schedule_card import build_vote_results_embed, refresh_schedule_post
+from bot.services.pod_schedule_card import build_vote_results_embed, refresh_schedule_post, render_schedule
 from bot.services.pod_signals import SLOT_EARLY, SLOT_LATE
 from bot.services.ping_roles import organizer_mention
 from bot.tasks.pod_daily_poll import retarget_launcher_day
@@ -39,6 +40,8 @@ MSG_PICK_DAY_POD = "Choose a day and a pod first"
 MSG_WRITE_IN_TITLE = "Add Format(s)"
 MSG_WRITE_IN_FIELD = "Set Codes"
 MSG_WRITE_IN_PLACEHOLDER = "e.g. DSK FIN MH3"
+
+VIEW_SCHEDULE_ID = "podsched:view"
 
 _SLOT_LABELS = {SLOT_EARLY: "Early Pod", SLOT_LATE: "Late Pod", SLOT_BOTH: "both pods"}
 
@@ -72,6 +75,29 @@ class PodScheduleView(ui.View):
         await interaction.response.send_message(
             MSG_OVERRIDE_PROMPT, view=PodScheduleOverrideView(), ephemeral=True,
         )
+
+
+class ViewScheduleButton(ui.DynamicItem[ui.Button], template=VIEW_SCHEDULE_ID):
+    def __init__(self) -> None:
+        super().__init__(ui.Button(
+            style=discord.ButtonStyle.success, label="View Schedule", emoji="📅", custom_id=VIEW_SCHEDULE_ID,
+        ))
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item: ui.Button, match: re.Match):
+        return cls()
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await send_schedule(interaction, ephemeral=True)
+
+
+async def send_schedule(interaction: discord.Interaction, *, ephemeral: bool, weeks: int | None = None) -> None:
+    await interaction.response.defer(ephemeral=ephemeral, thinking=True)
+    embed, file = await render_schedule(interaction.guild, weeks)
+    await interaction.followup.send(
+        embed=embed, file=file, view=PodScheduleView(), allowed_mentions=discord.AllowedMentions.none(),
+        ephemeral=ephemeral,
+    )
 
 
 async def _is_organizer(interaction: discord.Interaction) -> bool:

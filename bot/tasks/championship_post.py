@@ -1,7 +1,7 @@
 """Set Championship auto-scheduler and creator.
 
 A daily ET tick posts the season-closing championship its lead days ahead: the announcement plus the
-RSVP card (swiss, leaderboard-seated) in the coordination channel, the standings frozen onto the event
+RSVP card (swiss, leaderboard-seated) pinned in the coordination channel, the standings frozen onto the event
 so seeds lock in, and the frozen standings list in the thread. Over the following hours it runs the
 invite waves — awareness pings of successive rank tiers with a Confirm / Maybe / Can't row — then posts
 the Yes-tally seeding table once the last wave is out. Idempotent per set — it never posts a second card
@@ -19,9 +19,11 @@ from discord.ext import commands
 from bot.commands.pod_draft import build_leaderboard_standings_embed, refresh_seeding_table
 from bot.commands.pod_rsvp import build_championship_wave_view, post_scheduled_card
 from bot.config import settings
+from bot.discord_helpers import pin_quietly, run_detached
 from bot.services import championship
 from bot.services import championship_copy as cc
 from bot.services import pod_launch
+from bot.services.pod_drafts import is_championship
 from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
     champion_role_mention,
@@ -103,7 +105,27 @@ async def create_championship(bot: commands.Bot, plan: championship.Championship
     if thread is not None:
         await _post_thread_seeding(thread, event_id, plan.set_code, plan.event_at)
     _arm_waves(bot, event_id, datetime.now(SCHEDULE_TZ))
+    run_detached(pin_championship_card(channel, event_id), label="championship card pin")
     return event_id
+
+
+async def pin_championship_card(channel: discord.TextChannel, event_id: str) -> None:
+    """Pin the new card and unpin every earlier championship card, leaving the channel's other pins alone"""
+    surfaces = await asyncio.to_thread(pod_launch.event_card_surfaces_sync, event_id)
+    if surfaces is None:
+        return
+    card_id = int(surfaces[1])
+    async for pinned in channel.pins():
+        if pinned.id != card_id and _is_championship_card(pinned):
+            await pinned.unpin(reason="newer Set Championship card")
+    await pin_quietly(channel.get_partial_message(card_id), reason="Set Championship card")
+
+
+def _is_championship_card(message: discord.Message) -> bool:
+    if not message.author.bot or not message.embeds:
+        return False
+    heading = (message.embeds[0].description or "").split("\n", 1)[0]
+    return is_championship(heading)
 
 
 async def _resolve_thread(bot: commands.Bot, event_id: str) -> "discord.Thread | None":

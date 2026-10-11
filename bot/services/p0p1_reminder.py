@@ -1,8 +1,5 @@
-"""The T-1 day nudge for a P0P1 contest: ping everyone holding a P0P1 identity with no picks in it.
-
-Targeting rides on the shared ``Reminder`` role, not DMs: a bot can only message a user who shares a guild
-with it, so a DM sweep reaches nobody a role grant misses, and the burst reads to Discord as spam. The role
-is emptied after the post but never deleted, since a deleted role renders as ``@deleted-role`` in history.
+"""The T-1 day nudge for a P0P1 contest: ping everyone holding a P0P1 identity with no picks in it, through the
+shared ``Reminder`` role.
 
 Identity comes from ``auth.identities``, not ``players`` — most voters signed in on the website and never
 joined the leaderboard, so it is the only place their Discord id exists.
@@ -19,7 +16,8 @@ from sqlalchemy.exc import ProgrammingError
 
 from bot.config import PRODUCTION_GUILD_ID
 from bot.database import SessionLocal
-from bot.services.ping_roles import P0P1_COLOR, P0P1_POLL_ROLE_NAME, REMINDER_COLOR, REMINDER_ROLE_NAME
+from bot.services import role_ping
+from bot.services.ping_roles import P0P1_COLOR, P0P1_POLL_ROLE_NAME
 
 log = logging.getLogger(__name__)
 
@@ -115,8 +113,8 @@ async def ping_non_voters(
     """The non-voter list is read immediately before the grants, so a ballot filed during the run is not
     pinged for being unfilled."""
     non_voters = await asyncio.to_thread(non_voter_discord_ids_sync, set_code)
-    discord_ids = audience(guild, non_voters.discord_ids, restrict_to)
-    pinged, members = await ping_audience(guild, role, discord_ids, build_post)
+    discord_ids = role_ping.audience(guild, non_voters.discord_ids, restrict_to)
+    pinged, members = await role_ping.ping_audience(guild, role, discord_ids, build_post)
 
     outcome = ReminderOutcome(
         targeted=len(discord_ids), pinged=pinged, absent=len(discord_ids) - len(members),
@@ -128,119 +126,6 @@ async def ping_non_voters(
     return outcome
 
 
-async def ping_audience(
-    guild: discord.Guild, role: discord.Role, discord_ids: list[str], build_post,
-) -> tuple[int, list[discord.Member]]:
-    """Grant the role to every reachable id, fire one ping through ``build_post``, then strip the role again.
-    Returns how many were granted and the members reached. The role is emptied before the grants too, so a
-    run that died mid-strip starts clean, and never deleted, so the live post keeps a real pill."""
-    await _ensure_member_cache(guild)
-    members = _members_for(guild, discord_ids)
-    await _empty_role(role)
-    pinged = await _grant_all(role, members)
-    await _post_ping(role, build_post)
-    await _empty_role(role)
-    return pinged, members
-
-
-def audience(
-    guild: discord.Guild, discord_ids: list[str], restrict_to: discord.Member | None,
-) -> list[str]:
-    """Off the production guild the ping reaches only whoever asked for it, and nobody at all when the
-    scheduled tick fires. A test server holds real people who never signed up for a P0P1 nudge, and its
-    audience comes from the dev fallback anyway, so a full sweep there pings the wrong crowd."""
-    if guild.id == PRODUCTION_GUILD_ID:
-        return discord_ids
-    if restrict_to is None:
-        log.info(f"p0p1-reminder: {guild.name} is not the production guild, pinging nobody")
-        return []
-    log.info(f"p0p1-reminder: {guild.name} is not the production guild, pinging only {restrict_to}")
-    return [str(restrict_to.id)]
-
-
-async def reminder_role(guild: discord.Guild) -> discord.Role | None:
-    """The shared reminder role, not mentionable outside the post itself. `MANAGED_ROLES` owns its name and
-    color once a reconcile has run."""
-    return await _ping_role(guild, REMINDER_ROLE_NAME, REMINDER_COLOR, "p0p1 reminder ping")
-
-
 async def poll_role(guild: discord.Guild) -> discord.Role | None:
     """The transient P0P1 role the challenger poll pings, granted to past voters and stripped after the send"""
-    return await _ping_role(guild, P0P1_POLL_ROLE_NAME, P0P1_COLOR, "p0p1 challenger poll")
-
-
-async def _ensure_member_cache(guild: discord.Guild) -> None:
-    """Both the target lookup and the strip read the member cache, so an unchunked guild would silently
-    report most voters as absent and leave stale holders on the role."""
-    if guild.chunked:
-        return
-    try:
-        await guild.chunk()
-    except (discord.ClientException, asyncio.TimeoutError):
-        log.warning(f"p0p1-reminder: could not chunk {guild.name}, reach will be understated", exc_info=True)
-
-
-def _members_for(guild: discord.Guild, discord_ids: list[str]) -> list[discord.Member]:
-    members = []
-    for discord_id in discord_ids:
-        if not discord_id.isdigit():
-            log.warning(f"p0p1-reminder: skipping non-numeric discord id {discord_id!r}")
-            continue
-        member = guild.get_member(int(discord_id))
-        if member is not None:
-            members.append(member)
-    return members
-
-
-async def _post_ping(role: discord.Role, build_post) -> None:
-    """Make the role mentionable only for the send. Leaving it mentionable would let any member fire it,
-    and the alternative — posting a silent role and relying on Mention Everyone — makes the ping depend on
-    a permission the bot has no other reason to hold."""
-    try:
-        await role.edit(mentionable=True, reason="p0p1 reminder ping")
-    except discord.HTTPException:
-        log.warning(f"p0p1-reminder: could not make {role.name!r} mentionable", exc_info=True)
-    try:
-        await build_post(role.mention)
-    finally:
-        try:
-            await role.edit(mentionable=False, reason="p0p1 reminder ping sent")
-        except discord.HTTPException:
-            log.warning(f"p0p1-reminder: {role.name!r} left mentionable", exc_info=True)
-
-
-async def _grant_all(role: discord.Role, members: list[discord.Member]) -> int:
-    granted = 0
-    for member in members:
-        try:
-            await member.add_roles(role, reason="p0p1 reminder ping")
-            granted += 1
-        except discord.HTTPException:
-            log.warning(f"p0p1-reminder: could not grant {role.name!r} to {member}", exc_info=True)
-    return granted
-
-
-async def _empty_role(role: discord.Role) -> None:
-    """Strip every holder. Run before the grants as well as after, so a run that died mid-strip leaves the
-    next one a clean role instead of pinging last contest's list."""
-    for member in list(role.members):
-        try:
-            await member.remove_roles(role, reason="p0p1 reminder ping sent")
-        except discord.HTTPException:
-            log.warning(f"p0p1-reminder: could not strip {role.name!r} from {member}", exc_info=True)
-
-
-async def _ping_role(guild: discord.Guild, name: str, color: str, reason: str) -> discord.Role | None:
-    """The transient ping role by name, created non-mentionable when a guild has none yet"""
-    role = discord.utils.get(guild.roles, name=name)
-    if role is not None:
-        return role
-    try:
-        role = await guild.create_role(
-            name=name, colour=discord.Colour.from_str(color), mentionable=False, reason=reason,
-        )
-    except discord.HTTPException:
-        log.warning(f"p0p1-reminder: could not create {name!r} in {guild.name}", exc_info=True)
-        return None
-    log.info(f"p0p1-reminder: created {name!r} in {guild.name}")
-    return role
+    return await role_ping.ensure_ping_role(guild, P0P1_POLL_ROLE_NAME, P0P1_COLOR)

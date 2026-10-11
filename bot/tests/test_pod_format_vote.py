@@ -1,7 +1,9 @@
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
+from bot.models import PodDraftParticipant
 from bot.services import pod_format_vote as vote
+from bot.services.pod_drafts import record_ondemand_event
 from bot.services.championship_dates import (
     plan_for,
     vote_opens_at,
@@ -48,6 +50,34 @@ def test_a_player_reads_back_only_their_own_votes(session):
     assert vote.player_votes(session, "3", SEASON) == {"PEASANT", "NEO"}
 
 
+def test_the_reminder_reaches_finished_pod_players_who_have_not_voted(session):
+    finished = _pod(session, finalized=True)
+    unfinished = _pod(session, finalized=False)
+    _seat(session, finished, _user(10, "finkel"))
+    _seat(session, finished, _user(11, "lsv"))
+    _seat(session, unfinished, _user(12, "reid"))
+    vote.toggle_vote(session, _user(11, "lsv"), SEASON, "NEO")
+    session.flush()
+
+    unvoted = vote.unvoted_pod_players(session, SEASON)
+
+    assert unvoted == ["10"]
+
+
+def _pod(session, *, finalized):
+    event = record_ondemand_event(
+        session, set_code=SEASON, event_time=datetime(2026, 9, 1, tzinfo=RELEASE_TZ),
+        name="HOB Pod Draft", discord_thread_id=f"thread-{finalized}",
+    )
+    event.finalized_at = event.event_time if finalized else None
+    return event
+
+
+def _seat(session, event, user):
+    player = vote._voter_player(session, user)
+    session.add(PodDraftParticipant(event_id=event.id, player_id=player.id, display_name=user.display_name))
+
+
 def test_the_ballot_is_ordered_newest_release_first_regardless_of_votes():
     order = vote.ballot_order({"NEO": 5, "FIN": 1})
 
@@ -74,14 +104,14 @@ def test_voting_is_open_from_the_ballot_instant():
     assert voting_open(opens_at - timedelta(minutes=1)) is False
 
 
-def test_the_ping_and_reminder_fire_on_their_own_dates():
+def test_the_ping_and_reminder_are_due_for_a_day_from_their_instants():
     plan = plan_for(datetime(2026, 8, 29, 15, tzinfo=RELEASE_TZ))
-    open_date = vote_opens_at(plan).date()
+    opens_at = vote_opens_at(plan)
+    reminder_at = opens_at + timedelta(days=2)
 
-    def at(day):
-        return datetime.combine(day, time(11), tzinfo=RELEASE_TZ)
-
-    assert vote_ping_due(at(open_date)) is not None
-    assert vote_ping_due(at(open_date + timedelta(days=1))) is None
-    assert vote_reminder_due(at(open_date + timedelta(days=2))) is not None
-    assert vote_reminder_due(at(open_date)) is None
+    assert vote_ping_due(opens_at - timedelta(minutes=1)) is None
+    assert vote_ping_due(opens_at) is not None
+    assert vote_ping_due(opens_at + timedelta(hours=23)) is not None
+    assert vote_ping_due(opens_at + timedelta(days=1)) is None
+    assert vote_reminder_due(reminder_at - timedelta(minutes=1)) is None
+    assert vote_reminder_due(reminder_at) is not None

@@ -1,8 +1,9 @@
 """Generate and upload Discord application emojis from the keyrune / mana icon fonts or a local PNG.
 
-Each argument is ``source:glyph[:name]`` — source is ``keyrune``, ``mana``, ``appsplash`` or ``file``.
-For a font source, glyph is the icon's filename in that font's ``svg/`` directory; the glyph is
-recolored white and rasterized like the site's set symbols. ``appsplash`` takes the name of an
+Each argument is ``source:glyph[:name]`` — source is ``keyrune``, ``mana``, ``scryfall``, ``appsplash`` or
+``file``. For a font source, glyph is the icon's filename in that font's ``svg/`` directory; the glyph is
+recolored white and rasterized like the site's set symbols. ``scryfall`` takes a set code and renders
+Scryfall's set icon the same way, for a set keyrune has not drawn yet. ``appsplash`` takes the name of an
 already-uploaded emoji as glyph and re-uploads it scaled down and anchored bottom-left, the splash
 variant, so its disc and color match the full pip. For ``file``, glyph is a path to a PNG that is
 trimmed, fit into a 128px transparent square, and uploaded as is. Name defaults to the glyph basename with
@@ -34,6 +35,7 @@ API_BASE = "https://discord.com/api/v10"
 SVG_URLS = {
     "keyrune": "https://cdn.jsdelivr.net/gh/andrewgioia/keyrune@latest/svg/{glyph}.svg",
     "mana": "https://cdn.jsdelivr.net/gh/andrewgioia/mana@latest/svg/{glyph}.svg",
+    "scryfall": "https://svgs.scryfall.io/sets/{glyph}.svg",
 }
 EMOJI_PX = 128
 SPLASH_SCALE = 0.6
@@ -88,7 +90,7 @@ def _render_glyph(source: str, glyph: str, name: str) -> bytes | None:
         if e.code == 404:
             return None
         raise
-    svg = squarify(raw.replace("#444", "#ffffff"))
+    svg = squarify(raw.replace("#444", "#ffffff").replace("<svg ", '<svg fill="#ffffff" ', 1))
     workdir = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory(dir=workdir) as tmp:
         png_path = Path(tmp) / f"{name}.png"

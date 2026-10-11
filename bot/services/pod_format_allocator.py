@@ -4,7 +4,7 @@ The unit is the day, not the slot: each scheduled day offers exactly two formats
 Early and Late slot, so the calendar shows two icons a day. The two picks come from two rotating pools by
 weekday:
 
-- Flashback days (Mon/Wed/Fri/Sun): the featured custom set plus one voted flashback set.
+- Flashback days (Mon/Wed/Fri/Sun): the latest set plus one voted flashback set.
 - Staple days (Tue/Thu/Sat): the latest set plus the staple cube.
 
 A flashback set needs `VOTE_FLOOR` raw votes to be eligible, and the top `TOP_N` by vote count earn days, with
@@ -24,8 +24,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bot.models import PodDraftEvent, PodDraftParticipant, PodFormatVote, PodScheduleSlot, PodSignal
-from bot.services.championship_dates import SEASON_STARTS, championship_date_for
-from bot.services.pod_format import MEMA_CODE, PEASANT_CODE, is_custom
+from bot.services.championship_dates import championship_date_for, season_start
+from bot.services.pod_format import PEASANT_CODE, is_custom
 from bot.services.pod_format_schedule import (
     FLASHBACK,
     auto_slots,
@@ -44,22 +44,13 @@ TOP_N = 12
 HORIZON_CAP_DAYS = 70
 FLASHBACK_REVEAL_DELAY = timedelta(hours=24)
 
-FEATURED_BY_SEASON: dict[str, str] = {"HOB": MEMA_CODE}
-
-
-def featured_format(season: str) -> str | None:
-    return FEATURED_BY_SEASON.get(season)
-
-
-def day_picks(day: date, flashback_set: str | None, latest: str, featured: str | None) -> tuple[str, ...]:
-    """The formats a scheduled day offers. A flashback day pairs the season's featured pick with the voted
-    flashback set, falling back to the `FLASHBACK` placeholder when no set is eligible and dropping the featured
-    pick when the season has none; a staple day pairs the latest set with the staple cube."""
+def day_picks(day: date, flashback_set: str | None, latest: str) -> tuple[str, str]:
+    """The formats a scheduled day offers. A flashback day pairs the latest set with the voted flashback set,
+    falling back to the `FLASHBACK` placeholder when no set is eligible; a staple day pairs the latest set with
+    the staple cube."""
     if day.weekday() in FLASHBACK_WEEKDAYS:
-        picks = (featured, flashback_set or FLASHBACK)
-    else:
-        picks = (latest, STAPLE_FORMAT)
-    return tuple(code for code in picks if code)
+        return latest, flashback_set or FLASHBACK
+    return latest, STAPLE_FORMAT
 
 
 def assign_flashbacks(days: list[date], scores: dict[str, float]) -> list[str | None]:
@@ -106,17 +97,15 @@ def run_allocation(
     reserved = manual_slots(session, days[0], days[-1])
     kept = reserved if rewrite else reserved | auto_slots(session, days[0], days[-1])
     latest = latest_on(days[0])
-    season = latest
-    featured = featured_format(season)
-    revealed = _flashback_revealed(session, season, now or datetime.now(timezone.utc))
-    scores = _flashback_scores(session, season, latest) if revealed else {}
+    revealed = _flashback_revealed(session, latest, now or datetime.now(timezone.utc))
+    scores = _flashback_scores(session, latest, latest) if revealed else {}
     assignments, _ = _season_allocation(session, days[0], scores)
 
     result: dict[tuple[date, str], tuple[str, ...]] = {}
     for day in days:
         if _is_championship(day) or day in launched:
             continue
-        picks = day_picks(day, assignments.get(day), latest, featured)
+        picks = day_picks(day, assignments.get(day), latest)
         for slot in (SLOT_EARLY, SLOT_LATE):
             if (day, slot) in kept:
                 continue
@@ -215,7 +204,7 @@ def _horizon(start: date) -> list[date]:
 def _season_days(days: list[date]) -> list[date]:
     if not days:
         return []
-    start = SEASON_STARTS.get(latest_on(days[0]))
+    start = season_start(latest_on(days[0]))
     if start is None:
         return []
     return [day for day in days if day >= start]
@@ -269,7 +258,7 @@ def _flashback_scores(session: Session, season: str, latest: str) -> dict[str, f
 
 
 def _is_flashback_candidate(code: str, latest: str) -> bool:
-    if code in (latest, STAPLE_FORMAT) or code in FEATURED_BY_SEASON.values():
+    if code in (latest, STAPLE_FORMAT):
         return False
     if is_custom(code):
         return False

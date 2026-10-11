@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from bot import audit
 from bot.config import settings
 from bot.discord_helpers import message_text
-from bot.services import p0p1_contest, p0p1_copy, p0p1_reminder
+from bot.services import p0p1_contest, p0p1_copy, p0p1_reminder, role_ping
 from bot.services.format_schedule import channel_for_set
 from bot.sets import ALL_SETS
 
@@ -74,7 +74,7 @@ async def post_reminder(
     if channel is None:
         log.warning(f"p0p1-reminder: no channel found for {contest.code}, skipping")
         return None
-    role = await p0p1_reminder.reminder_role(guild)
+    role = await role_ping.reminder_role(guild)
     if role is None:
         return None
     if not force and await _already_reminded(channel, role, contest, now):

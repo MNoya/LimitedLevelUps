@@ -3,15 +3,13 @@ from types import SimpleNamespace
 
 from bot.models import PodScheduleSlot, PodSignal
 from bot.services import pod_format_vote as vote
-from bot.services.championship_dates import championship_date_for
+from bot.services.championship_dates import championship_date_for, season_start
 from bot.services.pod_format_allocator import (
     STAPLE_FORMAT,
     assign_flashbacks,
     day_picks,
-    featured_format,
     run_allocation,
 )
-from bot.services.pod_format import MEMA_CODE
 from bot.services.pod_format_schedule import FLASHBACK, latest_on, set_slot
 from bot.services.pod_signals import KIND_POLL, SLOT_EARLY, SLOT_LATE
 
@@ -60,20 +58,10 @@ def test_a_day_with_nothing_eligible_stays_empty():
     assert assign_flashbacks(_flashback_days(3), {}) == [None, None, None]
 
 
-def test_day_picks_pair_by_weekday():
-    assert day_picks(MON, "NEO", "HOB", MEMA_CODE) == (MEMA_CODE, "NEO")
-    assert day_picks(WED, None, "HOB", MEMA_CODE) == (MEMA_CODE, FLASHBACK)
-    assert day_picks(TUE, None, "HOB", MEMA_CODE) == ("HOB", STAPLE_FORMAT)
-
-
-def test_day_picks_drop_the_featured_slot_when_the_season_has_none():
-    assert day_picks(MON, "NEO", "FRA", None) == ("NEO",)
-    assert day_picks(TUE, None, "FRA", None) == ("FRA", STAPLE_FORMAT)
-
-
-def test_a_season_after_the_featured_one_has_no_featured_pick():
-    assert featured_format("HOB") == MEMA_CODE
-    assert featured_format("FRA") is None
+def test_day_picks_pair_the_latest_set_by_weekday():
+    assert day_picks(MON, "NEO", "HOB") == ("HOB", "NEO")
+    assert day_picks(WED, None, "HOB") == ("HOB", FLASHBACK)
+    assert day_picks(TUE, None, "HOB") == ("HOB", STAPLE_FORMAT)
 
 
 REVEALED = datetime.now(timezone.utc) + timedelta(days=2)
@@ -87,8 +75,8 @@ def test_run_allocation_fills_both_slots_and_never_touches_a_manual_row(session)
     assignments = run_allocation(session, MON, rewrite=True, now=REVEALED)
     session.commit()
 
-    assert assignments[(MON, SLOT_EARLY)] == (MEMA_CODE, "NEO")
-    assert assignments[(MON, SLOT_LATE)] == (MEMA_CODE, "NEO")
+    assert assignments[(MON, SLOT_EARLY)] == ("HOB", "NEO")
+    assert assignments[(MON, SLOT_LATE)] == ("HOB", "NEO")
     assert assignments[(TUE, SLOT_EARLY)] == (latest_on(TUE), STAPLE_FORMAT)
 
     manual = session.query(PodScheduleSlot).filter_by(day=WED, slot=SLOT_EARLY).one()
@@ -103,7 +91,7 @@ def test_run_allocation_holds_flashbacks_until_a_day_after_the_first_vote(sessio
 
     assignments = run_allocation(session, MON, rewrite=True, now=datetime.now(timezone.utc))
 
-    assert assignments[(MON, SLOT_EARLY)] == (MEMA_CODE, FLASHBACK)
+    assert assignments[(MON, SLOT_EARLY)] == ("HOB", FLASHBACK)
 
 
 def test_run_allocation_ignores_a_set_below_the_vote_floor(session):
@@ -112,10 +100,10 @@ def test_run_allocation_ignores_a_set_below_the_vote_floor(session):
 
     assignments = run_allocation(session, MON, rewrite=True, now=REVEALED)
 
-    assert assignments[(MON, SLOT_EARLY)] == (MEMA_CODE, FLASHBACK)
+    assert assignments[(MON, SLOT_EARLY)] == ("HOB", FLASHBACK)
 
 
-def test_a_season_with_no_start_stays_on_the_latest_set(session):
+def test_days_before_the_season_start_stay_on_the_latest_set(session):
     tre_release = date(2026, 11, 10)
     stale = tre_release + timedelta(days=2)
     set_slot(session, stale, SLOT_EARLY, (FLASHBACK,), source="auto")
@@ -124,7 +112,7 @@ def test_a_season_with_no_start_stays_on_the_latest_set(session):
     assignments = run_allocation(session, tre_release, rewrite=True, now=REVEALED)
     session.commit()
 
-    assert assignments == {}
+    assert min(day for day, _ in assignments) == season_start("TRK")
     assert session.query(PodScheduleSlot).filter_by(day=stale).count() == 0
 
 
@@ -146,14 +134,14 @@ def test_a_played_day_counts_against_a_set_s_season_budget(session):
     _seed_floor_votes(session, "NEO")
     _seed_floor_votes(session, "FIN")
     played = date(2026, 8, 26)
-    set_slot(session, played, SLOT_EARLY, (MEMA_CODE, "NEO"), source="auto")
+    set_slot(session, played, SLOT_EARLY, ("HOB", "NEO"), source="auto")
     session.commit()
 
     assignments = run_allocation(session, MON, rewrite=True, now=REVEALED)
 
     future = [
         picks[1] for (day, slot), picks in assignments.items()
-        if slot == SLOT_EARLY and len(picks) == 2 and picks[0] == MEMA_CODE
+        if slot == SLOT_EARLY and picks[1] != STAPLE_FORMAT
     ]
     assert future.count("NEO") + 1 == future.count("FIN")
 

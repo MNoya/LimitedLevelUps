@@ -11,7 +11,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, timedelta
 
 import discord
 from discord import ui
@@ -20,9 +21,15 @@ from sqlalchemy.orm import Session
 
 from bot.commands.authorization import organizer_authorized_interaction
 from bot.database import SessionLocal
-from bot.discord_helpers import RenderQueue, extract_avatar_hash, resolve_pod_chat_channel, run_detached
-from bot.models import PodFormatVote, Player
-from bot.services.championship_dates import plan_for, vote_opens_at, voting_open
+from bot.discord_helpers import (
+    RenderQueue,
+    extract_avatar_hash,
+    pin_quietly,
+    resolve_pod_chat_channel,
+    run_detached,
+)
+from bot.models import PodDraftEvent, PodDraftParticipant, PodFormatVote, Player
+from bot.services.championship_dates import plan_for, vote_opens_at, vote_reminder_at, voting_open
 from bot.services.pod_format import custom_formats, is_custom
 from bot.services.pod_format_poll import (
     MAX_ROWED_OPTIONS,
@@ -30,10 +37,11 @@ from bot.services.pod_format_poll import (
     add_button_emoji,
     normalize_write_ins,
 )
-from bot.services.pod_format_interest import cube_emoji, flashback_emoji
+from bot.services import role_ping
+from bot.services.pod_format_interest import FLASHBACK_ROLE_NAME, cube_emoji, flashback_emoji
 from bot.commands.messages import MSG_ORGANIZER_ONLY_SETTINGS
 from bot.services.ping_roles import organizer_mention
-from bot.services.pod_roles import role_mention
+from bot.services.pod_roles import find_role, role_mention
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME
 from bot.services.self_reported_events import get_or_create_player
 from bot import emojis
@@ -44,6 +52,7 @@ log = logging.getLogger(__name__)
 MSG_VOTE_SOON = "Format voting opens soon"
 MSG_VOTE_OPENS_AT = "Format voting opens <t:{unix}:R>"
 MSG_VOTE_OPEN = "{role} Vote for any formats you'd be interested in playing this season!"
+MSG_VOTE_REMINDER = "{reminder} to vote for the {flashback} formats you want to play this season!"
 MSG_VOTE_HEADING = "## 🗳️ Flashback Format Vote - {name} Edition"
 MSG_VOTE_INTRO = "Select or add any formats you would be interested in playing this season"
 MSG_VOTERS_HEADING = "## 📊 Format Votes"
@@ -83,6 +92,12 @@ VOTE_OPEN_ID = "podfmtopen"
 VOTE_OPEN_LABEL = "Vote Formats"
 
 _card_queue = RenderQueue(delay_s=1.0)
+
+
+@dataclass(frozen=True)
+class VoteReminderOutcome:
+    targeted: int
+    pinged: int
 
 
 def season_code(when=None) -> str:
@@ -193,6 +208,22 @@ def player_votes(session: Session, discord_id: str, season: str) -> set[str]:
             PodFormatVote.player_id == player.id, PodFormatVote.season_set_code == season,
         )
     ).scalars().all())
+
+
+def unvoted_pod_players(session: Session, season: str) -> list[str]:
+    """Discord ids of players who finished at least one pod and have no vote in this season"""
+    finished_a_pod = (
+        select(PodDraftParticipant.id)
+        .join(PodDraftEvent, PodDraftEvent.id == PodDraftParticipant.event_id)
+        .where(PodDraftParticipant.player_id == Player.id, PodDraftEvent.finalized_at.is_not(None))
+        .exists()
+    )
+    voted = (
+        select(PodFormatVote.id)
+        .where(PodFormatVote.player_id == Player.id, PodFormatVote.season_set_code == season)
+        .exists()
+    )
+    return list(session.execute(select(Player.discord_id).where(finished_a_pod, ~voted)).scalars().all())
 
 
 def voters_by_format(session: Session, season: str) -> dict[str, list[str]]:
@@ -382,14 +413,14 @@ def vote_ping_text(guild: discord.Guild) -> str:
 
 
 async def post_vote_card(channel: discord.abc.Messageable, content: str | None, *, force: bool = False) -> None:
-    """Post the season's public vote card and pin it, pinging with `content` when it is set. A card already up
-    for this season is left alone unless `force`, so a same-day repost does not re-ping."""
+    """Post the season's public vote card and pin it in place of the earlier one, pinging with `content` when it is
+    set. A card already up for this season is left alone unless `force`, so a same-day repost does not re-ping."""
     season = season_code()
     existing = await _existing_card(channel)
     if existing is not None and not force and _is_current_card(existing, season):
         return
     if existing is not None:
-        await _delete_quietly(existing)
+        await _retire(existing)
     embed, view = await asyncio.to_thread(panel, season)
     try:
         message = await channel.send(
@@ -398,10 +429,40 @@ async def post_vote_card(channel: discord.abc.Messageable, content: str | None, 
     except discord.HTTPException:
         log.warning("format vote: could not post the vote card", exc_info=True)
         return
-    try:
-        await message.pin()
-    except discord.HTTPException:
-        log.warning("format vote: could not pin the vote card", exc_info=True)
+    await pin_quietly(message, reason="format vote")
+
+
+async def post_vote_reminder(
+    channel: discord.TextChannel, *, force: bool = False, restrict_to: discord.Member | None = None,
+) -> VoteReminderOutcome | None:
+    """Ping the Pod Drafters who finished a pod and have not voted this season, plus the Flashback role. `force`
+    skips the already-posted check for a hand-fired run; `restrict_to` is the only person a run off the
+    production guild pings."""
+    guild = channel.guild
+    reminder = await role_ping.reminder_role(guild)
+    if reminder is None:
+        return None
+    if not force and await _already_reminded(channel, reminder):
+        return None
+    flashback = find_role(guild, FLASHBACK_ROLE_NAME)
+    pinged_roles = [reminder] if flashback is None else [reminder, flashback]
+    view = ui.View(timeout=None)
+    view.add_item(VoteFormatsButton())
+
+    async def send(reminder_mention: str) -> None:
+        content = MSG_VOTE_REMINDER.format(
+            reminder=reminder_mention, flashback=role_mention(guild, FLASHBACK_ROLE_NAME),
+        )
+        await channel.send(content, view=view, allowed_mentions=discord.AllowedMentions(roles=pinged_roles))
+
+    unvoted = await asyncio.to_thread(_unvoted_pod_players, season_code())
+    await role_ping.ensure_member_cache(guild)
+    pod_drafters = find_role(guild, POD_DRAFTERS_ROLE_NAME)
+    drafter_ids = {str(member.id) for member in pod_drafters.members} if pod_drafters is not None else set()
+    targets = role_ping.audience(guild, [discord_id for discord_id in unvoted if discord_id in drafter_ids],
+                                 restrict_to)
+    pinged, _ = await role_ping.ping_audience(guild, reminder, targets, send)
+    return VoteReminderOutcome(targeted=len(targets), pinged=pinged)
 
 
 async def refresh_vote_card(channel: discord.abc.Messageable) -> None:
@@ -441,6 +502,23 @@ def _vote_closed_message() -> str:
     return MSG_VOTE_OPENS_AT.format(unix=int(opens_at.timestamp()))
 
 
+def _unvoted_pod_players(season: str) -> list[str]:
+    with SessionLocal() as session:
+        return unvoted_pod_players(session, season)
+
+
+async def _already_reminded(channel: discord.TextChannel, reminder: discord.Role) -> bool:
+    """Whether this season's reminder is already in the channel, matched on the Reminder role mention"""
+    plan = plan_for()
+    reminder_at = vote_reminder_at(plan) if plan is not None else None
+    if reminder_at is None:
+        return False
+    async for message in channel.history(after=reminder_at - timedelta(hours=1), limit=500):
+        if message.author.bot and reminder.mention in message.content:
+            return True
+    return False
+
+
 async def _existing_card(channel: discord.abc.Messageable) -> discord.Message | None:
     if not isinstance(channel, discord.TextChannel):
         return None
@@ -461,11 +539,10 @@ def _is_current_card(message: discord.Message, season: str) -> bool:
     return set_name_for(season) in (message.embeds[0].description or "")
 
 
-async def _delete_quietly(message: discord.Message) -> None:
-    try:
-        await message.delete()
-    except discord.HTTPException:
-        log.warning("format vote: could not remove the old vote card", exc_info=True)
+async def _retire(message: discord.Message) -> None:
+    """Unpin an earlier vote card and drop its buttons, keeping its final tally as a record"""
+    await message.unpin(reason="newer format vote")
+    await message.edit(view=None)
 
 
 # --- the buttons, persistent so a pinned card keeps working after a restart ---

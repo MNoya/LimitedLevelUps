@@ -175,7 +175,7 @@ def _rows_for(day: date, *, past: bool) -> list[tuple[str, RGB, str]]:
 
 def _format_color(code: str, latest: str, past: bool) -> RGB:
     """A scheduled community flashback pick, the voted set or the TBD placeholder, shows blue to stand out from
-    the fixed featured set, the latest set and the staple cube. A past day is history, not a vote, so it dims."""
+    the latest set and the staple cube. A past day is history, not a vote, so it dims."""
     if past:
         return DIM
     if code != latest and not is_custom(code):

@@ -84,6 +84,7 @@ PREFIX_HELP_GROUPS: list[list[tuple[str, str]]] = [
         ("!pod", "Rally players for a Pod Draft"),
         ("!confirm", "Confirm your seat in a Pod thread"),
         ("!etiquette", "Server rules for Pod play"),
+        ("!flashback", "How Flashback season voting works"),
         ("!voice", "Share a Voice Chat Link"),
         ("!teams", "How Team Draft works"),
     ],

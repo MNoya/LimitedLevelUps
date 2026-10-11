@@ -1,4 +1,4 @@
-"""When each Set Championship is held, derived from `bot.sets` alone.
+"""When each Set Championship and flashback season vote happens, derived from `bot.sets` and the Scribe calendar.
 
 Split out of `championship` so the surfaces that only need the date stay clear of the ORM: that module
 carries the frozen-seed half, which imports the models and a session, and the pod format schedule and its
@@ -12,8 +12,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from functools import cache
 
-from bot.sets import ALL_SETS, RELEASE_TZ, active_set_code, prerelease_date_for, previous_weekday, release_instant
+from bot.services import mtgscribe
+from bot.sets import (
+    ALL_SETS,
+    RELEASE_TZ,
+    SetSeed,
+    active_set_code,
+    prerelease_date_for,
+    previous_weekday,
+    release_instant,
+    seed_for_code,
+)
 
 SATURDAY = 5
 CHAMPIONSHIP_TIME = time(14, 0)
@@ -23,7 +34,7 @@ BALLOT_LEAD_DAYS = 3
 BALLOT_OPENS_AT = time(13, 0)
 PARALLEL_LEAD_DAYS = 14
 VOTE_REMINDER_LAG_DAYS = 2
-SEASON_STARTS: dict[str, date] = {"HOB": date(2026, 8, 30), "FRA": date(2026, 10, 19)}
+SEASON_START_OVERRIDES: dict[str, date] = {"HOB": date(2026, 8, 30)}
 CHAMPIONSHIP_DATE_OVERRIDES: dict[str, date] = {"FRA": date(2026, 11, 7)}
 
 
@@ -97,12 +108,35 @@ def plan_due_for_creation(when: datetime) -> ChampionshipPlan | None:
     return plan if when.astimezone(RELEASE_TZ).date() == plan.create_on else None
 
 
+@cache
+def season_start(set_code: str) -> date | None:
+    """The first day of a set's flashback season: the day before Arena's first flashback queue inside the set's
+    window, three weeks after release when Scribe lists none yet. None for an unregistered set."""
+    override = SEASON_START_OVERRIDES.get(set_code)
+    if override is not None:
+        return override
+    seed = seed_for_code(set_code)
+    if seed is None:
+        return None
+    first_flashback = _first_arena_flashback(seed)
+    if first_flashback is None:
+        return seed.start_date + timedelta(weeks=3)
+    return first_flashback - timedelta(days=1)
+
+
 def vote_opens_at(plan: ChampionshipPlan) -> datetime | None:
-    """An hour before the Early Pod `BALLOT_LEAD_DAYS` ahead of the season start; None when no start is set"""
-    start = SEASON_STARTS.get(plan.set_code)
+    """An hour before the Early Pod `BALLOT_LEAD_DAYS` ahead of the season start"""
+    start = season_start(plan.set_code)
     if start is None:
         return None
     return datetime.combine(start - timedelta(days=BALLOT_LEAD_DAYS), BALLOT_OPENS_AT, tzinfo=RELEASE_TZ)
+
+
+def vote_reminder_at(plan: ChampionshipPlan) -> datetime | None:
+    opens_at = vote_opens_at(plan)
+    if opens_at is None:
+        return None
+    return opens_at + timedelta(days=VOTE_REMINDER_LAG_DAYS)
 
 
 def voting_open(when: datetime | None = None) -> bool:
@@ -118,20 +152,33 @@ def voting_open(when: datetime | None = None) -> bool:
 
 
 def vote_ping_due(when: datetime) -> ChampionshipPlan | None:
-    """The plan whose ballot opens on the ET date of `when`, for the one opening ping, else None."""
+    """The plan whose ballot opened within the day before `when`, for the one opening ping, else None"""
     plan = plan_for(when)
-    opens_at = vote_opens_at(plan) if plan is not None else None
-    if opens_at is None:
+    if plan is None:
         return None
-    return plan if when.astimezone(RELEASE_TZ).date() == opens_at.date() else None
+    return plan if _within_a_day_after(vote_opens_at(plan), when) else None
 
 
 def vote_reminder_due(when: datetime) -> ChampionshipPlan | None:
-    """The plan whose ballot opened `VOTE_REMINDER_LAG_DAYS` before the ET date of `when`, for the single
-    reminder ping, else None."""
+    """The plan whose reminder fell due within the day before `when`, for the single reminder ping, else None"""
     plan = plan_for(when)
-    opens_at = vote_opens_at(plan) if plan is not None else None
-    if opens_at is None:
+    if plan is None:
         return None
-    reminder_date = opens_at.date() + timedelta(days=VOTE_REMINDER_LAG_DAYS)
-    return plan if when.astimezone(RELEASE_TZ).date() == reminder_date else None
+    return plan if _within_a_day_after(vote_reminder_at(plan), when) else None
+
+
+def _within_a_day_after(instant: datetime | None, when: datetime) -> bool:
+    return instant is not None and instant <= when < instant + timedelta(days=1)
+
+
+def _first_arena_flashback(seed: SetSeed) -> date | None:
+    first = None
+    for event in mtgscribe.load_events():
+        if not mtgscribe.is_set_flashback(event):
+            continue
+        day = event.start.astimezone(RELEASE_TZ).date()
+        if not seed.start_date <= day <= seed.end_date:
+            continue
+        if first is None or day < first:
+            first = day
+    return first

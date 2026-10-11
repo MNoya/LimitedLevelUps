@@ -63,6 +63,7 @@ from bot.services.pod_hold_view import build_hold_items
 from bot.services.pod_active import set_pod_complete_hook, set_pod_drafting_hook, set_podium_posted_hook
 from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
+    ManageRolesButton,
     announce_pod_grant,
     build_pod_guide_button,
     grant_pod_roles,
@@ -974,14 +975,15 @@ async def _announce_play_again_signup(interaction: discord.Interaction, bucket_k
 
 
 class PodPollView(discord.ui.View):
-    """The day's launcher card: a signup button per joinable pod, plus the board Leave and Pod Guide in a
-    footer row. Each pod button names its format and only ever adds you; a slot that can't be joined renders
-    nothing and links to its own card instead. Add and Leave stay separate so a press never depends on hidden
-    state. Pod buttons are DynamicItems so the board survives a restart, and bucket glyphs ride the emoji slot
-    since they can't render in label text."""
+    """The day's launcher card: a signup button per joinable pod, plus the board Leave, the Guide and either
+    Vote Formats or Notifications in a footer row. Each pod button names its format and only ever adds you; a
+    slot that can't be joined renders nothing and links to its own card instead. Add and Leave stay separate so
+    a press never depends on hidden state. Pod buttons are DynamicItems so the board survives a restart, and
+    bucket glyphs ride the emoji slot since they can't render in label text."""
 
     def __init__(
         self, slots: list[pod_launch.LauncherSlot], guild: discord.Guild | None = None,
+        *, vote_open: bool | None = None,
     ) -> None:
         super().__init__(timeout=None)
         pods = 0
@@ -998,8 +1000,11 @@ class PodPollView(discord.ui.View):
         if any(_leavable(slot) for slot in slots):
             self.add_item(BoardLeaveButton(row=footer_row))
         self.add_item(build_pod_guide_button(row=footer_row))
-        if voting_open():
+        show_vote = voting_open() if vote_open is None else vote_open
+        if show_vote:
             self.add_item(VoteFormatsButton(row=footer_row))
+        else:
+            self.add_item(ManageRolesButton(row=footer_row))
 
 
 BUTTONS_PER_ROW = 5

@@ -18,8 +18,8 @@ from bot.commands import descriptions as desc
 from bot.commands.authorization import moderator_authorized_interaction
 from bot.discord_helpers import posts_publicly, resolve_pod_chat_channel
 from bot.services.pod_format_vote import post_vote_card, vote_ping_text
-from bot.services.pod_schedule_card import MAX_WEEKS, render_schedule
-from bot.services.pod_schedule_controls import PodScheduleView
+from bot.services.pod_schedule_card import MAX_WEEKS
+from bot.services.pod_schedule_controls import send_schedule
 
 MSG_OPEN_VOTE_DENIED = "Only organizers can open the format vote"
 MSG_NO_POD_CHAT = "Pod chat channel unavailable"
@@ -38,16 +38,7 @@ class PodSchedule(commands.Cog):
         self, interaction: discord.Interaction, weeks: app_commands.Range[int, 1, MAX_WEEKS] | None = None,
     ) -> None:
         audit.event("pod_schedule_invoked", user_id=str(interaction.user.id), weeks=weeks)
-        ephemeral = not posts_publicly(interaction)
-        await interaction.response.defer(ephemeral=ephemeral, thinking=True)
-        embed, file = await render_schedule(interaction.guild, weeks)
-        await interaction.followup.send(
-            embed=embed,
-            file=file,
-            view=PodScheduleView(),
-            allowed_mentions=discord.AllowedMentions.none(),
-            ephemeral=ephemeral,
-        )
+        await send_schedule(interaction, ephemeral=not posts_publicly(interaction), weeks=weeks)
 
     @app_commands.command(name="openvote", description=desc.OPEN_VOTE)
     @app_commands.describe(notify="Ping @Pod Drafters above the card (default on)")

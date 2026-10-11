@@ -6,7 +6,8 @@ import pytest
 from bot.services.p0p1_contest import Contest
 from bot.services.p0p1_copy import reminder, reminder_view
 from bot.config import PRODUCTION_GUILD_ID
-from bot.services.p0p1_reminder import SOURCE_PLAYERS, audience, non_voter_discord_ids_sync
+from bot.services.p0p1_reminder import SOURCE_PLAYERS, non_voter_discord_ids_sync
+from bot.services.role_ping import audience
 from bot.services.ping_roles import P0P1_COLOR
 from bot.tasks.p0p1_reminder_post import REMINDER_LEAD, contest_due
 

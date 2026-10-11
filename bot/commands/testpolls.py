@@ -69,6 +69,7 @@ from bot.services.ping_roles import (
     spec_named,
     strip_pod_roles,
 )
+from bot.services.championship_dates import plan_for, season_start
 from bot.services.pod_schedule import POD_QUEUE_ROLE_NAME
 from bot.services.pod_signals import (
     KIND_POLL,
@@ -102,18 +103,24 @@ from bot.tasks.pod_daily_poll import (
     resurface_board_after_the_early_pods,
 )
 from bot.tasks.pod_draft_reminder import fire_roster_reminder
-from bot.services.pod_schedule_card import repost_schedule_post
+from bot.services.pod_schedule_card import render_schedule, repost_schedule_post
 from bot.services.pod_schedule_controls import PodScheduleView
-from bot.services.pod_format_vote import post_vote_card, preview_codes, render_panel, season_code
+from bot.services.pod_format_vote import (
+    post_vote_card,
+    post_vote_reminder,
+    preview_codes,
+    render_panel,
+    season_code,
+    vote_ping_text,
+)
 from bot.services.pod_format_allocator import run_allocation
-from bot.services.pod_format_vote import vote_ping_text
 from bot.tasks.pod_thread_cleanup import delete_bot_threads_in, delete_threads
 
 
 log = logging.getLogger(__name__)
 
 WEEKDAY_ARGS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
-POLL_KEYWORDS = ("am", "split", *WEEKDAY_ARGS)
+POLL_KEYWORDS = ("am", "split", "vote", *WEEKDAY_ARGS)
 PURGE_WINDOW = timedelta(days=3)
 
 
@@ -183,7 +190,8 @@ async def setup(bot: commands.Bot) -> None:
         post; a weekday name posts that weekday's board, so `poll sat` shows the slots and formats Saturday
         carries; `split` seeds five dedicated per format plus two on both, so one press has to split them
         into two full pods; a set or cube code is offered beside the latest set, so `poll SAMP` drives that
-        format live without waiting for its date."""
+        format live without waiting for its date; `vote` shows the footer as it reads while the format vote is
+        open."""
         lowered = {arg.lower() for arg in args}
         now = datetime.now(SCHEDULE_TZ)
         day = _poll_day(now, args)
@@ -200,14 +208,29 @@ async def setup(bot: commands.Bot) -> None:
             return
         await asyncio.to_thread(_seed_poll_signups_sync, str(message.id), day, "split" in lowered)
         slots = await asyncio.to_thread(pod_launch.launcher_snapshot_sync, str(message.id), day)
-        await message.edit(embed=build_poll_embed(slots, ctx.guild), view=PodPollView(slots, ctx.guild))
+        view = PodPollView(slots, ctx.guild, vote_open=True if "vote" in lowered else None)
+        await message.edit(embed=build_poll_embed(slots, ctx.guild), view=view)
 
     @test_group.command(name="podschedule")
     @commands.is_owner()
-    async def test_podschedule(ctx: commands.Context) -> None:
-        """Owner-only. Remove any pinned pod format schedule card and post and pin a fresh one, carrying the
-        Manage Schedule button."""
-        await repost_schedule_post(ctx.channel, view=PodScheduleView())
+    async def test_podschedule(ctx: commands.Context, state: str = "") -> None:
+        """Owner-only. Unpin the pod format schedule card and post and pin a fresh one, the way the first tick
+        of a flashback season does. `flashback` instead posts an unpinned card as it reads on the season's
+        first day."""
+        if state.lower() != "flashback":
+            await repost_schedule_post(ctx.channel, view=PodScheduleView())
+            return
+        plan = plan_for()
+        start = season_start(plan.set_code) if plan is not None else None
+        if start is None:
+            await ctx.send("No flashback season to preview")
+            return
+        first_day = datetime.combine(start, time(12), tzinfo=SCHEDULE_TZ)
+        embed, file = await render_schedule(ctx.guild, now=first_day)
+        await ctx.send(
+            embed=embed, file=file, view=PodScheduleView(with_vote=True),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
     @test_group.command(name="votecard")
     @commands.is_owner()
@@ -226,6 +249,17 @@ async def setup(bot: commands.Bot) -> None:
             )
             return
         await post_vote_card(ctx.channel, vote_ping_text(ctx.guild), force=True)
+
+    @test_group.command(name="votereminder")
+    @commands.is_owner()
+    async def test_votereminder(ctx: commands.Context) -> None:
+        """Owner-only. Post the Sunday vote reminder here, pinging the Flashback role and, off the production
+        guild, only you through the Reminder role."""
+        outcome = await post_vote_reminder(ctx.channel, force=True, restrict_to=ctx.author)
+        if outcome is None:
+            await ctx.send("No Reminder role to ping with")
+            return
+        await ctx.send(f"Reminder pinged {outcome.pinged} of {outcome.targeted}")
 
     @test_group.command(name="allocate")
     @commands.is_owner()

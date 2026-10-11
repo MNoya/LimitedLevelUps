@@ -93,6 +93,11 @@ def load_events(*, arena_only: bool = True) -> list[ScribeEvent]:
     return events
 
 
+def is_set_flashback(event: ScribeEvent) -> bool:
+    """An Arena flashback queue for a past set, which Scribe also tags on a returning cube"""
+    return FLASHBACK_TAG in event.tag_slugs and not any(CUBE_TAG in tag for tag in event.tag_slugs)
+
+
 def fetch_raw_events(start_date: date) -> list[dict]:
     """Every raw event dict starting on/after ``start_date``, following pagination — the one code path
     that requests anything from mtgscribe.com, called only by ``bot.scripts.snapshot_scribe``.

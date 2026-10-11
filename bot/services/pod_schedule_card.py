@@ -17,7 +17,7 @@ import discord
 from bot import emojis
 from bot.config import PRODUCTION_GUILD_ID, settings
 from bot.database import SessionLocal
-from bot.discord_helpers import EM_SPACE, NBSP, message_text
+from bot.discord_helpers import EM_SPACE, NBSP, message_text, pin_quietly
 from bot.services import pod_format_interest as fi
 from bot.services.championship_dates import championship_on, voting_open
 from bot.services.ping_roles import SET_CHAMPION_ROLE_NAME
@@ -44,7 +44,7 @@ MSG_DAILY_SET = "{symbol} {role} **every day**"
 MSG_FLASHBACK_SEASON = "{flashback} {role} season is on! Two formats each day"
 MSG_VOTE_PROMPT = "🗳️ **Vote Formats** to put yours on the calendar"
 MSG_CHAMPIONSHIP = "👑 {role} <t:{unix}:R>"
-MSG_ARRIVAL = "{symbol} **{name}** <t:{unix}:R>"
+MSG_ARRIVAL = "{symbol}**{name}** <t:{unix}:R>"
 MSG_NO_VOTES = "No votes yet"
 RESULTS_PER_ROW = 4
 
@@ -59,9 +59,16 @@ COLUMN_GAP = EM_SPACE * 2
 LINE_GAP = "\n\n"
 
 
-async def refresh_schedule_post(channel: discord.abc.Messageable, *, view: discord.ui.View | None = None) -> None:
+async def refresh_schedule_post(
+    channel: discord.abc.Messageable, *, view: discord.ui.View | None = None, repost_before: datetime | None = None,
+) -> None:
+    """Edit the pinned schedule card in place, or post and pin a fresh one when there is none or the pinned card
+    was posted before `repost_before`"""
     embed, file = await render_schedule(getattr(channel, "guild", None))
     message = await _existing_post(channel)
+    if message is not None and repost_before is not None and message.created_at < repost_before:
+        await _retire(message)
+        message = None
     if message is None:
         await _post_fresh(channel, embed, file, view)
         return
@@ -72,22 +79,15 @@ async def refresh_schedule_post(channel: discord.abc.Messageable, *, view: disco
 
 
 async def repost_schedule_post(channel: discord.abc.Messageable, *, view: discord.ui.View | None = None) -> None:
-    """Remove the pinned schedule card and post a fresh one, so a preview always surfaces a new message rather
-    than editing the pin in place the way the daily tick does."""
-    existing = await _existing_post(channel)
-    if existing is not None:
-        try:
-            await existing.delete()
-        except discord.HTTPException:
-            log.warning("pod-schedule card: could not remove the old schedule", exc_info=True)
-    embed, file = await render_schedule(getattr(channel, "guild", None))
-    await _post_fresh(channel, embed, file, view)
+    """Unpin the schedule card and post a fresh one, so a preview always shows a new message rather than editing
+    the pin in place the way the daily tick does"""
+    await refresh_schedule_post(channel, view=view, repost_before=datetime.now(SCHEDULE_TZ))
 
 
 async def render_schedule(
-    guild: discord.Guild | None, weeks: int | None = None,
+    guild: discord.Guild | None, weeks: int | None = None, *, now: datetime | None = None,
 ) -> tuple[discord.Embed, discord.File]:
-    now = datetime.now(SCHEDULE_TZ)
+    now = now or datetime.now(SCHEDULE_TZ)
     weeks = weeks if weeks is not None else weeks_until_next_rotation(now.date(), MAX_WEEKS)
     days = calendar_days(now.date(), weeks)
     with SessionLocal() as session, schedule_overlay(session, days[0], days[-1]):
@@ -118,21 +118,28 @@ async def _post_fresh(
     except discord.HTTPException:
         log.warning("pod-schedule card: could not post the schedule", exc_info=True)
         return
-    try:
-        await message.pin()
-    except discord.HTTPException:
-        log.warning("pod-schedule card: could not pin the schedule", exc_info=True)
+    await pin_quietly(message, reason="pod format schedule")
+
+
+async def _retire(message: discord.Message) -> None:
+    """Unpin an outdated schedule card and drop its buttons, keeping the message as a record"""
+    await message.unpin(reason="newer pod format schedule")
+    await message.edit(view=None)
 
 
 def build_schedule_embed(guild: discord.Guild | None, now: datetime, weeks: int) -> discord.Embed:
     days = calendar_days(now.date(), weeks)
-    lines = [slot_line(guild, now), formats_line(guild, now)]
+    formats = formats_line(guild, now)
     arrival = arrival_line(guild, days, now)
-    if arrival:
-        lines.append(arrival)
     championship = championship_line(guild, days, now)
+    flashback_live = flashback_season_live(now)
+    if arrival and not flashback_live:
+        formats = f"{formats}{EM_SPACE}{arrival}"
+    lines = [slot_line(guild, now), formats]
     if championship:
         lines.append(championship)
+    if arrival and flashback_live:
+        lines.append(arrival)
     heading = MSG_HEADING.format(url=coordination_url(guild))
     embed = discord.Embed(description=f"{heading}\n{LINE_GAP.join(lines)}", color=discord.Color.green())
     embed.set_image(url=IMAGE_URL)
@@ -185,13 +192,17 @@ def slot_line(guild: discord.Guild | None, now: datetime) -> str:
 def formats_line(guild: discord.Guild | None, now: datetime) -> str:
     """The two-a-day line once the format vote opens or today carries a second format, else the latest set every day"""
     vote_open = voting_open(now)
-    if vote_open or len(scheduled_formats(now.date())) > 1:
+    if flashback_season_live(now):
         season = MSG_FLASHBACK_SEASON.format(
             flashback=fi.flashback_emoji(), role=role_mention(guild, fi.FLASHBACK_ROLE_NAME),
         )
         return f"{season}\n{MSG_VOTE_PROMPT}" if vote_open else season
     code = active_set_code(now)
     return MSG_DAILY_SET.format(symbol=fi.format_emoji(code), role=role_mention(guild, fi.LATEST_SET_ROLE_NAME))
+
+
+def flashback_season_live(now: datetime) -> bool:
+    return voting_open(now) or len(scheduled_formats(now.date())) > 1
 
 
 def arrival_line(guild: discord.Guild | None, days: list[date], now: datetime) -> str:

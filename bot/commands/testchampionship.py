@@ -54,6 +54,7 @@ from bot.services.pod_signals import (
     named_bucket_key,
     slot_event_time,
 )
+from bot.tasks.championship_post import pin_championship_card
 from bot.tasks.pod_daily_poll import PodPollView, build_poll_embed
 from bot.tasks.pod_draft_reminder import build_roster_embed
 from bot.services.pod_swiss import MatchOutcome
@@ -115,6 +116,7 @@ async def setup(bot: commands.Bot) -> None:
         if event_id is None:
             await ctx.send(MSG_CARD_FAILED)
             return
+        await pin_championship_card(channel, event_id)
         thread = await _resolve_preview_thread(ctx.bot, event_id)
         if thread is None:
             await ctx.send(MSG_THREAD_FAILED)

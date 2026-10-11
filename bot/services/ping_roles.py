@@ -462,9 +462,10 @@ class _PodGuideButton(discord.ui.Button):
 
 
 class ManageRolesButton(discord.ui.Button):
-    def __init__(self) -> None:
+    def __init__(self, row: int | None = None) -> None:
         super().__init__(
             label="Notifications", style=discord.ButtonStyle.primary, emoji="🔔", custom_id=MANAGE_ROLES_BUTTON_ID,
+            row=row,
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
@@ -601,7 +602,7 @@ def build_link_arena_modal(after_link=None) -> discord.ui.Modal:
 
 def build_pod_guide_button(row: int | None = None) -> discord.ui.Button:
     url = f"{settings.public_site_url.rstrip('/')}/pods/guide"
-    return discord.ui.Button(label="Pod Guide", style=discord.ButtonStyle.link, emoji="📖", url=url, row=row)
+    return discord.ui.Button(label="Guide", style=discord.ButtonStyle.link, emoji="📖", url=url, row=row)
 
 
 async def _linked_arena_handle(discord_id: str) -> str | None:
