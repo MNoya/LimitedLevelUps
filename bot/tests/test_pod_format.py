@@ -128,6 +128,28 @@ def test_emit_format_unloads_cube_before_restricting_to_set():
     assert events.index("setUseCustomCardList") < events.index("setRestriction")
 
 
+def test_emit_format_mixes_every_arena_set_into_each_chaos_pack():
+    mgr = _manager(pod_format.CHAOS_CODE)
+
+    asyncio.run(mgr._emit_format())
+
+    restriction = next(args[0] for name, args in mgr.sio.calls if name == "setRestriction")
+    assert {"xln", "fin", "fra"} <= set(restriction)
+    assert ("setUseBoosterContent", (True,)) in mgr.sio.calls
+
+
+def test_emit_format_restores_set_collation_after_a_chaos_pod():
+    mgr = _manager(pod_format.CHAOS_CODE)
+    asyncio.run(mgr._emit_format())
+
+    mgr.set_code = "SOS"
+    mgr.sio.calls.clear()
+    asyncio.run(mgr._emit_format())
+
+    assert ("setRestriction", (["sos"],)) in mgr.sio.calls
+    assert ("setUseBoosterContent", (False,)) in mgr.sio.calls
+
+
 def test_emit_format_asserts_color_balance_after_a_cube_import():
     """A cube import overwrites color balance from the imported list, so the assert has to follow it."""
     mgr = _manager(PEASANT_CODE)

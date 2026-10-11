@@ -15,7 +15,9 @@ from discord import ui
 from bot import emojis
 from bot.services import pod_format_interest as fi
 from bot.services.pod_format import (
+    CHAOS_CODE,
     CUSTOM_FORMATS,
+    PEASANT_CODE,
     SELECT_PLACEHOLDER,
     custom_formats,
     format_applied_message,
@@ -64,7 +66,8 @@ def format_options(current_code: str | None, when: datetime | None = None) -> li
     active = active_set_code(when)
     preview = preview_picker_sets(when)
     recent = flashback_picker_sets(when)
-    known = {active} | {seed.code for seed in preview} | {seed.code for seed in recent} | set(CUSTOM_FORMATS)
+    picker_sets = {seed.code for seed in preview} | {seed.code for seed in recent}
+    known = {active, CHAOS_CODE} | picker_sets | set(CUSTOM_FORMATS)
     options = [write_in_option("Format")]
     if is_write_in_cube(current_code):
         options.append(write_in_cube_option(current_code))
@@ -89,6 +92,11 @@ def format_options(current_code: str | None, when: datetime | None = None) -> li
             emoji=emojis.set_symbol(fmt.code) or fi.cube_emoji(),
             default=(cur == fmt.code.upper()),
         ))
+        if fmt.code == PEASANT_CODE:
+            options.append(set_select_option(
+                CHAOS_CODE, label=f"Format: {set_name_for(CHAOS_CODE)}",
+                description="Mixed packs from every Arena set", default=(cur == CHAOS_CODE),
+            ))
     for seed in recent:
         options.append(set_select_option(
             seed.code, label=f"Format: {seed.code}",

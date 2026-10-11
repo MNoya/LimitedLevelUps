@@ -855,18 +855,7 @@ class PodDraftManager:
         return True
 
     async def _emit_format(self) -> str | None:
-        """
-        Point the session at the current `set_code`: a registered cube → importCube, else a  plain set → setRestriction.
-        Returns an error string on cube-import failure, else None.
-
-        A cube import leaves Draftmancer's `useCustomCardList` flag on, and booster generation reads that
-        flag before the set restriction, so a switch from a cube to a set has to turn it off or the pod
-        drafts the cube it came from.
-
-        Color balance is on for cubes and off for plain sets, so a set drafts the way real Play Booster packs
-        do while a cube keeps every color present. An import overwrites the flag from the imported list, so it
-        is re-asserted on every format emit.
-        """
+        """Point the session at `set_code` via a card list, importCube or setRestriction; returns the load error"""
         card_list = pod_format.card_list_for(self.set_code)
         if card_list is not None:
             err = await self._parse_custom_card_list(card_list)
@@ -881,9 +870,16 @@ class PodDraftManager:
                 return err
         else:
             await self.sio.emit("setUseCustomCardList", False)
-            await self.sio.emit("setRestriction", [self.set_code.lower()])
+            await self.sio.emit("setRestriction", pod_format.set_restriction_for(self.set_code))
+            await self._emit_booster_content()
         await self.sio.emit("setColorBalance", cube_id is not None)
         return None
+
+    async def _emit_booster_content(self) -> None:
+        mixed_packs = pod_format.is_chaos(self.set_code)
+        if mixed_packs:
+            await self.sio.emit("setBoosterContent", {"common": 11, "uncommon": 3, "rare": 1, "bonus": 0})
+        await self.sio.emit("setUseBoosterContent", mixed_packs)
 
     async def _post_format_error(self, err: str) -> None:
         thread = await self._fetch_thread()

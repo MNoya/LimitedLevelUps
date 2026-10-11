@@ -59,6 +59,8 @@ MEMA_SESSION_SLUG = "MEMA"
 MEMA_LINK_TEXT = "Middle-Earth Masters"
 MEMA_PICK_LABEL = "Middle-Earth Masters"
 
+CHAOS_CODE = "CHAOS"
+
 SAMP_CODE = "SAMP"
 SAMP_LABEL = "samp Cube"
 SAMP_CUBE_ID = "samp"
@@ -79,7 +81,7 @@ CUSTOM_FORMATS: dict[str, PodFormat] = {
         command_name="sampcube", hidden=True),
 }
 
-BALLOT_EXTRA_CODES: tuple[str, ...] = (MEMA_CODE, "CHAOS")
+BALLOT_EXTRA_CODES: tuple[str, ...] = (MEMA_CODE, CHAOS_CODE)
 
 _CARD_LIST_CACHE: dict[str, str] = {}
 
@@ -186,6 +188,20 @@ def is_latest_set(code: str | None) -> bool:
 def cube_id_for(code: str) -> str | None:
     fmt = _format_for(code)
     return fmt.cube_id if fmt else None
+
+
+def is_chaos(code: str | None) -> bool:
+    return bool(code) and code.upper() == CHAOS_CODE
+
+
+def set_restriction_for(code: str) -> list[str]:
+    if not is_chaos(code):
+        return [code.lower()]
+    arena_sets = (
+        "xln rix dom m19 grn rna war m20 eld thb iko m21 akr znr klr khm stx afr mid vow neo snc dmu bro one sir "
+        "mom mat ltr woe lci ktk mkm otj mh3 blb dsk fdn pio dft tdm fin eoe om1 tla ecl tmt sos msh hob fra"
+    )
+    return arena_sets.split()
 
 
 def card_list_for(code: str | None) -> str | None:

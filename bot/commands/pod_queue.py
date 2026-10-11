@@ -30,10 +30,10 @@ from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
 from bot.services.pod_draft_manager import set_event_pick_timer
 from bot.services.pod_format import (
-    custom_formats, default_pick_timer_for, format_display, is_custom, is_write_in_cube, resolve_write_in,
+    default_pick_timer_for, format_display, is_custom, is_write_in_cube, resolve_write_in,
 )
 from bot.services.pod_format_select import (
-    WRITE_IN_VALUE, set_select_option, write_in_cube_option, write_in_option,
+    WRITE_IN_VALUE, format_options,
 )
 from bot.services.pod_pairing_select import SELECT_PLACEHOLDER as PAIRING_PLACEHOLDER
 from bot.services.pod_pairing_select import pairing_options
@@ -61,7 +61,7 @@ from bot.services.pod_signals import (
     should_fire,
     teardown_at,
 )
-from bot.sets import active_set_code, flashback_picker_sets, preview_picker_sets, set_name_for
+from bot.sets import active_set_code
 
 
 log = logging.getLogger(__name__)
@@ -458,46 +458,9 @@ class DraftLauncherView(discord.ui.View):
         ))
 
 
-def _set_options(current: str | None) -> list[discord.SelectOption]:
-    """The set dropdown: the active set (default), any curated preview set, the registered cubes, the
-    curated flashback sets, then a write-in for any other code, each carrying its keyrune emoji when one is
-    loaded. Cubes sit right under the latest set. Any set outside the list is reachable through the write-in,
-    and a written-in current shows as its own defaulted option so it survives re-render."""
-    active = active_set_code()
-    active_upper = active.upper()
-    chosen = (current or active).upper()
-    preview = preview_picker_sets()
-    recent = [seed.code for seed in flashback_picker_sets()]
-    cubes = custom_formats()
-    known = ({active_upper} | {seed.code for seed in preview} | {fmt.code for fmt in cubes}
-             | {code.upper() for code in recent})
-
-    options: list[discord.SelectOption] = [write_in_option("Format")]
-    if is_write_in_cube(current):
-        options.append(write_in_cube_option(current, "Format"))
-    elif chosen not in known:
-        options.append(set_select_option(
-            chosen, label=f"Format: {chosen}", description=set_name_for(chosen), default=True))
-    options.append(set_select_option(
-        active, label=f"Format: {active}", description=f"Latest Set: {set_name_for(active)}",
-        default=(chosen == active_upper)))
-    for seed in preview:
-        options.append(set_select_option(
-            seed.code, label=f"Format: {seed.code}", description=set_name_for(seed.code),
-            default=(chosen == seed.code)))
-    for fmt in cubes:
-        options.append(discord.SelectOption(
-            label=f"Format: {fmt.label}", value=fmt.code, description=f"CubeCobra: {fmt.cube_id}",
-            emoji=emojis.set_symbol(fmt.code) or fi.cube_emoji(), default=(chosen == fmt.code)))
-    for code in recent:
-        options.append(set_select_option(
-            code, label=f"Format: {code}", description=set_name_for(code), default=(chosen == code)))
-    return options
-
-
 class _LauncherSetSelect(discord.ui.Select):
     def __init__(self, current: str | None, row: int | None = None) -> None:
-        super().__init__(placeholder=SET_PLACEHOLDER, options=_set_options(current),
+        super().__init__(placeholder=SET_PLACEHOLDER, options=format_options(current),
                          min_values=1, max_values=1, row=row)
 
     async def callback(self, interaction: discord.Interaction) -> None:
