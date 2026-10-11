@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     discord_botlog_channel_name: str = "bot-spam"
     pod_draft_chat_channel_name: str = "pod-draft-chat"
     pod_draft_trophy_hype_channel_name: str = "trophy-hype"
+    pod_draft_peasant_chat_channel_name: str = "peasant-cube"
     pod_draft_target_players: int = 8
     pod_draft_voice_channel_name: str = "Pod General"
     pod_schedule_enabled: bool = True

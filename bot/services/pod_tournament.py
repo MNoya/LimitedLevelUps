@@ -55,6 +55,7 @@ from bot.services.pod_deck_color import (
     SubmitDeckView,
     format_deck_color_emojis,
 )
+from bot.services.peasant_trophy_post import is_peasant, post_peasant_trophies
 from bot.services.player_stats import leaderboard_seat_order
 from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
@@ -4364,6 +4365,9 @@ async def maybe_post_championship(manager, *, force: bool = False) -> None:
         guild = getattr(target, "guild", None)
         await swap_set_champion_role(guild, manager.champion_discord_ids)
         await grant_set_champion_title(guild, manager.set_code, manager.champion_discord_ids)
+    if is_peasant(manager.set_code):
+        podium_url = manager.champion_announcement_message.jump_url
+        await post_peasant_trophies(guild, event_id, short_event_name(event_name), podium_url)
     await _set_champion_card_result(manager, champions, player_colors)
     await _react_trophy_on_champion_screenshots(manager, deck_data, dm_info)
     if not force and manager.championship_task is not None and not manager.championship_task.done():

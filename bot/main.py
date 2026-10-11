@@ -62,6 +62,7 @@ from bot.commands.testp0p1reminder import setup as setup_testp0p1reminder
 from bot.commands.testp0p1podium import setup as setup_testp0p1podium
 from bot.commands.testawards import setup as setup_testawards
 from bot.commands.testchampcard import setup as setup_testchampcard
+from bot.commands.testpeasanttrophy import setup as setup_testpeasanttrophy
 from bot.commands.testchampionship import setup as setup_testchampionship
 from bot.commands.testcomponent import setup as setup_testcomponent
 from bot.commands.testcraft import setup as setup_testcraft
@@ -328,6 +329,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testwatchparty(bot)
         await setup_testchampionship(bot)
         await setup_testchampcard(bot)
+        await setup_testpeasanttrophy(bot)
         await setup_testmockcard(bot)
         register_pod_views(bot)
         bot.add_dynamic_items(TeamReportButton)
