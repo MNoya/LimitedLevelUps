@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 import pytest
@@ -104,6 +105,46 @@ def test_a_returned_player_is_paired_into_a_playable_match(session):
 
     assert load_dropped_names(event.id) == set()
     assert session.get(PodDraftMatch, rows[0][0]).winner_name is None
+
+
+@pytest.mark.parametrize("pairing_mode, advanced_rounds, team_settles", [
+    ("swiss", [2, 3], 0),
+    ("team", [], 1),
+])
+def test_a_drop_settles_the_pod_its_forfeits_belong_to(
+    session, monkeypatch, pairing_mode, advanced_rounds, team_settles,
+):
+    event = _event(session)
+    add_pairing(session, event.id, 2, "Finkel", "LSV", pairing_index=0)
+    add_pairing(session, event.id, 3, "Reid", "LSV", pairing_index=0)
+    session.commit()
+    advanced, settled = [], []
+    monkeypatch.setattr(pod_tournament, "load_event_pairing_mode_sync", lambda _event_id: pairing_mode)
+    monkeypatch.setattr(pod_tournament, "announce_round_result", _noop)
+
+    async def record_advance(_client, _event_id, round_num):
+        advanced.append(round_num)
+
+    async def record_settle(_client, event_id):
+        settled.append(event_id)
+
+    monkeypatch.setattr(pod_tournament, "_maybe_advance", record_advance)
+    monkeypatch.setattr(pod_tournament, "settle_team_board_for_event", record_settle)
+    forfeited = apply_drop(event.id, "LSV", 2)
+
+    asyncio.run(_settle_and_drain(event.id, forfeited))
+
+    assert sorted(advanced) == advanced_rounds
+    assert len(settled) == team_settles
+
+
+async def _settle_and_drain(event_id: str, forfeited: list[str]) -> None:
+    await pod_tournament.settle_auto_forfeits(None, event_id, forfeited)
+    await asyncio.sleep(0)
+
+
+async def _noop(*_args, **_kwargs) -> None:
+    return None
 
 
 def test_a_dropped_player_keeps_only_the_matches_they_played(session):

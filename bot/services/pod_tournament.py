@@ -1874,6 +1874,8 @@ class FixPairingView(ui.View):
         await _refresh_round_message_after_edit(
             interaction.client, self.round_message, self.event_id, self.round_num, match_id,
         )
+        if await asyncio.to_thread(load_event_pairing_mode_sync, self.event_id) == "team":
+            await settle_team_board_for_event(interaction.client, self.event_id)
         a_disp = _roster_display(self.roster, self.selected_a)
         b_disp = _roster_display(self.roster, self.selected_b)
         url = self.round_message.jump_url if self.round_message is not None else None
@@ -5532,6 +5534,7 @@ async def settle_auto_forfeits(bot_client, event_id: str, match_ids: list[str]) 
     forfeited = await asyncio.to_thread(auto_reported_results_sync, event_id, match_ids)
     if not forfeited:
         return
+    team_pod = await asyncio.to_thread(load_event_pairing_mode_sync, event_id) == "team"
     for round_num, round_ids in (await asyncio.to_thread(
         forfeited_rounds_sync, event_id, list(forfeited),
     )).items():
@@ -5542,7 +5545,17 @@ async def settle_auto_forfeits(bot_client, event_id: str, match_ids: list[str]) 
                 await announce_round_result(
                     bot_client, event_id, format_round_announcement(round_num, state, pairings_url),
                 )
-        asyncio.create_task(_maybe_advance(bot_client, event_id, round_num))
+        if not team_pod:
+            asyncio.create_task(_maybe_advance(bot_client, event_id, round_num))
+    if team_pod:
+        await settle_team_board_for_event(bot_client, event_id)
+
+
+async def settle_team_board_for_event(bot_client, event_id: str) -> None:
+    from bot.services.pod_team_board import load_team_board_data, settle_team_board
+
+    data = await asyncio.to_thread(load_team_board_data, event_id)
+    await settle_team_board(bot_client, event_id, data)
 
 
 def _load_pod_player_names(event_id: str) -> list[str]:

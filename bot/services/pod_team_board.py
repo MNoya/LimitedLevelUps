@@ -621,6 +621,13 @@ async def handle_team_report(
     if finished:
         asyncio.create_task(deck_recovery_scan(interaction.client, event_id, finished))
 
+    await settle_team_board(interaction.client, event_id, data, board_message)
+
+
+async def settle_team_board(
+    client: discord.Client, event_id: str, data: TeamBoardData, board_message: discord.Message | None = None,
+) -> None:
+    """Finalize a team pod whose last result just landed, then repaint its board and round reveals"""
     if await _maybe_finalize(event_id, data):
         data = await asyncio.to_thread(load_team_board_data, event_id)
     else:
@@ -630,7 +637,7 @@ async def handle_team_report(
 
             asyncio.create_task(maybe_post_team_trophy_hype(manager))
     await refresh_board_messages(event_id, data, board_message)
-    await sync_round_reveals(event_id, data, board_message, interaction.client)
+    await sync_round_reveals(event_id, data, board_message, client)
 
 
 def _player_has_no_pending(data: TeamBoardData, name: str) -> bool:
