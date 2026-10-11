@@ -1,7 +1,9 @@
 import contextlib
 
+import pytest
+
 import bot.services.pod_link_dm as link_dm
-from bot.services.pod_link_dm import build_link_dm
+from bot.services.pod_link_dm import build_link_dm, thread_link
 
 
 def _button_urls(view):
@@ -66,3 +68,18 @@ def test_resolve_recipients_drops_optouts_dedups_and_attaches_handle(monkeypatch
     result = link_dm._resolve_recipients(recipients)
 
     assert result == [("1", "Ann#1", "yes"), ("3", None, "maybe")]
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("FRA Oct 10 Late Pod 1", "[**__FRA Oct 10 Late Pod 1__**](https://x/9)"),
+        ("👑 FRA Set Championship", "👑 [**__FRA Set Championship__**](https://x/9)"),
+        ("FRA Pod 👑", "[**__FRA Pod__**](https://x/9) 👑"),
+        ("1️⃣ FRA Pod", "[**__FRA Pod__**](https://x/9)"),
+    ],
+)
+def test_thread_link_keeps_emoji_out_of_the_label(name, expected):
+    link = thread_link(name, "https://x/9")
+
+    assert link == expected

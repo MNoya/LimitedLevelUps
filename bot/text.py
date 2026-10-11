@@ -24,7 +24,7 @@ _COLLAPSE_WS = re.compile(r"\s{2,}")
 def link_with_emoji(text: str, url: str) -> str:
     """Markdown link with emoji moved out of the label: leading emoji before it, trailing after, interior dropped.
 
-    Discord mis-renders a link whose `[label]` starts or ends with an emoji, so the label must be emoji-free.
+    Discord mis-renders a link whose `[label]` carries an emoji anywhere, so the label must be emoji-free.
     """
     leading, core, trailing = partition_emoji(text)
     link = f"[{core}]({url})"

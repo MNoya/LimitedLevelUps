@@ -36,6 +36,7 @@ from bot.discord_helpers import BLANK_LINE, fetch_dm_user
 from bot.services.ping_roles import build_link_arena_modal, format_join_line
 from bot.services.pod_drafts import dm_draft_link_enabled, player_arena_handle
 from bot.services.pod_staging import FamilyPod, pod_numeral
+from bot.text import partition_emoji
 
 
 log = logging.getLogger(__name__)
@@ -83,10 +84,11 @@ def plain_link_text(name: str) -> str:
 
 
 def thread_link(name: str, url: str, *, decorated: bool = False) -> str:
-    """A thread as bold underlined link text carrying its name, with any numeral taken out."""
-    link = f"[**__{plain_link_text(name)}__**]({url})"
-    emoji = emojis.get("manat") if decorated else None
-    return f"{link} {emoji}" if emoji else link
+    """A thread as bold underlined link text, with its emoji moved beside the label where Discord renders them"""
+    leading, core, trailing = partition_emoji(plain_link_text(name))
+    lookup = emojis.get("manat") if decorated else None
+    parts = [leading, f"[**__{core}__**]({url})", trailing, lookup]
+    return " ".join(part for part in parts if part)
 
 
 def pod_thread_link(guild_id: int, pod: FamilyPod) -> str:

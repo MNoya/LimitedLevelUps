@@ -65,6 +65,7 @@ from bot.commands.testchampcard import setup as setup_testchampcard
 from bot.commands.testchampionship import setup as setup_testchampionship
 from bot.commands.testcomponent import setup as setup_testcomponent
 from bot.commands.testcraft import setup as setup_testcraft
+from bot.commands.testdms import setup as setup_testdms
 from bot.commands.testlobby import setup as setup_testlobby
 from bot.commands.testmockcard import setup as setup_testmockcard
 from bot.commands.testsandbox import SandboxButton, setup as setup_testsandbox
@@ -320,6 +321,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testpolls(bot)
         await setup_testscribe(bot)
         await setup_testcraft(bot)
+        await setup_testdms(bot)
         await setup_testformatschedule(bot)
         await setup_testwatchparty(bot)
         await setup_testchampionship(bot)

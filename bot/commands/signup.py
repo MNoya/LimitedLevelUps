@@ -184,10 +184,10 @@ class Signup(commands.Cog):
         try:
             dm = await interaction.user.create_dm()
             if in_guild:
-                await _send_signup_instructions(dm.send)
+                await send_signup_instructions(dm.send)
                 await interaction.followup.send(MSG_DM_SENT, ephemeral=True)
             else:
-                await _send_signup_instructions(interaction.followup.send)
+                await send_signup_instructions(interaction.followup.send)
         except discord.Forbidden:
             audit.event("signup_dms_disabled", user_id=user_id, username=username)
             logger.warning(f"join: {username} DMs blocked")
@@ -258,7 +258,7 @@ async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Signup(bot))
 
 
-async def _send_signup_instructions(send) -> None:
+async def send_signup_instructions(send) -> None:
     content = INSTRUCTIONS.format(hello=emojis.prefix("chordoHello"))
     await send_token_instructions(send, content)
 

@@ -57,9 +57,9 @@ from bot.services.pod_draft_manager import (
     cancel_manager_tasks,
     start_manager,
 )
-from bot.services.pod_drafts import draftmancer_url_for, player_arena_handle, seed_event_participants
+from bot.services.pod_drafts import draftmancer_url_for, seed_event_participants
 from bot.services.pod_join_button import build_join_view
-from bot.services.pod_link_dm import build_link_dm, format_thread_ref, send_lobby_link_dms, try_dm
+from bot.services.pod_link_dm import send_lobby_link_dms
 from bot.sets import active_set_code
 from bot.services.pod_format import format_display
 from bot.services.pod_pairing_select import DEFAULT_PAIRING_MODE, pairing_change_message, pairing_label
@@ -112,7 +112,6 @@ from bot.services.pod_tournament import (
     ManageRoundsPickerView,
     OrganizerDeckPanel,
     ParticipantDeckData,
-    RoundResultsView,
     actor_label,
     build_capture_submit_deck_button,
     build_live_deck_description_button,
@@ -120,9 +119,6 @@ from bot.services.pod_tournament import (
     build_deck_ping,
     build_final_report_ping,
     build_draft_review_message,
-    build_live_deck_color_select_view,
-    build_pairing_dm_embed,
-    build_submit_deck_dm_embed,
     build_trophy_hype_view,
     mark_trophy_match,
     pod_page_url,
@@ -485,59 +481,6 @@ async def _start_live_test_pod(ctx, mode: str, count: int = 8) -> None:
     await start_tournament(manager)
 
 
-async def _preview_link_dms(ctx) -> None:
-    """The `dmlink` path: DM the caller both lobby-open DM strings (linked + unlinked) against this
-    channel, so every string can be reviewed in one inbox regardless of link state."""
-    session_id = f"{active_set_code()}-TestOpen"
-    thread_ref = format_thread_ref(ctx.channel)
-    handle = await asyncio.to_thread(_arena_handle_for, str(ctx.author.id))
-    linked_body, linked_view = build_link_dm(
-        session_id=session_id, thread_ref=thread_ref,
-        arena_name=handle or "YourArena#12345", rsvp="yes",
-    )
-    unlinked_body, unlinked_view = build_link_dm(
-        session_id=session_id, thread_ref=thread_ref, arena_name=None, rsvp="maybe",
-    )
-    landed = 0
-    for body, view in ((linked_body, linked_view), (unlinked_body, unlinked_view)):
-        if await try_dm(ctx.bot, str(ctx.author.id), body, view):
-            landed += 1
-    if landed:
-        note = "" if handle else " (no Arena linked, so the linked DM used a placeholder handle)"
-        await ctx.send(f"🧪 Sent {landed}/2 link DMs to your DMs.{note}")
-    else:
-        await ctx.send("⚠️ Couldn't DM you, open DMs from server members and try again")
-
-
-async def _preview_round_dm(ctx) -> None:
-    """DM the caller the round pairing DM before and after a result, plus the Submit Deck colors DM"""
-    pairings_url = ctx.message.jump_url
-    open_state = {
-        "match_id": "dmpreview-1",
-        "a_name": _INVOKER_SEAT, "b_name": "Eli",
-        "a_display": ctx.author.display_name, "b_display": "Eli",
-        "winner_name": None, "score": None,
-    }
-    played_state = {**open_state, "winner_name": _INVOKER_SEAT, "score": "2-1"}
-
-    try:
-        for match_state in (open_state, played_state):
-            embed = build_pairing_dm_embed(
-                round_num=1, opponent_label="**Eli**", opponent_arena="Eli#10005",
-                pairings_url=pairings_url, event_name="Testlobby Live Pod",
-                match_state=match_state, viewer_is_a=True,
-            )
-            await ctx.author.send(embed=embed, view=RoundResultsView([match_state]))
-        await ctx.author.send(
-            embed=build_submit_deck_dm_embed(None),
-            view=build_live_deck_color_select_view(None),
-        )
-    except discord.Forbidden:
-        await ctx.send("⚠️ Couldn't DM you, open DMs from server members and try again")
-        return
-    await ctx.send("🧪 Sent 3 DMs: pairing, result, deck colors")
-
-
 _TEST_LOBBY_THREAD_NAME = "Pod Draft Test"
 
 
@@ -585,11 +528,6 @@ async def _clear_test_lobby_threads(parent) -> None:
             await thread.delete()
         except discord.HTTPException:
             pass
-
-
-def _arena_handle_for(discord_id: str) -> str | None:
-    with SessionLocal() as session:
-        return player_arena_handle(session, discord_id)
 
 
 def _unlink_arena(discord_id: str) -> bool:
@@ -1405,7 +1343,7 @@ _LINKED_EIGHT: list[tuple[str, str]] = [
 _VALID_STATES = (
     "empty", "partial", "linked", "unlinked", "ready", "held", "notready", "titles",
     "readyunlinked", "readyteam", "readypick2", "readycancel", "waiting",
-    "drafting", "complete", "submit", "deckpanel", "lobby", "lobbyopen", "dmlink", "dmround", "unlink",
+    "drafting", "complete", "submit", "deckpanel", "lobby", "lobbyopen", "unlink",
     "podbracket", "podswiss", "podrandom",
     "podteam", "podteamvote", "chat",
     "format", "seeding", "trophyhype", "champ", "podium", "round1", "round2", "round3",
@@ -1840,10 +1778,7 @@ async def setup(bot: commands.Bot) -> None:
         settings.
         `lobbyopen` posts the real lobby-open message and its Join Draft button — click it to get the
         ephemeral link with your Arena name pre-filled, or the Link Arena nudge when unlinked.
-        `dmlink` DMs you both lobby-open link DMs (linked + unlinked) and the opt-in test DM, so every
-        DM string can be reviewed in a real inbox without a live lobby. `dmround` DMs you the Round 1
-        pairing DM twice (the pairing then the same DM with a result in) plus the Submit Deck colors DM,
-        so all three can be checked in a real inbox without driving a whole pod. `unlink` clears your own Arena
+        Every DM the bot sends is reviewed with `!test dms`. `unlink` clears your own Arena
         handle so the unlinked Join Draft nudge can be replayed; re-link with the Link Arena button.
         `voicelink [url]` posts the voice offer, with the bot's own guest invite or the link you pass, so
         the same URL can be compared side by side with one you post yourself.
@@ -1940,14 +1875,6 @@ async def setup(bot: commands.Bot) -> None:
                 body, view=build_join_view(session_id),
                 allowed_mentions=discord.AllowedMentions(users=True),
             )
-            return
-
-        if state == "dmlink":
-            await _preview_link_dms(ctx)
-            return
-
-        if state == "dmround":
-            await _preview_round_dm(ctx)
             return
 
         if state == "unlink":

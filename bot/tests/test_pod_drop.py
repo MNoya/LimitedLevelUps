@@ -123,10 +123,10 @@ def test_a_bye_dm_reads_from_each_side_of_the_match():
         "winner_name": "Finkel", "score": BYE_SCORE,
     }
 
-    def body(viewer_is_a: bool) -> str:
+    def result(viewer_is_a: bool) -> str:
         return pod_tournament.build_pairing_dm_embed(
-            round_num=2, opponent_label="x", opponent_arena=None, pairings_url=None,
+            round_num=2, opponent_name="x", opponent_arena=None, pairings_url=None,
             match_state=forfeit, viewer_is_a=viewer_is_a,
-        ).description
+        ).fields[0].name
 
-    assert body(viewer_is_a=True) != body(viewer_is_a=False)
+    assert result(viewer_is_a=True) != result(viewer_is_a=False)

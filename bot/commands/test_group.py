@@ -11,6 +11,7 @@ surface that creates real pods, signals, or roles can only be driven in the test
 """
 from __future__ import annotations
 
+import random
 from typing import Awaitable, Callable
 
 from discord.ext import commands
@@ -70,6 +71,14 @@ async def refused_on_production(ctx: commands.Context, name: str) -> bool:
         return False
     await ctx.send(MSG_TEST_PRODUCTION_BLOCKED.format(name=name))
     return True
+
+
+def random_hall_of_famers(count: int) -> list[str]:
+    return random.sample(HALL_OF_FAME, count)
+
+
+def fake_arena_id(name: str) -> str:
+    return f"{name.replace(' ', '')}#{random.randint(10000, 99999)}"
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -164,6 +164,7 @@ MSG_RETURN_NOBODY_DROPPED = "Nobody in this pod has dropped"
 DROP_EMOJI = "🏳️"
 RETURN_EMOJI = "↩️"
 BYE_EMOJI = "🏳️"
+MATCH_EMOJI = "⚔️"
 POD_PAIRING_FAILED_MSG = (
     "⚠️ Round {round_num} pairings couldn't be generated. Reported results are safe, but the next "
     "round won't post on its own. An Organizer needs to start it."
@@ -529,7 +530,7 @@ def _build_standings_row(
 def build_pairing_dm_embed(
     *,
     round_num: int,
-    opponent_label: str,
+    opponent_name: str,
     opponent_arena: str | None,
     pairings_url: str | None,
     event_name: str | None = None,
@@ -537,69 +538,59 @@ def build_pairing_dm_embed(
     match_state: dict | None = None,
     viewer_is_a: bool | None = None,
 ) -> discord.Embed:
-    """Single source of truth for round-start + pairings-updated DMs.
-
-    `opponent_label` is the pre-formatted opponent string — see `_opponent_dm_label`. When
-    `match_state` carries a winner, a status line ('✅ You won 2-1' / '❌ You lost 2-0' /
-    '🚫 Not played' / the bye line) is appended; the line's
-    perspective is set by `viewer_is_a` (True if the recipient is player_a in the match).
-    An odd field's bye has no opponent to name, so that DM carries the bye line alone.
-    """
-    short = short_event_name(event_name)
-    has_result = bool(match_state) and bool(match_state.get("winner_name"))
-    if has_result:
-        suffix = "Reported"
+    """Round-start, re-pair and result DMs, the opponent's Arena ID alone in the body so Copy Text takes only the ID"""
+    result_line = _dm_result_line(match_state, viewer_is_a)
+    if result_line is not None:
+        suffix, color = "Reported", discord.Color.dark_grey()
     elif updated:
-        suffix = "Updated"
+        suffix, color = "Updated", discord.Color.yellow()
     else:
-        suffix = "Started"
-    title_round = f"Round {round_num} {suffix}"
-    title = f"{short} - {title_round}" if short else title_round
+        suffix, color = "Started", discord.Color.green()
+    round_label = f"Round {round_num} {suffix}"
+    short = short_event_name(event_name)
+    embed = discord.Embed(color=color)
+    embed.set_author(name=f"{short} - {round_label}" if short else round_label)
 
-    mtga = emojis.get("mtga")
-    arena_part = f" {mtga} `{opponent_arena}`" if opponent_arena else ""
     no_opponent = bool(match_state) and BYE_NAME in (match_state.get("a_name"), match_state.get("b_name"))
-    body_lines = [] if no_opponent else [f"Opponent: {opponent_label}{arena_part}"]
+    if not no_opponent:
+        embed.title = f"{MATCH_EMOJI} Opponent: {opponent_name}"
+        embed.description = opponent_arena
+        mtga = emojis.get_emoji("mtga")
+        if mtga is not None:
+            embed.set_thumbnail(url=mtga.url)
 
-    if match_state and match_state.get("winner_name"):
-        winner = match_state["winner_name"]
-        score = match_state.get("score") or ""
-        you_won = None
-        if viewer_is_a is not None:
-            winner_is_a = winner.lower() == (match_state.get("a_name") or "").lower()
-            you_won = winner_is_a if viewer_is_a else not winner_is_a
-        if winner == SKIPPED_SENTINEL:
-            body_lines.append("🚫 Not played")
-        elif score == BYE_SCORE:
-            body_lines.append(MSG_DM_DROPPED if you_won is False else MSG_DM_BYE)
-        elif you_won is not None:
-            body_lines.append(f"✅ You won {score}" if you_won else f"▫️ You lost {score}")
-        else:
-            body_lines.append(f"Result: {winner} {score}")
-
+    blank = "\u200b"
+    pairings_line = None
     if pairings_url:
         link_prefix = emojis.get("manat") or "↳"
-        body_lines.append(f"{link_prefix} [**View Pairings**]({pairings_url})")
-
-    if has_result:
-        color = discord.Color.dark_grey()
-    elif updated:
-        color = discord.Color.yellow()
-    else:
-        color = discord.Color.green()
-    return discord.Embed(
-        title=title,
-        description="\n".join(body_lines),
-        color=color,
-    )
+        pairings_line = f"{link_prefix} [**View Pairings**]({pairings_url})"
+    if result_line or pairings_line:
+        embed.add_field(name=result_line or blank, value=pairings_line or blank, inline=False)
+    return embed
 
 
-def _opponent_dm_label(opponent, fallback_key: str) -> str:
-    """Opponent name for a pod DM. DMs have no guild context, so the server nickname is rendered as
-    text — a `<@id>` mention would resolve to the opponent's global username instead. `display_name`
-    already carries the resolved LLU nickname (see `participant_dm_info`)."""
-    name = opponent.display_name if opponent else fallback_key
-    return f"**{name}**"
+def _dm_result_line(match_state: dict | None, viewer_is_a: bool | None) -> str | None:
+    """The reported result from the recipient's side, or None while the match is open"""
+    if not match_state or not match_state.get("winner_name"):
+        return None
+    winner = match_state["winner_name"]
+    score = match_state.get("score") or ""
+    you_won = None
+    if viewer_is_a is not None:
+        winner_is_a = winner.lower() == (match_state.get("a_name") or "").lower()
+        you_won = winner_is_a if viewer_is_a else not winner_is_a
+    if winner == SKIPPED_SENTINEL:
+        return "🚫 Not played"
+    if score == BYE_SCORE:
+        return MSG_DM_DROPPED if you_won is False else MSG_DM_BYE
+    if you_won is not None:
+        return f"✅ You won {score}" if you_won else f"▫️ You lost {score}"
+    return f"Result: {winner} {score}"
+
+
+def _opponent_dm_name(opponent, fallback_key: str) -> str:
+    """The opponent's LLU nickname as plain text, since a DM has no guild to resolve a mention against"""
+    return opponent.display_name if opponent else fallback_key
 
 
 async def _send_pairing_dm(
@@ -620,14 +611,14 @@ async def _send_pairing_dm(
     if recipient is None or not recipient.discord_id:
         return
     opponent = dm_info.get(opponent_key)
-    opp_label = _opponent_dm_label(opponent, opponent_key)
+    opp_name = _opponent_dm_name(opponent, opponent_key)
     opp_arena = opponent.arena_name if opponent else None
     viewer_is_a = None
     if match_state:
         viewer_is_a = recipient_key == normalize_player_name(match_state.get("a_name") or "")
     embed = build_pairing_dm_embed(
         round_num=round_num,
-        opponent_label=opp_label,
+        opponent_name=opp_name,
         opponent_arena=opp_arena,
         pairings_url=pairings_url,
         event_name=event_name,
@@ -1112,13 +1103,10 @@ def build_live_deck_color_select_view(current_value: str | None = None) -> DeckC
 
 
 def build_submit_deck_dm_embed(deck_colors: str | None) -> discord.Embed:
-    """Embed body for the Submit Deck DM. Pre-submit shows the prompt; post-submit collapses to
-    SAVED_MSG (the dropdown default already conveys the saved value visually)."""
+    """The Submit Deck DM: the prompt until colors are picked, then a green saved notice"""
     if deck_colors is not None:
-        body = SAVED_MSG
-    else:
-        body = "🎨 **Submit your deck colors with the dropdown below**"
-    return discord.Embed(description=body)
+        return discord.Embed(description=SAVED_MSG, color=discord.Color.green())
+    return discord.Embed(description="🎨 **Submit your deck colors with the dropdown below**")
 
 
 async def send_submit_deck_dms(bot_client, event_id: str) -> None:
@@ -1546,7 +1534,7 @@ class MatchResultSelect(ui.Select):
             a_disp = a_display or a_name
             b_disp = b_display or b_name
             base = f"🏆 {a_disp} vs {b_disp} 🏆" if is_trophy_match else f"{a_disp} vs {b_disp}"
-            placeholder = base if selected_value else f"⚔️ {base}"
+            placeholder = base if selected_value else f"{MATCH_EMOJI} {base}"
             values = [
                 (f"{a_disp} wins: 2-0", f"{a_disp} wins 2-0 vs {b_disp}", f"{match_id}|{a_name}|2-0", True),
                 (f"{a_disp} wins: 2-1", f"{a_disp} wins 2-1 vs {b_disp}", f"{match_id}|{a_name}|2-1", True),
@@ -2425,10 +2413,10 @@ def _build_dm_match_view(
         match_state["b_name"] if viewer_is_a else match_state["a_name"]
     )
     opponent = dm_info.get(opp_key)
-    opp_label = _opponent_dm_label(opponent, opp_key)
+    opp_name = _opponent_dm_name(opponent, opp_key)
     embed = build_pairing_dm_embed(
         round_num=round_num,
-        opponent_label=opp_label,
+        opponent_name=opp_name,
         opponent_arena=opponent.arena_name if opponent else None,
         pairings_url=pairings_url,
         event_name=event_name,
@@ -2516,7 +2504,7 @@ def build_report_card_embed(
         opponent = dm_info.get(opponent_key)
         arena = opponent.arena_name if opponent else None
         arena_part = f" {mtga} `{arena}`" if arena else ""
-        lines.append(f"Round {round_num}: {_opponent_dm_label(opponent, opponent_key)}{arena_part}")
+        lines.append(f"Round {round_num}: **{_opponent_dm_name(opponent, opponent_key)}**{arena_part}")
     return discord.Embed(
         title="Report Your Match" if len(open_matches) == 1 else "Report Your Matches",
         description="\n".join(lines),
@@ -3461,8 +3449,8 @@ def round_header(round_num: int, complete: bool, *, seated: bool = True) -> str:
     if complete:
         return f"✅ Round {round_num} complete!"
     if round_num == 1:
-        return f"⚔️ Round {round_num} Pairings {'by Seats' if seated else '(Random)'} ⚔️"
-    return f"⚔️ Round {round_num} Pairings ⚔️"
+        return f"{MATCH_EMOJI} Round {round_num} Pairings {'by Seats' if seated else '(Random)'} {MATCH_EMOJI}"
+    return f"{MATCH_EMOJI} Round {round_num} Pairings {MATCH_EMOJI}"
 
 
 _ROUND_TITLE_RE = re.compile(r"Round (\d+)")  # restart recovery reads the round number back out of round_header titles
@@ -3943,11 +3931,11 @@ async def _dm_changed_opponents(
         if info is None or not info.discord_id:
             continue
         opp_info = dm_info.get(normalize_player_name(new_opp))
-        opp_label = _opponent_dm_label(opp_info, new_opp)
+        opp_name = _opponent_dm_name(opp_info, new_opp)
         opp_arena = opp_info.arena_name if opp_info else None
         embed = build_pairing_dm_embed(
             round_num=round_num,
-            opponent_label=opp_label,
+            opponent_name=opp_name,
             opponent_arena=opp_arena,
             pairings_url=pairings_url,
             event_name=event_name,
@@ -5243,13 +5231,13 @@ def _match_line(m: dict, *, seat_label: str | None = None, show_arena: bool = Fa
         a_disp = name_with_arena(a_disp, m.get("a_arena"))
         b_disp = name_with_arena(b_disp, m.get("b_arena"))
     if seat_label:
-        return f"⚔️{NBSP}{NBSP}{a_disp} vs {b_disp} {seat_label}"
+        return f"{MATCH_EMOJI}{NBSP}{NBSP}{a_disp} vs {b_disp} {seat_label}"
     a_wl, b_wl = _parse_wl(m["a_record"]), _parse_wl(m["b_record"])
     if a_wl != b_wl:
         if (b_wl[0], -b_wl[1]) > (a_wl[0], -a_wl[1]):
             a_disp, b_disp, a_wl, b_wl = b_disp, a_disp, b_wl, a_wl
-        return f"⚔️{NBSP}{NBSP}{a_disp} ({a_wl[0]}-{a_wl[1]}) vs {b_disp} ({b_wl[0]}-{b_wl[1]})"
-    return f"⚔️{NBSP}{NBSP}{a_disp} vs {b_disp}"
+        return f"{MATCH_EMOJI}{NBSP}{NBSP}{a_disp} ({a_wl[0]}-{a_wl[1]}) vs {b_disp} ({b_wl[0]}-{b_wl[1]})"
+    return f"{MATCH_EMOJI}{NBSP}{NBSP}{a_disp} vs {b_disp}"
 
 
 def _round1_lines(match_states: list[dict], seated: bool) -> list[str]:
