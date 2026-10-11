@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 import discord
 
@@ -139,6 +140,7 @@ def test_re_arming_keeps_the_answers_of_seats_still_in_the_lobby():
     mgr.ready_check_active = True
     mgr.ready_discord_ids = {"0", "1"}
     mgr.ready_socket_ids = {"2", "7"}
+    _answered_now(mgr)
     mgr.session_users = [{"userID": str(i), "userName": str(i)} for i in range(7)]
     mgr._classify_users = _classify_as_linked
     mgr._show_progress_card = _async_noop
@@ -297,6 +299,7 @@ def test_a_resumed_check_carries_the_earlier_answers_and_drops_seats_that_left()
     mgr.ready_check_active = True
     mgr.ready_discord_ids = {"0", "7"}
     mgr.not_ready_ids = {"1"}
+    _answered_now(mgr)
     asyncio.run(mgr.stop_ready_check(actor="Finkel"))
 
     mgr.session_users = [{"userID": str(i), "userName": str(i)} for i in range(7)]
@@ -307,6 +310,30 @@ def test_a_resumed_check_carries_the_earlier_answers_and_drops_seats_that_left()
     assert mgr.ready_discord_ids == {"0"}
     assert mgr.not_ready_ids == {"1"}
     assert mgr.last_cancel_reason is None
+
+
+def test_a_resumed_check_forgets_answers_older_than_five_minutes():
+    ttl = pod_draft_manager._READY_ANSWER_TTL_S
+    cases = [
+        (ttl - 30, {"0"}, {"1"}),
+        (ttl + 30, set(), set()),
+    ]
+    for age_s, expected_ready, expected_not_ready in cases:
+        mgr = _setup_manager([str(i) for i in range(8)])
+        mgr.ready_check_active = True
+        mgr.ready_discord_ids = {"0"}
+        mgr.not_ready_ids = {"1"}
+        _answered_now(mgr)
+        asyncio.run(mgr.stop_ready_check(actor="Finkel"))
+        mgr._classify_users = _classify_as_linked
+        mgr._show_progress_card = _async_noop
+        for seat_id in mgr.ready_answered_at:
+            mgr.ready_answered_at[seat_id] -= age_s
+
+        asyncio.run(mgr.initiate_ready_check(_stub_thread()))
+
+        assert mgr.ready_discord_ids == expected_ready, age_s
+        assert mgr.not_ready_ids == expected_not_ready, age_s
 
 
 def test_stopping_a_check_that_is_not_running_reports_instead_of_closing():
@@ -428,6 +455,12 @@ async def _async_noop(*args, **kwargs):
 
 async def _classify_as_linked(names):
     return [(name, name) for name in names]
+
+
+def _answered_now(mgr: PodDraftManager) -> None:
+    now = time.monotonic()
+    for seat_id in mgr.ready_users | mgr.not_ready_ids:
+        mgr.ready_answered_at[seat_id] = now
 
 
 def _stub_thread():

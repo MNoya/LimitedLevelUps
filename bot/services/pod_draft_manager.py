@@ -13,6 +13,7 @@ import json
 import logging
 import random
 import re
+import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 
@@ -157,6 +158,7 @@ _BACKOFF_MAX_S = 30.0
 _BACKOFF_MAX_RETRIES = 8
 LOBBY_REHYDRATE_WINDOW = timedelta(hours=12)
 _READY_TIMEOUT_S = 180
+_READY_ANSWER_TTL_S = 300
 _READY_DEBOUNCE_S = 2.0
 _LOBBY_REFRESH_DEBOUNCE_S = 1.0
 _LOBBY_FULL_THRESHOLD = 8
@@ -376,6 +378,7 @@ class PodDraftManager:
         self.ready_discord_ids: set[str] = set()
         self.ready_socket_ids: set[str] = set()
         self.not_ready_ids: set[str] = set()
+        self.ready_answered_at: dict[str, float] = {}
         self.expected_user_ids: set[str] = set()
         self.expected_user_names: dict[str, str] = {}
         self._lobby_full_prompt_task: asyncio.Task | None = None
@@ -1103,8 +1106,8 @@ class PodDraftManager:
         success. Only the hard blockers stop it here; a short, odd, or unrecognized roster, and a lobby of
         six that could play a Team Draft, are confirmed by the caller beforehand.
 
-        Arming keeps every answer a seat still in the lobby already gave, so eight players click once.
-        `initiator` answers for itself: asking the table is as clear a statement as answering it."""
+        Arming keeps every answer under five minutes old that a seat still in the lobby gave, so eight players
+        click once. `initiator` answers for itself: asking the table is as clear a statement as answering it."""
         blocker = self.ready_check_blocker()
         if blocker:
             return blocker
@@ -1112,9 +1115,7 @@ class PodDraftManager:
         rearm = self.ready_check_active
         self.expected_user_ids = {u.get("userID") for u in non_bot}
         self.expected_user_names = {u.get("userID"): u.get("userName") for u in non_bot}
-        self.ready_discord_ids &= self.expected_user_ids
-        self.ready_socket_ids &= self.expected_user_ids
-        self.not_ready_ids &= self.expected_user_ids
+        self._keep_fresh_answers_from(self.expected_user_ids)
         self.ready_check_active = True
         self.ready_check_joined_ids = set()
         self.ready_check_left_ids = set()
@@ -1159,8 +1160,7 @@ class PodDraftManager:
         seat_id = await self.seat_id_for_discord_user(initiator)
         if seat_id is None or seat_id not in self.expected_user_ids:
             return
-        self.ready_discord_ids.add(seat_id)
-        self.not_ready_ids.discard(seat_id)
+        self._mark_ready_in_discord(seat_id)
         log.info(f"[READY] initiator_ready event={self.event_id} seat={self.seat_name(seat_id)!r}")
 
     async def _show_progress_card(
@@ -1264,12 +1264,12 @@ class PodDraftManager:
             return "No Ready Check is running"
         self._adopt_late_seat(seat_id)
         if ready:
-            self.ready_discord_ids.add(seat_id)
-            self.not_ready_ids.discard(seat_id)
+            self._mark_ready_in_discord(seat_id)
         else:
             self.ready_discord_ids.discard(seat_id)
             self.ready_socket_ids.discard(seat_id)
             self.not_ready_ids.add(seat_id)
+            self._stamp_answer(seat_id)
         log.info(
             f"[READY] discord_answer event={self.event_id} seat={self.seat_name(seat_id)!r} ready={ready} "
             f"actor={actor} ready_count={len(self.ready_users)}/{len(self.expected_user_ids)}"
@@ -1278,6 +1278,28 @@ class PodDraftManager:
         if ready:
             await self._maybe_complete_ready_check()
         return None
+
+    def _mark_ready_in_discord(self, seat_id: str) -> None:
+        self.ready_discord_ids.add(seat_id)
+        self.not_ready_ids.discard(seat_id)
+        self._stamp_answer(seat_id)
+
+    def _stamp_answer(self, seat_id: str) -> None:
+        self.ready_answered_at[seat_id] = time.monotonic()
+
+    def _keep_fresh_answers_from(self, seat_ids: set[str]) -> None:
+        cutoff = time.monotonic() - _READY_ANSWER_TTL_S
+        fresh = set()
+        for seat_id, answered_at in self.ready_answered_at.items():
+            if seat_id in seat_ids and answered_at >= cutoff:
+                fresh.add(seat_id)
+        dropped = (self.ready_users | self.not_ready_ids) - fresh
+        if dropped:
+            log.info(f"[READY] answers_dropped event={self.event_id} seats={sorted(dropped)}")
+        self.ready_discord_ids &= fresh
+        self.ready_socket_ids &= fresh
+        self.not_ready_ids &= fresh
+        self.ready_answered_at = {seat_id: self.ready_answered_at[seat_id] for seat_id in fresh}
 
     def _adopt_late_seat(self, seat_id: str) -> None:
         """Take a seat that joined after the check was armed into it, on that seat's own answer. A pod never
@@ -1309,6 +1331,7 @@ class PodDraftManager:
             self.ready_discord_ids.discard(seat_id)
             self.ready_socket_ids.discard(seat_id)
             self.not_ready_ids.discard(seat_id)
+            self.ready_answered_at.pop(seat_id, None)
             log.info(
                 f"[READY] reconnect_replaced_seat event={self.event_id} seat={name!r} old={seat_id}"
             )
@@ -2254,6 +2277,7 @@ class PodDraftManager:
         if ready:
             self.ready_socket_ids.add(user_id)
             self.not_ready_ids.discard(user_id)
+            self._stamp_answer(user_id)
         else:
             elapsed = asyncio.get_running_loop().time() - self._ready_check_started_at
             if elapsed < _READY_DEBOUNCE_S:
@@ -2267,6 +2291,7 @@ class PodDraftManager:
                 return
             self.ready_socket_ids.discard(user_id)
             self.not_ready_ids.add(user_id)
+            self._stamp_answer(user_id)
         self._schedule_lobby_refresh()
         await self._maybe_complete_ready_check()
 
@@ -2308,7 +2333,7 @@ class PodDraftManager:
                 continue
             self._replace_departed_seat(name)
             self._adopt_late_seat(seat_id)
-            self.ready_discord_ids.add(seat_id)
+            self._mark_ready_in_discord(seat_id)
             log.info(f"[READY] arrival_auto_ready event={self.event_id} seat={name!r}")
 
     async def _maybe_complete_ready_check(self) -> None:
@@ -2332,6 +2357,7 @@ class PodDraftManager:
         self.ready_discord_ids = set()
         self.ready_socket_ids = set()
         self.not_ready_ids = set()
+        self.ready_answered_at = {}
         self.ready_check_joined_ids = set()
         self.ready_check_left_ids = set()
         self.ready_check_overdue = False
@@ -3608,7 +3634,7 @@ class PodDraftManager:
         return mentions
 
     async def _end_ready_check(self, detail: str) -> None:
-        """Close a running check, which only a human stopping it does. The answers survive to the next arm"""
+        """Close a running check, which only a human stopping it does. Recent answers survive to the next arm"""
         self._cancel_ready_timeout()
         if not self.ready_check_active:
             return
