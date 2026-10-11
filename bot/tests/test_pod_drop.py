@@ -10,6 +10,7 @@ from bot.services.pod_tournament import (
     BYE_SCORE,
     SKIPPED_SENTINEL,
     apply_drop,
+    apply_return,
     insert_pending_matches,
     load_dropped_names,
 )
@@ -90,6 +91,19 @@ def test_a_later_pairing_into_the_dropped_player_is_reported_on_creation(session
     forfeit = by_id[rows[0][0]]
     assert (forfeit.winner_name, forfeit.score) == ("Reid", BYE_SCORE)
     assert by_id[rows[1][0]].winner_name is None
+
+
+def test_a_returned_player_is_paired_into_a_playable_match(session):
+    event = _event(session)
+    add_pairing(session, event.id, 1, "Finkel", "LSV", pairing_index=0)
+    session.commit()
+    apply_drop(event.id, "LSV", 1)
+
+    apply_return(event.id, "LSV")
+    rows = insert_pending_matches(event.id, 2, [("LSV", "Reid")])
+
+    assert load_dropped_names(event.id) == set()
+    assert session.get(PodDraftMatch, rows[0][0]).winner_name is None
 
 
 def test_a_dropped_player_keeps_only_the_matches_they_played(session):

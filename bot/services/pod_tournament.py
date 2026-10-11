@@ -159,7 +159,10 @@ MSG_FIX_SAME_PLAYER = "Pick two different players for the match"
 MSG_FIX_MATCH_GONE = "That match no longer exists. Reopen the editor to see the current round"
 MSG_DROP_PROMPT = "Pick the player who left. Every match they have left becomes a bye for their opponent"
 MSG_DROP_NOBODY_LEFT = "Everyone in this pod has already dropped"
+MSG_RETURN_PROMPT = "Pick the player who returned to include them in the pairings"
+MSG_RETURN_NOBODY_DROPPED = "Nobody in this pod has dropped"
 DROP_EMOJI = "🏳️"
+RETURN_EMOJI = "↩️"
 BYE_EMOJI = "🏳️"
 POD_PAIRING_FAILED_MSG = (
     "⚠️ Round {round_num} pairings couldn't be generated. Reported results are safe, but the next "
@@ -1692,13 +1695,14 @@ class FixPairingView(ui.View):
     dropdowns are gone — e.g. a match reported early that the players then actually played."""
 
     def __init__(self, event_id: str, round_num: int, round_message: discord.Message | None,
-                 matches: list[dict], roster: list[tuple[str, str]]):
+                 matches: list[dict], roster: list[tuple[str, str]], *, has_dropped: bool = False):
         super().__init__(timeout=300)
         self.event_id = event_id
         self.round_num = round_num
         self.round_message = round_message
         self.matches = matches
         self.roster = roster
+        self.has_dropped = has_dropped
         self.selected_match: dict | None = None
         self.selected_a: str | None = None
         self.selected_b: str | None = None
@@ -1722,6 +1726,11 @@ class FixPairingView(ui.View):
             drop = ui.Button(label="Drop Player", emoji=DROP_EMOJI, style=discord.ButtonStyle.danger, row=1)
             drop.callback = self._on_drop
             self.add_item(drop)
+            if self.has_dropped:
+                back = ui.Button(label="Return Player", emoji=RETURN_EMOJI, style=discord.ButtonStyle.secondary,
+                                 row=1)
+                back.callback = self._on_return
+                self.add_item(back)
         if self.selected_match is not None:
             self.add_item(self._player_select("a", self.selected_a, row=1))
             self.add_item(self._player_select("b", self.selected_b, row=2))
@@ -1826,6 +1835,18 @@ class FixPairingView(ui.View):
             ephemeral=True,
         )
 
+    async def _on_return(self, interaction: discord.Interaction) -> None:
+        dropped = await asyncio.to_thread(load_dropped_names, self.event_id)
+        returning = [(name, display) for name, display in self.roster if normalize_player_name(name) in dropped]
+        if not returning:
+            await interaction.response.send_message(MSG_RETURN_NOBODY_DROPPED, ephemeral=True)
+            return
+        await interaction.response.send_message(
+            MSG_RETURN_PROMPT,
+            view=ReturnPlayerView(self.event_id, self.round_num, returning, self.round_message),
+            ephemeral=True,
+        )
+
     async def _on_save(self, interaction: discord.Interaction) -> None:
         if self.selected_match is None:
             self.stop()
@@ -1926,9 +1947,13 @@ class FixPairingView(ui.View):
         return True
 
 
-class DropPlayerView(ui.View):
-    """Ephemeral organizer confirm: pick who left, then commit. A drop can't be undone, so the button
-    only arms once a name is chosen."""
+class PlayerPickView(ui.View):
+    """Ephemeral organizer confirm: pick a player, then commit. The button only arms once a name is chosen"""
+
+    placeholder: str
+    confirm_label: str
+    confirm_emoji: str
+    confirm_style: discord.ButtonStyle
 
     def __init__(self, event_id: str, round_num: int, roster: list[tuple[str, str]],
                  round_message: discord.Message | None):
@@ -1942,13 +1967,13 @@ class DropPlayerView(ui.View):
 
     def _build_items(self) -> None:
         self.clear_items()
-        select = ui.Select(placeholder="Player who dropped…", row=0, options=[
+        select = ui.Select(placeholder=self.placeholder, row=0, options=[
             discord.SelectOption(label=display[:100], value=name[:100], default=name == self.selected)
             for name, display in self.roster[:25]
         ])
         select.callback = self._on_select
         self.add_item(select)
-        confirm = ui.Button(label="Confirm Drop", emoji=DROP_EMOJI, style=discord.ButtonStyle.danger,
+        confirm = ui.Button(label=self.confirm_label, emoji=self.confirm_emoji, style=self.confirm_style,
                             row=1, disabled=self.selected is None)
         confirm.callback = self._on_confirm
         self.add_item(confirm)
@@ -1962,17 +1987,33 @@ class DropPlayerView(ui.View):
         if self.selected is None:
             return
         await interaction.response.defer()
-        forfeited = await asyncio.to_thread(apply_drop, self.event_id, self.selected, self.round_num)
+        await self._commit(interaction, self.selected)
+
+    async def _commit(self, interaction: discord.Interaction, name: str) -> None:
+        raise NotImplementedError
+
+    async def _dismiss(self, interaction: discord.Interaction) -> None:
         self.stop()
-        display = _roster_display(self.roster, self.selected)
         try:
             await interaction.delete_original_response()
         except discord.HTTPException:
-            log.warning("could not dismiss drop editor", exc_info=True)
+            log.warning("could not dismiss player picker", exc_info=True)
+
+
+class DropPlayerView(PlayerPickView):
+    placeholder = "Player who dropped…"
+    confirm_label = "Confirm Drop"
+    confirm_emoji = DROP_EMOJI
+    confirm_style = discord.ButtonStyle.danger
+
+    async def _commit(self, interaction: discord.Interaction, name: str) -> None:
+        forfeited = await asyncio.to_thread(apply_drop, self.event_id, name, self.round_num)
+        await self._dismiss(interaction)
         log.info(
-            f"[{self.event_id}] R{self.round_num} dropped {self.selected} "
+            f"[{self.event_id}] R{self.round_num} dropped {name} "
             f"forfeited={len(forfeited)} by {actor_label(interaction)}"
         )
+        display = _roster_display(self.roster, name)
         await announce_round_result(
             interaction.client, self.event_id, format_drop_announcement(self.round_num, display),
         )
@@ -1983,8 +2024,28 @@ class DropPlayerView(ui.View):
         await settle_auto_forfeits(interaction.client, self.event_id, forfeited)
 
 
+class ReturnPlayerView(PlayerPickView):
+    placeholder = "Returning Player…"
+    confirm_label = "Confirm Return"
+    confirm_emoji = RETURN_EMOJI
+    confirm_style = discord.ButtonStyle.success
+
+    async def _commit(self, interaction: discord.Interaction, name: str) -> None:
+        await asyncio.to_thread(apply_return, self.event_id, name)
+        await self._dismiss(interaction)
+        log.info(f"[{self.event_id}] R{self.round_num} returned {name} by {actor_label(interaction)}")
+        display = _roster_display(self.roster, name)
+        await announce_round_result(
+            interaction.client, self.event_id, format_return_announcement(self.round_num, display),
+        )
+
+
 def format_drop_announcement(round_num: int, display: str) -> str:
     return f"{DROP_EMOJI} **{round_link_target(round_num)} Drop:** {display}"
+
+
+def format_return_announcement(round_num: int, display: str) -> str:
+    return f"{RETURN_EMOJI} **{round_link_target(round_num)} Return:** {display}"
 
 
 def apply_drop(event_id: str, draftmancer_name: str, round_num: int) -> list[str]:
@@ -1994,12 +2055,8 @@ def apply_drop(event_id: str, draftmancer_name: str, round_num: int) -> list[str
     here each pairing they land in is reported for them, so the pod finishes without them."""
     with SessionLocal() as session:
         key = normalize_player_name(draftmancer_name)
-        participants = session.execute(
-            select(PodDraftParticipant).where(PodDraftParticipant.event_id == event_id)
-        ).scalars().all()
-        for participant in participants:
-            if normalize_player_name(participant.draftmancer_name or "") == key:
-                participant.dropped_round = round_num
+        for participant in _participants_named(session, event_id, key):
+            participant.dropped_round = round_num
         dropped = dropped_names_sync(session, event_id) | {key}
         open_matches = session.execute(
             select(PodDraftMatch).where(
@@ -2015,6 +2072,21 @@ def apply_drop(event_id: str, draftmancer_name: str, round_num: int) -> list[str
     return forfeited
 
 
+def apply_return(event_id: str, draftmancer_name: str) -> None:
+    """Put a dropped player back into every pairing made from here on. Matches already forfeited stand"""
+    with SessionLocal() as session:
+        for participant in _participants_named(session, event_id, normalize_player_name(draftmancer_name)):
+            participant.dropped_round = None
+        session.commit()
+
+
+def _participants_named(session: Session, event_id: str, key: str) -> list[PodDraftParticipant]:
+    participants = session.execute(
+        select(PodDraftParticipant).where(PodDraftParticipant.event_id == event_id)
+    ).scalars().all()
+    return [p for p in participants if normalize_player_name(p.draftmancer_name or "") == key]
+
+
 async def build_round_editor(
     event_id: str, round_num: int, round_message: discord.Message | None,
 ) -> "FixPairingView | None":
@@ -2024,8 +2096,11 @@ async def build_round_editor(
     matches = await asyncio.to_thread(_load_round_states, event_id, round_num)
     if not matches:
         return None
-    roster = await asyncio.to_thread(_load_round_roster, event_id)
-    return FixPairingView(event_id, round_num, round_message, matches, roster)
+    roster, dropped = await asyncio.gather(
+        asyncio.to_thread(_load_round_roster, event_id),
+        asyncio.to_thread(load_dropped_names, event_id),
+    )
+    return FixPairingView(event_id, round_num, round_message, matches, roster, has_dropped=bool(dropped))
 
 
 async def open_manage_rounds(interaction: discord.Interaction, event_id: str) -> None:
@@ -3717,8 +3792,13 @@ async def _regenerate_next_round(manager, next_round: int) -> None:
     prev_pairings = await asyncio.to_thread(_load_pairings_for_round, event_id, next_round)
 
     prior = await asyncio.to_thread(load_matches, event_id)
+    dropped = await asyncio.to_thread(load_dropped_names, event_id)
+    dropped_ids = {p.id for p in manager.tournament_players if normalize_player_name(p.id) in dropped}
     try:
-        pairings = pod_swiss.pair_round(manager.tournament_players, prior, next_round)
+        pairings = pod_swiss.pair_round(
+            manager.tournament_players, prior, next_round,
+            final_round=next_round == TOTAL_ROUNDS, dropped_ids=dropped_ids,
+        )
     except ValueError as e:
         log.error("regenerate pairings for round %d failed for %s: %s", next_round, event_id, e)
         await alert_thread_and_owner(
