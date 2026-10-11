@@ -41,6 +41,7 @@ CHAT_ANNOUNCE_MARKER = "used `/draft`"
 TEAM_DRAFT_PLAYERS = 6
 
 POD_DRAFTERS_ROLE_NAME = "Pod Drafters"
+ORGANIZER_ROLE_NAME = "Organizer"
 EARLY_POD_ROLE_NAME = "Early Pod"
 LATE_POD_ROLE_NAME = "Late Pod"
 POD_QUEUE_ROLE_NAME = "Pod Draft Queue"

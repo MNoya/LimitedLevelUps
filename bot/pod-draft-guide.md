@@ -20,6 +20,7 @@
 5. The bot will send your pairing for each of the 3 rounds via Direct Message.
 6. **Challenge** your opponent to a **Limited Tournament Match** (Bo3).
 7. After each match, report your result in the bot DMs.
+8. Play all 3 rounds, win or lose. Having a problem? Ask an @Organizer
 
 **After Your Matches:**
 1. Post a screenshot of your final deck in the thread, comment your record and colors.

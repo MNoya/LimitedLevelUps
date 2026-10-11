@@ -26,6 +26,7 @@ from bot.commands.authorization import MODERATOR_ROLE_NAME, moderator_authorized
 from bot.commands.pod_guide import GUIDE_MARKER, render_pod_guide_embed_body
 from bot.config import settings
 from bot.services.format_schedule import LATEST_SET_CATEGORY, latest_set_channel, set_tracking_todo_index
+from bot.services.pod_roles import role_mention
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME
 from bot.services.server_guide import GuideContent, GuidePage, find_channel, pages_by_channel, render_page
 
@@ -54,8 +55,8 @@ async def sync_channel(guild: discord.Guild, channel_name: str,
     channel = find_channel(guild.text_channels, channel_name)
     if channel is None:
         return SYNC_NO_CHANNEL, f"⚠️ `{channel_name}`: no matching channel"
-    mod_mention = _moderator_mention(guild)
-    pod_drafters_mention = _pod_drafters_mention(guild)
+    mod_mention = role_mention(guild, MODERATOR_ROLE_NAME)
+    pod_drafters_mention = role_mention(guild, POD_DRAFTERS_ROLE_NAME)
     linkable = guild.text_channels + guild.forums
     rendered = [render_page(page.name, linkable, _bot_mention(guild), mod_mention, pod_drafters_mention)
                 for page in pages]
@@ -137,7 +138,7 @@ async def sync_pod_guide(guild: discord.Guild) -> tuple[str, str]:
     channel = guild.get_channel(settings.pod_draft_channel_id)
     if channel is None:
         return SYNC_NO_CHANNEL, "⚠️ Pod guide: pod-draft coordination channel not found"
-    body = render_pod_guide_embed_body(_pod_drafters_mention(guild))
+    body = render_pod_guide_embed_body(guild)
     embed = discord.Embed(description=body, color=GUIDE_COLOR)
     try:
         existing = await _pinned_pod_guides(channel, guild.me)
@@ -293,16 +294,6 @@ def _bot_mention(guild: discord.Guild) -> str:
     if guild.self_role is not None:
         return guild.self_role.mention
     return guild.me.mention
-
-
-def _moderator_mention(guild: discord.Guild) -> str:
-    role = discord.utils.get(guild.roles, name=MODERATOR_ROLE_NAME)
-    return role.mention if role is not None else f"@{MODERATOR_ROLE_NAME}"
-
-
-def _pod_drafters_mention(guild: discord.Guild) -> str:
-    role = discord.utils.get(guild.roles, name=POD_DRAFTERS_ROLE_NAME)
-    return role.mention if role is not None else f"@{POD_DRAFTERS_ROLE_NAME}"
 
 
 async def _delete_guide_message(message: discord.Message, webhook: discord.Webhook | None) -> None:

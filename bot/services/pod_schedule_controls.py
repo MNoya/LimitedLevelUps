@@ -23,10 +23,10 @@ from bot.services.pod_format import custom_formats
 from bot.services.pod_format_poll import normalize_write_ins
 from bot.services.pod_format_schedule import LATEST, set_slot
 from bot.services.pod_format_vote import send_vote_panel
-from bot.services.pod_schedule import SCHEDULE_TZ
+from bot.services.pod_schedule import ORGANIZER_ROLE_NAME, SCHEDULE_TZ
 from bot.services.pod_schedule_card import build_vote_results_embed, refresh_schedule_post
 from bot.services.pod_signals import SLOT_EARLY, SLOT_LATE
-from bot.services.ping_roles import ORGANIZER_ROLE_NAME, organizer_mention
+from bot.services.ping_roles import organizer_mention
 from bot.tasks.pod_daily_poll import retarget_launcher_day
 from bot.sets import active_set_code, flashback_picker_sets, set_name_for
 

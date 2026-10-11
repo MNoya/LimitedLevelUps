@@ -6,7 +6,7 @@ import discord
 from discord.ext import commands
 
 from bot.config import settings
-from bot.services.ping_roles import ORGANIZER_ROLE_NAME
+from bot.services.pod_schedule import ORGANIZER_ROLE_NAME
 
 MODERATOR_ROLE_NAME = "Moderator"
 

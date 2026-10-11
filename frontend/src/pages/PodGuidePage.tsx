@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ExternalLink,
   Flag,
+  Handshake,
   ListChecks,
   PlayCircle,
   Settings2,
@@ -76,6 +77,7 @@ const SECTIONS: SectionDef[] = [
   { id: "signup", label: "Signing up", icon: ListChecks },
   { id: "draft", label: "Drafting", icon: Shuffle },
   { id: "rounds", label: "Round Pairings", tabLabel: "Pairings", icon: Swords },
+  { id: "etiquette", label: "Etiquette", icon: Handshake },
   { id: "podium", label: "Podium", icon: Trophy },
   { id: "seasons", label: "Seasons", icon: CalendarRange, iconClassName: "relative -top-[2px]" },
   { id: "organizers", label: "Organizers", icon: Settings2 },
@@ -343,6 +345,17 @@ function GuideBody() {
           </Bullets>
         </Block>
 
+        <Block id="etiquette">
+          <Bullets>
+            <Bullet>Join the Draftmancer table on time</Bullet>
+            <Bullet>Play all 3 rounds, win or lose</Bullet>
+            <Bullet>
+              Having a problem? Ask an <RoleMention role="Organizer" />
+            </Bullet>
+            <Bullet>Report your result as soon as your match ends</Bullet>
+          </Bullets>
+        </Block>
+
         <Block id="podium" aside={<RecapCard />}>
           <Bullets>
             <Bullet>Post your deck screenshot and submit colors in the thread</Bullet>
@@ -357,11 +370,11 @@ function GuideBody() {
             <Bullet>Flashbacks and Cube are added to the schedule later on</Bullet>
             <Bullet>Every draft counts towards the Leaderboard</Bullet>
             <Bullet>
-              Top of the Leaderboard gets a seat at the <B>Set Champion</B> 👑 event, streamed live the weekend before
+              Top of the Leaderboard gets a seat at the <RoleMention role="Set Champion" /> 👑 event, streamed live the weekend before
               the next set's prerelease
             </Bullet>
             <Bullet>
-              The top drafter of the season earns the <B>Pod Champion</B> ⚜️ role to wear until the next set
+              The top drafter of the season earns the <RoleMention role="Pod Champion" /> ⚜️ role to wear until the next set
             </Bullet>
           </Bullets>
         </Block>
@@ -1334,6 +1347,22 @@ function BotMention() {
       />
       {DISCHORD_BOT_NAME}
     </a>
+  );
+}
+
+type DiscordRole = "Organizer" | "Set Champion" | "Pod Champion";
+
+function RoleMention({ role }: { role: DiscordRole }) {
+  const roleColors: Record<DiscordRole, string> = {
+    Organizer: "#f38300",
+    "Set Champion": "#82cbff",
+    "Pod Champion": "#e7a855",
+  };
+  const color = roleColors[role];
+  return (
+    <span className="whitespace-nowrap rounded-[3px] px-0.5 font-medium" style={{ color, backgroundColor: `${color}1a` }}>
+      @{role}
+    </span>
   );
 }
 

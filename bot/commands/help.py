@@ -72,21 +72,28 @@ POD_HELP_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
 
 PREFIX_HELP_TITLE = "❔ Text Commands"
 
-PREFIX_HELP_COMMANDS: list[tuple[str, str]] = [
-    ("!llu", "Link the Website"),
-    ("!leaderboard", "Link the Leaderboard"),
-    ("!tier-list", "Link the Tier List"),
-    ("!pods", "Link the Pods page"),
-    ("!evergreen", "Link the Evergreen Episodes"),
-    ("!teams", "How Team Draft works"),
-    ("!pod", "Rally players for a Pod Draft"),
-    ("!confirm", "Confirm your seat in a Pod thread"),
-    ("!voice", "Share a Voice Chat Link"),
-    ("!peasant", "Peasant Cube on CubeCobra"),
-    ("!sampcube", "samp's Cube on CubeCobra"),
-    ("!mema", "Middle-Earth Masters on CubeCobra"),
-    ("!craft", "Decklists for Bulk Crafting the current set"),
-    ("!nephew", "What is a Nephew?"),
+PREFIX_HELP_GROUPS: list[list[tuple[str, str]]] = [
+    [
+        ("!llu", "Link the Website"),
+        ("!leaderboard", "Link the Leaderboard"),
+        ("!tier-list", "Link the Tier List"),
+        ("!pods", "Link the Pods page"),
+        ("!evergreen", "Link the Evergreen Episodes"),
+    ],
+    [
+        ("!pod", "Rally players for a Pod Draft"),
+        ("!confirm", "Confirm your seat in a Pod thread"),
+        ("!etiquette", "Server rules for Pod play"),
+        ("!voice", "Share a Voice Chat Link"),
+        ("!teams", "How Team Draft works"),
+    ],
+    [
+        ("!peasant", "Peasant Cube on CubeCobra"),
+        ("!sampcube", "samp's Cube on CubeCobra"),
+        ("!mema", "Middle-Earth Masters on CubeCobra"),
+        ("!craft", "Decklists for Bulk Crafting the current set"),
+        ("!nephew", "What is a Nephew?"),
+    ],
 ]
 
 
@@ -128,8 +135,8 @@ def render_help_embed(sections: list[tuple[str, list[tuple[str, str]]]] = HELP_S
 
 
 def render_prefix_help_embed() -> discord.Embed:
-    lines = [command_line(cmd, blurb) for cmd, blurb in PREFIX_HELP_COMMANDS]
-    return discord.Embed(title=PREFIX_HELP_TITLE, description="\n".join(lines), color=discord.Color.green())
+    groups = ["\n".join(command_line(cmd, blurb) for cmd, blurb in group) for group in PREFIX_HELP_GROUPS]
+    return discord.Embed(title=PREFIX_HELP_TITLE, description="\n\n".join(groups), color=discord.Color.green())
 
 
 class PrefixHelpCommand(commands.HelpCommand):

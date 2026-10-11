@@ -64,6 +64,7 @@ from bot.services.pod_schedule import (
     EARLY_POD_ROLE_NAME,
     LATE_POD_ROLE_NAME,
     MOCK_DRAFT_ROLE_NAME,
+    ORGANIZER_ROLE_NAME,
     POD_DRAFTERS_ROLE_NAME,
     POD_QUEUE_ROLE_NAME,
     SCHEDULE_TZ,
@@ -155,7 +156,6 @@ POD_CHAMPION_ROLE_NAME = "Pod Champion"
 POD_CHAMPION_COLOR = "#E7A855"
 POD_CHAMPION_EMOJI = "fleurdelis"
 SYNTHETIC_POD_CHAMPION_TAG = f"**@{POD_CHAMPION_ROLE_NAME}**"
-ORGANIZER_ROLE_NAME = "Organizer"
 TOP_P0P1_CHALLENGER_ROLE_NAME = "Top P0P1 Challenger"
 P0P1_COLOR = "#EFBF04"
 
@@ -188,9 +188,7 @@ def pod_champion_mention(guild: discord.Guild | None) -> str:
 
 
 def organizer_mention(guild: discord.Guild | None) -> str:
-    """Mention pill for the pod organizers, or plain text when the guild has no such role yet."""
-    role = find_role(guild, ORGANIZER_ROLE_NAME)
-    return role.mention if role is not None else f"@{ORGANIZER_ROLE_NAME}"
+    return role_mention(guild, ORGANIZER_ROLE_NAME)
 
 
 def spec_named(name: str) -> PingRole | None:
@@ -455,10 +453,9 @@ class _PodGuideButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        role = discord.utils.get(interaction.guild.roles, name=POD_DRAFTERS_ROLE_NAME) if interaction.guild else None
-        mention = role.mention if role is not None else f"@{POD_DRAFTERS_ROLE_NAME}"
+        guide = render_pod_guide_embed_body(interaction.guild)
         await interaction.response.send_message(
-            embed=discord.Embed(description=render_pod_guide_embed_body(mention), color=discord.Color.green()),
+            embed=discord.Embed(description=guide, color=discord.Color.green()),
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
         )

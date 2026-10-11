@@ -4,6 +4,9 @@ from __future__ import annotations
 import discord
 from discord.ext import commands
 
+from bot.services.pod_roles import role_label
+from bot.services.pod_schedule import ORGANIZER_ROLE_NAME
+
 SITE_URL = "https://limitedlevelups.com"
 LEADERBOARD_URL = "https://limitedlevelups.com/leaderboard"
 TIER_LIST_URL = "https://limitedlevelups.com/tier-list"
@@ -11,6 +14,7 @@ PODS_URL = "https://limitedlevelups.com/pods"
 EVERGREEN_URL = "https://limitedlevelups.com/episodes/evergreen"
 
 TEAM_DRAFT_TITLE = "Team Draft"
+POD_ETIQUETTE_TITLE = "Pod Etiquette"
 
 
 def team_draft_body(bot_mention: str) -> str:
@@ -24,6 +28,15 @@ def team_draft_body(bot_mention: str) -> str:
         "**Communication**\n"
         "During the draft, teammates aren't allowed to discuss picks or strategies.\n"
         "Later, each team gets its own private thread and voice room to discuss strategy."
+    )
+
+
+def pod_etiquette_body(organizer: str) -> str:
+    return (
+        "- Join the Draftmancer table on time\n"
+        "- Play all 3 rounds, win or lose\n"
+        f"- Having a problem? Ask an {organizer}\n"
+        "- Report your result as soon as your match ends"
     )
 
 
@@ -55,6 +68,12 @@ class QuickLinksListener(commands.Cog):
     async def teams(self, ctx: commands.Context) -> None:
         body = team_draft_body(self.bot.user.mention)
         embed = discord.Embed(title=TEAM_DRAFT_TITLE, description=body, color=discord.Color.green())
+        await ctx.channel.send(embed=embed)
+
+    @commands.command(name="etiquette")
+    async def etiquette(self, ctx: commands.Context) -> None:
+        body = pod_etiquette_body(role_label(ctx.guild, ORGANIZER_ROLE_NAME))
+        embed = discord.Embed(title=POD_ETIQUETTE_TITLE, description=body, color=discord.Color.green())
         await ctx.channel.send(embed=embed)
 
 
