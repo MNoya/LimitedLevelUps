@@ -1197,14 +1197,26 @@ function BoosterCard({ card, picked, showGrades }: { card: ArtifactCard; picked:
     <div
       className={cn(
         CARD_FRAME,
-        "relative",
+        "relative [container-type:inline-size]",
         "transition-transform duration-150 hover:z-10 hover:scale-[1.04]",
         picked && "p0p1-card-selected z-10 scale-[1.03] hover:scale-[1.05]",
       )}
     >
       <CardImage card={card} />
+      <FindableCardName name={card.n ?? ""} />
       {showGrades && <CardGradeOverlay card={card} />}
     </div>
+  );
+}
+
+function FindableCardName({ name }: { name: string }) {
+  return (
+    <span
+      className="pointer-events-none absolute inset-x-0 top-0 whitespace-nowrap pl-[8%] pt-[6.75%] text-transparent"
+      style={{ fontFamily: "Lato, sans-serif", fontSize: "5.35cqw" }}
+    >
+      {name}
+    </span>
   );
 }
 
