@@ -785,7 +785,7 @@ const toolsRoute = async (rest: string[]): Promise<RouteResolution> => {
   const setCode = rawCode.toUpperCase();
   const setName = P0P1_CONTESTS[setCode]?.name ?? setNameFor(await fetchSets(), setCode);
   const meta: RouteMeta = {
-    ...page(`${setName} - Bulk Crafting`, craftDescription, craftImage),
+    ...page(`${setName} - Craft Tool`, craftDescription, craftImage),
     tabTitle: `${setCode} Bulk Crafting${TITLE_SEPARATOR}${SITE}`,
   };
   return resolved(meta, `/tools/craft/${setCode}`);
