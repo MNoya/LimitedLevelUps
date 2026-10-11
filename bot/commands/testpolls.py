@@ -913,7 +913,8 @@ def _rolling_slots():
     previews."""
     today = datetime.now(SCHEDULE_TZ).date()
     tomorrow = today + timedelta(days=1)
-    early, late = poll_buckets_for(today)[:2]
+    buckets = poll_buckets_for(today)
+    early, late = buckets[0], buckets[-1]
     early_next = bucket_for_slot(tomorrow, early.slot_key)
     late_next = bucket_for_slot(tomorrow, late.slot_key)
     return today, tomorrow, early, late, early_next, late_next

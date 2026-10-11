@@ -9,7 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
+from bot.services.championship_dates import season_start
 from bot.services.pod_schedule import EARLY_POD_ROLE_NAME, LATE_POD_ROLE_NAME, POD_QUEUE_ROLE_NAME, SCHEDULE_TZ
+from bot.sets import active_set_code, release_instant
 
 
 SATURDAY = 5
@@ -65,7 +67,7 @@ WEEKDAY_BUCKETS: tuple[PollBucket, ...] = (
     PollBucket("LATE", "Late Pod", "☄️", time(21, 0), LATE_POD_ROLE_NAME, SLOT_LATE),
 )
 WEEKEND_BUCKETS: tuple[PollBucket, ...] = (WEEKEND_EARLY_BUCKET, WEEKEND_LATE_BUCKET)
-BONUS_BUCKET = PollBucket("BONUS", "Bonus Pod", "🌟", time(17, 0), "", SLOT_BONUS)
+BONUS_BUCKET = PollBucket("BONUS", "Bonus Pod", "🌟", time(18, 0), "", SLOT_BONUS)
 ALL_BUCKETS: tuple[PollBucket, ...] = (WEEKDAY_BUCKETS + WEEKEND_BUCKETS + (BONUS_BUCKET,))
 
 
@@ -74,7 +76,15 @@ def is_weekend(day: date) -> bool:
 
 
 def poll_buckets_for(day: date) -> tuple[PollBucket, ...]:
-    return WEEKEND_BUCKETS if is_weekend(day) else WEEKDAY_BUCKETS
+    early, late = WEEKEND_BUCKETS if is_weekend(day) else WEEKDAY_BUCKETS
+    if offers_daily_bonus(day):
+        return early, BONUS_BUCKET, late
+    return early, late
+
+
+def offers_daily_bonus(day: date) -> bool:
+    start = season_start(active_set_code(release_instant(day)))
+    return start is not None and day < start
 
 
 def owning_slot_key(event_time: datetime) -> str | None:

@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -9,6 +9,7 @@ from bot.config import settings
 from bot.models import PodDraftEvent, PodScheduleSlot, PodSignal, PodSignalMember
 from bot.services import pod_format_schedule as schedule
 from bot.services import pod_launch
+from bot.services.championship_dates import season_start
 from bot.services.pod_launch import LauncherSlot, create_poll_signals
 from bot.services.pod_signals import (
     KIND_POLL,
@@ -41,7 +42,8 @@ from bot.tasks.pod_daily_poll import (
 )
 
 
-FRIDAY = date(2026, 10, 9)
+FLASHBACK_SEASON_START = season_start("FRA")
+FRIDAY = FLASHBACK_SEASON_START + timedelta(days=4)
 SATURDAY = FRIDAY + timedelta(days=1)
 FRIDAY_AFTERNOON = datetime.combine(FRIDAY, time(16, 0), tzinfo=SCHEDULE_TZ)
 THRESHOLD = settings.pod_signal_fire_threshold

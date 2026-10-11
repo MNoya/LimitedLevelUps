@@ -1486,10 +1486,9 @@ def _board_slots(session: Session, signals: list[PodSignal], signal_date: date) 
     slots: list[LauncherSlot] = []
     with schedule_overlay(session, start, end):
         for slot_key in pod_signals.SLOT_ORDER:
+            slots.extend(_slot_snapshot(session, signals, slot_key, signal_date, now))
             if slot_key == pod_signals.SLOT_BONUS:
                 slots.extend(_bonus_slots(session, signals, signal_date))
-            else:
-                slots.extend(_slot_snapshot(session, signals, slot_key, signal_date, now))
     return slots
 
 

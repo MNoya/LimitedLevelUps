@@ -129,6 +129,7 @@ from bot.services.pod_signals import (
     bucket_by_key,
     bucket_role_name,
     format_of,
+    offers_daily_bonus,
     slot_of,
     should_fire,
     slot_can_fire,
@@ -261,14 +262,17 @@ async def catch_up_daily_poll(bot: commands.Bot) -> None:
             await fire_daily_poll()
             return
         log.info(f"launcher {existing.id} already up for {today}; graduating and re-rendering at startup")
+        guild_id = str(channel.guild.id) if channel.guild else ""
+        await bind_board_slots(bot, guild_id, str(channel.id), str(existing.id), today)
         await _graduate_held_slots(bot, str(existing.id), today)
         await _rerender_poll(bot, str(existing.id), today, channel)
         return
     board = await asyncio.to_thread(pod_launch.live_launcher_board_sync)
     if board is None:
         return
-    _guild_id, _channel_id, message_id, board_date = board
+    guild_id, channel_id, message_id, board_date = board
     log.info(f"re-rendering the live launcher {message_id} for {board_date} at startup")
+    await bind_board_slots(bot, guild_id, channel_id, message_id, board_date)
     await _rerender_poll(bot, message_id, board_date)
 
 
@@ -328,17 +332,7 @@ async def post_launcher(
         content=poll_ping_line(guild) if ping else None, embed=build_poll_embed(slots, guild),
         view=PodPollView(slots, guild), allowed_mentions=discord.AllowedMentions(roles=ping),
     )
-    bound = await asyncio.to_thread(
-        pod_launch.create_poll_signals_sync,
-        guild_id=guild_id, channel_id=str(channel.id), message_id=str(message.id), signal_date=signal_date,
-    )
-    posted_at = datetime.now(timezone.utc)
-    for signal_id, slot_time in bound:
-        if slot_time <= posted_at:
-            await pod_launch.fire_slot_expiry(signal_id)
-            continue
-        pod_launch.arm_slot_expiry(bot, signal_id, slot_time)
-        schedule_slot_underfill_checks(bot.pod_scheduler, signal_id, slot_time, posted_at)
+    await bind_board_slots(bot, guild_id, str(channel.id), str(message.id), signal_date)
     await _rerender_poll(bot, str(message.id), signal_date, channel)
     if graduate:
         await _graduate_held_slots(bot, str(message.id), signal_date)
@@ -386,17 +380,21 @@ def build_poll_embed(
     parts = (heading, intro, _format_legend(codes, guild) if several else "")
     description = "\n".join(part for part in parts if part)
     embed = discord.Embed(description=description, color=discord.Color.green())
+    _add_column_groups(embed, _column_groups(slots), guild)
+    embed.add_field(name=ZWSP, value=_mechanics_note(several), inline=False)
+    return embed
+
+
+def _column_groups(slots: list[pod_launch.LauncherSlot]) -> list[list[list[pod_launch.LauncherSlot]]]:
+    if _bonus_on_grid(slots):
+        return [[_key_slots(slots, slot_key) for slot_key in _slot_order(slots)]]
     pair = [_key_slots(slots, slot_key) for slot_key in _slot_order(slots) if slot_key != SLOT_BONUS]
     bonus = _bonus_columns(slots)
     if bonus and _bonus_placed_first(slots):
-        groups = [bonus, pair]
-    elif bonus:
-        groups = [pair, bonus]
-    else:
-        groups = [pair]
-    _add_column_groups(embed, groups, guild)
-    embed.add_field(name=ZWSP, value=_mechanics_note(several), inline=False)
-    return embed
+        return [bonus, pair]
+    if bonus:
+        return [pair, bonus]
+    return [pair]
 
 
 def _add_column_groups(
@@ -548,10 +546,19 @@ def _slot_order(slots: list[pod_launch.LauncherSlot]) -> list[str]:
 def _ordered_slots(slots: list[pod_launch.LauncherSlot]) -> list[str]:
     """Render order: the Early and Late pair, with Bonus before it when the earliest bonus pod starts before
     Early and after it otherwise, so the rows read in time order."""
+    if _bonus_on_grid(slots):
+        return _slot_order(slots)
     fixed = [slot_key for slot_key in _slot_order(slots) if slot_key != SLOT_BONUS]
     if not any(slot_of(slot.bucket_key) == SLOT_BONUS for slot in slots):
         return fixed
     return [SLOT_BONUS] + fixed if _bonus_placed_first(slots) else fixed + [SLOT_BONUS]
+
+
+def _bonus_on_grid(slots: list[pod_launch.LauncherSlot]) -> bool:
+    for slot in _key_slots(slots, SLOT_BONUS):
+        if slot.slot_time is not None and offers_daily_bonus(slot.slot_time.astimezone(SCHEDULE_TZ).date()):
+            return True
+    return False
 
 
 def _bonus_placed_first(slots: list[pod_launch.LauncherSlot]) -> bool:
@@ -887,8 +894,12 @@ def build_play_again_prompt(
 
 
 def _slot_pod_label(guild: discord.Guild | None, bucket_key: str) -> str:
-    """The slot named as its ping role, mentioned for the color it carries."""
-    return role_mention(guild, bucket_role_name(bucket_key) or "")
+    """The slot named as its ping role, mentioned for the color it carries"""
+    role_name = bucket_role_name(bucket_key)
+    if role_name:
+        return role_mention(guild, role_name)
+    bucket = bucket_by_key(bucket_key)
+    return f"**{bucket.name}**" if bucket else bucket_key
 
 
 class PlayAgainView(discord.ui.View):
@@ -1871,6 +1882,15 @@ async def retarget_launcher_day(bot: commands.Bot, signal_date: date) -> bool:
     if signal_date < board_date:
         return False
     await asyncio.to_thread(pod_launch.retarget_poll_signals_sync, signal_date)
+    await bind_board_slots(bot, guild_id, channel_id, message_id, signal_date)
+    await _rerender_poll(bot, message_id, board_date)
+    return True
+
+
+async def bind_board_slots(
+    bot: commands.Bot, guild_id: str, channel_id: str, message_id: str, signal_date: date,
+) -> None:
+    """Bind a signal to the board for every slot the day offers and arm its beats, closing a slot already past"""
     bound = await asyncio.to_thread(
         pod_launch.create_poll_signals_sync,
         guild_id=guild_id, channel_id=channel_id, message_id=message_id, signal_date=signal_date,
@@ -1882,8 +1902,6 @@ async def retarget_launcher_day(bot: commands.Bot, signal_date: date) -> bool:
             continue
         pod_launch.arm_slot_expiry(bot, signal_id, slot_time)
         schedule_slot_underfill_checks(bot.pod_scheduler, signal_id, slot_time, now)
-    await _rerender_poll(bot, message_id, board_date)
-    return True
 
 
 async def roll_slot_after_draft_start(bot: commands.Bot, event_id: str) -> None:
