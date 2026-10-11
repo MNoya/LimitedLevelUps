@@ -388,6 +388,9 @@ def build_poll_embed(
 
 def _column_groups(slots: list[pod_launch.LauncherSlot]) -> list[list[list[pod_launch.LauncherSlot]]]:
     pair = [_key_slots(slots, slot_key) for slot_key in _slot_order(slots) if slot_key != SLOT_BONUS]
+    if pair and _has_daily_bonus(slots):
+        pair[0] = pair[0] + _key_slots(slots, SLOT_BONUS)
+        return [pair]
     bonus = _bonus_columns(slots)
     if bonus and _bonus_placed_first(slots):
         return [bonus, pair]
@@ -404,7 +407,8 @@ def _add_column_groups(
     Bonus pod stays full-width, and a board with no Bonus keeps the pair at half width."""
     rendered = []
     for group in groups:
-        values = [value for value in (_clamped_value(_column_value(column, guild)) for column in group) if value]
+        column_values = [_clamped_value(_stacked_column_value(column, guild)) for column in group]
+        values = [value for value in column_values if value]
         if values:
             rendered.append((group, values))
     inline_groups = sum(1 for group, _ in rendered if not (len(group) == 1 and _group_is_bonus(group)))
@@ -418,6 +422,17 @@ def _add_column_groups(
         if stacked:
             for _ in range((-len(values)) % 3):
                 embed.add_field(name=ZWSP, value=ZWSP, inline=True)
+
+
+def _stacked_column_value(column: list[pod_launch.LauncherSlot], guild: discord.Guild | None) -> str:
+    """A column carrying a second slot_key below its own, like the daily Bonus under Early"""
+    segments: list[list[pod_launch.LauncherSlot]] = []
+    for slot in column:
+        if segments and slot_of(segments[-1][-1].bucket_key) == slot_of(slot.bucket_key):
+            segments[-1].append(slot)
+        else:
+            segments.append([slot])
+    return f"\n{NBSP}\n".join(_column_value(segment, guild) for segment in segments or [column])
 
 
 def _bonus_columns(slots: list[pod_launch.LauncherSlot]) -> list[list[pod_launch.LauncherSlot]]:
@@ -561,8 +576,9 @@ def _has_daily_bonus(slots: list[pod_launch.LauncherSlot]) -> bool:
 
 
 def _bonus_placed_first(slots: list[pod_launch.LauncherSlot]) -> bool:
-    """Whether the earliest bonus pod starts earlier in the day than Early, or Late with no Early column"""
-    bonus_start = _slot_start(slots, SLOT_BONUS)
+    """Whether the earliest open bonus pod starts earlier in the day than Early, or Late with no Early column"""
+    open_bonus = [slot for slot in _key_slots(slots, SLOT_BONUS) if not slot.locked and not _slot_closed(slot)]
+    bonus_start = _slot_start(open_bonus, SLOT_BONUS)
     reference = _slot_start(slots, SLOT_EARLY) or _slot_start(slots, SLOT_LATE)
     if bonus_start is None or reference is None:
         return False
