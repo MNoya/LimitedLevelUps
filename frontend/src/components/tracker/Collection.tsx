@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { frontFace } from "../../lib/cardSlug";
@@ -23,11 +23,15 @@ import {
   type CollectionCount,
 } from "../../data/trackerApi";
 import {
+  draftsToMythicComplete,
   draftsToRareComplete,
+  mythicsToComplete,
   packsToRareComplete,
   projectCompletion,
   remainingMasteryPacks,
   setPackRulesFor,
+  type MythicCompletionMath,
+  type RareCompletionMath,
 } from "../../data/collectionProjection";
 const SUBLABEL_CLS = "font-display text-[13px] tracking-[0.08em] text-muted";
 
@@ -129,6 +133,7 @@ export function Collection({
   const passPacksLeft = packRules && remainingMasteryPacks(eco.masteryLevel, packRules.track);
   const futurePacks = passPacksLeft == null ? null : passPacksLeft + eco.rankedSeasonPacks;
   const packsToOpen = futurePacks == null ? null : eco.packsOwned + futurePacks;
+  const rareMath = packRules && packsToRareComplete(eco, rare, packRules);
   const playsets = copiesMode === "playset";
   const toggleCopiesMode = () => setCopiesMode(playsets ? "singles" : "playset");
   const columns = [
@@ -140,6 +145,7 @@ export function Collection({
       projected: playsets ? projection?.rarePct ?? null : null,
       missing: rare.cards - rare.held,
       extraLine: packRules && `${draftsToRareComplete(eco, rare, draftRates, packRules)} drafts to complete`,
+      mathLine: playsets && rareMath ? rareCompletionFormula(rareMath) : null,
     },
     {
       key: "mythic" as const, label: "MYTHICS", sections: lists.mythics, rarity: RARITY_STYLE.mythic,
@@ -148,7 +154,9 @@ export function Collection({
       pct: playsets ? myth.pct : myth.heldPct,
       projected: playsets ? projection?.mythicPct ?? null : null,
       missing: myth.cards - myth.held,
-      extraLine: null,
+      extraLine: packRules && `${draftsToMythicComplete(eco, myth, draftRates, packRules)} drafts or `
+        + `${mythicsToComplete(eco, myth, packRules)} Mythics to complete`,
+      mathLine: playsets && projection ? mythicCompletionFormula(projection.mythicMath) : null,
     },
   ];
 
@@ -175,7 +183,7 @@ export function Collection({
              style={{ gridTemplateColumns: "2fr 1fr 2fr 1fr" }}>
           <EconomyCell label="PACKS OWNED" value={eco.packsOwned} tooltip="Unopened Packs you own"
                        onCommit={(n) => saveEconomy({ packsOwned: n })} />
-          <EconomyCell label="GOLDEN PACKS" value={eco.goldenPacks} tooltip="Golden Packs you own, about 4.3 Rares each"
+          <EconomyCell label="GOLDEN PACKS" value={eco.goldenPacks} tooltip="Worth 4.3 Rares + 1.7 Mythics each"
                        onCommit={(n) => saveEconomy({ goldenPacks: n })} />
           <EconomyCell label="PASS LVL" value={eco.masteryLevel}
                        tooltip="Your Mastery Pass level"
@@ -189,7 +197,7 @@ export function Collection({
                        tooltip="Pass Packs plus Ranked Packs" />
           <DerivedCell label="TO OPEN" value={packsToOpen}
                        tooltip="Packs you own plus every Future Pack" />
-          <DerivedCell label="PACKS NEEDED" value={packRules && packsToRareComplete(eco, rare, packRules)}
+          <DerivedCell label="PACKS NEEDED" value={rareMath && rareMath.packsNeeded}
                        tooltip="Extra Packs you need for a full Rare Playset" />
         </div>
       </div>
@@ -205,7 +213,7 @@ export function Collection({
             >
               <CompletionBar
                 label={col.label} owned={col.owned} total={col.total} pct={col.pct} projected={col.projected}
-                rarity={col.rarity} missing={col.missing} extraLine={col.extraLine}
+                rarity={col.rarity} missing={col.missing} extraLine={col.extraLine} mathLine={col.mathLine}
                 onToggleMode={() => (col.key === shownRarity ? toggleCopiesMode() : setShownRarity(col.key))}
               />
             </div>
@@ -216,12 +224,12 @@ export function Collection({
       <div className={cn("grid gap-4 items-start", columnsCls)}>
         {columns
           .filter((col) => !isMobile || col.key === shownRarity)
-          .map(({ key, label, sections, rarity, owned, total, pct, projected, missing, extraLine }) => (
+          .map(({ key, label, sections, rarity, owned, total, pct, projected, missing, extraLine, mathLine }) => (
           <div key={key} className={cn(!narrow && !isMobile && "xl:col-span-2")}>
             {!isMobile && (
               <div className="border border-border bg-surface mb-3">
                 <CompletionBar label={label} owned={owned} total={total} pct={pct} projected={projected}
-                               rarity={rarity} missing={missing} extraLine={extraLine}
+                               rarity={rarity} missing={missing} extraLine={extraLine} mathLine={mathLine}
                                onToggleMode={toggleCopiesMode} />
               </div>
             )}
@@ -365,20 +373,21 @@ function OpenedCard({ card, sources, onClose }: { card: string; sources: string[
 // The faint bar behind the solid one is the spreadsheet's "after packs + future" projection, and the
 // owned count doubles as the playset/singles switch
 function CompletionBar({
-  label, owned, total, pct, projected, rarity, missing, extraLine, onToggleMode,
+  label, owned, total, pct, projected, rarity, missing, extraLine, mathLine, onToggleMode,
 }: {
   label: string; owned: number; total: number; pct: number; projected: number | null; rarity: RarityStyle;
   missing: number;
   /** appended to the tooltip where the section has one, as rares do with their drafts estimate */
   extraLine: string | null;
+  mathLine: string | null;
   onToggleMode: () => void;
 }) {
-  const tip = [`${missing} singles missing`, extraLine].filter(Boolean).join(" - ");
+  const tip = [`${missing} singles missing`, extraLine].filter(Boolean).join("\u00a0\u00a0-\u00a0\u00a0");
   // Radix closes an uncontrolled tooltip on pointer down, and this trigger is also the mode switch
   const [hovered, setHovered] = useState(false);
 
   return (
-    <Tooltip label={tip} open={hovered}>
+    <Tooltip label={<TooltipLines first={tip} second={mathLine} />} open={hovered}>
       <button
         onClick={onToggleMode}
         onPointerEnter={() => setHovered(true)}
@@ -459,6 +468,34 @@ function EconomyCell({
       </Tooltip>
     </>
   );
+}
+
+function TooltipLines({ first, second }: { first: string; second: string | null }) {
+  return (
+    <>
+      <div>{first}</div>
+      {second && <div className="mt-1 text-muted tabular-nums">{withGreenOperators(second)}</div>}
+    </>
+  );
+}
+
+function withGreenOperators(formula: string): ReactNode[] {
+  return formula.split(/([+×])/).map((part, i) => (
+    part === "+" || part === "×" ? <span key={i} className="text-green">{part}</span> : part
+  ));
+}
+
+function rareCompletionFormula(math: RareCompletionMath): string {
+  const golden = math.goldenPacks ? ` + ${math.goldenPacks} Golden × ${math.raresPerGoldenPack.toFixed(1)}` : "";
+  return `${math.owned} + ${math.packsToOpen} Packs × ${math.raresPerPack.toFixed(3)}${golden}`
+    + ` = ${Math.floor(math.projected)} of ${math.playsetTotal}`;
+}
+
+function mythicCompletionFormula(math: MythicCompletionMath): string {
+  const golden = math.goldenPacks ? ` + ${math.goldenPacks} Golden × ${math.mythicsPerGoldenPack.toFixed(2)}` : "";
+  const icrs = math.remainingIcrs ? ` + ${math.remainingIcrs} ICR` : "";
+  return `${math.owned} + ${math.packsToOpen} Packs × ${math.mythicsPerPack.toFixed(3)}${golden}${icrs}`
+    + ` = ${Math.floor(math.projected)} of ${math.playsetTotal}`;
 }
 
 /** Computed from the economy inputs, so it carries no input affordance */

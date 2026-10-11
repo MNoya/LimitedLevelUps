@@ -58,15 +58,17 @@ export function useDraftRates(slug: string | undefined, setCode: string, account
   return useMemo(() => {
     const rows = arenaDrafts(events, accountId);
     if (!rows.length) {
-      return { avgRares: null, avgPacksWon: null };
+      return { avgRares: null, avgMythics: null, avgPacksWon: null };
     }
 
     let rares = 0;
+    let mythics = 0;
     let packs = 0;
     for (const e of rows) {
       rares += e.poolRares ?? 0;
+      mythics += e.poolMythics ?? 0;
       packs += payoutFor(e.format, e.wins)?.packs ?? 0;
     }
-    return { avgRares: rares / rows.length, avgPacksWon: packs / rows.length };
+    return { avgRares: rares / rows.length, avgMythics: mythics / rows.length, avgPacksWon: packs / rows.length };
   }, [events, accountId]);
 }

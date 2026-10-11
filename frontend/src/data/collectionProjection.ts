@@ -72,6 +72,7 @@ const GOLDEN_PACK_YIELD: PackYield = {
 };
 
 const FALLBACK_AVG_RARES = 3;
+const FALLBACK_AVG_MYTHICS = 0.5;
 const FALLBACK_AVG_PACKS = 2.5;
 
 /** Null for a set with no researched rules, so callers show a blank instead of another set's numbers */
@@ -105,9 +106,20 @@ export function remainingMasteryPacks(masteryLevel: number, track: MasteryTrack)
 }
 
 export interface Projection {
-  futureRewardPacks: number;
   rarePct: number;
   mythicPct: number;
+  mythicMath: MythicCompletionMath;
+}
+
+export interface MythicCompletionMath {
+  owned: number;
+  playsetTotal: number;
+  packsToOpen: number;
+  mythicsPerPack: number;
+  goldenPacks: number;
+  mythicsPerGoldenPack: number;
+  remainingIcrs: number;
+  projected: number;
 }
 
 export function projectCompletion(
@@ -116,20 +128,25 @@ export function projectCompletion(
   mythics: { owned: number; cards: number },
   rules: SetPackRules,
 ): Projection {
-  const futureRewardPacks = remainingMasteryPacks(economy.masteryLevel, rules.track) + economy.rankedSeasonPacks;
   const rareTotal = rares.cards * 4;
-  const mythicTotal = mythics.cards * 4;
-  const projectedMythics =
-    mythics.owned
-    + (economy.packsOwned + futureRewardPacks) * packYield(rules).mythics
-    + economy.goldenPacks * GOLDEN_PACK_YIELD.mythics
-    + remainingMythicIcrs(economy.masteryLevel, rules.track);
+  const mythicMath = mythicCompletionMath(economy, mythics, rules);
 
   return {
-    futureRewardPacks,
     rarePct: rareTotal ? Math.round((projectedRares(economy, rares.owned, rules) / rareTotal) * 100) : 0,
-    mythicPct: mythicTotal ? Math.round((projectedMythics / mythicTotal) * 100) : 0,
+    mythicPct: mythicMath.playsetTotal ? Math.round((mythicMath.projected / mythicMath.playsetTotal) * 100) : 0,
+    mythicMath,
   };
+}
+
+export interface RareCompletionMath {
+  owned: number;
+  playsetTotal: number;
+  packsToOpen: number;
+  raresPerPack: number;
+  goldenPacks: number;
+  raresPerGoldenPack: number;
+  projected: number;
+  packsNeeded: number;
 }
 
 /** Extra packs to accrue for a full rare playset, past every pack already owned or promised */
@@ -137,33 +154,101 @@ export function packsToRareComplete(
   economy: SetEconomy,
   rares: { owned: number; cards: number },
   rules: SetPackRules,
-): number {
-  const shortfall = rares.cards * 4 - projectedRares(economy, rares.owned, rules);
-  return Math.max(Math.ceil(shortfall / packYield(rules).rares), 0);
+): RareCompletionMath {
+  const raresPerPack = packYield(rules).rares;
+  const playsetTotal = rares.cards * 4;
+  const projected = projectedRares(economy, rares.owned, rules);
+  const shortfall = Math.max(playsetTotal - projected, 0);
+  return {
+    owned: rares.owned,
+    playsetTotal,
+    packsToOpen: packsToOpen(economy, rules),
+    raresPerPack,
+    goldenPacks: economy.goldenPacks,
+    raresPerGoldenPack: GOLDEN_PACK_YIELD.rares,
+    projected,
+    packsNeeded: Math.ceil(shortfall / raresPerPack),
+  };
+}
+
+export interface DraftRates {
+  avgRares: number | null;
+  avgMythics: number | null;
+  avgPacksWon: number | null;
 }
 
 /** Drafts still needed for a full rare set once every owned and future pack has been opened */
 export function draftsToRareComplete(
   economy: SetEconomy,
   rares: { owned: number; cards: number },
-  perDraft: { avgRares: number | null; avgPacksWon: number | null },
+  perDraft: DraftRates,
   rules: SetPackRules,
 ): number {
-  const avgRares = perDraft.avgRares ?? FALLBACK_AVG_RARES;
-  const avgPacksWon = perDraft.avgPacksWon ?? FALLBACK_AVG_PACKS;
-  const raresPerDraft = avgRares + avgPacksWon * packYield(rules).rares;
-  if (raresPerDraft <= 0) {
+  const shortfall = rares.cards * 4 - projectedRares(economy, rares.owned, rules);
+  const raresPerDraft = draftYield(perDraft.avgRares ?? FALLBACK_AVG_RARES, perDraft, packYield(rules).rares);
+  return unitsToCover(shortfall, raresPerDraft);
+}
+
+/** Drafts still needed for a full mythic set once every owned and future pack and ICR has been claimed */
+export function draftsToMythicComplete(
+  economy: SetEconomy,
+  mythics: { owned: number; cards: number },
+  perDraft: DraftRates,
+  rules: SetPackRules,
+): number {
+  const math = mythicCompletionMath(economy, mythics, rules);
+  const mythicsPerDraft = draftYield(perDraft.avgMythics ?? FALLBACK_AVG_MYTHICS, perDraft, packYield(rules).mythics);
+  return unitsToCover(math.playsetTotal - math.projected, mythicsPerDraft);
+}
+
+/** Mythics still missing once every owned and future pack and ICR has been claimed */
+export function mythicsToComplete(
+  economy: SetEconomy,
+  mythics: { owned: number; cards: number },
+  rules: SetPackRules,
+): number {
+  const math = mythicCompletionMath(economy, mythics, rules);
+  return Math.max(Math.ceil(math.playsetTotal - math.projected), 0);
+}
+
+function draftYield(pickedPerDraft: number, perDraft: DraftRates, perPack: number): number {
+  return pickedPerDraft + (perDraft.avgPacksWon ?? FALLBACK_AVG_PACKS) * perPack;
+}
+
+function unitsToCover(shortfall: number, perUnit: number): number {
+  if (perUnit <= 0) {
     return 0;
   }
-
-  const shortfall = rares.cards * 4 - projectedRares(economy, rares.owned, rules);
-  return Math.max(Math.ceil(shortfall / raresPerDraft), 0);
+  return Math.max(Math.ceil(shortfall / perUnit), 0);
 }
 
 function projectedRares(economy: SetEconomy, owned: number, rules: SetPackRules): number {
-  const packsToOpen =
-    economy.packsOwned + remainingMasteryPacks(economy.masteryLevel, rules.track) + economy.rankedSeasonPacks;
-  return owned + packsToOpen * packYield(rules).rares + economy.goldenPacks * GOLDEN_PACK_YIELD.rares;
+  return owned + packsToOpen(economy, rules) * packYield(rules).rares + economy.goldenPacks * GOLDEN_PACK_YIELD.rares;
+}
+
+function packsToOpen(economy: SetEconomy, rules: SetPackRules): number {
+  return economy.packsOwned + remainingMasteryPacks(economy.masteryLevel, rules.track) + economy.rankedSeasonPacks;
+}
+
+function mythicCompletionMath(
+  economy: SetEconomy,
+  mythics: { owned: number; cards: number },
+  rules: SetPackRules,
+): MythicCompletionMath {
+  const toOpen = packsToOpen(economy, rules);
+  const mythicsPerPack = packYield(rules).mythics;
+  const remainingIcrs = remainingMythicIcrs(economy.masteryLevel, rules.track);
+  return {
+    owned: mythics.owned,
+    playsetTotal: mythics.cards * 4,
+    packsToOpen: toOpen,
+    mythicsPerPack,
+    goldenPacks: economy.goldenPacks,
+    mythicsPerGoldenPack: GOLDEN_PACK_YIELD.mythics,
+    remainingIcrs,
+    projected:
+      mythics.owned + toOpen * mythicsPerPack + economy.goldenPacks * GOLDEN_PACK_YIELD.mythics + remainingIcrs,
+  };
 }
 
 function remainingMythicIcrs(masteryLevel: number, track: MasteryTrack): number {
