@@ -49,7 +49,7 @@ export async function fetchSetCardPool(setCode: string): Promise<SetCardPool> {
   const code = setCode.toLowerCase();
   const bonus = bonusSheets[setCode];
   const bonusCode = bonus?.setCode.toLowerCase();
-  const bonusClause = bonusCode ? ` or (set:${bonusCode} is:firstprint)` : "";
+  const bonusClause = bonusCode ? ` or set:${bonusCode}` : "";
   const guestClause = `(set:${SPECIAL_GUESTS_SET} date=${code})`;
   const printings = await scryfallSearch(`game:arena (set:${code} or ${guestClause}${bonusClause})`);
   const setPrintings = printings.filter((printing) => printing.set === code);
@@ -57,11 +57,11 @@ export async function fetchSetCardPool(setCode: string): Promise<SetCardPool> {
     return { cards: [], specialGuests: [], bonusSheet: null };
   }
   const guestPrintings = printings.filter((printing) => printing.set === SPECIAL_GUESTS_SET);
-  const bonusPrintings = printings.filter((printing) => printing.set === bonusCode);
+  const bonusCards = firstPrintingPerName(printings.filter((printing) => printing.set === bonusCode));
   return {
     cards: firstPrintingPerName(draftable(setPrintings)),
     specialGuests: firstPrintingPerName(guestPrintings),
-    bonusSheet: bonus ? { ...bonus, cards: firstPrintingPerName(bonusPrintings) } : null,
+    bonusSheet: bonus ? { setCode: bonus.setCode, label: bonus.label, cards: bonusCards } : null,
   };
 }
 
