@@ -31,6 +31,7 @@ from bot.services.pod_schedule import (
     SCHEDULE_TZ,
     build_recruiting_message,
     build_underfill_fired_message,
+    players_to_next_table,
     render_pod_name,
 )
 from bot.services.pod_signals import KIND_QUEUE
@@ -219,13 +220,14 @@ def _for_set(targets: list[RallyTarget], set_code: str | None) -> list[RallyTarg
 def _lobby_line(target: RallyTarget, aim: int) -> str:
     """An empty lobby drops the occupancy clause: `0 waiting` reads as a fault, and the seats needed
     already say the table is empty."""
-    needed = max(1, aim - target.seated)
+    needed, ask = players_to_next_table(target.seated, aim)
     waiting = RALLY_LOBBY_WAITING.format(seated=target.seated) if target.seated else ""
     return RALLY_LOBBY.format(
         thread_url=target.url,
         waiting=waiting,
         needed=needed,
         plural=plural(needed),
+        ask=ask,
         manat=emojis.get("manat"),
         session_url=draftmancer_url_for(target.session_id or ""),
     )

@@ -12,13 +12,11 @@ to its siblings, not back in those modules. A line naming a pod takes an already
 symbol does not touch the next word.
 """
 
-RECRUITING_BELOW_FLOOR = (
-    "{hello}{name} <t:{unix}:R> needs **{to_floor} more player{plural}** to fire a Team Draft "
-    "{manat} [**Sign up here**]({jump_url})"
-)
+TEAM_DRAFT_ASK = "to fire a Team Draft"
+FULL_POD_ASK = "for a full Pod Draft"
 
 RECRUITING_SHORT = (
-    "{hello}{name} <t:{unix}:R> needs **{to_aim} more player{plural}** for a full Pod Draft "
+    "{hello}{name} <t:{unix}:R> needs **{needed} more player{plural}** {ask} "
     "{manat} [**Sign up here**]({jump_url})"
 )
 
@@ -76,7 +74,7 @@ DRAFT_STARTED = (
 )
 
 RALLY_LOBBY = (
-    "{thread_url} needs **{needed} more player{plural}**{waiting} in the {manat} "
+    "{thread_url} needs **{needed} more player{plural}** {ask}{waiting} in the {manat} "
     "[**Draftmancer Lobby**]({session_url})"
 )
 

@@ -243,7 +243,8 @@ def _rally_states(thread_url: str) -> list[tuple[str, pod_rally.RallyTarget]]:
     lobby = [
         ("Lobby open, nobody has arrived", 0),
         ("Lobby open, one arrival", 1),
-        ("Lobby open, below the fire threshold", 5),
+        ("Lobby open, one short of a Team Draft", 5),
+        ("Lobby open, Team Draft ready, short of a full pod", 6),
         ("Lobby open, one seat short", 7),
     ]
     states = [
@@ -305,11 +306,11 @@ def _reminder_timeline(
         return (f"`{const}` ({desc})", body, None)
 
     return [
-        text("RECRUITING_BELOW_FLOOR", "short of the floor",
+        text("RECRUITING_SHORT + TEAM_DRAFT_ASK", "short of the floor",
              build_recruiting_message(pod_name, floor - 2, target, slot, url)),
-        text("RECRUITING_BELOW_FLOOR", "one short of the floor",
+        text("RECRUITING_SHORT + TEAM_DRAFT_ASK", "one short of the floor",
              build_recruiting_message(pod_name, floor - 1, target, slot, url)),
-        text("RECRUITING_SHORT", "the draft is on, short of the aim",
+        text("RECRUITING_SHORT + FULL_POD_ASK", "the draft is on, short of the aim",
              build_recruiting_message(pod_name, floor, target, slot, url)),
         text("RECRUITING_READY", "full pod",
              build_recruiting_message(pod_name, target, target, slot, url, maybe_count=2)),

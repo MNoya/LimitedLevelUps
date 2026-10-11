@@ -15,12 +15,13 @@ from bot.discord_helpers import plural
 from bot.services import pod_format, pod_format_interest
 from bot.services.pod_reminder_copy import (
     DRAFT_STARTED,
-    RECRUITING_BELOW_FLOOR,
+    FULL_POD_ASK,
     RECRUITING_MAYBE,
     RECRUITING_READY,
     RECRUITING_SECOND_TABLE,
     RECRUITING_SHORT,
     STAGED_TABLE_SHORT,
+    TEAM_DRAFT_ASK,
 )
 
 
@@ -153,15 +154,19 @@ def build_recruiting_message(
         "hello": emojis.prefix("chordoHello"), "name": name, "count": count, "unix": unix,
         "jump_url": jump_url, "manat": emojis.get("manat"),
     }
-    if count < TEAM_DRAFT_PLAYERS:
-        needed = TEAM_DRAFT_PLAYERS - count
-        return RECRUITING_BELOW_FLOOR.format(to_floor=needed, plural=plural(needed), **shared).rstrip()
     if count < aim:
-        needed = aim - count
-        return RECRUITING_SHORT.format(to_aim=needed, plural=plural(needed), **shared).rstrip()
+        needed, ask = players_to_next_table(count, aim)
+        return RECRUITING_SHORT.format(needed=needed, plural=plural(needed), ask=ask, **shared).rstrip()
     maybe = RECRUITING_MAYBE.format(maybe=maybe_count) if maybe_count else ""
     tail = RECRUITING_SECOND_TABLE if count + maybe_count >= 2 * aim else ""
     return RECRUITING_READY.format(yes=count, maybe=maybe, tail=tail, **shared).rstrip()
+
+
+def players_to_next_table(count: int, aim: int) -> tuple[int, str]:
+    """Seats short of a Team Draft while under the floor, of a full pod past it, with the ask that names it"""
+    if count < TEAM_DRAFT_PLAYERS:
+        return TEAM_DRAFT_PLAYERS - count, TEAM_DRAFT_ASK
+    return max(1, aim - count), FULL_POD_ASK
 
 
 def build_staged_table_message(
