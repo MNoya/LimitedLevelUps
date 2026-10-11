@@ -783,7 +783,7 @@ def _team_reveal_preview_parts() -> tuple[list[str], dict[str, str]]:
 _TEAM_PREVIEW_RECORDS = [(3, 0), (2, 1), (1, 2), (3, 0), (0, 3), (0, 3)]
 _TEAM_PREVIEW_COLORS = ["WU", "BR", "WBg", "UG", "RG", "WB"]
 _TEAM_PREVIEW_CAPTIONS = [
-    "fliers win games", "rakdos did rakdos things", None,
+    "3-0 6-0 fliers win games", "rakdos did rakdos things", None,
     "undefeated on the losing side", None, "never drew the bomb",
 ]
 

@@ -3463,11 +3463,10 @@ def escape_italics(text: str) -> str:
     return text.replace("_", "\\_").replace("*", "\\*")
 
 
-_LEADING_RECORD_RE = re.compile(r"^\s*\d{1,2}\s*[-:\s]\s*\d{1,2}(?:\s*[-:\s]\s*\d{1,2})?\s*[,;:.\-]?\s*")
+_LEADING_RECORD_RE = re.compile(r"^\s*\d{1,2}\s*[-:\s]\s*\d{1,2}(?:\s*[-:]\s*\d{1,2})?\s*[,;:.\-]?\s*")
 
 
 def clean_caption(raw: str) -> str:
-    """Strip a leading W-L like '2-1' / '3:0' / '3 0' — the standings row already shows the record."""
     return _LEADING_RECORD_RE.sub("", raw).strip()
 
 

@@ -1,8 +1,24 @@
+import pytest
+
 from bot.services.pod_swiss import Standing
 from bot.services.pod_tournament import (
     build_champion_embed,
+    clean_caption,
     normalize_player_name,
 )
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("2-1 WGb splash", "WGb splash"),
+    ("3:0, easy", "easy"),
+    ("0-2-1 dropped after two", "dropped after two"),
+    ("3-0 6-0 boomer jund", "6-0 boomer jund"),
+    ("2-1 4 color stuff", "4 color stuff"),
+])
+def test_clean_caption_strips_only_the_leading_match_record(raw, expected):
+    cleaned = clean_caption(raw)
+
+    assert cleaned == expected
 
 
 def test_medals_hidden_while_champion_undecided():
