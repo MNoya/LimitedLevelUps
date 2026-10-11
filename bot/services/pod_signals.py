@@ -87,6 +87,11 @@ def offers_daily_bonus(day: date) -> bool:
     return start is not None and day < start
 
 
+def is_daily_bonus_time(event_time: datetime) -> bool:
+    local = event_time.astimezone(SCHEDULE_TZ)
+    return local.time() == BONUS_BUCKET.start and offers_daily_bonus(local.date())
+
+
 def owning_slot_key(event_time: datetime) -> str | None:
     local = event_time.astimezone(SCHEDULE_TZ)
     minutes = local.hour * 60 + local.minute

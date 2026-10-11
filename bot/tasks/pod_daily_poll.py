@@ -25,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import Counter
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import discord
 from discord.ext import commands
@@ -120,6 +120,7 @@ from bot.services.pod_signals import (
     SLOT_BONUS,
     SLOT_EARLY,
     SLOT_LATE,
+    SLOT_ORDER,
     RSVP_MAYBE,
     RSVP_NO,
     RSVP_YES,
@@ -129,6 +130,7 @@ from bot.services.pod_signals import (
     bucket_by_key,
     bucket_role_name,
     format_of,
+    is_daily_bonus_time,
     slot_of,
     should_fire,
     slot_can_fire,
@@ -541,22 +543,34 @@ def _slot_order(slots: list[pod_launch.LauncherSlot]) -> list[str]:
 
 
 def _ordered_slots(slots: list[pod_launch.LauncherSlot]) -> list[str]:
-    """Render order: the Early and Late pair, with Bonus before it when the earliest bonus pod starts before
-    Early and after it otherwise, so the rows read in time order."""
-    fixed = [slot_key for slot_key in _slot_order(slots) if slot_key != SLOT_BONUS]
+    """Button order: the daily Bonus sits between Early and Late, and any other Bonus follows its row"""
+    present = _slot_order(slots)
+    if _has_daily_bonus(slots):
+        return [slot_key for slot_key in SLOT_ORDER if slot_key in present]
+    fixed = [slot_key for slot_key in present if slot_key != SLOT_BONUS]
     if not any(slot_of(slot.bucket_key) == SLOT_BONUS for slot in slots):
         return fixed
     return [SLOT_BONUS] + fixed if _bonus_placed_first(slots) else fixed + [SLOT_BONUS]
 
 
+def _has_daily_bonus(slots: list[pod_launch.LauncherSlot]) -> bool:
+    for slot in _key_slots(slots, SLOT_BONUS):
+        if slot.slot_time is not None and is_daily_bonus_time(slot.slot_time):
+            return True
+    return False
+
+
 def _bonus_placed_first(slots: list[pod_launch.LauncherSlot]) -> bool:
-    """Whether the earliest bonus pod starts before the day's Early pod, or before Late when no Early column
-    is on the board. Below by default."""
-    bonus_times = [slot.slot_time for slot in slots if slot_of(slot.bucket_key) == SLOT_BONUS and slot.slot_time]
-    if not bonus_times:
-        return False
+    """Whether the earliest bonus pod starts earlier in the day than Early, or Late with no Early column"""
+    bonus_start = _slot_start(slots, SLOT_BONUS)
     reference = _slot_start(slots, SLOT_EARLY) or _slot_start(slots, SLOT_LATE)
-    return reference is not None and min(bonus_times) < reference
+    if bonus_start is None or reference is None:
+        return False
+    return _clock_time(bonus_start) < _clock_time(reference)
+
+
+def _clock_time(moment: datetime) -> time:
+    return moment.astimezone(SCHEDULE_TZ).time()
 
 
 def _slot_start(slots: list[pod_launch.LauncherSlot], slot_key: str) -> datetime | None:
