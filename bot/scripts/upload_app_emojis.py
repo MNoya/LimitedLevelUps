@@ -22,14 +22,12 @@ import re
 import shutil
 import sys
 import tempfile
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import requests
 
 from bot.config import settings
-from bot.scripts.generate_set_symbols import rasterize, squarify
+from bot.scripts.generate_set_symbols import fetch_white_svg, rasterize
 
 API_BASE = "https://discord.com/api/v10"
 SVG_URLS = {
@@ -82,15 +80,9 @@ def upload(specs: list[tuple[str, str, str]], force: bool) -> int:
 def _render_glyph(source: str, glyph: str, name: str) -> bytes | None:
     if source == "file":
         return _render_file(glyph)
-    url = SVG_URLS[source].format(glyph=glyph)
-    try:
-        with urllib.request.urlopen(url, timeout=20) as resp:
-            raw = resp.read().decode("utf-8")
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return None
-        raise
-    svg = squarify(raw.replace("#444", "#ffffff").replace("<svg ", '<svg fill="#ffffff" ', 1))
+    svg = fetch_white_svg(SVG_URLS[source].format(glyph=glyph))
+    if svg is None:
+        return None
     workdir = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory(dir=workdir) as tmp:
         png_path = Path(tmp) / f"{name}.png"

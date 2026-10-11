@@ -155,6 +155,7 @@ const BESPOKE_GLYPHS: Record<string, BespokeGlyph> = {
   EVG: { src: LLU_LOGO_SRC, mode: "image" },
   MEMA: { src: `${import.meta.env.BASE_URL}set-symbols/mema.png`, mode: "mask" },
   FRC: { src: `${import.meta.env.BASE_URL}set-symbols/frc.svg`, mode: "mask" },
+  TRK: { src: `${import.meta.env.BASE_URL}set-symbols/trk.png`, mode: "mask" },
 };
 
 export function keyruneClass(code: string): string {

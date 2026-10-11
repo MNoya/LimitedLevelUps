@@ -1,4 +1,5 @@
-"""Generate white-on-transparent set-symbol PNGs for the leaderboard from keyrune.
+"""Generate white-on-transparent set-symbol PNGs for the leaderboard from keyrune, or from Scryfall's set icon
+for a set keyrune has not drawn yet.
 
 Keyrune ships each set glyph as a monochrome ``#444`` SVG; the leaderboard renders
 white symbols on dark surfaces (Discord unfurls, the site), so each glyph is
@@ -29,6 +30,7 @@ from pathlib import Path
 from bot.sets import ALL_SETS, MTGO_FLASHBACK_SETS
 
 KEYRUNE_SVG_URL = "https://cdn.jsdelivr.net/gh/andrewgioia/keyrune@latest/svg/{code}.svg"
+SCRYFALL_SVG_URL = "https://svgs.scryfall.io/sets/{code}.svg"
 OUTPUT_DIR = Path(__file__).resolve().parents[2] / "frontend" / "public" / "set-symbols"
 SYMBOL_PX = 256
 
@@ -38,7 +40,7 @@ KEYRUNE_ALIAS = {"SIR": "soi", "IPA": "inv", "CHAOS": "mb2"}
 
 
 def generate(codes: list[str]) -> tuple[list[str], list[str]]:
-    """Generate a PNG for each code; return ``(generated, missing)`` where missing codes have no keyrune glyph."""
+    """Generate a PNG for each code; return ``(generated, missing)`` where missing codes have no glyph anywhere."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     generated: list[str] = []
     missing: list[str] = []
@@ -56,7 +58,15 @@ def generate(codes: list[str]) -> tuple[list[str], list[str]]:
 
 def _fetch_white_svg(code: str) -> str | None:
     glyph = KEYRUNE_ALIAS.get(code.upper(), code.lower())
-    url = KEYRUNE_SVG_URL.format(code=glyph)
+    svg = fetch_white_svg(KEYRUNE_SVG_URL.format(code=glyph))
+    if svg is None:
+        svg = fetch_white_svg(SCRYFALL_SVG_URL.format(code=code.lower()))
+    return svg
+
+
+def fetch_white_svg(url: str) -> str | None:
+    """The icon at `url` recolored white and squared, or None when there is none. Keyrune paints its glyphs
+    #444 and Scryfall leaves the fill unset, so both the explicit color and the root default turn white."""
     try:
         with urllib.request.urlopen(url, timeout=20) as resp:
             raw = resp.read().decode("utf-8")
@@ -64,7 +74,7 @@ def _fetch_white_svg(code: str) -> str | None:
         if e.code == 404:
             return None
         raise
-    return squarify(raw.replace("#444", "#ffffff"))
+    return squarify(raw.replace("#444", "#ffffff").replace("<svg ", '<svg fill="#ffffff" ', 1))
 
 
 def squarify(svg: str) -> str:
@@ -126,7 +136,7 @@ def main(argv: list[str]) -> int:
     generated, missing = generate(codes)
     print(f"generated {len(generated)}: {', '.join(generated) or '(none)'}")
     if missing:
-        print(f"no keyrune glyph, skipped: {', '.join(missing)}")
+        print(f"no keyrune or Scryfall glyph, skipped: {', '.join(missing)}")
     return 0
 
 
