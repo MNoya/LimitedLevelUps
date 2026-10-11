@@ -84,7 +84,7 @@ def test_the_ballot_is_ordered_newest_release_first_regardless_of_votes():
     assert order.index("FIN") < order.index("NEO")
     assert "DSK" in order
     assert "PEASANT" not in order
-    assert "MEMA" not in order
+    assert order[-2:] == ["MEMA", "CHAOS"]
 
 
 def test_the_ballot_keeps_voted_options_when_it_overflows_the_grid():

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from bot.commands.authorization import organizer_authorized_interaction
 from bot.database import SessionLocal
 from bot.discord_helpers import (
+    NBSP,
     RenderQueue,
     extract_avatar_hash,
     pin_quietly,
@@ -30,7 +31,7 @@ from bot.discord_helpers import (
 )
 from bot.models import PodDraftEvent, PodDraftParticipant, PodFormatVote, Player
 from bot.services.championship_dates import plan_for, vote_opens_at, vote_reminder_at, voting_open
-from bot.services.pod_format import custom_formats, is_custom
+from bot.services.pod_format import BALLOT_EXTRA_CODES, custom_formats, is_custom
 from bot.services.pod_format_poll import (
     MAX_ROWED_OPTIONS,
     ROW_WIDTH,
@@ -105,9 +106,8 @@ def season_code(when=None) -> str:
 
 
 def seed_formats() -> list[str]:
-    """The formats always on the ballot: the curated flashback sets, so a season opens with the community's
-    candidates to click. The cubes are fixed on the schedule and are not up for a vote."""
-    return [seed.code for seed in flashback_picker_sets()]
+    """The formats always on the ballot: the curated flashback sets, then the extra formats in their listed order"""
+    return [seed.code for seed in flashback_picker_sets()] + list(BALLOT_EXTRA_CODES)
 
 
 def toggle_vote(session: Session, voter: discord.abc.User, season: str, code: str) -> bool:
@@ -240,9 +240,9 @@ def voters_by_format(session: Session, season: str) -> dict[str, list[str]]:
 
 def ballot_order(counts: dict[str, int], limit: int = MAX_ROWED_OPTIONS) -> list[str]:
     """The formats to show, the seeded flashback sets plus every written-in format, displayed newest release
-    first. Within `limit` the order is fixed on release date so a button never moves under a clicker. When the
-    list overruns `limit` the most-voted are kept, so a format a player picked is never dropped for an unvoted
-    or less-voted one."""
+    first with the extra formats last. Within `limit` the order is fixed so a button never moves under a clicker.
+    When the list overruns `limit` the most-voted are kept, so a format a player picked is never dropped for an
+    unvoted or less-voted one."""
     codes = list(seed_formats())
     for code in counts:
         if code not in codes:
@@ -250,8 +250,15 @@ def ballot_order(counts: dict[str, int], limit: int = MAX_ROWED_OPTIONS) -> list
     if len(codes) > limit:
         codes.sort(key=lambda code: (counts.get(code, 0), _release_sort_key(code)), reverse=True)
         codes = codes[:limit]
-    codes.sort(key=_release_sort_key, reverse=True)
+    codes.sort(key=_ballot_sort_key, reverse=True)
     return codes
+
+
+def _ballot_sort_key(code: str) -> tuple[int, date | int]:
+    """Sets newest release first, then the extra formats in their listed order"""
+    if code in BALLOT_EXTRA_CODES:
+        return 0, -BALLOT_EXTRA_CODES.index(code)
+    return 1, _release_sort_key(code)
 
 
 def _release_sort_key(code: str) -> date:
@@ -289,8 +296,9 @@ def _extra_voted(counts: dict[str, int], shown: list[str]) -> list[tuple[str, in
 
 
 def render_panel(season: str, codes: list[str], counts: dict[str, int]) -> tuple[discord.Embed, ui.View]:
-    """The embed and view for given data, without a DB read — for previews."""
-    return _vote_embed(season, codes, counts), build_vote_view(codes)
+    """The embed and view for given data without a DB read, for previews; codes past the grid list as Also Voted"""
+    shown = codes[:MAX_ROWED_OPTIONS]
+    return _vote_embed(season, shown, counts, _extra_voted(counts, shown)), build_vote_view(shown)
 
 
 def preview_codes(count: int) -> list[str]:
@@ -328,9 +336,32 @@ def _vote_embed(
     for _ in range(pad):
         embed.add_field(name=NBSP_FIELD, value=NBSP_FIELD, inline=True)
     if extras:
-        listed = "  ".join(f"{_emoji_prefix(code)}**{code}** {count}" for code, count in extras)
+        listed = _also_voted_rows(extras)
         embed.add_field(name=MSG_ALSO_VOTED.format(plus=add_button_emoji()), value=listed, inline=False)
     return embed
+
+
+def _also_voted_rows(extras: list[tuple[str, int]]) -> str:
+    """Six formats a row, each padded to its column's widest entry so the columns line up despite a long code"""
+    per_row = 6
+    rows = [extras[i:i + per_row] for i in range(0, len(extras), per_row)]
+    widths = [0.0] * per_row
+    for row in rows:
+        for column, (code, count) in enumerate(row):
+            widths[column] = max(widths[column], _entry_width(code, count))
+    lines = []
+    for row in rows:
+        cells = []
+        for column, (code, count) in enumerate(row):
+            pad = NBSP * int(widths[column] - _entry_width(code, count) + 0.5)
+            cells.append(f"{_emoji_prefix(code)}**{code}** {count}{pad}")
+        lines.append((NBSP * 3).join(cells))
+    return "\n".join(lines)
+
+
+def _entry_width(code: str, count: int) -> float:
+    """An entry's width in non-breaking spaces: a bold capital spans about two and a half, a digit two"""
+    return 2.5 * len(code) + 2 * len(str(count))
 
 
 def _voters_panel(season: str, discord_id: str) -> discord.Embed:

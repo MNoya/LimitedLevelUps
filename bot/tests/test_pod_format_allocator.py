@@ -85,6 +85,15 @@ def test_run_allocation_fills_both_slots_and_never_touches_a_manual_row(session)
     assert (WED, SLOT_LATE) in assignments
 
 
+def test_a_votable_cube_earns_flashback_days_like_a_set(session):
+    _seed_floor_votes(session, "MEMA")
+    session.commit()
+
+    assignments = run_allocation(session, MON, rewrite=True, now=REVEALED)
+
+    assert assignments[(MON, SLOT_EARLY)] == ("HOB", "MEMA")
+
+
 def test_run_allocation_holds_flashbacks_until_a_day_after_the_first_vote(session):
     _seed_floor_votes(session, "NEO")
     session.commit()

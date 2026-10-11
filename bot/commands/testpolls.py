@@ -69,6 +69,7 @@ from bot.services.ping_roles import (
     spec_named,
     strip_pod_roles,
 )
+from bot.listeners.quick_links import flashback_season_body, flashback_season_view
 from bot.services.championship_dates import plan_for, season_start
 from bot.services.pod_schedule import POD_QUEUE_ROLE_NAME
 from bot.services.pod_signals import (
@@ -232,13 +233,23 @@ async def setup(bot: commands.Bot) -> None:
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
+    @test_group.command(name="flashback")
+    @commands.is_owner()
+    async def test_flashback(ctx: commands.Context, on_date: str = "") -> None:
+        """Owner-only. Post `!flashback` as it reads at noon ET on `on_date` (YYYY-MM-DD, default today), so the
+        countdown, the live vote and the running season can each be seen ahead of time."""
+        day = date.fromisoformat(on_date) if on_date else datetime.now(SCHEDULE_TZ).date()
+        when = datetime.combine(day, time(12), tzinfo=SCHEDULE_TZ)
+        embed = discord.Embed(description=flashback_season_body(ctx.guild, when), color=discord.Color.green())
+        await ctx.send(embed=embed, view=flashback_season_view(when))
+
     @test_group.command(name="votecard")
     @commands.is_owner()
     async def test_votecard(ctx: commands.Context, count: int = 0) -> None:
         """Owner-only. Post and pin the public vote card here with the opening ping, the same one the tick
         posts when voting opens, replacing any already up. A count seeds that many formats with descending
-        fake counts for a density preview instead, posted unpinned. Vote from the real card or an ephemeral
-        /pod-schedule copy to see it repaint."""
+        fake counts for a density preview instead, posted unpinned, and past 20 the rest list as Also Voted.
+        Vote from the real card or an ephemeral /pod-schedule copy to see it repaint."""
         if count > 0:
             codes = preview_codes(count)
             counts = {code: count - index for index, code in enumerate(codes)}

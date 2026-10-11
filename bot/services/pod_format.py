@@ -79,6 +79,8 @@ CUSTOM_FORMATS: dict[str, PodFormat] = {
         command_name="sampcube", hidden=True),
 }
 
+BALLOT_EXTRA_CODES: tuple[str, ...] = (MEMA_CODE, "CHAOS")
+
 _CARD_LIST_CACHE: dict[str, str] = {}
 
 CUBE_MARKER = "cube:"

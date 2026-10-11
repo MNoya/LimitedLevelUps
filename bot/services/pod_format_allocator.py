@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from bot.models import PodDraftEvent, PodDraftParticipant, PodFormatVote, PodScheduleSlot, PodSignal
 from bot.services.championship_dates import championship_date_for, season_start
-from bot.services.pod_format import PEASANT_CODE, is_custom
+from bot.services.pod_format import PEASANT_CODE, BALLOT_EXTRA_CODES, is_custom
 from bot.services.pod_format_schedule import (
     FLASHBACK,
     auto_slots,
@@ -258,9 +258,9 @@ def _flashback_scores(session: Session, season: str, latest: str) -> dict[str, f
 
 
 def _is_flashback_candidate(code: str, latest: str) -> bool:
-    if code in (latest, STAPLE_FORMAT):
-        return False
-    if is_custom(code):
+    if code in BALLOT_EXTRA_CODES:
+        return True
+    if code in (latest, STAPLE_FORMAT) or is_custom(code):
         return False
     return is_known_set(code)
 

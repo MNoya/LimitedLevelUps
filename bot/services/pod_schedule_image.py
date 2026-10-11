@@ -28,7 +28,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 from bot.services.championship_dates import championship_on
-from bot.services.pod_format import PEASANT_CODE, is_custom
+from bot.services.pod_format import PEASANT_CODE, BALLOT_EXTRA_CODES, is_custom
 from bot.services.pod_format_schedule import (
     FLASHBACK,
     calendar_days,
@@ -178,7 +178,7 @@ def _format_color(code: str, latest: str, past: bool) -> RGB:
     the latest set and the staple cube. A past day is history, not a vote, so it dims."""
     if past:
         return DIM
-    if code != latest and not is_custom(code):
+    if code != latest and (not is_custom(code) or code in BALLOT_EXTRA_CODES):
         return PLACEHOLDER
     return TEXT
 

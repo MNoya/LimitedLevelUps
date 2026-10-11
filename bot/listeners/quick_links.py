@@ -51,9 +51,11 @@ def pod_etiquette_body(organizer: str) -> str:
 
 def flashback_season_body(guild: discord.Guild | None, now: datetime) -> str:
     plan = plan_for(now)
+    first_pod = _first_flashback_pod(plan)
     flashback = role_label(guild, FLASHBACK_ROLE_NAME)
     return (
-        f"{_flashback_season_heading(plan, now)}\n{_flashback_season_dates(plan, flashback, now)}"
+        f"{_flashback_season_heading(plan, first_pod, now)}\n"
+        f"{_flashback_season_dates(plan, first_pod, flashback, now)}"
         f"▫️ Sets with **{VOTE_FLOOR}+ votes** get days by vote share"
     )
 
@@ -111,22 +113,31 @@ class QuickLinksListener(commands.Cog):
         await ctx.channel.send(embed=embed, view=flashback_season_view(now))
 
 
-def _flashback_season_heading(plan: ChampionshipPlan | None, now: datetime) -> str:
+def _first_flashback_pod(plan: ChampionshipPlan | None) -> datetime | None:
+    start = season_start(plan.set_code) if plan is not None else None
+    early_pod = bucket_for_slot(start, SLOT_EARLY) if start is not None else None
+    if early_pod is None:
+        return None
+    return datetime.combine(start, early_pod.start, tzinfo=SCHEDULE_TZ)
+
+
+def _flashback_season_heading(plan: ChampionshipPlan | None, first_pod: datetime | None, now: datetime) -> str:
     opens_at = vote_opens_at(plan) if plan is not None else None
     emoji = flashback_emoji()
     if opens_at is None:
         return f"### {emoji} Flashback Season vote starts soon"
     if now < opens_at:
         return f"### {emoji} Flashback Season vote starts <t:{int(opens_at.timestamp())}:R>"
+    if first_pod is not None and now < first_pod:
+        return f"### {emoji} Flashback Season vote is on!"
     return f"### {emoji} Flashback Season is on!"
 
 
-def _flashback_season_dates(plan: ChampionshipPlan | None, flashback: str, now: datetime) -> str:
-    start = season_start(plan.set_code) if plan is not None else None
-    early_pod = bucket_for_slot(start, SLOT_EARLY) if start is not None else None
-    if early_pod is None:
+def _flashback_season_dates(
+    plan: ChampionshipPlan | None, first_pod: datetime | None, flashback: str, now: datetime,
+) -> str:
+    if first_pod is None:
         return ""
-    first_pod = datetime.combine(start, early_pod.start, tzinfo=SCHEDULE_TZ)
     if now < first_pod:
         return f"▫️ {flashback} Pods start <t:{int(first_pod.timestamp())}:f>\n"
     last_day = plan.next_release_at - timedelta(days=1)
