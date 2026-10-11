@@ -316,6 +316,7 @@ function GuideBody() {
             </Bullet>
             <Bullet>Pods need at least 6 players to draft</Bullet>
             <Bullet>Notifications are sent when the lobby is ready</Bullet>
+            <Bullet>Start time is the <B>deadline to join</B> the table</Bullet>
             <Bullet>
               Press Leave if you can no longer attend
             </Bullet>
@@ -347,7 +348,7 @@ function GuideBody() {
 
         <Block id="etiquette">
           <Bullets>
-            <Bullet>Join the Draftmancer table on time</Bullet>
+            <Bullet>Join the Draftmancer table when notified</Bullet>
             <Bullet>Play all 3 rounds, win or lose</Bullet>
             <Bullet>
               Having a problem? Ask an <RoleMention role="Organizer" />

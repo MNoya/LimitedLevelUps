@@ -42,7 +42,7 @@ def team_draft_body(bot_mention: str) -> str:
 
 def pod_etiquette_body(organizer: str) -> str:
     return (
-        "▫️ Join the Draftmancer table on time\n"
+        "▫️ Join the Draftmancer table when notified\n"
         "▫️ Play all 3 rounds, win or lose\n"
         f"▫️ Having a problem? Ask an {organizer}\n"
         "▫️ Report your result as soon as your match ends"
