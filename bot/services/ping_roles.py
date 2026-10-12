@@ -158,6 +158,7 @@ POD_CHAMPION_EMOJI = "fleurdelis"
 SYNTHETIC_POD_CHAMPION_TAG = f"**@{POD_CHAMPION_ROLE_NAME}**"
 TOP_P0P1_CHALLENGER_ROLE_NAME = "Top P0P1 Challenger"
 P0P1_COLOR = "#EFBF04"
+FANTASY_CHAMPION_ROLE_NAME = "Fantasy Champion"
 
 REMINDER_ROLE_NAME = "Reminder"
 REMINDER_COLOR = "#EFBF04"
@@ -171,6 +172,7 @@ MANAGED_ROLES: tuple[ManagedRole, ...] = (
     POD_CHAMPION_ROLE,
     ManagedRole(ORGANIZER_ROLE_NAME, "#F38300"),
     ManagedRole(TOP_P0P1_CHALLENGER_ROLE_NAME, P0P1_COLOR),
+    ManagedRole(FANTASY_CHAMPION_ROLE_NAME, P0P1_COLOR),
     ManagedRole(REMINDER_ROLE_NAME, REMINDER_COLOR, aliases=("P0P1 Reminder",)),
 ) + tuple(ManagedRole(spec.name, unicode_emoji=spec.icon) for spec in AWARD_ROLES)
 

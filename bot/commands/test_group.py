@@ -32,7 +32,7 @@ PRODUCTION_SAFE_TESTS = frozenset({
     "craftrelease",
     "firenudge", "formatschedule", "peasanttrophy",
     "lifecycle", "lockroster", "mockcard", "myset", "named", "overflow", "p0p1podium", "pollnudge", "queueclosed",
-    "p2vote", "rally", "reminder", "reminders", "replayprompt", "rolegrant", "rolling", "scribe", "sendoff",
+    "p2vote", "proplay", "rally", "reminder", "reminders", "replayprompt", "rolegrant", "rolling", "scribe", "sendoff",
     "setawards", "tables", "teamcard",
     "thread-intro", "tiebreakers", "underfill", "watchparty", "welcome", "welcomes",
 })

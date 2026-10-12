@@ -23,6 +23,8 @@ from bot.discord_helpers import message_text
 from bot.services import p0p1_ceremony, p0p1_contest, p0p1_copy
 from bot.services.format_schedule import channel_for_set
 from bot.services.ping_roles import TOP_P0P1_CHALLENGER_ROLE_NAME
+from bot.services.pod_roles import rotate_role
+from bot.services.role_ping import ensure_member_cache
 from bot.sets import ALL_SETS
 
 log = logging.getLogger(__name__)
@@ -85,7 +87,7 @@ async def post_ceremony(
         return False
 
     on_production = guild.id == PRODUCTION_GUILD_ID
-    await _ensure_member_cache(guild)
+    await ensure_member_cache(guild)
     role = discord.utils.get(guild.roles, name=TOP_P0P1_CHALLENGER_ROLE_NAME)
 
     members: list[discord.Member] = []
@@ -99,7 +101,7 @@ async def post_ceremony(
             podium.append(f"**{winner.name}**")
 
     if on_production and role is not None:
-        await _swap_challengers(role, members)
+        await rotate_role(role, members, reason="p0p1 podium winner")
     elif role is None:
         log.warning(f"p0p1-ceremony: {TOP_P0P1_CHALLENGER_ROLE_NAME!r} missing in {guild.name}, announcing only")
 
@@ -115,21 +117,6 @@ async def post_ceremony(
                 winners=[winner.name for winner in winners], granted=len(members) if on_production else 0)
     await _post_debug(contest, channel, winners, len(members), on_production, time.monotonic() - started)
     return True
-
-
-async def _swap_challengers(role: discord.Role, members: list[discord.Member]) -> None:
-    for holder in list(role.members):
-        if holder in members:
-            continue
-        try:
-            await holder.remove_roles(role, reason="p0p1 podium rotation")
-        except discord.HTTPException:
-            log.warning(f"p0p1-ceremony: could not strip {role.name!r} from {holder}", exc_info=True)
-    for member in members:
-        try:
-            await member.add_roles(role, reason="p0p1 podium winner")
-        except discord.HTTPException:
-            log.warning(f"p0p1-ceremony: could not grant {role.name!r} to {member}", exc_info=True)
 
 
 async def _post_debug(
@@ -175,11 +162,3 @@ async def _already_announced(channel: discord.TextChannel, contest: p0p1_contest
         return True
     return False
 
-
-async def _ensure_member_cache(guild: discord.Guild) -> None:
-    if guild.chunked:
-        return
-    try:
-        await guild.chunk()
-    except (discord.ClientException, asyncio.TimeoutError):
-        log.warning(f"p0p1-ceremony: could not chunk {guild.name}, winners may read as absent", exc_info=True)

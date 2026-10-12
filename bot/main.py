@@ -41,6 +41,7 @@ from bot.commands.pod_rally import setup as setup_pod_rally
 from bot.commands.pod_schedule import setup as setup_pod_schedule
 from bot.commands.report_results import setup as setup_report_results
 from bot.commands.roles import RolesView, setup as setup_roles
+from bot.commands.fantasy_round import setup as setup_fantasy_round
 from bot.commands.pod_stage import setup as setup_pod_stage
 from bot.commands.pod_table import setup as setup_pod_table
 from bot.commands.peasant import setup as setup_peasant
@@ -75,6 +76,7 @@ from bot.commands.testthreadintro import setup as setup_testthreadintro
 from bot.commands.testpolls import setup as setup_testpolls
 from bot.commands.testformatschedule import setup as setup_testformatschedule
 from bot.commands.testwatchparty import setup as setup_testwatchparty
+from bot.commands.testproplay import setup as setup_testproplay
 from bot.commands.testscribe import setup as setup_testscribe
 from bot.listeners.auto_link_listener import setup as setup_auto_link_listener
 from bot.listeners.profile_sync_listener import setup as setup_profile_sync_listener
@@ -148,6 +150,8 @@ from bot.tasks.watch_party_post import init_watch_party
 from bot.tasks.championship_post import init_championship_schedule
 from bot.tasks.p0p1_reminder_post import init_p0p1_reminder
 from bot.tasks.p0p1_ceremony_post import init_p0p1_ceremony
+from bot.tasks.fantasy_sync_tick import init_fantasy_sync
+from bot.tasks.pro_play_posts import init_pro_play_posts
 from bot.tasks.pod_organizer import init_table_organizer
 from bot.tasks.pod_orphan_reaper import init_orphan_reaper
 from bot.tasks.pod_underfill import init_underfill
@@ -264,6 +268,8 @@ def build_bot(guild_id: int) -> commands.Bot:
         init_championship_schedule(bot)
         init_p0p1_reminder(bot)
         init_p0p1_ceremony(bot)
+        init_fantasy_sync(bot)
+        init_pro_play_posts(bot)
         init_launch(bot)
         init_daily_poll(bot)
         init_table_organizer(bot)
@@ -296,6 +302,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_pod_schedule(bot)
         await setup_report_results(bot)
         await setup_roles(bot)
+        await setup_fantasy_round(bot)
         await setup_mock_draft(bot)
         await setup_pod_stage(bot)
         await setup_pod_table(bot)
@@ -327,6 +334,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testdms(bot)
         await setup_testformatschedule(bot)
         await setup_testwatchparty(bot)
+        await setup_testproplay(bot)
         await setup_testchampionship(bot)
         await setup_testchampcard(bot)
         await setup_testpeasanttrophy(bot)

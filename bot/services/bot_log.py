@@ -53,7 +53,13 @@ class BotLog:
             cutoff = now - _PER_FP_COOLDOWN_S * 4
             self._last_posted = {k: v for k, v in self._last_posted.items() if v > cutoff}
 
-    async def post_plain(self, content: str | None = None, *, embed: "discord.Embed | None" = None) -> None:
+    async def post_plain(
+        self,
+        content: str | None = None,
+        *,
+        embed: "discord.Embed | None" = None,
+        allowed_mentions: discord.AllowedMentions | None = None,
+    ) -> None:
         """Send raw content/embed to the bot-spam channel"""
         if content is None and embed is None:
             return
@@ -63,7 +69,7 @@ class BotLog:
         if channel is None:
             return
         try:
-            await channel.send(content=content, embed=embed)
+            await channel.send(content=content, embed=embed, allowed_mentions=allowed_mentions)
         except discord.HTTPException:
             log.warning("bot_log channel send failed", exc_info=True)
 
