@@ -66,6 +66,8 @@ Posts are green embeds with the set symbol before the title and the event crest 
 
 `bot/data/fantasy/wc32_field.json` is the curated Worlds 32 seed: 134 invitees from magic.gg's invitation list with country, qualification, Melee username and photo. Photos hotlink magic.gg's Contentful CDN, Melee and X; 120 have one. Name-only photo matches that couldn't be confirmed show initials. The authoritative field is the Melee registration once Round 1 pairings appear; a Melee player missing from the seed is added on sight.
 
+Invitations change until the event: Arena Championship 13 on October 24 still awards spots, and players withdraw. The `update-pro-play` skill runs `bot/scripts/fantasy_field_drift.py` against the registry's `invitationListUrl`, researches new invitees and stages the seed edit. Run it after each invitation-awarding event and in the week before picks lock. The hourly reseed removes a player who left the seed unless a member picked them or they have results. A pick who never plays scores nothing on Day 1 and can be replaced for Day 2 like anyone who misses it. New invitees have no profile stats until `fantasyPlayerStats.json` is regenerated.
+
 Qualification groups, in this order: Worlds 31 Top 8, Pro Tour, Points, Arena Championship, MOCS Showcase, Regional.
 
 ## Copy

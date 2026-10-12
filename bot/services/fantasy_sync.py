@@ -7,12 +7,12 @@ import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from bot.models import FantasyEvent as FantasyEventRow
-from bot.models import FantasyPlayer, FantasyResult, FantasyRound
+from bot.models import FantasyBracketPick, FantasyPick, FantasyPlayer, FantasyResult, FantasyRound
 from bot.services.fantasy_event import (
     BRACKET_FEEDS,
     QUARTERFINAL_BY_LOWER_SEED,
@@ -34,6 +34,7 @@ class SyncSummary:
     results_written: int = 0
     players_seeded: int = 0
     players_added: list[str] = field(default_factory=list)
+    players_removed: list[str] = field(default_factory=list)
     unseeded_quarterfinals: bool = False
 
 
@@ -44,6 +45,7 @@ def sync_event(
     summary = SyncSummary(event_code=event.code)
     upsert_event_row(session, event)
     summary.players_seeded = seed_field(session, event)
+    summary.players_removed = remove_withdrawn_players(session, event)
     roster = PlayerRoster.load(session, event.code)
     latest_stored = session.scalar(
         select(func.max(FantasyResult.round_number)).where(FantasyResult.event_code == event.code)
@@ -152,6 +154,33 @@ def seed_field(session: Session, event: FantasyEvent) -> int:
             seeded += 1
     session.flush()
     return seeded
+
+
+def remove_withdrawn_players(session: Session, event: FantasyEvent) -> list[str]:
+    if event.field_seed is None or not event.field_seed.exists():
+        return []
+    seeded_slugs = set()
+    for invitee in json.loads(event.field_seed.read_text()):
+        seeded_slugs.add(slugify(fold_name(f"{invitee['firstName']} {invitee['lastName']}")))
+    candidates = session.scalars(
+        select(FantasyPlayer).where(
+            FantasyPlayer.event_code == event.code,
+            FantasyPlayer.slug.not_in(seeded_slugs),
+            ~exists().where(FantasyPick.event_code == event.code, FantasyPick.player_id == FantasyPlayer.id),
+            ~exists().where(
+                FantasyBracketPick.event_code == event.code, FantasyBracketPick.winner_id == FantasyPlayer.id,
+            ),
+            ~exists().where(FantasyResult.event_code == event.code, FantasyResult.player_id == FantasyPlayer.id),
+        )
+    ).all()
+    removed = []
+    for player in candidates:
+        removed.append(f"{player.first_name} {player.last_name}")
+        session.delete(player)
+    session.flush()
+    if removed:
+        log.info(f"fantasy-sync: {event.code} removed players no longer in the seed: {', '.join(removed)}")
+    return removed
 
 
 def results_for_round(

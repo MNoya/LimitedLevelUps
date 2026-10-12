@@ -33,7 +33,8 @@
     "dayTwoMatchPoints": 12,
     "draftRounds": [1, 2, 3, 8, 9, 10],
     "bracketLockAt": "2026-11-15T14:00:00Z",
-    "fieldSeed": "bot/data/fantasy/wc32_field.json"
+    "fieldSeed": "bot/data/fantasy/wc32_field.json",
+    "invitationListUrl": "https://magic.gg/news/magic-world-championship-32-invitation-list"
   },
   "PTMSH": {
     "name": "Pro Tour Marvel Super Heroes",

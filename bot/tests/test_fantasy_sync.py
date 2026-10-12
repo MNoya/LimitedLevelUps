@@ -1,10 +1,13 @@
+import json
+import uuid
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
 
 from bot.commands.test_group import HALL_OF_FAME
-from bot.models import FantasyResult, FantasyRound
+from bot.models import FantasyPick, FantasyPlayer, FantasyResult, FantasyRound
 from bot.services.fantasy_event import FantasyEvent
 from bot.services.fantasy_sync import sync_event
 from bot.services.melee import MeleeCompetitor, MeleeMatch, MeleeRound
@@ -94,6 +97,32 @@ def test_a_drafted_top8_flags_the_table_fallback_once_on_the_first_quarterfinal_
     session.commit()
 
     assert (first.unseeded_quarterfinals, second.unseeded_quarterfinals) == (True, False)
+
+
+@pytest.mark.parametrize("picked", [False, True])
+def test_a_player_dropped_from_the_seed_leaves_the_field_unless_someone_picked_them(session, tmp_path, picked):
+    kept, dropped = HALL_OF_FAME[0], HALL_OF_FAME[1]
+    seed = tmp_path / "field.json"
+    event = replace(sample_event(), field_seed=seed)
+    seed.write_text(json.dumps([seed_entry(kept), seed_entry(dropped)]))
+    sync_event(session, event, FakeMelee([]))
+    session.commit()
+    if picked:
+        dropped_id = session.scalar(select(FantasyPlayer.id).where(FantasyPlayer.last_name == dropped))
+        session.add(FantasyPick(user_id=uuid.uuid4(), event_code=event.code, slot="player", player_id=dropped_id))
+        session.commit()
+
+    seed.write_text(json.dumps([seed_entry(kept)]))
+    sync_event(session, event, FakeMelee([]))
+    session.commit()
+
+    field = set(session.scalars(select(FantasyPlayer.last_name)).all())
+    assert field == ({kept, dropped} if picked else {kept})
+
+
+def seed_entry(last_name: str) -> dict:
+    return {"firstName": "Pro", "lastName": last_name, "country": "United States", "countryCode": "US",
+            "sources": [], "meleeUsername": None, "photoUrl": None}
 
 
 def match(guid: str, winner: str, loser: str, finished: bool, table_number: int = 1) -> MeleeMatch:
