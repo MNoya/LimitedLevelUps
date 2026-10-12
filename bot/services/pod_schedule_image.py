@@ -3,7 +3,7 @@
 Each cell lists the formats the schedule planned for that day, named by code, capped at two. A community
 flashback pick shows blue, the fixed sets grey, and a past day dims to what was scheduled then rather than the
 off-grid pods players ran. Two days break the pattern and each gets a filled date band: the day a new set
-arrives, and the Set Championship.
+arrives, and the Set Championship. A one-off event in `CALENDAR_EVENTS` fills its band mythic orange.
 
 Discord fits an embed image inside 400x300, so the layout is sized in logical pixels well under that and
 drawn at `SCALE`: a narrower logical grid is shown larger, which is the only lever the image has over how
@@ -30,6 +30,7 @@ from PIL import Image, ImageDraw, ImageFont
 from bot.services.championship_dates import championship_on
 from bot.services.pod_format import PEASANT_CODE, BALLOT_EXTRA_CODES, is_custom
 from bot.services.pod_format_schedule import (
+    CALENDAR_EVENTS,
     FLASHBACK,
     calendar_days,
     extras_on,
@@ -81,6 +82,7 @@ MUTED = (160, 167, 176)
 DIM = (138, 144, 153)
 ARRIVAL = ACCENT
 CHAMPIONSHIP = (201, 156, 84)
+MYTHIC = (243, 131, 0)
 PLACEHOLDER = (153, 170, 255)
 ON_FLAG = (30, 32, 35)
 TODAY = ACCENT
@@ -155,6 +157,8 @@ def _flag_fill(day: date) -> RGB | None:
         return ARRIVAL
     if championship_on(day) is not None:
         return CHAMPIONSHIP
+    if day in CALENDAR_EVENTS:
+        return MYTHIC
     return None
 
 
@@ -164,6 +168,9 @@ def _rows_for(day: date, *, past: bool) -> list[tuple[str, RGB, str]]:
     what was scheduled then, never the off-grid pods players ran on their own."""
     if championship_on(day) is not None:
         return [(CHAMPIONSHIP_LABEL, CHAMPIONSHIP, latest_on(day))]
+    event = CALENDAR_EVENTS.get(day)
+    if event is not None:
+        return [(event.label, MYTHIC, event.set_code)]
     latest = latest_on(day)
     if is_rotation_day(day):
         rows = [(latest, ARRIVAL, latest)]
@@ -192,7 +199,7 @@ def _draw_row(draw: ImageDraw.ImageDraw, cell_x: int, top: int, label: str, colo
               cell_w: int) -> None:
     """One centred symbol-and-code row. Centring the pair rather than left-aligning it keeps a one-row cell
     reading as a calendar entry instead of a list of one."""
-    long_label = label == PEASANT_CODE
+    long_label = len(label) >= len(PEASANT_CODE)
     font = _font(FONT_DISPLAY, CODE_SIZE - 1 if long_label else CODE_SIZE)
     mark = _symbol(symbol)
     mark_w = _px(SYMBOL_PX) + (_px(SYMBOL_GAP) if label else 0) if mark is not None else 0

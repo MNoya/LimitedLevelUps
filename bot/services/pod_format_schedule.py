@@ -35,6 +35,15 @@ LATEST = "LATEST"
 FLASHBACK = "FLASHBACK"
 CLOSED: tuple[str, ...] = ()
 
+
+@dataclass(frozen=True)
+class CalendarEvent:
+    set_code: str
+    label: str
+
+
+CALENDAR_EVENTS: dict[date, CalendarEvent] = {date(2026, 10, 31): CalendarEvent("DSK", "HALLOWEEN")}
+
 _DAY_SLOTS = (SLOT_EARLY, SLOT_LATE)
 
 

@@ -870,6 +870,7 @@ function chunkWeeks(rows: PodCalendarDayRow[] | undefined): PodCalendarDayRow[][
 const BAND_CLASS: Record<string, string> = {
   arrival: "bg-green/20 text-green",
   championship: "bg-gold/20 text-gold",
+  event: "bg-[#f38300]/20 text-[#f38300]",
 };
 
 function CalendarCell({
@@ -918,6 +919,7 @@ const ROLE_CLASS: Record<PodCalendarEntry["role"], string> = {
   flashback: "text-blue",
   arrival: "text-green",
   championship: "text-gold",
+  event: "text-[#f38300]",
 };
 
 function CalendarEntryRow({
@@ -931,13 +933,8 @@ function CalendarEntryRow({
 }) {
   const glyph =
     entry.glyph === "FLASHBACK" ? "FLASHBACK" : setGlyphCode({ code: entry.glyph, custom: !!cubeCobraUrl(entry.glyph) });
-  const glyphColor = past
-    ? "text-dim"
-    : entry.role === "championship"
-      ? "text-gold"
-      : entry.role === "flashback"
-        ? "text-blue"
-        : "text-white";
+  const accentedGlyph = entry.role === "championship" || entry.role === "event" || entry.role === "flashback";
+  const glyphColor = past ? "text-dim" : accentedGlyph ? ROLE_CLASS[entry.role] : "text-white";
   return (
     <span className={cn("flex items-center gap-1.5 min-w-0 max-w-full", past && "opacity-60")}>
       <SetGlyph code={glyph} size={iconsOnly ? 26 : 22} className={cn("shrink-0", glyphColor)} />

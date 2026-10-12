@@ -29,13 +29,13 @@ export interface PodSetCode {
 export interface PodCalendarEntry {
   label: string; // display code, e.g. HOB / PEASANT / CHAMPS / TBD
   glyph: string; // set/cube glyph code, FLASHBACK for the placeholder
-  role: "latest" | "cube" | "flashback" | "arrival" | "championship";
+  role: "latest" | "cube" | "flashback" | "arrival" | "championship" | "event";
 }
 
 export interface PodCalendarDayRow {
   day: string; // ISO date
   entries: PodCalendarEntry[];
-  band: "arrival" | "championship" | null;
+  band: "arrival" | "championship" | "event" | null;
 }
 
 export interface CubeSeason {

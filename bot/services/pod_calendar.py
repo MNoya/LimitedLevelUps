@@ -15,6 +15,7 @@ from bot.models import PodCalendarDay
 from bot.services.championship_dates import championship_on
 from bot.services.pod_format import is_custom
 from bot.services.pod_format_schedule import (
+    CALENDAR_EVENTS,
     FLASHBACK,
     calendar_days,
     extras_on,
@@ -47,6 +48,9 @@ def _entry(code: str, latest: str) -> dict:
 def _entries_for(day: date) -> list[dict]:
     if championship_on(day) is not None:
         return [{"label": "CHAMPS", "glyph": latest_on(day), "role": "championship"}]
+    event = CALENDAR_EVENTS.get(day)
+    if event is not None:
+        return [{"label": event.label, "glyph": event.set_code, "role": "event"}]
     latest = latest_on(day)
     if is_rotation_day(day):
         rows = [{"label": latest, "glyph": latest, "role": "arrival"}]
@@ -60,6 +64,8 @@ def _band_for(day: date) -> str | None:
         return "arrival"
     if championship_on(day) is not None:
         return "championship"
+    if day in CALENDAR_EVENTS:
+        return "event"
     return None
 
 
