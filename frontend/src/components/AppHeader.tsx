@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronDown, LogOut, User } from "lucide-react";
 import { GiCardPick, GiRoundTable, Hammer, House, MdVideoLibrary, Rocket, TbListNumbers, Trophy } from "./Icons";
@@ -14,14 +14,47 @@ import { slotsForSet } from "../data/p0p1Slots";
 import { p0p1DevEnabled, p0p1Now, useP0P1DevPreset } from "../data/p0p1DevState";
 import { deriveP0P1Phase } from "../data/useP0P1Ballot";
 import type { P0P1Phase } from "../data/p0p1Results";
+import {
+  fantasyEventPath,
+  fantasyNavEvent,
+  fantasyNavLabel,
+  nextUpFantasyEvent,
+  PRO_PLAY_BASE,
+  type FantasyEventEntry,
+} from "./fantasy/fantasyEvents";
+import { prefetchProPlay, prefetchProPlayWhenIdle } from "./fantasy/proPlayChunks";
 
 // Top-of-page chrome shared across the whole community site. The brand mark is
 // the Home link; each section is a nav tab.
 
 type NavIcon = ComponentType<{ size?: number | string; className?: string }>;
 
-const NAV: Array<{ label: string; icon: NavIcon; iconSize?: number; badge?: (props: { active: boolean }) => JSX.Element | null; to: string; match: (path: string) => boolean }> = [
-  { label: "P0 P1", icon: GiCardPick, iconSize: 21, badge: P0P1Badge, to: "/p0p1", match: (p) => p.startsWith("/p0p1") },
+type NavItem = {
+  label: string;
+  icon: NavIcon;
+  iconSize?: number;
+  leading?: ReactNode;
+  menuLeading?: ReactNode;
+  tight?: boolean;
+  badge?: (props: { active: boolean }) => JSX.Element | null;
+  menuBadge?: (props: { active: boolean }) => JSX.Element | null;
+  to: string;
+  match: (path: string) => boolean;
+  prefetch?: () => void;
+};
+
+const FANTASY_NAV_EVENT = fantasyNavEvent(new Date());
+
+const NAV: NavItem[] = [
+  {
+    label: "P0 P1",
+    icon: GiCardPick,
+    iconSize: 21,
+    badge: P0P1Badge,
+    menuBadge: P0P1MenuBadge,
+    to: "/p0p1",
+    match: (p) => p.startsWith("/p0p1"),
+  },
   { label: "EPISODES", icon: MdVideoLibrary, to: "/episodes", match: (p) => p.startsWith("/episodes") },
   { label: "TIER LIST", icon: TbListNumbers, to: "/tier-list", match: (p) => p.startsWith("/tier-list") },
   { label: "LEADERBOARD", icon: Trophy, to: "/leaderboard", match: (p) => p === "/leaderboard" || p.startsWith("/leaderboard/") || p.startsWith("/player/") },
@@ -30,7 +63,7 @@ const NAV: Array<{ label: string; icon: NavIcon; iconSize?: number; badge?: (pro
   { label: "TOOLS", icon: Hammer, to: "/tools", match: (p) => p.startsWith("/tools") },
 ];
 
-const HOME_ITEM: (typeof NAV)[number] = { label: "HOME", icon: House, to: "/", match: (p) => p === "/" };
+const HOME_ITEM: NavItem = { label: "HOME", icon: House, to: "/", match: (p) => p === "/" };
 
 const NAV_ITEM_CLASS = "h-12 px-5 inline-flex items-center no-underline border transition-colors whitespace-nowrap";
 
@@ -41,13 +74,16 @@ export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = fals
   const loc = useLocation();
   const isMobile = useIsMobile();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(NAV.length);
+  const nav = useMemo(() => navItemsFor(loc.pathname), [loc.pathname]);
+  const [visibleCount, setVisibleCount] = useState(nav.length);
   const brandHref = "/";
 
   const headerRef = useRef<HTMLElement>(null);
   const brandRef = useRef<HTMLAnchorElement>(null);
   const navMeasureRef = useRef<HTMLDivElement>(null);
   const authMeasureRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => (FANTASY_NAV_EVENT ? prefetchProPlayWhenIdle() : undefined), []);
 
   // Close the open menu whenever the route changes so it doesn't linger.
   useEffect(() => {
@@ -110,7 +146,7 @@ export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = fals
     return () => ro.disconnect();
   }, [isMobile, subtitle]);
 
-  const hasMenu = isMobile || visibleCount < NAV.length;
+  const hasMenu = isMobile || visibleCount < nav.length;
 
   useEffect(() => {
     if (!hasMenu) setMenuOpen(false);
@@ -147,8 +183,9 @@ export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = fals
         aria-hidden="true"
         className="absolute -left-[9999px] top-0 flex gap-2 font-display text-[19px] tracking-[0.14em]"
       >
-        {NAV.map((n) => (
-          <span key={n.label} className={NAV_ITEM_CLASS}>
+        {nav.map((n) => (
+          <span key={n.label} className={cn(NAV_ITEM_CLASS, n.leading && "gap-2", n.tight && "px-3")}>
+            {n.leading}
             {n.label}
           </span>
         ))}
@@ -164,20 +201,26 @@ export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = fals
       <div className="flex items-center gap-1">
         {!isMobile && visibleCount > 0 && (
           <nav className="flex gap-2 font-display text-[19px] tracking-[0.14em]">
-            {NAV.slice(0, visibleCount).map((n) => {
+            {nav.slice(0, visibleCount).map((n) => {
               const active = n.match(loc.pathname);
               return (
                 <Link
                   key={n.label}
                   to={n.to}
+                  onMouseEnter={n.prefetch}
+                  onFocus={n.prefetch}
+                  onTouchStart={n.prefetch}
                   className={cn(
                     NAV_ITEM_CLASS,
                     n.badge && "relative",
+                    n.leading && "gap-2",
+                    n.tight && "px-3",
                     active
                       ? "text-bg bg-green border-green"
                       : "text-text border-transparent hover:bg-surface hover:text-green",
                   )}
                 >
+                  {n.leading}
                   {n.label}
                   {n.badge && <n.badge active={active} />}
                 </Link>
@@ -205,7 +248,7 @@ export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = fals
 
       {hasMenu && menuOpen && (
         <MobileMenu
-          items={isMobile ? [HOME_ITEM, ...NAV] : NAV.slice(visibleCount)}
+          items={isMobile ? [HOME_ITEM, ...nav] : nav.slice(visibleCount)}
           includeAuth={isMobile}
           pathname={loc.pathname}
           onClose={() => setMenuOpen(false)}
@@ -303,7 +346,7 @@ function MobileMenu({
   pathname,
   onClose,
 }: {
-  items: typeof NAV;
+  items: NavItem[];
   includeAuth: boolean;
   pathname: string;
   onClose: () => void;
@@ -322,11 +365,19 @@ function MobileMenu({
     <>
       <div
         onClick={onClose}
-        className="absolute top-full left-0 right-0 h-screen bg-black/60 z-30"
+        className={cn(
+          "z-30",
+          includeAuth ? "absolute top-full left-0 right-0 h-screen bg-black/60" : "fixed inset-0 bg-transparent",
+        )}
         aria-hidden="true"
       />
       <nav
-        className="absolute top-full right-0 left-0 bg-bg border-b border-border z-40 flex flex-col"
+        className={cn(
+          "absolute top-full z-40 flex flex-col bg-bg",
+          includeAuth
+            ? "right-0 left-0 border-b border-border"
+            : "right-10 mt-1 w-[300px] border border-border2 shadow-2xl [&>*:last-child]:border-b-0",
+        )}
         role="menu"
       >
         {includeAuth && !loading && user && (
@@ -353,18 +404,22 @@ function MobileMenu({
             <Link
               key={n.label}
               to={n.to}
+              onMouseEnter={n.prefetch}
+              onFocus={n.prefetch}
+              onTouchStart={n.prefetch}
               role="menuitem"
               className={cn(
                 MENU_ROW_CLASS,
                 "no-underline",
+                !includeAuth && "flex-row-reverse",
                 active ? "bg-green text-bg" : "text-text bg-transparent hover:bg-surface",
               )}
             >
               <MenuIconSlot>
-                <n.icon size={n.iconSize ?? 19} className={active ? "text-bg" : "text-muted"} />
+                {n.menuLeading ?? <n.icon size={n.iconSize ?? 19} className={active ? "text-bg" : "text-muted"} />}
               </MenuIconSlot>
               {n.label}
-              {n.badge && <MobileBadgeSlot active={active} />}
+              {n.menuBadge && <n.menuBadge active={active} />}
             </Link>
           );
         })}
@@ -451,10 +506,7 @@ function P0P1Badge({ active }: { active: boolean }) {
   const { user, phase, filled, total } = useP0P1BadgeState();
   if (phase === "loading") return null;
 
-  const pill = cn(
-    "absolute -top-1.5 z-10 rounded-full border border-green px-1.5 py-0.5 text-[9px] leading-none font-sans font-bold tracking-wide",
-    active ? "bg-bg text-green" : "bg-green text-bg",
-  );
+  const pill = navPillClass(active);
 
   const label = p0p1BadgeLabel(phase);
   if (label) {
@@ -471,7 +523,7 @@ function p0p1VotingLabel(signedIn: boolean, filled: number, total: number): stri
   return `${filled}/${total}`;
 }
 
-function MobileBadgeSlot({ active }: { active: boolean }) {
+function P0P1MenuBadge({ active }: { active: boolean }) {
   const { user, phase, filled, total, setCode } = useP0P1BadgeState();
   if (phase === "loading") return null;
 
@@ -485,5 +537,52 @@ function MobileBadgeSlot({ active }: { active: boolean }) {
       {p0p1BadgeLabel(phase) ?? p0p1VotingLabel(Boolean(user), filled, total)}
       {setCode && <SetGlyph code={setCode} size={16} className={active ? "text-bg" : "text-green"} />}
     </span>
+  );
+}
+
+function navItemsFor(pathname: string): NavItem[] {
+  const fantasyEvent = FANTASY_NAV_EVENT ?? (isProPlayPath(pathname) ? nextUpFantasyEvent(new Date()) : undefined);
+  return fantasyEvent ? [fantasyNavItem(fantasyEvent), ...NAV] : NAV;
+}
+
+function fantasyNavItem(event: FantasyEventEntry): NavItem {
+  return {
+    label: "PRO PLAY",
+    icon: Trophy,
+    leading: event.crest ? (
+      <img src={event.crest} alt="" className="h-[34px] w-auto max-w-none shrink-0 -my-2 -translate-y-[3px]" />
+    ) : undefined,
+    tight: true,
+    menuLeading: event.crest ? <img src={event.crest} alt="" className="w-6 h-auto max-w-none" /> : undefined,
+    badge: ({ active }) => (
+      <span className={cn(navPillClass(active), "-right-1.5 whitespace-nowrap")}>
+        {fantasyNavLabel(event, new Date())}
+      </span>
+    ),
+    menuBadge: ({ active }) => (
+      <span
+        className={cn(
+          "ml-3 text-[14px] font-semibold font-sans tracking-[0.08em]",
+          active ? "text-bg" : "text-green",
+        )}
+      >
+        {fantasyNavLabel(event, new Date())}
+      </span>
+    ),
+    to: fantasyEventPath(event),
+    match: isProPlayPath,
+    prefetch: prefetchProPlay,
+  };
+}
+
+function isProPlayPath(pathname: string): boolean {
+  return pathname === PRO_PLAY_BASE || pathname.startsWith(`${PRO_PLAY_BASE}/`);
+}
+
+function navPillClass(active: boolean): string {
+  return cn(
+    "absolute -top-1.5 z-10 rounded-full border border-green px-1.5 py-0.5 text-[9px] leading-none",
+    "font-sans font-bold tracking-wide",
+    active ? "bg-bg text-green" : "bg-green text-bg",
   );
 }

@@ -60,6 +60,7 @@ export function FilterDropdown({
   const [open, setOpen] = useState(false);
   const [locked, setLocked] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const [menuTop, setMenuTop] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -97,18 +98,39 @@ export function FilterDropdown({
     }
   }, [open, mobileCentered]);
 
+  const trimmed = query.trim().toLowerCase();
+  const filtered = trimmed
+    ? options.filter(
+        (o) => o.label.toLowerCase().includes(trimmed) || o.value.toLowerCase().includes(trimmed),
+      )
+    : options;
+
+  const onMenuKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  onMenuKeyRef.current = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setOpen(false);
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setActiveIndex((index) => Math.min(Math.max(index + step, 0), filtered.length - 1));
+    } else if (e.key === "Enter" && filtered[activeIndex]) {
+      e.preventDefault();
+      select(filtered[activeIndex].value);
+    }
+  };
+
   useEffect(() => {
     if (!open) {
       setQuery("");
       setLocked(false);
       return;
     }
+    const selectedIndex = options.findIndex((o) => o.value === value);
+    setActiveIndex(Math.max(selectedIndex, 0));
     const onClickOutside = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
+    const onKey = (e: KeyboardEvent) => onMenuKeyRef.current(e);
     document.addEventListener("mousedown", onClickOutside);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -117,12 +139,9 @@ export function FilterDropdown({
     };
   }, [open]);
 
-  const trimmed = query.trim().toLowerCase();
-  const filtered = trimmed
-    ? options.filter(
-        (o) => o.label.toLowerCase().includes(trimmed) || o.value.toLowerCase().includes(trimmed),
-      )
-    : options;
+  useEffect(() => {
+    menuRef.current?.querySelector(`[data-option-index="${activeIndex}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, menuRef]);
 
   return (
     <div
@@ -138,6 +157,12 @@ export function FilterDropdown({
           ref={triggerRef}
           type="button"
           onClick={toggle}
+          onKeyDown={(e) => {
+            if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+              e.preventDefault();
+              setOpen(true);
+            }
+          }}
           className={cn(
             "flex items-center gap-2 w-full bg-transparent border border-border2 font-display text-text cursor-pointer transition-colors hover:bg-surface",
             isMobile
@@ -181,12 +206,9 @@ export function FilterDropdown({
               <input
                 autoFocus
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && filtered.length > 0) {
-                    e.preventDefault();
-                    select(filtered[0].value);
-                  }
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setActiveIndex(0);
                 }}
                 placeholder={searchPlaceholder}
                 className="w-full bg-bg border border-border px-2.5 py-1.5 font-body text-[14px] tracking-normal text-text placeholder:text-dim outline-none focus:border-green"
@@ -209,6 +231,8 @@ export function FilterDropdown({
                   <OptionItem
                     href={hrefFor?.(o.value)}
                     onSelect={() => select(o.value)}
+                    onPointerEnter={() => setActiveIndex(i)}
+                    index={i}
                     selected={isSelected}
                     className={cn(
                       "w-full text-left flex items-center gap-2 border-l-2 font-display cursor-pointer transition-colors whitespace-nowrap",
@@ -216,9 +240,8 @@ export function FilterDropdown({
                         ? "px-2.5 py-2.5 text-[15px] tracking-[0.08em]"
                         : "px-3.5 py-2.5 text-[15px] tracking-[0.06em]",
                       i > 0 && !showSectionHeader && "border-t border-border",
-                      isSelected
-                        ? "border-l-green bg-surface2 text-green"
-                        : "border-l-transparent bg-transparent text-text hover:bg-surface2",
+                      isSelected ? "border-l-green bg-surface2 text-green" : "border-l-transparent text-text",
+                      !isSelected && (i === activeIndex ? "bg-border" : "bg-transparent"),
                       optionClassName,
                     )}
                   >
@@ -240,19 +263,31 @@ export function FilterDropdown({
 const OptionItem = ({
   href,
   onSelect,
+  onPointerEnter,
+  index,
   selected,
   className,
   children,
 }: {
   href?: To;
   onSelect: () => void;
+  onPointerEnter: () => void;
+  index: number;
   selected: boolean;
   className: string;
   children: React.ReactNode;
 }) => {
   if (href === undefined) {
     return (
-      <button type="button" onClick={onSelect} role="option" aria-selected={selected} className={className}>
+      <button
+        type="button"
+        onClick={onSelect}
+        onPointerEnter={onPointerEnter}
+        data-option-index={index}
+        role="option"
+        aria-selected={selected}
+        className={className}
+      >
         {children}
       </button>
     );
@@ -267,6 +302,8 @@ const OptionItem = ({
         event.preventDefault();
         onSelect();
       }}
+      onPointerEnter={onPointerEnter}
+      data-option-index={index}
       role="option"
       aria-selected={selected}
       className={cn(className, "no-underline")}

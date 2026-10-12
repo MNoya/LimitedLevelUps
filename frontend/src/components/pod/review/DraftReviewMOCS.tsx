@@ -15,6 +15,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { frontFace } from "../../../lib/cardSlug";
 import { cn } from "../../../lib/utils";
+import { usePersistentBool } from "../../../lib/use-persistent-bool";
 import { wheelPixels } from "../../../lib/use-wheel-trap";
 import { ToggleSwitch } from "../../ToggleSwitch";
 import { Pips } from "../../ManaPips";
@@ -529,20 +530,6 @@ function usePersistentState<T extends string>(key: string, fallback: T): [T, Dis
   });
   useEffect(() => {
     window.localStorage.setItem(key, value);
-  }, [key, value]);
-  return [value, setValue];
-}
-
-function usePersistentBool(key: string, fallback: boolean): [boolean, Dispatch<SetStateAction<boolean>>] {
-  const [value, setValue] = useState<boolean>(() => {
-    if (typeof window === "undefined") {
-      return fallback;
-    }
-    const stored = window.localStorage.getItem(key);
-    return stored == null ? fallback : stored === "1";
-  });
-  useEffect(() => {
-    window.localStorage.setItem(key, value ? "1" : "0");
   }, [key, value]);
   return [value, setValue];
 }

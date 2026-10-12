@@ -33,6 +33,12 @@ _ALLOWED_VIEWS = {
     "public_cube_season_breakdown",
     "public_cube_season_events",
     "public_episodes",
+    "public_fantasy_bracket_picks",
+    "public_fantasy_event_state",
+    "public_fantasy_lineups",
+    "public_fantasy_players",
+    "public_fantasy_results",
+    "public_fantasy_standings",
     "public_episode_transcripts",
     "public_leaderboard",
     "public_p0p1_pick_stats",
@@ -61,8 +67,11 @@ _TRACKER_TABLES = {
     "tracker_match_notes": ("user_id", "draft_event_id", "match_number"),
     "tracker_collection": ("user_id", "set_code", "card_name"),
     "tracker_set_economy": ("user_id", "set_code"),
+    "fantasy_picks": ("user_id", "event_code", "slot", "from_round"),
+    "fantasy_bracket_picks": ("user_id", "event_code", "position"),
 }
 DEV_USER_ID = "00000000-0000-4000-8000-000000000001"
+DEV_JWT_CLAIMS = json.dumps({"sub": DEV_USER_ID})
 # public_my_player_accounts scopes itself with auth.jwt(), which does not exist here,
 # so serve the same shape for whichever player the dev identity points at
 DEV_DISCORD_ID = os.environ.get("DEV_DISCORD_ID", str(OWNER_DISCORD_ID))
@@ -152,7 +161,8 @@ async def _handle_view(request: web.Request) -> web.Response:
     if offset and offset.isdigit():
         sql += f" OFFSET {int(offset)}"
 
-    with engine.connect() as conn:
+    with engine.begin() as conn:
+        conn.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": DEV_JWT_CLAIMS})
         rows = conn.execute(text(sql), params).mappings().all()
     body = json.dumps([dict(r) for r in rows], default=_json_default)
     return web.Response(body=body, content_type="application/json")

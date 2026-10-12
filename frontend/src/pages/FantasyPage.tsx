@@ -1,0 +1,34 @@
+import { AppHeader } from "../components/AppHeader";
+import { CtaPill } from "../components/CtaPill";
+import { DiscordIcon } from "../components/BrandIcons";
+import { TeamSheet } from "../components/fantasy/TeamSheet";
+import { useAuth } from "../auth/useAuth";
+import { useLockedViewport } from "../lib/use-locked-viewport";
+import {
+  FantasyEventContext,
+  fantasyEventHeader,
+  type FantasyEventEntry,
+} from "../components/fantasy/fantasyEvents";
+
+export function FantasyPage({ event }: { event: FantasyEventEntry }) {
+  const { user, loading: authLoading, signIn } = useAuth();
+
+  useLockedViewport();
+
+  const signedOut = !authLoading && !user;
+
+  const loginCta = signedOut ? (
+    <button type="button" onClick={signIn} className="bg-transparent border-0 cursor-pointer p-0">
+      <CtaPill size="sm" icon={<DiscordIcon size={15} />}>LOG IN TO PICK</CtaPill>
+    </button>
+  ) : null;
+
+  return (
+    <div className="bg-bg text-text min-h-screen lg:h-screen lg:overflow-hidden flex flex-col page-fade">
+      <AppHeader subtitle="Pro Play" fill />
+      <FantasyEventContext.Provider value={fantasyEventHeader(event)}>
+        <TeamSheet loginCta={loginCta} onSignIn={signIn} />
+      </FantasyEventContext.Provider>
+    </div>
+  );
+}

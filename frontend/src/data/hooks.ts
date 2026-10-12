@@ -56,6 +56,18 @@ import {
   fetchSetReviewMentions,
   upsertP0P1Pick,
   deleteAllP0P1Picks,
+  fetchFantasyLineup,
+  saveFantasyPick,
+  deleteFantasyPick,
+  fetchFantasyEventState,
+  fetchFantasyField,
+  fetchFantasyResults,
+  fetchFantasyMembers,
+  fetchFantasyLineups,
+  fetchFantasyBracketPicks,
+  fetchFantasyOwnBracket,
+  saveFantasyBracketPick,
+  deleteFantasyBracketPick,
   fetchP0P1Ratings,
 } from "./api";
 import { fetchDiscordStats } from "./discord";
@@ -63,6 +75,7 @@ import { fetchYouTubeVideos, overlayLiveMedia, toVideoEpisode, type YouTubeVideo
 import { assignEpisodeSlugs, type Episode } from "./episodes";
 import { setReviewMentionKey, type SetReviewMention, type TranscriptSegment } from "./transcript";
 import type { P0P1BallotRow, P0P1Pick, SlotKey } from "../types/p0p1";
+import type { FantasyOwnBracketPick } from "../types/fantasy";
 import type { FeaturedContest } from "./p0p1Slots";
 import { resolveContestByCode, resolveFeaturedContest } from "./p0p1Slots";
 import { MULTI, OTHER } from "./filters";
@@ -670,6 +683,105 @@ export function useP0P1Cards(setCode: string | undefined) {
     enabled: !!setCode,
     staleTime: THIRTY_MINUTES,
   });
+}
+
+export function useFantasyEventState(eventCode: string) {
+  return useQuery({
+    queryKey: ["fantasy-event-state", eventCode],
+    queryFn: () => fetchFantasyEventState(eventCode),
+    staleTime: 0,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useFantasyField(eventCode: string) {
+  return useQuery({
+    queryKey: ["fantasy-field", eventCode],
+    queryFn: () => fetchFantasyField(eventCode),
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function useFantasyResults(eventCode: string, completedRound: number | undefined) {
+  return useQuery({
+    queryKey: ["fantasy-results", eventCode, completedRound],
+    queryFn: () => fetchFantasyResults(eventCode),
+    enabled: completedRound !== undefined && completedRound > 0,
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useFantasyMembers(eventCode: string, version: string | undefined) {
+  return useQuery({
+    queryKey: ["fantasy-members", eventCode, version],
+    queryFn: async () => {
+      const [members, lineups, brackets] = await Promise.all([
+        fetchFantasyMembers(eventCode),
+        fetchFantasyLineups(eventCode),
+        fetchFantasyBracketPicks(eventCode),
+      ]);
+      return { members, lineups, brackets };
+    },
+    enabled: version !== undefined,
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useFantasyLineup(eventCode: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["fantasy-lineup", eventCode],
+    queryFn: () => fetchFantasyLineup(eventCode),
+    enabled,
+    staleTime: 0,
+  });
+}
+
+export function useFantasyPickWriter(eventCode: string, onRejected: () => void) {
+  const qc = useQueryClient();
+  const reload = () => {
+    onRejected();
+    qc.invalidateQueries({ queryKey: ["fantasy-lineup", eventCode] });
+  };
+  const save = useMutation({
+    mutationFn: ({ slot, playerId, fromRound }: { slot: string; playerId: number; fromRound: number }) =>
+      saveFantasyPick(eventCode, slot, playerId, fromRound),
+    onError: reload,
+  });
+  const remove = useMutation({
+    mutationFn: ({ slot, fromRound }: { slot: string; fromRound: number }) =>
+      deleteFantasyPick(eventCode, slot, fromRound),
+    onError: reload,
+  });
+  return { save: save.mutate, remove: remove.mutate };
+}
+
+export function useFantasyOwnBracket(eventCode: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["fantasy-own-bracket", eventCode],
+    queryFn: () => fetchFantasyOwnBracket(eventCode),
+    enabled,
+    staleTime: 0,
+  });
+}
+
+export function useFantasyBracketWriter(eventCode: string, onRejected: () => void) {
+  const qc = useQueryClient();
+  const reload = () => {
+    onRejected();
+    qc.invalidateQueries({ queryKey: ["fantasy-own-bracket", eventCode] });
+  };
+  const save = useMutation({
+    mutationFn: (pick: FantasyOwnBracketPick) => saveFantasyBracketPick(eventCode, pick),
+    onError: reload,
+  });
+  const remove = useMutation({
+    mutationFn: (position: string) => deleteFantasyBracketPick(eventCode, position),
+    onError: reload,
+  });
+  return { save: save.mutate, remove: remove.mutate };
 }
 
 export function useP0P1Picks(setCode: string | undefined) {

@@ -273,7 +273,7 @@ function BestPossibleBadge() {
   );
 }
 
-function SelfBadge() {
+export function SelfBadge() {
   return (
     <span className="shrink-0 inline-flex items-center h-[18px] font-display uppercase tracking-[0.14em] px-[7px] text-[11px] bg-green text-bg">
       YOU

@@ -87,9 +87,15 @@ const config: Config = {
           "0%": { strokeDashoffset: "24" },
           "100%": { strokeDashoffset: "0" },
         },
+        liveHalo: {
+          "0%": { boxShadow: "0 0 8px rgba(46, 232, 92, 0.8), 0 0 0 0 rgba(46, 232, 92, 0.75)" },
+          "50%": { boxShadow: "0 0 4px rgba(46, 232, 92, 0.4), 0 0 0 9px rgba(46, 232, 92, 0)" },
+          "100%": { boxShadow: "0 0 8px rgba(46, 232, 92, 0.8), 0 0 0 0 rgba(46, 232, 92, 0)" },
+        },
       },
       animation: {
         pulse: "pulse 1.4s infinite",
+        liveHalo: "liveHalo 1.6s ease-out infinite",
         fadeIn: "fadeIn 220ms ease-out both",
         fadeOut: "fadeOut 220ms ease-out both",
         fadeUpIn: "fadeUpIn 260ms ease-out both",
