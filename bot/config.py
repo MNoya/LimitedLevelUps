@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DRAFTMANCER_HOST = "draftmancer.com"
 
+SITE_URL = "https://limitedlevelups.com"
+
 PRODUCTION_GUILD_ID = 775371722065051658
 
 OWNER_DISCORD_ID = 237762740532412416
