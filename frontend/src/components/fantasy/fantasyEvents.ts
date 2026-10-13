@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import type { FantasyEventState } from "../../types/fantasy";
+import { formatEventDays } from "./eventDays";
 import registry from "../../../../fantasy_events.json";
 
 export type FantasyEventEntry = {
@@ -101,15 +102,8 @@ export function fantasyEventHeader(event: FantasyEventEntry): FantasyEventHeader
 }
 
 export function eventDays(event: FantasyEventEntry, now: Date): string {
-  const start = new Date(`${event.startDate}T12:00:00Z`);
-  const end = new Date(`${event.endDate}T12:00:00Z`);
-  const month = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" });
-  const startYear = start.getUTCFullYear();
-  const endYear = end.getUTCFullYear();
-  const endSuffix = endYear === now.getFullYear() && startYear === endYear ? "" : `, ${endYear}`;
-  const startLabel = `${month.format(start)} ${start.getUTCDate()}${startYear === endYear ? "" : `, ${startYear}`}`;
-  const endMonth = month.format(start) === month.format(end) && startYear === endYear ? "" : `${month.format(end)} `;
-  return `${startLabel} - ${endMonth}${end.getUTCDate()}${endSuffix}`;
+  const sameYearAsNow = new Date(`${event.endDate}T12:00:00Z`).getUTCFullYear() === now.getFullYear();
+  return formatEventDays(event, !sameYearAsNow);
 }
 
 const NAV_DAYS_AFTER = 7;

@@ -24,6 +24,7 @@ import { type PodCardStatRow, aggregatePodCards, cardDataLabel, hasCardData } fr
 import { cardSlug } from "../frontend/src/lib/cardSlug";
 import { isMtgoFlashbackCode, mtgoSetName } from "../frontend/src/data/mtgoSets";
 import FANTASY_EVENTS from "../fantasy_events.json";
+import { formatEventDays } from "../frontend/src/components/fantasy/eventDays";
 import {
   P0P1_CONTESTS,
   type FeaturedContest,
@@ -787,8 +788,9 @@ const proPlayRoute = (rest: string[]): RouteResolution => {
   }
   const image: ImageIntent = event.crest ? { kind: "asset", path: event.crest } : null;
   if (event.replayOnly) {
-    const description = `Standings, Top 8 and player stats from ${event.shortName}`;
-    return resolved(page(`${event.shortName} Pro Play`, description, image), canonicalPath);
+    const played = `${event.city} ${formatEventDays(event, true)}`;
+    const description = `Results and player stats from this event, played in ${played}`;
+    return resolved(page(event.name.replace(/^Magic /, ""), description, image), canonicalPath);
   }
   const premise = "Put together a team of four Pro Players and score points every time they win a match!";
   return resolved(page(`${event.shortName} Fantasy Magic`, premise, image), canonicalPath);
