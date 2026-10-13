@@ -77,7 +77,8 @@ Qualification groups, in this order: Worlds 31 Top 8, Pro Tour, Points, Arena Ch
 - Premise while picks are open: "Put together a team of four Pro Players from **Worlds 32**", then "You score points every time they win a match".
 - Countdown "Closes in 32 days, 10 hours", then "Picks are closed". Lock line "Round 1 starts Fri, Nov 13 at 11 AM GMT-3", time in green.
 - Field status: "Picking Captain", "✓ Picks saved", "Log in to save picks", "Picks are locked", "Replace before Round 8".
-- Header status: "Round N of 14" with a pulse, "Day 1 complete", "Top 8 plays Sunday", "Top 8 Live" with a pulse, "Event complete".
+- Header status: "Round N of 14" with a pulse, "Day 1 Complete", "Top 8 on Sunday", "Top 8 Live" with a pulse, "Event Complete".
+- Phase notes: "Replace players who missed **Day 2** before Round 8" at the cut, and "Fill in your **Top 8** Bracket before Sunday's Quarterfinals" while the Bracket is open.
 - Spoiler-free tooltip: "SPOILER FREE: live coverage results only" or "SPOILERS ON: latest results from melee.gg".
 - Bracket: "Pick the winner of each match for 2 points in Quarterfinals, 4 in Semifinals and 8 in Finals", "Pick the exact games for 1 more point", "Your pick: X", "No pick", "N of M picks right".
 - Names: tabs PLAYERS, STANDINGS, TOP 8, LEADERBOARD; Podium label CHAMPION; leaderboard column TOP 8. The Top 8 predictions are the Bracket everywhere; "pick'em" was rejected.
@@ -93,7 +94,7 @@ Qualification groups, in this order: Worlds 31 Top 8, Pro Tour, Points, Arena Ch
 
 ## Local testing
 
-The DEV pill in the bottom-right corner, shared with P0P1, switches the team sheet between Live and every phase: picking signed in or logged out, Day 1, the cut, Day 2, Bracket open, Quarterfinals done and Event complete. On production the same pill reads DEMO and shows on an event's page until it gets `"live": true`.
+The DEV pill in the bottom-right corner, shared with P0P1, switches the team sheet between Live and every phase: picking signed in or logged out, Day 1, the cut, Day 2, Bracket open, Quarterfinals done and Event Complete. On production the same pill reads DEMO and shows on an event's page until it gets `"live": true`.
 
 - Live shows the real event. Locally, `fantasy_dry_run --reset` puts Worlds 32 back to its registry entry and field seed, with no results or picks, so Live matches production before the event.
 - While the event has no results, every preset reads `frontend/src/data/fantasyDemo.json`, a snapshot of Worlds 31 staged as a finished dry run, loaded only when chosen. Each preset reshapes the event state and cuts the results at its round in the browser.

@@ -21,11 +21,11 @@ export const FANTASY_DEV_PRESETS: DevStateOption<FantasyDevPreset>[] = [
   { value: "pickingSignedIn", group: "Picking", label: "Signed in" },
   { value: "pickingLoggedOut", group: "Picking", label: "Logged out" },
   { value: "dayOne", group: "Day 1", label: "Round 4 live" },
-  { value: "cut", group: "Cut", label: "Day 1 complete" },
+  { value: "cut", group: "Cut", label: "Day 1 Complete" },
   { value: "dayTwo", group: "Day 2", label: "Round 12 live" },
   { value: "bracketOpen", group: "Top 8", label: "Bracket open" },
   { value: "quarterfinalsDone", group: "Top 8", label: "Quarterfinals done" },
-  { value: "final", group: "Final", label: "Event complete" },
+  { value: "final", group: "Final", label: "Event Complete" },
   { value: "skeleton", group: "Loading", label: "Skeleton" },
 ];
 
@@ -71,10 +71,10 @@ export function devPresetState(
   return {
     revealedThroughRound: round,
     completedThroughRound: round,
-    picksLockAt: picking ? new Date(now + 48 * hour).toISOString() : past,
+    picksLockAt: picking ? event.picksLockAt : past,
     dayTwoStartedAt: round > event.cutRound ? past : null,
     top8StartedAt: round > event.swissRounds ? past : null,
-    bracketLockAt: round > event.swissRounds ? past : new Date(now + 24 * hour).toISOString(),
+    bracketLockAt: round > event.swissRounds ? past : event.bracketLockAt,
   };
 }
 

@@ -580,7 +580,7 @@ function TeamSheetView({
               className="flex-1 flex flex-col items-center justify-center gap-5 py-3"
               style={{ minHeight: cardAreaMinHeight }}
             >
-              {phase === "cut" ? <CutNote /> : null}
+              <PhaseNote />
               <div className="grid grid-cols-2 gap-x-5 gap-y-4">
                 {SLOTS.map((slot) => {
                   const player = picker.lineup[slot.key];
@@ -878,7 +878,7 @@ function LiveStatus({
           {spoilerControl}
         </span>
       </span>
-      {short && phase === "cut" ? <CutNote /> : null}
+      {short ? <PhaseNote /> : null}
     </span>
   );
 }
@@ -934,18 +934,28 @@ const SPOILERS_ON_TOOLTIP = (
 );
 
 const QUIET_STATUS: Partial<Record<EventPhase, string>> = {
-  cut: "Day 1 complete",
-  top8: "Top 8 plays Sunday",
-  final: "Event complete",
+  cut: "Day 1 Complete",
+  top8: "Top 8 on Sunday",
+  final: "Event Complete",
 };
 
-function CutNote() {
-  const { cutRound } = useLiveEvent();
-  return (
-    <span className="text-[13px] text-text">
-      Replace players who missed <b>Day 2</b> before Round {cutRound + 1}
-    </span>
-  );
+function PhaseNote() {
+  const { phase, cutRound, bracketWindowOpen, topEightStarted } = useLiveEvent();
+  if (phase === "cut") {
+    return (
+      <span className="text-[13px] text-text">
+        Replace players who missed <b>Day 2</b> before Round {cutRound + 1}
+      </span>
+    );
+  }
+  if (phase === "top8" && bracketWindowOpen && !topEightStarted) {
+    return (
+      <span className="text-[13px] text-text">
+        Fill in your <b>Top 8</b> Bracket before Sunday's Quarterfinals
+      </span>
+    );
+  }
+  return null;
 }
 
 function LivePulse() {
