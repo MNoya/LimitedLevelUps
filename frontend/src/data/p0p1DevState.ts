@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { createDevPresetStore, devToolsEnabled } from "../lib/dev-preset-store";
 import { votingDeadlineForScoringDate } from "./p0p1Slots";
 
 export type P0P1DevPreset =
@@ -24,34 +24,16 @@ export const P0P1_DEV_PRESETS: { value: P0P1DevPreset; group: string; label: str
   { value: "finalLoggedOut", group: "Final", label: "Logged out" },
 ];
 
-export const p0p1DevEnabled = import.meta.env.DEV && typeof window !== "undefined";
+export const p0p1DevEnabled = devToolsEnabled;
 
-const STORAGE_KEY = "p0p1DevPreset";
-const listeners = new Set<() => void>();
+const presetStore = createDevPresetStore<P0P1DevPreset>(
+  "p0p1DevPreset",
+  P0P1_DEV_PRESETS.map((preset) => preset.value),
+  "live",
+);
 
-function readStored(): P0P1DevPreset {
-  if (!p0p1DevEnabled) return "live";
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  const valid = P0P1_DEV_PRESETS.some((p) => p.value === stored);
-  return valid ? (stored as P0P1DevPreset) : "live";
-}
-
-let current = readStored();
-
-export function setP0P1DevPreset(preset: P0P1DevPreset) {
-  current = preset;
-  window.localStorage.setItem(STORAGE_KEY, preset);
-  listeners.forEach((notify) => notify());
-}
-
-function subscribe(notify: () => void) {
-  listeners.add(notify);
-  return () => listeners.delete(notify);
-}
-
-export function useP0P1DevPreset(): P0P1DevPreset {
-  return useSyncExternalStore(subscribe, () => current, () => "live");
-}
+export const setP0P1DevPreset = presetStore.set;
+export const useP0P1DevPreset = presetStore.useValue;
 
 // Forces the viewer's synthetic ballot (finalScoring preset) into a chosen
 // standings position so the best-possible badge and 1st/2nd/3rd medal
@@ -66,38 +48,21 @@ export const P0P1_DEV_SELF_PLACEMENTS: { value: P0P1DevSelfPlacement; label: str
   { value: "third", label: "3rd" },
 ];
 
-const SELF_PLACEMENT_STORAGE_KEY = "p0p1DevSelfPlacement";
-const selfPlacementListeners = new Set<() => void>();
+const selfPlacementStore = createDevPresetStore<P0P1DevSelfPlacement>(
+  "p0p1DevSelfPlacement",
+  P0P1_DEV_SELF_PLACEMENTS.map((placement) => placement.value),
+  "auto",
+);
 
-function readStoredSelfPlacement(): P0P1DevSelfPlacement {
-  if (!p0p1DevEnabled) return "auto";
-  const stored = window.localStorage.getItem(SELF_PLACEMENT_STORAGE_KEY);
-  const valid = P0P1_DEV_SELF_PLACEMENTS.some((p) => p.value === stored);
-  return valid ? (stored as P0P1DevSelfPlacement) : "auto";
-}
-
-let currentSelfPlacement = readStoredSelfPlacement();
-
-export function setP0P1DevSelfPlacement(placement: P0P1DevSelfPlacement) {
-  currentSelfPlacement = placement;
-  window.localStorage.setItem(SELF_PLACEMENT_STORAGE_KEY, placement);
-  selfPlacementListeners.forEach((notify) => notify());
-}
-
-function subscribeSelfPlacement(notify: () => void) {
-  selfPlacementListeners.add(notify);
-  return () => selfPlacementListeners.delete(notify);
-}
-
-export function useP0P1DevSelfPlacement(): P0P1DevSelfPlacement {
-  return useSyncExternalStore(subscribeSelfPlacement, () => currentSelfPlacement, () => "auto");
-}
+export const setP0P1DevSelfPlacement = selfPlacementStore.set;
+export const useP0P1DevSelfPlacement = selfPlacementStore.useValue;
 
 const DEV_RESULTS_REMAINING_MS = (20 * 24 + 1) * 60 * 60 * 1000;
 const DEV_PAST_SCORING_MS = 60 * 60 * 1000;
 const DEV_VOTING_REMAINING_MS = 24 * 60 * 60 * 1000;
 
 export function p0p1Now(scoringDate?: Date): number {
+  const current = presetStore.get();
   if (!p0p1DevEnabled || current === "live") return Date.now();
   const anchor = scoringDate?.getTime() ?? Date.now();
   if (current === "voting") {

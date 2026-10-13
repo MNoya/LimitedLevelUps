@@ -2,6 +2,12 @@ import { AppHeader } from "../components/AppHeader";
 import { CtaPill } from "../components/CtaPill";
 import { DiscordIcon } from "../components/BrandIcons";
 import { TeamSheet } from "../components/fantasy/TeamSheet";
+import { DevStatePanel } from "../components/DevStatePanel";
+import {
+  FANTASY_DEV_PRESETS,
+  setFantasyDevPreset,
+  useFantasyDevPreset,
+} from "../components/fantasy/fantasyDevState";
 import { useAuth } from "../auth/useAuth";
 import { useLockedViewport } from "../lib/use-locked-viewport";
 import {
@@ -15,7 +21,8 @@ export function FantasyPage({ event }: { event: FantasyEventEntry }) {
 
   useLockedViewport();
 
-  const signedOut = !authLoading && !user;
+  const devPreset = useFantasyDevPreset();
+  const signedOut = devPreset === "pickingLoggedOut" || (!authLoading && !user);
 
   const loginCta = signedOut ? (
     <button type="button" onClick={signIn} className="bg-transparent border-0 cursor-pointer p-0">
@@ -29,6 +36,13 @@ export function FantasyPage({ event }: { event: FantasyEventEntry }) {
       <FantasyEventContext.Provider value={fantasyEventHeader(event)}>
         <TeamSheet loginCta={loginCta} onSignIn={signIn} />
       </FantasyEventContext.Provider>
+      <DevStatePanel
+        title="DEV - PRO PLAY STATE"
+        options={FANTASY_DEV_PRESETS}
+        value={devPreset}
+        onChange={setFantasyDevPreset}
+        liveValue="live"
+      />
     </div>
   );
 }

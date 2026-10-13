@@ -66,6 +66,7 @@ import {
   useFantasyEvent,
   type FantasyEventHeader,
 } from "./fantasyEvents";
+import { devPresetState, useFantasyDevPreset } from "./fantasyDevState";
 import { Top8Bracket, Top8BracketList } from "./Top8Bracket";
 import { eventContext, membersFromRows, standings, type Member, type StandingsDay } from "./fantasyMembers";
 import { type BracketPicks } from "./fantasyTop8";
@@ -86,15 +87,20 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
   const entry = fantasyEventByCode(header.code);
   const [spoilerFree, setSpoilerFree] = usePersistentBool("fantasySpoilerFree", true);
   const now = useNow(15_000);
-  const { data: state } = useFantasyEventState(header.code);
+  const minute = Math.floor(now / 60_000);
+  const devPreset = useFantasyDevPreset();
+  const { data: storedState } = useFantasyEventState(header.code);
+  const state = useMemo(
+    () => (storedState && entry ? devPresetState(devPreset, storedState, entry, minute * 60_000) : storedState),
+    [storedState, entry, devPreset, minute],
+  );
   const { data: field } = useFantasyField(header.code);
-  const { data: results } = useFantasyResults(header.code, state?.completedThroughRound);
+  const { data: results } = useFantasyResults(header.code, storedState?.completedThroughRound);
   const locked = state ? now >= new Date(state.picksLockAt).getTime() : false;
   const bracketLocked = state ? now >= new Date(state.bracketLockAt).getTime() : false;
   const membersVersion = state && locked ? `${state.completedThroughRound}:${bracketLocked}` : undefined;
   const { data: members } = useFantasyMembers(header.code, membersVersion);
   const throughRound = state ? (spoilerFree ? state.revealedThroughRound : state.completedThroughRound) : 0;
-  const minute = Math.floor(now / 60_000);
   const liveEvent = useMemo(
     () => {
       if (!entry || !state || !field) {

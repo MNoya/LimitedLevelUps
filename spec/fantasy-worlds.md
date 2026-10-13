@@ -90,7 +90,9 @@ Qualification groups, in this order: Worlds 31 Top 8, Pro Tour, Points, Arena Ch
 - Mythic orange for the Captain, "WORLDS 32" as the title, a crest stacked above the title on mobile.
 - Fixed `bracketOpensAt` times: the Bracket follows the reveal marker.
 
-## Dry run
+## Local testing
+
+On the dev server, the DEV pill in the bottom-right corner, shared with P0P1, switches the team sheet between Live and every phase: picking signed in or logged out, Day 1, the cut, Day 2, Bracket open, Quarterfinals done and Event complete. Each preset reshapes the event state and cuts results at its round in the browser, so the local database only needs a finished event staged once, through Round 17. Picks and Bracket picks made under a preset save to the local database.
 
 `bot/scripts/fantasy_dry_run.py` copies a finished event's real field and results into another event on a local database, frozen at any round, with 30 members plus the dev user. It refuses a non-local `DATABASE_URL`. Round 0 stages the picking phase; 7 is the cut, 11 Day 2, 14 Bracket picking, 17 final.
 
