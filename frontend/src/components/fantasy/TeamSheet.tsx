@@ -56,7 +56,7 @@ import {
 import { TabLink } from "../TabButton";
 import { useAuth } from "../../auth/useAuth";
 import { LeaderboardSkeleton, MembersLeaderboard } from "./MembersLeaderboard";
-import { ReplayStandings, StandingsSkeleton } from "./ReplayStandings";
+import { ReplayStandings, StandingsSkeleton, type TeamSlot } from "./ReplayStandings";
 import { replayProfileEvent, standingsAfter, standingsRound } from "./fantasyReplay";
 import { usePersistedLineup } from "./usePersistedLineup";
 import {
@@ -310,6 +310,16 @@ function TeamSheetView({
 
   const isPicked = (player: FieldPlayer) => picker.pickedSlotByName.has(fullName(player));
 
+  const teamSlotOf = (player: FieldPlayer): TeamSlot | null => {
+    const name = fullName(player);
+    const picked = picker.pickedSlotByName.get(name);
+    if (picked) {
+      return { slot: picked, dayOne: false };
+    }
+    const replaced = replacedSlotByName.get(name);
+    return replaced ? { slot: replaced, dayOne: true } : null;
+  };
+
   const handleTileClick = (player: FieldPlayer) => {
     handleLeave();
     if (!live && picksOpen) {
@@ -442,6 +452,8 @@ function TeamSheetView({
       source={standingsSource}
       compact={isMobile}
       onOpen={openProfile}
+      onSelect={handleTileClick}
+      teamSlot={teamSlotOf}
       onHover={handleHover}
       onLeave={handleLeave}
     />

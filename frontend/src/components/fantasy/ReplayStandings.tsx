@@ -2,14 +2,18 @@ import { useMemo, type MouseEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { CountryFlag, PlayerPortrait, formatRecord, fullName, type FieldPlayer } from "./fantasyField";
+import { CountryFlag, PlayerPortrait, formatRecord, fullName, slotFor, type FieldPlayer, type SlotKey } from "./fantasyField";
 import { standingsAfter, standingsRound, type StandingsRow, type StandingsSource } from "./fantasyReplay";
+
+export type TeamSlot = { slot: SlotKey; dayOne: boolean };
 
 export function ReplayStandings({
   source,
   compact,
   playerHref,
   onOpen,
+  onSelect,
+  teamSlot,
   onHover,
   onLeave,
 }: {
@@ -17,6 +21,8 @@ export function ReplayStandings({
   compact: boolean;
   playerHref?: (player: FieldPlayer) => string;
   onOpen?: (player: FieldPlayer) => void;
+  onSelect?: (player: FieldPlayer) => void;
+  teamSlot?: (player: FieldPlayer) => TeamSlot | null;
   onHover: (player: FieldPlayer, element: HTMLElement) => void;
   onLeave: () => void;
 }) {
@@ -35,7 +41,9 @@ export function ReplayStandings({
             compact={compact}
             topEightLine={round === source.swissRounds && row.rank === 8}
             href={playerHref?.(row.player)}
+            team={teamSlot?.(row.player) ?? null}
             onOpen={onOpen}
+            onSelect={onSelect ?? onOpen}
             onHover={onHover}
             onLeave={onLeave}
           />
@@ -160,7 +168,9 @@ function StandingsLine({
   compact,
   topEightLine,
   href,
+  team,
   onOpen,
+  onSelect,
   onHover,
   onLeave,
 }: {
@@ -168,20 +178,24 @@ function StandingsLine({
   compact: boolean;
   topEightLine: boolean;
   href?: string;
+  team: TeamSlot | null;
   onOpen?: (player: FieldPlayer) => void;
+  onSelect?: (player: FieldPlayer) => void;
   onHover: (player: FieldPlayer, element: HTMLElement) => void;
   onLeave: () => void;
 }) {
   const { player, rank, movement, record } = row;
+  const teamStyle = team ? teamRowStyle(slotFor(team.slot).accent) : undefined;
   const className = cn(
     "w-full grid items-center gap-x-3 px-3 py-1.5 border-0 border-t border-border bg-surface text-left",
     "no-underline text-text hover:bg-surface2 transition-colors text-[14px] cursor-pointer",
     standingsColumns(compact),
     topEightLine && "border-b-2 border-b-green/60",
   );
-  const hoverProps = {
+  const rowProps = {
     onMouseEnter: (event: MouseEvent<HTMLElement>) => onHover(player, event.currentTarget),
     onMouseLeave: onLeave,
+    "data-fantasy-pick-target": "",
   };
   const content = (
     <>
@@ -195,7 +209,10 @@ function StandingsLine({
           <CountryFlag code={player.countryCode} width={18} />
         </span>
         <span className="flex flex-col min-w-0">
-          <span className="truncate text-text font-semibold">{fullName(player)}</span>
+          <span className="flex items-baseline gap-2 min-w-0">
+            <span className="truncate text-text font-semibold">{fullName(player)}</span>
+            {team && !compact ? <TeamTag team={team} /> : null}
+          </span>
           {compact && player.deck ? <span className="truncate text-[12px] text-subtle">{player.deck}</span> : null}
         </span>
       </span>
@@ -213,7 +230,7 @@ function StandingsLine({
   );
   if (href) {
     return (
-      <Link to={href} state={{ fromList: true }} className={className} {...hoverProps}>
+      <Link to={href} state={{ fromList: true }} className={className} style={teamStyle} {...rowProps}>
         {content}
       </Link>
     );
@@ -221,17 +238,31 @@ function StandingsLine({
   return (
     <button
       type="button"
-      onClick={() => onOpen?.(player)}
+      onClick={() => onSelect?.(player)}
       onContextMenu={(event) => {
         event.preventDefault();
         onOpen?.(player);
       }}
       className={className}
-      {...hoverProps}
+      style={teamStyle}
+      {...rowProps}
     >
       {content}
     </button>
   );
+}
+
+function TeamTag({ team }: { team: TeamSlot }) {
+  const slot = slotFor(team.slot);
+  return (
+    <span className="shrink-0 font-display text-[13px] tracking-[0.12em] leading-none" style={{ color: slot.accent }}>
+      {team.dayOne ? `${slot.label.toUpperCase()}-DAY 1` : slot.label.toUpperCase()}
+    </span>
+  );
+}
+
+function teamRowStyle(accent: string) {
+  return { boxShadow: `inset 3px 0 0 ${accent}`, backgroundColor: `${accent}14` };
 }
 
 function Movement({ movement }: { movement: number | null }) {
