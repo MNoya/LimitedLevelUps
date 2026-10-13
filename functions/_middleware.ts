@@ -23,6 +23,7 @@ import {
 import { type PodCardStatRow, aggregatePodCards, cardDataLabel, hasCardData } from "../frontend/src/data/podCards";
 import { cardSlug } from "../frontend/src/lib/cardSlug";
 import { isMtgoFlashbackCode, mtgoSetName } from "../frontend/src/data/mtgoSets";
+import FANTASY_EVENTS from "../fantasy_events.json";
 import {
   P0P1_CONTESTS,
   type FeaturedContest,
@@ -345,6 +346,9 @@ const resolveRoute = async (
   if (section === "tools") {
     return toolsRoute(rest);
   }
+  if (section === "pro-play") {
+    return proPlayRoute(rest);
+  }
   if (section === "community") {
     return resolved(page("Community", "Learn about us, the show and the community behind it"), "/community");
   }
@@ -405,6 +409,9 @@ const matchesAppRoute = (segments: string[]): boolean => {
     "/tools",
     "/tools/craft",
     "/tools/craft/:setCode",
+    "/pro-play",
+    "/pro-play/:slug",
+    "/pro-play/:slug/:view",
     "/banner",
   ];
   for (const route of appRoutes) {
@@ -770,6 +777,21 @@ const leaderboardBoardExists = async (setCode: string, sets: SetRow[] | null): P
     `public_cube_seasons?set_code=eq.${queryValue(setCode)}&select=set_code&limit=1`,
   );
   return rows === null ? null : rows.length > 0;
+};
+
+const proPlayRoute = (rest: string[]): RouteResolution => {
+  const canonicalPath = ["/pro-play", ...rest].join("/").toLowerCase();
+  const event = Object.values(FANTASY_EVENTS).find((entry) => entry.slug === rest[0]?.toLowerCase());
+  if (!event) {
+    return resolved(page("Pro Play", "Fantasy Magic and past Pro Tour results"), canonicalPath);
+  }
+  const image: ImageIntent = event.crest ? { kind: "asset", path: event.crest } : null;
+  if (event.replayOnly) {
+    const description = `Standings, Top 8 and player stats from ${event.shortName}`;
+    return resolved(page(`${event.shortName} Pro Play`, description, image), canonicalPath);
+  }
+  const premise = "Put together a team of four Pro Players and score points every time they win a match!";
+  return resolved(page(`${event.shortName} Fantasy Magic`, premise, image), canonicalPath);
 };
 
 const toolsRoute = async (rest: string[]): Promise<RouteResolution> => {

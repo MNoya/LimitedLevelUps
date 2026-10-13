@@ -87,7 +87,6 @@ export function App() {
       />
       <Route path={`${PRO_PLAY_BASE}/:eventSlug`} element={<FantasyEventRoute />} />
       <Route path={`${PRO_PLAY_BASE}/:eventSlug/:view`} element={<FantasyEventRoute />} />
-      <Route path="/fantasy/*" element={<LegacyFantasyRedirect />} />
       <Route path="/tier-list" element={<TierListPage />} />
       <Route path="/tier-list/:setCode" element={<TierListPage />} />
       <Route path="/tier-list/:setCode/archetypes" element={<TierListPage skeletonsOpen />} />
@@ -132,13 +131,6 @@ const ProPlayLoading = () => (
     <AppHeader subtitle="Pro Play" fill />
   </div>
 );
-
-const LegacyFantasyRedirect = () => {
-  const { "*": rest } = useParams();
-  const { search } = useLocation();
-  const pathname = rest ? `${PRO_PLAY_BASE}/${rest}` : PRO_PLAY_BASE;
-  return <Navigate to={{ pathname, search }} replace />;
-};
 
 const LegacyPlayerRedirect = () => {
   const { slug, setCode } = useParams<{ slug: string; setCode?: string }>();
