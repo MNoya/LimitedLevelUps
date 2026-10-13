@@ -2,13 +2,12 @@ import { useParams } from "react-router-dom";
 import { useEffect } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AppHeader } from "../components/AppHeader";
-import { EventReplay, REPLAY_VIEW_SLUG, type ReplayView } from "../components/fantasy/EventReplay";
+import { EventReplay, LoadingReplayHeader, REPLAY_VIEW_SLUG, type ReplayView } from "../components/fantasy/EventReplay";
 import { fantasyEventBySlug } from "../components/fantasy/fantasyEvents";
 import { hasReplay, loadReplay } from "../components/fantasy/fantasyReplay";
 import { NotFoundPage } from "./NotFoundPage";
 import { ProPlaySkeleton } from "../components/fantasy/ProPlaySkeleton";
 import { prefetchProPlay } from "../components/fantasy/proPlayChunks";
-import { LoadingEventHeader } from "../components/fantasy/FantasyParts";
 import { DevStatePanel } from "../components/DevStatePanel";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { LOADING_PRESETS, setFantasyDevPreset, useFantasyDevPreset } from "../components/fantasy/fantasyDevState";
@@ -43,7 +42,7 @@ export function FantasyReplayPage() {
       ) : (
         <ProPlaySkeleton
           layout="replay"
-          header={event ? <LoadingEventHeader event={event} compact={isMobile} layout="replay" /> : undefined}
+          header={event ? <LoadingReplayHeader event={event} compact={isMobile} /> : undefined}
         />
       )}
       <DevStatePanel

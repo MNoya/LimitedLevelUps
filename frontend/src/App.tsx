@@ -21,7 +21,7 @@ import { AppHeader } from "./components/AppHeader";
 import { loadFantasyPage, loadFantasyReplayPage } from "./components/fantasy/proPlayChunks";
 import { ProPlaySkeleton } from "./components/fantasy/ProPlaySkeleton";
 import {
-  currentFantasyEvent,
+  proPlayHomeEvent,
   fantasyEventBySlug,
   fantasyEventPath,
   PRO_PLAY_BASE,
@@ -84,7 +84,7 @@ export function App() {
 
       <Route
         path={PRO_PLAY_BASE}
-        element={<Navigate to={fantasyEventPath(currentFantasyEvent(new Date()))} replace />}
+        element={<Navigate to={fantasyEventPath(proPlayHomeEvent(new Date()))} replace />}
       />
       <Route path={`${PRO_PLAY_BASE}/:eventSlug`} element={<FantasyEventRoute />} />
       <Route path={`${PRO_PLAY_BASE}/:eventSlug/:view`} element={<FantasyEventRoute />} />

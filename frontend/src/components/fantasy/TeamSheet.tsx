@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -47,7 +48,6 @@ import {
   EventCrest,
   EventSwitcher,
   EventTitle,
-  LoadingEventHeader,
   ProfileHint,
   FieldTile,
   HoverCard,
@@ -66,6 +66,7 @@ import {
   fantasyEventByCode,
   fantasyEventPath,
   useFantasyEvent,
+  type FantasyEventEntry,
   type FantasyEventHeader,
 } from "./fantasyEvents";
 import { devPresetState, picksAtPreviewPhase, readsDemoData, useFantasyDevPreset } from "./fantasyDevState";
@@ -82,7 +83,12 @@ import {
   useFantasyMembers,
   useFantasyResults,
 } from "../../data/hooks";
-import type { FantasyBracketPickRow, FantasyLineupRow, FantasyMemberRow } from "../../types/fantasy";
+import type {
+  FantasyBracketPickRow,
+  FantasyEventState,
+  FantasyLineupRow,
+  FantasyMemberRow,
+} from "../../types/fantasy";
 
 
 type Picker = ReturnType<typeof useLineupPicker>;
@@ -97,13 +103,13 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
   const now = useNow(15_000);
   const minute = Math.floor(now / 60_000);
   const devPreset = useFantasyDevPreset(entry);
-  const isCompact = useIsMobile(1024);
   const { data: storedState } = useFantasyEventState(header.code);
-  const demoActive = storedState ? readsDemoData(devPreset, storedState) : false;
+  const baseState = useMemo(() => storedState ?? (entry ? stateFromRegistry(entry) : undefined), [storedState, entry]);
+  const demoActive = baseState ? readsDemoData(devPreset, baseState) : false;
   const { data: demo } = useFantasyDemo(demoActive);
   const state = useMemo(
-    () => (storedState && entry ? devPresetState(devPreset, storedState, entry, minute * 60_000) : storedState),
-    [storedState, entry, devPreset, minute],
+    () => (baseState && entry ? devPresetState(devPreset, baseState, entry, minute * 60_000) : baseState),
+    [baseState, entry, devPreset, minute],
   );
   const { data: storedField } = useFantasyField(header.code);
   const { data: storedResults } = useFantasyResults(header.code, storedState?.completedThroughRound);
@@ -114,18 +120,23 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
   const membersVersion = state && locked && !demoActive ? `${state.completedThroughRound}:${bracketLocked}` : undefined;
   const { data: storedMembers } = useFantasyMembers(header.code, membersVersion);
   const memberData = useMemo(
-    () => (demoActive && demo ? { members: demo.members, lineups: demo.lineups, brackets: demo.brackets } : storedMembers),
+    () => {
+      if (!demoActive || !demo) {
+        return storedMembers;
+      }
+      return { members: demo.members, lineups: demo.lineups, brackets: demo.brackets };
+    },
     [demoActive, demo, storedMembers],
   );
   const throughRound = state ? (spoilerFree ? state.revealedThroughRound : state.completedThroughRound) : 0;
   const liveEvent = useMemo(
     () => {
-      if (!entry || !state || !field) {
+      if (!entry || !state) {
         return null;
       }
       const demoData = demoActive ? (demo ?? null) : null;
       const readOnly = devPreset !== "live";
-      return buildLiveEvent(entry, state, field, results ?? [], throughRound, new Date(now), demoData, readOnly);
+      return buildLiveEvent(entry, state, field ?? [], results ?? [], throughRound, new Date(now), demoData, readOnly);
     },
     [entry, state, field, results, throughRound, minute, demoActive, demo, devPreset],
   );
@@ -147,15 +158,15 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
         : header,
     [header, state],
   );
-  if (!liveEvent || devPreset === "skeleton") {
-    const loadingHeader = entry ? <LoadingEventHeader event={entry} compact={isCompact} layout="sheet" /> : undefined;
-    return <ProPlaySkeleton layout="sheet" header={loadingHeader} />;
+  if (!liveEvent) {
+    return <ProPlaySkeleton layout="sheet" />;
   }
   return (
     <FantasyEventContext.Provider value={liveHeader}>
       <LiveEventContext.Provider value={liveEvent}>
         <TeamSheetView
           key={devPreset}
+          fieldLoading={!field || devPreset === "skeleton"}
           loginCta={loginCta}
           onSignIn={onSignIn}
           liveEvent={liveEvent}
@@ -169,6 +180,7 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
 }
 
 function TeamSheetView({
+  fieldLoading,
   loginCta,
   onSignIn,
   liveEvent,
@@ -176,6 +188,7 @@ function TeamSheetView({
   spoilerFree,
   onToggleSpoilerFree,
 }: {
+  fieldLoading: boolean;
   loginCta: ReactNode;
   onSignIn: () => void;
   liveEvent: LiveEvent;
@@ -418,6 +431,7 @@ function TeamSheetView({
 
   const field = (
     <FieldGroups
+      loading={fieldLoading}
       picker={picker}
       filters={filters}
       compact={isMobile}
@@ -656,6 +670,7 @@ function TeamSheetView({
 }
 
 function FieldGroups({
+  loading,
   picker,
   filters,
   compact,
@@ -665,6 +680,7 @@ function FieldGroups({
   onTileHover,
   onTileLeave,
 }: {
+  loading: boolean;
   picker: Picker;
   filters: Filters;
   compact: boolean;
@@ -678,6 +694,11 @@ function FieldGroups({
   const groups = useMemo(() => fieldGroups(filters.players), [filters.players]);
 
   const minColumn = compact ? 160 : 210;
+  const columns = `repeat(auto-fill, minmax(${minColumn}px, 1fr))`;
+  const grid = { className: cn("grid", compact ? "gap-1.5" : "gap-2.5"), style: { gridTemplateColumns: columns } };
+  if (loading) {
+    return <FieldSkeleton grid={grid} compact={compact} />;
+  }
   return (
     <div className={cn("flex flex-col", compact ? "gap-5" : "gap-7")}>
       {groups.map((group) => (
@@ -685,7 +706,7 @@ function FieldGroups({
           <SectionLabel size={compact ? 16 : 18} color="#ffffff" className={compact ? "mb-2" : "mb-3"}>
             {qualificationLabel(group.key, liveEvent.players).toUpperCase()}
           </SectionLabel>
-          <div className={cn("grid", compact ? "gap-1.5" : "gap-2.5")} style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${minColumn}px, 1fr))` }}>
+          <div {...grid}>
             {group.players.map((player) => (
               <FieldTile
                 key={fullName(player)}
@@ -710,6 +731,39 @@ function FieldGroups({
       ))}
     </div>
   );
+}
+
+function FieldSkeleton({ grid, compact }: { grid: { className: string; style: CSSProperties }; compact: boolean }) {
+  const nameWidths = [62, 48, 70, 55, 66, 44, 58, 74];
+  return (
+    <div>
+      <SectionLabel size={compact ? 16 : 18} color="transparent" className={compact ? "mb-2" : "mb-3"}>
+        LOADING
+      </SectionLabel>
+      <div {...grid}>
+        {Array.from({ length: compact ? 12 : 24 }, (_, index) => (
+          <div
+            key={index}
+            className={cn("flex items-center gap-2.5 pr-2 border border-border bg-surface", compact ? "h-[57px]" : "h-[48px]")}
+          >
+            <span className="self-stretch w-12 shrink-0 bg-surface2" />
+            <span className="h-3 bg-surface2" style={{ width: `${nameWidths[index % nameWidths.length]}%` }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function stateFromRegistry(event: FantasyEventEntry): FantasyEventState {
+  return {
+    revealedThroughRound: 0,
+    completedThroughRound: 0,
+    picksLockAt: event.picksLockAt,
+    dayTwoStartedAt: null,
+    bracketLockAt: event.bracketLockAt,
+    top8StartedAt: null,
+  };
 }
 
 function fieldGroups(players: FieldPlayer[]): { key: Qualification; players: FieldPlayer[] }[] {

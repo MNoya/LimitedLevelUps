@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type Ref } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Trophy } from "lucide-react";
 import { SectionLabel } from "../SectionLabel";
@@ -6,7 +6,7 @@ import { TabLink } from "../TabButton";
 import { SetGlyph } from "../Brand";
 import { cn } from "../../lib/utils";
 import { useIsMobile } from "../../lib/use-is-mobile";
-import { SearchBox, fullName, normalizeSearch, type FieldPlayer } from "./fantasyField";
+import { SearchBox, fullName, normalizeSearch, type EventHeader, type FieldPlayer } from "./fantasyField";
 import {
   EventCrest,
   EventSwitcher,
@@ -19,7 +19,7 @@ import {
 import { PlayerProfile, PlayerProfileSheet } from "./PlayerProfilePanel";
 import { Top8Bracket, Top8BracketList } from "./Top8Bracket";
 import { ReplayStandings } from "./ReplayStandings";
-import { eventDays, fantasyEventPath } from "./fantasyEvents";
+import { eventDays, fantasyEventPath, type FantasyEventEntry } from "./fantasyEvents";
 import {
   REPLAY_STAGE_LABEL,
   replayProfileEvent,
@@ -130,7 +130,11 @@ export function EventReplay({ replay, view }: { replay: Replay; view: ReplayView
               citySize={17}
             />
           ) : (
-            <ReplayHeading replay={replay} statusProps={statusProps} />
+            <ReplayHeading
+              event={replay.event}
+              header={replay.header}
+              status={(playersRef) => <ReplayStatus {...statusProps} inHeading playersRef={playersRef} />}
+            />
           )}
         </div>
         {isMobile ? <ReplayStatus {...statusProps} inHeading={false} /> : null}
@@ -179,7 +183,15 @@ function titleLabel(isMobile: boolean, replayOnly: boolean): "shown" | "hidden" 
   return isMobile ? "removed" : "hidden";
 }
 
-function ReplayHeading({ replay, statusProps }: { replay: Replay; statusProps: ReplayStatusProps }) {
+function ReplayHeading({
+  event,
+  header,
+  status,
+}: {
+  event: FantasyEventEntry;
+  header: EventHeader;
+  status: (playersRef: Ref<HTMLSpanElement>) => ReactNode;
+}) {
   const titleRef = useRef<HTMLSpanElement>(null);
   const glyphRef = useRef<HTMLSpanElement>(null);
   const playersRef = useRef<HTMLSpanElement>(null);
@@ -194,7 +206,7 @@ function ReplayHeading({ replay, statusProps }: { replay: Replay; statusProps: R
     };
     measure();
     void document.fonts.ready.then(measure);
-  }, [replay]);
+  }, [event, header]);
 
   return (
     <div
@@ -204,30 +216,73 @@ function ReplayHeading({ replay, statusProps }: { replay: Replay; statusProps: R
       <SectionLabel
         size={13}
         color="#b8c0d0"
-        className={cn("col-start-2 justify-self-center mb-1", replay.event.replayOnly && "invisible")}
+        className={cn("col-start-2 justify-self-center mb-1", event.replayOnly && "invisible")}
       >
         FANTASY MAGIC
       </SectionLabel>
       <span className="col-start-2 row-start-2 justify-self-center w-0 flex justify-center">
         <span ref={titleRef} className="relative shrink-0 flex">
           <span ref={glyphRef} className="absolute right-full top-1/2 -translate-y-1/2 pr-2 flex">
-            <SetGlyph code={replay.header.setCode} size={40} />
+            <SetGlyph code={header.setCode} size={40} />
           </span>
           <span
             className="font-display tracking-[0.04em] text-text whitespace-nowrap"
             style={{ fontSize: 42, lineHeight: 0.9 }}
           >
-            {replay.header.title}
+            {header.title}
           </span>
           <span className="absolute left-full bottom-0 ml-3 flex items-end gap-1.5">
             <span className="font-display text-subtle tracking-[0.06em]" style={{ fontSize: 18, lineHeight: 1 }}>
-              {replay.header.city}
+              {header.city}
             </span>
-            <EventSwitcher activeCode={replay.event.code} />
+            <EventSwitcher activeCode={event.code} />
           </span>
         </span>
       </span>
-      <ReplayStatus {...statusProps} inHeading playersRef={playersRef} />
+      {status(playersRef)}
+    </div>
+  );
+}
+
+export function LoadingReplayHeader({ event, compact }: { event: FantasyEventEntry; compact: boolean }) {
+  const header = { title: event.shortName.toUpperCase(), city: event.city.toUpperCase(), setCode: event.setCode };
+  const crest = event.crest ? <EventCrest src={event.crest} alt={event.name} height={compact ? 44 : 80} /> : null;
+  if (compact) {
+    return (
+      <div className="flex items-center gap-3">
+        {crest}
+        <EventTitle
+          event={header}
+          label="hidden"
+          switcher={<EventSwitcher activeCode={event.code} mobile />}
+          balanced={false}
+          labelSize={12}
+          glyphSize={32}
+          titleSize={34}
+          citySize={17}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-7">
+      {crest}
+      <ReplayHeading
+        event={event}
+        header={header}
+        status={(playersRef) => (
+          <span className="contents font-display text-[16px] tracking-[0.08em]">
+            <span className="row-start-3 mt-2.5 col-start-1 mr-6 justify-self-end text-text whitespace-nowrap">
+              {eventDays(event, new Date()).toUpperCase()}
+            </span>
+            <span
+              ref={playersRef}
+              className="row-start-3 mt-2.5 col-start-2 justify-self-center flex h-4 w-[77px] bg-surface2"
+            />
+            <span className="row-start-3 mt-2.5 col-start-3 ml-6 justify-self-start flex h-4 w-[115px] bg-surface2" />
+          </span>
+        )}
+      />
     </div>
   );
 }
