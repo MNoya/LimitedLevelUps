@@ -290,6 +290,11 @@ function TeamSheetView({
     }
   }
 
+  const cardRecord = (key: SlotKey) => {
+    const player = picker.lineup[key];
+    return live && player ? recordThrough(liveEvent, player) : undefined;
+  };
+
   const cardOut = (key: SlotKey) => {
     const player = picker.lineup[key];
     return live && Boolean(player && isOut(liveEvent, player));
@@ -544,6 +549,8 @@ function TeamSheetView({
           onSelect={selectCard}
           cardPoints={cardPoints}
           cardOut={cardOut}
+          cardRecord={cardRecord}
+          replacedPick={replacedPick}
         />
         {profileSheet}
       </main>
@@ -593,7 +600,7 @@ function TeamSheetView({
                       size="lg"
                       width={cardWidth}
                       points={cardPoints(slot.key)}
-                      record={live && player ? recordThrough(liveEvent, player) : undefined}
+                      record={cardRecord(slot.key)}
                       out={cardOut(slot.key)}
                       replaced={replacedPick(slot.key)}
                       replacedPoints={replacedPickPoints(slot.key)}
@@ -695,7 +702,8 @@ function FieldGroups({
 
   const minColumn = compact ? 160 : 210;
   const columns = `repeat(auto-fill, minmax(${minColumn}px, 1fr))`;
-  const grid = { className: cn("grid", compact ? "gap-1.5" : "gap-2.5"), style: { gridTemplateColumns: columns } };
+  const gridClass = cn("grid gap-y-2.5", compact ? "gap-x-1.5" : "gap-x-2.5");
+  const grid = { className: gridClass, style: { gridTemplateColumns: columns } };
   if (loading) {
     return <FieldSkeleton grid={grid} compact={compact} />;
   }
@@ -703,7 +711,7 @@ function FieldGroups({
     <div className={cn("flex flex-col", compact ? "gap-5" : "gap-7")}>
       {groups.map((group) => (
         <div key={group.key}>
-          <SectionLabel size={compact ? 16 : 18} color="#ffffff" className={compact ? "mb-2" : "mb-3"}>
+          <SectionLabel size={compact ? 16 : 18} color="#ffffff" className="mb-3">
             {qualificationLabel(group.key, liveEvent.players).toUpperCase()}
           </SectionLabel>
           <div {...grid}>
@@ -713,7 +721,6 @@ function FieldGroups({
                 player={player}
                 pickedSlot={picker.pickedSlotByName.get(fullName(player)) ?? null}
                 replacedSlot={replacedSlotByName.get(fullName(player)) ?? null}
-                showSlotTag={!compact}
                 out={isOut(liveEvent, player)}
                 detail={
                   <span className="truncate">
@@ -787,6 +794,8 @@ function MobileTray({
   onSelect,
   cardPoints,
   cardOut,
+  cardRecord,
+  replacedPick,
   showSaved,
 }: {
   picker: Picker;
@@ -796,6 +805,8 @@ function MobileTray({
   onSelect: (key: SlotKey) => void;
   cardPoints: (key: SlotKey) => number | undefined;
   cardOut: (key: SlotKey) => boolean;
+  cardRecord: (key: SlotKey) => string | undefined;
+  replacedPick: (key: SlotKey) => FieldPlayer | undefined;
 }) {
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 bg-surface border-t border-border px-2 pt-1.5 pb-2">
@@ -815,7 +826,9 @@ function MobileTray({
               active={picker.activeSlot === slot.key}
               size="xs"
               points={cardPoints(slot.key)}
+              record={cardRecord(slot.key)}
               out={cardOut(slot.key)}
+              replaced={replacedPick(slot.key)}
               onClick={() => {
                 const alreadyReplacing = player && picker.activeSlot === slot.key;
                 if (alreadyReplacing) {
@@ -1112,6 +1125,8 @@ function PicksPremise({ compact }: { compact: boolean }) {
 }
 
 function ScoringRules({ short = false }: { short?: boolean }) {
+  const { phase } = useLiveEvent();
+  const phaseNoteSaysIt = short && phase === "cut";
   return (
     <div className="text-[14px] text-subtle leading-[1.6] text-center">
       <div>
@@ -1126,12 +1141,14 @@ function ScoringRules({ short = false }: { short?: boolean }) {
       <div>
         <RoleName slotKey="constructed" /> scores <b className="text-text">double</b> in Constructed rounds
       </div>
-      <div
-        className={cn("mt-1.5", short && "whitespace-nowrap")}
-        style={short ? { fontSize: "clamp(11px, 3.3vw, 14px)" } : undefined}
-      >
-        <DayTwoNote />
-      </div>
+      {phaseNoteSaysIt ? null : (
+        <div
+          className={cn("mt-1.5", short && "whitespace-nowrap")}
+          style={short ? { fontSize: "clamp(11px, 3.3vw, 14px)" } : undefined}
+        >
+          <DayTwoNote />
+        </div>
+      )}
       {short ? <div className="mt-1.5 italic">Press and hold a player for more details</div> : null}
     </div>
   );
@@ -1143,9 +1160,10 @@ function RoleName({ slotKey }: { slotKey: SlotKey }) {
 }
 
 function DayTwoNote() {
+  const { cutRound } = useLiveEvent();
   return (
     <>
-      Players who miss <span className="font-semibold text-text">Day 2</span> can be replaced before Round 8
+      Players who miss <span className="font-semibold text-text">Day 2</span> can be replaced before Round {cutRound + 1}
     </>
   );
 }
@@ -1274,21 +1292,10 @@ function SheetCard({
               <span className={cn("block w-full h-full transition-opacity", (active || out) && "opacity-30", out && "grayscale")}>
                 <PlayerPortrait player={player} initialsSize={tiny ? 16 : 48} />
               </span>
-              {out && !active && tiny ? (
-                <span className="absolute inset-0 flex items-center justify-center px-1 text-center">
-                  <span className="font-display tracking-[0.06em] text-text leading-none text-[18px]">
-                    {dayOneRecord(liveEvent, player)}
-                  </span>
-                </span>
-              ) : null}
-              {record !== undefined && !tiny ? <CardStatPill className="left-1">{record}</CardStatPill> : null}
-              {points !== undefined && !tiny ? <CardStatPill className="right-1">{points} pts</CardStatPill> : null}
-              {points !== undefined && tiny ? (
-                <span className="absolute right-1 bottom-1 rounded bg-black/80 px-1 py-0.5 font-num font-semibold leading-none text-[12px] text-text">
-                  {points}
-                  <span className="text-subtle font-normal"> pts</span>
-                </span>
-              ) : null}
+              {record !== undefined && !tiny ? <CardStatPill className="left-1 bottom-1">{record}</CardStatPill> : null}
+              {points !== undefined && !tiny ? <CardStatPill className="right-1 bottom-1">{points} pts</CardStatPill> : null}
+              {replaced && tiny ? <ReplacedThumb player={replaced} /> : null}
+              {tiny ? <TinyStatRow record={record} points={points} /> : null}
               {active ? (
                 <span className="absolute inset-0 flex flex-col items-center justify-center gap-1">
                   <Repeat size={tiny ? 20 : 30} strokeWidth={2} style={{ color: slot.accent }} />
@@ -1353,11 +1360,30 @@ function CardStatPill({ className, children }: { className: string; children: Re
   return (
     <span
       className={cn(
-        "absolute bottom-1 rounded bg-black/80 px-1.5 py-1 font-num font-semibold leading-none text-[15px] text-text",
+        "absolute rounded bg-black/80 px-1.5 py-1 font-num font-semibold leading-none text-[15px] text-text",
         className,
       )}
     >
       {children}
+    </span>
+  );
+}
+
+function TinyStatRow({ record, points }: { record?: string; points?: number }) {
+  const pillClass = "rounded bg-black/80 px-1 py-0.5 font-num font-semibold leading-none text-text whitespace-nowrap";
+  const fontSize = "clamp(10px, 3.1vw, 12px)";
+  return (
+    <span className="absolute inset-x-0.5 bottom-0.5 flex justify-between gap-0.5" style={{ fontSize }}>
+      {record !== undefined ? <span className={pillClass}>{record}</span> : <span />}
+      {points !== undefined ? <span className={pillClass}>{points} pts</span> : null}
+    </span>
+  );
+}
+
+function ReplacedThumb({ player }: { player: FieldPlayer }) {
+  return (
+    <span className="absolute right-1 top-1 w-[22px] h-[22px] overflow-hidden rounded-[3px] opacity-70 grayscale ring-1 ring-black/80">
+      <PlayerPortrait player={player} initialsSize={9} />
     </span>
   );
 }

@@ -136,12 +136,10 @@ function BracketHeader({ results }: { results: BracketResults | null }) {
         Pick the winner of each match for <b>2</b> points in Quarterfinals, <b>4</b> in Semifinals and <b>8</b> in
         Finals
       </span>
-      {results ? null : (
-        <>
-          <span className="text-subtle">Pick the exact games for 1 more point</span>
-          <PicksLockDate size={13} prefix="Quarterfinals start" at={bracketLockAt} />
-        </>
-      )}
+      <span className="text-subtle">
+        Pick the exact game score for <b className="text-text">1</b> more point
+      </span>
+      {results ? null : <PicksLockDate size={13} prefix="Quarterfinals start" at={bracketLockAt} />}
     </div>
   );
 }

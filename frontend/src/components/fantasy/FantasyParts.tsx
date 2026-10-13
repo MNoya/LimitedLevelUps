@@ -157,7 +157,6 @@ export function FieldTile({
   aside,
   pickedSlot = null,
   replacedSlot = null,
-  showSlotTag = false,
   out = false,
   faded = false,
   large = false,
@@ -172,7 +171,6 @@ export function FieldTile({
   aside?: ReactNode;
   pickedSlot?: SlotKey | null;
   replacedSlot?: SlotKey | null;
-  showSlotTag?: boolean;
   out?: boolean;
   faded?: boolean;
   large?: boolean;
@@ -194,7 +192,7 @@ export function FieldTile({
   );
   const body = (
     <>
-      {slot && showSlotTag ? (
+      {slot ? (
         <span
           className="absolute -top-[10px] right-2 px-1 bg-bg font-display text-[13px] leading-none [text-box:trim-both_cap_alphabetic] py-[2px] tracking-[0.12em]"
           style={{ color: slot.accent }}

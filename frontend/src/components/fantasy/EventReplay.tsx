@@ -232,7 +232,10 @@ function ReplayHeading({
             {header.title}
           </span>
           <span className="absolute left-full bottom-0 ml-3 flex items-end gap-1.5">
-            <span className="font-display text-subtle tracking-[0.06em]" style={{ fontSize: 18, lineHeight: 1 }}>
+            <span
+              className="font-display text-subtle tracking-[0.06em] whitespace-nowrap"
+              style={{ fontSize: 18, lineHeight: 1 }}
+            >
               {header.city}
             </span>
             <EventSwitcher activeCode={event.code} />
