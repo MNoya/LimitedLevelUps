@@ -685,10 +685,11 @@ export function useP0P1Cards(setCode: string | undefined) {
   });
 }
 
-export function useFantasyEventState(eventCode: string) {
+export function useFantasyEventState(eventCode: string, enabled = true) {
   return useQuery({
     queryKey: ["fantasy-event-state", eventCode],
     queryFn: () => fetchFantasyEventState(eventCode),
+    enabled,
     staleTime: 0,
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,

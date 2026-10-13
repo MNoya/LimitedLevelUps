@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { FantasyEventState } from "../../types/fantasy";
 import registry from "../../../../fantasy_events.json";
 
 export type FantasyEventEntry = {
@@ -116,7 +117,7 @@ const NAV_DAYS_AFTER = 7;
 export function fantasyNavEvent(now: Date): FantasyEventEntry | undefined {
   const day = 24 * 60 * 60 * 1000;
   for (const event of FANTASY_EVENTS) {
-    if (event.replayOnly || !(event.live || import.meta.env.DEV)) {
+    if (event.replayOnly || !event.live) {
       continue;
     }
     const opens = oneMonthBefore(event.startDate).getTime();
@@ -128,15 +129,24 @@ export function fantasyNavEvent(now: Date): FantasyEventEntry | undefined {
   return undefined;
 }
 
-export function fantasyNavLabel(event: FantasyEventEntry, now: Date): string {
-  if (picksOpen(event, now)) {
+export function fantasyNavLabel(event: FantasyEventEntry, now: Date, state: FantasyEventState | null): string {
+  if (now.getTime() < new Date(state?.picksLockAt ?? event.picksLockAt).getTime()) {
     return "OPEN";
   }
-  if (isEventLive(event, now)) {
-    return "LIVE";
+  if (!state) {
+    return isEventLive(event, now) ? "LIVE" : "RESULTS";
   }
-  return "RESULTS";
+  const revealed = state.revealedThroughRound ?? 0;
+  const top8Stages = 3;
+  if (revealed >= event.swissRounds + top8Stages) {
+    return "RESULTS";
+  }
+  if (revealed >= event.swissRounds) {
+    return "TOP 8";
+  }
+  return `ROUND ${revealed + 1}`;
 }
+
 
 export function switcherTag(event: FantasyEventEntry, now: Date): "LIVE" | "NEXT UP" | undefined {
   if (isEventLive(event, now)) {

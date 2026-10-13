@@ -7,7 +7,14 @@ import { ALogo, AWordmark, SetGlyph } from "./Brand";
 import { cn } from "../lib/utils";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { useAuth } from "../auth/useAuth";
-import { useP0P1FeaturedContest, useP0P1Picks, useP0P1Ratings, usePlayerSlugByDiscordId, useSets } from "../data/hooks";
+import {
+  useFantasyEventState,
+  useP0P1FeaturedContest,
+  useP0P1Picks,
+  useP0P1Ratings,
+  usePlayerSlugByDiscordId,
+  useSets,
+} from "../data/hooks";
 import { ACTIVE_SET_CODE } from "../data/constants";
 import { playerPath } from "../data/utils";
 import { slotsForSet } from "../data/p0p1Slots";
@@ -23,6 +30,7 @@ import {
   type FantasyEventEntry,
 } from "./fantasy/fantasyEvents";
 import { prefetchProPlay, prefetchProPlayWhenIdle } from "./fantasy/proPlayChunks";
+import { devPresetState, useFantasyDevPreset } from "./fantasy/fantasyDevState";
 
 // Top-of-page chrome shared across the whole community site. The brand mark is
 // the Home link; each section is a nav tab.
@@ -556,7 +564,7 @@ function fantasyNavItem(event: FantasyEventEntry): NavItem {
     menuLeading: event.crest ? <img src={event.crest} alt="" className="w-6 h-auto max-w-none" /> : undefined,
     badge: ({ active }) => (
       <span className={cn(navPillClass(active), "-right-1.5 whitespace-nowrap")}>
-        {fantasyNavLabel(event, new Date())}
+        <ProPlayNavLabel event={event} />
       </span>
     ),
     menuBadge: ({ active }) => (
@@ -566,13 +574,22 @@ function fantasyNavItem(event: FantasyEventEntry): NavItem {
           active ? "text-bg" : "text-green",
         )}
       >
-        {fantasyNavLabel(event, new Date())}
+        <ProPlayNavLabel event={event} />
       </span>
     ),
     to: fantasyEventPath(event),
     match: isProPlayPath,
     prefetch: prefetchProPlay,
   };
+}
+
+function ProPlayNavLabel({ event }: { event: FantasyEventEntry }) {
+  const preset = useFantasyDevPreset(event);
+  const now = Date.now();
+  const lockPassed = now >= new Date(event.picksLockAt).getTime();
+  const { data: storedState } = useFantasyEventState(event.code, preset !== "live" || lockPassed);
+  const state = storedState && preset !== "live" ? devPresetState(preset, storedState, event, now) : storedState;
+  return <>{fantasyNavLabel(event, new Date(now), state ?? null)}</>;
 }
 
 function isProPlayPath(pathname: string): boolean {
