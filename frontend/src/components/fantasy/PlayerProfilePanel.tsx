@@ -82,7 +82,7 @@ export function PlayerProfileSheet({
   const history = event?.history;
   return createPortal(
     <div
-      data-fantasy-pick-target
+      data-keeps-active-slot
       className={cn(
         "fixed inset-0 z-[200] flex justify-center bg-black/70 p-4 animate-fadeIn",
         "select-none [-webkit-touch-callout:none]",

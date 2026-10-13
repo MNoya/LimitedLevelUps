@@ -195,7 +195,7 @@ function StandingsLine({
   const rowProps = {
     onMouseEnter: (event: MouseEvent<HTMLElement>) => onHover(player, event.currentTarget),
     onMouseLeave: onLeave,
-    "data-fantasy-pick-target": "",
+    "data-keeps-active-slot": "",
   };
   const content = (
     <>

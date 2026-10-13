@@ -243,7 +243,7 @@ function TeamSheetView({
     }
     const cancelOnOutsidePress = (event: PointerEvent) => {
       const target = event.target as Element | null;
-      if (!target?.closest("[data-fantasy-pick-target]")) {
+      if (!target?.closest("[data-keeps-active-slot]")) {
         picker.setActiveSlot(null);
       }
     };
@@ -528,7 +528,7 @@ function TeamSheetView({
         <div className="sticky top-0 z-10 bg-bg/95 backdrop-blur border-b border-border">
           {viewTabs}
           {showField ? (
-            <div className="px-3 py-2.5 flex flex-col gap-2">
+            <div data-keeps-active-slot className="px-3 py-2.5 flex flex-col gap-2">
               <SearchBox value={filters.search} onChange={filters.setSearch} className="w-full" />
               <div className="-mx-3 px-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
                 <div className="w-max">
@@ -626,9 +626,11 @@ function TeamSheetView({
         <div className={cn("sticky top-0 z-10 -mx-7 px-7 mb-3 bg-bg/95 backdrop-blur", showField && "border-b border-border")}>
           {viewTabs}
           {showField ? (
-        <div className="py-3 flex items-center gap-4">
+        <div data-keeps-active-slot className="py-3 flex items-center gap-4">
           <span className="shrink-0 grid text-[14px] text-subtle whitespace-nowrap">
-            <span className="invisible col-start-1 row-start-1" aria-hidden="true">Picking Constructed</span>
+            <span className="invisible col-start-1 row-start-1" aria-hidden="true">
+              Picking <span className="font-semibold">Constructed</span>
+            </span>
             <span className="invisible col-start-1 row-start-1" aria-hidden="true">
               Replace before Round {liveEvent.cutRound + 1}
             </span>
@@ -640,14 +642,12 @@ function TeamSheetView({
               <PickingStatus picker={picker} phase={phase} signedIn={!loginCta} onSignIn={onSignIn} />
             </span>
           </span>
-          <div className="flex-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-            <div className="w-max">
-              <QualificationChips
-                active={filters.qualification}
-                onChange={filters.setQualification}
-                players={liveEvent.players}
-              />
-            </div>
+          <div className="flex-1 min-w-0">
+            <QualificationChips
+              active={filters.qualification}
+              onChange={filters.setQualification}
+              players={liveEvent.players}
+            />
           </div>
           <SearchBox
             value={filters.search}
@@ -1058,7 +1058,7 @@ function PickingStatus({
   const slot = slotFor(picker.activeSlot);
   return (
     <>
-      Picking <span style={{ color: slot.accent }}>{slot.label}</span>
+      Picking <span className="font-semibold" style={{ color: slot.accent }}>{slot.label}</span>
     </>
   );
 }
@@ -1260,7 +1260,7 @@ function SheetCard({
   const cardWidth = tiny ? undefined : width;
   return (
     <button
-      data-fantasy-pick-target
+      data-keeps-active-slot
       type="button"
       onClick={() => {
         if (!longPress.consumeFired()) {

@@ -241,7 +241,7 @@ export function FieldTile({
   }
   return (
     <button
-      data-fantasy-pick-target
+      data-keeps-active-slot
       type="button"
       onClick={() => {
         if (!longPress.consumeFired()) {
