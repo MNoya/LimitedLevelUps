@@ -13,7 +13,8 @@ export type FantasyDevPreset =
   | "dayTwo"
   | "bracketOpen"
   | "quarterfinalsDone"
-  | "final";
+  | "final"
+  | "skeleton";
 
 export const FANTASY_DEV_PRESETS: DevStateOption<FantasyDevPreset>[] = [
   { value: "live", group: "Live", label: "Live" },
@@ -25,7 +26,12 @@ export const FANTASY_DEV_PRESETS: DevStateOption<FantasyDevPreset>[] = [
   { value: "bracketOpen", group: "Top 8", label: "Bracket open" },
   { value: "quarterfinalsDone", group: "Top 8", label: "Quarterfinals done" },
   { value: "final", group: "Final", label: "Event complete" },
+  { value: "skeleton", group: "Loading", label: "Skeleton" },
 ];
+
+export const DEMO_PRESETS = FANTASY_DEV_PRESETS.filter((preset) => preset.value !== "skeleton");
+
+export const LOADING_PRESETS = FANTASY_DEV_PRESETS.filter((preset) => ["live", "skeleton"].includes(preset.value));
 
 const presetStore = createDevPresetStore<FantasyDevPreset>(
   "fantasyDevPreset",
@@ -46,7 +52,7 @@ export function useFantasyDevPreset(event: FantasyEventEntry | undefined): Fanta
 }
 
 export function readsDemoData(preset: FantasyDevPreset, state: FantasyEventState): boolean {
-  return preset !== "live" && !state.completedThroughRound;
+  return preset !== "live" && preset !== "skeleton" && !state.completedThroughRound;
 }
 
 export function devPresetState(
@@ -55,7 +61,7 @@ export function devPresetState(
   event: FantasyEventEntry,
   now: number,
 ): FantasyEventState {
-  if (preset === "live") {
+  if (preset === "live" || preset === "skeleton") {
     return state;
   }
   const hour = 60 * 60 * 1000;
@@ -72,8 +78,8 @@ export function devPresetState(
   };
 }
 
-function presetRound(preset: Exclude<FantasyDevPreset, "live">, event: FantasyEventEntry): number {
-  const rounds: Record<Exclude<FantasyDevPreset, "live">, number> = {
+function presetRound(preset: Exclude<FantasyDevPreset, "live" | "skeleton">, event: FantasyEventEntry): number {
+  const rounds: Record<Exclude<FantasyDevPreset, "live" | "skeleton">, number> = {
     pickingSignedIn: 0,
     pickingLoggedOut: 0,
     dayOne: 3,

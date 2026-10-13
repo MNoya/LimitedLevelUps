@@ -7,6 +7,7 @@ import { prefetchProPlay } from "../components/fantasy/proPlayChunks";
 import { DevStatePanel } from "../components/DevStatePanel";
 import { devToolsEnabled } from "../lib/dev-preset-store";
 import {
+  DEMO_PRESETS,
   demoPresetsAllowed,
   FANTASY_DEV_PRESETS,
   setFantasyDevPreset,
@@ -45,7 +46,7 @@ export function FantasyPage({ event }: { event: FantasyEventEntry }) {
         title={devToolsEnabled ? "DEV - PRO PLAY STATE" : "DEMO - PRO PLAY"}
         label={devToolsEnabled ? "DEV" : "DEMO"}
         enabled={demoPresetsAllowed(event)}
-        options={FANTASY_DEV_PRESETS}
+        options={devToolsEnabled ? FANTASY_DEV_PRESETS : DEMO_PRESETS}
         value={devPreset}
         onChange={setFantasyDevPreset}
         liveValue="live"

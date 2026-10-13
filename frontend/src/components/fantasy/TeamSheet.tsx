@@ -47,6 +47,7 @@ import {
   EventCrest,
   EventSwitcher,
   EventTitle,
+  LoadingEventHeader,
   ProfileHint,
   FieldTile,
   HoverCard,
@@ -96,6 +97,7 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
   const now = useNow(15_000);
   const minute = Math.floor(now / 60_000);
   const devPreset = useFantasyDevPreset(entry);
+  const isCompact = useIsMobile(1024);
   const { data: storedState } = useFantasyEventState(header.code);
   const demoActive = storedState ? readsDemoData(devPreset, storedState) : false;
   const { data: demo } = useFantasyDemo(demoActive);
@@ -145,8 +147,9 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
         : header,
     [header, state],
   );
-  if (!liveEvent) {
-    return <ProPlaySkeleton layout="sheet" />;
+  if (!liveEvent || devPreset === "skeleton") {
+    const loadingHeader = entry ? <LoadingEventHeader event={entry} compact={isCompact} layout="sheet" /> : undefined;
+    return <ProPlaySkeleton layout="sheet" header={loadingHeader} />;
   }
   return (
     <FantasyEventContext.Provider value={liveHeader}>
