@@ -11,7 +11,7 @@ from bot.services.fantasy_podium import FantasyWinner
 MSG_PICKS_OPEN_TITLE = "Pro Play Fantasy picks are open for **{event}**"
 MSG_PICKS_OPEN_PREMISE = "Put together a team of four Pro Players and score points every time they win a match!"
 MSG_SELECTION_CLOSES = "Selection closes {when} ({relative})"
-MSG_CLOSE_REMINDER_TITLE = "**{event}** picks close {relative}"
+MSG_CLOSE_REMINDER_TITLE = "**{event}** Fantasy picks close {relative}"
 MSG_PICK_TEAM = "[**Pick your Team**]({url})"
 MSG_DAY_LIVE_TITLE = "**{event}** {day} is live"
 MSG_DAY_LIVE_BODY = "Follow your team after each round"
