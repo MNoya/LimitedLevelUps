@@ -40,6 +40,9 @@ export function buildLiveEvent(
   const seeded = topEightSeeds(results, players, byId, roundsPlayed >= event.swissRounds);
   const { bySlug, slugOf } = playerSlugs(players);
   const header = fantasyEventHeader(event);
+  const picksLockAt = new Date(state.picksLockAt).getTime();
+  const dayTwoStartAt = picksLockAt + 24 * 60 * 60 * 1000;
+  const dayTwoStarted = state.dayTwoStartedAt !== null || now.getTime() >= dayTwoStartAt;
   return {
     event,
     header: { title: header.title, city: header.city, setCode: header.setCode },
@@ -57,9 +60,9 @@ export function buildLiveEvent(
     bySlug,
     slugOf,
     byId,
-    phase: phaseOf(event, state, results, roundsPlayed, now),
+    phase: phaseOf(event, results, roundsPlayed, now, picksLockAt, dayTwoStarted),
     roundsPlayed,
-    replacementsOpen: state.dayTwoStartedAt === null && now.getTime() >= new Date(state.picksLockAt).getTime(),
+    replacementsOpen: !dayTwoStarted && now.getTime() >= picksLockAt,
     topEightStarted: state.top8StartedAt !== null || results.some((row) => row.stage !== "swiss"),
     bracketWindowOpen: state.revealedThroughRound >= event.swissRounds && state.top8StartedAt === null,
     demo,
@@ -90,12 +93,13 @@ const MINIMUM_PERCENTAGE = 1 / 3;
 
 function phaseOf(
   event: FantasyEventEntry,
-  state: FantasyEventState,
   results: FantasyResultRow[],
   roundsPlayed: number,
   now: Date,
+  picksLockAt: number,
+  dayTwoStarted: boolean,
 ): EventPhase {
-  if (now.getTime() < new Date(state.picksLockAt).getTime()) {
+  if (now.getTime() < picksLockAt) {
     return "picking";
   }
   if (results.some((row) => row.stage === "final")) {
@@ -104,10 +108,10 @@ function phaseOf(
   if (roundsPlayed >= event.swissRounds) {
     return "top8";
   }
-  if (roundsPlayed >= event.cutRound && state.dayTwoStartedAt === null) {
+  if (roundsPlayed >= event.cutRound && !dayTwoStarted) {
     return "cut";
   }
-  return roundsPlayed > event.cutRound || state.dayTwoStartedAt !== null ? "day2" : "day1";
+  return roundsPlayed > event.cutRound || dayTwoStarted ? "day2" : "day1";
 }
 
 type Tally = { matchPoints: number; matches: number; gamePoints: number; games: number; opponents: number[] };

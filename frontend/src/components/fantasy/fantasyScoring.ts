@@ -1,4 +1,4 @@
-import { SLOTS, formatRecord, fullName, type FieldPlayer, type Lineup, type SlotKey } from "./fantasyField";
+import { formatRecord, fullName, type FieldPlayer, type SlotKey } from "./fantasyField";
 import type { LiveEvent } from "./fantasyLive";
 
 export type EventPhase = "picking" | "day1" | "cut" | "day2" | "top8" | "final";
@@ -58,28 +58,6 @@ export function playerPoints(
   for (let round = fromRound; round <= toRound; round += 1) {
     const result = results[round - 1];
     total += result ? POINTS[result] * slotMultiplier(live, slotKey, round) : 0;
-  }
-  return total;
-}
-
-export function slotScore(live: LiveEvent, slotKey: SlotKey, dayOneLineup: Lineup, lineup: Lineup): number {
-  const original = dayOneLineup[slotKey];
-  const current = lineup[slotKey];
-  if (!original || !current) {
-    return 0;
-  }
-  if (fullName(original) === fullName(current)) {
-    return playerPoints(live, current, slotKey, 1, live.roundsPlayed);
-  }
-  const dayOne = playerPoints(live, original, slotKey, 1, Math.min(live.roundsPlayed, live.cutRound));
-  const dayTwo = playerPoints(live, current, slotKey, live.cutRound + 1, live.roundsPlayed);
-  return dayOne + dayTwo;
-}
-
-export function lineupScore(live: LiveEvent, dayOneLineup: Lineup, lineup: Lineup): number {
-  let total = 0;
-  for (const slot of SLOTS) {
-    total += slotScore(live, slot.key, dayOneLineup, lineup);
   }
   return total;
 }

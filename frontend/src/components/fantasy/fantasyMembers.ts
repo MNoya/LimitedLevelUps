@@ -1,5 +1,5 @@
 import { SLOTS, fullName, type FieldPlayer, type Lineup, type SlotKey } from "./fantasyField";
-import { playerPoints } from "./fantasyScoring";
+import { isOut, madeDayTwo, playerPoints } from "./fantasyScoring";
 import { liveBracketResults, type LiveEvent } from "./fantasyLive";
 import {
   BRACKET_KEY,
@@ -138,7 +138,8 @@ function memberStanding(member: Member, context: EventContext): MemberStanding {
     if (!dayOne || !current) {
       continue;
     }
-    slots.push(slotBreakdown(slot.key, dayOne, current, context));
+    const scored = subCounts(context.live, dayOne, current) ? current : dayOne;
+    slots.push(slotBreakdown(slot.key, dayOne, scored, context));
   }
   let day1 = 0;
   let day2 = 0;
@@ -154,6 +155,13 @@ function memberStanding(member: Member, context: EventContext): MemberStanding {
   const sunday = top8 + (bracketPoints ?? 0);
   const total = day1 + day2 + sunday;
   return { member, rank: 0, day1, day2, top8: sunday, total, bracketPoints, championCalled, slots };
+}
+
+function subCounts(live: LiveEvent, dayOne: FieldPlayer, current: FieldPlayer): boolean {
+  if (fullName(dayOne) === fullName(current)) {
+    return true;
+  }
+  return isOut(live, dayOne) && madeDayTwo(live, current);
 }
 
 function slotBreakdown(slot: SlotKey, dayOne: FieldPlayer, current: FieldPlayer, context: EventContext): SlotBreakdown {
