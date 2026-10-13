@@ -66,7 +66,7 @@ import {
   useFantasyEvent,
   type FantasyEventHeader,
 } from "./fantasyEvents";
-import { devPresetState, readsDemoData, useFantasyDevPreset } from "./fantasyDevState";
+import { devPresetState, picksAtPreviewPhase, readsDemoData, useFantasyDevPreset } from "./fantasyDevState";
 import { Top8Bracket, Top8BracketList } from "./Top8Bracket";
 import { eventContext, membersFromRows, standings, type Member, type StandingsDay } from "./fantasyMembers";
 import { type BracketPicks } from "./fantasyTop8";
@@ -110,7 +110,7 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
   const bracketLocked = state ? now >= new Date(state.bracketLockAt).getTime() : false;
   const membersVersion = state && locked && !demoActive ? `${state.completedThroughRound}:${bracketLocked}` : undefined;
   const { data: storedMembers } = useFantasyMembers(header.code, membersVersion);
-  const members = useMemo(
+  const memberData = useMemo(
     () => (demoActive && demo ? { members: demo.members, lineups: demo.lineups, brackets: demo.brackets } : storedMembers),
     [demoActive, demo, storedMembers],
   );
@@ -121,9 +121,17 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
         return null;
       }
       const demoData = demoActive ? (demo ?? null) : null;
-      return buildLiveEvent(entry, state, field, results ?? [], throughRound, new Date(now), demoData);
+      const readOnly = devPreset !== "live";
+      return buildLiveEvent(entry, state, field, results ?? [], throughRound, new Date(now), demoData, readOnly);
     },
-    [entry, state, field, results, throughRound, minute, demoActive, demo],
+    [entry, state, field, results, throughRound, minute, demoActive, demo, devPreset],
+  );
+  const members = useMemo(
+    () =>
+      liveEvent?.readOnly && memberData
+        ? { ...memberData, lineups: picksAtPreviewPhase(memberData.lineups, liveEvent.phase) }
+        : memberData,
+    [liveEvent?.readOnly, liveEvent?.phase, memberData],
   );
   const liveHeader = useMemo(
     () =>
@@ -143,6 +151,7 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
     <FantasyEventContext.Provider value={liveHeader}>
       <LiveEventContext.Provider value={liveEvent}>
         <TeamSheetView
+          key={devPreset}
           loginCta={loginCta}
           onSignIn={onSignIn}
           liveEvent={liveEvent}
@@ -179,7 +188,7 @@ function TeamSheetView({
   const roundsPlayed = liveEvent.roundsPlayed;
   const live = phase !== "picking";
   const replacing = phase === "cut" && liveEvent.replacementsOpen;
-  const lineupWritable = ((!live && picksOpen) || replacing) && !liveEvent.demo;
+  const lineupWritable = ((!live && picksOpen) || replacing) && !liveEvent.readOnly;
   const dayOneLineup = usePersistedLineup(picker, liveEvent, !loginCta, lineupWritable);
   const filters = useFieldFilters(liveEvent.players);
   const isMobile = useIsMobile(1024);
@@ -201,7 +210,7 @@ function TeamSheetView({
   const results = liveBracketResults(liveEvent);
   const topEightOpen = phase === "top8" || phase === "final";
   const bracketOpen = liveEvent.bracketWindowOpen && now < fantasyEvent.bracketLockAt.getTime() && !results;
-  const [bracketPicks, setBracketPicks] = usePersistedBracket(liveEvent, !loginCta, bracketOpen && !liveEvent.demo);
+  const [bracketPicks, setBracketPicks] = usePersistedBracket(liveEvent, !loginCta, bracketOpen && !liveEvent.readOnly);
 
   const replacingSlot = picker.activeSlot && picker.lineup[picker.activeSlot] ? picker.activeSlot : null;
 

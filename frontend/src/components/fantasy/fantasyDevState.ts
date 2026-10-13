@@ -2,6 +2,7 @@ import { createDevPresetStore, devToolsEnabled } from "../../lib/dev-preset-stor
 import type { DevStateOption } from "../DevStatePanel";
 import type { FantasyEventState } from "../../types/fantasy";
 import type { FantasyEventEntry } from "./fantasyEvents";
+import type { EventPhase } from "./fantasyScoring";
 
 export type FantasyDevPreset =
   | "live"
@@ -45,8 +46,7 @@ export function useFantasyDevPreset(event: FantasyEventEntry | undefined): Fanta
 }
 
 export function readsDemoData(preset: FantasyDevPreset, state: FantasyEventState): boolean {
-  const picking = preset === "live" || preset === "pickingSignedIn" || preset === "pickingLoggedOut";
-  return !picking && !state.completedThroughRound;
+  return preset !== "live" && !state.completedThroughRound;
 }
 
 export function devPresetState(
@@ -84,4 +84,14 @@ function presetRound(preset: Exclude<FantasyDevPreset, "live">, event: FantasyEv
     final: event.swissRounds + 3,
   };
   return rounds[preset];
+}
+
+export function picksAtPreviewPhase<T extends { fromRound: number }>(picks: T[], phase: EventPhase): T[] {
+  if (phase === "picking") {
+    return [];
+  }
+  if (phase === "day1" || phase === "cut") {
+    return picks.filter((pick) => pick.fromRound === 1);
+  }
+  return picks;
 }

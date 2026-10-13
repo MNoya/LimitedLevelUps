@@ -18,10 +18,6 @@ export function usePersistedBracket(
   });
 
   useEffect(() => {
-    stored.current = null;
-  }, [live.demo]);
-
-  useEffect(() => {
     if (!saved || isFetching || stored.current) {
       return;
     }

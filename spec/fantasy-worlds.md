@@ -92,13 +92,22 @@ Qualification groups, in this order: Worlds 31 Top 8, Pro Tour, Points, Arena Ch
 
 ## Local testing
 
-On the dev server, the DEV pill in the bottom-right corner, shared with P0P1, switches the team sheet between Live and every phase: picking signed in or logged out, Day 1, the cut, Day 2, Bracket open, Quarterfinals done and Event complete. Each preset reshapes the event state and cuts results at its round in the browser, so the local database only needs a finished event staged once, through Round 17. Picks and Bracket picks made under a preset save to the local database. On production the same pill reads DEMO and shows on an event's page until it gets `"live": true`. Before an event has results, presets past picking read `frontend/src/data/fantasyDemo.json`, a snapshot of the staged dry run with 30 fake members and a Demo Player lineup, loaded only when chosen. Nothing saves under those presets. Rebuild it with `python -m bot.scripts.fantasy_demo_snapshot` after staging Round 17.
+The DEV pill in the bottom-right corner, shared with P0P1, switches the team sheet between Live and every phase: picking signed in or logged out, Day 1, the cut, Day 2, Bracket open, Quarterfinals done and Event complete. On production the same pill reads DEMO and shows on an event's page until it gets `"live": true`.
 
-`bot/scripts/fantasy_dry_run.py` copies a finished event's real field and results into another event on a local database, frozen at any round, with 30 members plus the dev user. It refuses a non-local `DATABASE_URL`. Round 0 stages the picking phase; 7 is the cut, 11 Day 2, 14 Bracket picking, 17 final.
+- Live shows the real event. Locally, `fantasy_dry_run --reset` puts Worlds 32 back to its registry entry and field seed, with no results or picks, so Live matches production before the event.
+- While the event has no results, every preset reads `frontend/src/data/fantasyDemo.json`, a snapshot of Worlds 31 staged as a finished dry run, loaded only when chosen. Each preset reshapes the event state and cuts the results at its round in the browser.
+- Every preset is read-only: edits stay in the browser, and switching presets remounts the team sheet so nothing carries into Live. Saved picks follow the preset's phase: the lineup starts empty while picking, and replacements only appear from Day 2.
+- The snapshot's own lineup is a fixture in the dry run: Captain Ha Pham replaced by Javier Dominguez, Drafter Arne Huschenbeth, Constructed Jean-Emmanuel Depraz and Player Simon Nielsen.
+
+`bot/scripts/fantasy_dry_run.py` copies a finished event's real field and results into another event on a local database, frozen at any round, with 30 members plus the dev user. It refuses a non-local `DATABASE_URL`. Round 0 stages the picking phase; 7 is the cut, 11 Day 2, 14 Bracket picking, 17 final. To rebuild the snapshot, stage Round 17, run the snapshot script, then reset:
 
 ```
 DATABASE_URL=postgresql://postgres:devpw@localhost:5433/dischord \
-  .venv/bin/python -m bot.scripts.fantasy_dry_run --through-round 11 --revealed 10
+  .venv/bin/python -m bot.scripts.fantasy_dry_run --through-round 17
+DATABASE_URL=postgresql://postgres:devpw@localhost:5433/dischord \
+  .venv/bin/python -m bot.scripts.fantasy_demo_snapshot
+DATABASE_URL=postgresql://postgres:devpw@localhost:5433/dischord \
+  .venv/bin/python -m bot.scripts.fantasy_dry_run --reset
 ```
 
 ## Data sources
