@@ -49,7 +49,7 @@ Posts are green embeds with the set symbol before the title and the event crest 
 | 7 | Results with the top 3, when the marker passes the Final | #watch-party, pinned |
 
 - Spoiler-free reveals: Melee posts results before coverage shows them. The marker auto-reveals a round 90 minutes after Melee completes it; each day's first round and every Top 8 stage wait for a moderator's `/round`. Source: Mike Provencher of MTG Scribe.
-- **Fantasy Champion**: a gold managed role that moves to each event's top 3 on the production guild when the Final is revealed. The closing post mentions it above the top 3.
+- **Fantasy Champion**: a gold managed role that moves to each event's winner on the production guild when the Final is revealed. The closing post puts the role mention on the 1st-place line.
 - Local runs: `.env` sets `WATCH_PARTY_CHANNEL_ID` to the dev server's watch-party channel, so the local bot posts there for a live event.
 
 ## Site

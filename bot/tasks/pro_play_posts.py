@@ -152,16 +152,16 @@ async def _crown_podium(event: FantasyEvent) -> None:
     role = find_role(guild, FANTASY_CHAMPION_ROLE_NAME)
     if guild.id == PRODUCTION_GUILD_ID and role is not None:
         await ensure_member_cache(guild)
-        members = _podium_members(guild, winners)
-        granted = await rotate_role(role, members, reason=f"{event.code} fantasy podium")
-        log.info(f"pro-play-posts: {FANTASY_CHAMPION_ROLE_NAME} moved to {granted} of {len(winners)} for {event.code}")
+        champions = [winner for winner in winners if winner.rank == 1]
+        granted = await rotate_role(role, _guild_members(guild, champions), reason=f"{event.code} fantasy champion")
+        log.info(f"pro-play-posts: {FANTASY_CHAMPION_ROLE_NAME} moved to {granted} champion(s) for {event.code}")
     elif role is None:
         log.warning(f"pro-play-posts: {FANTASY_CHAMPION_ROLE_NAME!r} missing in {guild.name}, announcing only")
     champion_role = role_label(guild, FANTASY_CHAMPION_ROLE_NAME)
     await _post_to_watch_party(event, ceremony_embed(event, winners, champion_role), pin=True)
 
 
-def _podium_members(guild: discord.Guild, winners: list[FantasyWinner]) -> list[discord.Member]:
+def _guild_members(guild: discord.Guild, winners: list[FantasyWinner]) -> list[discord.Member]:
     members = []
     for winner in winners:
         if winner.discord_id is None or not winner.discord_id.isdigit():

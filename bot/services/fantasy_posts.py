@@ -87,10 +87,11 @@ def round_complete_embed(event: FantasyEvent, round_label: str, argument: str) -
 
 
 def ceremony_embed(event: FantasyEvent, winners: list[FantasyWinner], champion_role: str) -> discord.Embed:
-    lines = [MSG_CEREMONY_TITLE.format(event=event.short_name), champion_role]
+    lines = [MSG_CEREMONY_TITLE.format(event=event.short_name)]
     for medal, winner in zip(MEDALS, winners):
         name = f"<@{winner.discord_id}>" if winner.discord_id else f"**{winner.name}**"
-        lines.append(MSG_CEREMONY_LINE.format(medal=medal, name=name, points=winner.points))
+        line = MSG_CEREMONY_LINE.format(medal=medal, name=name, points=winner.points)
+        lines.append(f"{line} {champion_role}" if winner.rank == 1 else line)
     lines.extend(["", MSG_FINAL_LEADERBOARD.format(url=pro_play_url(event, "leaderboard"))])
     return _embed(event, lines)
 

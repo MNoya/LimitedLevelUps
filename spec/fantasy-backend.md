@@ -106,4 +106,4 @@ Scoring stays plain SQL views over the scraped results: one writer, no deploy fo
 
 ## Podium role
 
-`bot/services/fantasy_podium.py` returns the top three of `public_fantasy_standings` with Discord ids. When the reveal marker passes the Final, `bot/tasks/pro_play_posts.py` moves the **Fantasy Champion** role, gold, to them on the production guild through the shared `rotate_role` in `bot/services/pod_roles.py`, then posts and pins the closing post with the role mention above the top 3. The role is a managed role in `bot/services/ping_roles.py`, so the reconcile creates it. It rotates like P0P1's Top P0P1 Challenger.
+`bot/services/fantasy_podium.py` returns the top three of `public_fantasy_standings` with Discord ids. When the reveal marker passes the Final, `bot/tasks/pro_play_posts.py` moves the **Fantasy Champion** role, gold, to the winner on the production guild through the shared `rotate_role` in `bot/services/pod_roles.py`, then posts and pins the closing post with the role mention on the 1st-place line. The role is a managed role in `bot/services/ping_roles.py`, so the reconcile creates it. It rotates like P0P1's Top P0P1 Challenger.
