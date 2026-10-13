@@ -10,7 +10,7 @@ import {
   fullName,
   shortLastName,
   type FieldPlayer,
-} from "./fantasyMock";
+} from "./fantasyField";
 import { useFantasyEvent } from "./fantasyEvents";
 import {
   BRACKET_MATCHES,

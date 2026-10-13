@@ -1,5 +1,5 @@
-import { SLOTS, fullName, type FieldPlayer, type Lineup, type SlotKey } from "./fantasyMock";
-import { playerPoints } from "./fantasyEvent";
+import { SLOTS, fullName, type FieldPlayer, type Lineup, type SlotKey } from "./fantasyField";
+import { playerPoints } from "./fantasyScoring";
 import { liveBracketResults, type LiveEvent } from "./fantasyLive";
 import {
   BRACKET_KEY,

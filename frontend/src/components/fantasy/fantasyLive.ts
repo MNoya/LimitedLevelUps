@@ -1,9 +1,9 @@
 import { createContext, useContext } from "react";
-import { formatRecord, fullName, type FieldPlayer } from "./fantasyMock";
+import { formatRecord, fullName, type FieldPlayer } from "./fantasyField";
 import { fantasyEventHeader, type FantasyEventEntry } from "./fantasyEvents";
 import { playerSlugs, type EventReplay, type ReplayPlayer } from "./fantasyReplay";
 import { BRACKET_KEY, BRACKET_MATCHES, type BracketResults, type GameScore } from "./fantasyTop8";
-import type { EventPhase, RoundResult } from "./fantasyEvent";
+import type { EventPhase, RoundResult } from "./fantasyScoring";
 import type { FantasyEventState, FantasyFieldRow, FantasyResultRow } from "../../types/fantasy";
 
 export type LiveEvent = Omit<EventReplay, "results"> & {
@@ -11,7 +11,6 @@ export type LiveEvent = Omit<EventReplay, "results"> & {
   phase: EventPhase;
   roundsPlayed: number;
   byId: Map<number, ReplayPlayer>;
-  dayTwoMatchPoints: number;
   replacementsOpen: boolean;
   topEightStarted: boolean;
   bracketWindowOpen: boolean;
@@ -56,7 +55,6 @@ export function buildLiveEvent(
     byId,
     phase: phaseOf(event, state, results, roundsPlayed, now),
     roundsPlayed,
-    dayTwoMatchPoints: event.dayTwoMatchPoints ?? DEFAULT_DAY_TWO_MATCH_POINTS,
     replacementsOpen: state.dayTwoStartedAt === null && now.getTime() >= new Date(state.picksLockAt).getTime(),
     topEightStarted: state.top8StartedAt !== null || results.some((row) => row.stage !== "swiss"),
     bracketWindowOpen: state.revealedThroughRound >= event.swissRounds && state.top8StartedAt === null,
@@ -82,7 +80,6 @@ export function liveBracketResults(live: LiveEvent): BracketResults | null {
   return null;
 }
 
-const DEFAULT_DAY_TWO_MATCH_POINTS = 12;
 const MINIMUM_PERCENTAGE = 1 / 3;
 
 function phaseOf(

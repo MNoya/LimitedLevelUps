@@ -12,7 +12,7 @@ import {
 } from "./fantasyEvents";
 import { SectionLabel } from "../SectionLabel";
 import { cn } from "../../lib/utils";
-import { CountryFlag, PlayerPortrait, fullName, slotFor, type EventHeader, type FieldPlayer, type SlotKey } from "./fantasyMock";
+import { CountryFlag, PlayerPortrait, fullName, slotFor, type EventHeader, type FieldPlayer, type SlotKey } from "./fantasyField";
 
 export type HoverTarget = { player: FieldPlayer; rect: DOMRect };
 

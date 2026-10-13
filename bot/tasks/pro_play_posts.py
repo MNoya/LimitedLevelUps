@@ -56,11 +56,6 @@ _bot: commands.Bot | None = None
 def init_pro_play_posts(bot: commands.Bot) -> None:
     global _bot
     _bot = bot
-    bot.pod_scheduler.add_job(
-        fire_pro_play_posts, "cron", minute="*/10", timezone=timezone.utc,
-        id="pro-play-posts", replace_existing=True,
-    )
-    log.info("pro-play-posts: ten-minute tick armed")
 
 
 async def fire_pro_play_posts() -> None:

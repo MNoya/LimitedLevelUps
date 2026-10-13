@@ -14,7 +14,6 @@ export type FantasyEventEntry = {
   constructedFormat: string;
   swissRounds: number;
   cutRound: number;
-  dayTwoMatchPoints?: number;
   draftRounds: number[];
   meleeTournamentId?: number;
   crest?: string;

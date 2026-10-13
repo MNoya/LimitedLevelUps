@@ -2,7 +2,7 @@ import { useMemo, type MouseEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { CountryFlag, PlayerPortrait, formatRecord, fullName, type FieldPlayer } from "./fantasyMock";
+import { CountryFlag, PlayerPortrait, formatRecord, fullName, type FieldPlayer } from "./fantasyField";
 import { standingsAfter, standingsRound, type StandingsRow, type StandingsSource } from "./fantasyReplay";
 
 export function ReplayStandings({

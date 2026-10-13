@@ -1,19 +1,4 @@
 {
-  "PTNAU": {
-    "name": "Pro Tour Nauctis",
-    "slug": "pt-nau",
-    "shortName": "Pro Tour NAU",
-    "setCode": "NAU",
-    "city": "Detroit",
-    "startDate": "2027-02-26",
-    "endDate": "2027-02-28",
-    "constructedFormat": "Modern",
-    "picksLockAt": "2027-02-26T14:00:00Z",
-    "swissRounds": 16,
-    "cutRound": 8,
-    "draftRounds": [1, 2, 3, 9, 10, 11],
-    "bracketLockAt": "2027-02-28T14:00:00Z"
-  },
   "WC32": {
     "name": "Magic World Championship 32",
     "slug": "worlds-32",
@@ -30,7 +15,6 @@
     "picksLockAt": "2026-11-13T14:00:00Z",
     "swissRounds": 14,
     "cutRound": 7,
-    "dayTwoMatchPoints": 12,
     "draftRounds": [1, 2, 3, 8, 9, 10],
     "bracketLockAt": "2026-11-15T14:00:00Z",
     "fieldSeed": "bot/data/fantasy/wc32_field.json",

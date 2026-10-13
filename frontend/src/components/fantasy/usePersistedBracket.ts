@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useFantasyBracketWriter, useFantasyOwnBracket } from "../../data/hooks";
-import { fullName } from "./fantasyMock";
+import { fullName } from "./fantasyField";
 import { BRACKET_KEY, BRACKET_MATCHES, type BracketMatchKey, type BracketPicks, type GameScore } from "./fantasyTop8";
 import type { LiveEvent } from "./fantasyLive";
 

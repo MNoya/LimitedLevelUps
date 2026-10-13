@@ -15,17 +15,18 @@ from bot.services.fantasy_reveal import advance_auto_reveal
 from bot.services.fantasy_sync import SyncSummary, sync_event
 from bot.services.melee import MeleeClient
 from bot.services.watch_party import PREMIER_SCHEDULES
-from bot.tasks.pro_play_posts import alert_unseeded_bracket, announce_reveal
+from bot.tasks.pro_play_posts import alert_unseeded_bracket, announce_reveal, fire_pro_play_posts, init_pro_play_posts
 
 log = logging.getLogger(__name__)
 
 
 def init_fantasy_sync(bot: commands.Bot) -> None:
+    init_pro_play_posts(bot)
     bot.pod_scheduler.add_job(
         fire_fantasy_sync, "cron", minute="*/10", timezone=timezone.utc,
         id="fantasy-sync", replace_existing=True,
     )
-    log.info("fantasy-sync: ten-minute tick armed for fantasy event days")
+    log.info("fantasy-sync: ten-minute tick armed for Melee syncs and Pro Play posts")
 
 
 async def fire_fantasy_sync() -> None:
@@ -42,6 +43,7 @@ async def fire_fantasy_sync() -> None:
             await alert_unseeded_bracket(event)
         if reveal is not None:
             await announce_reveal(event, *reveal)
+    await fire_pro_play_posts()
 
 
 def sync_due(event: FantasyEvent, now: datetime) -> bool:

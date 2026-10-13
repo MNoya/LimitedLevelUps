@@ -151,7 +151,6 @@ from bot.tasks.championship_post import init_championship_schedule
 from bot.tasks.p0p1_reminder_post import init_p0p1_reminder
 from bot.tasks.p0p1_ceremony_post import init_p0p1_ceremony
 from bot.tasks.fantasy_sync_tick import init_fantasy_sync
-from bot.tasks.pro_play_posts import init_pro_play_posts
 from bot.tasks.pod_organizer import init_table_organizer
 from bot.tasks.pod_orphan_reaper import init_orphan_reaper
 from bot.tasks.pod_underfill import init_underfill
@@ -269,7 +268,6 @@ def build_bot(guild_id: int) -> commands.Bot:
         init_p0p1_reminder(bot)
         init_p0p1_ceremony(bot)
         init_fantasy_sync(bot)
-        init_pro_play_posts(bot)
         init_launch(bot)
         init_daily_poll(bot)
         init_table_organizer(bot)

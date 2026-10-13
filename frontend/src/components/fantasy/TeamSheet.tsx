@@ -41,7 +41,7 @@ import {
   type Qualification,
   type Slot,
   type SlotKey,
-} from "./fantasyMock";
+} from "./fantasyField";
 import { PickButton, PlayerProfile, PlayerProfileSheet } from "./PlayerProfilePanel";
 import {
   EventCrest,
@@ -69,7 +69,7 @@ import {
 import { Top8Bracket, Top8BracketList } from "./Top8Bracket";
 import { eventContext, membersFromRows, standings, type Member, type StandingsDay } from "./fantasyMembers";
 import { type BracketPicks } from "./fantasyTop8";
-import { dayOneRecord, isOut, playerPoints, recordThrough, type EventPhase } from "./fantasyEvent";
+import { dayOneRecord, isOut, playerPoints, recordThrough, type EventPhase } from "./fantasyScoring";
 import { LiveEventContext, buildLiveEvent, liveBracketResults, useLiveEvent, type LiveEvent } from "./fantasyLive";
 import { usePersistedBracket } from "./usePersistedBracket";
 import { useFantasyEventState, useFantasyField, useFantasyMembers, useFantasyResults } from "../../data/hooks";

@@ -6,7 +6,7 @@ import { TabLink } from "../TabButton";
 import { SetGlyph } from "../Brand";
 import { cn } from "../../lib/utils";
 import { useIsMobile } from "../../lib/use-is-mobile";
-import { SearchBox, fullName, normalizeSearch, type FieldPlayer } from "./fantasyMock";
+import { SearchBox, fullName, normalizeSearch, type FieldPlayer } from "./fantasyField";
 import {
   EventCrest,
   EventSwitcher,

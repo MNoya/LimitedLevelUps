@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFantasyLineup, useFantasyPickWriter } from "../../data/hooks";
-import { SLOTS, type Lineup, type SlotKey, type useLineupPicker } from "./fantasyMock";
+import { SLOTS, type Lineup, type SlotKey, type useLineupPicker } from "./fantasyField";
 import type { LiveEvent } from "./fantasyLive";
 import type { FantasySavedPick } from "../../types/fantasy";
 

@@ -1,4 +1,4 @@
-import { fullName, type FieldPlayer } from "./fantasyMock";
+import { fullName, type FieldPlayer } from "./fantasyField";
 
 export type BracketMatchKey = "qf1" | "qf2" | "qf3" | "qf4" | "sf1" | "sf2" | "final";
 

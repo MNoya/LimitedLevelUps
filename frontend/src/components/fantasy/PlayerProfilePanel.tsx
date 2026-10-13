@@ -19,8 +19,8 @@ import {
   type MatchRecord,
   type PlayerStats,
   type Slot,
-} from "./fantasyMock";
-import type { RoundResult } from "./fantasyEvent";
+} from "./fantasyField";
+import type { RoundResult } from "./fantasyScoring";
 import { meleeEventUrl, useFantasyEvent } from "./fantasyEvents";
 
 export type ProfileRound = { round: number; result: RoundResult | null; draft: boolean };

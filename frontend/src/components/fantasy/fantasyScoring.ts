@@ -1,4 +1,4 @@
-import { SLOTS, formatRecord, fullName, type FieldPlayer, type Lineup, type SlotKey } from "./fantasyMock";
+import { SLOTS, formatRecord, fullName, type FieldPlayer, type Lineup, type SlotKey } from "./fantasyField";
 import type { LiveEvent } from "./fantasyLive";
 
 export type EventPhase = "picking" | "day1" | "cut" | "day2" | "top8" | "final";
@@ -20,11 +20,12 @@ export function madeDayTwo(live: LiveEvent, player: FieldPlayer): boolean {
   if (live.roundsPlayed > live.cutRound) {
     return results.length > live.cutRound;
   }
+  const dayTwoMatchPoints = 12;
   let matchPoints = 0;
   for (const result of results.slice(0, live.cutRound)) {
     matchPoints += result ? POINTS[result] : 0;
   }
-  return matchPoints >= live.dayTwoMatchPoints;
+  return matchPoints >= dayTwoMatchPoints;
 }
 
 export function isOut(live: LiveEvent, player: FieldPlayer): boolean {

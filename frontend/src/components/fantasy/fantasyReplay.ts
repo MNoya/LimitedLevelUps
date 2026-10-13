@@ -5,10 +5,10 @@ import {
   type EventHeader,
   type FieldPlayer,
   type MatchRecord,
-} from "./fantasyMock";
+} from "./fantasyField";
 import { meleeEventUrl, type FantasyEventEntry } from "./fantasyEvents";
 import { BRACKET_MATCHES, type BracketMatchKey, type BracketResults, type GameScore } from "./fantasyTop8";
-import type { RoundResult } from "./fantasyEvent";
+import type { RoundResult } from "./fantasyScoring";
 import type { MatchHistoryRow, ProfileEvent } from "./PlayerProfilePanel";
 
 type PlayedRound = [result: RoundResult, opponentRank: number, gameWins: number, gameLosses: number, gameDraws: number];

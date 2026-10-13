@@ -3,7 +3,7 @@ import { ChevronDown, Trophy } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { MEDAL_COLOR } from "../p0p1/P0P1BallotScorecard";
 import { SelfBadge } from "../p0p1/FinalResults";
-import { PlayerPortrait, SLOTS, fullName, shortLastName, slotFor, type FieldPlayer } from "./fantasyMock";
+import { PlayerPortrait, SLOTS, fullName, shortLastName, slotFor, type FieldPlayer } from "./fantasyField";
 import { dayPoints, slotDayPoints, type MemberStanding, type SlotBreakdown, type StandingsDay } from "./fantasyMembers";
 import {
   BRACKET_MATCHES,

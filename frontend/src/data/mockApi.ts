@@ -34,16 +34,6 @@ import type {
   TrophyLeaderboardRow,
 } from "../types/leaderboard";
 import type { Card, P0P1BallotRow, P0P1Pick, P0P1PickStat, SlotKey } from "../types/p0p1";
-import type {
-  FantasyBracketPickRow,
-  FantasyEventState,
-  FantasyFieldRow,
-  FantasyLineupRow,
-  FantasyMemberRow,
-  FantasyOwnBracketPick,
-  FantasyResultRow,
-  FantasySavedPick,
-} from "../types/fantasy";
 import type { Episode } from "./episodes";
 import type { SetReviewMentions, TranscriptSegment } from "./transcript";
 import type { TranscriptIndex } from "./transcriptStatus";
@@ -665,45 +655,6 @@ const cardLoaders = import.meta.glob<Card[]>(
 );
 
 const p0p1Picks = new Map<string, P0P1Pick>();
-
-const fantasyPicks = new Map<string, FantasySavedPick>();
-
-
-export const fetchFantasyLineup = (_eventCode: string): Promise<FantasySavedPick[]> =>
-  wait([...fantasyPicks.values()]);
-
-export const saveFantasyPick = async (
-  _eventCode: string,
-  slot: string,
-  playerId: number,
-  fromRound: number,
-): Promise<void> => {
-  fantasyPicks.set(`${slot}:${fromRound}`, { slot, playerId, fromRound });
-};
-
-export const deleteFantasyPick = async (_eventCode: string, slot: string, fromRound: number): Promise<void> => {
-  fantasyPicks.delete(`${slot}:${fromRound}`);
-};
-
-export const fetchFantasyEventState = (_eventCode: string): Promise<FantasyEventState | null> => wait(null);
-export const fetchFantasyField = (_eventCode: string): Promise<FantasyFieldRow[]> => wait([]);
-export const fetchFantasyResults = (_eventCode: string): Promise<FantasyResultRow[]> => wait([]);
-export const fetchFantasyMembers = (_eventCode: string): Promise<FantasyMemberRow[]> => wait([]);
-export const fetchFantasyLineups = (_eventCode: string): Promise<FantasyLineupRow[]> => wait([]);
-export const fetchFantasyBracketPicks = (_eventCode: string): Promise<FantasyBracketPickRow[]> => wait([]);
-
-const fantasyBracket = new Map<string, FantasyOwnBracketPick>();
-
-export const fetchFantasyOwnBracket = (_eventCode: string): Promise<FantasyOwnBracketPick[]> =>
-  wait([...fantasyBracket.values()]);
-
-export const saveFantasyBracketPick = async (_eventCode: string, pick: FantasyOwnBracketPick): Promise<void> => {
-  fantasyBracket.set(pick.position, pick);
-};
-
-export const deleteFantasyBracketPick = async (_eventCode: string, position: string): Promise<void> => {
-  fantasyBracket.delete(position);
-};
 
 export async function fetchP0P1Cards(setCode: string): Promise<Card[]> {
   const key = `./fixtures/cards-${setCode.toLowerCase()}.ts`;
