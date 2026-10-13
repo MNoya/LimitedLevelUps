@@ -112,6 +112,7 @@ export function EventSwitcher({ activeCode, mobile = false }: { activeCode: stri
       options={options}
       variant={mobile ? "mobile" : "desktop"}
       mobileCentered
+      floating
       hrefFor={(code) => fantasyEventPath(eventByCode.get(code) as FantasyEventEntry)}
       renderOption={(option) => {
         const event = eventByCode.get(option.value) as FantasyEventEntry;

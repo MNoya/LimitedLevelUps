@@ -34,6 +34,7 @@ export function FilterDropdown({
   optionClassName,
   className,
   mobileCentered = false,
+  floating = false,
 }: {
   label?: string;
   value: string;
@@ -54,6 +55,7 @@ export function FilterDropdown({
   optionClassName?: string;
   className?: string;
   mobileCentered?: boolean;
+  floating?: boolean;
 }) {
   const isMobile = variant === "mobile";
   const selected = options.find((o) => o.value === value) ?? options[0];
@@ -62,8 +64,10 @@ export function FilterDropdown({
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [menuTop, setMenuTop] = useState(0);
+  const [floatingAt, setFloatingAt] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const menuRef = useWheelTrap<HTMLDivElement>(open);
 
   const navigate = useNavigate();
@@ -97,6 +101,32 @@ export function FilterDropdown({
       setMenuTop(rect.bottom + 4);
     }
   }, [open, mobileCentered]);
+
+  useLayoutEffect(() => {
+    if (!open || !floating) {
+      setFloatingAt(null);
+      return;
+    }
+    const place = () => {
+      const rect = (triggerRef.current ?? ref.current)?.getBoundingClientRect();
+      if (rect) {
+        setFloatingAt({ top: rect.bottom + 4, left: rect.left });
+      }
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, floating]);
+
+  useEffect(() => {
+    if (open) {
+      searchRef.current?.focus({ preventScroll: true });
+    }
+  }, [open]);
 
   const trimmed = query.trim().toLowerCase();
   const filtered = trimmed
@@ -196,15 +226,16 @@ export function FilterDropdown({
             align === "right" ? "right-0" : "left-0",
             mobileCentered &&
               "max-sm:!fixed max-sm:!left-1/2 max-sm:!right-auto max-sm:!-translate-x-1/2 max-sm:!top-[var(--menu-top)]",
+            floatingAt && "sm:fixed sm:min-w-0",
             menuClassName,
           )}
-          style={mobileCentered ? ({ "--menu-top": `${menuTop}px` } as React.CSSProperties) : undefined}
+          style={menuPosition(mobileCentered ? menuTop : null, floatingAt)}
           role="listbox"
         >
           {showSearch && (
             <div className="shrink-0 border-b border-border p-1.5">
               <input
-                autoFocus
+                ref={searchRef}
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -258,6 +289,19 @@ export function FilterDropdown({
       )}
     </div>
   );
+}
+
+function menuPosition(
+  mobileTop: number | null,
+  floatingAt: { top: number; left: number } | null,
+): React.CSSProperties | undefined {
+  if (mobileTop === null && floatingAt === null) {
+    return undefined;
+  }
+  return {
+    ...(mobileTop === null ? {} : { "--menu-top": `${mobileTop}px` }),
+    ...(floatingAt ? { top: floatingAt.top, left: floatingAt.left } : {}),
+  } as React.CSSProperties;
 }
 
 const OptionItem = ({

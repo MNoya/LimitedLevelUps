@@ -771,7 +771,7 @@ function LiveStatus({
           ) : (
             <>
               <LivePulse />
-              {phase === "top8" ? "Top 8 live" : `Round ${roundsPlayed + 1} of ${swissRounds}`}
+              {phase === "top8" ? "Top 8 Live" : `Round ${roundsPlayed + 1} of ${swissRounds}`}
             </>
           )}
           {spoilerControl}

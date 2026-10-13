@@ -133,14 +133,14 @@ function BracketHeader({ results }: { results: BracketResults | null }) {
   return (
     <div className="flex flex-col items-center gap-1 text-center text-[14px] text-text">
       <span>
-        Pick the winner of each match for <b>2</b> points in the Quarterfinals, <b>4</b> in the Semifinals and{" "}
-        <b>8</b> in the Final
-      </span>
-      <span className="text-subtle">
-        {results ? "Bracket points add to your total" : "Pick the exact games for 1 more point"}
+        Pick the winner of each match for <b>2</b> points in Quarterfinals, <b>4</b> in Semifinals and <b>8</b> in
+        Finals
       </span>
       {results ? null : (
-        <PicksLockDate size={13} prefix="Quarterfinals start" at={bracketLockAt} />
+        <>
+          <span className="text-subtle">Pick the exact games for 1 more point</span>
+          <PicksLockDate size={13} prefix="Quarterfinals start" at={bracketLockAt} />
+        </>
       )}
     </div>
   );

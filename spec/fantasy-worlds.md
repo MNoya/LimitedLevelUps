@@ -76,9 +76,9 @@ Qualification groups, in this order: Worlds 31 Top 8, Pro Tour, Points, Arena Ch
 - Premise while picks are open: "Put together a team of four Pro Players from **Worlds 32**", then "You score points every time they win a match".
 - Countdown "Closes in 32 days, 10 hours", then "Picks are closed". Lock line "Round 1 starts Fri, Nov 13 at 11 AM GMT-3", time in green.
 - Field status: "Picking Captain", "✓ Picks saved", "Log in to save picks", "Picks are locked", "Replace before Round 8".
-- Header status: "Round N of 14" with a pulse, "Day 1 complete", "Top 8 plays Sunday", "Top 8 live" with a pulse, "Event complete".
+- Header status: "Round N of 14" with a pulse, "Day 1 complete", "Top 8 plays Sunday", "Top 8 Live" with a pulse, "Event complete".
 - Spoiler-free tooltip: "SPOILER FREE: live coverage results only" or "SPOILERS ON: latest results from melee.gg".
-- Bracket: "Pick the winner of each match for 2 points in the Quarterfinals, 4 in the Semifinals and 8 in the Final", "Pick the exact games for 1 more point", "Your pick: X", "No pick", "N of M picks right".
+- Bracket: "Pick the winner of each match for 2 points in Quarterfinals, 4 in Semifinals and 8 in Finals", "Pick the exact games for 1 more point", "Your pick: X", "No pick", "N of M picks right".
 - Names: tabs PLAYERS, STANDINGS, TOP 8, LEADERBOARD; Podium label CHAMPION; leaderboard column TOP 8. The Top 8 predictions are the Bracket everywhere; "pick'em" was rejected.
 
 ## Tried and rejected
