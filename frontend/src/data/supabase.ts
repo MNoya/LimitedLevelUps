@@ -31,9 +31,18 @@ const config = resolveConfig();
 export const supabase: SupabaseClient | null = config
   ? createClient(config.url, config.key, {
       auth: { persistSession: true, flowType: "pkce" },
+      global: { fetch: fetchOutlivingPageUnload },
     })
   : null;
 
 export const useSupabase = supabase !== null;
 
 export const servesEdgeCachedReads = import.meta.env.PROD && config?.url === PUBLIC_SUPABASE_URL;
+
+function fetchOutlivingPageUnload(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const keepaliveBodyLimit = 8_000;
+  const write = init?.method !== undefined && init.method !== "GET" && init.method !== "HEAD";
+  const smallBody = !init?.body || (typeof init.body === "string" && init.body.length < keepaliveBodyLimit);
+  const smallWrite = write && smallBody;
+  return fetch(input, smallWrite ? { ...init, keepalive: true } : init);
+}

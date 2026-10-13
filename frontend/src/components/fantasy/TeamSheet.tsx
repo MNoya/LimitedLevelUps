@@ -206,7 +206,7 @@ function TeamSheetView({
   const live = phase !== "picking";
   const replacing = phase === "cut" && liveEvent.replacementsOpen;
   const lineupWritable = ((!live && picksOpen) || replacing) && !liveEvent.readOnly;
-  const { dayOneLineup, restoring } = usePersistedLineup(picker, liveEvent, !loginCta, lineupWritable);
+  const { dayOneLineup, restoring } = usePersistedLineup(picker, liveEvent, !loginCta, lineupWritable, fieldLoading);
   const teamLoading = restoring || (live && !members);
   const filters = useFieldFilters(liveEvent.players);
   const isMobile = useIsMobile(1024);
@@ -228,7 +228,12 @@ function TeamSheetView({
   const results = liveBracketResults(liveEvent);
   const topEightOpen = phase === "top8" || phase === "final";
   const bracketOpen = liveEvent.bracketWindowOpen && now < fantasyEvent.bracketLockAt.getTime() && !results;
-  const [bracketPicks, setBracketPicks] = usePersistedBracket(liveEvent, !loginCta, bracketOpen && !liveEvent.readOnly);
+  const [bracketPicks, setBracketPicks] = usePersistedBracket(
+    liveEvent,
+    !loginCta,
+    bracketOpen && !liveEvent.readOnly,
+    fieldLoading,
+  );
 
   const replacingSlot = picker.activeSlot && picker.lineup[picker.activeSlot] ? picker.activeSlot : null;
 

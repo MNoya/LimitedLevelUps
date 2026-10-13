@@ -2361,8 +2361,7 @@ export async function fetchFantasyOwnBracket(eventCode: string): Promise<Fantasy
 }
 
 export async function saveFantasyBracketPick(eventCode: string, pick: FantasyOwnBracketPick): Promise<void> {
-  const userId = DEV_AUTH_USER?.id ?? (await client().auth.getUser()).data.user?.id;
-  if (!userId) throw new Error("Not authenticated");
+  const userId = await signedInUserId();
   const { error } = await client()
     .from("fantasy_bracket_picks")
     .upsert(
@@ -2394,8 +2393,7 @@ export async function saveFantasyPick(
   playerId: number,
   fromRound: number,
 ): Promise<void> {
-  const userId = DEV_AUTH_USER?.id ?? (await client().auth.getUser()).data.user?.id;
-  if (!userId) throw new Error("Not authenticated");
+  const userId = await signedInUserId();
   const { error } = await client()
     .from("fantasy_picks")
     .upsert(
@@ -2440,17 +2438,21 @@ export async function upsertP0P1Pick(
   slot: SlotKey,
   cardName: string,
 ): Promise<void> {
-  const { data: { user } } = await client().auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  const userId = await signedInUserId();
   const { error } = await client()
     .from("p0p1_entries")
     .upsert(
-      { user_id: user.id, set_code: setCode, slot, card_name: cardName, updated_at: new Date().toISOString() },
+      { user_id: userId, set_code: setCode, slot, card_name: cardName, updated_at: new Date().toISOString() },
       { onConflict: "user_id,set_code,slot" },
     );
   if (error) throw error;
 }
 
+async function signedInUserId(): Promise<string> {
+  const userId = DEV_AUTH_USER?.id ?? (await client().auth.getSession()).data.session?.user.id;
+  if (!userId) throw new Error("Not authenticated");
+  return userId;
+}
 
 export async function deleteAllP0P1Picks(setCode: string): Promise<void> {
   const { error } = await client()

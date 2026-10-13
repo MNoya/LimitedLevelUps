@@ -14,8 +14,9 @@ export function usePersistedLineup(
   live: LiveEvent,
   signedIn: boolean,
   writable: boolean,
+  fieldLoading: boolean,
 ): { dayOneLineup: Lineup | null; restoring: boolean } {
-  const { data: fetched, isFetching, isLoading: restoring } = useFantasyLineup(live.event.code, signedIn && !live.demo);
+  const { data: fetched, isFetching, isLoading } = useFantasyLineup(live.event.code, signedIn && !live.demo);
   const allSaved = live.demo ? live.demo.ownLineup : fetched;
   const saved = useMemo(
     () => (allSaved && live.readOnly ? picksAtPreviewPhase(allSaved, live.phase) : allSaved),
@@ -48,24 +49,25 @@ export function usePersistedLineup(
       stored.current = null;
       return;
     }
-    if (!saved || isFetching || stored.current) {
+    if (!saved || isFetching || fieldLoading || stored.current) {
       return;
     }
     stored.current = storedSlots(saved, replacementRound);
-    const lineup: Lineup = {};
-    for (const [slot, picks] of stored.current) {
-      const player = live.byId.get((picks.replacement ?? picks.dayOne) as number);
-      if (player) {
-        lineup[slot] = player;
-      }
-    }
+    const lineup = lineupFromStored(stored.current, live);
     picker.setLineup(lineup);
     picker.setActiveSlot(pickingDayOne ? (SLOTS.find((slot) => !lineup[slot.key])?.key ?? null) : null);
-  }, [loaded, saved, isFetching, live, replacementRound, pickingDayOne]);
+  }, [loaded, saved, isFetching, fieldLoading, live, replacementRound, pickingDayOne]);
 
   useEffect(() => {
     const current = stored.current;
     if (!writable || !current) {
+      return;
+    }
+    if (pickingDayOne && removedDayOnePicks(current, picker.lineup) > 1) {
+      const savedLineup = lineupFromStored(current, live);
+      if (removedDayOnePicks(current, savedLineup) === 0) {
+        picker.setLineup(savedLineup);
+      }
       return;
     }
     for (const slot of SLOTS) {
@@ -105,7 +107,28 @@ export function usePersistedLineup(
     picks.replacement = wanted;
   };
 
-  return { dayOneLineup, restoring };
+  return { dayOneLineup, restoring: isLoading || fieldLoading };
+}
+
+function lineupFromStored(stored: Map<SlotKey, StoredSlot>, live: LiveEvent): Lineup {
+  const lineup: Lineup = {};
+  for (const [slot, picks] of stored) {
+    const player = live.byId.get((picks.replacement ?? picks.dayOne) as number);
+    if (player) {
+      lineup[slot] = player;
+    }
+  }
+  return lineup;
+}
+
+function removedDayOnePicks(stored: Map<SlotKey, StoredSlot>, lineup: Lineup): number {
+  let removed = 0;
+  for (const [slot, picks] of stored) {
+    if (picks.dayOne !== undefined && !lineup[slot]) {
+      removed += 1;
+    }
+  }
+  return removed;
 }
 
 function storedSlots(saved: FantasySavedPick[], replacementRound: number): Map<SlotKey, StoredSlot> {

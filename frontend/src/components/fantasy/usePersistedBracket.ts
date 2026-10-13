@@ -8,6 +8,7 @@ export function usePersistedBracket(
   live: LiveEvent,
   signedIn: boolean,
   writable: boolean,
+  fieldLoading: boolean,
 ): [BracketPicks, (picks: BracketPicks) => void] {
   const { data: fetched, isFetching } = useFantasyOwnBracket(live.event.code, signedIn && !live.demo);
   const saved = live.demo ? live.demo.ownBracket : fetched;
@@ -18,7 +19,7 @@ export function usePersistedBracket(
   });
 
   useEffect(() => {
-    if (!saved || isFetching || stored.current) {
+    if (!saved || isFetching || fieldLoading || stored.current) {
       return;
     }
     const loaded: BracketPicks = {};
@@ -31,7 +32,7 @@ export function usePersistedBracket(
     }
     stored.current = loaded;
     setPicks(loaded);
-  }, [saved, isFetching, live]);
+  }, [saved, isFetching, fieldLoading, live]);
 
   const update = (next: BracketPicks) => {
     setPicks(next);
