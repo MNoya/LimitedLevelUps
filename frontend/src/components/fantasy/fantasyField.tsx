@@ -275,7 +275,7 @@ export function SearchBox({
   );
 }
 
-export function PicksCountdown({ size }: { size: number }) {
+export function PicksCountdown({ size, compact = false }: { size: number; compact?: boolean }) {
   const now = useNow(30_000);
   const remaining = useFantasyEvent().picksLockAt.getTime() - now;
   return (
@@ -283,7 +283,7 @@ export function PicksCountdown({ size }: { size: number }) {
       {remaining > 0 ? (
         <>
           <span className="text-subtle">Closes in </span>
-          <span className="text-green">{formatRemaining(remaining)}</span>
+          <span className="text-green">{formatRemaining(remaining, compact)}</span>
         </>
       ) : (
         <span className="text-subtle">Picks are closed</span>
@@ -299,7 +299,7 @@ export function PicksLockDate({ size, prefix, at }: { size: number; prefix?: str
   return (
     <span style={{ fontSize: size }}>
       {prefix ? <span className="text-subtle">{prefix} </span> : null}
-      <span className="text-text">{day}</span>
+      <span className="font-semibold text-text">{day}</span>
       <span className="text-subtle"> at </span>
       <span className="text-green">{time}</span>
       <span className="text-subtle"> {viewerTimeZoneAbbr()}</span>

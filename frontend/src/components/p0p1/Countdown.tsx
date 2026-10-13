@@ -6,10 +6,13 @@ export function pluralizeUnit(value: number, unit: string) {
   return `${value} ${unit}${value === 1 ? "" : "s"}`;
 }
 
-export function formatRemaining(diff: number): string {
+export function formatRemaining(diff: number, daysOnlyPastAWeek = false): string {
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
   const minutes = Math.floor((diff / (1000 * 60)) % 60);
+  if (daysOnlyPastAWeek && days > 7) {
+    return pluralizeUnit(days, "day");
+  }
   if (days > 0) {
     return `${pluralizeUnit(days, "day")}, ${pluralizeUnit(hours, "hour")}`;
   }

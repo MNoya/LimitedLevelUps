@@ -1074,37 +1074,44 @@ function MobileHeader({ status }: { status: ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
     <div className="px-3 pt-3 pb-3 bg-surface border-b border-border flex flex-col gap-2.5">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-label={open ? "Hide rules" : "Show rules"}
-        className="relative grid w-full grid-cols-[1fr_auto_1fr] items-center gap-x-2 bg-transparent border-0 p-0 cursor-pointer"
-      >
-        <span />
-        <span className="flex flex-col items-center min-w-0">
-          <EventTitle
-            event={fantasyEvent}
-            crest={eventCrest(fantasyEvent, MOBILE_CREST_HEIGHT)}
-            labelSize={12}
-            glyphSize={26}
-            titleSize={30}
-            citySize={15}
-          />
-        </span>
-        <span className="flex justify-end">
-          <ChevronDown size={22} className={`text-subtle transition-transform ${open ? "" : "-rotate-90"}`} />
-        </span>
-      </button>
-      <div className="flex flex-col items-center gap-0.5">
-        {status ?? (
-          <>
-            <PicksPremise compact />
-            <PicksCountdown size={13} />
-          </>
-        )}
+      <div className="flex justify-center">
+        <EventTitle
+          event={fantasyEvent}
+          switcher={<EventSwitcher activeCode={fantasyEvent.code} mobile />}
+          crest={eventCrest(fantasyEvent, MOBILE_CREST_HEIGHT)}
+          labelSize={12}
+          glyphSize={26}
+          titleSize={30}
+          citySize={15}
+        />
       </div>
-      {open ? <ScoringRules short /> : null}
+      <div className="flex justify-center">
+        <span className="relative flex items-center">
+          {status ?? <PicksCountdown size={13} compact />}
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            aria-label={open ? "Hide rules" : "Show rules"}
+            className="absolute left-full top-1/2 -translate-y-1/2 ml-1.5 flex bg-transparent border-0 p-0 cursor-pointer"
+          >
+            <ChevronDown size={18} className={`text-subtle transition-transform ${open ? "" : "-rotate-90"}`} />
+          </button>
+        </span>
+      </div>
+      {open ? (
+        <div className="flex flex-col items-center">
+          {status ? null : (
+            <>
+              <div className="mb-2">
+                <PicksLockDate size={13} prefix="Round 1 starts" at={fantasyEvent.picksLockAt} />
+              </div>
+              <PicksPremise compact />
+            </>
+          )}
+          <ScoringRules short />
+        </div>
+      ) : null}
     </div>
   );
 }
