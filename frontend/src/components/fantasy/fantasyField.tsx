@@ -261,15 +261,25 @@ export function SearchBox({
   className?: string;
   placeholder?: string;
 }) {
+  const searching = value.trim() !== "";
   return (
     <div className={cn("relative w-[240px]", className)}>
-      <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+      <Search
+        size={15}
+        className={cn(
+          "absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors",
+          searching ? "text-green" : "text-muted",
+        )}
+      />
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-surface border border-border2 pl-8 pr-2.5 py-1.5 text-text text-[14px] placeholder:text-muted outline-none focus:border-green/60 transition-colors"
+        className={cn(
+          "w-full bg-surface border pl-8 pr-2.5 py-1.5 text-text text-[14px] placeholder:text-muted outline-none focus:border-green/60 transition-colors",
+          searching ? "border-green" : "border-border2",
+        )}
       />
     </div>
   );

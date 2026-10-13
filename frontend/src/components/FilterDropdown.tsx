@@ -226,7 +226,7 @@ export function FilterDropdown({
             align === "right" ? "right-0" : "left-0",
             mobileCentered &&
               "max-sm:!fixed max-sm:!left-1/2 max-sm:!right-auto max-sm:!-translate-x-1/2 max-sm:!top-[var(--menu-top)]",
-            floatingAt && "sm:fixed sm:min-w-0",
+            floating && "sm:fixed sm:min-w-0",
             menuClassName,
           )}
           style={menuPosition(mobileCentered ? menuTop : null, floatingAt)}
