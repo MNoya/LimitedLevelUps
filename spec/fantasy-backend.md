@@ -15,7 +15,7 @@ The game and its rules live in `spec/fantasy-worlds.md`. The migration is `alemb
 
 `fantasy_events.json` at the repo root, next to `p0p1_contests.json`. `invitationListUrl` points the field drift check at the official invitation page. `bot/services/fantasy_event.py` reads it the way `p0p1_contest.py` reads the P0P1 file, and the site can import the same JSON. Each entry holds the name, `scheduleName` matching a key in `PREMIER_SCHEDULES`, `meleeTournamentId`, `picksLockAt`, `swissRounds`, `cutRound`, `draftRounds`, `bracketLockAt`, `fieldSeed` and `live`. Only a `live` event gets #watch-party posts and the site's nav tab. `WC32` is the real event. `PTMSH` is a `replayOnly` entry for Pro Tour Marvel Super Heroes, used for the dry run and skipped by the live tick.
 
-Entries without `meleeTournamentId`, like PT NAU until Melee lists it, are skipped by the bot. `slug`, `shortName`, `setCode` and `crest` feed the Discord posts.
+Entries without `meleeTournamentId`, such as a Pro Tour Melee hasn't listed yet, are skipped by the bot. `slug`, `shortName`, `setCode` and `crest` feed the Discord posts.
 
 The sync copies each registry entry into the `fantasy_events` table, because the SQL views need the lock times and round structure. The JSON stays the source of truth: edit it and the next sync updates the row.
 
@@ -37,17 +37,17 @@ Picks and bracket picks reference players through a composite foreign key on `(e
 Internal views are `security_invoker`, have every grant revoked from `anon` and `authenticated`, and are read only through the public views:
 
 - `fantasy_effective_picks`: the picks that count, each with the round range it covers. A replacement counts only if it sits at `cut_round + 1` and the player it replaces has no result after the cut. Otherwise it is ignored and the Day 1 pick keeps scoring, so the replacement rule holds even against a direct API write.
-- `fantasy_slot_round_points`: one row per counted pick per round with points, plus a zero row for a pick with no results yet. Swiss rounds score 3 per win and 1 per draw times the slot multiplier: Captain 2, Drafter 3 in Draft rounds and 0 in Constructed, Constructed 0 in Draft and 2 in Constructed, Player 1. This matches `fantasyEvent.ts`. Top 8 rounds score the flat bonus with no multiplier: a quarterfinal is 4 for reaching the Top 8 plus 4 for a win, a semifinal win is 4 and a final win is 8.
+- `fantasy_slot_round_points`: one row per counted pick per round with points, plus a zero row for a pick with no results yet. Swiss rounds score 3 per win and 1 per draw times the slot multiplier: Captain 2, Drafter 3 in Draft rounds and 0 in Constructed, Constructed 0 in Draft and 2 in Constructed, Player 1. The site scores the same rules in the browser, because spoiler-free mode stops at the reveal marker; the SQL scoring feeds the rank and the Podium. Top 8 rounds score the flat bonus with no multiplier: a quarterfinal is 4 for reaching the Top 8 plus 4 for a win, a semifinal win is 4 and a final win is 8.
 - `fantasy_bracket_points`: each bracket pick against the real result at that position. A correct winner scores 2 in a quarterfinal, 4 in a semifinal and 8 in the final, plus 1 for the exact game score.
-- `fantasy_member_scores`: per member, total, Day 1, Day 2 and Day 3 points, bracket points, whether they called the champion, and when they last saved their Day 1 lineup.
+- `fantasy_member_scores`: per member, total points, Bracket points, whether they called the champion, and when they last saved their Day 1 lineup.
 
 Public views:
 
 - `public_fantasy_players`: the field, always readable.
-- `public_fantasy_results`: every player's round results with a `day` column, always readable.
-- `public_fantasy_standings`: per member per event: `member_key`, `is_me`, name, avatar, points, the three day totals, `bracket_points`, `champion_called`, `rank`, a rank per day and `member_count`. Rank orders by points with the Bracket included, then the champion call, then the earliest last change to the Day 1 lineup. Empty until `picks_lock_at`.
-- `public_fantasy_lineups`: per member per slot per pick row: player, replaced player, covered rounds, points and points per day. Feeds the review screen and leaderboard rows. Empty until `picks_lock_at`.
-- `public_fantasy_bracket_picks`: every member's bracket with correctness and points per position. Empty until `bracket_lock_at`.
+- `public_fantasy_results`: every player's round results, always readable.
+- `public_fantasy_standings`: per member per event: `member_key`, `is_me`, name, avatar, points, `bracket_points`, `champion_called` and `rank`. Rank orders by points with the Bracket included, then the champion call, then the earliest last change to the Day 1 lineup. Empty until `picks_lock_at`.
+- `public_fantasy_lineups`: every member's counted pick rows: slot, `from_round` and player. Empty until `picks_lock_at`.
+- `public_fantasy_bracket_picks`: every member's Bracket picks. Empty until `bracket_lock_at`.
 
 Before the lock a member reads only their own picks, straight from `fantasy_picks` and `fantasy_bracket_picks` under RLS.
 
@@ -98,7 +98,7 @@ Data sizes: Worlds has 134 players and 17 rounds, so about 2,300 result rows. Me
 
 Scoring stays plain SQL views over the scraped results: one writer, no deploy for new results, and the site reads one view per screen. A precomputed standings table, a static JSON snapshot scored in the browser and a Supabase Edge Function were rejected as second copies of the scoring or new infrastructure.
 
-`bot/tasks/fantasy_sync_tick.py` runs every 10 minutes from the bot's scheduler. During an event's live window it syncs results. The window runs from 30 minutes before the first `PREMIER_SCHEDULES` day starts until 2 hours after the last day ends, and the dead hours between days cost two cheap requests per tick. In the 14 days before the window it reseeds the field once an hour, so invitation and photo updates in the seed reach the database without a deploy. `init_fantasy_sync` is wired into `bot/main.py`. A bot deploy mid-event skips at most one tick. For corrections run `fantasy_sync <code> --full` from a Railway console. The 4-hour refresh-cron service is too slow for live rounds and is left alone.
+`bot/tasks/fantasy_sync_tick.py` runs every 10 minutes from the bot's scheduler, then runs the Pro Play posts pass from `bot/tasks/pro_play_posts.py`, so one job drives both. During an event's live window it syncs results. The window runs from 30 minutes before the first `PREMIER_SCHEDULES` day starts until 2 hours after the last day ends, and the dead hours between days cost two cheap requests per tick. In the 14 days before the window it reseeds the field once an hour, so invitation and photo updates in the seed reach the database without a deploy. `init_fantasy_sync` is wired into `bot/main.py`. A bot deploy mid-event skips at most one tick. For corrections run `fantasy_sync <code> --full` from a Railway console. The 4-hour refresh-cron service is too slow for live rounds and is left alone.
 
 ## Tests
 

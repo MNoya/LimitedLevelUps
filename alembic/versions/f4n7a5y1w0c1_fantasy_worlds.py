@@ -66,10 +66,6 @@ SLOT_ROUND_POINTS_SQL = """
 CREATE OR REPLACE VIEW fantasy_slot_round_points WITH (security_invoker = true) AS
 SELECT ep.user_id, ep.event_code, ep.slot, ep.from_round, ep.to_round, ep.player_id, ep.replaced_player_id,
        r.round_number, r.stage,
-       CASE WHEN r.round_number IS NULL THEN NULL
-            WHEN r.round_number <= e.cut_round THEN 1
-            WHEN r.round_number <= e.swiss_rounds THEN 2
-            ELSE 3 END AS day,
        coalesce(CASE r.stage
            WHEN 'swiss' THEN
                (CASE r.result WHEN 'W' THEN 3 WHEN 'D' THEN 1 ELSE 0 END)
@@ -83,7 +79,6 @@ SELECT ep.user_id, ep.event_code, ep.slot, ep.from_round, ep.to_round, ep.player
            ELSE CASE r.result WHEN 'W' THEN 8 ELSE 0 END
        END, 0) AS points
 FROM fantasy_effective_picks ep
-JOIN fantasy_events e ON e.code = ep.event_code
 LEFT JOIN fantasy_results r ON r.event_code = ep.event_code AND r.player_id = ep.player_id
      AND r.round_number BETWEEN ep.from_round AND ep.to_round
 """
@@ -96,10 +91,8 @@ WITH actual AS (
     FROM fantasy_results r
     WHERE r.bracket_position IS NOT NULL AND r.result = 'W'
 )
-SELECT b.user_id, b.event_code, b.position, b.winner_id, b.games, b.updated_at,
-       a.winner_id IS NOT NULL AS decided,
+SELECT b.user_id, b.event_code, b.position,
        coalesce(a.winner_id = b.winner_id, false) AS correct_winner,
-       coalesce(a.winner_id = b.winner_id AND a.games = b.games, false) AS exact_games,
        CASE WHEN a.winner_id = b.winner_id THEN
                 CASE WHEN b.position LIKE 'QF%' THEN 2 WHEN b.position LIKE 'SF%' THEN 4 ELSE 8 END
                 + CASE WHEN a.games = b.games THEN 1 ELSE 0 END
@@ -115,11 +108,7 @@ WITH members AS (
     FROM fantasy_picks
     GROUP BY user_id, event_code
 ), lineup AS (
-    SELECT user_id, event_code,
-           sum(points) AS points,
-           sum(points) FILTER (WHERE day = 1) AS day1_points,
-           sum(points) FILTER (WHERE day = 2) AS day2_points,
-           sum(points) FILTER (WHERE day = 3) AS day3_points
+    SELECT user_id, event_code, sum(points) AS points
     FROM fantasy_slot_round_points
     GROUP BY user_id, event_code
 ), bracket AS (
@@ -130,9 +119,6 @@ WITH members AS (
 )
 SELECT m.user_id, m.event_code, m.lineup_saved_at,
        (coalesce(l.points, 0) + coalesce(b.points, 0))::int AS points,
-       coalesce(l.day1_points, 0)::int AS day1_points,
-       coalesce(l.day2_points, 0)::int AS day2_points,
-       (coalesce(l.day3_points, 0) + coalesce(b.points, 0))::int AS day3_points,
        coalesce(b.points, 0)::int AS bracket_points,
        coalesce(b.champion_called, false) AS champion_called
 FROM members m
@@ -150,12 +136,8 @@ FROM fantasy_players p
 PUBLIC_RESULTS_SQL = """
 CREATE OR REPLACE VIEW public_fantasy_results AS
 SELECT r.event_code, r.round_number, r.player_id, r.opponent_id, r.stage, r.format, r.result,
-       r.game_wins, r.game_losses, r.game_draws, r.is_bye, r.bracket_position,
-       CASE WHEN r.round_number <= e.cut_round THEN 1
-            WHEN r.round_number <= e.swiss_rounds THEN 2
-            ELSE 3 END AS day
+       r.game_wins, r.game_losses, r.game_draws, r.is_bye, r.bracket_position
 FROM fantasy_results r
-JOIN fantasy_events e ON e.code = r.event_code
 """
 
 PUBLIC_STANDINGS_SQL = f"""
@@ -165,15 +147,11 @@ SELECT m.event_code,
        {VIEWER_IS_MEMBER} AS is_me,
        coalesce(v.name, 'Anonymous entrant') AS name,
        v.avatar_url,
-       m.points, m.day1_points, m.day2_points, m.day3_points, m.bracket_points, m.champion_called,
+       m.points, m.bracket_points, m.champion_called,
        rank() OVER (
            PARTITION BY m.event_code
            ORDER BY m.points DESC, m.champion_called DESC, m.lineup_saved_at ASC NULLS LAST
-       )::int AS rank,
-       rank() OVER (PARTITION BY m.event_code ORDER BY m.day1_points DESC)::int AS day1_rank,
-       rank() OVER (PARTITION BY m.event_code ORDER BY m.day2_points DESC)::int AS day2_rank,
-       rank() OVER (PARTITION BY m.event_code ORDER BY m.day3_points DESC)::int AS day3_rank,
-       count(*) OVER (PARTITION BY m.event_code)::int AS member_count
+       )::int AS rank
 FROM fantasy_member_scores m
 JOIN fantasy_events e ON e.code = m.event_code
 LEFT JOIN fantasy_members v ON v.user_id = m.user_id
@@ -185,15 +163,10 @@ CREATE OR REPLACE VIEW public_fantasy_lineups AS
 SELECT m.event_code,
        {MEMBER_KEY} AS member_key,
        {VIEWER_IS_MEMBER} AS is_me,
-       m.slot, m.from_round, m.to_round, m.player_id, m.replaced_player_id,
-       sum(m.points)::int AS points,
-       coalesce(sum(m.points) FILTER (WHERE m.day = 1), 0)::int AS day1_points,
-       coalesce(sum(m.points) FILTER (WHERE m.day = 2), 0)::int AS day2_points,
-       coalesce(sum(m.points) FILTER (WHERE m.day = 3), 0)::int AS day3_points
-FROM fantasy_slot_round_points m
+       m.slot, m.from_round, m.player_id
+FROM fantasy_effective_picks m
 JOIN fantasy_events e ON e.code = m.event_code
 WHERE now() >= e.picks_lock_at
-GROUP BY m.event_code, m.user_id, m.slot, m.from_round, m.to_round, m.player_id, m.replaced_player_id
 """
 
 PUBLIC_BRACKET_PICKS_SQL = f"""
@@ -201,8 +174,8 @@ CREATE OR REPLACE VIEW public_fantasy_bracket_picks AS
 SELECT m.event_code,
        {MEMBER_KEY} AS member_key,
        {VIEWER_IS_MEMBER} AS is_me,
-       m.position, m.winner_id, m.games, m.decided, m.correct_winner, m.exact_games, m.points
-FROM fantasy_bracket_points m
+       m.position, m.winner_id, m.games
+FROM fantasy_bracket_picks m
 JOIN fantasy_events e ON e.code = m.event_code
 WHERE now() >= e.bracket_lock_at
 """
