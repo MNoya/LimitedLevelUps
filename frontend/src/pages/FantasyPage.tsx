@@ -32,7 +32,7 @@ export function FantasyPage({ event }: { event: FantasyEventEntry }) {
 
   const loginCta = signedOut ? (
     <button type="button" onClick={signIn} className="bg-transparent border-0 cursor-pointer p-0">
-      <CtaPill size="sm" icon={<DiscordIcon size={15} />}>LOG IN TO PICK</CtaPill>
+      <CtaPill size="sm" icon={<DiscordIcon size={15} />}>LOG IN TO SAVE</CtaPill>
     </button>
   ) : null;
 

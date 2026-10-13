@@ -4,6 +4,7 @@ import { SLOTS, type Lineup, type SlotKey, type useLineupPicker } from "./fantas
 import type { LiveEvent } from "./fantasyLive";
 import type { FantasySavedPick } from "../../types/fantasy";
 import { picksAtPreviewPhase } from "./fantasyDevState";
+import { clearLocalLineup, readLocalLineup, writeLocalLineup, type LocalLineup } from "../../data/localFantasyLineup";
 
 type Picker = ReturnType<typeof useLineupPicker>;
 
@@ -24,6 +25,7 @@ export function usePersistedLineup(
   );
   const loaded = signedIn || live.demo !== null;
   const stored = useRef<Map<SlotKey, StoredSlot> | null>(null);
+  const localRestored = useRef(false);
   const writer = useFantasyPickWriter(live.event.code, () => {
     stored.current = null;
   });
@@ -45,8 +47,13 @@ export function usePersistedLineup(
   }, [saved, live]);
 
   useEffect(() => {
+    const eventCode = live.event.code;
     if (!loaded) {
       stored.current = null;
+      if (!fieldLoading && pickingDayOne && !localRestored.current) {
+        localRestored.current = true;
+        showLineup(addLocalPicks({}, readLocalLineup(eventCode), live));
+      }
       return;
     }
     if (!saved || isFetching || fieldLoading || stored.current) {
@@ -54,9 +61,22 @@ export function usePersistedLineup(
     }
     stored.current = storedSlots(saved, replacementRound);
     const lineup = lineupFromStored(stored.current, live);
+    const local = readLocalLineup(eventCode);
+    clearLocalLineup(eventCode);
+    showLineup(writable && pickingDayOne ? addLocalPicks(lineup, local, live) : lineup);
+  }, [loaded, saved, isFetching, fieldLoading, live, replacementRound, pickingDayOne, writable]);
+
+  useEffect(() => {
+    if (loaded || !localRestored.current || !pickingDayOne || live.readOnly) {
+      return;
+    }
+    writeLocalLineup(live.event.code, localLineupOf(picker.lineup));
+  }, [loaded, picker.lineup, pickingDayOne]);
+
+  const showLineup = (lineup: Lineup) => {
     picker.setLineup(lineup);
     picker.setActiveSlot(pickingDayOne ? (SLOTS.find((slot) => !lineup[slot.key])?.key ?? null) : null);
-  }, [loaded, saved, isFetching, fieldLoading, live, replacementRound, pickingDayOne]);
+  };
 
   useEffect(() => {
     const current = stored.current;
@@ -108,6 +128,30 @@ export function usePersistedLineup(
   };
 
   return { dayOneLineup, restoring: isLoading || fieldLoading };
+}
+
+function addLocalPicks(lineup: Lineup, local: LocalLineup, live: LiveEvent): Lineup {
+  const merged: Lineup = { ...lineup };
+  const taken = new Set(Object.values(merged).map((player) => player?.id));
+  for (const slot of SLOTS) {
+    const player = live.byId.get(local[slot.key] as number);
+    if (!merged[slot.key] && player && !taken.has(player.id)) {
+      merged[slot.key] = player;
+      taken.add(player.id);
+    }
+  }
+  return merged;
+}
+
+function localLineupOf(lineup: Lineup): LocalLineup {
+  const local: LocalLineup = {};
+  for (const slot of SLOTS) {
+    const id = lineup[slot.key]?.id;
+    if (id !== undefined) {
+      local[slot.key] = id;
+    }
+  }
+  return local;
 }
 
 function lineupFromStored(stored: Map<SlotKey, StoredSlot>, live: LiveEvent): Lineup {
