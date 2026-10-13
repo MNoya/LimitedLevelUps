@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 import type { FantasyEventState } from "../../types/fantasy";
-import { formatEventDays } from "./eventDays";
+import { formatEventDays } from "./eventLabels";
 import registry from "../../../../fantasy_events.json";
 
 export type FantasyEventEntry = {

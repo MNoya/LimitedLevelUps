@@ -9,3 +9,7 @@ export function formatEventDays(event: { startDate: string; endDate: string }, w
   const endMonth = month.format(start) === month.format(end) && startYear === endYear ? "" : `${month.format(end)} `;
   return `${startLabel} - ${endMonth}${end.getUTCDate()}${endSuffix}`;
 }
+
+export function proPlayTabLabel(event: { shortName: string }): string {
+  return event.shortName.replace(/^Pro Tour /, "PT ");
+}

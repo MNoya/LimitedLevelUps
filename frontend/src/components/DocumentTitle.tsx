@@ -7,6 +7,8 @@ import { cubeVariantForBoard } from "../data/cubeVariants";
 import { cardDataLabel } from "../data/podCards";
 import { skeletonsFor } from "../data/skeletons";
 import { ACTIVE_SET_CODE, SITE_NAME, TITLE_SEPARATOR } from "../data/constants";
+import { proPlayTabLabel } from "./fantasy/eventLabels";
+import FANTASY_EVENTS from "../../../fantasy_events.json";
 
 // Mirrors functions/_middleware.ts so the in-app tab title matches the crawler/unfurl title.
 // The SPA never reloads on navigation, so without this the tab title would freeze at whatever
@@ -195,6 +197,10 @@ const resolvePageTitle = (
   }
   if (section === "about") {
     return "About";
+  }
+  if (section === "pro-play") {
+    const event = Object.values(FANTASY_EVENTS).find((entry) => entry.slug === rest[0]);
+    return event ? proPlayTabLabel(event) : "Pro Play";
   }
   return SITE_NAME;
 };
