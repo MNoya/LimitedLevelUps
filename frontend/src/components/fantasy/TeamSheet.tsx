@@ -73,7 +73,7 @@ import { devPresetState, picksAtPreviewPhase, readsDemoData, useFantasyDevPreset
 import { Top8Bracket, Top8BracketList } from "./Top8Bracket";
 import { eventContext, membersFromRows, standings, type Member, type StandingsDay } from "./fantasyMembers";
 import { type BracketPicks } from "./fantasyTop8";
-import { dayOneRecord, isOut, playerPoints, recordThrough, type EventPhase } from "./fantasyScoring";
+import { dayOneRecord, isOut, recordThrough, type EventPhase } from "./fantasyScoring";
 import { LiveEventContext, buildLiveEvent, liveBracketResults, useLiveEvent, type LiveEvent } from "./fantasyLive";
 import { usePersistedBracket } from "./usePersistedBracket";
 import {
@@ -206,7 +206,8 @@ function TeamSheetView({
   const live = phase !== "picking";
   const replacing = phase === "cut" && liveEvent.replacementsOpen;
   const lineupWritable = ((!live && picksOpen) || replacing) && !liveEvent.readOnly;
-  const dayOneLineup = usePersistedLineup(picker, liveEvent, !loginCta, lineupWritable);
+  const { dayOneLineup, restoring } = usePersistedLineup(picker, liveEvent, !loginCta, lineupWritable);
+  const teamLoading = restoring || (live && !members);
   const filters = useFieldFilters(liveEvent.players);
   const isMobile = useIsMobile(1024);
   const [searchParams] = useSearchParams();
@@ -277,11 +278,6 @@ function TeamSheetView({
     return original;
   };
 
-  const replacedPickPoints = (key: SlotKey) => {
-    const replaced = replacedPick(key);
-    return replaced ? playerPoints(liveEvent, replaced, key, 1, liveEvent.cutRound) : undefined;
-  };
-
   const replacedSlotByName = new Map<string, SlotKey>();
   for (const slot of SLOTS) {
     const replaced = replacedPick(slot.key);
@@ -323,6 +319,7 @@ function TeamSheetView({
         roundsPlayed={roundsPlayed}
         score={score}
         rank={selfRow?.rank ?? null}
+        loading={teamLoading}
         memberCount={memberCount}
         short={short}
         spoilerControl={<SpoilerEye on={spoilerFree} onToggle={onToggleSpoilerFree} />}
@@ -603,11 +600,10 @@ function TeamSheetView({
                       record={cardRecord(slot.key)}
                       out={cardOut(slot.key)}
                       replaced={replacedPick(slot.key)}
-                      replacedPoints={replacedPickPoints(slot.key)}
                       onClick={() => selectCard(slot.key)}
                       onHover={(element) => (player ? handleHover(player, element) : undefined)}
                       onReplacedHover={handleHover}
-                      onReplacedLongPress={openProfile}
+                      onReplacedOpen={openProfile}
                       onLongPress={player ? () => openProfile(player) : undefined}
                       onLeave={handleLeave}
                     />
@@ -829,6 +825,7 @@ function MobileTray({
               record={cardRecord(slot.key)}
               out={cardOut(slot.key)}
               replaced={replacedPick(slot.key)}
+              onReplacedOpen={onOpenProfile}
               onClick={() => {
                 const alreadyReplacing = player && picker.activeSlot === slot.key;
                 if (alreadyReplacing) {
@@ -851,10 +848,12 @@ function LiveStatus({
   roundsPlayed,
   score,
   rank,
+  loading,
   memberCount,
   short,
   spoilerControl,
 }: {
+  loading: boolean;
   phase: EventPhase;
   roundsPlayed: number;
   spoilerControl: ReactNode;
@@ -868,7 +867,8 @@ function LiveStatus({
   return (
     <span className="flex flex-col items-center text-center gap-1">
       <span className="flex items-baseline gap-x-6 gap-y-1 flex-wrap justify-center">
-        {rank === null ? null : (
+        {loading ? <span className="self-center h-[18px] w-[180px] rounded bg-surface2 animate-pulse" /> : null}
+        {loading || rank === null ? null : (
           <>
             <span className="flex items-baseline gap-1.5">
               <span className="font-num text-[18px] font-semibold text-green leading-none">{score}</span>
@@ -1125,7 +1125,7 @@ function PicksPremise({ compact }: { compact: boolean }) {
 }
 
 function ScoringRules({ short = false }: { short?: boolean }) {
-  const { phase } = useLiveEvent();
+  const { phase, constructedFormat } = useLiveEvent();
   const phaseNoteSaysIt = short && phase === "cut";
   return (
     <div className="text-[14px] text-subtle leading-[1.6] text-center">
@@ -1139,7 +1139,7 @@ function ScoringRules({ short = false }: { short?: boolean }) {
         <RoleName slotKey="drafter" /> scores <b className="text-text">triple</b> in Draft rounds
       </div>
       <div>
-        <RoleName slotKey="constructed" /> scores <b className="text-text">double</b> in Constructed rounds
+        <RoleName slotKey="constructed" /> scores <b className="text-text">double</b> in {constructedFormat} rounds
       </div>
       {phaseNoteSaysIt ? null : (
         <div
@@ -1223,10 +1223,8 @@ function SheetCard({
   record,
   out = false,
   replaced,
-  replacedPoints,
-  labelSuffix,
   onReplacedHover,
-  onReplacedLongPress,
+  onReplacedOpen,
 }: {
   slot: Slot;
   player: FieldPlayer | undefined;
@@ -1237,21 +1235,18 @@ function SheetCard({
   record?: string;
   out?: boolean;
   replaced?: FieldPlayer;
-  replacedPoints?: number;
-  labelSuffix?: string;
   onClick: () => void;
   onHover?: (element: HTMLElement) => void;
   onReplacedHover?: (player: FieldPlayer, element: HTMLElement) => void;
-  onReplacedLongPress?: (player: FieldPlayer) => void;
+  onReplacedOpen?: (player: FieldPlayer) => void;
   onLeave?: () => void;
   onLongPress?: () => void;
 }) {
-  const liveEvent = useLiveEvent();
   const tiny = size === "xs";
   const longPress = useLongPress(() => onLongPress?.());
   const frameColor = player || active ? slot.accent : `${slot.accent}55`;
   const cardWidth = tiny ? undefined : width;
-  const card = (
+  return (
     <button
       data-fantasy-pick-target
       type="button"
@@ -1294,7 +1289,15 @@ function SheetCard({
               </span>
               {record !== undefined && !tiny ? <CardStatPill className="left-1 bottom-1">{record}</CardStatPill> : null}
               {points !== undefined && !tiny ? <CardStatPill className="right-1 bottom-1">{points} pts</CardStatPill> : null}
-              {replaced && tiny ? <ReplacedThumb player={replaced} /> : null}
+              {replaced ? (
+                <ReplacedThumb
+                  player={replaced}
+                  size={tiny ? 22 : 40}
+                  onHover={onReplacedHover}
+                  onOpen={onReplacedOpen}
+                  onLeave={(cardElement) => onHover?.(cardElement)}
+                />
+              ) : null}
               {tiny ? <TinyStatRow record={record} points={points} /> : null}
               {active ? (
                 <span className="absolute inset-0 flex flex-col items-center justify-center gap-1">
@@ -1322,37 +1325,12 @@ function SheetCard({
             )}
             style={{ color: slot.accent }}
           >
-            {labelSuffix ? `${slot.label.toUpperCase()} ${labelSuffix}` : slot.label.toUpperCase()}
+            {slot.label.toUpperCase()}
           </span>
           {player && !tiny ? <CountryFlag code={player.countryCode} width={21} /> : null}
         </span>
       </span>
     </button>
-  );
-  if (!replaced || tiny) {
-    return card;
-  }
-  return (
-    <span className="relative inline-flex">
-      <span className="absolute inset-0 translate-x-[10px] -translate-y-[10px] transition-transform duration-200 hover:z-[2] hover:translate-x-[16px] hover:-translate-y-[16px]">
-        <SheetCard
-          slot={slot}
-          player={replaced}
-          active={false}
-          size="lg"
-          width={width}
-          points={replacedPoints}
-          record={dayOneRecord(liveEvent, replaced)}
-          labelSuffix={slot.key === "constructed" ? "D1" : "DAY 1"}
-          out
-          onClick={() => undefined}
-          onHover={(element) => onReplacedHover?.(replaced, element)}
-          onLongPress={() => onReplacedLongPress?.(replaced)}
-          onLeave={onLeave}
-        />
-      </span>
-      {card}
-    </span>
   );
 }
 
@@ -1360,7 +1338,7 @@ function CardStatPill({ className, children }: { className: string; children: Re
   return (
     <span
       className={cn(
-        "absolute rounded bg-black/80 px-1.5 py-1 font-num font-semibold leading-none text-[15px] text-text",
+        "absolute rounded bg-black/80 px-1 py-0.5 font-num font-semibold leading-none text-[13px] text-text",
         className,
       )}
     >
@@ -1380,10 +1358,36 @@ function TinyStatRow({ record, points }: { record?: string; points?: number }) {
   );
 }
 
-function ReplacedThumb({ player }: { player: FieldPlayer }) {
+function ReplacedThumb({
+  player,
+  size,
+  onHover,
+  onOpen,
+  onLeave,
+}: {
+  player: FieldPlayer;
+  size: number;
+  onOpen?: (player: FieldPlayer) => void;
+  onHover?: (player: FieldPlayer, element: HTMLElement) => void;
+  onLeave?: (cardElement: HTMLElement) => void;
+}) {
   return (
-    <span className="absolute right-1 top-1 w-[22px] h-[22px] overflow-hidden rounded-[3px] opacity-70 grayscale ring-1 ring-black/80">
-      <PlayerPortrait player={player} initialsSize={9} />
+    <span
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen?.(player);
+      }}
+      onMouseEnter={(event) => onHover?.(player, event.currentTarget)}
+      onMouseLeave={(event) => {
+        const cardElement = event.currentTarget.closest("button");
+        if (cardElement) {
+          onLeave?.(cardElement);
+        }
+      }}
+      className="absolute right-1 top-1 overflow-hidden rounded-[3px] opacity-70 grayscale ring-1 ring-black/80"
+      style={{ width: size, height: size }}
+    >
+      <PlayerPortrait player={player} initialsSize={Math.round(size * 0.4)} />
     </span>
   );
 }

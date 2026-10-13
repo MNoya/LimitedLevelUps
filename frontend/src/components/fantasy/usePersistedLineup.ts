@@ -9,8 +9,13 @@ type Picker = ReturnType<typeof useLineupPicker>;
 
 type StoredSlot = { dayOne?: number; replacement?: number };
 
-export function usePersistedLineup(picker: Picker, live: LiveEvent, signedIn: boolean, writable: boolean): Lineup | null {
-  const { data: fetched, isFetching } = useFantasyLineup(live.event.code, signedIn && !live.demo);
+export function usePersistedLineup(
+  picker: Picker,
+  live: LiveEvent,
+  signedIn: boolean,
+  writable: boolean,
+): { dayOneLineup: Lineup | null; restoring: boolean } {
+  const { data: fetched, isFetching, isLoading: restoring } = useFantasyLineup(live.event.code, signedIn && !live.demo);
   const allSaved = live.demo ? live.demo.ownLineup : fetched;
   const saved = useMemo(
     () => (allSaved && live.readOnly ? picksAtPreviewPhase(allSaved, live.phase) : allSaved),
@@ -100,7 +105,7 @@ export function usePersistedLineup(picker: Picker, live: LiveEvent, signedIn: bo
     picks.replacement = wanted;
   };
 
-  return dayOneLineup;
+  return { dayOneLineup, restoring };
 }
 
 function storedSlots(saved: FantasySavedPick[], replacementRound: number): Map<SlotKey, StoredSlot> {
