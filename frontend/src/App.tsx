@@ -19,6 +19,7 @@ import { NotFoundPage } from "./pages/NotFoundPage";
 import { P0P1Page } from "./pages/P0P1Page";
 import { AppHeader } from "./components/AppHeader";
 import { loadFantasyPage, loadFantasyReplayPage } from "./components/fantasy/proPlayChunks";
+import { ProPlaySkeleton } from "./components/fantasy/ProPlaySkeleton";
 import {
   currentFantasyEvent,
   fantasyEventBySlug,
@@ -122,13 +123,15 @@ const FantasyReplayPage = lazy(() =>
 const FantasyEventRoute = () => {
   const { eventSlug } = useParams();
   const event = fantasyEventBySlug(eventSlug);
-  const page = event && !event.replayOnly ? <FantasyPage event={event} /> : <FantasyReplayPage />;
-  return <Suspense fallback={<ProPlayLoading />}>{page}</Suspense>;
+  const teamSheet = Boolean(event && !event.replayOnly);
+  const page = teamSheet && event ? <FantasyPage event={event} /> : <FantasyReplayPage />;
+  return <Suspense fallback={<ProPlayLoading layout={teamSheet ? "sheet" : "replay"} />}>{page}</Suspense>;
 };
 
-const ProPlayLoading = () => (
-  <div className="bg-bg text-text min-h-screen">
+const ProPlayLoading = ({ layout }: { layout: "sheet" | "replay" }) => (
+  <div className="bg-bg text-text min-h-screen lg:h-screen lg:overflow-hidden flex flex-col">
     <AppHeader subtitle="Pro Play" fill />
+    <ProPlaySkeleton layout={layout} />
   </div>
 );
 

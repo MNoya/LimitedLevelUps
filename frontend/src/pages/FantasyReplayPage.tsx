@@ -1,10 +1,13 @@
 import { useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AppHeader } from "../components/AppHeader";
 import { EventReplay, REPLAY_VIEW_SLUG, type ReplayView } from "../components/fantasy/EventReplay";
 import { fantasyEventBySlug } from "../components/fantasy/fantasyEvents";
 import { hasReplay, loadReplay } from "../components/fantasy/fantasyReplay";
 import { NotFoundPage } from "./NotFoundPage";
+import { ProPlaySkeleton } from "../components/fantasy/ProPlaySkeleton";
+import { prefetchProPlay } from "../components/fantasy/proPlayChunks";
 import { useLockedViewport } from "../lib/use-locked-viewport";
 
 export function FantasyReplayPage() {
@@ -17,9 +20,11 @@ export function FantasyReplayPage() {
     queryFn: () => loadReplay(event!),
     enabled: replayable,
     staleTime: Infinity,
+    placeholderData: keepPreviousData,
   });
 
   useLockedViewport();
+  useEffect(prefetchProPlay, []);
 
   if (!replayable || !view) {
     return <NotFoundPage />;
@@ -27,7 +32,7 @@ export function FantasyReplayPage() {
   return (
     <div className="bg-bg text-text min-h-screen lg:h-screen lg:overflow-hidden flex flex-col page-fade">
       <AppHeader subtitle="Pro Play" fill />
-      {replay ? <EventReplay replay={replay} view={view} /> : null}
+      {replay ? <EventReplay replay={replay} view={view} /> : <ProPlaySkeleton layout="replay" />}
     </div>
   );
 }

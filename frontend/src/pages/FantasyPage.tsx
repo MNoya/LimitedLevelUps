@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { CtaPill } from "../components/CtaPill";
 import { DiscordIcon } from "../components/BrandIcons";
 import { TeamSheet } from "../components/fantasy/TeamSheet";
+import { prefetchProPlay } from "../components/fantasy/proPlayChunks";
 import { DevStatePanel } from "../components/DevStatePanel";
 import { devToolsEnabled } from "../lib/dev-preset-store";
 import {
@@ -22,6 +24,7 @@ export function FantasyPage({ event }: { event: FantasyEventEntry }) {
   const { user, loading: authLoading, signIn } = useAuth();
 
   useLockedViewport();
+  useEffect(prefetchProPlay, []);
 
   const devPreset = useFantasyDevPreset(event);
   const signedOut = devPreset === "pickingLoggedOut" || (!authLoading && !user);

@@ -57,6 +57,7 @@ import { TabLink } from "../TabButton";
 import { useAuth } from "../../auth/useAuth";
 import { LeaderboardSkeleton, MembersLeaderboard } from "./MembersLeaderboard";
 import { ReplayStandings, StandingsSkeleton, type TeamSlot } from "./ReplayStandings";
+import { ProPlaySkeleton } from "./ProPlaySkeleton";
 import { replayProfileEvent, standingsAfter, standingsRound } from "./fantasyReplay";
 import { usePersistedLineup } from "./usePersistedLineup";
 import {
@@ -145,7 +146,7 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
     [header, state],
   );
   if (!liveEvent) {
-    return <main className="flex-1" />;
+    return <ProPlaySkeleton layout="sheet" />;
   }
   return (
     <FantasyEventContext.Provider value={liveHeader}>
