@@ -1,0 +1,1616 @@
+[
+  {
+    "firstName": "January",
+    "lastName": "Adams",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - CA"
+    ],
+    "meleeUsername": "JanuaryAdams",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/APlLN6xhm3pTKvSZeW3lX/c698121f1ee051f1628ba7eda1abf59b/281x225-January-Adams-Febuary-2026-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Diego",
+    "lastName": "Almeida",
+    "country": "Brazil",
+    "countryCode": "BR",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - SA"
+    ],
+    "meleeUsername": "okiba",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2UkNdCDioJGFMWj34Pdnge/75510b9d3b9358e11df50c246acab75c/281x225-Diego-Almeida-2024-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Francisco",
+    "lastName": "Avila",
+    "country": "Mexico",
+    "countryCode": "MX",
+    "sources": [
+      "Winner Regional Championship PT MSH Round - MCC"
+    ],
+    "meleeUsername": "ApodoRulz",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2GLWHyghJYKlJzwXqVExxu/8d89cc64fcef6f8f38ef4e2ad3891c14/Central-America-Magic-Series-Mexico-City-May-2026-Francisco-Avila-Trophy-1920x1280.jpg?w=450&h=600&fit=crop&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Zachary",
+    "lastName": "Aymie",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - US 1"
+    ],
+    "meleeUsername": "PurpleHaze09",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4YMwLaWgMAnkVQKuNQNRN7/0e46c42876a5355acae269fa3d115d47/Regional-Championship-at-SCG-Cincinnati-May-2026-Zachary-Aymie-Trophy-1920x1080.jpg?w=450&h=600&fit=crop&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Riley",
+    "lastName": "Beck",
+    "country": "Australia",
+    "countryCode": "AU",
+    "sources": [
+      "Winner Regional Championship PT MSH Round - ANZ"
+    ],
+    "meleeUsername": "quiznium",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4hAa9SHfQb8klSZaTztcSJ/0edce40f5e41bfa6783e7dbc56969cb0/ANZ-Super-Series-Finals-Adelaide-May-2026-Riley-Beck-Trophy-1920x1280.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Julio",
+    "lastName": "Bejarano Espejo",
+    "country": "Peru",
+    "countryCode": "PE",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - SA"
+    ],
+    "meleeUsername": null,
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2hYnu8B1CcImBFMg5f2l4l/bb1db1ddf45930593a889fee95122273/South-America-Magic-Series-Sao-Paulo-November-2025-Julio-Bejarano-Espejo-Trophy-540x540.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Marco",
+    "lastName": "Belacca",
+    "country": "Italy",
+    "countryCode": "IT",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT ECL"
+    ],
+    "meleeUsername": "MarcoBelacca",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1Xw1FWvYJ34qeNjPMGzc5/68cb370a197bae155f45cb94a1ebbda2/Pro-Tour-Lorwyn-Eclipsed-Marco-Belacca-Top-8-1920x1080.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Timo",
+    "lastName": "Bertram",
+    "country": "Austria",
+    "countryCode": "AT",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT MSH"
+    ],
+    "meleeUsername": "Durotan97",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4PZBfB2QGFVkbdmpB5FwCo/4c1a62e341784afb4f7c0765dc6a1917/PT_MSH_Bertram.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Mikey",
+    "lastName": "Bishara",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "YungDingo",
+    "photoUrl": "https://cdn.melee.gg/userphotos/userprofiles/effe7a35-1282-4f1f-97fb-bd79e63d6b38.jpg?v=1",
+    "photoSource": "melee"
+  },
+  {
+    "firstName": "Antonín",
+    "lastName": "Braniš",
+    "country": "Czech Republic",
+    "countryCode": "CZ",
+    "sources": [
+      "Top 2 MOCS Showcase 2"
+    ],
+    "meleeUsername": "toondoslav",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4J3Ksd14cXoWEQgyeean7f/0ad8502f95967df230b1bd342d98f38f/1920x1080-MOCS-2025-Season-3-Antonin-Branis-Winner.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Mason",
+    "lastName": "Buonadonna",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - US 1"
+    ],
+    "meleeUsername": "Shadaro",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1x6H11qIoztDyWniQhFFwI/e3313cb0dfc4c0b9c4181a5fb322c7be/PTEOE-Mason-Buonadonna-Top-8-960x640.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Marco",
+    "lastName": "Cammilluzzi",
+    "country": "Italy",
+    "countryCode": "IT",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT ECL"
+    ],
+    "meleeUsername": "Bomberboss",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6lW0CssiZrOInXX9KsNFZq/7430d83dd1c72b27bd11c79e8a441b9c/281x225-Marco-Cammilluzzi-May-2026-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Marcelo",
+    "lastName": "Cavalcante",
+    "country": "Brazil",
+    "countryCode": "BR",
+    "sources": [
+      "Top 2 Arena Championship 11"
+    ],
+    "meleeUsername": "MarceloRCavalcante",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/Qv96cpJoc4ZreCbnTp4sb/750817649ed0c53efb2359020bc5c061/1920x1080-Arena-Championship-11-Hero-Marcelo-Cavalcante.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Winston",
+    "lastName": "Chamora",
+    "country": "Indonesia",
+    "countryCode": "ID",
+    "sources": [
+      "Winner Regional Championship PT ECL Round - SEA"
+    ],
+    "meleeUsername": "MTGHolic",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5yoRGDHZmlTvJTDnfhzz3M/8ffd28fb1e0248393e533e25971ec99e/SEA-Championship-Final-Singapore-November-2025-Winston-Chamora-Trophy-1920x1280.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Samuel",
+    "lastName": "Chang",
+    "country": "Chinese Taipei",
+    "countryCode": "TW",
+    "sources": [
+      "Winner Regional Championship PT MSH Round - CT"
+    ],
+    "meleeUsername": "samuelyeh226",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/dFWsqcQ13lbF4cI9G6bmn/02acc6cc2c90c6cc632faeb22746d9d3/MIT-Championship-Finals-Taipei-City-May-2026-Samuel-Chang-Trophy-1920x1280.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Justin",
+    "lastName": "Chin",
+    "country": "Malaysia",
+    "countryCode": "MY",
+    "sources": [
+      "Winner Regional Championship PT MSH Round - SEA"
+    ],
+    "meleeUsername": "RubyXillia",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5bSoxoMmD05C4izL2gwg62/6ba49af60d3addb36fcf9fa62904cd04/SEA-Championship-Final-Kuala-Lumpur-May-2026-Justin-Chin-Trophy-1080x1280.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Ryan",
+    "lastName": "Condon",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "redryansox",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5c3SgMoh5iWriQYotlt8aT/db3695ef59bf59f354226eca0a7cf98b/281x225-Ryan-Condon-2024-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Dawson",
+    "lastName": "Courson",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - CA"
+    ],
+    "meleeUsername": "Bugsy",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6w1QiIUzN4rWoRvixLp35J/43f618687fce206a648d79418ec6baa7/F2F-Tour-Championship-Ottawa-May-2026-Dawson-Courson-Trophy-1920x1280.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Nam",
+    "lastName": "Dang",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "Nammersquats",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6e5iPceLkJaCEU9Q8Vctip/9ffb783f5e2f6d47384e717423a33a2d/281x225-Nam-Dang-October-2025-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Derrick",
+    "lastName": "Davis",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "World Championship 31 Top 8"
+    ],
+    "meleeUsername": "derrick_davis",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5ShKBUM5Uu4Di0RIPRpZz6/796ee1a62ffc49dad06693e89eab59c9/1920x1280-Magic-World-Championship-31-Top-8-Derrick-Davis.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Marco",
+    "lastName": "Del Pivo",
+    "country": "Italy",
+    "countryCode": "IT",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "PivoUlivo",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1h8TdwgDxqPm26FgRKR9F2/109644b825e46a6ba705d9aa059ecb58/1920x1280-Legacy-European-Championship-Ghent-January-2024-Marco-del-Pivo-Trophy.jpg?w=330&h=440&fit=crop&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Jean-Emmanuel",
+    "lastName": "Depraz",
+    "country": "France",
+    "countryCode": "FR",
+    "sources": [
+      "World Championship 31 Top 8"
+    ],
+    "meleeUsername": "JiRock",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5EG5exXLzj66CV4I7BMv6Y/8e6a6d5027207b8ef86158be0e9538f1/1920x1280-Magic-World-Championship-31-Top-8-Jean-Emmanuel-Depraz.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Nick",
+    "lastName": "Deriu",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "nickderiu",
+    "photoUrl": "https://cdn.melee.gg/userphotos/userprofiles/3922400e-01b1-466e-9942-31f12009f4ae.jpg?v=2",
+    "photoSource": "melee"
+  },
+  {
+    "firstName": "Davor",
+    "lastName": "Detecnik",
+    "country": "Slovenia",
+    "countryCode": "SI",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "Dafore",
+    "photoUrl": "https://cdn.melee.gg/userphotos/userprofiles/e1bd9acd-69ee-4758-97d3-407db9923219.jpg?v=4",
+    "photoSource": "melee"
+  },
+  {
+    "firstName": "Ricardo",
+    "lastName": "Dias",
+    "country": "Portugal",
+    "countryCode": "PT",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - EMEA"
+    ],
+    "meleeUsername": null,
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6qYk2IkWIU2j9DjOvoveW1/6e0baec7278003e12afca4d620481e80/281x225-Ricardo-Dias-May-2026-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Javier",
+    "lastName": "Dominguez",
+    "country": "Spain",
+    "countryCode": "ES",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "JavierDmagic",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/ZmwIOB3vZVHc47NyktXuS/2f132760058e167bb96902b15454b739/1920x1080-Magic-World-Championship-30-Top-8-Javier-Dominguez.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Arch",
+    "lastName": "Dota",
+    "country": "United Kingdom",
+    "countryCode": "GB",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "ArchaeusDota",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "James",
+    "lastName": "Drake",
+    "country": "Australia",
+    "countryCode": "AU",
+    "sources": [
+      "Winner Regional Championship PT ECL Round - ANZ"
+    ],
+    "meleeUsername": "JamesDrake",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/jyN8Qc3iPklvxyeTAHKsI/478bb2f6ba9bc694392fea0864014b93/ANZ-Super-Series-Finals-Melbourne-October-2025-James-Drake-Trophy-1920x1280.jpg?w=450&h=600&fit=crop&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Adam",
+    "lastName": "Edelson",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT ECL"
+    ],
+    "meleeUsername": "_goblinlackey",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6AM4aVAqpAS2UlcTRySV1X/89d935436e1aa163b26f4004dfb9ff2c/281x225-Adam-Edelson-2024-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Andreas",
+    "lastName": "Eklund",
+    "country": "Sweden",
+    "countryCode": "SE",
+    "sources": [
+      "Top 2 MOCS Showcase 3"
+    ],
+    "meleeUsername": "Eken",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/HDe0lBzGPMvyHdlZ2hoZS/1f0e7b868801ae0246b0b95e2d2e8288/281x225-Andreas-Eklund-2026-MOCS-Season-1-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Andrew",
+    "lastName": "Elenbogen",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "Aje8",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6coE1Y7zpRfgFfnCXzCTEF/19719baffb3942a6f672e278e968d69b/pc-andrew-elenbogen.jpg?w=252&h=336&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Rasmus",
+    "lastName": "Enegren",
+    "country": "Sweden",
+    "countryCode": "SE",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - EMEA"
+    ],
+    "meleeUsername": "Mussie",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3DMB6iLDgSAYUfPQURfVwR/0ea30917b370cf35ff6a8cb2628b35a7/Ultimate-Guard-European-Magic-Series-Prague-May-2026-Rasmus-Enegren-Trophy-1920x1080.jpg?w=330&h=440&fit=crop&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Samuele",
+    "lastName": "Estratti",
+    "country": "Italy",
+    "countryCode": "IT",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - EMEA"
+    ],
+    "meleeUsername": "Samuele",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5yWJWM1TgJd4OEzLs5Curi/3ec858bf4122e084a68a59d7bc05b6f7/281x225-Samuele-Estratti-March-2025-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Noé",
+    "lastName": "Fauquenoi",
+    "country": "France",
+    "countryCode": "FR",
+    "sources": [
+      "Top 2 MOCS Showcase 2"
+    ],
+    "meleeUsername": "Noe_Fauquenoi",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1H1HOrC6h1COyaSXYByadT/33235b88e06e4f040b5971091128d816/281x225-Noe-Fauquenoi-2025-MOCS-Season-3-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Zevin",
+    "lastName": "Faust",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT SOS"
+    ],
+    "meleeUsername": "A_Turtle",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/7kIkK1CaE2TfunXNJ91JrV/97c3377632885699ecf0b5b2a672c457/Top_8_PTSOS-Top-8-Zevin-Faust-1920x1080.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Isael",
+    "lastName": "Feitosa",
+    "country": "Brazil",
+    "countryCode": "BR",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - SA"
+    ],
+    "meleeUsername": "Isael",
+    "photoUrl": "https://cdn.melee.gg/userphotos/userprofiles/58928af4-5828-4255-839c-3258ab022228.jpg?v=1",
+    "photoSource": "melee"
+  },
+  {
+    "firstName": "Mateo",
+    "lastName": "Ferreira",
+    "country": "Spain",
+    "countryCode": "ES",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT SOS"
+    ],
+    "meleeUsername": "TheManLand",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/16ASFybYVP69fFDIrDQS8Q/2d6597e779ebfa9b686a40e2d7a484ee/1080x1080-Legacy-European-Championship-Naples-May-2024-Mateo-Ferreira-Trophy.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Vinnie",
+    "lastName": "Fino",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - US 1"
+    ],
+    "meleeUsername": "Vinniefino",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5mnoBgHdAZkCmrlODPU7nk/3fa90152a185ad037c61e53459cf0084/281x225-Vinnie-Fino-October-2025-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Andrea",
+    "lastName": "Fortunati",
+    "country": "Italy",
+    "countryCode": "IT",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - EMEA"
+    ],
+    "meleeUsername": "Mithrandir",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4pzNG6NJbuhKZzWPwzQWwG/f48cf299108f6ab5a695095cccae02ca/Ultimate-Guard-European-Magic-Series-Turin-March-2026-Andrea-Fortunati-Trophy-1920x1280.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Andy",
+    "lastName": "Garcia-Romo",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT SOS"
+    ],
+    "meleeUsername": "andygarciaromo",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2Xss2pddbH8YsLvICXGXWk/8721876bc77d6b6bac66e05140bbdea8/960x540-PTFIN-Top-8-Andy-Garcia-Romo-Stage.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Nathan",
+    "lastName": "Goldberg",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - US 2"
+    ],
+    "meleeUsername": "Nathan_of_the_Gilt_Leaf",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2MJqQuKCFlURTPqkp52o6X/6853675d696c36b3e81e1b22908e10ed/United-States-Regional-Championships-Las-Vegas-November-2025-Nathan-Goldberg-Trophy-1920x1280.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Lorenzo",
+    "lastName": "Gruppi",
+    "country": "Italy",
+    "countryCode": "IT",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT MSH"
+    ],
+    "meleeUsername": "ceralguy",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6q42eHhbJ9ZNcXkaRMjLjI/ad41ac212403162fc956a7d2c8fb88b6/PT_MSH_Gruppi.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Shaun",
+    "lastName": "Henry",
+    "country": "Australia",
+    "countryCode": "AU",
+    "sources": [
+      "World Championship 31 Top 8"
+    ],
+    "meleeUsername": "KingHairy",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3D29cw4jVTIDkQgLLGWww7/d7beb91be9bd14be82c237a1496556ae/1920x1280-Magic-World-Championship-31-Top-8-Shaun-Henry.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Elijah",
+    "lastName": "Herr",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - US 2"
+    ],
+    "meleeUsername": "Ezherr",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/20Zd4aSr2jmlvZ8kVToJ2x/bc5d5526498d4ab4203ac3857ce96fd9/281x225-Elijah-Herr-Febuary-2026-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Yuta",
+    "lastName": "Hori",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - JPK"
+    ],
+    "meleeUsername": "scottiefive",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5Wvt3flJWWXmTC5NB1Uf4g/1b66b4d22c61903b3777613f580fcd7f/Champions-Cup-Final-Yokohama-November-2025-Yuta-Hori-Trophy-1920x1280.jpg?w=450&h=600&fit=crop&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Tooru",
+    "lastName": "Horie",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - JPK"
+    ],
+    "meleeUsername": "outback",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3vLtIUpUaRyrkeR07E4O8O/e45b379be474adf250568742b87f50d6/281x225-Toru-Horie-May-2026-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Arne",
+    "lastName": "Huschenbeth",
+    "country": "Germany",
+    "countryCode": "DE",
+    "sources": [
+      "World Championship 31 Top 8"
+    ],
+    "meleeUsername": "tabananga",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6g35slCbA2AQ8vrFl6SF6f/7f2e54861d78c623c71d62688a720d24/1920x1280-Magic-World-Championship-31-Top-8-Arne-Huschenbeth.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Yuuki",
+    "lastName": "Ichikawa",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT MSH"
+    ],
+    "meleeUsername": "triosk",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3DP3EPcFlaRPkCtlpLeCAT/0dd594bcd7c4b234e1d9da7eaa5fddff/PT_MSH_Ichikawa.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Liam",
+    "lastName": "Kane",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT SOS"
+    ],
+    "meleeUsername": "jkony_",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5VDutMEYNzMEE2SGeJOwXQ/d898c7100ba5ee124a1d08057302a0b3/281x225-Liam-Kane-September-2026-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Alexander",
+    "lastName": "Kans",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Arena Championship 12",
+      "36+ Match Points or Top 8 (or greater) - PT MSH"
+    ],
+    "meleeUsername": "Snakeazkusa",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3SkIjRaRrNK1B8z7m0kUT3/70521ee9cbb7cfd2ac254cb2f494041c/US-Regional-Championships-Washington-DC-May-2026-Alexander-Kans-1920x1080.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Eli",
+    "lastName": "Kassis",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "Eli_Kassis",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4Hw1YXwFYVtkqOkdu5GUfD/17105d94e89a32c51baafca3f1a32216/281x225-Eli-Kassis-Pro-Tour-Modern-Horizons-3-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Jody",
+    "lastName": "Keith",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "JodyK",
+    "photoUrl": "https://cdn.melee.gg/userphotos/userprofiles/8fe079c2-9bd9-4b9f-a76c-2c0249c96ca3.jpg?v=1",
+    "photoSource": "melee"
+  },
+  {
+    "firstName": "Se̍k-un",
+    "lastName": "Khó͘",
+    "country": "Chinese Taipei",
+    "countryCode": "TW",
+    "sources": [
+      "Winner Regional Championship PT ECL Round - CT"
+    ],
+    "meleeUsername": "lineopen",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4hSUFTabya3xLlthqdaTBx/3b5335092e42471848448ad89ce2b274/MIT-Championship-Finals-Taipei-City-October-2025-Kho-Sek-un-Hero-1920x1080.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Charis",
+    "lastName": "Kikidis",
+    "country": "Greece",
+    "countryCode": "GR",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "Mogged",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6s4g94UoreJ4dsrvZkXiDe/b42c12cd0fe5d0eb7d6c75b183afc4b3/281x225-Charis-Kikidis-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Maxx",
+    "lastName": "Kominowski",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT SOS"
+    ],
+    "meleeUsername": "twinlesstwin",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4Cj2mLvVBJOQxCZBOUyBmT/bf1b444e0b6d5faecb9e035339bd02b6/Top_8_PTSOS-Top-8-Maxx-Kominowski-1920x1080.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Chris",
+    "lastName": "Kral",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "DragonT28",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/hcB27LEyICsa4cU0txArJ/46c51d85c3fb4c54001faf099b4c1034/281x225-Christopher-Kral-January-2026-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Will",
+    "lastName": "Krueger",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - US 2"
+    ],
+    "meleeUsername": "Xwhale",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6dkCtjONQb0ktzwrfYRwmK/8ba5c322f1d68a18746fd7b8a8a96a8c/United-States-Regional-Championships-Milwaukee-February-2026-Will-Krueger-Trophy-1920x1080.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Etai",
+    "lastName": "Kurtzman",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "theonedrop1",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2pGB3KmFJINkbN6TslmZNj/0ffdfe953986c0ba726409efa322b496/281x225-Etai-Kurtzman-October-2025-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Christoffer",
+    "lastName": "Larsen",
+    "country": "Denmark",
+    "countryCode": "DK",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT ECL",
+      "36+ Match Points or Top 8 (or greater) - PT SOS"
+    ],
+    "meleeUsername": "ChristfferLarsen",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6daobp6CKEtCbwoH3yCEF7/0c8399157a3f18ead71000d085c0c146/Top_8_PTSOS-Top-8-Christoffer-Larsen-1920x1080.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Anthony",
+    "lastName": "Lee",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "mtgbentcard",
+    "photoUrl": "https://pbs.twimg.com/profile_images/1789871427706908672/a2Ihwa-R_400x400.jpg",
+    "photoSource": "x"
+  },
+  {
+    "firstName": "Pierre",
+    "lastName": "Liebsch",
+    "country": "Germany",
+    "countryCode": "DE",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - EMEA"
+    ],
+    "meleeUsername": "pl",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Simon",
+    "lastName": "Linabury",
+    "country": "Australia",
+    "countryCode": "AU",
+    "sources": [
+      "Winner Regional Championship PT SOS Round - ANZ"
+    ],
+    "meleeUsername": "Simon_L",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2fqz83DmJVya7iIOhcZTB8/30c3410ae35da94ac249ca63ea405c5b/281x225-Simon-Linabury-March-2026-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Yuchen",
+    "lastName": "Liu",
+    "country": "China",
+    "countryCode": "CN",
+    "sources": [
+      "Winner Regional Championship PT MSH Round - CN"
+    ],
+    "meleeUsername": "liuyuchen",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6xoOoHOYeHqyCzt0uSCEdM/55dbdbfec232cc203d1102ba84f3da79/960x540-PTFIN-Top-8-Yuchen-Liu-Stage.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Jorge",
+    "lastName": "Lopez",
+    "country": "Mexico",
+    "countryCode": "MX",
+    "sources": [
+      "Winner Regional Championship PT SOS Round - MCC"
+    ],
+    "meleeUsername": "JorgeKDM",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/447q1nnWvz3KXbqmVWnwRM/721a759f4eaca3ad2bcf7de7f744b6d0/CENTRA-1.JPG?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Guglielmo",
+    "lastName": "Lupi",
+    "country": "Italy",
+    "countryCode": "IT",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT ECL",
+      "Top 2 MOCS Showcase 1"
+    ],
+    "meleeUsername": "Zompatanfo",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2Vvk3gAKVPx45cE75ihlnh/a9910fda2381670beaff224380774980/Pro-Tour-Lorwyn-Eclipsed-Guglielmo-Lupi-Top-8-1920x1080.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Seth",
+    "lastName": "Manfield",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "World Championship 31 Top 8"
+    ],
+    "meleeUsername": "SethManfieldMTG",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/7H5dm6F1s6qECc4ZVytJ6S/f13cbeebfd024d8f064e2d1183aa044f/1920x1280-Magic-World-Championship-31-Top-8-Seth-Manfield.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Rafael Kenji",
+    "lastName": "Marques Nishiyama",
+    "country": "Brazil",
+    "countryCode": "BR",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - SA"
+    ],
+    "meleeUsername": "tchuco",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/50l2z7S8G63CrjqvxDQpYn/08ecf6b1ce44be668fc026cad16f79b1/South-America-Regional-Championship-Sao-Paulo-May-2026-Rafael-Kenji-Nishiyama-Trophy-540x540.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Adrià",
+    "lastName": "Martín",
+    "country": "Spain",
+    "countryCode": "ES",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "lemonadeqq",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Keiichiro",
+    "lastName": "Matsumoto",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - JPK"
+    ],
+    "meleeUsername": "genmatsu",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1yuCFuargSheCTS3yfNvc6/239342f2abd8c5366161a444bc33a287/Champions-Cup-Final-Tokyo-May-2026-Keiichiro-Matsumoto-Trophy-1920x1280.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Noah",
+    "lastName": "Michaud",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - CA"
+    ],
+    "meleeUsername": null,
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Aidan",
+    "lastName": "Mirabelli",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - CA"
+    ],
+    "meleeUsername": "CalakaLaka",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2HC5Wx7t2HLnARJkla7oHq/d3cfab7636652ab479480b428e8f0148/281x225-Aidan-Mirabelli-January-2025-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Jacob",
+    "lastName": "Mitchell-Rabaey",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "Jacro",
+    "photoUrl": "https://cdn.melee.gg/userphotos/userprofiles/a945bbdb-504d-4398-9530-08c033e4f89d.jpg?v=1",
+    "photoSource": "melee"
+  },
+  {
+    "firstName": "Alejandro",
+    "lastName": "Mora",
+    "country": "Spain",
+    "countryCode": "ES",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "Ale_Mtg",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Masahide",
+    "lastName": "Moriyama",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "SakeIzumo",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/21t9k4Sb8x4lEYBNPAQaGZ/24d2830901ada16315add1479113ebc6/281x225-Masahide-Moriyama-May-2026-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Brady",
+    "lastName": "Munroe",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 MOCS Showcase 3"
+    ],
+    "meleeUsername": "einstein9998",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3FABcLcctU9dvzcYLVieEG/8c0db1ba2448330bbae82b3ca55ae684/MOCS-2026-Season-1-Brady-Munroe-Winner-1920x1080.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Shuhei",
+    "lastName": "Nakamura",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "nakshu",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/n5X5VmQs1zGxbQiGIFn8t/12f54959cc4d326545ae0c56b2d3a329/1080x1600-Shuhei-Nakamura.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Satoshi",
+    "lastName": "Nakayama",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "Top 2 Arena Championship 12"
+    ],
+    "meleeUsername": "johnyjohn",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6rNj62zrvNwvEyvhoEQB6D/400243db766a2c3e7d63a872f39cf47f/Arena-Championship-12-Hero-Satoshi-Nakayama-1920x1080.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Matt",
+    "lastName": "Nass",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT SOS"
+    ],
+    "meleeUsername": "mattnass",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4oURy3U5JmjGOocX57hJmG/583a87aa1a79e3e84246be07698477e6/Top_8_PTSOS-Top-8-Matt-Nass-1920x1080.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Ma",
+    "lastName": "Noah",
+    "country": "South Korea",
+    "countryCode": "KR",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - JPK"
+    ],
+    "meleeUsername": "manoah",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4dXJDIorhV2n0E6kHD5E4Q/3e4336c93da3144860298cf771ef4931/Champions-Cup-Final-Kyoto-March-2026-Ma-Noah-Trophy-1920x1280.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Dylan",
+    "lastName": "Nollen",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "NiHaoDyLan",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Nicholas",
+    "lastName": "Odenheimer",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "StarFighter",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1jxIIZmwIbyME81ZItJKKX/ac91e34462907b2315dde4f39f9aad80/1080x1080-Magic-Spotlight-Foundations-Atlanta-2025-Nicholas-Odenheimer-Trophy.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Atsuya",
+    "lastName": "Okuno",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - JPK"
+    ],
+    "meleeUsername": "Ao",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Mattia",
+    "lastName": "Oneto",
+    "country": "Italy",
+    "countryCode": "IT",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT MSH"
+    ],
+    "meleeUsername": "Schiapponetor",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1Kfwt80g8Am0DIEP9u7FUi/6c5fd2cd462ead6de3d5359d69ec9e7b/PT_MSH_Oneto.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Sam",
+    "lastName": "Pardee",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "World Championship 31 Top 8"
+    ],
+    "meleeUsername": "Smdster",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5Orv8rlyr11dwKVjhqv2pF/93062294048273f8bf3795895149d2b4/1920x1280-Magic-World-Championship-31-Top-8-Sam-Pardee.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Kellen",
+    "lastName": "Pastore",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "KelMasterP",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/coBcu4SqIRvtbcRogAKJO/9235fa313027a6b8731e28926995e4d5/281x225-Kellen-Pastore-October-2025-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Alexey",
+    "lastName": "Paulot",
+    "country": "France",
+    "countryCode": "FR",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "Xioshiva",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5Dj7Xs1wjCcQMRxZ8GBksO/31fccbda186620224c2c141b1d6036c7/Magic-Spotlight-Spider-Man-Liverpool-2025-Alexey-Paulot-Trophy-960x720.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Marc",
+    "lastName": "Peral",
+    "country": "Spain",
+    "countryCode": "ES",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "Perals",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Michael",
+    "lastName": "Plummer",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Arena Championship 10"
+    ],
+    "meleeUsername": "killah_suv",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5d4IlGg9JK7X09UpYaoAZN/30d9e2fe12b31c8b488d58c24da964bf/PTEOE-Michael-DeBenedetto-Plummer-Top-8-960x640.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Toni",
+    "lastName": "Portolan",
+    "country": "Croatia",
+    "countryCode": "HR",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT ECL"
+    ],
+    "meleeUsername": "Portich",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3hcBF3cF6NPjEXRtef93BY/52814055a4d63367d0b4f9ffb817b187/960x540-PTFIN-Top-8-Toni-Portolan-Stage.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Joseph",
+    "lastName": "Puglisi",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - US 2"
+    ],
+    "meleeUsername": "XantosCell",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/AlYAtTUIAJIduhhMqkIUx/4e04bd706a5df0e4af82f81657a7a700/281x225-Joseph-Puglisi-October-2025-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "John",
+    "lastName": "Puglisi Clark",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - US 1"
+    ],
+    "meleeUsername": "Skeptic",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/yXj0D0UMV9pl1deXXfsbI/683230555c1c77e20cac687f037fb940/Magic-Spotlight-Teenage-Mutant-Ninja-Turtles-Richmond-2026-John-Puglisi-Clark-Trophy-1920x1080.jpg?w=450&h=600&fit=crop&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Joao",
+    "lastName": "Quege",
+    "country": "Brazil",
+    "countryCode": "BR",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - SA"
+    ],
+    "meleeUsername": "quege",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6vWeDTtLiDUBYw7AG0u903/bc0e9025e9e864d439370fe15a18597c/South-America-Magic-Series-Santiago-February-2026-Joao-QuegeTrophy-1920x1280.jpg?w=450&h=600&fit=crop&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Thierry",
+    "lastName": "Ramboa",
+    "country": "France",
+    "countryCode": "FR",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "El_Gran_Boa",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/410ksVFwnbmqdZ8woX9Y9I/b96f4eec8c6a1d1af7aadc6de836cb9e/thierry-ramboa-top8.png?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Maxime",
+    "lastName": "Rayvich",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "Maxime",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Ian",
+    "lastName": "Robb",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "Ioncannon",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1qyHAZB5N8y8Y7RXus5Oyg/d7eb30e1db5c410c570336ecf7d71f27/960x540-PTFIN-Top-8-Ian-Robb-Stage.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Alex",
+    "lastName": "Rohan",
+    "country": "United Kingdom",
+    "countryCode": "GB",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT SOS",
+      "36+ Match Points or Top 8 (or greater) - PT MSH"
+    ],
+    "meleeUsername": "alexrohan_",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/7Jm8hAJeDhTuKDFGdUlvVw/da6c0d37364bb99e5c6b8ef04075d7bb/PT_MSH_Rohan.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Eduardo",
+    "lastName": "Sajgalik",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT ECL",
+      "36+ Match Points or Top 8 (or greater) - PT MSH"
+    ],
+    "meleeUsername": "EduS",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/21fIQktV7tuusJgccfbL1D/0a6bb16264704d0dbc12cd253088c4a0/PT_MSH_Sajgalik.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "João Jorge",
+    "lastName": "Sales Junior",
+    "country": "Brazil",
+    "countryCode": "BR",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - SA"
+    ],
+    "meleeUsername": "JohnJonis",
+    "photoUrl": "https://cdn.melee.gg/userphotos/userprofiles/d0f4aa5b-4183-48f6-8e83-6f6a062708f8.jpg?v=1",
+    "photoSource": "melee"
+  },
+  {
+    "firstName": "Luis",
+    "lastName": "Salvatto",
+    "country": "Argentina",
+    "countryCode": "AR",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT ECL"
+    ],
+    "meleeUsername": "LuisSalvatto",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3k2cjwauNOcaa7PAS3oWjY/36397fa2d958e0657b1c94735f000562/Pro-Tour-Lorwyn-Eclipsed-Luis-Salvatto-Top-8-1920x1080.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Francisco",
+    "lastName": "Sánchez",
+    "country": "Spain",
+    "countryCode": "ES",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT ECL"
+    ],
+    "meleeUsername": "Patxi",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2wqvV2FX445R7HmYZaOxxo/386a39336ed764eeb11844476e06436b/PTEOE-Francisco-Sanchez-Top-8-960x640.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Vinicio",
+    "lastName": "Sanchez Delgado",
+    "country": "Costa Rica",
+    "countryCode": "CR",
+    "sources": [
+      "Winner Regional Championship PT ECL Round - MCC"
+    ],
+    "meleeUsername": null,
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/daPy4sSThHx9piebQ9c4l/2e1c8b05b574ad373e4b97eb01ee3f34/281x225-Vinicio-Sanchez-Delgado-October-2025-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Josep",
+    "lastName": "Sanfeliu",
+    "country": "Spain",
+    "countryCode": "ES",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "MasterPepo",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/7dAw4cMp3UtBWr9uSzhpxF/5da2d0735fbc2f6a69c22be8b66ca859/281x225-Josep-Sanfeliu-Regional-Champion-2023-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Abe",
+    "lastName": "Schnake",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "PigNorton",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Stefan",
+    "lastName": "Schütz",
+    "country": "Austria",
+    "countryCode": "AT",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT SOS"
+    ],
+    "meleeUsername": "Sedris",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5deA3mB7DqhEqsPGrjdRJj/9af7a585673163f1b713a9f8b59be72a/Top_8_PTSOS-Top-8-Stefan-Schutz-1920x1080.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Jordan",
+    "lastName": "Selesnick",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - US 2"
+    ],
+    "meleeUsername": "jordanselesnick",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4Z5woAzwikOwXQ5Xf0yjOn/647a15745e787b8e1363c4e6f4d1e32b/US-Regional-Championships-Washington-DC-May-2026-Jordan-Selesnick-Trophy-1920x1080.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Lee",
+    "lastName": "Shi Tian",
+    "country": "Hong Kong",
+    "countryCode": "HK",
+    "sources": [
+      "Winner Regional Championship PT SOS Round - CT"
+    ],
+    "meleeUsername": "LEESHITIAN",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6dOxvJZO8KpTEmBecUwUuP/33414033be76ef3dad029bf65736570b/MIT-Championship-Finals-Taipei-City-March-2026-Lee-Shi-Tian-Hero-540x540.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Akira",
+    "lastName": "Shibata",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "World Championship 31 Top 8"
+    ],
+    "meleeUsername": "RICHUA",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6Q9ZFmRQlaqnXXzJgTFrtw/1877aa8aa8c62ace161e2203ff1e40c9/1920x1280-Magic-World-Championship-31-Top-8-Akira-Shibata.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Petr",
+    "lastName": "Sochůrek",
+    "country": "Czech Republic",
+    "countryCode": "CZ",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT ECL"
+    ],
+    "meleeUsername": "PetrKikac",
+    "photoUrl": "https://files.mtg.wiki/Petr_Soch%C5%AFrek.jpg",
+    "photoSource": "other"
+  },
+  {
+    "firstName": "Matthew",
+    "lastName": "Stefansson",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT SOS"
+    ],
+    "meleeUsername": "MatS121",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3APoORDYTWPCowLmRBwuex/7a6722e4c1f021d366d79c60c8915676/Top_8_PTSOS-Top-8-Matthew-Stefansson-1920x1080.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Nathan",
+    "lastName": "Steuer",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT SOS"
+    ],
+    "meleeUsername": "nathansteuer",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5rfuFNAr7m7LdudcS8bELk/6b29a61f6839dcf7a65eec66d0f5f9bf/Top_8_PTSOS-Top-8-Nathan-Steuer-1920x1080.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Ondrej",
+    "lastName": "Strasky",
+    "country": "Czech Republic",
+    "countryCode": "CZ",
+    "sources": [
+      "Top 2 Arena Championship 10"
+    ],
+    "meleeUsername": "OndrejStrasky",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/4x7hm9wh1Ub3tIr5qWuMR/54e1a3dbae9aaa75ba99cff1cb93ee26/484x641-Magic-World-Championship-XXVII-FYC-Ondrej-Strasky.png?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Nick",
+    "lastName": "Talbot",
+    "country": "Australia",
+    "countryCode": "AU",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT MSH"
+    ],
+    "meleeUsername": "Nicholas Talbot",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6ekJ94HASPhibh8ZytYVXO/5406fe2db3b7897b59cf542bc6241178/281x225-Nicholas-Talbot-October-2025-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Richmond",
+    "lastName": "Tan",
+    "country": "Philippines",
+    "countryCode": "PH",
+    "sources": [
+      "Winner Regional Championship PT SOS Round - SEA"
+    ],
+    "meleeUsername": "AkaiAkuma",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/7uP2AvcHYLjwUwFu1BFBmN/723c996740baf7681cb536a5f1f87865/SEA-Championship-Final-Bangkok-March-2026-Richmond-Tan-1920x1440.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Daniel",
+    "lastName": "Toledo",
+    "country": "Spain",
+    "countryCode": "ES",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - EMEA"
+    ],
+    "meleeUsername": "dani_tb",
+    "photoUrl": "https://cdn.melee.gg/userphotos/userprofiles/ba789c8e-3eb1-409a-950c-079c11376161.jpg?v=2",
+    "photoSource": "melee"
+  },
+  {
+    "firstName": "Quinn",
+    "lastName": "Tonole",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "quinniac",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5KWOS7Q9Hkq1K7jOKX3HGZ/d950ab2af52493f70d75f5b31e161182/1920x1080-Magic-World-Championship-30-Top-8-Quinn-Tonole.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Bernardo",
+    "lastName": "Torres",
+    "country": "Portugal",
+    "countryCode": "PT",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT MSH"
+    ],
+    "meleeUsername": "BERNASTORRES",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/5hoC4xdj3e8Q19bjcLB29R/a765cdcf02165679ba5db7ed812ad09c/PT_MSH_Torres.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Cyprien",
+    "lastName": "Tron",
+    "country": "France",
+    "countryCode": "FR",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT ECL"
+    ],
+    "meleeUsername": "shouloucou",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1eQ6fDKKgzMN6DkEgSFtN8/2b73087c2ca1fbeb8f12c2dc5c80ee4a/Pro-Tour-Lorwyn-Eclipsed-Cyprien-Tron-Top-8-1920x1080.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Owen",
+    "lastName": "Turcotte",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "Top 2 Regional Championship PT ECL Round - CA"
+    ],
+    "meleeUsername": "PTarts2win",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2TWLsBecKldoWXQSDRMH3A/8ed50ccd2e434db4e31d86f250e16e9b/F2F-Tour-Championship-Calgary-November-2025-Owen-Turcotte-Trophy-1920x1280.jpg?w=450&h=600&fit=crop&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Robert",
+    "lastName": "Wagner Krankel",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - US 1"
+    ],
+    "meleeUsername": "DonZaloog69",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/6jlwtuSENyJnNtLm8I94ms/8fc1eebe830cb5398cbf68740c95cd9d/281x225-Robert-Wagner-Krankel-Regional-Champion-2023-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Daniel",
+    "lastName": "Weiss",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Arena Championship 11"
+    ],
+    "meleeUsername": "dcwasabi",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Thomas",
+    "lastName": "White",
+    "country": "United Kingdom",
+    "countryCode": "GB",
+    "sources": [
+      "Top 2 MOCS Showcase 1"
+    ],
+    "meleeUsername": "McWinSauce",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Matthew",
+    "lastName": "Wright",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "mcwright_",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Allen",
+    "lastName": "Wu",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "nalkpas",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1v9nHhITthei09q0MvE9NB/c6248d6772fcb320844af82af115a88f/281x225-Allen-Wu-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Tristan",
+    "lastName": "Wylde-LaRue",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - US 1"
+    ],
+    "meleeUsername": "wyldelarue",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/7jlnXtObfC0ejC2Aa2QnEg/b63e7ae9173b2a490223322507f747f8/United-States-Regional-Championships-Portland-January-2026-Tristan-Wylde-LaRue-Trophy-1920x1080.jpg?w=450&h=600&fit=crop&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Matt",
+    "lastName": "Xu",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "Top 2 Regional Championship PT MSH Round - US 2"
+    ],
+    "meleeUsername": "evilgorrilaz",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3w7eyPDg6eASNXLShtHEXp/0fb301c60e00bb6cae8c906532644ec6/US-Regional-Championships-Washington-DC-May-2026-Matt-Xu-Trophy-1920x1080.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Shi",
+    "lastName": "Yang",
+    "country": "China",
+    "countryCode": "CN",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT MSH"
+    ],
+    "meleeUsername": "unknownplayer",
+    "photoUrl": null,
+    "photoSource": null
+  },
+  {
+    "firstName": "Yi",
+    "lastName": "Yang",
+    "country": "China",
+    "countryCode": "CN",
+    "sources": [
+      "Winner Regional Championship PT ECL Round - CN"
+    ],
+    "meleeUsername": "swff",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3EouueHUyyiMawe8rQ1uwq/56cb5860c06ec5dcb97952bf7a294d7a/MTG-China-Open-Beijing-November-2025-Yang-Yi-Trophy-1920x1280.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Shota",
+    "lastName": "Yasooka",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "yaya3",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/7iMRsdmjFXr0Bg9WZezsjh/4d38a21505332e452f6d36d1a2fa1d90/281x225-Shota-Yasooka-Champions-Cup-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Muhan",
+    "lastName": "Yu",
+    "country": "China",
+    "countryCode": "CN",
+    "sources": [
+      "Winner Regional Championship PT SOS Round - CN"
+    ],
+    "meleeUsername": "Beenew",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/l0z3rxCzALULbBGzODujB/675b77176dc8dbe2b248a292d2c44204/MTG-China-Open-Changsha-March-2026-Muhan-Yu-Trophy-1920x1280.jpg?w=450&h=600&fit=crop&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Ken",
+    "lastName": "Yukuhiro",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "World Championship 31 Top 8",
+      "36+ Match Points or Top 8 (or greater) - PT MSH"
+    ],
+    "meleeUsername": "deathsnow",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1eQ70ER96C0Nv1r1PY8PEV/a5ea26c753c1b47ca46e9147bce22529/PT_MSH_Yukuhiro.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Tase",
+    "lastName": "Yuya",
+    "country": "Japan",
+    "countryCode": "JP",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - JPK"
+    ],
+    "meleeUsername": "Octyrant76",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1Rei4p0uIXXWSz9tyWhqdw/7b296f74560c3cae7a21e9737fd3113e/281x225-Tase-Yuya-May-2026-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Neilson",
+    "lastName": "Zhang",
+    "country": "Canada",
+    "countryCode": "CA",
+    "sources": [
+      "Top 2 Regional Championship PT SOS Round - CA"
+    ],
+    "meleeUsername": "NeilsonZhang",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/3mKYx8SZ8RjHhCLa0T7FUx/7a86cd855f8cb2eec795d5b531238062/F2F-Tour-Championship-Vancouver-February-2026-Neilson-Zhang-Trophy-1920x1280.jpg?w=300&h=400&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  },
+  {
+    "firstName": "Rui",
+    "lastName": "Zhang",
+    "country": "United States",
+    "countryCode": "US",
+    "sources": [
+      "36+ Match Points or Top 8 (or greater) - PT SOS"
+    ],
+    "meleeUsername": "cftsoc",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/2DhdtIZWTUtNmqQlTwA6X3/56b278a2a0da1fd90709050ba9877f62/Top_8_PTSOS-Top-8-Rui-Zhang-1920x1080.jpg",
+    "photoSource": "magicgg"
+  },
+  {
+    "firstName": "Yimin",
+    "lastName": "Zhi",
+    "country": "China",
+    "countryCode": "CN",
+    "sources": [
+      "Top 32 Players in Post PT MSH AMP not already invited (Incl ties)"
+    ],
+    "meleeUsername": "James_Zhi",
+    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/7Dv7gGEbwNI33fcvKRccxS/f4c021545f4d93bad2c297df6926960b/281x225-Yimin-Zhi-May-2025-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
+    "photoSource": "magicgg-face"
+  }
+]

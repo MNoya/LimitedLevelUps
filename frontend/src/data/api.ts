@@ -54,6 +54,20 @@ export const fetchPodSetCodes = impl.fetchPodSetCodes;
 export const fetchPodCalendar = impl.fetchPodCalendar;
 export const fetchP0P1Cards = impl.fetchP0P1Cards;
 export const fetchP0P1Picks = impl.fetchP0P1Picks;
+export {
+  fetchFantasyLineup,
+  saveFantasyPick,
+  deleteFantasyPick,
+  fetchFantasyEventState,
+  fetchFantasyField,
+  fetchFantasyResults,
+  fetchFantasyMembers,
+  fetchFantasyLineups,
+  fetchFantasyBracketPicks,
+  fetchFantasyOwnBracket,
+  saveFantasyBracketPick,
+  deleteFantasyBracketPick,
+} from "./realApi";
 export const upsertP0P1Pick = impl.upsertP0P1Pick;
 export const deleteAllP0P1Picks = impl.deleteAllP0P1Picks;
 export const fetchP0P1PickStats = impl.fetchP0P1PickStats;

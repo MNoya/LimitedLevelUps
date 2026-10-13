@@ -45,6 +45,25 @@ def role_mention(guild: discord.Guild | None, name: str) -> str:
     return role.mention if role is not None else f"@{name}"
 
 
+async def rotate_role(role: discord.Role, members: list[discord.Member], *, reason: str) -> int:
+    """Moves the role to exactly these members and returns how many hold it afterwards"""
+    for holder in list(role.members):
+        if holder in members:
+            continue
+        try:
+            await holder.remove_roles(role, reason=f"{reason} rotation")
+        except discord.HTTPException:
+            log.warning(f"rotate-role: could not strip {role.name!r} from {holder}", exc_info=True)
+    granted = 0
+    for member in members:
+        try:
+            await member.add_roles(role, reason=reason)
+            granted += 1
+        except discord.HTTPException:
+            log.warning(f"rotate-role: could not grant {role.name!r} to {member}", exc_info=True)
+    return granted
+
+
 def role_label(guild: discord.Guild | None, name: str) -> str:
     """The role's mention in a guild, bold text in a DM where Discord can't resolve a role mention"""
     role = find_role(guild, name)

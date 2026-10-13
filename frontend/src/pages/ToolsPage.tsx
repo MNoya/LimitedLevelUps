@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
-import { Coins, Hammer, Library, type LucideIcon } from "lucide-react";
+import { Coins, Hammer, Library, Swords, type LucideIcon } from "lucide-react";
 import { PageShell } from "../components/PageShell";
 import { Container } from "../components/Container";
 import { PanelShell } from "../components/CommunityBits";
 import { WildcardIcon } from "../components/WildcardIcon";
 import { ArrowRight } from "../components/Icons";
 import { cn } from "../lib/utils";
+import { fantasyEventPath, proPlayHomeEvent } from "../components/fantasy/fantasyEvents";
 
 interface Tool {
   title: string;
@@ -31,6 +32,12 @@ export function ToolsPage() {
       Icon: Hammer,
       to: "/tools/craft",
       extra: wildcards,
+    },
+    {
+      title: "Pro Play",
+      blurb: "Fantasy Magic and past Pro Tour results",
+      Icon: Swords,
+      to: fantasyEventPath(proPlayHomeEvent(new Date())),
     },
     { title: "Event EV", blurb: "Expected gems and packs per event at your win rate", Icon: Coins },
     { title: "Set Completion", blurb: "Packs and wildcards left to complete a set", Icon: Library },

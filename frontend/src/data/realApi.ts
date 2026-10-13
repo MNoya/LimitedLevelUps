@@ -2189,6 +2189,17 @@ function adaptPodLeaderboardRow(row: Record<string, unknown>): PodLeaderboardRow
 // --- P0P1 contest ---
 
 import type { Card, P0P1BallotRow, P0P1Pick, P0P1PickStat, SlotKey } from "../types/p0p1";
+import type {
+  FantasyBracketPickRow,
+  FantasyEventState,
+  FantasyFieldRow,
+  FantasyLineupRow,
+  FantasyMemberRow,
+  FantasyOwnBracketPick,
+  FantasyResultRow,
+  FantasySavedPick,
+} from "../types/fantasy";
+import { DEV_AUTH_USER } from "./devAuth";
 import type { RatingsSnapshot } from "./p0p1Results";
 
 const cardLoaders = import.meta.glob<Card[]>(
@@ -2212,6 +2223,203 @@ export async function fetchP0P1Ratings(setCode: string): Promise<RatingsSnapshot
   const loader = ratingLoaders[key];
   if (!loader) return null;
   return loader();
+}
+
+
+export async function fetchFantasyLineup(eventCode: string): Promise<FantasySavedPick[]> {
+  const { data, error } = await client()
+    .from("fantasy_picks")
+    .select("slot, player_id, from_round")
+    .eq("event_code", eventCode);
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ slot: r.slot, playerId: r.player_id, fromRound: r.from_round }));
+}
+
+export async function fetchFantasyEventState(eventCode: string): Promise<FantasyEventState | null> {
+  const { data, error } = await client()
+    .from("public_fantasy_event_state")
+    .select("*")
+    .eq("event_code", eventCode)
+    .limit(1);
+  if (error) throw error;
+  const row = data?.[0];
+  if (!row) {
+    return null;
+  }
+  return {
+    revealedThroughRound: row.revealed_through_round,
+    completedThroughRound: row.completed_through_round,
+    picksLockAt: row.picks_lock_at,
+    dayTwoStartedAt: row.day_two_started_at,
+    bracketLockAt: row.bracket_lock_at,
+    top8StartedAt: row.top8_started_at,
+  };
+}
+
+export async function fetchFantasyField(eventCode: string): Promise<FantasyFieldRow[]> {
+  const rows = await pagedRows((from, to) =>
+    client().from("public_fantasy_players").select("*").eq("event_code", eventCode).order("id").range(from, to),
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    slug: r.slug,
+    firstName: r.first_name,
+    lastName: r.last_name,
+    shortName: r.short_name,
+    country: r.country,
+    countryCode: r.country_code,
+    sources: r.sources ?? [],
+    photoUrl: r.photo_url,
+    deckName: r.deck_name,
+    decklistId: r.decklist_id,
+  }));
+}
+
+export async function fetchFantasyResults(eventCode: string): Promise<FantasyResultRow[]> {
+  const rows = await pagedRows((from, to) =>
+    client()
+      .from("public_fantasy_results")
+      .select("*")
+      .eq("event_code", eventCode)
+      .order("round_number")
+      .order("player_id")
+      .range(from, to),
+  );
+  return rows.map((r) => ({
+    round: r.round_number,
+    playerId: r.player_id,
+    opponentId: r.opponent_id,
+    stage: r.stage,
+    result: r.result,
+    gameWins: r.game_wins,
+    gameLosses: r.game_losses,
+    gameDraws: r.game_draws,
+    isBye: r.is_bye,
+    bracketPosition: r.bracket_position,
+  }));
+}
+
+export async function fetchFantasyMembers(eventCode: string): Promise<FantasyMemberRow[]> {
+  const rows = await pagedRows((from, to) =>
+    client()
+      .from("public_fantasy_standings")
+      .select("member_key, is_me, name, avatar_url, rank")
+      .eq("event_code", eventCode)
+      .order("rank")
+      .range(from, to),
+  );
+  return rows.map((r) => ({
+    memberKey: r.member_key,
+    isMe: r.is_me,
+    name: r.name,
+    avatarUrl: r.avatar_url,
+    rank: r.rank,
+  }));
+}
+
+export async function fetchFantasyLineups(eventCode: string): Promise<FantasyLineupRow[]> {
+  const rows = await pagedRows((from, to) =>
+    client()
+      .from("public_fantasy_lineups")
+      .select("member_key, is_me, slot, from_round, player_id")
+      .eq("event_code", eventCode)
+      .range(from, to),
+  );
+  return rows.map((r) => ({
+    memberKey: r.member_key,
+    isMe: r.is_me,
+    slot: r.slot,
+    fromRound: r.from_round,
+    playerId: r.player_id,
+  }));
+}
+
+export async function fetchFantasyBracketPicks(eventCode: string): Promise<FantasyBracketPickRow[]> {
+  const rows = await pagedRows((from, to) =>
+    client()
+      .from("public_fantasy_bracket_picks")
+      .select("member_key, is_me, position, winner_id, games")
+      .eq("event_code", eventCode)
+      .range(from, to),
+  );
+  return rows.map((r) => ({
+    memberKey: r.member_key,
+    isMe: r.is_me,
+    position: r.position,
+    winnerId: r.winner_id,
+    games: r.games,
+  }));
+}
+
+export async function fetchFantasyOwnBracket(eventCode: string): Promise<FantasyOwnBracketPick[]> {
+  const { data, error } = await client()
+    .from("fantasy_bracket_picks")
+    .select("position, winner_id, games")
+    .eq("event_code", eventCode);
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ position: r.position, winnerId: r.winner_id, games: r.games }));
+}
+
+export async function saveFantasyBracketPick(eventCode: string, pick: FantasyOwnBracketPick): Promise<void> {
+  const userId = DEV_AUTH_USER?.id ?? (await client().auth.getUser()).data.user?.id;
+  if (!userId) throw new Error("Not authenticated");
+  const { error } = await client()
+    .from("fantasy_bracket_picks")
+    .upsert(
+      {
+        user_id: userId,
+        event_code: eventCode,
+        position: pick.position,
+        winner_id: pick.winnerId,
+        games: pick.games,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,event_code,position" },
+    );
+  if (error) throw error;
+}
+
+export async function deleteFantasyBracketPick(eventCode: string, position: string): Promise<void> {
+  const { error } = await client()
+    .from("fantasy_bracket_picks")
+    .delete()
+    .eq("event_code", eventCode)
+    .eq("position", position);
+  if (error) throw error;
+}
+
+export async function saveFantasyPick(
+  eventCode: string,
+  slot: string,
+  playerId: number,
+  fromRound: number,
+): Promise<void> {
+  const userId = DEV_AUTH_USER?.id ?? (await client().auth.getUser()).data.user?.id;
+  if (!userId) throw new Error("Not authenticated");
+  const { error } = await client()
+    .from("fantasy_picks")
+    .upsert(
+      {
+        user_id: userId,
+        event_code: eventCode,
+        slot,
+        from_round: fromRound,
+        player_id: playerId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,event_code,slot,from_round" },
+    );
+  if (error) throw error;
+}
+
+export async function deleteFantasyPick(eventCode: string, slot: string, fromRound: number): Promise<void> {
+  const { error } = await client()
+    .from("fantasy_picks")
+    .delete()
+    .eq("event_code", eventCode)
+    .eq("slot", slot)
+    .eq("from_round", fromRound);
+  if (error) throw error;
 }
 
 export async function fetchP0P1Picks(setCode: string): Promise<P0P1Pick[]> {

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
 import { PLAYER_BASE } from "./data/utils";
 import { Provider as TooltipProvider } from "@radix-ui/react-tooltip";
@@ -17,6 +17,14 @@ import { TierListPage } from "./pages/TierListPage";
 import { PodCardDataPage } from "./pages/PodCardDataPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { P0P1Page } from "./pages/P0P1Page";
+import { AppHeader } from "./components/AppHeader";
+import { loadFantasyPage, loadFantasyReplayPage } from "./components/fantasy/proPlayChunks";
+import {
+  currentFantasyEvent,
+  fantasyEventBySlug,
+  fantasyEventPath,
+  PRO_PLAY_BASE,
+} from "./components/fantasy/fantasyEvents";
 import { CraftToolPage } from "./pages/CraftToolPage";
 import { ToolsPage } from "./pages/ToolsPage";
 import { BannerLab } from "./pages/BannerLab";
@@ -73,6 +81,13 @@ export function App() {
       <Route path="/pods/:slug/:who" element={<PodDraftLogRoute />} />
       <Route path="/pods/:slug/:who/:pack/:pick" element={<PodDraftLogRoute />} />
 
+      <Route
+        path={PRO_PLAY_BASE}
+        element={<Navigate to={fantasyEventPath(currentFantasyEvent(new Date()))} replace />}
+      />
+      <Route path={`${PRO_PLAY_BASE}/:eventSlug`} element={<FantasyEventRoute />} />
+      <Route path={`${PRO_PLAY_BASE}/:eventSlug/:view`} element={<FantasyEventRoute />} />
+      <Route path="/fantasy/*" element={<LegacyFantasyRedirect />} />
       <Route path="/tier-list" element={<TierListPage />} />
       <Route path="/tier-list/:setCode" element={<TierListPage />} />
       <Route path="/tier-list/:setCode/archetypes" element={<TierListPage skeletonsOpen />} />
@@ -99,6 +114,31 @@ export function App() {
     </TooltipProvider>
   );
 }
+
+const FantasyPage = lazy(() => loadFantasyPage().then((module) => ({ default: module.FantasyPage })));
+const FantasyReplayPage = lazy(() =>
+  loadFantasyReplayPage().then((module) => ({ default: module.FantasyReplayPage })),
+);
+
+const FantasyEventRoute = () => {
+  const { eventSlug } = useParams();
+  const event = fantasyEventBySlug(eventSlug);
+  const page = event && !event.replayOnly ? <FantasyPage event={event} /> : <FantasyReplayPage />;
+  return <Suspense fallback={<ProPlayLoading />}>{page}</Suspense>;
+};
+
+const ProPlayLoading = () => (
+  <div className="bg-bg text-text min-h-screen">
+    <AppHeader subtitle="Pro Play" fill />
+  </div>
+);
+
+const LegacyFantasyRedirect = () => {
+  const { "*": rest } = useParams();
+  const { search } = useLocation();
+  const pathname = rest ? `${PRO_PLAY_BASE}/${rest}` : PRO_PLAY_BASE;
+  return <Navigate to={{ pathname, search }} replace />;
+};
 
 const LegacyPlayerRedirect = () => {
   const { slug, setCode } = useParams<{ slug: string; setCode?: string }>();

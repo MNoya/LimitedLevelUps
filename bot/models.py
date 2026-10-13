@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     LargeBinary,
@@ -42,6 +43,142 @@ class P0P1Entry(Base):
 
 class P0P1Voter(Base):
     __tablename__ = "p0p1_voters"
+
+    user_id    = Column(UUID(as_uuid=True), primary_key=True)
+    name       = Column(Text, nullable=False)
+    avatar_url = Column(Text, nullable=True)
+
+
+class FantasyEvent(Base):
+    __tablename__ = "fantasy_events"
+
+    code                = Column(Text, primary_key=True)
+    name                = Column(Text, nullable=False)
+    melee_tournament_id = Column(Integer, nullable=False)
+    picks_lock_at       = Column(DateTime(timezone=True), nullable=False)
+    swiss_rounds        = Column(SmallInteger, nullable=False)
+    cut_round           = Column(SmallInteger, nullable=False)
+    draft_rounds        = Column(ARRAY(SmallInteger), nullable=False, server_default="{}")
+    bracket_lock_at     = Column(DateTime(timezone=True), nullable=False)
+    revealed_through_round = Column(SmallInteger, nullable=False, server_default="0")
+    day_two_started_at  = Column(DateTime(timezone=True), nullable=True)
+    top8_started_at     = Column(DateTime(timezone=True), nullable=True)
+    synced_at           = Column(DateTime(timezone=True), nullable=True)
+
+
+class FantasyPlayer(Base):
+    __tablename__ = "fantasy_players"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    event_code     = Column(Text, ForeignKey("fantasy_events.code", ondelete="CASCADE"), nullable=False)
+    slug           = Column(Text, nullable=False)
+    first_name     = Column(Text, nullable=False)
+    last_name      = Column(Text, nullable=False)
+    short_name     = Column(Text, nullable=True)
+    country        = Column(Text, nullable=True)
+    country_code   = Column(Text, nullable=True)
+    sources        = Column(ARRAY(Text), nullable=False, server_default="{}")
+    photo_url      = Column(Text, nullable=True)
+    melee_username = Column(Text, nullable=True)
+    deck_name      = Column(Text, nullable=True)
+    decklist_id    = Column(Text, nullable=True)
+    created_at     = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("event_code", "slug"),
+        UniqueConstraint("event_code", "id"),
+        UniqueConstraint("event_code", "melee_username"),
+    )
+
+
+class FantasyResult(Base):
+    __tablename__ = "fantasy_results"
+
+    event_code       = Column(Text, nullable=False)
+    round_number     = Column(SmallInteger, nullable=False)
+    player_id        = Column(Integer, nullable=False)
+    opponent_id      = Column(Integer, nullable=True)
+    stage            = Column(Text, nullable=False)
+    format           = Column(Text, nullable=False)
+    result           = Column(Text, nullable=False)
+    game_wins        = Column(SmallInteger, nullable=False, server_default="0")
+    game_losses      = Column(SmallInteger, nullable=False, server_default="0")
+    game_draws       = Column(SmallInteger, nullable=False, server_default="0")
+    is_bye           = Column(Boolean, nullable=False, server_default="false")
+    bracket_position = Column(Text, nullable=True)
+    melee_match_guid = Column(Text, nullable=True)
+    updated_at       = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        PrimaryKeyConstraint("event_code", "round_number", "player_id"),
+        ForeignKeyConstraint(
+            ["event_code", "player_id"], ["fantasy_players.event_code", "fantasy_players.id"], ondelete="CASCADE",
+        ),
+        CheckConstraint("result IN ('W', 'L', 'D')", name="fantasy_result_valid"),
+        CheckConstraint(
+            "stage IN ('swiss', 'quarterfinal', 'semifinal', 'final')", name="fantasy_result_stage_valid",
+        ),
+        CheckConstraint("format IN ('draft', 'constructed')", name="fantasy_result_format_valid"),
+        Index("ix_fantasy_results_player", "event_code", "player_id"),
+    )
+
+
+class FantasyRound(Base):
+    __tablename__ = "fantasy_rounds"
+
+    event_code   = Column(Text, ForeignKey("fantasy_events.code", ondelete="CASCADE"), primary_key=True)
+    round_number = Column(SmallInteger, primary_key=True)
+    completed_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class FantasyPick(Base):
+    __tablename__ = "fantasy_picks"
+
+    user_id    = Column(UUID(as_uuid=True), nullable=False)
+    event_code = Column(Text, nullable=False)
+    slot       = Column(Text, nullable=False)
+    from_round = Column(SmallInteger, nullable=False, server_default="1")
+    player_id  = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "event_code", "slot", "from_round"),
+        ForeignKeyConstraint(
+            ["event_code", "player_id"], ["fantasy_players.event_code", "fantasy_players.id"], ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "slot IN ('captain', 'drafter', 'constructed', 'player')", name="fantasy_pick_slot_valid",
+        ),
+        CheckConstraint("from_round >= 1", name="fantasy_pick_from_round_valid"),
+    )
+
+
+class FantasyBracketPick(Base):
+    __tablename__ = "fantasy_bracket_picks"
+
+    user_id    = Column(UUID(as_uuid=True), nullable=False)
+    event_code = Column(Text, nullable=False)
+    position   = Column(Text, nullable=False)
+    winner_id  = Column(Integer, nullable=False)
+    games      = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "event_code", "position"),
+        ForeignKeyConstraint(
+            ["event_code", "winner_id"], ["fantasy_players.event_code", "fantasy_players.id"], ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "position IN ('QF1', 'QF2', 'QF3', 'QF4', 'SF1', 'SF2', 'F')", name="fantasy_bracket_position_valid",
+        ),
+        CheckConstraint("games IN ('3-0', '3-1', '3-2')", name="fantasy_bracket_games_valid"),
+    )
+
+
+class FantasyMember(Base):
+    __tablename__ = "fantasy_members"
 
     user_id    = Column(UUID(as_uuid=True), primary_key=True)
     name       = Column(Text, nullable=False)

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import discord
 from discord.ext import commands
 
+from bot.config import SITE_URL
 from bot.services.championship_dates import ChampionshipPlan, plan_for, season_start, vote_opens_at, voting_open
 from bot.services.pod_format_allocator import VOTE_FLOOR
 from bot.services.pod_format_interest import FLASHBACK_ROLE_NAME, flashback_emoji
@@ -15,12 +16,11 @@ from bot.services.pod_schedule import ORGANIZER_ROLE_NAME, SCHEDULE_TZ
 from bot.services.pod_schedule_controls import ViewScheduleButton
 from bot.services.pod_signals import SLOT_EARLY, bucket_for_slot
 
-SITE_URL = "https://limitedlevelups.com"
-LEADERBOARD_URL = "https://limitedlevelups.com/leaderboard"
-TIER_LIST_URL = "https://limitedlevelups.com/tier-list"
-PODS_URL = "https://limitedlevelups.com/pods"
-EVERGREEN_URL = "https://limitedlevelups.com/episodes/evergreen"
-POD_ETIQUETTE_URL = "https://limitedlevelups.com/pods/guide#etiquette"
+LEADERBOARD_URL = f"{SITE_URL}/leaderboard"
+TIER_LIST_URL = f"{SITE_URL}/tier-list"
+PODS_URL = f"{SITE_URL}/pods"
+EVERGREEN_URL = f"{SITE_URL}/episodes/evergreen"
+POD_ETIQUETTE_URL = f"{SITE_URL}/pods/guide#etiquette"
 
 TEAM_DRAFT_TITLE = "Team Draft"
 POD_ETIQUETTE_TITLE = "Pod Draft Etiquette"
