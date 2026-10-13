@@ -1,4 +1,4 @@
-import { createDevPresetStore } from "../../lib/dev-preset-store";
+import { createDevPresetStore, devToolsEnabled } from "../../lib/dev-preset-store";
 import type { DevStateOption } from "../DevStatePanel";
 import type { FantasyEventState } from "../../types/fantasy";
 import type { FantasyEventEntry } from "./fantasyEvents";
@@ -30,10 +30,24 @@ const presetStore = createDevPresetStore<FantasyDevPreset>(
   "fantasyDevPreset",
   FANTASY_DEV_PRESETS.map((preset) => preset.value),
   "live",
+  typeof window !== "undefined",
 );
 
 export const setFantasyDevPreset = presetStore.set;
-export const useFantasyDevPreset = presetStore.useValue;
+
+export function demoPresetsAllowed(event: FantasyEventEntry): boolean {
+  return devToolsEnabled || !event.live;
+}
+
+export function useFantasyDevPreset(event: FantasyEventEntry | undefined): FantasyDevPreset {
+  const preset = presetStore.useValue();
+  return event && demoPresetsAllowed(event) ? preset : "live";
+}
+
+export function readsDemoData(preset: FantasyDevPreset, state: FantasyEventState): boolean {
+  const picking = preset === "live" || preset === "pickingSignedIn" || preset === "pickingLoggedOut";
+  return !picking && !state.completedThroughRound;
+}
 
 export function devPresetState(
   preset: FantasyDevPreset,

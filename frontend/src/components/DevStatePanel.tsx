@@ -9,6 +9,8 @@ export function DevStatePanel<T extends string>({
   value,
   onChange,
   liveValue,
+  enabled = devToolsEnabled,
+  label = "DEV",
   children,
 }: {
   title: string;
@@ -16,10 +18,12 @@ export function DevStatePanel<T extends string>({
   value: T;
   onChange: (value: T) => void;
   liveValue: T;
+  enabled?: boolean;
+  label?: string;
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  if (!devToolsEnabled) {
+  if (!enabled) {
     return null;
   }
   const selected = options.find((option) => option.value === value);
@@ -55,7 +59,7 @@ export function DevStatePanel<T extends string>({
         onClick={() => setOpen((isOpen) => !isOpen)}
         className="mb-2 mr-1 rounded-full border border-green bg-black px-4 py-2.5 text-[13px] tracking-wide text-green shadow-lg"
       >
-        DEV {value === liveValue ? "" : `- ${selectedLabel}`}
+        {label} {value === liveValue ? "" : `- ${selectedLabel}`}
       </button>
     </div>
   );

@@ -9,7 +9,9 @@ type Picker = ReturnType<typeof useLineupPicker>;
 type StoredSlot = { dayOne?: number; replacement?: number };
 
 export function usePersistedLineup(picker: Picker, live: LiveEvent, signedIn: boolean, writable: boolean): Lineup | null {
-  const { data: saved, isFetching } = useFantasyLineup(live.event.code, signedIn);
+  const { data: fetched, isFetching } = useFantasyLineup(live.event.code, signedIn && !live.demo);
+  const saved = live.demo ? live.demo.ownLineup : fetched;
+  const loaded = signedIn || live.demo !== null;
   const stored = useRef<Map<SlotKey, StoredSlot> | null>(null);
   const writer = useFantasyPickWriter(live.event.code, () => {
     stored.current = null;
@@ -32,7 +34,11 @@ export function usePersistedLineup(picker: Picker, live: LiveEvent, signedIn: bo
   }, [saved, live]);
 
   useEffect(() => {
-    if (!signedIn) {
+    stored.current = null;
+  }, [live.demo]);
+
+  useEffect(() => {
+    if (!loaded) {
       stored.current = null;
       return;
     }
@@ -49,7 +55,7 @@ export function usePersistedLineup(picker: Picker, live: LiveEvent, signedIn: bo
     }
     picker.setLineup(lineup);
     picker.setActiveSlot(pickingDayOne ? (SLOTS.find((slot) => !lineup[slot.key])?.key ?? null) : null);
-  }, [signedIn, saved, isFetching, live, replacementRound, pickingDayOne]);
+  }, [loaded, saved, isFetching, live, replacementRound, pickingDayOne]);
 
   useEffect(() => {
     const current = stored.current;

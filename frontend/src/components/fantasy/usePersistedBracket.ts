@@ -9,12 +9,17 @@ export function usePersistedBracket(
   signedIn: boolean,
   writable: boolean,
 ): [BracketPicks, (picks: BracketPicks) => void] {
-  const { data: saved, isFetching } = useFantasyOwnBracket(live.event.code, signedIn);
+  const { data: fetched, isFetching } = useFantasyOwnBracket(live.event.code, signedIn && !live.demo);
+  const saved = live.demo ? live.demo.ownBracket : fetched;
   const [picks, setPicks] = useState<BracketPicks>({});
   const stored = useRef<BracketPicks | null>(null);
   const writer = useFantasyBracketWriter(live.event.code, () => {
     stored.current = null;
   });
+
+  useEffect(() => {
+    stored.current = null;
+  }, [live.demo]);
 
   useEffect(() => {
     if (!saved || isFetching || stored.current) {

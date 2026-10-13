@@ -12,12 +12,13 @@ export function createDevPresetStore<T extends string>(
   storageKey: string,
   values: readonly T[],
   fallback: T,
+  enabled = devToolsEnabled,
 ): DevPresetStore<T> {
   const listeners = new Set<() => void>();
   let current = readStored();
 
   function readStored(): T {
-    if (!devToolsEnabled) {
+    if (!enabled) {
       return fallback;
     }
     const stored = window.localStorage.getItem(storageKey) as T | null;

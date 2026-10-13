@@ -3,7 +3,9 @@ import { CtaPill } from "../components/CtaPill";
 import { DiscordIcon } from "../components/BrandIcons";
 import { TeamSheet } from "../components/fantasy/TeamSheet";
 import { DevStatePanel } from "../components/DevStatePanel";
+import { devToolsEnabled } from "../lib/dev-preset-store";
 import {
+  demoPresetsAllowed,
   FANTASY_DEV_PRESETS,
   setFantasyDevPreset,
   useFantasyDevPreset,
@@ -21,7 +23,7 @@ export function FantasyPage({ event }: { event: FantasyEventEntry }) {
 
   useLockedViewport();
 
-  const devPreset = useFantasyDevPreset();
+  const devPreset = useFantasyDevPreset(event);
   const signedOut = devPreset === "pickingLoggedOut" || (!authLoading && !user);
 
   const loginCta = signedOut ? (
@@ -37,7 +39,9 @@ export function FantasyPage({ event }: { event: FantasyEventEntry }) {
         <TeamSheet loginCta={loginCta} onSignIn={signIn} />
       </FantasyEventContext.Provider>
       <DevStatePanel
-        title="DEV - PRO PLAY STATE"
+        title={devToolsEnabled ? "DEV - PRO PLAY STATE" : "DEMO - PRO PLAY"}
+        label={devToolsEnabled ? "DEV" : "DEMO"}
+        enabled={demoPresetsAllowed(event)}
         options={FANTASY_DEV_PRESETS}
         value={devPreset}
         onChange={setFantasyDevPreset}

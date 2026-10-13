@@ -4,7 +4,7 @@ import { fantasyEventHeader, type FantasyEventEntry } from "./fantasyEvents";
 import { playerSlugs, type EventReplay, type ReplayPlayer } from "./fantasyReplay";
 import { BRACKET_KEY, BRACKET_MATCHES, type BracketResults, type GameScore } from "./fantasyTop8";
 import type { EventPhase, RoundResult } from "./fantasyScoring";
-import type { FantasyEventState, FantasyFieldRow, FantasyResultRow } from "../../types/fantasy";
+import type { FantasyDemo, FantasyEventState, FantasyFieldRow, FantasyResultRow } from "../../types/fantasy";
 
 export type LiveEvent = Omit<EventReplay, "results"> & {
   results: BracketResults;
@@ -14,6 +14,7 @@ export type LiveEvent = Omit<EventReplay, "results"> & {
   replacementsOpen: boolean;
   topEightStarted: boolean;
   bracketWindowOpen: boolean;
+  demo: FantasyDemo | null;
 };
 
 export function buildLiveEvent(
@@ -23,6 +24,7 @@ export function buildLiveEvent(
   allResults: FantasyResultRow[],
   throughRound: number,
   now: Date,
+  demo: FantasyDemo | null = null,
 ): LiveEvent {
   const results = allResults.filter((row) => row.round <= throughRound);
   const roundsPlayed = Math.min(throughRound, event.swissRounds);
@@ -58,6 +60,7 @@ export function buildLiveEvent(
     replacementsOpen: state.dayTwoStartedAt === null && now.getTime() >= new Date(state.picksLockAt).getTime(),
     topEightStarted: state.top8StartedAt !== null || results.some((row) => row.stage !== "swiss"),
     bracketWindowOpen: state.revealedThroughRound >= event.swissRounds && state.top8StartedAt === null,
+    demo,
   };
 }
 

@@ -75,7 +75,7 @@ import { fetchYouTubeVideos, overlayLiveMedia, toVideoEpisode, type YouTubeVideo
 import { assignEpisodeSlugs, type Episode } from "./episodes";
 import { setReviewMentionKey, type SetReviewMention, type TranscriptSegment } from "./transcript";
 import type { P0P1BallotRow, P0P1Pick, SlotKey } from "../types/p0p1";
-import type { FantasyOwnBracketPick } from "../types/fantasy";
+import type { FantasyDemo, FantasyOwnBracketPick } from "../types/fantasy";
 import type { FeaturedContest } from "./p0p1Slots";
 import { resolveContestByCode, resolveFeaturedContest } from "./p0p1Slots";
 import { MULTI, OTHER } from "./filters";
@@ -727,6 +727,15 @@ export function useFantasyMembers(eventCode: string, version: string | undefined
     enabled: version !== undefined,
     staleTime: Infinity,
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useFantasyDemo(enabled: boolean) {
+  return useQuery({
+    queryKey: ["fantasy-demo"],
+    queryFn: async () => (await import("./fantasyDemo.json")).default as FantasyDemo,
+    enabled,
+    staleTime: Infinity,
   });
 }
 

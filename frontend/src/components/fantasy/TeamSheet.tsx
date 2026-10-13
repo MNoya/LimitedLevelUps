@@ -66,14 +66,20 @@ import {
   useFantasyEvent,
   type FantasyEventHeader,
 } from "./fantasyEvents";
-import { devPresetState, useFantasyDevPreset } from "./fantasyDevState";
+import { devPresetState, readsDemoData, useFantasyDevPreset } from "./fantasyDevState";
 import { Top8Bracket, Top8BracketList } from "./Top8Bracket";
 import { eventContext, membersFromRows, standings, type Member, type StandingsDay } from "./fantasyMembers";
 import { type BracketPicks } from "./fantasyTop8";
 import { dayOneRecord, isOut, playerPoints, recordThrough, type EventPhase } from "./fantasyScoring";
 import { LiveEventContext, buildLiveEvent, liveBracketResults, useLiveEvent, type LiveEvent } from "./fantasyLive";
 import { usePersistedBracket } from "./usePersistedBracket";
-import { useFantasyEventState, useFantasyField, useFantasyMembers, useFantasyResults } from "../../data/hooks";
+import {
+  useFantasyDemo,
+  useFantasyEventState,
+  useFantasyField,
+  useFantasyMembers,
+  useFantasyResults,
+} from "../../data/hooks";
 import type { FantasyBracketPickRow, FantasyLineupRow, FantasyMemberRow } from "../../types/fantasy";
 
 
@@ -88,27 +94,36 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
   const [spoilerFree, setSpoilerFree] = usePersistentBool("fantasySpoilerFree", true);
   const now = useNow(15_000);
   const minute = Math.floor(now / 60_000);
-  const devPreset = useFantasyDevPreset();
+  const devPreset = useFantasyDevPreset(entry);
   const { data: storedState } = useFantasyEventState(header.code);
+  const demoActive = storedState ? readsDemoData(devPreset, storedState) : false;
+  const { data: demo } = useFantasyDemo(demoActive);
   const state = useMemo(
     () => (storedState && entry ? devPresetState(devPreset, storedState, entry, minute * 60_000) : storedState),
     [storedState, entry, devPreset, minute],
   );
-  const { data: field } = useFantasyField(header.code);
-  const { data: results } = useFantasyResults(header.code, storedState?.completedThroughRound);
+  const { data: storedField } = useFantasyField(header.code);
+  const { data: storedResults } = useFantasyResults(header.code, storedState?.completedThroughRound);
+  const field = demoActive ? demo?.field : storedField;
+  const results = demoActive ? demo?.results : storedResults;
   const locked = state ? now >= new Date(state.picksLockAt).getTime() : false;
   const bracketLocked = state ? now >= new Date(state.bracketLockAt).getTime() : false;
-  const membersVersion = state && locked ? `${state.completedThroughRound}:${bracketLocked}` : undefined;
-  const { data: members } = useFantasyMembers(header.code, membersVersion);
+  const membersVersion = state && locked && !demoActive ? `${state.completedThroughRound}:${bracketLocked}` : undefined;
+  const { data: storedMembers } = useFantasyMembers(header.code, membersVersion);
+  const members = useMemo(
+    () => (demoActive && demo ? { members: demo.members, lineups: demo.lineups, brackets: demo.brackets } : storedMembers),
+    [demoActive, demo, storedMembers],
+  );
   const throughRound = state ? (spoilerFree ? state.revealedThroughRound : state.completedThroughRound) : 0;
   const liveEvent = useMemo(
     () => {
       if (!entry || !state || !field) {
         return null;
       }
-      return buildLiveEvent(entry, state, field, results ?? [], throughRound, new Date(now));
+      const demoData = demoActive ? (demo ?? null) : null;
+      return buildLiveEvent(entry, state, field, results ?? [], throughRound, new Date(now), demoData);
     },
-    [entry, state, field, results, throughRound, minute],
+    [entry, state, field, results, throughRound, minute, demoActive, demo],
   );
   const liveHeader = useMemo(
     () =>
@@ -164,7 +179,8 @@ function TeamSheetView({
   const roundsPlayed = liveEvent.roundsPlayed;
   const live = phase !== "picking";
   const replacing = phase === "cut" && liveEvent.replacementsOpen;
-  const dayOneLineup = usePersistedLineup(picker, liveEvent, !loginCta, (!live && picksOpen) || replacing);
+  const lineupWritable = ((!live && picksOpen) || replacing) && !liveEvent.demo;
+  const dayOneLineup = usePersistedLineup(picker, liveEvent, !loginCta, lineupWritable);
   const filters = useFieldFilters(liveEvent.players);
   const isMobile = useIsMobile(1024);
   const [searchParams] = useSearchParams();
@@ -185,7 +201,7 @@ function TeamSheetView({
   const results = liveBracketResults(liveEvent);
   const topEightOpen = phase === "top8" || phase === "final";
   const bracketOpen = liveEvent.bracketWindowOpen && now < fantasyEvent.bracketLockAt.getTime() && !results;
-  const [bracketPicks, setBracketPicks] = usePersistedBracket(liveEvent, !loginCta, bracketOpen);
+  const [bracketPicks, setBracketPicks] = usePersistedBracket(liveEvent, !loginCta, bracketOpen && !liveEvent.demo);
 
   const replacingSlot = picker.activeSlot && picker.lineup[picker.activeSlot] ? picker.activeSlot : null;
 

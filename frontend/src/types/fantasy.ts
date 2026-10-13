@@ -43,3 +43,13 @@ export type FantasyLineupRow = { memberKey: string; isMe: boolean; slot: string;
 export type FantasyBracketPickRow = { memberKey: string; isMe: boolean; position: string; winnerId: number; games: string | null };
 
 export type FantasyOwnBracketPick = { position: string; winnerId: number; games: string | null };
+
+export type FantasyDemo = {
+  field: FantasyFieldRow[];
+  results: FantasyResultRow[];
+  members: FantasyMemberRow[];
+  lineups: FantasyLineupRow[];
+  brackets: FantasyBracketPickRow[];
+  ownLineup: FantasySavedPick[];
+  ownBracket: FantasyOwnBracketPick[];
+};
