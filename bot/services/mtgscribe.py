@@ -73,6 +73,7 @@ class EventGroup:
 
 
 ARENA_TAG = "arena"
+LIMITED_TAG = "limited"
 FLASHBACK_TAG = "flashback"
 CUBE_TAG = "cube"
 DRAFT_TAG = "draft"
@@ -96,6 +97,10 @@ def load_events(*, arena_only: bool = True) -> list[ScribeEvent]:
 def is_set_flashback(event: ScribeEvent) -> bool:
     """An Arena flashback queue for a past set, which Scribe also tags on a returning cube"""
     return FLASHBACK_TAG in event.tag_slugs and not any(CUBE_TAG in tag for tag in event.tag_slugs)
+
+
+def is_limited(event: ScribeEvent) -> bool:
+    return LIMITED_TAG in event.tag_slugs or bool(_limited_format(event.tag_slugs))
 
 
 def fetch_raw_events(start_date: date) -> list[dict]:

@@ -20,6 +20,7 @@ from bot.services.format_schedule import (
     effective_start,
     latest_set_channel,
     newest_set,
+    set_pin_due,
     set_pin_frozen,
     awards_eve_set,
     channel_for_set,
@@ -151,6 +152,15 @@ def test_set_pin_freezes_inside_the_final_week():
     frozen = [(when, set_pin_frozen(when)) for when, _ in cases]
 
     assert frozen == cases
+
+
+@pytest.mark.parametrize("when,due", [
+    (datetime(2026, 9, 29, 17, tzinfo=timezone.utc), False),
+    (datetime(2026, 9, 30, 15, tzinfo=timezone.utc), False),
+    (datetime(2026, 9, 30, 17, tzinfo=timezone.utc), True),
+])
+def test_set_pin_is_due_a_day_after_release(when, due):
+    assert set_pin_due(when) is due
 
 
 def test_awards_eve_set_returns_outgoing_on_release_eve():
@@ -406,6 +416,19 @@ def test_select_groups_ors_flashback_and_quick():
 
     labels = {group.label for group in upcoming}
     assert labels == {"Aetherdrift", "Bloomburrow"}
+
+
+def test_sealed_play_in_without_the_limited_tag_stays_on_the_competitive_schedule():
+    now = datetime.now(timezone.utc)
+    events = [
+        _event("ACQ Bo1 Play-In (Bonus)", "Reality Fracture Sealed",
+               ("arena", "best-of-one", "play-in", "qualifier", "sealed"), now, 1, 2),
+        _event("ACQ Bo1 Play-In", "Standard", ("arena", "constructed", "play-in", "qualifier", "standard"), now, 1, 2),
+    ]
+
+    _, upcoming = select_groups(events, ["competitive"], apply_horizon=False)
+
+    assert [group.label for group in upcoming] == ["Reality Fracture"]
 
 
 def test_select_groups_cube_filter_matches_cube_tag():

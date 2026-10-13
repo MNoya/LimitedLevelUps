@@ -55,6 +55,7 @@ from bot.services.format_schedule import (
     oldest_set_first,
     overflow_candidates,
     previous_window_start,
+    set_pin_due,
     set_pin_frozen,
     set_seed_for_channel,
 )
@@ -170,8 +171,9 @@ async def fire_window() -> None:
                 in_progress, upcoming = select_season_groups(events, scope), []
                 url = scribe_url(set_query=scope, past=True)
             if not (archival and await _pin_already_archival(channel, scope)):
+                create_if_missing = pin.auto_pin and set_pin_due(now)
                 await _refresh_pin(channel, scope, in_progress, upcoming, emojis, url,
-                                   create_if_missing=pin.auto_pin, archival=archival)
+                                   create_if_missing=create_if_missing, archival=archival)
         if pin.announce != ANNOUNCE_NONE:
             scheduled = announce_groups(events, pin)
             fresh = newly_opened(scheduled, since, now)
@@ -421,10 +423,7 @@ def _resolve_channel(guild: discord.Guild, pin: SchedulePin) -> discord.TextChan
 async def _refresh_pin(channel: discord.TextChannel, scope: str, in_progress: list,
                        upcoming: list, emojis: dict, url: str, *, create_if_missing: bool = False,
                        archival: bool = False) -> None:
-    """Edit the pin in place, matching on the title so the right pin is edited when a channel holds
-    several. Pins are human-seeded (the owner pins a filtered /event-scribe post) and a channel without
-    a matching pin is left alone. ``create_if_missing`` would post and pin the schedule itself instead;
-    no pin enables it today, reserved for when the bot should seed a channel's pin."""
+    """Edit the pin in place, matched on its title since a channel can hold several"""
     payload = build_schedule_payload(in_progress, upcoming, emojis, scope, archival=archival, url=url)
     try:
         message = await pinned_schedule(channel, schedule_title_marker(scope))

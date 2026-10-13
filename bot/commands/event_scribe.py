@@ -43,6 +43,8 @@ LEADING_ARTICLES = {"the", "a", "an"}
 
 ARENA_DIRECT_TAG = "arena-direct"
 MIDWEEK_TAG = "midweek-magic"
+ALCHEMY_TAG = "alchemy"
+ALCHEMY_PREFIX = "Alchemy "
 PREMIER_FORMATS = ("Premier Draft", "Contender Draft")
 BOOSTER_LABELS = {"play-boosters": "Play", "collector-booster": "Collector"}
 PACKAGE_EMOJI = "📦"
@@ -201,11 +203,9 @@ def _format_matches(event: mtgscribe.ScribeEvent, filters: list | None) -> bool:
 
 
 def _in_scope(event: mtgscribe.ScribeEvent, selected: str | None) -> bool:
-    """The schedule is Limited-only, except the Midweek filter, which surfaces every Midweek
-    queue (Brawl, Pauper, Momir included)."""
     if selected == "midweek":
         return True
-    return "limited" in event.tag_slugs
+    return mtgscribe.is_limited(event)
 
 
 def build_schedule_payload(in_progress: list, upcoming: list, emojis: dict, scope: str = "Limited",
@@ -741,10 +741,11 @@ def _seed_for_label(label: str):
 def _passes_format(event: mtgscribe.ScribeEvent, selected: str | None) -> bool:
     if selected is None:
         return True
+    base_format = event.format_label.removeprefix(ALCHEMY_PREFIX)
     if selected == "premier":
-        return event.format_label in PREMIER_FORMATS
+        return base_format in PREMIER_FORMATS
     if selected == "quick":
-        return event.format_label == "Quick Draft"
+        return base_format == "Quick Draft"
     if selected == "flashback":
         return mtgscribe.FLASHBACK_TAG in event.tag_slugs
     if selected == "draft":
@@ -780,9 +781,7 @@ FORMAT_TITLES = {
 
 
 def _heading_scope(set_query: str | None, selected: str | None) -> str:
-    """The descriptor before "Event Schedule": the set, the format, both, or "Limited" when neither
-    is filtered. The Midweek and Competitive filters surface Constructed queues, so the default
-    Limited framing only holds when nothing is selected."""
+    """The descriptor before "Event Schedule": the set, the format, both, or "Limited" when neither is filtered"""
     parts = []
     if set_query:
         parts.append(set_query)
@@ -809,6 +808,8 @@ def normalize_event(event: mtgscribe.ScribeEvent) -> mtgscribe.ScribeEvent:
     format_label = event.format_label
     if _is_competitive(event.tag_slugs):
         format_label = _with_best_of(format_label, event.title)
+    if ALCHEMY_TAG in event.tag_slugs and format_label:
+        format_label = f"{ALCHEMY_PREFIX}{format_label}"
     if set_name == event.group_label and format_label == event.format_label:
         return event
     return replace(event, group_label=set_name, format_label=format_label)

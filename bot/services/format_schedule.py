@@ -16,7 +16,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import bot.services.mtgscribe as mtgscribe
-from bot.sets import ALL_SETS, RELEASE_TIME, SetSeed, active_set_code
+from bot.sets import ALL_SETS, RELEASE_TIME, SetSeed, active_set_code, release_instant
 
 OPEN_TZ = ZoneInfo("America/Los_Angeles")
 EVENT_DAY_TZ = ZoneInfo("America/New_York")
@@ -46,9 +46,8 @@ class SchedulePin:
     callout — independent of the pin, so the set channel shows the full set but announces competitive
     only, and an announce-only channel (cube) keeps no pin at all. Routing is by ``channel_name``
     substring, except the set pin leaves it ``None`` and sets ``category``, which resolves the active
-    set's own channel there so routing follows the rotation without a config edit.
-    Pins are human-seeded and the bot only keeps them fresh; ``auto_pin`` would have it post and pin the
-    schedule itself when none exists, off for every pin today and reserved for when that's wanted."""
+    set's own channel there so routing follows the rotation without a config edit. ``auto_pin`` has the bot
+    post and pin the schedule itself when none exists; the other pins are human-seeded and only kept fresh."""
     key: str
     channel_name: str | None
     pin_filters: tuple[str, ...]
@@ -67,7 +66,9 @@ SCHEDULE_PINS: tuple[SchedulePin, ...] = (
     ),
     SchedulePin("cube", "cube-talk", (), None, ANNOUNCE_ROTATION, ("cube",), maintain_pin=False),
     SchedulePin("sealed", "sealed-discussion", ("sealed",), "Sealed", ANNOUNCE_NONE),
-    SchedulePin("set", None, (), None, ANNOUNCE_COMPETITIVE, ("competitive",), category=LATEST_SET_CATEGORY),
+    SchedulePin(
+        "set", None, (), None, ANNOUNCE_COMPETITIVE, ("competitive",), category=LATEST_SET_CATEGORY, auto_pin=True
+    ),
 )
 
 
@@ -210,6 +211,12 @@ def set_pin_frozen(when: datetime | None = None) -> bool:
     that pin becomes the season's record. Freezing early keeps it a full picture instead.
     """
     return season_archived(active_set_seed(when), when)
+
+
+def set_pin_due(when: datetime | None = None) -> bool:
+    now = when or datetime.now(timezone.utc)
+    settle_time = timedelta(days=1)
+    return now >= release_instant(active_set_seed(now).start_date) + settle_time
 
 
 def awards_eve_set(when: datetime | None = None) -> SetSeed | None:
@@ -378,8 +385,9 @@ def announcement_format(group: mtgscribe.EventGroup) -> str:
         return "Competitive"
     if group.cube:
         return ""
-    if "Quick Draft" in group.formats:
-        return "Quick Draft"
+    for format_label in group.formats:
+        if format_label.endswith("Quick Draft"):
+            return format_label
     return "Sealed"
 
 
