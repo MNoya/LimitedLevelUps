@@ -16,6 +16,7 @@ from bot.commands.event_scribe import (
 )
 from bot.commands.messages import MSG_EVENT_LIVE
 from bot.config import settings
+from bot.discord_helpers import channel_matching_name
 from bot.services import mtgscribe
 from bot.tasks.format_schedule_post import create_pinned_schedule, pinned_schedule
 from bot.services.watch_party import (
@@ -40,11 +41,10 @@ MSG_WINDOW_FOLLOW = "Follow on https://magic.gg/"
 MSG_WINDOW_DATES = "{dates} ({relative})"
 MSG_WINDOW_ENDS = "Ends {day} ({relative})"
 MSG_ALSO_THIS_WEEKEND = "**Also this weekend:**"
-MSG_ANNOUNCEMENT = (
-    "**Join the {kind} Watch Party!**\n"
-    "Come discuss the event, draft commentary, question the pros’ picks, and everything about {about}\n\n"
-    "{subject_line}"
-)
+MSG_ANNOUNCEMENT = "**Join the {kind} Watch Party!**\n{invitation}\n\n{subject_line}"
+MSG_INVITE_DRAFT = "Come discuss the event, draft commentary, question the pros’ picks, and everything about {about}"
+MSG_INVITE = "Come discuss the event, question the pros’ plays and everything about {about}"
+MSG_REDIRECT = "**{name}** is live! Join the {channel}"
 MSG_ANNOUNCEMENT_SUBJECT = "Subject: {name} - {subject}"
 
 log = logging.getLogger(__name__)
@@ -156,8 +156,17 @@ def window_marker(window: CoverageWindow, *, live: bool) -> str:
 
 
 def build_announcement(covered: CoveredEvent) -> str:
-    about = f"the **{covered.ordinal}**" if covered.ordinal else f"**{covered.name}**"
-    return MSG_ANNOUNCEMENT.format(kind=covered.kind.name, about=about, subject_line=announcement_marker(covered))
+    invitation = MSG_INVITE_DRAFT if covered.is_draft else MSG_INVITE
+    about = f"**{covered.short_name}**"
+    return MSG_ANNOUNCEMENT.format(
+        kind=covered.kind.name, invitation=invitation.format(about=about), subject_line=announcement_marker(covered),
+    )
+
+
+def build_redirect(covered: CoveredEvent, watch_party: discord.abc.GuildChannel, emojis: dict) -> str:
+    emoji = coverage_emoji(covered, emojis)
+    lead = f"{emoji} " if emoji else ""
+    return lead + MSG_REDIRECT.format(name=covered.name, channel=watch_party.jump_url)
 
 
 def announcement_marker(covered: CoveredEvent) -> str:
@@ -234,6 +243,21 @@ async def _announce_started_events(channel: discord.TextChannel, window: Coverag
             continue
         await channel.send(build_announcement(covered), allowed_mentions=discord.AllowedMentions.none())
         log.info(f"watch-party: announced {covered.name}")
+        await _post_redirect(channel, covered)
+
+
+async def _post_redirect(channel: discord.TextChannel, covered: CoveredEvent) -> None:
+    redirect_name = settings.watch_party_redirect_channel_name
+    redirect = channel_matching_name(channel.guild, redirect_name)
+    if redirect is None:
+        log.warning(f"watch-party: no {redirect_name} channel to point at the {covered.name} watch party")
+        return
+    try:
+        emojis = {emoji.name: emoji for emoji in await _bot.fetch_application_emojis()}
+        await redirect.send(build_redirect(covered, channel, emojis), allowed_mentions=discord.AllowedMentions.none())
+        log.info(f"watch-party: pointed {redirect.name} at the {covered.name} watch party")
+    except discord.HTTPException:
+        log.warning(f"watch-party: could not post the {covered.name} redirect in {redirect.name}", exc_info=True)
 
 
 def _is_due(moment: datetime, tick: datetime) -> bool:

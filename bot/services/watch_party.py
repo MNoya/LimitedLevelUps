@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
-from bot.services.mtgscribe import ScribeEvent
+from bot.services.mtgscribe import DRAFT_TAG, ScribeEvent
 from bot.sets import active_set_code
 
 CHANNEL_PREFIX = "📺🎉-"
@@ -18,7 +18,7 @@ SCG_TWITCH_URL = "https://twitch.tv/starcitygames"
 CHANNEL_TZ = ZoneInfo("America/New_York")
 FALLBACK_START = time(9, 0)
 FALLBACK_END = time(18, 0)
-ARENA_CHAMPIONSHIP_NUMBER = re.compile(r"Arena Championship (\d+)")
+EDITION_NUMBER = re.compile(r"(\d+)$")
 QUALIFIER_TITLE_WORDS = ("Qualifier", "ACQ")
 
 
@@ -38,7 +38,7 @@ WORLDS = CoverageKind("worlds", "World Championship", "magic-world-championship"
 PRO_TOUR = CoverageKind("pt", "Pro Tour", None, "Pro Tour",
                         always_covered=True, scheduled_event=True, announced=True)
 ARENA_CHAMPIONSHIP = CoverageKind("ac", "Arena Championship", "arena-championship", "Arena Championship",
-                                  always_covered=True, scheduled_event=True, announced=False)
+                                  always_covered=True, scheduled_event=True, announced=True)
 SPOTLIGHT = CoverageKind("spotlight", "Spotlight Series", "magic-spotlight-series", "Spotlight Series",
                          always_covered=False, scheduled_event=False, announced=False)
 REGIONAL = CoverageKind("rc", "Regional Championship", "regional-championship", "Regional Championship",
@@ -58,7 +58,6 @@ class EventDay:
 class PremierSchedule:
     tz: ZoneInfo
     days: tuple[EventDay, ...]
-    ordinal: str | None = None
 
 
 PREMIER_SCHEDULES: dict[str, PremierSchedule] = {
@@ -97,16 +96,30 @@ class CoveredEvent:
 
     @property
     def stream_url(self) -> str | None:
-        if self.kind in (WORLDS, PRO_TOUR):
+        if self.kind in (WORLDS, PRO_TOUR, ARENA_CHAMPIONSHIP):
             return MAGIC_TWITCH_URL
         if SCG_TAG in self.event.tag_slugs:
             return SCG_TWITCH_URL
         return None
 
     @property
-    def ordinal(self) -> str | None:
-        schedule = PREMIER_SCHEDULES.get(self.name)
-        return schedule.ordinal if schedule is not None else None
+    def short_name(self) -> str:
+        if self.kind is WORLDS:
+            return _numbered("Worlds", self.edition_number)
+        if self.kind is ARENA_CHAMPIONSHIP:
+            return _numbered("AC", self.edition_number)
+        if self.kind is PRO_TOUR:
+            return f"PT {active_set_code(self.starts_at())}"
+        return self.name
+
+    @property
+    def edition_number(self) -> str | None:
+        match = EDITION_NUMBER.search(self.name)
+        return match.group(1) if match else None
+
+    @property
+    def is_draft(self) -> bool:
+        return DRAFT_TAG in self.event.tag_slugs or "Draft" in self.details
 
     def starts_at(self) -> datetime:
         tz, days = self._timed_days()
@@ -201,8 +214,7 @@ def channel_slug(covered: CoveredEvent) -> str:
     if covered.kind is WORLDS:
         return "worlds"
     if covered.kind is ARENA_CHAMPIONSHIP:
-        number = ARENA_CHAMPIONSHIP_NUMBER.search(covered.event.title)
-        return f"ac{number.group(1)}" if number else "ac"
+        return f"ac{covered.edition_number or ''}"
     set_code = active_set_code(covered.starts_at()).lower()
     return f"{covered.kind.key}-{set_code}"
 
@@ -211,6 +223,10 @@ def channel_name(window: CoverageWindow | None) -> str:
     if window is None:
         return f"{CHANNEL_PREFIX}{CHANNEL_SUFFIX}"
     return f"{CHANNEL_PREFIX}{channel_slug(window.headliner)}-{CHANNEL_SUFFIX}"
+
+
+def _numbered(prefix: str, number: str | None) -> str:
+    return f"{prefix} {number}" if number else prefix
 
 
 def _is_qualifier(event: ScribeEvent) -> bool:

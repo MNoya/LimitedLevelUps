@@ -7,12 +7,14 @@ from discord.ext import commands
 from discord.utils import format_dt
 
 from bot.commands.test_group import test_group
+from bot.config import settings
 from bot.services import mtgscribe
 from bot.services.watch_party import CHANNEL_TZ, channel_name, upcoming_windows
 from bot.tasks.watch_party_post import (
     UPCOMING_LEAD,
     announcement_candidates,
     build_announcement,
+    build_redirect,
     build_window_embed,
     channel_topic,
     scheduled_event_candidates,
@@ -38,6 +40,10 @@ async def setup(bot: commands.Bot) -> None:
         for covered in scheduled_event_candidates(current):
             await ctx.send(f"__**Scheduled Event**__ **{covered.name}**\n{covered.details}\n"
                            f"{format_dt(covered.starts_at(), 'f')} to {format_dt(covered.ends_at(), 'f')}")
+        watch_party = ctx.bot.get_channel(settings.watch_party_channel_id) or ctx.channel
         for covered in announcement_candidates(current):
             await ctx.send(f"__**Posts at {format_dt(covered.starts_at(), 'f')}**__")
             await ctx.send(build_announcement(covered), allowed_mentions=discord.AllowedMentions.none())
+            await ctx.send(f"__**Then in #{settings.watch_party_redirect_channel_name}**__")
+            redirect = build_redirect(covered, watch_party, emojis)
+            await ctx.send(redirect, allowed_mentions=discord.AllowedMentions.none())
