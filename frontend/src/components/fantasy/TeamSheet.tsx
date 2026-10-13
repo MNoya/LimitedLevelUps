@@ -277,7 +277,7 @@ function TeamSheetView({
   const replacedPick = (key: SlotKey) => {
     const original = dayOneLineup?.[key];
     const current = picker.lineup[key];
-    if (!original || !current || fullName(original) === fullName(current)) {
+    if (!live || !original || !current || fullName(original) === fullName(current)) {
       return undefined;
     }
     return original;
