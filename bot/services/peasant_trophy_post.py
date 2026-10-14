@@ -12,15 +12,15 @@ from sqlalchemy import func, select
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import channel_matching_name, ordinal
-from bot.models import PodDraftEvent, PodDraftParticipant
+from bot.models import PodDraftEvent, PodDraftParticipant, Player
 from bot.services.pod_deck_color import format_deck_color_emojis
-from bot.services.pod_drafts import POD_TROPHY_WINS, parse_record
+from bot.services.pod_drafts import POD_TROPHY_WINS, parse_record, strip_arena_suffix
 from bot.services.pod_format import PEASANT_CODE, PEASANT_LABEL
 from bot.sets import SetSeed, active_set_code, seed_for_code
 
 log = logging.getLogger(__name__)
 
-MSG_PEASANT_TROPHY = "🏆 {name} takes [__**{pod_name}**__]({podium_url}){colors}"
+MSG_PEASANT_TROPHY = "🏆 **{name}** takes [__**{pod_name}**__]({podium_url}){colors}"
 MSG_PEASANT_LIFETIME = "Their {nth} {cube} trophy"
 MSG_PEASANT_FIRST_TROPHY = "Their **1st {cube} trophy!**"
 MSG_PEASANT_SEASON = "{nth} this season"
@@ -144,11 +144,15 @@ def load_peasant_champions_sync(event_id: str) -> list[PeasantChampion]:
         for participant in participants:
             if parse_record(participant.record)[0] < POD_TROPHY_WINS:
                 continue
+            name = strip_arena_suffix(participant.display_name)
             stats = None
             if participant.player_id is not None:
+                player = session.get(Player, participant.player_id)
+                if player is not None:
+                    name = player.display_name
                 finishes = _peasant_history(session, participant.player_id, event.event_time)
                 stats = trophy_stats(finishes, season) if finishes else None
-            champions.append(PeasantChampion(participant.display_name, participant.deck_colors, stats))
+            champions.append(PeasantChampion(name, participant.deck_colors, stats))
         return champions
 
 
