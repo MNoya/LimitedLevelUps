@@ -16,6 +16,7 @@ export interface SetCard {
 export interface SetCardPool {
   cards: SetCard[];
   specialGuests: SetCard[];
+  alchemy: SetCard[];
   bonusSheet: BonusSheet | null;
 }
 
@@ -51,16 +52,19 @@ export async function fetchSetCardPool(setCode: string): Promise<SetCardPool> {
   const bonusCode = bonus?.setCode.toLowerCase();
   const bonusClause = bonusCode ? ` or set:${bonusCode}` : "";
   const guestClause = `(set:${SPECIAL_GUESTS_SET} date=${code})`;
-  const printings = await scryfallSearch(`game:arena (set:${code} or ${guestClause}${bonusClause})`);
+  const alchemyCode = `y${code}`;
+  const sets = `set:${code} or ${guestClause} or set:${alchemyCode}${bonusClause}`;
+  const printings = await scryfallSearch(`game:arena (${sets})`);
   const setPrintings = printings.filter((printing) => printing.set === code);
   if (setPrintings.length === 0) {
-    return { cards: [], specialGuests: [], bonusSheet: null };
+    return { cards: [], specialGuests: [], alchemy: [], bonusSheet: null };
   }
   const guestPrintings = printings.filter((printing) => printing.set === SPECIAL_GUESTS_SET);
   const bonusCards = firstPrintingPerName(printings.filter((printing) => printing.set === bonusCode));
   return {
     cards: firstPrintingPerName(draftable(setPrintings)),
     specialGuests: firstPrintingPerName(guestPrintings),
+    alchemy: firstPrintingPerName(printings.filter((printing) => printing.set === alchemyCode)),
     bonusSheet: bonus ? { setCode: bonus.setCode, label: bonus.label, cards: bonusCards } : null,
   };
 }

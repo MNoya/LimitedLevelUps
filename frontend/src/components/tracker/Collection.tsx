@@ -36,7 +36,7 @@ import {
 const SUBLABEL_CLS = "font-display text-[13px] tracking-[0.08em] text-muted";
 
 const COLOR_HEX: Record<string, string> = {
-  W: "#f5efd6", U: "#4aa8ff", B: "#a98eff", R: "#ff5e5e", G: "#2ee85c", M: "#ffc63a", C: "#8a93a5",
+  W: "#f5efd6", U: "#4aa8ff", B: "#a98eff", R: "#ff5e5e", G: "#34a865", M: "#ffc63a", C: "#8a93a5",
 };
 
 const RARITY_STYLE = {
@@ -88,7 +88,10 @@ export function Collection({
   const { setCount, syncFailed } = useCollectionSync(setCode);
 
   const cardImages = useMemo(
-    () => cardImagesFromUrls(setCode, [...(pool?.cards ?? []), ...(pool?.specialGuests ?? [])]),
+    () => cardImagesFromUrls(
+      setCode,
+      [...(pool?.cards ?? []), ...(pool?.specialGuests ?? []), ...(pool?.alchemy ?? [])],
+    ),
     [pool, setCode],
   );
   const { data: economy } = useQuery({
@@ -240,6 +243,7 @@ export function Collection({
                   label={section.label}
                   background={COLOR_HEX[section.color] ?? COLOR_HEX.C}
                   cards={section.cards}
+                  identities={section.color === "M" ? lists.identities : undefined}
                   {...sectionProps}
                 />
               ))}
@@ -250,10 +254,22 @@ export function Collection({
                   label="Special Guests"
                   background={RARITY_STYLE.mythic.gradient}
                   cards={lists.specialGuests}
+                  identities={lists.identities}
                   {...sectionProps}
                 />
               </div>
             )}
+            {key === "mythic" && lists.alchemy.map((section) => (
+              <div key={section.label} className="mt-4">
+                <CardSection
+                  label={section.label}
+                  background={section.background}
+                  cards={section.cards}
+                  identities={lists.identities}
+                  {...sectionProps}
+                />
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -314,9 +330,10 @@ function useCollectionSync(setCode: string) {
 }
 
 function CardSection({
-  label, background, cards, lookup, playsets, costs, touch, onSet, onOpen, onHover, onLeave,
+  label, background, cards, identities, lookup, playsets, costs, touch, onSet, onOpen, onHover, onLeave,
 }: {
-  label: string; background: string; cards: string[]; lookup: (name: string) => number; playsets: boolean;
+  label: string; background: string; cards: string[]; identities?: Record<string, string[]>;
+  lookup: (name: string) => number; playsets: boolean;
   costs?: Record<string, string>; touch: boolean;
   onSet: (card: string, n: number) => void;
   onOpen: (card: string) => void;
@@ -327,31 +344,67 @@ function CardSection({
     const copies = lookup(card);
     owned += playsets ? copies : Math.min(copies, 1);
   }
+  const renderRow = (card: string) => (
+    <CardRow
+      key={card}
+      card={card}
+      besideStrip={identities != null}
+      owned={lookup(card)}
+      cost={costs?.[card]}
+      touch={touch}
+      onSet={onSet}
+      onOpen={onOpen}
+      onHover={onHover}
+      onLeave={onLeave}
+    />
+  );
   return (
     <section className="border border-border">
       <header className="flex items-baseline gap-2 px-2.5 py-1.5" style={{ background }}>
         <span className="font-display text-[15px] tracking-[0.16em] text-bg">{label}</span>
-        <span className="font-display tabular-nums ml-auto text-[15px] text-bg/75">
+        <span className="font-display tabular-nums ml-auto text-[15px] text-bg">
           {owned}/{cards.length * (playsets ? 4 : 1)}
         </span>
       </header>
       <div className="flex flex-col gap-[1px] bg-border">
-        {cards.map((card) => (
-          <CardRow
-            key={card}
-            card={card}
-            owned={lookup(card)}
-            cost={costs?.[card]}
-            touch={touch}
-            onSet={onSet}
-            onOpen={onOpen}
-            onHover={onHover}
-            onLeave={onLeave}
-          />
-        ))}
+        {identities
+          ? identityGroups(cards, identities).map((group) => (
+            <div key={group.colors.join("")} className="flex gap-[1px]">
+              <i className="w-1 shrink-0" style={{ background: identityStripBackground(group.colors) }} />
+              <div className="flex flex-1 min-w-0 flex-col gap-[1px]">
+                {group.cards.map(renderRow)}
+              </div>
+            </div>
+          ))
+          : cards.map(renderRow)}
       </div>
     </section>
   );
+}
+
+function identityStripBackground(colors: string[]): string {
+  const maxFadeColors = 3;
+  if (colors.length > maxFadeColors) {
+    return COLOR_HEX.M;
+  }
+  if (colors.length === 1) {
+    return COLOR_HEX[colors[0]];
+  }
+  return `linear-gradient(180deg, ${colors.map((color) => COLOR_HEX[color]).join(", ")})`;
+}
+
+function identityGroups(cards: string[], identities: Record<string, string[]>) {
+  const groups: Array<{ colors: string[]; cards: string[] }> = [];
+  for (const card of cards) {
+    const colors = identities[card] ?? [];
+    const last = groups[groups.length - 1];
+    if (last && last.colors.join("") === colors.join("")) {
+      last.cards.push(card);
+    } else {
+      groups.push({ colors, cards: [card] });
+    }
+  }
+  return groups;
 }
 
 function CardPreview({ sources, anchor }: { sources: string[]; anchor: PreviewAnchor }) {
@@ -513,9 +566,10 @@ function DerivedCell({ label, value, tooltip }: { label: string; value: number |
 }
 
 const CardRow = memo(function CardRow({
-  card, owned, cost, touch = false, onSet, onOpen, onHover, onLeave,
+  card, owned, cost, besideStrip = false, touch = false, onSet, onOpen, onHover, onLeave,
 }: {
   card: string; owned: number;
+  besideStrip?: boolean;
   /** Scryfall mana cost, shown only where the row has room for it */
   cost?: string;
   /** a tap is the only gesture on a phone, so the count wraps 4 → 0 and the target grows */
@@ -543,7 +597,8 @@ const CardRow = memo(function CardRow({
       >
         <span
           ref={nameRef}
-          className={cn("flex-1 min-w-0 truncate pl-3 pr-2 font-serif",
+          className={cn("flex-1 min-w-0 truncate pr-2 font-serif",
+            besideStrip ? "pl-[17px]" : "pl-3",
             touch ? "py-2" : "py-[3px]",
             owned === 0 ? "text-muted" : "text-text")}
         >
@@ -626,40 +681,65 @@ const SECTION_ORDER: Array<ColorSection["color"]> = ["W", "U", "B", "R", "G", "M
 const SECTION_LABELS: Record<ColorSection["color"], string> = {
   W: "White", U: "Blue", B: "Black", R: "Red", G: "Green", M: "Multicolor", C: "Colorless",
 };
+const WUBRG = "WUBRG";
+const ARENA_PAIR_ORDER = ["WU", "WB", "UB", "UR", "BR", "BG", "RG", "RW", "GW", "GU"];
 
 function collectionLists(pool: SetCardPool) {
+  const { cards, specialGuests } = pool;
+  const alchemy = pool.alchemy ?? [];
   const costs: Record<string, string> = {};
-  for (const card of [...pool.cards, ...pool.specialGuests]) {
+  const identities: Record<string, string[]> = {};
+  for (const card of [...cards, ...specialGuests, ...alchemy]) {
     if (card.manaCost) {
       costs[card.name] = card.manaCost;
     }
+    const colorless = card.colorIdentity.length === 0;
+    identities[card.name] = colorless ? ["C"] : arenaPairOrdered(wubrgSorted(card.colorIdentity));
   }
   return {
-    rares: colorSections(pool.cards.filter((card) => card.rarity === "rare")),
-    mythics: colorSections(pool.cards.filter((card) => card.rarity === "mythic")),
-    specialGuests: pool.specialGuests.map((card) => card.name),
+    rares: colorSections(cards.filter((card) => card.rarity === "rare")),
+    mythics: colorSections(cards.filter((card) => card.rarity === "mythic")),
+    specialGuests: arenaSorted(specialGuests),
+    alchemy: [
+      {
+        label: "Alchemy Rares",
+        background: "linear-gradient(-45deg, #652978 0%, #c09ac5 50%, #652978 100%)",
+        cards: arenaSorted(alchemy.filter((card) => card.rarity === "rare")),
+      },
+      {
+        label: "Alchemy Mythics",
+        background: "linear-gradient(-45deg, #652978 0%, #94284d 35%, #d5602e 50%, #94284d 65%, #652978 100%)",
+        cards: arenaSorted(alchemy.filter((card) => card.rarity === "mythic")),
+      },
+    ].filter((section) => section.cards.length > 0),
     costs,
+    identities,
   };
 }
 
 /** Color identity, not casting cost, so the sections match how Arena sorts a collection */
 function colorSections(cards: SetCard[]): ColorSection[] {
-  const bySection = new Map<ColorSection["color"], string[]>();
+  const bySection = new Map<ColorSection["color"], SetCard[]>();
   for (const card of cards) {
     const key = sectionColor(card.colorIdentity);
     if (!bySection.has(key)) {
       bySection.set(key, []);
     }
-    bySection.get(key)!.push(card.name);
+    bySection.get(key)!.push(card);
   }
   const sections: ColorSection[] = [];
   for (const color of SECTION_ORDER) {
-    const names = bySection.get(color);
-    if (names?.length) {
+    const sectionCards = bySection.get(color);
+    if (sectionCards?.length) {
+      const names = [...sectionCards].sort(compareArenaOrder).map((card) => card.name);
       sections.push({ color, label: SECTION_LABELS[color], cards: names });
     }
   }
   return sections;
+}
+
+function arenaSorted(cards: SetCard[]): string[] {
+  return colorSections(cards).flatMap((section) => section.cards);
 }
 
 function sectionColor(identity: string[]): ColorSection["color"] {
@@ -670,4 +750,66 @@ function sectionColor(identity: string[]): ColorSection["color"] {
     return "M";
   }
   return identity[0] as ColorSection["color"];
+}
+
+function compareArenaOrder(a: SetCard, b: SetCard): number {
+  const byIdentity = identityRank(a.colorIdentity) - identityRank(b.colorIdentity);
+  if (byIdentity !== 0) {
+    return byIdentity;
+  }
+  const aCost = arenaCost(a);
+  const bCost = arenaCost(b);
+  if (aCost.kind !== bCost.kind) {
+    return aCost.kind - bCost.kind;
+  }
+  return aCost.manaValue - bCost.manaValue;
+}
+
+function identityRank(identity: string[]): number {
+  const colors = wubrgSorted(identity);
+  if (colors.length !== 2) {
+    const wheelPositions = colors.map((color) => WUBRG.indexOf(color)).join("");
+    return ARENA_PAIR_ORDER.length + colors.length * 1000 + Number(wheelPositions || 0);
+  }
+  const pair = colors.join("");
+  const reversed = [...colors].reverse().join("");
+  for (let i = 0; i < ARENA_PAIR_ORDER.length; i++) {
+    if (ARENA_PAIR_ORDER[i] === pair || ARENA_PAIR_ORDER[i] === reversed) {
+      return i;
+    }
+  }
+  return ARENA_PAIR_ORDER.length;
+}
+
+const COST_KIND = { spell: 0, xSpell: 1, land: 2 };
+
+function arenaCost(card: SetCard): { kind: number; manaValue: number } {
+  if (!card.manaCost) {
+    return { kind: COST_KIND.land, manaValue: 0 };
+  }
+  const castableCost = card.layout === "split" ? card.manaCost : card.manaCost.split(" // ")[0];
+  const symbols = castableCost.match(/\{[^}]+\}/g) ?? [];
+  let manaValue = 0;
+  let hasX = false;
+  for (const symbol of symbols) {
+    const inner = symbol.slice(1, -1);
+    if (inner === "X" || inner === "Y" || inner === "Z") {
+      hasX = true;
+      continue;
+    }
+    const generic = Number(inner.split("/")[0]);
+    manaValue += Number.isNaN(generic) ? 1 : generic;
+  }
+  return { kind: hasX ? COST_KIND.xSpell : COST_KIND.spell, manaValue };
+}
+
+function arenaPairOrdered(colors: string[]): string[] {
+  if (colors.length === 2 && !ARENA_PAIR_ORDER.includes(colors.join(""))) {
+    return [...colors].reverse();
+  }
+  return colors;
+}
+
+function wubrgSorted(identity: string[]): string[] {
+  return [...identity].sort((a, b) => WUBRG.indexOf(a) - WUBRG.indexOf(b));
 }
