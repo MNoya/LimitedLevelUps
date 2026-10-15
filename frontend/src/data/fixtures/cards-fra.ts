@@ -11,9 +11,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Human Cleric",
     "collectorNumber": "10",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/2/32a7a905-11bf-4b66-a28e-1066a0e372b8.jpg?1789644811",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/2/32a7a905-11bf-4b66-a28e-1066a0e372b8.jpg?1789644811",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/2/32a7a905-11bf-4b66-a28e-1066a0e372b8.jpg?1789644811"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/2/32a7a905-11bf-4b66-a28e-1066a0e372b8.webp?1789644811",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/2/32a7a905-11bf-4b66-a28e-1066a0e372b8.webp?1789644811",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/2/32a7a905-11bf-4b66-a28e-1066a0e372b8.webp?1789644811"
   },
   {
     "name": "Carnivorous Cultivator",
@@ -25,9 +25,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Elf Warlock // Sorcery",
     "collectorNumber": "100",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/9/79dd5c54-5ea5-47b5-8f9b-50ed57a5ea45.jpg?1789385967",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/9/79dd5c54-5ea5-47b5-8f9b-50ed57a5ea45.jpg?1789385967",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/9/79dd5c54-5ea5-47b5-8f9b-50ed57a5ea45.jpg?1789385967"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/9/79dd5c54-5ea5-47b5-8f9b-50ed57a5ea45.webp?1789385967",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/9/79dd5c54-5ea5-47b5-8f9b-50ed57a5ea45.webp?1789385967",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/9/79dd5c54-5ea5-47b5-8f9b-50ed57a5ea45.webp?1789385967"
   },
   {
     "name": "Compel Brutality",
@@ -39,9 +39,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "101",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/d/bd32d736-7a58-46b9-90b4-2cac3c3e80a1.jpg?1788521235",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/d/bd32d736-7a58-46b9-90b4-2cac3c3e80a1.jpg?1788521235",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/d/bd32d736-7a58-46b9-90b4-2cac3c3e80a1.jpg?1788521235"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/d/bd32d736-7a58-46b9-90b4-2cac3c3e80a1.webp?1788521235",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/d/bd32d736-7a58-46b9-90b4-2cac3c3e80a1.webp?1788521235",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/d/bd32d736-7a58-46b9-90b4-2cac3c3e80a1.webp?1788521235"
   },
   {
     "name": "Flourishing Grapple",
@@ -53,9 +53,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "102",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/7/f71958e9-6d6d-4393-8b49-567103b50877.jpg?1789470852",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/7/f71958e9-6d6d-4393-8b49-567103b50877.jpg?1789470852",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/7/f71958e9-6d6d-4393-8b49-567103b50877.jpg?1789470852"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/7/f71958e9-6d6d-4393-8b49-567103b50877.webp?1789470852",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/7/f71958e9-6d6d-4393-8b49-567103b50877.webp?1789470852",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/7/f71958e9-6d6d-4393-8b49-567103b50877.webp?1789470852"
   },
   {
     "name": "Gardenize",
@@ -67,9 +67,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Enchantment",
     "collectorNumber": "103",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/3/930b89c3-4433-48de-829f-20fc3dbfced9.jpg?1789644837",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/3/930b89c3-4433-48de-829f-20fc3dbfced9.jpg?1789644837",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/3/930b89c3-4433-48de-829f-20fc3dbfced9.jpg?1789644837"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/3/930b89c3-4433-48de-829f-20fc3dbfced9.webp?1789644837",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/3/930b89c3-4433-48de-829f-20fc3dbfced9.webp?1789644837",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/3/930b89c3-4433-48de-829f-20fc3dbfced9.webp?1789644837"
   },
   {
     "name": "Greenhouse Propagator",
@@ -81,9 +81,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Cat Druid",
     "collectorNumber": "104",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/5/a56e0f91-b128-4693-a949-53cb403f4fbf.jpg?1789127136",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/5/a56e0f91-b128-4693-a949-53cb403f4fbf.jpg?1789127136",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/5/a56e0f91-b128-4693-a949-53cb403f4fbf.jpg?1789127136"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/5/a56e0f91-b128-4693-a949-53cb403f4fbf.webp?1789127136",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/5/a56e0f91-b128-4693-a949-53cb403f4fbf.webp?1789127136",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/5/a56e0f91-b128-4693-a949-53cb403f4fbf.webp?1789127136"
   },
   {
     "name": "Heartwood Crafter",
@@ -95,9 +95,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Creature — Elf Artificer // Sorcery",
     "collectorNumber": "105",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/1/910a1f41-17fd-4ab0-9597-7151e79dc760.jpg?1789127630",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/1/910a1f41-17fd-4ab0-9597-7151e79dc760.jpg?1789127630",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/1/910a1f41-17fd-4ab0-9597-7151e79dc760.jpg?1789127630"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/1/910a1f41-17fd-4ab0-9597-7151e79dc760.webp?1789127630",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/1/910a1f41-17fd-4ab0-9597-7151e79dc760.webp?1789127630",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/1/910a1f41-17fd-4ab0-9597-7151e79dc760.webp?1789127630"
   },
   {
     "name": "Hexhaven Invigorator",
@@ -109,9 +109,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Creature — Chimera Horror",
     "collectorNumber": "106",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/a/9a446cae-e93c-4574-8ffd-7688f9729a8a.jpg?1788878191",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/a/9a446cae-e93c-4574-8ffd-7688f9729a8a.jpg?1788878191",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/a/9a446cae-e93c-4574-8ffd-7688f9729a8a.jpg?1788878191"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/a/9a446cae-e93c-4574-8ffd-7688f9729a8a.webp?1788878191",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/a/9a446cae-e93c-4574-8ffd-7688f9729a8a.webp?1788878191",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/a/9a446cae-e93c-4574-8ffd-7688f9729a8a.webp?1788878191"
   },
   {
     "name": "Hungering Puppetbeast",
@@ -123,9 +123,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Artifact Creature — Beast Construct",
     "collectorNumber": "107",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/d/3db2da7a-8088-4117-916b-f9c905d1b45b.jpg?1789127646",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/d/3db2da7a-8088-4117-916b-f9c905d1b45b.jpg?1789127646",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/d/3db2da7a-8088-4117-916b-f9c905d1b45b.jpg?1789127646"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/d/3db2da7a-8088-4117-916b-f9c905d1b45b.webp?1789127646",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/d/3db2da7a-8088-4117-916b-f9c905d1b45b.webp?1789127646",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/d/3db2da7a-8088-4117-916b-f9c905d1b45b.webp?1789127646"
   },
   {
     "name": "Hunter's Axe",
@@ -137,9 +137,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Artifact — Equipment",
     "collectorNumber": "108",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/2/a2cc5d0e-9643-4ee2-81de-fa2c3bd1ab09.jpg?1789556822",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/2/a2cc5d0e-9643-4ee2-81de-fa2c3bd1ab09.jpg?1789556822",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/2/a2cc5d0e-9643-4ee2-81de-fa2c3bd1ab09.jpg?1789556822"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/2/a2cc5d0e-9643-4ee2-81de-fa2c3bd1ab09.webp?1789556822",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/2/a2cc5d0e-9643-4ee2-81de-fa2c3bd1ab09.webp?1789556822",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/2/a2cc5d0e-9643-4ee2-81de-fa2c3bd1ab09.webp?1789556822"
   },
   {
     "name": "Inspired Tethermage",
@@ -151,9 +151,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Elf Warrior",
     "collectorNumber": "109",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/7/073f4998-a204-447b-93d5-746ae87fd6a1.jpg?1788878192",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/7/073f4998-a204-447b-93d5-746ae87fd6a1.jpg?1788878192",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/7/073f4998-a204-447b-93d5-746ae87fd6a1.jpg?1788878192"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/7/073f4998-a204-447b-93d5-746ae87fd6a1.webp?1788878192",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/7/073f4998-a204-447b-93d5-746ae87fd6a1.webp?1788878192",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/7/073f4998-a204-447b-93d5-746ae87fd6a1.webp?1788878192"
   },
   {
     "name": "Guiding Hydra",
@@ -165,9 +165,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Hydra Horror",
     "collectorNumber": "11",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/5/a53eb840-039d-4c45-b701-d58cb26b1a6c.jpg?1789644816",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/5/a53eb840-039d-4c45-b701-d58cb26b1a6c.jpg?1789644816",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/5/a53eb840-039d-4c45-b701-d58cb26b1a6c.jpg?1789644816"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/5/a53eb840-039d-4c45-b701-d58cb26b1a6c.webp?1789644816",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/5/a53eb840-039d-4c45-b701-d58cb26b1a6c.webp?1789644816",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/5/a53eb840-039d-4c45-b701-d58cb26b1a6c.webp?1789644816"
   },
   {
     "name": "Puppet Crafting",
@@ -179,9 +179,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Enchantment — Aura",
     "collectorNumber": "111",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/b/6b8789a6-3b63-4198-af5f-c2f2f49fafd9.jpg?1789470736",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/b/6b8789a6-3b63-4198-af5f-c2f2f49fafd9.jpg?1789470736",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/b/6b8789a6-3b63-4198-af5f-c2f2f49fafd9.jpg?1789470736"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/b/6b8789a6-3b63-4198-af5f-c2f2f49fafd9.webp?1789470736",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/b/6b8789a6-3b63-4198-af5f-c2f2f49fafd9.webp?1789470736",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/b/6b8789a6-3b63-4198-af5f-c2f2f49fafd9.webp?1789470736"
   },
   {
     "name": "Restore with Empathy",
@@ -193,9 +193,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "112",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/5/3546b93b-a7d1-451d-a369-22cc8ddcd00d.jpg?1788865848",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/5/3546b93b-a7d1-451d-a369-22cc8ddcd00d.jpg?1788865848",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/5/3546b93b-a7d1-451d-a369-22cc8ddcd00d.jpg?1788865848"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/5/3546b93b-a7d1-451d-a369-22cc8ddcd00d.webp?1788865848",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/5/3546b93b-a7d1-451d-a369-22cc8ddcd00d.webp?1788865848",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/5/3546b93b-a7d1-451d-a369-22cc8ddcd00d.webp?1788865848"
   },
   {
     "name": "Simulacrum Shaper",
@@ -207,9 +207,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Elf Druid",
     "collectorNumber": "113",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/c/7c725702-8696-4e5a-8318-62f5e2616d52.jpg?1789470857",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/c/7c725702-8696-4e5a-8318-62f5e2616d52.jpg?1789470857",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/c/7c725702-8696-4e5a-8318-62f5e2616d52.jpg?1789470857"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/c/7c725702-8696-4e5a-8318-62f5e2616d52.webp?1789470857",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/c/7c725702-8696-4e5a-8318-62f5e2616d52.webp?1789470857",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/c/7c725702-8696-4e5a-8318-62f5e2616d52.webp?1789470857"
   },
   {
     "name": "Something Worth Saving",
@@ -221,9 +221,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "114",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/2/02ee7817-40af-4fcf-a2df-eb218b669281.jpg?1788878199",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/2/02ee7817-40af-4fcf-a2df-eb218b669281.jpg?1788878199",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/2/02ee7817-40af-4fcf-a2df-eb218b669281.jpg?1788878199"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/2/02ee7817-40af-4fcf-a2df-eb218b669281.webp?1788878199",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/2/02ee7817-40af-4fcf-a2df-eb218b669281.webp?1788878199",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/2/02ee7817-40af-4fcf-a2df-eb218b669281.webp?1788878199"
   },
   {
     "name": "Sureshot Sower",
@@ -235,9 +235,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Human Archer",
     "collectorNumber": "115",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/6/b635389c-e286-4edb-80d1-23dbe4a18857.jpg?1789614751",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/6/b635389c-e286-4edb-80d1-23dbe4a18857.jpg?1789614751",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/6/b635389c-e286-4edb-80d1-23dbe4a18857.jpg?1789614751"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/6/b635389c-e286-4edb-80d1-23dbe4a18857.webp?1789614751",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/6/b635389c-e286-4edb-80d1-23dbe4a18857.webp?1789614751",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/6/b635389c-e286-4edb-80d1-23dbe4a18857.webp?1789614751"
   },
   {
     "name": "Tarmogoyf",
@@ -249,9 +249,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Creature — Lhurgoyf",
     "collectorNumber": "116",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/b/8be5ee47-8f8a-4e3c-b1a1-9ca0e1fdec7f.jpg?1789127270",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/b/8be5ee47-8f8a-4e3c-b1a1-9ca0e1fdec7f.jpg?1789127270",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/b/8be5ee47-8f8a-4e3c-b1a1-9ca0e1fdec7f.jpg?1789127270"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/b/8be5ee47-8f8a-4e3c-b1a1-9ca0e1fdec7f.webp?1789127270",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/b/8be5ee47-8f8a-4e3c-b1a1-9ca0e1fdec7f.webp?1789127270",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/b/8be5ee47-8f8a-4e3c-b1a1-9ca0e1fdec7f.webp?1789127270"
   },
   {
     "name": "Tethermage's Advantage",
@@ -263,9 +263,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "117",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/8/38589a7c-9cfb-4bcc-845e-9dc205095853.jpg?1789129937",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/8/38589a7c-9cfb-4bcc-845e-9dc205095853.jpg?1789129937",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/8/38589a7c-9cfb-4bcc-845e-9dc205095853.jpg?1789129937"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/8/38589a7c-9cfb-4bcc-845e-9dc205095853.webp?1789129937",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/8/38589a7c-9cfb-4bcc-845e-9dc205095853.webp?1789129937",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/8/38589a7c-9cfb-4bcc-845e-9dc205095853.webp?1789129937"
   },
   {
     "name": "Verdant Kraken",
@@ -277,9 +277,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Plant Kraken",
     "collectorNumber": "118",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/b/2bb7a8eb-227f-410b-859f-750ef0aea2f0.jpg?1789644841",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/b/2bb7a8eb-227f-410b-859f-750ef0aea2f0.jpg?1789644841",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/b/2bb7a8eb-227f-410b-859f-750ef0aea2f0.jpg?1789644841"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/b/2bb7a8eb-227f-410b-859f-750ef0aea2f0.webp?1789644841",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/b/2bb7a8eb-227f-410b-859f-750ef0aea2f0.webp?1789644841",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/b/2bb7a8eb-227f-410b-859f-750ef0aea2f0.webp?1789644841"
   },
   {
     "name": "Vinelasher Adept",
@@ -291,9 +291,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Rhino Soldier",
     "collectorNumber": "119",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/5/e5ed142b-2b61-4ef5-8b23-2db2a0a0319d.jpg?1789556814",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/5/e5ed142b-2b61-4ef5-8b23-2db2a0a0319d.jpg?1789556814",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/5/e5ed142b-2b61-4ef5-8b23-2db2a0a0319d.jpg?1789556814"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/5/e5ed142b-2b61-4ef5-8b23-2db2a0a0319d.webp?1789556814",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/5/e5ed142b-2b61-4ef5-8b23-2db2a0a0319d.webp?1789556814",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/5/e5ed142b-2b61-4ef5-8b23-2db2a0a0319d.webp?1789556814"
   },
   {
     "name": "Hexhaven Battalion",
@@ -305,9 +305,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "12",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/b/3b6ac80e-c726-4bd0-893a-e666041a04a6.jpg?1789556695",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/b/3b6ac80e-c726-4bd0-893a-e666041a04a6.jpg?1789556695",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/b/3b6ac80e-c726-4bd0-893a-e666041a04a6.jpg?1789556695"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/b/3b6ac80e-c726-4bd0-893a-e666041a04a6.webp?1789556695",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/b/3b6ac80e-c726-4bd0-893a-e666041a04a6.webp?1789556695",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/b/3b6ac80e-c726-4bd0-893a-e666041a04a6.webp?1789556695"
   },
   {
     "name": "Wrecking Gecko",
@@ -319,9 +319,9 @@ export default [
     "rarity": "common",
     "typeLine": "Artifact Creature — Lizard Construct",
     "collectorNumber": "120",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/d/3d693cb0-681e-480a-8f70-07e94c39225c.jpg?1789385843",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/d/3d693cb0-681e-480a-8f70-07e94c39225c.jpg?1789385843",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/d/3d693cb0-681e-480a-8f70-07e94c39225c.jpg?1789385843"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/d/3d693cb0-681e-480a-8f70-07e94c39225c.webp?1789385843",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/d/3d693cb0-681e-480a-8f70-07e94c39225c.webp?1789385843",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/d/3d693cb0-681e-480a-8f70-07e94c39225c.webp?1789385843"
   },
   {
     "name": "Aerid Konstrari",
@@ -334,9 +334,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Creature — Elder Sphinx",
     "collectorNumber": "121",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/1/f17d2792-b075-4c47-ad38-e7a7eaee5f8c.jpg?1788878199",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/1/f17d2792-b075-4c47-ad38-e7a7eaee5f8c.jpg?1788878199",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/1/f17d2792-b075-4c47-ad38-e7a7eaee5f8c.jpg?1788878199"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/1/f17d2792-b075-4c47-ad38-e7a7eaee5f8c.webp?1788878199",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/1/f17d2792-b075-4c47-ad38-e7a7eaee5f8c.webp?1788878199",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/1/f17d2792-b075-4c47-ad38-e7a7eaee5f8c.webp?1788878199"
   },
   {
     "name": "Avatar of Burgeoning Echoes",
@@ -349,9 +349,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Creature — Avatar",
     "collectorNumber": "122",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/9/5905995b-7a20-4602-a7cc-90aa5089a082.jpg?1788878208",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/9/5905995b-7a20-4602-a7cc-90aa5089a082.jpg?1788878208",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/9/5905995b-7a20-4602-a7cc-90aa5089a082.jpg?1788878208"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/9/5905995b-7a20-4602-a7cc-90aa5089a082.webp?1788878208",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/9/5905995b-7a20-4602-a7cc-90aa5089a082.webp?1788878208",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/9/5905995b-7a20-4602-a7cc-90aa5089a082.webp?1788878208"
   },
   {
     "name": "Blessed Ghoul",
@@ -364,9 +364,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Zombie Cleric",
     "collectorNumber": "123",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/b/bb975803-9bf2-401e-9414-d272df314398.jpg?1789556847",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/b/bb975803-9bf2-401e-9414-d272df314398.jpg?1789556847",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/b/bb975803-9bf2-401e-9414-d272df314398.jpg?1789556847"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/b/bb975803-9bf2-401e-9414-d272df314398.webp?1789556847",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/b/bb975803-9bf2-401e-9414-d272df314398.webp?1789556847",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/b/bb975803-9bf2-401e-9414-d272df314398.webp?1789556847"
   },
   {
     "name": "Bloombrute",
@@ -379,9 +379,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Creature — Plant Elemental",
     "collectorNumber": "124",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/b/6b804503-9c70-4b1f-bb13-a65fb6dd3ef8.jpg?1789644843",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/b/6b804503-9c70-4b1f-bb13-a65fb6dd3ef8.jpg?1789644843",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/b/6b804503-9c70-4b1f-bb13-a65fb6dd3ef8.jpg?1789644843"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/b/6b804503-9c70-4b1f-bb13-a65fb6dd3ef8.webp?1789644843",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/b/6b804503-9c70-4b1f-bb13-a65fb6dd3ef8.webp?1789644843",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/b/6b804503-9c70-4b1f-bb13-a65fb6dd3ef8.webp?1789644843"
   },
   {
     "name": "Charge the Sanctum",
@@ -394,9 +394,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "125",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/7/87b40df5-5c0a-41f5-a09c-a04f17066a91.jpg?1788521570",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/7/87b40df5-5c0a-41f5-a09c-a04f17066a91.jpg?1788521570",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/7/87b40df5-5c0a-41f5-a09c-a04f17066a91.jpg?1788521570"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/7/87b40df5-5c0a-41f5-a09c-a04f17066a91.webp?1788521570",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/7/87b40df5-5c0a-41f5-a09c-a04f17066a91.webp?1788521570",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/7/87b40df5-5c0a-41f5-a09c-a04f17066a91.webp?1788521570"
   },
   {
     "name": "Clash of Elements",
@@ -409,9 +409,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "126",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/6/b61bcef7-5832-45e6-a2bc-26d4f23707fc.jpg?1788878210",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/6/b61bcef7-5832-45e6-a2bc-26d4f23707fc.jpg?1788878210",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/6/b61bcef7-5832-45e6-a2bc-26d4f23707fc.jpg?1788878210"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/6/b61bcef7-5832-45e6-a2bc-26d4f23707fc.webp?1788878210",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/6/b61bcef7-5832-45e6-a2bc-26d4f23707fc.webp?1788878210",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/6/b61bcef7-5832-45e6-a2bc-26d4f23707fc.webp?1788878210"
   },
   {
     "name": "Craftwork Crusher",
@@ -424,9 +424,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Artifact Creature — Boar Construct",
     "collectorNumber": "127",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/3/03f9839c-aa07-4ee7-847b-091e47ab80c4.jpg?1789470711",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/3/03f9839c-aa07-4ee7-847b-091e47ab80c4.jpg?1789470711",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/3/03f9839c-aa07-4ee7-847b-091e47ab80c4.jpg?1789470711"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/3/03f9839c-aa07-4ee7-847b-091e47ab80c4.webp?1789470711",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/3/03f9839c-aa07-4ee7-847b-091e47ab80c4.webp?1789470711",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/3/03f9839c-aa07-4ee7-847b-091e47ab80c4.webp?1789470711"
   },
   {
     "name": "Denzilore Fatehold",
@@ -439,9 +439,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Creature — Elder Sphinx",
     "collectorNumber": "128",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/8/986f9e98-9d8d-428b-9187-860745cf3269.jpg?1788878215",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/8/986f9e98-9d8d-428b-9187-860745cf3269.jpg?1788878215",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/8/986f9e98-9d8d-428b-9187-860745cf3269.jpg?1788878215"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/8/986f9e98-9d8d-428b-9187-860745cf3269.webp?1788878215",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/8/986f9e98-9d8d-428b-9187-860745cf3269.webp?1788878215",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/8/986f9e98-9d8d-428b-9187-860745cf3269.webp?1788878215"
   },
   {
     "name": "Desperate Futurescribe",
@@ -454,9 +454,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Creature — Kor Scout",
     "collectorNumber": "129",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/f/cfaa3ebd-5c21-4e99-a0dd-8426d19b53a5.jpg?1789644852",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/f/cfaa3ebd-5c21-4e99-a0dd-8426d19b53a5.jpg?1789644852",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/f/cfaa3ebd-5c21-4e99-a0dd-8426d19b53a5.jpg?1789644852"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/f/cfaa3ebd-5c21-4e99-a0dd-8426d19b53a5.webp?1789644852",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/f/cfaa3ebd-5c21-4e99-a0dd-8426d19b53a5.webp?1789644852",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/f/cfaa3ebd-5c21-4e99-a0dd-8426d19b53a5.webp?1789644852"
   },
   {
     "name": "Kindred Judgment",
@@ -468,9 +468,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Sorcery",
     "collectorNumber": "13",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/f/6f9f814b-8249-4e48-a05e-4c84060fe6fb.jpg?1789470776",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/f/6f9f814b-8249-4e48-a05e-4c84060fe6fb.jpg?1789470776",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/f/6f9f814b-8249-4e48-a05e-4c84060fe6fb.jpg?1789470776"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/f/6f9f814b-8249-4e48-a05e-4c84060fe6fb.webp?1789470776",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/f/6f9f814b-8249-4e48-a05e-4c84060fe6fb.webp?1789470776",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/f/6f9f814b-8249-4e48-a05e-4c84060fe6fb.webp?1789470776"
   },
   {
     "name": "Emergency Phytomedic",
@@ -483,9 +483,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Dryad Cleric // Sorcery",
     "collectorNumber": "130",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/e/de94d388-919d-44ff-baef-8c90a417ac6d.jpg?1789637792",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/e/de94d388-919d-44ff-baef-8c90a417ac6d.jpg?1789637792",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/e/de94d388-919d-44ff-baef-8c90a417ac6d.jpg?1789637792"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/e/de94d388-919d-44ff-baef-8c90a417ac6d.webp?1789637792",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/e/de94d388-919d-44ff-baef-8c90a417ac6d.webp?1789637792",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/e/de94d388-919d-44ff-baef-8c90a417ac6d.webp?1789637792"
   },
   {
     "name": "Entrust the Spark",
@@ -498,9 +498,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Sorcery",
     "collectorNumber": "131",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/a/ca894d25-b9fc-4cd6-8746-70d8c2868721.jpg?1789614779",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/a/ca894d25-b9fc-4cd6-8746-70d8c2868721.jpg?1789614779",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/a/ca894d25-b9fc-4cd6-8746-70d8c2868721.jpg?1789614779"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/a/ca894d25-b9fc-4cd6-8746-70d8c2868721.webp?1789614779",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/a/ca894d25-b9fc-4cd6-8746-70d8c2868721.webp?1789614779",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/a/ca894d25-b9fc-4cd6-8746-70d8c2868721.webp?1789614779"
   },
   {
     "name": "Fatehold Charm",
@@ -513,9 +513,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "132",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/f/cfc54011-647e-4428-bcdb-59400e1da49d.jpg?1789127637",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/f/cfc54011-647e-4428-bcdb-59400e1da49d.jpg?1789127637",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/f/cfc54011-647e-4428-bcdb-59400e1da49d.jpg?1789127637"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/f/cfc54011-647e-4428-bcdb-59400e1da49d.webp?1789127637",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/f/cfc54011-647e-4428-bcdb-59400e1da49d.webp?1789127637",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/f/cfc54011-647e-4428-bcdb-59400e1da49d.webp?1789127637"
   },
   {
     "name": "Fatehold Chronologist",
@@ -528,9 +528,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Bird Wizard // Sorcery",
     "collectorNumber": "133",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/9/29e7ec16-0c16-48aa-8e09-ce6e0d5bd40b.jpg?1789060173",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/9/29e7ec16-0c16-48aa-8e09-ce6e0d5bd40b.jpg?1789060173",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/9/29e7ec16-0c16-48aa-8e09-ce6e0d5bd40b.jpg?1789060173"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/9/29e7ec16-0c16-48aa-8e09-ce6e0d5bd40b.webp?1789060173",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/9/29e7ec16-0c16-48aa-8e09-ce6e0d5bd40b.webp?1789060173",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/9/29e7ec16-0c16-48aa-8e09-ce6e0d5bd40b.webp?1789060173"
   },
   {
     "name": "Ferocity of the Hunt",
@@ -543,9 +543,9 @@ export default [
     "rarity": "common",
     "typeLine": "Enchantment — Aura",
     "collectorNumber": "134",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/9/a9793ce9-5a0b-41fe-b9ad-02f6f7da2481.jpg?1789644856",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/9/a9793ce9-5a0b-41fe-b9ad-02f6f7da2481.jpg?1789644856",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/9/a9793ce9-5a0b-41fe-b9ad-02f6f7da2481.jpg?1789644856"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/9/a9793ce9-5a0b-41fe-b9ad-02f6f7da2481.webp?1789644856",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/9/a9793ce9-5a0b-41fe-b9ad-02f6f7da2481.webp?1789644856",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/9/a9793ce9-5a0b-41fe-b9ad-02f6f7da2481.webp?1789644856"
   },
   {
     "name": "Frostbite Pyromental",
@@ -558,9 +558,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Elemental",
     "collectorNumber": "135",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/a/7a44581f-8fc4-457d-888a-1e211090ee7e.jpg?1789470870",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/a/7a44581f-8fc4-457d-888a-1e211090ee7e.jpg?1789470870",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/a/7a44581f-8fc4-457d-888a-1e211090ee7e.jpg?1789470870"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/a/7a44581f-8fc4-457d-888a-1e211090ee7e.webp?1789470870",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/a/7a44581f-8fc4-457d-888a-1e211090ee7e.webp?1789470870",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/a/7a44581f-8fc4-457d-888a-1e211090ee7e.webp?1789470870"
   },
   {
     "name": "Grim Repriser",
@@ -573,9 +573,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Creature — Zombie Bard",
     "collectorNumber": "136",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/2/8295c48c-b4dd-4bc1-a206-04cf12b79bbd.jpg?1789470746",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/2/8295c48c-b4dd-4bc1-a206-04cf12b79bbd.jpg?1789470746",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/2/8295c48c-b4dd-4bc1-a206-04cf12b79bbd.jpg?1789470746"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/2/8295c48c-b4dd-4bc1-a206-04cf12b79bbd.webp?1789470746",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/2/8295c48c-b4dd-4bc1-a206-04cf12b79bbd.webp?1789470746",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/2/8295c48c-b4dd-4bc1-a206-04cf12b79bbd.webp?1789470746"
   },
   {
     "name": "Ingris Stingerquill",
@@ -588,9 +588,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Creature — Elder Sphinx",
     "collectorNumber": "137",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/4/6471b135-33a8-4005-9a07-ebb74e0bf145.jpg?1788878212",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/4/6471b135-33a8-4005-9a07-ebb74e0bf145.jpg?1788878212",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/4/6471b135-33a8-4005-9a07-ebb74e0bf145.jpg?1788878212"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/4/6471b135-33a8-4005-9a07-ebb74e0bf145.webp?1788878212",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/4/6471b135-33a8-4005-9a07-ebb74e0bf145.webp?1788878212",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/4/6471b135-33a8-4005-9a07-ebb74e0bf145.webp?1788878212"
   },
   {
     "name": "Konstrari Charm",
@@ -603,9 +603,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "138",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/d/7d29dfa1-9582-47bc-8f42-62b611bdcc4e.jpg?1789127645",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/d/7d29dfa1-9582-47bc-8f42-62b611bdcc4e.jpg?1789127645",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/d/7d29dfa1-9582-47bc-8f42-62b611bdcc4e.jpg?1789127645"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/d/7d29dfa1-9582-47bc-8f42-62b611bdcc4e.webp?1789127645",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/d/7d29dfa1-9582-47bc-8f42-62b611bdcc4e.webp?1789127645",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/d/7d29dfa1-9582-47bc-8f42-62b611bdcc4e.webp?1789127645"
   },
   {
     "name": "Konstrari Improviser",
@@ -618,9 +618,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Human Artificer // Sorcery",
     "collectorNumber": "139",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/2/42e28bd2-486b-45d4-8840-6e33c19c2d57.jpg?1789556881",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/2/42e28bd2-486b-45d4-8840-6e33c19c2d57.jpg?1789556881",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/2/42e28bd2-486b-45d4-8840-6e33c19c2d57.jpg?1789556881"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/2/42e28bd2-486b-45d4-8840-6e33c19c2d57.webp?1789556881",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/2/42e28bd2-486b-45d4-8840-6e33c19c2d57.webp?1789556881",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/2/42e28bd2-486b-45d4-8840-6e33c19c2d57.webp?1789556881"
   },
   {
     "name": "Loyal Tutor",
@@ -632,9 +632,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Instant",
     "collectorNumber": "14",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/9/490dae91-94ce-42a9-a11f-6c5e77c4e486.jpg?1788878096",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/9/490dae91-94ce-42a9-a11f-6c5e77c4e486.jpg?1788878096",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/9/490dae91-94ce-42a9-a11f-6c5e77c4e486.jpg?1788878096"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/9/490dae91-94ce-42a9-a11f-6c5e77c4e486.webp?1788878096",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/9/490dae91-94ce-42a9-a11f-6c5e77c4e486.webp?1788878096",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/9/490dae91-94ce-42a9-a11f-6c5e77c4e486.webp?1788878096"
   },
   {
     "name": "Kwia Vigorbloom",
@@ -647,9 +647,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Creature — Elder Sphinx",
     "collectorNumber": "140",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/d/2d6ff182-a853-4898-895b-072c89324ca7.jpg?1788878236",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/d/2d6ff182-a853-4898-895b-072c89324ca7.jpg?1788878236",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/d/2d6ff182-a853-4898-895b-072c89324ca7.jpg?1788878236"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/d/2d6ff182-a853-4898-895b-072c89324ca7.webp?1788878236",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/d/2d6ff182-a853-4898-895b-072c89324ca7.webp?1788878236",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/d/2d6ff182-a853-4898-895b-072c89324ca7.webp?1788878236"
   },
   {
     "name": "Mind Meanderer",
@@ -662,9 +662,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Creature — Bird Fish Illusion",
     "collectorNumber": "141",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/4/94c290ce-252c-42b3-bcb0-c1ef621df566.jpg?1789470861",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/4/94c290ce-252c-42b3-bcb0-c1ef621df566.jpg?1789470861",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/4/94c290ce-252c-42b3-bcb0-c1ef621df566.jpg?1789470861"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/4/94c290ce-252c-42b3-bcb0-c1ef621df566.webp?1789470861",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/4/94c290ce-252c-42b3-bcb0-c1ef621df566.webp?1789470861",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/4/94c290ce-252c-42b3-bcb0-c1ef621df566.webp?1789470861"
   },
   {
     "name": "Null Summoner",
@@ -677,9 +677,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Human Warlock",
     "collectorNumber": "142",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/a/3afdc75a-1bf5-4f2f-84eb-d82f77a095cd.jpg?1789127648",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/a/3afdc75a-1bf5-4f2f-84eb-d82f77a095cd.jpg?1789127648",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/a/3afdc75a-1bf5-4f2f-84eb-d82f77a095cd.jpg?1789127648"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/a/3afdc75a-1bf5-4f2f-84eb-d82f77a095cd.webp?1789127648",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/a/3afdc75a-1bf5-4f2f-84eb-d82f77a095cd.webp?1789127648",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/a/3afdc75a-1bf5-4f2f-84eb-d82f77a095cd.webp?1789127648"
   },
   {
     "name": "Paradox Shaper",
@@ -692,9 +692,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Creature — Octopus Wizard // Sorcery",
     "collectorNumber": "143",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/6/e61b9d48-0ace-4453-afe0-a1024444bac0.jpg?1788329390",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/6/e61b9d48-0ace-4453-afe0-a1024444bac0.jpg?1788329390",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/6/e61b9d48-0ace-4453-afe0-a1024444bac0.jpg?1788329390"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/6/e61b9d48-0ace-4453-afe0-a1024444bac0.webp?1788329390",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/6/e61b9d48-0ace-4453-afe0-a1024444bac0.webp?1788329390",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/6/e61b9d48-0ace-4453-afe0-a1024444bac0.webp?1788329390"
   },
   {
     "name": "Primal Witchstalker",
@@ -707,9 +707,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Creature — Wolf",
     "collectorNumber": "144",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/4/04e64af7-cca1-499e-8951-f386e84c8b5b.jpg?1789644850",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/4/04e64af7-cca1-499e-8951-f386e84c8b5b.jpg?1789644850",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/4/04e64af7-cca1-499e-8951-f386e84c8b5b.jpg?1789644850"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/4/04e64af7-cca1-499e-8951-f386e84c8b5b.webp?1789644850",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/4/04e64af7-cca1-499e-8951-f386e84c8b5b.webp?1789644850",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/4/04e64af7-cca1-499e-8951-f386e84c8b5b.webp?1789644850"
   },
   {
     "name": "Proctor of Potential",
@@ -722,9 +722,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Human Cleric",
     "collectorNumber": "145",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/f/cf0eec8c-0475-4050-8144-481a9bb13a0f.jpg?1789127661",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/f/cf0eec8c-0475-4050-8144-481a9bb13a0f.jpg?1789127661",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/f/cf0eec8c-0475-4050-8144-481a9bb13a0f.jpg?1789127661"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/f/cf0eec8c-0475-4050-8144-481a9bb13a0f.webp?1789127661",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/f/cf0eec8c-0475-4050-8144-481a9bb13a0f.webp?1789127661",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/f/cf0eec8c-0475-4050-8144-481a9bb13a0f.webp?1789127661"
   },
   {
     "name": "Prudent Fateseer",
@@ -737,9 +737,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Creature — Dwarf Wizard // Sorcery",
     "collectorNumber": "146",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/c/6c1c790b-9e0e-4964-9ea3-554843907f06.jpg?1788329412",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/c/6c1c790b-9e0e-4964-9ea3-554843907f06.jpg?1788329412",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/c/6c1c790b-9e0e-4964-9ea3-554843907f06.jpg?1788329412"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/c/6c1c790b-9e0e-4964-9ea3-554843907f06.webp?1788329412",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/c/6c1c790b-9e0e-4964-9ea3-554843907f06.webp?1788329412",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/c/6c1c790b-9e0e-4964-9ea3-554843907f06.webp?1788329412"
   },
   {
     "name": "Recursive Recruitment",
@@ -752,9 +752,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Sorcery",
     "collectorNumber": "147",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/8/68fddb6a-86d4-4ebb-907d-fdcaadebc4b3.jpg?1789556898",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/8/68fddb6a-86d4-4ebb-907d-fdcaadebc4b3.jpg?1789556898",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/8/68fddb6a-86d4-4ebb-907d-fdcaadebc4b3.jpg?1789556898"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/8/68fddb6a-86d4-4ebb-907d-fdcaadebc4b3.webp?1789556898",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/8/68fddb6a-86d4-4ebb-907d-fdcaadebc4b3.webp?1789556898",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/8/68fddb6a-86d4-4ebb-907d-fdcaadebc4b3.webp?1789556898"
   },
   {
     "name": "Solarium Sentry",
@@ -767,9 +767,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Cat Soldier",
     "collectorNumber": "148",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/e/1ef12dcf-df50-4da6-8c4c-e2937ba9698e.jpg?1789127651",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/e/1ef12dcf-df50-4da6-8c4c-e2937ba9698e.jpg?1789127651",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/e/1ef12dcf-df50-4da6-8c4c-e2937ba9698e.jpg?1789127651"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/e/1ef12dcf-df50-4da6-8c4c-e2937ba9698e.webp?1789127651",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/e/1ef12dcf-df50-4da6-8c4c-e2937ba9698e.webp?1789127651",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/e/1ef12dcf-df50-4da6-8c4c-e2937ba9698e.webp?1789127651"
   },
   {
     "name": "Solitary Cell",
@@ -782,9 +782,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Artifact",
     "collectorNumber": "149",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/1/5142bbb6-194c-4b12-b11a-1a21c9fe81a6.jpg?1788260690",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/1/5142bbb6-194c-4b12-b11a-1a21c9fe81a6.jpg?1788260690",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/1/5142bbb6-194c-4b12-b11a-1a21c9fe81a6.jpg?1788260690"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/1/5142bbb6-194c-4b12-b11a-1a21c9fe81a6.webp?1788260690",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/1/5142bbb6-194c-4b12-b11a-1a21c9fe81a6.webp?1788260690",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/1/5142bbb6-194c-4b12-b11a-1a21c9fe81a6.webp?1788260690"
   },
   {
     "name": "Memory Trap",
@@ -796,9 +796,9 @@ export default [
     "rarity": "common",
     "typeLine": "Enchantment",
     "collectorNumber": "15",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/f/2f5345ae-4489-4d05-b2d5-c71285254f05.jpg?1788866058",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/f/2f5345ae-4489-4d05-b2d5-c71285254f05.jpg?1788866058",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/f/2f5345ae-4489-4d05-b2d5-c71285254f05.jpg?1788866058"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/f/2f5345ae-4489-4d05-b2d5-c71285254f05.webp?1788866058",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/f/2f5345ae-4489-4d05-b2d5-c71285254f05.webp?1788866058",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/f/2f5345ae-4489-4d05-b2d5-c71285254f05.webp?1788866058"
   },
   {
     "name": "Stingerquill Charm",
@@ -811,9 +811,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "150",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/1/81733ff7-e611-43ee-bf38-6bb700676017.jpg?1789127652",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/1/81733ff7-e611-43ee-bf38-6bb700676017.jpg?1789127652",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/1/81733ff7-e611-43ee-bf38-6bb700676017.jpg?1789127652"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/1/81733ff7-e611-43ee-bf38-6bb700676017.webp?1789127652",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/1/81733ff7-e611-43ee-bf38-6bb700676017.webp?1789127652",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/1/81733ff7-e611-43ee-bf38-6bb700676017.webp?1789127652"
   },
   {
     "name": "Stingerquill Voxmancer",
@@ -826,9 +826,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Creature — Goblin Sorcerer // Sorcery",
     "collectorNumber": "151",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/4/84b1c268-3b8a-41b6-92e3-a2ce0cc3d738.jpg?1788329418",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/4/84b1c268-3b8a-41b6-92e3-a2ce0cc3d738.jpg?1788329418",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/4/84b1c268-3b8a-41b6-92e3-a2ce0cc3d738.jpg?1788329418"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/4/84b1c268-3b8a-41b6-92e3-a2ce0cc3d738.webp?1788329418",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/4/84b1c268-3b8a-41b6-92e3-a2ce0cc3d738.webp?1788329418",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/4/84b1c268-3b8a-41b6-92e3-a2ce0cc3d738.webp?1788329418"
   },
   {
     "name": "Stinging Vitriol",
@@ -841,9 +841,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Sorcery",
     "collectorNumber": "152",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/7/a7d78297-7411-4ec5-8931-a25146869d5b.jpg?1789385971",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/7/a7d78297-7411-4ec5-8931-a25146869d5b.jpg?1789385971",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/7/a7d78297-7411-4ec5-8931-a25146869d5b.jpg?1789385971"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/7/a7d78297-7411-4ec5-8931-a25146869d5b.webp?1789385971",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/7/a7d78297-7411-4ec5-8931-a25146869d5b.webp?1789385971",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/7/a7d78297-7411-4ec5-8931-a25146869d5b.webp?1789385971"
   },
   {
     "name": "Tam's Resistance",
@@ -856,9 +856,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "153",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/3/b3d33df2-a77b-4c2e-ba7f-2cc9c1505f9b.jpg?1788878215",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/3/b3d33df2-a77b-4c2e-ba7f-2cc9c1505f9b.jpg?1788878215",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/3/b3d33df2-a77b-4c2e-ba7f-2cc9c1505f9b.jpg?1788878215"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/3/b3d33df2-a77b-4c2e-ba7f-2cc9c1505f9b.webp?1788878215",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/3/b3d33df2-a77b-4c2e-ba7f-2cc9c1505f9b.webp?1788878215",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/3/b3d33df2-a77b-4c2e-ba7f-2cc9c1505f9b.webp?1788878215"
   },
   {
     "name": "Tenured Tethermage",
@@ -871,9 +871,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Human Artificer",
     "collectorNumber": "154",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/7/1703306d-6a3d-4ab8-bf58-a9992236ef0f.jpg?1789385792",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/7/1703306d-6a3d-4ab8-bf58-a9992236ef0f.jpg?1789385792",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/7/1703306d-6a3d-4ab8-bf58-a9992236ef0f.jpg?1789385792"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/7/1703306d-6a3d-4ab8-bf58-a9992236ef0f.webp?1789385792",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/7/1703306d-6a3d-4ab8-bf58-a9992236ef0f.webp?1789385792",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/7/1703306d-6a3d-4ab8-bf58-a9992236ef0f.webp?1789385792"
   },
   {
     "name": "Theorix Charm",
@@ -886,9 +886,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "155",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/8/2835c9aa-0904-44db-8da2-e8c4e04201aa.jpg?1789127659",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/8/2835c9aa-0904-44db-8da2-e8c4e04201aa.jpg?1789127659",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/8/2835c9aa-0904-44db-8da2-e8c4e04201aa.jpg?1789127659"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/8/2835c9aa-0904-44db-8da2-e8c4e04201aa.webp?1789127659",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/8/2835c9aa-0904-44db-8da2-e8c4e04201aa.webp?1789127659",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/8/2835c9aa-0904-44db-8da2-e8c4e04201aa.webp?1789127659"
   },
   {
     "name": "Theorix Metamage",
@@ -901,9 +901,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Shade Wizard // Sorcery",
     "collectorNumber": "156",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/b/fb6bad96-841d-4738-8e62-92f346f914fd.jpg?1789556930",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/b/fb6bad96-841d-4738-8e62-92f346f914fd.jpg?1789556930",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/b/fb6bad96-841d-4738-8e62-92f346f914fd.jpg?1789556930"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/b/fb6bad96-841d-4738-8e62-92f346f914fd.webp?1789556930",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/b/fb6bad96-841d-4738-8e62-92f346f914fd.webp?1789556930",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/b/fb6bad96-841d-4738-8e62-92f346f914fd.webp?1789556930"
   },
   {
     "name": "Twinned Vision",
@@ -916,9 +916,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "157",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/5/55f85984-0137-4899-8993-bbc8c4794d33.jpg?1789556940",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/5/55f85984-0137-4899-8993-bbc8c4794d33.jpg?1789556940",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/5/55f85984-0137-4899-8993-bbc8c4794d33.jpg?1789556940"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/5/55f85984-0137-4899-8993-bbc8c4794d33.webp?1789556940",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/5/55f85984-0137-4899-8993-bbc8c4794d33.webp?1789556940",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/5/55f85984-0137-4899-8993-bbc8c4794d33.webp?1789556940"
   },
   {
     "name": "Twisted Fates",
@@ -931,9 +931,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Sorcery",
     "collectorNumber": "158",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/7/c7c0765d-38fd-4d7b-bfb4-49b10ff5939b.jpg?1789614785",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/7/c7c0765d-38fd-4d7b-bfb4-49b10ff5939b.jpg?1789614785",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/7/c7c0765d-38fd-4d7b-bfb4-49b10ff5939b.jpg?1789614785"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/7/c7c0765d-38fd-4d7b-bfb4-49b10ff5939b.webp?1789614785",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/7/c7c0765d-38fd-4d7b-bfb4-49b10ff5939b.webp?1789614785",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/7/c7c0765d-38fd-4d7b-bfb4-49b10ff5939b.webp?1789614785"
   },
   {
     "name": "Uldaros Theorix",
@@ -946,9 +946,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Creature — Elder Sphinx",
     "collectorNumber": "159",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/7/a7ad622a-42ff-48fa-ae95-12e0a5bd9387.jpg?1788878220",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/7/a7ad622a-42ff-48fa-ae95-12e0a5bd9387.jpg?1788878220",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/7/a7ad622a-42ff-48fa-ae95-12e0a5bd9387.jpg?1788878220"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/7/a7ad622a-42ff-48fa-ae95-12e0a5bd9387.webp?1788878220",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/7/a7ad622a-42ff-48fa-ae95-12e0a5bd9387.webp?1788878220",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/7/a7ad622a-42ff-48fa-ae95-12e0a5bd9387.webp?1788878220"
   },
   {
     "name": "Predictive Preparations",
@@ -960,9 +960,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "16",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/0/50a0e5f0-3c39-4f16-9a73-eec8ef71f12e.jpg?1789556696",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/0/50a0e5f0-3c39-4f16-9a73-eec8ef71f12e.jpg?1789556696",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/0/50a0e5f0-3c39-4f16-9a73-eec8ef71f12e.jpg?1789556696"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/0/50a0e5f0-3c39-4f16-9a73-eec8ef71f12e.webp?1789556696",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/0/50a0e5f0-3c39-4f16-9a73-eec8ef71f12e.webp?1789556696",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/0/50a0e5f0-3c39-4f16-9a73-eec8ef71f12e.webp?1789556696"
   },
   {
     "name": "Vigorbloom Charm",
@@ -975,9 +975,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "160",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/b/2b198e10-b507-4314-a29c-a219f06e48b7.jpg?1789127656",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/b/2b198e10-b507-4314-a29c-a219f06e48b7.jpg?1789127656",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/b/2b198e10-b507-4314-a29c-a219f06e48b7.jpg?1789127656"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/b/2b198e10-b507-4314-a29c-a219f06e48b7.webp?1789127656",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/b/2b198e10-b507-4314-a29c-a219f06e48b7.webp?1789127656",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/b/2b198e10-b507-4314-a29c-a219f06e48b7.webp?1789127656"
   },
   {
     "name": "Vigorbloom Vanguard",
@@ -990,9 +990,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Creature — Troll Druid // Sorcery",
     "collectorNumber": "161",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/c/acefc515-bf97-4dc0-b0f7-ae8ae5a61671.jpg?1788329423",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/c/acefc515-bf97-4dc0-b0f7-ae8ae5a61671.jpg?1788329423",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/c/acefc515-bf97-4dc0-b0f7-ae8ae5a61671.jpg?1788329423"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/c/acefc515-bf97-4dc0-b0f7-ae8ae5a61671.webp?1788329423",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/c/acefc515-bf97-4dc0-b0f7-ae8ae5a61671.webp?1788329423",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/c/acefc515-bf97-4dc0-b0f7-ae8ae5a61671.webp?1788329423"
   },
   {
     "name": "Vindictive Triumph",
@@ -1005,9 +1005,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Instant",
     "collectorNumber": "162",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/8/a803dbe7-153a-4e92-ad4d-c2babebe003d.jpg?1789127665",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/8/a803dbe7-153a-4e92-ad4d-c2babebe003d.jpg?1789127665",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/8/a803dbe7-153a-4e92-ad4d-c2babebe003d.jpg?1789127665"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/8/a803dbe7-153a-4e92-ad4d-c2babebe003d.webp?1789127665",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/8/a803dbe7-153a-4e92-ad4d-c2babebe003d.webp?1789127665",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/8/a803dbe7-153a-4e92-ad4d-c2babebe003d.webp?1789127665"
   },
   {
     "name": "Warrior's Blades",
@@ -1020,9 +1020,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Artifact — Equipment",
     "collectorNumber": "163",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/6/c63d5b0e-ee72-42ed-aa7e-484ba84507cd.jpg?1789007648",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/6/c63d5b0e-ee72-42ed-aa7e-484ba84507cd.jpg?1789007648",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/6/c63d5b0e-ee72-42ed-aa7e-484ba84507cd.jpg?1789007648"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/6/c63d5b0e-ee72-42ed-aa7e-484ba84507cd.webp?1789007648",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/6/c63d5b0e-ee72-42ed-aa7e-484ba84507cd.webp?1789007648",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/6/c63d5b0e-ee72-42ed-aa7e-484ba84507cd.webp?1789007648"
   },
   {
     "name": "Whiplash Wordsmith",
@@ -1035,9 +1035,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Vampire Sorcerer // Sorcery",
     "collectorNumber": "164",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/0/8096bc9a-a610-448f-bef2-7230e17e9777.jpg?1789127692",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/0/8096bc9a-a610-448f-bef2-7230e17e9777.jpg?1789127692",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/0/8096bc9a-a610-448f-bef2-7230e17e9777.jpg?1789127692"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/0/8096bc9a-a610-448f-bef2-7230e17e9777.webp?1789127692",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/0/8096bc9a-a610-448f-bef2-7230e17e9777.webp?1789127692",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/0/8096bc9a-a610-448f-bef2-7230e17e9777.webp?1789127692"
   },
   {
     "name": "Woodwork Prodigy",
@@ -1050,9 +1050,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Creature — Cat Druid // Sorcery",
     "collectorNumber": "165",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/d/7d17f7e3-7b63-4674-9024-4fd1827f40ec.jpg?1788329429",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/d/7d17f7e3-7b63-4674-9024-4fd1827f40ec.jpg?1788329429",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/d/7d17f7e3-7b63-4674-9024-4fd1827f40ec.jpg?1788329429"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/d/7d17f7e3-7b63-4674-9024-4fd1827f40ec.webp?1788329429",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/d/7d17f7e3-7b63-4674-9024-4fd1827f40ec.webp?1788329429",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/d/7d17f7e3-7b63-4674-9024-4fd1827f40ec.webp?1788329429"
   },
   {
     "name": "Afterthought Sentry",
@@ -1062,9 +1062,9 @@ export default [
     "rarity": "common",
     "typeLine": "Artifact Creature — Gargoyle",
     "collectorNumber": "166",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/d/4d4b3bf7-a149-4099-b97d-4e36a87dfa60.jpg?1789385875",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/d/4d4b3bf7-a149-4099-b97d-4e36a87dfa60.jpg?1789385875",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/d/4d4b3bf7-a149-4099-b97d-4e36a87dfa60.jpg?1789385875"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/d/4d4b3bf7-a149-4099-b97d-4e36a87dfa60.webp?1789385875",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/d/4d4b3bf7-a149-4099-b97d-4e36a87dfa60.webp?1789385875",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/d/4d4b3bf7-a149-4099-b97d-4e36a87dfa60.webp?1789385875"
   },
   {
     "name": "Archive Arbiter",
@@ -1074,9 +1074,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Artifact Creature — Sphinx",
     "collectorNumber": "167",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/2/024bce1e-a5f3-4292-bc17-d0355a5d65e1.jpg?1789614867",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/2/024bce1e-a5f3-4292-bc17-d0355a5d65e1.jpg?1789614867",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/2/024bce1e-a5f3-4292-bc17-d0355a5d65e1.jpg?1789614867"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/2/024bce1e-a5f3-4292-bc17-d0355a5d65e1.webp?1789614867",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/2/024bce1e-a5f3-4292-bc17-d0355a5d65e1.webp?1789614867",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/2/024bce1e-a5f3-4292-bc17-d0355a5d65e1.webp?1789614867"
   },
   {
     "name": "Codie, Ravenous Codex",
@@ -1086,9 +1086,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Artifact Creature — Book Construct",
     "collectorNumber": "168",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/3/c3192390-1518-49fc-8716-f2c7a0384f39.jpg?1789646811",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/3/c3192390-1518-49fc-8716-f2c7a0384f39.jpg?1789646811",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/3/c3192390-1518-49fc-8716-f2c7a0384f39.jpg?1789646811"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/3/c3192390-1518-49fc-8716-f2c7a0384f39.webp?1789646811",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/3/c3192390-1518-49fc-8716-f2c7a0384f39.webp?1789646811",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/3/c3192390-1518-49fc-8716-f2c7a0384f39.webp?1789646811"
   },
   {
     "name": "The Echoverse Fulcrum",
@@ -1098,9 +1098,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Artifact",
     "collectorNumber": "169",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/7/d71d250f-c0e0-44b2-877c-76f3bcab4f34.jpg?1789385887",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/7/d71d250f-c0e0-44b2-877c-76f3bcab4f34.jpg?1789385887",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/7/d71d250f-c0e0-44b2-877c-76f3bcab4f34.jpg?1789385887"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/7/d71d250f-c0e0-44b2-877c-76f3bcab4f34.webp?1789385887",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/7/d71d250f-c0e0-44b2-877c-76f3bcab4f34.webp?1789385887",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/7/d71d250f-c0e0-44b2-877c-76f3bcab4f34.webp?1789385887"
   },
   {
     "name": "Prophesied End",
@@ -1112,9 +1112,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "17",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/f/1f95399a-9766-4f3d-aa6a-ece55e0530d9.jpg?1788951920",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/f/1f95399a-9766-4f3d-aa6a-ece55e0530d9.jpg?1788951920",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/f/1f95399a-9766-4f3d-aa6a-ece55e0530d9.jpg?1788951920"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/f/1f95399a-9766-4f3d-aa6a-ece55e0530d9.webp?1788951920",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/f/1f95399a-9766-4f3d-aa6a-ece55e0530d9.webp?1788951920",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/f/1f95399a-9766-4f3d-aa6a-ece55e0530d9.webp?1788951920"
   },
   {
     "name": "Eye of Jace",
@@ -1124,9 +1124,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Artifact",
     "collectorNumber": "170",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/e/0edba64a-39cf-4a8d-ba20-4f7da10b6c3d.jpg?1789614864",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/e/0edba64a-39cf-4a8d-ba20-4f7da10b6c3d.jpg?1789614864",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/e/0edba64a-39cf-4a8d-ba20-4f7da10b6c3d.jpg?1789614864"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/e/0edba64a-39cf-4a8d-ba20-4f7da10b6c3d.webp?1789614864",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/e/0edba64a-39cf-4a8d-ba20-4f7da10b6c3d.webp?1789614864",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/e/0edba64a-39cf-4a8d-ba20-4f7da10b6c3d.webp?1789614864"
   },
   {
     "name": "Keeper of the Quiet Hour",
@@ -1136,9 +1136,9 @@ export default [
     "rarity": "common",
     "typeLine": "Artifact Creature — Chimera",
     "collectorNumber": "171",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/6/b6331218-dbb8-44a9-8ba5-5fb1ab41c5c0.jpg?1788878239",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/6/b6331218-dbb8-44a9-8ba5-5fb1ab41c5c0.jpg?1788878239",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/6/b6331218-dbb8-44a9-8ba5-5fb1ab41c5c0.jpg?1788878239"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/6/b6331218-dbb8-44a9-8ba5-5fb1ab41c5c0.webp?1788878239",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/6/b6331218-dbb8-44a9-8ba5-5fb1ab41c5c0.webp?1788878239",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/6/b6331218-dbb8-44a9-8ba5-5fb1ab41c5c0.webp?1788878239"
   },
   {
     "name": "Living Library",
@@ -1148,9 +1148,9 @@ export default [
     "rarity": "common",
     "typeLine": "Artifact Creature — Book Illusion",
     "collectorNumber": "172",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/d/5d4a8e5f-0024-4da3-a2f5-edb48b12e733.jpg?1789556949",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/d/5d4a8e5f-0024-4da3-a2f5-edb48b12e733.jpg?1789556949",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/d/5d4a8e5f-0024-4da3-a2f5-edb48b12e733.jpg?1789556949"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/d/5d4a8e5f-0024-4da3-a2f5-edb48b12e733.webp?1789556949",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/d/5d4a8e5f-0024-4da3-a2f5-edb48b12e733.webp?1789556949",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/d/5d4a8e5f-0024-4da3-a2f5-edb48b12e733.webp?1789556949"
   },
   {
     "name": "Medic's Kitesail",
@@ -1160,9 +1160,9 @@ export default [
     "rarity": "common",
     "typeLine": "Artifact — Equipment",
     "collectorNumber": "173",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/b/8b07409a-1dce-461d-95e4-1130521ff4c4.jpg?1789556945",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/b/8b07409a-1dce-461d-95e4-1130521ff4c4.jpg?1789556945",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/b/8b07409a-1dce-461d-95e4-1130521ff4c4.jpg?1789556945"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/b/8b07409a-1dce-461d-95e4-1130521ff4c4.webp?1789556945",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/b/8b07409a-1dce-461d-95e4-1130521ff4c4.webp?1789556945",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/b/8b07409a-1dce-461d-95e4-1130521ff4c4.webp?1789556945"
   },
   {
     "name": "Murmuring Volume",
@@ -1172,9 +1172,9 @@ export default [
     "rarity": "common",
     "typeLine": "Artifact — Book",
     "collectorNumber": "174",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/6/d68eab2e-89dd-4377-b7af-01512b1804a0.jpg?1789385977",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/6/d68eab2e-89dd-4377-b7af-01512b1804a0.jpg?1789385977",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/6/d68eab2e-89dd-4377-b7af-01512b1804a0.jpg?1789385977"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/6/d68eab2e-89dd-4377-b7af-01512b1804a0.webp?1789385977",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/6/d68eab2e-89dd-4377-b7af-01512b1804a0.webp?1789385977",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/6/d68eab2e-89dd-4377-b7af-01512b1804a0.webp?1789385977"
   },
   {
     "name": "Dedicated Commons",
@@ -1184,9 +1184,9 @@ export default [
     "rarity": "common",
     "typeLine": "Land",
     "collectorNumber": "175",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/2/3223e5db-5cc4-42f9-ae9e-ff58abc7c390.jpg?1789556950",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/2/3223e5db-5cc4-42f9-ae9e-ff58abc7c390.jpg?1789556950",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/2/3223e5db-5cc4-42f9-ae9e-ff58abc7c390.jpg?1789556950"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/2/3223e5db-5cc4-42f9-ae9e-ff58abc7c390.webp?1789556950",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/2/3223e5db-5cc4-42f9-ae9e-ff58abc7c390.webp?1789556950",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/2/3223e5db-5cc4-42f9-ae9e-ff58abc7c390.webp?1789556950"
   },
   {
     "name": "Deserted Beach",
@@ -1196,9 +1196,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Land",
     "collectorNumber": "176",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/6/56dae4c4-3e71-4a32-979b-4e26d9c9e96c.jpg?1788878239",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/6/56dae4c4-3e71-4a32-979b-4e26d9c9e96c.jpg?1788878239",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/6/56dae4c4-3e71-4a32-979b-4e26d9c9e96c.jpg?1788878239"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/6/56dae4c4-3e71-4a32-979b-4e26d9c9e96c.webp?1788878239",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/6/56dae4c4-3e71-4a32-979b-4e26d9c9e96c.webp?1788878239",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/6/56dae4c4-3e71-4a32-979b-4e26d9c9e96c.webp?1788878239"
   },
   {
     "name": "Fatehold Annex",
@@ -1208,9 +1208,9 @@ export default [
     "rarity": "common",
     "typeLine": "Land",
     "collectorNumber": "177",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/1/5140f962-62f3-40fd-a322-44896c7e2613.jpg?1789556955",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/1/5140f962-62f3-40fd-a322-44896c7e2613.jpg?1789556955",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/1/5140f962-62f3-40fd-a322-44896c7e2613.jpg?1789556955"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/1/5140f962-62f3-40fd-a322-44896c7e2613.webp?1789556955",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/1/5140f962-62f3-40fd-a322-44896c7e2613.webp?1789556955",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/1/5140f962-62f3-40fd-a322-44896c7e2613.webp?1789556955"
   },
   {
     "name": "Formidable Commons",
@@ -1220,9 +1220,9 @@ export default [
     "rarity": "common",
     "typeLine": "Land",
     "collectorNumber": "178",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/6/e6ca6c3e-f145-42d6-8a17-90770c15afaf.jpg?1789556960",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/6/e6ca6c3e-f145-42d6-8a17-90770c15afaf.jpg?1789556960",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/6/e6ca6c3e-f145-42d6-8a17-90770c15afaf.jpg?1789556960"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/6/e6ca6c3e-f145-42d6-8a17-90770c15afaf.webp?1789556960",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/6/e6ca6c3e-f145-42d6-8a17-90770c15afaf.webp?1789556960",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/6/e6ca6c3e-f145-42d6-8a17-90770c15afaf.webp?1789556960"
   },
   {
     "name": "Hall of Echoes",
@@ -1232,9 +1232,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Land",
     "collectorNumber": "179",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/a/4a771010-b397-4849-ac9b-08e4dd5d6a72.jpg?1789644859",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/a/4a771010-b397-4849-ac9b-08e4dd5d6a72.jpg?1789644859",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/a/4a771010-b397-4849-ac9b-08e4dd5d6a72.jpg?1789644859"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/a/4a771010-b397-4849-ac9b-08e4dd5d6a72.webp?1789644859",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/a/4a771010-b397-4849-ac9b-08e4dd5d6a72.webp?1789644859",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/a/4a771010-b397-4849-ac9b-08e4dd5d6a72.webp?1789644859"
   },
   {
     "name": "Refute Destiny",
@@ -1246,9 +1246,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Sorcery",
     "collectorNumber": "18",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/c/2c588954-c6eb-4aae-a2fa-0651ccf2d90a.jpg?1789470778",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/c/2c588954-c6eb-4aae-a2fa-0651ccf2d90a.jpg?1789470778",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/c/2c588954-c6eb-4aae-a2fa-0651ccf2d90a.jpg?1789470778"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/c/2c588954-c6eb-4aae-a2fa-0651ccf2d90a.webp?1789470778",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/c/2c588954-c6eb-4aae-a2fa-0651ccf2d90a.webp?1789470778",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/c/2c588954-c6eb-4aae-a2fa-0651ccf2d90a.webp?1789470778"
   },
   {
     "name": "Haunted Ridge",
@@ -1258,9 +1258,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Land",
     "collectorNumber": "180",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/4/a4e4966b-8963-4fac-a8bf-e778e063c7dd.jpg?1788878241",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/4/a4e4966b-8963-4fac-a8bf-e778e063c7dd.jpg?1788878241",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/4/a4e4966b-8963-4fac-a8bf-e778e063c7dd.jpg?1788878241"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/4/a4e4966b-8963-4fac-a8bf-e778e063c7dd.webp?1788878241",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/4/a4e4966b-8963-4fac-a8bf-e778e063c7dd.webp?1788878241",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/4/a4e4966b-8963-4fac-a8bf-e778e063c7dd.webp?1788878241"
   },
   {
     "name": "Hexhaven Dueling Arena",
@@ -1270,9 +1270,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Land",
     "collectorNumber": "181",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/1/9128ce00-6744-4d36-bfbe-ef75d78110b0.jpg?1789556985",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/1/9128ce00-6744-4d36-bfbe-ef75d78110b0.jpg?1789556985",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/1/9128ce00-6744-4d36-bfbe-ef75d78110b0.jpg?1789556985"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/1/9128ce00-6744-4d36-bfbe-ef75d78110b0.webp?1789556985",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/1/9128ce00-6744-4d36-bfbe-ef75d78110b0.webp?1789556985",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/1/9128ce00-6744-4d36-bfbe-ef75d78110b0.webp?1789556985"
   },
   {
     "name": "Innovative Commons",
@@ -1282,9 +1282,9 @@ export default [
     "rarity": "common",
     "typeLine": "Land",
     "collectorNumber": "182",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/4/84ea799a-faa2-4ff1-a933-432d4ee31a3b.jpg?1789556991",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/4/84ea799a-faa2-4ff1-a933-432d4ee31a3b.jpg?1789556991",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/4/84ea799a-faa2-4ff1-a933-432d4ee31a3b.jpg?1789556991"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/4/84ea799a-faa2-4ff1-a933-432d4ee31a3b.webp?1789556991",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/4/84ea799a-faa2-4ff1-a933-432d4ee31a3b.webp?1789556991",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/4/84ea799a-faa2-4ff1-a933-432d4ee31a3b.webp?1789556991"
   },
   {
     "name": "Konstrari Annex",
@@ -1294,9 +1294,9 @@ export default [
     "rarity": "common",
     "typeLine": "Land",
     "collectorNumber": "183",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/9/39c805e3-82cd-42a9-80fe-8d81712a94ea.jpg?1789556993",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/9/39c805e3-82cd-42a9-80fe-8d81712a94ea.jpg?1789556993",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/9/39c805e3-82cd-42a9-80fe-8d81712a94ea.jpg?1789556993"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/9/39c805e3-82cd-42a9-80fe-8d81712a94ea.webp?1789556993",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/9/39c805e3-82cd-42a9-80fe-8d81712a94ea.webp?1789556993",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/9/39c805e3-82cd-42a9-80fe-8d81712a94ea.webp?1789556993"
   },
   {
     "name": "Meticulous Commons",
@@ -1306,9 +1306,9 @@ export default [
     "rarity": "common",
     "typeLine": "Land",
     "collectorNumber": "184",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/3/93ac525e-1919-43dd-aba4-073b7e4c1768.jpg?1789557002",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/3/93ac525e-1919-43dd-aba4-073b7e4c1768.jpg?1789557002",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/3/93ac525e-1919-43dd-aba4-073b7e4c1768.jpg?1789557002"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/3/93ac525e-1919-43dd-aba4-073b7e4c1768.webp?1789557002",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/3/93ac525e-1919-43dd-aba4-073b7e4c1768.webp?1789557002",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/3/93ac525e-1919-43dd-aba4-073b7e4c1768.webp?1789557002"
   },
   {
     "name": "Overgrown Farmland",
@@ -1318,9 +1318,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Land",
     "collectorNumber": "185",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/7/178e61e4-472f-42cd-9d3b-4880c2acc527.jpg?1788878246",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/7/178e61e4-472f-42cd-9d3b-4880c2acc527.jpg?1788878246",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/7/178e61e4-472f-42cd-9d3b-4880c2acc527.jpg?1788878246"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/7/178e61e4-472f-42cd-9d3b-4880c2acc527.webp?1788878246",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/7/178e61e4-472f-42cd-9d3b-4880c2acc527.webp?1788878246",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/7/178e61e4-472f-42cd-9d3b-4880c2acc527.webp?1788878246"
   },
   {
     "name": "Rockfall Vale",
@@ -1330,9 +1330,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Land",
     "collectorNumber": "186",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/3/e3c8a8b6-23ba-45ad-80d1-8e2dc79897f7.jpg?1788878243",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/3/e3c8a8b6-23ba-45ad-80d1-8e2dc79897f7.jpg?1788878243",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/3/e3c8a8b6-23ba-45ad-80d1-8e2dc79897f7.jpg?1788878243"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/3/e3c8a8b6-23ba-45ad-80d1-8e2dc79897f7.webp?1788878243",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/3/e3c8a8b6-23ba-45ad-80d1-8e2dc79897f7.webp?1788878243",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/3/e3c8a8b6-23ba-45ad-80d1-8e2dc79897f7.webp?1788878243"
   },
   {
     "name": "Roiling Canopy",
@@ -1342,9 +1342,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Land",
     "collectorNumber": "187",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/b/db61361b-bd12-453e-abc2-bbe09b66e3d9.jpg?1789514074",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/b/db61361b-bd12-453e-abc2-bbe09b66e3d9.jpg?1789514074",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/b/db61361b-bd12-453e-abc2-bbe09b66e3d9.jpg?1789514074"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/b/db61361b-bd12-453e-abc2-bbe09b66e3d9.webp?1789514074",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/b/db61361b-bd12-453e-abc2-bbe09b66e3d9.webp?1789514074",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/b/db61361b-bd12-453e-abc2-bbe09b66e3d9.webp?1789514074"
   },
   {
     "name": "Room of Refuge",
@@ -1354,9 +1354,9 @@ export default [
     "rarity": "common",
     "typeLine": "Land",
     "collectorNumber": "188",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/a/9a467560-6676-4fc2-9400-768a79650aa4.jpg?1789557010",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/a/9a467560-6676-4fc2-9400-768a79650aa4.jpg?1789557010",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/a/9a467560-6676-4fc2-9400-768a79650aa4.jpg?1789557010"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/a/9a467560-6676-4fc2-9400-768a79650aa4.webp?1789557010",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/a/9a467560-6676-4fc2-9400-768a79650aa4.webp?1789557010",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/a/9a467560-6676-4fc2-9400-768a79650aa4.webp?1789557010"
   },
   {
     "name": "Shipwreck Marsh",
@@ -1366,9 +1366,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Land",
     "collectorNumber": "189",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/e/9e944c5b-68ac-4a30-bbd4-09a4288319ce.jpg?1788878245",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/e/9e944c5b-68ac-4a30-bbd4-09a4288319ce.jpg?1788878245",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/e/9e944c5b-68ac-4a30-bbd4-09a4288319ce.jpg?1788878245"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/e/9e944c5b-68ac-4a30-bbd4-09a4288319ce.webp?1788878245",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/e/9e944c5b-68ac-4a30-bbd4-09a4288319ce.webp?1788878245",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/e/9e944c5b-68ac-4a30-bbd4-09a4288319ce.webp?1788878245"
   },
   {
     "name": "Repurposed Enforcer",
@@ -1380,9 +1380,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Human Soldier",
     "collectorNumber": "19",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/5/35000e93-85d3-44f8-976a-5918ee4c71e0.jpg?1788878108",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/5/35000e93-85d3-44f8-976a-5918ee4c71e0.jpg?1788878108",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/5/35000e93-85d3-44f8-976a-5918ee4c71e0.jpg?1788878108"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/5/35000e93-85d3-44f8-976a-5918ee4c71e0.webp?1788878108",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/5/35000e93-85d3-44f8-976a-5918ee4c71e0.webp?1788878108",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/5/35000e93-85d3-44f8-976a-5918ee4c71e0.webp?1788878108"
   },
   {
     "name": "Stingerquill Annex",
@@ -1392,9 +1392,9 @@ export default [
     "rarity": "common",
     "typeLine": "Land",
     "collectorNumber": "190",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/e/6ede3143-69ac-4cbe-922a-d25b07c26da7.jpg?1789557046",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/e/6ede3143-69ac-4cbe-922a-d25b07c26da7.jpg?1789557046",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/e/6ede3143-69ac-4cbe-922a-d25b07c26da7.jpg?1789557046"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/e/6ede3143-69ac-4cbe-922a-d25b07c26da7.webp?1789557046",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/e/6ede3143-69ac-4cbe-922a-d25b07c26da7.webp?1789557046",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/e/6ede3143-69ac-4cbe-922a-d25b07c26da7.webp?1789557046"
   },
   {
     "name": "Theorist's Sanctum",
@@ -1404,9 +1404,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Land — Island",
     "collectorNumber": "191",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/2/22db5bba-46c9-4a26-821d-303ddb386ea4.jpg?1788878256",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/2/22db5bba-46c9-4a26-821d-303ddb386ea4.jpg?1788878256",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/2/22db5bba-46c9-4a26-821d-303ddb386ea4.jpg?1788878256"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/2/22db5bba-46c9-4a26-821d-303ddb386ea4.webp?1788878256",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/2/22db5bba-46c9-4a26-821d-303ddb386ea4.webp?1788878256",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/2/22db5bba-46c9-4a26-821d-303ddb386ea4.webp?1788878256"
   },
   {
     "name": "Theorix Annex",
@@ -1416,9 +1416,9 @@ export default [
     "rarity": "common",
     "typeLine": "Land",
     "collectorNumber": "192",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/7/97bbbd23-ecb1-4407-ac14-dede08532a1e.jpg?1789557008",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/7/97bbbd23-ecb1-4407-ac14-dede08532a1e.jpg?1789557008",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/7/97bbbd23-ecb1-4407-ac14-dede08532a1e.jpg?1789557008"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/7/97bbbd23-ecb1-4407-ac14-dede08532a1e.webp?1789557008",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/7/97bbbd23-ecb1-4407-ac14-dede08532a1e.webp?1789557008",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/7/97bbbd23-ecb1-4407-ac14-dede08532a1e.webp?1789557008"
   },
   {
     "name": "Transformative Commons",
@@ -1428,9 +1428,9 @@ export default [
     "rarity": "common",
     "typeLine": "Land",
     "collectorNumber": "193",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/5/b57d5be7-3157-4b49-aeb8-d7368ca7e9dd.jpg?1789557014",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/5/b57d5be7-3157-4b49-aeb8-d7368ca7e9dd.jpg?1789557014",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/5/b57d5be7-3157-4b49-aeb8-d7368ca7e9dd.jpg?1789557014"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/5/b57d5be7-3157-4b49-aeb8-d7368ca7e9dd.webp?1789557014",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/5/b57d5be7-3157-4b49-aeb8-d7368ca7e9dd.webp?1789557014",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/5/b57d5be7-3157-4b49-aeb8-d7368ca7e9dd.webp?1789557014"
   },
   {
     "name": "Vigorbloom Annex",
@@ -1440,9 +1440,9 @@ export default [
     "rarity": "common",
     "typeLine": "Land",
     "collectorNumber": "194",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/b/db8c7bdd-76cd-4be0-ae0d-d430e9a5fe7a.jpg?1789557019",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/b/db8c7bdd-76cd-4be0-ae0d-d430e9a5fe7a.jpg?1789557019",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/b/db8c7bdd-76cd-4be0-ae0d-d430e9a5fe7a.jpg?1789557019"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/b/db8c7bdd-76cd-4be0-ae0d-d430e9a5fe7a.webp?1789557019",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/b/db8c7bdd-76cd-4be0-ae0d-d430e9a5fe7a.webp?1789557019",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/b/db8c7bdd-76cd-4be0-ae0d-d430e9a5fe7a.webp?1789557019"
   },
   {
     "name": "Ajani Resolute",
@@ -1454,9 +1454,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Planeswalker — Ajani",
     "collectorNumber": "195",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/5/a5e1a7dd-8c49-4435-935c-bcc78704082b.jpg?1788329189",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/5/a5e1a7dd-8c49-4435-935c-bcc78704082b.jpg?1788329189",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/5/a5e1a7dd-8c49-4435-935c-bcc78704082b.jpg?1788329189"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/5/a5e1a7dd-8c49-4435-935c-bcc78704082b.webp?1788329189",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/5/a5e1a7dd-8c49-4435-935c-bcc78704082b.webp?1788329189",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/5/a5e1a7dd-8c49-4435-935c-bcc78704082b.webp?1788329189"
   },
   {
     "name": "Danitha, Sword of Hope",
@@ -1468,9 +1468,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Knight",
     "collectorNumber": "196",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/5/d5cb9810-3c2d-4ae4-b8b6-0155ca3f47ad.jpg?1789127178",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/5/d5cb9810-3c2d-4ae4-b8b6-0155ca3f47ad.jpg?1789127178",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/5/d5cb9810-3c2d-4ae4-b8b6-0155ca3f47ad.jpg?1789127178"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/5/d5cb9810-3c2d-4ae4-b8b6-0155ca3f47ad.webp?1789127178",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/5/d5cb9810-3c2d-4ae4-b8b6-0155ca3f47ad.webp?1789127178",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/5/d5cb9810-3c2d-4ae4-b8b6-0155ca3f47ad.webp?1789127178"
   },
   {
     "name": "Ghalta the Immovable",
@@ -1482,9 +1482,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Elder Dinosaur",
     "collectorNumber": "197",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/9/a9f3aa55-908f-42db-8135-4201433df850.jpg?1789014423",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/9/a9f3aa55-908f-42db-8135-4201433df850.jpg?1789014423",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/9/a9f3aa55-908f-42db-8135-4201433df850.jpg?1789014423"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/9/a9f3aa55-908f-42db-8135-4201433df850.webp?1789014423",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/9/a9f3aa55-908f-42db-8135-4201433df850.webp?1789014423",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/9/a9f3aa55-908f-42db-8135-4201433df850.webp?1789014423"
   },
   {
     "name": "Gideon's Memorial",
@@ -1496,9 +1496,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Artifact",
     "collectorNumber": "198",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/6/768c0e64-9907-417a-a763-c836fdf36883.jpg?1789127685",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/6/768c0e64-9907-417a-a763-c836fdf36883.jpg?1789127685",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/6/768c0e64-9907-417a-a763-c836fdf36883.jpg?1789127685"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/6/768c0e64-9907-417a-a763-c836fdf36883.webp?1789127685",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/6/768c0e64-9907-417a-a763-c836fdf36883.webp?1789127685",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/6/768c0e64-9907-417a-a763-c836fdf36883.webp?1789127685"
   },
   {
     "name": "Koth of the Homestead",
@@ -1510,9 +1510,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Citizen",
     "collectorNumber": "199",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/2/920703fd-2a2f-454b-8829-af8f2afda4f4.jpg?1789568532",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/2/920703fd-2a2f-454b-8829-af8f2afda4f4.jpg?1789568532",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/2/920703fd-2a2f-454b-8829-af8f2afda4f4.jpg?1789568532"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/2/920703fd-2a2f-454b-8829-af8f2afda4f4.webp?1789568532",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/2/920703fd-2a2f-454b-8829-af8f2afda4f4.webp?1789568532",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/2/920703fd-2a2f-454b-8829-af8f2afda4f4.webp?1789568532"
   },
   {
     "name": "Academic Ascent",
@@ -1524,9 +1524,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "2",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/3/730d8c28-1e58-4b8e-89e9-445d154d2e83.jpg?1788878081",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/3/730d8c28-1e58-4b8e-89e9-445d154d2e83.jpg?1788878081",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/3/730d8c28-1e58-4b8e-89e9-445d154d2e83.jpg?1788878081"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/3/730d8c28-1e58-4b8e-89e9-445d154d2e83.webp?1788878081",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/3/730d8c28-1e58-4b8e-89e9-445d154d2e83.webp?1788878081",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/3/730d8c28-1e58-4b8e-89e9-445d154d2e83.webp?1788878081"
   },
   {
     "name": "Liliana the Faultless",
@@ -1538,9 +1538,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Creature — Human Cleric",
     "collectorNumber": "200",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/0/70d8c400-87dc-4f15-808f-e54a95d779fc.jpg?1788329194",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/0/70d8c400-87dc-4f15-808f-e54a95d779fc.jpg?1788329194",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/0/70d8c400-87dc-4f15-808f-e54a95d779fc.jpg?1788329194"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/0/70d8c400-87dc-4f15-808f-e54a95d779fc.webp?1788329194",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/0/70d8c400-87dc-4f15-808f-e54a95d779fc.webp?1788329194",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/0/70d8c400-87dc-4f15-808f-e54a95d779fc.webp?1788329194"
   },
   {
     "name": "Lyra, Archangel of Dawn",
@@ -1552,9 +1552,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Creature — Angel Knight",
     "collectorNumber": "201",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/6/86a3866e-68a8-402c-baf0-1908e98e3995.jpg?1789127693",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/6/86a3866e-68a8-402c-baf0-1908e98e3995.jpg?1789127693",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/6/86a3866e-68a8-402c-baf0-1908e98e3995.jpg?1789127693"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/6/86a3866e-68a8-402c-baf0-1908e98e3995.webp?1789127693",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/6/86a3866e-68a8-402c-baf0-1908e98e3995.webp?1789127693",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/6/86a3866e-68a8-402c-baf0-1908e98e3995.webp?1789127693"
   },
   {
     "name": "Rescue Girl, First Responder",
@@ -1566,9 +1566,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Cleric",
     "collectorNumber": "202",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/9/699874e3-1ccf-4a6c-8371-61040de82d08.jpg?1789645598",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/9/699874e3-1ccf-4a6c-8371-61040de82d08.jpg?1789645598",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/9/699874e3-1ccf-4a6c-8371-61040de82d08.jpg?1789645598"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/9/699874e3-1ccf-4a6c-8371-61040de82d08.webp?1789645598",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/9/699874e3-1ccf-4a6c-8371-61040de82d08.webp?1789645598",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/9/699874e3-1ccf-4a6c-8371-61040de82d08.webp?1789645598"
   },
   {
     "name": "Saheeli, Consul of Oversight",
@@ -1580,9 +1580,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Advisor",
     "collectorNumber": "203",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/7/07572be0-6610-493c-a21e-14b78e9805c9.jpg?1789645608",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/7/07572be0-6610-493c-a21e-14b78e9805c9.jpg?1789645608",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/7/07572be0-6610-493c-a21e-14b78e9805c9.jpg?1789645608"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/7/07572be0-6610-493c-a21e-14b78e9805c9.webp?1789645608",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/7/07572be0-6610-493c-a21e-14b78e9805c9.webp?1789645608",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/7/07572be0-6610-493c-a21e-14b78e9805c9.webp?1789645608"
   },
   {
     "name": "Teyo, Lightshield Expert",
@@ -1594,9 +1594,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Cleric",
     "collectorNumber": "204",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/f/5f7521d7-9f1f-4f03-b2ea-dd2a1b1e4e5b.jpg?1789471515",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/f/5f7521d7-9f1f-4f03-b2ea-dd2a1b1e4e5b.jpg?1789471515",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/f/5f7521d7-9f1f-4f03-b2ea-dd2a1b1e4e5b.jpg?1789471515"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/f/5f7521d7-9f1f-4f03-b2ea-dd2a1b1e4e5b.webp?1789471515",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/f/5f7521d7-9f1f-4f03-b2ea-dd2a1b1e4e5b.webp?1789471515",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/f/5f7521d7-9f1f-4f03-b2ea-dd2a1b1e4e5b.webp?1789471515"
   },
   {
     "name": "Thalia, the Survivor",
@@ -1608,9 +1608,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Soldier",
     "collectorNumber": "205",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/0/80226231-9e70-430e-aabc-f262f70b9226.jpg?1789127700",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/0/80226231-9e70-430e-aabc-f262f70b9226.jpg?1789127700",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/0/80226231-9e70-430e-aabc-f262f70b9226.jpg?1789127700"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/0/80226231-9e70-430e-aabc-f262f70b9226.webp?1789127700",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/0/80226231-9e70-430e-aabc-f262f70b9226.webp?1789127700",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/0/80226231-9e70-430e-aabc-f262f70b9226.webp?1789127700"
   },
   {
     "name": "Tomik, Orzhov Lawmage",
@@ -1622,9 +1622,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Advisor",
     "collectorNumber": "206",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/c/7ca95235-6e54-4ff8-bc2e-6a3d483ff007.jpg?1789729766",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/c/7ca95235-6e54-4ff8-bc2e-6a3d483ff007.jpg?1789729766",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/c/7ca95235-6e54-4ff8-bc2e-6a3d483ff007.jpg?1789729766"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/c/7ca95235-6e54-4ff8-bc2e-6a3d483ff007.webp?1789729766",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/c/7ca95235-6e54-4ff8-bc2e-6a3d483ff007.webp?1789729766",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/c/7ca95235-6e54-4ff8-bc2e-6a3d483ff007.webp?1789729766"
   },
   {
     "name": "Way of the Healer",
@@ -1636,9 +1636,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Enchantment",
     "collectorNumber": "207",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/0/50326a2a-7e10-464b-a97e-e880bda0558c.jpg?1789729503",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/0/50326a2a-7e10-464b-a97e-e880bda0558c.jpg?1789729503",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/0/50326a2a-7e10-464b-a97e-e880bda0558c.jpg?1789729503"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/0/50326a2a-7e10-464b-a97e-e880bda0558c.webp?1789729503",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/0/50326a2a-7e10-464b-a97e-e880bda0558c.webp?1789729503",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/0/50326a2a-7e10-464b-a97e-e880bda0558c.webp?1789729503"
   },
   {
     "name": "Way of the Mentor",
@@ -1650,9 +1650,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Enchantment",
     "collectorNumber": "208",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/a/1a59d5b1-12d6-486b-bd29-ca371359addd.jpg?1789729554",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/a/1a59d5b1-12d6-486b-bd29-ca371359addd.jpg?1789729554",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/a/1a59d5b1-12d6-486b-bd29-ca371359addd.jpg?1789729554"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/a/1a59d5b1-12d6-486b-bd29-ca371359addd.webp?1789729554",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/a/1a59d5b1-12d6-486b-bd29-ca371359addd.webp?1789729554",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/a/1a59d5b1-12d6-486b-bd29-ca371359addd.webp?1789729554"
   },
   {
     "name": "Yoshimaru, Beloved Companion",
@@ -1664,9 +1664,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Dog",
     "collectorNumber": "209",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/8/384f3b7d-8d7f-41bf-bebd-64e8babe7fca.jpg?1789470881",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/8/384f3b7d-8d7f-41bf-bebd-64e8babe7fca.jpg?1789470881",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/8/384f3b7d-8d7f-41bf-bebd-64e8babe7fca.jpg?1789470881"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/8/384f3b7d-8d7f-41bf-bebd-64e8babe7fca.webp?1789470881",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/8/384f3b7d-8d7f-41bf-bebd-64e8babe7fca.webp?1789470881",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/8/384f3b7d-8d7f-41bf-bebd-64e8babe7fca.webp?1789470881"
   },
   {
     "name": "Shatterwing Pegasus",
@@ -1678,9 +1678,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Pegasus",
     "collectorNumber": "21",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/2/e29095de-59ec-4562-ba8e-73f952e457ae.jpg?1789385580",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/2/e29095de-59ec-4562-ba8e-73f952e457ae.jpg?1789385580",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/2/e29095de-59ec-4562-ba8e-73f952e457ae.jpg?1789385580"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/2/e29095de-59ec-4562-ba8e-73f952e457ae.webp?1789385580",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/2/e29095de-59ec-4562-ba8e-73f952e457ae.webp?1789385580",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/2/e29095de-59ec-4562-ba8e-73f952e457ae.webp?1789385580"
   },
   {
     "name": "Yuriko, Blade of the Mighty",
@@ -1692,9 +1692,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Samurai",
     "collectorNumber": "210",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/c/ccbe92a5-42bc-4228-9d5a-212df2f5dc15.jpg?1789128047",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/c/ccbe92a5-42bc-4228-9d5a-212df2f5dc15.jpg?1789128047",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/c/ccbe92a5-42bc-4228-9d5a-212df2f5dc15.jpg?1789128047"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/c/ccbe92a5-42bc-4228-9d5a-212df2f5dc15.webp?1789128047",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/c/ccbe92a5-42bc-4228-9d5a-212df2f5dc15.webp?1789128047",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/c/ccbe92a5-42bc-4228-9d5a-212df2f5dc15.webp?1789128047"
   },
   {
     "name": "Arni, Humble Scribe",
@@ -1706,9 +1706,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Wizard",
     "collectorNumber": "211",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/e/8e3a2239-9348-4639-9318-e9e35b2cf86b.jpg?1789568409",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/e/8e3a2239-9348-4639-9318-e9e35b2cf86b.jpg?1789568409",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/e/8e3a2239-9348-4639-9318-e9e35b2cf86b.jpg?1789568409"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/e/8e3a2239-9348-4639-9318-e9e35b2cf86b.webp?1789568409",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/e/8e3a2239-9348-4639-9318-e9e35b2cf86b.webp?1789568409",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/e/8e3a2239-9348-4639-9318-e9e35b2cf86b.webp?1789568409"
   },
   {
     "name": "Chandra, Chill of Compliance",
@@ -1720,9 +1720,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Planeswalker — Chandra",
     "collectorNumber": "212",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/4/240f58ab-944c-4f4c-9df9-5f40b132bf3e.jpg?1788329242",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/4/240f58ab-944c-4f4c-9df9-5f40b132bf3e.jpg?1788329242",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/4/240f58ab-944c-4f4c-9df9-5f40b132bf3e.jpg?1788329242"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/4/240f58ab-944c-4f4c-9df9-5f40b132bf3e.webp?1788329242",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/4/240f58ab-944c-4f4c-9df9-5f40b132bf3e.webp?1788329242",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/4/240f58ab-944c-4f4c-9df9-5f40b132bf3e.webp?1788329242"
   },
   {
     "name": "Fblthp, Impossibly Lost",
@@ -1734,9 +1734,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Homunculus",
     "collectorNumber": "213",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/3/a3a2edbb-d144-4670-acad-17316cea98d2.jpg?1789127697",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/3/a3a2edbb-d144-4670-acad-17316cea98d2.jpg?1789127697",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/3/a3a2edbb-d144-4670-acad-17316cea98d2.jpg?1789127697"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/3/a3a2edbb-d144-4670-acad-17316cea98d2.webp?1789127697",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/3/a3a2edbb-d144-4670-acad-17316cea98d2.webp?1789127697",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/3/a3a2edbb-d144-4670-acad-17316cea98d2.webp?1789127697"
   },
   {
     "name": "Geist of Saint Thalia",
@@ -1748,9 +1748,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Spirit Cleric",
     "collectorNumber": "214",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/c/9c334530-0880-46b5-a358-9603eee3cecf.jpg?1789128026",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/c/9c334530-0880-46b5-a358-9603eee3cecf.jpg?1789128026",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/c/9c334530-0880-46b5-a358-9603eee3cecf.jpg?1789128026"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/c/9c334530-0880-46b5-a358-9603eee3cecf.webp?1789128026",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/c/9c334530-0880-46b5-a358-9603eee3cecf.webp?1789128026",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/c/9c334530-0880-46b5-a358-9603eee3cecf.webp?1789128026"
   },
   {
     "name": "Hapatra, the Desert Frost",
@@ -1762,9 +1762,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Wizard",
     "collectorNumber": "215",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/5/85faaa9d-4656-4365-871d-7cba53ed0996.jpg?1789387113",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/5/85faaa9d-4656-4365-871d-7cba53ed0996.jpg?1789387113",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/5/85faaa9d-4656-4365-871d-7cba53ed0996.jpg?1789387113"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/5/85faaa9d-4656-4365-871d-7cba53ed0996.webp?1789387113",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/5/85faaa9d-4656-4365-871d-7cba53ed0996.webp?1789387113",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/5/85faaa9d-4656-4365-871d-7cba53ed0996.webp?1789387113"
   },
   {
     "name": "Jace, Reality Sculptor",
@@ -1776,9 +1776,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Planeswalker — Jace",
     "collectorNumber": "216",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/4/74087795-0b38-4fd2-9841-147583baca41.jpg?1789644880",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/4/74087795-0b38-4fd2-9841-147583baca41.jpg?1789644880",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/4/74087795-0b38-4fd2-9841-147583baca41.jpg?1789644880"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/4/74087795-0b38-4fd2-9841-147583baca41.webp?1789644880",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/4/74087795-0b38-4fd2-9841-147583baca41.webp?1789644880",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/4/74087795-0b38-4fd2-9841-147583baca41.webp?1789644880"
   },
   {
     "name": "Lyra, Tolarian Archangel",
@@ -1790,9 +1790,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Creature — Angel Wizard",
     "collectorNumber": "217",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/5/a5183681-447b-4023-91f7-00e9338f4417.jpg?1789128032",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/5/a5183681-447b-4023-91f7-00e9338f4417.jpg?1789128032",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/5/a5183681-447b-4023-91f7-00e9338f4417.jpg?1789128032"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/5/a5183681-447b-4023-91f7-00e9338f4417.webp?1789128032",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/5/a5183681-447b-4023-91f7-00e9338f4417.webp?1789128032",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/5/a5183681-447b-4023-91f7-00e9338f4417.webp?1789128032"
   },
   {
     "name": "Proft, Consulting Detective",
@@ -1804,9 +1804,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Detective",
     "collectorNumber": "218",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/8/b8466593-40fe-4557-89b2-760c1c92087b.jpg?1789127178",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/8/b8466593-40fe-4557-89b2-760c1c92087b.jpg?1789127178",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/8/b8466593-40fe-4557-89b2-760c1c92087b.jpg?1789127178"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/8/b8466593-40fe-4557-89b2-760c1c92087b.webp?1789127178",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/8/b8466593-40fe-4557-89b2-760c1c92087b.webp?1789127178",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/8/b8466593-40fe-4557-89b2-760c1c92087b.webp?1789127178"
   },
   {
     "name": "Ruric Thar, Biomagus",
@@ -1818,9 +1818,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Ogre Crab Wizard",
     "collectorNumber": "219",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/0/00af4e87-5576-4a43-9422-4c35b2b66775.jpg?1789127229",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/0/00af4e87-5576-4a43-9422-4c35b2b66775.jpg?1789127229",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/0/00af4e87-5576-4a43-9422-4c35b2b66775.jpg?1789127229"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/0/00af4e87-5576-4a43-9422-4c35b2b66775.webp?1789127229",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/0/00af4e87-5576-4a43-9422-4c35b2b66775.webp?1789127229",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/0/00af4e87-5576-4a43-9422-4c35b2b66775.webp?1789127229"
   },
   {
     "name": "Surgical Precision",
@@ -1832,9 +1832,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "22",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/3/d3acf176-ef02-4729-88c4-0f0dfbfdada4.jpg?1789385570",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/3/d3acf176-ef02-4729-88c4-0f0dfbfdada4.jpg?1789385570",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/3/d3acf176-ef02-4729-88c4-0f0dfbfdada4.jpg?1789385570"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/3/d3acf176-ef02-4729-88c4-0f0dfbfdada4.webp?1789385570",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/3/d3acf176-ef02-4729-88c4-0f0dfbfdada4.webp?1789385570",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/3/d3acf176-ef02-4729-88c4-0f0dfbfdada4.webp?1789385570"
   },
   {
     "name": "Samut, Tyrant of Naktamun",
@@ -1846,9 +1846,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Creature — Human Wizard",
     "collectorNumber": "220",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/d/6d7d8fa7-ce69-4a8c-9af0-55571393a244.jpg?1789729644",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/d/6d7d8fa7-ce69-4a8c-9af0-55571393a244.jpg?1789729644",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/d/6d7d8fa7-ce69-4a8c-9af0-55571393a244.jpg?1789729644"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/d/6d7d8fa7-ce69-4a8c-9af0-55571393a244.webp?1789729644",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/d/6d7d8fa7-ce69-4a8c-9af0-55571393a244.webp?1789729644",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/d/6d7d8fa7-ce69-4a8c-9af0-55571393a244.webp?1789729644"
   },
   {
     "name": "Tetsuko Umezawa, Fugitive",
@@ -1860,9 +1860,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Rogue",
     "collectorNumber": "221",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/9/3983d71e-3c23-4b36-b331-08e0707d8245.jpg?1789127702",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/9/3983d71e-3c23-4b36-b331-08e0707d8245.jpg?1789127702",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/9/3983d71e-3c23-4b36-b331-08e0707d8245.jpg?1789127702"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/9/3983d71e-3c23-4b36-b331-08e0707d8245.webp?1789127702",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/9/3983d71e-3c23-4b36-b331-08e0707d8245.webp?1789127702",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/9/3983d71e-3c23-4b36-b331-08e0707d8245.webp?1789127702"
   },
   {
     "name": "Traxos, Academy Guardian",
@@ -1874,9 +1874,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Artifact Creature — Dragon Construct",
     "collectorNumber": "222",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/3/a349800f-b634-4e74-a9d9-185df37ad909.jpg?1789568451",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/3/a349800f-b634-4e74-a9d9-185df37ad909.jpg?1789568451",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/3/a349800f-b634-4e74-a9d9-185df37ad909.jpg?1789568451"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/3/a349800f-b634-4e74-a9d9-185df37ad909.webp?1789568451",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/3/a349800f-b634-4e74-a9d9-185df37ad909.webp?1789568451",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/3/a349800f-b634-4e74-a9d9-185df37ad909.webp?1789568451"
   },
   {
     "name": "Way of the Cryomancer",
@@ -1888,9 +1888,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Enchantment",
     "collectorNumber": "223",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/3/838b0efb-7398-4df9-8fdf-b8af43b47938.jpg?1789014637",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/3/838b0efb-7398-4df9-8fdf-b8af43b47938.jpg?1789014637",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/3/838b0efb-7398-4df9-8fdf-b8af43b47938.jpg?1789014637"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/3/838b0efb-7398-4df9-8fdf-b8af43b47938.webp?1789014637",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/3/838b0efb-7398-4df9-8fdf-b8af43b47938.webp?1789014637",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/3/838b0efb-7398-4df9-8fdf-b8af43b47938.webp?1789014637"
   },
   {
     "name": "Way of the Mind Sculptor",
@@ -1902,9 +1902,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Enchantment",
     "collectorNumber": "224",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/8/5838af68-66c3-4fe8-ab89-0a1721b0cfeb.jpg?1789729565",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/8/5838af68-66c3-4fe8-ab89-0a1721b0cfeb.jpg?1789729565",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/8/5838af68-66c3-4fe8-ab89-0a1721b0cfeb.jpg?1789729565"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/8/5838af68-66c3-4fe8-ab89-0a1721b0cfeb.webp?1789729565",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/8/5838af68-66c3-4fe8-ab89-0a1721b0cfeb.webp?1789729565",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/8/5838af68-66c3-4fe8-ab89-0a1721b0cfeb.webp?1789729565"
   },
   {
     "name": "Yargle, Goliath of Otaria",
@@ -1916,9 +1916,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Frog Spirit",
     "collectorNumber": "225",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/4/f45ba926-6496-4bd4-96eb-663946d56bbf.jpg?1789128043",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/4/f45ba926-6496-4bd4-96eb-663946d56bbf.jpg?1789128043",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/4/f45ba926-6496-4bd4-96eb-663946d56bbf.jpg?1789128043"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/4/f45ba926-6496-4bd4-96eb-663946d56bbf.webp?1789128043",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/4/f45ba926-6496-4bd4-96eb-663946d56bbf.webp?1789128043",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/4/f45ba926-6496-4bd4-96eb-663946d56bbf.webp?1789128043"
   },
   {
     "name": "Yuriko, Hope from the Shadows",
@@ -1930,9 +1930,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Ninja",
     "collectorNumber": "226",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/5/45e81487-8b8c-480b-922a-eaa9edc7201d.jpg?1789127717",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/5/45e81487-8b8c-480b-922a-eaa9edc7201d.jpg?1789127717",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/5/45e81487-8b8c-480b-922a-eaa9edc7201d.jpg?1789127717"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/5/45e81487-8b8c-480b-922a-eaa9edc7201d.webp?1789127717",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/5/45e81487-8b8c-480b-922a-eaa9edc7201d.webp?1789127717",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/5/45e81487-8b8c-480b-922a-eaa9edc7201d.webp?1789127717"
   },
   {
     "name": "Danitha, Spear of Agony",
@@ -1944,9 +1944,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Knight",
     "collectorNumber": "227",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/4/6489814b-3d10-423e-988c-324740d36748.jpg?1789127194",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/4/6489814b-3d10-423e-988c-324740d36748.jpg?1789127194",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/4/6489814b-3d10-423e-988c-324740d36748.jpg?1789127194"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/4/6489814b-3d10-423e-988c-324740d36748.webp?1789127194",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/4/6489814b-3d10-423e-988c-324740d36748.webp?1789127194",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/4/6489814b-3d10-423e-988c-324740d36748.webp?1789127194"
   },
   {
     "name": "Gallia, Tragic Host",
@@ -1958,9 +1958,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Zombie Satyr",
     "collectorNumber": "228",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/9/498fa810-8522-4020-b773-52ad404c9f65.jpg?1789385697",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/9/498fa810-8522-4020-b773-52ad404c9f65.jpg?1789385697",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/9/498fa810-8522-4020-b773-52ad404c9f65.jpg?1789385697"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/9/498fa810-8522-4020-b773-52ad404c9f65.webp?1789385697",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/9/498fa810-8522-4020-b773-52ad404c9f65.webp?1789385697",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/9/498fa810-8522-4020-b773-52ad404c9f65.webp?1789385697"
   },
   {
     "name": "Garruk, Veiled Butcher",
@@ -1972,9 +1972,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Planeswalker — Garruk",
     "collectorNumber": "229",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/4/d48bfb8a-d135-45f3-be99-4694b4b9ab93.jpg?1788329269",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/4/d48bfb8a-d135-45f3-be99-4694b4b9ab93.jpg?1788329269",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/4/d48bfb8a-d135-45f3-be99-4694b4b9ab93.jpg?1788329269"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/4/d48bfb8a-d135-45f3-be99-4694b4b9ab93.webp?1788329269",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/4/d48bfb8a-d135-45f3-be99-4694b4b9ab93.webp?1788329269",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/4/d48bfb8a-d135-45f3-be99-4694b4b9ab93.webp?1788329269"
   },
   {
     "name": "Unflinching Hortimancer",
@@ -1986,9 +1986,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Human Cleric",
     "collectorNumber": "23",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/3/63f82985-c9c2-4d0a-ac4f-560166bebd9f.jpg?1789556741",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/3/63f82985-c9c2-4d0a-ac4f-560166bebd9f.jpg?1789556741",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/3/63f82985-c9c2-4d0a-ac4f-560166bebd9f.jpg?1789556741"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/3/63f82985-c9c2-4d0a-ac4f-560166bebd9f.webp?1789556741",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/3/63f82985-c9c2-4d0a-ac4f-560166bebd9f.webp?1789556741",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/3/63f82985-c9c2-4d0a-ac4f-560166bebd9f.webp?1789556741"
   },
   {
     "name": "Gideon the Oathless",
@@ -2000,9 +2000,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Creature — Human Mercenary",
     "collectorNumber": "230",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/9/c985b0d1-25bd-4069-aab7-a566ff27a8f6.jpg?1789127990",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/9/c985b0d1-25bd-4069-aab7-a566ff27a8f6.jpg?1789127990",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/9/c985b0d1-25bd-4069-aab7-a566ff27a8f6.jpg?1789127990"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/9/c985b0d1-25bd-4069-aab7-a566ff27a8f6.webp?1789127990",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/9/c985b0d1-25bd-4069-aab7-a566ff27a8f6.webp?1789127990",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/9/c985b0d1-25bd-4069-aab7-a566ff27a8f6.webp?1789127990"
   },
   {
     "name": "Liliana the Repentant",
@@ -2014,9 +2014,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Creature — Human Warlock",
     "collectorNumber": "231",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/e/1eb25a6c-d6b4-465d-990e-f1ab86b26b69.jpg?1788329273",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/e/1eb25a6c-d6b4-465d-990e-f1ab86b26b69.jpg?1788329273",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/e/1eb25a6c-d6b4-465d-990e-f1ab86b26b69.jpg?1788329273"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/e/1eb25a6c-d6b4-465d-990e-f1ab86b26b69.webp?1788329273",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/e/1eb25a6c-d6b4-465d-990e-f1ab86b26b69.webp?1788329273",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/e/1eb25a6c-d6b4-465d-990e-f1ab86b26b69.webp?1788329273"
   },
   {
     "name": "Loot, the Anomaly",
@@ -2028,9 +2028,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Beast Horror",
     "collectorNumber": "232",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/f/4f6fd2fa-8bc8-4743-bbc8-b56475d64eff.jpg?1789568430",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/f/4f6fd2fa-8bc8-4743-bbc8-b56475d64eff.jpg?1789568430",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/f/4f6fd2fa-8bc8-4743-bbc8-b56475d64eff.jpg?1789568430"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/f/4f6fd2fa-8bc8-4743-bbc8-b56475d64eff.webp?1789568430",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/f/4f6fd2fa-8bc8-4743-bbc8-b56475d64eff.webp?1789568430",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/f/4f6fd2fa-8bc8-4743-bbc8-b56475d64eff.webp?1789568430"
   },
   {
     "name": "Mabel, Bitter Recluse",
@@ -2042,9 +2042,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Mouse Warlock",
     "collectorNumber": "233",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/2/b2a412b0-2ae4-4552-bc5e-70654b6b9b4e.jpg?1789385677",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/2/b2a412b0-2ae4-4552-bc5e-70654b6b9b4e.jpg?1789385677",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/2/b2a412b0-2ae4-4552-bc5e-70654b6b9b4e.jpg?1789385677"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/2/b2a412b0-2ae4-4552-bc5e-70654b6b9b4e.webp?1789385677",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/2/b2a412b0-2ae4-4552-bc5e-70654b6b9b4e.webp?1789385677",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/2/b2a412b0-2ae4-4552-bc5e-70654b6b9b4e.webp?1789385677"
   },
   {
     "name": "Massacre Girl, Most Wanted",
@@ -2056,9 +2056,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Assassin",
     "collectorNumber": "234",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/0/9028d31f-9c41-47e3-885b-6a869bca8178.jpg?1789644882",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/0/9028d31f-9c41-47e3-885b-6a869bca8178.jpg?1789644882",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/0/9028d31f-9c41-47e3-885b-6a869bca8178.jpg?1789644882"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/0/9028d31f-9c41-47e3-885b-6a869bca8178.webp?1789644882",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/0/9028d31f-9c41-47e3-885b-6a869bca8178.webp?1789644882",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/0/9028d31f-9c41-47e3-885b-6a869bca8178.webp?1789644882"
   },
   {
     "name": "Proft, Sinister Mastermind",
@@ -2070,9 +2070,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Rogue",
     "collectorNumber": "235",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/3/d36b0e06-cb82-4c48-bf35-e76f109116f6.jpg?1789127196",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/3/d36b0e06-cb82-4c48-bf35-e76f109116f6.jpg?1789127196",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/3/d36b0e06-cb82-4c48-bf35-e76f109116f6.jpg?1789127196"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/3/d36b0e06-cb82-4c48-bf35-e76f109116f6.webp?1789127196",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/3/d36b0e06-cb82-4c48-bf35-e76f109116f6.webp?1789127196",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/3/d36b0e06-cb82-4c48-bf35-e76f109116f6.webp?1789127196"
   },
   {
     "name": "Teyo, Diamondblade Mage",
@@ -2084,9 +2084,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Warlock",
     "collectorNumber": "236",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/0/100c3b67-0c92-4224-b5ed-67789c612df7.jpg?1789470892",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/0/100c3b67-0c92-4224-b5ed-67789c612df7.jpg?1789470892",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/0/100c3b67-0c92-4224-b5ed-67789c612df7.jpg?1789470892"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/0/100c3b67-0c92-4224-b5ed-67789c612df7.webp?1789470892",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/0/100c3b67-0c92-4224-b5ed-67789c612df7.webp?1789470892",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/0/100c3b67-0c92-4224-b5ed-67789c612df7.webp?1789470892"
   },
   {
     "name": "Tinybones, Pocket Nuisance",
@@ -2098,9 +2098,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Skeleton Rogue",
     "collectorNumber": "237",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/f/2f47ddf7-35b6-4205-8045-f057914c5f64.jpg?1788329294",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/f/2f47ddf7-35b6-4205-8045-f057914c5f64.jpg?1788329294",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/f/2f47ddf7-35b6-4205-8045-f057914c5f64.jpg?1788329294"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/f/2f47ddf7-35b6-4205-8045-f057914c5f64.webp?1788329294",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/f/2f47ddf7-35b6-4205-8045-f057914c5f64.webp?1788329294",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/f/2f47ddf7-35b6-4205-8045-f057914c5f64.webp?1788329294"
   },
   {
     "name": "Way of the Deathbringer",
@@ -2112,9 +2112,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Enchantment",
     "collectorNumber": "238",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/2/12dd46b2-e892-4660-b120-55766fd4d878.jpg?1789729576",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/2/12dd46b2-e892-4660-b120-55766fd4d878.jpg?1789729576",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/2/12dd46b2-e892-4660-b120-55766fd4d878.jpg?1789729576"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/2/12dd46b2-e892-4660-b120-55766fd4d878.webp?1789729576",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/2/12dd46b2-e892-4660-b120-55766fd4d878.webp?1789729576",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/2/12dd46b2-e892-4660-b120-55766fd4d878.webp?1789729576"
   },
   {
     "name": "Way of the Necromancer",
@@ -2126,9 +2126,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Enchantment",
     "collectorNumber": "239",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/0/a0ff9689-ea49-4fff-b37c-4abbaeb0f73d.jpg?1789729526",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/0/a0ff9689-ea49-4fff-b37c-4abbaeb0f73d.jpg?1789729526",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/0/a0ff9689-ea49-4fff-b37c-4abbaeb0f73d.jpg?1789729526"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/0/a0ff9689-ea49-4fff-b37c-4abbaeb0f73d.webp?1789729526",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/0/a0ff9689-ea49-4fff-b37c-4abbaeb0f73d.webp?1789729526",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/0/a0ff9689-ea49-4fff-b37c-4abbaeb0f73d.webp?1789729526"
   },
   {
     "name": "Your Fate Ends Here",
@@ -2140,9 +2140,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "24",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/5/25000a17-b701-4d69-b2ef-2c74029199d3.jpg?1789729751",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/5/25000a17-b701-4d69-b2ef-2c74029199d3.jpg?1789729751",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/5/25000a17-b701-4d69-b2ef-2c74029199d3.jpg?1789729751"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/5/25000a17-b701-4d69-b2ef-2c74029199d3.webp?1789729751",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/5/25000a17-b701-4d69-b2ef-2c74029199d3.webp?1789729751",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/5/25000a17-b701-4d69-b2ef-2c74029199d3.webp?1789729751"
   },
   {
     "name": "Winter, Tormented Loner",
@@ -2154,9 +2154,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Warlock",
     "collectorNumber": "240",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/6/9670f754-f41f-45ac-8e8b-025ad2c0f66b.jpg?1789127724",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/6/9670f754-f41f-45ac-8e8b-025ad2c0f66b.jpg?1789127724",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/6/9670f754-f41f-45ac-8e8b-025ad2c0f66b.jpg?1789127724"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/6/9670f754-f41f-45ac-8e8b-025ad2c0f66b.webp?1789127724",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/6/9670f754-f41f-45ac-8e8b-025ad2c0f66b.webp?1789127724",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/6/9670f754-f41f-45ac-8e8b-025ad2c0f66b.webp?1789127724"
   },
   {
     "name": "Yargle, Glutton of Urborg",
@@ -2168,9 +2168,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Frog Spirit",
     "collectorNumber": "241",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/4/04c816fb-5951-4db1-8834-ed3f0b36bfe1.jpg?1789127722",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/4/04c816fb-5951-4db1-8834-ed3f0b36bfe1.jpg?1789127722",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/4/04c816fb-5951-4db1-8834-ed3f0b36bfe1.jpg?1789127722"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/4/04c816fb-5951-4db1-8834-ed3f0b36bfe1.webp?1789127722",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/4/04c816fb-5951-4db1-8834-ed3f0b36bfe1.webp?1789127722",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/4/04c816fb-5951-4db1-8834-ed3f0b36bfe1.webp?1789127722"
   },
   {
     "name": "Ajani Unrelenting",
@@ -2182,9 +2182,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Planeswalker — Ajani",
     "collectorNumber": "242",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/c/bc3c096f-7f6c-474c-a2c8-75d3e6ddd6f5.jpg?1788329317",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/c/bc3c096f-7f6c-474c-a2c8-75d3e6ddd6f5.jpg?1788329317",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/c/bc3c096f-7f6c-474c-a2c8-75d3e6ddd6f5.jpg?1788329317"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/c/bc3c096f-7f6c-474c-a2c8-75d3e6ddd6f5.webp?1788329317",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/c/bc3c096f-7f6c-474c-a2c8-75d3e6ddd6f5.webp?1788329317",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/c/bc3c096f-7f6c-474c-a2c8-75d3e6ddd6f5.webp?1788329317"
   },
   {
     "name": "Arni, Renowned Champion",
@@ -2196,9 +2196,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Berserker",
     "collectorNumber": "243",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/d/bd8db649-1dba-457d-8327-e1f1da1aab36.jpg?1789557035",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/d/bd8db649-1dba-457d-8327-e1f1da1aab36.jpg?1789557035",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/d/bd8db649-1dba-457d-8327-e1f1da1aab36.jpg?1789557035"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/d/bd8db649-1dba-457d-8327-e1f1da1aab36.webp?1789557035",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/d/bd8db649-1dba-457d-8327-e1f1da1aab36.webp?1789557035",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/d/bd8db649-1dba-457d-8327-e1f1da1aab36.webp?1789557035"
   },
   {
     "name": "Chandra, Torch of Defiance",
@@ -2210,9 +2210,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Planeswalker — Chandra",
     "collectorNumber": "244",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/0/40cb22c8-cb03-45c9-bb0e-b8cabdcc43cd.jpg?1788329325",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/0/40cb22c8-cb03-45c9-bb0e-b8cabdcc43cd.jpg?1788329325",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/0/40cb22c8-cb03-45c9-bb0e-b8cabdcc43cd.jpg?1788329325"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/0/40cb22c8-cb03-45c9-bb0e-b8cabdcc43cd.webp?1788329325",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/0/40cb22c8-cb03-45c9-bb0e-b8cabdcc43cd.webp?1788329325",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/0/40cb22c8-cb03-45c9-bb0e-b8cabdcc43cd.webp?1788329325"
   },
   {
     "name": "Gallia, the Merrymaker",
@@ -2224,9 +2224,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Satyr",
     "collectorNumber": "245",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/2/f27d50f0-d76e-4ce1-a8d9-d997af6a5b41.jpg?1789385716",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/2/f27d50f0-d76e-4ce1-a8d9-d997af6a5b41.jpg?1789385716",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/2/f27d50f0-d76e-4ce1-a8d9-d997af6a5b41.jpg?1789385716"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/2/f27d50f0-d76e-4ce1-a8d9-d997af6a5b41.webp?1789385716",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/2/f27d50f0-d76e-4ce1-a8d9-d997af6a5b41.webp?1789385716",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/2/f27d50f0-d76e-4ce1-a8d9-d997af6a5b41.webp?1789385716"
   },
   {
     "name": "Jiang Yanggu, Alone",
@@ -2238,9 +2238,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Berserker",
     "collectorNumber": "246",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/8/e8c1ce21-b77d-40bf-9ed1-478604e71f5f.jpg?1789014416",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/8/e8c1ce21-b77d-40bf-9ed1-478604e71f5f.jpg?1789014416",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/8/e8c1ce21-b77d-40bf-9ed1-478604e71f5f.jpg?1789014416"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/8/e8c1ce21-b77d-40bf-9ed1-478604e71f5f.webp?1789014416",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/8/e8c1ce21-b77d-40bf-9ed1-478604e71f5f.webp?1789014416",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/8/e8c1ce21-b77d-40bf-9ed1-478604e71f5f.webp?1789014416"
   },
   {
     "name": "Kiora of Fire and Ashes",
@@ -2252,9 +2252,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Merfolk Noble",
     "collectorNumber": "247",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/8/08657053-86f9-4c52-abf0-d9cdd443ae3b.jpg?1789127995",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/8/08657053-86f9-4c52-abf0-d9cdd443ae3b.jpg?1789127995",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/8/08657053-86f9-4c52-abf0-d9cdd443ae3b.jpg?1789127995"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/8/08657053-86f9-4c52-abf0-d9cdd443ae3b.webp?1789127995",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/8/08657053-86f9-4c52-abf0-d9cdd443ae3b.webp?1789127995",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/8/08657053-86f9-4c52-abf0-d9cdd443ae3b.webp?1789127995"
   },
   {
     "name": "Koth, the Geomancer",
@@ -2266,9 +2266,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Warrior",
     "collectorNumber": "248",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/4/54f64e95-5a97-4d7c-9939-7f33a3165562.jpg?1789470892",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/4/54f64e95-5a97-4d7c-9939-7f33a3165562.jpg?1789470892",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/4/54f64e95-5a97-4d7c-9939-7f33a3165562.jpg?1789470892"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/4/54f64e95-5a97-4d7c-9939-7f33a3165562.webp?1789470892",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/4/54f64e95-5a97-4d7c-9939-7f33a3165562.webp?1789470892",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/4/54f64e95-5a97-4d7c-9939-7f33a3165562.webp?1789470892"
   },
   {
     "name": "Marwyn, the Clearcutter",
@@ -2280,9 +2280,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Elf Warrior",
     "collectorNumber": "249",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/9/f93da73c-ca8b-438e-8387-6109dac3fc1a.jpg?1789644549",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/9/f93da73c-ca8b-438e-8387-6109dac3fc1a.jpg?1789644549",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/9/f93da73c-ca8b-438e-8387-6109dac3fc1a.jpg?1789644549"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/9/f93da73c-ca8b-438e-8387-6109dac3fc1a.webp?1789644549",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/9/f93da73c-ca8b-438e-8387-6109dac3fc1a.webp?1789644549",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/9/f93da73c-ca8b-438e-8387-6109dac3fc1a.webp?1789644549"
   },
   {
     "name": "Countersculpt",
@@ -2294,9 +2294,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "25",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/4/145b928d-a7ff-4fe5-ae4d-bbae7b1d955b.jpg?1788878107",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/4/145b928d-a7ff-4fe5-ae4d-bbae7b1d955b.jpg?1788878107",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/4/145b928d-a7ff-4fe5-ae4d-bbae7b1d955b.jpg?1788878107"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/4/145b928d-a7ff-4fe5-ae4d-bbae7b1d955b.webp?1788878107",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/4/145b928d-a7ff-4fe5-ae4d-bbae7b1d955b.webp?1788878107",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/4/145b928d-a7ff-4fe5-ae4d-bbae7b1d955b.webp?1788878107"
   },
   {
     "name": "Pia, Determined Rebuilder",
@@ -2308,9 +2308,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Artificer",
     "collectorNumber": "250",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/d/dd3faaf4-45ca-4714-8dbe-37102ec131cf.jpg?1789385851",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/d/dd3faaf4-45ca-4714-8dbe-37102ec131cf.jpg?1789385851",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/d/dd3faaf4-45ca-4714-8dbe-37102ec131cf.jpg?1789385851"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/d/dd3faaf4-45ca-4714-8dbe-37102ec131cf.webp?1789385851",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/d/dd3faaf4-45ca-4714-8dbe-37102ec131cf.webp?1789385851",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/d/dd3faaf4-45ca-4714-8dbe-37102ec131cf.webp?1789385851"
   },
   {
     "name": "Samut, Hazoret's Champion",
@@ -2322,9 +2322,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Creature — Human Warrior Cleric",
     "collectorNumber": "251",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/a/ba920f23-f05c-410e-8516-c93abedf1d4d.jpg?1789729662",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/a/ba920f23-f05c-410e-8516-c93abedf1d4d.jpg?1789729662",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/a/ba920f23-f05c-410e-8516-c93abedf1d4d.jpg?1789729662"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/a/ba920f23-f05c-410e-8516-c93abedf1d4d.webp?1789729662",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/a/ba920f23-f05c-410e-8516-c93abedf1d4d.webp?1789729662",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/a/ba920f23-f05c-410e-8516-c93abedf1d4d.webp?1789729662"
   },
   {
     "name": "Tetsuko Umezawa, Pursuer",
@@ -2336,9 +2336,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Mercenary",
     "collectorNumber": "252",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/f/df818900-ce5e-4b0d-a927-c975cbef7eda.jpg?1789128002",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/f/df818900-ce5e-4b0d-a927-c975cbef7eda.jpg?1789128002",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/f/df818900-ce5e-4b0d-a927-c975cbef7eda.jpg?1789128002"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/f/df818900-ce5e-4b0d-a927-c975cbef7eda.webp?1789128002",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/f/df818900-ce5e-4b0d-a927-c975cbef7eda.webp?1789128002",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/f/df818900-ce5e-4b0d-a927-c975cbef7eda.webp?1789128002"
   },
   {
     "name": "Tomik, Izzet Sparkmage",
@@ -2350,9 +2350,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Wizard",
     "collectorNumber": "253",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/c/5c5afd5f-6f37-4c3e-83f0-68fdcea98810.jpg?1789729773",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/c/5c5afd5f-6f37-4c3e-83f0-68fdcea98810.jpg?1789729773",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/c/5c5afd5f-6f37-4c3e-83f0-68fdcea98810.jpg?1789729773"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/c/5c5afd5f-6f37-4c3e-83f0-68fdcea98810.webp?1789729773",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/c/5c5afd5f-6f37-4c3e-83f0-68fdcea98810.webp?1789729773",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/c/5c5afd5f-6f37-4c3e-83f0-68fdcea98810.webp?1789729773"
   },
   {
     "name": "Way of the Pyromancer",
@@ -2364,9 +2364,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Enchantment",
     "collectorNumber": "254",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/1/c1a00020-7c14-4503-a057-5763704bb83e.jpg?1788878311",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/1/c1a00020-7c14-4503-a057-5763704bb83e.jpg?1788878311",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/1/c1a00020-7c14-4503-a057-5763704bb83e.jpg?1788878311"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/1/c1a00020-7c14-4503-a057-5763704bb83e.webp?1788878311",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/1/c1a00020-7c14-4503-a057-5763704bb83e.webp?1788878311",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/1/c1a00020-7c14-4503-a057-5763704bb83e.webp?1788878311"
   },
   {
     "name": "Way of the Warlord",
@@ -2378,9 +2378,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Enchantment",
     "collectorNumber": "255",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/d/6d86e410-20c4-4248-96bf-5780ece6274a.jpg?1789729585",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/d/6d86e410-20c4-4248-96bf-5780ece6274a.jpg?1789729585",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/d/6d86e410-20c4-4248-96bf-5780ece6274a.jpg?1789729585"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/d/6d86e410-20c4-4248-96bf-5780ece6274a.webp?1789729585",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/d/6d86e410-20c4-4248-96bf-5780ece6274a.webp?1789729585",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/d/6d86e410-20c4-4248-96bf-5780ece6274a.webp?1789729585"
   },
   {
     "name": "Winter, Team Player",
@@ -2392,9 +2392,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Warrior",
     "collectorNumber": "256",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/f/df8713cd-3f4b-43ef-adbd-e37c2617c617.jpg?1789128020",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/f/df8713cd-3f4b-43ef-adbd-e37c2617c617.jpg?1789128020",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/f/df8713cd-3f4b-43ef-adbd-e37c2617c617.jpg?1789128020"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/f/df8713cd-3f4b-43ef-adbd-e37c2617c617.webp?1789128020",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/f/df8713cd-3f4b-43ef-adbd-e37c2617c617.webp?1789128020",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/f/df8713cd-3f4b-43ef-adbd-e37c2617c617.webp?1789128020"
   },
   {
     "name": "Edgar, Moonlit Sovereign",
@@ -2406,9 +2406,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Werewolf Noble",
     "collectorNumber": "257",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/a/dad6afc9-8505-4cdd-bf79-e9ba4670f2bb.jpg?1789127966",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/a/dad6afc9-8505-4cdd-bf79-e9ba4670f2bb.jpg?1789127966",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/a/dad6afc9-8505-4cdd-bf79-e9ba4670f2bb.jpg?1789127966"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/a/dad6afc9-8505-4cdd-bf79-e9ba4670f2bb.webp?1789127966",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/a/dad6afc9-8505-4cdd-bf79-e9ba4670f2bb.webp?1789127966",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/a/dad6afc9-8505-4cdd-bf79-e9ba4670f2bb.webp?1789127966"
   },
   {
     "name": "Fblthp, Knows the Way",
@@ -2420,9 +2420,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Homunculus Scout",
     "collectorNumber": "258",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/8/28fbb55a-5c9d-45ee-bf42-a84b1048f5d2.jpg?1789127976",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/8/28fbb55a-5c9d-45ee-bf42-a84b1048f5d2.jpg?1789127976",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/8/28fbb55a-5c9d-45ee-bf42-a84b1048f5d2.jpg?1789127976"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/8/28fbb55a-5c9d-45ee-bf42-a84b1048f5d2.webp?1789127976",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/8/28fbb55a-5c9d-45ee-bf42-a84b1048f5d2.webp?1789127976",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/8/28fbb55a-5c9d-45ee-bf42-a84b1048f5d2.webp?1789127976"
   },
   {
     "name": "Garruk, Curse Breaker",
@@ -2434,9 +2434,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Planeswalker — Garruk",
     "collectorNumber": "259",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/0/90ca5812-ceb5-46bd-b049-aed7ff10e6af.jpg?1788329370",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/0/90ca5812-ceb5-46bd-b049-aed7ff10e6af.jpg?1788329370",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/0/90ca5812-ceb5-46bd-b049-aed7ff10e6af.jpg?1788329370"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/0/90ca5812-ceb5-46bd-b049-aed7ff10e6af.webp?1788329370",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/0/90ca5812-ceb5-46bd-b049-aed7ff10e6af.webp?1788329370",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/0/90ca5812-ceb5-46bd-b049-aed7ff10e6af.webp?1788329370"
   },
   {
     "name": "Cruel Calculations",
@@ -2448,9 +2448,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Sorcery",
     "collectorNumber": "26",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/7/f76c4d8e-3e1f-4264-99af-1b8adb9a06be.jpg?1789127482",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/7/f76c4d8e-3e1f-4264-99af-1b8adb9a06be.jpg?1789127482",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/7/f76c4d8e-3e1f-4264-99af-1b8adb9a06be.jpg?1789127482"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/7/f76c4d8e-3e1f-4264-99af-1b8adb9a06be.webp?1789127482",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/7/f76c4d8e-3e1f-4264-99af-1b8adb9a06be.webp?1789127482",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/7/f76c4d8e-3e1f-4264-99af-1b8adb9a06be.webp?1789127482"
   },
   {
     "name": "Ghalta the Unstoppable",
@@ -2462,9 +2462,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Elder Dinosaur",
     "collectorNumber": "260",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/d/1d535b5f-c916-4f16-89a7-9477578826d2.jpg?1788878290",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/d/1d535b5f-c916-4f16-89a7-9477578826d2.jpg?1788878290",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/d/1d535b5f-c916-4f16-89a7-9477578826d2.jpg?1788878290"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/d/1d535b5f-c916-4f16-89a7-9477578826d2.webp?1788878290",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/d/1d535b5f-c916-4f16-89a7-9477578826d2.webp?1788878290",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/d/1d535b5f-c916-4f16-89a7-9477578826d2.webp?1788878290"
   },
   {
     "name": "Jiang Yanggu, Never Alone",
@@ -2476,9 +2476,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Druid",
     "collectorNumber": "261",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/5/f5a0bb3e-8119-4739-8684-e61d1d607dcb.jpg?1789014406",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/5/f5a0bb3e-8119-4739-8684-e61d1d607dcb.jpg?1789014406",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/5/f5a0bb3e-8119-4739-8684-e61d1d607dcb.jpg?1789014406"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/5/f5a0bb3e-8119-4739-8684-e61d1d607dcb.webp?1789014406",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/5/f5a0bb3e-8119-4739-8684-e61d1d607dcb.webp?1789014406",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/5/f5a0bb3e-8119-4739-8684-e61d1d607dcb.webp?1789014406"
   },
   {
     "name": "Loot, the Nexus",
@@ -2490,9 +2490,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Beast Noble",
     "collectorNumber": "262",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/c/3cfa4fc6-4d90-4576-a83f-6496c7f21104.jpg?1789614764",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/c/3cfa4fc6-4d90-4576-a83f-6496c7f21104.jpg?1789614764",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/c/3cfa4fc6-4d90-4576-a83f-6496c7f21104.jpg?1789614764"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/c/3cfa4fc6-4d90-4576-a83f-6496c7f21104.webp?1789614764",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/c/3cfa4fc6-4d90-4576-a83f-6496c7f21104.webp?1789614764",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/c/3cfa4fc6-4d90-4576-a83f-6496c7f21104.webp?1789614764"
   },
   {
     "name": "Marwyn, the Preserver",
@@ -2504,9 +2504,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Elf Druid",
     "collectorNumber": "263",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/0/90f33f99-7bc5-42e1-815e-bfb4c2b74107.jpg?1789644564",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/0/90f33f99-7bc5-42e1-815e-bfb4c2b74107.jpg?1789644564",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/0/90f33f99-7bc5-42e1-815e-bfb4c2b74107.jpg?1789644564"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/0/90f33f99-7bc5-42e1-815e-bfb4c2b74107.webp?1789644564",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/0/90f33f99-7bc5-42e1-815e-bfb4c2b74107.webp?1789644564",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/0/90f33f99-7bc5-42e1-815e-bfb4c2b74107.webp?1789644564"
   },
   {
     "name": "Pia, Aether Ascetic",
@@ -2518,9 +2518,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Druid",
     "collectorNumber": "264",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/f/ff0bc30f-9d20-458e-808f-bdc2825905a5.jpg?1789387120",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/f/ff0bc30f-9d20-458e-808f-bdc2825905a5.jpg?1789387120",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/f/ff0bc30f-9d20-458e-808f-bdc2825905a5.jpg?1789387120"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/f/ff0bc30f-9d20-458e-808f-bdc2825905a5.webp?1789387120",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/f/ff0bc30f-9d20-458e-808f-bdc2825905a5.webp?1789387120",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/f/ff0bc30f-9d20-458e-808f-bdc2825905a5.webp?1789387120"
   },
   {
     "name": "Ruric Thar, Magecrusher",
@@ -2532,9 +2532,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Ogre Warrior",
     "collectorNumber": "265",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/e/eed83302-dc2c-45f4-a4bd-af9da51edef5.jpg?1789358701",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/e/eed83302-dc2c-45f4-a4bd-af9da51edef5.jpg?1789358701",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/e/eed83302-dc2c-45f4-a4bd-af9da51edef5.jpg?1789358701"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/e/eed83302-dc2c-45f4-a4bd-af9da51edef5.webp?1789358701",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/e/eed83302-dc2c-45f4-a4bd-af9da51edef5.webp?1789358701",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/e/eed83302-dc2c-45f4-a4bd-af9da51edef5.webp?1789358701"
   },
   {
     "name": "Titanbones, Towering Heart",
@@ -2546,9 +2546,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Skeleton Druid",
     "collectorNumber": "266",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/d/edea6f70-a5a7-475d-b7f2-97933d0f32cf.jpg?1788329375",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/d/edea6f70-a5a7-475d-b7f2-97933d0f32cf.jpg?1788329375",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/d/edea6f70-a5a7-475d-b7f2-97933d0f32cf.jpg?1788329375"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/d/edea6f70-a5a7-475d-b7f2-97933d0f32cf.webp?1788329375",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/d/edea6f70-a5a7-475d-b7f2-97933d0f32cf.webp?1788329375",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/d/edea6f70-a5a7-475d-b7f2-97933d0f32cf.webp?1788329375"
   },
   {
     "name": "Way of the Paradox",
@@ -2560,9 +2560,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Enchantment",
     "collectorNumber": "267",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/8/98dc5470-507a-4364-8480-42607255e56c.jpg?1789729606",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/8/98dc5470-507a-4364-8480-42607255e56c.jpg?1789729606",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/8/98dc5470-507a-4364-8480-42607255e56c.jpg?1789729606"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/8/98dc5470-507a-4364-8480-42607255e56c.webp?1789729606",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/8/98dc5470-507a-4364-8480-42607255e56c.webp?1789729606",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/8/98dc5470-507a-4364-8480-42607255e56c.webp?1789729606"
   },
   {
     "name": "Way of the Wildspeaker",
@@ -2574,9 +2574,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Enchantment",
     "collectorNumber": "268",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/2/a252cb01-537b-4afe-9abc-81a98c4a1439.jpg?1789729602",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/2/a252cb01-537b-4afe-9abc-81a98c4a1439.jpg?1789729602",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/2/a252cb01-537b-4afe-9abc-81a98c4a1439.jpg?1789729602"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/2/a252cb01-537b-4afe-9abc-81a98c4a1439.webp?1789729602",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/2/a252cb01-537b-4afe-9abc-81a98c4a1439.webp?1789729602",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/2/a252cb01-537b-4afe-9abc-81a98c4a1439.webp?1789729602"
   },
   {
     "name": "Yoshimaru, Scrappy Stray",
@@ -2588,9 +2588,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Dog",
     "collectorNumber": "269",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/8/b8dfd087-2434-42c6-ac4c-1decbcdde2db.jpg?1789470909",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/8/b8dfd087-2434-42c6-ac4c-1decbcdde2db.jpg?1789470909",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/8/b8dfd087-2434-42c6-ac4c-1decbcdde2db.jpg?1789470909"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/8/b8dfd087-2434-42c6-ac4c-1decbcdde2db.webp?1789470909",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/8/b8dfd087-2434-42c6-ac4c-1decbcdde2db.webp?1789470909",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/8/b8dfd087-2434-42c6-ac4c-1decbcdde2db.webp?1789470909"
   },
   {
     "name": "Cryotheory Adept",
@@ -2602,9 +2602,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Human Wizard",
     "collectorNumber": "27",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/b/9ba1f7ce-3404-4932-9795-22967707f762.jpg?1789556701",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/b/9ba1f7ce-3404-4932-9795-22967707f762.jpg?1789556701",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/b/9ba1f7ce-3404-4932-9795-22967707f762.jpg?1789556701"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/b/9ba1f7ce-3404-4932-9795-22967707f762.webp?1789556701",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/b/9ba1f7ce-3404-4932-9795-22967707f762.webp?1789556701",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/b/9ba1f7ce-3404-4932-9795-22967707f762.webp?1789556701"
   },
   {
     "name": "Edgar, Ancient Bloodlord",
@@ -2617,9 +2617,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Vampire Noble",
     "collectorNumber": "270",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/c/7c619fed-2394-4efc-8cdc-6df5f51c1f57.jpg?1789127743",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/c/7c619fed-2394-4efc-8cdc-6df5f51c1f57.jpg?1789127743",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/c/7c619fed-2394-4efc-8cdc-6df5f51c1f57.jpg?1789127743"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/c/7c619fed-2394-4efc-8cdc-6df5f51c1f57.webp?1789127743",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/c/7c619fed-2394-4efc-8cdc-6df5f51c1f57.webp?1789127743",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/c/7c619fed-2394-4efc-8cdc-6df5f51c1f57.webp?1789127743"
   },
   {
     "name": "Hapatra, the Desert Fang",
@@ -2632,9 +2632,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Cleric",
     "collectorNumber": "271",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/f/cf7c1534-af41-4991-b3c3-f0a34ae330b5.jpg?1789385991",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/f/cf7c1534-af41-4991-b3c3-f0a34ae330b5.jpg?1789385991",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/f/cf7c1534-af41-4991-b3c3-f0a34ae330b5.jpg?1789385991"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/f/cf7c1534-af41-4991-b3c3-f0a34ae330b5.webp?1789385991",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/f/cf7c1534-af41-4991-b3c3-f0a34ae330b5.webp?1789385991",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/f/cf7c1534-af41-4991-b3c3-f0a34ae330b5.webp?1789385991"
   },
   {
     "name": "Karn, Gilded Guardian",
@@ -2650,9 +2650,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Artifact Creature — Golem",
     "collectorNumber": "272",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/a/3abcae65-5b21-4c98-adad-34b8bc76ea3a.jpg?1789014541",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/a/3abcae65-5b21-4c98-adad-34b8bc76ea3a.jpg?1789014541",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/a/3abcae65-5b21-4c98-adad-34b8bc76ea3a.jpg?1789014541"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/a/3abcae65-5b21-4c98-adad-34b8bc76ea3a.webp?1789014541",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/a/3abcae65-5b21-4c98-adad-34b8bc76ea3a.webp?1789014541",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/a/3abcae65-5b21-4c98-adad-34b8bc76ea3a.webp?1789014541"
   },
   {
     "name": "Kiora of Salt and Sand",
@@ -2665,9 +2665,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Merfolk Noble",
     "collectorNumber": "273",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/1/8151f5f5-e9f6-4fbe-b543-f456ebf22aa5.jpg?1789127745",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/1/8151f5f5-e9f6-4fbe-b543-f456ebf22aa5.jpg?1789127745",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/1/8151f5f5-e9f6-4fbe-b543-f456ebf22aa5.jpg?1789127745"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/1/8151f5f5-e9f6-4fbe-b543-f456ebf22aa5.webp?1789127745",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/1/8151f5f5-e9f6-4fbe-b543-f456ebf22aa5.webp?1789127745",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/1/8151f5f5-e9f6-4fbe-b543-f456ebf22aa5.webp?1789127745"
   },
   {
     "name": "Mabel, Valley Hero",
@@ -2680,9 +2680,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Mouse Soldier",
     "collectorNumber": "274",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/7/47abea4b-9848-48aa-bc1b-f04f4799e920.jpg?1789385857",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/7/47abea4b-9848-48aa-bc1b-f04f4799e920.jpg?1789385857",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/7/47abea4b-9848-48aa-bc1b-f04f4799e920.jpg?1789385857"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/7/47abea4b-9848-48aa-bc1b-f04f4799e920.webp?1789385857",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/7/47abea4b-9848-48aa-bc1b-f04f4799e920.webp?1789385857",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/7/47abea4b-9848-48aa-bc1b-f04f4799e920.webp?1789385857"
   },
   {
     "name": "Saheeli, Jewel of Avishkar",
@@ -2695,9 +2695,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Creature — Human Artificer",
     "collectorNumber": "275",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/8/28d84ef6-e190-46d4-882d-1cea5e111e2a.jpg?1789644883",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/8/28d84ef6-e190-46d4-882d-1cea5e111e2a.jpg?1789644883",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/8/28d84ef6-e190-46d4-882d-1cea5e111e2a.jpg?1789644883"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/8/28d84ef6-e190-46d4-882d-1cea5e111e2a.webp?1789644883",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/8/28d84ef6-e190-46d4-882d-1cea5e111e2a.webp?1789644883",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/8/28d84ef6-e190-46d4-882d-1cea5e111e2a.webp?1789644883"
   },
   {
     "name": "Tam, the Possibility",
@@ -2710,9 +2710,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Creature — Gorgon Wizard",
     "collectorNumber": "276",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/5/6529d399-677e-45a6-ac3e-12a0b10f6c37.jpg?1789644886",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/5/6529d399-677e-45a6-ac3e-12a0b10f6c37.jpg?1789644886",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/5/6529d399-677e-45a6-ac3e-12a0b10f6c37.jpg?1789644886"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/5/6529d399-677e-45a6-ac3e-12a0b10f6c37.webp?1789644886",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/5/6529d399-677e-45a6-ac3e-12a0b10f6c37.webp?1789644886",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/5/6529d399-677e-45a6-ac3e-12a0b10f6c37.webp?1789644886"
   },
   {
     "name": "Vraska, Soul of Stone",
@@ -2726,9 +2726,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Creature — Gorgon Wizard",
     "collectorNumber": "277",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/3/f3869752-eade-4e7a-8dd1-68cafb9e10be.jpg?1789128008",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/3/f3869752-eade-4e7a-8dd1-68cafb9e10be.jpg?1789128008",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/3/f3869752-eade-4e7a-8dd1-68cafb9e10be.jpg?1789128008"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/3/f3869752-eade-4e7a-8dd1-68cafb9e10be.webp?1789128008",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/3/f3869752-eade-4e7a-8dd1-68cafb9e10be.webp?1789128008",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/3/f3869752-eade-4e7a-8dd1-68cafb9e10be.webp?1789128008"
   },
   {
     "name": "Vraska, the Cutting Glare",
@@ -2741,9 +2741,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Creature — Gorgon Assassin",
     "collectorNumber": "278",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/c/5c28b012-5efb-488f-a1c1-09e2dddfd6ee.jpg?1789127776",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/c/5c28b012-5efb-488f-a1c1-09e2dddfd6ee.jpg?1789127776",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/c/5c28b012-5efb-488f-a1c1-09e2dddfd6ee.jpg?1789127776"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/c/5c28b012-5efb-488f-a1c1-09e2dddfd6ee.webp?1789127776",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/c/5c28b012-5efb-488f-a1c1-09e2dddfd6ee.webp?1789127776",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/c/5c28b012-5efb-488f-a1c1-09e2dddfd6ee.webp?1789127776"
   },
   {
     "name": "Karn, Argent Defender",
@@ -2753,9 +2753,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Legendary Artifact Creature — Golem",
     "collectorNumber": "279",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/e/1ebbbddb-2dc3-4194-b72b-13bcebe2ab89.jpg?1788878301",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/e/1ebbbddb-2dc3-4194-b72b-13bcebe2ab89.jpg?1788878301",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/e/1ebbbddb-2dc3-4194-b72b-13bcebe2ab89.jpg?1788878301"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/e/1ebbbddb-2dc3-4194-b72b-13bcebe2ab89.webp?1788878301",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/e/1ebbbddb-2dc3-4194-b72b-13bcebe2ab89.webp?1788878301",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/e/1ebbbddb-2dc3-4194-b72b-13bcebe2ab89.webp?1788878301"
   },
   {
     "name": "Diviner of Victory",
@@ -2767,9 +2767,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Dwarf Wizard // Sorcery",
     "collectorNumber": "28",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/8/0853bb80-8664-432a-8457-600139fd96d5.jpg?1788878145",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/8/0853bb80-8664-432a-8457-600139fd96d5.jpg?1788878145",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/8/0853bb80-8664-432a-8457-600139fd96d5.jpg?1788878145"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/8/0853bb80-8664-432a-8457-600139fd96d5.webp?1788878145",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/8/0853bb80-8664-432a-8457-600139fd96d5.webp?1788878145",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/8/0853bb80-8664-432a-8457-600139fd96d5.webp?1788878145"
   },
   {
     "name": "Traxos, Scourge Eternal",
@@ -2779,9 +2779,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Legendary Artifact Creature — Dragon Construct",
     "collectorNumber": "280",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/5/05102c46-96f8-44a0-a1e6-e388fa5e0841.jpg?1789557046",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/5/05102c46-96f8-44a0-a1e6-e388fa5e0841.jpg?1789557046",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/5/05102c46-96f8-44a0-a1e6-e388fa5e0841.jpg?1789557046"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/5/05102c46-96f8-44a0-a1e6-e388fa5e0841.webp?1789557046",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/5/05102c46-96f8-44a0-a1e6-e388fa5e0841.webp?1789557046",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/5/05102c46-96f8-44a0-a1e6-e388fa5e0841.webp?1789557046"
   },
   {
     "name": "Plains",
@@ -2791,9 +2791,9 @@ export default [
     "rarity": "common",
     "typeLine": "Basic Land — Plains",
     "collectorNumber": "281",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/4/a4eaecb8-066a-4c72-aa5d-5ed0614ba537.jpg?1789599702",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/4/a4eaecb8-066a-4c72-aa5d-5ed0614ba537.jpg?1789599702",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/4/a4eaecb8-066a-4c72-aa5d-5ed0614ba537.jpg?1789599702"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/4/a4eaecb8-066a-4c72-aa5d-5ed0614ba537.webp?1789599702",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/4/a4eaecb8-066a-4c72-aa5d-5ed0614ba537.webp?1789599702",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/4/a4eaecb8-066a-4c72-aa5d-5ed0614ba537.webp?1789599702"
   },
   {
     "name": "Island",
@@ -2803,9 +2803,9 @@ export default [
     "rarity": "common",
     "typeLine": "Basic Land — Island",
     "collectorNumber": "283",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/8/d8184e92-54e6-4ddc-86e8-67f5c5eb079d.jpg?1789599732",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/8/d8184e92-54e6-4ddc-86e8-67f5c5eb079d.jpg?1789599732",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/8/d8184e92-54e6-4ddc-86e8-67f5c5eb079d.jpg?1789599732"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/8/d8184e92-54e6-4ddc-86e8-67f5c5eb079d.webp?1789599732",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/8/d8184e92-54e6-4ddc-86e8-67f5c5eb079d.webp?1789599732",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/8/d8184e92-54e6-4ddc-86e8-67f5c5eb079d.webp?1789599732"
   },
   {
     "name": "Swamp",
@@ -2815,9 +2815,9 @@ export default [
     "rarity": "common",
     "typeLine": "Basic Land — Swamp",
     "collectorNumber": "285",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/0/30693b85-550d-4c98-8c5b-4fd4e91c9f28.jpg?1789599699",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/0/30693b85-550d-4c98-8c5b-4fd4e91c9f28.jpg?1789599699",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/0/30693b85-550d-4c98-8c5b-4fd4e91c9f28.jpg?1789599699"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/0/30693b85-550d-4c98-8c5b-4fd4e91c9f28.webp?1789599699",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/0/30693b85-550d-4c98-8c5b-4fd4e91c9f28.webp?1789599699",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/0/30693b85-550d-4c98-8c5b-4fd4e91c9f28.webp?1789599699"
   },
   {
     "name": "Mountain",
@@ -2827,9 +2827,9 @@ export default [
     "rarity": "common",
     "typeLine": "Basic Land — Mountain",
     "collectorNumber": "287",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/6/16671d98-6f00-477b-a010-d2905c94eb65.jpg?1789599693",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/6/16671d98-6f00-477b-a010-d2905c94eb65.jpg?1789599693",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/6/16671d98-6f00-477b-a010-d2905c94eb65.jpg?1789599693"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/6/16671d98-6f00-477b-a010-d2905c94eb65.webp?1789599693",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/6/16671d98-6f00-477b-a010-d2905c94eb65.webp?1789599693",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/6/16671d98-6f00-477b-a010-d2905c94eb65.webp?1789599693"
   },
   {
     "name": "Forest",
@@ -2839,9 +2839,9 @@ export default [
     "rarity": "common",
     "typeLine": "Basic Land — Forest",
     "collectorNumber": "289",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/1/613bc075-2fe4-421f-bfec-3786a5e37797.jpg?1789729776",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/1/613bc075-2fe4-421f-bfec-3786a5e37797.jpg?1789729776",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/1/613bc075-2fe4-421f-bfec-3786a5e37797.jpg?1789729776"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/1/613bc075-2fe4-421f-bfec-3786a5e37797.webp?1789729776",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/1/613bc075-2fe4-421f-bfec-3786a5e37797.webp?1789729776",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/1/613bc075-2fe4-421f-bfec-3786a5e37797.webp?1789729776"
   },
   {
     "name": "Divining Duelist",
@@ -2853,9 +2853,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Merfolk Wizard",
     "collectorNumber": "29",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/6/960c7335-331d-488b-be68-2ad1c1c695dc.jpg?1789556709",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/6/960c7335-331d-488b-be68-2ad1c1c695dc.jpg?1789556709",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/6/960c7335-331d-488b-be68-2ad1c1c695dc.jpg?1789556709"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/6/960c7335-331d-488b-be68-2ad1c1c695dc.webp?1789556709",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/6/960c7335-331d-488b-be68-2ad1c1c695dc.webp?1789556709",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/6/960c7335-331d-488b-be68-2ad1c1c695dc.webp?1789556709"
   },
   {
     "name": "Blossom-Blessed Angel",
@@ -2867,9 +2867,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Angel Cleric // Sorcery",
     "collectorNumber": "3",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/e/5e77fbf0-9d1f-4e7d-a02e-43065d11b0d9.jpg?1789692643",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/e/5e77fbf0-9d1f-4e7d-a02e-43065d11b0d9.jpg?1789692643",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/e/5e77fbf0-9d1f-4e7d-a02e-43065d11b0d9.jpg?1789692643"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/e/5e77fbf0-9d1f-4e7d-a02e-43065d11b0d9.webp?1789692643",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/e/5e77fbf0-9d1f-4e7d-a02e-43065d11b0d9.webp?1789692643",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/e/5e77fbf0-9d1f-4e7d-a02e-43065d11b0d9.webp?1789692643"
   },
   {
     "name": "Icy Reception",
@@ -2881,9 +2881,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "30",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/d/8d754b96-5e44-45af-9c7a-b0da59fbe4c3.jpg?1788779540",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/d/8d754b96-5e44-45af-9c7a-b0da59fbe4c3.jpg?1788779540",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/d/8d754b96-5e44-45af-9c7a-b0da59fbe4c3.jpg?1788779540"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/d/8d754b96-5e44-45af-9c7a-b0da59fbe4c3.webp?1788779540",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/d/8d754b96-5e44-45af-9c7a-b0da59fbe4c3.webp?1788779540",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/d/8d754b96-5e44-45af-9c7a-b0da59fbe4c3.webp?1788779540"
   },
   {
     "name": "Infinite Coursework",
@@ -2895,9 +2895,9 @@ export default [
     "rarity": "common",
     "typeLine": "Enchantment — Aura",
     "collectorNumber": "31",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/5/a5988272-faaa-463d-a0a1-a8e96b946bad.jpg?1789385916",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/5/a5988272-faaa-463d-a0a1-a8e96b946bad.jpg?1789385916",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/5/a5988272-faaa-463d-a0a1-a8e96b946bad.jpg?1789385916"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/5/a5988272-faaa-463d-a0a1-a8e96b946bad.webp?1789385916",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/5/a5988272-faaa-463d-a0a1-a8e96b946bad.webp?1789385916",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/5/a5988272-faaa-463d-a0a1-a8e96b946bad.webp?1789385916"
   },
   {
     "name": "Jace's Machinations",
@@ -2909,9 +2909,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Instant",
     "collectorNumber": "32",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/8/282588b9-3656-453b-aa25-2419e078ddc1.jpg?1788878150",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/8/282588b9-3656-453b-aa25-2419e078ddc1.jpg?1788878150",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/8/282588b9-3656-453b-aa25-2419e078ddc1.jpg?1788878150"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/8/282588b9-3656-453b-aa25-2419e078ddc1.webp?1788878150",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/8/282588b9-3656-453b-aa25-2419e078ddc1.webp?1788878150",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/8/282588b9-3656-453b-aa25-2419e078ddc1.webp?1788878150"
   },
   {
     "name": "Mindseeker Oculus",
@@ -2923,9 +2923,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Homunculus",
     "collectorNumber": "33",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/5/f5324741-353a-4a70-adb2-b631b00806dd.jpg?1789556707",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/5/f5324741-353a-4a70-adb2-b631b00806dd.jpg?1789556707",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/5/f5324741-353a-4a70-adb2-b631b00806dd.jpg?1789556707"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/5/f5324741-353a-4a70-adb2-b631b00806dd.webp?1789556707",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/5/f5324741-353a-4a70-adb2-b631b00806dd.webp?1789556707",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/5/f5324741-353a-4a70-adb2-b631b00806dd.webp?1789556707"
   },
   {
     "name": "Perfected Theory",
@@ -2937,9 +2937,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "34",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/0/d0ecae06-bc5a-4886-84df-c2900816f226.jpg?1788329222",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/0/d0ecae06-bc5a-4886-84df-c2900816f226.jpg?1788329222",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/0/d0ecae06-bc5a-4886-84df-c2900816f226.jpg?1788329222"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/0/d0ecae06-bc5a-4886-84df-c2900816f226.webp?1788329222",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/0/d0ecae06-bc5a-4886-84df-c2900816f226.webp?1788329222",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/0/d0ecae06-bc5a-4886-84df-c2900816f226.webp?1788329222"
   },
   {
     "name": "Plan for All Outcomes",
@@ -2951,9 +2951,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Enchantment",
     "collectorNumber": "35",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/4/c4effc17-0d0e-423a-b5f2-597ea6c71f67.jpg?1789576786",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/4/c4effc17-0d0e-423a-b5f2-597ea6c71f67.jpg?1789576786",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/4/c4effc17-0d0e-423a-b5f2-597ea6c71f67.jpg?1789576786"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/4/c4effc17-0d0e-423a-b5f2-597ea6c71f67.webp?1789576786",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/4/c4effc17-0d0e-423a-b5f2-597ea6c71f67.webp?1789576786",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/4/c4effc17-0d0e-423a-b5f2-597ea6c71f67.webp?1789576786"
   },
   {
     "name": "Precise Redaction",
@@ -2965,9 +2965,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "36",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/2/9244efad-35ab-45c0-b173-4bc68276cb67.jpg?1789470790",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/2/9244efad-35ab-45c0-b173-4bc68276cb67.jpg?1789470790",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/2/9244efad-35ab-45c0-b173-4bc68276cb67.jpg?1789470790"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/2/9244efad-35ab-45c0-b173-4bc68276cb67.webp?1789470790",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/2/9244efad-35ab-45c0-b173-4bc68276cb67.webp?1789470790",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/2/9244efad-35ab-45c0-b173-4bc68276cb67.webp?1789470790"
   },
   {
     "name": "Protege's Awakening",
@@ -2979,9 +2979,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "37",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/0/a08c7ec2-4c6a-4db2-85a7-41afe8731523.jpg?1788878176",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/0/a08c7ec2-4c6a-4db2-85a7-41afe8731523.jpg?1788878176",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/0/a08c7ec2-4c6a-4db2-85a7-41afe8731523.jpg?1788878176"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/0/a08c7ec2-4c6a-4db2-85a7-41afe8731523.webp?1788878176",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/0/a08c7ec2-4c6a-4db2-85a7-41afe8731523.webp?1788878176",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/0/a08c7ec2-4c6a-4db2-85a7-41afe8731523.webp?1788878176"
   },
   {
     "name": "Semester Foreseer",
@@ -2993,9 +2993,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Human Wizard // Sorcery",
     "collectorNumber": "39",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/e/7e5a640b-fd88-4b5a-9dfc-1d8f5a5cef41.jpg?1789127516",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/e/7e5a640b-fd88-4b5a-9dfc-1d8f5a5cef41.jpg?1789127516",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/e/7e5a640b-fd88-4b5a-9dfc-1d8f5a5cef41.jpg?1789127516"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/e/7e5a640b-fd88-4b5a-9dfc-1d8f5a5cef41.webp?1789127516",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/e/7e5a640b-fd88-4b5a-9dfc-1d8f5a5cef41.webp?1789127516",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/e/7e5a640b-fd88-4b5a-9dfc-1d8f5a5cef41.webp?1789127516"
   },
   {
     "name": "Campus Crier",
@@ -3007,9 +3007,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Human Advisor",
     "collectorNumber": "4",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/0/6047b14c-91d5-4f8e-af3f-057a541e2546.jpg?1788878120",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/0/6047b14c-91d5-4f8e-af3f-057a541e2546.jpg?1788878120",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/0/6047b14c-91d5-4f8e-af3f-057a541e2546.jpg?1788878120"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/0/6047b14c-91d5-4f8e-af3f-057a541e2546.webp?1788878120",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/0/6047b14c-91d5-4f8e-af3f-057a541e2546.webp?1788878120",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/0/6047b14c-91d5-4f8e-af3f-057a541e2546.webp?1788878120"
   },
   {
     "name": "Sphinx of False Conclusions",
@@ -3021,9 +3021,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Sphinx Illusion",
     "collectorNumber": "40",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/8/08ffbd51-2bd3-4262-8809-09576ce2b6f5.jpg?1789385594",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/8/08ffbd51-2bd3-4262-8809-09576ce2b6f5.jpg?1789385594",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/8/08ffbd51-2bd3-4262-8809-09576ce2b6f5.jpg?1789385594"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/8/08ffbd51-2bd3-4262-8809-09576ce2b6f5.webp?1789385594",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/8/08ffbd51-2bd3-4262-8809-09576ce2b6f5.webp?1789385594",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/8/08ffbd51-2bd3-4262-8809-09576ce2b6f5.webp?1789385594"
   },
   {
     "name": "Sphinx's Approach",
@@ -3035,9 +3035,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "41",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/4/f49be090-c745-40e5-bc1c-605b8d98acdf.jpg?1789644816",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/4/f49be090-c745-40e5-bc1c-605b8d98acdf.jpg?1789644816",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/4/f49be090-c745-40e5-bc1c-605b8d98acdf.jpg?1789644816"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/4/f49be090-c745-40e5-bc1c-605b8d98acdf.webp?1789644816",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/4/f49be090-c745-40e5-bc1c-605b8d98acdf.webp?1789644816",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/4/f49be090-c745-40e5-bc1c-605b8d98acdf.webp?1789644816"
   },
   {
     "name": "Surveillance Phantasm",
@@ -3049,9 +3049,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Bird Illusion",
     "collectorNumber": "42",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/d/9df8a06d-c7de-49af-8c01-06dca3dfef4b.jpg?1789385597",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/d/9df8a06d-c7de-49af-8c01-06dca3dfef4b.jpg?1789385597",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/d/9df8a06d-c7de-49af-8c01-06dca3dfef4b.jpg?1789385597"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/d/9df8a06d-c7de-49af-8c01-06dca3dfef4b.webp?1789385597",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/d/9df8a06d-c7de-49af-8c01-06dca3dfef4b.webp?1789385597",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/d/9df8a06d-c7de-49af-8c01-06dca3dfef4b.webp?1789385597"
   },
   {
     "name": "The Theorist, Jace Beleren",
@@ -3063,9 +3063,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Planeswalker — Jace",
     "collectorNumber": "43",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/0/20bb8c55-4b0b-425f-8201-b54fa2fdde86.jpg?1788329228",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/0/20bb8c55-4b0b-425f-8201-b54fa2fdde86.jpg?1788329228",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/0/20bb8c55-4b0b-425f-8201-b54fa2fdde86.jpg?1788329228"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/0/20bb8c55-4b0b-425f-8201-b54fa2fdde86.webp?1788329228",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/0/20bb8c55-4b0b-425f-8201-b54fa2fdde86.webp?1788329228",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/0/20bb8c55-4b0b-425f-8201-b54fa2fdde86.webp?1788329228"
   },
   {
     "name": "Emrakul, the Exigent Doom",
@@ -3075,9 +3075,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Legendary Creature — Eldrazi",
     "collectorNumber": "438",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/e/ee609b68-5c9c-43e0-aff4-eb1bbc8b2911.jpg?1789060230",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/e/ee609b68-5c9c-43e0-aff4-eb1bbc8b2911.jpg?1789060230",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/e/ee609b68-5c9c-43e0-aff4-eb1bbc8b2911.jpg?1789060230"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/e/ee609b68-5c9c-43e0-aff4-eb1bbc8b2911.webp?1789060230",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/e/ee609b68-5c9c-43e0-aff4-eb1bbc8b2911.webp?1789060230",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/e/ee609b68-5c9c-43e0-aff4-eb1bbc8b2911.webp?1789060230"
   },
   {
     "name": "Theorist's Proxy",
@@ -3089,9 +3089,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Illusion",
     "collectorNumber": "44",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/1/710302ca-c4be-4069-8ce1-f531414c74e9.jpg?1788878151",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/1/710302ca-c4be-4069-8ce1-f531414c74e9.jpg?1788878151",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/1/710302ca-c4be-4069-8ce1-f531414c74e9.jpg?1788878151"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/1/710302ca-c4be-4069-8ce1-f531414c74e9.webp?1788878151",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/1/710302ca-c4be-4069-8ce1-f531414c74e9.webp?1788878151",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/1/710302ca-c4be-4069-8ce1-f531414c74e9.webp?1788878151"
   },
   {
     "name": "Return to the Light Realms",
@@ -3103,9 +3103,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Sorcery",
     "collectorNumber": "440",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/5/65e9f4df-02e5-4ac7-86da-795688bfb66f.jpg?1788878434",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/5/65e9f4df-02e5-4ac7-86da-795688bfb66f.jpg?1788878434",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/5/65e9f4df-02e5-4ac7-86da-795688bfb66f.jpg?1788878434"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/5/65e9f4df-02e5-4ac7-86da-795688bfb66f.webp?1788878434",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/5/65e9f4df-02e5-4ac7-86da-795688bfb66f.webp?1788878434",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/5/65e9f4df-02e5-4ac7-86da-795688bfb66f.webp?1788878434"
   },
   {
     "name": "Seasoned Cryomancer",
@@ -3117,9 +3117,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Creature — Human Wizard",
     "collectorNumber": "441",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/1/f1a15a83-2f74-4513-ae4b-4cdc17016a84.jpg?1789470965",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/1/f1a15a83-2f74-4513-ae4b-4cdc17016a84.jpg?1789470965",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/1/f1a15a83-2f74-4513-ae4b-4cdc17016a84.jpg?1789470965"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/1/f1a15a83-2f74-4513-ae4b-4cdc17016a84.webp?1789470965",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/1/f1a15a83-2f74-4513-ae4b-4cdc17016a84.webp?1789470965",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/1/f1a15a83-2f74-4513-ae4b-4cdc17016a84.webp?1789470965"
   },
   {
     "name": "Darklight Phoenix",
@@ -3131,9 +3131,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Creature — Phoenix",
     "collectorNumber": "444",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/6/16c5f0f3-2578-40d3-9012-6eaef17fa0b1.jpg?1789471442",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/6/16c5f0f3-2578-40d3-9012-6eaef17fa0b1.jpg?1789471442",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/6/16c5f0f3-2578-40d3-9012-6eaef17fa0b1.jpg?1789471442"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/6/16c5f0f3-2578-40d3-9012-6eaef17fa0b1.webp?1789471442",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/6/16c5f0f3-2578-40d3-9012-6eaef17fa0b1.webp?1789471442",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/6/16c5f0f3-2578-40d3-9012-6eaef17fa0b1.webp?1789471442"
   },
   {
     "name": "Omnipresence",
@@ -3145,9 +3145,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Enchantment",
     "collectorNumber": "448",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/1/91e787cb-a9b0-4353-86b4-a4340122fd2f.jpg?1789471487",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/1/91e787cb-a9b0-4353-86b4-a4340122fd2f.jpg?1789471487",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/1/91e787cb-a9b0-4353-86b4-a4340122fd2f.jpg?1789471487"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/1/91e787cb-a9b0-4353-86b4-a4340122fd2f.webp?1789471487",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/1/91e787cb-a9b0-4353-86b4-a4340122fd2f.webp?1789471487",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/1/91e787cb-a9b0-4353-86b4-a4340122fd2f.webp?1789471487"
   },
   {
     "name": "Undulating Witness",
@@ -3159,9 +3159,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Serpent",
     "collectorNumber": "45",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/a/0adbb4b2-a142-48da-8f4b-fa91529dbac4.jpg?1789556706",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/a/0adbb4b2-a142-48da-8f4b-fa91529dbac4.jpg?1789556706",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/a/0adbb4b2-a142-48da-8f4b-fa91529dbac4.jpg?1789556706"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/a/0adbb4b2-a142-48da-8f4b-fa91529dbac4.webp?1789556706",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/a/0adbb4b2-a142-48da-8f4b-fa91529dbac4.webp?1789556706",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/a/0adbb4b2-a142-48da-8f4b-fa91529dbac4.webp?1789556706"
   },
   {
     "name": "Unsummon",
@@ -3173,9 +3173,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "46",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/d/ddad9f16-52d5-49de-82b0-b1a5294a9c44.jpg?1789556722",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/d/ddad9f16-52d5-49de-82b0-b1a5294a9c44.jpg?1789556722",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/d/ddad9f16-52d5-49de-82b0-b1a5294a9c44.jpg?1789556722"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/d/ddad9f16-52d5-49de-82b0-b1a5294a9c44.webp?1789556722",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/d/ddad9f16-52d5-49de-82b0-b1a5294a9c44.webp?1789556722",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/d/ddad9f16-52d5-49de-82b0-b1a5294a9c44.webp?1789556722"
   },
   {
     "name": "Variable Chaser",
@@ -3187,9 +3187,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Human Wizard // Sorcery",
     "collectorNumber": "47",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/3/e3afedb1-bf9d-4e31-9700-433514cc29b1.jpg?1789470807",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/3/e3afedb1-bf9d-4e31-9700-433514cc29b1.jpg?1789470807",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/3/e3afedb1-bf9d-4e31-9700-433514cc29b1.jpg?1789470807"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/3/e3afedb1-bf9d-4e31-9700-433514cc29b1.webp?1789470807",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/3/e3afedb1-bf9d-4e31-9700-433514cc29b1.webp?1789470807",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/3/e3afedb1-bf9d-4e31-9700-433514cc29b1.webp?1789470807"
   },
   {
     "name": "Apex Witchstalker",
@@ -3201,9 +3201,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Wolf",
     "collectorNumber": "48",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/d/cd56f047-6bdc-4e83-8a7c-923ebad26302.jpg?1789556710",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/d/cd56f047-6bdc-4e83-8a7c-923ebad26302.jpg?1789556710",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/d/cd56f047-6bdc-4e83-8a7c-923ebad26302.jpg?1789556710"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/d/cd56f047-6bdc-4e83-8a7c-923ebad26302.webp?1789556710",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/d/cd56f047-6bdc-4e83-8a7c-923ebad26302.webp?1789556710",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/d/cd56f047-6bdc-4e83-8a7c-923ebad26302.webp?1789556710"
   },
   {
     "name": "Bloodline Recollector",
@@ -3215,9 +3215,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Creature — Vampire Warlock // Instant",
     "collectorNumber": "49",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/f/4fcc913e-f736-460a-b24b-022fa2e861b9.jpg?1788329264",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/f/4fcc913e-f736-460a-b24b-022fa2e861b9.jpg?1788329264",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/f/4fcc913e-f736-460a-b24b-022fa2e861b9.jpg?1788329264"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/f/4fcc913e-f736-460a-b24b-022fa2e861b9.webp?1788329264",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/f/4fcc913e-f736-460a-b24b-022fa2e861b9.webp?1788329264",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/f/4fcc913e-f736-460a-b24b-022fa2e861b9.webp?1788329264"
   },
   {
     "name": "Enlightened Confidant",
@@ -3229,9 +3229,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Creature — Kor Cleric",
     "collectorNumber": "5",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/8/483fcc58-cc6e-4452-a696-7b38e117c837.jpg?1788329184",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/8/483fcc58-cc6e-4452-a696-7b38e117c837.jpg?1788329184",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/8/483fcc58-cc6e-4452-a696-7b38e117c837.jpg?1788329184"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/8/483fcc58-cc6e-4452-a696-7b38e117c837.webp?1788329184",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/8/483fcc58-cc6e-4452-a696-7b38e117c837.webp?1788329184",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/8/483fcc58-cc6e-4452-a696-7b38e117c837.webp?1788329184"
   },
   {
     "name": "Break Under Pressure",
@@ -3243,9 +3243,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "50",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/6/46974d94-e900-43e4-92b5-4fb9b9f7cf46.jpg?1789385622",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/6/46974d94-e900-43e4-92b5-4fb9b9f7cf46.jpg?1789385622",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/6/46974d94-e900-43e4-92b5-4fb9b9f7cf46.jpg?1789385622"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/6/46974d94-e900-43e4-92b5-4fb9b9f7cf46.webp?1789385622",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/6/46974d94-e900-43e4-92b5-4fb9b9f7cf46.webp?1789385622",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/6/46974d94-e900-43e4-92b5-4fb9b9f7cf46.webp?1789385622"
   },
   {
     "name": "Cast Away Doubt",
@@ -3257,9 +3257,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "51",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/b/3b5b28a4-0abd-4dc2-9856-c9a8d27f6a2d.jpg?1788353191",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/b/3b5b28a4-0abd-4dc2-9856-c9a8d27f6a2d.jpg?1788353191",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/b/3b5b28a4-0abd-4dc2-9856-c9a8d27f6a2d.jpg?1788353191"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/b/3b5b28a4-0abd-4dc2-9856-c9a8d27f6a2d.webp?1788353191",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/b/3b5b28a4-0abd-4dc2-9856-c9a8d27f6a2d.webp?1788353191",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/b/3b5b28a4-0abd-4dc2-9856-c9a8d27f6a2d.webp?1788353191"
   },
   {
     "name": "Dark Matter Manipulator",
@@ -3271,9 +3271,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Human Warlock",
     "collectorNumber": "52",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/e/4ec912d5-cbe7-4d07-9ece-b03ac02d3055.jpg?1789385959",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/e/4ec912d5-cbe7-4d07-9ece-b03ac02d3055.jpg?1789385959",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/e/4ec912d5-cbe7-4d07-9ece-b03ac02d3055.jpg?1789385959"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/e/4ec912d5-cbe7-4d07-9ece-b03ac02d3055.webp?1789385959",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/e/4ec912d5-cbe7-4d07-9ece-b03ac02d3055.webp?1789385959",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/e/4ec912d5-cbe7-4d07-9ece-b03ac02d3055.webp?1789385959"
   },
   {
     "name": "Extended Absence",
@@ -3285,9 +3285,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "54",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/b/eb4b6ed8-782e-4473-abc9-d50bf2275c6a.jpg?1789556713",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/b/eb4b6ed8-782e-4473-abc9-d50bf2275c6a.jpg?1789556713",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/b/eb4b6ed8-782e-4473-abc9-d50bf2275c6a.jpg?1789556713"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/b/eb4b6ed8-782e-4473-abc9-d50bf2275c6a.webp?1789556713",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/b/eb4b6ed8-782e-4473-abc9-d50bf2275c6a.webp?1789556713",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/b/eb4b6ed8-782e-4473-abc9-d50bf2275c6a.webp?1789556713"
   },
   {
     "name": "Extrapolate the Impossible",
@@ -3299,9 +3299,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Sorcery",
     "collectorNumber": "55",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/7/17fb6538-493c-41aa-ad13-3e63d3ad3317.jpg?1789729624",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/7/17fb6538-493c-41aa-ad13-3e63d3ad3317.jpg?1789729624",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/7/17fb6538-493c-41aa-ad13-3e63d3ad3317.jpg?1789729624"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/7/17fb6538-493c-41aa-ad13-3e63d3ad3317.webp?1789729624",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/7/17fb6538-493c-41aa-ad13-3e63d3ad3317.webp?1789729624",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/7/17fb6538-493c-41aa-ad13-3e63d3ad3317.webp?1789729624"
   },
   {
     "name": "Last Gasp",
@@ -3313,9 +3313,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "56",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/3/2381d123-d8c7-4822-98fe-b1c365beb5ed.jpg?1789127524",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/3/2381d123-d8c7-4822-98fe-b1c365beb5ed.jpg?1789127524",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/3/2381d123-d8c7-4822-98fe-b1c365beb5ed.jpg?1789127524"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/3/2381d123-d8c7-4822-98fe-b1c365beb5ed.webp?1789127524",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/3/2381d123-d8c7-4822-98fe-b1c365beb5ed.webp?1789127524",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/3/2381d123-d8c7-4822-98fe-b1c365beb5ed.webp?1789127524"
   },
   {
     "name": "Lich's Relic",
@@ -3327,9 +3327,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Artifact — Equipment",
     "collectorNumber": "57",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/1/b105511d-5022-4a84-b6ce-4bb433e93a62.jpg?1789644819",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/1/b105511d-5022-4a84-b6ce-4bb433e93a62.jpg?1789644819",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/1/b105511d-5022-4a84-b6ce-4bb433e93a62.jpg?1789644819"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/1/b105511d-5022-4a84-b6ce-4bb433e93a62.webp?1789644819",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/1/b105511d-5022-4a84-b6ce-4bb433e93a62.webp?1789644819",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/1/b105511d-5022-4a84-b6ce-4bb433e93a62.webp?1789644819"
   },
   {
     "name": "Multiply by Zero",
@@ -3341,9 +3341,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "58",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/0/90d684a4-9639-4792-8760-2011a7a85370.jpg?1789644823",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/0/90d684a4-9639-4792-8760-2011a7a85370.jpg?1789644823",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/0/90d684a4-9639-4792-8760-2011a7a85370.jpg?1789644823"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/0/90d684a4-9639-4792-8760-2011a7a85370.webp?1789644823",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/0/90d684a4-9639-4792-8760-2011a7a85370.webp?1789644823",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/0/90d684a4-9639-4792-8760-2011a7a85370.webp?1789644823"
   },
   {
     "name": "Overwrite the Multiverse",
@@ -3355,9 +3355,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Sorcery",
     "collectorNumber": "59",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/4/c4554f5b-791b-48f6-bf54-ad28699e1beb.jpg?1788952080",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/4/c4554f5b-791b-48f6-bf54-ad28699e1beb.jpg?1788952080",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/4/c4554f5b-791b-48f6-bf54-ad28699e1beb.jpg?1788952080"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/4/c4554f5b-791b-48f6-bf54-ad28699e1beb.webp?1788952080",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/4/c4554f5b-791b-48f6-bf54-ad28699e1beb.webp?1788952080",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/4/c4554f5b-791b-48f6-bf54-ad28699e1beb.webp?1788952080"
   },
   {
     "name": "Fateshaper Aspirant",
@@ -3369,9 +3369,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Rhino Cleric",
     "collectorNumber": "6",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/0/f0c8400d-824f-4d79-84bc-7615a0deb831.jpg?1789556683",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/0/f0c8400d-824f-4d79-84bc-7615a0deb831.jpg?1789556683",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/0/f0c8400d-824f-4d79-84bc-7615a0deb831.jpg?1789556683"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/0/f0c8400d-824f-4d79-84bc-7615a0deb831.webp?1789556683",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/0/f0c8400d-824f-4d79-84bc-7615a0deb831.webp?1789556683",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/0/f0c8400d-824f-4d79-84bc-7615a0deb831.webp?1789556683"
   },
   {
     "name": "Rampart Hunter",
@@ -3383,9 +3383,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Horror",
     "collectorNumber": "60",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/4/f4a80225-7459-4151-86bb-8fdea31c39a6.jpg?1789127211",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/4/f4a80225-7459-4151-86bb-8fdea31c39a6.jpg?1789127211",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/4/f4a80225-7459-4151-86bb-8fdea31c39a6.jpg?1789127211"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/4/f4a80225-7459-4151-86bb-8fdea31c39a6.webp?1789127211",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/4/f4a80225-7459-4151-86bb-8fdea31c39a6.webp?1789127211",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/4/f4a80225-7459-4151-86bb-8fdea31c39a6.webp?1789127211"
   },
   {
     "name": "Rank Rat",
@@ -3397,9 +3397,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Zombie Rat",
     "collectorNumber": "61",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.jpg?1789556727",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.jpg?1789556727",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.jpg?1789556727"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.webp?1789556727",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.webp?1789556727",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/f/4ff6da82-d7dd-4b59-b7e6-30670cea7169.webp?1789556727"
   },
   {
     "name": "Rewrite Regrets",
@@ -3411,9 +3411,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Sorcery",
     "collectorNumber": "62",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/5/453cfde7-c460-4b55-9472-b714e16f24bb.jpg?1788952087",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/5/453cfde7-c460-4b55-9472-b714e16f24bb.jpg?1788952087",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/5/453cfde7-c460-4b55-9472-b714e16f24bb.jpg?1788952087"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/5/453cfde7-c460-4b55-9472-b714e16f24bb.webp?1788952087",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/5/453cfde7-c460-4b55-9472-b714e16f24bb.webp?1788952087",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/5/453cfde7-c460-4b55-9472-b714e16f24bb.webp?1788952087"
   },
   {
     "name": "Rise of the Deathbringer",
@@ -3425,9 +3425,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Instant",
     "collectorNumber": "63",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/1/811719ad-b5a3-4d31-8c6f-5dbdfccf7c1f.jpg?1789470807",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/1/811719ad-b5a3-4d31-8c6f-5dbdfccf7c1f.jpg?1789470807",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/1/811719ad-b5a3-4d31-8c6f-5dbdfccf7c1f.jpg?1789470807"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/1/811719ad-b5a3-4d31-8c6f-5dbdfccf7c1f.webp?1789470807",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/1/811719ad-b5a3-4d31-8c6f-5dbdfccf7c1f.webp?1789470807",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/1/811719ad-b5a3-4d31-8c6f-5dbdfccf7c1f.webp?1789470807"
   },
   {
     "name": "Sanctum Lurker",
@@ -3439,9 +3439,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Horror",
     "collectorNumber": "64",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/1/2185c08f-bb4d-49d5-8b6c-c629a48bb61c.jpg?1789556729",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/1/2185c08f-bb4d-49d5-8b6c-c629a48bb61c.jpg?1789556729",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/1/2185c08f-bb4d-49d5-8b6c-c629a48bb61c.jpg?1789556729"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/1/2185c08f-bb4d-49d5-8b6c-c629a48bb61c.webp?1789556729",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/1/2185c08f-bb4d-49d5-8b6c-c629a48bb61c.webp?1789556729",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/1/2185c08f-bb4d-49d5-8b6c-c629a48bb61c.webp?1789556729"
   },
   {
     "name": "Screeching Soulbreaker",
@@ -3453,9 +3453,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Siren Bard",
     "collectorNumber": "65",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/3/738667a1-c184-43ea-829f-49fbb69b6fc0.jpg?1789385960",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/3/738667a1-c184-43ea-829f-49fbb69b6fc0.jpg?1789385960",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/3/738667a1-c184-43ea-829f-49fbb69b6fc0.jpg?1789385960"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/3/738667a1-c184-43ea-829f-49fbb69b6fc0.webp?1789385960",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/3/738667a1-c184-43ea-829f-49fbb69b6fc0.webp?1789385960",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/3/738667a1-c184-43ea-829f-49fbb69b6fc0.webp?1789385960"
   },
   {
     "name": "Silence the Echo",
@@ -3467,9 +3467,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "66",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/1/f1d274db-751b-4414-a38d-762198168e91.jpg?1789385640",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/1/f1d274db-751b-4414-a38d-762198168e91.jpg?1789385640",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/1/f1d274db-751b-4414-a38d-762198168e91.jpg?1789385640"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/1/f1d274db-751b-4414-a38d-762198168e91.webp?1789385640",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/1/f1d274db-751b-4414-a38d-762198168e91.webp?1789385640",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/1/f1d274db-751b-4414-a38d-762198168e91.webp?1789385640"
   },
   {
     "name": "Solve for Disappointment",
@@ -3481,9 +3481,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "67",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/b/7beaa8c9-1a2c-4c88-b579-91e371d8d9e3.jpg?1788878155",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/b/7beaa8c9-1a2c-4c88-b579-91e371d8d9e3.jpg?1788878155",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/b/7beaa8c9-1a2c-4c88-b579-91e371d8d9e3.jpg?1788878155"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/b/7beaa8c9-1a2c-4c88-b579-91e371d8d9e3.webp?1788878155",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/b/7beaa8c9-1a2c-4c88-b579-91e371d8d9e3.webp?1788878155",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/b/7beaa8c9-1a2c-4c88-b579-91e371d8d9e3.webp?1788878155"
   },
   {
     "name": "Terminal Criticism",
@@ -3495,9 +3495,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "68",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/e/7ebd7e38-b27c-4c6e-aaea-e8ee5ba5e5df.jpg?1789470810",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/e/7ebd7e38-b27c-4c6e-aaea-e8ee5ba5e5df.jpg?1789470810",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/e/7ebd7e38-b27c-4c6e-aaea-e8ee5ba5e5df.jpg?1789470810"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/e/7ebd7e38-b27c-4c6e-aaea-e8ee5ba5e5df.webp?1789470810",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/e/7ebd7e38-b27c-4c6e-aaea-e8ee5ba5e5df.webp?1789470810",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/e/7ebd7e38-b27c-4c6e-aaea-e8ee5ba5e5df.webp?1789470810"
   },
   {
     "name": "Theoretical Necromancer",
@@ -3509,9 +3509,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Vampire Warlock",
     "collectorNumber": "69",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/3/e36a7908-1e22-494b-adb4-e72ac0974d62.jpg?1789556734",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/3/e36a7908-1e22-494b-adb4-e72ac0974d62.jpg?1789556734",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/3/e36a7908-1e22-494b-adb4-e72ac0974d62.jpg?1789556734"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/3/e36a7908-1e22-494b-adb4-e72ac0974d62.webp?1789556734",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/3/e36a7908-1e22-494b-adb4-e72ac0974d62.webp?1789556734",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/3/e36a7908-1e22-494b-adb4-e72ac0974d62.webp?1789556734"
   },
   {
     "name": "Flickering Hound",
@@ -3523,9 +3523,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Dog",
     "collectorNumber": "7",
-    "imageSmall": "https://cards.scryfall.io/small/front/6/8/686f3a25-305d-4f02-8972-eba7b8e9635f.jpg?1789470769",
-    "imageNormal": "https://cards.scryfall.io/normal/front/6/8/686f3a25-305d-4f02-8972-eba7b8e9635f.jpg?1789470769",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/6/8/686f3a25-305d-4f02-8972-eba7b8e9635f.jpg?1789470769"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/6/8/686f3a25-305d-4f02-8972-eba7b8e9635f.webp?1789470769",
+    "imageNormal": "https://cards.scryfall.io/grid/front/6/8/686f3a25-305d-4f02-8972-eba7b8e9635f.webp?1789470769",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/6/8/686f3a25-305d-4f02-8972-eba7b8e9635f.webp?1789470769"
   },
   {
     "name": "Void Extrapolator",
@@ -3537,9 +3537,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Aetherborn Warlock // Sorcery",
     "collectorNumber": "70",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/e/0eae2efb-bf25-48ee-9c07-9098008110ad.jpg?1789556787",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/e/0eae2efb-bf25-48ee-9c07-9098008110ad.jpg?1789556787",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/e/0eae2efb-bf25-48ee-9c07-9098008110ad.jpg?1789556787"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/e/0eae2efb-bf25-48ee-9c07-9098008110ad.webp?1789556787",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/e/0eae2efb-bf25-48ee-9c07-9098008110ad.webp?1789556787",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/e/0eae2efb-bf25-48ee-9c07-9098008110ad.webp?1789556787"
   },
   {
     "name": "Vraska's Final Mercy",
@@ -3551,9 +3551,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Sorcery",
     "collectorNumber": "71",
-    "imageSmall": "https://cards.scryfall.io/small/front/9/9/992bd991-7cfb-459f-bafd-9a44f3c925c5.jpg?1789699369",
-    "imageNormal": "https://cards.scryfall.io/normal/front/9/9/992bd991-7cfb-459f-bafd-9a44f3c925c5.jpg?1789699369",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/9/9/992bd991-7cfb-459f-bafd-9a44f3c925c5.jpg?1789699369"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/9/9/992bd991-7cfb-459f-bafd-9a44f3c925c5.webp?1789699369",
+    "imageNormal": "https://cards.scryfall.io/grid/front/9/9/992bd991-7cfb-459f-bafd-9a44f3c925c5.webp?1789699369",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/9/9/992bd991-7cfb-459f-bafd-9a44f3c925c5.webp?1789699369"
   },
   {
     "name": "Ajani's Anguish",
@@ -3565,9 +3565,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Enchantment",
     "collectorNumber": "72",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/9/d9039a58-2f17-4b8a-b714-3a2f0b46f057.jpg?1789470674",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/9/d9039a58-2f17-4b8a-b714-3a2f0b46f057.jpg?1789470674",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/9/d9039a58-2f17-4b8a-b714-3a2f0b46f057.jpg?1789470674"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/9/d9039a58-2f17-4b8a-b714-3a2f0b46f057.webp?1789470674",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/9/d9039a58-2f17-4b8a-b714-3a2f0b46f057.webp?1789470674",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/9/d9039a58-2f17-4b8a-b714-3a2f0b46f057.webp?1789470674"
   },
   {
     "name": "Artifist Acumen",
@@ -3579,9 +3579,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "73",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/d/7d3b720d-f27c-462a-8f80-15748e5086e1.jpg?1789729762",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/d/7d3b720d-f27c-462a-8f80-15748e5086e1.jpg?1789729762",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/d/7d3b720d-f27c-462a-8f80-15748e5086e1.jpg?1789729762"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/d/7d3b720d-f27c-462a-8f80-15748e5086e1.webp?1789729762",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/d/7d3b720d-f27c-462a-8f80-15748e5086e1.webp?1789729762",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/d/7d3b720d-f27c-462a-8f80-15748e5086e1.webp?1789729762"
   },
   {
     "name": "Awaken the Inferno",
@@ -3593,9 +3593,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "74",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/5/c596c4ec-8480-4be9-a45d-700398a126f6.jpg?1789556812",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/5/c596c4ec-8480-4be9-a45d-700398a126f6.jpg?1789556812",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/5/c596c4ec-8480-4be9-a45d-700398a126f6.jpg?1789556812"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/5/c596c4ec-8480-4be9-a45d-700398a126f6.webp?1789556812",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/5/c596c4ec-8480-4be9-a45d-700398a126f6.webp?1789556812",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/5/c596c4ec-8480-4be9-a45d-700398a126f6.webp?1789556812"
   },
   {
     "name": "Blazing Crescendo",
@@ -3607,9 +3607,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "75",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/4/8414a98c-0c79-4884-bc9b-061a6456b392.jpg?1789060147",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/4/8414a98c-0c79-4884-bc9b-061a6456b392.jpg?1789060147",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/4/8414a98c-0c79-4884-bc9b-061a6456b392.jpg?1789060147"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/4/8414a98c-0c79-4884-bc9b-061a6456b392.webp?1789060147",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/4/8414a98c-0c79-4884-bc9b-061a6456b392.webp?1789060147",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/4/8414a98c-0c79-4884-bc9b-061a6456b392.webp?1789060147"
   },
   {
     "name": "Chandra's Emberling",
@@ -3621,9 +3621,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Gremlin Elemental",
     "collectorNumber": "76",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/a/3a64c5f4-9cfc-4d19-bd99-13d619b1aa9d.jpg?1789385708",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/a/3a64c5f4-9cfc-4d19-bd99-13d619b1aa9d.jpg?1789385708",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/a/3a64c5f4-9cfc-4d19-bd99-13d619b1aa9d.jpg?1789385708"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/a/3a64c5f4-9cfc-4d19-bd99-13d619b1aa9d.webp?1789385708",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/a/3a64c5f4-9cfc-4d19-bd99-13d619b1aa9d.webp?1789385708",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/a/3a64c5f4-9cfc-4d19-bd99-13d619b1aa9d.webp?1789385708"
   },
   {
     "name": "Command the Stage",
@@ -3635,9 +3635,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Sorcery",
     "collectorNumber": "77",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/3/f3307da2-6dad-4ef2-9614-a7d34f38088e.jpg?1789644825",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/3/f3307da2-6dad-4ef2-9614-a7d34f38088e.jpg?1789644825",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/3/f3307da2-6dad-4ef2-9614-a7d34f38088e.jpg?1789644825"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/3/f3307da2-6dad-4ef2-9614-a7d34f38088e.webp?1789644825",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/3/f3307da2-6dad-4ef2-9614-a7d34f38088e.webp?1789644825",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/3/f3307da2-6dad-4ef2-9614-a7d34f38088e.webp?1789644825"
   },
   {
     "name": "Craterclaw Colossus",
@@ -3649,9 +3649,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Artifact Creature — Beast Construct",
     "collectorNumber": "78",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/7/47793a51-08c6-4ad2-a7e5-a4484d83a5cd.jpg?1788329298",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/7/47793a51-08c6-4ad2-a7e5-a4484d83a5cd.jpg?1788329298",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/7/47793a51-08c6-4ad2-a7e5-a4484d83a5cd.jpg?1788329298"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/7/47793a51-08c6-4ad2-a7e5-a4484d83a5cd.webp?1788329298",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/7/47793a51-08c6-4ad2-a7e5-a4484d83a5cd.webp?1788329298",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/7/47793a51-08c6-4ad2-a7e5-a4484d83a5cd.webp?1788329298"
   },
   {
     "name": "Curse-Marred Demon",
@@ -3663,9 +3663,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Demon",
     "collectorNumber": "79",
-    "imageSmall": "https://cards.scryfall.io/small/front/8/f/8f827e50-0a08-4bc8-98b1-b26c9af15ef2.jpg?1789470818",
-    "imageNormal": "https://cards.scryfall.io/normal/front/8/f/8f827e50-0a08-4bc8-98b1-b26c9af15ef2.jpg?1789470818",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/8/f/8f827e50-0a08-4bc8-98b1-b26c9af15ef2.jpg?1789470818"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/8/f/8f827e50-0a08-4bc8-98b1-b26c9af15ef2.webp?1789470818",
+    "imageNormal": "https://cards.scryfall.io/grid/front/8/f/8f827e50-0a08-4bc8-98b1-b26c9af15ef2.webp?1789470818",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/8/f/8f827e50-0a08-4bc8-98b1-b26c9af15ef2.webp?1789470818"
   },
   {
     "name": "Generous Revival",
@@ -3677,9 +3677,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Sorcery",
     "collectorNumber": "8",
-    "imageSmall": "https://cards.scryfall.io/small/front/f/8/f82f181b-a43b-4cec-b8f6-f6c1dd4c64fd.jpg?1788433351",
-    "imageNormal": "https://cards.scryfall.io/normal/front/f/8/f82f181b-a43b-4cec-b8f6-f6c1dd4c64fd.jpg?1788433351",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/f/8/f82f181b-a43b-4cec-b8f6-f6c1dd4c64fd.jpg?1788433351"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/f/8/f82f181b-a43b-4cec-b8f6-f6c1dd4c64fd.webp?1788433351",
+    "imageNormal": "https://cards.scryfall.io/grid/front/f/8/f82f181b-a43b-4cec-b8f6-f6c1dd4c64fd.webp?1788433351",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/f/8/f82f181b-a43b-4cec-b8f6-f6c1dd4c64fd.webp?1788433351"
   },
   {
     "name": "Draconic Visitor",
@@ -3691,9 +3691,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Dragon",
     "collectorNumber": "80",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/1/112f8478-bd89-4a14-9721-8ab750613129.jpg?1789470842",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/1/112f8478-bd89-4a14-9721-8ab750613129.jpg?1789470842",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/1/112f8478-bd89-4a14-9721-8ab750613129.jpg?1789470842"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/1/112f8478-bd89-4a14-9721-8ab750613129.webp?1789470842",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/1/112f8478-bd89-4a14-9721-8ab750613129.webp?1789470842",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/1/112f8478-bd89-4a14-9721-8ab750613129.webp?1789470842"
   },
   {
     "name": "Eardrum Rattler",
@@ -3705,9 +3705,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Human Bard",
     "collectorNumber": "81",
-    "imageSmall": "https://cards.scryfall.io/small/front/5/f/5f8771f9-8128-4818-a11d-41ea368cf697.jpg?1789127173",
-    "imageNormal": "https://cards.scryfall.io/normal/front/5/f/5f8771f9-8128-4818-a11d-41ea368cf697.jpg?1789127173",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/5/f/5f8771f9-8128-4818-a11d-41ea368cf697.jpg?1789127173"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/5/f/5f8771f9-8128-4818-a11d-41ea368cf697.webp?1789127173",
+    "imageNormal": "https://cards.scryfall.io/grid/front/5/f/5f8771f9-8128-4818-a11d-41ea368cf697.webp?1789127173",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/5/f/5f8771f9-8128-4818-a11d-41ea368cf697.webp?1789127173"
   },
   {
     "name": "Essence Burn",
@@ -3719,9 +3719,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "82",
-    "imageSmall": "https://cards.scryfall.io/small/front/d/2/d2e958de-70de-4156-8f9b-b2c0c1ba704a.jpg?1789470825",
-    "imageNormal": "https://cards.scryfall.io/normal/front/d/2/d2e958de-70de-4156-8f9b-b2c0c1ba704a.jpg?1789470825",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/d/2/d2e958de-70de-4156-8f9b-b2c0c1ba704a.jpg?1789470825"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/d/2/d2e958de-70de-4156-8f9b-b2c0c1ba704a.webp?1789470825",
+    "imageNormal": "https://cards.scryfall.io/grid/front/d/2/d2e958de-70de-4156-8f9b-b2c0c1ba704a.webp?1789470825",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/d/2/d2e958de-70de-4156-8f9b-b2c0c1ba704a.webp?1789470825"
   },
   {
     "name": "Face Yourself",
@@ -3733,9 +3733,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Sorcery",
     "collectorNumber": "83",
-    "imageSmall": "https://cards.scryfall.io/small/front/3/c/3ccf8f64-19bd-4fdf-b70a-30a042bacf2f.jpg?1789127528",
-    "imageNormal": "https://cards.scryfall.io/normal/front/3/c/3ccf8f64-19bd-4fdf-b70a-30a042bacf2f.jpg?1789127528",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/3/c/3ccf8f64-19bd-4fdf-b70a-30a042bacf2f.jpg?1789127528"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/3/c/3ccf8f64-19bd-4fdf-b70a-30a042bacf2f.webp?1789127528",
+    "imageNormal": "https://cards.scryfall.io/grid/front/3/c/3ccf8f64-19bd-4fdf-b70a-30a042bacf2f.webp?1789127528",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/3/c/3ccf8f64-19bd-4fdf-b70a-30a042bacf2f.webp?1789127528"
   },
   {
     "name": "Fulminous Forte",
@@ -3747,9 +3747,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "84",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/9/19acb2b5-3b3e-43f0-bd81-8426ed3d9c55.jpg?1789614832",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/9/19acb2b5-3b3e-43f0-bd81-8426ed3d9c55.jpg?1789614832",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/9/19acb2b5-3b3e-43f0-bd81-8426ed3d9c55.jpg?1789614832"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/9/19acb2b5-3b3e-43f0-bd81-8426ed3d9c55.webp?1789614832",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/9/19acb2b5-3b3e-43f0-bd81-8426ed3d9c55.webp?1789614832",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/9/19acb2b5-3b3e-43f0-bd81-8426ed3d9c55.webp?1789614832"
   },
   {
     "name": "Hallway Heckler",
@@ -3761,9 +3761,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Elemental Sorcerer // Sorcery",
     "collectorNumber": "85",
-    "imageSmall": "https://cards.scryfall.io/small/front/7/e/7e324816-552f-455d-97c4-5ea6b26d2e6e.jpg?1789127576",
-    "imageNormal": "https://cards.scryfall.io/normal/front/7/e/7e324816-552f-455d-97c4-5ea6b26d2e6e.jpg?1789127576",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/7/e/7e324816-552f-455d-97c4-5ea6b26d2e6e.jpg?1789127576"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/7/e/7e324816-552f-455d-97c4-5ea6b26d2e6e.webp?1789127576",
+    "imageNormal": "https://cards.scryfall.io/grid/front/7/e/7e324816-552f-455d-97c4-5ea6b26d2e6e.webp?1789127576",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/7/e/7e324816-552f-455d-97c4-5ea6b26d2e6e.webp?1789127576"
   },
   {
     "name": "Heartstring Puller",
@@ -3775,9 +3775,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Elf Sorcerer",
     "collectorNumber": "86",
-    "imageSmall": "https://cards.scryfall.io/small/front/c/b/cbfe3354-7ced-4773-9a4e-a937ae9f94f8.jpg?1789556808",
-    "imageNormal": "https://cards.scryfall.io/normal/front/c/b/cbfe3354-7ced-4773-9a4e-a937ae9f94f8.jpg?1789556808",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/c/b/cbfe3354-7ced-4773-9a4e-a937ae9f94f8.jpg?1789556808"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/c/b/cbfe3354-7ced-4773-9a4e-a937ae9f94f8.webp?1789556808",
+    "imageNormal": "https://cards.scryfall.io/grid/front/c/b/cbfe3354-7ced-4773-9a4e-a937ae9f94f8.webp?1789556808",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/c/b/cbfe3354-7ced-4773-9a4e-a937ae9f94f8.webp?1789556808"
   },
   {
     "name": "Identity Echo",
@@ -3789,9 +3789,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Enchantment",
     "collectorNumber": "87",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/6/e600b33b-8916-43dd-95d3-d7cbf874933d.jpg?1789385968",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/6/e600b33b-8916-43dd-95d3-d7cbf874933d.jpg?1789385968",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/6/e600b33b-8916-43dd-95d3-d7cbf874933d.jpg?1789385968"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/6/e600b33b-8916-43dd-95d3-d7cbf874933d.webp?1789385968",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/6/e600b33b-8916-43dd-95d3-d7cbf874933d.webp?1789385968",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/6/e600b33b-8916-43dd-95d3-d7cbf874933d.webp?1789385968"
   },
   {
     "name": "Master of Barbs",
@@ -3803,9 +3803,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Lizard Bard",
     "collectorNumber": "88",
-    "imageSmall": "https://cards.scryfall.io/small/front/4/4/4404d9d4-9cdd-4dad-a4f6-574d90db5052.jpg?1789127596",
-    "imageNormal": "https://cards.scryfall.io/normal/front/4/4/4404d9d4-9cdd-4dad-a4f6-574d90db5052.jpg?1789127596",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/4/4/4404d9d4-9cdd-4dad-a4f6-574d90db5052.jpg?1789127596"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/4/4/4404d9d4-9cdd-4dad-a4f6-574d90db5052.webp?1789127596",
+    "imageNormal": "https://cards.scryfall.io/grid/front/4/4/4404d9d4-9cdd-4dad-a4f6-574d90db5052.webp?1789127596",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/4/4/4404d9d4-9cdd-4dad-a4f6-574d90db5052.webp?1789127596"
   },
   {
     "name": "No Admittance",
@@ -3817,9 +3817,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "89",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/1/11ba4fdd-cc03-4bb6-a493-91a9785771d0.jpg?1788878170",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/1/11ba4fdd-cc03-4bb6-a493-91a9785771d0.jpg?1788878170",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/1/11ba4fdd-cc03-4bb6-a493-91a9785771d0.jpg?1788878170"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/1/11ba4fdd-cc03-4bb6-a493-91a9785771d0.webp?1788878170",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/1/11ba4fdd-cc03-4bb6-a493-91a9785771d0.webp?1788878170",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/1/11ba4fdd-cc03-4bb6-a493-91a9785771d0.webp?1788878170"
   },
   {
     "name": "Germinate Recruits",
@@ -3831,9 +3831,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Instant",
     "collectorNumber": "9",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/b/1b5d7d19-b32a-4786-ae9a-00da5e6658ad.jpg?1789644810",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/b/1b5d7d19-b32a-4786-ae9a-00da5e6658ad.jpg?1789644810",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/b/1b5d7d19-b32a-4786-ae9a-00da5e6658ad.jpg?1789644810"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/b/1b5d7d19-b32a-4786-ae9a-00da5e6658ad.webp?1789644810",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/b/1b5d7d19-b32a-4786-ae9a-00da5e6658ad.webp?1789644810",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/b/1b5d7d19-b32a-4786-ae9a-00da5e6658ad.webp?1789644810"
   },
   {
     "name": "Pompous Battlemage",
@@ -3845,9 +3845,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Goblin Sorcerer // Sorcery",
     "collectorNumber": "90",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/a/aa0f77ac-741a-444a-8bf0-a42c644726bf.jpg?1788878186",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/a/aa0f77ac-741a-444a-8bf0-a42c644726bf.jpg?1788878186",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/a/aa0f77ac-741a-444a-8bf0-a42c644726bf.jpg?1788878186"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/a/aa0f77ac-741a-444a-8bf0-a42c644726bf.webp?1788878186",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/a/aa0f77ac-741a-444a-8bf0-a42c644726bf.webp?1788878186",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/a/aa0f77ac-741a-444a-8bf0-a42c644726bf.webp?1788878186"
   },
   {
     "name": "Pyre Rhymer",
@@ -3859,9 +3859,9 @@ export default [
     "rarity": "rare",
     "typeLine": "Creature — Elemental Sorcerer // Instant",
     "collectorNumber": "91",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/b/2b0ebea0-86de-4da4-9fe8-dacc1e75c161.jpg?1789470850",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/b/2b0ebea0-86de-4da4-9fe8-dacc1e75c161.jpg?1789470850",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/b/2b0ebea0-86de-4da4-9fe8-dacc1e75c161.jpg?1789470850"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/b/2b0ebea0-86de-4da4-9fe8-dacc1e75c161.webp?1789470850",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/b/2b0ebea0-86de-4da4-9fe8-dacc1e75c161.webp?1789470850",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/b/2b0ebea0-86de-4da4-9fe8-dacc1e75c161.webp?1789470850"
   },
   {
     "name": "Skilled Battlecarver",
@@ -3873,9 +3873,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Human Warrior",
     "collectorNumber": "92",
-    "imageSmall": "https://cards.scryfall.io/small/front/0/e/0e44f959-1322-4abd-b6eb-dea992307c0c.jpg?1789556811",
-    "imageNormal": "https://cards.scryfall.io/normal/front/0/e/0e44f959-1322-4abd-b6eb-dea992307c0c.jpg?1789556811",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/0/e/0e44f959-1322-4abd-b6eb-dea992307c0c.jpg?1789556811"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/0/e/0e44f959-1322-4abd-b6eb-dea992307c0c.webp?1789556811",
+    "imageNormal": "https://cards.scryfall.io/grid/front/0/e/0e44f959-1322-4abd-b6eb-dea992307c0c.webp?1789556811",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/0/e/0e44f959-1322-4abd-b6eb-dea992307c0c.webp?1789556811"
   },
   {
     "name": "Stingcaster Mage",
@@ -3887,9 +3887,9 @@ export default [
     "rarity": "mythic",
     "typeLine": "Creature — Human Wizard",
     "collectorNumber": "93",
-    "imageSmall": "https://cards.scryfall.io/small/front/2/d/2d8e8e5f-3bf5-490d-aa9c-9df2b26f1460.jpg?1788329303",
-    "imageNormal": "https://cards.scryfall.io/normal/front/2/d/2d8e8e5f-3bf5-490d-aa9c-9df2b26f1460.jpg?1788329303",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/2/d/2d8e8e5f-3bf5-490d-aa9c-9df2b26f1460.jpg?1788329303"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/2/d/2d8e8e5f-3bf5-490d-aa9c-9df2b26f1460.webp?1788329303",
+    "imageNormal": "https://cards.scryfall.io/grid/front/2/d/2d8e8e5f-3bf5-490d-aa9c-9df2b26f1460.webp?1788329303",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/2/d/2d8e8e5f-3bf5-490d-aa9c-9df2b26f1460.webp?1788329303"
   },
   {
     "name": "Tether Technician",
@@ -3901,9 +3901,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Minotaur Artificer",
     "collectorNumber": "94",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/7/b75bbf46-a421-467a-9433-6cf22398a3a5.jpg?1789556839",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/7/b75bbf46-a421-467a-9433-6cf22398a3a5.jpg?1789556839",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/7/b75bbf46-a421-467a-9433-6cf22398a3a5.jpg?1789556839"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/7/b75bbf46-a421-467a-9433-6cf22398a3a5.webp?1789556839",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/7/b75bbf46-a421-467a-9433-6cf22398a3a5.webp?1789556839",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/7/b75bbf46-a421-467a-9433-6cf22398a3a5.webp?1789556839"
   },
   {
     "name": "Violent Echoes",
@@ -3915,9 +3915,9 @@ export default [
     "rarity": "uncommon",
     "typeLine": "Instant",
     "collectorNumber": "95",
-    "imageSmall": "https://cards.scryfall.io/small/front/a/d/ad03ba90-2442-4a71-94df-2088b5b63662.jpg?1789127599",
-    "imageNormal": "https://cards.scryfall.io/normal/front/a/d/ad03ba90-2442-4a71-94df-2088b5b63662.jpg?1789127599",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/a/d/ad03ba90-2442-4a71-94df-2088b5b63662.jpg?1789127599"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/a/d/ad03ba90-2442-4a71-94df-2088b5b63662.webp?1789127599",
+    "imageNormal": "https://cards.scryfall.io/grid/front/a/d/ad03ba90-2442-4a71-94df-2088b5b63662.webp?1789127599",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/a/d/ad03ba90-2442-4a71-94df-2088b5b63662.webp?1789127599"
   },
   {
     "name": "Wrath of the Bloodmane",
@@ -3929,9 +3929,9 @@ export default [
     "rarity": "common",
     "typeLine": "Instant",
     "collectorNumber": "96",
-    "imageSmall": "https://cards.scryfall.io/small/front/b/5/b5b55617-684a-4036-be9b-a3b24fc9cd5a.jpg?1789385820",
-    "imageNormal": "https://cards.scryfall.io/normal/front/b/5/b5b55617-684a-4036-be9b-a3b24fc9cd5a.jpg?1789385820",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/b/5/b5b55617-684a-4036-be9b-a3b24fc9cd5a.jpg?1789385820"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/b/5/b5b55617-684a-4036-be9b-a3b24fc9cd5a.webp?1789385820",
+    "imageNormal": "https://cards.scryfall.io/grid/front/b/5/b5b55617-684a-4036-be9b-a3b24fc9cd5a.webp?1789385820",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/b/5/b5b55617-684a-4036-be9b-a3b24fc9cd5a.webp?1789385820"
   },
   {
     "name": "Arcane Amphisbaena",
@@ -3943,9 +3943,9 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Snake",
     "collectorNumber": "97",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/b/1bf923c4-f0b7-4271-978c-fd2e79fe1cc8.jpg?1788878190",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/b/1bf923c4-f0b7-4271-978c-fd2e79fe1cc8.jpg?1788878190",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/b/1bf923c4-f0b7-4271-978c-fd2e79fe1cc8.jpg?1788878190"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/b/1bf923c4-f0b7-4271-978c-fd2e79fe1cc8.webp?1788878190",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/b/1bf923c4-f0b7-4271-978c-fd2e79fe1cc8.webp?1788878190",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/b/1bf923c4-f0b7-4271-978c-fd2e79fe1cc8.webp?1788878190"
   },
   {
     "name": "Bestial Incursion",
@@ -3957,9 +3957,9 @@ export default [
     "rarity": "common",
     "typeLine": "Sorcery",
     "collectorNumber": "98",
-    "imageSmall": "https://cards.scryfall.io/small/front/e/0/e0de5f66-f0df-4866-9f73-104ce50411b4.jpg?1789127248",
-    "imageNormal": "https://cards.scryfall.io/normal/front/e/0/e0de5f66-f0df-4866-9f73-104ce50411b4.jpg?1789127248",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/e/0/e0de5f66-f0df-4866-9f73-104ce50411b4.jpg?1789127248"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/e/0/e0de5f66-f0df-4866-9f73-104ce50411b4.webp?1789127248",
+    "imageNormal": "https://cards.scryfall.io/grid/front/e/0/e0de5f66-f0df-4866-9f73-104ce50411b4.webp?1789127248",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/e/0/e0de5f66-f0df-4866-9f73-104ce50411b4.webp?1789127248"
   },
   {
     "name": "Budding Insurgent",
@@ -3971,8 +3971,8 @@ export default [
     "rarity": "common",
     "typeLine": "Creature — Dryad Scout",
     "collectorNumber": "99",
-    "imageSmall": "https://cards.scryfall.io/small/front/1/8/18c59d60-2640-4576-9375-3ba38aa3ecb7.jpg?1789127120",
-    "imageNormal": "https://cards.scryfall.io/normal/front/1/8/18c59d60-2640-4576-9375-3ba38aa3ecb7.jpg?1789127120",
-    "imageArtCrop": "https://cards.scryfall.io/art_crop/front/1/8/18c59d60-2640-4576-9375-3ba38aa3ecb7.jpg?1789127120"
+    "imageSmall": "https://cards.scryfall.io/thumb/front/1/8/18c59d60-2640-4576-9375-3ba38aa3ecb7.webp?1789127120",
+    "imageNormal": "https://cards.scryfall.io/grid/front/1/8/18c59d60-2640-4576-9375-3ba38aa3ecb7.webp?1789127120",
+    "imageArtCrop": "https://cards.scryfall.io/art/front/1/8/18c59d60-2640-4576-9375-3ba38aa3ecb7.webp?1789127120"
   }
 ] satisfies Card[];

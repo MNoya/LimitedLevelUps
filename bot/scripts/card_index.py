@@ -16,6 +16,7 @@ from difflib import get_close_matches
 from datetime import date, timedelta
 from pathlib import Path
 
+from bot.config import USER_AGENT
 from bot.sets import release_instant, seed_for_code
 
 SCRYFALL_SEARCH = "https://api.scryfall.com/cards/search"
@@ -26,7 +27,7 @@ ORACLE_MAX_AGE_DAYS = 14
 SET_MAX_AGE_DAYS = 7
 SET_SETTLE_DAYS = 14
 FUZZY_CUTOFF = 0.88
-HEADERS = {"User-Agent": "llu-transcripts/1.0", "Accept": "application/json"}
+HEADERS = {"User-Agent": USER_AGENT, "Accept": "application/json"}
 _FRAGMENTS: set[str] | None = None
 
 

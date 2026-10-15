@@ -176,7 +176,7 @@ async function resolveCardImages(body: { identifiers?: { name?: unknown; set?: u
     }
     const page = (await res.json()) as { data?: any[] };
     for (const card of page.data ?? []) {
-      const image = card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null;
+      const image = card.image_uris?.grid ?? card.card_faces?.[0]?.image_uris?.grid ?? null;
       if (image) {
         map[`${card.set.toLowerCase()}|${frontFaceName(card.name).toLowerCase()}`] = image;
       }

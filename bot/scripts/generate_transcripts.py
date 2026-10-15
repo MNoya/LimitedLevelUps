@@ -18,7 +18,7 @@ from pathlib import Path
 
 from sqlalchemy import and_, or_, select
 
-from bot.config import settings
+from bot.config import USER_AGENT, settings
 from bot.database import SessionLocal
 from bot.models import Episode, EpisodeTranscript
 from bot.services.transcript_cards import sync_card_mentions
@@ -382,7 +382,7 @@ def _process_audio_only(session, guid: str, title: str, audio_url: str, set_code
 
 def _download_audio_url(url: str, workdir: Path) -> Path:
     dest = workdir / "audio.mp3"
-    request = urllib.request.Request(url, headers={"User-Agent": "llu-transcripts/1.0"})
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(request) as response, open(dest, "wb") as handle:
         shutil.copyfileobj(response, handle)
     return dest

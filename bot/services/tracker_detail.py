@@ -16,7 +16,7 @@ from datetime import timedelta
 from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.orm import Session
 
-from bot.config import settings
+from bot.config import USER_AGENT, settings
 from bot.models import DraftEvent, MagicSet, Player
 from bot.services.active_set import resolve_active_set
 from bot.services.refresh import refresh_player
@@ -37,7 +37,7 @@ def is_tracker_player(discord_id: str | None) -> bool:
 def fetch_17lands(path: str) -> dict | None:
     request = urllib.request.Request(
         f"https://www.17lands.com{path}",
-        headers={"Accept": "application/json", "User-Agent": "LLU-tracker/1.0"},
+        headers={"Accept": "application/json", "User-Agent": USER_AGENT},
     )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:

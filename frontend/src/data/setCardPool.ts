@@ -34,8 +34,8 @@ interface ScryfallPrinting {
   type_line?: string;
   color_identity?: string[];
   mana_cost?: string;
-  image_uris?: { normal?: string };
-  card_faces?: Array<{ mana_cost?: string; image_uris?: { normal?: string } }>;
+  image_uris?: { grid?: string };
+  card_faces?: Array<{ mana_cost?: string; image_uris?: { grid?: string } }>;
 }
 
 export function isSetCode(setCode: string): boolean {
@@ -111,7 +111,7 @@ function toSetCard(printing: ScryfallPrinting): SetCard {
     rarity: printing.rarity,
     colorIdentity: printing.color_identity ?? [],
     manaCost: printing.mana_cost || frontFace?.mana_cost || null,
-    image: printing.image_uris?.normal ?? frontFace?.image_uris?.normal ?? null,
+    image: printing.image_uris?.grid ?? frontFace?.image_uris?.grid ?? null,
   };
 }
 

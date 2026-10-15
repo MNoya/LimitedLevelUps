@@ -36,6 +36,7 @@ import { cubeForBoard, cubeVariantForBoard } from "../frontend/src/data/cubeVari
 import { CUBE_LIFETIME, isCubeSeasonCode } from "../frontend/src/data/utils";
 import { POD_SEASON_PARAM, podSeasons } from "../frontend/src/data/podSeasons";
 import { skeletonsFor } from "../frontend/src/data/skeletons";
+import { scryfallWebp } from "../frontend/src/data/scryfallImage";
 import {
   SET_ROWS_QUERY,
   type SetRow,
@@ -516,7 +517,7 @@ const tierCardMeta = async (setCode: string, slug: string): Promise<RouteMeta | 
       if (cardSlug(card.name) === slug) {
         const gap = "\u00a0\u00a0";
         const grade = card.trend && card.trend_from ? `${card.trend_from}${gap}→${gap}${card.tier}` : card.tier;
-        return page(card.name, `Set Review Grade: ${grade}`, { kind: "url", url: card.url });
+        return page(card.name, `Set Review Grade: ${grade}`, { kind: "url", url: scryfallWebp(card.url, "display") });
       }
     }
   } catch {
@@ -593,7 +594,7 @@ const podCardMeta = async (
   return page(title, `${label} Cube ${stats.join(", ")}`, image ? { kind: "url", url: image } : null);
 };
 
-type ScryfallCard = { image_uris?: { large?: string }; card_faces?: { image_uris?: { large?: string } }[] };
+type ScryfallCard = { image_uris?: { display?: string }; card_faces?: { image_uris?: { display?: string } }[] };
 
 const scryfallImageUrl = async (name: string, set: string | null): Promise<string | null> => {
   const printing = set ? `&set=${encodeURIComponent(set)}` : "";
@@ -606,7 +607,7 @@ const scryfallImageUrl = async (name: string, set: string | null): Promise<strin
       return null;
     }
     const card = (await resp.json()) as ScryfallCard;
-    return card.image_uris?.large ?? card.card_faces?.[0]?.image_uris?.large ?? null;
+    return card.image_uris?.display ?? card.card_faces?.[0]?.image_uris?.display ?? null;
   } catch {
     return null;
   }

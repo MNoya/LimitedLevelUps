@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { frontFace } from "../lib/cardSlug";
+import { scryfallWebp } from "./scryfallImage";
 
 // Card art resolves through /api/card-images (Scryfall batch → CDN URLs); the browser never hits Scryfall directly
 
@@ -190,13 +191,12 @@ export function cardImageSources(
   return ready ? fallback : [];
 }
 
-// Like cardImageSources but rewritten to Scryfall's art_crop for a frameless thumbnail
 export function cardArtSources(
   name: string | null | undefined,
   set: string | null | undefined,
   cardImages?: CardImages,
 ): string[] {
   return cardImageSources(name, set, cardImages).map((url) =>
-    url.includes("cards.scryfall.io/") ? url.replace("/normal/", "/art_crop/") : url.replace("version=normal", "version=art_crop"),
+    url.includes("cards.scryfall.io/") ? scryfallWebp(url, "art") : url.replace("version=normal", "version=art_crop"),
   );
 }

@@ -29,6 +29,8 @@ from pathlib import Path
 
 import requests
 
+from bot.config import USER_AGENT
+
 logger = logging.getLogger(__name__)
 
 EVENTS_URL = "https://mtgscribe.com/wp-json/tribe/events/v1/events"
@@ -37,7 +39,7 @@ STALE_HORIZON = timedelta(days=14)
 PER_PAGE = 50
 REQUEST_TIMEOUT = 15
 REQUEST_HEADERS = {
-    "User-Agent": "LimitedLevelUps-Bot/1.0 (+https://limitedlevelups.com)",
+    "User-Agent": USER_AGENT,
     "Accept": "application/json",
 }
 

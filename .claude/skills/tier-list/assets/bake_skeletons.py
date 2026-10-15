@@ -18,7 +18,7 @@ Each line looks like:
 
 POOL_API = "https://sealeddeck.tech/api/pools/{pool}?columns=true"
 SCRYFALL_COLLECTION = "https://api.scryfall.com/cards/collection"
-HEADERS = {"User-Agent": "llu-skeleton-baker", "Accept": "application/json"}
+HEADERS = {"User-Agent": "LimitedLevelUps/1.0", "Accept": "application/json"}
 
 
 def wubrg(colors):

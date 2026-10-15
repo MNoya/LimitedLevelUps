@@ -17,8 +17,8 @@ interface Identifier {
 interface ScryfallCard {
   name: string;
   set: string;
-  image_uris?: { normal?: string };
-  card_faces?: { image_uris?: { normal?: string } }[];
+  image_uris?: { grid?: string };
+  card_faces?: { image_uris?: { grid?: string } }[];
 }
 
 function frontFaceName(name: string): string {
@@ -26,8 +26,8 @@ function frontFaceName(name: string): string {
   return (separator === -1 ? name : name.slice(0, separator)).trim();
 }
 
-function normalImage(card: ScryfallCard): string | null {
-  return card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null;
+function gridImage(card: ScryfallCard): string | null {
+  return card.image_uris?.grid ?? card.card_faces?.[0]?.image_uris?.grid ?? null;
 }
 
 function normalize(raw: unknown): Identifier[] {
@@ -87,7 +87,7 @@ export const onRequestPost: PagesFunction = async (context) => {
 
   const cache = caches.default;
   const hash = await sha256Hex(JSON.stringify(identifiers));
-  const cacheKey = new Request(new URL(`/api/card-images/${hash}`, request.url).toString());
+  const cacheKey = new Request(new URL(`/api/card-images/grid/${hash}`, request.url).toString());
   const cached = await cache.match(cacheKey);
   if (cached) {
     return cached;
@@ -101,7 +101,7 @@ export const onRequestPost: PagesFunction = async (context) => {
     }
     const page = (await res.json()) as { data?: ScryfallCard[] };
     for (const card of page.data ?? []) {
-      const image = normalImage(card);
+      const image = gridImage(card);
       if (image) {
         map[`${card.set.toLowerCase()}|${frontFaceName(card.name).toLowerCase()}`] = image;
       }

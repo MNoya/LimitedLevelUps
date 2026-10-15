@@ -40,6 +40,7 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from bot.config import USER_AGENT
 from bot.sets import ALL_SETS, RELEASE_TZ, SetSeed, release_instant
 
 RESULTS_WINDOW = timedelta(days=28)
@@ -48,7 +49,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES_DIR = REPO_ROOT / "frontend/src/data/fixtures"
 CONTESTS_JSON = REPO_ROOT / "p0p1_contests.json"
 SCRYFALL_SEARCH = "https://api.scryfall.com/cards/search"
-USER_AGENT = "DischordLeaderboard/1.0"
 
 FRONT_FACE_NAME_LAYOUTS = {"adventure", "transform", "modal_dfc", "prepare", "flip"}
 
@@ -97,9 +97,9 @@ def extract_card(raw: dict) -> dict:
         "rarity": raw.get("rarity", "common"),
         "typeLine": raw.get("type_line", ""),
         "collectorNumber": raw.get("collector_number", ""),
-        "imageSmall": images.get("small", ""),
-        "imageNormal": images.get("normal", ""),
-        "imageArtCrop": images.get("art_crop", ""),
+        "imageSmall": images.get("thumb", ""),
+        "imageNormal": images.get("grid", ""),
+        "imageArtCrop": images.get("art", ""),
     }
 
 

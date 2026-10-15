@@ -23,6 +23,7 @@ import urllib.request
 
 from sqlalchemy import select, text
 
+from bot.config import USER_AGENT
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
 
@@ -71,7 +72,7 @@ def fetch_cmc_type(identifiers: set) -> dict:
         request = urllib.request.Request(
             SCRYFALL_COLLECTION_URL, data=body, method="POST",
             headers={"Content-Type": "application/json", "Accept": "application/json",
-                     "User-Agent": "DischordLeaderboard/1.0"},
+                     "User-Agent": USER_AGENT},
         )
         try:
             with urllib.request.urlopen(request, timeout=30) as response:

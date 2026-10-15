@@ -12,6 +12,7 @@ import {
   hasTierList,
 } from "./constants";
 import { TRI_COLOR_CODES, TWO_COLOR_CODES } from "./filters";
+import { scryfallWebp } from "./scryfallImage";
 import type { SetSummary } from "../types/leaderboard";
 
 export interface ResolvedTierList {
@@ -508,7 +509,12 @@ function normalizeTrend(raw: unknown): "up" | "down" | null {
 }
 
 const normalizeCards = (cards: TierCard[]): TierCard[] =>
-  cards.map((card) => ({ ...card, trend: normalizeTrend(card.trend) }));
+  cards.map((card) => ({
+    ...card,
+    url: scryfallWebp(card.url, "display"),
+    url_back: card.url_back ? scryfallWebp(card.url_back, "display") : card.url_back,
+    trend: normalizeTrend(card.trend),
+  }));
 
 // Bare-array responses are card ratings only; the dict shape adds list metadata
 // including `last_updated` (UTC, space-separated).

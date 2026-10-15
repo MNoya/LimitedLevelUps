@@ -45,6 +45,7 @@ import {
   type TierFilters,
 } from "../data/tierList";
 import { formatWinRate, type CardGrades, type CardStats } from "../data/cardStats";
+import { scryfallWebp } from "../data/scryfallImage";
 
 const RARITY_ACCENT: Record<string, string> = {
   C: "#ffffff",
@@ -646,7 +647,7 @@ function CardBar({
   const [anchor, setAnchor] = useState<PreviewAnchor | null>(null);
   const [artLoaded, setArtLoaded] = useState(false);
   const accent = RARITY_ACCENT[card.rarity] ?? RARITY_ACCENT.C;
-  const art = card.url.replace("/large/", "/art_crop/");
+  const art = scryfallWebp(card.url, "art");
   const badges = `${card.comment ? "💬" : ""}${cardFlags(card).map((flag) => flag.glyph).join("")}`;
   const trendLabel = card.trend
     ? `${TREND_LABEL[card.trend]}${card.trend_from ? ` (${card.trend_from} → ${card.tier})` : ""}`

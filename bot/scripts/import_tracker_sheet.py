@@ -27,7 +27,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from sqlalchemy import create_engine, text
 
-from bot.config import OWNER_DISCORD_ID
+from bot.config import OWNER_DISCORD_ID, USER_AGENT
 
 SPREADSHEET_ID = "1ykMC8ZpbBBRrv83zpzRFe39r4Yr_z2BY5VjtijCfQeU"
 KEY_PATH = os.path.expanduser("~/.config/gcloud/sheets-mcp-key.json")
@@ -86,7 +86,7 @@ def set_card_names(set_code: str) -> dict[str, str]:
            + quote(f"set:{set_code.lower()} (rarity:rare or rarity:mythic)")
            + "&unique=cards&order=review")
     while url:
-        request = Request(url, headers={"User-Agent": "LLU-tracker-import/1.0", "Accept": "application/json"})
+        request = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
         with urlopen(request) as response:
             page = json.load(response)
         for card in page["data"]:
