@@ -3395,7 +3395,8 @@ def build_champion_announcement_view(
         if s.wins + s.losses >= TOTAL_ROUNDS
     ]
 
-    for block in _announcement_blocks(top_standings, deck_data, event_name):
+    champion_apart = is_championship(event_name) or posts_whole_pod(standings)
+    for block in _announcement_blocks(top_standings, deck_data, champion_apart=champion_apart):
         rows: list[str] = []
         decks: list[discord.MediaGalleryItem] = []
         for s in block:
@@ -3428,12 +3429,8 @@ def build_champion_announcement_view(
     return view
 
 
-def _announcement_blocks(finishers, deck_data, event_name: str | None) -> list[list[pod_swiss.Standing]]:
-    """The announced rows split into the blocks the card draws, each block one text run plus its own deck
-    gallery. A pod groups by record, so its 3-0s and its 2-1s each get a gallery of their own. A Set
-    Championship keeps the champion alone above their full-size deck, once they have posted one, with the
-    rest of the field in a single block below."""
-    if is_championship(event_name):
+def _announcement_blocks(finishers, deck_data, *, champion_apart: bool) -> list[list[pod_swiss.Standing]]:
+    if champion_apart:
         champion = finishers[0] if finishers else None
         data = deck_data.get(normalize_player_name(champion.player_name)) if champion else None
         if data is not None and data.screenshot_url:
@@ -4005,9 +4002,13 @@ def announced_finishers(standings, event_name: str | None) -> list[pod_swiss.Sta
     Set Championship, whose full result is the record worth keeping. A pod of four goes out whole too: one
     loss cuts it to two rows, which reads as half a result. The same set gates the post, so every row it
     shows has had its deck waited for."""
-    if is_championship(event_name) or len(standings) <= FULL_FIELD_POD_SIZE:
+    if is_championship(event_name) or posts_whole_pod(standings):
         return list(standings)
     return [s for s in standings if s.losses <= ANNOUNCED_MAX_LOSSES]
+
+
+def posts_whole_pod(standings) -> bool:
+    return len(standings) <= FULL_FIELD_POD_SIZE
 
 
 def incomplete_decks(finishers, deck_data) -> list[str]:
