@@ -1,8 +1,8 @@
 """The organizer's controls on a busy pod that holds for attendance.
 
-📋 on the held card opens a private tick list of the roster, so someone in the room can record what the
-buttons could not, and while the pod is holding it also carries a Feature On Table 1 picker that pins a
-player to the first table the split opens. Open Tables ends the wait early, which is the same release the
+📋 on the roster card opens a private tick list of the roster, so someone in the room can record what the
+buttons could not, and until the tables open it also carries a Feature On Table 1 picker that pins a
+player to the first table a split opens. Open Tables ends the wait early, which is the same release the
 start time would have run.
 
 Both carry the event id in their custom_id, so they keep working after a restart. They are rendered greyed
@@ -37,7 +37,7 @@ from bot.commands.messages import (
 )
 from bot.discord_helpers import run_detached
 from bot.services.pod_confirm import decline_players_sync, set_confirmations_sync
-from bot.services.pod_launch import cancel_release, is_holding, release_attendance_hold
+from bot.services.pod_launch import cancel_release, has_held, is_holding, release_attendance_hold
 from bot.services.pod_staging import (
     Signup,
     confirmed_first_roster_sync,
@@ -81,9 +81,10 @@ class AttendeesButton(ui.DynamicItem[ui.Button], template=rf"{ATTENDEES_BUTTON_P
         if not roster:
             await interaction.followup.send(MSG_ATTENDEES_EMPTY, ephemeral=True)
             return
+        tables_unopened = is_holding(self.event_id) or not has_held(self.event_id)
         await interaction.followup.send(
             MSG_ATTENDEES_LEAD,
-            view=_AttendeesView(self.event_id, roster, featuring=is_holding(self.event_id)),
+            view=_AttendeesView(self.event_id, roster, featuring=tables_unopened),
             ephemeral=True,
         )
 
@@ -129,8 +130,8 @@ def build_hold_items(
 ) -> list[ui.Item]:
     """The organizer controls a roster card carries beyond its RSVP row.
 
-    The tick list spans the whole confirmation window and carries the Feature On Table 1 picker while the
-    pod is holding; opening the tables is the hold's own act and needs a hold to end. Both grey out
+    The tick list spans the whole confirmation window and carries the Feature On Table 1 picker until the
+    tables open; opening the tables is the hold's own act and needs a hold to end. Both grey out
     afterwards rather than vanishing, and Discord refuses a disabled press, so neither needs copy saying
     the moment has passed."""
     items: list[ui.Item] = []
@@ -211,8 +212,7 @@ class _AttendeesSelect(ui.Select):
 
 
 class _FeatureSelect(ui.Select):
-    """Pin players to Table 1 so the release seats them at the first table it opens. Carried by the tick
-    list only while the pod is holding, since a pod that will not split has one table to seat everyone."""
+    """Pin players to Table 1 so a split seats them at the first table it opens"""
 
     def __init__(self, event_id: str, roster: list[Signup]) -> None:
         shown = roster[:SELECT_LIMIT]
