@@ -12,7 +12,7 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import discord
 from discord import ui
@@ -445,10 +445,11 @@ def vote_ping_text(guild: discord.Guild) -> str:
 
 async def post_vote_card(channel: discord.abc.Messageable, content: str | None, *, force: bool = False) -> None:
     """Post the season's public vote card and pin it in place of the earlier one, pinging with `content` when it is
-    set. A card already up for this season is left alone unless `force`, so a same-day repost does not re-ping."""
+    set. A card posted since this season's ballot opened is left alone unless `force`, so a same-day repost does
+    not re-ping."""
     season = season_code()
     existing = await _existing_card(channel)
-    if existing is not None and not force and _is_current_card(existing, season):
+    if existing is not None and not force and posted_since_ballot_opened(existing):
         return
     if existing is not None:
         await _retire(existing)
@@ -562,12 +563,10 @@ async def _existing_card(channel: discord.abc.Messageable) -> discord.Message | 
     return None
 
 
-def _is_current_card(message: discord.Message, season: str) -> bool:
-    """Whether an existing card is this season's, read off the set name in its heading, so an old season's
-    card is replaced while the current one is left alone. No hidden footer marker needed."""
-    if not message.embeds:
-        return False
-    return set_name_for(season) in (message.embeds[0].description or "")
+def posted_since_ballot_opened(message: discord.Message, when: datetime | None = None) -> bool:
+    plan = plan_for(when)
+    opens_at = vote_opens_at(plan) if plan is not None else None
+    return opens_at is not None and message.created_at >= opens_at
 
 
 async def _retire(message: discord.Message) -> None:

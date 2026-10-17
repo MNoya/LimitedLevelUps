@@ -104,6 +104,20 @@ def test_voting_is_open_from_the_ballot_instant():
     assert voting_open(opens_at - timedelta(minutes=1)) is False
 
 
+def test_a_card_pinned_before_the_ballot_opened_is_replaced_whatever_its_heading_reads():
+    opens_at = vote_opens_at(plan_for(datetime(2026, 10, 16, 15, tzinfo=RELEASE_TZ)))
+    cases = [
+        (datetime(2026, 8, 30, 23, 36, tzinfo=RELEASE_TZ), False),
+        (opens_at - timedelta(minutes=1), False),
+        (opens_at, True),
+        (opens_at + timedelta(hours=5), True),
+    ]
+
+    kept = [vote.posted_since_ballot_opened(SimpleNamespace(created_at=posted), opens_at) for posted, _ in cases]
+
+    assert kept == [expected for _, expected in cases]
+
+
 def test_the_ping_and_reminder_are_due_for_a_day_from_their_instants():
     plan = plan_for(datetime(2026, 8, 29, 15, tzinfo=RELEASE_TZ))
     opens_at = vote_opens_at(plan)

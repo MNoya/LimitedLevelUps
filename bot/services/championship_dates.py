@@ -36,6 +36,8 @@ PARALLEL_LEAD_DAYS = 14
 VOTE_REMINDER_LAG_DAYS = 2
 SEASON_START_OVERRIDES: dict[str, date] = {"HOB": date(2026, 8, 30)}
 CHAMPIONSHIP_DATE_OVERRIDES: dict[str, date] = {"FRA": date(2026, 11, 7)}
+BALLOT_DATE_OVERRIDES: dict[str, date] = {"FRA": date(2026, 10, 17)}
+VOTE_REMINDER_DATE_OVERRIDES: dict[str, date] = {"FRA": date(2026, 10, 18)}
 
 
 @dataclass(frozen=True)
@@ -126,13 +128,19 @@ def season_start(set_code: str) -> date | None:
 
 def vote_opens_at(plan: ChampionshipPlan) -> datetime | None:
     """An hour before the Early Pod `BALLOT_LEAD_DAYS` ahead of the season start"""
-    start = season_start(plan.set_code)
-    if start is None:
-        return None
-    return datetime.combine(start - timedelta(days=BALLOT_LEAD_DAYS), BALLOT_OPENS_AT, tzinfo=RELEASE_TZ)
+    ballot_date = BALLOT_DATE_OVERRIDES.get(plan.set_code)
+    if ballot_date is None:
+        start = season_start(plan.set_code)
+        if start is None:
+            return None
+        ballot_date = start - timedelta(days=BALLOT_LEAD_DAYS)
+    return datetime.combine(ballot_date, BALLOT_OPENS_AT, tzinfo=RELEASE_TZ)
 
 
 def vote_reminder_at(plan: ChampionshipPlan) -> datetime | None:
+    reminder_date = VOTE_REMINDER_DATE_OVERRIDES.get(plan.set_code)
+    if reminder_date is not None:
+        return datetime.combine(reminder_date, BALLOT_OPENS_AT, tzinfo=RELEASE_TZ)
     opens_at = vote_opens_at(plan)
     if opens_at is None:
         return None
