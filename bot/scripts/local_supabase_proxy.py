@@ -42,6 +42,7 @@ _ALLOWED_VIEWS = {
     "public_fantasy_standings",
     "public_episode_transcripts",
     "public_leaderboard",
+    "public_p0p1_ballots",
     "public_p0p1_pick_stats",
     "public_p0p1_ratings",
     "public_player",
