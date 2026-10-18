@@ -5,6 +5,9 @@ import { ArrowUpRight, BookOpen, ChevronDown } from "lucide-react";
 import { PodPage } from "./PodPage";
 
 import { AppHeader } from "../components/AppHeader";
+import { TopColorsCard } from "../components/ArchetypePanel";
+import { RecentTrophiesCard } from "../components/PodRecentTrophies";
+import { InsightsStrip } from "../components/LeaderboardSidebar";
 import { Footer } from "../components/Footer";
 import { SectionHeading } from "../components/SectionHeading";
 import { SectionLabel } from "../components/SectionLabel";
@@ -68,6 +71,7 @@ import {
   usePodCalendar,
   usePodSetCodes,
   useSets,
+  useAllPodArchetypes,
   useAllPodEvents,
   useAllPodResults,
 } from "../data/hooks";
@@ -90,6 +94,7 @@ import {
 import { resolveDeck } from "../data/draft-artifact";
 import { usePodDecklistAccess } from "../data/podDecklistAccess";
 import { hasCardData } from "../data/podCards";
+import { aggregateArchetypes, championPairCounts, gameTally } from "../data/podArchetypes";
 import type {
   PodCalendarDayRow,
   PodCalendarEntry,
@@ -511,6 +516,26 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
   const cardDataHref = hasCardData(activeSet) ? `/pods/${activeSet}/data${cardDataSearch}` : null;
   const cubeCobraHref = setCode ? cubeCobraUrl(setCode) : null;
 
+  const { data: archetypeRows } = useAllPodArchetypes();
+  const topColorsArchetypes = useMemo(() => {
+    const playedIds = new Set(played.map((e) => e.eventId));
+    const playedRows = (archetypeRows ?? []).filter((r) => playedIds.has(r.event_id));
+    return aggregateArchetypes(playedRows.map(gameTally));
+  }, [played, archetypeRows]);
+  const topColorsTrophies = useMemo(() => championPairCounts(played), [played]);
+  const topColors = (
+    <TopColorsCard
+      archetypes={topColorsArchetypes}
+      trophiesByKey={topColorsTrophies}
+      loading={events === undefined || archetypeRows === undefined}
+      pageSize={7}
+    />
+  );
+  const recentTrophies = <RecentTrophiesCard events={played} loading={events === undefined} pageSize={7} />;
+  const sideBySide = !useIsMobile(CALENDAR_LABEL_WIDTH);
+  const [eventsTabChoice, setEventsTab] = useState<"events" | "colors" | "trophies">("events");
+  const eventsTab = sideBySide && eventsTabChoice === "trophies" ? "colors" : eventsTabChoice;
+
   // The season view spans every set, so a name lands on the lifetime profile's pods
   const profileHref = (row: LeaderboardTableRow) => {
     if (setCode) {
@@ -576,17 +601,40 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
             ) : (
               <>
                 {showUpcoming && <UpcomingBlock />}
-                {events === undefined ? (
+                <div className="mt-2 flex items-stretch border-y border-border">
+                  <TabButton size="section" active={eventsTab === "events"} onClick={() => setEventsTab("events")}>
+                    EVENTS
+                  </TabButton>
+                  <TabButton size="section" active={eventsTab === "colors"} onClick={() => setEventsTab("colors")}>
+                    TOP COLORS
+                  </TabButton>
+                  {!sideBySide && (
+                    <TabButton
+                      size="section"
+                      active={eventsTab === "trophies"}
+                      onClick={() => setEventsTab("trophies")}
+                    >
+                      TROPHIES
+                    </TabButton>
+                  )}
+                </div>
+                {eventsTab !== "events" ? (
+                  sideBySide ? (
+                    <div className="pt-3 grid grid-cols-2 gap-4 items-start">
+                      {topColors}
+                      {recentTrophies}
+                    </div>
+                  ) : (
+                    <div className="pt-3">{eventsTab === "trophies" ? recentTrophies : topColors}</div>
+                  )
+                ) : events === undefined ? (
                   <EventsLoadingBlock />
                 ) : played.length > 0 ? (
                   <EventsBlock events={played} nowMs={nowMs} />
                 ) : (
-                  <div>
-                    <SectionHeading label="EVENTS" count={0} unit="EVENTS" />
-                    <EmptyHint>
-                      {allSeasons ? "No pod drafts recorded yet" : `No pod drafts recorded yet for ${activeSet}`}
-                    </EmptyHint>
-                  </div>
+                  <EmptyHint>
+                    {allSeasons ? "No pod drafts recorded yet" : `No pod drafts recorded yet for ${activeSet}`}
+                  </EmptyHint>
                 )}
                 {mock.length > 0 && <MockDraftsBlock events={mock} />}
               </>
@@ -605,6 +653,17 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
               {isMobile ? (
                 <div ref={standingsHeadRef} className="sticky z-[9] bg-bg" style={{ top: chromeHeight }}>
                   <StandingsHeading leaderboard={leaderboard} events={events && played} compact />
+                  <InsightsStrip
+                    colors={() => (
+                      <TopColorsCard
+                        archetypes={topColorsArchetypes}
+                        trophiesByKey={topColorsTrophies}
+                        loading={events === undefined || archetypeRows === undefined}
+                        pageSize={12}
+                      />
+                    )}
+                    recent={() => <RecentTrophiesCard events={played} loading={events === undefined} pageSize={25} />}
+                  />
                   {leaderboard !== undefined && leaderboard.length > 0 && (
                     <LeaderboardColumnHeader variant="mobile" mode="pod" sort={sort} onSort={onSort} />
                   )}
@@ -748,12 +807,7 @@ function EventsBlock({ events, nowMs }: { events: PodEventSummary[]; nowMs: numb
   const { count, sentinelRef } = useIncrementalReveal(events.length);
   return (
     <div>
-      <SectionHeading
-        label="EVENTS"
-        count={events.length}
-        unit={events.length === 1 ? "EVENT" : "EVENTS"}
-      />
-      <div className="flex flex-col lg:gap-2">
+      <div className="flex flex-col lg:gap-2 pt-2">
         {events.slice(0, count).map((e, i) => (
           <EventRow
             key={e.eventId}
@@ -1388,12 +1442,11 @@ function EventRowBody({
       )}
     </RowTitle>
   );
-  // A pod with no champion is a pod still running, so the row says nothing about being in progress
   const outcome = (
     <>
       {event.isTeamDraft && <TeamDraftResult event={event} stacked={stacked} />}
       {event.championDisplayName && <ChampionResult event={event} stacked={stacked} />}
-      {inProgress && currentRound != null && <RoundLabel round={currentRound} stacked={stacked} />}
+      {inProgress && <RoundLabel round={currentRound} stacked={stacked} />}
     </>
   );
   return (
@@ -1445,13 +1498,13 @@ function ChampionResult({ event, stacked }: { event: PodEventSummary; stacked: b
   );
 }
 
-function RoundLabel({ round, stacked }: { round: number; stacked: boolean }) {
+function RoundLabel({ round, stacked }: { round: number | null; stacked: boolean }) {
   return (
     <span
       className="shrink-0 font-display text-subtle tracking-[0.18em] leading-none"
       style={{ fontSize: stacked ? 11 : 12 }}
     >
-      ROUND {round}
+      {round == null ? "IN PROGRESS" : `ROUND ${round}`}
     </span>
   );
 }
@@ -1486,6 +1539,9 @@ function EventStandings({ event }: { event: PodEventSummary }) {
       }
     }
   };
+  if (!isLoading && sorted.length === 0) {
+    return null;
+  }
   return (
     <>
       <div className="border-t border-dashed border-border2">
@@ -1566,8 +1622,7 @@ function EventRowSkeleton({ index, stacked = false }: { index: number; stacked?:
 function EventsLoadingBlock() {
   return (
     <div>
-      <SectionHeading label="EVENTS" unit="EVENTS" />
-      <div className="flex flex-col lg:gap-2">
+      <div className="flex flex-col lg:gap-2 pt-2">
         {[0, 1, 2].map((i) => (
           <EventRowSkeleton key={i} index={i} />
         ))}

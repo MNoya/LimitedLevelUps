@@ -1,10 +1,20 @@
-// Reads public_pod_archetype_stats (one row per deck_colors); folds into the main color pair, mono and 3+ into "Other"
+import type { PodEventSummary } from "../types/leaderboard";
+
+// Folds deck colors into the main color pair, mono and 3+ into "Other"
 export interface PodArchetypeRow {
   set_code: string;
   season: string;
+  event_id: string;
   deck_colors: string;
   decks: number;
   game_wins: number;
+  games: number;
+}
+
+export interface ArchetypeTally {
+  deckColors: string;
+  decks: number;
+  wins: number;
   games: number;
 }
 
@@ -12,7 +22,7 @@ export interface Archetype {
   key: string;
   colors: string;
   decks: number;
-  gameWins: number;
+  wins: number;
   games: number;
   playRate: number;
   winRate: number | null;
@@ -28,17 +38,21 @@ export function mainPair(deckColors: string): string {
   return main.length === 2 ? main.join("") : OTHER_KEY;
 }
 
-export function aggregateArchetypes(rows: PodArchetypeRow[]): Archetype[] {
-  const byKey = new Map<string, { decks: number; gameWins: number; games: number }>();
+export function gameTally(row: PodArchetypeRow): ArchetypeTally {
+  return { deckColors: row.deck_colors, decks: row.decks, wins: row.game_wins, games: row.games };
+}
+
+export function aggregateArchetypes(tallies: ArchetypeTally[]): Archetype[] {
+  const byKey = new Map<string, { decks: number; wins: number; games: number }>();
   let totalDecks = 0;
-  for (const row of rows) {
-    const key = mainPair(row.deck_colors);
-    const acc = byKey.get(key) ?? { decks: 0, gameWins: 0, games: 0 };
-    acc.decks += row.decks;
-    acc.gameWins += row.game_wins;
-    acc.games += row.games;
+  for (const tally of tallies) {
+    const key = mainPair(tally.deckColors);
+    const acc = byKey.get(key) ?? { decks: 0, wins: 0, games: 0 };
+    acc.decks += tally.decks;
+    acc.wins += tally.wins;
+    acc.games += tally.games;
     byKey.set(key, acc);
-    totalDecks += row.decks;
+    totalDecks += tally.decks;
   }
   const archetypes: Archetype[] = [];
   for (const [key, acc] of byKey) {
@@ -46,25 +60,23 @@ export function aggregateArchetypes(rows: PodArchetypeRow[]): Archetype[] {
       key,
       colors: key === OTHER_KEY ? "" : key,
       decks: acc.decks,
-      gameWins: acc.gameWins,
+      wins: acc.wins,
       games: acc.games,
       playRate: totalDecks > 0 ? acc.decks / totalDecks : 0,
-      winRate: acc.games > 0 ? acc.gameWins / acc.games : null,
+      winRate: acc.games > 0 ? acc.wins / acc.games : null,
     });
   }
   return archetypes;
 }
 
-export function sortArchetypes(archetypes: Archetype[]): Archetype[] {
-  return [...archetypes].sort((a, b) => {
-    if (a.key === OTHER_KEY && b.key !== OTHER_KEY) {
-      return 1;
+export function championPairCounts(events: PodEventSummary[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const e of events) {
+    if (e.kind === "mock" || !e.isFinalized || !e.championDeckColors) {
+      continue;
     }
-    if (b.key === OTHER_KEY && a.key !== OTHER_KEY) {
-      return -1;
-    }
-    const aw = a.winRate ?? -1;
-    const bw = b.winRate ?? -1;
-    return bw - aw || b.decks - a.decks;
-  });
+    const key = mainPair(e.championDeckColors);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }

@@ -269,6 +269,18 @@ export async function fetchPodArchetypes(boardCode: string): Promise<PodArchetyp
   return (data ?? []).map((r) => r as unknown as PodArchetypeRow);
 }
 
+export async function fetchAllPodArchetypes(): Promise<PodArchetypeRow[]> {
+  return pagedRows<PodArchetypeRow>((from, to) =>
+    client()
+      .from("public_pod_archetype_stats")
+      .select("*")
+      .order("event_id")
+      .order("deck_colors")
+      .range(from, to)
+      .returns<PodArchetypeRow[]>(),
+  );
+}
+
 // ─── public_sets ───────────────────────────────────────────────────────────
 
 export async function fetchSets(): Promise<SetSummary[]> {
@@ -1968,6 +1980,7 @@ export async function fetchPodSeasonResults(
 }
 
 const POD_RESULT_EVENT_COLUMNS = "event_id, set_code, event_time, kind";
+const POD_RESULT_PARTICIPANT_COLUMNS = "event_id, player_slug, player_display_name, avatar_url, record, placement";
 
 // The whole history in two ordered range-paged reads run in parallel, so the pods page holds every scope
 // client-side and never chains an events read into a per-event participants read
@@ -1979,7 +1992,7 @@ export async function fetchAllPodResults(): Promise<PodSeasonResultRow[]> {
     pagedRows<Record<string, unknown>>((from, to) =>
       client()
         .from("public_pod_draft_event_participants")
-        .select("event_id, player_slug, player_display_name, avatar_url, record, placement")
+        .select(POD_RESULT_PARTICIPANT_COLUMNS)
         .order("event_id")
         .range(from, to),
     ),
@@ -2064,7 +2077,7 @@ async function podParticipantsForEvents(eventIds: string[]): Promise<Record<stri
     chunks.map((ids) =>
       client()
         .from("public_pod_draft_event_participants")
-        .select("event_id, player_slug, player_display_name, avatar_url, record, placement")
+        .select(POD_RESULT_PARTICIPANT_COLUMNS)
         .in("event_id", ids),
     ),
   );

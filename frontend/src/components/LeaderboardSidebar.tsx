@@ -166,8 +166,46 @@ export function LeaderboardInsightsStrip({
   maxColors?: number;
 }) {
   const d = useInsightsData({ setCode, colors, format, otherCombos, maxRecent }, searchParams);
+  return (
+    <InsightsStrip
+      colors={(close) => (
+        <div className="px-3 py-1.5">
+          <TopColorsRows
+            topColors={d.topColors}
+            maxColors={maxColors}
+            colors={colors}
+            colorsHref={colorsHref}
+            onPick={close}
+            lcqScope={d.lcqScope}
+          />
+        </div>
+      )}
+      recent={() => (
+        <div className="px-3 py-1.5">
+          <RecentTrophyRows
+            recentScoped={d.recentScoped}
+            recentEmpty={d.recentEmpty}
+            cube={d.cube}
+            showRowPips={d.showRowPips}
+            setCode={d.setCode}
+            qs={d.qs}
+          />
+        </div>
+      )}
+    />
+  );
+}
+
+export function InsightsStrip({
+  colors,
+  recent,
+}: {
+  colors: (close: () => void) => ReactNode;
+  recent: (close: () => void) => ReactNode;
+}) {
   const [open, setOpen] = useState<"colors" | "recent" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const close = () => setOpen(null);
 
   useEffect(() => {
     if (!open) {
@@ -203,26 +241,8 @@ export function LeaderboardInsightsStrip({
         </StripToggle>
       </div>
       {open && (
-        <div className="menu-scrollbar absolute inset-x-0 top-full z-20 max-h-[min(62vh,460px)] overflow-y-auto border-b border-border bg-surface px-3 py-1.5 shadow-lg">
-          {open === "colors" ? (
-            <TopColorsRows
-              topColors={d.topColors}
-              maxColors={maxColors}
-              colors={colors}
-              colorsHref={colorsHref}
-              onPick={() => setOpen(null)}
-              lcqScope={d.lcqScope}
-            />
-          ) : (
-            <RecentTrophyRows
-              recentScoped={d.recentScoped}
-              recentEmpty={d.recentEmpty}
-              cube={d.cube}
-              showRowPips={d.showRowPips}
-              setCode={d.setCode}
-              qs={d.qs}
-            />
-          )}
+        <div className="menu-scrollbar absolute inset-x-0 top-full z-20 max-h-[min(62vh,460px)] overflow-y-auto border-b border-border bg-surface shadow-lg">
+          {open === "colors" ? colors(close) : recent(close)}
         </div>
       )}
     </div>

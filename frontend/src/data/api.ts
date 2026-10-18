@@ -14,6 +14,7 @@ export const fetchSets = impl.fetchSets;
 export const fetchCubeSeasons = impl.fetchCubeSeasons;
 export const fetchPodCardStats = impl.fetchPodCardStats;
 export const fetchPodArchetypes = impl.fetchPodArchetypes;
+export const fetchAllPodArchetypes = impl.fetchAllPodArchetypes;
 export const fetchPodCardDecks = impl.fetchPodCardDecks;
 export const fetchPodDeckCards = impl.fetchPodDeckCards;
 export const fetchDbEpisodes = impl.fetchDbEpisodes;

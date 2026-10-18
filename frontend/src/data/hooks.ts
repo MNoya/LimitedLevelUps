@@ -15,6 +15,7 @@ import {
   fetchCubeSeasons,
   fetchPodCardStats,
   fetchPodArchetypes,
+  fetchAllPodArchetypes,
   fetchPodCardDecks,
   fetchPodDeckCards,
   fetchP0P1Cards,
@@ -258,6 +259,14 @@ export function usePodArchetypes(boardCode: string | undefined) {
     queryKey: ["pod-archetypes", boardCode],
     queryFn: () => fetchPodArchetypes(boardCode!),
     enabled: !!boardCode,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function useAllPodArchetypes() {
+  return useQuery({
+    queryKey: ["pod-archetypes-all"],
+    queryFn: fetchAllPodArchetypes,
     staleTime: THIRTY_MINUTES,
   });
 }

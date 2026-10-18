@@ -112,6 +112,8 @@ export const fetchPodCardStats = (_boardCode: string): Promise<PodCardStatRow[]>
 
 export const fetchPodArchetypes = (_boardCode: string): Promise<PodArchetypeRow[]> => wait(peasantArchetypesFixture);
 
+export const fetchAllPodArchetypes = (): Promise<PodArchetypeRow[]> => wait(peasantArchetypesFixture);
+
 export const fetchPodCardDecks = (_boardCode: string, _cardName: string): Promise<PodCardDeckRow[]> => wait([]);
 
 export const fetchPodDeckCards = (_eventIds: string[]): Promise<PodDeckCardRow[]> => wait([]);

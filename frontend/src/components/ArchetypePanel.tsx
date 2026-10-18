@@ -10,7 +10,13 @@ import { cn } from "../lib/utils";
 import { colorsDisplayName } from "../data/filters";
 import { winRateColor } from "../data/winRate";
 import { usePodArchetypes, usePodEvents } from "../data/hooks";
-import { OTHER_KEY, aggregateArchetypes, mainPair, type Archetype } from "../data/podArchetypes";
+import {
+  OTHER_KEY,
+  aggregateArchetypes,
+  championPairCounts,
+  gameTally,
+  type Archetype,
+} from "../data/podArchetypes";
 import { eventSeason } from "./PodRecentTrophies";
 import type { SetSummary } from "../types/leaderboard";
 
@@ -34,33 +40,42 @@ export function ArchetypePanel({
 }) {
   const { data, isPending } = usePodArchetypes(setCode);
   const { data: events } = usePodEvents(setCode);
-  const [sortKey, setSortKey] = useState<ArchSortKey>("win");
-  const [sortDir, setSortDir] = useState<ArchSortDir>("desc");
-  const [limit, setLimit] = useState(ARCH_PAGE);
 
   const trophiesByKey = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const e of events ?? []) {
-      if (e.kind === "mock" || !e.isFinalized || !e.championDeckColors) {
-        continue;
-      }
-      if (season != null && eventSeason(e, sets) !== season) {
-        continue;
-      }
-      const key = mainPair(e.championDeckColors);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return counts;
+    const inSeason = (events ?? []).filter((e) => season == null || eventSeason(e, sets) === season);
+    return championPairCounts(inSeason);
   }, [events, season, sets]);
 
-  const rows = useMemo(() => {
+  const archetypes = useMemo(() => {
     const scoped = season == null ? (data ?? []) : (data ?? []).filter((r) => r.season === season);
+    return aggregateArchetypes(scoped.map(gameTally));
+  }, [data, season]);
+
+  return <TopColorsCard archetypes={archetypes} trophiesByKey={trophiesByKey} loading={isPending} />;
+}
+
+export function TopColorsCard({
+  archetypes,
+  trophiesByKey,
+  loading,
+  pageSize = ARCH_PAGE,
+}: {
+  archetypes: Archetype[];
+  trophiesByKey: Map<string, number>;
+  loading: boolean;
+  pageSize?: number;
+}) {
+  const [sortKey, setSortKey] = useState<ArchSortKey>("win");
+  const [sortDir, setSortDir] = useState<ArchSortDir>("desc");
+  const [limit, setLimit] = useState(pageSize);
+
+  const rows = useMemo(() => {
     const value = (a: Archetype) => (sortKey === "play" ? a.playRate : (a.winRate ?? -1));
-    return aggregateArchetypes(scoped).sort((a, b) => {
+    return [...archetypes].sort((a, b) => {
       const diff = value(a) - value(b);
       return sortDir === "desc" ? -diff : diff;
     });
-  }, [data, season, sortKey, sortDir]);
+  }, [archetypes, sortKey, sortDir]);
   const shown = rows.slice(0, limit);
 
   const onSort = (key: ArchSortKey) => {
@@ -85,7 +100,7 @@ export function ArchetypePanel({
         <SortHeaderButton label="PLAY RATE" active={sortKey === "play"} dir={sortDir} onClick={() => onSort("play")} />
         <SortHeaderButton label="WIN RATE" active={sortKey === "win"} dir={sortDir} onClick={() => onSort("win")} />
       </div>
-      {isPending ? (
+      {loading ? (
         <div className="font-mono text-[11px] text-muted py-2">LOADING…</div>
       ) : rows.length === 0 ? (
         <div className="font-mono text-[11px] text-muted py-2">NO DECK COLORS RECORDED YET</div>
@@ -122,7 +137,7 @@ export function ArchetypePanel({
           {rows.length > limit && (
             <button
               type="button"
-              onClick={() => setLimit((n) => n + ARCH_PAGE)}
+              onClick={() => setLimit((n) => n + pageSize)}
               className="-mb-3.5 mt-0.5 flex w-full items-center justify-center gap-1.5 border-t border-border bg-transparent py-2 font-display text-[12px] tracking-[0.18em] text-muted transition-colors hover:text-text"
             >
               SHOW MORE

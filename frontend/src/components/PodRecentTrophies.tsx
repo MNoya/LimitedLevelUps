@@ -43,15 +43,25 @@ export function PodRecentTrophies({
   sets: SetSummary[] | undefined;
 }) {
   const { data } = usePodEvents(setCode);
-  const [limit, setLimit] = useState(RECENT_PAGE);
-
-  const finalized = useMemo(
-    () =>
-      (data ?? []).filter(
-        (e) => e.kind !== "mock" && e.isFinalized && (season == null || eventSeason(e, sets) === season),
-      ),
+  const inSeason = useMemo(
+    () => (data ?? []).filter((e) => season == null || eventSeason(e, sets) === season),
     [data, season, sets],
   );
+  return <RecentTrophiesCard events={inSeason} loading={!data} />;
+}
+
+export function RecentTrophiesCard({
+  events,
+  loading,
+  pageSize = RECENT_PAGE,
+}: {
+  events: PodEventSummary[];
+  loading: boolean;
+  pageSize?: number;
+}) {
+  const [limit, setLimit] = useState(pageSize);
+
+  const finalized = useMemo(() => events.filter((e) => e.kind !== "mock" && e.isFinalized), [events]);
   const champions = useMemo(
     () =>
       finalized
@@ -69,7 +79,7 @@ export function PodRecentTrophies({
           <Trophy size={16} color="#ffc63a" />
           <SectionLabel size={16} className="text-subtle">RECENT TROPHIES</SectionLabel>
         </div>
-        {!data ? (
+        {loading ? (
           <div className="font-mono text-[11px] text-muted py-2">LOADING…</div>
         ) : champions.length === 0 ? (
           <div className="font-mono text-[11px] text-muted py-2">NO TROPHIES YET</div>
@@ -105,7 +115,7 @@ export function PodRecentTrophies({
             {champions.length > limit && (
               <button
                 type="button"
-                onClick={() => setLimit((n) => n + RECENT_PAGE)}
+                onClick={() => setLimit((n) => n + pageSize)}
                 className="-mb-3.5 mt-0.5 flex w-full items-center justify-center gap-1.5 border-t border-border bg-transparent py-2 font-display text-[12px] tracking-[0.18em] text-muted transition-colors hover:text-text"
               >
                 SHOW MORE

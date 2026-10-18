@@ -5,6 +5,7 @@ import type { PodArchetypeRow } from "../podArchetypes";
 const mk = (season: string, colors: string, decks: number, wins: number, games: number): PodArchetypeRow => ({
   set_code: "PEASANT",
   season,
+  event_id: `peasant-${season}`,
   deck_colors: colors,
   decks,
   game_wins: wins,
