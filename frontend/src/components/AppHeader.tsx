@@ -65,10 +65,20 @@ const NAV: NavItem[] = [
   },
   { label: "EPISODES", icon: MdVideoLibrary, to: "/episodes", match: (p) => p.startsWith("/episodes") },
   { label: "TIER LIST", icon: TbListNumbers, to: "/tier-list", match: (p) => p.startsWith("/tier-list") },
-  { label: "LEADERBOARD", icon: Trophy, to: "/leaderboard", match: (p) => p === "/leaderboard" || p.startsWith("/leaderboard/") || p.startsWith("/player/") },
+  {
+    label: "LEADERBOARD",
+    icon: Trophy,
+    to: "/leaderboard",
+    match: (p) => p === "/leaderboard" || p.startsWith("/leaderboard/") || p.startsWith("/player/"),
+  },
   { label: "POD DRAFTS", icon: GiRoundTable, iconSize: 23, to: "/pods", match: (p) => p.startsWith("/pods") },
   { label: "COMMUNITY", icon: Rocket, to: "/community", match: (p) => p.startsWith("/community") },
-  { label: "TOOLS", icon: Hammer, to: "/tools", match: (p) => p.startsWith("/tools") },
+  {
+    label: "TOOLS",
+    icon: Hammer,
+    to: "/tools",
+    match: (p) => p.startsWith("/tools") || p.startsWith("/wheel-of-fortune"),
+  },
 ];
 
 const HOME_ITEM: NavItem = { label: "HOME", icon: House, to: "/", match: (p) => p === "/" };
@@ -78,7 +88,17 @@ const NAV_ITEM_CLASS = "h-12 px-5 inline-flex items-center no-underline border t
 const MENU_ROW_CLASS =
   "flex items-center gap-4 min-h-[54px] px-5 font-display text-[17px] tracking-[0.14em] border-b border-border transition-colors";
 
-export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = false }: { subtitle?: string; subtitleShort?: string; fill?: boolean }) {
+export function AppHeader({
+  subtitle = "LEADERBOARD",
+  subtitleShort,
+  phoneTitle,
+  fill = false,
+}: {
+  subtitle?: string;
+  subtitleShort?: string;
+  phoneTitle?: ReactNode;
+  fill?: boolean;
+}) {
   const loc = useLocation();
   const isMobile = useIsMobile();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -172,10 +192,7 @@ export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = fals
       <Link
         ref={brandRef}
         to={brandHref}
-        className={cn(
-          "flex items-center no-underline shrink-0",
-          isMobile ? "gap-3 pl-2" : "gap-6 pl-[13px]",
-        )}
+        className={cn("flex items-center no-underline shrink-0", isMobile ? "gap-3 pl-2" : "gap-6 pl-[13px]")}
       >
         <div
           className="flex items-center justify-center shrink-0 overflow-visible"
@@ -183,7 +200,11 @@ export function AppHeader({ subtitle = "LEADERBOARD", subtitleShort, fill = fals
         >
           <ALogo size={isMobile ? 42 : 55} />
         </div>
-        <AWordmark size={isMobile ? "sm" : "lg"} subtitle={subtitle} subtitleShort={subtitleShort} />
+        {isMobile && phoneTitle ? (
+          phoneTitle
+        ) : (
+          <AWordmark size={isMobile ? "sm" : "lg"} subtitle={subtitle} subtitleShort={subtitleShort} />
+        )}
       </Link>
 
       <div
@@ -303,7 +324,13 @@ function DesktopAuth() {
     user.avatarUrl ? (
       <img src={user.avatarUrl} alt="" className={cn(size, "rounded-full")} />
     ) : (
-      <div className={cn(size, "rounded-full bg-surface2 flex items-center justify-center text-subtle font-semibold", text)}>
+      <div
+        className={cn(
+          size,
+          "rounded-full bg-surface2 flex items-center justify-center text-subtle font-semibold",
+          text,
+        )}
+      >
         {user.username.charAt(0).toUpperCase()}
       </div>
     );
@@ -336,7 +363,10 @@ function DesktopAuth() {
           )}
           <button
             type="button"
-            onClick={() => { signOut(); setOpen(false); }}
+            onClick={() => {
+              signOut();
+              setOpen(false);
+            }}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 font-display text-[15px] tracking-[0.14em] text-subtle hover:bg-surface2 hover:text-green cursor-pointer bg-transparent border-none transition-colors"
           >
             <LogOut size={16} />
@@ -362,7 +392,8 @@ function MobileMenu({
   const { user, loading, signIn, signOut } = useAuth();
   const myProfilePath = useMyProfilePath(user?.discordId);
 
-  const avatarEl = user &&
+  const avatarEl =
+    user &&
     (user.avatarUrl ? (
       <img src={user.avatarUrl} alt="" className="w-6 h-6 rounded-full" />
     ) : (
@@ -388,8 +419,10 @@ function MobileMenu({
         )}
         role="menu"
       >
-        {includeAuth && !loading && user && (
-          myProfilePath ? (
+        {includeAuth &&
+          !loading &&
+          user &&
+          (myProfilePath ? (
             <Link
               to={myProfilePath}
               onClick={onClose}
@@ -404,8 +437,7 @@ function MobileMenu({
               <MenuIconSlot>{avatarEl}</MenuIconSlot>
               <span className="text-text text-sm truncate">{user.username}</span>
             </div>
-          )
-        )}
+          ))}
         {items.map((n) => {
           const active = n.match(pathname);
           return (
@@ -434,9 +466,15 @@ function MobileMenu({
         {includeAuth && !loading && !user && (
           <button
             type="button"
-            onClick={() => { signIn(); onClose(); }}
+            onClick={() => {
+              signIn();
+              onClose();
+            }}
             role="menuitem"
-            className={cn(MENU_ROW_CLASS, "text-text bg-transparent hover:bg-surface cursor-pointer border-x-0 border-t-0")}
+            className={cn(
+              MENU_ROW_CLASS,
+              "text-text bg-transparent hover:bg-surface cursor-pointer border-x-0 border-t-0",
+            )}
           >
             <MenuIconSlot>
               <DiscordIcon size={19} />
@@ -447,9 +485,15 @@ function MobileMenu({
         {includeAuth && !loading && user && (
           <button
             type="button"
-            onClick={() => { signOut(); onClose(); }}
+            onClick={() => {
+              signOut();
+              onClose();
+            }}
             role="menuitem"
-            className={cn(MENU_ROW_CLASS, "text-text bg-transparent hover:bg-surface cursor-pointer border-x-0 border-t-0")}
+            className={cn(
+              MENU_ROW_CLASS,
+              "text-text bg-transparent hover:bg-surface cursor-pointer border-x-0 border-t-0",
+            )}
           >
             <MenuIconSlot>
               <LogOut size={19} className="text-muted" />
@@ -518,9 +562,7 @@ function P0P1Badge({ active }: { active: boolean }) {
 
   const label = p0p1BadgeLabel(phase);
   if (label) {
-    return (
-      <span className={cn(pill, "left-1/2 -translate-x-1/2 whitespace-nowrap")}>{label}</span>
-    );
+    return <span className={cn(pill, "left-1/2 -translate-x-1/2 whitespace-nowrap")}>{label}</span>;
   }
   return <span className={cn(pill, "-right-1.5")}>{p0p1VotingLabel(Boolean(user), filled, total)}</span>;
 }
@@ -569,10 +611,7 @@ function fantasyNavItem(event: FantasyEventEntry): NavItem {
     ),
     menuBadge: ({ active }) => (
       <span
-        className={cn(
-          "ml-3 text-[14px] font-semibold font-sans tracking-[0.08em]",
-          active ? "text-bg" : "text-green",
-        )}
+        className={cn("ml-3 text-[14px] font-semibold font-sans tracking-[0.08em]", active ? "text-bg" : "text-green")}
       >
         <ProPlayNavLabel event={event} />
       </span>

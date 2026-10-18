@@ -13,12 +13,18 @@ import { useLockedViewport } from "../lib/use-locked-viewport";
 // normal growing-and-scrolling flow.
 export function PageShell({
   subtitle,
+  subtitleShort,
+  phoneTitle,
   fill = false,
+  footer = true,
   sponsorVariant = "gray",
   children,
 }: {
   subtitle?: string;
+  subtitleShort?: string;
+  phoneTitle?: ReactNode;
   fill?: boolean;
+  footer?: boolean;
   sponsorVariant?: "color" | "gray";
   children: ReactNode;
 }) {
@@ -27,13 +33,13 @@ export function PageShell({
   return (
     <div
       className={cn(
-        "bg-bg text-text flex flex-col page-fade min-h-screen",
+        "bg-bg text-text flex flex-col page-fade min-h-[100dvh]",
         fill && "lg:h-screen lg:min-h-0 lg:overflow-hidden",
       )}
     >
-      <AppHeader subtitle={subtitle} fill={fill} />
+      <AppHeader subtitle={subtitle} subtitleShort={subtitleShort} phoneTitle={phoneTitle} fill={fill} />
       <main className={cn("flex-1", fill ? "lg:min-h-0 lg:overflow-hidden" : "flex flex-col")}>{children}</main>
-      <SiteFooter sponsorVariant={sponsorVariant} />
+      {footer && <SiteFooter sponsorVariant={sponsorVariant} />}
     </div>
   );
 }

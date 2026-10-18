@@ -6,6 +6,7 @@ import { categoryFromSlug, episodeSlug, type Episode } from "../data/episodes";
 import { cubeVariantForBoard } from "../data/cubeVariants";
 import { cardDataLabel } from "../data/podCards";
 import { skeletonsFor } from "../data/skeletons";
+import { TROPHY_GAME_TITLE, WHEEL_GAME_TITLE } from "../data/draftGames";
 import { ACTIVE_SET_CODE, SITE_NAME, TITLE_SEPARATOR } from "../data/constants";
 import { proPlayTabLabel } from "./fantasy/eventLabels";
 import FANTASY_EVENTS from "../../../fantasy_events.json";
@@ -194,6 +195,12 @@ const resolvePageTitle = (
       return "Tools";
     }
     return rest[1] ? `${rest[1].toUpperCase()} Bulk Crafting` : "Bulk Crafting";
+  }
+  if (section === "wheel-of-fortune") {
+    return WHEEL_GAME_TITLE;
+  }
+  if (section === "trophy-mage") {
+    return TROPHY_GAME_TITLE;
   }
   if (section === "about") {
     return "About";

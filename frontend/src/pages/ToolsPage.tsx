@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Coins, Hammer, Library, Swords, type LucideIcon } from "lucide-react";
+import { Coins, FerrisWheel, Hammer, Library, Swords, Trophy, type LucideIcon } from "lucide-react";
 import { PageShell } from "../components/PageShell";
 import { Container } from "../components/Container";
 import { PanelShell } from "../components/CommunityBits";
@@ -7,6 +7,7 @@ import { WildcardIcon } from "../components/WildcardIcon";
 import { ArrowRight } from "../components/Icons";
 import { cn } from "../lib/utils";
 import { fantasyEventPath, proPlayHomeEvent } from "../components/fantasy/fantasyEvents";
+import { TROPHY_GAME_TITLE, WHEEL_GAME_TITLE } from "../data/draftGames";
 
 interface Tool {
   title: string;
@@ -38,6 +39,18 @@ export function ToolsPage() {
       blurb: "Fantasy Magic and past Pro Tour results",
       Icon: Swords,
       to: fantasyEventPath(proPlayHomeEvent(new Date())),
+    },
+    {
+      title: WHEEL_GAME_TITLE,
+      blurb: "Guess the pick order of a real Peasant Cube Pod pack and call the wheel",
+      Icon: FerrisWheel,
+      to: "/wheel-of-fortune",
+    },
+    {
+      title: TROPHY_GAME_TITLE,
+      blurb: "Spot the 3-0 deck among four decks from one Pod",
+      Icon: Trophy,
+      to: "/trophy-mage",
     },
     { title: "Event EV", blurb: "Expected gems and packs per event at your win rate", Icon: Coins },
     { title: "Set Completion", blurb: "Packs and wildcards left to complete a set", Icon: Library },

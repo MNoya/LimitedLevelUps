@@ -51,6 +51,9 @@ const config: Config = {
         tabular: ["tabular-nums"],
       },
       keyframes: {
+        slotPulse: {
+          "50%": { filter: "drop-shadow(0 0 3px rgba(246, 201, 94, 0.4))" },
+        },
         pulse: {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.3" },
@@ -87,6 +90,62 @@ const config: Config = {
           "0%": { strokeDashoffset: "24" },
           "100%": { strokeDashoffset: "0" },
         },
+        chipExtend: {
+          "0%": { maxWidth: "0", opacity: "0" },
+          "100%": { maxWidth: "12em", opacity: "1" },
+        },
+        chipRingFromGold: {
+          "0%": { boxShadow: "0 0 0 1px #f6c95e, 2px 2px 0 1px #05070a" },
+        },
+        chipFillFromGold: {
+          "0%": { backgroundColor: "#f6c95e", color: "#1a120b" },
+        },
+        stamp: {
+          "0%": { opacity: "0", transform: "scale(1.7)" },
+          "60%": { opacity: "1", transform: "scale(0.92)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
+        flipIn: {
+          "0%": { transform: "rotateX(90deg)" },
+          "100%": { transform: "rotateX(0deg)" },
+        },
+        dealIn: {
+          "0%": { opacity: "0", transform: "translateY(-10px) scale(0.97)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        rowIn: {
+          "0%": { opacity: "0", translate: "-10px 0" },
+          "100%": { opacity: "1", translate: "0 0" },
+        },
+        nudge: {
+          "0%, 100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.06)" },
+        },
+        cardDeal: {
+          "0%": { opacity: "0", transform: "translateY(-28px) rotateX(35deg) scale(0.92)" },
+          "70%": { opacity: "1", transform: "translateY(2px) rotateX(0deg) scale(1.01)" },
+          "100%": { opacity: "1", transform: "translateY(0) rotateX(0deg) scale(1)" },
+        },
+        scoredGlow: {
+          "0%": { boxShadow: "0 0 0 0 rgba(46, 232, 92, 0)" },
+          "40%": { boxShadow: "0 0 26px 6px rgba(46, 232, 92, 0.55)" },
+          "100%": { boxShadow: "0 0 10px 2px rgba(46, 232, 92, 0.4)" },
+        },
+        missShake: {
+          "0%, 100%": { transform: "translateX(0)" },
+          "20%": { transform: "translateX(-4px) rotate(-0.6deg)" },
+          "40%": { transform: "translateX(4px) rotate(0.6deg)" },
+          "60%": { transform: "translateX(-3px)" },
+          "80%": { transform: "translateX(2px)" },
+        },
+        artDrift: {
+          "0%": { transform: "scale(1.04) translate(-1.5%, -1%)" },
+          "100%": { transform: "scale(1.04) translate(1.5%, 1%)" },
+        },
+        softPulse: {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(46, 232, 92, 0.35)" },
+          "50%": { boxShadow: "0 0 0 6px rgba(46, 232, 92, 0)" },
+        },
         liveHalo: {
           "0%": { boxShadow: "0 0 8px rgba(46, 232, 92, 0.8), 0 0 0 0 rgba(46, 232, 92, 0.75)" },
           "50%": { boxShadow: "0 0 4px rgba(46, 232, 92, 0.4), 0 0 0 9px rgba(46, 232, 92, 0)" },
@@ -94,8 +153,21 @@ const config: Config = {
         },
       },
       animation: {
+        slotPulse: "slotPulse 2.4s ease-in-out infinite",
         pulse: "pulse 1.4s infinite",
         liveHalo: "liveHalo 1.6s ease-out infinite",
+        chipExtend: "chipExtend 360ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        chipRingFromGold: "chipRingFromGold 300ms ease-out backwards",
+        chipFillFromGold: "chipFillFromGold 300ms ease-out backwards",
+        stamp: "stamp 260ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
+        flipIn: "flipIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        dealIn: "dealIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        rowIn: "rowIn 200ms ease-out both",
+        nudge: "nudge 300ms ease-out",
+        cardDeal: "cardDeal 420ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        scoredGlow: "scoredGlow 700ms ease-out both",
+        missShake: "missShake 380ms ease-in-out both",
+        softPulse: "softPulse 1.6s ease-out infinite",
         fadeIn: "fadeIn 220ms ease-out both",
         fadeOut: "fadeOut 220ms ease-out both",
         fadeUpIn: "fadeUpIn 260ms ease-out both",
