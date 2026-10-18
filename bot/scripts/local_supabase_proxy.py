@@ -43,6 +43,7 @@ _ALLOWED_VIEWS = {
     "public_episode_transcripts",
     "public_leaderboard",
     "public_p0p1_pick_stats",
+    "public_p0p1_ratings",
     "public_player",
     "public_player_draft_events",
     "public_player_format_breakdown",

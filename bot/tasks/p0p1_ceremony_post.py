@@ -1,5 +1,5 @@
-"""Crowns the P0P1 podium when a contest reaches its scoring date: swaps the Top P0P1 Challenger role to
-the new top three and posts the reveal into the contest set's own channel.
+"""Captures the P0P1 ratings snapshots when due and crowns the podium at a contest's scoring date: swaps the
+Top P0P1 Challenger role to the new top three and posts the reveal into the contest set's own channel.
 
 Hourly rather than pinned to the instant, so a deploy across the scoring time still lands it. Idempotent on
 the announcement already sitting in the channel, so the repeated tick neither reposts nor re-swaps roles.
@@ -20,16 +20,18 @@ from sqlalchemy.exc import SQLAlchemyError
 from bot import audit
 from bot.config import PRODUCTION_GUILD_ID, settings
 from bot.discord_helpers import message_text
-from bot.services import p0p1_ceremony, p0p1_contest, p0p1_copy
+from bot.database import SessionLocal
+from bot.services import p0p1_ceremony, p0p1_contest, p0p1_copy, p0p1_ratings
 from bot.services.format_schedule import channel_for_set
 from bot.services.ping_roles import TOP_P0P1_CHALLENGER_ROLE_NAME
 from bot.services.pod_roles import rotate_role
 from bot.services.role_ping import ensure_member_cache
+from bot.services.seventeenlands import SeventeenLandsClient
 from bot.sets import ALL_SETS
 
 log = logging.getLogger(__name__)
 
-REVEAL_WINDOW = timedelta(hours=4)
+REVEAL_WINDOW = timedelta(hours=24)
 
 _bot: commands.Bot | None = None
 
@@ -41,13 +43,17 @@ def init_p0p1_ceremony(bot: commands.Bot) -> None:
         fire_ceremony, "cron", minute=5, timezone=timezone.utc,
         id="p0p1-podium-ceremony", replace_existing=True,
     )
-    log.info("p0p1-ceremony: hourly tick armed for each contest scoring date")
+    log.info("p0p1-ceremony: hourly tick armed for ratings snapshots and each contest scoring date")
 
 
 async def fire_ceremony() -> None:
     if _bot is None:
         return
     now = datetime.now(timezone.utc)
+    try:
+        await asyncio.to_thread(_capture_due_snapshots, now)
+    except Exception:
+        log.exception("p0p1-ceremony: ratings capture failed, retrying next hour")
     contest = contest_due(now)
     if contest is None:
         return
@@ -162,3 +168,7 @@ async def _already_announced(channel: discord.TextChannel, contest: p0p1_contest
         return True
     return False
 
+
+def _capture_due_snapshots(now: datetime) -> None:
+    with SessionLocal() as session:
+        p0p1_ratings.capture_due_snapshots(session, SeventeenLandsClient(), now)

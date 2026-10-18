@@ -8,7 +8,9 @@ export type SetRow = { code: string; name: string; start_date: string; end_date:
 
 export const SET_ROWS_QUERY = "public_sets?select=code,name,start_date,end_date,is_active&order=code";
 
-export const restGet = async (query: string, cacheTtl: number): Promise<Response> => {
+type CacheTtl = number | ((rows: unknown[]) => number);
+
+export const restGet = async (query: string, cacheTtl: CacheTtl): Promise<Response> => {
   const url = `${PUBLIC_SUPABASE_URL}/rest/v1/${query}`;
   const cacheKey = new Request(url);
   const hit = await caches.default.match(cacheKey);
@@ -25,9 +27,11 @@ export const restGet = async (query: string, cacheTtl: number): Promise<Response
   if (!upstream.ok) {
     return upstream;
   }
-  const response = new Response(upstream.body, {
+  const body = await upstream.text();
+  const ttl = typeof cacheTtl === "number" ? cacheTtl : cacheTtl(JSON.parse(body));
+  const response = new Response(body, {
     status: upstream.status,
-    headers: { "content-type": "application/json", "cache-control": `public, max-age=${cacheTtl}` },
+    headers: { "content-type": "application/json", "cache-control": `public, max-age=${ttl}` },
   });
   await caches.default.put(cacheKey, response.clone());
   return response;

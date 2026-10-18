@@ -2213,7 +2213,7 @@ import type {
   FantasySavedPick,
 } from "../types/fantasy";
 import { DEV_AUTH_USER } from "./devAuth";
-import type { RatingsSnapshot } from "./p0p1Results";
+import type { CardRating, RatingsSnapshot } from "./p0p1Results";
 
 const cardLoaders = import.meta.glob<Card[]>(
   "./fixtures/cards-*.ts",
@@ -2232,12 +2232,41 @@ export async function fetchP0P1Cards(setCode: string): Promise<Card[]> {
 }
 
 export async function fetchP0P1Ratings(setCode: string): Promise<RatingsSnapshot | null> {
-  const key = `./fixtures/p0p1-ratings-${setCode.toLowerCase()}.ts`;
-  const loader = ratingLoaders[key];
-  if (!loader) return null;
-  return loader();
+  const rows = await fetchP0P1RatingsRows(setCode).catch((): P0P1RatingsRow[] => []);
+  const latest = rows.find((row) => row.phase === "final") ?? rows.find((row) => row.phase === "midway");
+  if (latest) {
+    return {
+      setCode: latest.set_code,
+      phase: latest.phase,
+      dateRange: { start: latest.date_start, end: latest.date_end },
+      cards: latest.cards,
+    };
+  }
+  const loader = ratingLoaders[`./fixtures/p0p1-ratings-${setCode.toLowerCase()}.ts`];
+  return loader ? loader() : null;
 }
 
+type P0P1RatingsRow = {
+  set_code: string;
+  phase: "midway" | "final";
+  date_start: string;
+  date_end: string;
+  cards: CardRating[];
+};
+
+async function fetchP0P1RatingsRows(setCode: string): Promise<P0P1RatingsRow[]> {
+  if (servesEdgeCachedReads) {
+    return fetchEdgeRows<P0P1RatingsRow>(`/api/p0p1-ratings/${setCode.toUpperCase()}`);
+  }
+  const { data, error } = await client()
+    .from("public_p0p1_ratings")
+    .select("set_code, phase, date_start, date_end, cards")
+    .eq("set_code", setCode.toUpperCase());
+  if (error) {
+    throw error;
+  }
+  return data as P0P1RatingsRow[];
+}
 
 export async function fetchFantasyLineup(eventCode: string): Promise<FantasySavedPick[]> {
   const { data, error } = await client()

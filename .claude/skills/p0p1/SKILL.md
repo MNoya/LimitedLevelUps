@@ -68,14 +68,10 @@ Never reschedule a window that already exists unless the user asked. Players may
 - **Overlap**: if this contest's `previewsOpen` falls before the previous contest's `scoringDate`
   (which also marks when that contest loses the front page — no separate reveal-end field), warn
   that the previous contest loses the front page early. It stays reachable at `/p0p1/<prev>`.
-- **Finalize ordering**: if the previous contest's `p0p1-ratings-<prev>.ts` exists and its `phase`
-  is not `"final"`, warn that it never reached final results.
 - **Results coverage**: `scoringDate` defaults to `release + 28d`, so results always cover a full
   four weeks of Arena play regardless of the voting deadline. Only a hand-picked `--results` can
   shorten that — flag it if the resolved `scoringDate` is less than `release + 28d`, and note that
   doing so also shortens how long the contest stays featured, since the two are the same field.
-- **Ratings join**: if `p0p1-ratings-<code>.ts` already exists, compare pool names normalized via
-  `name.split(" // ")[0].trim()` against the ratings names and report mismatches both ways.
 
 ### 5. Type check
 
@@ -99,5 +95,5 @@ Never run `git commit` or `git push`.
 - `/p0p1/<code>` is the historic viewer for any contest and carries no pointer to a later set.
   Before its `previewsOpen`, that URL 404s in production and renders in dev, which is how a partial
   pool gets previewed safely.
-- `p0p1-phase` is the separate skill for the results side, producing `p0p1-ratings-<code>.ts` weeks
-  later (midway, then final).
+- Results need no step here: the bot's hourly P0P1 tick captures the `p0p1_ratings` midway snapshot
+  halfway between release and `scoringDate`, then the final one at `scoringDate`, from this pool fixture.

@@ -49,6 +49,22 @@ class P0P1Voter(Base):
     avatar_url = Column(Text, nullable=True)
 
 
+class P0P1Ratings(Base):
+    __tablename__ = "p0p1_ratings"
+
+    set_code    = Column(Text, nullable=False)
+    phase       = Column(Text, nullable=False)
+    date_start  = Column(Date, nullable=False)
+    date_end    = Column(Date, nullable=False)
+    cards       = Column(JSONB, nullable=False)
+    captured_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        PrimaryKeyConstraint("set_code", "phase"),
+        CheckConstraint("phase IN ('midway', 'final')", name="ck_p0p1_ratings_phase"),
+    )
+
+
 class FantasyEvent(Base):
     __tablename__ = "fantasy_events"
 

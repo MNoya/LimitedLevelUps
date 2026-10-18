@@ -872,12 +872,10 @@ export function useDeleteAllP0P1Picks(setCode: string) {
   });
 }
 
-// Ratings snapshot is a static fixture — staleTime: Infinity so it never re-fetches.
-// Returns null when no fixture exists (contest in voting/post-voting phase).
 export function useP0P1Ratings(setCode: string) {
   return useQuery({
     queryKey: ["p0p1-ratings", setCode] as const,
     queryFn: () => fetchP0P1Ratings(setCode),
-    staleTime: Infinity,
+    staleTime: 60 * 1000,
   });
 }

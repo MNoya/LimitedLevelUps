@@ -1,25 +1,17 @@
-"""The P0P1 podium at a contest's scoring date: top three ballots by summed GIH win rate.
-
-Ratings come from the committed frontend fixture, the same numbers the site reveals, so the bot podium
-matches the site exactly instead of drifting on a fresh 17lands pull. Discord ids come from
-``auth.identities``, the only place a website-only voter's id exists, so the ``auth`` schema means this
-resolves against prod alone; local dev has no such schema and gets None.
-"""
+"""The P0P1 podium at a contest's scoring date: top three ballots by summed GIH win rate from the final snapshot"""
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 
 from bot.database import SessionLocal
+from bot.services.p0p1_ratings import load_final_ratings
 
 log = logging.getLogger(__name__)
 
-FIXTURES_DIR = Path(__file__).resolve().parents[2] / "frontend/src/data/fixtures"
 GIH_SAMPLE_FLOOR = 500
 PODIUM_SIZE = 3
 
@@ -54,21 +46,6 @@ def normalize_card_name(name: str) -> str:
     return name.split(" // ")[0].strip()
 
 
-def load_fixture_ratings(set_code: str) -> dict[str, tuple[float | None, int]]:
-    """Map normalized card name to (gihwr, gih) from the committed ratings fixture, empty when absent."""
-    path = FIXTURES_DIR / f"p0p1-ratings-{set_code.lower()}.ts"
-    if not path.exists():
-        log.warning(f"p0p1-ceremony: no ratings fixture at {path}")
-        return {}
-    body = path.read_text()
-    start = body.index("{", body.index("export default"))
-    data = json.loads(body[start:body.rindex("}") + 1])
-    ratings: dict[str, tuple[float | None, int]] = {}
-    for card in data.get("cards", []):
-        ratings[normalize_card_name(card["card_name"])] = (card.get("gihwr"), card.get("gih") or 0)
-    return ratings
-
-
 def score_picks(picks: dict[str, str], ratings: dict[str, tuple[float | None, int]]) -> float:
     total = 0.0
     for card_name in picks.values():
@@ -85,8 +62,11 @@ def score_picks(picks: dict[str, str], ratings: dict[str, tuple[float | None, in
 def podium_sync(set_code: str, limit: int = PODIUM_SIZE) -> list[Winner] | None:
     """The top ballots by summed GIHWR, mirroring the site's rankBallots. None when the auth schema is
     absent, so a caller on a developer database knows the real podium cannot be read there."""
-    ratings = load_fixture_ratings(set_code)
     with SessionLocal() as session:
+        ratings = _ratings_by_name(load_final_ratings(session, set_code))
+        if not ratings:
+            log.warning(f"p0p1-ceremony: no final ratings for {set_code} yet")
+            return []
         try:
             rows = session.execute(PODIUM_SQL, {"set_code": set_code.upper()}).all()
         except ProgrammingError:
@@ -109,3 +89,10 @@ def podium_sync(set_code: str, limit: int = PODIUM_SIZE) -> list[Winner] | None:
         discord_id = str(ballot["discord_id"]) if ballot["discord_id"] is not None else None
         winners.append(Winner(rank=index, name=ballot["name"] or "Unknown", discord_id=discord_id, score=score))
     return winners
+
+
+def _ratings_by_name(cards: list[dict]) -> dict[str, tuple[float | None, int]]:
+    ratings: dict[str, tuple[float | None, int]] = {}
+    for card in cards:
+        ratings[normalize_card_name(card["card_name"])] = (card.get("gihwr"), card.get("gih") or 0)
+    return ratings
