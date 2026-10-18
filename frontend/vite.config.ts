@@ -1,7 +1,8 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { CARD_STATS_SETS } from "./src/data/constants";
 import { fetchCardStatsFile } from "./src/data/cardStats";
 import { fetchSetCardPool, isSetCode } from "./src/data/setCardPool";
@@ -10,7 +11,14 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
     base: "/",
-    plugins: [react(), youtubeDevApi(env.YOUTUBE_API_KEY), cardImagesDevApi(), cardStatsDevApi(), setCardsDevApi()],
+    plugins: [
+      react(),
+      youtubeDevApi(env.YOUTUBE_API_KEY),
+      cardImagesDevApi(),
+      cardStatsDevApi(),
+      setCardsDevApi(),
+      imageCacheDevApi(),
+    ],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
@@ -121,7 +129,7 @@ function cardImagesDevApi(): Plugin {
             chunks.push(chunk as Buffer);
           }
           const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
-          res.end(JSON.stringify(await resolveCardImages(body)));
+          res.end(JSON.stringify(await resolveCardImagesCached(body)));
         } catch {
           res.statusCode = 502;
           res.end("{}");
@@ -157,7 +165,9 @@ async function fetchChunkWithRetry(chunk: { name: string; set: string }[], attem
   }
 }
 
-async function resolveCardImages(body: { identifiers?: { name?: unknown; set?: unknown }[] }): Promise<Record<string, string>> {
+async function resolveCardImages(body: {
+  identifiers?: { name?: unknown; set?: unknown }[];
+}): Promise<{ images: Record<string, string>; layouts: Record<string, string> }> {
   const byKey = new Map<string, { name: string; set: string }>();
   for (const item of Array.isArray(body?.identifiers) ? body.identifiers : []) {
     if (typeof item?.name !== "string" || typeof item?.set !== "string") {
@@ -168,7 +178,8 @@ async function resolveCardImages(body: { identifiers?: { name?: unknown; set?: u
     byKey.set(`${set}|${name.toLowerCase()}`, { name, set });
   }
   const identifiers = Array.from(byKey.values());
-  const map: Record<string, string> = {};
+  const images: Record<string, string> = {};
+  const layouts: Record<string, string> = {};
   for (let i = 0; i < identifiers.length; i += CHUNK) {
     const res = await fetchChunkWithRetry(identifiers.slice(i, i + CHUNK));
     if (!res.ok) {
@@ -176,13 +187,107 @@ async function resolveCardImages(body: { identifiers?: { name?: unknown; set?: u
     }
     const page = (await res.json()) as { data?: any[] };
     for (const card of page.data ?? []) {
+      const key = `${card.set.toLowerCase()}|${frontFaceName(card.name).toLowerCase()}`;
       const image = card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null;
       if (image) {
-        map[`${card.set.toLowerCase()}|${frontFaceName(card.name).toLowerCase()}`] = image;
+        images[key] = image;
+      }
+      if (card.layout) {
+        layouts[key] = card.layout;
       }
     }
   }
-  return map;
+  return { images, layouts };
+}
+
+const IMAGE_CACHE_DIR = path.resolve(__dirname, "../review/.image-cache");
+const CARD_IMAGES_CACHE = path.join(IMAGE_CACHE_DIR, "card-images.json");
+const CACHED_IMAGE_HOSTS = ["cards.scryfall.io", "api.scryfall.com", "cdn.discordapp.com", "media.discordapp.net"];
+
+async function resolveCardImagesCached(body: { identifiers?: { name?: unknown; set?: unknown }[] }) {
+  const known: Record<string, string> = JSON.parse((await readFile(CARD_IMAGES_CACHE, "utf8").catch(() => "{}")) || "{}");
+  const missing: { name: string; set: string }[] = [];
+  const images: Record<string, string> = {};
+  const layouts: Record<string, string> = {};
+  for (const item of Array.isArray(body?.identifiers) ? body.identifiers : []) {
+    if (typeof item?.name !== "string" || typeof item?.set !== "string") {
+      continue;
+    }
+    const key = `${item.set.toLowerCase()}|${frontFaceName(item.name).toLowerCase()}`;
+    const layout = known[`${LAYOUT_PREFIX}${key}`];
+    if (known[key] && layout) {
+      images[key] = known[key];
+      layouts[key] = layout;
+    } else {
+      missing.push({ name: item.name, set: item.set });
+    }
+  }
+  if (missing.length > 0) {
+    const fetched = await resolveCardImages({ identifiers: missing });
+    Object.assign(images, fetched.images);
+    Object.assign(layouts, fetched.layouts);
+    const fetchedLayouts = Object.entries(fetched.layouts).map(([key, layout]) => [`${LAYOUT_PREFIX}${key}`, layout]);
+    await mkdir(IMAGE_CACHE_DIR, { recursive: true });
+    await writeFile(
+      CARD_IMAGES_CACHE,
+      JSON.stringify({ ...known, ...fetched.images, ...Object.fromEntries(fetchedLayouts) }),
+    );
+  }
+  return { images, layouts };
+}
+
+const LAYOUT_PREFIX = "layout|";
+
+function imageCacheDevApi(): Plugin {
+  return {
+    name: "image-cache-dev-api",
+    configureServer(server) {
+      server.middlewares.use("/__image", async (req, res) => {
+        const upstream = new URL(req.url ?? "", "http://localhost").searchParams.get("u") ?? "";
+        let target: URL;
+        try {
+          target = new URL(upstream);
+        } catch {
+          res.statusCode = 400;
+          res.end();
+          return;
+        }
+        if (!CACHED_IMAGE_HOSTS.includes(target.hostname)) {
+          res.statusCode = 403;
+          res.end();
+          return;
+        }
+        const isDiscord = target.hostname.endsWith("discordapp.com") || target.hostname.endsWith("discordapp.net");
+        const cacheKey = isDiscord ? `${target.hostname}${target.pathname}` : target.href;
+        const file = path.join(IMAGE_CACHE_DIR, createHash("sha1").update(cacheKey).digest("hex"));
+        res.setHeader("cache-control", "public, max-age=31536000, immutable");
+        const cached = await readFile(file).catch(() => null);
+        if (cached) {
+          res.setHeader("content-type", (await readFile(`${file}.type`, "utf8").catch(() => null)) ?? "image/jpeg");
+          res.end(cached);
+          return;
+        }
+        try {
+          const response = await fetch(target, { headers: { "user-agent": "LimitedLevelUps/1.0" } });
+          if (!response.ok) {
+            res.statusCode = response.status;
+            res.end();
+            return;
+          }
+          const bytes = Buffer.from(await response.arrayBuffer());
+          const type = response.headers.get("content-type") ?? "image/jpeg";
+          await mkdir(IMAGE_CACHE_DIR, { recursive: true });
+          await writeFile(file, bytes);
+          await writeFile(`${file}.type`, type);
+          res.setHeader("content-type", type);
+          res.end(bytes);
+        } catch {
+          res.statusCode = 502;
+          res.end();
+        }
+      });
+    },
+  };
 }
 
 const CHANNEL_HANDLE = "limitedlevel-ups";

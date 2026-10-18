@@ -357,7 +357,8 @@ const resolveRoute = async (
   }
   if (section === "trophy-mage") {
     const trophyArt: ImageIntent = { kind: "asset", path: "/games/trophy-mage/og-image.png" };
-    return resolved(page("Trophy Mage", "Can you guess which decks trophied?", trophyArt), "/trophy-mage");
+    const trophyPath = ["/trophy-mage", ...rest.map((part) => part.toLowerCase())].join("/");
+    return resolved(page("Trophy Mage", "Can you guess which decks trophied?", trophyArt), trophyPath);
   }
   if (section === "community") {
     return resolved(page("Community", "Learn about us, the show and the community behind it"), "/community");
@@ -421,6 +422,7 @@ const matchesAppRoute = (segments: string[]): boolean => {
     "/tools/craft/:setCode",
     "/tools/trophy-mage",
     "/trophy-mage",
+    "/trophy-mage/:play",
     "/wheel-of-fortune",
     "/wheel-of-fortune/:play",
     "/pro-play",

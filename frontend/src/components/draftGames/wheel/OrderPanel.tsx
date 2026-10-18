@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { X } from "lucide-react";
 
 import { cn } from "../../../lib/utils";
@@ -9,7 +9,7 @@ import {
   type WheelPack,
   type WheelScore,
 } from "../../../data/draftGames";
-import { PIXEL_HEADING, PIXEL_TAG } from "../pixelStyles";
+import { PIXEL_HEADING } from "../pixelStyles";
 import { CardTitle, TitleSlot } from "./CardTitle";
 import { ResultChip, revealOutcome } from "./PackGrid";
 import { pickRevealDelay, REVEAL_START_MS, REVEAL_STEP_MS, useCountUp, useFlip, wheelRevealDelay } from "./motion";
@@ -67,6 +67,7 @@ export function OrderSection({
     if (revealed || e.button !== 0) {
       return;
     }
+    e.preventDefault();
     pitch.current = e.currentTarget.getBoundingClientRect().height + ROW_GAP_PX;
     if (e.isTrusted) {
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -104,14 +105,14 @@ export function OrderSection({
 
   return (
     <section>
-      <div className={cn("mb-2 h-8", ROW_GRID)}>
-        <h2 className={cn("col-span-2 text-2xl", PIXEL_HEADING)}>{revealed ? "Real Order" : "Your Order"}</h2>
-        {revealed ? (
-          <HeaderCount value={shownPoints} label={`of ${score.max} Points`} className={PIXEL_HEADING} />
-        ) : (
+      {revealed ? (
+        <RevealHeader title="Real Order" count={<ResultCount value={shownPoints} label={`of ${score.max} Points`} />} />
+      ) : (
+        <div className={cn("mb-2 h-8", ROW_GRID)}>
+          <h2 className={cn("col-span-2 text-2xl", PIXEL_HEADING)}>Your Order</h2>
           <HeaderCount value={slots.length} label={`of ${slotCount}`} className="text-subtle max-lg:hidden" />
-        )}
-      </div>
+        </div>
+      )}
       <div ref={listRef} className={cn("relative", ROW_GRID)}>
         {pack.order.map((_, i) => (
           <span
@@ -146,7 +147,7 @@ export function OrderSection({
               onPointerCancel={endReorder}
               className={cn(
                 "animate-rowIn rounded-[2.8%/30%]",
-                !revealed && "cursor-grab touch-none active:cursor-grabbing",
+                !revealed && "cursor-grab touch-none select-none active:cursor-grabbing",
                 dragging && "relative z-20 shadow-[0_10px_24px_rgba(0,0,0,0.6)]",
               )}
               style={{
@@ -216,17 +217,20 @@ export function WheelSection({
   const delay = wheelRevealDelay(pack.order.length, animate);
   return (
     <section className="mt-4 border-t-2 border-[#3a2a17] pt-4">
-      <div className="mb-2 flex h-10 items-center gap-3">
-        <h2 className={cn("text-2xl", PIXEL_HEADING)}>{score ? "Real Wheel" : "Your Wheel"}</h2>
-        {score && (
-          <span
-            className={cn(PIXEL_TAG, "px-2 pt-1 pb-0.5 text-base animate-stamp")}
-            style={{ animationDelay: `${delay}ms` }}
-          >
-            {score.wheelCalled} of {wheelCount} Correct
-          </span>
-        )}
-      </div>
+      {score ? (
+        <RevealHeader
+          title="Real Wheel"
+          count={
+            <span className="flex animate-stamp" style={{ animationDelay: `${delay}ms` }}>
+              <ResultCount value={score.wheelCalled} label={`of ${wheelCount} Correct`} />
+            </span>
+          }
+        />
+      ) : (
+        <div className="mb-2 flex h-10 items-center gap-3">
+          <h2 className={cn("text-2xl", PIXEL_HEADING)}>Your Wheel</h2>
+        </div>
+      )}
       <div className={ROW_GRID}>
         {Array.from({ length: wheelCount }, (_, i) => {
           const card = cards[i];
@@ -272,6 +276,27 @@ export function WheelSection({
         })}
       </div>
     </section>
+  );
+}
+
+function RevealHeader({ title, count }: { title: string; count: ReactNode }) {
+  return (
+    <div className="mb-2 flex h-8 items-center gap-2 lg:-mr-2">
+      <h2 className={cn("shrink-0 text-2xl", PIXEL_HEADING)}>{title}</h2>
+      <span className="flex flex-1 justify-center">{count}</span>
+      <span className="w-[6.25rem] shrink-0 pl-3">
+        <span className={cn("flex w-16 justify-center whitespace-nowrap text-lg", PIXEL_HEADING)}>Your Order</span>
+      </span>
+    </div>
+  );
+}
+
+function ResultCount({ value, label }: { value: number; label: string }) {
+  return (
+    <span className={cn("flex items-baseline gap-1.5 whitespace-nowrap", PIXEL_HEADING)}>
+      <span className="text-3xl">{value}</span>
+      <span className="text-lg">{label}</span>
+    </span>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { WheelPack } from "../../../data/draftGames";
+import { DAILY_ROUNDS, type WheelPack } from "../../../data/draftGames";
 
 export interface WheelDay {
   advanced: number;
@@ -14,6 +14,27 @@ const EMPTY_DAY: WheelDay = { advanced: 0, current: 0, locked: {}, drafts: {} };
 export function wheelDayStorageKey(dayKey: string): string {
   return `wheel-of-fortune-featured:${dayKey}`;
 }
+
+export function nextOpenWheelDay(todayKey: string, currentKey: string | null): string | null {
+  for (let offset = 0; offset < OPEN_DAYS; offset++) {
+    const key = daysBefore(todayKey, offset);
+    if (key === currentKey) {
+      continue;
+    }
+    const saved = readFeaturedDay(key);
+    if (!saved || saved.advanced < DAILY_ROUNDS) {
+      return key;
+    }
+  }
+  return null;
+}
+
+export function daysBefore(dayKey: string, days: number): string {
+  return new Date(Date.parse(`${dayKey}T12:00:00Z`) - days * DAY_MS).toISOString().slice(0, 10);
+}
+
+const OPEN_DAYS = 2;
+const DAY_MS = 86_400_000;
 
 export function readFeaturedDay(dayKey: string): WheelDay | null {
   const raw = localStorage.getItem(wheelDayStorageKey(dayKey));

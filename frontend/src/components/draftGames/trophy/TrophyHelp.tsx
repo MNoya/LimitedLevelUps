@@ -1,16 +1,25 @@
 import { useState, type ReactNode } from "react";
 
 import { RECORD_POINTS, TROPHY_MAGE_ART, TROPHY_POINTS } from "../../../data/trophyMage";
-import { GameHelpDialog, HelpScoreRow, HelpSection, HelpSteps } from "../GameDialog";
+import { GameHelpDialog, HelpScoreRow, HelpSection, HelpSteps, type GameHelpAction } from "../GameDialog";
 import { ACCENT_BUTTON } from "../pixelStyles";
-import { CallTag, RevealChip } from "./RecordChip";
+import { ResultTag } from "./RecordChip";
 import { SpriteStrip, TROPHY_SPRITE } from "./SpriteStrip";
 
-export function TrophyHelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function TrophyHelpDialog({
+  open,
+  onClose,
+  action,
+}: {
+  open: boolean;
+  onClose: () => void;
+  action?: GameHelpAction;
+}) {
   return (
     <GameHelpDialog
       open={open}
       onClose={onClose}
+      action={action}
       art={TROPHY_MAGE_ART}
       artPosition="50% 30%"
       icon={<ShiningTrophy />}
@@ -21,9 +30,9 @@ export function TrophyHelpDialog({ open, onClose }: { open: boolean; onClose: ()
       <HelpSection title="Guess the 3-0 Deck">
         <HelpSteps
           steps={[
-            "Each round shows the decks from one Pod",
+            "Each round shows 3 decks from one Pod",
             "Pick the deck you think went 3-0",
-            "Place the other decks for bonus points",
+            "Place the other two for bonus points",
           ]}
         />
       </HelpSection>
@@ -32,7 +41,7 @@ export function TrophyHelpDialog({ open, onClose }: { open: boolean; onClose: ()
           <HelpScoreRow
             plate={
               <ScorePlate>
-                <CallTag record="3-0" />
+                <ResultTag call="3-0" actual="3-0" className="[&_.lucide-trophy]:-translate-y-px" />
               </ScorePlate>
             }
             points={TROPHY_POINTS}
@@ -42,7 +51,7 @@ export function TrophyHelpDialog({ open, onClose }: { open: boolean; onClose: ()
           <HelpScoreRow
             plate={
               <ScorePlate>
-                <RevealChip call="1-2" actual="1-2" />
+                <ResultTag call="1-2" actual="1-2" />
               </ScorePlate>
             }
             points={RECORD_POINTS}

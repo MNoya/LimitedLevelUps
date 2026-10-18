@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from "react";
 
 import { cn } from "../../../lib/utils";
-import { setShortLabel, shortDayLabel, utcDayKey } from "../../../data/draftGames";
-import { useDailyTrophyRounds } from "../../../data/trophyMage";
+import { setShortLabel, shortDayLabel } from "../../../data/draftGames";
 import { SetGlyph } from "../../Brand";
-import { HARD_TEXT_SHADOW, PIXEL_HEADING, PIXEL_TAG } from "../pixelStyles";
+import { Trophy } from "lucide-react";
+
+import { DARK_PIXEL_BUTTON, HARD_TEXT_SHADOW, PIXEL_HEADING, PIXEL_TAG } from "../pixelStyles";
 import {
-  dayProgress,
+  DAY_DONE_ACTION,
   HelpButton,
   PlayButton,
   ResponsiveTitle,
@@ -15,11 +16,9 @@ import {
   type IntroData,
 } from "./introParts";
 import { CLEAN_TROPHY_SPRITE, PixelFrame, SpriteStrip } from "./SpriteStrip";
-import { readTrophyDay, trophyDayStorageKey } from "./useTrophyDay";
+import { DayScoreRow } from "./TrophyRecap";
 
 const SHELF_HEADING = "Today's Showcase";
-const PAST_DAYS = 2;
-const DAY_MS = 86_400_000;
 
 export function TrophyShowcase({ data }: { data: IntroData }) {
   const [playHovered, setPlayHovered] = useState(false);
@@ -43,7 +42,6 @@ export function TrophyShowcase({ data }: { data: IntroData }) {
           <span className={cn("text-2xl font-bold text-text max-sm:text-lg", HARD_TEXT_SHADOW)}>
             Can you guess which decks trophied?
           </span>
-          <HelpButton onHelp={data.onHelp} className="max-sm:hidden" />
         </div>
         <div className="flex w-full max-w-[760px] flex-col gap-3 max-sm:gap-2">
           <h2
@@ -52,20 +50,46 @@ export function TrophyShowcase({ data }: { data: IntroData }) {
               HARD_TEXT_SHADOW,
             )}
           >
+            <span className={cn("mr-3 text-[0.8em]", PIXEL_HEADING)}>{data.dayLabel}</span>
             {SHELF_HEADING}
           </h2>
-          <ShelfCase slots={data.slots} size="large" onRound={data.onRound} lifted={playHovered} />
+          <ShelfCase
+            slots={data.slots}
+            size="large"
+            onRound={data.onRound}
+            lifted={playHovered && data.dayScore == null}
+          />
+          {data.dayScore && (
+            <DayScoreRow
+              dayKey={data.dayKey}
+              points={data.dayScore.points}
+              max={data.dayScore.max}
+              pending={data.dayScore.pending}
+              className="justify-end"
+            />
+          )}
         </div>
         <div
-          className="flex items-stretch justify-center gap-3"
+          className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-3"
           onPointerOver={(event) => setPlayHovered((event.target as HTMLElement).closest("[data-play]") != null)}
           onPointerLeave={() => setPlayHovered(false)}
         >
+          {data.onResults ? (
+            <button
+              onClick={data.onResults}
+              className={cn(DARK_PIXEL_BUTTON, "justify-self-end px-4 py-2.5 text-xl max-sm:px-3 max-sm:text-lg")}
+            >
+              <Trophy size={18} strokeWidth={2.5} className="-mt-0.5" />
+              {DAY_DONE_ACTION}
+            </button>
+          ) : (
+            <span />
+          )}
           <PlayButton
             data={data}
             className="max-sm:px-8 max-sm:py-2.5 [@media(max-height:760px)]:py-2 [@media(max-height:760px)]:text-2xl"
           />
-          <HelpButton onHelp={data.onHelp} className="sm:hidden" />
+          <HelpButton onHelp={data.onHelp} className="justify-self-start max-sm:px-3" />
         </div>
         <div className="grid w-full max-w-[760px] grid-cols-2 gap-4 max-sm:gap-3 [@media(max-height:760px)]:gap-3">
           <PastShelves data={data} />
@@ -93,7 +117,7 @@ function ShelfCase({
   return (
     <div
       className={cn(
-        "relative overflow-hidden border-[4px] border-[color:var(--px-ink)] backdrop-blur-[3px]",
+        "relative overflow-hidden border-[4px] border-[color:var(--px-ink)]",
         "bg-[radial-gradient(ellipse_at_50%_20%,rgba(30,60,115,0.1),rgba(8,14,32,0.35)_75%)]",
         "shadow-[inset_0_0_0_3px_var(--px-rim),8px_8px_0_#05070a]",
         "before:pointer-events-none before:absolute before:inset-0 before:content-['']",
@@ -150,7 +174,7 @@ function ShelfSpot({
       <span className="hidden sm:block [@media(max-height:760px)]:hidden">{trophy(4)}</span>
     </>
   );
-  const base = <TrophyBase slot={slot} index={index} small={!large} />;
+  const base = <TrophyBase slot={slot} small={!large} />;
   if (!onPlay) {
     return (
       <span className="flex flex-col items-center">
@@ -166,29 +190,28 @@ function ShelfSpot({
       disabled={!slot.round}
       aria-label={slot.round ? `Play ${setShortLabel(slot.round.setCode)} #${index + 1}` : "Loading"}
       className={cn(
-        "relative flex flex-col items-center transition-transform duration-200",
+        "relative flex flex-auto flex-col items-center transition-transform duration-200",
+        "after:absolute after:-inset-x-1 after:-top-6 after:-bottom-12 after:content-['']",
+        "first:after:-left-4 last:after:-right-4 sm:first:after:-left-10 sm:last:after:-right-10",
         "ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-2",
         "hover:drop-shadow-[0_0_18px_rgba(246,201,94,0.55)]",
         lifted && "-translate-y-2 drop-shadow-[0_0_18px_rgba(246,201,94,0.55)]",
       )}
       style={lifted ? { transitionDelay: `${index * 60}ms` } : undefined}
     >
-      {trophies}
-      {base}
+      <span className="flex flex-col items-center">
+        {trophies}
+        {base}
+      </span>
     </button>
   );
 }
 
 function ShelfTrophy({ index, slot, scale }: { index: number; slot: DaySlot; scale: number }) {
-  const won = slot.state === "won";
+  const won = slot.state !== "open";
   return (
     <span
-      className={cn(
-        "relative block",
-        won && "animate-stamp",
-        slot.state === "open" && "opacity-80 brightness-[0.55]",
-        slot.state === "missed" && "brightness-[0.4] grayscale-[0.5]",
-      )}
+      className={cn("relative block", won && "animate-stamp", slot.state === "open" && "opacity-80 brightness-[0.55]")}
       style={won ? { animationDelay: `${index * 80}ms` } : undefined}
     >
       {won ? (
@@ -212,7 +235,7 @@ function ShelfTrophy({ index, slot, scale }: { index: number; slot: DaySlot; sca
   );
 }
 
-function TrophyBase({ slot, index, small }: { slot: DaySlot; index: number; small: boolean }) {
+function TrophyBase({ slot, small }: { slot: DaySlot; small: boolean }) {
   return (
     <span
       className={cn(
@@ -224,42 +247,30 @@ function TrophyBase({ slot, index, small }: { slot: DaySlot; index: number; smal
           : "px-2 pt-[3px] text-base sm:text-lg [@media(max-height:760px)]:sm:text-base",
       )}
     >
-      {slot.round ? setShortLabel(slot.round.setCode) : `#${index + 1}`}
+      {slot.round ? setShortLabel(slot.round.setCode) : " "}
     </span>
   );
 }
 
 function PastShelves({ data }: { data: IntroData }) {
-  const dayKeys: string[] = [];
-  for (let back = 1; back <= PAST_DAYS; back++) {
-    dayKeys.push(utcDayKey(new Date(Date.parse(`${data.dayKey}T12:00:00Z`) - back * DAY_MS)));
-  }
   return (
     <>
-      {dayKeys.map((dayKey) => (
-        <PastShelf key={dayKey} dayKey={dayKey} data={data} />
+      {data.pastDays.map(({ dayKey, slots }) => (
+        <ShelfLabel key={dayKey} label={shortDayLabel(dayKey)}>
+          <button
+            type="button"
+            onClick={() => data.onDay(dayKey)}
+            aria-label={`Play ${shortDayLabel(dayKey)}`}
+            className={cn(
+              "block w-full text-left transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
+              "hover:-translate-y-1 hover:drop-shadow-[0_0_14px_rgba(246,201,94,0.45)]",
+            )}
+          >
+            <ShelfCase slots={slots} size="small" />
+          </button>
+        </ShelfLabel>
       ))}
     </>
-  );
-}
-
-function PastShelf({ dayKey, data }: { dayKey: string; data: IntroData }) {
-  const { rounds } = useDailyTrophyRounds(dayKey);
-  const { slots } = dayProgress(rounds, readTrophyDay(trophyDayStorageKey(dayKey)));
-  return (
-    <ShelfLabel label={shortDayLabel(dayKey)}>
-      <button
-        type="button"
-        onClick={() => data.onDay(dayKey)}
-        aria-label={`Play ${shortDayLabel(dayKey)}`}
-        className={cn(
-          "block w-full text-left transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
-          "hover:-translate-y-1 hover:drop-shadow-[0_0_14px_rgba(246,201,94,0.45)]",
-        )}
-      >
-        <ShelfCase slots={slots} size="small" />
-      </button>
-    </ShelfLabel>
   );
 }
 

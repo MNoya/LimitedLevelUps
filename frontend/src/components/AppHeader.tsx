@@ -77,7 +77,7 @@ const NAV: NavItem[] = [
     label: "TOOLS",
     icon: Hammer,
     to: "/tools",
-    match: (p) => p.startsWith("/tools") || p.startsWith("/wheel-of-fortune"),
+    match: (p) => p.startsWith("/tools") || p.startsWith("/wheel-of-fortune") || p.startsWith("/trophy-mage"),
   },
 ];
 
@@ -92,11 +92,13 @@ export function AppHeader({
   subtitle = "LEADERBOARD",
   subtitleShort,
   phoneTitle,
+  titleHref,
   fill = false,
 }: {
   subtitle?: string;
   subtitleShort?: string;
   phoneTitle?: ReactNode;
+  titleHref?: string;
   fill?: boolean;
 }) {
   const loc = useLocation();
@@ -107,7 +109,7 @@ export function AppHeader({
   const brandHref = "/";
 
   const headerRef = useRef<HTMLElement>(null);
-  const brandRef = useRef<HTMLAnchorElement>(null);
+  const brandRef = useRef<HTMLDivElement>(null);
   const navMeasureRef = useRef<HTMLDivElement>(null);
   const authMeasureRef = useRef<HTMLSpanElement>(null);
 
@@ -189,23 +191,28 @@ export function AppHeader({
       )}
       style={fill && !isMobile ? { paddingRight: "calc(2.5rem + var(--app-scrollbar, 0px))" } : undefined}
     >
-      <Link
-        ref={brandRef}
-        to={brandHref}
-        className={cn("flex items-center no-underline shrink-0", isMobile ? "gap-3 pl-2" : "gap-6 pl-[13px]")}
-      >
-        <div
+      <div ref={brandRef} className={cn("flex items-center shrink-0", isMobile ? "gap-3 pl-2" : "gap-6 pl-[13px]")}>
+        <Link
+          to={brandHref}
+          aria-label="Limited Level-Ups home"
           className="flex items-center justify-center shrink-0 overflow-visible"
           style={{ height: isMobile ? 44 : 64 }}
         >
           <ALogo size={isMobile ? 42 : 55} />
-        </div>
+        </Link>
         {isMobile && phoneTitle ? (
-          phoneTitle
+          <Link
+            to={titleHref ?? brandHref}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 no-underline"
+          >
+            {phoneTitle}
+          </Link>
         ) : (
-          <AWordmark size={isMobile ? "sm" : "lg"} subtitle={subtitle} subtitleShort={subtitleShort} />
+          <Link to={titleHref ?? brandHref} className="no-underline">
+            <AWordmark size={isMobile ? "sm" : "lg"} subtitle={subtitle} subtitleShort={subtitleShort} />
+          </Link>
         )}
-      </Link>
+      </div>
 
       <div
         ref={navMeasureRef}

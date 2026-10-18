@@ -6,33 +6,61 @@ export function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export function useFlip(container: RefObject<HTMLElement>, skipKey: string | null = null, durationMs = 280) {
-  const previous = useRef(new Map<string, DOMRect>());
+export function useFlip(
+  container: RefObject<HTMLElement>,
+  skipKey: string | null = null,
+  durationMs = 280,
+  enabled = true,
+) {
+  const previous = useRef(new Map<string, LayoutPoint>());
+  const running = useRef(new WeakMap<HTMLElement, Animation>());
   useLayoutEffect(() => {
     const root = container.current;
     if (!root) {
       return;
     }
-    const animate = !prefersReducedMotion();
-    const next = new Map<string, DOMRect>();
+    const animate = enabled && !prefersReducedMotion();
+    const origin = pagePosition(root);
+    const next = new Map<string, LayoutPoint>();
     root.querySelectorAll<HTMLElement>("[data-flip]").forEach((node) => {
       const key = node.dataset.flip!;
-      const rect = node.getBoundingClientRect();
-      next.set(key, rect);
+      const position = pagePosition(node);
+      const point = { left: position.left - origin.left, top: position.top - origin.top };
+      next.set(key, point);
       const before = previous.current.get(key);
       if (!animate || !before || key === skipKey) {
         return;
       }
-      const dx = before.left - rect.left;
-      const dy = before.top - rect.top;
+      const dx = before.left - point.left;
+      const dy = before.top - point.top;
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) {
         return;
       }
+      running.current.get(node)?.cancel();
       const from = { transform: `translate(${dx}px, ${dy}px)` };
-      node.animate([from, { transform: "translate(0, 0)" }], { duration: durationMs, easing: SETTLE_EASING });
+      const slide = node.animate([from, { transform: "translate(0, 0)" }], {
+        duration: durationMs,
+        easing: SETTLE_EASING,
+      });
+      running.current.set(node, slide);
     });
     previous.current = next;
   });
+}
+
+interface LayoutPoint {
+  left: number;
+  top: number;
+}
+
+function pagePosition(node: HTMLElement): LayoutPoint {
+  let left = 0;
+  let top = 0;
+  for (let current: HTMLElement | null = node; current; current = current.offsetParent as HTMLElement | null) {
+    left += current.offsetLeft;
+    top += current.offsetTop;
+  }
+  return { left, top };
 }
 
 export function useCountUp(target: number, animate: boolean, delayMs: number, durationMs = 650): number {
@@ -59,7 +87,7 @@ export function useCountUp(target: number, animate: boolean, delayMs: number, du
 }
 
 export const REVEAL_START_MS = 300;
-export const REVEAL_STEP_MS = 120;
+export const REVEAL_STEP_MS = 130;
 const WHEEL_BEAT_MS = 200;
 
 export function pickRevealDelay(pickIndex: number, animate: boolean): number {

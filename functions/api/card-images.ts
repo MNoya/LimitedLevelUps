@@ -17,6 +17,7 @@ interface Identifier {
 interface ScryfallCard {
   name: string;
   set: string;
+  layout?: string;
   image_uris?: { normal?: string };
   card_faces?: { image_uris?: { normal?: string } }[];
 }
@@ -82,18 +83,22 @@ export const onRequestPost: PagesFunction = async (context) => {
   }
   const identifiers = normalize(body);
   if (identifiers.length === 0) {
-    return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify({ images: {}, layouts: {} }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
   }
 
   const cache = caches.default;
   const hash = await sha256Hex(JSON.stringify(identifiers));
-  const cacheKey = new Request(new URL(`/api/card-images/${hash}`, request.url).toString());
+  const cacheKey = new Request(new URL(`/api/card-images/v2/${hash}`, request.url).toString());
   const cached = await cache.match(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const map: Record<string, string> = {};
+  const images: Record<string, string> = {};
+  const layouts: Record<string, string> = {};
   for (let i = 0; i < identifiers.length; i += CHUNK) {
     const res = await fetchChunkWithRetry(identifiers.slice(i, i + CHUNK));
     if (!res.ok) {
@@ -101,14 +106,18 @@ export const onRequestPost: PagesFunction = async (context) => {
     }
     const page = (await res.json()) as { data?: ScryfallCard[] };
     for (const card of page.data ?? []) {
+      const key = `${card.set.toLowerCase()}|${frontFaceName(card.name).toLowerCase()}`;
       const image = normalImage(card);
       if (image) {
-        map[`${card.set.toLowerCase()}|${frontFaceName(card.name).toLowerCase()}`] = image;
+        images[key] = image;
+      }
+      if (card.layout) {
+        layouts[key] = card.layout;
       }
     }
   }
 
-  const response = new Response(JSON.stringify(map), {
+  const response = new Response(JSON.stringify({ images, layouts }), {
     status: 200,
     headers: { "content-type": "application/json", "cache-control": `public, max-age=${CACHE_SECONDS}` },
   });

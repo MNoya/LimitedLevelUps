@@ -51,6 +51,15 @@ const config: Config = {
         tabular: ["tabular-nums"],
       },
       keyframes: {
+        revealSpotlight: {
+          "0%": { opacity: "0.62" },
+          "100%": { opacity: "0" },
+        },
+        badgePop: {
+          "0%": { opacity: "0", transform: "scale(0.4)" },
+          "60%": { opacity: "1", transform: "scale(1.25)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
         slotPulse: {
           "50%": { filter: "drop-shadow(0 0 3px rgba(246, 201, 94, 0.4))" },
         },
@@ -126,11 +135,6 @@ const config: Config = {
           "70%": { opacity: "1", transform: "translateY(2px) rotateX(0deg) scale(1.01)" },
           "100%": { opacity: "1", transform: "translateY(0) rotateX(0deg) scale(1)" },
         },
-        scoredGlow: {
-          "0%": { boxShadow: "0 0 0 0 rgba(46, 232, 92, 0)" },
-          "40%": { boxShadow: "0 0 26px 6px rgba(46, 232, 92, 0.55)" },
-          "100%": { boxShadow: "0 0 10px 2px rgba(46, 232, 92, 0.4)" },
-        },
         missShake: {
           "0%, 100%": { transform: "translateX(0)" },
           "20%": { transform: "translateX(-4px) rotate(-0.6deg)" },
@@ -153,6 +157,8 @@ const config: Config = {
         },
       },
       animation: {
+        revealSpotlight: "revealSpotlight 700ms ease-out both",
+        badgePop: "badgePop 360ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
         slotPulse: "slotPulse 2.4s ease-in-out infinite",
         pulse: "pulse 1.4s infinite",
         liveHalo: "liveHalo 1.6s ease-out infinite",
@@ -165,7 +171,6 @@ const config: Config = {
         rowIn: "rowIn 200ms ease-out both",
         nudge: "nudge 300ms ease-out",
         cardDeal: "cardDeal 420ms cubic-bezier(0.22, 1, 0.36, 1) both",
-        scoredGlow: "scoredGlow 700ms ease-out both",
         missShake: "missShake 380ms ease-in-out both",
         softPulse: "softPulse 1.6s ease-out infinite",
         fadeIn: "fadeIn 220ms ease-out both",

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronUp } from "lucide-react";
+import { ChevronLeft, ChevronUp } from "lucide-react";
 
 import { PageShell } from "../components/PageShell";
+import { Tooltip } from "../components/Tooltip";
 import { Container } from "../components/Container";
-import { CardImageMapProvider } from "../components/pod/review/ReviewCard";
+import { CardImageMapProvider, useCardImageMapContext } from "../components/pod/review/ReviewCard";
 import { podDraftPickHref } from "../components/pod/podLinks";
 import { GameStatus } from "../components/draftGames/GameChrome";
 import { CardTitle } from "../components/draftGames/wheel/CardTitle";
@@ -14,20 +15,24 @@ import {
   CardZoom,
   GAME_COLUMNS,
   PackGrid,
+  PackSlot,
   PickingCard,
+  PulseCard,
   RevealCard,
   useRevealLayout,
-  SkeletonCard,
+  type CardOpening,
+  type RevealLayout,
 } from "../components/draftGames/wheel/PackGrid";
 import { useWheelDay, wheelDayStorageKey } from "../components/draftGames/wheel/useWheelDay";
 import { WheelBackdrop } from "../components/draftGames/wheel/WheelBackdrop";
+import { WheelTitle } from "../components/draftGames/wheel/WheelTitle";
 import { WheelHeader, type WheelHeaderTools, type WheelProgress } from "../components/draftGames/wheel/WheelHeader";
 import { QuickHelpDialog, WheelHelpDialog } from "../components/draftGames/wheel/WheelHelp";
-import { useGuideHash, useNoScrollGutter, useTouchVerb } from "../components/draftGames/wheel/pageHooks";
+import { releaseFocus, useGuideHash, useNoScrollGutter, useTouchVerb } from "../components/draftGames/wheel/pageHooks";
 import { FEATURED_PLAY, WheelIntro } from "../components/draftGames/wheel/WheelIntro";
 import { WheelSummary } from "../components/draftGames/wheel/WheelSummary";
 import { useFlip } from "../components/draftGames/wheel/motion";
-import { useCardImageMap } from "../data/cardImages";
+import { cardImageSources, hasCardImage, useCardImageMap } from "../data/cardImages";
 import {
   MINI_GAMES_HEADER,
   ordinal,
@@ -36,18 +41,26 @@ import {
   useFeaturedPacks,
   useFreePlayPacks,
   useWheelSets,
-  utcDayKey,
+  gameDayKey,
   type WheelPack,
 } from "../data/draftGames";
 import type { ArtifactCard } from "../types/leaderboard";
 import { cn } from "../lib/utils";
-import { GOLD_BUTTON, PIXEL_HEADING, PIXEL_PANEL, WAITING_PIXEL_BUTTON } from "../components/draftGames/pixelStyles";
+import {
+  GOLD_BUTTON,
+  PIXEL_HEADING,
+  PIXEL_PANEL,
+  PIXEL_TOOLTIP,
+  WAITING_PIXEL_BUTTON,
+} from "../components/draftGames/pixelStyles";
 
 const WHEEL_PATH = "/wheel-of-fortune";
+const SKELETON_CARDS = 14;
+const QUICK_PATH = `${WHEEL_PATH}/quick`;
 const DAY_PATH = /^\d{4}-\d{2}-\d{2}$/;
 
 const GAME_LAYOUT = cn(
-  "flex flex-col gap-3 pb-28 lg:grid lg:grid-rows-[auto_1fr]",
+  "flex flex-col gap-3 pb-[88px] lg:grid lg:grid-rows-[auto_1fr]",
   GAME_COLUMNS,
   "lg:justify-center lg:gap-x-4 lg:gap-y-3 lg:pb-0",
 );
@@ -57,13 +70,13 @@ type GameMode = "featured" | "free";
 export function WheelOfFortunePage() {
   useNoScrollGutter();
   const [today] = useState(() => {
-    const day = utcDayKey();
+    const day = gameDayKey();
     if (import.meta.env.DEV) {
       resetDayOnRequest(day);
     }
     return day;
   });
-  const { play } = useParams<{ play?: string }>();
+  const { play, packNumber } = useParams<{ play?: string; packNumber?: string }>();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [helpOpen, openHelp, closeHelp] = useGuideHash("guide");
@@ -89,25 +102,46 @@ export function WheelOfFortunePage() {
         onPlay={(next) => navigate(playPath(next))}
         onHelp={openHelp}
         onQuickHelp={openQuickHelp}
+        helpOpen={helpOpen}
+        onCloseHelp={closeHelp}
       />
     );
   } else if (isDay) {
     body = <FeaturedGame key={play} dayKey={play} helpOpen={helpOpen} onHelp={openHelp} onExit={exit} />;
   } else {
     const setCode = play.toUpperCase();
-    body = <FreePlayGame key={setCode} setCode={setCode} helpOpen={helpOpen} onHelp={openHelp} onExit={exit} />;
+    body = (
+      <FreePlayGame
+        key={setCode}
+        setCode={setCode}
+        startNumber={Number(packNumber) || null}
+        helpOpen={helpOpen}
+        onHelp={openHelp}
+        onExit={exit}
+      />
+    );
   }
 
   return (
-    <PageShell subtitle="WHEEL OF FORTUNE" subtitleShort={MINI_GAMES_HEADER} footer={false}>
+    <PageShell
+      subtitle="WHEEL OF FORTUNE"
+      titleHref="/wheel-of-fortune"
+      subtitleShort={MINI_GAMES_HEADER}
+      phoneTitle={play ? <WheelTitle scale={2} interactive={false} /> : undefined}
+      footer={false}
+    >
       <Container
         className={cn("draft-game pt-3 pb-4", play ? "lg:px-4 2xl:px-10" : "flex flex-1 flex-col max-sm:pb-2")}
       >
         <WheelBackdrop />
         <div className={cn("relative z-[1]", !play && "flex flex-1 flex-col")}>{body}</div>
       </Container>
-      <WheelHelpDialog open={helpOpen} onClose={closeHelp} touchVerb={touchVerb} />
-      <QuickHelpDialog open={quickHelpOpen} onClose={closeQuickHelp} />
+      {play && <WheelHelpDialog open={helpOpen} onClose={closeHelp} touchVerb={touchVerb} />}
+      <QuickHelpDialog
+        open={quickHelpOpen}
+        onClose={closeQuickHelp}
+        action={{ label: "Play", onClick: () => navigate(QUICK_PATH) }}
+      />
     </PageShell>
   );
 }
@@ -141,10 +175,23 @@ function FeaturedGame({ dayKey, ...modeProps }: ModeProps & { dayKey: string }) 
   );
 }
 
-function FreePlayGame({ setCode, ...modeProps }: ModeProps & { setCode: string }) {
+function FreePlayGame({
+  setCode,
+  startNumber,
+  ...modeProps
+}: ModeProps & { setCode: string; startNumber: number | null }) {
+  const navigate = useNavigate();
   const [seed] = useState(() => Math.floor(Math.random() * 1_000_000));
+  const [firstNumber] = useState(startNumber);
   const [wanted, setWanted] = useState(1);
-  const { packs, isPending, exhausted } = useFreePlayPacks(setCode, wanted, seed);
+  const { packs, isPending, exhausted, packNumbers } = useFreePlayPacks(setCode, wanted, seed, firstNumber);
+  const packNumberOf = (pack: WheelPack) => packNumbers.get(pack.eventId) ?? null;
+  const showPackInAddress = (pack: WheelPack) => {
+    const number = packNumberOf(pack);
+    if (number != null) {
+      navigate(`${WHEEL_PATH}/${setCode.toLowerCase()}/${number}`, { replace: true });
+    }
+  };
   const { sets, isPending: setsPending } = useWheelSets();
   const cardImages = usePackImages(packs);
   if (!setsPending && !sets.some((set) => set.code === setCode)) {
@@ -162,6 +209,8 @@ function FreePlayGame({ setCode, ...modeProps }: ModeProps & { setCode: string }
         storageKey={null}
         exhausted={exhausted}
         onAdvance={(index) => setWanted(index + 1)}
+        packNumberOf={packNumberOf}
+        onPackShown={showPackInAddress}
         {...modeProps}
       />
     </CardImageMapProvider>
@@ -185,6 +234,8 @@ function WheelGame({
   onHelp,
   onExit,
   onAdvance,
+  packNumberOf,
+  onPackShown,
 }: ModeProps & {
   mode: GameMode;
   packs: WheelPack[];
@@ -192,6 +243,8 @@ function WheelGame({
   storageKey: string | null;
   exhausted?: boolean;
   onAdvance?: (index: number) => void;
+  packNumberOf?: (pack: WheelPack) => number | null;
+  onPackShown?: (pack: WheelPack) => void;
 }) {
   const { day, setDraft: saveDraft, lockIn, goTo, advance, finish } = useWheelDay(storageKey, packs);
   const { sets } = useWheelSets();
@@ -206,12 +259,24 @@ function WheelGame({
   const touchVerb = useTouchVerb();
   const revealLayout = useRevealLayout();
   const gridRef = useRef<HTMLDivElement>(null);
-  useFlip(gridRef, null, 700);
+  useFlip(gridRef, null, 700, freshReveal);
 
   const featured = mode === "featured";
   const finished = featured && day.advanced >= packs.length;
   const viewIndex = finished ? (reviewing ?? 0) : Math.min(day.current, packs.length - 1);
   const pack: WheelPack | undefined = packs[viewIndex];
+  const shownEventId = pack?.eventId;
+  const announcePack = useRef(() => pack && onPackShown?.(pack));
+  announcePack.current = () => pack && onPackShown?.(pack);
+  useEffect(() => {
+    announcePack.current();
+  }, [shownEventId]);
+  const artResolved = usePackArtResolved(pack);
+  const [opening, setOpening] = useState<PackOpening | null>(null);
+  if (pack && opening?.eventId !== pack.eventId) {
+    const previousId = artResolved ? (opening?.eventId ?? null) : null;
+    setOpening({ eventId: pack.eventId, previousId, openedAt: performance.now() });
+  }
   const locked = pack ? day.locked[pack.eventId] : undefined;
   const slots = locked ?? (pack ? (day.drafts[pack.eventId] ?? []) : []);
   const setDraft = (draft: number[]) => pack && saveDraft(pack.eventId, draft);
@@ -220,6 +285,7 @@ function WheelGame({
   const ready = slotCount > 0 && slots.length === slotCount;
   const nextOpen = featured ? nextUnlockedIndex(packs, day.locked, viewIndex) : null;
   const last = featured && nextOpen == null;
+  usePreloadPackArt(featured ? (nextOpen != null ? packs[nextOpen] : undefined) : packs[viewIndex + 1]);
 
   const place = (card: number, at: number) => {
     const without = slots.filter((c) => c !== card);
@@ -253,17 +319,40 @@ function WheelGame({
     setFreshReveal(false);
     setSheetOpen(false);
     if (finished) {
-      setReviewing(index);
+      openReview(index);
     } else {
       goTo(index);
     }
     window.scrollTo({ top: 0 });
   };
-  const closeReview = () => {
+  const openReview = (index: number) => {
+    if (reviewing == null) {
+      window.history.pushState({ ...window.history.state, wheelReview: true }, "");
+    }
+    setReviewing(index);
+    window.scrollTo({ top: 0 });
+  };
+  const showResults = () => {
     setReviewing(null);
     setFreshSummary(false);
     window.scrollTo({ top: 0 });
   };
+  const closeReview = () => {
+    if (window.history.state?.wheelReview) {
+      window.history.back();
+      return;
+    }
+    showResults();
+  };
+  useEffect(() => {
+    const onBack = () => {
+      if (!window.history.state?.wheelReview) {
+        showResults();
+      }
+    };
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, []);
 
   useEffect(() => {
     if (!pack || (finished && reviewing == null)) {
@@ -275,6 +364,9 @@ function WheelGame({
         return;
       }
       const confirmKey = e.key === " " || e.key === "Enter";
+      if (confirmKey || e.key === "Backspace") {
+        releaseFocus();
+      }
       if (reviewing != null && (confirmKey || e.key === "Escape")) {
         e.preventDefault();
         closeReview();
@@ -342,13 +434,8 @@ function WheelGame({
         locked={day.locked}
         dayKey={dayKey}
         animate={freshSummary}
-        touchVerb={touchVerb}
-        setName={setName}
         onExit={onExit}
-        onReview={(index) => {
-          setReviewing(index);
-          window.scrollTo({ top: 0 });
-        }}
+        onReview={openReview}
       />
     );
   }
@@ -366,19 +453,9 @@ function WheelGame({
     return <WheelSkeleton />;
   }
 
-  let sessionPoints = 0;
-  let sessionMax = 0;
-  for (const played of packs) {
-    const playedSlots = day.locked[played.eventId];
-    if (playedSlots) {
-      const playedScore = scoreWheel(played, playedSlots);
-      sessionPoints += playedScore.points;
-      sessionMax += playedScore.max;
-    }
-  }
   const progress: WheelProgress = featured
     ? { kind: "featured", steps: featuredSteps, current: viewIndex, onSelect: jumpTo }
-    : { kind: "free", packNumber: viewIndex + 1, points: sessionPoints, max: sessionMax };
+    : { kind: "free", packNumber: viewIndex + 1 };
 
   const startGridDrag = (card: number) => (e: ReactPointerEvent) =>
     setGridDrag({ card, x: e.clientX, y: e.clientY, index: null });
@@ -390,8 +467,9 @@ function WheelGame({
     const keyInset = floating ? "lg:gap-8 lg:pr-3.5" : "lg:gap-4 lg:pr-2.5";
     if (reviewing != null) {
       return (
-        <button onClick={closeReview} className={cn(GOLD_BUTTON, size)}>
-          Back to Today's Score
+        <button onClick={closeReview} className={cn(GOLD_BUTTON, "gap-1.5 pl-3.5", size)}>
+          <ChevronLeft className="size-[1em]" strokeWidth={3} />
+          Back to Results
         </button>
       );
     }
@@ -399,21 +477,19 @@ function WheelGame({
       return (
         <span key="next" className="flex animate-fadeUpIn" style={{ animationDelay: `${nextDelay}ms` }}>
           <button onClick={next} className={cn(GOLD_BUTTON, size, keyInset)}>
-            {last ? "See Today's Score" : "Next Pack"}
+            {last ? "Results" : "Next Pack"}
             <SpaceKey />
           </button>
         </span>
       );
     }
+    if (!ready) {
+      return <WaitingConfirm key="waiting" remaining={slotCount - slots.length} className={size} />;
+    }
     return (
-      <button
-        key={ready ? "ready" : "waiting"}
-        onClick={lock}
-        disabled={!ready}
-        className={cn(ready ? cn(GOLD_BUTTON, keyInset) : WAITING_PIXEL_BUTTON, size)}
-      >
+      <button key="ready" onClick={lock} className={cn(GOLD_BUTTON, keyInset, size)}>
         Confirm
-        {ready && <SpaceKey />}
+        <SpaceKey />
       </button>
     );
   };
@@ -433,20 +509,33 @@ function WheelGame({
   const revealCard = (card: number) => (
     <RevealCard pack={pack} card={card} slots={slots} animate={freshReveal} showDrafter={showDrafters} />
   );
-  const pickingCard = (card: number, i: number) => (
+  const previousPack = packs.find((played) => played.eventId === opening?.previousId);
+  const previousOrder = previousPack
+    ? gridOrderFor(previousPack, Boolean(day.locked[previousPack.eventId]), revealLayout)
+    : [];
+  const formatChanged =
+    previousPack != null && (previousPack.setCode !== pack.setCode || previousOrder.length !== pack.pack.length);
+  const underlayAt = (index: number): CardOpening["underlay"] => {
+    if (!previousPack) {
+      return "skeleton";
+    }
+    return formatChanged ? "empty" : previousPack.cards[previousOrder[index]];
+  };
+  const pickingCard = (card: number, index: number) => (
     <PickingCard
       card={pack.cards[card]}
       pickNumber={slots.includes(card) ? slots.indexOf(card) + 1 : null}
-      dealIndex={i}
+      opening={{
+        index,
+        openedAt: opening?.openedAt ?? 0,
+        underlay: underlayAt(index),
+      }}
       onToggle={() => toggle(card)}
       onDragOut={startGridDrag(card)}
       onZoom={() => setZoom(pack.cards[card])}
     />
   );
-  let gridOrder = pack.pack;
-  if (score && revealLayout === "real-order") {
-    gridOrder = [...pack.order.map((pick) => pick.card), ...pack.wheel];
-  }
+  const gridOrder = gridOrderFor(pack, score != null, revealLayout);
 
   const headerTools: WheelHeaderTools = score
     ? {
@@ -456,12 +545,13 @@ function WheelGame({
         onReset: import.meta.env.DEV ? () => restartToday(dayKey) : undefined,
       }
     : {};
+  const packNumber = packNumberOf?.(pack);
+  const freePlayTitle = packNumber ? `${setName(pack.setCode)} Pack #${packNumber}` : setName(pack.setCode);
   const header = (className: string, compact: boolean) => (
     <WheelHeader
       setCode={pack.setCode}
-      title={featured ? `${setName(pack.setCode)} #${viewIndex + 1}` : setName(pack.setCode)}
-      subtitle={featured ? undefined : "Free Play"}
-      dayLabel={dayKey ? shortDayLabel(dayKey) : undefined}
+      title={featured ? `${setName(pack.setCode)} #${viewIndex + 1}` : freePlayTitle}
+      dayLabel={dayKey ? `${shortDayLabel(dayKey)} Packs` : undefined}
       progress={progress}
       tools={headerTools}
       onHelp={onHelp}
@@ -482,18 +572,18 @@ function WheelGame({
           onClick={score && freshReveal ? () => setFreshReveal(false) : undefined}
           gridRef={gridRef}
         >
-          {gridOrder.map((card, i) => (
-            <div key={card} data-flip={`${pack.eventId}-${card}`}>
-              {score ? revealCard(card) : pickingCard(card, i)}
-            </div>
+          {gridOrder.map((card, index) => (
+            <PackSlot key={card} index={index} flipKey={`${pack.eventId}-${card}`}>
+              {score ? revealCard(card) : artResolved ? pickingCard(card, index) : <PulseCard index={index} />}
+            </PackSlot>
           ))}
           {floatingAction}
         </PackGrid>
         <div
           className={cn(
-            "fixed inset-x-0 bottom-0 z-20 border-t-[3px] border-[#1a120b] bg-[#16110c]",
-            "shadow-[inset_0_2px_0_#5a3a1e,0_-8px_0_rgba(5,7,10,0.6)] transition-[max-height] duration-300 ease-out",
-            sheetOpen ? "max-h-[82vh] overflow-y-auto" : "max-h-[76px] overflow-hidden",
+            "fixed inset-x-0 bottom-0 z-20 border-t-[3px] border-[#1a120b]",
+            "shadow-[inset_0_2px_0_#5a3a1e] transition-[max-height,background-color] duration-300 ease-out",
+            sheetOpen ? "max-h-[82vh] overflow-y-auto bg-[#16110c]/90" : "max-h-[76px] overflow-hidden bg-[#16110c]",
             "isolate lg:relative lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:flex lg:max-h-[calc(100vh-125px)]",
             "lg:flex-col lg:overflow-y-auto lg:border-[3px] lg:p-4",
             "lg:bg-[#16110c]/95 lg:shadow-[inset_0_0_0_2px_#5a3a1e,6px_6px_0_#05070a]",
@@ -534,6 +624,35 @@ function WheelGame({
   );
 }
 
+function WaitingConfirm({ remaining, className }: { remaining: number; className: string }) {
+  const [tapped, setTapped] = useState(false);
+  useEffect(() => {
+    if (!tapped) {
+      return;
+    }
+    const timer = window.setTimeout(() => setTapped(false), 2200);
+    return () => window.clearTimeout(timer);
+  }, [tapped]);
+  return (
+    <Tooltip
+      label={`Pick ${remaining} more ${remaining === 1 ? "card" : "cards"}`}
+      open={tapped || undefined}
+      delayDuration={0}
+      hideArrow
+      className={PIXEL_TOOLTIP}
+    >
+      <button
+        type="button"
+        aria-disabled
+        onClick={() => setTapped(true)}
+        className={cn(WAITING_PIXEL_BUTTON, className)}
+      >
+        Confirm
+      </button>
+    </Tooltip>
+  );
+}
+
 function SheetBar({
   open,
   onToggle,
@@ -546,15 +665,20 @@ function SheetBar({
   action: ReactNode;
 }) {
   return (
-    <div className="flex h-[76px] items-center gap-3 px-4 lg:hidden">
-      <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={open}>
-        <ChevronUp size={20} className={cn("shrink-0 transition-transform duration-300", open && "rotate-180")} />
-        <span className="min-w-0">
-          <span className={cn("block text-xl", PIXEL_HEADING)}>{status}</span>
-          <span className="block text-sm text-subtle">{open ? "Hide Order" : "Show Order"}</span>
-        </span>
+    <div onClick={onToggle} className="flex h-[76px] cursor-pointer items-center gap-3 px-4 lg:hidden">
+      <button
+        aria-label={open ? "Hide Order" : "Show Order"}
+        aria-expanded={open}
+        className="grid size-8 shrink-0 place-items-center text-[#f6c95e]"
+      >
+        <ChevronUp
+          size={22}
+          strokeWidth={3}
+          className={cn("transition-transform duration-300", open && "rotate-180")}
+        />
       </button>
-      {action}
+      <span className={cn("min-w-0 flex-1 truncate text-xl", PIXEL_HEADING)}>{status}</span>
+      <span onClick={(e) => e.stopPropagation()}>{action}</span>
     </div>
   );
 }
@@ -562,15 +686,61 @@ function SheetBar({
 function WheelSkeleton() {
   return (
     <div className={GAME_LAYOUT}>
-      <div className={cn(PIXEL_PANEL, "h-[84px] animate-pulse lg:col-start-2 lg:row-start-1")} />
-      <PackGrid cardCount={15}>
-        {Array.from({ length: 15 }, (_, i) => (
-          <SkeletonCard key={i} index={i} />
+      <div className={cn(PIXEL_PANEL, "h-[84px] lg:col-start-2 lg:row-start-1")} />
+      <PackGrid cardCount={SKELETON_CARDS}>
+        {Array.from({ length: SKELETON_CARDS }, (_, i) => (
+          <PackSlot key={i} index={i}>
+            <PulseCard index={i} />
+          </PackSlot>
         ))}
       </PackGrid>
-      <div className={cn(PIXEL_PANEL, "hidden h-[620px] animate-pulse lg:col-start-2 lg:row-start-2 lg:block")} />
+      <div className={cn(PIXEL_PANEL, "hidden h-[620px] p-4 lg:col-start-2 lg:row-start-2 lg:block")}>
+        <h2 className={cn("text-2xl", PIXEL_HEADING)}>Your Order</h2>
+      </div>
     </div>
   );
+}
+
+interface PackOpening {
+  eventId: string;
+  previousId: string | null;
+  openedAt: number;
+}
+
+function gridOrderFor(pack: WheelPack, revealed: boolean, revealLayout: RevealLayout): number[] {
+  if (revealed && revealLayout === "real-order") {
+    return [...pack.order.map((pick) => pick.card), ...pack.wheel];
+  }
+  return pack.pack;
+}
+
+function usePackArtResolved(pack: WheelPack | undefined): boolean {
+  const cardImages = useCardImageMapContext();
+  if (!pack) {
+    return false;
+  }
+  return (
+    cardImages.ready || pack.pack.every((card) => hasCardImage(cardImages, pack.cards[card].n, pack.cards[card].s))
+  );
+}
+
+function usePreloadPackArt(pack: WheelPack | undefined) {
+  const cardImages = useCardImageMapContext();
+  const artResolved = usePackArtResolved(pack);
+  useEffect(() => {
+    if (!pack || !artResolved) {
+      return;
+    }
+    for (const card of pack.pack) {
+      preloadImage(cardImageSources(pack.cards[card].n, pack.cards[card].s, cardImages)[0]);
+    }
+  }, [pack, artResolved, cardImages]);
+}
+
+function preloadImage(src: string | undefined) {
+  if (src) {
+    new Image().src = src;
+  }
 }
 
 function usePackImages(packs: WheelPack[]) {

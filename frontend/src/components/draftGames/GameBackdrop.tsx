@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { cachedImageUrl } from "../../lib/dev-image-cache";
 import { cn } from "../../lib/utils";
 
 export function GameBackdrop({ art, className }: { art: string; className: string }) {
@@ -11,7 +12,7 @@ export function GameBackdrop({ art, className }: { art: string; className: strin
       style={{ top: headerHeight }}
     >
       <img
-        src={art}
+        src={cachedImageUrl(art)}
         alt=""
         className={cn(
           "size-full object-cover blur-[0.5px]",

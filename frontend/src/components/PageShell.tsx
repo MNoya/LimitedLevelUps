@@ -15,6 +15,7 @@ export function PageShell({
   subtitle,
   subtitleShort,
   phoneTitle,
+  titleHref,
   fill = false,
   footer = true,
   sponsorVariant = "gray",
@@ -23,6 +24,7 @@ export function PageShell({
   subtitle?: string;
   subtitleShort?: string;
   phoneTitle?: ReactNode;
+  titleHref?: string;
   fill?: boolean;
   footer?: boolean;
   sponsorVariant?: "color" | "gray";
@@ -37,7 +39,13 @@ export function PageShell({
         fill && "lg:h-screen lg:min-h-0 lg:overflow-hidden",
       )}
     >
-      <AppHeader subtitle={subtitle} subtitleShort={subtitleShort} phoneTitle={phoneTitle} fill={fill} />
+      <AppHeader
+        subtitle={subtitle}
+        subtitleShort={subtitleShort}
+        phoneTitle={phoneTitle}
+        titleHref={titleHref}
+        fill={fill}
+      />
       <main className={cn("flex-1", fill ? "lg:min-h-0 lg:overflow-hidden" : "flex flex-col")}>{children}</main>
       {footer && <SiteFooter sponsorVariant={sponsorVariant} />}
     </div>

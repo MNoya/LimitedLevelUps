@@ -8,9 +8,8 @@ import { orderedDeckColors } from "./utils";
 import type { PodEventParticipantRow, PodEventSummary } from "../types/leaderboard";
 
 export const TROPHY_MAGE_TITLE = "Trophy Mage";
-export const TROPHY_FREE_PLAY_LABEL = "Free Play";
 export const TROPHY_DAILY_ROUNDS = 3;
-export const TROPHY_POINTS = 1;
+export const TROPHY_POINTS = 2;
 export const RECORD_POINTS = 1;
 export const TROPHY_RECORD = "3-0";
 export const OTHER_RECORDS = ["2-1", "1-2", "0-3"] as const;
@@ -70,6 +69,13 @@ export function scoreTrophyRound(round: TrophyMageRound, calls: TrophyCalls): Tr
   return { points, max, crowned, recordsRight };
 }
 
+export function callFor(calls: TrophyCalls, deck: TrophyMageDeck): TrophyRecord | null {
+  if (calls.crown === deck.key) {
+    return TROPHY_RECORD;
+  }
+  return calls.records[deck.key] ?? null;
+}
+
 export function trophyMark(score: TrophyScore): RoundMark {
   if (score.crowned) {
     return "hit";
@@ -125,9 +131,21 @@ export function useFreePlayTrophyRounds(
 function dailySlots(events: PodEventSummary[], dayKey: string, seed: number): PodEventSummary[][] {
   const settled = events.filter((event) => event.eventDate < dayKey);
   const shuffled = seededShuffle(settled, seed);
+  const bySet = new Map<string, PodEventSummary[]>();
+  for (const event of shuffled) {
+    const pods = bySet.get(event.setCode) ?? [];
+    pods.push(event);
+    bySet.set(event.setCode, pods);
+  }
+  const setPods = [...bySet.values()];
   const slots: PodEventSummary[][] = [];
+  if (setPods.length === 0) {
+    return slots;
+  }
   for (let slot = 0; slot < TROPHY_DAILY_ROUNDS; slot++) {
-    slots.push(shuffled.slice(slot * CANDIDATES_PER_ROUND, (slot + 1) * CANDIDATES_PER_ROUND));
+    const pods = setPods[slot % setPods.length];
+    const start = Math.floor(slot / setPods.length) * CANDIDATES_PER_ROUND;
+    slots.push(pods.slice(start, start + CANDIDATES_PER_ROUND));
   }
   return slots;
 }

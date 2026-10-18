@@ -1,5 +1,9 @@
 import {
+  createContext,
+  useContext,
   useEffect,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -14,7 +18,7 @@ import { Trophy } from "../../Brand";
 import { Pips } from "../../ManaPips";
 import { CardImage } from "../../pod/review/ReviewCard";
 import { cn } from "../../../lib/utils";
-import { ordinal, ordinalSuffix, type WheelPack } from "../../../data/draftGames";
+import { FIRST_PICK_POINTS, ordinal, ordinalSuffix, type WheelPack } from "../../../data/draftGames";
 import type { ArtifactCard } from "../../../types/leaderboard";
 import { pickRevealDelay, wheelRevealDelay } from "./motion";
 
@@ -29,9 +33,11 @@ const CARD_ASPECT = 488 / 680;
 
 interface PackFit {
   columns: number;
-  width: number;
+  width: number | null;
 }
 const LONG_PRESS_MS = 450;
+const WAVE_STEP_MS = 40;
+const PackShapeContext = createContext({ columns: 5, cardCount: 0, waveSteps: [] as number[] });
 const DRAG_THRESHOLD_PX = 6;
 
 export function PackGrid({
@@ -49,35 +55,67 @@ export function PackGrid({
 }) {
   const ownRef = useRef<HTMLDivElement>(null);
   const ref = gridRef ?? ownRef;
-  const fit = usePackFit(ref, cardCount);
+  const { columns, width } = usePackFit(ref, cardCount);
+  const shape = useMemo(
+    () => ({ columns, cardCount, waveSteps: snakeWaveSteps(columns, cardCount) }),
+    [columns, cardCount],
+  );
   return (
-    <div
-      ref={ref}
-      onClick={onClick}
-      className={cn(
-        "grid grid-cols-3 gap-2 sm:grid-cols-5 lg:col-start-1 lg:row-span-2 lg:row-start-1",
-        "relative [perspective:1200px] lg:self-start",
-        PACK_GRID_WIDTH,
-        className,
-      )}
-      style={fit ? { gridTemplateColumns: `repeat(${fit.columns}, minmax(0, 1fr))`, width: fit.width } : undefined}
-    >
+    <PackShapeContext.Provider value={shape}>
+      <div
+        ref={ref}
+        onClick={onClick}
+        className={cn(
+          "grid gap-2 lg:col-start-1 lg:row-span-2 lg:row-start-1",
+          "relative [perspective:1200px] lg:self-start",
+          PACK_GRID_WIDTH,
+          className,
+        )}
+        style={{ gridTemplateColumns: `repeat(${columns * 2}, minmax(0, 1fr))`, width: width ?? undefined }}
+      >
+        {children}
+      </div>
+    </PackShapeContext.Provider>
+  );
+}
+
+export function PackSlot({ index, flipKey, children }: { index: number; flipKey?: string; children: ReactNode }) {
+  const { columns, cardCount } = useContext(PackShapeContext);
+  const lastRowStart = Math.floor((cardCount - 1) / columns) * columns;
+  const lastRowLength = cardCount - lastRowStart;
+  const centeredStart = index === lastRowStart ? `${columns - lastRowLength + 1} / span 2` : "span 2";
+  return (
+    <div data-flip={flipKey} style={{ gridColumn: centeredStart }}>
       {children}
     </div>
+  );
+}
+
+export function PulseCard({ index }: { index?: number }) {
+  const delayMs = useWaveDelay(index ?? 0);
+  return (
+    <span
+      className={cn("block", index != null && "animate-fadeIn")}
+      style={index != null ? { animationDelay: `${delayMs}ms` } : undefined}
+    >
+      <span className={cn("block aspect-[488/680] animate-pulse bg-surface2", CARD_RADIUS)} />
+    </span>
   );
 }
 
 export function PickingCard({
   card,
   pickNumber,
-  dealIndex,
+  dealDelayMs,
+  opening,
   onToggle,
   onDragOut,
   onZoom,
 }: {
   card: ArtifactCard;
   pickNumber: number | null;
-  dealIndex: number;
+  dealDelayMs?: number;
+  opening?: CardOpening;
   onToggle: () => void;
   onDragOut: (event: ReactPointerEvent) => void;
   onZoom: () => void;
@@ -85,7 +123,10 @@ export function PickingCard({
   const gesture = useCardGesture({ onTap: onToggle, onDragOut, onZoom });
   const picked = pickNumber != null;
   return (
-    <div className="animate-cardDeal" style={{ animationDelay: `${700 + dealIndex * 40}ms` }}>
+    <div
+      className={cn(dealDelayMs != null && "animate-cardDeal")}
+      style={dealDelayMs != null ? { animationDelay: `${dealDelayMs}ms` } : undefined}
+    >
       <button
         type="button"
         aria-pressed={picked}
@@ -101,7 +142,7 @@ export function PickingCard({
           picked ? "shadow-[0_0_0_3px_#f6c95e,5px_6px_0_3px_#05070a]" : "hover:shadow-[0_12px_28px_rgba(0,0,0,0.6)]",
         )}
       >
-        <CardImage card={card} className={CARD_RADIUS} />
+        {opening ? <CrossfadeImage card={card} opening={opening} /> : <CardImage card={card} className={CARD_RADIUS} />}
         {picked && (
           <ChipRow>
             <ChipFrame key={pickNumber} className="animate-stamp">
@@ -118,17 +159,18 @@ export type RevealLayout = "in-place" | "real-order";
 export type RevealOutcome = "first" | "right" | "missed" | "neutral";
 
 const CALL_CHIP = "flex items-center whitespace-nowrap px-[0.35em] pt-[0.18em] pb-[0.12em] font-display leading-none";
+const BADGE_LAG_MS = 320;
 const CALL_GOLD = "bg-[#f6c95e] text-[#1a120b]";
 const RESULT_RING: Record<RevealOutcome, string> = {
   first: "shadow-[0_0_0_1px_#2ee85c,2px_2px_0_1px_#05070a]",
   right: "shadow-[0_0_0_1px_#2ee85c,2px_2px_0_1px_#05070a]",
   missed: "shadow-[0_0_0_1px_#ef4444,2px_2px_0_1px_#05070a]",
-  neutral: "shadow-[0_0_0_1px_#f6c95e,2px_2px_0_1px_#05070a]",
+  neutral: "shadow-[0_0_0_1px_#5b6b85,2px_2px_0_1px_#05070a]",
 };
 const CALL_FILL: Record<RevealOutcome, string> = {
   first: "bg-green text-[#0b1a10]",
   right: "bg-green text-[#0b1a10]",
-  missed: "bg-red text-[#1a0b0b]",
+  missed: "bg-[#2b3445] text-[#ff7a7a]",
   neutral: "bg-[#2b3445] text-text",
 };
 
@@ -156,35 +198,42 @@ export function RevealCard({
   const delay = pick ? pickRevealDelay(realIndex, animate) : wheelRevealDelay(pack.order.length, animate);
   const delayStyle = { animationDelay: `${delay}ms` };
   return (
-    <div
-      className={cn(
-        "relative [container-type:inline-size]",
-        CARD_RADIUS,
-        outcome === "first" && "animate-scoredGlow shadow-[0_0_0_4px_#f6c95e,0_0_28px_6px_rgba(246,201,94,0.6)]",
-        outcome === "missed" && "animate-missShake",
-      )}
-      style={delayStyle}
-    >
-      <CardImage card={pack.cards[card]} className={CARD_RADIUS} />
-      <CallChip yourIndex={yourIndex} realIndex={realIndex} outcome={outcome} style={delayStyle} />
-      {showDrafter && pick && (
-        <span className="absolute inset-x-[5%] bottom-[4%] flex justify-center animate-fadeUpIn" style={delayStyle}>
+    <div>
+      <div
+        className={cn(
+          "relative [container-type:inline-size]",
+          CARD_RADIUS,
+          animate && outcome === "missed" && "animate-missShake",
+        )}
+        style={delayStyle}
+      >
+        <CardImage card={pack.cards[card]} className={CARD_RADIUS} />
+        {animate && (
           <span
-            className={cn(
-              "flex max-w-full items-center gap-1.5 border-2 border-[#1a120b] bg-[#16110c] px-2 py-1",
-              "text-[13px] font-semibold shadow-[3px_3px_0_#05070a]",
-            )}
-          >
-            {pick.deckColors && <Pips colors={pick.deckColors} size={13} />}
-            <span className="truncate">{pick.drafter}</span>
-            {pick.trophy && (
-              <span title="Won the Pod" className="shrink-0">
-                <Trophy size={13} color="#ffc63a" />
-              </span>
-            )}
+            className={cn("pointer-events-none absolute inset-0 bg-black animate-revealSpotlight", CARD_RADIUS)}
+            style={delayStyle}
+          />
+        )}
+        <CallChip yourIndex={yourIndex} realIndex={realIndex} outcome={outcome} style={delayStyle} still={!animate} />
+        {showDrafter && pick && (
+          <span className="absolute inset-x-[5%] bottom-[4%] flex justify-center animate-fadeUpIn" style={delayStyle}>
+            <span
+              className={cn(
+                "flex max-w-full items-center gap-1.5 border-2 border-[#1a120b] bg-[#16110c] px-2 py-1",
+                "text-[13px] font-semibold shadow-[3px_3px_0_#05070a]",
+              )}
+            >
+              {pick.deckColors && <Pips colors={pick.deckColors} size={13} />}
+              <span className="truncate">{pick.drafter}</span>
+              {pick.trophy && (
+                <span title="Won the Pod" className="shrink-0">
+                  <Trophy size={13} color="#ffc63a" />
+                </span>
+              )}
+            </span>
           </span>
-        </span>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -216,7 +265,9 @@ export function QuickRevealCard({
       ) : (
         <ChipRow>
           <ChipFrame className={cn("animate-stamp", RESULT_RING[wheeled ? "right" : "neutral"])}>
-            <span className={cn(CALL_CHIP, unguessedFill)}>{wheeled ? "Wheeled" : pickLabel(realIndex)}</span>
+            <span className={cn(CALL_CHIP, unguessedFill)}>
+              {wheeled ? <WordLabel>Wheeled</WordLabel> : pickLabel(realIndex)}
+            </span>
           </ChipFrame>
         </ChipRow>
       )}
@@ -224,7 +275,13 @@ export function QuickRevealCard({
   );
 }
 
-function CallChip(props: { yourIndex: number; realIndex: number; outcome: RevealOutcome; style: CSSProperties }) {
+function CallChip(props: {
+  yourIndex: number;
+  realIndex: number;
+  outcome: RevealOutcome;
+  style: CSSProperties;
+  still?: boolean;
+}) {
   return (
     <ChipRow>
       <CallChipFace {...props} />
@@ -248,40 +305,62 @@ export function CallChipFace({
   const right = outcome === "first" || outcome === "right";
   const called = yourIndex >= 0;
   const motion = (className: string) => (still ? undefined : className);
+  const badgeDelay = style?.animationDelay ? `calc(${style.animationDelay} + ${BADGE_LAG_MS}ms)` : `${BADGE_LAG_MS}ms`;
   return (
-    <ChipFrame
-      className={cn(RESULT_RING[outcome], motion(called ? "animate-chipRingFromGold" : "animate-stamp"))}
-      style={style}
-    >
-      <span
-        className={cn(
-          CALL_CHIP,
-          "gap-[0.18em]",
-          right ? CALL_FILL.right : CALL_GOLD,
-          called && right && motion("animate-chipFillFromGold"),
-        )}
+    <span className="relative flex">
+      <ChipFrame
+        className={cn(RESULT_RING[outcome], motion(called ? "animate-chipRingFromGold" : "animate-stamp"))}
         style={style}
       >
-        {called ? pickLabel(yourIndex) : "Wheel"}
-        {right && (
-          <Check className={cn("-mt-[0.1em] size-[0.9em]", motion("animate-stamp"))} strokeWidth={4} style={style} />
-        )}
-      </span>
-      {!right && (
-        <span className={cn("flex items-stretch overflow-hidden", motion("animate-chipExtend"))} style={style}>
-          <span className="grid place-items-center bg-[#1a120b] px-[0.12em] text-[#f6c95e]">
-            <ArrowRight className="size-[0.8em]" strokeWidth={3} />
+        <span
+          className={cn(
+            CALL_CHIP,
+            "gap-[0.18em]",
+            right ? CALL_FILL.right : CALL_FILL.neutral,
+            called && motion("animate-chipFillFromGold"),
+          )}
+          style={style}
+        >
+          {called ? pickLabel(yourIndex) : <WordLabel>Wheel</WordLabel>}
+          {right && (
+            <Check className={cn("-mt-[0.1em] size-[0.9em]", motion("animate-stamp"))} strokeWidth={4} style={style} />
+          )}
+        </span>
+        {!right && (
+          <span className={cn("flex items-stretch overflow-hidden", motion("animate-chipExtend"))} style={style}>
+            <span className="grid place-items-center bg-[#1a120b] px-[0.12em] text-[#f6c95e]">
+              <ArrowRight className="size-[0.8em]" strokeWidth={3} />
+            </span>
+            <span className={cn(CALL_CHIP, CALL_FILL[outcome])}>
+              {realIndex < 0 ? <WordLabel>Wheeled</WordLabel> : pickLabel(realIndex)}
+            </span>
           </span>
-          <span className={cn(CALL_CHIP, CALL_FILL[outcome])}>{realIndex < 0 ? "Wheeled" : pickLabel(realIndex)}</span>
+        )}
+      </ChipFrame>
+      {outcome === "first" && (
+        <span
+          className={cn(
+            "absolute -top-[1em] -right-[0.75em] border-2 border-[#1a120b] bg-[#f6c95e] px-[0.28em] pt-[0.12em]",
+            "font-display text-[0.82em] leading-none text-[#1a120b] shadow-[2px_2px_0_#05070a]",
+            !still && "animate-badgePop",
+          )}
+          style={still ? undefined : { animationDelay: badgeDelay }}
+        >
+          +{FIRST_PICK_POINTS}
         </span>
       )}
-    </ChipFrame>
+    </span>
   );
 }
 
 function ChipRow({ children }: { children: ReactNode }) {
   return (
-    <span className="pointer-events-none absolute inset-x-[4%] bottom-[45.5%] flex justify-center text-[8.5cqw]">
+    <span
+      className={cn(
+        "pointer-events-none absolute inset-x-[4%] bottom-[45.5%] flex justify-center",
+        "text-[max(12px,8.5cqw)]",
+      )}
+    >
       {children}
     </span>
   );
@@ -300,6 +379,10 @@ function ChipFrame({ className, style, children }: { className?: string; style?:
       {children}
     </span>
   );
+}
+
+function WordLabel({ children }: { children: ReactNode }) {
+  return <span className="relative left-[0.07em]">{children}</span>;
 }
 
 function pickLabel(index: number): ReactNode {
@@ -327,11 +410,11 @@ export function ResultChip({
   className?: string;
   style?: CSSProperties;
 }) {
-  const fill = outcome === "missed" ? CALL_FILL.neutral : CALL_FILL[outcome];
+  const fill = CALL_FILL[outcome];
   return (
     <span className={cn("flex border-2 border-[#1a120b]", RESULT_RING[outcome], className)} style={style}>
       <span className={cn("flex-1 px-1 pt-1 pb-0.5 text-center font-display leading-none", fill)}>
-        {yourIndex >= 0 ? ordinal(yourIndex + 1) : "Wheel"}
+        {yourIndex >= 0 ? ordinal(yourIndex + 1) : <WordLabel>Wheel</WordLabel>}
       </span>
     </span>
   );
@@ -354,22 +437,77 @@ export function revealOutcome(realIndex: number, yourIndex: number): RevealOutco
   return "neutral";
 }
 
-function usePackFit(ref: RefObject<HTMLDivElement>, cardCount: number): PackFit | null {
-  const [fit, setFit] = useState<PackFit | null>(null);
-  useEffect(() => {
+export interface CardOpening {
+  index: number;
+  openedAt: number;
+  underlay: ArtifactCard | "skeleton" | "empty";
+}
+
+function CrossfadeImage({ card, opening }: { card: ArtifactCard; opening: CardOpening }) {
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
+  const revealAt = opening.openedAt + useWaveDelay(opening.index);
+  const waitMs = loadedAt == null ? 0 : Math.max(0, revealAt - loadedAt);
+  return (
+    <div className="relative">
+      <OpeningUnderlay underlay={opening.underlay} />
+      <div
+        className={cn("absolute inset-0 transition-opacity duration-300 ease-out", loadedAt == null && "opacity-0")}
+        style={{ transitionDelay: `${waitMs}ms` }}
+      >
+        <CardImage card={card} className={CARD_RADIUS} onLoad={() => setLoadedAt(performance.now())} />
+      </div>
+    </div>
+  );
+}
+
+function OpeningUnderlay({ underlay }: { underlay: CardOpening["underlay"] }) {
+  if (underlay === "skeleton") {
+    return <PulseCard />;
+  }
+  if (underlay === "empty") {
+    return <span className="block aspect-[488/680]" />;
+  }
+  return <CardImage card={underlay} className={CARD_RADIUS} />;
+}
+
+function useWaveDelay(index: number): number {
+  const { waveSteps } = useContext(PackShapeContext);
+  return (waveSteps[index] ?? index) * WAVE_STEP_MS;
+}
+
+function snakeWaveSteps(columns: number, cardCount: number): number[] {
+  const steps: number[] = [];
+  for (let index = 0; index < cardCount; index++) {
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    const rowLength = Math.min(columns, cardCount - row * columns);
+    const stepInRow = row % 2 === 0 ? column : rowLength - 1 - column;
+    steps.push(row * columns + stepInRow);
+  }
+  return steps;
+}
+
+function smallScreenColumns(): number {
+  return window.matchMedia("(min-width: 640px)").matches ? 5 : 3;
+}
+
+function usePackFit(ref: RefObject<HTMLDivElement>, cardCount: number): PackFit {
+  const [fit, setFit] = useState<PackFit>(() => ({ columns: smallScreenColumns(), width: null }));
+  useLayoutEffect(() => {
     const layout = ref.current?.parentElement;
     if (!layout) {
       return;
     }
     const measure = () => {
       if (window.innerWidth < 1024) {
-        setFit(null);
+        setFit({ columns: smallScreenColumns(), width: null });
         return;
       }
       const width = layout.clientWidth - SIDEBAR_MIN_PX - LAYOUT_GAP_PX;
       const height = window.innerHeight - CHROME_HEIGHT_PX;
       setFit(bestPackFit(cardCount, width, height));
     };
+    measure();
     const observer = new ResizeObserver(measure);
     observer.observe(layout);
     window.addEventListener("resize", measure);
@@ -395,15 +533,6 @@ function bestPackFit(cardCount: number, width: number, height: number): PackFit 
     }
   }
   return best;
-}
-
-export function SkeletonCard({ index }: { index: number }) {
-  return (
-    <div
-      className={cn("aspect-[488/680] animate-pulse bg-surface2", CARD_RADIUS)}
-      style={{ animationDelay: `${index * 60}ms` }}
-    />
-  );
 }
 
 export function CardZoom({ card, onClose }: { card: ArtifactCard | null; onClose: () => void }) {

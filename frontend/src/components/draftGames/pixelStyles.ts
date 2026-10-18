@@ -16,7 +16,7 @@ export const ACCENT_BUTTON = cn(PIXEL_BUTTON, "bg-[image:var(--px-button)] text-
 export const DARK_PIXEL_BUTTON = cn(PIXEL_BUTTON, "bg-[#2b3445] text-text");
 export const WAITING_PIXEL_BUTTON = cn(
   "inline-flex cursor-not-allowed items-center justify-center gap-2 border-[3px] border-[color:var(--px-ink)]",
-  "bg-[color:var(--px-panel)] font-display leading-none text-subtle shadow-[5px_5px_0_#05070a]",
+  "bg-[#3a404c] font-display leading-none text-[#9aa3b4] shadow-[inset_0_-3px_0_#2a2f38,5px_5px_0_#05070a]",
 );
 export const PIXEL_PANEL = cn(
   "border-[3px] border-[color:var(--px-ink)] bg-[color:var(--px-panel-glass)]",
@@ -27,5 +27,9 @@ export const PIXEL_TAG = cn(
   "leading-none text-[color:var(--px-ink)] shadow-[3px_3px_0_#05070a]",
 );
 export const PIXEL_WELL = "border-2 border-[color:var(--px-well-rim)] bg-[color:var(--px-well)]";
+export const PIXEL_TOOLTIP = cn(
+  "rounded-none border-2 border-[#1a120b] bg-[#16110c] px-2.5 py-1.5 font-display text-base leading-none text-text",
+  "shadow-[3px_3px_0_#05070a]",
+);
 export const HARD_TEXT_SHADOW = "[text-shadow:2px_2px_0_#05070a]";
 export const PIXEL_HEADING = cn("font-display leading-none text-[color:var(--px-accent)]", HARD_TEXT_SHADOW);

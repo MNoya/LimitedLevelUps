@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ExternalLink, Play, X } from "lucide-react";
 
+import { cachedImageUrl } from "../../lib/dev-image-cache";
 import { cn } from "../../lib/utils";
 import { SITE_LINKS } from "../../data/site";
 import { useDialogKeys } from "./GameChrome";
@@ -11,9 +12,15 @@ const HELP_STEP_NUMBER = cn(
   "font-display text-xl leading-none text-[color:var(--px-ink)] shadow-[2px_2px_0_#05070a]",
 );
 
+export interface GameHelpAction {
+  label: string;
+  onClick: () => void;
+}
+
 export function GameHelpDialog({
   open,
   onClose,
+  action = { label: "Resume", onClick: onClose },
   title = "How to Play",
   art,
   artPosition,
@@ -25,6 +32,7 @@ export function GameHelpDialog({
 }: {
   open: boolean;
   onClose: () => void;
+  action?: GameHelpAction;
   title?: string;
   art: string;
   artPosition: string;
@@ -56,7 +64,7 @@ export function GameHelpDialog({
         )}
       >
         <img
-          src={art}
+          src={cachedImageUrl(art)}
           alt=""
           aria-hidden
           className="pointer-events-none absolute top-0 right-0 h-56 w-[85%] object-cover opacity-60"
@@ -82,9 +90,9 @@ export function GameHelpDialog({
         </button>
         <div className="relative space-y-5 px-4 pt-5 text-[15px] leading-snug sm:px-6">{children}</div>
         <div className="relative px-4 pt-5 pb-4 sm:px-6">
-          <button onClick={onClose} className={cn(playButton, "w-full py-3 text-2xl")}>
+          <button onClick={action.onClick} className={cn(playButton, "w-full py-3 text-2xl")}>
             <Play size={20} className="fill-current" />
-            Play
+            {action.label}
           </button>
           <p className="mt-3 text-center text-[13px] text-subtle">
             {footnote}{" "}

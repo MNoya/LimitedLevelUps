@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 export function useNoScrollGutter() {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const html = document.documentElement;
     html.style.scrollbarGutter = "auto";
     return () => {
@@ -23,4 +23,10 @@ export function useGuideHash(hash: string): [boolean, () => void, () => void] {
 export function useTouchVerb(): string {
   const [verb] = useState(() => (window.matchMedia("(pointer: coarse)").matches ? "Tap" : "Click"));
   return verb;
+}
+
+export function releaseFocus() {
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
 }

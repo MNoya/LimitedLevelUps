@@ -48,7 +48,7 @@ export function ToolsPage() {
     },
     {
       title: TROPHY_GAME_TITLE,
-      blurb: "Spot the 3-0 deck among four decks from one Pod",
+      blurb: "Can you guess which decks trophied?",
       Icon: Trophy,
       to: "/trophy-mage",
     },

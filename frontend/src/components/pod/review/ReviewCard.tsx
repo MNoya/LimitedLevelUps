@@ -46,7 +46,15 @@ export function useFallbackImage(sources: string[]): { src: string | null; onErr
   return { src: sources[index] ?? null, onError: () => setIndex((i) => i + 1) };
 }
 
-export function CardImage({ card, className }: { card: ArtifactCard; className?: string }) {
+export function CardImage({
+  card,
+  className,
+  onLoad,
+}: {
+  card: ArtifactCard;
+  className?: string;
+  onLoad?: () => void;
+}) {
   const openPreview = useContext(CardPreviewContext);
   const { src, onError } = useFallbackImage(useCardImageSources(card));
   const onContextMenu = openPreview
@@ -65,6 +73,7 @@ export function CardImage({ card, className }: { card: ArtifactCard; className?:
       alt={card.n ?? ""}
       loading="lazy"
       draggable={false}
+      onLoad={onLoad}
       onError={onError}
       onContextMenu={onContextMenu}
       className={cn("block aspect-[488/680] w-full object-cover", className)}

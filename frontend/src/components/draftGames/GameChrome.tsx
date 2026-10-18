@@ -3,7 +3,8 @@ import { Check, Copy } from "lucide-react";
 
 import { copyToClipboard } from "../CopyTextButton";
 import { cn } from "../../lib/utils";
-import type { RoundMark } from "../../data/draftGames";
+import { PIXEL_HEADING } from "./pixelStyles";
+import { msUntilNextGameDay, type RoundMark } from "../../data/draftGames";
 
 export const MARK_EMOJI: Record<RoundMark, string> = { hit: "🟩", close: "🟨", miss: "🟥" };
 const GAME_BUTTON = cn(
@@ -50,6 +51,41 @@ export function ShareButton({
       {copied ? <Check size={18} /> : <Copy size={18} />}
       {copied ? "Copied" : "Copy for Discord"}
     </button>
+  );
+}
+
+export function LoadingLabel({ label, className }: { label: string; className?: string }) {
+  return (
+    <span className={cn(PIXEL_HEADING, className)}>
+      {label}
+      {[0, 1, 2].map((dot) => (
+        <span
+          key={dot}
+          className="inline-block"
+          style={{ animation: "pulse 1.2s ease-in-out infinite", animationDelay: `${dot * 200}ms` }}
+        >
+          .
+        </span>
+      ))}
+    </span>
+  );
+}
+
+export function DailyCountdown({ label, className }: { label: string; className?: string }) {
+  const [remaining, setRemaining] = useState(msUntilNextGameDay);
+  useEffect(() => {
+    const timer = window.setInterval(() => setRemaining(msUntilNextGameDay()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const hours = Math.floor(remaining / 3_600_000);
+  const minutes = Math.floor((remaining % 3_600_000) / 60_000);
+  return (
+    <p className={cn("flex items-baseline gap-2 font-display text-xl leading-none text-subtle", className)}>
+      {label}
+      <span className={cn("text-2xl", PIXEL_HEADING)}>
+        {hours}h {minutes}m
+      </span>
+    </p>
   );
 }
 

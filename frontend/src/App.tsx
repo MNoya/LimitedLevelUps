@@ -31,7 +31,6 @@ import { ToolsPage } from "./pages/ToolsPage";
 import { TrophyMageLabPage } from "./pages/TrophyMageLabPage";
 import { WheelOfFortunePage } from "./pages/WheelOfFortunePage";
 import { WheelQuickPage } from "./pages/WheelQuickPage";
-import { WheelRevealMockupsPage } from "./pages/WheelRevealMockupsPage";
 import { BannerLab } from "./pages/BannerLab";
 import { preloadGuildLogos } from "./data/guild-art";
 
@@ -106,10 +105,10 @@ export function App() {
         <Route path="/tools/craft/:setCode" element={<CraftToolPage />} />
         <Route path="/wheel-of-fortune" element={<WheelOfFortunePage />} />
         <Route path="/wheel-of-fortune/quick" element={<WheelQuickPage />} />
-        <Route path="/wheel-of-fortune/:play" element={<WheelOfFortunePage />} />
-        {import.meta.env.DEV && <Route path="/wheel-of-fortune/mockups" element={<WheelRevealMockupsPage />} />}
+        <Route path="/wheel-of-fortune/:play/:packNumber?" element={<WheelOfFortunePage />} />
         <Route path="/tools/trophy-mage" element={<Navigate to="/trophy-mage" replace />} />
         <Route path="/trophy-mage" element={<TrophyMageLabPage />} />
+        <Route path="/trophy-mage/:play" element={<TrophyMageLabPage />} />
 
         <Route path="/banner" element={<BannerLab />} />
 

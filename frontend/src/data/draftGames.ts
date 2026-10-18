@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 
 import { fetchPodDraftArtifact, fetchPodEventParticipants } from "./api";
@@ -7,9 +7,20 @@ import { useAllPodEvents, usePodSetCodes, useSets } from "./hooks";
 import { orderedDeckColors } from "./utils";
 import type { ArtifactCard, PodDraftArtifact, PodEventParticipantRow, PodEventSummary } from "../types/leaderboard";
 
-export const DAILY_ROUNDS = 5;
+export const DAILY_ROUNDS = 3;
 export const CUBE_SET_CODE = "PEASANT";
+export const ALL_SETS_CODE = "ALL";
 const MIN_SET_PODS = 10;
+const GAME_DAY_START_HOUR = 10;
+const GAME_DAY_CLOCK = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  hourCycle: "h23",
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  minute: "numeric",
+});
 export const WHEEL_CARD_POINTS = 1;
 export const FIRST_PICK_POINTS = 3;
 export const WHEEL_GAME_TITLE = "Wheel of Fortune";
@@ -56,8 +67,10 @@ export interface WheelScore {
   mark: RoundMark;
 }
 
-export function utcDayKey(now: Date = new Date()): string {
-  return now.toISOString().slice(0, 10);
+export function gameDayKey(now: Date = new Date()): string {
+  const clock = zonedClock(now);
+  const startedToday = clock.hour >= GAME_DAY_START_HOUR;
+  return new Date(Date.UTC(clock.year, clock.month - 1, clock.day - (startedToday ? 0 : 1))).toISOString().slice(0, 10);
 }
 
 export function dayNumber(dayKey: string): number {
@@ -65,9 +78,34 @@ export function dayNumber(dayKey: string): number {
   return Math.round((Date.parse(`${dayKey}T00:00:00Z`) - firstDay) / 86_400_000) + 1;
 }
 
-export function msUntilNextDay(now: Date = new Date()): number {
-  const tomorrow = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
-  return tomorrow - now.getTime();
+export function msUntilNextGameDay(now: Date = new Date()): number {
+  const clock = zonedClock(now);
+  const startedToday = clock.hour >= GAME_DAY_START_HOUR;
+  const nextStartOnClock = Date.UTC(
+    clock.year,
+    clock.month - 1,
+    clock.day + (startedToday ? 1 : 0),
+    GAME_DAY_START_HOUR,
+  );
+  const roughStart = nextStartOnClock - zoneOffsetMs(now);
+  const nextStart = nextStartOnClock - zoneOffsetMs(new Date(roughStart));
+  return nextStart - now.getTime();
+}
+
+function zonedClock(now: Date) {
+  const parts: Record<string, number> = {};
+  for (const part of GAME_DAY_CLOCK.formatToParts(now)) {
+    if (part.type !== "literal") {
+      parts[part.type] = Number(part.value);
+    }
+  }
+  return { year: parts.year, month: parts.month, day: parts.day, hour: parts.hour, minute: parts.minute };
+}
+
+function zoneOffsetMs(at: Date): number {
+  const clock = zonedClock(at);
+  const onClock = Date.UTC(clock.year, clock.month - 1, clock.day, clock.hour, clock.minute);
+  return onClock - Math.floor(at.getTime() / 60_000) * 60_000;
 }
 
 export function seededShuffle<T>(list: T[], seed: number): T[] {
@@ -163,7 +201,8 @@ export function useFeaturedPacks(dayKey: string): { packs: WheelPack[]; isPendin
   const { events, sets, isPending: setsPending } = useWheelSets();
   const seed = dayNumber(dayKey) * 7919;
   const slots = useMemo(() => featuredSlots(events, sets, dayKey, seed), [events, sets, dayKey, seed]);
-  const slotPacks = usePackSlots(slots, seed);
+  const seedForSlot = useCallback((_event: PodEventSummary, slotIndex: number) => seed + slotIndex, [seed]);
+  const slotPacks = usePackSlots(slots, seedForSlot);
   const loaded = slotPacks.every((pack) => pack !== undefined);
   const packs = useMemo(() => slotPacks.filter((pack): pack is WheelPack => pack != null), [slotPacks]);
   return { packs, isPending: setsPending || !loaded };
@@ -173,19 +212,25 @@ export function useFreePlayPacks(
   setCode: string,
   wanted: number,
   seed: number,
-): { packs: WheelPack[]; isPending: boolean; exhausted: boolean } {
-  const { events, isPending: setsPending } = useWheelSets();
-  const shuffled = useMemo(
-    () =>
-      seededShuffle(
-        events.filter((event) => event.setCode === setCode),
-        seed,
-      ),
-    [events, setCode, seed],
-  );
+  startNumber: number | null = null,
+): { packs: WheelPack[]; isPending: boolean; exhausted: boolean; packNumbers: Map<string, number> } {
+  const { events, sets, isPending: setsPending } = useWheelSets();
+  const packNumbers = useMemo(() => numberPacksBySet(events), [events]);
+  const shuffled = useMemo(() => {
+    const playable = new Set(sets.map((set) => set.code));
+    const inPool = (event: PodEventSummary) =>
+      setCode === ALL_SETS_CODE ? playable.has(event.setCode) : event.setCode === setCode;
+    const pool = events.filter(inPool);
+    const start = pool.find((event) => packNumbers.get(event.eventId) === startNumber);
+    const rest = seededShuffle(
+      pool.filter((event) => event !== start),
+      seed,
+    );
+    return start ? [start, ...rest] : rest;
+  }, [events, sets, setCode, seed, startNumber, packNumbers]);
   const lookahead = 4;
   const slots = useMemo(() => shuffled.slice(0, wanted + lookahead).map((event) => [event]), [shuffled, wanted]);
-  const slotPacks = usePackSlots(slots, seed);
+  const slotPacks = usePackSlots(slots, podSeed);
   const packs: WheelPack[] = [];
   let resolved = true;
   for (const pack of slotPacks) {
@@ -200,10 +245,35 @@ export function useFreePlayPacks(
   const isPending = setsPending || (!resolved && packs.length < wanted);
   const consumedAll = slots.length === shuffled.length;
   const exhausted = !setsPending && resolved && consumedAll && packs.length < wanted;
-  return { packs, isPending, exhausted };
+  return { packs, isPending, exhausted, packNumbers };
 }
 
-function usePackSlots(slots: PodEventSummary[][], seed: number): (WheelPack | null | undefined)[] {
+function numberPacksBySet(events: PodEventSummary[]): Map<string, number> {
+  const oldestFirst = [...events].sort(
+    (a, b) => a.eventDate.localeCompare(b.eventDate) || a.eventId.localeCompare(b.eventId),
+  );
+  const countBySet = new Map<string, number>();
+  const numbers = new Map<string, number>();
+  for (const event of oldestFirst) {
+    const number = (countBySet.get(event.setCode) ?? 0) + 1;
+    countBySet.set(event.setCode, number);
+    numbers.set(event.eventId, number);
+  }
+  return numbers;
+}
+
+function podSeed(event: PodEventSummary): number {
+  let hash = 0;
+  for (const char of event.eventId) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+  return hash;
+}
+
+function usePackSlots(
+  slots: PodEventSummary[][],
+  seedFor: (event: PodEventSummary, slotIndex: number) => number,
+): (WheelPack | null | undefined)[] {
   const flat = useMemo(() => slots.flat(), [slots]);
   const artifacts = useQueries({
     queries: flat.map((event) => ({
@@ -226,14 +296,14 @@ function usePackSlots(slots: PodEventSummary[][], seed: number): (WheelPack | nu
           break;
         }
         if (artifact && picksPerTurn(artifact) === 1) {
-          result = buildWheelPack(candidates[k], artifact, people ?? [], seed + slotIndex);
+          result = buildWheelPack(candidates[k], artifact, people ?? [], seedFor(candidates[k], slotIndex));
           break;
         }
       }
       offset += candidates.length;
       return result;
     });
-  }, [slots, artifacts, participants, seed]);
+  }, [slots, artifacts, participants, seedFor]);
 }
 
 function featuredSlots(
@@ -253,8 +323,9 @@ function featuredSlots(
     eligible.map((set) => set.code).filter((code) => code !== latestSet && code !== CUBE_SET_CODE),
     seed,
   );
+  const flashbackSet = others[0];
   const order: string[] = [];
-  for (const code of [latestSet, latestSet, CUBE_SET_CODE, CUBE_SET_CODE, CUBE_SET_CODE]) {
+  for (const code of [latestSet, CUBE_SET_CODE, flashbackSet]) {
     order.push(isEligible(code) ? code : (others[order.length % Math.max(others.length, 1)] ?? eligible[0].code));
   }
   const slots: PodEventSummary[][] = [];
@@ -340,7 +411,7 @@ function buildWheelPack(
   const opener = seed % seats;
   const views = reconstructDraft(artifact);
   const first = views[opener][0][0].booster;
-  let remaining = [...first];
+  const remaining = [...first];
   const order: WheelPick[] = [];
   for (let turn = 0; turn < seats; turn++) {
     for (let seat = 0; seat < seats; seat++) {
@@ -359,21 +430,44 @@ function buildWheelPack(
           trophy: isTrophyRecord(participant?.record ?? null),
           madeDeck: artifact.decks ? artifact.decks[seat].main.includes(card) : null,
         });
-        remaining = remaining.filter((c) => c !== card);
+        remaining.splice(remaining.indexOf(card), 1);
         break;
       }
     }
   }
+  const copies = separateCopies(first, artifact.cards);
   return {
     eventId: event.eventId,
     eventSlug: event.slug,
     setCode: event.setCode,
-    cards: artifact.cards,
-    pack: event.setCode === CUBE_SET_CODE ? first : byRarity(first, artifact.cards),
-    order,
-    wheel: remaining,
+    cards: copies.cards,
+    pack: event.setCode === CUBE_SET_CODE ? copies.pack : byRarity(copies.pack, copies.cards),
+    order: order.map((pick) => ({ ...pick, card: copies.claim(pick.card) })),
+    wheel: remaining.map(copies.claim),
     seats,
   };
+}
+
+function separateCopies(booster: number[], cards: ArtifactCard[]) {
+  const ownCards = [...cards];
+  const copiesOf = new Map<number, number[]>();
+  const pack = booster.map((card) => {
+    const copies = copiesOf.get(card);
+    if (!copies) {
+      copiesOf.set(card, [card]);
+      return card;
+    }
+    copies.push(ownCards.length);
+    ownCards.push(cards[card]);
+    return copies[copies.length - 1];
+  });
+  const claimed = new Map<number, number>();
+  const claim = (card: number) => {
+    const next = claimed.get(card) ?? 0;
+    claimed.set(card, next + 1);
+    return copiesOf.get(card)?.[next] ?? card;
+  };
+  return { cards: ownCards, pack, claim };
 }
 
 function byRarity(cards: number[], table: ArtifactCard[]): number[] {
