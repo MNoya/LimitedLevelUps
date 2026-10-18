@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "include": ["/*"],
+  "exclude": [
+    "/assets/*",
+    "/card-stats/*",
+    "/fantasy/*",
+    "/fonts/*",
+    "/guilds/*",
+    "/platforms/*",
+    "/rank/*",
+    "/set-symbols/*",
+    "/sponsors/*",
+    "/tier-fixtures/*",
+    "/wildcards/*",
+    "/alchemy.png",
+    "/apple-touch-icon.png",
+    "/arenachamp.png",
+    "/favicon-16.png",
+    "/favicon-32.png",
+    "/favicon.ico",
+    "/icon-192.png",
+    "/icon-512.png",
+    "/llu-bot-avatar-transparent.png",
+    "/llu-bot.png",
+    "/llu-logo-transparent-v2.png",
+    "/llu-logo.png",
+    "/llu-logo.svg",
+    "/robots.txt",
+    "/site.webmanifest"
+  ]
+}
