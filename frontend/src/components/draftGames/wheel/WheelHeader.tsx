@@ -95,7 +95,11 @@ export function WheelHeader({
       <div className="flex items-start gap-3">
         {setCode ? <SetTile code={setCode} /> : <WheelEmoji spinToken={null} scale={1.6} />}
         <div className="flex min-h-11 min-w-0 flex-col justify-center">
-          <div className={cn("truncate font-display text-2xl leading-none text-text", HARD_TEXT_SHADOW)}>{title}</div>
+          <div
+            className={cn("truncate font-display text-2xl leading-none text-text max-2xl:text-xl", HARD_TEXT_SHADOW)}
+          >
+            {title}
+          </div>
           {(subtitle ?? dayLabel) && <div className={cn("mt-1 text-base", PIXEL_HEADING)}>{subtitle ?? dayLabel}</div>}
         </div>
         {center && <div className="flex h-11 items-center">{center}</div>}
@@ -153,7 +157,7 @@ function ToolButtons({ tools, small = false }: { tools: WheelHeaderTools; small?
         </IconButton>
       )}
       {tools.onReset && (
-        <IconButton label="Reset" onClick={tools.onReset} className={size}>
+        <IconButton label="Replay Today" onClick={tools.onReset} className={size}>
           <RotateCcw size={iconSize - 1} strokeWidth={3} />
         </IconButton>
       )}

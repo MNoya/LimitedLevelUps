@@ -286,7 +286,12 @@ function PickerIntro({ data }: { data: IntroData }) {
           );
         })}
       </div>
-      <div className="mt-10 flex flex-col items-center gap-7 max-sm:hidden [@media(max-height:760px)]:sm:mt-3 [@media(max-height:760px)]:sm:gap-4">
+      <div
+        className={cn(
+          "mt-10 flex flex-col items-center gap-7 max-sm:hidden",
+          "[@media(max-height:760px)]:sm:mt-6 [@media(max-height:760px)]:sm:gap-4",
+        )}
+      >
         <div className="relative">
           {isToday && data.todayDone && <ResultsButton onClick={data.onTodayResults} />}
           <button
@@ -429,7 +434,7 @@ function TodayHeading({ dayLabel, title = "Today's Packs" }: { dayLabel: string;
 
 function SlideLabel({ slide, center, day }: { slide: string; center: boolean; day: DaySlide | null }) {
   if (!day) {
-    return setShortLabel(slide);
+    return homeSetLabel(slide);
   }
   if (!center) {
     return day.name;
@@ -442,11 +447,15 @@ function SlideLabel({ slide, center, day }: { slide: string; center: boolean; da
           className="shrink-0 px-1 text-center whitespace-nowrap"
           style={{ minWidth: `calc(var(--u) * var(--fan-step, ${FAN_STEP}))` }}
         >
-          {code === CUBE_SET_CODE ? "CUBE" : setShortLabel(code)}
+          {homeSetLabel(code)}
         </span>
       ))}
     </span>
   );
+}
+
+function homeSetLabel(code: string): string {
+  return code === CUBE_SET_CODE ? "CUBE" : setShortLabel(code);
 }
 
 function TodayFan({ sets, lift }: { sets: string[]; lift: boolean }) {
@@ -497,14 +506,17 @@ function FreePlayRow({ data, title, className }: { data: IntroData; title: strin
             <button
               key={day.dayKey}
               onClick={() => data.onDay(day.dayKey)}
-              className="group flex shrink-0 flex-col items-center gap-2 px-1.5 transition-transform duration-200 hover:-translate-y-1.5"
+              className={cn(
+                "group flex shrink-0 flex-col items-center gap-2 px-1.5",
+                "transition-transform duration-200 hover:-translate-y-1.5",
+              )}
             >
               <span className="block [--fan-step:0.5] [--u:36px]">
                 <TodayFan sets={day.sets} lift={false} />
               </span>
               <span
                 className={cn(
-                  "relative z-10 text-center text-base leading-none font-bold text-[#f6c95e]",
+                  "relative z-10 text-center text-base leading-none font-bold text-text group-hover:text-[#f6c95e]",
                   HARD_TEXT_SHADOW,
                 )}
               >
@@ -530,7 +542,7 @@ function FreePlayRow({ data, title, className }: { data: IntroData; title: strin
                 HARD_TEXT_SHADOW,
               )}
             >
-              {setShortLabel(set.code)}
+              {homeSetLabel(set.code)}
             </span>
           </button>
         ))}

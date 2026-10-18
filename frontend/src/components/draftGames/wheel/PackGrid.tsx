@@ -413,7 +413,13 @@ export function ResultChip({
   const fill = CALL_FILL[outcome];
   return (
     <span className={cn("flex border-2 border-[#1a120b]", RESULT_RING[outcome], className)} style={style}>
-      <span className={cn("flex-1 px-1 pt-1 pb-0.5 text-center font-display leading-none", fill)}>
+      <span
+        className={cn(
+          "flex-1 px-1 pt-1 pb-0.5 text-center font-display leading-none",
+          "[@media(max-height:760px)]:lg:pt-0.5 [@media(max-height:760px)]:lg:pb-0",
+          fill,
+        )}
+      >
         {yourIndex >= 0 ? ordinal(yourIndex + 1) : <WordLabel>Wheel</WordLabel>}
       </span>
     </span>

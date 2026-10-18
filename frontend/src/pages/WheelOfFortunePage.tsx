@@ -542,7 +542,7 @@ function WheelGame({
         draftHref,
         draftersShown: showDrafters,
         onToggleDrafters: import.meta.env.DEV ? () => setShowDrafters((shown) => !shown) : undefined,
-        onReset: import.meta.env.DEV ? () => restartToday(dayKey) : undefined,
+        onReset: dayKey ? () => restartToday(dayKey) : undefined,
       }
     : {};
   const packNumber = packNumberOf?.(pack);
@@ -550,7 +550,7 @@ function WheelGame({
   const header = (className: string, compact: boolean) => (
     <WheelHeader
       setCode={pack.setCode}
-      title={featured ? `${setName(pack.setCode)} #${viewIndex + 1}` : freePlayTitle}
+      title={featured ? `${setName(pack.setCode)} Pack #${viewIndex + 1}` : freePlayTitle}
       dayLabel={dayKey ? `${shortDayLabel(dayKey)} Packs` : undefined}
       progress={progress}
       tools={headerTools}
@@ -585,11 +585,17 @@ function WheelGame({
             "shadow-[inset_0_2px_0_#5a3a1e] transition-[max-height,background-color] duration-300 ease-out",
             sheetOpen ? "max-h-[82vh] overflow-y-auto bg-[#16110c]/90" : "max-h-[76px] overflow-hidden bg-[#16110c]",
             "isolate lg:relative lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:flex lg:max-h-[calc(100vh-125px)]",
-            "lg:flex-col lg:overflow-y-auto lg:border-[3px] lg:p-4",
+            "lg:flex-col lg:overflow-y-auto lg:border-[3px] lg:p-4 [@media(max-height:760px)]:lg:p-3",
             "lg:bg-[#16110c]/95 lg:shadow-[inset_0_0_0_2px_#5a3a1e,6px_6px_0_#05070a]",
           )}
         >
-          {header("mb-4 hidden border-b-2 border-[#3a2a17] pb-4 lg:block", false)}
+          {header(
+            cn(
+              "mb-4 hidden border-b-2 border-[#3a2a17] pb-4 lg:block",
+              "[@media(max-height:760px)]:lg:mb-2.5 [@media(max-height:760px)]:lg:pb-2.5",
+            ),
+            false,
+          )}
           <SheetBar
             open={sheetOpen}
             onToggle={() => setSheetOpen(!sheetOpen)}

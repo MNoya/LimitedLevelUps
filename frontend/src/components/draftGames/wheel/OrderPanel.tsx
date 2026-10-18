@@ -216,7 +216,12 @@ export function WheelSection({
   const cards = score ? pack.wheel : leftOut.length === wheelCount ? leftOut : [];
   const delay = wheelRevealDelay(pack.order.length, animate);
   return (
-    <section className="mt-4 border-t-2 border-[#3a2a17] pt-4">
+    <section
+      className={cn(
+        "mt-4 border-t-2 border-[#3a2a17] pt-4",
+        "[@media(max-height:760px)]:lg:mt-2 [@media(max-height:760px)]:lg:pt-2.5",
+      )}
+    >
       {score ? (
         <RevealHeader
           title="Real Wheel"
@@ -327,7 +332,11 @@ function RowResult({
 }) {
   return (
     <span className="flex items-center gap-1.5 animate-fadeIn" style={{ animationDelay: `${delay}ms` }}>
-      <ResultChip yourIndex={yourIndex} outcome={revealOutcome(realIndex, yourIndex)} className="w-16 text-base" />
+      <ResultChip
+        yourIndex={yourIndex}
+        outcome={revealOutcome(realIndex, yourIndex)}
+        className="w-16 text-base [@media(max-height:760px)]:lg:text-[13px]"
+      />
       {points > 0 && <span className="font-display text-lg leading-none text-[#f6c95e]">+{points}</span>}
     </span>
   );

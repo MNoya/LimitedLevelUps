@@ -151,7 +151,8 @@ function QuickGame({
   const [round, setRound] = useState(0);
   const [guess, setGuess] = useState<number | null>(null);
   const [history, setHistory] = useState<PlayedRound[]>([]);
-  const [best, setBest] = useState(() => Number(localStorage.getItem(BEST_STREAK_KEY) ?? 0));
+  const [savedBest, setSavedBest] = useState<Partial<Record<QuickDifficulty, number>>>({});
+  const best = savedBest[difficulty] ?? readBestStreak(difficulty);
   const [zoom, setZoom] = useState<ArtifactCard | null>(null);
   const [viewing, setViewing] = useState<number | null>(null);
   const { packs, isPending } = useFreePlayPacks(setCode, round + 2, seed);
@@ -177,8 +178,8 @@ function QuickGame({
     setGuess(card);
     setHistory((played) => [...played, { pack, candidates, card, right }]);
     if (nextStreak > best) {
-      setBest(nextStreak);
-      localStorage.setItem(BEST_STREAK_KEY, String(nextStreak));
+      setSavedBest((saved) => ({ ...saved, [difficulty]: nextStreak }));
+      localStorage.setItem(bestStreakKey(difficulty), String(nextStreak));
     }
   };
   const next = () => {
@@ -297,7 +298,12 @@ function QuickGame({
             <div
               className={cn("flex w-full flex-col items-center gap-3", "lg:min-h-0 lg:flex-1 lg:[container-type:size]")}
             >
-              <div className="flex h-11 w-full items-center justify-between max-lg:pl-2 lg:translate-y-0.5 lg:justify-center">
+              <div
+                className={cn(
+                  "flex h-11 w-full items-center justify-between max-lg:pl-2",
+                  "lg:translate-y-0.5 lg:justify-center",
+                )}
+              >
                 <h2 className={cn("text-2xl lg:text-3xl", PIXEL_HEADING)}>Which One Wheeled?</h2>
                 {revealed && (
                   <button
@@ -577,6 +583,14 @@ function streakTone(streak: number): string {
     return "text-text";
   }
   return "text-subtle";
+}
+
+function bestStreakKey(difficulty: QuickDifficulty): string {
+  return `${BEST_STREAK_KEY}:${difficulty}`;
+}
+
+function readBestStreak(difficulty: QuickDifficulty): number {
+  return Number(localStorage.getItem(bestStreakKey(difficulty)) ?? 0);
 }
 
 function currentStreak(history: PlayedRound[]): number {
