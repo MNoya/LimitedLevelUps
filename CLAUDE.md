@@ -145,6 +145,10 @@ Selects backend at module-load time via `useSupabase` from `data/supabase.ts`, d
 
 Vite `base: "/"` + React Router at the domain root: the app serves from `/`, with the leaderboard as one section (`/leaderboard`) alongside `/tier-list`, `/episodes`, `/community`, `/pods`, `/about`. Static assets in `frontend/public/` (e.g. `set-symbols/<code>.png`) serve from the root too. SPA fallback for CF Pages is **`functions/_middleware.ts`** (a Pages Function), not `_redirects` — `_redirects 200`-rewrites are over-greedy on Cloudflare.
 
+### Mini games
+
+Trophy Mage and Wheel of Fortune live under `frontend/src/components/draftGames/`. Read `spec/trophy-mage.md` or `spec/wheel-of-fortune.md` before changing either, and run `npm test` in `frontend/` after touching their data files.
+
 ### CI — `.github/workflows/ci.yml`
 
 On push/PR to `master`: spin up Postgres service container → `alembic upgrade head` → `alembic check` (catches model/migration drift) → `pytest bot/tests/`.

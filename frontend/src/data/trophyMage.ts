@@ -97,7 +97,7 @@ export function useDailyTrophyRounds(
 ): { rounds: TrophyMageRound[]; isPending: boolean } {
   const { events, sets, isPending: eventsPending } = useWheelSets();
   const seed = dayNumber(dayKey) * 104729;
-  const slots = useMemo(() => dailySlots(events, sets, dayKey, seed), [events, sets, dayKey, seed]);
+  const slots = useMemo(() => dealDailySlots(events, sets, dayKey, seed), [events, sets, dayKey, seed]);
   const resolved = useRoundSlots(slots, seed, enabled);
   const loaded = resolved.every((round) => round !== undefined);
   const rounds = useMemo(
@@ -142,7 +142,7 @@ export function useFreePlayTrophyRounds(
   return { rounds, isPending, exhausted };
 }
 
-function dailySlots(
+export function dealDailySlots(
   events: PodEventSummary[],
   sets: WheelSetOption[],
   dayKey: string,
