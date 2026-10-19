@@ -44,6 +44,7 @@ design/
 frontend/dist/
 frontend/node_modules
 frontend/*.tsbuildinfo
+/node_modules/
 
 design/fold-1-bento.png
 

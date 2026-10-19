@@ -36,6 +36,7 @@ import { packArtResolved, usePreloadPackArt } from "../components/draftGames/whe
 import { useCardImageMap } from "../data/cardImages";
 import {
   MINI_GAMES_HEADER,
+  clearSavedDaysOnRequest,
   ordinal,
   scoreWheel,
   shortDayLabel,
@@ -72,11 +73,8 @@ type GameMode = "featured" | "free";
 export function WheelOfFortunePage() {
   useNoScrollGutter();
   const [today] = useState(() => {
-    const day = gameDayKey();
-    if (import.meta.env.DEV) {
-      resetDayOnRequest(day);
-    }
-    return day;
+    clearSavedDaysOnRequest(wheelDayStorageKey(""));
+    return gameDayKey();
   });
   const { play, packNumber } = useParams<{ play?: string; packNumber?: string }>();
   const [params] = useSearchParams();
@@ -752,14 +750,4 @@ function restartToday(dayKey: string | null) {
     localStorage.removeItem(wheelDayStorageKey(dayKey));
   }
   window.location.reload();
-}
-
-function resetDayOnRequest(dayKey: string) {
-  const url = new URL(window.location.href);
-  if (!url.searchParams.has("reset")) {
-    return;
-  }
-  localStorage.removeItem(wheelDayStorageKey(dayKey));
-  url.searchParams.delete("reset");
-  window.history.replaceState(null, "", url);
 }

@@ -92,6 +92,20 @@ export function msUntilNextGameDay(now: Date = new Date()): number {
   return nextStart - now.getTime();
 }
 
+export function clearSavedDaysOnRequest(savedDayPrefix: string) {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("reset")) {
+    return;
+  }
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith(savedDayPrefix)) {
+      localStorage.removeItem(key);
+    }
+  }
+  url.searchParams.delete("reset");
+  window.history.replaceState(window.history.state, "", url);
+}
+
 function zonedClock(now: Date) {
   const parts: Record<string, number> = {};
   for (const part of GAME_DAY_CLOCK.formatToParts(now)) {

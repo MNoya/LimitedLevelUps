@@ -11,14 +11,13 @@ import { TrophyIntro } from "../components/draftGames/trophy/TrophyIntro";
 import { TrophyTitle } from "../components/draftGames/trophy/TrophyTitle";
 import { trophyDayStorageKey } from "../components/draftGames/trophy/useTrophyDay";
 import { useGuideHash, useNoScrollGutter } from "../components/draftGames/wheel/pageHooks";
-import { MINI_GAMES_HEADER, gameDayKey, useWheelSets } from "../data/draftGames";
+import { MINI_GAMES_HEADER, clearSavedDaysOnRequest, gameDayKey, useWheelSets } from "../data/draftGames";
 import { TROPHY_DAILY_ROUNDS, useDailyTrophyRounds, useFreePlayTrophyRounds } from "../data/trophyMage";
 import { cn } from "../lib/utils";
 
 const REVIEW_PARAM = "review";
 const ROUND_PARAM = "round";
 const INVALID_ROUND = -1;
-const RESET_PARAM = "reset";
 const RESULTS_PARAM = "results";
 const TROPHY_PATH = "/trophy-mage";
 const DAY_SEGMENT = /^\d{4}-\d{2}-\d{2}$/;
@@ -30,7 +29,7 @@ interface PlayOptions {
 }
 
 export function TrophyMageLabPage() {
-  useState(clearSavedDaysOnRequest);
+  useState(() => clearSavedDaysOnRequest(trophyDayStorageKey("")));
   const [dayKey] = useState(gameDayKey);
   const [params] = useSearchParams();
   const { play: playSegment } = useParams();
@@ -232,19 +231,4 @@ function roundIndexParam(params: URLSearchParams, name: string): number | null {
     return INVALID_ROUND;
   }
   return roundNumber - 1;
-}
-
-function clearSavedDaysOnRequest() {
-  const url = new URL(window.location.href);
-  if (!url.searchParams.has(RESET_PARAM)) {
-    return;
-  }
-  const savedDayPrefix = trophyDayStorageKey("");
-  for (const key of Object.keys(localStorage)) {
-    if (key.startsWith(savedDayPrefix)) {
-      localStorage.removeItem(key);
-    }
-  }
-  url.searchParams.delete(RESET_PARAM);
-  window.history.replaceState(window.history.state, "", url);
 }
