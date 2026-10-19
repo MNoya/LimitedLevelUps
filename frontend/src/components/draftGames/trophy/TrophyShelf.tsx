@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 
 import { cn } from "../../../lib/utils";
 import { setShortLabel, shortDayLabel } from "../../../data/draftGames";
@@ -172,7 +172,7 @@ function ShelfSpot({
       <span className="hidden sm:block [@media(max-height:760px)]:hidden">{trophy(4)}</span>
     </>
   );
-  const base = <TrophyBase slot={slot} small={!large} />;
+  const base = <TrophyBase index={index} slot={slot} small={!large} />;
   if (!onPlay) {
     return (
       <span className="flex flex-col items-center">
@@ -209,22 +209,27 @@ function ShelfTrophy({ index, slot, scale }: { index: number; slot: DaySlot; sca
   const won = slot.state !== "open";
   return (
     <span
-      className={cn("relative block", won && "animate-stamp", slot.state === "open" && "opacity-80 brightness-[0.55]")}
+      className={cn("relative block", won && "animate-stamp")}
       style={won ? { animationDelay: `${index * 80}ms` } : undefined}
     >
       {won ? (
         <SpriteStrip sheet={CLEAN_TROPHY_SPRITE} scale={scale} restMs={2400 + index * 300} />
       ) : (
-        <PixelFrame sheet={CLEAN_TROPHY_SPRITE} scale={scale} />
+        <span className="block brightness-[0.8] saturate-[0.8]">
+          <PixelFrame sheet={CLEAN_TROPHY_SPRITE} scale={scale} />
+        </span>
       )}
       {slot.round && (
-        <span className="absolute left-1/2 top-[31%] -translate-x-1/2 -translate-y-1/2">
+        <span
+          className="absolute left-1/2 top-[31%] -translate-x-1/2 -translate-y-1/2 animate-fadeIn"
+          style={revealDelay(index)}
+        >
           <SetGlyph
             code={slot.round.setCode}
             size={scale * 5}
             className={cn(
               "text-[#fff1d6] drop-shadow-[0_0_1px_#1a120b] drop-shadow-[1px_2px_0_rgba(0,0,0,0.55)]",
-              slot.state === "open" && "opacity-70",
+              !won && "opacity-[0.85]",
             )}
           />
         </span>
@@ -233,19 +238,33 @@ function ShelfTrophy({ index, slot, scale }: { index: number; slot: DaySlot; sca
   );
 }
 
-function TrophyBase({ slot, small }: { slot: DaySlot; small: boolean }) {
+function revealDelay(index: number): CSSProperties {
+  return { animationDelay: `${index * 120}ms`, animationDuration: "400ms" };
+}
+
+function TrophyBase({ index, slot, small }: { index: number; slot: DaySlot; small: boolean }) {
+  const label = slot.round ? (
+    <span className="animate-fadeIn" style={revealDelay(index)}>
+      {setShortLabel(slot.round.setCode)}
+    </span>
+  ) : (
+    <span className="relative inline-block">
+      <span className="invisible">FRA</span>
+      <span className="absolute inset-x-0 top-[20%] bottom-[25%] animate-pulse bg-[#fff1d6]/35" />
+    </span>
+  );
   return (
     <span
       className={cn(
         "relative block w-3/4 min-w-max border-2 border-[#1a120b] bg-[linear-gradient(180deg,#b47b43,#7a4e26)]",
-        "text-center font-display leading-none text-[#fff1d6] [text-shadow:1px_1px_0_#1a120b]",
+        "text-center font-display text-[#fff1d6] [text-shadow:1px_1px_0_#1a120b]",
         "shadow-[inset_0_2px_0_#d99a5b,inset_0_-2px_0_#5a3a1e]",
         small
-          ? "px-1 pt-px text-sm max-sm:hidden [@media(max-height:760px)]:sm:hidden"
-          : "px-2 pt-[3px] text-base sm:text-lg [@media(max-height:760px)]:sm:text-base",
+          ? "px-1 pt-px text-sm/none max-sm:hidden [@media(max-height:760px)]:sm:hidden"
+          : "px-2 pt-px pb-[3px] text-lg/none",
       )}
     >
-      {slot.round ? setShortLabel(slot.round.setCode) : " "}
+      {label}
     </span>
   );
 }

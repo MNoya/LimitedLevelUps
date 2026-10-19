@@ -1,9 +1,17 @@
 import { useMemo } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
-import { fetchPodEventParticipants } from "./api";
+import { fetchPodEventsParticipants } from "./api";
 import { seatHandle } from "./draft-artifact";
-import { dayNumber, seededShuffle, useWheelSets, type RoundMark } from "./draftGames";
+import {
+  CUBE_SET_CODE,
+  dayNumber,
+  featuredSlots,
+  seededShuffle,
+  useWheelSets,
+  type RoundMark,
+  type WheelSetOption,
+} from "./draftGames";
 import { orderedDeckColors } from "./utils";
 import type { PodEventParticipantRow, PodEventSummary } from "../types/leaderboard";
 
@@ -83,11 +91,14 @@ export function trophyMark(score: TrophyScore): RoundMark {
   return score.recordsRight > 0 ? "close" : "miss";
 }
 
-export function useDailyTrophyRounds(dayKey: string): { rounds: TrophyMageRound[]; isPending: boolean } {
-  const { events, isPending: eventsPending } = useWheelSets();
+export function useDailyTrophyRounds(
+  dayKey: string,
+  enabled = true,
+): { rounds: TrophyMageRound[]; isPending: boolean } {
+  const { events, sets, isPending: eventsPending } = useWheelSets();
   const seed = dayNumber(dayKey) * 104729;
-  const slots = useMemo(() => dailySlots(events, dayKey, seed), [events, dayKey, seed]);
-  const resolved = useRoundSlots(slots, seed);
+  const slots = useMemo(() => dailySlots(events, sets, dayKey, seed), [events, sets, dayKey, seed]);
+  const resolved = useRoundSlots(slots, seed, enabled);
   const loaded = resolved.every((round) => round !== undefined);
   const rounds = useMemo(
     () => (loaded ? resolved.filter((round): round is TrophyMageRound => round != null) : []),
@@ -131,38 +142,47 @@ export function useFreePlayTrophyRounds(
   return { rounds, isPending, exhausted };
 }
 
-function dailySlots(events: PodEventSummary[], dayKey: string, seed: number): PodEventSummary[][] {
-  const settled = events.filter((event) => event.eventDate < dayKey);
-  const shuffled = seededShuffle(settled, seed);
-  const bySet = new Map<string, PodEventSummary[]>();
-  for (const event of shuffled) {
-    const pods = bySet.get(event.setCode) ?? [];
-    pods.push(event);
-    bySet.set(event.setCode, pods);
-  }
-  const setPods = [...bySet.values()];
-  const slots: PodEventSummary[][] = [];
-  if (setPods.length === 0) {
-    return slots;
-  }
-  for (let slot = 0; slot < TROPHY_DAILY_ROUNDS; slot++) {
-    const pods = setPods[slot % setPods.length];
-    const start = Math.floor(slot / setPods.length) * CANDIDATES_PER_ROUND;
-    slots.push(pods.slice(start, start + CANDIDATES_PER_ROUND));
-  }
-  return slots;
+function dailySlots(
+  events: PodEventSummary[],
+  sets: WheelSetOption[],
+  dayKey: string,
+  seed: number,
+): PodEventSummary[][] {
+  return featuredSlots(withoutFreshLatestSetPods(events, dayKey), sets, dayKey, seed, CANDIDATES_PER_ROUND);
 }
 
-function useRoundSlots(slots: PodEventSummary[][], seed: number): (TrophyMageRound | null | undefined)[] {
+function withoutFreshLatestSetPods(events: PodEventSummary[], dayKey: string): PodEventSummary[] {
+  let latestSet: string | null = null;
+  for (const event of events) {
+    if (event.eventDate < dayKey && event.setCode !== CUBE_SET_CODE) {
+      latestSet = event.setCode;
+      break;
+    }
+  }
+  const minAgeDays = 7;
+  const newestAllowed = new Date(Date.parse(`${dayKey}T00:00:00Z`) - minAgeDays * 86_400_000).toISOString().slice(0, 10);
+  return events.filter((event) => event.setCode !== latestSet || event.eventDate <= newestAllowed);
+}
+
+function useRoundSlots(
+  slots: PodEventSummary[][],
+  seed: number,
+  enabled = true,
+): (TrophyMageRound | null | undefined)[] {
+  const queryClient = useQueryClient();
   const flat = useMemo(() => slots.flat(), [slots]);
-  const participants = useQueries({
-    queries: flat.map((event) => ({
-      queryKey: ["pod-event-participants", event.eventId],
-      queryFn: () => fetchPodEventParticipants(event.eventId),
-      staleTime: Infinity,
-    })),
-    combine: (results) => results.map((result) => (result.isPending ? undefined : (result.data ?? null))),
+  const eventIds = useMemo(() => flat.map((event) => event.eventId), [flat]);
+  const { data: participantsByEvent } = useQuery({
+    queryKey: ["pod-events-participants", eventIds],
+    queryFn: () => fetchParticipantsByEvent(eventIds, queryClient),
+    enabled: enabled && eventIds.length > 0,
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
   });
+  const participants = useMemo(
+    () => flat.map((event) => participantsByEvent?.get(event.eventId)),
+    [flat, participantsByEvent],
+  );
   return useMemo(() => {
     let offset = 0;
     return slots.map((candidates, slotIndex) => {
@@ -173,7 +193,7 @@ function useRoundSlots(slots: PodEventSummary[][], seed: number): (TrophyMageRou
           result = undefined;
           break;
         }
-        const round = buildRound(candidates[k], people ?? [], seed + slotIndex);
+        const round = buildRound(candidates[k], people, seed + slotIndex);
         if (round) {
           result = round;
           break;
@@ -183,6 +203,29 @@ function useRoundSlots(slots: PodEventSummary[][], seed: number): (TrophyMageRou
       return result;
     });
   }, [slots, participants, seed]);
+}
+
+async function fetchParticipantsByEvent(
+  eventIds: string[],
+  queryClient: QueryClient,
+): Promise<Map<string, PodEventParticipantRow[]>> {
+  const participantsByEvent = new Map<string, PodEventParticipantRow[]>();
+  const missing: string[] = [];
+  for (const eventId of eventIds) {
+    const cached = queryClient.getQueryData<PodEventParticipantRow[]>(["pod-event-participants", eventId]);
+    if (cached) {
+      participantsByEvent.set(eventId, cached);
+    } else {
+      missing.push(eventId);
+    }
+  }
+  const rows = await fetchPodEventsParticipants(missing);
+  for (const eventId of missing) {
+    const eventRows = rows.filter((row) => row.eventId === eventId);
+    queryClient.setQueryData(["pod-event-participants", eventId], eventRows);
+    participantsByEvent.set(eventId, eventRows);
+  }
+  return participantsByEvent;
 }
 
 function buildRound(event: PodEventSummary, participants: PodEventParticipantRow[], seed: number) {

@@ -47,6 +47,7 @@ export const fetchAllPodEvents = impl.fetchAllPodEvents;
 export const fetchAllPodResults = impl.fetchAllPodResults;
 export const fetchPodEventBySlug = impl.fetchPodEventBySlug;
 export const fetchPodEventParticipants = impl.fetchPodEventParticipants;
+export const fetchPodEventsParticipants = impl.fetchPodEventsParticipants;
 export const fetchPodDraftArtifact = impl.fetchPodDraftArtifact;
 export const fetchPodEventMatches = impl.fetchPodEventMatches;
 export const fetchPodEventReplays = impl.fetchPodEventReplays;

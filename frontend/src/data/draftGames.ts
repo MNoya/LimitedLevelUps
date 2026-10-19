@@ -348,11 +348,12 @@ function usePackSlots(
   }, [slots, artifacts, participants, seedFor]);
 }
 
-function featuredSlots(
+export function featuredSlots(
   events: PodEventSummary[],
   sets: WheelSetOption[],
   dayKey: string,
   seed: number,
+  candidatesPerSlot = 3,
 ): PodEventSummary[][] {
   const settled = events.filter((event) => event.eventDate < dayKey);
   const eligible = sets.filter((set) => settled.filter((event) => event.setCode === set.code).length >= MIN_SET_PODS);
@@ -375,7 +376,7 @@ function featuredSlots(
     const setCode = order[slot];
     const used = new Set(slots.flat().map((event) => event.eventId));
     const pool = settled.filter((event) => event.setCode === setCode && !used.has(event.eventId));
-    slots.push(seededShuffle(pool, seed + slot).slice(0, 3));
+    slots.push(seededShuffle(pool, seed + slot).slice(0, candidatesPerSlot));
   }
   return slots;
 }

@@ -236,7 +236,7 @@ function roundIndexParam(params: URLSearchParams, name: string): number | null {
 
 function clearSavedDaysOnRequest() {
   const url = new URL(window.location.href);
-  if (!import.meta.env.DEV || !url.searchParams.has(RESET_PARAM)) {
+  if (!url.searchParams.has(RESET_PARAM)) {
     return;
   }
   const savedDayPrefix = trophyDayStorageKey("");

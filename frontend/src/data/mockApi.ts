@@ -561,6 +561,10 @@ export const fetchPodEventParticipants = (
   return wait(podEventParticipantsFixture.filter((p) => p.eventId === eventId));
 };
 
+export const fetchPodEventsParticipants = (eventIds: string[]): Promise<PodEventParticipantRow[]> => {
+  return wait(podEventParticipantsFixture.filter((p) => eventIds.includes(p.eventId)));
+};
+
 export const fetchPodDraftArtifact = (eventId: string): Promise<PodDraftArtifact | null> => {
   return wait(podDraftArtifactFixture[eventId] ?? null);
 };

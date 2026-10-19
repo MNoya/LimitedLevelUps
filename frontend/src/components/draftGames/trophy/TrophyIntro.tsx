@@ -29,8 +29,9 @@ export function TrophyIntro({
   const twoDaysAgoKey = daysBefore(dayKey, 2);
   const { sets } = useWheelSets();
   const today = useDailyTrophyRounds(dayKey);
-  const yesterday = useDailyTrophyRounds(yesterdayKey);
-  const twoDaysAgo = useDailyTrophyRounds(twoDaysAgoKey);
+  const todayLoaded = !today.isPending;
+  const yesterday = useDailyTrophyRounds(yesterdayKey, todayLoaded);
+  const twoDaysAgo = useDailyTrophyRounds(twoDaysAgoKey, todayLoaded);
   const progressOf = (key: string, rounds: TrophyMageRound[]) =>
     dayProgress(rounds, readTrophyDay(trophyDayStorageKey(key)));
   const progress = progressOf(dayKey, today.rounds);

@@ -1778,6 +1778,18 @@ export async function fetchPodEventParticipants(
   return (data ?? []).map((r) => adaptPodEventParticipant(r as Record<string, unknown>));
 }
 
+export async function fetchPodEventsParticipants(eventIds: string[]): Promise<PodEventParticipantRow[]> {
+  if (eventIds.length === 0) {
+    return [];
+  }
+  const { data, error } = await client()
+    .from("public_pod_draft_event_participants")
+    .select("*")
+    .in("event_id", eventIds);
+  if (error) throw error;
+  return (data ?? []).map((r) => adaptPodEventParticipant(r as Record<string, unknown>));
+}
+
 export async function fetchPodDraftArtifact(eventId: string): Promise<PodDraftArtifact | null> {
   const { data, error } = await client()
     .from("public_pod_draft_log")
