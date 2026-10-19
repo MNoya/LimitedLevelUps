@@ -352,12 +352,12 @@ const resolveRoute = async (
     return proPlayRoute(rest);
   }
   if (section === "wheel-of-fortune") {
-    const wheelArt: ImageIntent = { kind: "asset", path: "/games/wheel-of-fortune/og-image.png" };
+    const wheelArt: ImageIntent = { kind: "asset", path: "/games/wheel-of-fortune/og-image.gif" };
     const wheelPath = ["/wheel-of-fortune", ...rest.map((part) => part.toLowerCase())].join("/");
     return resolved(page("Wheel of Fortune", "Can you guess what will wheel?", wheelArt), wheelPath);
   }
   if (section === "trophy-mage") {
-    const trophyArt: ImageIntent = { kind: "asset", path: "/games/trophy-mage/og-image.png" };
+    const trophyArt: ImageIntent = { kind: "asset", path: "/games/trophy-mage/og-image.gif" };
     const trophyPath = ["/trophy-mage", ...rest.map((part) => part.toLowerCase())].join("/");
     return resolved(page("Trophy Mage", "Can you guess which decks trophied?", trophyArt), trophyPath);
   }
