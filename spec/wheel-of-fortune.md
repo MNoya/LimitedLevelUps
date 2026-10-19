@@ -17,7 +17,7 @@ This doc records what was built and the decisions behind it. For how it works to
 - **Yesterday.** The home carousel holds yesterday's packs to the left of today's. Only one past day is offered; Quick Mode fills the "something else to play" role that Trophy Mage gives to a second past day.
 - **Next and Endless.** Once today is finished, the main button reads Next and opens the next unfinished open day, with a Results button beside it. When every open day is done it reads Endless and opens Free Play on the newest set. The Results screen's Next follows the same rule. This mirrors Trophy Mage and fixes the earlier dead end where a finished day left no way to reach other days.
 - **Free Play.** Endless packs from one set, or all sets. It has no mode name in the header; the title is the set and pack number.
-- **Quick Mode.** A shorter game added after playtest feedback: three cards from one pack, guess which one wheeled. Normal mixes an early pick and a late pick with the wheeled card; Hard uses two late picks. Basic lands and wheeled cards graded D or F by 17lands are skipped so every round has a fair answer. Best streak is kept per difficulty. The streak number changes color by tier, topping out at 7, which the user set as the point where a streak is already remarkable.
+- **Quick Mode.** A shorter game added after playtest feedback: three cards from one pack, guess which one wheeled. Normal mixes an early pick and a late pick with the wheeled card; Hard uses two late picks. Basic lands and wheeled cards graded D or F by 17lands are skipped so every round has a fair answer. The chosen difficulty and the Best streak per difficulty are remembered. The streak number changes color by tier, topping out at 7, which the user set as the point where a streak is already remarkable.
 
 ## Stable pack numbers
 
@@ -30,14 +30,24 @@ Every Pod gets a number within its set, oldest first, so "Reality Fracture Pack 
 - `/wheel-of-fortune/<set>` and `/wheel-of-fortune/<set>/<number>`: Free Play
 - `/wheel-of-fortune/quick`: Quick Mode
 
-Old `?play=` links redirect. Every Wheel path unfurls on Discord with the pixel wheel card from `functions/_middleware.ts`.
+Old `?play=` links redirect. `/wheel-of-fortune?reset` clears every saved Wheel day, on the live site too, through `clearSavedDaysOnRequest` in `data/draftGames.ts`, which Trophy Mage shares. Replay Today in the game header clears just the current day. Every Wheel path unfurls on Discord with the animated pixel wheel `public/games/wheel-of-fortune/og-image.gif`, served by `functions/_middleware.ts` and built by `frontend/scripts/pixel-art/build_og_gifs.py`.
+
+## Saved progress
+
+Everything lives in the browser, no account:
+
+- `wheel-of-fortune-featured:<day>`: a day's picks, locked packs and position (`useWheelDay`)
+- `wheel-of-fortune-quick-best:<difficulty>` and `wheel-of-fortune-quick-difficulty`: Quick Mode's Best streaks and last difficulty
+- `wheel-of-fortune-sets:v1` and `wheel-of-fortune-featured-sets:v1:<day>`: cached set list and each day's sets, so the home draws instantly on a return visit
+- `wheel-of-fortune-quick-seed` in session storage: the seed of the next Quick Mode visit, so the home can preload its first pack
+- `cardimg:v3` and `cardlayout:v1`: shared card art and layout caches
 
 ## Look and feel decisions
 
 - **Pixel game style** shared with Trophy Mage through `components/draftGames/pixelStyles.ts`: pixel wordmark with an animated wheel sprite, gold buttons, dark panels, the faint wheel art backdrop. No prominent AI art.
 - **Everything fits one screen** with no page scroll at desktop 1854×929, laptops 1366×657 and 1200×959, and phones 390×844 and 375×667. The card grid picks its column count from the space available; the sidebar shrinks its spacing on short screens. The exception is the phone game screen, where the card grid scrolls behind a docked bottom panel.
 - **Reveal language.** A right call turns green with a check. A wrong call extends an arrow to the actual result in red. Gold means points only. A correct first pick gets a raised +3 badge. After Confirm, cards dim and light up in the order they were picked, wheel cards last, in about 1.5s for a pack. Revisiting a confirmed pack shows the result still, with no replayed animation.
-- **Loading.** No forced delay. Cards render as soon as their pack is known and cross-fade in a snake order: row 1 left to right, row 2 right to left. A clockwise spiral was tried and rejected as confusing. The next pack's art downloads in the background while the current one is played, so Next Pack is near instant. When the format changes between packs the grid clears first, which hides the change from 14 to 15 cards. The home draws its pack layout from the first frame and caches the day's sets in the browser so a return visit is instant; the deal animation plays once and never replays when data arrives.
+- **Loading.** No forced delay. Cards render as soon as their pack is known and cross-fade in a snake order: row 1 left to right, row 2 right to left. A clockwise spiral was tried and rejected as confusing. The next pack's art downloads in the background while the current one is played, so Next Pack is near instant. Quick Mode does the same: the home preloads its first pack, each round preloads the next, and its cards cross-fade in order like the main game. When the format changes between packs the grid clears first, which hides the change from 14 to 15 cards. The home draws its pack layout from the first frame and caches the day's sets in the browser so a return visit is instant; the deal animation plays once and never replays when data arrives.
 - **Card name strips** in the order list are crops of the card image, framed to show the title bar with a thin band of frame. Double-faced and split cards use Scryfall's layout, which `/api/card-images` now returns next to each image URL.
 - **Results screen** mirrors Trophy Mage's recap: one row per pack with the set icon, the actual first pick with your call, the wheel cards with your correct calls lit, and points. The row is symmetric so Menu and Next line up under the two images. Opening a pack from Results adds a history entry, so the browser Back button returns to Results.
 - **Copy rules.** Title Case for buttons and headings, no em dashes, plain words, and no "real" in game copy. Peasant Cube reads CUBE on the home and Peasant elsewhere, by choice.
@@ -53,9 +63,10 @@ Old `?play=` links redirect. Every Wheel path unfurls on Discord with the pixel 
 
 - `pages/WheelOfFortunePage.tsx`: routing, the daily game and Free Play
 - `pages/WheelQuickPage.tsx`: Quick Mode
+- `components/draftGames/wheel/packArt.ts` and `quickPreload.ts`: art preloading for both modes and the home's Quick Mode preload
 - `components/draftGames/wheel/`: intro, pack grid, order panel, header, results and guides
 - `data/draftGames.ts`: pack building, daily selection, numbering and scoring
 - `data/cardImages.ts` and `functions/api/card-images.ts`: card art and layouts
-- `frontend/scripts/pixel-art/`: claude-pxl sources for the wordmark and wheel sprite, which render to the PNGs in `frontend/public/games/`
+- `frontend/scripts/pixel-art/`: claude-pxl sources for the wordmark and wheel sprite, which render to the PNGs in `frontend/public/games/`, plus `build_og_gifs.py` for the unfurl GIFs
 
  Open follow-ups for both games are tracked in `spec/mini-games-roadmap.html`.

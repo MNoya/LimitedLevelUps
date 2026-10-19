@@ -79,6 +79,7 @@ const DESKTOP_REST_SIZE = {
   ].join(", "),
 } as CSSProperties;
 const BEST_STREAK_KEY = "wheel-of-fortune-quick-best";
+const DIFFICULTY_KEY = "wheel-of-fortune-quick-difficulty";
 const BAND_SIZE = 3;
 
 export function WheelQuickPage() {
@@ -87,7 +88,7 @@ export function WheelQuickPage() {
   const [helpOpen, openHelp, closeHelp] = useGuideHash("quick-guide");
   const { sets } = useWheelSets();
   const [setCode, setSetCode] = useState<string | null>(null);
-  const [difficulty, setDifficulty] = useState<QuickDifficulty>("easy");
+  const [difficulty, setDifficulty] = useState<QuickDifficulty>(readDifficulty);
   const [firstSeed] = useState(quickSeed);
   useEffect(() => {
     rotateQuickSeed();
@@ -121,7 +122,10 @@ export function WheelQuickPage() {
               difficulty={difficulty}
               sets={sets}
               setName={setName}
-              onDifficulty={setDifficulty}
+              onDifficulty={(next) => {
+                setDifficulty(next);
+                localStorage.setItem(DIFFICULTY_KEY, next);
+              }}
               onSet={setSetCode}
               onHelp={openHelp}
               onExit={() => navigate("/wheel-of-fortune")}
@@ -614,6 +618,10 @@ interface RoundOpening {
   openedAt: number;
   previous: ArtifactCard[] | null;
   cards: ArtifactCard[] | null;
+}
+
+function readDifficulty(): QuickDifficulty {
+  return localStorage.getItem(DIFFICULTY_KEY) === "hard" ? "hard" : "easy";
 }
 
 function bestStreakKey(difficulty: QuickDifficulty): string {
