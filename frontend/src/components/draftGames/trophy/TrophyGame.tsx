@@ -419,7 +419,13 @@ function RoundView({
           <span className="flex items-center gap-2.5">
             <RoundMenu info={headerInfo} />
           </span>
-          <RoundName info={headerInfo} className="pointer-events-none flex-1 items-center" />
+          <RoundName
+            info={headerInfo}
+            className={cn(
+              "pointer-events-none items-center",
+              headerInfo.outcomes ? "flex-1" : "absolute inset-x-0 mx-auto w-fit max-w-[calc(100%-13rem)]",
+            )}
+          />
           <RoundTiles info={headerInfo} />
         </div>
         <div className="flex min-h-[3.875rem] items-center justify-center gap-3">
