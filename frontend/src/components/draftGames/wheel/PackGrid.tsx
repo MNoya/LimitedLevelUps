@@ -449,7 +449,7 @@ export interface CardOpening {
   underlay: ArtifactCard | "skeleton" | "empty";
 }
 
-function CrossfadeImage({ card, opening }: { card: ArtifactCard; opening: CardOpening }) {
+export function CrossfadeImage({ card, opening }: { card: ArtifactCard; opening: CardOpening }) {
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const revealAt = opening.openedAt + useWaveDelay(opening.index);
   const waitMs = loadedAt == null ? 0 : Math.max(0, revealAt - loadedAt);

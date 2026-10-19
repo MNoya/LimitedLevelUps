@@ -17,12 +17,16 @@ import { GOLD_BUTTON, PIXEL_HEADING, PIXEL_PANEL } from "../components/draftGame
 import { CardTitle } from "../components/draftGames/wheel/CardTitle";
 import {
   CardZoom,
+  CrossfadeImage,
   PickingCard,
   QuickRevealCard,
+  type CardOpening,
   ResultChip,
   revealOutcome,
 } from "../components/draftGames/wheel/PackGrid";
 import { releaseFocus, useGuideHash, useNoScrollGutter } from "../components/draftGames/wheel/pageHooks";
+import { usePreloadPackArt } from "../components/draftGames/wheel/packArt";
+import { quickSeed, rotateQuickSeed } from "../components/draftGames/wheel/quickPreload";
 import { SpaceKey } from "../components/draftGames/wheel/SpaceKey";
 import { WheelBackdrop } from "../components/draftGames/wheel/WheelBackdrop";
 import { LoadingLabel } from "../components/draftGames/GameChrome";
@@ -62,9 +66,6 @@ interface PlayedRound {
 
 const HISTORY_ROWS = 8;
 const PHONE_HISTORY = 6;
-const CANDIDATE_DEAL_STEP_MS = 60;
-const REST_DEAL_START_MS = 260;
-const REST_DEAL_STEP_MS = 25;
 const REST_GAP_PX = 8;
 const PHONE_BOTTOM_GAP_PX = 12;
 const CARD_ASPECT = 488 / 680;
@@ -87,6 +88,10 @@ export function WheelQuickPage() {
   const { sets } = useWheelSets();
   const [setCode, setSetCode] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState<QuickDifficulty>("easy");
+  const [firstSeed] = useState(quickSeed);
+  useEffect(() => {
+    rotateQuickSeed();
+  }, []);
   const activeSet = setCode ?? sets[0]?.code ?? null;
   const setName = (code: string) =>
     code === ALL_SETS_CODE ? "All Sets" : (sets.find((set) => set.code === code)?.name ?? code);
@@ -102,7 +107,7 @@ export function WheelQuickPage() {
         <WheelBackdrop />
         <div className="relative z-[1]">
           {!activeSet && (
-            <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(340px,456px)] lg:gap-x-4">
+            <div className={QUICK_LAYOUT}>
               <div className={cn(PIXEL_PANEL, "h-[74px] lg:hidden")} />
               <QuickLoading />
               <div className={cn(PIXEL_PANEL, "hidden lg:block lg:h-[calc(100dvh-125px)]")} />
@@ -112,6 +117,7 @@ export function WheelQuickPage() {
             <QuickGame
               key={activeSet}
               setCode={activeSet}
+              initialSeed={setCode == null ? firstSeed : undefined}
               difficulty={difficulty}
               sets={sets}
               setName={setName}
@@ -130,6 +136,7 @@ export function WheelQuickPage() {
 
 function QuickGame({
   setCode,
+  initialSeed,
   difficulty,
   sets,
   setName,
@@ -139,6 +146,7 @@ function QuickGame({
   onExit,
 }: {
   setCode: string;
+  initialSeed?: number;
   difficulty: QuickDifficulty;
   sets: WheelSetOption[];
   setName: (code: string) => string;
@@ -147,7 +155,7 @@ function QuickGame({
   onHelp: () => void;
   onExit: () => void;
 }) {
-  const [seed] = useState(() => Math.floor(Math.random() * 1_000_000));
+  const [seed] = useState(() => initialSeed ?? Math.floor(Math.random() * 1_000_000) + 1);
   const [round, setRound] = useState(0);
   const [guess, setGuess] = useState<number | null>(null);
   const [history, setHistory] = useState<PlayedRound[]>([]);
@@ -161,11 +169,21 @@ function QuickGame({
   const images = useCardImageMap(
     useMemo(() => packs.flatMap((p) => p.pack.map((i) => ({ name: p.cards[i].n, set: p.cards[i].s }))), [packs]),
   );
+  usePreloadPackArt(packs[round + 1], images);
   const candidates = useMemo(() => (pack ? pickCandidates(pack, difficulty, stats) : []), [pack, difficulty, stats]);
   const viewed = viewing == null ? null : history[viewing];
   const shownPack = viewed ? viewed.pack : pack;
   const shownCandidates = viewed ? viewed.candidates : candidates;
   const shownGuess = viewed ? viewed.card : guess;
+  const [opening, setOpening] = useState<RoundOpening | null>(null);
+  if (shownPack && opening?.eventId !== shownPack.eventId) {
+    setOpening({
+      eventId: shownPack.eventId,
+      openedAt: performance.now(),
+      previous: opening?.cards ?? null,
+      cards: null,
+    });
+  }
   const revealed = shownGuess != null;
   const streak = currentStreak(history);
 
@@ -259,10 +277,19 @@ function QuickGame({
   const others = shownPack
     ? withoutBasics(shownPack.pack, shownPack).filter((card) => !shownCandidates.some((c) => c.card === card))
     : [];
+  const shownCards = shownPack ? [...shownCandidates.map((c) => c.card), ...others].map((c) => shownPack.cards[c]) : [];
+  if (opening && shownPack && opening.eventId === shownPack.eventId && opening.cards == null && shownCards.length > 0) {
+    setOpening({ ...opening, cards: shownCards });
+  }
+  const openingFor = (index: number): CardOpening => ({
+    index,
+    openedAt: opening?.openedAt ?? 0,
+    underlay: opening?.previous?.[index] ?? "empty",
+  });
   return (
     <CardImageMapProvider value={images}>
       <CardZoom card={zoom} onClose={() => setZoom(null)} />
-      <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(340px,456px)] lg:gap-x-4">
+      <div className={QUICK_LAYOUT}>
         {header(
           cn(PIXEL_PANEL, "px-3 py-2 lg:hidden"),
           true,
@@ -332,7 +359,7 @@ function QuickGame({
                       key={c.card}
                       card={shownPack.cards[c.card]}
                       pickNumber={null}
-                      dealDelayMs={i * CANDIDATE_DEAL_STEP_MS}
+                      opening={openingFor(i)}
                       onToggle={() => choose(c.card)}
                       onDragOut={() => {}}
                       onZoom={() => setZoom(shownPack.cards[c.card])}
@@ -365,12 +392,7 @@ function QuickGame({
                       "lg:w-[var(--rest-w)]",
                     )}
                   >
-                    <span
-                      className="block animate-cardDeal"
-                      style={{ animationDelay: `${REST_DEAL_START_MS + i * REST_DEAL_STEP_MS}ms` }}
-                    >
-                      <CardImage card={shownPack.cards[card]} className="rounded-[4.5%/3.2%]" />
-                    </span>
+                    <CrossfadeImage card={shownPack.cards[card]} opening={openingFor(shownCandidates.length + i)} />
                   </button>
                 ))}
                 {revealed && (
@@ -583,6 +605,15 @@ function streakTone(streak: number): string {
     return "text-text";
   }
   return "text-subtle";
+}
+
+const QUICK_LAYOUT = "flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_clamp(330px,30vw,456px)] lg:gap-x-4";
+
+interface RoundOpening {
+  eventId: string;
+  openedAt: number;
+  previous: ArtifactCard[] | null;
+  cards: ArtifactCard[] | null;
 }
 
 function bestStreakKey(difficulty: QuickDifficulty): string {

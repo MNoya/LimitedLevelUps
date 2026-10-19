@@ -26,6 +26,7 @@ import { CardBack } from "./CardBack";
 import { nextOpenWheelDay, readFeaturedDay, daysBefore } from "./useWheelDay";
 import { NextPacksCountdown } from "./NextPacksCountdown";
 import { useTouchVerb } from "./pageHooks";
+import { useQuickPreload } from "./quickPreload";
 import { WheelHelpDialog } from "./WheelHelp";
 import { WheelTitle } from "./WheelTitle";
 
@@ -55,6 +56,7 @@ export function WheelIntro({
   const todayDone = today.action === RESULTS_ACTION;
   const nextDayKey = nextOpenWheelDay(dayKey, dayKey);
   const newestSet = sets[0]?.code;
+  useQuickPreload(newestSet);
   const playNext = () => {
     if (nextDayKey) {
       onPlay(nextDayKey);

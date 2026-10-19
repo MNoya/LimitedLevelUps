@@ -32,7 +32,8 @@ import { releaseFocus, useGuideHash, useNoScrollGutter, useTouchVerb } from "../
 import { FEATURED_PLAY, WheelIntro } from "../components/draftGames/wheel/WheelIntro";
 import { WheelSummary } from "../components/draftGames/wheel/WheelSummary";
 import { useFlip } from "../components/draftGames/wheel/motion";
-import { cardImageSources, hasCardImage, useCardImageMap } from "../data/cardImages";
+import { packArtResolved, usePreloadPackArt } from "../components/draftGames/wheel/packArt";
+import { useCardImageMap } from "../data/cardImages";
 import {
   MINI_GAMES_HEADER,
   ordinal,
@@ -287,7 +288,8 @@ function WheelGame({
   const ready = slotCount > 0 && slots.length === slotCount;
   const nextOpen = featured ? nextUnlockedIndex(packs, day.locked, viewIndex) : null;
   const last = featured && nextOpen == null;
-  usePreloadPackArt(featured ? (nextOpen != null ? packs[nextOpen] : undefined) : packs[viewIndex + 1]);
+  const cardImages = useCardImageMapContext();
+  usePreloadPackArt(featured ? (nextOpen != null ? packs[nextOpen] : undefined) : packs[viewIndex + 1], cardImages);
 
   const place = (card: number, at: number) => {
     const without = slots.filter((c) => c !== card);
@@ -724,32 +726,7 @@ function gridOrderFor(pack: WheelPack, revealed: boolean, revealLayout: RevealLa
 }
 
 function usePackArtResolved(pack: WheelPack | undefined): boolean {
-  const cardImages = useCardImageMapContext();
-  if (!pack) {
-    return false;
-  }
-  return (
-    cardImages.ready || pack.pack.every((card) => hasCardImage(cardImages, pack.cards[card].n, pack.cards[card].s))
-  );
-}
-
-function usePreloadPackArt(pack: WheelPack | undefined) {
-  const cardImages = useCardImageMapContext();
-  const artResolved = usePackArtResolved(pack);
-  useEffect(() => {
-    if (!pack || !artResolved) {
-      return;
-    }
-    for (const card of pack.pack) {
-      preloadImage(cardImageSources(pack.cards[card].n, pack.cards[card].s, cardImages)[0]);
-    }
-  }, [pack, artResolved, cardImages]);
-}
-
-function preloadImage(src: string | undefined) {
-  if (src) {
-    new Image().src = src;
-  }
+  return packArtResolved(pack, useCardImageMapContext());
 }
 
 function usePackImages(packs: WheelPack[]) {
