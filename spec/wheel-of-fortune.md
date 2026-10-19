@@ -56,5 +56,6 @@ Old `?play=` links redirect. Every Wheel path unfurls on Discord with the pixel 
 - `components/draftGames/wheel/`: intro, pack grid, order panel, header, results and guides
 - `data/draftGames.ts`: pack building, daily selection, numbering and scoring
 - `data/cardImages.ts` and `functions/api/card-images.ts`: card art and layouts
+- `frontend/scripts/pixel-art/`: claude-pxl sources for the wordmark and wheel sprite, which render to the PNGs in `frontend/public/games/`
 
  Open follow-ups for both games are tracked in `spec/mini-games-roadmap.html`.

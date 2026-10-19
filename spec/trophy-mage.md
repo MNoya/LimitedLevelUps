@@ -24,7 +24,7 @@ One Pod, three or four decks on screen. Exactly one of them went 3-0. The player
 - **Shared look, reuse it:**
   - `frontend/src/components/draftGames/pixelStyles.ts`: `GOLD_BUTTON`, `DARK_PIXEL_BUTTON`, `PIXEL_PANEL`, `PIXEL_TAG`, `PIXEL_WELL`, `PIXEL_HEADING`, `HARD_TEXT_SHADOW`.
   - Wheel components to learn from: `wheel/WheelIntro.tsx` (intro with title, premise row, carousel), `wheel/WheelTitle.tsx` (pixel wordmark with an animated sprite as a letter), `wheel/WheelEmoji.tsx` (sprite strip with spin physics), `wheel/WheelBackdrop.tsx` (faint drifting card art under the page), `wheel/WheelHelp.tsx` (How to Play dialog), `wheel/PackGrid.tsx` (reveal chips).
-  - Pixel art is generated with claude-pxl, cloned at `/tmp/claude-pxl`. Recreate it if `/tmp` was wiped: the Wheel's sources are `review/wheel-ambient/wheel-emoji.px.js` and `wheel-title.px.js`.
+  - Pixel art is generated with claude-pxl, cloned at `/tmp/claude-pxl`. Recreate it if `/tmp` was wiped. Both games' sources live in `frontend/scripts/pixel-art/`.
 
 ## Visual direction
 
