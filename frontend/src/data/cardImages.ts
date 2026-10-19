@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { frontFace } from "../lib/cardSlug";
+import { cachedImageUrl } from "../lib/dev-image-cache";
 import { scryfallWebp } from "./scryfallImage";
 
 // Card art resolves through /api/card-images (Scryfall batch → CDN URLs); the browser never hits Scryfall directly
@@ -12,6 +13,7 @@ export interface CardImageItem {
 
 export interface CardImages {
   images: Map<string, string>;
+  layouts?: Map<string, string>;
   ready: boolean;
   settled?: ReadonlySet<string>;
 }
@@ -40,21 +42,35 @@ function dedupeIdentifiers(items: CardImageItem[]): { name: string; set: string 
   return [...byKey.values()];
 }
 
-async function fetchCardImages(identifiers: { name: string; set: string }[]): Promise<Record<string, string>> {
+interface ResolvedCards {
+  images: Record<string, string>;
+  layouts: Record<string, string>;
+}
+
+async function fetchCardImages(identifiers: { name: string; set: string }[]): Promise<ResolvedCards> {
   if (identifiers.length === 0) {
-    return {};
+    return { images: {}, layouts: {} };
   }
   const res = await fetch("/api/card-images", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ identifiers }),
   });
-  return res.ok ? ((await res.json()) as Record<string, string>) : {};
+  if (!res.ok) {
+    return { images: {}, layouts: {} };
+  }
+  const body = (await res.json()) as Partial<ResolvedCards> | Record<string, string>;
+  if (typeof body.images === "object" && body.images) {
+    return { images: body.images as Record<string, string>, layouts: (body.layouts ?? {}) as Record<string, string> };
+  }
+  return { images: body as Record<string, string>, layouts: {} };
 }
 
 // One app-wide card->URL map shared by every caller, persisted to localStorage; a hook resolves only its missing cards
 const CACHE_KEY = "cardimg:v3";
+const LAYOUT_CACHE_KEY = "cardlayout:v1";
 const memoryMap = new Map<string, string>();
+const layoutMap = new Map<string, string>();
 let hydrated = false;
 
 function hydrate(): void {
@@ -69,6 +85,12 @@ function hydrate(): void {
         memoryMap.set(key, url);
       }
     }
+    const rawLayouts = localStorage.getItem(LAYOUT_CACHE_KEY);
+    if (rawLayouts) {
+      for (const [key, layout] of Object.entries(JSON.parse(rawLayouts) as Record<string, string>)) {
+        layoutMap.set(key, layout);
+      }
+    }
   } catch {
     return;
   }
@@ -77,6 +99,7 @@ function hydrate(): void {
 function persist(): void {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(Object.fromEntries(memoryMap)));
+    localStorage.setItem(LAYOUT_CACHE_KEY, JSON.stringify(Object.fromEntries(layoutMap)));
   } catch {
     return;
   }
@@ -87,7 +110,7 @@ export function useCardImageMap(items: CardImageItem[]): CardImages {
   hydrate();
   const identifiers = useMemo(() => dedupeIdentifiers(items), [items]);
   const missing = useMemo(
-    () => identifiers.filter((id) => !memoryMap.has(mapKey(id.set, id.name))),
+    () => identifiers.filter((id) => !memoryMap.has(mapKey(id.set, id.name)) || needsLayout(id)),
     [identifiers],
   );
   const missingSignature = useMemo(
@@ -102,7 +125,7 @@ export function useCardImageMap(items: CardImageItem[]): CardImages {
     gcTime: Infinity,
   });
   return useMemo(
-    () => ({ images: new Map(memoryMap), ready: missing.length === 0 || !isFetching }),
+    () => ({ images: new Map(memoryMap), layouts: new Map(layoutMap), ready: missing.length === 0 || !isFetching }),
     [missing.length, isFetching],
   );
 }
@@ -147,11 +170,22 @@ export function useBoardCardImages(board: CardImageItem[], visible: CardImageIte
 
 async function resolveIntoMap(identifiers: { name: string; set: string }[]): Promise<Record<string, string>> {
   const fetched = await fetchCardImages(identifiers);
-  for (const [key, url] of Object.entries(fetched)) {
+  for (const [key, url] of Object.entries(fetched.images)) {
     memoryMap.set(key, url);
   }
+  for (const [key, layout] of Object.entries(fetched.layouts)) {
+    layoutMap.set(key, layout);
+  }
   persist();
-  return fetched;
+  return fetched.images;
+}
+
+function needsLayout(id: { name: string; set: string }): boolean {
+  return id.name.includes("//") && !layoutMap.has(mapKey(id.set, id.name));
+}
+
+export function cardLayout(cardImages: CardImages, name: string | null | undefined, set: string | null | undefined) {
+  return name ? cardImages.layouts?.get(mapKey(set, name)) : undefined;
 }
 
 // A fixed card->URL map from images already known, such as a set pool, so nothing is resolved over the network
@@ -176,6 +210,30 @@ export function cardImageSources(
   set: string | null | undefined,
   cardImages?: CardImages,
 ): string[] {
+  return scryfallImageSources(name, set, cardImages).map(cachedImageUrl);
+}
+
+export function hasCardImage(cardImages: CardImages, name: string | null | undefined, set: string | null | undefined) {
+  return name != null && cardImages.images.has(mapKey(set, name));
+}
+
+// Like cardImageSources but rewritten to Scryfall's art crop for a frameless thumbnail
+export function cardArtSources(
+  name: string | null | undefined,
+  set: string | null | undefined,
+  cardImages?: CardImages,
+): string[] {
+  const artUrls = scryfallImageSources(name, set, cardImages).map((url) =>
+    url.includes("cards.scryfall.io/") ? scryfallWebp(url, "art") : url.replace("version=normal", "version=art_crop"),
+  );
+  return artUrls.map(cachedImageUrl);
+}
+
+function scryfallImageSources(
+  name: string | null | undefined,
+  set: string | null | undefined,
+  cardImages?: CardImages,
+): string[] {
   if (!name) {
     return [];
   }
@@ -189,14 +247,4 @@ export function cardImageSources(
   const settled = cardImages?.settled;
   const ready = settled ? settled.has(mapKey(set, name)) : (cardImages?.ready ?? true);
   return ready ? fallback : [];
-}
-
-export function cardArtSources(
-  name: string | null | undefined,
-  set: string | null | undefined,
-  cardImages?: CardImages,
-): string[] {
-  return cardImageSources(name, set, cardImages).map((url) =>
-    url.includes("cards.scryfall.io/") ? scryfallWebp(url, "art") : url.replace("version=normal", "version=art_crop"),
-  );
 }

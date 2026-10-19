@@ -351,6 +351,16 @@ const resolveRoute = async (
   if (section === "pro-play") {
     return proPlayRoute(rest);
   }
+  if (section === "wheel-of-fortune") {
+    const wheelArt: ImageIntent = { kind: "asset", path: "/games/wheel-of-fortune/og-image.png" };
+    const wheelPath = ["/wheel-of-fortune", ...rest.map((part) => part.toLowerCase())].join("/");
+    return resolved(page("Wheel of Fortune", "Can you guess what will wheel?", wheelArt), wheelPath);
+  }
+  if (section === "trophy-mage") {
+    const trophyArt: ImageIntent = { kind: "asset", path: "/games/trophy-mage/og-image.png" };
+    const trophyPath = ["/trophy-mage", ...rest.map((part) => part.toLowerCase())].join("/");
+    return resolved(page("Trophy Mage", "Can you guess which decks trophied?", trophyArt), trophyPath);
+  }
   if (section === "community") {
     return resolved(page("Community", "Learn about us, the show and the community behind it"), "/community");
   }
@@ -411,6 +421,11 @@ const matchesAppRoute = (segments: string[]): boolean => {
     "/tools",
     "/tools/craft",
     "/tools/craft/:setCode",
+    "/tools/trophy-mage",
+    "/trophy-mage",
+    "/trophy-mage/:play",
+    "/wheel-of-fortune",
+    "/wheel-of-fortune/:play",
     "/pro-play",
     "/pro-play/:slug",
     "/pro-play/:slug/:view",
@@ -803,6 +818,9 @@ const proPlayRoute = (rest: string[]): RouteResolution => {
 const toolsRoute = async (rest: string[]): Promise<RouteResolution> => {
   if (rest.length === 0) {
     return resolved(page("Tools", "Community tools for MTG limited players"), "/tools");
+  }
+  if (rest[0] === "trophy-mage") {
+    return redirect("/trophy-mage", 301);
   }
   const craftDescription = "Importable Decklists for Bulk Crafting";
   const craftImage: ImageIntent = { kind: "asset", path: "/wildcards/mythic-card.png" };

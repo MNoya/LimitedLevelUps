@@ -75,6 +75,7 @@ body,
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 a {
@@ -93,6 +94,25 @@ button {
   --font-num: "Hanken Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
   --font-serif: "Spectral", Georgia, serif;
+  --px-ink: #1a120b;
+  --px-panel: #16110c;
+  --px-panel-glass: rgba(22, 17, 12, 0.95);
+  --px-rim: #5a3a1e;
+  --px-well: #0f0b07;
+  --px-well-rim: #3a2a17;
+  --px-accent: #f6c95e;
+  --px-button: linear-gradient(180deg, #fff3cf 0%, #f6c95e 45%, #cf8e2c 100%);
+}
+
+.game-theme-ice {
+  --px-ink: #0b1430;
+  --px-panel: #0e1729;
+  --px-panel-glass: rgba(14, 23, 41, 0.95);
+  --px-rim: #2c5d8f;
+  --px-well: #08101f;
+  --px-well-rim: #1d3557;
+  --px-accent: #9ff3ff;
+  --px-button: linear-gradient(180deg, #ecfdff 0%, #8fe3f8 45%, #3fa6dc 100%);
 }
 
 .no-scrollbar {
@@ -241,4 +261,12 @@ button {
 @keyframes eqBar {
   0%, 100% { transform: scaleY(0.35); }
   50% { transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draft-game * {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
 }
