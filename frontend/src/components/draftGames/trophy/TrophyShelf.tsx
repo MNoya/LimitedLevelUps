@@ -5,10 +5,12 @@ import { setShortLabel, shortDayLabel } from "../../../data/draftGames";
 import { SetGlyph } from "../../Brand";
 import { Trophy } from "lucide-react";
 
+import { DailyCountdown } from "../GameChrome";
 import { DARK_PIXEL_BUTTON, HARD_TEXT_SHADOW, PIXEL_HEADING, PIXEL_TAG } from "../pixelStyles";
 import {
   DAY_DONE_ACTION,
   HelpButton,
+  NEXT_PODS_LABEL,
   PlayButton,
   ResponsiveTitle,
   SetPicker,
@@ -16,7 +18,6 @@ import {
   type IntroData,
 } from "./introParts";
 import { CLEAN_TROPHY_SPRITE, PixelFrame, SpriteStrip } from "./SpriteStrip";
-import { DayScoreRow } from "./TrophyRecap";
 
 const SHELF_HEADING = "Today's Showcase";
 
@@ -43,7 +44,7 @@ export function TrophyShowcase({ data }: { data: IntroData }) {
             Can you guess which decks trophied?
           </span>
         </div>
-        <div className="flex w-full max-w-[760px] flex-col gap-3 max-sm:gap-2">
+        <div className="relative flex w-full max-w-[760px] flex-col gap-3 max-sm:gap-2">
           <h2
             className={cn(
               "font-display text-3xl leading-none text-text max-sm:text-2xl [@media(max-height:760px)]:text-2xl",
@@ -57,15 +58,12 @@ export function TrophyShowcase({ data }: { data: IntroData }) {
             slots={data.slots}
             size="large"
             onRound={data.onRound}
-            lifted={playHovered && data.dayScore == null}
+            lifted={playHovered && !data.dayDone}
           />
-          {data.dayScore && (
-            <DayScoreRow
-              dayKey={data.dayKey}
-              points={data.dayScore.points}
-              max={data.dayScore.max}
-              pending={data.dayScore.pending}
-              className="justify-end"
+          {data.dayDone && (
+            <DailyCountdown
+              label={NEXT_PODS_LABEL}
+              className="absolute top-full right-0 mt-4 text-base max-sm:mt-3 [&>span]:text-lg"
             />
           )}
         </div>
@@ -243,7 +241,7 @@ function TrophyBase({ slot, small }: { slot: DaySlot; small: boolean }) {
         "text-center font-display leading-none text-[#fff1d6] [text-shadow:1px_1px_0_#1a120b]",
         "shadow-[inset_0_2px_0_#d99a5b,inset_0_-2px_0_#5a3a1e]",
         small
-          ? "px-1 pt-px text-xs max-sm:hidden [@media(max-height:760px)]:sm:hidden"
+          ? "px-1 pt-px text-sm max-sm:hidden [@media(max-height:760px)]:sm:hidden"
           : "px-2 pt-[3px] text-base sm:text-lg [@media(max-height:760px)]:sm:text-base",
       )}
     >

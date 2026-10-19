@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Coins, FerrisWheel, Hammer, Library, Swords, Trophy, type LucideIcon } from "lucide-react";
+import { TrophyTitle } from "../components/draftGames/trophy/TrophyTitle";
+import { WheelTitle } from "../components/draftGames/wheel/WheelTitle";
 import { PageShell } from "../components/PageShell";
 import { Container } from "../components/Container";
 import { PanelShell } from "../components/CommunityBits";
@@ -15,6 +17,7 @@ interface Tool {
   Icon: LucideIcon;
   to?: string;
   extra?: ReactNode;
+  wordmark?: ReactNode;
 }
 
 export function ToolsPage() {
@@ -42,15 +45,17 @@ export function ToolsPage() {
     },
     {
       title: WHEEL_GAME_TITLE,
-      blurb: "Guess the pick order of a real Peasant Cube Pod pack and call the wheel",
+      blurb: "Can you guess what will wheel?",
       Icon: FerrisWheel,
       to: "/wheel-of-fortune",
+      wordmark: <WheelTitle scale={2} interactive={false} />,
     },
     {
       title: TROPHY_GAME_TITLE,
       blurb: "Can you guess which decks trophied?",
       Icon: Trophy,
       to: "/trophy-mage",
+      wordmark: <TrophyTitle scale={2} interactive={false} />,
     },
     { title: "Event EV", blurb: "Expected gems and packs per event at your win rate", Icon: Coins },
     { title: "Set Completion", blurb: "Packs and wildcards left to complete a set", Icon: Library },
@@ -82,20 +87,26 @@ function ToolCard({ tool }: { tool: Tool }) {
       className={cn("min-h-[190px]", !live && "opacity-60")}
     >
       <div className="relative flex flex-1 flex-col gap-4 p-6">
-        <div className="flex items-center gap-3">
-          <tool.Icon
-            size={26}
-            className={cn("shrink-0 text-subtle", live && "transition-colors group-hover:text-green")}
-          />
-          <span
-            className={cn(
-              "font-display text-text text-[26px] leading-[0.95] tracking-[0.03em]",
-              live && "transition-colors group-hover:text-green",
-            )}
-          >
-            {tool.title}
-          </span>
-        </div>
+        {tool.wordmark ? (
+          <div className="flex h-[30px] items-center" aria-label={tool.title}>
+            {tool.wordmark}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <tool.Icon
+              size={26}
+              className={cn("shrink-0 text-subtle", live && "transition-colors group-hover:text-green")}
+            />
+            <span
+              className={cn(
+                "font-display text-text text-[26px] leading-[0.95] tracking-[0.03em]",
+                live && "transition-colors group-hover:text-green",
+              )}
+            >
+              {tool.title}
+            </span>
+          </div>
+        )}
         <p className="text-subtle text-[14px] leading-[1.55] max-w-[340px]">{tool.blurb}</p>
         <div className="mt-auto flex items-end justify-between gap-3">
           {tool.extra ?? <span />}

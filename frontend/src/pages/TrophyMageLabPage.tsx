@@ -10,11 +10,14 @@ import { DAILY_PLAY, TrophyLoading, TrophyNotice } from "../components/draftGame
 import { TrophyIntro } from "../components/draftGames/trophy/TrophyIntro";
 import { TrophyTitle } from "../components/draftGames/trophy/TrophyTitle";
 import { trophyDayStorageKey } from "../components/draftGames/trophy/useTrophyDay";
+import { useGuideHash, useNoScrollGutter } from "../components/draftGames/wheel/pageHooks";
 import { MINI_GAMES_HEADER, gameDayKey, useWheelSets } from "../data/draftGames";
-import { useDailyTrophyRounds, useFreePlayTrophyRounds } from "../data/trophyMage";
+import { TROPHY_DAILY_ROUNDS, useDailyTrophyRounds, useFreePlayTrophyRounds } from "../data/trophyMage";
 import { cn } from "../lib/utils";
 
 const REVIEW_PARAM = "review";
+const ROUND_PARAM = "round";
+const INVALID_ROUND = -1;
 const RESET_PARAM = "reset";
 const RESULTS_PARAM = "results";
 const TROPHY_PATH = "/trophy-mage";
@@ -33,7 +36,8 @@ export function TrophyMageLabPage() {
   const { play: playSegment } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [helpOpen, openHelp, closeHelp] = useGuideHash();
+  useNoScrollGutter();
+  const [helpOpen, openHelp, closeHelp] = useGuideHash("guide");
   const goTo = (segment: string | null, search: Record<string, string> = {}, replace = false) =>
     navigate(
       {
@@ -68,14 +72,20 @@ export function TrophyMageLabPage() {
       />
     );
   } else if (DAY_SEGMENT.test(play)) {
-    const round = params.get("round");
-    const review = params.get(REVIEW_PARAM);
+    const startAt = roundIndexParam(params, ROUND_PARAM);
+    const reviewIndex = roundIndexParam(params, REVIEW_PARAM);
+    if (startAt === INVALID_ROUND || reviewIndex === INVALID_ROUND) {
+      const canonical = new URLSearchParams(params);
+      canonical.delete(ROUND_PARAM);
+      canonical.delete(REVIEW_PARAM);
+      return <Navigate to={{ pathname: location.pathname, search: canonical.toString() }} replace />;
+    }
     const playedDay = play;
     body = (
       <DailyGame
         dayKey={playedDay}
-        startAt={round == null ? null : Number(round)}
-        reviewIndex={review == null ? null : Number(review)}
+        startAt={startAt}
+        reviewIndex={reviewIndex}
         showResults={params.has(RESULTS_PARAM)}
         onReview={(index, replace) => goTo(playedDay, playSearch({ review: index }), replace)}
         onEndReview={() => {
@@ -89,7 +99,7 @@ export function TrophyMageLabPage() {
         onExit={exit}
         onPlayDay={(day) => playDay(day)}
         onPlaySet={(code) => goTo(code.toLowerCase())}
-        onDayDone={() => (playedDay === dayKey ? goTo(null) : goTo(playedDay, playSearch({ results: true })))}
+        onDayDone={() => goTo(playedDay, playSearch({ results: true }))}
       />
     );
   } else {
@@ -201,15 +211,27 @@ function FreePlayGame({ setCode, onHelp, onExit }: { setCode: string; onHelp: ()
 function playSearch(options: PlayOptions): Record<string, string> {
   const search: Record<string, string> = {};
   if (options.round != null) {
-    search.round = String(options.round);
+    search[ROUND_PARAM] = String(options.round + 1);
   }
   if (options.review != null) {
-    search[REVIEW_PARAM] = String(options.review);
+    search[REVIEW_PARAM] = String(options.review + 1);
   }
   if (options.results) {
     search[RESULTS_PARAM] = "1";
   }
   return search;
+}
+
+function roundIndexParam(params: URLSearchParams, name: string): number | null {
+  const value = params.get(name);
+  if (value == null) {
+    return null;
+  }
+  const roundNumber = Number(value);
+  if (!Number.isInteger(roundNumber) || roundNumber < 1 || roundNumber > TROPHY_DAILY_ROUNDS) {
+    return INVALID_ROUND;
+  }
+  return roundNumber - 1;
 }
 
 function clearSavedDaysOnRequest() {
@@ -225,13 +247,4 @@ function clearSavedDaysOnRequest() {
   }
   url.searchParams.delete(RESET_PARAM);
   window.history.replaceState(window.history.state, "", url);
-}
-
-function useGuideHash(): [boolean, () => void, () => void] {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const open = location.hash === "#guide";
-  const openGuide = () => navigate({ search: location.search, hash: "guide" });
-  const closeGuide = () => navigate({ search: location.search, hash: "" }, { replace: true });
-  return [open, openGuide, closeGuide];
 }

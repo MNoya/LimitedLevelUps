@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import { SetGlyph } from "../../Brand";
 import { cn } from "../../../lib/utils";
 
-export function CardBack({ code, index, className }: { code: string; index: number; className?: string }) {
+export function CardBack({ code, index, className }: { code: string | null; index: number; className?: string }) {
   return (
     <span
       className={cn(
@@ -22,13 +22,15 @@ export function CardBack({ code, index, className }: { code: string; index: numb
             "group-hover:translate-x-[120%] group-hover:transition-transform group-hover:duration-700",
           )}
         />
-        <span className="absolute inset-0 grid place-items-center">
-          <SetGlyph
-            code={code}
-            size="50cqw"
-            className={cn("drop-shadow-[0_0_1px_#1a120b] drop-shadow-[1px_2px_0_rgba(0,0,0,0.55)]", "text-[#fff1d6]")}
-          />
-        </span>
+        {code && (
+          <span className="absolute inset-0 grid place-items-center animate-fadeIn">
+            <SetGlyph
+              code={code}
+              size="50cqw"
+              className={cn("drop-shadow-[0_0_1px_#1a120b] drop-shadow-[1px_2px_0_rgba(0,0,0,0.55)]", "text-[#fff1d6]")}
+            />
+          </span>
+        )}
       </span>
     </span>
   );

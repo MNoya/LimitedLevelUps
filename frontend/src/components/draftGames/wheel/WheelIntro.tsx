@@ -154,6 +154,7 @@ interface IntroData {
 
 const TODAY_SLIDE = "today";
 const DAY_SLIDE_PREFIX = "day:";
+const LOADING_SET_SLIDES = ["loading-0", "loading-1", "loading-2", "loading-3", "loading-4"];
 const SHORT_SCREEN_BUTTON = "[@media(max-height:760px)]:sm:py-1.5 [@media(max-height:760px)]:sm:text-2xl";
 const DESKTOP_PLAY = cn("px-12 py-3.5 text-3xl", SHORT_SCREEN_BUTTON);
 const DESKTOP_QUICK = cn("px-7 py-3.5 text-2xl", SHORT_SCREEN_BUTTON, "[@media(max-height:760px)]:sm:text-xl");
@@ -172,12 +173,12 @@ function PickerIntro({ data }: { data: IntroData }) {
     () => [
       ...pastDays.map((day) => `${DAY_SLIDE_PREFIX}${day.dayKey}`),
       TODAY_SLIDE,
-      ...data.sets.map((set) => set.code),
+      ...(data.sets.length > 0 ? data.sets.map((set) => set.code) : LOADING_SET_SLIDES),
     ],
     [pastDays, data.sets],
   );
   const [requestedIndex, setRequestedIndex] = useState(todayIndex);
-  const lastIndex = slides.length - 1;
+  const lastIndex = todayIndex + data.sets.length;
   const selectedIndex = Math.min(requestedIndex, lastIndex);
   const selected = slides[selectedIndex];
   const isToday = selected === TODAY_SLIDE;
@@ -190,7 +191,7 @@ function PickerIntro({ data }: { data: IntroData }) {
   useArrowKeys(step);
   const swipe = useSwipe(step);
   const play = () => (selectedDay ? data.onDay(selectedDay.dayKey) : data.onSet(selected));
-  const fanCounts = data.days.map((day) => day.sets.length);
+  const fanCounts = data.days.map((day) => fanCount(day.sets));
   const offsets = slideOffsets(slides.length, todayIndex, selectedIndex, fanCounts);
   const firstSetEdge = fanWidth(data.featuredSets.length) / 2 + TODAY_GAP;
 
@@ -246,7 +247,7 @@ function PickerIntro({ data }: { data: IntroData }) {
           const transform = `translateX(calc(-50% + var(--u) * ${offsets[i]})) scale(${center ? 1 : SIDE_SCALE})`;
           return (
             <button
-              key={slide}
+              key={i > todayIndex ? `set-${i}` : slide}
               onClick={() => (center ? play() : setRequestedIndex(i))}
               aria-label={day ? `${day.label} ${day.title}` : data.sets[i - todayIndex - 1]?.name}
               tabIndex={hidden ? -1 : 0}
@@ -269,6 +270,8 @@ function PickerIntro({ data }: { data: IntroData }) {
               >
                 {day ? (
                   <TodayFan sets={day.sets} lift={center} />
+                ) : LOADING_SET_SLIDES.includes(slide) ? (
+                  <CardBack code={null} index={i} className="w-[var(--u)]" />
                 ) : (
                   <CardBack code={slide} index={i} className="w-[var(--u)]" />
                 )}
@@ -289,7 +292,7 @@ function PickerIntro({ data }: { data: IntroData }) {
       <div
         className={cn(
           "mt-10 flex flex-col items-center gap-7 max-sm:hidden",
-          "[@media(max-height:760px)]:sm:mt-6 [@media(max-height:760px)]:sm:gap-4",
+          "[@media(max-height:760px)]:sm:mt-5 [@media(max-height:760px)]:sm:gap-3",
         )}
       >
         <div className="relative">
@@ -434,7 +437,10 @@ function TodayHeading({ dayLabel, title = "Today's Packs" }: { dayLabel: string;
 
 function SlideLabel({ slide, center, day }: { slide: string; center: boolean; day: DaySlide | null }) {
   if (!day) {
-    return homeSetLabel(slide);
+    return LOADING_SET_SLIDES.includes(slide) ? "\u00a0" : homeSetLabel(slide);
+  }
+  if (day.sets.length === 0) {
+    return "\u00a0";
   }
   if (!center) {
     return day.name;
@@ -454,12 +460,17 @@ function SlideLabel({ slide, center, day }: { slide: string; center: boolean; da
   );
 }
 
+function fanCount(sets: string[]): number {
+  return sets.length > 0 ? sets.length : DAILY_ROUNDS;
+}
+
 function homeSetLabel(code: string): string {
   return code === CUBE_SET_CODE ? "CUBE" : setShortLabel(code);
 }
 
 function TodayFan({ sets, lift }: { sets: string[]; lift: boolean }) {
-  const count = sets.length;
+  const count = fanCount(sets);
+  const cards = sets.length > 0 ? sets : Array.from({ length: count }, () => null);
   return (
     <span
       className="relative mb-[calc(var(--u)*0.12)] block h-[calc(var(--u)*1.55)]"
@@ -467,11 +478,11 @@ function TodayFan({ sets, lift }: { sets: string[]; lift: boolean }) {
         width: `calc(var(--u) * (1 + ${count - 1} * var(--fan-step, ${FAN_STEP})))`,
       }}
     >
-      {sets.map((code, i) => {
+      {cards.map((code, i) => {
         const offset = i - (count - 1) / 2;
         return (
           <span
-            key={`${code}-${i}`}
+            key={`card-${i}`}
             className={cn("group/pack absolute bottom-0 origin-bottom", lift && "hover:!z-20")}
             style={{
               left: `calc(var(--u) * ${i} * var(--fan-step, ${FAN_STEP}))`,
@@ -498,7 +509,13 @@ function FreePlayRow({ data, title, className }: { data: IntroData; title: strin
   return (
     <section className={cn("w-full", className)}>
       <ChoiceHeading>{title}</ChoiceHeading>
-      <div className={cn("mt-4 flex gap-x-2 overflow-x-auto px-2 pt-2 pb-2 [justify-content:safe_center]")}>
+      <div
+        className={cn(
+          "-mx-4 mt-4 flex gap-x-2 overflow-x-auto px-5 pt-2 pb-2 [justify-content:safe_center]",
+          "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          "[mask-image:linear-gradient(to_right,transparent,black_28px,black_calc(100%-28px),transparent)]",
+        )}
+      >
         {data.days
           .slice(0, -1)
           .reverse()
@@ -520,21 +537,21 @@ function FreePlayRow({ data, title, className }: { data: IntroData; title: strin
                   HARD_TEXT_SHADOW,
                 )}
               >
-                {day.name}
+                {day.sets.length > 0 ? day.name : "\u00a0"}
               </span>
             </button>
           ))}
-        <span className="mx-1 my-3 w-0.5 shrink-0 self-stretch bg-[#3a2a17]" />
-        {data.sets.map((set, i) => (
+        {(data.sets.length > 0 ? data.sets.map((set) => set.code) : LOADING_SET_SLIDES).map((code, i) => (
           <button
-            key={set.code}
-            onClick={() => data.onSet(set.code)}
+            key={`set-${i}`}
+            disabled={LOADING_SET_SLIDES.includes(code)}
+            onClick={() => data.onSet(code)}
             className={cn(
               "group flex w-[60px] shrink-0 flex-col items-center gap-2 transition-transform duration-200",
               "hover:-translate-y-1.5",
             )}
           >
-            <CardBack code={set.code} index={i} className="w-[54px]" />
+            <CardBack code={LOADING_SET_SLIDES.includes(code) ? null : code} index={i} className="w-[54px]" />
             <span
               className={cn(
                 "relative z-10 text-center text-base leading-none font-bold text-text",
@@ -542,7 +559,7 @@ function FreePlayRow({ data, title, className }: { data: IntroData; title: strin
                 HARD_TEXT_SHADOW,
               )}
             >
-              {homeSetLabel(set.code)}
+              {LOADING_SET_SLIDES.includes(code) ? "\u00a0" : homeSetLabel(code)}
             </span>
           </button>
         ))}

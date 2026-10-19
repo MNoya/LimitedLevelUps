@@ -89,7 +89,10 @@ export function useDailyTrophyRounds(dayKey: string): { rounds: TrophyMageRound[
   const slots = useMemo(() => dailySlots(events, dayKey, seed), [events, dayKey, seed]);
   const resolved = useRoundSlots(slots, seed);
   const loaded = resolved.every((round) => round !== undefined);
-  const rounds = useMemo(() => resolved.filter((round): round is TrophyMageRound => round != null), [resolved]);
+  const rounds = useMemo(
+    () => (loaded ? resolved.filter((round): round is TrophyMageRound => round != null) : []),
+    [resolved, loaded],
+  );
   return { rounds, isPending: eventsPending || !loaded };
 }
 

@@ -34,7 +34,7 @@ export interface IntroData {
   dayLabel: string;
   slots: DaySlot[];
   dailyAction: string;
-  dayScore: { points: number; max: number; pending: boolean } | null;
+  dayDone: boolean;
   pastDays: { dayKey: string; slots: DaySlot[] }[];
   sets: WheelSetOption[];
   onDaily: () => void;

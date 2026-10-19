@@ -6,7 +6,6 @@ import {
   dayProgress,
   ENDLESS_ACTION,
   NEXT_DAY_ACTION,
-  type DaySlot,
   type IntroData,
 } from "./introParts";
 import { TrophyHelpDialog } from "./TrophyHelp";
@@ -47,13 +46,12 @@ export function TrophyIntro({
       onPlay(newestSet);
     }
   };
-  const todayLoaded = !today.isPending;
   const data: IntroData = {
     dayKey,
     dayLabel: shortDayLabel(dayKey),
     ...progress,
     dailyAction: showsResultHere ? (nextDayKey ? NEXT_DAY_ACTION : ENDLESS_ACTION) : progress.dailyAction,
-    dayScore: showsResultHere ? { ...totalScore(progress.slots), pending: !todayLoaded } : null,
+    dayDone: showsResultHere,
     pastDays: [
       { dayKey: yesterdayKey, slots: yesterdayProgress.slots },
       { dayKey: twoDaysAgoKey, slots: twoDaysAgoProgress.slots },
@@ -76,14 +74,4 @@ export function TrophyIntro({
       />
     </div>
   );
-}
-
-function totalScore(slots: DaySlot[]): { points: number; max: number } {
-  let points = 0;
-  let max = 0;
-  for (const slot of slots) {
-    points += slot.points ?? 0;
-    max += slot.max;
-  }
-  return { points, max };
 }

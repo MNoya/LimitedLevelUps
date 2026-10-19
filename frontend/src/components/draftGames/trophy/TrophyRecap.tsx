@@ -2,7 +2,7 @@ import { ChevronLeft, Play } from "lucide-react";
 
 import { SetGlyph } from "../../Brand";
 import { cn } from "../../../lib/utils";
-import { setShortLabel, useWheelSets, gameDayKey } from "../../../data/draftGames";
+import { setShortLabel, shortDayLabel, useWheelSets, gameDayKey } from "../../../data/draftGames";
 import {
   callFor,
   EMPTY_CALLS,
@@ -12,10 +12,11 @@ import {
   type TrophyMageDeck,
   type TrophyMageRound,
 } from "../../../data/trophyMage";
-import { ACCENT_BUTTON, DARK_PIXEL_BUTTON, HARD_TEXT_SHADOW } from "../pixelStyles";
+import { ACCENT_BUTTON, DARK_PIXEL_BUTTON, HARD_TEXT_SHADOW, PIXEL_HEADING } from "../pixelStyles";
 import { DailyCountdown } from "../GameChrome";
 import { ENDLESS_ACTION, NEXT_DAY_ACTION, NEXT_PODS_LABEL, ResponsiveTitle } from "./introParts";
 import { ResultTag } from "./RecordChip";
+import { SpriteStrip, TROPHY_SPRITE } from "./SpriteStrip";
 import { useDeckImage } from "./useDeckImage";
 import { nextOpenDay, type TrophyDay } from "./useTrophyDay";
 
@@ -46,19 +47,29 @@ export function TrophyRecap({
     max += score.max;
   }
   return (
-    <div className="mx-auto flex w-full max-w-[1100px] flex-col items-center pb-4 text-center">
-      <ResponsiveTitle />
+    <div
+      className={cn(
+        "mx-auto flex w-full max-w-[1100px] flex-col items-center pb-4 text-center",
+        "max-sm:h-[calc(100dvh-5rem)] max-sm:pb-0",
+      )}
+    >
+      <div className="max-sm:hidden">
+        <ResponsiveTitle />
+      </div>
+      <PhoneRecapHeading dayKey={dayKey} points={points} max={max} />
       <div
         className={cn(
           "mt-7 flex w-full flex-col items-center gap-6 sm:mt-8",
-          "[@media(max-height:760px)]:sm:mt-3 [@media(max-height:760px)]:gap-3 max-sm:mt-3 max-sm:gap-4",
+          "[@media(max-height:760px)]:sm:mt-3 [@media(max-height:760px)]:gap-3",
+          "max-sm:mt-3 max-sm:min-h-0 max-sm:flex-1 max-sm:gap-3",
         )}
       >
         <DayScoreRow dayKey={dayKey} points={points} max={max} />
         <div
           className={cn(
-            "flex w-full max-w-[1040px] flex-col gap-4 max-sm:gap-3",
-            "[@media(max-height:760px)]:max-w-[620px] [@media(max-height:760px)]:gap-2",
+            "flex w-full max-w-[1040px] flex-col gap-4 max-sm:min-h-0 max-sm:shrink max-sm:gap-3",
+            "[@media(min-height:821px)_and_(max-height:940px)]:max-w-[820px]",
+            "[@media(max-height:820px)]:max-w-[620px] [@media(max-height:760px)]:gap-2",
           )}
         >
           {rounds.map((round, i) => (
@@ -76,30 +87,42 @@ export function TrophyRecap({
   );
 }
 
-export function DayScoreRow({
-  dayKey,
-  points,
-  max,
-  pending = false,
-  className,
-}: {
-  dayKey: string | null;
-  points: number;
-  max: number;
-  pending?: boolean;
-  className?: string;
-}) {
+function PhoneRecapHeading({ dayKey, points, max }: { dayKey: string | null; points: number; max: number }) {
   return (
-    <div className={cn("flex w-full flex-wrap items-center justify-center gap-x-6 gap-y-2", className)}>
-      <span
-        className={cn("font-display text-3xl leading-none text-[#f6c95e]", HARD_TEXT_SHADOW, pending && "invisible")}
-      >
-        {points}
-        <span className="text-2xl"> of {max} Points</span>
+    <div className="flex w-full shrink-0 items-center justify-between gap-3 px-1 sm:hidden">
+      <span className="flex items-center gap-3">
+        <SpriteStrip sheet={TROPHY_SPRITE} scale={2.5} restMs={1800} className="drop-shadow-[2px_2px_0_#05070a]" />
+        {dayKey && <h1 className={cn("text-3xl", PIXEL_HEADING)}>{shortDayLabel(dayKey)}</h1>}
       </span>
-      {dayKey === gameDayKey(new Date()) && <DailyCountdown label={NEXT_PODS_LABEL} />}
+      <span className="flex flex-col items-end gap-1.5">
+        <DayPoints points={points} max={max} className="text-2xl [&>span]:text-xl" />
+        {isToday(dayKey) && <DailyCountdown label={NEXT_PODS_LABEL} className="text-sm [&>span]:text-base" />}
+      </span>
     </div>
   );
+}
+
+function DayScoreRow({ dayKey, points, max }: { dayKey: string | null; points: number; max: number }) {
+  return (
+    <div className="flex w-full flex-wrap items-center justify-center gap-x-6 gap-y-2 max-sm:hidden">
+      {dayKey && <h1 className={cn("text-3xl", PIXEL_HEADING)}>{shortDayLabel(dayKey)}</h1>}
+      <DayPoints points={points} max={max} />
+      {isToday(dayKey) && <DailyCountdown label={NEXT_PODS_LABEL} />}
+    </div>
+  );
+}
+
+function DayPoints({ points, max, className }: { points: number; max: number; className?: string }) {
+  return (
+    <span className={cn("font-display text-3xl leading-none text-[#f6c95e]", HARD_TEXT_SHADOW, className)}>
+      {points}
+      <span className="text-2xl"> of {max} Points</span>
+    </span>
+  );
+}
+
+function isToday(dayKey: string | null): boolean {
+  return dayKey === gameDayKey(new Date());
 }
 
 function DayEndActions({
@@ -142,6 +165,7 @@ export const SCORE_LABEL = "Score";
 
 function RecapRow({ round, calls, onReview }: { round: TrophyMageRound; calls: TrophyCalls; onReview: () => void }) {
   const score = scoreTrophyRound(round, calls);
+  const crownedDeck = round.decks.find((deck) => deck.key === calls.crown);
   return (
     <button
       type="button"
@@ -151,11 +175,11 @@ function RecapRow({ round, calls, onReview }: { round: TrophyMageRound; calls: T
         "grid grid-cols-[8rem_minmax(0,1fr)_7rem] items-center gap-5 border-[3px] border-[color:var(--px-ink)] px-5 py-4",
         "bg-[radial-gradient(ellipse_at_50%_20%,rgba(30,60,115,0.1),rgba(8,14,32,0.35)_75%)]",
         "shadow-[inset_0_0_0_2px_var(--px-rim),6px_6px_0_#05070a] transition-transform hover:-translate-y-0.5",
-        "max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-x-2 max-sm:gap-y-2 max-sm:px-2.5 max-sm:py-2",
+        "max-sm:flex max-sm:min-h-0 max-sm:flex-col max-sm:items-stretch max-sm:gap-2 max-sm:px-2.5 max-sm:py-2",
         "[@media(max-height:760px)]:py-2",
       )}
     >
-      <span className="flex flex-col items-center gap-2 max-sm:flex-row max-sm:gap-2.5">
+      <span className="flex shrink-0 flex-col items-center gap-2 max-sm:flex-row max-sm:gap-2.5">
         <span
           className={cn(
             "grid size-14 place-items-center border-2 border-[color:var(--px-ink)] shadow-[2px_2px_0_#05070a]",
@@ -170,23 +194,54 @@ function RecapRow({ round, calls, onReview }: { round: TrophyMageRound; calls: T
         <span className="font-display text-2xl leading-none text-text max-sm:text-xl">
           {setShortLabel(round.setCode)}
         </span>
+        {crownedDeck && (
+          <ResultTag
+            call={callFor(calls, crownedDeck)}
+            actual={crownedDeck.record}
+            className="mx-auto text-sm sm:hidden"
+          />
+        )}
+        <RoundPoints points={score.points} crowned={score.crowned} className="sm:hidden" />
       </span>
-      <span className="grid grid-cols-3 gap-4 max-sm:col-span-2 max-sm:row-start-2 max-sm:gap-2">
+      <span className="grid grid-cols-3 gap-4 max-sm:hidden">
         {round.decks.map((deck) => (
           <RecapDeck key={deck.key} deck={deck} eventId={round.eventId} calls={calls} />
         ))}
       </span>
-      <span
-        className={cn(
-          "font-display text-5xl leading-none max-sm:col-start-2 max-sm:row-start-1 max-sm:text-3xl",
-          score.crowned ? "text-[#f6c95e]" : "text-[#aab3c5]",
-          HARD_TEXT_SHADOW,
-        )}
-      >
-        {score.points}
-        <span className="text-2xl max-sm:text-lg"> {POINTS_SHORT}</span>
-      </span>
+      {crownedDeck && <CrownedDeckImage deck={crownedDeck} eventId={round.eventId} />}
+      <RoundPoints points={score.points} crowned={score.crowned} className="max-sm:hidden" />
     </button>
+  );
+}
+
+function RoundPoints({ points, crowned, className }: { points: number; crowned: boolean; className: string }) {
+  return (
+    <span
+      className={cn(
+        "font-display text-5xl leading-none max-sm:text-3xl",
+        crowned ? "text-[#f6c95e]" : "text-[#aab3c5]",
+        HARD_TEXT_SHADOW,
+        className,
+      )}
+    >
+      {points}
+      <span className="text-2xl max-sm:text-lg"> {POINTS_SHORT}</span>
+    </span>
+  );
+}
+
+function CrownedDeckImage({ deck, eventId }: { deck: TrophyMageDeck; eventId: string }) {
+  const { url } = useDeckImage(deck, eventId);
+  const isTrophy = deck.record === TROPHY_RECORD;
+  return (
+    <span
+      className={cn(
+        "relative block aspect-[12/5] min-h-0 w-full overflow-hidden border-2 bg-[color:var(--px-well)] sm:hidden",
+        isTrophy ? "border-[#f6c95e]" : "border-[color:var(--px-accent)]",
+      )}
+    >
+      {url && <img src={url} alt="" draggable={false} className="absolute inset-0 size-full object-cover" />}
+    </span>
   );
 }
 
@@ -207,7 +262,7 @@ function RecapDeck({ deck, eventId, calls }: { deck: TrophyMageDeck; eventId: st
       <ResultTag
         call={callFor(calls, deck)}
         actual={deck.record}
-        className="text-xl max-sm:text-sm max-sm:[&>svg]:hidden max-sm:[&>svg~span]:hidden"
+        className="text-xl"
       />
     </span>
   );

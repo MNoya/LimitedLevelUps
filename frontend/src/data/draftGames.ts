@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 
 import { fetchPodDraftArtifact, fetchPodEventParticipants } from "./api";
@@ -162,7 +162,7 @@ export function useWheelSets(): { sets: WheelSetOption[]; events: PodEventSummar
   const { data: allEvents, isPending } = useAllPodEvents(true);
   const { data: setSummaries } = useSets();
   const { data: podSetCodes } = usePodSetCodes();
-  return useMemo(() => {
+  const result = useMemo(() => {
     const events = wheelEvents(allEvents);
     const bySet = new Map<string, PodEventSummary[]>();
     for (const event of events) {
@@ -179,30 +179,67 @@ export function useWheelSets(): { sets: WheelSetOption[]; events: PodEventSummar
       sets.push({ code, name, pods: setEvents.length, releaseDate: summary?.startDate ?? null });
     }
     sets.sort(byNewestRelease);
-    return { sets: withCubeSecond(sets), events, isPending };
+    const ordered = withCubeSecond(sets);
+    return {
+      sets: ordered.length > 0 ? ordered : (readCached<WheelSetOption[]>(SETS_CACHE_KEY) ?? []),
+      events,
+      isPending,
+    };
   }, [allEvents, setSummaries, podSetCodes, isPending]);
+  useEffect(() => {
+    if (result.events.length > 0 && result.sets.length > 0) {
+      writeCached(SETS_CACHE_KEY, result.sets);
+    }
+  }, [result]);
+  return result;
 }
 
 export function useFeaturedSetCodes(dayKey: string): string[] {
   const { events, sets } = useWheelSets();
   const seed = dayNumber(dayKey) * 7919;
-  return useMemo(() => {
-    const codes: string[] = [];
+  const cacheKey = `${FEATURED_CACHE_PREFIX}${dayKey}`;
+  const codes = useMemo(() => {
+    const fresh: string[] = [];
     for (const slot of featuredSlots(events, sets, dayKey, seed)) {
       if (slot.length > 0) {
-        codes.push(slot[0].setCode);
+        fresh.push(slot[0].setCode);
       }
     }
-    return codes;
+    return fresh;
   }, [events, sets, dayKey, seed]);
+  useEffect(() => {
+    if (codes.length > 0) {
+      writeCached(cacheKey, codes);
+    }
+  }, [codes, cacheKey]);
+  return codes.length > 0 ? codes : (readCached<string[]>(cacheKey) ?? []);
+}
+
+const SETS_CACHE_KEY = "wheel-of-fortune-sets:v1";
+const FEATURED_CACHE_PREFIX = "wheel-of-fortune-featured-sets:v1:";
+
+function readCached<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCached(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    return;
+  }
 }
 
 export function useFeaturedPacks(dayKey: string): { packs: WheelPack[]; isPending: boolean } {
   const { events, sets, isPending: setsPending } = useWheelSets();
   const seed = dayNumber(dayKey) * 7919;
   const slots = useMemo(() => featuredSlots(events, sets, dayKey, seed), [events, sets, dayKey, seed]);
-  const seedForSlot = useCallback((_event: PodEventSummary, slotIndex: number) => seed + slotIndex, [seed]);
-  const slotPacks = usePackSlots(slots, seedForSlot);
+  const slotPacks = usePackSlots(slots, podSeed);
   const loaded = slotPacks.every((pack) => pack !== undefined);
   const packs = useMemo(() => slotPacks.filter((pack): pack is WheelPack => pack != null), [slotPacks]);
   return { packs, isPending: setsPending || !loaded };
@@ -246,6 +283,11 @@ export function useFreePlayPacks(
   const consumedAll = slots.length === shuffled.length;
   const exhausted = !setsPending && resolved && consumedAll && packs.length < wanted;
   return { packs, isPending, exhausted, packNumbers };
+}
+
+export function usePackNumbers(): Map<string, number> {
+  const { events } = useWheelSets();
+  return useMemo(() => numberPacksBySet(events), [events]);
 }
 
 function numberPacksBySet(events: PodEventSummary[]): Map<string, number> {

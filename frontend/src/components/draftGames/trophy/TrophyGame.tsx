@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ChevronLeft, Play, Trophy } from "lucide-react";
 
 import { SetGlyph } from "../../Brand";
@@ -96,7 +96,10 @@ export function TrophyGame({
   const reviewing = finished && reviewIndex != null && rounds[reviewIndex] != null;
   const viewIndex = reviewing ? reviewIndex : Math.min(day.current, rounds.length - 1);
   const round: TrophyMageRound | undefined = rounds[viewIndex];
-  const setName = (code: string) => sets.find((set) => set.code === code)?.name ?? code;
+  const setName = (code: string) => {
+    const shortNames: Record<string, string> = { MSH: "Marvel", SOS: "Strixhaven" };
+    return shortNames[code] ?? sets.find((set) => set.code === code)?.name ?? code;
+  };
   const [finishedNow, setFinishedNow] = useState(false);
   const endsOnHome = finished && !reviewing && finishedNow && !showResults;
   const review = (index: number) => onReview?.(index);
@@ -416,10 +419,7 @@ function RoundView({
           <span className="flex items-center gap-2.5">
             <RoundMenu info={headerInfo} />
           </span>
-          <RoundName
-            info={headerInfo}
-            className="pointer-events-none absolute inset-x-0 mx-auto w-fit max-w-[calc(100%-15.5rem)] items-center"
-          />
+          <RoundName info={headerInfo} className="pointer-events-none flex-1 items-center" />
           <RoundTiles info={headerInfo} />
         </div>
         <div className="flex min-h-[3.875rem] items-center justify-center gap-3">
@@ -443,18 +443,19 @@ function RoundView({
           "max-lg:hidden",
         )}
       >
-        <div className="relative flex h-full items-center gap-4 pl-5">
+        <div className="relative flex h-full items-center gap-4 pl-5 [container-type:inline-size]">
           <RoundMenu info={headerInfo} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            {headerInfo.outcomes ? (
-              <>
-                <RoundTiles info={headerInfo} />
-                <RoundName info={headerInfo} className="absolute top-1/2 left-full ml-5 w-max -translate-y-1/2" />
-              </>
-            ) : (
-              <RoundName info={headerInfo} className="w-max items-center" />
-            )}
-          </div>
+          {headerInfo.outcomes ? (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+              <RoundTiles info={headerInfo} />
+              <RoundName
+                info={headerInfo}
+                className="absolute top-1/2 left-full ml-5 w-max max-w-[calc(50cqw-5.5rem)] -translate-y-1/2"
+              />
+            </div>
+          ) : (
+            <RoundName info={headerInfo} className="flex-1 items-center pr-5" />
+          )}
         </div>
         <div className="flex justify-center text-center [&>button]:min-w-48">{actionButton || status}</div>
         <div className="flex justify-center">{revealDone && status}</div>
@@ -493,13 +494,47 @@ function RoundMenu({ info }: { info: RoundInfo }) {
 }
 
 function RoundName({ info, className }: { info: RoundInfo; className?: string }) {
+  const nameRef = useRef<HTMLSpanElement>(null);
+  useFitToParentWidth(nameRef, info.title);
   return (
     <div className={cn("flex min-w-0 flex-col gap-1", className)}>
-      <span className={cn("truncate font-display text-xl leading-none text-text lg:text-3xl", HARD_TEXT_SHADOW)}>
+      <span
+        ref={nameRef}
+        className={cn("whitespace-nowrap font-display text-xl leading-none text-text lg:text-3xl", HARD_TEXT_SHADOW)}
+      >
         {info.title}
       </span>
     </div>
   );
+}
+
+function useFitToParentWidth(ref: RefObject<HTMLElement | null>, text: string) {
+  useLayoutEffect(() => {
+    const element = ref.current;
+    const parent = element?.parentElement;
+    if (!element || !parent) {
+      return;
+    }
+    const minFontPx = 12;
+    const fit = () => {
+      element.style.fontSize = "";
+      const naturalWidth = element.scrollWidth;
+      const room = parent.clientWidth;
+      if (naturalWidth > room && room > 0) {
+        const baseFontPx = parseFloat(getComputedStyle(element).fontSize);
+        element.style.fontSize = `${Math.max(minFontPx, (baseFontPx * room) / naturalWidth)}px`;
+      }
+    };
+    fit();
+    document.fonts.ready.then(fit);
+    const observer = new ResizeObserver(fit);
+    observer.observe(parent.parentElement ?? parent);
+    window.addEventListener("resize", fit);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, [ref, text]);
 }
 
 function RoundTiles({ info }: { info: RoundInfo }) {

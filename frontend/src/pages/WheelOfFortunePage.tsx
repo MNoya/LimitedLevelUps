@@ -40,6 +40,7 @@ import {
   shortDayLabel,
   useFeaturedPacks,
   useFreePlayPacks,
+  usePackNumbers,
   useWheelSets,
   gameDayKey,
   type WheelPack,
@@ -248,6 +249,7 @@ function WheelGame({
 }) {
   const { day, setDraft: saveDraft, lockIn, goTo, advance, finish } = useWheelDay(storageKey, packs);
   const { sets } = useWheelSets();
+  const packNumbers = usePackNumbers();
   const [freshReveal, setFreshReveal] = useState(false);
   const [freshSummary, setFreshSummary] = useState(false);
   const [zoom, setZoom] = useState<ArtifactCard | null>(null);
@@ -545,12 +547,13 @@ function WheelGame({
         onReset: dayKey ? () => restartToday(dayKey) : undefined,
       }
     : {};
-  const packNumber = packNumberOf?.(pack);
+  const packNumber = featured ? (packNumbers.get(pack.eventId) ?? null) : packNumberOf?.(pack);
+  const featuredTitle = `${setName(pack.setCode)} Pack #${packNumber ?? viewIndex + 1}`;
   const freePlayTitle = packNumber ? `${setName(pack.setCode)} Pack #${packNumber}` : setName(pack.setCode);
   const header = (className: string, compact: boolean) => (
     <WheelHeader
       setCode={pack.setCode}
-      title={featured ? `${setName(pack.setCode)} Pack #${viewIndex + 1}` : freePlayTitle}
+      title={featured ? featuredTitle : freePlayTitle}
       dayLabel={dayKey ? `${shortDayLabel(dayKey)} Packs` : undefined}
       progress={progress}
       tools={headerTools}
