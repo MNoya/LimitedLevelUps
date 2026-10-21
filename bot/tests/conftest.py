@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 
 import pytest
@@ -9,10 +8,10 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 from testcontainers.postgres import PostgresContainer
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT))
+from bot import database
+from bot.models import Base
 
-from bot.models import Base  # noqa: E402
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture(scope="session")
@@ -37,6 +36,7 @@ def engine(postgres_url):
     rebuilding the schema for every test."""
     engine = create_engine(postgres_url)
     Base.metadata.create_all(engine)
+    database.SessionLocal.configure(bind=engine)
     try:
         yield engine
     finally:
