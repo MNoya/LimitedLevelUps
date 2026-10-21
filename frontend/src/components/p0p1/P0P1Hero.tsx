@@ -16,6 +16,7 @@ export function P0P1Hero({
   cta,
   innerRef,
   belowIntro,
+  bottomCenter,
   phase,
   dateRange,
   isCurrent,
@@ -26,6 +27,7 @@ export function P0P1Hero({
   cta: ReactNode;
   innerRef?: Ref<HTMLDivElement>;
   belowIntro?: ReactNode;
+  bottomCenter?: ReactNode;
   phase: P0P1Phase;
   dateRange?: RatingsSnapshot["dateRange"];
   isCurrent: boolean;
@@ -70,6 +72,7 @@ export function P0P1Hero({
         </div>
       </div>
       <div className="shrink-0 ml-auto flex justify-end min-w-[280px]">{cta}</div>
+      {bottomCenter && <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10">{bottomCenter}</div>}
     </div>
   );
 }

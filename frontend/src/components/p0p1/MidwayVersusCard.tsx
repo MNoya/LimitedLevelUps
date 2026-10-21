@@ -44,20 +44,38 @@ const ROLE_LABEL: Record<Role, string> = {
   best: "BEST POSSIBLE",
 };
 
-// Keys are role names sorted alphabetically so the lookup is order-independent
-const MERGED_LABEL: Record<string, string> = {
-  "crowd+yours": "CROWD・YOURS",
-  "best+yours": "BEST POSSIBLE・YOURS",
-  "best+crowd": "BEST POSSIBLE・CROWD",
-  "best+crowd+yours": "BEST POSSIBLE・CROWD・YOURS",
+const MERGED_ROLE_LABEL: Record<Role, string> = {
+  best: "BEST POSSIBLE",
+  crowd: "CROWD",
+  yours: "YOURS",
 };
+
+const MERGED_ROLE_ORDER: Role[] = ["best", "crowd", "yours"];
+
+function columnLabel(roles: Role[], pickLabel: string | undefined): string {
+  if (roles.length === 1) {
+    const [role] = roles;
+    if (role === "yours" && pickLabel) {
+      return pickLabel;
+    }
+    return ROLE_LABEL[role];
+  }
+  const parts: string[] = [];
+  for (const role of MERGED_ROLE_ORDER) {
+    if (!roles.includes(role)) {
+      continue;
+    }
+    parts.push(role === "yours" && pickLabel ? pickLabel : MERGED_ROLE_LABEL[role]);
+  }
+  return parts.join("・");
+}
 
 function accentFor(roles: Role[]): string {
   if (roles.includes("best") && roles.includes("yours")) return GREEN;
   return TEXT;
 }
 
-function buildColumns(versus: MidwaySlotVersus): Column[] {
+function buildColumns(versus: MidwaySlotVersus, pickLabel: string | undefined): Column[] {
   const present: Array<{ role: Role; side: MidwayVersusSide }> = [];
   present.push({ role: "crowd", side: versus.crowd });
   present.push({ role: "best", side: versus.best });
@@ -84,8 +102,7 @@ function buildColumns(versus: MidwaySlotVersus): Column[] {
 
   return order.map((name) => {
     const { roles, side } = grouped.get(name)!;
-    const key = [...roles].sort().join("+");
-    const label = MERGED_LABEL[key] ?? ROLE_LABEL[roles[0]];
+    const label = columnLabel(roles, pickLabel);
     const accent = accentFor(roles);
     return { side, roles, label, accent };
   });
@@ -102,15 +119,17 @@ export function useMidwayVersusPager(list: MidwaySlotVersus[]) {
 export function MidwayVersusModal({
   pager,
   bounds,
+  pickLabel,
 }: {
   pager: ReturnType<typeof useMidwayVersusPager>;
   bounds: GihwrBounds;
+  pickLabel?: string;
 }) {
   return (
     <VersusModal
       pager={pager}
       padding="p-4"
-      renderCard={(versus, nav) => <MidwayVersusCard versus={versus} bounds={bounds} {...nav} />}
+      renderCard={(versus, nav) => <MidwayVersusCard versus={versus} bounds={bounds} pickLabel={pickLabel} {...nav} />}
     />
   );
 }
@@ -123,15 +142,17 @@ export function MidwayVersusCard({
   onNext,
   paged = false,
   bounds,
+  pickLabel,
 }: {
   versus: MidwaySlotVersus;
   onPrev?: () => void;
   onNext?: () => void;
   paged?: boolean;
   bounds: GihwrBounds;
+  pickLabel?: string;
 }) {
   const stop = (e: MouseEvent) => e.stopPropagation();
-  const columns = buildColumns(versus);
+  const columns = buildColumns(versus, pickLabel);
   const maxWidth = columns.length === 1 ? 420 : columns.length === 2 ? 820 : 1160;
 
   return (

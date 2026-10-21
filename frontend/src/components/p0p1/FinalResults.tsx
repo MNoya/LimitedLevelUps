@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ChevronDown } from "lucide-react";
 import { SectionLabel } from "../SectionLabel";
 import { Tooltip } from "../Tooltip";
 import { PickGrid } from "./CommunityGrid";
-import { CardImagePreview } from "./CardImagePreview";
+import { MidwayVersusModal, useMidwayVersusPager } from "./MidwayVersusCard";
 import { usePreloaded } from "../../lib/imageReveal";
 import { breakdownStripAccent } from "./slotVisuals";
 import { CHAMFER, MEDAL_COLOR } from "./P0P1BallotScorecard";
@@ -18,6 +18,8 @@ import {
   findUserBallot,
   highlightsFeed,
   applyDevSelfPlacement,
+  buildMidwaySlotVersus,
+  gihwrBounds,
   GIH_SAMPLE_FLOOR,
 } from "../../data/p0p1Results";
 import { p0p1DevEnabled, useP0P1DevSelfPlacement } from "../../data/p0p1DevState";
@@ -57,14 +59,12 @@ function BallotAvatar({
   className,
   fallbackClassName,
   style,
-  title,
 }: {
   name: string;
   avatarUrl: string | null;
   className: string;
   fallbackClassName: string;
   style?: React.CSSProperties;
-  title?: string;
 }) {
   const [failed, setFailed] = useState(false);
   if (avatarUrl && !failed) {
@@ -72,7 +72,6 @@ function BallotAvatar({
       <img
         src={avatarUrl}
         alt={name}
-        title={title}
         decoding="async"
         onError={() => setFailed(true)}
         className={className}
@@ -81,7 +80,7 @@ function BallotAvatar({
     );
   }
   return (
-    <div className={fallbackClassName} style={style} title={title}>
+    <div className={fallbackClassName} style={style}>
       {name.replace(/^\W+/, "").charAt(0).toUpperCase() || "?"}
     </div>
   );
@@ -198,7 +197,7 @@ function ContributionBar({
   return (
     // self-stretch + negative vertical margins cancel the button's py-2.5/py-3 padding,
     // so the bar bleeds to the full row height while hover events still reach Layer 2.
-    <div className="hidden lg:block flex-1 self-stretch -my-2.5 lg:-my-3 relative min-w-0" onClick={(e) => e.stopPropagation()}>
+    <div className="hidden lg:block flex-1 self-stretch -my-2.5 lg:-my-3 relative min-w-0">
       {/* Track: full-width faint bar marks the max bar length / non-clickable extent */}
       <div className="absolute inset-0 bg-black/15 pointer-events-none" />
 
@@ -303,6 +302,7 @@ function SyntheticRow({
   cardsByName,
   ratingsByName,
   stickyTop = 0,
+  compact = false,
 }: {
   standing: SyntheticStanding;
   setCode: string;
@@ -310,6 +310,7 @@ function SyntheticRow({
   cardsByName: Map<string, Card>;
   ratingsByName: Map<string, CardRating>;
   stickyTop?: number;
+  compact?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const style = SYNTHETIC_STYLE[standing.kind];
@@ -369,7 +370,7 @@ function SyntheticRow({
 
       {expanded && (
         <div className="px-3 lg:px-4 pb-4 pt-1">
-          <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} />
+          <BallotPickGrid entries={entries} picks={null} cardsByName={cardsByName} setCode={setCode} compact={compact} />
         </div>
       )}
     </div>
@@ -387,6 +388,7 @@ function BroadcastTop3({
   ratingsByName,
   userBallotId,
   bestAchieverIds,
+  compact,
 }: {
   champion: RankedBallot;
   runnersUp: RankedBallot[];
@@ -396,7 +398,9 @@ function BroadcastTop3({
   ratingsByName: Map<string, CardRating>;
   userBallotId: number | null;
   bestAchieverIds: Set<number>;
+  compact: boolean;
 }) {
+  const [expanded, setExpanded] = useState(true);
   const entries = useMemo(
     () => ballotToEntries(champion, setCode, ratingsByName),
     [champion, setCode, ratingsByName],
@@ -404,8 +408,10 @@ function BroadcastTop3({
 
   return (
     <div className="animate-fadeUpIn flex flex-col gap-2.5">
-      <div
-        className="relative overflow-hidden"
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="relative overflow-hidden cursor-pointer p-0 text-left text-text"
         style={{
           transform: "skewX(-6deg)",
           marginInline: 10,
@@ -482,12 +488,25 @@ function BroadcastTop3({
               <div className="font-mono tracking-[0.18em] text-[8px] font-semibold text-gold/80">FINAL SCORE</div>
             </div>
           </div>
+          <ChevronDown
+            size={16}
+            className={`shrink-0 text-muted transition-transform duration-150 ${expanded ? "rotate-180" : ""}`}
+          />
         </div>
-      </div>
+      </button>
 
-      <div className="mx-[10px]">
-        <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} />
-      </div>
+      {expanded && (
+        <div className="mx-[10px]">
+          <BallotPickGrid
+            entries={entries}
+            picks={champion.picks}
+            pickLabel={pickLabelFor(champion, champion.ballotId === userBallotId)}
+            cardsByName={cardsByName}
+            setCode={setCode}
+            compact={compact}
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-1.5 mt-1">
         {runnersUp.map((ballot) => (
@@ -500,6 +519,7 @@ function BroadcastTop3({
             setCode={setCode}
             cardsByName={cardsByName}
             ratingsByName={ratingsByName}
+            compact={compact}
           />
         ))}
         {self && (
@@ -512,6 +532,7 @@ function BroadcastTop3({
             setCode={setCode}
             cardsByName={cardsByName}
             ratingsByName={ratingsByName}
+            compact={compact}
           />
         )}
       </div>
@@ -527,6 +548,7 @@ function BroadcastSubBar({
   setCode,
   cardsByName,
   ratingsByName,
+  compact,
 }: {
   ballot: RankedBallot;
   accent: string;
@@ -535,6 +557,7 @@ function BroadcastSubBar({
   setCode: string;
   cardsByName: Map<string, Card>;
   ratingsByName: Map<string, CardRating>;
+  compact: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const entries = useMemo(
@@ -595,7 +618,14 @@ function BroadcastSubBar({
 
       {expanded && (
         <div className="mx-[10px]">
-          <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} />
+          <BallotPickGrid
+            entries={entries}
+            picks={ballot.picks}
+            pickLabel={pickLabelFor(ballot, isSelf)}
+            cardsByName={cardsByName}
+            setCode={setCode}
+            compact={compact}
+          />
         </div>
       )}
     </div>
@@ -617,6 +647,7 @@ function MedalRow({
   ratingsByName,
   rowRef,
   stickyTop = 0,
+  compact = false,
 }: {
   ballot: RankedBallot;
   setCode: string;
@@ -626,6 +657,7 @@ function MedalRow({
   ratingsByName: Map<string, CardRating>;
   rowRef?: (el: HTMLDivElement | null) => void;
   stickyTop?: number;
+  compact?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const entries = useMemo(
@@ -696,7 +728,14 @@ function MedalRow({
 
       {expanded && (
         <div className="px-3 lg:px-4 pb-4 pt-1">
-          <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} />
+          <BallotPickGrid
+            entries={entries}
+            picks={ballot.picks}
+            pickLabel={pickLabelFor(ballot, isSelf)}
+            cardsByName={cardsByName}
+            setCode={setCode}
+            compact={compact}
+          />
         </div>
       )}
     </div>
@@ -714,6 +753,7 @@ function LeaderboardRow({
   ratingsByName,
   rowRef,
   stickyTop = 0,
+  compact = false,
 }: {
   ballot: RankedBallot;
   setCode: string;
@@ -723,6 +763,7 @@ function LeaderboardRow({
   ratingsByName: Map<string, CardRating>;
   rowRef?: (el: HTMLDivElement | null) => void;
   stickyTop?: number;
+  compact?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const entries = useMemo(
@@ -783,7 +824,14 @@ function LeaderboardRow({
 
       {expanded && (
         <div className="px-3 lg:px-4 pb-4 pt-1">
-          <PickGrid entries={entries} cardsByName={cardsByName} setCode={setCode} />
+          <BallotPickGrid
+            entries={entries}
+            picks={ballot.picks}
+            pickLabel={pickLabelFor(ballot, isSelf)}
+            cardsByName={cardsByName}
+            setCode={setCode}
+            compact={compact}
+          />
         </div>
       )}
     </div>
@@ -872,6 +920,7 @@ function Leaderboard({
   mode = "full",
   onSeeAll,
   stickyTop = 0,
+  compact = false,
 }: {
   rankedBallots: RankedBallot[];
   bestTeam: TeamResult;
@@ -884,6 +933,7 @@ function Leaderboard({
   onSeeAll?: () => void;
   /** Viewport offset (px) below which the floating self-row pins — clears sticky page chrome. */
   stickyTop?: number;
+  compact?: boolean;
 }) {
   const standings = useMemo(
     () => buildStandingsList(rankedBallots, bestTeam, crowdTeam),
@@ -951,6 +1001,7 @@ function Leaderboard({
           ratingsByName={ratingsByName}
           userBallotId={userBallotId}
           bestAchieverIds={standings.bestAchieverIds}
+          compact={compact}
         />
         {rankedBallots.length > COLLAPSED_COUNT && onSeeAll && (
           <div className="flex justify-center mt-2.5">
@@ -1006,6 +1057,7 @@ function Leaderboard({
                 cardsByName={cardsByName}
                 ratingsByName={ratingsByName}
                 stickyTop={stickyTop}
+                compact={compact}
               />
             );
           }
@@ -1022,6 +1074,7 @@ function Leaderboard({
               ratingsByName={ratingsByName}
               rowRef={ballot.ballotId === userBallotId ? setSelfRowEl : undefined}
               stickyTop={stickyTop}
+              compact={compact}
             />
           );
         })}
@@ -1069,44 +1122,14 @@ function joinNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-function highlightStory(h: Highlight) {
-  if (h.kind === "trap") {
-    return (
-      <>
-        <b className="text-subtle font-medium">
-          {h.pickCount} {h.pickCount === 1 ? "player" : "players"} ({shareLabel(h.pickShare)})
-        </b>{" "}
-        picked it
-      </>
-    );
+function namesWithOverflow(names: string[]): string {
+  const maxNamed = 3;
+  if (names.length <= maxNamed + 1) {
+    return joinNames(names);
   }
-  if (h.teamCount === 0) {
-    return (
-      <>
-        <b className="text-subtle font-medium">Everyone</b> missed it
-      </>
-    );
-  }
-  if (h.teamCount <= 3) {
-    return (
-      <>
-        Only{" "}
-        <b className="text-subtle font-medium">
-          {joinNames(h.voters.map((v) => v.name))}
-        </b>{" "}
-        found it
-      </>
-    );
-  }
-  return (
-    <>
-      <b className="text-subtle font-medium">
-        {h.teamCount} players ({shareLabel(h.teamShare)})
-      </b>{" "}
-      picked it
-    </>
-  );
+  return `${names.slice(0, maxNamed).join(", ")} and ${names.length - maxNamed} more`;
 }
+
 
 function VoterStack({ voters }: { voters: HighlightVoter[] }) {
   const shown = voters.slice(0, VOTER_STACK_MAX);
@@ -1116,14 +1139,7 @@ function VoterStack({ voters }: { voters: HighlightVoter[] }) {
   return (
     <div className="flex -space-x-1.5">
       {shown.map((v) => (
-        <BallotAvatar
-          key={v.name}
-          name={v.name}
-          avatarUrl={v.avatarUrl}
-          title={v.name}
-          className={`w-[22px] h-[22px] rounded-full shrink-0 ${ring}`}
-          fallbackClassName={`w-[22px] h-[22px] rounded-full shrink-0 bg-surface flex items-center justify-center font-mono text-[10px] text-green ${ring}`}
-        />
+        <VoterAvatar key={v.name} voter={v} ring={ring} />
       ))}
       {extra > 0 && (
         <span
@@ -1133,6 +1149,29 @@ function VoterStack({ voters }: { voters: HighlightVoter[] }) {
         </span>
       )}
     </div>
+  );
+}
+
+function VoterAvatar({ voter, ring }: { voter: HighlightVoter; ring: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Tooltip label={voter.name} side="top" delayDuration={0} open={open} onOpenChange={setOpen}>
+      <span
+        className="shrink-0"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+      >
+        <BallotAvatar
+          name={voter.name}
+          avatarUrl={voter.avatarUrl}
+          className={`w-[22px] h-[22px] rounded-full shrink-0 ${ring}`}
+          fallbackClassName={`w-[22px] h-[22px] rounded-full shrink-0 bg-surface flex items-center justify-center font-mono text-[10px] text-green ${ring}`}
+        />
+      </span>
+    </Tooltip>
   );
 }
 
@@ -1160,6 +1199,12 @@ function HighlightTile({
 }) {
   const card = cardsByName.get(highlight.cardName);
   const accent = HIGHLIGHT_ACCENT[highlight.kind];
+  const openVersus = useContext(OpenVersusContext);
+  const highlightPicks = new Map([[highlight.slot, highlight.cardName]]);
+  const pickCount = highlight.kind === "trap" ? highlight.pickCount : highlight.teamCount;
+  const pickShare = highlight.kind === "trap" ? highlight.pickShare : highlight.teamShare;
+  const isFewPickers = highlight.kind === "sleeper" && Math.round(pickShare * 100) <= 2;
+  const pickers = isFewPickers ? highlight.voters : null;
 
   const inner = (
       <div
@@ -1222,11 +1267,13 @@ function HighlightTile({
             {highlight.slotLabel}, {gihwrLabel(highlight.gihwr)} GIH
           </div>
 
-          <div className="mt-2.5">
-            <p className="text-[12.5px] leading-[1.45] text-subtle">
-              {highlightStory(highlight)}
+          {pickCount === 0 ? (
+            <p className="mt-2.5 text-[12.5px] leading-[1.45] text-subtle">
+              <b className="text-subtle font-medium">No one</b> picked it
             </p>
-          </div>
+          ) : (
+            <PickedByLine share={pickShare} count={pickCount} pickers={pickers} accent={accent} />
+          )}
         </div>
       </div>
   );
@@ -1244,13 +1291,13 @@ function HighlightTile({
           background: `linear-gradient(165deg, ${accent} 0%, color-mix(in srgb, ${accent} 28%, #3b4458) 30%, #3b4458 70%, color-mix(in srgb, ${accent} 22%, #3b4458) 100%)`,
         }}
       >
-        {card ? (
-          <CardImagePreview imageUrl={card.imageNormal} alt={card.name} className="block sm:h-full">
-            {inner}
-          </CardImagePreview>
-        ) : (
-          inner
-        )}
+        <button
+          type="button"
+          onClick={() => openVersus(highlightPicks, HIGHLIGHT_STAMP[highlight.kind], highlight.slot)}
+          className="block w-full sm:h-full cursor-pointer p-0 border-0 bg-transparent text-left text-text"
+        >
+          {inner}
+        </button>
       </article>
     </div>
   );
@@ -1283,6 +1330,30 @@ function HighlightsReel({
   );
 }
 
+function PickedByLine({
+  share,
+  count,
+  pickers,
+  accent,
+}: {
+  share: number;
+  count: number;
+  pickers: HighlightVoter[] | null;
+  accent: string;
+}) {
+  const playerCount = `${count} ${count === 1 ? "player" : "players"}`;
+  const pickerLine = pickers ? namesWithOverflow(pickers.map((v) => v.name)) : playerCount;
+  return (
+    <div className="mt-2.5">
+      <div className="flex items-baseline gap-1.5" style={{ color: accent }}>
+        <span className="font-display text-[12px] tracking-[0.2em]">PICKED BY</span>
+        <span className="font-num tabular-nums text-[17px] font-bold leading-none">{shareLabel(share)}</span>
+      </div>
+      <div className="text-[14px] font-semibold text-white leading-snug mt-0.5 line-clamp-2">{pickerLine}</div>
+    </div>
+  );
+}
+
 // ── Orchestrator ──────────────────────────────────────────────────────────────
 
 export function FinalResults({
@@ -1295,6 +1366,7 @@ export function FinalResults({
   user,
   hasParticipated,
   stickyTop = 0,
+  compact = false,
 }: {
   ratingsSnapshot: RatingsSnapshot;
   pickStats: P0P1PickStat[];
@@ -1306,6 +1378,7 @@ export function FinalResults({
   hasParticipated: boolean;
   /** Viewport offset (px) below which the FULL RESULTS floating self-row pins — clears sticky page chrome. */
   stickyTop?: number;
+  compact?: boolean;
 }) {
   const { setCode } = ratingsSnapshot;
   const contestSlots = useMemo(() => slotsForSet(setCode), [setCode]);
@@ -1344,57 +1417,129 @@ export function FinalResults({
 
   const fullSectionRef = useRef<HTMLDivElement>(null);
 
+  const [versusOwner, setVersusOwner] = useState<VersusOwner>({ picks: null });
+  const versusList = useMemo(
+    () =>
+      buildMidwaySlotVersus(
+        contestSlots,
+        versusOwner.picks ?? new Map(),
+        crowdTeam,
+        bestTeam,
+        ratingsByName,
+        cardsByName,
+        versusOwner.picks !== null,
+      ),
+    [contestSlots, versusOwner, crowdTeam, bestTeam, ratingsByName, cardsByName],
+  );
+  const versusPager = useMidwayVersusPager(versusList);
+  const bounds = useMemo(() => gihwrBounds(pickStats, ratingsByName), [pickStats, ratingsByName]);
+  const openVersus: OpenVersus = (picks, pickLabel, slotKey) => {
+    const slotIndex = contestSlots.findIndex((s) => s.key === slotKey);
+    if (slotIndex === -1) {
+      return;
+    }
+    setVersusOwner({ picks, pickLabel });
+    versusPager.open(slotIndex);
+  };
+
   return (
-    <div className="flex flex-col gap-8">
-      {/* Top-3 broadcast */}
-      {rankedForDisplay.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <SectionHeading title="PODIUM" />
-          <Leaderboard
-            rankedBallots={rankedForDisplay}
-            bestTeam={bestTeam}
-            crowdTeam={crowdTeam}
-            setCode={setCode}
-            userBallotId={userBallot?.ballotId ?? null}
-            cardsByName={cardsByName}
-            ratingsByName={ratingsByName}
-            mode="peek"
-            onSeeAll={() => fullSectionRef.current?.scrollIntoView({ behavior: "smooth" })}
-            stickyTop={stickyTop}
-          />
-        </div>
-      )}
+    <OpenVersusContext.Provider value={openVersus}>
+      <MidwayVersusModal pager={versusPager} bounds={bounds} pickLabel={versusOwner.pickLabel} />
+      <div className="flex flex-col gap-8">
+        {rankedForDisplay.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <SectionHeading title="PODIUM" />
+            <Leaderboard
+              rankedBallots={rankedForDisplay}
+              bestTeam={bestTeam}
+              crowdTeam={crowdTeam}
+              setCode={setCode}
+              userBallotId={userBallot?.ballotId ?? null}
+              cardsByName={cardsByName}
+              ratingsByName={ratingsByName}
+              mode="peek"
+              onSeeAll={() => fullSectionRef.current?.scrollIntoView({ behavior: "smooth" })}
+              stickyTop={stickyTop}
+              compact={compact}
+            />
+          </div>
+        )}
 
-      <SprocketRail />
+        <SprocketRail />
 
-      {/* Highlights reel */}
-      <HighlightsReel highlights={highlights} cardsByName={cardsByName} />
+        <HighlightsReel highlights={highlights} cardsByName={cardsByName} />
 
-      <SprocketRail />
+        <SprocketRail />
 
-      {/* Full standings */}
-      {rankedForDisplay.length > 0 && (
-        <div
-          ref={fullSectionRef}
-          className="flex flex-col gap-3 pb-24"
-          style={{ scrollMarginTop: stickyTop + 20 }}
-        >
-          <SectionHeading title="FULL STANDINGS">
-            Every player ranked alongside the best possible team and the crowd's picks
-          </SectionHeading>
-          <Leaderboard
-            rankedBallots={rankedForDisplay}
-            bestTeam={bestTeam}
-            crowdTeam={crowdTeam}
-            setCode={setCode}
-            userBallotId={userBallot?.ballotId ?? null}
-            cardsByName={cardsByName}
-            ratingsByName={ratingsByName}
-            mode="full"
-            stickyTop={stickyTop}
-          />
-        </div>
-      )}
-    </div>
+        {rankedForDisplay.length > 0 && (
+          <div
+            ref={fullSectionRef}
+            className="flex flex-col gap-3 pb-24"
+            style={{ scrollMarginTop: stickyTop + 20 }}
+          >
+            <SectionHeading title="FULL STANDINGS">
+              Every player ranked alongside the best possible team and the crowd's picks
+            </SectionHeading>
+            <Leaderboard
+              rankedBallots={rankedForDisplay}
+              bestTeam={bestTeam}
+              crowdTeam={crowdTeam}
+              setCode={setCode}
+              userBallotId={userBallot?.ballotId ?? null}
+              cardsByName={cardsByName}
+              ratingsByName={ratingsByName}
+              mode="full"
+              stickyTop={stickyTop}
+              compact={compact}
+            />
+          </div>
+        )}
+      </div>
+    </OpenVersusContext.Provider>
+  );
+}
+
+type OpenVersus = (picks: Map<SlotKey, string> | null, pickLabel: string | undefined, slotKey: SlotKey) => void;
+
+interface VersusOwner {
+  picks: Map<SlotKey, string> | null;
+  pickLabel?: string;
+}
+
+const OpenVersusContext = createContext<OpenVersus>(() => {});
+
+function pickLabelFor(ballot: RankedBallot, isSelf: boolean): string | undefined {
+  if (isSelf) {
+    return undefined;
+  }
+  const maxLabelLength = 14;
+  const name = ballot.name.toUpperCase();
+  return name.length > maxLabelLength ? `${name.slice(0, maxLabelLength - 1)}…` : name;
+}
+
+function BallotPickGrid({
+  entries,
+  picks,
+  pickLabel,
+  cardsByName,
+  setCode,
+  compact = false,
+}: {
+  entries: PickEntry[];
+  picks: Map<SlotKey, string> | null;
+  pickLabel?: string;
+  cardsByName: Map<string, Card>;
+  setCode: string;
+  compact?: boolean;
+}) {
+  const openVersus = useContext(OpenVersusContext);
+  return (
+    <PickGrid
+      entries={entries}
+      cardsByName={cardsByName}
+      setCode={setCode}
+      compact={compact}
+      onTileOpen={(slotKey) => openVersus(picks, pickLabel, slotKey)}
+    />
   );
 }

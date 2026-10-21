@@ -183,14 +183,11 @@ export function P0P1Page() {
 
   const collapsible = isWideBallot(contestSlots.length);
   const compactGrids = collapsible && !gridsExpanded;
-  const gridsToggle = (topClass: string) => (
-    <ExpandToggle
-      expanded={gridsExpanded}
-      onToggle={() => setGridsExpanded((v) => !v)}
-      className={`absolute left-1/2 ${topClass} -translate-x-1/2 z-10`}
-    />
+  const gridsToggle = (className: string) => (
+    <ExpandToggle expanded={gridsExpanded} onToggle={() => setGridsExpanded((v) => !v)} className={className} />
   );
   let belowIntro: ReactNode = null;
+  let heroBottomCenter: ReactNode = null;
   if (!isPastDeadline) {
     belowIntro = (
       <div className="relative flex items-center gap-3 w-full max-w-[420px]">
@@ -198,11 +195,11 @@ export function P0P1Page() {
         <div className="flex-1">
           <P0P1ProgressBar filled={scoringFilled} total={contestSlots.length} isComplete={isComplete} />
         </div>
-        {collapsible && gridsToggle("top-full")}
+        {collapsible && gridsToggle("absolute left-1/2 top-full -translate-x-1/2 z-10")}
       </div>
     );
-  } else if ((phase === "postVoting" || showMidway) && collapsible) {
-    belowIntro = <div className="relative w-full">{gridsToggle("top-2")}</div>;
+  } else if ((phase === "postVoting" || showMidway || phase === "final") && collapsible) {
+    heroBottomCenter = gridsToggle("");
   }
 
   return (
@@ -216,6 +213,7 @@ export function P0P1Page() {
           innerRef={heroRef}
           cta={heroCta}
           belowIntro={belowIntro}
+          bottomCenter={heroBottomCenter}
           phase={phase}
           dateRange={ratingsSnapshot?.dateRange}
           isCurrent={isCurrentContest}
@@ -274,6 +272,7 @@ export function P0P1Page() {
               user={user}
               hasParticipated={hasParticipated}
               stickyTop={heroHeight}
+              compact={compactGrids}
             />
           ) : (
             <ResultsSkeleton setCode={featured?.code} />
