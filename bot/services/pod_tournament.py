@@ -4324,7 +4324,7 @@ async def maybe_post_championship(manager, *, force: bool = False) -> None:
         return
 
     displays = await asyncio.to_thread(load_participant_displays, event_id)
-    champions = [s for s in standings if s.losses == 0] or [standings[0]]
+    champions = pod_champions(standings)
     champion_keys = {normalize_player_name(c.player_name) for c in champions}
     dm_info = await asyncio.to_thread(load_dm_info_sync, event_id)
     manager.champion_discord_ids = {
@@ -4391,7 +4391,7 @@ async def maybe_post_trophy_hype(manager, *, force: bool = False) -> None:
     if resolved is None:
         return
     standings, _ = resolved
-    champions = [s for s in standings if s.losses == 0] or [standings[0]]
+    champions = pod_champions(standings)
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
     incomplete = incomplete_decks(champions, deck_data)
     if incomplete and not force:
@@ -4534,7 +4534,7 @@ async def post_trophy_hype_for_event(bot, event_id: str, guild) -> None:
     if resolved is None:
         return
     standings, _ = resolved
-    champions = [s for s in standings if s.losses == 0] or [standings[0]]
+    champions = pod_champions(standings)
     deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
     displays = await asyncio.to_thread(load_participant_displays, event_id)
     dm_info = await asyncio.to_thread(load_dm_info_sync, event_id)
@@ -4565,31 +4565,17 @@ async def post_trophy_hype(
         log.info(f"[FINALIZE] trophy_hype.skip event={event_id} reason=no_channel")
         return False
     started_at = await asyncio.to_thread(load_event_started_at_sync, event_id)
-    recap_url = pod_page_url(event_name)
-    self_post_authors, already_posted = await _scan_trophy_hype_channel(channel, started_at, recap_url)
-    if already_posted:
+    self_post_authors, posted_card = await _scan_trophy_hype_channel(channel, started_at, pod_page_url(event_name))
+    if posted_card is not None:
         log.info(f"[FINALIZE] trophy_hype.skip event={event_id} reason=already_in_channel")
         return True
-    remaining = []
-    for standing in champions:
-        info = dm_info.get(normalize_player_name(standing.player_name))
-        discord_id = info.discord_id if info else None
-        if discord_id and discord_id in self_post_authors:
-            log.info(
-                f"[FINALIZE] trophy_hype.skip_champion event={event_id} "
-                f"champion={standing.player_name!r} reason=already_posted"
-            )
-            continue
-        remaining.append(standing)
+    remaining = _champions_without_own_post(event_id, champions, dm_info, self_post_authors)
     if not remaining:
         log.info(f"[FINALIZE] trophy_hype.skip event={event_id} reason=champions_already_posted")
         return True
-    hype_view = build_trophy_hype_view(
-        remaining, event_name=event_name, displays=displays,
-        player_colors=player_colors, deck_data=deck_data,
-        guild_id=getattr(guild, "id", None), thread_id=thread_id,
-        format_title=format_title,
-        champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
+    hype_view = _build_trophy_hype_card(
+        remaining, guild, thread_id, event_name=event_name, displays=displays,
+        player_colors=player_colors, deck_data=deck_data, format_title=format_title,
     )
     try:
         await channel.send(view=hype_view, allowed_mentions=discord.AllowedMentions.none())
@@ -4600,6 +4586,84 @@ async def post_trophy_hype(
         return False
 
 
+async def refresh_posted_trophy_hype(event_id: str, guild, thread_id: int, discord_id: str) -> None:
+    """Re-render an already posted trophy-hype card in place when the corrected screenshot is one it shows"""
+    channel = _find_trophy_hype_channel(guild)
+    if channel is None:
+        return
+    event_name = await asyncio.to_thread(load_event_name_sync, event_id)
+    started_at = await asyncio.to_thread(load_event_started_at_sync, event_id)
+    self_post_authors, posted_card = await _scan_trophy_hype_channel(channel, started_at, pod_page_url(event_name))
+    if posted_card is None or posted_card.author.id != guild.me.id:
+        return
+    pairing_mode = await asyncio.to_thread(load_event_pairing_mode_sync, event_id)
+    format_title = None
+    if pairing_mode == "team":
+        from bot.services.pod_team_showcase import format_team_trophy_title, load_team_trophy_standings
+
+        players = await asyncio.to_thread(load_tournament_players_sync, event_id)
+        champions = await load_team_trophy_standings(event_id, players)
+        format_title = format_team_trophy_title
+    else:
+        resolved = await _resolve_announcement_standings(event_id)
+        champions = None if resolved is None else pod_champions(resolved[0])
+    if not champions:
+        return
+    dm_info = await asyncio.to_thread(load_dm_info_sync, event_id)
+    shown = _champions_without_own_post(event_id, champions, dm_info, self_post_authors)
+    shown_discord_ids = {_champion_discord_id(standing, dm_info) for standing in shown}
+    if discord_id not in shown_discord_ids:
+        return
+    deck_data = await asyncio.to_thread(load_event_deck_data_sync, event_id)
+    displays = await asyncio.to_thread(load_participant_displays, event_id)
+    hype_view = _build_trophy_hype_card(
+        shown, guild, thread_id, event_name=event_name, displays=displays,
+        player_colors=colors_only(deck_data), deck_data=deck_data, format_title=format_title,
+    )
+    await posted_card.edit(view=hype_view, allowed_mentions=discord.AllowedMentions.none())
+    log.info(f"[FINALIZE] trophy_hype_refresh.edited event={event_id} message={posted_card.id}")
+
+
+def pod_champions(standings) -> list:
+    return [s for s in standings if s.losses == 0] or [standings[0]]
+
+
+def _champions_without_own_post(event_id: str, champions, dm_info: dict, self_post_authors: set[str]) -> list:
+    remaining = []
+    for standing in champions:
+        discord_id = _champion_discord_id(standing, dm_info)
+        if discord_id and discord_id in self_post_authors:
+            log.info(
+                f"[FINALIZE] trophy_hype.skip_champion event={event_id} "
+                f"champion={standing.player_name!r} reason=already_posted"
+            )
+            continue
+        remaining.append(standing)
+    return remaining
+
+
+def _champion_discord_id(standing, dm_info: dict) -> str | None:
+    info = dm_info.get(normalize_player_name(standing.player_name))
+    return info.discord_id if info else None
+
+
+def _build_trophy_hype_card(
+    champions, guild, thread_id: int | None, *,
+    event_name: str,
+    displays: dict[str, dict],
+    player_colors: dict[str, str | None],
+    deck_data: dict[str, "ParticipantDeckData"],
+    format_title=None,
+) -> ui.LayoutView:
+    return build_trophy_hype_view(
+        champions, event_name=event_name, displays=displays,
+        player_colors=player_colors, deck_data=deck_data,
+        guild_id=getattr(guild, "id", None), thread_id=thread_id,
+        format_title=format_title,
+        champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
+    )
+
+
 def _find_trophy_hype_channel(guild: discord.Guild | None) -> discord.TextChannel | None:
     if guild is None:
         return None
@@ -4607,21 +4671,20 @@ def _find_trophy_hype_channel(guild: discord.Guild | None) -> discord.TextChanne
 
 
 async def _scan_trophy_hype_channel(channel: discord.TextChannel, after, recap_url: str):
-    """One pass over the hype channel since the event started, returning (image-poster discord ids,
-    card-already-posted). The image posters let a champion who shared their own shot skip a duplicate
-    bot post; the flag — any message carrying this event's Draft Recap link — makes the bot's own
-    post idempotent across a restart, since only this card links to that pod page."""
+    """One pass over the hype channel since the event started, returning (image-poster discord ids, posted card).
+    The image posters let a champion who shared their own shot skip a duplicate bot post; the posted card is the
+    message carrying this event's Draft Recap link, which only the bot's card links to"""
     authors: set[str] = set()
-    already_posted = False
+    posted_card = None
     try:
         async for message in channel.history(limit=TROPHY_HYPE_HISTORY_LIMIT, after=after):
             if message.attachments or message.embeds:
                 authors.add(str(message.author.id))
-            if not already_posted and recap_url in _component_link_urls(message.components):
-                already_posted = True
+            if posted_card is None and recap_url in _component_link_urls(message.components):
+                posted_card = message
     except Exception:
         log.warning("could not scan trophy hype channel history", exc_info=True)
-    return authors, already_posted
+    return authors, posted_card
 
 
 def _component_link_urls(components) -> list[str]:

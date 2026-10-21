@@ -81,7 +81,7 @@ def test_post_trophy_hype_forwards_format_title_to_view(monkeypatch):
             return None
 
     async def fake_scan(channel, after, recap_url):
-        return set(), False
+        return set(), None
 
     monkeypatch.setattr(pod_tournament, "build_trophy_hype_view", fake_build)
     monkeypatch.setattr(pod_tournament, "_find_trophy_hype_channel", lambda guild: _Channel())

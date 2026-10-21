@@ -276,12 +276,7 @@ async def maybe_post_team_trophy_hype(manager: "PodDraftManager", *, force: bool
     if manager.trophy_hype_posted:
         return
     event_id = manager.event_id
-    board = await asyncio.to_thread(load_team_board_data, event_id)
-    if not board.rounds:
-        return
-    prior = await asyncio.to_thread(load_matches, event_id)
-    standings = pod_swiss.compute_standings(manager.tournament_players, prior)
-    trophies = decided_trophy_standings(standings, board.rounds)
+    trophies = await load_team_trophy_standings(event_id, manager.tournament_players)
     if trophies is None:
         return
     if not trophies:
@@ -309,6 +304,15 @@ async def maybe_post_team_trophy_hype(manager: "PodDraftManager", *, force: bool
     )
     if not posted:
         manager.trophy_hype_posted = False
+
+
+async def load_team_trophy_standings(event_id: str, tournament_players) -> list | None:
+    board = await asyncio.to_thread(load_team_board_data, event_id)
+    if not board.rounds:
+        return None
+    prior = await asyncio.to_thread(load_matches, event_id)
+    standings = pod_swiss.compute_standings(tournament_players, prior)
+    return decided_trophy_standings(standings, board.rounds)
 
 
 def format_team_trophy_title(name: str, colors: str | None, short_event: str) -> str:

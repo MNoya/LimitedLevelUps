@@ -11,7 +11,7 @@ A bare screenshot is paired with the poster's adjacent text-only message within 
 in either order.
 
 A camera react (📸 or 📷) on an image post forces that image as the poster's deck screenshot and
-re-renders an already posted podium with it.
+re-renders an already posted podium with it, plus the trophy-hype card when that poster is on it.
 
 On capture we re-run the championship trigger — swiss or team, live manager or the recovery
 shim once finalize has evicted it — so a late screenshot completing the showcase decks posts
@@ -42,6 +42,7 @@ from bot.services.pod_thread_backfill import parse_caption_colors
 from bot.services.pod_tournament import (
     maybe_post_championship,
     refresh_posted_podium,
+    refresh_posted_trophy_hype,
     refresh_standings_for_event,
 )
 
@@ -117,6 +118,9 @@ class PodScreenshotListener(commands.Cog):
         log.info(f"[DECK] camera_react_override event={event_id} discord_id={discord_id} by={payload.user_id}")
         await self._post_capture(event_id, discord_id, thread_id, reacted)
         run_detached(refresh_posted_podium(self.bot, event_id, thread_id), "podium refresh")
+        run_detached(
+            refresh_posted_trophy_hype(event_id, channel.guild, channel.id, discord_id), "trophy hype refresh"
+        )
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
