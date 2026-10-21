@@ -911,7 +911,7 @@ class PodDraftManager:
 
     async def _import_cube(self, cube_id: str) -> str | None:
         """Load a CubeCobra cube into the session (owner-only). Ported from Amelas/DraftBot."""
-        payload = {"service": "Cube Cobra", "cubeID": cube_id, "matchVersions": True}
+        payload = {"service": "Cube Cobra", "cubeID": cube_id, "matchVersions": True, "importCustomFormat": True}
         result = await self._emit_with_ack("importCube", payload, timeout_s=30.0)
         error_text = _ack_error_text(result)
         if error_text is not None:

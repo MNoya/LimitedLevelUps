@@ -96,8 +96,8 @@ def _manager(set_code: str) -> PodDraftManager:
 def test_emit_format_loads_cube_for_registered_code():
     mgr = _manager(PEASANT_CODE)
     asyncio.run(mgr._emit_session_settings())
-    expected_import = ("importCube", ({"service": "Cube Cobra", "cubeID": PEASANT_CUBE_ID, "matchVersions": True},))
-    assert expected_import in mgr.sio.calls
+    payload = {"service": "Cube Cobra", "cubeID": PEASANT_CUBE_ID, "matchVersions": True, "importCustomFormat": True}
+    assert ("importCube", (payload,)) in mgr.sio.calls
     assert "setRestriction" not in mgr.sio.events()
     assert ("setUseCustomCardList", (False,)) not in mgr.sio.calls
 
@@ -105,7 +105,7 @@ def test_emit_format_loads_cube_for_registered_code():
 def test_emit_format_imports_written_in_cube_with_exact_case():
     mgr = _manager(pod_format.write_in_cube_code("LSVCube"))
     asyncio.run(mgr._emit_format())
-    payload = {"service": "Cube Cobra", "cubeID": "LSVCube", "matchVersions": True}
+    payload = {"service": "Cube Cobra", "cubeID": "LSVCube", "matchVersions": True, "importCustomFormat": True}
     assert ("importCube", (payload,)) in mgr.sio.calls
     assert "setRestriction" not in mgr.sio.events()
 
