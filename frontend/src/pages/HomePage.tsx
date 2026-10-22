@@ -11,6 +11,7 @@ import { episodePlayability } from "../components/PlayableThumbnail";
 import { PlayBadge } from "../components/PlayBadge";
 import { Pips } from "../components/ManaPips";
 import { highlightEventLabel } from "../components/pod/EventLabel";
+import { compareStandings, recordParts } from "../components/pod/PodStandings";
 import { GiRoundTable } from "react-icons/gi";
 import { SiPatreon, SiTwitch, SiYoutube } from "react-icons/si";
 import type { IconType } from "react-icons";
@@ -32,6 +33,7 @@ import {
   useFormatLeaderboard,
   useLeaderboard,
   useRecentEpisodes,
+  usePodEventParticipants,
   usePodEvents,
   useSets,
 } from "../data/hooks";
@@ -40,10 +42,17 @@ import { ACTIVE_SET_CODE } from "../data/constants";
 import { FMT_COLORS, shortFormat } from "../data/format-display";
 import { FORMAT_OPTIONS } from "../data/filters";
 import { HOST, SITE_LINKS } from "../data/site";
-import { cleanPodEventName, leaderboardPath, playerPath, relativeAge, relativeAgeShort } from "../data/utils";
+import {
+  cleanPodEventName,
+  leaderboardPath,
+  playerPath,
+  relativeAge,
+  relativeAgeShort,
+  stripDiscriminator,
+} from "../data/utils";
 import type { Episode } from "../data/episodes";
 import { categorySlug, formatDurationShort } from "../data/episodes";
-import type { LeaderboardRow, PodEventSummary, SetSummary } from "../types/leaderboard";
+import type { LeaderboardRow, PodEventParticipantRow, PodEventSummary, SetSummary } from "../types/leaderboard";
 import { cn } from "../lib/utils";
 
 export function HomePage() {
@@ -995,20 +1004,20 @@ function PodDraftsPanel({ setCode }: { setCode: string }) {
 
 function PodRow({ entry }: { entry: PodEntry }) {
   const { event, upcoming } = entry;
-  const championName = event.championDisplayName?.replace(/#.*$/, "");
+  const champion = usePodChampion(event);
   const title = cleanPodEventName(event.name, event.setCode);
   const { month, day } = podMonthDay(event);
 
   let sub: ReactNode;
   if (upcoming) {
     sub = <span className="truncate">{podWhenLabel(event)}</span>;
-  } else if (championName) {
+  } else if (champion) {
     sub = (
       <>
         <Trophy size={13} strokeWidth={2} className="text-gold" />
-        <span className="truncate text-[12px] font-bold text-text">{championName}</span>
-        {event.championRecord ? <span className="shrink-0">{event.championRecord}</span> : null}
-        {event.championDeckColors ? <Pips colors={event.championDeckColors} size={11} /> : null}
+        <span className="truncate text-[12px] font-bold text-text">{stripDiscriminator(champion.displayName)}</span>
+        {champion.record ? <span className="shrink-0">{champion.record}</span> : null}
+        {champion.deckColors ? <Pips colors={champion.deckColors} size={11} /> : null}
       </>
     );
   } else {
@@ -1059,9 +1068,7 @@ function PodRow({ entry }: { entry: PodEntry }) {
       </Tooltip>
     );
   }
-  const winnerQuery = event.championDisplayName
-    ? `?player=${encodeURIComponent(event.championDisplayName)}`
-    : "";
+  const winnerQuery = champion ? `?player=${encodeURIComponent(champion.displayName)}` : "";
   return (
     <Tooltip label="View seats, logs & replays" side="left">
       <Link to={`/pods/${event.slug}${winnerQuery}`} className={rowClassName}>
@@ -1069,6 +1076,34 @@ function PodRow({ entry }: { entry: PodEntry }) {
       </Link>
     </Tooltip>
   );
+}
+
+interface PodChampion {
+  displayName: string;
+  record: string | null;
+  deckColors: string | null;
+}
+
+function usePodChampion(event: PodEventSummary): PodChampion | null {
+  const teamDraftResultId = event.isTeamDraft && event.isFinalized ? event.eventId : undefined;
+  const { data: seats } = usePodEventParticipants(teamDraftResultId);
+  if (!event.isTeamDraft) {
+    const { championDisplayName, championRecord, championDeckColors } = event;
+    if (!championDisplayName) {
+      return null;
+    }
+    return { displayName: championDisplayName, record: championRecord, deckColors: championDeckColors };
+  }
+  let best: PodEventParticipantRow | null = null;
+  for (const seat of seats ?? []) {
+    if (!recordParts(seat.record).played) {
+      continue;
+    }
+    if (!best || compareStandings(seat, best) < 0) {
+      best = seat;
+    }
+  }
+  return best;
 }
 
 function podMonthDay(event: PodEventSummary): { month: string; day: number } {
