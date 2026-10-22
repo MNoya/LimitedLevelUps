@@ -35,14 +35,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   const videos = await fetchPlaylist(uploads, key, recent ? 1 : MAX_PAGES);
   await attachDurations(videos, key);
+  const hasVideos = videos.length > 0;
   const response = new Response(JSON.stringify({ videos }), {
     status: 200,
     headers: {
       "content-type": "application/json",
-      "cache-control": "public, max-age=3600",
+      "cache-control": hasVideos ? "public, max-age=3600" : "no-store",
     },
   });
-  context.waitUntil(cache.put(cacheKey, response.clone()));
+  if (hasVideos) {
+    context.waitUntil(cache.put(cacheKey, response.clone()));
+  }
   return response;
 };
 
