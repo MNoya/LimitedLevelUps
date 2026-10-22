@@ -65,6 +65,7 @@ import {
   fetchFantasyResults,
   fetchFantasyMembers,
   fetchFantasyLineups,
+  fetchFantasyLineupFlags,
   fetchFantasyBracketPicks,
   fetchFantasyOwnBracket,
   saveFantasyBracketPick,
@@ -734,6 +735,16 @@ export function useFantasyMembers(eventCode: string, version: string | undefined
       ]);
       return { members, lineups, brackets };
     },
+    enabled: version !== undefined,
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useFantasyLineupFlags(eventCode: string, version: string | undefined) {
+  return useQuery({
+    queryKey: ["fantasy-lineup-flags", eventCode, version],
+    queryFn: () => fetchFantasyLineupFlags(eventCode),
     enabled: version !== undefined,
     staleTime: Infinity,
     placeholderData: keepPreviousData,

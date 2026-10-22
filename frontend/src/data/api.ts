@@ -65,6 +65,7 @@ export {
   fetchFantasyResults,
   fetchFantasyMembers,
   fetchFantasyLineups,
+  fetchFantasyLineupFlags,
   fetchFantasyBracketPicks,
   fetchFantasyOwnBracket,
   saveFantasyBracketPick,

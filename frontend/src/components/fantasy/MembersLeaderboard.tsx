@@ -1,9 +1,18 @@
-import { useMemo, useState, type MouseEvent } from "react";
+import { useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { ChevronDown, Trophy } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { MEDAL_COLOR } from "../p0p1/P0P1BallotScorecard";
 import { SelfBadge } from "../p0p1/FinalResults";
-import { PlayerPortrait, SLOTS, fullName, shortLastName, slotFor, type FieldPlayer } from "./fantasyField";
+import {
+  CountryFlag,
+  PlayerPortrait,
+  SLOTS,
+  fullName,
+  shortLastName,
+  slotFor,
+  type FieldPlayer,
+  type Slot,
+} from "./fantasyField";
 import { dayPoints, slotDayPoints, type MemberStanding, type SlotBreakdown, type StandingsDay } from "./fantasyMembers";
 import {
   BRACKET_MATCHES,
@@ -12,6 +21,8 @@ import {
   type BracketPicks,
   type BracketResults,
 } from "./fantasyTop8";
+import { useLiveEvent } from "./fantasyLive";
+import type { FantasyLineupFlagRow, FantasyMemberRow } from "../../types/fantasy";
 
 type LeaderboardProps = {
   rows: MemberStanding[];
@@ -84,14 +95,14 @@ export function LeaderboardSkeleton({ compact, rows }: { compact: boolean; rows:
             compact && "flex-wrap",
           )}
         >
-          <span className="w-8 shrink-0 text-right font-display text-[17px] tracking-[0.06em] text-subtle">
+          <span className={cn(rankCellClass(compact), "font-display text-[17px] tracking-[0.06em] text-subtle")}>
             {index + 1}
           </span>
           <span className={cn("flex items-center gap-2", compact ? "flex-1" : "w-[176px] shrink-0")}>
             <span className="w-6 h-6 shrink-0 rounded-full bg-surface2" />
             <span className="h-3 bg-surface2" style={{ width: nameWidths[index % nameWidths.length] }} />
           </span>
-          <span className={cn("flex items-center gap-1.5", compact ? "w-full pl-11" : "flex-1")}>
+          <span className={cn("flex items-center gap-1.5", lineupCellClass(compact))}>
             {SLOTS.map((slot) => (
               <span
                 key={slot.key}
@@ -112,10 +123,105 @@ export function LeaderboardSkeleton({ compact, rows }: { compact: boolean; rows:
   );
 }
 
-function HeaderRow({ showBracket }: { showBracket: boolean }) {
+export function MembersRoster({
+  members,
+  lineupFlags,
+  compact,
+  lockNote,
+}: {
+  members: FantasyMemberRow[];
+  lineupFlags: FantasyLineupFlagRow[];
+  compact: boolean;
+  lockNote: ReactNode;
+}) {
+  const selfThenNewest = useMemo(
+    () =>
+      [...members].sort(
+        (a, b) => Number(b.isMe) - Number(a.isMe) || (b.joinedAt ?? "").localeCompare(a.joinedAt ?? ""),
+      ),
+    [members],
+  );
+  const flagsByMember = useMemo(() => {
+    const byMember = new Map<string, Map<string, string | null>>();
+    for (const flag of lineupFlags) {
+      const slots = byMember.get(flag.memberKey) ?? new Map<string, string | null>();
+      slots.set(flag.slot, flag.countryCode);
+      byMember.set(flag.memberKey, slots);
+    }
+    return byMember;
+  }, [lineupFlags]);
+  return (
+    <div className="flex flex-col gap-4">
+      <div className={cn("flex items-baseline gap-x-4 gap-y-1 flex-wrap", compact ? "justify-center" : "justify-between")}>
+        <span className="text-[14px] text-text">
+          <b>{members.length}</b> <span className="text-subtle">{members.length === 1 ? "participant" : "participants"}</span>
+        </span>
+        {compact ? null : lockNote}
+      </div>
+      <div className="flex flex-col border border-border2">
+        {!compact ? <HeaderRow showBracket={false} centerRank /> : null}
+        {selfThenNewest.map((member) => (
+          <div
+            key={member.memberKey}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 border-b border-border last:border-b-0",
+              compact && "flex-wrap",
+              member.isMe && "bg-green/[0.07]",
+            )}
+            style={member.isMe ? { boxShadow: "inset 3px 0 0 #2ee85c" } : undefined}
+          >
+            {compact ? null : <span className="w-8 shrink-0 text-center font-num text-[13px] text-muted">–</span>}
+            <span className={cn("flex items-center gap-2 min-w-0", compact ? "flex-1" : "w-[176px] shrink-0")}>
+              <MemberAvatar name={member.name} isSelf={member.isMe} />
+              <span className={cn("truncate text-[14px]", member.isMe ? "font-semibold text-white" : "text-text")}>
+                {member.name}
+              </span>
+            </span>
+            <span className={cn("flex items-center gap-1.5 min-w-0", lineupCellClass(compact))}>
+              {SLOTS.map((slot) => (
+                <FlagChip key={slot.key} slot={slot} flags={flagsByMember.get(member.memberKey)} compact={compact} />
+              ))}
+            </span>
+            {compact ? null : <span className="w-[56px] shrink-0" />}
+            {compact ? null : <span className="w-[14px]" />}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FlagChip({
+  slot,
+  flags,
+  compact,
+}: {
+  slot: Slot;
+  flags: Map<string, string | null> | undefined;
+  compact: boolean;
+}) {
+  const { constructedFormat } = useLiveEvent();
+  const picked = flags?.has(slot.key) ?? false;
+  return (
+    <span
+      className="flex-1 min-w-0 h-7 flex items-center gap-1.5 px-1.5 bg-surface"
+      style={{ boxShadow: `inset 0 0 0 1px ${slot.accent}${picked ? "66" : "30"}` }}
+    >
+      {picked ? <CountryFlag code={flags?.get(slot.key) ?? null} width={compact ? 18 : 21} /> : null}
+      <span
+        className={cn("truncate font-display", compact ? "text-[13px]" : "text-[14px] tracking-[0.06em]")}
+        style={{ color: picked ? slot.accent : `${slot.accent}66` }}
+      >
+        {(compact && slot.key === "constructed" ? constructedFormat : slot.label).toUpperCase()}
+      </span>
+    </span>
+  );
+}
+
+function HeaderRow({ showBracket, centerRank = false }: { showBracket: boolean; centerRank?: boolean }) {
   return (
     <div className="flex items-center gap-3 px-3 py-2 border-b border-border2 bg-surface font-display text-[13px] tracking-[0.12em] text-subtle">
-      <span className="w-8 text-right">#</span>
+      <span className={cn("w-8", centerRank ? "text-center" : "text-right")}>#</span>
       <span className="w-[176px]">MEMBER</span>
       <span className="flex-1">LINEUP</span>
       {showBracket ? <span className="w-[64px] text-right">TOP 8</span> : null}
@@ -154,7 +260,7 @@ function MemberRow({
         )}
       >
         <span
-          className="w-8 shrink-0 text-right font-display text-[17px] tracking-[0.06em] text-text"
+          className={cn(rankCellClass(compact), "font-display text-[17px] tracking-[0.06em] text-text")}
           style={medal ? { color: medal } : undefined}
         >
           {rank}
@@ -166,7 +272,7 @@ function MemberRow({
           </span>
         </span>
         {compact ? <RowPoints points={dayPoints(row, day)} bracketPoints={row.bracketPoints} medal={medal} /> : null}
-        <span className={cn("flex items-center gap-1.5 min-w-0", compact ? "w-full pl-11" : "flex-1")}>
+        <span className={cn("flex items-center gap-1.5 min-w-0", lineupCellClass(compact))}>
           {row.slots.map((slot) => (
             <PickChip
               key={slot.slot}
@@ -197,6 +303,14 @@ function MemberRow({
       {open ? <MemberReview row={row} results={results} seeded={seeded} compact={compact} /> : null}
     </div>
   );
+}
+
+function rankCellClass(compact: boolean): string {
+  return compact ? "w-5 shrink-0 text-left" : "w-8 shrink-0 text-right";
+}
+
+function lineupCellClass(compact: boolean): string {
+  return compact ? "w-full" : "flex-1";
 }
 
 function RowPoints({

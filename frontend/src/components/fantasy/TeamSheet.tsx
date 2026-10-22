@@ -56,7 +56,7 @@ import {
 } from "./FantasyParts";
 import { TabLink } from "../TabButton";
 import { useAuth } from "../../auth/useAuth";
-import { LeaderboardSkeleton, MembersLeaderboard } from "./MembersLeaderboard";
+import { LeaderboardSkeleton, MembersLeaderboard, MembersRoster } from "./MembersLeaderboard";
 import { ReplayStandings, StandingsSkeleton, type TeamSlot } from "./ReplayStandings";
 import { ProPlaySkeleton } from "./ProPlaySkeleton";
 import { replayProfileEvent, standingsAfter, standingsRound } from "./fantasyReplay";
@@ -80,12 +80,14 @@ import {
   useFantasyDemo,
   useFantasyEventState,
   useFantasyField,
+  useFantasyLineupFlags,
   useFantasyMembers,
   useFantasyResults,
 } from "../../data/hooks";
 import type {
   FantasyBracketPickRow,
   FantasyEventState,
+  FantasyLineupFlagRow,
   FantasyLineupRow,
   FantasyMemberRow,
 } from "../../types/fantasy";
@@ -117,8 +119,10 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
   const results = demoActive ? demo?.results : storedResults;
   const locked = state ? now >= new Date(state.picksLockAt).getTime() : false;
   const bracketLocked = state ? now >= new Date(state.bracketLockAt).getTime() : false;
-  const membersVersion = state && locked && !demoActive ? `${state.completedThroughRound}:${bracketLocked}` : undefined;
+  const membersVersion = state && !demoActive ? membersQueryVersion(state, locked, bracketLocked, minute) : undefined;
   const { data: storedMembers } = useFantasyMembers(header.code, membersVersion);
+  const flagsVersion = !locked && !demoActive ? membersVersion : undefined;
+  const { data: lineupFlags } = useFantasyLineupFlags(header.code, flagsVersion);
   const memberData = useMemo(
     () => {
       if (!demoActive || !demo) {
@@ -171,6 +175,7 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
           onSignIn={onSignIn}
           liveEvent={liveEvent}
           members={members}
+          lineupFlags={lineupFlags ?? []}
           spoilerFree={spoilerFree}
           onToggleSpoilerFree={() => setSpoilerFree((value) => !value)}
         />
@@ -185,6 +190,7 @@ function TeamSheetView({
   onSignIn,
   liveEvent,
   members,
+  lineupFlags,
   spoilerFree,
   onToggleSpoilerFree,
 }: {
@@ -193,6 +199,7 @@ function TeamSheetView({
   onSignIn: () => void;
   liveEvent: LiveEvent;
   members: { members: FantasyMemberRow[]; lineups: FantasyLineupRow[]; brackets: FantasyBracketPickRow[] } | undefined;
+  lineupFlags: FantasyLineupFlagRow[];
   spoilerFree: boolean;
   onToggleSpoilerFree: () => void;
 }) {
@@ -501,6 +508,13 @@ function TeamSheetView({
   );
   const leaderboardView = live ? (
     leaderboard
+  ) : members?.members.length ? (
+    <MembersRoster
+      members={members.members}
+      lineupFlags={lineupFlags}
+      compact={isMobile}
+      lockNote={<PicksLockDate size={14} prefix="Lineups show when Round 1 starts" at={fantasyEvent.picksLockAt} />}
+    />
   ) : (
     <ViewPlaceholder
       backdrop={<LeaderboardSkeleton compact={isMobile} rows={14} />}
@@ -761,6 +775,13 @@ function FieldSkeleton({ grid, compact }: { grid: { className: string; style: CS
       </div>
     </div>
   );
+}
+
+function membersQueryVersion(state: FantasyEventState, locked: boolean, bracketLocked: boolean, minute: number) {
+  if (!locked) {
+    return `picking:${minute}`;
+  }
+  return `${state.completedThroughRound}:${bracketLocked}`;
 }
 
 function stateFromRegistry(event: FantasyEventEntry): FantasyEventState {

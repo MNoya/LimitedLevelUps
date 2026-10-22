@@ -2218,6 +2218,7 @@ import type {
   FantasyBracketPickRow,
   FantasyEventState,
   FantasyFieldRow,
+  FantasyLineupFlagRow,
   FantasyLineupRow,
   FantasyMemberRow,
   FantasyOwnBracketPick,
@@ -2357,7 +2358,7 @@ export async function fetchFantasyMembers(eventCode: string): Promise<FantasyMem
   const rows = await pagedRows((from, to) =>
     client()
       .from("public_fantasy_standings")
-      .select("member_key, is_me, name, avatar_url, rank")
+      .select("member_key, is_me, name, avatar_url, rank, joined_at")
       .eq("event_code", eventCode)
       .order("rank")
       .range(from, to),
@@ -2368,6 +2369,7 @@ export async function fetchFantasyMembers(eventCode: string): Promise<FantasyMem
     name: r.name,
     avatarUrl: r.avatar_url,
     rank: r.rank,
+    joinedAt: r.joined_at,
   }));
 }
 
@@ -2386,6 +2388,17 @@ export async function fetchFantasyLineups(eventCode: string): Promise<FantasyLin
     fromRound: r.from_round,
     playerId: r.player_id,
   }));
+}
+
+export async function fetchFantasyLineupFlags(eventCode: string): Promise<FantasyLineupFlagRow[]> {
+  const rows = await pagedRows((from, to) =>
+    client()
+      .from("public_fantasy_lineup_flags")
+      .select("member_key, slot, country_code")
+      .eq("event_code", eventCode)
+      .range(from, to),
+  );
+  return rows.map((r) => ({ memberKey: r.member_key, slot: r.slot, countryCode: r.country_code }));
 }
 
 export async function fetchFantasyBracketPicks(eventCode: string): Promise<FantasyBracketPickRow[]> {

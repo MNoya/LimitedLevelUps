@@ -36,9 +36,18 @@ export type FantasyResultRow = {
   bracketPosition: string | null;
 };
 
-export type FantasyMemberRow = { memberKey: string; isMe: boolean; name: string; avatarUrl: string | null; rank: number };
+export type FantasyMemberRow = {
+  memberKey: string;
+  isMe: boolean;
+  name: string;
+  avatarUrl: string | null;
+  rank: number;
+  joinedAt: string | null;
+};
 
 export type FantasyLineupRow = { memberKey: string; isMe: boolean; slot: string; fromRound: number; playerId: number };
+
+export type FantasyLineupFlagRow = { memberKey: string; slot: string; countryCode: string | null };
 
 export type FantasyBracketPickRow = { memberKey: string; isMe: boolean; position: string; winnerId: number; games: string | null };
 

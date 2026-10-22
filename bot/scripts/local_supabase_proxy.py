@@ -36,6 +36,7 @@ _ALLOWED_VIEWS = {
     "public_episodes",
     "public_fantasy_bracket_picks",
     "public_fantasy_event_state",
+    "public_fantasy_lineup_flags",
     "public_fantasy_lineups",
     "public_fantasy_players",
     "public_fantasy_results",
