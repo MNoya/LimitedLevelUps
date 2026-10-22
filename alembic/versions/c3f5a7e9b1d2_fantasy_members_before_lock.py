@@ -37,7 +37,7 @@ JOINED_AT_COLUMN = """,
 
 
 LINEUP_FLAGS_SQL = """
-CREATE VIEW public_fantasy_lineup_flags AS
+CREATE OR REPLACE VIEW public_fantasy_lineup_flags AS
 SELECT p.event_code,
        left(encode(sha256(p.user_id::text::bytea), 'hex'), 16) AS member_key,
        p.slot,
@@ -47,11 +47,15 @@ JOIN fantasy_players f ON f.event_code = p.event_code AND f.id = p.player_id
 WHERE p.from_round = 1
 """
 
+STANDINGS_SQL = (
+    f"CREATE OR REPLACE VIEW public_fantasy_standings AS SELECT{STANDINGS_COLUMNS}{JOINED_AT_COLUMN}{STANDINGS_FROM}"
+)
+VIEW_STATEMENTS = (STANDINGS_SQL, LINEUP_FLAGS_SQL)
+
 
 def upgrade() -> None:
-    columns = STANDINGS_COLUMNS + JOINED_AT_COLUMN
-    op.execute(f"CREATE OR REPLACE VIEW public_fantasy_standings AS SELECT{columns}{STANDINGS_FROM}")
-    op.execute(LINEUP_FLAGS_SQL)
+    for statement in VIEW_STATEMENTS:
+        op.execute(statement)
     op.execute(_site_grant_sql("public_fantasy_lineup_flags"))
 
 

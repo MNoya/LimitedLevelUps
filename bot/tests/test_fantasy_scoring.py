@@ -9,13 +9,12 @@ from sqlalchemy import text
 
 @pytest.fixture(scope="module")
 def fantasy_views(engine):
-    migration_path = Path(__file__).resolve().parents[2] / "alembic/versions/f4n7a5y1w0c1_fantasy_worlds.py"
-    spec = importlib.util.spec_from_file_location("fantasy_migration", migration_path)
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
+    migrations = [_load_migration(name) for name in VIEW_MIGRATIONS]
     with engine.begin() as conn:
-        for statement in migration.VIEW_STATEMENTS:
-            conn.execute(text(statement))
+        conn.execute(text("DROP VIEW IF EXISTS public_fantasy_standings"))
+        for migration in migrations:
+            for statement in migration.VIEW_STATEMENTS:
+                conn.execute(text(statement))
 
 
 @pytest.fixture
@@ -219,3 +218,14 @@ def standing_for(session, member):
         SELECT s.* FROM public_fantasy_standings s
         WHERE s.member_key = left(encode(sha256(CAST(:user_id AS text)::bytea), 'hex'), 16)
     """), {"user_id": str(member)}).one()
+
+
+VIEW_MIGRATIONS = ("f4n7a5y1w0c1_fantasy_worlds", "c3f5a7e9b1d2_fantasy_members_before_lock")
+
+
+def _load_migration(name):
+    migration_path = Path(__file__).resolve().parents[2] / f"alembic/versions/{name}.py"
+    spec = importlib.util.spec_from_file_location(name, migration_path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    return migration
