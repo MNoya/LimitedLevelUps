@@ -531,7 +531,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
       pageSize={7}
     />
   );
-  const recentTrophies = <RecentTrophiesCard events={played} loading={events === undefined} pageSize={7} />;
+  const recentTrophiesProps = { events: played, loading: events === undefined, pageSize: 8 };
   const sideBySide = !useIsMobile(CALENDAR_LABEL_WIDTH);
   const [eventsTabChoice, setEventsTab] = useState<"events" | "colors" | "trophies">("events");
   const eventsTab = sideBySide && eventsTabChoice === "trophies" ? "colors" : eventsTabChoice;
@@ -620,12 +620,14 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
                 </div>
                 {eventsTab !== "events" ? (
                   sideBySide ? (
-                    <div className="pt-3 grid grid-cols-2 gap-4 items-start">
+                    <div className="pt-3 grid grid-cols-2 gap-4">
                       {topColors}
-                      {recentTrophies}
+                      <RecentTrophiesCard {...recentTrophiesProps} className="row-span-2 grid grid-rows-subgrid" />
                     </div>
                   ) : (
-                    <div className="pt-3">{eventsTab === "trophies" ? recentTrophies : topColors}</div>
+                    <div className="pt-3">
+                      {eventsTab === "trophies" ? <RecentTrophiesCard {...recentTrophiesProps} /> : topColors}
+                    </div>
                   )
                 ) : events === undefined ? (
                   <EventsLoadingBlock />

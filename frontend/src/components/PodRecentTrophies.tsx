@@ -54,10 +54,12 @@ export function RecentTrophiesCard({
   events,
   loading,
   pageSize = RECENT_PAGE,
+  className,
 }: {
   events: PodEventSummary[];
   loading: boolean;
   pageSize?: number;
+  className?: string;
 }) {
   const [limit, setLimit] = useState(pageSize);
 
@@ -73,7 +75,7 @@ export function RecentTrophiesCard({
   const shown = champions.slice(0, limit);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className={cn("flex flex-col gap-4", className)}>
       <SurfaceCard>
         <div className="mb-1 flex items-center gap-1.5">
           <Trophy size={16} color="#ffc63a" />
