@@ -6,16 +6,15 @@ import { Tooltip } from "../../Tooltip";
 import { cn } from "../../../lib/utils";
 import { setShortLabel, type WheelSetOption } from "../../../data/draftGames";
 import { EMPTY_CALLS, scoreTrophyRound, TROPHY_DAILY_ROUNDS, type TrophyMageRound } from "../../../data/trophyMage";
-import { LoadingLabel } from "../GameChrome";
-import { DARK_PIXEL_BUTTON, ACCENT_BUTTON, PIXEL_HEADING } from "../pixelStyles";
+import { dayAction, RESULTS_ACTION } from "../gameDay";
+import { LoadingLabel, PlayButton } from "../GameChrome";
+import { ResponsiveWordmark } from "../PixelWordmark";
+import { DARK_PIXEL_BUTTON, PIXEL_HEADING } from "../pixelStyles";
 import { CLEAN_TROPHY_SPRITE, PixelFrame } from "./SpriteStrip";
 import { TrophyTitle } from "./TrophyTitle";
-import type { TrophyDay } from "./useTrophyDay";
+import { TROPHY_DAY, type TrophyDay } from "./trophyDay";
 
 export const DAILY_PLAY = "daily";
-export const DAY_DONE_ACTION = "Results";
-export const NEXT_DAY_ACTION = "Next";
-export const ENDLESS_ACTION = "Endless";
 export const NEXT_PODS_LABEL = "New Pods In";
 const SET_PICKER_LABEL = "Or Select a Set";
 const LOADING_LINES = ["Pondering Drafts", "Studying Decks", "Polishing Trophies", "Reading Draft Logs"];
@@ -66,14 +65,7 @@ export function dayProgress(
     }
     slots.push({ round, state, points, max });
   }
-  const started = day ? Object.keys(day.locked).length + Object.keys(day.drafts).length : 0;
-  let dailyAction = "Play";
-  if (day && day.advanced >= TROPHY_DAILY_ROUNDS) {
-    dailyAction = DAY_DONE_ACTION;
-  } else if (started > 0) {
-    dailyAction = "Continue";
-  }
-  return { slots, dailyAction };
+  return { slots, dailyAction: dayAction(TROPHY_DAY, day) };
 }
 
 export function SetPicker({ sets, onPlay }: { sets: WheelSetOption[]; onPlay: (code: string) => void }) {
@@ -119,45 +111,52 @@ export function SetPicker({ sets, onPlay }: { sets: WheelSetOption[]; onPlay: (c
   );
 }
 
-export function PlayButton({ data, className }: { data: IntroData; className?: string }) {
+export function DailyPlayButton({ data, className }: { data: IntroData; className?: string }) {
+  const resultsIcon = <Trophy size={22} strokeWidth={2.5} className="-mt-1" />;
   return (
-    <button
-      data-play
+    <PlayButton
+      label={data.dailyAction}
+      icon={data.dailyAction === RESULTS_ACTION ? resultsIcon : undefined}
       onClick={data.onDaily}
-      className={cn(ACCENT_BUTTON, "px-10 py-3.5 text-3xl max-sm:text-2xl", className)}
-    >
-      {data.dailyAction === DAY_DONE_ACTION ? (
-        <Trophy size={22} strokeWidth={2.5} className="-mt-1" />
-      ) : (
-        <Play size={22} className="fill-current" />
-      )}
-      {data.dailyAction}
-    </button>
+      className={cn("px-10 py-3.5 text-3xl max-sm:text-2xl", className)}
+    />
   );
 }
 
-export function HelpButton({ onHelp, className }: { onHelp: () => void; className?: string }) {
+export function HelpButton({
+  onHelp,
+  phoneIcon = false,
+  className,
+}: {
+  onHelp: () => void;
+  phoneIcon?: boolean;
+  className?: string;
+}) {
   return (
-    <button onClick={onHelp} className={cn(DARK_PIXEL_BUTTON, "px-4 py-2.5 text-xl max-sm:text-lg", className)}>
-      How to Play
+    <button
+      onClick={onHelp}
+      aria-label="How to Play"
+      className={cn(
+        DARK_PIXEL_BUTTON,
+        "px-4 py-2.5 text-xl max-sm:text-lg",
+        className,
+        phoneIcon && "max-sm:w-12 max-sm:px-0 max-sm:text-2xl",
+      )}
+    >
+      {phoneIcon ? (
+        <>
+          <span className="sm:hidden">?</span>
+          <span className="max-sm:hidden">How to Play</span>
+        </>
+      ) : (
+        "How to Play"
+      )}
     </button>
   );
 }
 
 export function ResponsiveTitle() {
-  return (
-    <>
-      <div className="sm:hidden">
-        <TrophyTitle scale={3.6} />
-      </div>
-      <div className="hidden sm:block [@media(max-height:760px)]:hidden">
-        <TrophyTitle scale={5} />
-      </div>
-      <div className="hidden [@media(max-height:760px)]:sm:block">
-        <TrophyTitle scale={4} />
-      </div>
-    </>
-  );
+  return <ResponsiveWordmark wordmark={TrophyTitle} phone={3.6} desktop={5} short={4} />;
 }
 
 export function TrophyLoading() {

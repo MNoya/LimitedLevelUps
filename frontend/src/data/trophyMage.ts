@@ -15,7 +15,6 @@ import {
 import { orderedDeckColors } from "./utils";
 import type { PodEventParticipantRow, PodEventSummary } from "../types/leaderboard";
 
-export const TROPHY_MAGE_TITLE = "Trophy Mage";
 export const TROPHY_DAILY_ROUNDS = 3;
 export const TROPHY_POINTS = 2;
 export const RECORD_POINTS = 1;
@@ -160,7 +159,9 @@ function withoutFreshLatestSetPods(events: PodEventSummary[], dayKey: string): P
     }
   }
   const minAgeDays = 7;
-  const newestAllowed = new Date(Date.parse(`${dayKey}T00:00:00Z`) - minAgeDays * 86_400_000).toISOString().slice(0, 10);
+  const newestAllowed = new Date(Date.parse(`${dayKey}T00:00:00Z`) - minAgeDays * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
   return events.filter((event) => event.setCode !== latestSet || event.eventDate <= newestAllowed);
 }
 

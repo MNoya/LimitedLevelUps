@@ -8,10 +8,6 @@ export const PIXEL_BUTTON = cn(
   "active:translate-x-[3px] active:translate-y-[3px] active:shadow-[2px_2px_0_#05070a]",
   "active:after:-top-[9px] active:after:-left-[9px]",
 );
-export const GOLD_BUTTON = cn(
-  PIXEL_BUTTON,
-  "bg-[linear-gradient(180deg,#fff3cf_0%,#f6c95e_45%,#cf8e2c_100%)] text-[#1a120b]",
-);
 export const ACCENT_BUTTON = cn(PIXEL_BUTTON, "bg-[image:var(--px-button)] text-[color:var(--px-ink)]");
 export const DARK_PIXEL_BUTTON = cn(PIXEL_BUTTON, "bg-[#2b3445] text-text");
 export const WAITING_PIXEL_BUTTON = cn(

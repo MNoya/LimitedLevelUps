@@ -14,17 +14,19 @@ import { ChevronLeft, ChevronRight, LayoutGrid, Play, Zap } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import {
   CUBE_SET_CODE,
-  DAILY_ROUNDS,
+  daysBefore,
   setShortLabel,
   useFeaturedSetCodes,
   useWheelSets,
   type WheelSetOption,
   shortDayLabel,
 } from "../../../data/draftGames";
-import { DARK_PIXEL_BUTTON, GOLD_BUTTON, HARD_TEXT_SHADOW, PIXEL_TAG } from "../pixelStyles";
+import { DailyCountdown, HelpSquareButton, PlayButton } from "../GameChrome";
+import { ResponsiveWordmark } from "../PixelWordmark";
+import { dayAction, NEXT_DAY_ACTION, nextPlayAfter, PLAY_ACTION, readGameDay, RESULTS_ACTION } from "../gameDay";
+import { DARK_PIXEL_BUTTON, ACCENT_BUTTON, HARD_TEXT_SHADOW, PIXEL_TAG } from "../pixelStyles";
 import { CardBack } from "./CardBack";
-import { nextOpenWheelDay, readFeaturedDay, daysBefore } from "./useWheelDay";
-import { NextPacksCountdown } from "./NextPacksCountdown";
+import { NEXT_PACKS_LABEL, WHEEL_DAY } from "./wheelDay";
 import { useTouchVerb } from "./pageHooks";
 import { useQuickPreload } from "./quickPreload";
 import { WheelHelpDialog } from "./WheelHelp";
@@ -54,20 +56,20 @@ export function WheelIntro({
   const yesterdaySets = useFeaturedSetCodes(yesterdayKey);
   const today = daySlide(dayKey, featuredSets, "Today", "Today's Packs");
   const todayDone = today.action === RESULTS_ACTION;
-  const nextDayKey = nextOpenWheelDay(dayKey, dayKey);
   const newestSet = sets[0]?.code;
+  const nextPlay = nextPlayAfter(WHEEL_DAY, dayKey, dayKey, newestSet);
   useQuickPreload(newestSet);
   const playNext = () => {
-    if (nextDayKey) {
-      onPlay(nextDayKey);
-    } else if (newestSet) {
-      onPlay(newestSet);
+    if (nextPlay.label === NEXT_DAY_ACTION) {
+      onPlay(nextPlay.dayKey);
+    } else if (nextPlay.setCode) {
+      onPlay(nextPlay.setCode);
     }
   };
   const data: IntroData = {
     dayLabel: today.label,
     featuredSets,
-    featuredAction: todayDone ? (nextDayKey ? NEXT_DAY_ACTION : ENDLESS_ACTION) : today.action,
+    featuredAction: todayDone ? nextPlay.label : today.action,
     todayDone,
     onTodayResults: () => onPlay(FEATURED_PLAY),
     days: [daySlide(yesterdayKey, yesterdaySets, "Yesterday", "Yesterday's Packs"), today],
@@ -81,15 +83,7 @@ export function WheelIntro({
 
   return (
     <div className="mx-auto flex w-full max-w-[880px] flex-1 flex-col items-center pb-4 text-center">
-      <div className="mt-1 sm:hidden">
-        <WheelTitle scale={3} />
-      </div>
-      <div className="hidden sm:block [@media(max-height:760px)]:hidden">
-        <WheelTitle scale={6} />
-      </div>
-      <div className="hidden [@media(max-height:760px)]:sm:block">
-        <WheelTitle scale={4} />
-      </div>
+      <ResponsiveWordmark wordmark={WheelTitle} phone={3} desktop={6} short={4} phoneClassName="mt-1" />
       <PickerIntro data={data} />
       <WheelHelpDialog
         open={helpOpen}
@@ -101,33 +95,13 @@ export function WheelIntro({
   );
 }
 
-const RESULTS_ACTION = "Results";
-const NEXT_DAY_ACTION = "Next";
-const ENDLESS_ACTION = "Endless";
-
 function daySlide(dayKey: string, sets: string[], name: string, title: string): DaySlide {
-  const saved = readFeaturedDay(dayKey);
-  const played = saved ? Object.keys(saved.locked).length : 0;
-  let action = "Play";
-  if (saved && saved.advanced >= DAILY_ROUNDS) {
-    action = RESULTS_ACTION;
-  } else if (played > 0) {
-    action = "Continue";
-  }
+  const action = dayAction(WHEEL_DAY, readGameDay(WHEEL_DAY, dayKey));
   return { dayKey, label: shortDayLabel(dayKey), name, title, sets, action };
 }
 
-function PlayLabel({ action }: { action: string }) {
-  return (
-    <>
-      {action === RESULTS_ACTION ? (
-        <LayoutGrid size={22} strokeWidth={3} />
-      ) : (
-        <Play size={22} className="fill-current" />
-      )}
-      {action}
-    </>
-  );
+function resultsIcon(action: string): ReactNode {
+  return action === RESULTS_ACTION ? <LayoutGrid size={22} strokeWidth={3} /> : undefined;
 }
 
 interface DaySlide {
@@ -193,6 +167,10 @@ function PickerIntro({ data }: { data: IntroData }) {
   useArrowKeys(step);
   const swipe = useSwipe(step);
   const play = () => (selectedDay ? data.onDay(selectedDay.dayKey) : data.onSet(selected));
+  let desktopAction = selectedDay ? selectedDay.action : PLAY_ACTION;
+  if (isToday) {
+    desktopAction = data.featuredAction;
+  }
   const fanCounts = data.days.map((day) => fanCount(day.sets));
   const offsets = slideOffsets(slides.length, todayIndex, selectedIndex, fanCounts);
   const firstSetEdge = fanWidth(data.featuredSets.length) / 2 + TODAY_GAP;
@@ -299,21 +277,20 @@ function PickerIntro({ data }: { data: IntroData }) {
       >
         <div className="relative">
           {isToday && data.todayDone && <ResultsButton onClick={data.onTodayResults} />}
-          <button
+          <PlayButton
+            label={desktopAction}
+            icon={resultsIcon(desktopAction)}
             onClick={play}
             className={cn(
-              GOLD_BUTTON,
               "picker-play",
               "[@media(hover:hover)]:group-has-[.picker-center:hover]/picker:-translate-y-0.5",
               "[@media(hover:hover)]:group-has-[.picker-center:hover]/picker:brightness-110",
               "[@media(hover:hover)]:group-has-[.picker-center:hover]/picker:shadow-[6px_7px_0_#05070a]",
               DESKTOP_PLAY,
             )}
-          >
-            <PlayLabel action={isToday ? data.featuredAction : selectedDay ? selectedDay.action : "Play"} />
-          </button>
+          />
         </div>
-        {isToday && data.todayDone && <NextPacksCountdown className="-mt-3" />}
+        {isToday && data.todayDone && <DailyCountdown label={NEXT_PACKS_LABEL} className="-mt-3" />}
         <QuickModeRow onHelp={data.onQuickHelp} size={DESKTOP_QUICK} />
       </div>
     </div>
@@ -338,14 +315,12 @@ function QuickModeRow({ onHelp, size, className }: { onHelp: () => void; size: s
         <span className="absolute top-1/2 right-full mr-4 -translate-y-1/2">
           <ChoiceHeading>Or</ChoiceHeading>
         </span>
-        <Link to="/wheel-of-fortune/quick" className={cn(GOLD_BUTTON, size)}>
+        <Link to="/wheel-of-fortune/quick" className={cn(ACCENT_BUTTON, size)}>
           <Zap size={18} className="fill-current" />
           Quick Mode
         </Link>
         <span className="absolute inset-y-0 left-full ml-4 flex items-center">
-          <button onClick={onHelp} aria-label="About Quick Mode" className={cn(DARK_PIXEL_BUTTON, "size-10 text-xl")}>
-            ?
-          </button>
+          <HelpSquareButton onClick={onHelp} label="About Quick Mode" />
         </span>
       </div>
     </div>
@@ -400,12 +375,16 @@ function MobileToday({ data }: { data: IntroData }) {
       <div className="relative mt-4 flex flex-col items-center gap-3">
         <div className="relative">
           {data.todayDone && <ResultsButton onClick={data.onTodayResults} small />}
-          <button onClick={data.onFeatured} className={cn(GOLD_BUTTON, PHONE_PLAY)}>
-            <PlayLabel action={data.featuredAction} />
-          </button>
+          <PlayButton
+            label={data.featuredAction}
+            icon={resultsIcon(data.featuredAction)}
+            onClick={data.onFeatured}
+            className={PHONE_PLAY}
+          />
         </div>
         {data.todayDone && (
-          <NextPacksCountdown
+          <DailyCountdown
+            label={NEXT_PACKS_LABEL}
             className={cn(
               "[@media(max-height:700px)]:absolute [@media(max-height:700px)]:top-1/2",
               "[@media(max-height:700px)]:left-full [@media(max-height:700px)]:w-max",
@@ -463,7 +442,7 @@ function SlideLabel({ slide, center, day }: { slide: string; center: boolean; da
 }
 
 function fanCount(sets: string[]): number {
-  return sets.length > 0 ? sets.length : DAILY_ROUNDS;
+  return sets.length > 0 ? sets.length : WHEEL_DAY.roundsPerDay;
 }
 
 function homeSetLabel(code: string): string {

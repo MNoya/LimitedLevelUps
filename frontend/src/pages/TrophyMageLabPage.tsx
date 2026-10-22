@@ -9,7 +9,8 @@ import { TrophyHelpDialog } from "../components/draftGames/trophy/TrophyHelp";
 import { DAILY_PLAY, TrophyLoading, TrophyNotice } from "../components/draftGames/trophy/introParts";
 import { TrophyIntro } from "../components/draftGames/trophy/TrophyIntro";
 import { TrophyTitle } from "../components/draftGames/trophy/TrophyTitle";
-import { trophyDayStorageKey } from "../components/draftGames/trophy/useTrophyDay";
+import { TROPHY_DAY } from "../components/draftGames/trophy/trophyDay";
+import { gameDayStorageKey } from "../components/draftGames/gameDay";
 import { useGuideHash, useNoScrollGutter } from "../components/draftGames/wheel/pageHooks";
 import { MINI_GAMES_HEADER, clearSavedDaysOnRequest, gameDayKey, useWheelSets } from "../data/draftGames";
 import { TROPHY_DAILY_ROUNDS, useDailyTrophyRounds, useFreePlayTrophyRounds } from "../data/trophyMage";
@@ -29,7 +30,7 @@ interface PlayOptions {
 }
 
 export function TrophyMageLabPage() {
-  useState(() => clearSavedDaysOnRequest(trophyDayStorageKey("")));
+  useState(() => clearSavedDaysOnRequest(gameDayStorageKey(TROPHY_DAY, "")));
   const [dayKey] = useState(gameDayKey);
   const [params] = useSearchParams();
   const { play: playSegment } = useParams();
@@ -165,7 +166,6 @@ function DailyGame({
       key={dayKey}
       rounds={rounds}
       dayKey={dayKey}
-      storageKey={trophyDayStorageKey(dayKey)}
       startAt={startAt}
       reviewIndex={reviewIndex}
       showResults={showResults}
@@ -198,7 +198,6 @@ function FreePlayGame({ setCode, onHelp, onExit }: { setCode: string; onHelp: ()
     <TrophyGame
       rounds={rounds}
       dayKey={null}
-      storageKey={null}
       exhausted={exhausted}
       onAdvance={(index) => setWanted(index + 2)}
       onHelp={onHelp}

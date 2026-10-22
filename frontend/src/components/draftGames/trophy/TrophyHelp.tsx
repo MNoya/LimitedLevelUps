@@ -27,7 +27,7 @@ export function TrophyHelpDialog({
       footnote="Every deck was pod-drafted on"
       className="game-theme-ice"
     >
-      <HelpSection title="Guess the 3-0 Deck">
+      <HelpSection title="Guess the Trophy" centered>
         <HelpSteps
           steps={[
             "Each round shows 3 decks from one Pod",
@@ -36,7 +36,7 @@ export function TrophyHelpDialog({
           ]}
         />
       </HelpSection>
-      <HelpSection title="Scoring">
+      <HelpSection title="Scoring" centered>
         <ul className="grid grid-cols-[auto_auto_1fr] items-center gap-x-3 gap-y-2.5">
           <HelpScoreRow
             plate={

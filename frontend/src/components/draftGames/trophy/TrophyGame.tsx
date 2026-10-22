@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ChevronLeft, Play, Trophy } from "lucide-react";
+import { Play, Trophy } from "lucide-react";
 
 import { SetGlyph } from "../../Brand";
 import { LuScrollText } from "../../Icons";
-import { Pips } from "../../ManaPips";
 import { podDraftLogHref } from "../../pod/podLinks";
 import { cn } from "../../../lib/utils";
 import { setShortLabel, useWheelSets } from "../../../data/draftGames";
@@ -20,14 +19,16 @@ import {
   type TrophyScore,
 } from "../../../data/trophyMage";
 import { ACCENT_BUTTON, DARK_PIXEL_BUTTON, HARD_TEXT_SHADOW, PIXEL_PANEL } from "../pixelStyles";
+import { HelpSquareButton, MenuButton } from "../GameChrome";
 import { SpaceKey } from "../wheel/SpaceKey";
 import { DeckCard, type DeckFrame } from "./DeckCard";
 import { DeckViewer } from "./DeckViewer";
-import { SCORE_LABEL, TrophyRecap } from "./TrophyRecap";
+import { TrophyRecap } from "./TrophyRecap";
 import { TrophyLoading, TrophyNotice } from "./introParts";
 import { CallTag, ResultTag } from "./RecordChip";
 import { useDeckImage } from "./useDeckImage";
-import { useTrophyDay } from "./useTrophyDay";
+import { nextUnlockedIndex, RESULTS_ACTION, useGameDay } from "../gameDay";
+import { TROPHY_DAY } from "./trophyDay";
 
 type Outcome = "found" | "missed";
 
@@ -59,7 +60,6 @@ interface RoundInfo {
 export function TrophyGame({
   rounds,
   dayKey,
-  storageKey,
   exhausted = false,
   onExit,
   onHelp,
@@ -75,7 +75,6 @@ export function TrophyGame({
 }: {
   rounds: TrophyMageRound[];
   dayKey: string | null;
-  storageKey: string | null;
   exhausted?: boolean;
   onExit: () => void;
   onHelp: () => void;
@@ -89,7 +88,12 @@ export function TrophyGame({
   reviewIndex?: number | null;
   showResults?: boolean;
 }) {
-  const { day, setDraft, lockIn, goTo, advance, finish } = useTrophyDay(storageKey, rounds, startAt);
+  const { day, setDraft, lockIn, goTo, advance, finish } = useGameDay(
+    TROPHY_DAY,
+    dayKey,
+    rounds,
+    startAt ?? "firstOpen",
+  );
   const { sets } = useWheelSets();
   const featured = dayKey != null;
   const finished = featured && day.advanced >= rounds.length;
@@ -130,12 +134,12 @@ export function TrophyGame({
     return exhausted ? <TrophyNotice label="Every Pod in this set is played" onExit={onExit} /> : <TrophyLoading />;
   }
 
-  const nextOpen = featured ? nextUnplayedRound(rounds, day.locked, viewIndex) : null;
+  const nextOpen = featured ? nextUnlockedIndex(rounds, day.locked, viewIndex) : null;
   let nextLabel = NEXT_POD_LABEL;
   if (reviewing) {
     nextLabel = REVIEW_BACK_LABEL;
   } else if (featured && nextOpen == null) {
-    nextLabel = SCORE_LABEL;
+    nextLabel = RESULTS_ACTION;
   }
   const upcoming = featured ? (nextOpen == null ? undefined : rounds[nextOpen]) : rounds[viewIndex + 1];
   const next = () => {
@@ -430,7 +434,12 @@ function RoundView({
         </div>
         <div className="flex min-h-[3.875rem] items-center justify-center gap-3">
           {revealDone ? (
-            <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 animate-fadeUpIn">
+            <div
+              className={cn(
+                "grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3",
+                "animate-fadeUpIn",
+              )}
+            >
               <RoundPoints score={score} total={total} className="flex-col items-center gap-1" />
               <RoundOutcome outcome={outcome} />
               <div className="flex justify-end [&>button]:px-4">{actionButton}</div>
@@ -486,15 +495,12 @@ function RoundView({
 function RoundMenu({ info }: { info: RoundInfo }) {
   return (
     <>
-      <button
+      <MenuButton
         onClick={info.onExit}
-        aria-label="Menu"
-        className={cn(DARK_PIXEL_BUTTON, "h-10 shrink-0 pr-3 pl-2 text-lg max-sm:w-10 max-sm:px-0")}
-      >
-        <ChevronLeft size={18} strokeWidth={3} />
-        <span className="max-sm:hidden">Menu</span>
-      </button>
-      <HelpButton onHelp={info.onHelp} />
+        className="h-10 shrink-0 pr-3 pl-2 text-lg max-sm:w-10 max-sm:px-0"
+        labelClassName="max-sm:hidden"
+      />
+      <HelpSquareButton onClick={info.onHelp} />
     </>
   );
 }
@@ -562,18 +568,6 @@ function RoundTiles({ info }: { info: RoundInfo }) {
         </button>
       ))}
     </div>
-  );
-}
-
-function HelpButton({ onHelp, className }: { onHelp: () => void; className?: string }) {
-  return (
-    <button
-      onClick={onHelp}
-      aria-label="How to Play"
-      className={cn(DARK_PIXEL_BUTTON, "size-10 shrink-0 text-xl", className)}
-    >
-      ?
-    </button>
   );
 }
 
@@ -683,7 +677,12 @@ function RecordButton({
       )}
     >
       {beckon && (
-        <span className="pointer-events-none absolute -inset-0.5 animate-pulse border-2 border-[color:var(--px-accent)]" />
+        <span
+          className={cn(
+            "pointer-events-none absolute -inset-0.5 animate-pulse border-2",
+            "border-[color:var(--px-accent)]",
+          )}
+        />
       )}
       {record}
     </button>
@@ -722,20 +721,6 @@ function assign(calls: TrophyCalls, deckKey: string, record: TrophyRecord | null
     records[deckKey] = record;
   }
   return { crown, records };
-}
-
-function nextUnplayedRound(
-  rounds: TrophyMageRound[],
-  locked: Record<string, TrophyCalls>,
-  current: number,
-): number | null {
-  for (let step = 1; step < rounds.length; step++) {
-    const index = (current + step) % rounds.length;
-    if (!locked[rounds[index].eventId]) {
-      return index;
-    }
-  }
-  return null;
 }
 
 function freePlayPoints(rounds: TrophyMageRound[], locked: Record<string, TrophyCalls>, current: string): number {

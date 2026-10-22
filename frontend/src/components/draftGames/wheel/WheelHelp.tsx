@@ -3,7 +3,7 @@ import { useState } from "react";
 import { FIRST_PICK_POINTS, WHEEL_CARD_POINTS, WHEEL_GAME_ART } from "../../../data/draftGames";
 import { GameHelpDialog, HelpScoreRow, HelpSection, HelpSteps, type GameHelpAction } from "../GameDialog";
 import { cn } from "../../../lib/utils";
-import { GOLD_BUTTON } from "../pixelStyles";
+import { ACCENT_BUTTON } from "../pixelStyles";
 import { CallChipFace } from "./PackGrid";
 import { WheelEmoji } from "./WheelEmoji";
 
@@ -28,7 +28,7 @@ export function WheelHelpDialog({
       art={WHEEL_GAME_ART}
       artPosition="60% 38%"
       icon={<SpinningWheel />}
-      playButton={GOLD_BUTTON}
+      playButton={ACCENT_BUTTON}
       footnote="Every pack was pod-drafted on"
     >
       <HelpSection title="Guess the Wheel">
@@ -86,7 +86,7 @@ export function QuickHelpDialog({
       art={WHEEL_GAME_ART}
       artPosition="60% 38%"
       icon={<SpinningWheel />}
-      playButton={GOLD_BUTTON}
+      playButton={ACCENT_BUTTON}
       footnote="Every pack was pod-drafted on"
     >
       <HelpSteps steps={["Each round shows 3 cards from one Pod pack", "Select the card you think wheeled"]} />

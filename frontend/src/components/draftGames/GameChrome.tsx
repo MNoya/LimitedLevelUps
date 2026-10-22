@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, ChevronLeft, Copy, Play } from "lucide-react";
 
 import { copyToClipboard } from "../CopyTextButton";
 import { cn } from "../../lib/utils";
-import { PIXEL_HEADING } from "./pixelStyles";
+import { ACCENT_BUTTON, DARK_PIXEL_BUTTON, HARD_TEXT_SHADOW, PIXEL_HEADING } from "./pixelStyles";
 import { msUntilNextGameDay, type RoundMark } from "../../data/draftGames";
+import type { NextPlay } from "./gameDay";
 
 export const MARK_EMOJI: Record<RoundMark, string> = { hit: "🟩", close: "🟨", miss: "🟥" };
 const GAME_BUTTON = cn(
@@ -91,4 +92,94 @@ export function DailyCountdown({ label, className }: { label: string; className?
 
 export function GameStatus({ children }: { children: ReactNode }) {
   return <div className="py-16 text-center text-subtle">{children}</div>;
+}
+
+export function MenuButton({
+  onClick,
+  className,
+  labelClassName,
+  iconSize = 18,
+}: {
+  onClick: () => void;
+  className: string;
+  labelClassName?: string;
+  iconSize?: number;
+}) {
+  return (
+    <button onClick={onClick} aria-label="Menu" className={cn(DARK_PIXEL_BUTTON, className)}>
+      <ChevronLeft size={iconSize} strokeWidth={3} />
+      <span className={labelClassName}>Menu</span>
+    </button>
+  );
+}
+
+export function HelpSquareButton({
+  onClick,
+  label = "How to Play",
+  className,
+}: {
+  onClick: () => void;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      className={cn(DARK_PIXEL_BUTTON, "size-10 shrink-0 text-xl", className)}
+    >
+      ?
+    </button>
+  );
+}
+
+export function PlayButton({
+  label,
+  onClick,
+  icon,
+  className,
+}: {
+  label: string;
+  onClick: () => void;
+  icon?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <button data-play onClick={onClick} className={cn(ACCENT_BUTTON, className)}>
+      {icon ?? <Play size={22} className="fill-current" />}
+      {label}
+    </button>
+  );
+}
+
+export function DayEndButtons({
+  next,
+  onNext,
+  onExit,
+  menuClassName,
+  nextClassName,
+}: {
+  next: NextPlay;
+  onNext: (() => void) | null;
+  onExit: () => void;
+  menuClassName?: string;
+  nextClassName?: string;
+}) {
+  return (
+    <>
+      <MenuButton onClick={onExit} iconSize={24} className={cn("py-3.5 pr-10 pl-7 text-3xl", menuClassName)} />
+      {onNext && (
+        <PlayButton label={next.label} onClick={onNext} className={cn("px-10 py-3.5 text-3xl", nextClassName)} />
+      )}
+    </>
+  );
+}
+
+export function DayPoints({ points, max, className }: { points: number; max: number; className?: string }) {
+  return (
+    <span className={cn("font-display text-3xl leading-none text-[#f6c95e]", HARD_TEXT_SHADOW, className)}>
+      {points}
+      <span className="text-2xl"> of {max} Points</span>
+    </span>
+  );
 }

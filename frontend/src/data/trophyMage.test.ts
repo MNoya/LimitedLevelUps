@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CUBE_SET_CODE, type WheelSetOption } from "./draftGames";
+import { CUBE_SET_CODE, daysBefore, type WheelSetOption } from "./draftGames";
 import { dealDailySlots, scoreTrophyRound, type TrophyCalls, type TrophyMageRound } from "./trophyMage";
 import type { PodEventSummary } from "../types/leaderboard";
 
@@ -117,10 +117,6 @@ function pod(setCode: string, eventDate: string): PodEventSummary {
     participantCount: 8,
     isFinalized: true,
   };
-}
-
-function daysBefore(dayKey: string, days: number): string {
-  return new Date(Date.parse(`${dayKey}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
 }
 
 function threeDeckRound(): TrophyMageRound {

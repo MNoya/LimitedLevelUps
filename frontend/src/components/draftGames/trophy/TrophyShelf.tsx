@@ -6,12 +6,12 @@ import { SetGlyph } from "../../Brand";
 import { Trophy } from "lucide-react";
 
 import { DailyCountdown } from "../GameChrome";
+import { CONTINUE_ACTION, ENDLESS_ACTION, RESULTS_ACTION } from "../gameDay";
 import { DARK_PIXEL_BUTTON, HARD_TEXT_SHADOW, PIXEL_HEADING, PIXEL_TAG } from "../pixelStyles";
 import {
-  DAY_DONE_ACTION,
+  DailyPlayButton,
   HelpButton,
   NEXT_PODS_LABEL,
-  PlayButton,
   ResponsiveTitle,
   SetPicker,
   type DaySlot,
@@ -54,12 +54,7 @@ export function TrophyShowcase({ data }: { data: IntroData }) {
             <span className={cn("mr-3 text-[0.8em]", PIXEL_HEADING)}>{data.dayLabel}</span>
             {SHELF_HEADING}
           </h2>
-          <ShelfCase
-            slots={data.slots}
-            size="large"
-            onRound={data.onRound}
-            lifted={playHovered && !data.dayDone}
-          />
+          <ShelfCase slots={data.slots} size="large" onRound={data.onRound} lifted={playHovered && !data.dayDone} />
           {data.dayDone && (
             <DailyCountdown
               label={NEXT_PODS_LABEL}
@@ -78,16 +73,20 @@ export function TrophyShowcase({ data }: { data: IntroData }) {
               className={cn(DARK_PIXEL_BUTTON, "justify-self-end px-4 py-2.5 text-xl max-sm:px-3 max-sm:text-lg")}
             >
               <Trophy size={18} strokeWidth={2.5} className="-mt-0.5" />
-              {DAY_DONE_ACTION}
+              {RESULTS_ACTION}
             </button>
           ) : (
             <span />
           )}
-          <PlayButton
+          <DailyPlayButton
             data={data}
             className="max-sm:px-8 max-sm:py-2.5 [@media(max-height:760px)]:py-2 [@media(max-height:760px)]:text-2xl"
           />
-          <HelpButton onHelp={data.onHelp} className="justify-self-start max-sm:px-3" />
+          <HelpButton
+            onHelp={data.onHelp}
+            phoneIcon={data.dailyAction === CONTINUE_ACTION || data.dailyAction === ENDLESS_ACTION}
+            className="justify-self-start max-sm:px-3"
+          />
         </div>
         <div className="grid w-full max-w-[760px] grid-cols-2 gap-4 max-sm:gap-3 [@media(max-height:760px)]:gap-3">
           <PastShelves data={data} />

@@ -73,6 +73,10 @@ export function gameDayKey(now: Date = new Date()): string {
   return new Date(Date.UTC(clock.year, clock.month - 1, clock.day - (startedToday ? 0 : 1))).toISOString().slice(0, 10);
 }
 
+export function daysBefore(dayKey: string, days: number): string {
+  return new Date(Date.parse(`${dayKey}T12:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
+}
+
 export function dayNumber(dayKey: string): number {
   const firstDay = Date.UTC(2026, 9, 15);
   return Math.round((Date.parse(`${dayKey}T00:00:00Z`) - firstDay) / 86_400_000) + 1;

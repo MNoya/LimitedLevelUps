@@ -6,6 +6,7 @@ import { LuScrollText } from "../../Icons";
 import { Tooltip } from "../../Tooltip";
 import { cn } from "../../../lib/utils";
 import { ordinal, type RoundMark } from "../../../data/draftGames";
+import { MenuButton } from "../GameChrome";
 import { DARK_PIXEL_BUTTON, HARD_TEXT_SHADOW, PIXEL_HEADING, PIXEL_TOOLTIP } from "../pixelStyles";
 import { useFlip } from "./motion";
 import { WheelEmoji } from "./WheelEmoji";
@@ -105,14 +106,11 @@ export function WheelHeader({
         {center && <div className="flex h-11 items-center">{center}</div>}
         <div className={cn("ml-auto flex shrink-0 gap-3", center && "h-11 items-center")}>
           {onExit && (
-            <button
+            <MenuButton
               onClick={onExit}
-              aria-label="Menu"
-              className={cn(DARK_PIXEL_BUTTON, "h-9 pr-3 pl-2 text-lg max-2xl:w-9 max-2xl:px-0")}
-            >
-              <ChevronLeft size={18} strokeWidth={3} />
-              <span className="max-2xl:hidden">Menu</span>
-            </button>
+              className="h-9 pr-3 pl-2 text-lg max-2xl:w-9 max-2xl:px-0"
+              labelClassName="max-2xl:hidden"
+            />
           )}
           {onHelp && (
             <IconButton label="How to Play" onClick={onHelp} className="size-9 text-xl">

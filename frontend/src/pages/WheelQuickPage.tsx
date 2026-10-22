@@ -12,8 +12,8 @@ import { useNavigate } from "react-router-dom";
 
 import { Container } from "../components/Container";
 import { PageShell } from "../components/PageShell";
-import { CardImage, CardImageMapProvider } from "../components/pod/review/ReviewCard";
-import { GOLD_BUTTON, PIXEL_HEADING, PIXEL_PANEL } from "../components/draftGames/pixelStyles";
+import { CardImageMapProvider } from "../components/pod/review/ReviewCard";
+import { ACCENT_BUTTON, PIXEL_HEADING, PIXEL_PANEL } from "../components/draftGames/pixelStyles";
 import { CardTitle } from "../components/draftGames/wheel/CardTitle";
 import {
   CardZoom,
@@ -25,7 +25,7 @@ import {
   revealOutcome,
 } from "../components/draftGames/wheel/PackGrid";
 import { releaseFocus, useGuideHash, useNoScrollGutter } from "../components/draftGames/wheel/pageHooks";
-import { usePreloadPackArt } from "../components/draftGames/wheel/packArt";
+import { useCurrentPackFirstImages, usePackDealtAt, usePreloadPackArt } from "../components/draftGames/wheel/packArt";
 import { quickSeed, rotateQuickSeed } from "../components/draftGames/wheel/quickPreload";
 import { SpaceKey } from "../components/draftGames/wheel/SpaceKey";
 import { WheelBackdrop } from "../components/draftGames/wheel/WheelBackdrop";
@@ -39,7 +39,6 @@ import {
   QuickHelpDialog,
   type QuickDifficulty,
 } from "../components/draftGames/wheel/WheelHelp";
-import { useCardImageMap } from "../data/cardImages";
 import {
   ALL_SETS_CODE,
   MINI_GAMES_HEADER,
@@ -170,11 +169,12 @@ function QuickGame({
   const { packs, isPending } = useFreePlayPacks(setCode, round + 2, seed);
   const pack = packs[round];
   const stats = useCardStats(pack?.setCode ?? setCode);
-  const images = useCardImageMap(
-    useMemo(() => packs.flatMap((p) => p.pack.map((i) => ({ name: p.cards[i].n, set: p.cards[i].s }))), [packs]),
-  );
+  const images = useCurrentPackFirstImages(packs, round);
   usePreloadPackArt(packs[round + 1], images);
   const candidates = useMemo(() => (pack ? pickCandidates(pack, difficulty, stats) : []), [pack, difficulty, stats]);
+  const candidateCards = candidates.map((candidate) => candidate.card);
+  const dealtAt = usePackDealtAt(pack, candidateCards, images);
+  const dealt = dealtAt != null;
   const viewed = viewing == null ? null : history[viewing];
   const shownPack = viewed ? viewed.pack : pack;
   const shownCandidates = viewed ? viewed.candidates : candidates;
@@ -272,7 +272,7 @@ function QuickGame({
   );
 
   const restRef = useRef<HTMLDivElement>(null);
-  const restCount = shownPack ? withoutBasics(shownPack.pack, shownPack).length - shownCandidates.length : 0;
+  const restCount = shownPack && dealt ? withoutBasics(shownPack.pack, shownPack).length - shownCandidates.length : 0;
   const phoneRestFit = usePhoneRestFit(restRef, restCount);
 
   if (!shownPack && !isPending) {
@@ -287,7 +287,7 @@ function QuickGame({
   }
   const openingFor = (index: number): CardOpening => ({
     index,
-    openedAt: opening?.openedAt ?? 0,
+    openedAt: Math.max(opening?.openedAt ?? 0, dealtAt ?? 0),
     underlay: opening?.previous?.[index] ?? "empty",
   });
   return (
@@ -318,7 +318,7 @@ function QuickGame({
             </button>
           </span>,
         )}
-        {shownPack ? (
+        {shownPack && dealt ? (
           <section
             className={cn(
               "relative flex min-w-0 flex-col items-center gap-3",
@@ -340,7 +340,7 @@ function QuickGame({
                   <button
                     key={round}
                     onClick={advance}
-                    className={cn(GOLD_BUTTON, "h-11 px-5 text-2xl animate-fadeUpIn lg:hidden")}
+                    className={cn(ACCENT_BUTTON, "h-11 px-5 text-2xl animate-fadeUpIn lg:hidden")}
                   >
                     {viewed ? "Back to Pack" : "Next Pack"}
                   </button>
@@ -409,7 +409,7 @@ function QuickGame({
                       key={round}
                       onClick={advance}
                       className={cn(
-                        GOLD_BUTTON,
+                        ACCENT_BUTTON,
                         "pointer-events-auto h-12 gap-6 px-6 text-2xl animate-fadeUpIn lg:pr-2.5",
                       )}
                     >
@@ -556,18 +556,8 @@ function restRowWidth(fit: RestFit): number {
 
 function QuickLoading() {
   return (
-    <section className="flex flex-col items-center gap-3 max-lg:min-h-[60dvh] lg:h-[calc(100dvh-125px)]">
-      <h2
-        className={cn(
-          "flex h-11 w-full items-center text-2xl lg:translate-y-0.5 lg:text-3xl max-lg:pl-2 lg:justify-center",
-          PIXEL_HEADING,
-        )}
-      >
-        Which One Wheeled?
-      </h2>
-      <div className="flex w-full flex-1 items-center justify-center lg:pb-[25%]">
-        <LoadingLabel label="Shuffling the Packs" className="text-3xl" />
-      </div>
+    <section className="flex items-center justify-center max-lg:min-h-[60dvh] lg:h-[calc(100dvh-125px)] lg:pb-[12%]">
+      <LoadingLabel label="Shuffling the Packs" className="text-3xl" />
     </section>
   );
 }

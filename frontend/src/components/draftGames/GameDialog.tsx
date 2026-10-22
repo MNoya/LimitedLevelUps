@@ -112,9 +112,17 @@ export function GameHelpDialog({
   );
 }
 
-export function HelpSection({ title, children }: { title: string; children: ReactNode }) {
+export function HelpSection({
+  title,
+  centered = false,
+  children,
+}: {
+  title: string;
+  centered?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <section>
+    <section className={cn(centered && "flex flex-col items-center")}>
       <h3 className={cn("mb-3 font-display text-2xl leading-none text-[color:var(--px-accent)]", HARD_TEXT_SHADOW)}>
         {title}
       </h3>

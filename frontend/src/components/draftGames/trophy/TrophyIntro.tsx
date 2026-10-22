@@ -1,16 +1,10 @@
-import { shortDayLabel, useWheelSets } from "../../../data/draftGames";
+import { daysBefore, shortDayLabel, useWheelSets } from "../../../data/draftGames";
 import { useDailyTrophyRounds, type TrophyMageRound } from "../../../data/trophyMage";
-import {
-  DAILY_PLAY,
-  DAY_DONE_ACTION,
-  dayProgress,
-  ENDLESS_ACTION,
-  NEXT_DAY_ACTION,
-  type IntroData,
-} from "./introParts";
+import { NEXT_DAY_ACTION, RESULTS_ACTION, nextPlayAfter, readGameDay } from "../gameDay";
+import { DAILY_PLAY, dayProgress, type IntroData } from "./introParts";
+import { TROPHY_DAY } from "./trophyDay";
 import { TrophyHelpDialog } from "./TrophyHelp";
 import { TrophyShowcase } from "./TrophyShelf";
-import { daysBefore, nextOpenDay, readTrophyDay, trophyDayStorageKey } from "./useTrophyDay";
 
 export function TrophyIntro({
   dayKey,
@@ -32,26 +26,24 @@ export function TrophyIntro({
   const todayLoaded = !today.isPending;
   const yesterday = useDailyTrophyRounds(yesterdayKey, todayLoaded);
   const twoDaysAgo = useDailyTrophyRounds(twoDaysAgoKey, todayLoaded);
-  const progressOf = (key: string, rounds: TrophyMageRound[]) =>
-    dayProgress(rounds, readTrophyDay(trophyDayStorageKey(key)));
+  const progressOf = (key: string, rounds: TrophyMageRound[]) => dayProgress(rounds, readGameDay(TROPHY_DAY, key));
   const progress = progressOf(dayKey, today.rounds);
   const yesterdayProgress = progressOf(yesterdayKey, yesterday.rounds);
   const twoDaysAgoProgress = progressOf(twoDaysAgoKey, twoDaysAgo.rounds);
-  const showsResultHere = progress.dailyAction === DAY_DONE_ACTION;
-  const nextDayKey = nextOpenDay(dayKey, dayKey);
-  const newestSet = sets[0]?.code;
+  const showsResultHere = progress.dailyAction === RESULTS_ACTION;
+  const nextPlay = nextPlayAfter(TROPHY_DAY, dayKey, dayKey, sets[0]?.code);
   const playNext = () => {
-    if (nextDayKey) {
-      onPlay(DAILY_PLAY, { day: nextDayKey });
-    } else if (newestSet) {
-      onPlay(newestSet);
+    if (nextPlay.label === NEXT_DAY_ACTION) {
+      onPlay(DAILY_PLAY, { day: nextPlay.dayKey });
+    } else if (nextPlay.setCode) {
+      onPlay(nextPlay.setCode);
     }
   };
   const data: IntroData = {
     dayKey,
     dayLabel: shortDayLabel(dayKey),
     ...progress,
-    dailyAction: showsResultHere ? (nextDayKey ? NEXT_DAY_ACTION : ENDLESS_ACTION) : progress.dailyAction,
+    dailyAction: showsResultHere ? nextPlay.label : progress.dailyAction,
     dayDone: showsResultHere,
     pastDays: [
       { dayKey: yesterdayKey, slots: yesterdayProgress.slots },
@@ -60,7 +52,7 @@ export function TrophyIntro({
     sets,
     onDaily: showsResultHere ? playNext : () => onPlay(DAILY_PLAY),
     onResults: showsResultHere ? () => onPlay(DAILY_PLAY, { results: true }) : null,
-    onRound: (round) => onPlay(DAILY_PLAY, progress.dailyAction === DAY_DONE_ACTION ? { review: round } : { round }),
+    onRound: (round) => onPlay(DAILY_PLAY, showsResultHere ? { review: round } : { round }),
     onDay: (pastDay) => onPlay(DAILY_PLAY, { day: pastDay }),
     onSet: (code) => onPlay(code),
     onHelp,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronUp } from "lucide-react";
 
@@ -23,7 +23,14 @@ import {
   type CardOpening,
   type RevealLayout,
 } from "../components/draftGames/wheel/PackGrid";
-import { useWheelDay, wheelDayStorageKey } from "../components/draftGames/wheel/useWheelDay";
+import { WHEEL_DAY } from "../components/draftGames/wheel/wheelDay";
+import {
+  RESULTS_ACTION,
+  gameDayStorageKey,
+  nextUnlockedIndex,
+  readGameDay,
+  useGameDay,
+} from "../components/draftGames/gameDay";
 import { WheelBackdrop } from "../components/draftGames/wheel/WheelBackdrop";
 import { WheelTitle } from "../components/draftGames/wheel/WheelTitle";
 import { WheelHeader, type WheelHeaderTools, type WheelProgress } from "../components/draftGames/wheel/WheelHeader";
@@ -32,8 +39,12 @@ import { releaseFocus, useGuideHash, useNoScrollGutter, useTouchVerb } from "../
 import { FEATURED_PLAY, WheelIntro } from "../components/draftGames/wheel/WheelIntro";
 import { WheelSummary } from "../components/draftGames/wheel/WheelSummary";
 import { useFlip } from "../components/draftGames/wheel/motion";
-import { packArtResolved, usePreloadPackArt } from "../components/draftGames/wheel/packArt";
-import { useCardImageMap } from "../data/cardImages";
+import {
+  packArtResolved,
+  useCurrentPackFirstImages,
+  usePackDealtAt,
+  usePreloadPackArt,
+} from "../components/draftGames/wheel/packArt";
 import {
   MINI_GAMES_HEADER,
   clearSavedDaysOnRequest,
@@ -50,7 +61,7 @@ import {
 import type { ArtifactCard } from "../types/leaderboard";
 import { cn } from "../lib/utils";
 import {
-  GOLD_BUTTON,
+  ACCENT_BUTTON,
   PIXEL_HEADING,
   PIXEL_PANEL,
   PIXEL_TOOLTIP,
@@ -73,7 +84,7 @@ type GameMode = "featured" | "free";
 export function WheelOfFortunePage() {
   useNoScrollGutter();
   const [today] = useState(() => {
-    clearSavedDaysOnRequest(wheelDayStorageKey(""));
+    clearSavedDaysOnRequest(gameDayStorageKey(WHEEL_DAY, ""));
     return gameDayKey();
   });
   const { play, packNumber } = useParams<{ play?: string; packNumber?: string }>();
@@ -154,7 +165,9 @@ interface ModeProps {
 
 function FeaturedGame({ dayKey, ...modeProps }: ModeProps & { dayKey: string }) {
   const { packs, isPending } = useFeaturedPacks(dayKey);
-  const cardImages = usePackImages(packs);
+  const [savedDay] = useState(() => readGameDay(WHEEL_DAY, dayKey));
+  const dayFinished = savedDay != null && savedDay.advanced >= WHEEL_DAY.roundsPerDay;
+  const cardImages = useCurrentPackFirstImages(packs, savedDay?.current ?? 0, dayFinished);
   if (isPending) {
     return <WheelSkeleton />;
   }
@@ -163,14 +176,7 @@ function FeaturedGame({ dayKey, ...modeProps }: ModeProps & { dayKey: string }) 
   }
   return (
     <CardImageMapProvider value={cardImages}>
-      <WheelGame
-        key={dayKey}
-        mode="featured"
-        packs={packs}
-        dayKey={dayKey}
-        storageKey={wheelDayStorageKey(dayKey)}
-        {...modeProps}
-      />
+      <WheelGame key={dayKey} mode="featured" packs={packs} dayKey={dayKey} {...modeProps} />
     </CardImageMapProvider>
   );
 }
@@ -193,7 +199,7 @@ function FreePlayGame({
     }
   };
   const { sets, isPending: setsPending } = useWheelSets();
-  const cardImages = usePackImages(packs);
+  const cardImages = useCurrentPackFirstImages(packs, 0);
   if (!setsPending && !sets.some((set) => set.code === setCode)) {
     return <GameStatus>No Pods to play for this set yet</GameStatus>;
   }
@@ -206,7 +212,6 @@ function FreePlayGame({
         mode="free"
         packs={packs}
         dayKey={null}
-        storageKey={null}
         exhausted={exhausted}
         onAdvance={(index) => setWanted(index + 1)}
         packNumberOf={packNumberOf}
@@ -228,7 +233,6 @@ function WheelGame({
   mode,
   packs,
   dayKey,
-  storageKey,
   exhausted = false,
   helpOpen,
   onHelp,
@@ -240,13 +244,12 @@ function WheelGame({
   mode: GameMode;
   packs: WheelPack[];
   dayKey: string | null;
-  storageKey: string | null;
   exhausted?: boolean;
   onAdvance?: (index: number) => void;
   packNumberOf?: (pack: WheelPack) => number | null;
   onPackShown?: (pack: WheelPack) => void;
 }) {
-  const { day, setDraft: saveDraft, lockIn, goTo, advance, finish } = useWheelDay(storageKey, packs);
+  const { day, setDraft: saveDraft, lockIn, goTo, advance, finish } = useGameDay(WHEEL_DAY, dayKey, packs);
   const { sets } = useWheelSets();
   const packNumbers = usePackNumbers();
   const [freshReveal, setFreshReveal] = useState(false);
@@ -288,6 +291,8 @@ function WheelGame({
   const last = featured && nextOpen == null;
   const cardImages = useCardImageMapContext();
   usePreloadPackArt(featured ? (nextOpen != null ? packs[nextOpen] : undefined) : packs[viewIndex + 1], cardImages);
+  const dealtAt = usePackDealtAt(pack, pack?.pack ?? [], cardImages);
+  const cardsShown = artResolved && dealtAt != null;
 
   const place = (card: number, at: number) => {
     const without = slots.filter((c) => c !== card);
@@ -469,7 +474,7 @@ function WheelGame({
     const keyInset = floating ? "lg:gap-8 lg:pr-3.5" : "lg:gap-4 lg:pr-2.5";
     if (reviewing != null) {
       return (
-        <button onClick={closeReview} className={cn(GOLD_BUTTON, "gap-1.5 pl-3.5", size)}>
+        <button onClick={closeReview} className={cn(ACCENT_BUTTON, "gap-1.5 pl-3.5", size)}>
           <ChevronLeft className="size-[1em]" strokeWidth={3} />
           Back to Results
         </button>
@@ -478,8 +483,8 @@ function WheelGame({
     if (score) {
       return (
         <span key="next" className="flex animate-fadeUpIn" style={{ animationDelay: `${nextDelay}ms` }}>
-          <button onClick={next} className={cn(GOLD_BUTTON, size, keyInset)}>
-            {last ? "Results" : "Next Pack"}
+          <button onClick={next} className={cn(ACCENT_BUTTON, size, keyInset)}>
+            {last ? RESULTS_ACTION : "Next Pack"}
             <SpaceKey />
           </button>
         </span>
@@ -489,7 +494,7 @@ function WheelGame({
       return <WaitingConfirm key="waiting" remaining={slotCount - slots.length} className={size} />;
     }
     return (
-      <button key="ready" onClick={lock} className={cn(GOLD_BUTTON, keyInset, size)}>
+      <button key="ready" onClick={lock} className={cn(ACCENT_BUTTON, keyInset, size)}>
         Confirm
         <SpaceKey />
       </button>
@@ -529,7 +534,7 @@ function WheelGame({
       pickNumber={slots.includes(card) ? slots.indexOf(card) + 1 : null}
       opening={{
         index,
-        openedAt: opening?.openedAt ?? 0,
+        openedAt: Math.max(opening?.openedAt ?? 0, dealtAt ?? 0),
         underlay: underlayAt(index),
       }}
       onToggle={() => toggle(card)}
@@ -577,7 +582,7 @@ function WheelGame({
         >
           {gridOrder.map((card, index) => (
             <PackSlot key={card} index={index} flipKey={`${pack.eventId}-${card}`}>
-              {score ? revealCard(card) : artResolved ? pickingCard(card, index) : <PulseCard index={index} />}
+              {score ? revealCard(card) : cardsShown ? pickingCard(card, index) : <PulseCard index={index} />}
             </PackSlot>
           ))}
           {floatingAction}
@@ -727,27 +732,9 @@ function usePackArtResolved(pack: WheelPack | undefined): boolean {
   return packArtResolved(pack, useCardImageMapContext());
 }
 
-function usePackImages(packs: WheelPack[]) {
-  const imageItems = useMemo(
-    () => packs.flatMap((pack) => pack.pack.map((i) => ({ name: pack.cards[i].n, set: pack.cards[i].s }))),
-    [packs],
-  );
-  return useCardImageMap(imageItems);
-}
-
-function nextUnlockedIndex(packs: WheelPack[], locked: Record<string, number[]>, from: number): number | null {
-  for (let step = 1; step < packs.length; step++) {
-    const index = (from + step) % packs.length;
-    if (!locked[packs[index].eventId]) {
-      return index;
-    }
-  }
-  return null;
-}
-
 function restartToday(dayKey: string | null) {
   if (dayKey) {
-    localStorage.removeItem(wheelDayStorageKey(dayKey));
+    localStorage.removeItem(gameDayStorageKey(WHEEL_DAY, dayKey));
   }
   window.location.reload();
 }

@@ -24,6 +24,20 @@ export function CardTitle({ card, className }: { card: ArtifactCard; className?:
   if (frame === "pill") {
     return <ColorPill card={card} className={className} />;
   }
+  if (frame === "battle") {
+    return (
+      <div className={cn("flex w-full items-center", TITLE_ASPECT, className)}>
+        <div className="relative aspect-[569/45] w-full overflow-hidden rounded-[2.8%/40%] bg-surface2">
+          <div
+            className="absolute top-0 left-0 w-[85.76%] origin-top-left"
+            style={{ transform: "translate(calc(122.13% + 4px), -2.65%) rotate(90deg)" }}
+          >
+            <CardImage card={card} />
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (frame === "sideways") {
     return (
       <div className={cn("flex w-full items-center", TITLE_ASPECT, className)}>
@@ -56,10 +70,10 @@ export function TitleSlot({ className, children }: { className?: string; childre
   return <div className={cn("flex w-full items-center px-3", TITLE_ASPECT, className)}>{children}</div>;
 }
 
-function titleFrame(card: ArtifactCard, layout: string | undefined): "upright" | "sideways" | "pill" {
+function titleFrame(card: ArtifactCard, layout: string | undefined): "upright" | "sideways" | "battle" | "pill" {
   const type = card.type ?? "";
   if (type.includes("Battle")) {
-    return "pill";
+    return "battle";
   }
   if (!card.n?.includes("//")) {
     return "upright";

@@ -1,5 +1,4 @@
 import type { CSSProperties } from "react";
-import { ChevronLeft, Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { SetGlyph } from "../../Brand";
@@ -15,18 +14,13 @@ import {
   type WheelScore,
 } from "../../../data/draftGames";
 import type { ArtifactCard } from "../../../types/leaderboard";
-import {
-  ACCENT_BUTTON,
-  DARK_PIXEL_BUTTON,
-  HARD_TEXT_SHADOW,
-  PIXEL_HEADING,
-  PIXEL_TAG,
-  PIXEL_WELL,
-} from "../pixelStyles";
+import { HARD_TEXT_SHADOW, PIXEL_HEADING, PIXEL_TAG, PIXEL_WELL } from "../pixelStyles";
 import { useCountUp } from "./motion";
 import { CallChipFace, revealOutcome } from "./PackGrid";
-import { NextPacksCountdown } from "./NextPacksCountdown";
-import { nextOpenWheelDay } from "./useWheelDay";
+import { DailyCountdown, DayEndButtons, DayPoints } from "../GameChrome";
+import { ResponsiveWordmark } from "../PixelWordmark";
+import { NEXT_DAY_ACTION, nextPlayAfter } from "../gameDay";
+import { NEXT_PACKS_LABEL, WHEEL_DAY } from "./wheelDay";
 import { WheelTitle } from "./WheelTitle";
 
 const ROW_GRID = cn(
@@ -69,17 +63,12 @@ export function WheelSummary({
   }
   const shownPoints = useCountUp(points, animate, 150, 900);
   const { sets } = useWheelSets();
-  const nextDayKey = nextOpenWheelDay(gameDayKey(), dayKey);
-  const nextPath = nextDayKey ? nextDayKey : sets[0]?.code.toLowerCase();
+  const next = nextPlayAfter(WHEEL_DAY, gameDayKey(), dayKey, sets[0]?.code);
+  const nextPath = next.label === NEXT_DAY_ACTION ? next.dayKey : next.setCode?.toLowerCase();
 
   return (
     <div className="mx-auto flex w-full max-w-[1100px] flex-col items-center pb-4 text-center">
-      <div className="hidden sm:block [@media(max-height:760px)]:hidden">
-        <WheelTitle scale={5} />
-      </div>
-      <div className="hidden [@media(max-height:760px)]:sm:block">
-        <WheelTitle scale={3.5} />
-      </div>
+      <ResponsiveWordmark wordmark={WheelTitle} phone={null} desktop={5} short={3.5} />
       <div
         className={cn(
           "mt-5 flex w-full flex-col items-center gap-5",
@@ -88,10 +77,7 @@ export function WheelSummary({
       >
         <div className="flex items-center justify-center gap-x-4">
           <span className={PIXEL_TAG}>{dayKey === gameDayKey() ? "Today's Score" : "Score"}</span>
-          <span className={cn("font-display text-3xl leading-none text-[#f6c95e]", HARD_TEXT_SHADOW)}>
-            {shownPoints}
-            <span className="text-2xl"> of {max} Points</span>
-          </span>
+          <DayPoints points={shownPoints} max={max} />
         </div>
         <div
           className={cn(
@@ -111,33 +97,16 @@ export function WheelSummary({
             />
           ))}
           <div className={cn(ROW_GRID, "mt-2 px-[19px] max-sm:px-[13px] [@media(max-height:760px)]:mt-0")}>
-            <button
-              onClick={onExit}
-              className={cn(
-                DARK_PIXEL_BUTTON,
-                "col-start-2 justify-self-center py-3.5 pr-10 pl-7 text-3xl",
-                PHONE_BUTTON,
-                "max-sm:col-start-1",
-              )}
-            >
-              <ChevronLeft size={24} strokeWidth={3} />
-              Menu
-            </button>
-            <button
-              onClick={() => nextPath && navigate(`/wheel-of-fortune/${nextPath}`)}
-              className={cn(
-                ACCENT_BUTTON,
-                "col-start-3 justify-self-center px-10 py-3.5 text-3xl",
-                PHONE_BUTTON,
-                "max-sm:col-start-2",
-              )}
-            >
-              <Play size={22} className="fill-current" />
-              {nextDayKey ? "Next" : "Endless"}
-            </button>
+            <DayEndButtons
+              next={next}
+              onNext={() => nextPath && navigate(`/wheel-of-fortune/${nextPath}`)}
+              onExit={onExit}
+              menuClassName={cn("col-start-2 justify-self-center", PHONE_BUTTON, "max-sm:col-start-1")}
+              nextClassName={cn("col-start-3 justify-self-center", PHONE_BUTTON, "max-sm:col-start-2")}
+            />
           </div>
         </div>
-        {dayKey === gameDayKey() && <NextPacksCountdown className="-mt-1" />}
+        {dayKey === gameDayKey() && <DailyCountdown label={NEXT_PACKS_LABEL} className="-mt-1" />}
       </div>
     </div>
   );
@@ -191,7 +160,8 @@ function PackRecapRow({
       <span
         className={cn(
           "col-start-4 row-start-1 justify-self-center whitespace-nowrap font-display text-3xl leading-none",
-          "text-[#f6c95e] max-sm:col-start-2 max-sm:justify-self-end max-sm:text-2xl [@media(max-height:760px)]:sm:text-2xl",
+          "text-[#f6c95e] max-sm:col-start-2 max-sm:justify-self-end max-sm:text-2xl",
+          "[@media(max-height:760px)]:sm:text-2xl",
           HARD_TEXT_SHADOW,
         )}
       >

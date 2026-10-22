@@ -1,5 +1,3 @@
-import { ChevronLeft, Play } from "lucide-react";
-
 import { SetGlyph } from "../../Brand";
 import { cn } from "../../../lib/utils";
 import { setShortLabel, shortDayLabel, useWheelSets, gameDayKey } from "../../../data/draftGames";
@@ -12,13 +10,14 @@ import {
   type TrophyMageDeck,
   type TrophyMageRound,
 } from "../../../data/trophyMage";
-import { ACCENT_BUTTON, DARK_PIXEL_BUTTON, HARD_TEXT_SHADOW, PIXEL_HEADING } from "../pixelStyles";
-import { DailyCountdown } from "../GameChrome";
-import { ENDLESS_ACTION, NEXT_DAY_ACTION, NEXT_PODS_LABEL, ResponsiveTitle } from "./introParts";
+import { HARD_TEXT_SHADOW, PIXEL_HEADING } from "../pixelStyles";
+import { DailyCountdown, DayEndButtons, DayPoints } from "../GameChrome";
+import { ENDLESS_ACTION, NEXT_DAY_ACTION, nextPlayAfter } from "../gameDay";
+import { NEXT_PODS_LABEL, ResponsiveTitle } from "./introParts";
 import { ResultTag } from "./RecordChip";
 import { SpriteStrip, TROPHY_SPRITE } from "./SpriteStrip";
+import { TROPHY_DAY, type TrophyDay } from "./trophyDay";
 import { useDeckImage } from "./useDeckImage";
-import { nextOpenDay, type TrophyDay } from "./useTrophyDay";
 
 const POINTS_SHORT = "PTs";
 
@@ -112,15 +111,6 @@ function DayScoreRow({ dayKey, points, max }: { dayKey: string | null; points: n
   );
 }
 
-function DayPoints({ points, max, className }: { points: number; max: number; className?: string }) {
-  return (
-    <span className={cn("font-display text-3xl leading-none text-[#f6c95e]", HARD_TEXT_SHADOW, className)}>
-      {points}
-      <span className="text-2xl"> of {max} Points</span>
-    </span>
-  );
-}
-
 function isToday(dayKey: string | null): boolean {
   return dayKey === gameDayKey(new Date());
 }
@@ -137,31 +127,20 @@ function DayEndActions({
   onExit: () => void;
 }) {
   const { sets } = useWheelSets();
-  const nextDayKey = nextOpenDay(gameDayKey(new Date()), dayKey);
-  const newestSet = sets[0]?.code;
+  const next = nextPlayAfter(TROPHY_DAY, gameDayKey(new Date()), dayKey, sets[0]?.code);
   let playNext: (() => void) | null = null;
-  if (nextDayKey && onPlayDay) {
-    playNext = () => onPlayDay(nextDayKey);
-  } else if (!nextDayKey && newestSet && onPlaySet) {
-    playNext = () => onPlaySet(newestSet);
+  if (next.label === NEXT_DAY_ACTION && onPlayDay) {
+    playNext = () => onPlayDay(next.dayKey);
+  } else if (next.label === ENDLESS_ACTION && next.setCode && onPlaySet) {
+    const setCode = next.setCode;
+    playNext = () => onPlaySet(setCode);
   }
   return (
     <div className="flex flex-wrap justify-center gap-3">
-      <button onClick={onExit} className={cn(DARK_PIXEL_BUTTON, "py-3.5 pr-10 pl-7 text-3xl")}>
-        <ChevronLeft size={24} strokeWidth={3} />
-        Menu
-      </button>
-      {playNext && (
-        <button onClick={playNext} className={cn(ACCENT_BUTTON, "px-10 py-3.5 text-3xl")}>
-          <Play size={22} className="fill-current" />
-          {nextDayKey ? NEXT_DAY_ACTION : ENDLESS_ACTION}
-        </button>
-      )}
+      <DayEndButtons next={next} onNext={playNext} onExit={onExit} />
     </div>
   );
 }
-
-export const SCORE_LABEL = "Score";
 
 function RecapRow({ round, calls, onReview }: { round: TrophyMageRound; calls: TrophyCalls; onReview: () => void }) {
   const score = scoreTrophyRound(round, calls);
@@ -172,7 +151,8 @@ function RecapRow({ round, calls, onReview }: { round: TrophyMageRound; calls: T
       onClick={onReview}
       aria-label={`Review ${setShortLabel(round.setCode)}`}
       className={cn(
-        "grid grid-cols-[8rem_minmax(0,1fr)_7rem] items-center gap-5 border-[3px] border-[color:var(--px-ink)] px-5 py-4",
+        "grid grid-cols-[8rem_minmax(0,1fr)_7rem] items-center gap-5 px-5 py-4",
+        "border-[3px] border-[color:var(--px-ink)]",
         "bg-[radial-gradient(ellipse_at_50%_20%,rgba(30,60,115,0.1),rgba(8,14,32,0.35)_75%)]",
         "shadow-[inset_0_0_0_2px_var(--px-rim),6px_6px_0_#05070a] transition-transform hover:-translate-y-0.5",
         "max-sm:flex max-sm:min-h-0 max-sm:flex-col max-sm:items-stretch max-sm:gap-2 max-sm:px-2.5 max-sm:py-2",
@@ -259,11 +239,7 @@ function RecapDeck({ deck, eventId, calls }: { deck: TrophyMageDeck; eventId: st
       >
         {url && <img src={url} alt="" draggable={false} className="absolute inset-0 size-full object-cover" />}
       </span>
-      <ResultTag
-        call={callFor(calls, deck)}
-        actual={deck.record}
-        className="text-xl"
-      />
+      <ResultTag call={callFor(calls, deck)} actual={deck.record} className="text-xl" />
     </span>
   );
 }
