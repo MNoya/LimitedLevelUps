@@ -9,7 +9,7 @@ import { SectionLabel } from "../../SectionLabel";
 import { Tooltip } from "../../Tooltip";
 import { podShortName } from "../../PodRecentTrophies";
 import { DeckScreenshotModal } from "../DeckScreenshotModal";
-import { onPlainClick, podDeckHref, podDraftLogHref, podSeatHref } from "../podLinks";
+import { onPlainClick, podDeckHref, podDraftLogHref, podPagePath, podSeatHref } from "../podLinks";
 import { CARD_FRAME } from "../review/ReviewCard";
 import { RevealImage } from "../../RevealImage";
 import { useCursorTooltip, type CursorTooltipBinding } from "../../CursorTooltip";
@@ -355,7 +355,7 @@ function CardDeckRow({
   const podLabel = podShortName(deck.eventDate, deck.eventName);
   return (
     <Link
-      to={podDeckHref(deck.eventSlug, deck.displayName, deck.displayName)}
+      to={podDeckHref(podPagePath(deck.eventSlug), deck.displayName, deck.displayName)}
       {...tooltip}
       onClick={onPlainClick(() => onOpen(deck))}
       className={cn(
@@ -565,7 +565,7 @@ export function CardDeckModal({
         mainboard,
         record: deck.record,
       }}
-      breakdownHref={podSeatHref(deck.eventSlug, deck.displayName)}
+      breakdownHref={podSeatHref(podPagePath(deck.eventSlug), deck.displayName)}
       draftLogHref={artifact ? podDraftLogHref(deck.eventSlug, seat) : null}
       onClose={onClose}
       onPrev={onPrev}

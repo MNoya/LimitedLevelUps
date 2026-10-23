@@ -22,6 +22,7 @@ export function Tooltip({
   delayDuration,
   hideArrow,
   collisionPadding,
+  interactive = false,
 }: {
   label: React.ReactNode;
   side?: Side;
@@ -33,9 +34,15 @@ export function Tooltip({
   delayDuration?: number;
   hideArrow?: boolean;
   collisionPadding?: number | Partial<Record<Side, number>>;
+  interactive?: boolean;
 }) {
   return (
-    <Root open={open} onOpenChange={onOpenChange} delayDuration={delayDuration}>
+    <Root
+      open={open}
+      onOpenChange={onOpenChange}
+      delayDuration={delayDuration}
+      disableHoverableContent={interactive ? false : undefined}
+    >
       <Trigger asChild>{children}</Trigger>
       <Portal>
         <Content
@@ -44,7 +51,8 @@ export function Tooltip({
           sideOffset={7}
           collisionPadding={collisionPadding ?? 8}
           className={cn(
-            "relative z-50 pointer-events-none select-none rounded-md px-2.5 py-1.5",
+            "relative z-50 rounded-md px-2.5 py-1.5",
+            interactive ? "pointer-events-auto select-text" : "pointer-events-none select-none",
             "border border-border2 bg-black text-text text-[12px] leading-tight",
             "shadow-lg shadow-black/60",
             className,

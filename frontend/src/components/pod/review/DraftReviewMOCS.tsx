@@ -36,7 +36,7 @@ import { cardImageSources, useCardImageMap } from "../../../data/cardImages";
 import { highlightEventLabel } from "../EventLabel";
 import { AAvatar } from "../../Brand";
 import { DeckScreenshotModal, type DeckLike } from "../DeckScreenshotModal";
-import { onPlainClick, podDeckHref, podDraftPickHref, type InPlaceLink } from "../podLinks";
+import { onPlainClick, podDeckHref, podDraftPickHref, podPagePath, type InPlaceLink } from "../podLinks";
 import { picksPerTurn, poolBefore, poolByPack, reconstructDraft, resolveDeck, seatHandle, type DraftPickView } from "../../../data/draft-artifact";
 import { cleanPodEventName, stripDiscriminator } from "../../../data/utils";
 import type { ArtifactCard, PodDraftArtifact } from "../../../types/leaderboard";
@@ -263,7 +263,7 @@ export function DraftReviewMOCS({
   const deckLink: InPlaceLink | undefined =
     activeInfo && canOpenDeck
       ? {
-          href: podDeckHref(eventSlug, activeInfo.displayName, activeInfo.displayName),
+          href: podDeckHref(podPagePath(eventSlug), activeInfo.displayName, activeInfo.displayName),
           open: () => setDeckPopupSeat(seat),
         }
       : undefined;

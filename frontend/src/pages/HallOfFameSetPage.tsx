@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { BackButton, MobilePageHeader } from "../components/PageNav";
 import { GrandFinal } from "../components/hallOfFame/ChampionshipBracket";
@@ -13,13 +13,16 @@ import {
   type ChampionshipTab,
 } from "../components/hallOfFame/ChampionshipChrome";
 import { PlayerProfileCard } from "../components/hallOfFame/PlayerProfileCard";
+import { DeckScreenshotModal } from "../components/pod/DeckScreenshotModal";
+import { PodPagePathProvider } from "../components/pod/podLinks";
 import { QualificationList } from "../components/hallOfFame/QualificationList";
 import { useChampionshipEvent, useChampionshipPlayers } from "../components/hallOfFame/useChampionship";
 import { useChampionshipField } from "../components/hallOfFame/useChampionshipField";
 import { useChampionshipLinks, usePodCalendar, usePodEventMatches, usePodEventParticipants } from "../data/hooks";
+import { OPENED_IN_APP, useCloseModal } from "../lib/modal-history";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { cn } from "../lib/utils";
-import { playerPath, podEventTitle } from "../data/utils";
+import { podEventTitle } from "../data/utils";
 import {
   championshipPodNumber,
   championshipViewFromSegment,
@@ -50,13 +53,13 @@ export function HallOfFameSetPage() {
   if (event && started && pods.length > 0) {
     const tabs = splitChampionshipTabs(pods);
     if (view === "table") {
-      return <GrandFinalPage event={event} tabs={tabs} />;
+      return <GrandFinalPage event={event} pods={pods} tabs={tabs} />;
     }
     const pod = pods.find((entry) => podView(championshipPodNumber(entry.name) ?? 0) === view);
-    return pod ? <PodPage slugOverride={pod.slug} championshipView={view} championshipTabs={tabs} /> : toBase;
+    return pod ? <HostedPodPage slug={pod.slug} view={view} tabs={tabs} /> : toBase;
   }
   if (event && started) {
-    return isPodView(view) ? toBase : <PodPage slugOverride={event.slug} championshipView={view} />;
+    return isPodView(view) ? toBase : <HostedPodPage slug={event.slug} view={view} />;
   }
   if (isLoading) {
     return null;
@@ -67,6 +70,16 @@ export function HallOfFameSetPage() {
   return <UpcomingChampionship setCode={setCode} view={view} />;
 }
 
+function HostedPodPage({ slug, view, tabs }: { slug: string; view: ChampionshipView; tabs?: ChampionshipTab[] }) {
+  const location = useLocation();
+  const hosted = useMemo(() => ({ slug, path: location.pathname }), [slug, location.pathname]);
+  return (
+    <PodPagePathProvider value={hosted}>
+      <PodPage slugOverride={slug} championshipView={view} championshipTabs={tabs} />
+    </PodPagePathProvider>
+  );
+}
+
 function splitChampionshipTabs(pods: PodEventSummary[]): ChampionshipTab[] {
   const podTabs = pods.map((pod) => {
     const number = championshipPodNumber(pod.name) ?? 0;
@@ -75,19 +88,39 @@ function splitChampionshipTabs(pods: PodEventSummary[]): ChampionshipTab[] {
   return [{ view: "table", label: "GRAND FINAL" }, ...podTabs];
 }
 
-function GrandFinalPage({ event, tabs }: { event: PodEventSummary; tabs: ChampionshipTab[] }) {
+function GrandFinalPage({
+  event,
+  pods,
+  tabs,
+}: {
+  event: PodEventSummary;
+  pods: PodEventSummary[];
+  tabs: ChampionshipTab[];
+}) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { data: matches } = usePodEventMatches(event.eventId);
   const { data: participants } = usePodEventParticipants(event.eventId);
   const { data: links } = useChampionshipLinks();
   const byName = useMemo(() => participantByName(participants ?? []), [participants]);
   const final = matches?.[0];
   const vodUrl = links?.find((row) => row.eventId === event.eventId)?.vodUrl;
-  const openProfile = (name: string) => {
-    const slug = byName.get(name)?.playerSlug;
-    if (slug) {
-      navigate(playerPath(slug, event.setCode));
+  const finalists = final ? [final.playerAName, final.playerBName] : [];
+  const deckOwner = searchParams.get("deck");
+  const deckParticipant = deckOwner ? byName.get(deckOwner) : undefined;
+  const deckHref = (name: string) => `${location.pathname}?${new URLSearchParams({ deck: name })}`;
+  const closeDeck = useCloseModal(location.pathname);
+  const openDeck = (name: string) => navigate(deckHref(name), { state: OPENED_IN_APP });
+  const switchDeck = (name: string) => navigate(deckHref(name), { replace: true, state: location.state });
+  const otherFinalist = finalists.find((name) => name !== deckOwner);
+  const podTabFor = (name: string) => {
+    const pod = pods.find((entry) => entry.championDisplayName === name);
+    if (!pod) {
+      return undefined;
     }
+    const view = podView(championshipPodNumber(pod.name) ?? 0);
+    return `${championshipViewHref(event.setCode, view)}?${new URLSearchParams({ player: name })}`;
   };
   return (
     <ChampionshipShell
@@ -99,7 +132,27 @@ function GrandFinalPage({ event, tabs }: { event: PodEventSummary; tabs: Champio
       view="table"
       centered
     >
-      <GrandFinal match={final} champion={final?.winnerName ?? null} byName={byName} onSelect={openProfile} />
+      <GrandFinal match={final} champion={final?.winnerName ?? null} byName={byName} onSelect={openDeck} />
+      {deckOwner && deckParticipant ? (
+        <DeckScreenshotModal
+          participant={{
+            eventId: event.eventId,
+            displayName: deckOwner,
+            participantDisplayName: deckParticipant.displayName,
+            deckColors: deckParticipant.deckColors,
+            deckScreenshotUrl: deckParticipant.deckScreenshotUrl,
+            deckScreenshotCaption: deckParticipant.deckScreenshotCaption,
+            record: deckParticipant.record,
+          }}
+          breakdownHref={podTabFor(deckOwner)}
+          hideDraftLog
+          onClose={closeDeck}
+          onPrev={otherFinalist ? () => switchDeck(otherFinalist) : undefined}
+          onNext={otherFinalist ? () => switchDeck(otherFinalist) : undefined}
+          prevHref={otherFinalist ? deckHref(otherFinalist) : undefined}
+          nextHref={otherFinalist ? deckHref(otherFinalist) : undefined}
+        />
+      ) : null}
     </ChampionshipShell>
   );
 }

@@ -14,7 +14,7 @@ import {
   TEAM_STANDING_COLS_CLASS,
   TEAM_TONE,
 } from "./PodStandingRow";
-import { podDeckHref, podDraftLogHref, podSeatHref } from "./podLinks";
+import { podDeckHref, podDraftLogHref, podSeatHref, usePodPagePath } from "./podLinks";
 import type { PodEventParticipantRow, PodSeat } from "../../types/leaderboard";
 
 export { recordParts } from "./PodStandingRow";
@@ -57,6 +57,7 @@ export function PodStandings({
   actions: PodStandingsActions;
   highlightChampion?: boolean;
 }) {
+  const pagePath = usePodPagePath(actions.eventSlug);
   const row = (seat: PodSeat, rank: number | null, cols?: string) => {
     const viewable = actions.canViewSeat(seat.avatarUrl);
     const hasDeck = viewable && (!!seat.deckScreenshotUrl || !!seat.hasDeckList);
@@ -68,8 +69,8 @@ export function PodStandings({
         cols={cols}
         selected={seat.seatIndex === selectedSeat}
         champion={highlightChampion && finalized && rank === 1}
-        rowHref={podSeatHref(actions.eventSlug, seat.discordName)}
-        deckHref={hasDeck ? podDeckHref(actions.eventSlug, null, seat.discordName) : null}
+        rowHref={podSeatHref(pagePath, seat.discordName)}
+        deckHref={hasDeck ? podDeckHref(pagePath, null, seat.discordName) : null}
         logHref={actions.hasDraftLog && viewable ? podDraftLogHref(actions.eventSlug, seat) : null}
         onHover={(hovering) => onHover?.(hovering ? seat.seatIndex : null)}
       />

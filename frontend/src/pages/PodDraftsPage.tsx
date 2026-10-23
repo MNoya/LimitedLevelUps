@@ -519,9 +519,13 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
   const finishedChampionship = setCode
     ? scopeEvents?.find((e) => e.setCode === setCode && e.isFinalized && isChampionshipEvent(e.name))
     : undefined;
-  const hallOfFameHref = finishedChampionship ? hallOfFameSetHref(finishedChampionship.setCode) : null;
-  const standingsLinks = { cardDataHref, hallOfFameHref };
-  const hasStandingsLinks = Boolean(cardDataHref || hallOfFameHref);
+  const { data: calendar } = usePodCalendar();
+  const nextChampionshipCode = !setCode && seasonAxis === null ? nextChampionshipSet(calendar) : null;
+  const championshipLink = finishedChampionship
+    ? { href: hallOfFameSetHref(finishedChampionship.setCode), label: "HALL OF FAME" }
+    : nextChampionshipCode
+      ? { href: hallOfFameSetHref(nextChampionshipCode), label: "SET CHAMPIONSHIP" }
+      : null;
   const cubeCobraHref = setCode ? cubeCobraUrl(setCode) : null;
 
   const { data: archetypeRows } = useAllPodArchetypes();
@@ -594,6 +598,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
             sets={switcherSets}
             pins={switcherPins}
             range={boardRange}
+            championshipLink={championshipLink}
           />
         </>
       )}
@@ -675,10 +680,10 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
                     leaderboard={leaderboard}
                     events={events && played}
                     center={
-                      hallOfFameHref ? (
+                      championshipLink ? (
                         <StandingsLink
-                          href={hallOfFameHref}
-                          label="HALL OF FAME"
+                          href={championshipLink.href}
+                          label={championshipLink.label}
                           icon={<Crown size={13} />}
                           variant="heading"
                           gold
@@ -706,7 +711,16 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
                 <StandingsHeading
                   leaderboard={leaderboard}
                   events={events}
-                  center={hasStandingsLinks ? <StandingsLinks {...standingsLinks} /> : undefined}
+                  center={
+                    cardDataHref ? (
+                      <StandingsLink
+                        href={cardDataHref}
+                        label="VIEW CARD DATA"
+                        icon={<TbListNumbers size={16} />}
+                        variant="center"
+                      />
+                    ) : undefined
+                  }
                   controls={standingsControls}
                 />
               )}
@@ -737,6 +751,20 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
       <Footer className="mt-auto px-5 py-4 md:pt-5 md:pb-3 shrink-0" />
     </div>
   );
+}
+
+function nextChampionshipSet(calendar: PodCalendarDayRow[] | undefined): string | null {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  for (const day of calendar ?? []) {
+    if (day.day < todayIso) {
+      continue;
+    }
+    const championship = day.entries.find((entry) => entry.role === "championship");
+    if (championship) {
+      return championship.glyph;
+    }
+  }
+  return null;
 }
 
 // Returns 0 while the element is unmounted, so a desktop render contributes no sticky offset
@@ -1806,25 +1834,6 @@ function CubeListLink({ href }: { href: string }) {
   );
 }
 
-function StandingsLinks({
-  cardDataHref,
-  hallOfFameHref,
-}: {
-  cardDataHref: string | null;
-  hallOfFameHref: string | null;
-}) {
-  return (
-    <span className="flex items-stretch gap-8">
-      {cardDataHref ? (
-        <StandingsLink href={cardDataHref} label="VIEW CARD DATA" icon={<TbListNumbers size={16} />} variant="center" />
-      ) : null}
-      {hallOfFameHref ? (
-        <StandingsLink href={hallOfFameHref} label="HALL OF FAME" icon={<Crown size={16} />} variant="center" gold />
-      ) : null}
-    </span>
-  );
-}
-
 function StandingsLink({
   href,
   label,
@@ -1900,6 +1909,7 @@ function SetHero({
   sets,
   pins,
   range,
+  championshipLink,
 }: {
   board?: string;
   boardMeta: SetSummary | undefined;
@@ -1908,6 +1918,7 @@ function SetHero({
   sets: SetSummary[];
   pins: string[];
   range?: string | null;
+  championshipLink: { href: string; label: string } | null;
 }) {
   const week = season ? weekOfSet(season) : null;
   const isLive = (board ?? season?.code) === liveSeasonCode;
@@ -1932,11 +1943,25 @@ function SetHero({
         </div>
         <div className="font-mono text-[11px] text-muted mt-1 flex items-center justify-between gap-4 h-4">
           {(board || season) && (
-            <>
+            <span className="flex items-center gap-4">
               <span>{range || " "}</span>
               {week && <span>{week}</span>}
-            </>
+            </span>
           )}
+          {championshipLink ? (
+            <Link
+              to={championshipLink.href}
+              className="group relative inline-flex items-center gap-2 font-display text-[12px] tracking-[0.14em]
+                leading-none no-underline text-gold transition-colors hover:text-gold/75"
+            >
+              <Crown size={13} />
+              {championshipLink.label}
+              <ArrowRight
+                size={12}
+                className="absolute left-full ml-1.5 shrink-0 transition-transform group-hover:translate-x-0.5"
+              />
+            </Link>
+          ) : null}
         </div>
       </div>
       <div className="flex-1" />

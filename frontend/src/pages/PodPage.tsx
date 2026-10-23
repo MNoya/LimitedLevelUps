@@ -13,7 +13,7 @@ import { PlayerSeatPanel } from "../components/pod/PlayerSeatPanel";
 import type { RoundOutcome } from "../components/pod/PlayerSeatPanel";
 import { MobileSeatStack, MobileSeatStackSkeleton } from "../components/pod/MobileSeatStack";
 import { DeckScreenshotModal, type DeckTab } from "../components/pod/DeckScreenshotModal";
-import { podDeckHref, podDraftLogHref, podSeatHref } from "../components/pod/podLinks";
+import { podDeckHref, podDraftLogHref, podPagePath, podSeatHref } from "../components/pod/podLinks";
 import {
   compareStandings,
   hasStandings,
@@ -231,6 +231,7 @@ export function PodPage({
     };
   }, [siblingEvents, event, isChampionship]);
   const siblingView = isPodView(championshipView) ? "table" : championshipView;
+  const showingTable = !isChampionship || championshipView === "table" || isPodView(championshipView);
   const siblingHref = (sibling: PodEventSummary | null) => {
     if (!sibling) return null;
     return isChampionship ? championshipViewHref(sibling.setCode, siblingView) : `/pods/${sibling.slug}`;
@@ -359,7 +360,7 @@ export function PodPage({
               {isChampionship ? <ChampionshipTabs tabs={championshipTabs} view={championshipView} onChange={switchView} /> : <span />}
             </div>
           )}
-          {isChampionship && championshipView !== "table" ? (
+          {!showingTable ? (
             <div className="flex-1" />
           ) : railOpensOnLoad ? (
             <div className={`flex-1 flex items-stretch min-h-0 ${contentRowPad}`}>
@@ -422,7 +423,6 @@ export function PodPage({
     }
   };
   const detailOpen = selectedParticipant !== null;
-  const showingTable = !isChampionship || championshipView === "table";
   const open = showingTable ? detailOpen || standingsAvailable : championshipView === "bracket" && detailOpen;
   const tableMaxPx = open ? TABLE_MAX_SHRUNK : TABLE_MAX_WIDE;
   const loadedMatches = matches ?? [];
@@ -433,7 +433,8 @@ export function PodPage({
     hasDraftLog: !!draftArtifact,
     canViewSeat: decklistAccess.canViewSeat,
   };
-  const deckHrefFor = (owner: PodSeat, tab: DeckTab) => podDeckHref(event.slug, seatParam, owner.discordName, tab);
+  const deckHrefFor = (owner: PodSeat, tab: DeckTab) =>
+    podDeckHref(location.pathname, seatParam, owner.discordName, tab);
   const replaceDeck = (href: string) => navigate(href, { replace: true, state: location.state });
   const prevDeck = neighbourDeck(-1);
   const nextDeck = neighbourDeck(1);
@@ -728,7 +729,7 @@ export function PodDraftLogRoute() {
   }));
 
   const current = resolved != null ? seats.find((s) => s.seatIndex === resolved) : null;
-  const backHref = podSeatHref(event.slug, current?.discordName ?? null);
+  const backHref = podSeatHref(podPagePath(event.slug), current?.discordName ?? null);
 
   // While the pod is closed a player gets their own draft in scroll-only mode; only organizers and
   // finished pods open the whole-table review.

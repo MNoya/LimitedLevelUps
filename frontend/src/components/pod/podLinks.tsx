@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import { createContext, useContext, type MouseEvent } from "react";
 import { Link, type LinkProps } from "react-router-dom";
 
 import { OPENED_IN_APP } from "../../lib/modal-history";
@@ -15,10 +15,26 @@ export interface InPlaceLink {
   open: () => void;
 }
 
-export const podSeatHref = (slug: string, seatName: string | null) => podPageHref(slug, seatName, null, "screenshot");
+const PodPagePathContext = createContext<{ slug: string; path: string } | null>(null);
 
-export const podDeckHref = (slug: string, seatName: string | null, ownerName: string, view: DeckTab = "screenshot") =>
-  podPageHref(slug, seatName, ownerName, view);
+export const PodPagePathProvider = PodPagePathContext.Provider;
+
+export const podPagePath = (slug: string) => `/pods/${slug}`;
+
+export const usePodPagePath = (slug: string) => {
+  const hosted = useContext(PodPagePathContext);
+  return hosted?.slug === slug ? hosted.path : podPagePath(slug);
+};
+
+export const podSeatHref = (pagePath: string, seatName: string | null) =>
+  podPageHref(pagePath, seatName, null, "screenshot");
+
+export const podDeckHref = (
+  pagePath: string,
+  seatName: string | null,
+  ownerName: string,
+  view: DeckTab = "screenshot",
+) => podPageHref(pagePath, seatName, ownerName, view);
 
 export const podDraftLogHref = (slug: string, seat: SeatRef) => `/pods/${slug}/${seatIdentifier(seat)}`;
 
@@ -40,7 +56,7 @@ export const onPlainClick = (action: (() => void) | undefined) => {
 
 export const DeckLink = (props: LinkProps) => <Link state={OPENED_IN_APP} {...props} />;
 
-const podPageHref = (slug: string, seatName: string | null, deckOwnerName: string | null, view: DeckTab) => {
+const podPageHref = (pagePath: string, seatName: string | null, deckOwnerName: string | null, view: DeckTab) => {
   const params = new URLSearchParams();
   if (seatName) {
     params.set("player", seatName);
@@ -52,7 +68,7 @@ const podPageHref = (slug: string, seatName: string | null, deckOwnerName: strin
     }
   }
   const query = params.toString();
-  return query ? `/pods/${slug}?${query}` : `/pods/${slug}`;
+  return query ? `${pagePath}?${query}` : pagePath;
 };
 
 const seatIdentifier = (seat: SeatRef) => seat.playerSlug ?? String(seat.seatIndex);

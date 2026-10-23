@@ -29,6 +29,7 @@ import { Play } from "../components/Icons";
 import { GiRoundTable } from "react-icons/gi";
 import { PageShell } from "../components/PageShell";
 import { DiscordIcon } from "../components/BrandIcons";
+import { RoleMention } from "../components/RoleMention";
 import { Container } from "../components/Container";
 import { EpisodeThumbnail } from "../components/EpisodeThumbnail";
 import { PlayBadge } from "../components/PlayBadge";
@@ -1348,22 +1349,6 @@ function BotMention() {
       />
       {DISCHORD_BOT_NAME}
     </a>
-  );
-}
-
-type DiscordRole = "Organizer" | "Set Champion" | "Pod Champion";
-
-function RoleMention({ role }: { role: DiscordRole }) {
-  const roleColors: Record<DiscordRole, string> = {
-    Organizer: "#f38300",
-    "Set Champion": "#82cbff",
-    "Pod Champion": "#e7a855",
-  };
-  const color = roleColors[role];
-  return (
-    <span className="whitespace-nowrap rounded-[3px] px-0.5 font-medium" style={{ color, backgroundColor: `${color}1a` }}>
-      @{role}
-    </span>
   );
 }
 

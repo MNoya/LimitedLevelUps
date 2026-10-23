@@ -1319,6 +1319,7 @@ async function fetchPodBoardDraftEvents(slug: string, window: PodBoardWindow): P
       .select(DRAFT_EVENT_COLUMNS)
       .eq("slug", slug)
       .eq("set_code", window.board)
+      .or(PLAYED_EVENTS_FILTER)
       .order("finished_at", { ascending: false, nullsFirst: false }),
     window.season ? seasonSpan(window.season) : Promise.resolve(null),
   ]);
@@ -1528,6 +1529,8 @@ export async function fetchPlayerIdentity(slug: string): Promise<PlayerIdentity 
 const DRAFT_EVENT_COLUMNS =
   "slug, set_code, event_id, format, expansion, wins, losses, is_trophy, colors, started_at, finished_at, seventeenlands_event_id, external_url, event_name, pod_event_slug, end_rank";
 
+const PLAYED_EVENTS_FILTER = "format.neq.PodDraft,wins.gt.0,losses.gt.0";
+
 export async function fetchPlayerDraftEvents(
   slug: string,
   setCode: string,
@@ -1539,6 +1542,7 @@ export async function fetchPlayerDraftEvents(
     .select(DRAFT_EVENT_COLUMNS)
     .eq("slug", slug)
     .eq("set_code", setCode)
+    .or(PLAYED_EVENTS_FILTER)
     .order("finished_at", { ascending: false, nullsFirst: false });
   if (error) throw error;
   return (data ?? []).map((r) => adaptDraftEvent(r as unknown as Record<string, unknown>));
@@ -1564,7 +1568,8 @@ export async function fetchLifetimeDraftEvents(
   let query = client()
     .from("public_player_draft_events")
     .select(DRAFT_EVENT_COLUMNS)
-    .eq("slug", slug);
+    .eq("slug", slug)
+    .or(PLAYED_EVENTS_FILTER);
   if (formatFilter !== "ALL") {
     const raw = FORMAT_RAW_GROUPS[formatFilter];
     query = raw && raw.length > 0 ? query.in("format", raw) : query.ilike("format", `%${formatFilter}%`);

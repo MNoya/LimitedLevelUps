@@ -9,7 +9,7 @@ import { highlightEventLabel } from "./EventLabel";
 import { PlayerSeatPanel } from "./PlayerSeatPanel";
 import { PodStandings, PodStandingsSkeleton, recordParts, StandingsBackBar, type PodStandingsActions } from "./PodStandings";
 import { isPodTrophyRecord } from "../../data/utils";
-import { podSeatHref } from "./podLinks";
+import { podSeatHref, usePodPagePath } from "./podLinks";
 import type { PodEventMatchRow, PodEventReplayRow, PodSeat } from "../../types/leaderboard";
 
 interface Props {
@@ -168,6 +168,7 @@ export function MobileSeatStack({
     ? null
     : participants.find((p) => p.seatIndex === selectedSeat) ?? null;
   const showStandings = standingsAvailable && !!standingsActions && selected == null;
+  const pagePath = usePodPagePath(eventSlug);
 
   return (
     <div className="flex flex-col">
@@ -208,7 +209,7 @@ export function MobileSeatStack({
         <div className="overflow-hidden">
           {selected && (
             <div className="bg-surface">
-              {standingsAvailable && <StandingsBackBar to={podSeatHref(eventSlug, null)} />}
+              {standingsAvailable && <StandingsBackBar to={podSeatHref(pagePath, null)} />}
               <PlayerSeatPanel
                 key={selected.displayName}
                 participant={selected}
@@ -328,6 +329,7 @@ function TileRow({
   eventSlug: string;
   scale: number;
 }) {
+  const pagePath = usePodPagePath(eventSlug);
   return (
     <div className="flex items-center justify-between">
       {tiles.map((p, i) => (
@@ -335,7 +337,7 @@ function TileRow({
           <PlayerTile
             participant={p}
             selected={selectedSeat === p.seatIndex}
-            href={podSeatHref(eventSlug, p.discordName)}
+            href={podSeatHref(pagePath, p.discordName)}
             replace={selectedSeat != null}
             scale={scale}
           />

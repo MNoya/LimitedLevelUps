@@ -6,7 +6,7 @@ import { Tooltip } from "../Tooltip";
 import { highlightEventLabel } from "./EventLabel";
 import { PlayerShield, ShieldFrame } from "./PlayerShield";
 import { cn } from "../../lib/utils";
-import { DeckLink, podDeckHref, podDraftLogHref, podSeatHref } from "./podLinks";
+import { DeckLink, podDeckHref, podDraftLogHref, podSeatHref, usePodPagePath } from "./podLinks";
 import type { PodSeat } from "../../types/leaderboard";
 import type { RoundOutcome } from "./PlayerSeatPanel";
 
@@ -54,6 +54,7 @@ export function PodTable({
   maxWidth = 720,
 }: Props) {
   const sorted = [...participants].sort((a, b) => a.seatIndex - b.seatIndex);
+  const pagePath = usePodPagePath(eventSlug);
   const ref = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   useLayoutEffect(() => {
@@ -140,7 +141,7 @@ export function PodTable({
                 selected={isSelected}
                 highlighted={!isSelected && highlightedSeat === p.seatIndex}
                 highlightedOutcome={highlightedOutcome}
-                href={podSeatHref(eventSlug, isSelected ? null : p.discordName)}
+                href={podSeatHref(pagePath, isSelected ? null : p.discordName)}
                 replace={selectedSeat != null}
                 scale={scale}
               />
@@ -178,6 +179,7 @@ function ShieldActions({
   scale: number;
 }) {
   const hasDeck = canViewDeck && (!!participant.deckScreenshotUrl || !!participant.hasDeckList);
+  const pagePath = usePodPagePath(eventSlug);
   const logInternalHref = hasDraftLog && canViewDeck ? podDraftLogHref(eventSlug, participant) : null;
   const showLog = logInternalHref !== null;
   if (!hasDeck && !showLog) return null;
@@ -203,7 +205,7 @@ function ShieldActions({
         {hasDeck && (
           <Tooltip label="View Deck" side="right">
             <DeckLink
-              to={podDeckHref(eventSlug, participant.discordName, participant.discordName)}
+              to={podDeckHref(pagePath, participant.discordName, participant.discordName)}
               aria-label="View Deck"
               className="group flex items-center justify-center rounded-full bg-bg border border-border hover:border-green/60 hover:bg-green/10 transition-colors cursor-pointer no-underline shadow-[0_4px_10px_rgba(0,0,0,0.55)]"
               style={{ width: btnSize, height: btnSize }}

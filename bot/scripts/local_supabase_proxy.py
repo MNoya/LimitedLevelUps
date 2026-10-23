@@ -108,30 +108,45 @@ def _build_where(query: Iterable[tuple[str, str]]) -> tuple[str, dict[str, Any]]
     for key, raw in query:
         if key in {"select", "order", "limit", "offset"}:
             continue
-        m = _OP_PATTERN.match(raw)
-        if not m:
+        if key == "or":
+            alternatives = []
+            for term in raw.strip().removeprefix("(").removesuffix(")").split(","):
+                column, _, filter_expr = term.partition(".")
+                clause = _filter_clause(column, filter_expr, params)
+                if clause:
+                    alternatives.append(clause)
+            if alternatives:
+                clauses.append(f"({' OR '.join(alternatives)})")
             continue
-        op, value = m.group(1), m.group(2)
-        if op == "in":
-            items = value.strip()
-            if items.startswith("(") and items.endswith(")"):
-                items = items[1:-1]
-            parts = [p.strip().strip('"') for p in items.split(",") if p.strip()]
-            if not parts:
-                continue
-            binds = []
-            for part in parts:
-                bind = f"p{len(params)}"
-                params[bind] = part
-                binds.append(f":{bind}")
-            clauses.append(f'"{key}" IN ({", ".join(binds)})')
-            continue
-        sql_op = {"eq": "=", "neq": "!=", "lt": "<", "lte": "<=", "gt": ">", "gte": ">=",
-                  "like": "LIKE", "ilike": "ILIKE"}[op]
-        bind = f"p{len(params)}"
-        clauses.append(f'"{key}" {sql_op} :{bind}')
-        params[bind] = value
+        clause = _filter_clause(key, raw, params)
+        if clause:
+            clauses.append(clause)
     return (" AND ".join(clauses), params)
+
+
+def _filter_clause(column: str, raw: str, params: dict[str, Any]) -> str | None:
+    m = _OP_PATTERN.match(raw)
+    if not m:
+        return None
+    op, value = m.group(1), m.group(2)
+    if op == "in":
+        items = value.strip()
+        if items.startswith("(") and items.endswith(")"):
+            items = items[1:-1]
+        parts = [p.strip().strip('"') for p in items.split(",") if p.strip()]
+        if not parts:
+            return None
+        binds = []
+        for part in parts:
+            bind = f"p{len(params)}"
+            params[bind] = part
+            binds.append(f":{bind}")
+        return f'"{column}" IN ({", ".join(binds)})'
+    sql_op = {"eq": "=", "neq": "!=", "lt": "<", "lte": "<=", "gt": ">", "gte": ">=",
+              "like": "LIKE", "ilike": "ILIKE"}[op]
+    bind = f"p{len(params)}"
+    params[bind] = value
+    return f'"{column}" {sql_op} :{bind}'
 
 
 async def _handle_view(request: web.Request) -> web.Response:

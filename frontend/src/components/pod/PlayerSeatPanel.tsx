@@ -14,7 +14,7 @@ import { useIsCompact, useIsLandscapePhone } from "../../lib/use-is-mobile";
 import { isPodTrophyRecord, playerPath, podSeatName, stripDiscriminator } from "../../data/utils";
 import { recordParts } from "./PodStandingRow";
 import { useResolvedDeckUrl } from "../../data/refresh-deck-url";
-import { DeckLink, podDeckHref, podDraftLogHref } from "./podLinks";
+import { DeckLink, podDeckHref, podDraftLogHref, usePodPagePath } from "./podLinks";
 import type { PodEventMatchRow, PodEventReplayRow, PodSeat } from "../../types/leaderboard";
 
 const SKIPPED_SENTINEL = "(skipped)";
@@ -58,8 +58,9 @@ export function PlayerSeatPanel({
   const profileHref = (slug: string | null | undefined): string | null =>
     slug ? playerPath(slug, setCode) : null;
 
+  const pagePath = usePodPagePath(eventSlug);
   const draftLogHref = hasDraftLog && canViewOwnDeck ? podDraftLogHref(eventSlug, participant) : null;
-  const deckHref = (owner: PodSeat) => podDeckHref(eventSlug, participant.discordName, owner.discordName);
+  const deckHref = (owner: PodSeat) => podDeckHref(pagePath, participant.discordName, owner.discordName);
 
   return (
     <div className="flex flex-col min-h-0 flex-1">
@@ -70,7 +71,7 @@ export function PlayerSeatPanel({
         deckHidden={!isMock && !canViewOwnDeck}
         deckHref={deckHref(participant)}
         cardPoolHref={
-          canViewOwnDeck ? podDeckHref(eventSlug, participant.discordName, participant.discordName, "decklist") : null
+          canViewOwnDeck ? podDeckHref(pagePath, participant.discordName, participant.discordName, "decklist") : null
         }
         isMock={isMock}
       />
