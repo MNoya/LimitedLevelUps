@@ -6,17 +6,39 @@ export const HALL_OF_FAME_PATH = "/hall-of-fame";
 
 export const hallOfFameSetHref = (setCode: string) => `${HALL_OF_FAME_PATH}/${setCode}`;
 
-export type ChampionshipView = "table" | "bracket" | "top8";
+export type PodView = `pod-${number}`;
 
-const VIEW_SEGMENTS: Record<Exclude<ChampionshipView, "table">, string> = { bracket: "bracket", top8: "top-8" };
+export type ChampionshipView = "table" | "bracket" | "top8" | PodView;
+
+const VIEW_SEGMENTS: Record<"bracket" | "top8", string> = { bracket: "bracket", top8: "top-8" };
+
+export function podView(pod: number): PodView {
+  return `pod-${pod}`;
+}
+
+export function isPodView(view: string): view is PodView {
+  return /^pod-\d+$/.test(view);
+}
+
+export function championshipPodNumber(name: string): number | null {
+  const match = name.match(/\bpod\s+(\d+)\s*$/i);
+  return match ? Number(match[1]) : null;
+}
 
 export function championshipViewHref(setCode: string, view: ChampionshipView): string {
-  return view === "table" ? hallOfFameSetHref(setCode) : `${hallOfFameSetHref(setCode)}/${VIEW_SEGMENTS[view]}`;
+  if (view === "table") {
+    return hallOfFameSetHref(setCode);
+  }
+  const segment = isPodView(view) ? view : VIEW_SEGMENTS[view];
+  return `${hallOfFameSetHref(setCode)}/${segment}`;
 }
 
 export function championshipViewFromSegment(segment: string | undefined): ChampionshipView | null {
   if (!segment) {
     return "table";
+  }
+  if (isPodView(segment)) {
+    return segment;
   }
   for (const [view, path] of Object.entries(VIEW_SEGMENTS)) {
     if (path === segment) {

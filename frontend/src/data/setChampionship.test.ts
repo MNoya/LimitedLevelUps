@@ -4,6 +4,8 @@ import {
   buildChampionshipBracket,
   buildSwissRounds,
   championOf,
+  championshipPodNumber,
+  championshipViewFromSegment,
   pickPodWildcard,
   projectChampionshipSeats,
   type ChampionshipEntrant,
@@ -61,6 +63,28 @@ describe("projectChampionshipSeats", () => {
     const seats = projectChampionshipSeats(entrants);
 
     expect(seats.map((seat) => seat.rank)).toEqual(seated);
+  });
+});
+
+describe("split championships", () => {
+  it.each([
+    { name: "👑 TLA Set Championship Pod 2", pod: 2 },
+    { name: "👑 TLA Set Championship", pod: null },
+  ])("reads the pod number from $name", ({ name, pod }) => {
+    const number = championshipPodNumber(name);
+
+    expect(number).toBe(pod);
+  });
+
+  it.each([
+    { segment: undefined, view: "table" },
+    { segment: "pod-1", view: "pod-1" },
+    { segment: "top-8", view: "top8" },
+    { segment: "pods", view: null },
+  ])("maps the $segment segment to a view", ({ segment, view }) => {
+    const resolved = championshipViewFromSegment(segment);
+
+    expect(resolved).toBe(view);
   });
 });
 

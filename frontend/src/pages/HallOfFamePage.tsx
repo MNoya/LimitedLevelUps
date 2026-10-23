@@ -9,6 +9,7 @@ import { Pips } from "../components/ManaPips";
 import { cn } from "../lib/utils";
 import { useChampionshipEvents, useChampionshipLinks, usePodCalendar, useSets } from "../data/hooks";
 import {
+  championshipPodNumber,
   championshipThreadUrl,
   formatChampionshipDay,
   hallOfFameSetHref,
@@ -25,7 +26,7 @@ export function HallOfFamePage() {
   const { data: links } = useChampionshipLinks();
 
   const linksByEvent = new Map((links ?? []).map((row) => [row.eventId, row]));
-  const finished = (events ?? []).filter((event) => event.isFinalized);
+  const finished = (events ?? []).filter((event) => event.isFinalized && championshipPodNumber(event.name) === null);
   const liveSets = new Set((events ?? []).filter((event) => isChampionshipLive(event)).map((event) => event.setCode));
   const finishedSets = new Set(finished.map((event) => event.setCode));
   const upcoming = (calendar ?? []).flatMap((day) =>

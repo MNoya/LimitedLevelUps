@@ -80,6 +80,27 @@ export function ChampionshipBracket({
   return <Tree bracket={bracket} champion={championPanel} {...props} />;
 }
 
+export function GrandFinal({
+  match,
+  champion,
+  ...rowProps
+}: Omit<RowProps, "dims" | "showDecks"> & { match: PodEventMatchRow | undefined; champion: string | null }) {
+  const isMobile = useIsMobile(1024);
+  const dims = isMobile ? BRACKET_SIZES.regular : BRACKET_SIZES.large;
+  const props = { ...rowProps, dims, showDecks: false };
+  return (
+    <div className={cn("flex items-center", isMobile ? "flex-col gap-14 w-full pt-7" : "gap-16")}>
+      <div className="relative" style={{ width: isMobile ? "100%" : dims.matchColumn }}>
+        <div className="absolute left-0 -top-7">{FINAL_HEADING}</div>
+        <MatchBlock match={match} final {...props} />
+      </div>
+      <div style={{ width: dims.championColumn }}>
+        <ChampionPanel name={champion} {...props} centerOnPortrait />
+      </div>
+    </div>
+  );
+}
+
 function Tree({ bracket, champion, ...rowProps }: RowProps & { bracket: Bracket; champion: ReactNode }) {
   const { dims } = rowProps;
   const matchHeight = dims.row * 2 + 1;

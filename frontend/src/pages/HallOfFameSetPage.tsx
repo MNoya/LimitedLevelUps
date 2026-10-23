@@ -1,26 +1,38 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { BackButton, MobilePageHeader } from "../components/PageNav";
+import { GrandFinal } from "../components/hallOfFame/ChampionshipBracket";
 import {
+  championshipMedia,
   ChampionshipMobileTitle,
   ChampionshipTabs,
   ChampionshipTitle,
   UPCOMING_TABS,
+  type ChampionshipMedia,
+  type ChampionshipTab,
 } from "../components/hallOfFame/ChampionshipChrome";
 import { PlayerProfileCard } from "../components/hallOfFame/PlayerProfileCard";
 import { QualificationList } from "../components/hallOfFame/QualificationList";
 import { useChampionshipEvent, useChampionshipPlayers } from "../components/hallOfFame/useChampionship";
 import { useChampionshipField } from "../components/hallOfFame/useChampionshipField";
-import { usePodCalendar } from "../data/hooks";
+import { useChampionshipLinks, usePodCalendar, usePodEventMatches, usePodEventParticipants } from "../data/hooks";
 import { useIsMobile } from "../lib/use-is-mobile";
+import { cn } from "../lib/utils";
+import { playerPath, podEventTitle } from "../data/utils";
 import {
+  championshipPodNumber,
   championshipViewFromSegment,
   championshipViewHref,
   HALL_OF_FAME_PATH,
   hallOfFameSetHref,
+  isChampionshipLive,
+  isPodView,
+  participantByName,
+  podView,
   type ChampionshipView,
 } from "../data/setChampionship";
+import type { PodEventSummary } from "../types/leaderboard";
 import { PodPage } from "./PodPage";
 
 const UPCOMING_LABEL = "👑 SET CHAMPIONSHIP";
@@ -29,26 +41,70 @@ export function HallOfFameSetPage() {
   const params = useParams();
   const setCode = (params.setCode ?? "").toUpperCase();
   const view = championshipViewFromSegment(params.view);
-  const { event, isLoading } = useChampionshipEvent(setCode);
+  const { event, pods, isLoading } = useChampionshipEvent(setCode);
+  const toBase = <Navigate to={hallOfFameSetHref(setCode)} replace />;
   if (!view) {
-    return <Navigate to={hallOfFameSetHref(setCode)} replace />;
+    return toBase;
   }
   const started = event !== undefined && (event.isFinalized || new Date(event.eventTime).getTime() <= Date.now());
+  if (event && started && pods.length > 0) {
+    const tabs = splitChampionshipTabs(pods);
+    if (view === "table") {
+      return <GrandFinalPage event={event} tabs={tabs} />;
+    }
+    const pod = pods.find((entry) => podView(championshipPodNumber(entry.name) ?? 0) === view);
+    return pod ? <PodPage slugOverride={pod.slug} championshipView={view} championshipTabs={tabs} /> : toBase;
+  }
   if (event && started) {
-    return <PodPage slugOverride={event.slug} championshipView={view} />;
+    return isPodView(view) ? toBase : <PodPage slugOverride={event.slug} championshipView={view} />;
   }
   if (isLoading) {
     return null;
   }
-  if (view === "bracket") {
-    return <Navigate to={hallOfFameSetHref(setCode)} replace />;
+  if (view === "bracket" || isPodView(view)) {
+    return toBase;
   }
   return <UpcomingChampionship setCode={setCode} view={view} />;
 }
 
-function UpcomingChampionship({ setCode, view }: { setCode: string; view: ChampionshipView }) {
+function splitChampionshipTabs(pods: PodEventSummary[]): ChampionshipTab[] {
+  const podTabs = pods.map((pod) => {
+    const number = championshipPodNumber(pod.name) ?? 0;
+    return { view: podView(number), label: `POD ${number}` };
+  });
+  return [{ view: "table", label: "GRAND FINAL" }, ...podTabs];
+}
+
+function GrandFinalPage({ event, tabs }: { event: PodEventSummary; tabs: ChampionshipTab[] }) {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { data: matches } = usePodEventMatches(event.eventId);
+  const { data: participants } = usePodEventParticipants(event.eventId);
+  const { data: links } = useChampionshipLinks();
+  const byName = useMemo(() => participantByName(participants ?? []), [participants]);
+  const final = matches?.[0];
+  const vodUrl = links?.find((row) => row.eventId === event.eventId)?.vodUrl;
+  const openProfile = (name: string) => {
+    const slug = byName.get(name)?.playerSlug;
+    if (slug) {
+      navigate(playerPath(slug, event.setCode));
+    }
+  };
+  return (
+    <ChampionshipShell
+      setCode={event.setCode}
+      label={podEventTitle(event).toUpperCase()}
+      day={event.eventDate}
+      media={championshipMedia(isChampionshipLive(event), vodUrl)}
+      tabs={tabs}
+      view="table"
+      centered
+    >
+      <GrandFinal match={final} champion={final?.winnerName ?? null} byName={byName} onSelect={openProfile} />
+    </ChampionshipShell>
+  );
+}
+
+function UpcomingChampionship({ setCode, view }: { setCode: string; view: ChampionshipView }) {
   const isMobile = useIsMobile();
   const field = useChampionshipField(setCode);
   const calendarDay = useChampionshipDay(setCode);
@@ -65,7 +121,6 @@ function UpcomingChampionship({ setCode, view }: { setCode: string; view: Champi
     [field.seats, field.frozen],
   );
   const { players, statsLoading } = useChampionshipPlayers(setCode, identities);
-  const switchView = (next: ChampionshipView) => navigate(`${championshipViewHref(setCode, next)}${location.search}`);
 
   const content =
     view === "top8" ? (
@@ -93,13 +148,45 @@ function UpcomingChampionship({ setCode, view }: { setCode: string; view: Champi
       />
     );
 
+  return (
+    <ChampionshipShell setCode={setCode} label={UPCOMING_LABEL} day={day} tabs={UPCOMING_TABS} view={view}>
+      <div className={view === "top8" ? "w-full" : "w-full max-w-[860px] mx-auto"}>{content}</div>
+    </ChampionshipShell>
+  );
+}
+
+function ChampionshipShell({
+  setCode,
+  label,
+  day,
+  media = null,
+  tabs,
+  view,
+  centered = false,
+  children,
+}: {
+  setCode: string;
+  label: string;
+  day: string | null;
+  media?: ChampionshipMedia | null;
+  tabs: ChampionshipTab[];
+  view: ChampionshipView;
+  centered?: boolean;
+  children: ReactNode;
+}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isMobile = useIsMobile();
+  const switchView = (next: ChampionshipView) => navigate(`${championshipViewHref(setCode, next)}${location.search}`);
+  const title = { setCode, label, day, media };
+
   if (isMobile) {
     return (
       <div className="bg-bg text-text min-h-screen flex flex-col">
         <MobilePageHeader backTo={HALL_OF_FAME_PATH} prevTo={null} nextTo={null} />
-        <ChampionshipMobileTitle setCode={setCode} label={UPCOMING_LABEL} day={day} />
-        <ChampionshipTabs tabs={UPCOMING_TABS} view={view} onChange={switchView} className="w-full" />
-        <div className="px-3 py-4">{content}</div>
+        <ChampionshipMobileTitle {...title} />
+        <ChampionshipTabs tabs={tabs} view={view} onChange={switchView} className="w-full" />
+        <div className="px-3 py-4">{children}</div>
       </div>
     );
   }
@@ -112,14 +199,19 @@ function UpcomingChampionship({ setCode, view }: { setCode: string; view: Champi
           <span className="flex items-center gap-4 min-w-0">
             <BackButton to={HALL_OF_FAME_PATH} label="BACK TO HALL OF FAME" inline />
             <span className="flex-1 min-w-0 flex justify-center">
-              <ChampionshipTitle setCode={setCode} label={UPCOMING_LABEL} day={day} />
+              <ChampionshipTitle {...title} />
             </span>
           </span>
-          <ChampionshipTabs tabs={UPCOMING_TABS} view={view} onChange={switchView} />
+          <ChampionshipTabs tabs={tabs} view={view} onChange={switchView} />
           <span />
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto themed-scrollbar py-4">
-          <div className={view === "top8" ? "w-full" : "w-full max-w-[860px] mx-auto"}>{content}</div>
+        <div
+          className={cn(
+            "flex-1 min-h-0 overflow-y-auto themed-scrollbar py-4",
+            centered && "flex items-center justify-center pb-[140px]",
+          )}
+        >
+          {children}
         </div>
       </main>
     </div>

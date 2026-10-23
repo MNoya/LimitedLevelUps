@@ -44,11 +44,15 @@ import {
   ChampionshipTabs,
   ChampionshipTitle,
   FINISHED_TABS,
+  type ChampionshipTab,
 } from "../components/hallOfFame/ChampionshipChrome";
 import {
   championshipViewHref,
   HALL_OF_FAME_PATH,
+  championshipPodNumber,
   isLiveChampionship,
+  isPodView,
+  podView,
   type ChampionshipView,
 } from "../data/setChampionship";
 import { TabButton } from "../components/TabButton";
@@ -102,7 +106,8 @@ function findSeatByName(seats: PodSeat[], name: string): PodSeat | undefined {
 export function PodPage({
   slugOverride,
   championshipView = "table",
-}: { slugOverride?: string; championshipView?: ChampionshipView } = {}) {
+  championshipTabs = FINISHED_TABS,
+}: { slugOverride?: string; championshipView?: ChampionshipView; championshipTabs?: ChampionshipTab[] } = {}) {
   const params = useParams<{ slug: string }>();
   const slug = slugOverride ?? params.slug;
   const navigate = useNavigate();
@@ -159,6 +164,7 @@ export function PodPage({
   const { data: setEvents } = usePodEvents(event?.setCode);
   const decklistAccess = usePodDecklistAccess(event, participantRows);
   const isChampionship = event ? isChampionshipEvent(event.name) : false;
+  const championshipPod = event ? championshipPodNumber(event.name) : null;
   const championship = useChampionship(isChampionship && event ? event : undefined, live);
   const { data: championshipEvents } = useChampionshipEvents();
   const { data: championshipLinks } = useChampionshipLinks();
@@ -206,23 +212,28 @@ export function PodPage({
     return null;
   };
 
-  const siblingEvents = isChampionship ? championshipEvents : setEvents;
+  const siblingEvents = isChampionship
+    ? championshipEvents?.filter((e) => championshipPodNumber(e.name) === null)
+    : setEvents;
   const { prevEvent, nextEvent } = useMemo(() => {
     if (!siblingEvents || !event) return { prevEvent: null, nextEvent: null };
     const nowMs = Date.now();
     const started = siblingEvents.filter(
       (e) => e.championDisplayName || new Date(e.eventTime).getTime() <= nowMs,
     );
-    const idx = started.findIndex((e) => e.eventId === event.eventId);
+    const isCurrent = (e: PodEventSummary) =>
+      isChampionship ? e.setCode === event.setCode : e.eventId === event.eventId;
+    const idx = started.findIndex(isCurrent);
     if (idx < 0) return { prevEvent: null, nextEvent: null };
     return {
       prevEvent: idx > 0 ? started[idx - 1] : null,
       nextEvent: idx < started.length - 1 ? started[idx + 1] : null,
     };
-  }, [siblingEvents, event]);
+  }, [siblingEvents, event, isChampionship]);
+  const siblingView = isPodView(championshipView) ? "table" : championshipView;
   const siblingHref = (sibling: PodEventSummary | null) => {
     if (!sibling) return null;
-    return isChampionship ? championshipViewHref(sibling.setCode, championshipView) : `/pods/${sibling.slug}`;
+    return isChampionship ? championshipViewHref(sibling.setCode, siblingView) : `/pods/${sibling.slug}`;
   };
   const prevTo = siblingHref(prevEvent);
   const nextTo = siblingHref(nextEvent);
@@ -292,7 +303,8 @@ export function PodPage({
   const railOpensOnLoad = !isMock || seatParam !== null;
 
   if (!slugOverride && event && isChampionship) {
-    return <Navigate to={`${championshipViewHref(event.setCode, "table")}${location.search}`} replace />;
+    const view = championshipPod === null ? "table" : podView(championshipPod);
+    return <Navigate to={`${championshipViewHref(event.setCode, view)}${location.search}`} replace />;
   }
 
   if (eventLoading || (event && participantsLoading)) {
@@ -314,7 +326,7 @@ export function PodPage({
                 day={event.eventDate}
                 media={media}
               />
-              <ChampionshipViewTabs view={championshipView} onChange={switchView} className="w-full" />
+              <ChampionshipTabs tabs={championshipTabs} view={championshipView} onChange={switchView} className="w-full" />
             </>
           ) : null}
           <MobileSeatStackSkeleton
@@ -344,7 +356,7 @@ export function PodPage({
                   </span>
                 ) : null}
               </span>
-              {isChampionship ? <ChampionshipViewTabs view={championshipView} onChange={switchView} /> : <span />}
+              {isChampionship ? <ChampionshipTabs tabs={championshipTabs} view={championshipView} onChange={switchView} /> : <span />}
             </div>
           )}
           {isChampionship && championshipView !== "table" ? (
@@ -464,7 +476,7 @@ export function PodPage({
         {isChampionship ? (
           <>
             <ChampionshipMobileTitle setCode={event.setCode} label={eventLabel} day={event.eventDate} media={media} />
-            <ChampionshipViewTabs view={championshipView} onChange={switchView} className="w-full" />
+            <ChampionshipTabs tabs={championshipTabs} view={championshipView} onChange={switchView} className="w-full" />
           </>
         ) : null}
         {isChampionship && championshipView === "bracket" ? (
@@ -528,7 +540,7 @@ export function PodPage({
                 </span>
               ) : null}
             </span>
-            {isChampionship ? <ChampionshipViewTabs view={championshipView} onChange={switchView} /> : <span />}
+            {isChampionship ? <ChampionshipTabs tabs={championshipTabs} view={championshipView} onChange={switchView} /> : <span />}
             <span className="justify-self-end">
               <PrevNextNav
                 prevTo={prevTo}
@@ -613,7 +625,7 @@ export function PodPage({
                       selectedSeat={selectedSeat}
                       onHover={(seat) => handleRoundHover(seat, null, null)}
                       actions={standingsActions}
-                      highlightChampion={isChampionship}
+                      highlightChampion={isChampionship && championshipPod === null}
                     />
                   </RailLayer>
                 )}
@@ -654,18 +666,6 @@ export function PodPage({
       {deckModal}
     </div>
   );
-}
-
-function ChampionshipViewTabs({
-  view,
-  onChange,
-  className,
-}: {
-  view: ChampionshipView;
-  onChange: (view: ChampionshipView) => void;
-  className?: string;
-}) {
-  return <ChampionshipTabs tabs={FINISHED_TABS} view={view} onChange={onChange} className={className} />;
 }
 
 const readDeckParams =(params: URLSearchParams, seatParam: string | null) => {

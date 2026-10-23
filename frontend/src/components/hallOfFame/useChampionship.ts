@@ -11,6 +11,7 @@ import {
   buildChampionshipBracket,
   buildSwissRounds,
   championOf,
+  championshipPodNumber,
   participantByName,
   playerLabel,
 } from "../../data/setChampionship";
@@ -38,7 +39,12 @@ export interface ChampionshipPlayer extends ChampionshipIdentity {
 
 export function useChampionshipEvent(setCode: string) {
   const { data: events, isLoading } = useChampionshipEvents();
-  return { event: events?.find((entry) => entry.setCode === setCode), isLoading };
+  const forSet = (events ?? []).filter((entry) => entry.setCode === setCode);
+  const event = forSet.find((entry) => championshipPodNumber(entry.name) === null);
+  const pods = forSet
+    .filter((entry) => championshipPodNumber(entry.name) !== null)
+    .sort((a, b) => (championshipPodNumber(a.name) ?? 0) - (championshipPodNumber(b.name) ?? 0));
+  return { event, pods, isLoading };
 }
 
 export function useChampionship(event: PodEventSummary | undefined, live = false) {

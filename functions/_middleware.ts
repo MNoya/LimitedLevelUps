@@ -701,14 +701,14 @@ const hallOfFameRoute = async (rawCode: string | undefined, view: string | undef
   }
   const code = rawCode.toUpperCase();
   const tab = view?.toLowerCase();
-  const knownTab = tab === undefined || tab === "bracket" || tab === "top-8";
+  const knownTab = tab === undefined || tab === "bracket" || tab === "top-8" || /^pod-\d+$/.test(tab);
   const canonicalPath = tab ? `/hall-of-fame/${code}/${tab}` : `/hall-of-fame/${code}`;
   const championshipFilter = queryValue(JSON.stringify([{ role: "championship", glyph: code }]));
   const [sets, events, calendar] = await Promise.all([
     fetchSets(),
     viewRows<ChampionshipEventRow>(
       `public_pod_draft_events?select=is_finalized,champion_display_name&set_code=eq.${queryValue(code)}` +
-        "&name=ilike.*championship*&order=event_time.desc&limit=1",
+        "&name=ilike.*championship*&name=not.ilike.*pod*&order=event_time.desc&limit=1",
     ),
     viewRows<{ day: string }>(`public_pod_calendar?select=day&entries=cs.${championshipFilter}&limit=1`),
   ]);
