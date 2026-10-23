@@ -1,4 +1,5 @@
-import { stripDiscriminator } from "./utils";
+import { DISCORD_GUILD_ID } from "./site";
+import { isChampionshipEvent, stripDiscriminator } from "./utils";
 import type { PodEventMatchRow, PodEventParticipantRow } from "../types/leaderboard";
 
 export const HALL_OF_FAME_PATH = "/hall-of-fame";
@@ -91,6 +92,23 @@ export function championOf(rounds: SwissRound[]): string | null {
   return final?.winnerName ?? null;
 }
 
+export function isChampionshipLive(event: { eventTime: string; isFinalized: boolean }, now = Date.now()): boolean {
+  return !event.isFinalized && new Date(event.eventTime).getTime() <= now;
+}
+
+export function isStartingOrLive(event: { eventTime: string; isFinalized: boolean }): boolean {
+  const halfHour = 30 * 60 * 1000;
+  return isChampionshipLive(event, Date.now() + halfHour);
+}
+
+export function isLiveChampionship(event: { name: string; eventTime: string; isFinalized: boolean } | null | undefined) {
+  return !!event && isChampionshipEvent(event.name) && isChampionshipLive(event);
+}
+
+export function championshipThreadUrl(threadId: string | null): string | null {
+  return threadId ? `https://discord.com/channels/${DISCORD_GUILD_ID}/${threadId}` : null;
+}
+
 export const CHAMPIONSHIP_SEATS = 8;
 export const CHAMPIONSHIP_INVITE_DEPTH = 32;
 
@@ -133,7 +151,7 @@ export function pickPodWildcard(
 
 export function formatChampionshipDay(day: string): string {
   const date = new Date(`${day.slice(0, 10)}T12:00:00`);
-  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 export function participantByName(participants: PodEventParticipantRow[]): Map<string, PodEventParticipantRow> {

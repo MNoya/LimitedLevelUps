@@ -272,6 +272,13 @@ export interface PodChampionshipSeedRow {
   frozenAt: string;
 }
 
+export interface PodChampionshipLinksRow {
+  eventId: string;
+  setCode: string;
+  threadId: string | null;
+  vodUrl: string | null;
+}
+
 export interface PodChampionshipRsvpRow {
   eventId: string;
   displayName: string;

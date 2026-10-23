@@ -26,6 +26,7 @@ export interface ChampionshipIdentity {
   name: string;
   avatarUrl: string | null;
   slug: string | null;
+  unconfirmed?: boolean;
 }
 
 export interface ChampionshipPlayer extends ChampionshipIdentity {
@@ -40,9 +41,9 @@ export function useChampionshipEvent(setCode: string) {
   return { event: events?.find((entry) => entry.setCode === setCode), isLoading };
 }
 
-export function useChampionship(event: PodEventSummary | undefined) {
-  const { data: matches } = usePodEventMatches(event?.eventId);
-  const { data: participants } = usePodEventParticipants(event?.eventId);
+export function useChampionship(event: PodEventSummary | undefined, live = false) {
+  const { data: matches } = usePodEventMatches(event?.eventId, live);
+  const { data: participants } = usePodEventParticipants(event?.eventId, live);
   const rounds = useMemo(
     () => buildSwissRounds(matches ?? [], event?.totalRounds ?? 3),
     [matches, event?.totalRounds],

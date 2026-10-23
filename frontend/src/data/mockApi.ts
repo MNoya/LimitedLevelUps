@@ -23,6 +23,7 @@ import type {
   PodDraftArtifact,
   PodEventMatchRow,
   PodEventParticipantRow,
+  PodChampionshipLinksRow,
   PodChampionshipRsvpRow,
   PodChampionshipSeedRow,
   PodEventReplayRow,
@@ -573,6 +574,8 @@ export const fetchChampionshipEvents = (): Promise<PodEventSummary[]> =>
 export const fetchChampionshipSeeds = (_setCode: string): Promise<PodChampionshipSeedRow[]> => wait([]);
 
 export const fetchChampionshipRsvps = (_eventId: string): Promise<PodChampionshipRsvpRow[]> => wait([]);
+
+export const fetchChampionshipLinks = (): Promise<PodChampionshipLinksRow[]> => wait([]);
 
 export const fetchPodEventParticipants = (
   eventId: string,

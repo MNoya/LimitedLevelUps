@@ -1,22 +1,32 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Crown } from "lucide-react";
-import { SiYoutube } from "react-icons/si";
+import { SiTwitch, SiYoutube } from "react-icons/si";
 import { PageShell } from "../components/PageShell";
 import { Container } from "../components/Container";
 import { AAvatar, SetGlyph } from "../components/Brand";
 import { DiscordIcon } from "../components/BrandIcons";
 import { Pips } from "../components/ManaPips";
-import { useChampionshipEvents, usePodCalendar, useSets } from "../data/hooks";
-import { formatChampionshipDay, hallOfFameSetHref } from "../data/setChampionship";
+import { cn } from "../lib/utils";
+import { useChampionshipEvents, useChampionshipLinks, usePodCalendar, useSets } from "../data/hooks";
+import {
+  championshipThreadUrl,
+  formatChampionshipDay,
+  hallOfFameSetHref,
+  isChampionshipLive,
+} from "../data/setChampionship";
+import { SITE_LINKS } from "../data/site";
 import { orderedDeckColors, stripDiscriminator } from "../data/utils";
-import type { PodEventSummary, SetSummary } from "../types/leaderboard";
+import type { PodChampionshipLinksRow, PodEventSummary, SetSummary } from "../types/leaderboard";
 
 export function HallOfFamePage() {
   const { data: events } = useChampionshipEvents();
   const { data: sets } = useSets();
   const { data: calendar } = usePodCalendar();
+  const { data: links } = useChampionshipLinks();
 
+  const linksByEvent = new Map((links ?? []).map((row) => [row.eventId, row]));
   const finished = (events ?? []).filter((event) => event.isFinalized);
+  const liveSets = new Set((events ?? []).filter((event) => isChampionshipLive(event)).map((event) => event.setCode));
   const finishedSets = new Set(finished.map((event) => event.setCode));
   const upcoming = (calendar ?? []).flatMap((day) =>
     day.entries
@@ -35,7 +45,13 @@ export function HallOfFamePage() {
             <SectionLabel>UP NEXT</SectionLabel>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {upcoming.map(({ setCode, day }) => (
-                <UpcomingCard key={setCode} set={setFor(sets, setCode)} setCode={setCode} day={day} />
+                <UpcomingCard
+                  key={setCode}
+                  set={setFor(sets, setCode)}
+                  setCode={setCode}
+                  day={day}
+                  live={liveSets.has(setCode)}
+                />
               ))}
             </div>
           </section>
@@ -44,7 +60,12 @@ export function HallOfFamePage() {
           <SectionLabel>CHAMPIONS</SectionLabel>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {finished.map((event) => (
-              <ChampionCard key={event.eventId} event={event} set={setFor(sets, event.setCode)} />
+              <ChampionCard
+                key={event.eventId}
+                event={event}
+                set={setFor(sets, event.setCode)}
+                links={linksByEvent.get(event.eventId)}
+              />
             ))}
           </div>
         </section>
@@ -57,26 +78,47 @@ function SectionLabel({ children }: { children: string }) {
   return <span className="font-display text-[15px] tracking-[0.14em] text-subtle">{children}</span>;
 }
 
-function UpcomingCard({ set, setCode, day }: { set: SetSummary | undefined; setCode: string; day: string }) {
+function UpcomingCard({
+  set,
+  setCode,
+  day,
+  live,
+}: {
+  set: SetSummary | undefined;
+  setCode: string;
+  day: string;
+  live: boolean;
+}) {
   return (
-    <Link
-      to={hallOfFameSetHref(setCode)}
-      className="group flex items-center gap-4 p-5 border border-gold/40 bg-surface no-underline transition-colors
-        hover:bg-surface2"
-    >
-      <SetGlyph code={setCode} size={44} className="text-gold" />
-      <span className="flex-1 min-w-0 flex flex-col gap-1">
-        <span className="font-display text-[22px] tracking-[0.04em] text-text truncate">
-          {(set?.name ?? setCode).toUpperCase()}
+    <div className="group flex flex-col border border-gold/40 bg-surface transition-colors hover:bg-surface2">
+      <Link to={hallOfFameSetHref(setCode)} className="flex items-center gap-4 p-5 no-underline">
+        <SetGlyph code={setCode} size={44} className="text-gold" />
+        <span className="flex-1 min-w-0 flex flex-col gap-1">
+          <span className="font-display text-[22px] tracking-[0.04em] text-text truncate">
+            {(set?.name ?? setCode).toUpperCase()}
+          </span>
+          <span className="text-[14px] text-subtle">{formatChampionshipDay(day)}</span>
         </span>
-        <span className="text-[14px] text-subtle">{formatChampionshipDay(day)}</span>
-      </span>
-      <ArrowRight size={18} className="shrink-0 text-subtle transition-transform group-hover:translate-x-0.5" />
-    </Link>
+        <ArrowRight size={18} className="shrink-0 text-subtle transition-transform group-hover:translate-x-0.5" />
+      </Link>
+      {live ? (
+        <span className="flex justify-end border-t border-border">
+          <MediaLink icon={<SiTwitch size={15} />} label="TWITCH" url={SITE_LINKS.championshipTwitch} />
+        </span>
+      ) : null}
+    </div>
   );
 }
 
-function ChampionCard({ event, set }: { event: PodEventSummary; set: SetSummary | undefined }) {
+function ChampionCard({
+  event,
+  set,
+  links,
+}: {
+  event: PodEventSummary;
+  set: SetSummary | undefined;
+  links: PodChampionshipLinksRow | undefined;
+}) {
   return (
     <div className="group flex flex-col border border-border2 bg-surface transition-colors hover:border-gold/60">
       <Link to={hallOfFameSetHref(event.setCode)} className="flex flex-col no-underline">
@@ -119,23 +161,37 @@ function ChampionCard({ event, set }: { event: PodEventSummary; set: SetSummary 
           VIEW BRACKET
           <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
         </Link>
-        <PendingLink icon={<SiYoutube size={15} />} label="VOD" />
-        <PendingLink icon={<DiscordIcon size={15} />} label="THREAD" />
+        <MediaLink icon={<SiYoutube size={15} />} label="VOD" url={links?.vodUrl ?? null} />
+        <MediaLink
+          icon={<DiscordIcon size={15} />}
+          label="THREAD"
+          url={championshipThreadUrl(links?.threadId ?? null)}
+        />
       </span>
     </div>
   );
 }
 
-function PendingLink({ icon, label }: { icon: React.ReactNode; label: string }) {
+function MediaLink({ icon, label, url }: { icon: React.ReactNode; label: string; url: string | null }) {
+  const className = "flex items-center gap-1.5 px-4 py-3 border-l border-border font-display text-[13px] tracking-[0.14em]";
+  if (!url) {
+    return (
+      <span title="Not linked yet" className={cn(className, "text-muted cursor-default")}>
+        {icon}
+        {label}
+      </span>
+    );
+  }
   return (
-    <span
-      title="Not linked yet"
-      className="flex items-center gap-1.5 px-4 border-l border-border font-display text-[13px] tracking-[0.14em]
-        text-muted cursor-default"
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className={cn(className, "no-underline text-subtle transition-colors hover:text-green")}
     >
       {icon}
       {label}
-    </span>
+    </a>
   );
 }
 

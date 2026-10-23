@@ -54,13 +54,13 @@ function FullPlayerCard({
         <AAvatar displayName={player.name} avatarUrl={player.avatarUrl} size={52} green />
         <div className="flex-1 min-w-0 flex flex-col items-start gap-2">
           {nameNode}
-          {board ? <RankBadge rank={board.rank} size="sm" /> : null}
+          <span className="flex items-center gap-2">
+            {board ? <RankBadge rank={board.rank} size="sm" /> : null}
+            {player.unconfirmed ? <UnconfirmedTag /> : null}
+          </span>
         </div>
-        {loading || !board ? (
-          <div className="h-[52px] w-[200px] bg-surface2 animate-pulse" />
-        ) : (
-          <StatStrip board={board} />
-        )}
+        {loading ? <div className="h-[52px] w-[200px] bg-surface2 animate-pulse" /> : null}
+        {!loading && board ? <StatStrip board={board} /> : null}
       </div>
       {loading ? (
         <div className="m-4 h-[250px] bg-surface2 animate-pulse" />
@@ -112,10 +112,10 @@ function LeanPlayerCard({
           <span className="flex items-center gap-2 min-w-0">
             <FitText text={name} max={18} min={13} className="font-display tracking-[0.03em] text-text" />
             {board ? <RankBadge rank={board.rank} size="sm" /> : null}
+            {player.unconfirmed ? <UnconfirmedTag /> : null}
           </span>
-          {loading || !board ? (
-            <span className="h-[14px] w-[140px] bg-surface2 animate-pulse" />
-          ) : (
+          {loading ? <span className="h-[14px] w-[140px] bg-surface2 animate-pulse" /> : null}
+          {!loading && board ? (
             <span className="grid grid-cols-[48px_74px_44px] items-center font-num text-[13px] text-subtle">
               <span className="flex items-center gap-1 text-text">
                 <Trophy size={12} color="#ffc63a" />
@@ -124,7 +124,7 @@ function LeanPlayerCard({
               <Record mono wins={board.wins} losses={board.losses} />
               <span>{winRate(board.wins, board.losses)}</span>
             </span>
-          )}
+          ) : null}
         </span>
         <ChevronDown size={18} className={cn("shrink-0 text-subtle transition-transform", open && "rotate-180")} />
       </button>
@@ -206,6 +206,12 @@ function LeanRow({ columns, children }: { columns: string; children: ReactNode }
     <div className="grid items-center gap-2 h-[22px]" style={{ gridTemplateColumns: columns }}>
       {children}
     </div>
+  );
+}
+
+function UnconfirmedTag() {
+  return (
+    <span className="shrink-0 font-display text-[13px] leading-none tracking-[0.04em] text-subtle">UNCONFIRMED</span>
   );
 }
 

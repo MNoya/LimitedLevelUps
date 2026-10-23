@@ -23,6 +23,7 @@ import {
 } from "../components/pod/PodStandings";
 import {
   useChampionshipEvents,
+  useChampionshipLinks,
   usePodDraftArtifact,
   usePodEventBySlug,
   usePodEventMatches,
@@ -37,10 +38,17 @@ import { isChampionshipEvent, podDiscordName, podEventTitle, podSeatName } from 
 import { ChampionshipBracket } from "../components/hallOfFame/ChampionshipBracket";
 import { PlayerProfileCard } from "../components/hallOfFame/PlayerProfileCard";
 import { useChampionship } from "../components/hallOfFame/useChampionship";
-import { ChampionshipTabs, ChampionshipTitle, FINISHED_TABS } from "../components/hallOfFame/ChampionshipChrome";
+import {
+  championshipMedia,
+  ChampionshipMobileTitle,
+  ChampionshipTabs,
+  ChampionshipTitle,
+  FINISHED_TABS,
+} from "../components/hallOfFame/ChampionshipChrome";
 import {
   championshipViewHref,
   HALL_OF_FAME_PATH,
+  isLiveChampionship,
   type ChampionshipView,
 } from "../data/setChampionship";
 import { TabButton } from "../components/TabButton";
@@ -137,7 +145,8 @@ export function PodPage({
 
   const { data: event, isLoading: eventLoading } = usePodEventBySlug(slug);
   const eventId = event?.eventId;
-  const { data: participantRows, isLoading: participantsLoading } = usePodEventParticipants(eventId);
+  const live = isLiveChampionship(event);
+  const { data: participantRows, isLoading: participantsLoading } = usePodEventParticipants(eventId, live);
   const { data: draftArtifact } = usePodDraftArtifact(eventId);
   // Warm the card-image map for the whole draft so the review's first pick paints instantly on entry.
   const warmImageItems = useMemo(
@@ -145,13 +154,16 @@ export function PodPage({
     [draftArtifact],
   );
   const warmedImages = useCardImageMap(warmImageItems);
-  const { data: matches, isLoading: matchesLoading } = usePodEventMatches(eventId);
+  const { data: matches, isLoading: matchesLoading } = usePodEventMatches(eventId, live);
   const { data: replays, isLoading: replaysLoading } = usePodEventReplays(eventId);
   const { data: setEvents } = usePodEvents(event?.setCode);
-  const decklistAccess = usePodDecklistAccess(event);
+  const decklistAccess = usePodDecklistAccess(event, participantRows);
   const isChampionship = event ? isChampionshipEvent(event.name) : false;
-  const championship = useChampionship(isChampionship && event ? event : undefined);
+  const championship = useChampionship(isChampionship && event ? event : undefined, live);
   const { data: championshipEvents } = useChampionshipEvents();
+  const { data: championshipLinks } = useChampionshipLinks();
+  const vodUrl = championshipLinks?.find((row) => row.eventId === eventId)?.vodUrl;
+  const media = isChampionship ? championshipMedia(live, vodUrl) : null;
 
   const seats = useMemo<PodSeat[]>(() => {
     if (!participantRows) return [];
@@ -279,6 +291,10 @@ export function PodPage({
   const isMock = event ? event.kind === "mock" : isMockDraftSlug(slug);
   const railOpensOnLoad = !isMock || seatParam !== null;
 
+  if (!slugOverride && event && isChampionship) {
+    return <Navigate to={`${championshipViewHref(event.setCode, "table")}${location.search}`} replace />;
+  }
+
   if (eventLoading || (event && participantsLoading)) {
     if (isMobile) {
       return (
@@ -290,8 +306,16 @@ export function PodPage({
             prevAriaLabel="Previous pod"
             nextAriaLabel="Next pod"
           />
-          {isChampionship ? (
-            <ChampionshipViewTabs view={championshipView} onChange={switchView} className="w-full" />
+          {isChampionship && event ? (
+            <>
+              <ChampionshipMobileTitle
+                setCode={event.setCode}
+                label={podEventTitle(event).toUpperCase()}
+                day={event.eventDate}
+                media={media}
+              />
+              <ChampionshipViewTabs view={championshipView} onChange={switchView} className="w-full" />
+            </>
           ) : null}
           <MobileSeatStackSkeleton
             variant={seatParam || isMock ? "player" : "standings"}
@@ -307,11 +331,25 @@ export function PodPage({
         <main className={mainClass}>
           {!isLandscapePhone && (
             <div className={NAV_ROW_CLASS}>
-              <BackButton to={backTo} label={backLabel} inline />
+              <span className="flex items-center gap-4 min-w-0">
+                <BackButton to={backTo} label={backLabel} inline />
+                {isChampionship && event ? (
+                  <span className="flex-1 min-w-0 flex justify-center">
+                    <ChampionshipTitle
+                      setCode={event.setCode}
+                      label={podEventTitle(event).toUpperCase()}
+                      day={event.eventDate}
+                      media={media}
+                    />
+                  </span>
+                ) : null}
+              </span>
               {isChampionship ? <ChampionshipViewTabs view={championshipView} onChange={switchView} /> : <span />}
             </div>
           )}
-          {railOpensOnLoad ? (
+          {isChampionship && championshipView !== "table" ? (
+            <div className="flex-1" />
+          ) : railOpensOnLoad ? (
             <div className={`flex-1 flex items-stretch min-h-0 ${contentRowPad}`}>
               <div className={`flex items-center min-w-0 shrink-0 justify-end ${tableColumnPad}`} style={{ width: "55%" }}>
                 <PodTableSkeleton
@@ -424,7 +462,10 @@ export function PodPage({
           nextAriaLabel="Next pod"
         />
         {isChampionship ? (
-          <ChampionshipViewTabs view={championshipView} onChange={switchView} className="w-full" />
+          <>
+            <ChampionshipMobileTitle setCode={event.setCode} label={eventLabel} day={event.eventDate} media={media} />
+            <ChampionshipViewTabs view={championshipView} onChange={switchView} className="w-full" />
+          </>
         ) : null}
         {isChampionship && championshipView === "bracket" ? (
           <div className="px-3 py-4">
@@ -483,7 +524,7 @@ export function PodPage({
               <BackButton to={backTo} label={backLabel} inline />
               {isChampionship ? (
                 <span className="flex-1 min-w-0 flex justify-center">
-                  <ChampionshipTitle setCode={event.setCode} label={eventLabel} day={event.eventDate} />
+                  <ChampionshipTitle setCode={event.setCode} label={eventLabel} day={event.eventDate} media={media} />
                 </span>
               ) : null}
             </span>
@@ -654,7 +695,7 @@ export function PodDraftLogRoute() {
   const eventId = event?.eventId;
   const { data: participantRows, isLoading: participantsLoading } = usePodEventParticipants(eventId);
   const { data: artifact, isLoading: artifactLoading } = usePodDraftArtifact(eventId);
-  const decklistAccess = usePodDecklistAccess(event);
+  const decklistAccess = usePodDecklistAccess(event, participantRows);
 
   const seats = useMemo(
     () => (participantRows ? assignSeats(participantRows) : []),

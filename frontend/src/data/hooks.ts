@@ -39,6 +39,7 @@ import {
   fetchPodDraftArtifact,
   fetchPodEventBySlug,
   fetchChampionshipEvents,
+  fetchChampionshipLinks,
   fetchChampionshipRsvps,
   fetchChampionshipSeeds,
   fetchFormatBreakdowns,
@@ -78,6 +79,7 @@ import {
   fetchP0P1Ratings,
 } from "./api";
 import { fetchDiscordStats } from "./discord";
+import { isLiveChampionship, isStartingOrLive } from "./setChampionship";
 import { fetchYouTubeVideos, overlayLiveMedia, toVideoEpisode, type YouTubeVideo } from "./youtube";
 import { assignEpisodeSlugs, type Episode } from "./episodes";
 import { setReviewMentionKey, type SetReviewMention, type TranscriptSegment } from "./transcript";
@@ -90,6 +92,7 @@ import { boardOffersSoup } from "./cubeVariants";
 import { fetchCubeCardNames } from "./podFormats";
 import { useNow } from "../lib/countdown";
 const THIRTY_MINUTES = 30 * 60 * 1000;
+const LIVE_POLL_MS = 30 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
 const CONTEST_TICK_MS = 30_000;
 
@@ -608,12 +611,13 @@ export function useAllPodResults(enabled: boolean) {
   });
 }
 
-export function usePodEventParticipants(eventId: string | undefined) {
+export function usePodEventParticipants(eventId: string | undefined, live = false) {
   return useQuery({
     queryKey: ["pod-event-participants", eventId],
     queryFn: () => fetchPodEventParticipants(eventId!),
     enabled: !!eventId,
     staleTime: THIRTY_MINUTES,
+    refetchInterval: live ? LIVE_POLL_MS : false,
   });
 }
 
@@ -632,6 +636,7 @@ export function usePodEventBySlug(slug: string | undefined) {
     queryFn: () => fetchPodEventBySlug(slug!),
     enabled: !!slug,
     staleTime: THIRTY_MINUTES,
+    refetchInterval: (query) => (isLiveChampionship(query.state.data) ? LIVE_POLL_MS : false),
   });
 }
 
@@ -639,6 +644,15 @@ export function useChampionshipEvents() {
   return useQuery({
     queryKey: ["championship-events"],
     queryFn: fetchChampionshipEvents,
+    staleTime: THIRTY_MINUTES,
+    refetchInterval: (query) => (query.state.data?.some(isStartingOrLive) ? LIVE_POLL_MS : false),
+  });
+}
+
+export function useChampionshipLinks() {
+  return useQuery({
+    queryKey: ["championship-links"],
+    queryFn: fetchChampionshipLinks,
     staleTime: THIRTY_MINUTES,
   });
 }
@@ -681,12 +695,13 @@ export function usePlayersDraftEvents(setCode: string | undefined, slugs: string
   });
 }
 
-export function usePodEventMatches(eventId: string | undefined) {
+export function usePodEventMatches(eventId: string | undefined, live = false) {
   return useQuery({
     queryKey: ["pod-event-matches", eventId],
     queryFn: () => fetchPodEventMatches(eventId!),
     enabled: !!eventId,
     staleTime: THIRTY_MINUTES,
+    refetchInterval: live ? LIVE_POLL_MS : false,
   });
 }
 

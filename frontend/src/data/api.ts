@@ -49,6 +49,7 @@ export const fetchPodEventBySlug = impl.fetchPodEventBySlug;
 export const fetchChampionshipEvents = impl.fetchChampionshipEvents;
 export const fetchChampionshipSeeds = impl.fetchChampionshipSeeds;
 export const fetchChampionshipRsvps = impl.fetchChampionshipRsvps;
+export const fetchChampionshipLinks = impl.fetchChampionshipLinks;
 export const fetchFormatBreakdowns = impl.fetchFormatBreakdowns;
 export const fetchPlayersDraftEvents = impl.fetchPlayersDraftEvents;
 export const fetchPodEventParticipants = impl.fetchPodEventParticipants;

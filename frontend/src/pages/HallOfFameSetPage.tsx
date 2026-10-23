@@ -2,7 +2,12 @@ import { useMemo } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { BackButton, MobilePageHeader } from "../components/PageNav";
-import { ChampionshipTabs, ChampionshipTitle, UPCOMING_TABS } from "../components/hallOfFame/ChampionshipChrome";
+import {
+  ChampionshipMobileTitle,
+  ChampionshipTabs,
+  ChampionshipTitle,
+  UPCOMING_TABS,
+} from "../components/hallOfFame/ChampionshipChrome";
 import { PlayerProfileCard } from "../components/hallOfFame/PlayerProfileCard";
 import { QualificationList } from "../components/hallOfFame/QualificationList";
 import { useChampionshipEvent, useChampionshipPlayers } from "../components/hallOfFame/useChampionship";
@@ -55,8 +60,9 @@ function UpcomingChampionship({ setCode, view }: { setCode: string; view: Champi
         name: seat.displayName,
         avatarUrl: seat.avatarUrl,
         slug: seat.slug,
+        unconfirmed: field.frozen && seat.rsvp !== "yes",
       })),
-    [field.seats],
+    [field.seats, field.frozen],
   );
   const { players, statsLoading } = useChampionshipPlayers(setCode, identities);
   const switchView = (next: ChampionshipView) => navigate(`${championshipViewHref(setCode, next)}${location.search}`);
@@ -91,6 +97,7 @@ function UpcomingChampionship({ setCode, view }: { setCode: string; view: Champi
     return (
       <div className="bg-bg text-text min-h-screen flex flex-col">
         <MobilePageHeader backTo={HALL_OF_FAME_PATH} prevTo={null} nextTo={null} />
+        <ChampionshipMobileTitle setCode={setCode} label={UPCOMING_LABEL} day={day} />
         <ChampionshipTabs tabs={UPCOMING_TABS} view={view} onChange={switchView} className="w-full" />
         <div className="px-3 py-4">{content}</div>
       </div>

@@ -52,6 +52,7 @@ import type {
   PodDraftArtifact,
   PodEventMatchRow,
   PodEventParticipantRow,
+  PodChampionshipLinksRow,
   PodChampionshipRsvpRow,
   PodChampionshipSeedRow,
   PodEventReplayRow,
@@ -1823,6 +1824,20 @@ export async function fetchChampionshipSeeds(setCode: string): Promise<PodChampi
     .order("rank");
   if (error) throw error;
   return (data ?? []).map((r) => adaptChampionshipSeed(r as Record<string, unknown>));
+}
+
+export async function fetchChampionshipLinks(): Promise<PodChampionshipLinksRow[]> {
+  const { data, error } = await client().from("public_pod_championships").select("*");
+  if (error) throw error;
+  return (data ?? []).map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      eventId: row.event_id as string,
+      setCode: row.set_code as string,
+      threadId: (row.thread_id ?? null) as string | null,
+      vodUrl: (row.vod_url ?? null) as string | null,
+    };
+  });
 }
 
 export async function fetchChampionshipRsvps(eventId: string): Promise<PodChampionshipRsvpRow[]> {
