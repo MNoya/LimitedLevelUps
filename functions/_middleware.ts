@@ -33,7 +33,7 @@ import {
 } from "../frontend/src/data/p0p1Slots";
 import { categoryFromSlug, episodeSlugBase } from "../frontend/src/data/episodes";
 import { cubeForBoard, cubeVariantForBoard } from "../frontend/src/data/cubeVariants";
-import { CUBE_LIFETIME, isCubeSeasonCode } from "../frontend/src/data/utils";
+import { CUBE_LIFETIME, isCubeSeasonCode, stripDiscriminator } from "../frontend/src/data/utils";
 import { POD_SEASON_PARAM, podSeasons } from "../frontend/src/data/podSeasons";
 import { skeletonsFor } from "../frontend/src/data/skeletons";
 import { scryfallWebp } from "../frontend/src/data/scryfallImage";
@@ -342,6 +342,9 @@ const resolveRoute = async (
   if (section === "p0p1") {
     return p0p1Route(rest[0]);
   }
+  if (section === "hall-of-fame") {
+    return hallOfFameRoute(rest[0], rest[1]);
+  }
   if (section === "episodes") {
     return resolved(await episodesMeta(rest), `/${segments.join("/").toLowerCase()}`);
   }
@@ -418,6 +421,9 @@ const matchesAppRoute = (segments: string[]): boolean => {
     "/tier-list/:setCode/:card",
     "/p0p1",
     "/p0p1/:setCode",
+    "/hall-of-fame",
+    "/hall-of-fame/:setCode",
+    "/hall-of-fame/:setCode/:view",
     "/tools",
     "/tools/craft",
     "/tools/craft/:setCode",
@@ -687,6 +693,58 @@ const p0p1Route = (rawCode: string | undefined): RouteResolution => {
   const hidden = contest === null || (contest.status === "pre" && !contest.comingSoon);
   return resolved(p0p1Meta(contest, now), `/p0p1/${rawCode.toLowerCase()}`, hidden);
 };
+
+const hallOfFameRoute = async (rawCode: string | undefined, view: string | undefined): Promise<RouteResolution> => {
+  if (rawCode === undefined) {
+    const index = page("Set Champions", "Every Set Championship winner and Top 8");
+    return resolved({ ...index, noImagePreview: true }, "/hall-of-fame");
+  }
+  const code = rawCode.toUpperCase();
+  const tab = view?.toLowerCase();
+  const knownTab = tab === undefined || tab === "bracket" || tab === "top-8";
+  const canonicalPath = tab ? `/hall-of-fame/${code}/${tab}` : `/hall-of-fame/${code}`;
+  const championshipFilter = queryValue(JSON.stringify([{ role: "championship", glyph: code }]));
+  const [sets, events, calendar] = await Promise.all([
+    fetchSets(),
+    viewRows<ChampionshipEventRow>(
+      `public_pod_draft_events?select=is_finalized,champion_display_name&set_code=eq.${queryValue(code)}` +
+        "&name=ilike.*championship*&order=event_time.desc&limit=1",
+    ),
+    viewRows<{ day: string }>(`public_pod_calendar?select=day&entries=cs.${championshipFilter}&limit=1`),
+  ]);
+  const setName = sets?.find((set) => set.code === code)?.name ?? null;
+  const event = events?.[0];
+  const day = calendar?.[0]?.day ?? null;
+  const exists = setName !== null && (event !== undefined || day !== null);
+  const lookupFailed = sets === null || events === null || calendar === null;
+  const meta = page(
+    `${code} Set Championship`,
+    setName ? championshipDescription(setName, event, day) : null,
+    { kind: "setSymbol", code },
+  );
+  return resolved(meta, canonicalPath, !knownTab || (!exists && !lookupFailed));
+};
+
+type ChampionshipEventRow = { is_finalized: boolean; champion_display_name: string | null };
+
+const championshipDescription = (
+  setName: string,
+  event: ChampionshipEventRow | undefined,
+  day: string | null,
+): string => {
+  if (event?.is_finalized && event.champion_display_name) {
+    return `${stripDiscriminator(event.champion_display_name)} is ${setName} Set Champion`;
+  }
+  const date = day ? ` on ${formatMonthDay(day)}` : "";
+  return `See who qualifies for the ${setName} Set Championship${date}`;
+};
+
+const formatMonthDay = (day: string): string =>
+  new Date(`${day.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 
 const episodesMeta = async (rest: string[]): Promise<RouteMeta> => {
   const slug = rest[0];
