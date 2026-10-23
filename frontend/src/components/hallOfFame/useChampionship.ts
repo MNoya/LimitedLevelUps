@@ -47,7 +47,7 @@ export function useChampionshipEvent(setCode: string) {
   return { event, pods, isLoading };
 }
 
-export function useChampionship(event: PodEventSummary | undefined, live = false) {
+export function useChampionship(event: PodEventSummary | undefined, live = false, withPlayerStats = false) {
   const { data: matches } = usePodEventMatches(event?.eventId, live);
   const { data: participants } = usePodEventParticipants(event?.eventId, live);
   const rounds = useMemo(
@@ -67,7 +67,8 @@ export function useChampionship(event: PodEventSummary | undefined, live = false
       })),
     [participants],
   );
-  const { players: unsorted, statsLoading } = useChampionshipPlayers(event?.setCode, identities, champion);
+  const statsSetCode = withPlayerStats ? event?.setCode : undefined;
+  const { players: unsorted, statsLoading } = useChampionshipPlayers(statsSetCode, identities, champion);
   const players = useMemo(
     () =>
       [...unsorted].sort(

@@ -640,19 +640,21 @@ export function usePodEventBySlug(slug: string | undefined) {
   });
 }
 
-export function useChampionshipEvents() {
+export function useChampionshipEvents(enabled = true) {
   return useQuery({
     queryKey: ["championship-events"],
     queryFn: fetchChampionshipEvents,
+    enabled,
     staleTime: THIRTY_MINUTES,
     refetchInterval: (query) => (query.state.data?.some(isStartingOrLive) ? LIVE_POLL_MS : false),
   });
 }
 
-export function useChampionshipLinks() {
+export function useChampionshipLinks(enabled = true) {
   return useQuery({
     queryKey: ["championship-links"],
     queryFn: fetchChampionshipLinks,
+    enabled,
     staleTime: THIRTY_MINUTES,
   });
 }

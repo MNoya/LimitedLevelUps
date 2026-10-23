@@ -161,13 +161,17 @@ export function PodPage({
   const warmedImages = useCardImageMap(warmImageItems);
   const { data: matches, isLoading: matchesLoading } = usePodEventMatches(eventId, live);
   const { data: replays, isLoading: replaysLoading } = usePodEventReplays(eventId);
-  const { data: setEvents } = usePodEvents(event?.setCode);
   const decklistAccess = usePodDecklistAccess(event, participantRows);
   const isChampionship = event ? isChampionshipEvent(event.name) : false;
+  const { data: setEvents } = usePodEvents(event && !isChampionship ? event.setCode : undefined);
   const championshipPod = event ? championshipPodNumber(event.name) : null;
-  const championship = useChampionship(isChampionship && event ? event : undefined, live);
-  const { data: championshipEvents } = useChampionshipEvents();
-  const { data: championshipLinks } = useChampionshipLinks();
+  const championship = useChampionship(
+    isChampionship && event ? event : undefined,
+    live,
+    championshipView === "top8",
+  );
+  const { data: championshipEvents } = useChampionshipEvents(isChampionship);
+  const { data: championshipLinks } = useChampionshipLinks(isChampionship);
   const vodUrl = championshipLinks?.find((row) => row.eventId === eventId)?.vodUrl;
   const media = isChampionship ? championshipMedia(live, vodUrl) : null;
 
