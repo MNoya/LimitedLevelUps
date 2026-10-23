@@ -42,6 +42,8 @@ import { BackButton, MobilePageHeader } from "../components/PageNav";
 import { CubeSeasonSelector, cubeBoardHasSeasons } from "../components/CubeSeasonSelector";
 import { BoardWindowSelector, type BoardWindowOption } from "../components/BoardWindowSelector";
 import { RankBadge } from "../components/RankBadge";
+import { FitText } from "../components/FitText";
+import { aggregate, BreakdownPanel, COLOR_KEYS, COLOR_NAMES } from "../components/player/BreakdownPanel";
 import { ArenaRankIcon } from "../components/ArenaRankIcon";
 import { GoToTopButton } from "../components/GoToTopButton";
 import { Tooltip } from "../components/Tooltip";
@@ -52,7 +54,7 @@ import { CUBE_VARIANTS, cubeBoardCode, cubeBoardForRoute, cubeForBoard, setsWith
 import { podBoardCode, podBoardWindowFor, withCustomPodBoards } from "../data/podFormats";
 import { AXIS_ALL, MIN_BOARD_SEASONS, POD_SEASON_PARAM, seasonsPlayed } from "../data/podSeasons";
 import { aggregate as scoreAggregate, computeScore, type ScoringStatRow } from "../data/scoring";
-import { canonicalSetCode, colorsOf, CUBE_BASE, eventDate, eventDisplayLabel, fmtShortDate, formatTag, isCubeCode, isFlashbackEvent, isRealSeasonSet, isSoup, lastUpdated, lcqCashPrize, leaderboardPath, mainColors, playerPath, prettyFormat, winPct } from "../data/utils";
+import { canonicalSetCode, colorsOf, CUBE_BASE, eventDate, eventDisplayLabel, fmtShortDate, formatTag, isCubeCode, isFlashbackEvent, isRealSeasonSet, isSoup, lastUpdated, lcqCashPrize, leaderboardPath, playerPath, prettyFormat, winPct } from "../data/utils";
 import { ACTIVE_SET_CODE } from "../data/constants";
 import {
   colorsDisplayName,
@@ -66,7 +68,14 @@ import {
   TWO_COLOR_CODES,
   type FilterOption,
 } from "../data/filters";
-import { FMT_COLORS, renderColorOption, renderFormatOption, shortFormat } from "../data/format-display";
+import {
+  COLOR_STROKES,
+  comboColors,
+  FMT_COLORS,
+  renderColorOption,
+  renderFormatOption,
+  shortFormat,
+} from "../data/format-display";
 import { cn } from "../lib/utils";
 import { OPENED_IN_APP, useCloseModal } from "../lib/modal-history";
 import { useSearchParamHref } from "../lib/search-param-href";
@@ -80,35 +89,6 @@ import type {
   SetPlayed,
   SetSummary,
 } from "../types/leaderboard";
-
-// ─── Color palettes ────────────────────────────────────────────────────────
-
-const COLOR_STROKES: Record<string, string> = {
-  W: "#f0f2c0",
-  U: "#b5cde3",
-  B: "#aca29a",
-  R: "#db8664",
-  G: "#93b483",
-};
-
-const COLOR_KEYS: Array<"W" | "U" | "B" | "R" | "G"> = ["W", "U", "B", "R", "G"];
-
-const COLOR_NAMES: Record<"W" | "U" | "B" | "R" | "G", string> = {
-  W: "White",
-  U: "Blue",
-  B: "Black",
-  R: "Red",
-  G: "Green",
-};
-
-function comboColors(combo: string): string[] {
-  const out: string[] = [];
-  for (const c of combo) {
-    const hex = COLOR_STROKES[c];
-    if (hex) out.push(hex);
-  }
-  return out.length > 0 ? out : ["#7a8395"];
-}
 
 // ─── Page entry ────────────────────────────────────────────────────────────
 
@@ -540,37 +520,6 @@ function LifetimeMobileHeader({ backTo }: { backTo: To }) {
 }
 
 type SetSortKey = "recent" | "set" | "trophies" | "events" | "winrate";
-
-function FitText({ text, max = 15, min = 9, className }: { text: string; max?: number; min?: number; className?: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const fit = () => {
-      el.style.fontSize = `${max}px`;
-      if (el.clientWidth > 0 && el.scrollWidth > el.clientWidth) {
-        const scaled = (max * el.clientWidth) / el.scrollWidth;
-        el.style.fontSize = `${Math.max(min, Math.floor(scaled * 10) / 10)}px`;
-      }
-    };
-    fit();
-    const observer = new ResizeObserver(fit);
-    observer.observe(el);
-    let cancelled = false;
-    document.fonts?.ready.then(() => {
-      if (!cancelled) fit();
-    });
-    return () => {
-      cancelled = true;
-      observer.disconnect();
-    };
-  }, [text, max, min]);
-  return (
-    <span ref={ref} className={cn("block min-w-0 flex-1 overflow-hidden whitespace-nowrap leading-none", className)}>
-      {text}
-    </span>
-  );
-}
 
 function winRate(sp: SetPlayed): number {
   const games = sp.wins + sp.losses;
@@ -1425,12 +1374,6 @@ interface SiblingNav {
 
 // ─── Aggregation ───────────────────────────────────────────────────────────
 
-interface PlayerAggregates {
-  colorCount: Record<"W" | "U" | "B" | "R" | "G", number>;
-  comboCount: Record<string, number>;
-  comboTrophies: Record<string, number>;
-}
-
 interface StatStripStats {
   trophies: number;
   events: number;
@@ -1471,26 +1414,6 @@ const trophyChipValue = (trophies: number) =>
 const eventsChipValue = (events: number) => (events > 0 ? events : emptyStat);
 const recordChipValue = (wins: number, losses: number) => (wins + losses > 0 ? `${wins}–${losses}` : emptyStat);
 const winRateChipValue = (wins: number, losses: number, wp: string) => (wins + losses > 0 ? `${wp}%` : emptyStat);
-
-function aggregate(
-  events: PlayerDraftEvent[],
-  selfReported: readonly SelfReportedEvent[] = [],
-): PlayerAggregates {
-  const colorCount: PlayerAggregates["colorCount"] = { W: 0, U: 0, B: 0, R: 0, G: 0 };
-  const comboCount: Record<string, number> = {};
-  const comboTrophies: Record<string, number> = {};
-  for (const e of [...events, ...selfReported]) {
-    const main = mainColors(e.colors);
-    for (const c of main) {
-      if (c in colorCount) colorCount[c as keyof typeof colorCount]++;
-    }
-    const combo = colorsOf(e.colors);
-    if (combo.length === 0) continue;
-    comboCount[combo] = (comboCount[combo] ?? 0) + 1;
-    if (e.isTrophy) comboTrophies[combo] = (comboTrophies[combo] ?? 0) + 1;
-  }
-  return { colorCount, comboCount, comboTrophies };
-}
 
 // ─── Desktop ───────────────────────────────────────────────────────────────
 
@@ -2074,233 +1997,6 @@ function StatStrip({
         return (
           <div key={t.label} className={tileCls}>
             {body}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-const PANEL_TITLE_COLOR = "#e6ecf5";
-
-function BreakdownPanel({
-  breakdown,
-  totalScore,
-  events,
-  selfReported,
-  showPoints,
-  lockedFormats,
-  bordered = true,
-}: {
-  breakdown: PlayerFormatBreakdown[];
-  totalScore: number;
-  events: PlayerDraftEvent[];
-  selfReported: SelfReportedEvent[];
-  showPoints: boolean;
-  lockedFormats?: string[] | null;
-  bordered?: boolean;
-}) {
-  const formatBreakdown = useMemo(
-    () => [...breakdown].sort((a, b) => b.scoreContribution - a.scoreContribution),
-    [breakdown],
-  );
-  const total = formatBreakdown.reduce((s, f) => s + f.scoreContribution, 0) || 1;
-  const { colorCount, comboCount, comboTrophies } = aggregate(events, selfReported);
-  const comboEntries = Object.entries(comboCount).sort((a, b) => b[1] - a[1]);
-  const comboTotal = comboEntries.reduce((s, [, n]) => s + n, 0) || 1;
-  const colorTotal = Object.values(colorCount).reduce((a, b) => a + b, 0) || 1;
-
-  const [fmtHover, setFmtHover] = useState<string | null>(null);
-  const activeFmt = fmtHover ?? lockedFormats ?? null;
-  const [deckHover, setDeckHover] = useState<string | null>(null);
-  const [colorHover, setColorHover] = useState<string | null>(null);
-
-  const deckRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  useEffect(() => {
-    if (deckHover) {
-      deckRowRefs.current[deckHover]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-  }, [deckHover]);
-
-  return (
-    <section className={cn("py-5 pr-8 pl-6 min-[1360px]:pl-10", bordered && "border-r border-border")}>
-      {showPoints && formatBreakdown.length > 0 && (
-        <>
-          <SectionLabel size={15} letterSpacing="0.18em" color={PANEL_TITLE_COLOR} className="mb-3.5 text-center whitespace-nowrap" style={{ width: 148 }}>POINTS BY FORMAT</SectionLabel>
-          <div className="flex items-center gap-5 mb-4">
-            <DonutChart
-              pieHole={0.5}
-              entries={formatBreakdown.map((f) => ({
-                key: f.formatLabel,
-                value: f.scoreContribution / total,
-                color: FMT_COLORS[f.formatLabel] ?? "#5c8aff",
-              }))}
-              radius={56}
-              strokeWidth={18}
-              size={148}
-              activeKey={activeFmt}
-              onHoverEntry={setFmtHover}
-            />
-            <FormatLegend
-              breakdown={formatBreakdown}
-              totalScore={totalScore}
-              hoveredKey={activeFmt}
-              onHover={setFmtHover}
-            />
-          </div>
-        </>
-      )}
-
-      <SectionLabel size={15} letterSpacing="0.18em" color={PANEL_TITLE_COLOR} className={cn("mb-3 text-center whitespace-nowrap", showPoints && formatBreakdown.length > 0 && "mt-6")} style={{ width: 148 }}>DECK COLORS</SectionLabel>
-      <div className="flex items-center gap-5">
-        <DonutChart
-          pieHole={0.5}
-          entries={comboEntries.map(([k, v]) => ({
-            key: k,
-            value: v,
-            colors: comboColors(k),
-          }))}
-          radius={56}
-          strokeWidth={18}
-          size={148}
-          activeKey={deckHover}
-          onHoverEntry={setDeckHover}
-        />
-        <div
-          className="flex-1 flex flex-col gap-1 max-h-[148px] overflow-y-auto overflow-x-hidden pr-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border2 [&::-webkit-scrollbar-thumb]:rounded-full"
-          style={{ scrollbarWidth: "thin", scrollbarColor: "#3b4458 transparent" }}
-        >
-          {comboEntries.map(([code, count]) => (
-            <div
-              key={code}
-              ref={(el) => {
-                deckRowRefs.current[code] = el;
-              }}
-              onMouseEnter={() => setDeckHover(code)}
-              onMouseLeave={() => setDeckHover(null)}
-              className={cn(
-                "grid gap-2 items-center px-1.5 rounded transition-colors cursor-default",
-                deckHover === code && "bg-surface2",
-              )}
-              style={{ gridTemplateColumns: "auto 1fr 44px 40px" }}
-            >
-              <Pips colors={code} size={14} />
-              <span className="font-display text-[15px] tracking-[0.06em]">
-                {colorsDisplayName(code)}
-              </span>
-              <TrophyCount
-                count={comboTrophies[code] ?? 0}
-                size="md"
-                display
-                fixedDigits={2}
-                className="text-subtle justify-self-end"
-              />
-              <span className="font-num text-[15px] text-subtle text-right">
-                ×{count}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <SectionLabel size={15} letterSpacing="0.18em" color={PANEL_TITLE_COLOR} className="mt-6 mb-3 text-center whitespace-nowrap" style={{ width: 148 }}>COLORS PLAYED</SectionLabel>
-      <div className="flex items-center gap-5">
-        <DonutChart
-          pieHole={0.5}
-          entries={Object.entries(colorCount)
-            .filter(([, v]) => v > 0)
-            .map(([k, v]) => ({ key: k, value: v, color: COLOR_STROKES[k] }))}
-          radius={56}
-          strokeWidth={18}
-          size={148}
-          activeKey={colorHover}
-          onHoverEntry={setColorHover}
-        />
-        <div className="flex-1 flex flex-col gap-1 pr-4">
-          {COLOR_KEYS.map((c) => {
-            const pct = (colorCount[c] / colorTotal) * 100;
-            return (
-              <div
-                key={c}
-                onMouseEnter={() => setColorHover(c)}
-                onMouseLeave={() => setColorHover(null)}
-                className={cn(
-                  "grid gap-2 items-center px-1.5 -mx-1.5 rounded transition-colors cursor-default",
-                  colorHover === c && "bg-surface2",
-                )}
-                style={{ gridTemplateColumns: "auto 1fr 48px" }}
-              >
-                <Pip c={c} size={14} />
-                <span className="font-display text-[15px] tracking-[0.06em]">
-                  {COLOR_NAMES[c]}
-                </span>
-                <span className="font-num text-[15px] text-subtle text-right">
-                  {pct.toFixed(0)}%
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function FormatLegend({
-  breakdown,
-  totalScore,
-  hoveredKey,
-  onHover,
-}: {
-  breakdown: PlayerFormatBreakdown[];
-  totalScore: number;
-  hoveredKey?: string | string[] | null;
-  onHover?: (key: string | null) => void;
-}) {
-  const isHighlighted = (label: string) =>
-    Array.isArray(hoveredKey) ? hoveredKey.includes(label) : hoveredKey === label;
-  return (
-    <div className="flex-1 flex flex-col">
-      {breakdown.map((f, i) => {
-        const pct = totalScore ? (f.scoreContribution / totalScore) * 100 : 0;
-        return (
-          <div
-            key={f.formatLabel}
-            onMouseEnter={onHover ? () => onHover(f.formatLabel) : undefined}
-            onMouseLeave={onHover ? () => onHover(null) : undefined}
-            className={cn(
-              "grid items-center py-[5px] gap-2.5 px-1.5 -mx-1.5 rounded transition-colors cursor-default",
-              isHighlighted(f.formatLabel) && "bg-surface2",
-            )}
-            style={{ gridTemplateColumns: "1fr 44px 68px 48px" }}
-          >
-            <span
-              className="font-display text-[15px] tracking-[0.06em]"
-              style={{ color: FMT_COLORS[f.formatLabel] ?? "#5c8aff" }}
-            >
-              {shortFormat(f.formatLabel)}
-            </span>
-            <TrophyCount
-              count={f.trophies}
-              size="md"
-              display
-              fixedDigits={2}
-              className="text-subtle justify-self-end"
-            />
-            <Record
-              mono
-              wins={f.wins}
-              losses={f.losses}
-              className="font-num text-[13px] text-right text-subtle"
-            />
-            <span
-              className={cn(
-                "font-display text-[17px] text-right",
-                pct > 0 ? "text-green" : "text-muted",
-              )}
-            >
-              {fmtPts(f.scoreContribution)}
-            </span>
           </div>
         );
       })}

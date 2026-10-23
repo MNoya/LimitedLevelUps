@@ -51,6 +51,7 @@ export function PodStandingRow({
   teamSide = null,
   selected = false,
   trophy = false,
+  champion = false,
   nameHref,
   rowHref,
   deckHref,
@@ -68,6 +69,7 @@ export function PodStandingRow({
   teamSide?: "A" | "B" | null;
   selected?: boolean;
   trophy?: boolean;
+  champion?: boolean;
   nameHref?: string | null;
   rowHref?: string | null;
   deckHref?: string | null;
@@ -114,14 +116,14 @@ export function PodStandingRow({
             className="group/name peer/name relative z-20 flex items-center gap-2 lg:gap-2.5 min-w-0 max-w-full justify-self-start w-fit no-underline text-text hover:text-green transition-colors"
           >
             <SeatAvatar name={name} avatarUrl={p.avatarUrl} size={avatarSize} teamSide={teamSide} />
-            <PlayerName name={name} compact={compact} />
+            <PlayerName name={name} compact={compact} gold={champion} />
             {trophy && <Trophy size={compact ? 12 : 14} color="#ffc63a" className="shrink-0" />}
           </Link>
         </Tooltip>
       ) : (
         <div className="flex items-center gap-2 lg:gap-2.5 min-w-0">
           <SeatAvatar name={name} avatarUrl={p.avatarUrl} size={avatarSize} teamSide={teamSide} />
-          <PlayerName name={name} compact={compact} />
+          <PlayerName name={name} compact={compact} gold={champion} />
           {trophy && <Trophy size={compact ? 12 : 14} color="#ffc63a" className="shrink-0" />}
         </div>
       )}
@@ -225,10 +227,13 @@ export function deckPipSize(colors: string, base: number): number {
   return base - 4;
 }
 
-function PlayerName({ name, compact = false }: { name: string; compact?: boolean }) {
+function PlayerName({ name, compact = false, gold = false }: { name: string; compact?: boolean; gold?: boolean }) {
   return (
     <span
-      className="font-display leading-none tracking-[0.04em] whitespace-nowrap overflow-hidden text-ellipsis"
+      className={cn(
+        "font-display leading-none tracking-[0.04em] whitespace-nowrap overflow-hidden text-ellipsis",
+        gold && "text-gold",
+      )}
       style={{ fontSize: compact ? 15 : 16 }}
     >
       {name.toUpperCase()}

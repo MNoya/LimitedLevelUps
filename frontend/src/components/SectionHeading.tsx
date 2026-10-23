@@ -24,8 +24,9 @@ export function SectionHeading({
 }) {
   if (compact) {
     return (
-      <div className="flex items-baseline justify-between gap-3 py-2 pl-5 pr-3 border-b border-border">
+      <div className="flex items-center justify-between gap-3 py-2 pl-5 pr-3 border-b border-border">
         <span className="font-display text-text text-[14px] tracking-[0.16em] leading-none">{label}</span>
+        {center}
         {meta && (
           <span className="font-display text-[12px] tracking-[0.14em] leading-none text-muted">{meta}</span>
         )}

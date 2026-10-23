@@ -258,6 +258,30 @@ export interface PodEventParticipantRow {
   avatarUrl: string | null;
 }
 
+export interface PodChampionshipSeedRow {
+  eventId: string;
+  setCode: string;
+  eventTime: string;
+  rank: number;
+  displayName: string;
+  playerSlug: string | null;
+  avatarUrl: string | null;
+  score: number;
+  trophies: number | null;
+  wildcard: boolean;
+  frozenAt: string;
+}
+
+export interface PodChampionshipRsvpRow {
+  eventId: string;
+  displayName: string;
+  playerSlug: string | null;
+  avatarUrl: string | null;
+  rsvp: "yes" | "maybe" | "no";
+  confirmed: boolean;
+  answeredAt: string;
+}
+
 export interface PodEventMatchRow {
   eventId: string;
   eventName: string;

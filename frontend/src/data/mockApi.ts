@@ -23,6 +23,8 @@ import type {
   PodDraftArtifact,
   PodEventMatchRow,
   PodEventParticipantRow,
+  PodChampionshipRsvpRow,
+  PodChampionshipSeedRow,
   PodEventReplayRow,
   PodEventSummary,
   PodLeaderboardRow,
@@ -153,7 +155,7 @@ export const fetchTrophyLeaderboard = (setCode: string): Promise<TrophyLeaderboa
 // Aggregates color combos from the curated player draft events. Only the 5
 // fixture players contribute, but they cover the SOS top of the leaderboard so
 // the list is representative enough for dev.
-import { colorsOf } from "./utils";
+import { colorsOf, isChampionshipEvent } from "./utils";
 import { matchesFormatFilter } from "./filters";
 
 export const fetchColorsSummary = (setCode: string): Promise<ColorsSummary[]> => {
@@ -554,6 +556,23 @@ const podResultsFor = (match: (e: PodEventSummary) => boolean): Promise<PodSeaso
   }
   return wait(rows);
 };
+
+export const fetchFormatBreakdowns = async (setCode: string, slugs: string[]): Promise<PlayerFormatBreakdown[]> => {
+  const profiles = await Promise.all(slugs.map((slug) => fetchPlayerProfile(slug, setCode)));
+  return profiles.flatMap((profile) => profile?.formatBreakdown ?? []);
+};
+
+export const fetchPlayersDraftEvents = async (setCode: string, slugs: string[]): Promise<PlayerDraftEvent[]> => {
+  const events = await Promise.all(slugs.map((slug) => fetchPlayerDraftEvents(slug, setCode)));
+  return events.flat();
+};
+
+export const fetchChampionshipEvents = (): Promise<PodEventSummary[]> =>
+  wait(withPodOrdinals(podEventsFixture).filter((event) => isChampionshipEvent(event.name)));
+
+export const fetchChampionshipSeeds = (_setCode: string): Promise<PodChampionshipSeedRow[]> => wait([]);
+
+export const fetchChampionshipRsvps = (_eventId: string): Promise<PodChampionshipRsvpRow[]> => wait([]);
 
 export const fetchPodEventParticipants = (
   eventId: string,

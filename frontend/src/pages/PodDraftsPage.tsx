@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useParams, useSearchParams, type To } from "react-router-dom";
-import { ArrowUpRight, BookOpen, ChevronDown } from "lucide-react";
+import { ArrowUpRight, BookOpen, ChevronDown, Crown } from "lucide-react";
 
 import { PodPage } from "./PodPage";
 
@@ -52,6 +52,7 @@ import {
   colorsOf,
   CUBE_BASE,
   fmtRange,
+  isChampionshipEvent,
   isCubeCode,
   orderedDeckColors,
   PLAYER_BASE,
@@ -94,6 +95,7 @@ import {
 import { resolveDeck } from "../data/draft-artifact";
 import { usePodDecklistAccess } from "../data/podDecklistAccess";
 import { hasCardData } from "../data/podCards";
+import { hallOfFameSetHref } from "../data/setChampionship";
 import { aggregateArchetypes, championPairCounts, gameTally } from "../data/podArchetypes";
 import type {
   PodCalendarDayRow,
@@ -514,6 +516,12 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
 
   const cardDataSearch = boardWindow ? `?${POD_SEASON_PARAM}=${boardWindow.code}` : "";
   const cardDataHref = hasCardData(activeSet) ? `/pods/${activeSet}/data${cardDataSearch}` : null;
+  const finishedChampionship = setCode
+    ? scopeEvents?.find((e) => e.setCode === setCode && e.isFinalized && isChampionshipEvent(e.name))
+    : undefined;
+  const hallOfFameHref = finishedChampionship ? hallOfFameSetHref(finishedChampionship.setCode) : null;
+  const standingsLinks = { cardDataHref, hallOfFameHref };
+  const hasStandingsLinks = Boolean(cardDataHref || hallOfFameHref);
   const cubeCobraHref = setCode ? cubeCobraUrl(setCode) : null;
 
   const { data: archetypeRows } = useAllPodArchetypes();
@@ -563,7 +571,16 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
             scopeSelector={scopeSelector}
             formatSelector={formatSelector}
             windowSelector={windowSelector}
-            cardDataLink={cardDataHref ? <CardDataLink href={cardDataHref} variant="mobile" /> : undefined}
+            cardDataLink={
+              cardDataHref ? (
+                <StandingsLink
+                  href={cardDataHref}
+                  label="VIEW CARD DATA"
+                  icon={<TbListNumbers size={16} />}
+                  variant="mobile"
+                />
+              ) : undefined
+            }
           />
         </div>
       ) : (
@@ -654,7 +671,22 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
               {/* Mobile folds the column header into the sticky chrome, desktop leaves it in the table */}
               {isMobile ? (
                 <div ref={standingsHeadRef} className="sticky z-[9] bg-bg" style={{ top: chromeHeight }}>
-                  <StandingsHeading leaderboard={leaderboard} events={events && played} compact />
+                  <StandingsHeading
+                    leaderboard={leaderboard}
+                    events={events && played}
+                    center={
+                      hallOfFameHref ? (
+                        <StandingsLink
+                          href={hallOfFameHref}
+                          label="HALL OF FAME"
+                          icon={<Crown size={13} />}
+                          variant="heading"
+                          gold
+                        />
+                      ) : undefined
+                    }
+                    compact
+                  />
                   <InsightsStrip
                     colors={() => (
                       <TopColorsCard
@@ -674,7 +706,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
                 <StandingsHeading
                   leaderboard={leaderboard}
                   events={events}
-                  center={cardDataHref ? <CardDataLink href={cardDataHref} variant="center" /> : undefined}
+                  center={hasStandingsLinks ? <StandingsLinks {...standingsLinks} /> : undefined}
                   controls={standingsControls}
                 />
               )}
@@ -1774,15 +1806,47 @@ function CubeListLink({ href }: { href: string }) {
   );
 }
 
-function CardDataLink({ href, variant }: { href: string; variant: "center" | "mobile" }) {
+function StandingsLinks({
+  cardDataHref,
+  hallOfFameHref,
+}: {
+  cardDataHref: string | null;
+  hallOfFameHref: string | null;
+}) {
+  return (
+    <span className="flex items-stretch gap-8">
+      {cardDataHref ? (
+        <StandingsLink href={cardDataHref} label="VIEW CARD DATA" icon={<TbListNumbers size={16} />} variant="center" />
+      ) : null}
+      {hallOfFameHref ? (
+        <StandingsLink href={hallOfFameHref} label="HALL OF FAME" icon={<Crown size={16} />} variant="center" gold />
+      ) : null}
+    </span>
+  );
+}
+
+function StandingsLink({
+  href,
+  label,
+  icon,
+  variant,
+  gold = false,
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  variant: "center" | "heading" | "mobile";
+  gold?: boolean;
+}) {
   if (variant === "mobile") {
     return (
       <Link
         to={href}
-        className="w-full flex items-center justify-center gap-2 border border-green/40 text-green transition-colors hover:bg-green/10 no-underline font-display text-[13px] tracking-[0.14em] leading-none"
+        className="w-full flex items-center justify-center gap-2 border border-green/40 text-green transition-colors
+          hover:bg-green/10 no-underline font-display text-[13px] tracking-[0.14em] leading-none"
       >
-        <TbListNumbers size={16} />
-        VIEW CARD DATA
+        {icon}
+        {label}
         <ArrowRight size={14} className="shrink-0" />
       </Link>
     );
@@ -1790,10 +1854,18 @@ function CardDataLink({ href, variant }: { href: string; variant: "center" | "mo
   return (
     <Link
       to={href}
-      className="group inline-flex items-center gap-2 font-display text-[15px] tracking-[0.14em] leading-none text-subtle transition-colors hover:text-green"
+      className={cn(
+        "group inline-flex items-center gap-2 font-display tracking-[0.14em] leading-none transition-colors",
+        variant === "heading" ? "text-[12px]" : "text-[15px]",
+        gold ? "text-gold hover:text-gold/75" : "text-subtle hover:text-green",
+      )}
     >
-      VIEW CARD DATA
-      <ArrowRight size={14} className="shrink-0 transition-transform group-hover:translate-x-0.5" />
+      {icon}
+      {label}
+      <ArrowRight
+        size={variant === "heading" ? 12 : 14}
+        className="shrink-0 transition-transform group-hover:translate-x-0.5"
+      />
     </Link>
   );
 }

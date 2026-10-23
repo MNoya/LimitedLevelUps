@@ -38,6 +38,11 @@ import {
   fetchPlayerProfile,
   fetchPodDraftArtifact,
   fetchPodEventBySlug,
+  fetchChampionshipEvents,
+  fetchChampionshipRsvps,
+  fetchChampionshipSeeds,
+  fetchFormatBreakdowns,
+  fetchPlayersDraftEvents,
   fetchPodEventMatches,
   fetchPodEventParticipants,
   fetchPodEventReplays,
@@ -626,6 +631,52 @@ export function usePodEventBySlug(slug: string | undefined) {
     queryKey: ["pod-event-by-slug", slug],
     queryFn: () => fetchPodEventBySlug(slug!),
     enabled: !!slug,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function useChampionshipEvents() {
+  return useQuery({
+    queryKey: ["championship-events"],
+    queryFn: fetchChampionshipEvents,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function useChampionshipSeeds(setCode: string | undefined) {
+  return useQuery({
+    queryKey: ["championship-seeds", setCode],
+    queryFn: () => fetchChampionshipSeeds(setCode!),
+    enabled: !!setCode,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function useChampionshipRsvps(eventId: string | undefined) {
+  const oneMinute = 60 * 1000;
+  return useQuery({
+    queryKey: ["championship-rsvps", eventId],
+    queryFn: () => fetchChampionshipRsvps(eventId!),
+    enabled: !!eventId,
+    staleTime: oneMinute,
+    refetchInterval: oneMinute,
+  });
+}
+
+export function useFormatBreakdowns(setCode: string | undefined, slugs: string[]) {
+  return useQuery({
+    queryKey: ["format-breakdowns", setCode, slugs],
+    queryFn: () => fetchFormatBreakdowns(setCode!, slugs),
+    enabled: !!setCode && slugs.length > 0,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function usePlayersDraftEvents(setCode: string | undefined, slugs: string[]) {
+  return useQuery({
+    queryKey: ["players-draft-events", setCode, slugs],
+    queryFn: () => fetchPlayersDraftEvents(setCode!, slugs),
+    enabled: !!setCode && slugs.length > 0,
     staleTime: THIRTY_MINUTES,
   });
 }

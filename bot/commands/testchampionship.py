@@ -54,7 +54,7 @@ from bot.services.pod_signals import (
     named_bucket_key,
     slot_event_time,
 )
-from bot.tasks.championship_post import pin_championship_card
+from bot.tasks.championship_post import draft_champion_congrats, pin_championship_card
 from bot.tasks.pod_daily_poll import PodPollView, build_poll_embed
 from bot.tasks.pod_draft_reminder import build_roster_embed
 from bot.services.pod_swiss import MatchOutcome
@@ -130,6 +130,7 @@ async def setup(bot: commands.Bot) -> None:
             ]
         await _stage(thread, "Posted right after the card")
         await thread.send(embed=build_leaderboard_standings_embed(attendees, timestamp=datetime.now(SCHEDULE_TZ)))
+        await thread.send(cc.follow_standings_line(), allowed_mentions=discord.AllowedMentions.none())
 
         post_url = _card_post_url(thread.guild.id, await asyncio.to_thread(scheduled_card_ref_sync, event_id))
         preview_rsvps = _preview_rsvp_states(names)
@@ -160,6 +161,14 @@ async def setup(bot: commands.Bot) -> None:
         )
         await _thread_send(thread, seeding_file, seeding_embed)
 
+        await _stage(thread, "Posted at the RSVP deadline, 2 PM ET the day before, after every Maybe turns into No")
+        await thread.send(
+            cc.top_eight_locked_body(
+                set_code=plan.set_code, seat_mentions=[f"**@{name}**" for name in names[: championship.SEAT_COUNT]],
+            ),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
         await _stage(thread, "Posted 1 hour before the draft")
         preview_roster = _preview_championship_roster(attendees)
         await thread.send(
@@ -180,6 +189,9 @@ async def setup(bot: commands.Bot) -> None:
             view=build_join_view(preview_session),
             allowed_mentions=discord.AllowedMentions.none(),
         )
+
+        await _stage(channel, "Sent to bot-spam when the champion is crowned, with you standing in as champion")
+        await draft_champion_congrats(ctx.bot, plan.set_code, {str(ctx.author.id)})
 
         await _stage(channel, "Posted on the Daily Pod Launcher, championship day")
         slots = _preview_launcher_slots(plan.set_code, event_at, names, str(thread.id))

@@ -280,7 +280,7 @@ function SeatHeader({
 
   return (
     <header className="shrink-0 flex items-center gap-4 px-4 md:px-5 xl:px-8 py-5 border-b border-border">
-      <AAvatar displayName={participant.discordName} avatarUrl={participant.avatarUrl} size={54} green={isWinner} />
+      <AAvatar displayName={participant.discordName} avatarUrl={participant.avatarUrl} size={88} green={isWinner} />
       <div className="min-w-0 flex-1 flex flex-col gap-2">
         {nameLink}
         {metaRow}

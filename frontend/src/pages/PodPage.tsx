@@ -22,6 +22,7 @@ import {
   StandingsBackBar,
 } from "../components/pod/PodStandings";
 import {
+  useChampionshipEvents,
   usePodDraftArtifact,
   usePodEventBySlug,
   usePodEventMatches,
@@ -32,9 +33,20 @@ import {
 import { resolveDeck } from "../data/draft-artifact";
 import { usePodDecklistAccess } from "../data/podDecklistAccess";
 import { useCardImageMap } from "../data/cardImages";
-import { podDiscordName, podEventTitle, podSeatName } from "../data/utils";
+import { isChampionshipEvent, podDiscordName, podEventTitle, podSeatName } from "../data/utils";
+import { ChampionshipBracket } from "../components/hallOfFame/ChampionshipBracket";
+import { PlayerProfileCard } from "../components/hallOfFame/PlayerProfileCard";
+import { useChampionship } from "../components/hallOfFame/useChampionship";
+import { ChampionshipTabs, ChampionshipTitle, FINISHED_TABS } from "../components/hallOfFame/ChampionshipChrome";
+import {
+  championshipViewHref,
+  HALL_OF_FAME_PATH,
+  type ChampionshipView,
+} from "../data/setChampionship";
+import { TabButton } from "../components/TabButton";
 import type {
   PodEventParticipantRow,
+  PodEventSummary,
   PodSeat,
 } from "../types/leaderboard";
 
@@ -46,6 +58,7 @@ const RAIL_SLIDE_MS = 220;
 const CHROME_OFFSET_LANDSCAPE = 84;
 const PANEL_MIN_WIDTH = 360;
 const PANEL_MIN_WIDTH_LANDSCAPE = 280;
+const NAV_ROW_CLASS = "h-[64px] pt-5 pb-2 grid grid-cols-[1fr_auto_1fr] items-center gap-4 shrink-0";
 
 function assignSeats(rows: PodEventParticipantRow[]): PodSeat[] {
   const haveRealSeats = rows.some((r) => r.seatIndex != null);
@@ -78,8 +91,12 @@ function findSeatByName(seats: PodSeat[], name: string): PodSeat | undefined {
   );
 }
 
-export function PodPage() {
-  const { slug } = useParams<{ slug: string }>();
+export function PodPage({
+  slugOverride,
+  championshipView = "table",
+}: { slugOverride?: string; championshipView?: ChampionshipView } = {}) {
+  const params = useParams<{ slug: string }>();
+  const slug = slugOverride ?? params.slug;
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -91,7 +108,26 @@ export function PodPage() {
   const [highlightedRound, setHighlightedRound] = useState<number | null>(null);
   const [highlightedOutcome, setHighlightedOutcome] = useState<RoundOutcome | null>(null);
   const [animateLayout, setAnimateLayout] = useState(false);
-  const closeDeck = useCloseModal(podSeatHref(slug ?? "", seatParam));
+  const hrefWith = (changes: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === null) {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+    }
+    const query = next.toString();
+    return query ? `${location.pathname}?${query}` : location.pathname;
+  };
+  const switchView = (view: ChampionshipView) => {
+    if (!event) {
+      return;
+    }
+    setAnimateLayout(false);
+    navigate(`${championshipViewHref(event.setCode, view)}${location.search}`);
+  };
+  const closeDeck = useCloseModal(hrefWith({ deck: null, view: null }));
 
   const handleRoundHover = (seat: number | null, round: number | null, outcome: RoundOutcome | null) => {
     setHighlightedSeat(seat);
@@ -113,6 +149,9 @@ export function PodPage() {
   const { data: replays, isLoading: replaysLoading } = usePodEventReplays(eventId);
   const { data: setEvents } = usePodEvents(event?.setCode);
   const decklistAccess = usePodDecklistAccess(event);
+  const isChampionship = event ? isChampionshipEvent(event.name) : false;
+  const championship = useChampionship(isChampionship && event ? event : undefined);
+  const { data: championshipEvents } = useChampionshipEvents();
 
   const seats = useMemo<PodSeat[]>(() => {
     if (!participantRows) return [];
@@ -155,21 +194,28 @@ export function PodPage() {
     return null;
   };
 
-  const { prevSlug, nextSlug } = useMemo(() => {
-    if (!setEvents || !event) return { prevSlug: null, nextSlug: null };
+  const siblingEvents = isChampionship ? championshipEvents : setEvents;
+  const { prevEvent, nextEvent } = useMemo(() => {
+    if (!siblingEvents || !event) return { prevEvent: null, nextEvent: null };
     const nowMs = Date.now();
-    const started = setEvents.filter(
+    const started = siblingEvents.filter(
       (e) => e.championDisplayName || new Date(e.eventTime).getTime() <= nowMs,
     );
     const idx = started.findIndex((e) => e.eventId === event.eventId);
-    if (idx < 0) return { prevSlug: null, nextSlug: null };
+    if (idx < 0) return { prevEvent: null, nextEvent: null };
     return {
-      prevSlug: idx > 0 ? started[idx - 1].slug : null,
-      nextSlug: idx < started.length - 1 ? started[idx + 1].slug : null,
+      prevEvent: idx > 0 ? started[idx - 1] : null,
+      nextEvent: idx < started.length - 1 ? started[idx + 1] : null,
     };
-  }, [setEvents, event]);
-  const prevTo = prevSlug ? `/pods/${prevSlug}` : null;
-  const nextTo = nextSlug ? `/pods/${nextSlug}` : null;
+  }, [siblingEvents, event]);
+  const siblingHref = (sibling: PodEventSummary | null) => {
+    if (!sibling) return null;
+    return isChampionship ? championshipViewHref(sibling.setCode, championshipView) : `/pods/${sibling.slug}`;
+  };
+  const prevTo = siblingHref(prevEvent);
+  const nextTo = siblingHref(nextEvent);
+  const backTo = isChampionship ? HALL_OF_FAME_PATH : "/pods";
+  const backLabel = isChampionship ? "BACK TO HALL OF FAME" : "BACK TO POD DRAFTS";
 
   const chromeOffset = isLandscapePhone ? CHROME_OFFSET_LANDSCAPE : CHROME_OFFSET;
   const panelMinWidth = isLandscapePhone ? PANEL_MIN_WIDTH_LANDSCAPE : PANEL_MIN_WIDTH;
@@ -178,7 +224,7 @@ export function PodPage() {
   const contentRowPad = isLandscapePhone ? "py-1" : "py-2";
   const pageHeader = isLandscapePhone ? (
     <MobilePageHeader
-      backTo="/pods"
+      backTo={backTo}
       prevTo={prevTo}
       nextTo={nextTo}
       prevAriaLabel="Previous pod"
@@ -238,12 +284,15 @@ export function PodPage() {
       return (
         <div className="bg-bg text-text min-h-screen flex flex-col">
           <MobilePageHeader
-            backTo="/pods"
+            backTo={backTo}
             prevTo={null}
             nextTo={null}
             prevAriaLabel="Previous pod"
             nextAriaLabel="Next pod"
           />
+          {isChampionship ? (
+            <ChampionshipViewTabs view={championshipView} onChange={switchView} className="w-full" />
+          ) : null}
           <MobileSeatStackSkeleton
             variant={seatParam || isMock ? "player" : "standings"}
             finalized={event?.isFinalized ?? true}
@@ -257,8 +306,9 @@ export function PodPage() {
         {pageHeader}
         <main className={mainClass}>
           {!isLandscapePhone && (
-            <div className="pt-5 pb-2 flex items-center justify-between gap-4 shrink-0">
-              <BackButton to="/pods" label="BACK TO POD DRAFTS" inline />
+            <div className={NAV_ROW_CLASS}>
+              <BackButton to={backTo} label={backLabel} inline />
+              {isChampionship ? <ChampionshipViewTabs view={championshipView} onChange={switchView} /> : <span />}
             </div>
           )}
           {railOpensOnLoad ? (
@@ -308,8 +358,22 @@ export function PodPage() {
   }
 
   const eventLabel = podEventTitle(event).toUpperCase();
-  const open = selectedParticipant !== null || standingsAvailable;
+  const selectSeatByName = (name: string) => {
+    const seat = seats.find((entry) => entry.displayName === name);
+    if (seat) {
+      navigate(hrefWith({ player: podSeatName(seat) }));
+    }
+  };
+  const openSeatInTable = (name: string) => {
+    const seat = seats.find((entry) => entry.displayName === name);
+    if (seat) {
+      const player = new URLSearchParams({ player: podSeatName(seat) });
+      navigate(`${championshipViewHref(event.setCode, "table")}?${player}`);
+    }
+  };
   const detailOpen = selectedParticipant !== null;
+  const showingTable = !isChampionship || championshipView === "table";
+  const open = showingTable ? detailOpen || standingsAvailable : championshipView === "bracket" && detailOpen;
   const tableMaxPx = open ? TABLE_MAX_SHRUNK : TABLE_MAX_WIDE;
   const loadedMatches = matches ?? [];
   const loadedReplays = replays ?? [];
@@ -353,30 +417,56 @@ export function PodPage() {
     return (
       <div className="bg-bg text-text min-h-screen flex flex-col">
         <MobilePageHeader
-          backTo="/pods"
+          backTo={backTo}
           prevTo={prevTo}
           nextTo={nextTo}
           prevAriaLabel="Previous pod"
           nextAriaLabel="Next pod"
         />
-        <MobileSeatStack
-          participants={seats}
-          participantsBySeatName={participantsBySeatName}
-          matches={loadedMatches}
-          replays={loadedReplays}
-          selectedSeat={selectedSeat}
-          canViewSeat={decklistAccess.canViewSeat}
-          podFinalized={event.isFinalized}
-          eventLabel={eventLabel}
-          setCode={event.setCode}
-          eventSlug={event.slug}
-          hasDraftLog={!!draftArtifact}
-          formatLabel={event.formatLabel}
-          isMock={isMock}
-          standingsAvailable={standingsAvailable}
-          teamDraft={event.isTeamDraft ?? false}
-          standingsActions={standingsActions}
-        />
+        {isChampionship ? (
+          <ChampionshipViewTabs view={championshipView} onChange={switchView} className="w-full" />
+        ) : null}
+        {isChampionship && championshipView === "bracket" ? (
+          <div className="px-3 py-4">
+            <ChampionshipBracket
+              bracket={championship.bracket}
+              champion={championship.champion}
+              byName={championship.byName}
+              showDecks={decklistAccess.canViewAll}
+              onSelect={(name) => openSeatInTable(name)}
+            />
+          </div>
+        ) : isChampionship && championshipView === "top8" ? (
+          <div className="px-3 py-4 flex flex-col gap-3">
+            {championship.players.map((player) => (
+              <PlayerProfileCard
+                key={player.key}
+                player={player}
+                setCode={event.setCode}
+                loading={championship.statsLoading}
+              />
+            ))}
+          </div>
+        ) : (
+          <MobileSeatStack
+            participants={seats}
+            participantsBySeatName={participantsBySeatName}
+            matches={loadedMatches}
+            replays={loadedReplays}
+            selectedSeat={selectedSeat}
+            canViewSeat={decklistAccess.canViewSeat}
+            podFinalized={event.isFinalized}
+            eventLabel={eventLabel}
+            setCode={event.setCode}
+            eventSlug={event.slug}
+            hasDraftLog={!!draftArtifact}
+            formatLabel={event.formatLabel}
+            isMock={isMock}
+            standingsAvailable={standingsAvailable}
+            teamDraft={event.isTeamDraft ?? false}
+            standingsActions={standingsActions}
+          />
+        )}
         {deckModal}
       </div>
     );
@@ -388,14 +478,24 @@ export function PodPage() {
 
       <main className={mainClass}>
         {!isLandscapePhone && (
-          <div className="pt-5 pb-2 flex items-center justify-between gap-4 shrink-0">
-            <BackButton to="/pods" label="BACK TO POD DRAFTS" inline />
-            <PrevNextNav
-              prevTo={prevTo}
-              nextTo={nextTo}
-              prevAriaLabel="Previous pod"
-              nextAriaLabel="Next pod"
-            />
+          <div className={NAV_ROW_CLASS}>
+            <span className="flex items-center gap-4 min-w-0">
+              <BackButton to={backTo} label={backLabel} inline />
+              {isChampionship ? (
+                <span className="flex-1 min-w-0 flex justify-center">
+                  <ChampionshipTitle setCode={event.setCode} label={eventLabel} day={event.eventDate} />
+                </span>
+              ) : null}
+            </span>
+            {isChampionship ? <ChampionshipViewTabs view={championshipView} onChange={switchView} /> : <span />}
+            <span className="justify-self-end">
+              <PrevNextNav
+                prevTo={prevTo}
+                nextTo={nextTo}
+                prevAriaLabel="Previous pod"
+                nextAriaLabel="Next pod"
+              />
+            </span>
           </div>
         )}
 
@@ -407,22 +507,49 @@ export function PodPage() {
               transition: animateLayout ? `width ${ANIMATION_MS}ms ease-out` : "none",
             }}
           >
-            <PodTable
-              participants={seats}
-              selectedSeat={selectedSeat}
-              highlightedSeat={highlightedSeat}
-              highlightedRound={highlightedRound}
-              highlightedOutcome={highlightedOutcome}
-              canViewDeck={decklistAccess.canViewSeat}
-              eventLabel={eventLabel}
-              teamDraft={event.isTeamDraft ?? false}
-              eventSlug={event.slug}
-              hasDraftLog={!!draftArtifact}
-              setCode={event.setCode}
-              formatLabel={event.formatLabel}
-              date={event.eventDate}
-              maxWidth={`min(${tableMaxPx}px, calc(100vh - ${chromeOffset}px))`}
-            />
+            {isChampionship && championshipView === "bracket" ? (
+              <div className="w-full self-stretch flex flex-col items-center">
+                <span className="flex-[1_1_0px]" />
+                <ChampionshipBracket
+                  bracket={championship.bracket}
+                  champion={championship.champion}
+                  byName={championship.byName}
+                  showDecks={decklistAccess.canViewAll && !open}
+                  large={!open}
+                  selected={selectedParticipant?.displayName ?? null}
+                  onSelect={selectSeatByName}
+                />
+                <span className="flex-[1_1_140px]" />
+              </div>
+            ) : isChampionship && championshipView === "top8" ? (
+              <div className="w-full grid grid-cols-[repeat(auto-fill,minmax(420px,1fr))] gap-4 self-start">
+                {championship.players.map((player) => (
+                  <PlayerProfileCard
+                    key={player.key}
+                    player={player}
+                    setCode={event.setCode}
+                    loading={championship.statsLoading}
+                  />
+                ))}
+              </div>
+            ) : (
+              <PodTable
+                participants={seats}
+                selectedSeat={selectedSeat}
+                highlightedSeat={highlightedSeat}
+                highlightedRound={highlightedRound}
+                highlightedOutcome={highlightedOutcome}
+                canViewDeck={decklistAccess.canViewSeat}
+                eventLabel={eventLabel}
+                teamDraft={event.isTeamDraft ?? false}
+                eventSlug={event.slug}
+                hasDraftLog={!!draftArtifact}
+                setCode={event.setCode}
+                formatLabel={event.formatLabel}
+                date={event.eventDate}
+                maxWidth={`min(${tableMaxPx}px, calc(100vh - ${chromeOffset}px))`}
+              />
+            )}
           </div>
           <div
             className="min-w-0 shrink-0 self-start max-h-full flex flex-col min-h-0"
@@ -445,11 +572,17 @@ export function PodPage() {
                       selectedSeat={selectedSeat}
                       onHover={(seat) => handleRoundHover(seat, null, null)}
                       actions={standingsActions}
+                      highlightChampion={isChampionship}
                     />
                   </RailLayer>
                 )}
                 <RailLayer shown={detailOpen || !standingsAvailable} hiddenShift="translate-x-6">
-                  {standingsAvailable && <StandingsBackBar to={podSeatHref(event.slug, null)} />}
+                  {standingsAvailable && (
+                    <StandingsBackBar
+                      to={hrefWith({ player: null })}
+                      label={championshipView === "bracket" ? "BACK TO BRACKET" : "BACK TO STANDINGS"}
+                    />
+                  )}
                   {displayParticipant && (
                     <PlayerSeatPanel
                       key={displayParticipant.displayName}
@@ -482,7 +615,19 @@ export function PodPage() {
   );
 }
 
-const readDeckParams = (params: URLSearchParams, seatParam: string | null) => {
+function ChampionshipViewTabs({
+  view,
+  onChange,
+  className,
+}: {
+  view: ChampionshipView;
+  onChange: (view: ChampionshipView) => void;
+  className?: string;
+}) {
+  return <ChampionshipTabs tabs={FINISHED_TABS} view={view} onChange={onChange} className={className} />;
+}
+
+const readDeckParams =(params: URLSearchParams, seatParam: string | null) => {
   const deck = params.get("deck");
   const poolView = params.get("view") === "pool";
   const legacyTab = deck === "screenshot" || deck === "decklist";

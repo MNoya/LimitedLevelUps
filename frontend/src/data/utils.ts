@@ -356,6 +356,10 @@ const POD_NAME_DATE_RE = new RegExp(`\\s*[-–]?\\s*${POD_DATE_START_RE.source}`
 
 // Plain-string title (medallions, aria): `#15 Early Pod - Table 2` once run, the slot alone upcoming.
 // PodEventTitle renders the styled version. Number is the execution-ordered ordinal, not any baked #N.
+export function isChampionshipEvent(name: string): boolean {
+  return name.toLowerCase().includes("championship");
+}
+
 export function podEventTitle(event: {
   ordinal?: number | null;
   tableIndex?: number;
@@ -364,7 +368,7 @@ export function podEventTitle(event: {
 }): string {
   const slot = podSlotName(event.name, event.setCode);
   const qualifier = podEventQualifier(event);
-  if (event.ordinal != null) {
+  if (event.ordinal != null && !isChampionshipEvent(event.name)) {
     return `#${event.ordinal} ${slot}${qualifier}`;
   }
   return slot;

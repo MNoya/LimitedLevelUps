@@ -362,6 +362,26 @@ def decline_players_sync(event_id: str, discord_ids: Iterable[str]) -> int:
         return len(members)
 
 
+def decline_maybes_sync(event_id: str) -> int:
+    """Turn every Maybe on the pod into No at its RSVP deadline, and say how many moved"""
+    with SessionLocal() as session:
+        signal = session.execute(
+            select(PodSignal).where(PodSignal.event_id == event_id)
+        ).scalar_one_or_none()
+        if signal is None:
+            return 0
+        maybes = session.execute(
+            select(PodSignalMember).where(
+                PodSignalMember.signal_id == signal.id,
+                PodSignalMember.rsvp == RSVP_MAYBE,
+            )
+        ).scalars().all()
+        for member in maybes:
+            member.rsvp = RSVP_NO
+        session.commit()
+        return len(maybes)
+
+
 CLASH_WINDOW_MINUTES = 120
 
 

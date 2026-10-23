@@ -602,7 +602,7 @@ function PlayerCell({
   );
 }
 
-function TrophyCell({
+export function TrophyCell({
   trophies,
   compact,
   large = false,
@@ -638,7 +638,7 @@ function TrophyCell({
   );
 }
 
-function ScoreCell({ score, large, unranked }: { score: number; large?: boolean; unranked?: boolean }) {
+export function ScoreCell({ score, large, unranked }: { score: number; large?: boolean; unranked?: boolean }) {
   if (unranked) {
     return <span className="font-num text-right text-[13px] text-dim">—</span>;
   }

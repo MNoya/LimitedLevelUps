@@ -30,6 +30,8 @@ _ALLOWED_VIEWS = {
     "public_pod_calendar",
     "public_pod_card_stats",
     "public_pod_card_decks",
+    "public_pod_championship_rsvps",
+    "public_pod_championship_seeds",
     "public_cube_seasons",
     "public_cube_season_breakdown",
     "public_cube_season_events",

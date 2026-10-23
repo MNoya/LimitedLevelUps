@@ -1190,6 +1190,7 @@ def _champion_announcement_preview(guild, event_name: str, records) -> discord.u
         guild_id=1,
         thread_id=1,
         champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
+        set_code=active_set_code(),
     )
 
 
@@ -1206,6 +1207,7 @@ def _champion_hype_preview(guild) -> discord.ui.LayoutView:
         guild_id=1,
         thread_id=1,
         champion_mention=champion_role_mention(find_role(guild, SET_CHAMPION_ROLE_NAME)),
+        set_code=active_set_code(),
     )
 
 

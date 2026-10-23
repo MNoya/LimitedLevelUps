@@ -11,6 +11,9 @@ import { LeaderboardPage } from "./pages/LeaderboardPage";
 import { PlayerPage } from "./pages/PlayerPage";
 import { PodDraftsPage, PodsRoute } from "./pages/PodDraftsPage";
 import { PodGuidePage } from "./pages/PodGuidePage";
+import { HallOfFamePage } from "./pages/HallOfFamePage";
+import { HallOfFameSetPage } from "./pages/HallOfFameSetPage";
+import { HALL_OF_FAME_PATH } from "./data/setChampionship";
 import { PodDraftLogRoute } from "./pages/PodPage";
 import { AboutPage } from "./pages/AboutPage";
 import { TierListPage } from "./pages/TierListPage";
@@ -76,6 +79,9 @@ export function App() {
 
         {/* Static /pods/guide ranks above /pods/:slug; declared first for readers */}
         <Route path="/pods/guide" element={<PodGuidePage />} />
+        <Route path={HALL_OF_FAME_PATH} element={<HallOfFamePage />} />
+        <Route path={`${HALL_OF_FAME_PATH}/:setCode`} element={<HallOfFameSetPage />} />
+        <Route path={`${HALL_OF_FAME_PATH}/:setCode/:view`} element={<HallOfFameSetPage />} />
 
         {/* Both render PodsRoute so moving between them reconciles instead of remounting the page */}
         <Route path="/pods" element={<PodsRoute />} />

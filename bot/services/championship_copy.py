@@ -19,6 +19,7 @@ from bot.services.championship import INVITE_WAVE_TIERS
 from bot.services.containers import build_container
 from bot.services.mock_lobby_card import set_symbol_url
 from bot.services.ping_roles import SYNTHETIC_CHAMPION_TAG, pod_champion_glyph
+from bot.services.pod_drafts import hall_of_fame_url
 from bot.services.pod_reminder_copy import LOBBY_ARENA_NAME
 from bot.services.pod_signals import RSVP_EMOJI
 
@@ -59,6 +60,7 @@ def card_content(
     return (
         f"{_closing_lines(set_name, champion_mention)}\n\n"
         f"📊 **Standings:** [limitedlevelups.com/leaderboard](<{standings_url(set_code)}>)\n"
+        f"🎖️ **Hall of Fame:** [limitedlevelups.com/hall-of-fame](<{hall_of_fame_url()}>)\n"
         f"📺 **Streamed live:** [twitch.tv/GatoDelFuego](<{TWITCH_URL}>)\n\n"
         "**How it works**\n"
         "• RSVP here if you can make it. The eight highest-ranked players who show up take the seats, "
@@ -72,13 +74,40 @@ def lobby_open_body(*, set_code: str, draftmancer_url: str, seat_mentions: Seque
     """The lobby post for a championship: its own headline over the seated players in seed order, so the one
     ping the event sends both opens the lobby and says who is playing. Alternates are not pinged, so the list
     is the table. Mention tokens are passed in, letting the preview show the shape without pinging anyone."""
-    seats = "\n".join(f"{seat}. {mention}" for seat, mention in enumerate(seat_mentions, 1))
     return (
-        f"👑 **{set_code} Set Championship** is now live!\n\n"
+        f"👑 **{set_code} Set Championship** is now live!\n"
+        f"{MSG_FOLLOW_BRACKET.format(url=hall_of_fame_url(set_code, 'bracket'))}\n\n"
         f"**Join the Draftmancer session:** <{draftmancer_url}>\n\n"
         f"{LOBBY_ARENA_NAME}\n\n"
-        f"**Your seats**\n{seats}"
+        f"**Your seats**\n{_numbered_seats(seat_mentions)}"
     )
+
+
+MSG_FOLLOW_STANDINGS = "See the standings, the RSVPs and the projected Top 8 on [**limitedlevelups.com**](<{url}>)"
+MSG_FOLLOW_BRACKET = "Follow the bracket live on [**the Hall of Fame**](<{url}>)"
+
+
+def follow_standings_line() -> str:
+    return MSG_FOLLOW_STANDINGS.format(url=hall_of_fame_url())
+
+
+def champion_congrats_draft(*, champion_role: str, champion: str, set_title: str) -> str:
+    return (
+        f"Congrats to our new {champion_role} {champion} 🎉\n"
+        f"Joins the [**Hall of Fame**](<{hall_of_fame_url()}>) as {set_title}"
+    )
+
+
+def champion_congrats_draft_note(*, set_code: str, draft: str) -> str:
+    return f"Draft for the coordination channel, {set_code} Set Championship:\n```\n{draft}\n```"
+
+
+def top_eight_locked_body(*, set_code: str, seat_mentions: Sequence[str]) -> str:
+    return f"**{set_code} Set Championship Pod:**\n{_numbered_seats(seat_mentions)}"
+
+
+def _numbered_seats(seat_mentions: Sequence[str]) -> str:
+    return "\n".join(f"{seat}. {mention}" for seat, mention in enumerate(seat_mentions, 1))
 
 
 def native_event_body(*, set_name: str, set_code: str, champion_mention: str) -> str:
@@ -88,6 +117,7 @@ def native_event_body(*, set_name: str, set_code: str, champion_mention: str) ->
     return (
         f"{_closing_lines(set_name, champion_mention)}\n\n"
         f"📊 **Standings:** {bare_url(standings_url(set_code))}\n"
+        f"🎖️ **Hall of Fame:** {bare_url(hall_of_fame_url())}\n"
         f"📺 **Streamed live:** {bare_url(TWITCH_URL)}"
     )
 

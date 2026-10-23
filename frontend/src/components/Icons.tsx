@@ -26,7 +26,11 @@ import {
   Trophy as LR_Trophy,
 } from "lucide-react";
 import { MdPause as R_MdPause, MdVideoLibrary as R_MdVideoLibrary } from "react-icons/md";
-import { TbCards as R_TbCards, TbListNumbers as R_TbListNumbers } from "react-icons/tb";
+import {
+  TbCards as R_TbCards,
+  TbListNumbers as R_TbListNumbers,
+  TbQuestionMark as R_TbQuestionMark,
+} from "react-icons/tb";
 import { LuScrollText as R_LuScrollText } from "react-icons/lu";
 import {
   GiArcheryTarget as R_GiArcheryTarget,
@@ -101,6 +105,7 @@ export function Play({ size = 24, className, ...rest }: { size?: number } & Reac
 }
 export const MdVideoLibrary = withShrink(R_MdVideoLibrary);
 export const TbCards = withShrink(R_TbCards);
+export const TbQuestionMark = withShrink(R_TbQuestionMark);
 export const TbListNumbers = withShrink(R_TbListNumbers);
 export const LuScrollText = withShrink(R_LuScrollText);
 export const GiCardPick = withShrink(R_GiCardPick);

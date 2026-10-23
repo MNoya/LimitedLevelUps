@@ -24,6 +24,23 @@ export const FMT_COLORS: Record<string, string> = {
 
 export const FMT_DEFAULT_COLOR = "#5c8aff";
 
+export const COLOR_STROKES: Record<string, string> = {
+  W: "#f0f2c0",
+  U: "#b5cde3",
+  B: "#aca29a",
+  R: "#db8664",
+  G: "#93b483",
+};
+
+export function comboColors(combo: string): string[] {
+  const out: string[] = [];
+  for (const c of combo) {
+    const hex = COLOR_STROKES[c];
+    if (hex) out.push(hex);
+  }
+  return out.length > 0 ? out : ["#7a8395"];
+}
+
 const FORMAT_SHORT: Record<string, string> = {
   PremierDraft: "PREMIER",
   ContenderDraft: "CONTENDER",

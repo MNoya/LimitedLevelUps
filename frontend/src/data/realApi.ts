@@ -52,6 +52,8 @@ import type {
   PodDraftArtifact,
   PodEventMatchRow,
   PodEventParticipantRow,
+  PodChampionshipRsvpRow,
+  PodChampionshipSeedRow,
   PodEventReplayRow,
   PodEventSummary,
   PodLeaderboardRow,
@@ -1167,44 +1169,15 @@ export async function fetchPlayerProfile(
   } else {
     headline = trophyOnlyHeadline(slug, setCode, trophyRows[0]);
   }
-  const breakdown = (breakdownResp.data ?? []).map((r) =>
-    adaptFormatBreakdown(r as Record<string, unknown>),
+  const podRow = podResp.data ? podBreakdownRow(setCode, slug, podResp.data as Record<string, unknown>) : null;
+  const breakdown = scoredBreakdown(
+    (breakdownResp.data ?? []).map((r) => adaptFormatBreakdown(r as Record<string, unknown>)),
+    podRow,
   );
-  // scoreContribution is aggregate-dependent (one confidence over total trophies), so it
-  // can't be computed per row — derive each row's share from the full breakdown here.
-  const agg = aggregate(groupTotalsFromBreakdown(breakdown));
-  for (const b of breakdown) {
-    b.scoreContribution = Math.round((agg.contributionByLabel.get(b.formatLabel) ?? 0) * 100) / 100;
-  }
-  // Pods score flat (no weight/rate/confidence) — append as its own breakdown row
-  let podTrophies = 0;
-  let podEvents = 0;
-  let podWins = 0;
-  let podLosses = 0;
-  if (podResp.data) {
-    const p = podResp.data as Record<string, unknown>;
-    podTrophies = (p.trophies as number) ?? 0;
-    podEvents = (p.events as number) ?? 0;
-    podWins = (p.wins as number) ?? 0;
-    podLosses = (p.losses as number) ?? 0;
-    const twoWins = (p.two_win_finishes as number) ?? 0;
-    const oneWins = (p.one_win_finishes as number) ?? 0;
-    const pts = podPoints(podTrophies, twoWins, oneWins);
-    if (pts > 0) {
-      breakdown.push({
-        setCode,
-        slug,
-        formatLabel: "Pod",
-        events: podEvents,
-        wins: podWins,
-        losses: podLosses,
-        trophies: podTrophies,
-        twoWins,
-        oneWins,
-        scoreContribution: pts,
-      });
-    }
-  }
+  const podTrophies = podRow?.trophies ?? 0;
+  const podEvents = podRow?.events ?? 0;
+  const podWins = podRow?.wins ?? 0;
+  const podLosses = podRow?.losses ?? 0;
   // podOnlyHeadline already carries the pod totals, so only fold pods in on top of the 17lands row
   const foldPods = Boolean(headlineResp.data);
   const board = await fetchLeaderboard(setCode);
@@ -1224,6 +1197,35 @@ export async function fetchPlayerProfile(
     lastCalculatedAt: headline.lastCalculatedAt || undefined,
     formatBreakdown: breakdown,
     selfReportedEvents: trophyRows.map((r) => adaptSelfReportedEvent(r)),
+  };
+}
+
+function scoredBreakdown(breakdown: PlayerFormatBreakdown[], podRow: PlayerFormatBreakdown | null) {
+  const agg = aggregate(groupTotalsFromBreakdown(breakdown));
+  for (const b of breakdown) {
+    b.scoreContribution = Math.round((agg.contributionByLabel.get(b.formatLabel) ?? 0) * 100) / 100;
+  }
+  if (podRow && podRow.scoreContribution > 0) {
+    breakdown.push(podRow);
+  }
+  return breakdown;
+}
+
+function podBreakdownRow(setCode: string, slug: string, row: Record<string, unknown>): PlayerFormatBreakdown {
+  const trophies = (row.trophies as number) ?? 0;
+  const twoWins = (row.two_win_finishes as number) ?? 0;
+  const oneWins = (row.one_win_finishes as number) ?? 0;
+  return {
+    setCode,
+    slug,
+    formatLabel: "Pod",
+    events: (row.events as number) ?? 0,
+    wins: (row.wins as number) ?? 0,
+    losses: (row.losses as number) ?? 0,
+    trophies,
+    twoWins,
+    oneWins,
+    scoreContribution: podPoints(trophies, twoWins, oneWins),
   };
 }
 
@@ -1767,6 +1769,71 @@ export async function fetchAllPodEvents(): Promise<PodEventSummary[]> {
   return rows.map((r) => adaptPodEvent(r));
 }
 
+export async function fetchFormatBreakdowns(setCode: string, slugs: string[]): Promise<PlayerFormatBreakdown[]> {
+  if (slugs.length === 0) {
+    return [];
+  }
+  const [breakdownResp, podResp] = await Promise.all([
+    client().from("public_player_format_breakdown").select("*").eq("set_code", setCode).in("slug", slugs),
+    client().from("public_pod_scoring").select("*").eq("set_code", setCode).in("slug", slugs),
+  ]);
+  if (breakdownResp.error) throw breakdownResp.error;
+  if (podResp.error) throw podResp.error;
+  const rows = (breakdownResp.data ?? []).map((r) => adaptFormatBreakdown(r as Record<string, unknown>));
+  const podRows = (podResp.data ?? []) as Record<string, unknown>[];
+  return slugs.flatMap((slug) => {
+    const podRow = podRows.find((row) => row.slug === slug);
+    return scoredBreakdown(
+      rows.filter((row) => row.slug === slug),
+      podRow ? podBreakdownRow(setCode, slug, podRow) : null,
+    );
+  });
+}
+
+export async function fetchPlayersDraftEvents(setCode: string, slugs: string[]): Promise<PlayerDraftEvent[]> {
+  if (slugs.length === 0) {
+    return [];
+  }
+  const rows = await pagedRows<Record<string, unknown>>((from, to) =>
+    client()
+      .from(eventsViewFor(setCode))
+      .select(DRAFT_EVENT_COLUMNS)
+      .eq("set_code", setCode)
+      .in("slug", slugs)
+      .range(from, to),
+  );
+  return rows.map((row) => adaptDraftEvent(row));
+}
+
+export async function fetchChampionshipEvents(): Promise<PodEventSummary[]> {
+  const { data, error } = await client()
+    .from("public_pod_draft_events")
+    .select("*")
+    .ilike("name", "%championship%")
+    .order("event_time", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => adaptPodEvent(r as Record<string, unknown>));
+}
+
+export async function fetchChampionshipSeeds(setCode: string): Promise<PodChampionshipSeedRow[]> {
+  const { data, error } = await client()
+    .from("public_pod_championship_seeds")
+    .select("*")
+    .eq("set_code", setCode)
+    .order("rank");
+  if (error) throw error;
+  return (data ?? []).map((r) => adaptChampionshipSeed(r as Record<string, unknown>));
+}
+
+export async function fetchChampionshipRsvps(eventId: string): Promise<PodChampionshipRsvpRow[]> {
+  const { data, error } = await client()
+    .from("public_pod_championship_rsvps")
+    .select("*")
+    .eq("event_id", eventId);
+  if (error) throw error;
+  return (data ?? []).map((r) => adaptChampionshipRsvp(r as Record<string, unknown>));
+}
+
 export async function fetchPodEventParticipants(
   eventId: string,
 ): Promise<PodEventParticipantRow[]> {
@@ -2161,6 +2228,34 @@ function adaptPodEventParticipant(row: Record<string, unknown>): PodEventPartici
     playerSlug: (row.player_slug ?? null) as string | null,
     playerDisplayName: (row.player_display_name ?? null) as string | null,
     avatarUrl: (row.avatar_url ?? null) as string | null,
+  };
+}
+
+function adaptChampionshipSeed(row: Record<string, unknown>): PodChampionshipSeedRow {
+  return {
+    eventId: row.event_id as string,
+    setCode: row.set_code as string,
+    eventTime: row.event_time as string,
+    rank: row.rank as number,
+    displayName: row.display_name as string,
+    playerSlug: (row.player_slug ?? null) as string | null,
+    avatarUrl: (row.avatar_url ?? null) as string | null,
+    score: Number(row.score ?? 0),
+    trophies: (row.trophies ?? null) as number | null,
+    wildcard: (row.wildcard ?? false) as boolean,
+    frozenAt: row.frozen_at as string,
+  };
+}
+
+function adaptChampionshipRsvp(row: Record<string, unknown>): PodChampionshipRsvpRow {
+  return {
+    eventId: row.event_id as string,
+    displayName: row.display_name as string,
+    playerSlug: (row.player_slug ?? null) as string | null,
+    avatarUrl: (row.avatar_url ?? null) as string | null,
+    rsvp: row.rsvp as PodChampionshipRsvpRow["rsvp"],
+    confirmed: (row.confirmed ?? false) as boolean,
+    answeredAt: row.answered_at as string,
   };
 }
 

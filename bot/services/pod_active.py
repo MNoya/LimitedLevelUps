@@ -41,6 +41,7 @@ _POD_DRAFTING_HOOK = None
 _POD_COMPLETE_HOOK = None
 _POD_CARD_HOOK = None
 _PODIUM_POSTED_HOOK = None
+_CHAMPIONSHIP_CROWNED_HOOK = None
 _RSVP_ROSTER_HOOK = None
 
 
@@ -71,6 +72,11 @@ def set_podium_posted_hook(callback) -> None:
     memory and nothing about it is stored."""
     global _PODIUM_POSTED_HOOK
     _PODIUM_POSTED_HOOK = callback
+
+
+def set_championship_crowned_hook(callback) -> None:
+    global _CHAMPIONSHIP_CROWNED_HOOK
+    _CHAMPIONSHIP_CROWNED_HOOK = callback
 
 
 def set_pod_card_hook(callback) -> None:
@@ -128,6 +134,11 @@ def notify_podium_posted(bot, event_id: str, jump_url: str | None) -> None:
     """Release the pod's Play Again prompt now that its podium post is up (no-op if unset)."""
     if _PODIUM_POSTED_HOOK is not None:
         asyncio.create_task(_PODIUM_POSTED_HOOK(bot, event_id, jump_url))
+
+
+def notify_championship_crowned(bot, set_code: str, champion_discord_ids: set[str]) -> None:
+    if _CHAMPIONSHIP_CROWNED_HOOK is not None:
+        asyncio.create_task(_CHAMPIONSHIP_CROWNED_HOOK(bot, set_code, champion_discord_ids))
 
 
 def active_manager_for_channel(channel_id: int | None):

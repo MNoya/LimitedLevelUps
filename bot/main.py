@@ -147,7 +147,7 @@ from bot.services.pod_format_vote import (
 )
 from bot.tasks.set_awards_post import init_set_awards_schedule
 from bot.tasks.watch_party_post import init_watch_party
-from bot.tasks.championship_post import init_championship_schedule
+from bot.tasks.championship_post import init_championship_schedule, rearm_deadline
 from bot.tasks.p0p1_reminder_post import init_p0p1_reminder
 from bot.tasks.p0p1_ceremony_post import init_p0p1_ceremony
 from bot.tasks.fantasy_sync_tick import init_fantasy_sync
@@ -712,6 +712,7 @@ def build_bot(guild_id: int) -> commands.Bot:
                 await fire_schedule_post()
                 await fire_format_vote_tick()
             await reconcile_unannounced_championships(bot)
+            await rearm_deadline(bot)
             try:
                 await reconcile_ping_roles(bot)
             except Exception:

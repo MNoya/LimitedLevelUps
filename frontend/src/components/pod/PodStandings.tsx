@@ -47,6 +47,7 @@ export function PodStandings({
   selectedSeat,
   onHover,
   actions,
+  highlightChampion = false,
 }: {
   seats: PodSeat[];
   teamDraft?: boolean;
@@ -54,6 +55,7 @@ export function PodStandings({
   selectedSeat: number | null;
   onHover?: (seat: number | null) => void;
   actions: PodStandingsActions;
+  highlightChampion?: boolean;
 }) {
   const row = (seat: PodSeat, rank: number | null, cols?: string) => {
     const viewable = actions.canViewSeat(seat.avatarUrl);
@@ -65,6 +67,7 @@ export function PodStandings({
         rank={rank}
         cols={cols}
         selected={seat.seatIndex === selectedSeat}
+        champion={highlightChampion && finalized && rank === 1}
         rowHref={podSeatHref(actions.eventSlug, seat.discordName)}
         deckHref={hasDeck ? podDeckHref(actions.eventSlug, null, seat.discordName) : null}
         logHref={actions.hasDraftLog && viewable ? podDraftLogHref(actions.eventSlug, seat) : null}
@@ -129,7 +132,7 @@ const BAR_LABEL_SIZE = 16;
 const CHEVRON_SLOT = 22;
 const CHEVRON_INSET = "pl-[22px]";
 
-export function StandingsBackBar({ to }: { to: string }) {
+export function StandingsBackBar({ to, label = "BACK TO STANDINGS" }: { to: string; label?: string }) {
   return (
     <Link
       to={to}
@@ -143,7 +146,7 @@ export function StandingsBackBar({ to }: { to: string }) {
     >
       <ChevronLeft size={16} className="shrink-0" />
       <span className={cn(BAR_LABEL, "ml-1.5")} style={{ fontSize: BAR_LABEL_SIZE }}>
-        BACK TO STANDINGS
+        {label}
       </span>
     </Link>
   );

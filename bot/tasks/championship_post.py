@@ -17,17 +17,20 @@ import discord
 from discord.ext import commands
 
 from bot.commands.pod_draft import build_leaderboard_standings_embed, refresh_seeding_table
-from bot.commands.pod_rsvp import build_championship_wave_view, post_scheduled_card
+from bot.commands.pod_rsvp import build_championship_wave_view, post_scheduled_card, refresh_event_rsvp_surfaces
 from bot.config import settings
 from bot.discord_helpers import pin_quietly, run_detached
 from bot.services import championship
 from bot.services import championship_copy as cc
 from bot.services import pod_launch
+from bot.services.pod_active import set_championship_crowned_hook
+from bot.services.pod_confirm import decline_maybes_sync
 from bot.services.pod_drafts import is_championship
 from bot.services.ping_roles import (
     SET_CHAMPION_ROLE_NAME,
     champion_role_mention,
     ensure_set_champion_title,
+    set_champion_title_name,
 )
 from bot.services.pod_roles import find_role
 from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
@@ -37,12 +40,14 @@ log = logging.getLogger(__name__)
 _bot: commands.Bot | None = None
 
 WAVE_OFFSETS_MIN: tuple[int, ...] = (10, 120, 240)
+DEADLINE_LEAD = timedelta(days=1)
 SEEDING_TALLY_OFFSET_MIN = WAVE_OFFSETS_MIN[-1] + 60
 
 
 def init_championship_schedule(bot: commands.Bot) -> None:
     global _bot
     _bot = bot
+    set_championship_crowned_hook(draft_champion_congrats)
     bot.pod_scheduler.add_job(
         fire_championship_tick, "cron", hour=championship.CREATION_HOUR_ET, minute=0,
         timezone=SCHEDULE_TZ, id="championship-create", replace_existing=True,
@@ -104,7 +109,9 @@ async def create_championship(bot: commands.Bot, plan: championship.Championship
     thread = await _resolve_thread(bot, event_id)
     if thread is not None:
         await _post_thread_seeding(thread, event_id, plan.set_code, plan.event_at)
+        await _send_quietly(thread, cc.follow_standings_line())
     _arm_waves(bot, event_id, datetime.now(SCHEDULE_TZ))
+    arm_deadline(bot, event_id, plan.event_at)
     run_detached(pin_championship_card(channel, event_id), label="championship card pin")
     return event_id
 
@@ -168,6 +175,86 @@ def _arm_waves(bot: commands.Bot, event_id: str, created_at: datetime) -> None:
         fire_seeding_tally_job, "date", run_date=created_at + timedelta(minutes=SEEDING_TALLY_OFFSET_MIN),
         args=[event_id], id=f"championship-tally-{event_id}", replace_existing=True,
     )
+
+
+def arm_deadline(bot: commands.Bot, event_id: str, event_at: datetime) -> None:
+    """Schedule the RSVP deadline a day before the event, when Maybe answers turn into No and the Top 8 is
+    posted. A deadline already past is left alone, so a restart never reposts the Top 8."""
+    deadline = event_at - DEADLINE_LEAD
+    if deadline <= datetime.now(deadline.tzinfo):
+        return
+    bot.pod_scheduler.add_job(
+        fire_deadline_job, "date", run_date=deadline, args=[event_id],
+        id=f"championship-deadline-{event_id}", replace_existing=True,
+    )
+    log.info(f"armed championship RSVP deadline for {event_id} at {deadline.isoformat()}")
+
+
+async def rearm_deadline(bot: commands.Bot) -> None:
+    """Re-arm the active set's deadline after a restart, since the scheduler keeps no jobs on disk"""
+    plan = championship.plan_for(datetime.now(SCHEDULE_TZ))
+    if plan is None:
+        return
+    existing = await asyncio.to_thread(championship.event_for_set_sync, plan.set_code)
+    if existing is not None:
+        event_id, event_at = existing
+        arm_deadline(bot, event_id, event_at)
+
+
+async def fire_deadline_job(event_id: str) -> None:
+    if _bot is None:
+        return
+    await lock_top_eight(_bot, event_id)
+
+
+async def lock_top_eight(bot: commands.Bot, event_id: str) -> None:
+    """Turn every Maybe into No, repaint the card and seeding table, then post the seated eight in the thread"""
+    declined = await asyncio.to_thread(decline_maybes_sync, event_id)
+    log.info(f"championship deadline for {event_id}: {declined} Maybe answers turned into No")
+    await refresh_event_rsvp_surfaces(bot, event_id)
+    await refresh_seeding_table(bot, event_id)
+    meta = await asyncio.to_thread(championship.event_meta_sync, event_id)
+    thread = await _resolve_thread(bot, event_id)
+    if meta is None or thread is None:
+        return
+    set_code, _ = meta
+    roster = await asyncio.to_thread(pod_launch.roster_for_event_sync, event_id)
+    seated = await asyncio.to_thread(championship.playing_roster_sync, event_id, roster)
+    body = cc.top_eight_locked_body(set_code=set_code, seat_mentions=[f"<@{discord_id}>" for discord_id, _ in seated])
+    try:
+        await thread.send(content=body, allowed_mentions=discord.AllowedMentions(users=True))
+    except discord.HTTPException:
+        log.warning(f"championship: could not post the Top 8 in thread {thread.id}", exc_info=True)
+
+
+async def draft_champion_congrats(bot: commands.Bot, set_code: str, champion_discord_ids: set[str]) -> None:
+    channel = bot.get_channel(settings.pod_draft_channel_id)
+    if not isinstance(channel, discord.TextChannel):
+        log.warning(f"championship {set_code}: coordination channel unresolved, congrats draft skipped")
+        return
+    guild = channel.guild
+    role_mention = _role_mention(guild, SET_CHAMPION_ROLE_NAME)
+    title_mention = _role_mention(guild, set_champion_title_name(set_code))
+    for discord_id in sorted(champion_discord_ids):
+        draft = cc.champion_congrats_draft(
+            champion_role=role_mention, champion=f"<@{discord_id}>", set_title=title_mention,
+        )
+        await bot.bot_log.post_plain(
+            cc.champion_congrats_draft_note(set_code=set_code, draft=draft),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+
+def _role_mention(guild: discord.Guild, role_name: str) -> str:
+    role = find_role(guild, role_name)
+    return role.mention if role else f"@{role_name}"
+
+
+async def _send_quietly(thread: discord.Thread, content: str) -> None:
+    try:
+        await thread.send(content=content, allowed_mentions=discord.AllowedMentions.none())
+    except discord.HTTPException:
+        log.warning(f"championship: could not post in thread {thread.id}", exc_info=True)
 
 
 async def fire_wave_job(event_id: str, wave_index: int) -> None:

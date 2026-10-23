@@ -338,6 +338,24 @@ def test_confirming_a_split_table_drops_the_player_from_its_sibling(session):
     assert (on_pod_one, on_pod_two) == (0, 1)
 
 
+def test_deadline_turns_every_maybe_into_no(session, monkeypatch):
+    monkeypatch.setattr(pod_confirm, "SessionLocal", _session_factory(session))
+    event = _split_sibling(session, "👑 HOB Set Championship", datetime.now(timezone.utc), message_id="555")
+    signal = session.query(PodSignal).filter(PodSignal.event_id == event.id).one()
+    answers = {"u1": pod_signals.RSVP_YES, "u2": pod_signals.RSVP_MAYBE, "u3": pod_signals.RSVP_MAYBE}
+    for user_id, rsvp in answers.items():
+        session.add(PodSignalMember(signal_id=signal.id, discord_user_id=user_id, display_name=user_id, rsvp=rsvp))
+    session.flush()
+
+    declined = pod_confirm.decline_maybes_sync(event.id)
+
+    members = session.query(PodSignalMember).filter(PodSignalMember.signal_id == signal.id).all()
+    assert declined == 2
+    assert {member.discord_user_id: member.rsvp for member in members} == {
+        "u1": pod_signals.RSVP_YES, "u2": pod_signals.RSVP_NO, "u3": pod_signals.RSVP_NO,
+    }
+
+
 def _split_sibling(session, name: str, start: datetime, *, message_id: str) -> PodDraftEvent:
     event = PodDraftEvent(
         name=name, set_code="HOB", discord_thread_id=message_id,

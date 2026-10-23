@@ -885,6 +885,13 @@ def pod_page_url(event_name: str) -> str:
     return f"{settings.public_site_url.rstrip('/')}/pods/{slugify(event_name)}"
 
 
+def hall_of_fame_url(set_code: str | None = None, view: str = "") -> str:
+    page = f"{settings.public_site_url.rstrip('/')}/hall-of-fame"
+    if set_code:
+        page = f"{page}/{set_code.upper()}"
+    return f"{page}/{view}" if view else page
+
+
 def update_event_format(session: Session, event_id: str, code: str) -> str | None:
     """Repoint a pre-draft pod event's set_code, set_id and format label, swapping the leading set
     token in its name to match. Returns the (possibly renamed) event name, or None if missing or
