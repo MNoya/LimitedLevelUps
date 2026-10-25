@@ -35,6 +35,12 @@ import { categoryFromSlug, episodeSlugBase } from "../frontend/src/data/episodes
 import { cubeForBoard, cubeVariantForBoard } from "../frontend/src/data/cubeVariants";
 import { CUBE_LIFETIME, isCubeSeasonCode, stripDiscriminator } from "../frontend/src/data/utils";
 import { POD_SEASON_PARAM, podSeasons } from "../frontend/src/data/podSeasons";
+import {
+  POD_DRAFTS_DESCRIPTION,
+  POD_DRAFTS_TITLE,
+  POD_GUIDE_DESCRIPTION,
+  POD_GUIDE_TITLE,
+} from "../frontend/src/data/podPageMeta";
 import { skeletonsFor } from "../frontend/src/data/skeletons";
 import { scryfallWebp } from "../frontend/src/data/scryfallImage";
 import {
@@ -44,6 +50,14 @@ import {
   restRows,
   toSetSummary,
 } from "./_shared/public-data";
+import {
+  type PodEventSummary,
+  communityCrawlHtml,
+  crawlArticle,
+  homeCrawlHtml,
+  podCrawlHtml,
+  podEventCrawlHtml,
+} from "./_shared/crawl-text";
 
 const EPISODE_CATEGORY_DESCRIPTIONS: Record<string, string> = {
   "Set Review": "Card-by-card set reviews and first impressions for MTG limited",
@@ -96,6 +110,7 @@ type RouteMeta = {
   description: string | null;
   image: ImageIntent;
   noImagePreview?: boolean;
+  crawlHtml?: string;
 };
 
 const page = (label: string, description: string | null, image: ImageIntent = null): RouteMeta => ({
@@ -222,7 +237,8 @@ export const onRequest: PagesFunction = async (context) => {
   if (context.request.method !== "GET") return context.next();
 
   const lastSegment = url.pathname.split("/").pop() ?? "";
-  if (lastSegment.includes(".") || url.pathname.startsWith("/api/")) return context.next();
+  if (url.pathname.startsWith("/api/")) return context.next();
+  if (lastSegment.includes(".")) return missingFileAsNotFound(await context.next(), lastSegment);
 
   const userAgent = context.request.headers.get("user-agent") ?? "";
   const segments = url.pathname.split("/").filter(Boolean);
@@ -273,6 +289,12 @@ export const onRequest: PagesFunction = async (context) => {
     });
   }
 
+  const { crawlHtml } = meta;
+  if (crawlHtml) {
+    const article = crawlArticle(crawlHtml);
+    rewriter = rewriter.on("div#root", { element: (el) => el.setInnerContent(article, { html: true }) });
+  }
+
   if (route.notFound) {
     rewriter = rewriter.on("head", {
       element: (el) => el.append('<meta name="robots" content="noindex">', { html: true }),
@@ -291,6 +313,14 @@ export const onRequest: PagesFunction = async (context) => {
   }
 
   return rewriter.transform(baseResponse);
+};
+
+const missingFileAsNotFound = (response: Response, fileName: string): Response => {
+  const servedSpaShell = response.headers.get("content-type")?.startsWith("text/html") ?? false;
+  if (!servedSpaShell || fileName.endsWith(".html")) {
+    return response;
+  }
+  return new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
 };
 
 const isLinkPreviewCrawler = (userAgent: string): boolean =>
@@ -315,7 +345,7 @@ const resolveRoute = async (
   wantsCardMeta: boolean,
 ): Promise<RouteResolution> => {
   if (segments.length === 0) {
-    return resolved({ ...HOME_META, noImagePreview: true }, "/");
+    return resolved({ ...HOME_META, noImagePreview: true, crawlHtml: homeCrawlHtml() }, "/");
   }
   const legacyPath = legacyRedirectPath(segments);
   if (legacyPath) {
@@ -365,7 +395,8 @@ const resolveRoute = async (
     return resolved(page("Trophy Mage", "Can you guess which decks trophied?", trophyArt), trophyPath);
   }
   if (section === "community") {
-    return resolved(page("Community", "Learn about us, the show and the community behind it"), "/community");
+    const communityMeta = page("Community", "Learn about us, the show and the community behind it");
+    return resolved({ ...communityMeta, crawlHtml: communityCrawlHtml() }, "/community");
   }
   return resolved({ ...HOME_META, description: null }, `/${section}`);
 };
@@ -554,17 +585,22 @@ const podsRoute = async (
 ): Promise<RouteResolution> => {
   const [first, second, third] = rest;
   if (first === undefined) {
-    return resolved(page("Pod Drafts", "Check community pod draft results and standings"), "/pods");
+    return resolved(podCrawlMeta(POD_DRAFTS_TITLE, POD_DRAFTS_DESCRIPTION), "/pods");
   }
   if (second?.toLowerCase() === "data" && rest.length <= 3) {
     const requestedSeason = wantsCardMeta ? searchParams.get(POD_SEASON_PARAM) : null;
     return podCardDataRoute(first.toUpperCase(), third, requestedSeason, wantsCardMeta);
   }
   if (rest.length === 1 && first.toLowerCase() === "guide") {
-    return resolved(page("Pod Drafts Guide", "How to play on our community Pod Drafts"), "/pods/guide");
+    return resolved(podCrawlMeta(POD_GUIDE_TITLE, POD_GUIDE_DESCRIPTION), "/pods/guide");
   }
   return podSlugRoute(first, rest.slice(1));
 };
+
+const podCrawlMeta = (title: string, description: string): RouteMeta => ({
+  ...page(title, description),
+  crawlHtml: podCrawlHtml(title),
+});
 
 const podCardDataRoute = async (
   board: string,
@@ -639,10 +675,14 @@ const podSlugRoute = async (rawSlug: string, tail: string[]): Promise<RouteResol
   const split = rawSlug.lastIndexOf("-");
   const boardQuery = (setCode: string) =>
     `public_pod_draft_events?select=set_code,format_label&set_code=ilike.${queryValue(setCode)}`;
+  const eventFields = [
+    "slug", "name", "set_code", "event_date", "format_label", "total_rounds", "participant_count", "is_team_draft",
+    "is_finalized", "champion_player_slug", "champion_display_name", "champion_record",
+  ].join(",");
   const [sets, boards, events, windowBoards] = await Promise.all([
     fetchSets(),
     viewRows<PodBoardRow>(`${boardQuery(rawSlug)}&order=format_label.nullslast&limit=1`),
-    viewRows<{ slug: string }>(`public_pod_draft_events?select=slug&slug=ilike.${queryValue(rawSlug)}&limit=1`),
+    viewRows<PodEventRow>(`public_pod_draft_events?select=${eventFields}&slug=ilike.${queryValue(rawSlug)}&limit=1`),
     split > 0 ? viewRows<PodBoardRow>(`${boardQuery(rawSlug.slice(0, split))}&limit=1`) : [],
   ]);
   const meta = podSlugMeta(rawSlug, sets, boards?.[0]?.format_label ?? null);
@@ -664,10 +704,46 @@ const podSlugRoute = async (rawSlug: string, tail: string[]): Promise<RouteResol
     return resolved(meta, `/pods/${rawSlug.toLowerCase()}`);
   }
   if (event) {
-    return resolved(meta, `/pods/${event.slug}`);
+    return resolved({ ...meta, crawlHtml: podEventCrawlHtml(podEventSummary(event, sets)) }, `/pods/${event.slug}`);
   }
   const lookupFailed = sets === null || boards === null || events === null || windowBoards === null;
   return resolved(meta, `/pods/${rawSlug}`, !lookupFailed);
+};
+
+type PodEventRow = {
+  slug: string;
+  name: string;
+  set_code: string;
+  event_date: string;
+  format_label: string | null;
+  total_rounds: number;
+  participant_count: number;
+  is_team_draft: boolean;
+  is_finalized: boolean;
+  champion_player_slug: string | null;
+  champion_display_name: string | null;
+  champion_record: string | null;
+};
+
+const podEventSummary = (event: PodEventRow, sets: SetRow[] | null): PodEventSummary => {
+  const setName = sets?.find((set) => set.code === event.set_code)?.name;
+  const date = new Date(`${event.event_date}T12:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return {
+    name: event.name,
+    formatName: event.format_label ?? setName ?? event.set_code,
+    date,
+    playerCount: event.participant_count,
+    rounds: event.total_rounds,
+    isTeamDraft: event.is_team_draft,
+    championName: event.is_finalized ? event.champion_display_name : null,
+    championSlug: event.is_finalized ? event.champion_player_slug : null,
+    championRecord: event.champion_record,
+  };
 };
 
 const podSlugMeta = (rawSlug: string, sets: SetRow[] | null, formatLabel: string | null): RouteMeta => {

@@ -45,6 +45,21 @@ export const DISCORD_BLURB =
   "improve your drafting, discuss formats, share your latest trophies, or just chat with other Limited enthusiasts, " +
   "you'll find a welcoming group of players here.";
 
+export const COMMUNITY_DISCORD_HEADING = "A home for Limited players";
+
+export const COMMUNITY_INTRO_PARAGRAPHS = [
+  SITE_BLURB_PARAGRAPHS[0],
+  "Whether you're looking to get your first trophy, sharpen your fundamentals, or compete at the highest level, " +
+    "you'll find a community of Limited enthusiasts ready to help you level up your game.",
+];
+
+export const COMMUNITY_SHOW_PARAGRAPHS = [
+  "Every set covered from start to finish: first impressions as previews drop, a complete set review, then " +
+    "metagame updates as it develops.",
+  "Other episodes range from focused deck breakdowns to evergreen lessons on gameplay and big picture strategy " +
+    "that stay relevant from one format to the next.",
+];
+
 export interface Host {
   name: string;
   handle: string;

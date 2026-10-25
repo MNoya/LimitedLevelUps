@@ -5,16 +5,14 @@ import { Container } from "../components/Container";
 import { ChamferCta } from "../components/ChamferCta";
 import { DiscordIcon } from "../components/BrandIcons";
 import { CommunityHeading, HostBlock, EventCard, SectionPanel, ShowTopics, SupportCard } from "../components/CommunityBits";
+import { COMMUNITY_EVENTS, COMMUNITY_HIGHLIGHTS, COMMUNITY_SHOW_TOPICS, useCommunityStats } from "../data/community";
 import {
   COMMUNITY_DISCORD_HEADING,
-  COMMUNITY_EVENTS,
-  COMMUNITY_HIGHLIGHTS,
   COMMUNITY_INTRO_PARAGRAPHS,
   COMMUNITY_SHOW_PARAGRAPHS,
-  COMMUNITY_SHOW_TOPICS,
-  useCommunityStats,
-} from "../data/community";
-import { HOSTS, SITE_LINKS } from "../data/site";
+  HOSTS,
+  SITE_LINKS,
+} from "../data/site";
 
 export function CommunityPage() {
   const { members, online } = useCommunityStats();

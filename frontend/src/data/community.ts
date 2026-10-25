@@ -15,17 +15,9 @@ import { FaYoutube } from "react-icons/fa";
 import { POD_DRAFT_CHANNEL_NAME, POD_DRAFT_CHANNEL_URL } from "./site";
 import { categorySlug, type EpisodeCategory } from "./episodes";
 import { useDiscordStats } from "./hooks";
-import { DISCORD_BLURB, SITE_BLURB_PARAGRAPHS } from "./site";
+import { DISCORD_BLURB } from "./site";
 
 export const COMMUNITY_DISCORD_PITCH = DISCORD_BLURB.replace("The Limited Level-Ups Discord is a ", "A ");
-
-export const COMMUNITY_DISCORD_HEADING = "A home for Limited players";
-
-export const COMMUNITY_INTRO_PARAGRAPHS = [
-  SITE_BLURB_PARAGRAPHS[0],
-  "Whether you're looking to get your first trophy, sharpen your fundamentals, or compete at the highest level, " +
-    "you'll find a community of Limited enthusiasts ready to help you level up your game.",
-];
 
 export interface CommunityHighlight {
   Icon: LucideIcon;
@@ -37,13 +29,6 @@ export const COMMUNITY_HIGHLIGHTS: CommunityHighlight[] = [
   { Icon: TrendingUp, text: "Get help with deckbuilding, picks, and gameplay" },
   { Icon: Rocket, text: "Play in community organized events" },
   { Icon: Trophy, text: "Connect with dedicated Limited players" },
-];
-
-export const COMMUNITY_SHOW_PARAGRAPHS = [
-  "Every set covered from start to finish: first impressions as previews drop, a complete set review, then " +
-    "metagame updates as it develops.",
-  "Other episodes range from focused deck breakdowns to evergreen lessons on gameplay and big picture strategy " +
-    "that stay relevant from one format to the next.",
 ];
 
 export const COMMUNITY_SUPPORT_NOTE =
