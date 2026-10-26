@@ -132,8 +132,12 @@ export function useGameDay<Pick, Round extends { eventId: string }>(
     });
   const goTo = (index: number) => setDay((d) => ({ ...d, current: index }));
   const advance = () => setDay((d) => ({ ...d, advanced: d.advanced + 1, current: d.advanced + 1 }));
-  const finish = () => setDay((d) => ({ ...d, advanced: rounds.length }));
+  const finish = () => setDay((d) => ({ ...d, advanced: finishedAdvance(rules, rounds) }));
   return { day, setDraft, lockIn, goTo, advance, finish };
+}
+
+function finishedAdvance(rules: { roundsPerDay: number }, rounds: unknown[]): number {
+  return Math.max(rounds.length, rules.roundsPerDay);
 }
 
 function readMatchingDay<Pick, Round extends { eventId: string }>(
@@ -152,7 +156,8 @@ function readMatchingDay<Pick, Round extends { eventId: string }>(
       return emptyDay();
     }
   }
-  return saved;
+  const finishedShortDay = rounds.length > 0 && saved.advanced >= rounds.length;
+  return finishedShortDay ? { ...saved, advanced: finishedAdvance(rules, rounds) } : saved;
 }
 
 function emptyDay<Pick>(): GameDay<Pick> {
