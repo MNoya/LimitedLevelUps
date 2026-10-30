@@ -415,7 +415,7 @@ class PodDraftManager:
         self.pairing_mode = "swiss"              # resolved in start_tournament; see pod_pairing_select.PAIRING_MODES
         self.seating_mode = "random"             # 'random', 'manual', or 'leaderboard'; hydrated on connect
         self._bots_pushed: int | None = None
-        self.pick_timer = settings.mock_draft_pick_timer if kind == "mock" else settings.pod_draft_pick_timer
+        self.pick_timer = pod_event_settings.standard_pick_timer(mock=kind == "mock")
         self.picks_per_pack = settings.pod_draft_picks_per_pack
         self.max_players = settings.pod_draft_max_players
         self.packs_per_player: int | None = None

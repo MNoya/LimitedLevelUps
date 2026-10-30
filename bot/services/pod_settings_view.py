@@ -20,6 +20,7 @@ from bot.services.pod_format import (
     default_pick_timer_for, format_change_message, settings_change_message, settings_notice_marker,
     settings_notice_markers,
 )
+from bot.services.pod_event_settings import standard_pick_timer
 from bot.services.pod_notices import send_settings_notice
 from bot.services.pod_drafts import is_championship
 from bot.services.pod_registration_embed import update_registered_embed
@@ -370,7 +371,8 @@ class PodSettingsView(ui.View):
         together. No-op when the timer control is absent or already at the target."""
         if self.on_timer is None:
             return None
-        target = default_pick_timer_for(self.current_code, standard=settings.pod_draft_pick_timer)
+        standard = standard_pick_timer(mock=self.mock)
+        target = default_pick_timer_for(self.current_code, standard=standard)
         if target == self.current_timer:
             return None
         err = await self.on_timer(interaction, str(target))

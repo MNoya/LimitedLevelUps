@@ -12,6 +12,7 @@ in either order.
 
 A camera react (📸 or 📷) on an image post forces that image as the poster's deck screenshot and
 re-renders an already posted podium with it, plus the trophy-hype card when that poster is on it.
+Until the bot restarts, the poster's later images no longer replace it; only another camera react does.
 
 On capture we re-run the championship trigger — swiss or team, live manager or the recovery
 shim once finalize has evicted it — so a late screenshot completing the showcase decks posts
@@ -56,6 +57,7 @@ CAMERA_EMOJIS = {"📸", "📷"}
 class PodScreenshotListener(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        self.camera_picked_decks: set[tuple[str, str]] = set()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
@@ -75,6 +77,9 @@ class PodScreenshotListener(commands.Cog):
 
         thread_id = str(message.channel.id)
         discord_id = str(message.author.id)
+        if (thread_id, discord_id) in self.camera_picked_decks:
+            log.info(f"[DECK] screenshot.camera_picked_ignored thread={thread_id} discord_id={discord_id}")
+            return
         caption = message_caption(message)
         if caption is None and _is_pod_thread(message.channel):
             caption = await self._nearby_caption_before(message)
@@ -97,7 +102,7 @@ class PodScreenshotListener(commands.Cog):
                 channel = await self.bot.fetch_channel(payload.channel_id)
             except discord.HTTPException:
                 return
-        if not _is_pod_thread(channel):
+        if not isinstance(channel, discord.Thread):
             return
         try:
             reacted = await channel.fetch_message(payload.message_id)
@@ -115,6 +120,7 @@ class PodScreenshotListener(commands.Cog):
         event_id = await asyncio.to_thread(_capture_sync, thread_id, discord_id, image_url, caption, force=True)
         if event_id is None:
             return
+        self.camera_picked_decks.add((thread_id, discord_id))
         log.info(f"[DECK] camera_react_override event={event_id} discord_id={discord_id} by={payload.user_id}")
         await self._post_capture(event_id, discord_id, thread_id, reacted)
         run_detached(refresh_posted_podium(self.bot, event_id, thread_id), "podium refresh")

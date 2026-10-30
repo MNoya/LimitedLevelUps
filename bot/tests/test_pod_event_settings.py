@@ -58,3 +58,16 @@ def test_a_roster_wider_than_a_table_opens_its_room_at_the_seats_one_session_hol
     stored = pod_event_settings.load_sync(event.id)
 
     assert stored[pod_event_settings.MAX_PLAYERS] == seats
+
+
+@pytest.mark.parametrize("kind, timer", [
+    ("tournament", settings.pod_draft_pick_timer),
+    ("mock", settings.mock_draft_pick_timer),
+])
+def test_an_unset_pick_timer_loads_the_default_for_the_pod_kind(event, session, kind, timer):
+    event.kind = kind
+    session.commit()
+
+    stored = pod_event_settings.load_sync(event.id)
+
+    assert stored[pod_event_settings.PICK_TIMER] == timer

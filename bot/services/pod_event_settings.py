@@ -25,11 +25,11 @@ PACKS_PER_PLAYER = "packs_per_player"
 CARDS_PER_PACK = "cards_per_pack"
 
 
-def defaults() -> dict[str, int | None]:
+def defaults(kind: str | None = None) -> dict[str, int | None]:
     """A pod nobody has configured. The pack shape defaults to nothing so a set keeps its own collation
     and an imported cube keeps the numbers its list carries."""
     return {
-        PICK_TIMER: settings.pod_draft_pick_timer,
+        PICK_TIMER: standard_pick_timer(mock=kind == "mock"),
         PICKS_PER_PACK: settings.pod_draft_picks_per_pack,
         PICKS_SET_BY_USER: False,
         MAX_PLAYERS: settings.pod_draft_max_players,
@@ -38,8 +38,18 @@ def defaults() -> dict[str, int | None]:
     }
 
 
+def standard_pick_timer(*, mock: bool) -> int:
+    return settings.mock_draft_pick_timer if mock else settings.pod_draft_pick_timer
+
+
 def load_sync(event_id: str) -> dict[str, int | None]:
-    return {**defaults(), **stored_sync(event_id)}
+    with SessionLocal() as session:
+        row = session.execute(
+            select(PodDraftEvent.kind, PodDraftEvent.settings).where(PodDraftEvent.id == event_id)
+        ).one_or_none()
+    if row is None:
+        return defaults()
+    return {**defaults(row.kind), **(row.settings or {})}
 
 
 def stored_sync(event_id: str) -> dict[str, int | None]:
