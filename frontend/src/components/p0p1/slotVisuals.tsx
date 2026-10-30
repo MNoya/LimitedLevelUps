@@ -1,5 +1,5 @@
 import { Pip } from "../ManaPips";
-import { keyruneClass } from "../Brand";
+import { BespokeSetGlyph, hasBespokeGlyph, keyruneClass } from "../Brand";
 import type { SlotKey } from "../../types/p0p1";
 
 type Color = "W" | "U" | "B" | "R" | "G";
@@ -60,11 +60,16 @@ export function SlotPip({ slotKey, size = 15, setCode = "" }: { slotKey: SlotKey
   if (slotKey === "multicolor_uncommon") {
     return <i className="ms ms-multicolor ms-duo ms-duo-color ms-grad" style={{ fontSize: size, lineHeight: 1 }} />;
   }
+  const isWildcard = slotKey === "wildcard_common";
+  const isRare = slotKey === "best_card";
+  if (hasBespokeGlyph(setCode)) {
+    const tierFill = isRare ? RARE_GLYPH_GRADIENT : UNCOMMON_GLYPH_GRADIENT;
+    return <BespokeSetGlyph code={setCode} size={size} fill={isWildcard ? "#fff" : tierFill} />;
+  }
   const setSymbol = `ss ss-${keyruneClass(setCode)}`;
-  if (slotKey === "wildcard_common") {
+  if (isWildcard) {
     return <i className={setSymbol} style={{ fontSize: size, color: "#fff", lineHeight: 1 }} />;
   }
-  const isRare = slotKey === "best_card";
   return (
     <i
       className={`${setSymbol} ${isRare ? "ss-mythic" : "ss-uncommon"} ss-grad`}

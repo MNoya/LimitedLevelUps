@@ -222,6 +222,14 @@ export function RaritySetGlyph({ code, rarity, size }: { code: string; rarity: R
   );
 }
 
+export function hasBespokeGlyph(code: string): boolean {
+  return code in BESPOKE_GLYPHS;
+}
+
+export function BespokeSetGlyph({ code, size, fill }: { code: string; size: number; fill: string }) {
+  return <BespokeGlyphMark glyph={BESPOKE_GLYPHS[code]} size={size} className="block shrink-0" fill={fill} />;
+}
+
 export function SetGlyph({ code, size = 18, className = "text-white" }: { code: string; size?: number | string; className?: string }) {
   const glyph = glyphSpec(code);
   const fontSize = typeof size === "number" ? size * glyph.scale : `calc(${size} * ${glyph.scale})`;

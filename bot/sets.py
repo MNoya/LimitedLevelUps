@@ -422,6 +422,7 @@ PREVIEW_WINDOWS: tuple[PreviewWindow, ...] = (
     PreviewWindow("MSH", date(2026, 6, 2), date(2026, 6, 8)),
     PreviewWindow("HOB", date(2026, 7, 18), date(2026, 7, 31)),
     PreviewWindow("FRA", date(2026, 9, 1), date(2026, 9, 18)),
+    PreviewWindow("TRK", date(2026, 10, 20), date(2026, 10, 30)),
 )
 
 

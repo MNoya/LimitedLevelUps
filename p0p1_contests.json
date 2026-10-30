@@ -1,4 +1,20 @@
 {
+  "TRK": {
+    "name": "Star Trek",
+    "release": "2026-11-10T17:00:00Z",
+    "previewsOpen": "2026-10-30T15:40:40Z",
+    "votingDeadline": "2026-11-04T17:00:00Z",
+    "scoringDate": "2026-12-08T17:00:00Z",
+    "layout": 2
+  },
+  "FRA": {
+    "name": "Reality Fracture",
+    "release": "2026-09-29T16:00:00Z",
+    "previewsOpen": "2026-09-18T16:00:00Z",
+    "votingDeadline": "2026-09-23T16:00:00Z",
+    "scoringDate": "2026-10-21T16:00:00Z",
+    "layout": 2
+  },
   "HOB": {
     "name": "The Hobbit",
     "release": "2026-08-11T16:00:00Z",
@@ -14,13 +30,5 @@
     "votingDeadline": "2026-06-23T15:00:00Z",
     "scoringDate": "2026-07-21T16:00:00Z",
     "layout": 1
-  },
-  "FRA": {
-    "name": "Reality Fracture",
-    "release": "2026-09-29T16:00:00Z",
-    "previewsOpen": "2026-09-18T16:00:00Z",
-    "votingDeadline": "2026-09-23T16:00:00Z",
-    "scoringDate": "2026-10-21T16:00:00Z",
-    "layout": 2
   }
 }
