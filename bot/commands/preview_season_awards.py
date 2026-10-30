@@ -126,7 +126,7 @@ def build_awards_view(data: AwardsData, reveal: int | None = None, scanned_pct: 
         ("### 👍 Voted Most Acceptable", "Playable", data.acceptable),
         ("### 🤔 The Jury is Still Out", "Ask Again in Two Weeks", data.jury),
         ("### 🗑️ Last-Pick Material", "Leave in the Sideboard", data.trash),
-        ("### ⭐ Flavor Win", "The Eyes Have It", data.flavor),
+        ("### ⭐ Flavor Win", "Save the Whales", data.flavor),
     )
     awarded_rows = [(heading, tagline, winner) for heading, tagline, winner in rows if winner is not None]
     if scanned_pct is not None:
