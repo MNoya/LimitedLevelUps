@@ -9,6 +9,7 @@ import { EpisodesPage } from "./pages/EpisodesPage";
 import { CommunityPage } from "./pages/CommunityPage";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
 import { PlayerPage } from "./pages/PlayerPage";
+import { MyProfilePage } from "./pages/MyProfilePage";
 import { PodDraftsPage, PodsRoute } from "./pages/PodDraftsPage";
 import { PodGuidePage } from "./pages/PodGuidePage";
 import { HallOfFamePage } from "./pages/HallOfFamePage";
@@ -68,6 +69,7 @@ export function App() {
         <Route path="/leaderboard/about" element={<AboutPage />} />
         <Route path="/leaderboard/:setCode" element={<LeaderboardPage />} />
 
+        <Route path="/player/profile" element={<MyProfilePage />} />
         <Route path="/player/:slug" element={<PlayerPage />} />
         <Route path="/player/:slug/:setCode" element={<PlayerPage />} />
         <Route path="/player/:slug/:setCode/:trackerTab" element={<PlayerPage />} />

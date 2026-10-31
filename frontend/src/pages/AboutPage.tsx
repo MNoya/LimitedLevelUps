@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AppHeader } from "../components/AppHeader";
+import { Cmd } from "../components/Cmd";
 import { Footer } from "../components/Footer";
 import { ScoringExplainer } from "../components/ScoringExplainer";
 
@@ -33,8 +34,8 @@ function Intro() {
         <ExternalLink href={SEVENTEEN_LANDS_URL}>17Lands</ExternalLink> data.
       </p>
       <p className="text-[13px] md:text-[14px] text-muted leading-[1.6] mt-2">
-        Use <Cmd>/opt-out</Cmd> to hide your rank, keeping your profile and stats. Use <Cmd>/retire</Cmd>{" "}
-        to hide everything until you come back.
+        Use <Cmd>/opt-out</Cmd> to hide your rank, keeping your profile and stats. Use <Cmd>/retire</Cmd> to hide
+        everything until you come back.
       </p>
     </section>
   );
@@ -56,9 +57,7 @@ function Feedback() {
 
 function SectionHeading({ children }: { children: ReactNode }) {
   return (
-    <h2 className="font-display text-[16px] md:text-[18px] text-text tracking-[0.18em] mb-3 md:mb-4">
-      {children}
-    </h2>
+    <h2 className="font-display text-[16px] md:text-[18px] text-text tracking-[0.18em] mb-3 md:mb-4">{children}</h2>
   );
 }
 
@@ -69,14 +68,6 @@ function Rule() {
       <span className="flex-1 h-px bg-border block" />
       <span className="w-1 h-1 bg-dim rotate-45 inline-block" />
     </div>
-  );
-}
-
-function Cmd({ children }: { children: ReactNode }) {
-  return (
-    <code className="font-mono text-text bg-surface2 border border-border2 px-1.5 py-px text-[13px] whitespace-nowrap">
-      {children}
-    </code>
   );
 }
 

@@ -1,6 +1,8 @@
 from datetime import date, datetime, timezone
 
-from bot.sets import SetSeed, prerelease_date_for, prereleased_sets, set_code_for_event
+import pytest
+
+from bot.sets import SetSeed, newest_playable_set_code, prerelease_date_for, set_code_for_event
 
 
 def test_prerelease_date_falls_back_to_the_friday_before_the_arena_release():
@@ -11,12 +13,16 @@ def test_prerelease_date_falls_back_to_the_friday_before_the_arena_release():
     assert prerelease_date_for(derived) == date(2026, 8, 7)
 
 
-def test_a_set_becomes_selectable_at_midnight_et_on_its_prerelease_date():
-    eve = datetime(2026, 8, 7, 3, 0, tzinfo=timezone.utc)
-    prerelease_morning = datetime(2026, 8, 7, 5, 0, tzinfo=timezone.utc)
+@pytest.mark.parametrize("when, expected", [
+    (datetime(2026, 8, 5, 3, 0, tzinfo=timezone.utc), "MSH"),
+    (datetime(2026, 8, 5, 5, 0, tzinfo=timezone.utc), "HOB"),
+    (datetime(2026, 8, 20, 12, 0, tzinfo=timezone.utc), "HOB"),
+    (datetime(2025, 10, 25, 12, 0, tzinfo=timezone.utc), "SPM"),
+])
+def test_trophy_default_moves_to_the_new_set_at_midnight_et_on_the_wednesday_of_its_prerelease_week(when, expected):
+    code = newest_playable_set_code(when)
 
-    assert "HOB" not in {seed.code for seed in prereleased_sets(eve)}
-    assert prereleased_sets(prerelease_morning)[0].code == "HOB"
+    assert code == expected
 
 
 def test_chaos_expansion_routes_only_events_from_the_2026_event_on():

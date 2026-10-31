@@ -43,13 +43,7 @@ import {
 } from "../frontend/src/data/podPageMeta";
 import { skeletonsFor } from "../frontend/src/data/skeletons";
 import { scryfallWebp } from "../frontend/src/data/scryfallImage";
-import {
-  SET_ROWS_QUERY,
-  type SetRow,
-  restGet,
-  restRows,
-  toSetSummary,
-} from "./_shared/public-data";
+import { SET_ROWS_QUERY, type SetRow, restGet, restRows, toSetSummary } from "./_shared/public-data";
 import {
   type PodEventSummary,
   communityCrawlHtml,
@@ -76,7 +70,8 @@ const TRANSCRIPT_READ_DESCRIPTION = "Read this episode";
 
 const LEADERBOARD_DESCRIPTION =
   "Check ranks and trophies from the community. /join on Discord to share your drafts and climb the leaderboard";
-const HOME_DESCRIPTION = "Weekly episodes, set reviews, strategy and community events. Join the Discord and climb the leaderboard.";
+const HOME_DESCRIPTION =
+  "Weekly episodes, set reviews, strategy and community events. Join the Discord and climb the leaderboard.";
 
 const P0P1_PICK_SENTENCE = "Pick a team of eight cards you think will perform best from the upcoming set.";
 
@@ -89,9 +84,10 @@ const p0p1Meta = (contest: FeaturedContest | null, now: number): RouteMeta => {
 
   let description = P0P1_PICK_SENTENCE;
   if (now > contest.votingDeadline.getTime()) {
-    description = now < contest.scoringDate.getTime()
-      ? `${P0P1_PICK_SENTENCE} Preliminary data now available!`
-      : `${P0P1_PICK_SENTENCE} Final standings now available!`;
+    description =
+      now < contest.scoringDate.getTime()
+        ? `${P0P1_PICK_SENTENCE} Preliminary data now available!`
+        : `${P0P1_PICK_SENTENCE} Final standings now available!`;
   }
   return page("P0P1 Challenge", description, { kind: "setSymbol", code: contest.code });
 };
@@ -121,7 +117,13 @@ const page = (label: string, description: string | null, image: ImageIntent = nu
   image,
 });
 
-const HOME_META: RouteMeta = { ogTitle: SITE, tabTitle: SITE, siteName: null, description: HOME_DESCRIPTION, image: null };
+const HOME_META: RouteMeta = {
+  ogTitle: SITE,
+  tabTitle: SITE,
+  siteName: null,
+  description: HOME_DESCRIPTION,
+  image: null,
+};
 
 const slugToName = (slug: string): string => slug.replace(/-/g, " ");
 
@@ -176,9 +178,21 @@ const episodeSlugMeta = async (slug: string): Promise<RouteMeta | null> => {
 const EPISODE_SUMMARY_MAX = 300;
 const EPISODE_SUMMARY_MIN = 12;
 const EPISODE_BOILERPLATE_MARKERS = [
-  "http://", "https://", "bit.ly", "limited level-ups patreon", "llu patreon", "llu tierlist",
-  "tierlist:", "limited level-ups discord", "llu discord", "alex's stream", "alex's coaching",
-  "limited level-ups podcast", "untappedgg", "set primer playlist", "set review playlist",
+  "http://",
+  "https://",
+  "bit.ly",
+  "limited level-ups patreon",
+  "llu patreon",
+  "llu tierlist",
+  "tierlist:",
+  "limited level-ups discord",
+  "llu discord",
+  "alex's stream",
+  "alex's coaching",
+  "limited level-ups podcast",
+  "untappedgg",
+  "set primer playlist",
+  "set review playlist",
 ];
 const EPISODE_TRAILING_LABEL = /\s+[A-Za-z][A-Za-z'\- ]{0,40}:$/;
 const EPISODE_TRAILING_TAGS = /(?:\s+#\S+)+$/;
@@ -357,6 +371,9 @@ const resolveRoute = async (
   const section = segments[0].toLowerCase();
   const rest = segments.slice(1);
 
+  if (section === "player" && rest.length === 1 && rest[0].toLowerCase() === "profile") {
+    return resolved(page("Your Profile", "Your decks and results on Limited Level-Ups"), "/player/profile");
+  }
   if (section === "player") {
     return playerRoute(rest[0], rest[1]);
   }
@@ -502,16 +519,19 @@ const leaderboardRoute = async (rawCode: string | undefined): Promise<RouteResol
   // "Cube" / "Cube SOS" / the cube's own name, resolving the symbol from the base CUBE set.
   const baseCode = setCode.startsWith("CUBE-") ? "CUBE" : setCode;
   const variant = cubeVariantForBoard(setCode);
-  const label = setCode === "CUBE" ? "Cube"
-    : variant ? variant.name
-    : setCode.startsWith("CUBE-") ? `Cube ${setCode.slice("CUBE-".length)}`
-    : setCode;
+  const label =
+    setCode === "CUBE"
+      ? "Cube"
+      : variant
+        ? variant.name
+        : setCode.startsWith("CUBE-")
+          ? `Cube ${setCode.slice("CUBE-".length)}`
+          : setCode;
   const setName = variant?.name ?? setNameFor(sets, baseCode);
-  const meta = page(
-    `${label} Leaderboard`,
-    `Check ${setName} ranks and trophies on the leaderboard`,
-    { kind: "setSymbol", code: baseCode },
-  );
+  const meta = page(`${label} Leaderboard`, `Check ${setName} ranks and trophies on the leaderboard`, {
+    kind: "setSymbol",
+    code: baseCode,
+  });
   const boardExists = await leaderboardBoardExists(setCode, sets);
   return resolved(meta, `/leaderboard/${setCode}`, boardExists === false);
 };
@@ -676,8 +696,18 @@ const podSlugRoute = async (rawSlug: string, tail: string[]): Promise<RouteResol
   const boardQuery = (setCode: string) =>
     `public_pod_draft_events?select=set_code,format_label&set_code=ilike.${queryValue(setCode)}`;
   const eventFields = [
-    "slug", "name", "set_code", "event_date", "format_label", "total_rounds", "participant_count", "is_team_draft",
-    "is_finalized", "champion_player_slug", "champion_display_name", "champion_record",
+    "slug",
+    "name",
+    "set_code",
+    "event_date",
+    "format_label",
+    "total_rounds",
+    "participant_count",
+    "is_team_draft",
+    "is_finalized",
+    "champion_player_slug",
+    "champion_display_name",
+    "champion_record",
   ].join(",");
   const [sets, boards, events, windowBoards] = await Promise.all([
     fetchSets(),
@@ -793,11 +823,10 @@ const hallOfFameRoute = async (rawCode: string | undefined, view: string | undef
   const day = calendar?.[0]?.day ?? null;
   const exists = setName !== null && (event !== undefined || day !== null);
   const lookupFailed = sets === null || events === null || calendar === null;
-  const meta = page(
-    `${code} Set Championship`,
-    setName ? championshipDescription(setName, event, day) : null,
-    { kind: "setSymbol", code },
-  );
+  const meta = page(`${code} Set Championship`, setName ? championshipDescription(setName, event, day) : null, {
+    kind: "setSymbol",
+    code,
+  });
   return resolved(meta, canonicalPath, !knownTab || (!exists && !lookupFailed));
 };
 
@@ -860,11 +889,10 @@ const episodesMeta = async (rest: string[]): Promise<RouteMeta> => {
   const setCode = slug.toUpperCase();
   const setName = await fetchEpisodeSetName(setCode);
   if (setName) {
-    return page(
-      `${setCode} Episodes`,
-      `Episodes, set reviews and draft guides for ${setName}`,
-      { kind: "setSymbol", code: setCode },
-    );
+    return page(`${setCode} Episodes`, `Episodes, set reviews and draft guides for ${setName}`, {
+      kind: "setSymbol",
+      code: setCode,
+    });
   }
   const episodeMeta = await episodeSlugMeta(slug);
   return episodeMeta ?? page(titleCaseSlug(slug, new Set()), EPISODE_WATCH_FALLBACK);

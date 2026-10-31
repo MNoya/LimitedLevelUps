@@ -1,13 +1,4 @@
-"""/trophy — log a draft result posted in trophy-hype to your profile.
-
-Showcase only, never scored. Trophies and non-trophy decks both log; a trophy flag is guessed
-from the record and the player can flip it, and only trophies rank the MTGO flashback board.
-Record, colors, and set are read from the post caption; the set defaults to the active one but a
-named code or set name (e.g. MH1, "Urza's Saga", MTGO-only flashbacks) overrides it. The player
-picks the platform and fills anything that didn't parse. Bare `/trophy` grabs your most recent
-image post in the current channel; `/trophy link:<url>` logs one from anywhere. Idempotent per
-post via the upsert in services.self_reported_events.
-"""
+"""/trophy logs a showcase result from a post's caption to the player's profile, never scored"""
 from __future__ import annotations
 
 import logging
@@ -47,7 +38,7 @@ from bot.services.self_reported_events import (
     is_trophy_record,
     upsert_event,
 )
-from bot.sets import active_set_code, parse_caption_set_code, prereleased_sets
+from bot.sets import newest_playable_set_code, parse_caption_set_code, prereleased_sets
 
 logger = logging.getLogger(__name__)
 
@@ -582,7 +573,7 @@ async def _present_trophy_draft(
         discord_username=str(author),
         display_name=await resolve_display_name(bot, author),
         avatar_hash=extract_avatar_hash(author),
-        set_code=parse_caption_set_code(caption) or active_set_code(message.created_at),
+        set_code=parse_caption_set_code(caption) or newest_playable_set_code(message.created_at),
         source_channel_id=str(message.channel.id),
         source_message_id=str(message.id),
         source_url=message.jump_url,

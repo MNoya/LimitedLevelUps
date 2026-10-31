@@ -12,11 +12,8 @@ import {
   useP0P1FeaturedContest,
   useP0P1Picks,
   useP0P1Ratings,
-  usePlayerSlugByDiscordId,
-  useSets,
+  useMyProfilePath,
 } from "../data/hooks";
-import { ACTIVE_SET_CODE } from "../data/constants";
-import { playerPath } from "../data/utils";
 import { slotsForSet } from "../data/p0p1Slots";
 import { p0p1DevEnabled, p0p1Now, useP0P1DevPreset } from "../data/p0p1DevState";
 import { deriveP0P1Phase } from "../data/useP0P1Ballot";
@@ -296,7 +293,7 @@ export function AppHeader({
 
 function DesktopAuth() {
   const { user, loading, signIn, signOut } = useAuth();
-  const myProfilePath = useMyProfilePath(user?.discordId);
+  const { path: myProfilePath } = useMyProfilePath(user?.discordId);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -397,7 +394,7 @@ function MobileMenu({
   onClose: () => void;
 }) {
   const { user, loading, signIn, signOut } = useAuth();
-  const myProfilePath = useMyProfilePath(user?.discordId);
+  const { path: myProfilePath } = useMyProfilePath(user?.discordId);
 
   const avatarEl =
     user &&
@@ -511,16 +508,6 @@ function MobileMenu({
       </nav>
     </>
   );
-}
-
-function useMyProfilePath(discordId: string | undefined): string | null {
-  const { data: slug } = usePlayerSlugByDiscordId(discordId);
-  const { data: sets } = useSets();
-  if (!slug) {
-    return null;
-  }
-  const activeSetCode = sets?.find((s) => s.isActive)?.code ?? ACTIVE_SET_CODE;
-  return playerPath(slug, activeSetCode);
 }
 
 function MenuIconSlot({ children }: { children: ReactNode }) {

@@ -29,6 +29,7 @@ import { Play } from "../components/Icons";
 import { GiRoundTable } from "react-icons/gi";
 import { PageShell } from "../components/PageShell";
 import { DiscordIcon } from "../components/BrandIcons";
+import { Cmd } from "../components/Cmd";
 import { RoleMention } from "../components/RoleMention";
 import { Container } from "../components/Container";
 import { EpisodeThumbnail } from "../components/EpisodeThumbnail";
@@ -36,11 +37,7 @@ import { PlayBadge } from "../components/PlayBadge";
 import { Tooltip } from "../components/Tooltip";
 import { SetGlyph, Trophy as TrophyGlyph, fmtPts } from "../components/Brand";
 import { compareStandings } from "../components/pod/PodStandings";
-import {
-  PodStandingRow,
-  PodStandingRowSkeleton,
-  SeatAvatar,
-} from "../components/pod/PodStandingRow";
+import { PodStandingRow, PodStandingRowSkeleton, SeatAvatar } from "../components/pod/PodStandingRow";
 import { DeckScreenshotModal } from "../components/pod/DeckScreenshotModal";
 import { podDeckHref, podDraftLogHref, podSeatHref } from "../components/pod/podLinks";
 import {
@@ -198,10 +195,7 @@ function MobileTabs({
     el?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
   }, [active]);
   return (
-    <nav
-      aria-label="Guide sections"
-      className="lg:hidden sticky top-0 z-10 border-b border-border bg-surface"
-    >
+    <nav aria-label="Guide sections" className="lg:hidden sticky top-0 z-10 border-b border-border bg-surface">
       <div ref={barRef} className="flex h-11 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {SECTIONS.map((section) => {
           const Icon = section.icon;
@@ -285,7 +279,9 @@ function GuideBody() {
               hideArrow
               icon={<PlatformIcon src="draftmancer.png" size={24} style={{ filter: OFFWHITE_OUTLINE }} />}
             >
-              <Bullet>Link is posted in the Discord thread <B>10 minutes before</B> start</Bullet>
+              <Bullet>
+                Link is posted in the Discord thread <B>10 minutes before</B> start
+              </Bullet>
               <Bullet>
                 Set your{" "}
                 <Tooltip label="ArenaID#12345">
@@ -317,10 +313,10 @@ function GuideBody() {
             </Bullet>
             <Bullet>Pods need at least 6 players to draft</Bullet>
             <Bullet>Notifications are sent when the lobby is ready</Bullet>
-            <Bullet>Start time is the <B>deadline to join</B> the table</Bullet>
             <Bullet>
-              Press Leave if you can no longer attend
+              Start time is the <B>deadline to join</B> the table
             </Bullet>
+            <Bullet>Press Leave if you can no longer attend</Bullet>
           </Bullets>
         </Block>
 
@@ -372,11 +368,12 @@ function GuideBody() {
             <Bullet>Flashbacks and Cube are added to the schedule later on</Bullet>
             <Bullet>Every draft counts towards the Leaderboard</Bullet>
             <Bullet>
-              Top of the Leaderboard gets a seat at the <RoleMention role="Set Champion" /> 👑 event, streamed live the weekend before
-              the next set's prerelease
+              Top of the Leaderboard gets a seat at the <RoleMention role="Set Champion" /> 👑 event, streamed live the
+              weekend before the next set's prerelease
             </Bullet>
             <Bullet>
-              The top drafter of the season earns the <RoleMention role="Pod Champion" /> ⚜️ role to wear until the next set
+              The top drafter of the season earns the <RoleMention role="Pod Champion" /> ⚜️ role to wear until the next
+              set
             </Bullet>
           </Bullets>
         </Block>
@@ -398,9 +395,16 @@ type BlockProps = {
   children: ReactNode;
 };
 
-function Block(
-  { id, titleOnDesktop = true, maxWidthClass, watermark, aside, belowAside, headingAside, children }: BlockProps,
-) {
+function Block({
+  id,
+  titleOnDesktop = true,
+  maxWidthClass,
+  watermark,
+  aside,
+  belowAside,
+  headingAside,
+  children,
+}: BlockProps) {
   const section = SECTION_BY_ID.get(id) ?? SECTIONS[0];
   const Icon = section.icon;
   const maxW = maxWidthClass ?? (aside ? "lg:max-w-[1260px]" : "lg:max-w-[820px]");
@@ -414,7 +418,10 @@ function Block(
     </div>
   );
   return (
-    <section id={id} className={cn(PANEL, "group relative scroll-mt-[52px] lg:scroll-mt-4 overflow-hidden p-5 md:p-6", maxW)}>
+    <section
+      id={id}
+      className={cn(PANEL, "group relative scroll-mt-[52px] lg:scroll-mt-4 overflow-hidden p-5 md:p-6", maxW)}
+    >
       {watermark ? (
         <Icon
           size={96}
@@ -445,7 +452,6 @@ function Block(
   );
 }
 
-
 function Bullets({ children, className }: { children: ReactNode; className?: string }) {
   return <ul className={cn("flex flex-col gap-2.5 pl-1", className)}>{children}</ul>;
 }
@@ -466,9 +472,15 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
     title: "Scheduling Pods",
     body: (
       <>
-        <li>Use <Cmd>/draft</Cmd> to create a pod for now or at a specific time</li>
-        <li>Select an existing format or <B>Write-In</B> for a set or cube not covered by the list</li>
-        <li>Turn on <B>Notifications</B> wisely if you must</li>
+        <li>
+          Use <Cmd>/draft</Cmd> to create a pod for now or at a specific time
+        </li>
+        <li>
+          Select an existing format or <B>Write-In</B> for a set or cube not covered by the list
+        </li>
+        <li>
+          Turn on <B>Notifications</B> wisely if you must
+        </li>
       </>
     ),
     preview: <DraftCard />,
@@ -478,7 +490,9 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
     body: (
       <>
         <li>Flashback formats are scheduled for the season based on community votes</li>
-        <li>Run <Cmd>/pod-schedule</Cmd> to view the set calendar</li>
+        <li>
+          Run <Cmd>/pod-schedule</Cmd> to view the set calendar
+        </li>
       </>
     ),
   },
@@ -486,9 +500,16 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
     title: "10+ Player Pods",
     body: (
       <>
-        <li>Bot handles this by holding the lobby link while people confirm attendance, then splits into different tables after 10 min</li>
-        <li>Organizers can 🚀 <B>Open Tables</B> as soon as everyone is accounted for</li>
-        <li>Run <Cmd>/pod-table</Cmd> to add another table manually</li>
+        <li>
+          Bot handles this by holding the lobby link while people confirm attendance, then splits into different tables
+          after 10 min
+        </li>
+        <li>
+          Organizers can 🚀 <B>Open Tables</B> as soon as everyone is accounted for
+        </li>
+        <li>
+          Run <Cmd>/pod-table</Cmd> to add another table manually
+        </li>
       </>
     ),
   },
@@ -496,8 +517,13 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
     title: "Looking For More",
     body: (
       <>
-        <li>When a pod needs more players, write <Cmd>!pod</Cmd> in any channel to post a quick link to it</li>
-        <li>🪑 <B>Waitlist</B> indicates the last to sign up and decides who would have to drop if there's only 7 or 9 players</li>
+        <li>
+          When a pod needs more players, write <Cmd>!pod</Cmd> in any channel to post a quick link to it
+        </li>
+        <li>
+          🪑 <B>Waitlist</B> indicates the last to sign up and decides who would have to drop if there's only 7 or 9
+          players
+        </li>
       </>
     ),
   },
@@ -505,9 +531,15 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
     title: "Pod Settings",
     body: (
       <>
-        <li>Open ⚙️ <B>Settings</B> to see the configuration options</li>
-        <li>Set <B>Max Players</B> if you need to increase table size</li>
-        <li>Use 📝 <B>Details</B> to rename or provide extra info</li>
+        <li>
+          Open ⚙️ <B>Settings</B> to see the configuration options
+        </li>
+        <li>
+          Set <B>Max Players</B> if you need to increase table size
+        </li>
+        <li>
+          Use 📝 <B>Details</B> to rename or provide extra info
+        </li>
       </>
     ),
     preview: <SettingsCard />,
@@ -535,9 +567,15 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
     title: "Restarting or Canceling",
     body: (
       <>
-        <li>♻️ <B>Restart Draft</B> discards an ongoing draft and allows to start over</li>
-        <li>🕐 <B>Reschedule</B> to move the starting time</li>
-        <li>🗑️ <B>Cancel Draft</B> if the pod is no longer happening</li>
+        <li>
+          ♻️ <B>Restart Draft</B> discards an ongoing draft and allows to start over
+        </li>
+        <li>
+          🕐 <B>Reschedule</B> to move the starting time
+        </li>
+        <li>
+          🗑️ <B>Cancel Draft</B> if the pod is no longer happening
+        </li>
       </>
     ),
   },
@@ -545,7 +583,9 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
     title: "Fixing Incorrect Results",
     body: (
       <>
-        <li>🔧 <B>Manage Rounds</B> if a match was incorrectly reported and the round has already advanced</li>
+        <li>
+          🔧 <B>Manage Rounds</B> if a match was incorrectly reported and the round has already advanced
+        </li>
       </>
     ),
   },
@@ -553,8 +593,13 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
     title: "Removing Players",
     body: (
       <>
-        <li>🏳️ <B>Drop Player</B> if someone has to leave and can't continue playing, remaining matches become a <em>bye</em> for their opponent</li>
-        <li>🔨 <B>Kick Player</B> before the draft starts if needed</li>
+        <li>
+          🏳️ <B>Drop Player</B> if someone has to leave and can't continue playing, remaining matches become a{" "}
+          <em>bye</em> for their opponent
+        </li>
+        <li>
+          🔨 <B>Kick Player</B> before the draft starts if needed
+        </li>
       </>
     ),
   },
@@ -563,8 +608,12 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
     body: (
       <>
         <li>Wait up to 2 minutes in case of a temporary disconnect</li>
-        <li>♻️ <B>Restart Draft</B> to find someone to take their spot</li>
-        <li>🤖 <B>Replace With Bot</B> to play on with a <em>bye</em> each round</li>
+        <li>
+          ♻️ <B>Restart Draft</B> to find someone to take their spot
+        </li>
+        <li>
+          🤖 <B>Replace With Bot</B> to play on with a <em>bye</em> each round
+        </li>
       </>
     ),
   },
@@ -572,8 +621,11 @@ const ORGANIZER_ITEMS: { title: string; body: ReactNode; preview?: ReactNode }[]
     title: "Mock Drafts",
     body: (
       <>
-        <li>Run <Cmd>/mock-draft</Cmd> to practice a set before it hits Arena</li>
-        <li>No matches expected, but you can challenge willing opponents on{" "}
+        <li>
+          Run <Cmd>/mock-draft</Cmd> to practice a set before it hits Arena
+        </li>
+        <li>
+          No matches expected, but you can challenge willing opponents on{" "}
           <ExternalDomainLink href="https://moxgate.com">moxgate.com</ExternalDomainLink>
         </li>
       </>
@@ -611,7 +663,9 @@ function OrganizersSection() {
   const toggleAll = () => {
     const next = !anyOpen;
     const y = window.scrollY;
-    gridRef.current?.querySelectorAll("details").forEach((node) => { node.open = next; });
+    gridRef.current?.querySelectorAll("details").forEach((node) => {
+      node.open = next;
+    });
     requestAnimationFrame(() => {
       if (next) {
         document.getElementById("organizers")?.scrollIntoView({ block: "start" });
@@ -628,7 +682,11 @@ function OrganizersSection() {
         onClick={toggleAll}
         className="pointer-events-auto inline-flex shrink-0 items-center gap-1.5 font-display text-[14px] md:text-[15px] tracking-[0.04em] text-text transition-colors hover:text-green"
       >
-        <ChevronDown size={16} strokeWidth={2.5} className={cn("text-green transition-transform", anyOpen ? "rotate-0" : "-rotate-90")} />
+        <ChevronDown
+          size={16}
+          strokeWidth={2.5}
+          className={cn("text-green transition-transform", anyOpen ? "rotate-0" : "-rotate-90")}
+        />
         {anyOpen ? "Collapse All" : "Expand All"}
       </button>
     </div>
@@ -658,15 +716,28 @@ function OrganizersSection() {
   );
 }
 
-function Acc(
-  { title, divider, preview, children }:
-  { title: string; divider?: boolean; preview?: ReactNode; children: ReactNode },
-) {
+function Acc({
+  title,
+  divider,
+  preview,
+  children,
+}: {
+  title: string;
+  divider?: boolean;
+  preview?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <details className={cn("group/acc", divider ? "border-t border-border" : null)}>
       <summary className="flex items-center gap-1.5 py-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-        <ChevronDown size={17} strokeWidth={2.5} className="-mt-[2px] shrink-0 text-green -rotate-90 transition-transform group-open/acc:rotate-0" />
-        <span className="text-[17px] font-semibold text-text transition-colors group-hover/acc:text-green">{title}</span>
+        <ChevronDown
+          size={17}
+          strokeWidth={2.5}
+          className="-mt-[2px] shrink-0 text-green -rotate-90 transition-transform group-open/acc:rotate-0"
+        />
+        <span className="text-[17px] font-semibold text-text transition-colors group-hover/acc:text-green">
+          {title}
+        </span>
       </summary>
       <ul className="mb-4 flex flex-col gap-1.5 text-subtle text-[14px] leading-[1.45] [&_strong]:font-semibold [&>li]:relative [&>li]:pl-[19px] [&>li]:before:absolute [&>li]:before:left-[6px] [&>li]:before:top-[8px] [&>li]:before:h-[4px] [&>li]:before:w-[4px] [&>li]:before:rotate-45 [&>li]:before:bg-green [&>li]:before:content-['']">
         {children}
@@ -685,11 +756,17 @@ type StepProps = {
   children: ReactNode;
 };
 
-const STEP_TITLE ="inline-flex flex-wrap items-center gap-x-2 gap-y-1 font-display text-text text-[19px] md:text-[21px] tracking-[0.04em] leading-none";
+const STEP_TITLE =
+  "inline-flex flex-wrap items-center gap-x-2 gap-y-1 font-display text-text text-[19px] md:text-[21px] tracking-[0.04em] leading-none";
 
 function Step({ n, title, href, hideArrow, icon, children }: StepProps) {
   const heading = href ? (
-    <a href={href} target="_blank" rel="noreferrer" className={cn(STEP_TITLE, "no-underline transition-colors hover:text-green")}>
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className={cn(STEP_TITLE, "no-underline transition-colors hover:text-green")}
+    >
       {title}
       {icon}
       {hideArrow ? null : <ArrowRight size={16} strokeWidth={2} className="shrink-0" />}
@@ -716,7 +793,14 @@ const OFFWHITE_OUTLINE =
 
 function PlatformIcon({ src, size, style }: { src: string; size: number; style?: CSSProperties }) {
   return (
-    <img src={`${import.meta.env.BASE_URL}platforms/${src}`} alt="" width={size} height={size} className="shrink-0" style={style} />
+    <img
+      src={`${import.meta.env.BASE_URL}platforms/${src}`}
+      alt=""
+      width={size}
+      height={size}
+      className="shrink-0"
+      style={style}
+    />
   );
 }
 
@@ -726,18 +810,34 @@ const EMBED_ACCENT = "#2ecc71";
 const TIMESTAMP_BG = "rgba(114,118,125,0.3)";
 
 const LAUNCHER_SLOTS = [
-  { short: "Early", label: "Early Pod", emoji: "💫", color: "#5CA8E0", pillBg: "rgba(92,168,224,0.16)",
-    roster: ["Nassif", "Finkel", "LSV", "JED"] },
-  { short: "Late", label: "Late Pod", emoji: "☄️", color: "#9B8AE6", pillBg: "rgba(155,138,230,0.16)",
-    roster: ["Paolo", "Shota", "Reid", "Chapin"] },
+  {
+    short: "Early",
+    label: "Early Pod",
+    emoji: "💫",
+    color: "#5CA8E0",
+    pillBg: "rgba(92,168,224,0.16)",
+    roster: ["Nassif", "Finkel", "LSV", "JED"],
+  },
+  {
+    short: "Late",
+    label: "Late Pod",
+    emoji: "☄️",
+    color: "#9B8AE6",
+    pillBg: "rgba(155,138,230,0.16)",
+    roster: ["Paolo", "Shota", "Reid", "Chapin"],
+  },
 ] as const;
 
 const TITLE_DAY_FMT = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
 const FULL_DATE_FMT = new Intl.DateTimeFormat(undefined, {
-  weekday: "long", month: "short", day: "numeric",
+  weekday: "long",
+  month: "short",
+  day: "numeric",
 });
 const SHORT_DATE_FMT = new Intl.DateTimeFormat(undefined, {
-  weekday: "short", month: "short", day: "numeric",
+  weekday: "short",
+  month: "short",
+  day: "numeric",
 });
 const CLOCK_FMT = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 
@@ -746,7 +846,8 @@ function LauncherCard() {
   const code = ACTIVE_SET_CODE;
   const glyphCode = ACTIVE_SET_CODE;
   const slots = LAUNCHER_SLOTS.map((slot, index) => ({
-    ...slot, when: nextPodSlotInstant(POD_SLOTS[index].easternHour),
+    ...slot,
+    when: nextPodSlotInstant(POD_SLOTS[index].easternHour),
   }));
   return (
     <div style={{ fontFamily: DISCORD_FONT }}>
@@ -771,20 +872,28 @@ function LauncherCard() {
                   </span>
                 </div>
                 <div className="mt-1">
-                  <span className="rounded-sm px-1 text-[#dbdee1] text-[13px]" style={{ backgroundColor: TIMESTAMP_BG }}>
+                  <span
+                    className="rounded-sm px-1 text-[#dbdee1] text-[13px]"
+                    style={{ backgroundColor: TIMESTAMP_BG }}
+                  >
                     <span className="sm:hidden">{SHORT_DATE_FMT.format(slot.when)}</span>
                     <span className="hidden sm:inline">{FULL_DATE_FMT.format(slot.when)}</span>
-                    {" at "}{CLOCK_FMT.format(slot.when)}
+                    {" at "}
+                    {CLOCK_FMT.format(slot.when)}
                   </span>
                 </div>
                 <div className="mt-1.5 flex items-center gap-1 text-[#f2f3f5] text-[14px] font-semibold">
                   <SetGlyph code={glyphCode} size={20} className="text-white" />
-                  <span>{slot.short} {code} ({slot.roster.length})</span>
+                  <span>
+                    {slot.short} {code} ({slot.roster.length})
+                  </span>
                 </div>
                 <div className="mt-1 ml-1.5 flex gap-2">
                   <span className="w-1 shrink-0 self-stretch rounded-full bg-[#4e5058]" />
                   <div className="text-[#dbdee1] text-[14px] leading-[1.45]">
-                    {slot.roster.map((name) => <div key={name}>{name}</div>)}
+                    {slot.roster.map((name) => (
+                      <div key={name}>{name}</div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -837,14 +946,22 @@ function tomorrow(): Date {
   return date;
 }
 
-function ReadyRosterGroup(
-  { marker, label, rows, showHandles = true }:
-  { marker: string; label: string; rows: ReadyRow[]; showHandles?: boolean },
-) {
+function ReadyRosterGroup({
+  marker,
+  label,
+  rows,
+  showHandles = true,
+}: {
+  marker: string;
+  label: string;
+  rows: ReadyRow[];
+  showHandles?: boolean;
+}) {
   return (
     <div>
       <div className="flex items-center gap-1.5 whitespace-nowrap text-white text-[15px] font-semibold">
-        <span aria-hidden>{marker}</span>{label} ({rows.length})
+        <span aria-hidden>{marker}</span>
+        {label} ({rows.length})
       </div>
       <div className="mt-1 ml-1.5 flex gap-2">
         <span className="w-1 shrink-0 self-stretch rounded-full" style={{ backgroundColor: SECONDARY_GREY }} />
@@ -864,7 +981,9 @@ function ReadyRosterGroup(
           </div>
         ) : (
           <div className="flex flex-col gap-1 text-[#dbdee1] text-[14px]">
-            {rows.map((row) => <span key={row.name}>{row.name}</span>)}
+            {rows.map((row) => (
+              <span key={row.name}>{row.name}</span>
+            ))}
           </div>
         )}
       </div>
@@ -883,7 +1002,9 @@ function ReadyCheckCard() {
         <div className="p-4">
           <div className="flex items-center gap-1.5 text-white font-bold text-[17px]">
             <SetGlyph code={glyphCode} size={20} className="text-white" />
-            <span>{code} {READY_DATE_FMT.format(tomorrow())} Early Pod</span>
+            <span>
+              {code} {READY_DATE_FMT.format(tomorrow())} Early Pod
+            </span>
           </div>
           <div className="mt-1.5 flex items-center gap-1.5 text-white font-semibold text-[15px]">
             <span aria-hidden>🔔</span>
@@ -896,7 +1017,10 @@ function ReadyCheckCard() {
         </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-2 text-[14px] text-white">
-        <span className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 font-semibold" style={{ backgroundColor: DISCORD_BUTTON_GREEN }}>
+        <span
+          className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 font-semibold"
+          style={{ backgroundColor: DISCORD_BUTTON_GREEN }}
+        >
           <span className="text-[17px] leading-none">✅</span> I&apos;m Ready
         </span>
       </div>
@@ -944,12 +1068,16 @@ function RoundOneCard() {
           </div>
           <div className="mt-4 flex gap-1.5 text-[14px] text-[#dbdee1]">
             <span aria-hidden>🎯</span>
-            <span>Opponent DM'd. Use <MonoPill>/report-results</MonoPill> or the menu below after your match</span>
+            <span>
+              Opponent DM'd. Use <MonoPill>/report-results</MonoPill> or the menu below after your match
+            </span>
           </div>
         </div>
       </div>
       <div className="mt-2 flex w-fit items-center gap-8 rounded border border-[#232428] bg-[#1e1f22] px-3 py-2 text-[14px] text-[#dbdee1]">
-        <span>⚔️ <span className="italic">PlayerName</span> vs Paolo</span>
+        <span>
+          ⚔️ <span className="italic">PlayerName</span> vs Paolo
+        </span>
         <ChevronDown size={18} className="text-[#949ba4]" />
       </div>
     </div>
@@ -967,22 +1095,34 @@ function DiscordSelect({ icon, label }: { icon: ReactNode; label: string }) {
       className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[14px]"
       style={{ backgroundColor: DISCORD_SELECT_BG, border: `1px solid ${DISCORD_SELECT_BORDER}` }}
     >
-      <span className="flex w-4 shrink-0 items-center justify-center" aria-hidden>{icon}</span>
+      <span className="flex w-4 shrink-0 items-center justify-center" aria-hidden>
+        {icon}
+      </span>
       <span className="truncate font-medium text-[#f2f3f5]">{label}</span>
       <ChevronDown size={16} className="ml-auto shrink-0 text-[#b5bac1]" />
     </div>
   );
 }
 
-function DiscordButton(
-  { icon, label, variant = "grey" }: { icon?: ReactNode; label: string; variant?: keyof typeof DISCORD_BTN },
-) {
+function DiscordButton({
+  icon,
+  label,
+  variant = "grey",
+}: {
+  icon?: ReactNode;
+  label: string;
+  variant?: keyof typeof DISCORD_BTN;
+}) {
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[13px] font-medium text-white"
       style={{ backgroundColor: DISCORD_BTN[variant] }}
     >
-      {icon ? <span className="inline-flex shrink-0 items-center" aria-hidden>{icon}</span> : null}
+      {icon ? (
+        <span className="inline-flex shrink-0 items-center" aria-hidden>
+          {icon}
+        </span>
+      ) : null}
       {label}
     </span>
   );
@@ -996,9 +1136,18 @@ function DiscordMessage({ children }: { children: ReactNode }) {
   return (
     <div style={{ fontFamily: DISCORD_FONT }} className="rounded-lg bg-[#313338] p-2.5">
       <div className="mb-2 flex items-center gap-1">
-        <img src="/llu-bot-avatar-transparent.png" alt="" className="h-[26px] w-[26px] shrink-0 -translate-y-[2px] rounded-full object-contain" />
+        <img
+          src="/llu-bot-avatar-transparent.png"
+          alt=""
+          className="h-[26px] w-[26px] shrink-0 -translate-y-[2px] rounded-full object-contain"
+        />
         <span className="font-medium text-[14px] text-green">DisChordBot</span>
-        <span className="rounded px-1 text-[10px] font-semibold uppercase text-white" style={{ backgroundColor: DISCORD_BLURPLE }}>App</span>
+        <span
+          className="rounded px-1 text-[10px] font-semibold uppercase text-white"
+          style={{ backgroundColor: DISCORD_BLURPLE }}
+        >
+          App
+        </span>
       </div>
       <div className="flex flex-col gap-1.5">{children}</div>
     </div>
@@ -1027,7 +1176,10 @@ function SettingsCard() {
       <DiscordSelect icon={<span className="text-[14px]">🪑</span>} label="Seats: Random" />
       <DiscordButtonGrid>
         <DiscordButton icon={<span className="text-[14px]">⏱️</span>} label="Pick Timer: 60s" />
-        <DiscordButton icon={<i className="ms ms-8 ms-cost" style={{ fontSize: 14, letterSpacing: 0, margin: 0 }} />} label="Max Players" />
+        <DiscordButton
+          icon={<i className="ms ms-8 ms-cost" style={{ fontSize: 14, letterSpacing: 0, margin: 0 }} />}
+          label="Max Players"
+        />
         <DiscordButton icon={<span className="text-[14px]">🃏</span>} label="Mode: Pick One" />
         <DiscordButton icon={<span className="text-[14px]">🔓</span>} label="Decklist: Off" />
         <DiscordButton icon={<span className="text-[14px]">🕐</span>} label="Reschedule" />
@@ -1042,8 +1194,8 @@ const ASIDE_FOOT =
   "mt-3 inline-flex items-center gap-1.5 font-display text-[13px] tracking-[0.04em] text-green no-underline hover:underline";
 
 const RECAP_TOP_PLACEMENTS = 4;
-const RECAP_COLS = "[grid-template-columns:16px_1fr_46px_32px_34px] " +
-  "lg:[grid-template-columns:22px_1fr_80px_70px_86px]";
+const RECAP_COLS =
+  "[grid-template-columns:16px_1fr_46px_32px_34px] " + "lg:[grid-template-columns:22px_1fr_80px_70px_86px]";
 const RECAP_PAD = "pl-2 pr-1.5 lg:pr-2";
 
 function mainColorsOnly(colors: string | null): string | null {
@@ -1117,7 +1269,8 @@ function RecapCard() {
         <div
           className={cn(
             "grid items-center gap-x-2 lg:gap-x-3 border-b border-border bg-surface2",
-            RECAP_PAD, RECAP_COLS,
+            RECAP_PAD,
+            RECAP_COLS,
           )}
           style={{ height: 34 }}
         >
@@ -1131,7 +1284,10 @@ function RecapCard() {
           <span className="font-display text-muted tracking-[0.16em] text-[11px] text-center whitespace-nowrap">
             <span className="hidden min-[1180px]:inline">RESULT</span>
           </span>
-          <Link to={`/pods/${pod.slug}`} className="inline-flex items-center justify-end gap-1 font-display tracking-[0.05em] text-[13px] text-white no-underline hover:underline">
+          <Link
+            to={`/pods/${pod.slug}`}
+            className="inline-flex items-center justify-end gap-1 font-display tracking-[0.05em] text-[13px] text-white no-underline hover:underline"
+          >
             RECAP
             <ArrowRight size={14} strokeWidth={2} className="shrink-0" />
           </Link>
@@ -1188,7 +1344,8 @@ function RecapCard() {
 }
 
 const SEASON_BOARD_TOP_N = 6;
-const SEASON_COLS = "grid items-center gap-x-2 lg:gap-x-3 [grid-template-columns:16px_1fr_58px_56px] " +
+const SEASON_COLS =
+  "grid items-center gap-x-2 lg:gap-x-3 [grid-template-columns:16px_1fr_58px_56px] " +
   "lg:[grid-template-columns:22px_1fr_72px_66px]";
 const GUIDE_TABLE_PAD = "pl-2 pr-3 lg:pr-4";
 const SEASON_METRIC_HEAD = "font-display text-[11px] tracking-[0.2em] text-muted text-center whitespace-nowrap";
@@ -1229,7 +1386,11 @@ function SeasonBoardCard() {
           to="/pods"
           className="group/season col-span-2 flex items-center gap-2 min-w-0 no-underline text-white transition-colors hover:text-green"
         >
-          <SetGlyph code={ACTIVE_SET_CODE} size={17} className="shrink-0 text-white transition-colors group-hover/season:text-green" />
+          <SetGlyph
+            code={ACTIVE_SET_CODE}
+            size={17}
+            className="shrink-0 text-white transition-colors group-hover/season:text-green"
+          />
           <span className="font-display tracking-[0.04em] text-[15px]">SEASON LEADERBOARD</span>
           <ArrowRight size={14} strokeWidth={2} className="shrink-0" />
         </Link>
@@ -1326,14 +1487,6 @@ function ExternalDomainLink({ href, children }: { href: string; children: ReactN
   );
 }
 
-function Cmd({ children }: { children: ReactNode }) {
-  return (
-    <code className="font-mono text-text bg-surface2 border border-border2 px-1.5 py-px text-[13px] whitespace-nowrap">
-      {children}
-    </code>
-  );
-}
-
 function BotMention() {
   return (
     <a
@@ -1364,5 +1517,3 @@ function ChannelLink() {
     </a>
   );
 }
-
-

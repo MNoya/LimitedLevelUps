@@ -18,6 +18,7 @@ a real ``end_date`` is filled in when a successor set is added. Keep an anticipa
 """
 from __future__ import annotations
 
+import calendar
 import json
 import re
 from dataclasses import dataclass
@@ -37,13 +38,18 @@ def release_instant(d: date) -> datetime:
     return datetime.combine(d, RELEASE_TIME, tzinfo=RELEASE_TZ).astimezone(timezone.utc)
 
 
-FRIDAY = 4
-
-
 def previous_weekday(day: date, weekday: int) -> date:
     """The latest `weekday` strictly before `day`."""
     back = (day.weekday() - weekday) % 7 or 7
     return day - timedelta(days=back)
+
+
+def weekday_on_or_before(day: date, weekday: int) -> date:
+    return day - timedelta(days=(day.weekday() - weekday) % 7)
+
+
+def weekday_on_or_after(day: date, weekday: int) -> date:
+    return day + timedelta(days=(weekday - day.weekday()) % 7)
 
 
 @dataclass(frozen=True)
@@ -261,21 +267,34 @@ def prerelease_date_for(seed: SetSeed) -> date:
     release for sets that carry no recorded date."""
     if seed.prerelease_date is not None:
         return seed.prerelease_date
-    return previous_weekday(seed.start_date, FRIDAY)
+    return previous_weekday(seed.start_date, calendar.FRIDAY)
 
 
-def prerelease_instant(seed: SetSeed) -> datetime:
-    """Midnight ET on the prerelease date — the moment a set counts as playable, so early prerelease
-    events on the eve are covered."""
-    return datetime.combine(prerelease_date_for(seed), time(0, 0), tzinfo=RELEASE_TZ).astimezone(timezone.utc)
+def prerelease_week_start(seed: SetSeed) -> datetime:
+    """Midnight ET on the Wednesday of prerelease week, the earliest a store runs a prerelease"""
+    wednesday = weekday_on_or_before(prerelease_date_for(seed), calendar.WEDNESDAY)
+    return datetime.combine(wednesday, time(0, 0), tzinfo=RELEASE_TZ).astimezone(timezone.utc)
 
 
 def prereleased_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:
-    """Sets whose prerelease weekend has started, newest first — everything a player can hold cards
-    from, which runs days ahead of ``released_sets`` while the newest set is still in prerelease."""
     now = when or datetime.now(timezone.utc)
-    out = [seed for seed in ALL_SETS if prerelease_instant(seed) <= now]
+    out = [seed for seed in ALL_SETS if prerelease_week_start(seed) <= now]
     return tuple(reversed(out))
+
+
+def newest_playable_set_code(when: datetime | None = None) -> str:
+    """The set in paper prerelease week until its Arena release, otherwise the set Arena is drafting"""
+    now = when or datetime.now(timezone.utc)
+    for seed in prereleased_sets(now):
+        if seed.prerelease_date is not None and release_instant(seed.start_date) > now:
+            return seed.code
+    return active_set_code(now)
+
+
+def prerelease_friday(seed: SetSeed) -> date | None:
+    if seed.prerelease_date is None:
+        return None
+    return weekday_on_or_after(seed.prerelease_date, calendar.FRIDAY)
 
 
 def upcoming_sets(when: datetime | None = None) -> tuple[SetSeed, ...]:

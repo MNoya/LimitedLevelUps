@@ -91,6 +91,8 @@ import { MULTI, OTHER } from "./filters";
 import { boardOffersSoup } from "./cubeVariants";
 import { fetchCubeCardNames } from "./podFormats";
 import { useNow } from "../lib/countdown";
+import { ACTIVE_SET_CODE } from "./constants";
+import { playerPath } from "./utils";
 const THIRTY_MINUTES = 30 * 60 * 1000;
 const LIVE_POLL_MS = 30 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
@@ -164,10 +166,7 @@ export function useMediaFeed() {
   const videos = useYouTubeVideos();
   // The recent list is the cache the home page warms, so a fresh drop's thumbnail resolves without a cold refetch
   const recentVideos = useYouTubeVideos(true);
-  const mergedVideos = useMemo(
-    () => mergeVideoLists(recentVideos.data, videos.data),
-    [recentVideos.data, videos.data],
-  );
+  const mergedVideos = useMemo(() => mergeVideoLists(recentVideos.data, videos.data), [recentVideos.data, videos.data]);
   const data = useMemo(() => {
     if (!db.data) {
       return undefined;
@@ -310,10 +309,7 @@ export function useTrophyLeaderboard(setCode: string | undefined) {
 // Per-format leaderboard — switches data source from public_leaderboard to a
 // join over public_player_format_breakdown when a format is selected. Returns
 // the same row shape so the rendering table doesn't care which is live.
-export function useFormatLeaderboard(
-  setCode: string | undefined,
-  format: string | undefined,
-) {
+export function useFormatLeaderboard(setCode: string | undefined, format: string | undefined) {
   return useQuery({
     queryKey: ["format-leaderboard", setCode, format],
     queryFn: () => fetchFormatLeaderboard(setCode!, format!),
@@ -322,10 +318,7 @@ export function useFormatLeaderboard(
   });
 }
 
-export function useColorsLeaderboard(
-  setCode: string | undefined,
-  colors: string | undefined
-) {
+export function useColorsLeaderboard(setCode: string | undefined, colors: string | undefined) {
   return useQuery({
     queryKey: ["colors-leaderboard", setCode, colors],
     queryFn: () => fetchColorsLeaderboard(setCode!, colors!),
@@ -340,8 +333,7 @@ export function useFormatColorsLeaderboard(
   archetypes: string | string[] | undefined,
 ) {
   const key = Array.isArray(archetypes) ? [...archetypes].sort().join(",") : archetypes;
-  const enabled = !!setCode && !!format && !!archetypes
-    && (Array.isArray(archetypes) ? archetypes.length > 0 : true);
+  const enabled = !!setCode && !!format && !!archetypes && (Array.isArray(archetypes) ? archetypes.length > 0 : true);
   return useQuery({
     queryKey: ["format-colors-leaderboard", setCode, format, key],
     queryFn: () => fetchFormatColorsLeaderboard(setCode!, format!, archetypes!),
@@ -395,7 +387,15 @@ export function useLifetimeDraftEvents(
   return useInfiniteQuery({
     queryKey: ["lifetime-events", slug, formatFilter, colorsFilter, seasonStart ?? "ALL"],
     queryFn: ({ pageParam }) =>
-      fetchLifetimeDraftEvents(slug!, pageParam, LIFETIME_EVENTS_PAGE, formatFilter, colorsFilter, seasonStart, seasonEndExclusive),
+      fetchLifetimeDraftEvents(
+        slug!,
+        pageParam,
+        LIFETIME_EVENTS_PAGE,
+        formatFilter,
+        colorsFilter,
+        seasonStart,
+        seasonEndExclusive,
+      ),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < LIFETIME_EVENTS_PAGE ? undefined : allPages.length * LIFETIME_EVENTS_PAGE,
@@ -438,6 +438,23 @@ export function usePlayerSlugByDiscordId(discordId: string | undefined) {
   });
 }
 
+export function useMyProfilePath(discordId: string | undefined): {
+  path: string | null;
+  resolving: boolean;
+  failed: boolean;
+} {
+  const { data: slug, isPending, isError } = usePlayerSlugByDiscordId(discordId);
+  const { data: sets, isPending: setsPending } = useSets();
+  if (!slug) {
+    return { path: null, resolving: !!discordId && isPending, failed: isError };
+  }
+  if (setsPending) {
+    return { path: null, resolving: true, failed: false };
+  }
+  const activeSetCode = sets?.find((s) => s.isActive)?.code ?? ACTIVE_SET_CODE;
+  return { path: playerPath(slug, activeSetCode), resolving: false, failed: false };
+}
+
 export function useDraftEvents(slug: string | undefined, setCode: string, enabled = true) {
   return useQuery({
     queryKey: ["draft-events", slug, setCode],
@@ -470,10 +487,7 @@ export function useRecentTrophies(setCode: string | undefined, limit = 8) {
 
 // All trophies for the set filtered to a specific format. Backs both Top Colors
 // and Recent Trophies in the sidebar when the user picks a format.
-export function useFormatScopedTrophies(
-  setCode: string | undefined,
-  format: string | undefined,
-) {
+export function useFormatScopedTrophies(setCode: string | undefined, format: string | undefined) {
   return useQuery({
     queryKey: ["format-trophies", setCode, format],
     queryFn: () => fetchFormatRecentTrophies(setCode!, format!),
@@ -540,9 +554,7 @@ export function useColorChips(setCode: string): { chips: string[]; otherCombos: 
   const { data, isLoading } = useColorsSummary(setCode);
   return useMemo(() => {
     if (!data) return { chips: [], otherCombos: [], loading: isLoading };
-    const total = data
-      .filter((r) => r.colors !== MULTI && r.colors !== "")
-      .reduce((s, r) => s + r.events, 0);
+    const total = data.filter((r) => r.colors !== MULTI && r.colors !== "").reduce((s, r) => s + r.events, 0);
     if (total === 0) return { chips: [], otherCombos: [], loading: false };
     const threshold = total * 0.01;
     const named: string[] = [];
@@ -572,7 +584,6 @@ export function useColorChips(setCode: string): { chips: string[]; otherCombos: 
   }, [data, isLoading, setCode]);
 }
 
-
 export function usePodEvents(setCode: string | undefined) {
   return useQuery({
     queryKey: ["pod-events", setCode],
@@ -582,9 +593,7 @@ export function usePodEvents(setCode: string | undefined) {
   });
 }
 
-export function usePodSeasonResults(
-  season: { code: string; startDate: string; endDate: string } | undefined,
-) {
+export function usePodSeasonResults(season: { code: string; startDate: string; endDate: string } | undefined) {
   return useQuery({
     queryKey: ["pod-season-results", season?.code, season?.startDate, season?.endDate],
     queryFn: () => fetchPodSeasonResults(season!.startDate, season!.endDate, season!.code),
@@ -745,13 +754,10 @@ export function usePodCalendar() {
 
 export function useP0P1FeaturedContest(overrideCode?: string): FeaturedContest | undefined {
   const now = useNow(CONTEST_TICK_MS);
-  return useMemo(
-    () => {
-      if (overrideCode) return resolveContestByCode(overrideCode, now) ?? undefined;
-      return resolveFeaturedContest(now) ?? undefined;
-    },
-    [overrideCode, now],
-  );
+  return useMemo(() => {
+    if (overrideCode) return resolveContestByCode(overrideCode, now) ?? undefined;
+    return resolveFeaturedContest(now) ?? undefined;
+  }, [overrideCode, now]);
 }
 
 export function useP0P1Cards(setCode: string | undefined) {
@@ -895,8 +901,7 @@ export function useUpsertP0P1Pick(setCode: string) {
   const qc = useQueryClient();
   const queryKey = ["p0p1-picks", setCode];
   return useMutation({
-    mutationFn: ({ slot, cardName }: { slot: SlotKey; cardName: string }) =>
-      upsertP0P1Pick(setCode, slot, cardName),
+    mutationFn: ({ slot, cardName }: { slot: SlotKey; cardName: string }) => upsertP0P1Pick(setCode, slot, cardName),
     onMutate: async ({ slot, cardName }) => {
       await qc.cancelQueries({ queryKey });
       const prev = qc.getQueryData<P0P1Pick[]>(queryKey);

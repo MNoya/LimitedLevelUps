@@ -23,6 +23,7 @@ from bot.commands.craft import setup as setup_craft
 from bot.commands.delete_account import setup as setup_delete_account
 from bot.commands.event_scribe import setup as setup_event_scribe
 from bot.commands.guide import setup as setup_guide
+from bot.commands.trophy_card import setup as setup_trophy_card
 from bot.commands.help import PrefixHelpCommand, setup as setup_help
 from bot.commands.link_17lands import setup as setup_link_17lands
 from bot.commands.messages import MSG_TOKEN_INVALIDATED
@@ -149,6 +150,7 @@ from bot.tasks.set_awards_post import init_set_awards_schedule
 from bot.tasks.watch_party_post import init_watch_party
 from bot.tasks.championship_post import init_championship_schedule, rearm_deadline
 from bot.tasks.p0p1_reminder_post import init_p0p1_reminder
+from bot.tasks.prerelease_trophy_post import init_prerelease_trophy_post
 from bot.tasks.p0p1_ceremony_post import init_p0p1_ceremony
 from bot.tasks.fantasy_sync_tick import init_fantasy_sync
 from bot.tasks.pod_organizer import init_table_organizer
@@ -266,6 +268,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         init_watch_party(bot)
         init_championship_schedule(bot)
         init_p0p1_reminder(bot)
+        init_prerelease_trophy_post(bot)
         init_p0p1_ceremony(bot)
         init_fantasy_sync(bot)
         init_launch(bot)
@@ -285,6 +288,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_trophy(bot)
         await setup_save_resource(bot)
         await setup_guide(bot)
+        await setup_trophy_card(bot)
         await setup_advertise(bot)
         await setup_p0p1_poll(bot)
         await setup_help(bot)
