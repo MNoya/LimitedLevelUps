@@ -10,7 +10,7 @@ draft is a stronger statement of intent than a button pressed days ago, so it is
 The caller's message is left up. Anything a player types around `!confirm` is their own words, and the card
 lands under it either way.
 
-An Organizer gets the roster read back and no seat: for them this is a chasing tool, not a signup.
+An Organizer gets the roster read back and no seat, and the card always moves to the bottom of the thread.
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ from bot.services.pod_confirm import (
 from bot.services.pod_drafts import load_event_id_by_thread_sync, load_event_socket_status_sync
 from bot.services.pod_signals import RSVP_YES
 from bot.services.pod_tournament import is_pod_organizer
-from bot.tasks.pod_draft_reminder import refresh_or_repost_roster_reminder
+from bot.tasks.pod_draft_reminder import refresh_or_repost_roster_reminder, repost_roster_reminder
 
 
 NOTICE_LIFETIME_S = 20
@@ -121,8 +121,8 @@ async def _organizer_roster_reply(ctx: commands.Context, event_id: str) -> None:
         return
     with contextlib.suppress(discord.HTTPException):
         await _replace_standing_reply(ctx, event_id, attendance)
-    await refresh_or_repost_roster_reminder(event_id)
-    log.info(f"confirm: {ctx.author} read the roster for event {event_id}")
+    await repost_roster_reminder(event_id)
+    log.info(f"confirm: {ctx.author} bumped the roster card for event {event_id}")
 
 
 _standing_replies: dict[str, int] = {}

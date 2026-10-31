@@ -143,6 +143,19 @@ def closed_decklist_notice(actor: str, closed: bool) -> str:
     return settings_change_message(actor, "Closed Decklist", "On" if closed else "Off", subtext=subtext)
 
 
+OPEN_TABLES_SETTING = "Open Tables"
+
+
+def open_tables_mode_label(by_hand: bool) -> str:
+    return "By Organizer" if by_hand else "At Start Time"
+
+
+def open_tables_mode_notice(actor: str, by_hand: bool) -> str:
+    subtext = ("The tables open only when an Organizer presses Open Tables"
+               if by_hand else "The tables open at the start time")
+    return settings_change_message(actor, OPEN_TABLES_SETTING, open_tables_mode_label(by_hand), subtext=subtext)
+
+
 def description_notice(actor: str, text: str | None) -> str:
     """The note can be several lines; the notice collapses it to one so the thread reads as a log."""
     value = " ".join(text.split()) if text else "none"
@@ -182,6 +195,7 @@ class PodSettingsView(ui.View):
                  on_description: DescriptionApply | None = None, current_description: str | None = None,
                  on_event_name: EventNameApply | None = None,
                  on_closed_decklist: Apply | None = None, current_closed_decklist: bool = False,
+                 on_open_by_hand: Apply | None = None, current_open_by_hand: bool = False,
                  event_name: str | None = None, mock: bool = False,
                  notice_channel: discord.abc.Messageable | None = None) -> None:
         super().__init__(timeout=300)
@@ -221,6 +235,8 @@ class PodSettingsView(ui.View):
         self.on_event_name = on_event_name
         self.on_closed_decklist = on_closed_decklist
         self.current_closed_decklist = current_closed_decklist
+        self.on_open_by_hand = on_open_by_hand
+        self.current_open_by_hand = current_open_by_hand
         self.event_name = event_name
         self.mock = mock
         if on_format is not None:
@@ -241,6 +257,8 @@ class PodSettingsView(ui.View):
             self.add_item(_LinkPlayersButton(row=3))
         if kick_targets_provider is not None and on_kick is not None:
             self.add_item(_KickPlayerButton(row=3))
+        if on_open_by_hand is not None:
+            self.add_item(_OpenTablesModeButton(current_open_by_hand, row=3))
         if on_picks_per_pack is not None:
             self.add_item(_PicksPerPackButton(current_picks_per_pack, row=4))
         if on_manage_rounds is not None:
@@ -313,6 +331,7 @@ class PodSettingsView(ui.View):
             on_event_name=self.on_event_name,
             on_closed_decklist=self.on_closed_decklist,
             current_closed_decklist=self.current_closed_decklist,
+            on_open_by_hand=self.on_open_by_hand, current_open_by_hand=self.current_open_by_hand,
             event_name=self.event_name, mock=self.mock,
             notice_channel=self.notice_channel,
         ))
@@ -338,6 +357,16 @@ class PodSettingsView(ui.View):
         self.current_closed_decklist = closed
         notice = closed_decklist_notice(actor_label(interaction), closed)
         await self._render(interaction, [(notice, settings_notice_marker("Closed Decklist"))])
+
+    async def _apply_open_by_hand(self, interaction: discord.Interaction, by_hand: bool) -> None:
+        await interaction.response.defer()
+        err = await self.on_open_by_hand(interaction, "1" if by_hand else "0")
+        if err:
+            await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
+            return
+        self.current_open_by_hand = by_hand
+        notice = open_tables_mode_notice(actor_label(interaction), by_hand)
+        await self._render(interaction, [(notice, settings_notice_marker(OPEN_TABLES_SETTING))])
 
     async def _apply_details(self, interaction: discord.Interaction, name: str | None,
                              text: str | None) -> None:
@@ -606,6 +635,17 @@ class _ClosedDecklistButton(ui.Button):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         await self.view._apply_closed_decklist(interaction, not self.view.current_closed_decklist)
+
+
+class _OpenTablesModeButton(ui.Button):
+    def __init__(self, by_hand: bool, row: int | None = None) -> None:
+        super().__init__(
+            label=f"{OPEN_TABLES_SETTING}: {open_tables_mode_label(by_hand)}",
+            emoji="✋" if by_hand else "⏰", style=discord.ButtonStyle.grey, row=row,
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self.view._apply_open_by_hand(interaction, not self.view.current_open_by_hand)
 
 
 class PodDescriptionModal(ui.Modal, title="Pod Description"):

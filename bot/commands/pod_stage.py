@@ -103,6 +103,7 @@ async def stage_pods(bot: commands.Bot, event_id: str) -> None:
             )
         await _reclaim_source_roster(event_id, groups, unconfirmed, maybes)
         pod_active.clear_pins(event_id)
+        pod_active.clear_seat_shuffle(event_id)
     if signup_card is not None:
         await render_pod_overview(bot, event_id, signup_card[2])
     family = await asyncio.to_thread(pod_family_sync, event_id)

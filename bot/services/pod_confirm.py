@@ -206,6 +206,7 @@ def roster_attendance_for_event_sync(event_id: str) -> Attendance | None:
             .where(PodSignalMember.signal_id == signal.id)
             .order_by(PodSignalMember.created_at)
         ).all()
+    rows = pod_active.in_seat_order(event_id, rows, lambda row: row.discord_user_id)
     pins = pod_active.pins(event_id)
     buckets: dict[str, list[str]] = {CONFIRMED: [], RSVP_YES: [], RSVP_MAYBE: [], RSVP_NO: []}
     new_drafters: set[str] = set()

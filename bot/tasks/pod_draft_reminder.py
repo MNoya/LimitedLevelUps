@@ -59,7 +59,7 @@ from bot.services.pod_confirm import (
     seating_plan,
     plan_tables,
 )
-from bot.services import pod_active
+from bot.services import pod_active, pod_event_settings
 from bot.services.pod_drafts import new_drafter_column
 from bot.services.pod_roster_fields import add_roster_fields, add_table_plan_fields
 from bot.services.pod_signals import RSVP_MAYBE, RSVP_NO, RSVP_YES
@@ -81,7 +81,7 @@ log = logging.getLogger(__name__)
 
 _bot: commands.Bot | None = None
 
-ReminderViewBuilder = Callable[[str, bool, bool], "discord.ui.View"]
+ReminderViewBuilder = Callable[[str, bool, bool, bool], "discord.ui.View"]
 _reminder_view_builder: ReminderViewBuilder | None = None
 
 
@@ -169,9 +169,9 @@ def card_is_buried(thread_id: int) -> bool:
     return _messages_since_card.get(thread_id, 0) >= BURIED_AFTER_MESSAGES
 
 
-def gathering_is_over(event_time: datetime) -> bool:
-    """Whether the pod has reached its start time, which is when it stops asking for answers"""
-    return event_time <= datetime.now(timezone.utc)
+def gathering_is_over(event_id: str, event_time: datetime) -> bool:
+    """Whether the pod stopped asking for answers: its start time passed and no Organizer is holding the tables"""
+    return event_time <= datetime.now(timezone.utc) and not pod_active.is_holding(event_id)
 
 
 async def refresh_or_repost_roster_reminder(event_id: str) -> None:
@@ -205,11 +205,11 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
     loaded = await asyncio.to_thread(_load_event_for_roster_by_id, event_id)
     if loaded is None:
         return None
-    thread_id, event_time, event_name, status, set_code = loaded
+    thread_id, event_time, event_name, status, set_code, opens_by_hand = loaded
     if status != "pending":
         log.info(f"repost_roster_reminder: event {event_id} is {status}; skipping")
         return None
-    if gathering_is_over(event_time):
+    if gathering_is_over(event_id, event_time):
         log.info(f"repost_roster_reminder: event {event_id} has started; skipping")
         return None
     thread = await _fetch_thread(thread_id)
@@ -224,7 +224,7 @@ async def repost_roster_reminder(event_id: str) -> "discord.Message | None":
     embed = reminder_embed(
         event_name, event_time, rosters, roster_interests, championship_roster, set_code, new_drafters, pinned,
     )
-    view = _build_reminder_view(event_id, event_time)
+    view = _build_reminder_view(event_id, event_time, opens_by_hand)
     existing = await _find_roster_reminder(thread, event_id) or await _scan_for_roster_reminder(thread)
     try:
         posted = await thread.send(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
@@ -248,12 +248,13 @@ async def refresh_roster_reminder_for_event(event_id: str) -> bool:
     loaded = await asyncio.to_thread(_load_event_for_roster_by_id, event_id)
     if loaded is None:
         return True
-    thread_id, event_time, event_name, status, set_code = loaded
+    thread_id, event_time, event_name, status, set_code, opens_by_hand = loaded
     if status != "pending":
         return True
     rosters, roster_interests, new_drafters, pinned = await event_rsvp_rosters(event_id)
     return await _edit_roster_reminder(
         event_id, thread_id, event_name, event_time, rosters, roster_interests, set_code, new_drafters, pinned,
+        opens_by_hand,
     )
 
 
@@ -277,7 +278,7 @@ def reminder_embed(
 
 
 def _build_reminder_view(
-    event_id: str, event_time: datetime,
+    event_id: str, event_time: datetime, opens_by_hand: bool = False,
 ) -> "discord.ui.View | None":
     """The reminder's buttons. The seat button is Confirm on every pod, busy or not: the ask is what turns
     a signup from days ago into a seat somebody has answered for, and a pod of six needs that answer as much
@@ -289,7 +290,7 @@ def _build_reminder_view(
     if _reminder_view_builder is None:
         return None
     return _reminder_view_builder(
-        event_id, True, gathering_is_over(event_time),
+        event_id, True, gathering_is_over(event_id, event_time), opens_by_hand,
     )
 
 
@@ -300,6 +301,7 @@ async def _edit_roster_reminder(
     set_code: str = "",
     new_drafters: frozenset[str] = frozenset(),
     pinned: frozenset[str] = frozenset(),
+    opens_by_hand: bool = False,
 ) -> bool:
     thread = await _fetch_thread(thread_id)
     if thread is None:
@@ -311,7 +313,7 @@ async def _edit_roster_reminder(
     embed = reminder_embed(
         event_name, event_time, rosters, roster_interests, championship_roster, set_code, new_drafters, pinned,
     )
-    view = _build_reminder_view(event_id, event_time)
+    view = _build_reminder_view(event_id, event_time, opens_by_hand)
     try:
         await reminder.edit(embed=embed, view=view, allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:
@@ -326,13 +328,14 @@ def load_event_thread_id_for_roster_sync(event_id: str) -> int | None:
     return loaded[0] if loaded is not None else None
 
 
-def _load_event_for_roster_by_id(event_id: str) -> tuple[int, datetime, str, str, str] | None:
+def _load_event_for_roster_by_id(event_id: str) -> tuple[int, datetime, str, str, str, bool] | None:
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, event_id)
         if event is None:
             return None
+        setup = pod_event_settings.merged(event.kind, event.settings)
         return (int(event.discord_thread_id), event.event_time, event.name, event.socket_status,
-                event.set_code)
+                event.set_code, bool(setup[pod_event_settings.MANUAL_OPEN]))
 
 
 def _remember_confirm_card_sync(event_id: str, message_id: str | None) -> None:

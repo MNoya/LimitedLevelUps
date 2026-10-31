@@ -94,7 +94,7 @@ from bot.services.cube_seasons import sync_cube_seasons
 from bot.services.lobby_embed import LobbyReadyButtonView, ReadyCheckAnswerView
 from bot.services.pod_draft_manager import rehydrate_active_lobbies
 from bot.services.pod_team_board import TeamReportButton, TeamRevealReportButton
-from bot.services.pod_hold_view import AttendeesButton, OpenTablesButton
+from bot.services.pod_hold_view import AttendeesButton, OpenTablesButton, ShuffleTablesButton
 from bot.services.pod_join_button import JoinDraftButton, MockJoinDraftButton
 from bot.services.pod_link_dm import DmLinkArenaButton
 from bot.services.pod_disconnect import DisconnectVoteButton
@@ -352,6 +352,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(JoinDraftButton)
         bot.add_dynamic_items(AttendeesButton)
         bot.add_dynamic_items(OpenTablesButton)
+        bot.add_dynamic_items(ShuffleTablesButton)
         bot.add_dynamic_items(SandboxButton)
         bot.add_dynamic_items(MockJoinDraftButton)
         bot.add_dynamic_items(DmLinkArenaButton)

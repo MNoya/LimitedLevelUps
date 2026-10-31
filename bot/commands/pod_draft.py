@@ -806,6 +806,15 @@ async def build_pod_settings_view(
         await asyncio.to_thread(set_event_closed_decklist_sync, event_id, value == "1")
         return None
 
+    on_open_by_hand = None
+    current_open_by_hand = False
+    if scheduled and setup_open and manager is None and not mock:
+        current_open_by_hand = await asyncio.to_thread(pod_launch.opens_by_hand_sync, event_id)
+
+        async def on_open_by_hand(inter: discord.Interaction, value: str) -> str | None:
+            await pod_launch.set_opens_by_hand(bot, event_id, value == "1")
+            return None
+
     on_seating = None
     seat_order_provider = None
     kick_targets_provider = None
@@ -904,6 +913,7 @@ async def build_pod_settings_view(
         on_event_name=on_event_name,
         on_closed_decklist=None if mock else on_closed_decklist,
         current_closed_decklist=current_closed_decklist,
+        on_open_by_hand=on_open_by_hand, current_open_by_hand=current_open_by_hand,
         event_name=event_name, mock=mock,
         notice_channel=notice_channel,
     )

@@ -11,6 +11,12 @@ has nowhere else to find one.
 TABLE_ONE_PINS holds the players an organizer pinned to Table 1 for a pod still gathering, keyed the same
 way. It is a plan hint that lives for the few minutes before the tables open, so it stays in memory and
 never touches the roster's stored names: a restart drops it, the confirmations it stamped persist.
+
+SEAT_SHUFFLES holds the seat order an organizer's Shuffle press drew, for the same few minutes and for the
+same reason. A restart drops it and the tables fall back to signup order.
+
+ATTENDANCE_HOLDS is pod_launch's hold registry, kept here so the roster card can tell a pod an Organizer is
+still holding past its start time from one that started.
 """
 from __future__ import annotations
 
@@ -19,6 +25,12 @@ import asyncio
 ACTIVE_POD_MANAGERS = {}
 ACTIVE_TABLE_VIEWS = {}
 TABLE_ONE_PINS: dict[str, set[str]] = {}
+SEAT_SHUFFLES: dict[str, list[str]] = {}
+ATTENDANCE_HOLDS: dict[str, bool] = {}
+
+
+def is_holding(event_id: str) -> bool:
+    return ATTENDANCE_HOLDS.get(event_id, False)
 
 
 def set_pins(event_id: str, discord_ids) -> None:
@@ -35,6 +47,23 @@ def is_pinned(event_id: str, discord_id: str) -> bool:
 
 def clear_pins(event_id: str) -> None:
     TABLE_ONE_PINS.pop(event_id, None)
+
+
+def set_seat_shuffle(event_id: str, discord_ids) -> None:
+    SEAT_SHUFFLES[event_id] = list(discord_ids)
+
+
+def in_seat_order(event_id: str, rows: list, discord_id_of) -> list:
+    """Rows in the organizer's shuffled order, with anyone who signed up after the shuffle last in signup order"""
+    shuffle = SEAT_SHUFFLES.get(event_id)
+    if not shuffle:
+        return rows
+    rank = {discord_id: position for position, discord_id in enumerate(shuffle)}
+    return sorted(rows, key=lambda row: rank.get(discord_id_of(row), len(rank)))
+
+
+def clear_seat_shuffle(event_id: str) -> None:
+    SEAT_SHUFFLES.pop(event_id, None)
 
 _CARD_PHASE_HOOK = None
 _POD_DRAFTING_HOOK = None

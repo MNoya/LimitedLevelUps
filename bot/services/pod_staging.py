@@ -155,6 +155,7 @@ def confirmed_first_roster_sync(event_id: str) -> list[Signup]:
             .where(PodSignalMember.signal_id == signal.id, PodSignalMember.rsvp == RSVP_YES)
             .order_by(PodSignalMember.created_at)
         ).all()
+    rows = pod_active.in_seat_order(event_id, rows, lambda row: row[0])
     pinned = [Signup(row[0], row[1], True, True) for row in rows if row[0] in pins]
     confirmed = [Signup(row[0], row[1], True) for row in rows if row[0] not in pins and row[2] is not None]
     unconfirmed = [Signup(row[0], row[1], False) for row in rows if row[0] not in pins and row[2] is None]

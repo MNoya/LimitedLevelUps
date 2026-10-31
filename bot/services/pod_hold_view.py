@@ -5,7 +5,9 @@ buttons could not, and until the tables open it also carries a Feature On Table 
 player to the first table a split opens. Open Tables ends the wait early, which is the same release the
 start time would have run.
 
-Both carry the event id in their custom_id, so they keep working after a restart. They are rendered greyed
+🔀 deals the seats in a fresh random order, on a pod whose tables open By Organizer.
+
+Each carries the event id in its custom_id, so they keep working after a restart. They are rendered greyed
 out once the tables open, and a press that slips through the moment before that edit lands is acknowledged
 and dropped.
 
@@ -16,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import re
 
 import discord
@@ -31,11 +34,14 @@ from bot.commands.messages import (
     MSG_FEATURE_DONE,
     MSG_FEATURE_PLACEHOLDER,
     MSG_NOT_ORGANIZER_ATTENDEES,
+    MSG_NOT_ORGANIZER_SHUFFLE,
     MSG_NOT_ORGANIZER_TABLES,
     MSG_OPEN_TABLES_BUTTON,
     MSG_OPEN_TABLES_DONE,
+    MSG_SHUFFLE_DONE,
 )
 from bot.discord_helpers import run_detached
+from bot.services import pod_active
 from bot.services.pod_confirm import decline_players_sync, set_confirmations_sync
 from bot.services.pod_launch import cancel_release, has_held, is_holding, release_attendance_hold
 from bot.services.pod_staging import (
@@ -49,6 +55,7 @@ from bot.tasks.pod_draft_reminder import refresh_or_repost_roster_reminder
 
 ATTENDEES_BUTTON_PREFIX = "podattendees"
 OPEN_TABLES_BUTTON_PREFIX = "podopentables"
+SHUFFLE_BUTTON_PREFIX = "podshuffle"
 SELECT_LIMIT = 25
 
 log = logging.getLogger(__name__)
@@ -125,8 +132,46 @@ class OpenTablesButton(
         log.info(f"attendance hold on {self.event_id}: opened early by {interaction.user}")
 
 
+class ShuffleTablesButton(ui.DynamicItem[ui.Button], template=rf"{SHUFFLE_BUTTON_PREFIX}:(?P<event_id>.+)"):
+    """Deal the seats in a fresh random order. Pins still lead Table 1, and a press announces itself in the
+    channel so a player who moved tables can see why."""
+
+    def __init__(self, event_id: str, disabled: bool = False) -> None:
+        super().__init__(ui.Button(
+            style=discord.ButtonStyle.secondary, emoji="🔀", disabled=disabled,
+            custom_id=f"{SHUFFLE_BUTTON_PREFIX}:{event_id}",
+        ))
+        self.event_id = event_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item: ui.Button, match: re.Match):
+        return cls(match["event_id"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if has_held(self.event_id) and not is_holding(self.event_id):
+            await interaction.response.defer()
+            return
+        if not await is_pod_organizer(interaction.client, interaction.user):
+            await interaction.response.send_message(MSG_NOT_ORGANIZER_SHUFFLE, ephemeral=True)
+            return
+        await interaction.response.send_message(
+            MSG_SHUFFLE_DONE.format(actor=interaction.user.display_name),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        run_detached(_shuffle_and_repaint(self.event_id), f"the table shuffle on {self.event_id}")
+        log.info(f"tables of {self.event_id} shuffled by {interaction.user}")
+
+
+async def _shuffle_and_repaint(event_id: str) -> None:
+    roster = await asyncio.to_thread(confirmed_first_roster_sync, event_id)
+    discord_ids = [signup.discord_id for signup in roster]
+    random.shuffle(discord_ids)
+    pod_active.set_seat_shuffle(event_id, discord_ids)
+    await refresh_or_repost_roster_reminder(event_id)
+
+
 def build_hold_items(
-    event_id: str, *, confirming: bool, held: bool, holding: bool,
+    event_id: str, *, confirming: bool, held: bool, holding: bool, shuffles: bool = False,
 ) -> list[ui.Item]:
     """The organizer controls a roster card carries beyond its RSVP row.
 
@@ -137,6 +182,8 @@ def build_hold_items(
     items: list[ui.Item] = []
     if confirming or held:
         items.append(AttendeesButton(event_id, disabled=held and not holding))
+    if shuffles and (confirming or held):
+        items.append(ShuffleTablesButton(event_id, disabled=held and not holding))
     if held:
         items.append(OpenTablesButton(event_id, disabled=not holding))
     return items

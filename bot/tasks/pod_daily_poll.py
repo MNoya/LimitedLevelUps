@@ -1206,7 +1206,7 @@ async def open_interest_prompt_from_card(interaction: discord.Interaction) -> No
 
 
 def build_reminder_view(
-    event_id: str, confirming: bool = False, closed: bool = False,
+    event_id: str, confirming: bool = False, closed: bool = False, shuffles: bool = False,
 ) -> discord.ui.View:
     """The roster reminder's controls, carrying the event id so they resolve the pod after a restart.
 
@@ -1221,7 +1221,7 @@ def build_reminder_view(
     view.add_item(ReminderRsvpButton(RSVP_NO, event_id, disabled=closed))
     for item in build_hold_items(
         event_id, confirming=confirming, held=pod_launch.has_held(event_id),
-        holding=pod_launch.is_holding(event_id) and not closed,
+        holding=pod_launch.is_holding(event_id) and not closed, shuffles=shuffles,
     ):
         view.add_item(item)
     return view

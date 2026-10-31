@@ -23,6 +23,7 @@ PICKS_SET_BY_USER = "picks_set_by_user"
 MAX_PLAYERS = "max_players"
 PACKS_PER_PLAYER = "packs_per_player"
 CARDS_PER_PACK = "cards_per_pack"
+MANUAL_OPEN = "manual_open"
 
 
 def defaults(kind: str | None = None) -> dict[str, int | None]:
@@ -35,6 +36,7 @@ def defaults(kind: str | None = None) -> dict[str, int | None]:
         MAX_PLAYERS: settings.pod_draft_max_players,
         PACKS_PER_PLAYER: None,
         CARDS_PER_PACK: None,
+        MANUAL_OPEN: False,
     }
 
 
@@ -49,7 +51,11 @@ def load_sync(event_id: str) -> dict[str, int | None]:
         ).one_or_none()
     if row is None:
         return defaults()
-    return {**defaults(row.kind), **(row.settings or {})}
+    return merged(row.kind, row.settings)
+
+
+def merged(kind: str | None, stored: dict | None) -> dict[str, int | None]:
+    return {**defaults(kind), **(stored or {})}
 
 
 def stored_sync(event_id: str) -> dict[str, int | None]:

@@ -58,6 +58,7 @@ from bot.services.pod_drafts import (
     get_flashback_ranking,
     get_format_interests,
     is_championship,
+    load_event_time_sync,
     new_drafter_column,
     normalize_player_name,
     record_ondemand_event,
@@ -102,7 +103,7 @@ log = logging.getLogger(__name__)
 StagePodsHook = Callable[[commands.Bot, str], Awaitable[None]]
 _stage_pods_hook: StagePodsHook | None = None
 
-_holding: dict[str, bool] = {}
+_holding = pod_active.ATTENDANCE_HOLDS
 """Pods that have held, against whether they are still waiting. Kept in memory rather than on the row.
 
 The hold lasts ten minutes and nothing outside this process asks about it, so a column would be written
@@ -787,7 +788,8 @@ def set_rsvp(
         )
 
     event = session.get(PodDraftEvent, signal.event_id) if signal.event_id is not None else None
-    if confirming and event is not None and event.event_time <= datetime.now(timezone.utc):
+    started = event is not None and event.event_time <= datetime.now(timezone.utc)
+    if confirming and started and not pod_active.is_holding(event.id):
         rosters, new_drafters = _members_by_rsvp(session, signal.id)
         yes_count = len(rosters[pod_signals.RSVP_YES])
         return RsvpResult(
@@ -2349,12 +2351,33 @@ async def _hold_for_attendance(
                 allowed_mentions=discord.AllowedMentions(users=True),
             )
     await repost_roster_reminder(event_id)
+    if await asyncio.to_thread(opens_by_hand_sync, event_id):
+        log.info(f"attendance hold on {event_id}: {attendance.expected} expected, waiting for an Organizer")
+        return True
     _arm_release(bot, event_id, event_time)
     log.info(
         f"attendance hold on {event_id}: {attendance.expected} expected over {SESSION_SEATS} seats, "
         f"releasing at {event_time.isoformat()}"
     )
     return True
+
+
+def opens_by_hand_sync(event_id: str) -> bool:
+    return bool(pod_event_settings.load_sync(event_id)[pod_event_settings.MANUAL_OPEN])
+
+
+async def set_opens_by_hand(bot: commands.Bot, event_id: str, by_hand: bool) -> None:
+    """Store whether only Open Tables ends this pod's hold, and move a hold already running onto the new answer"""
+    await asyncio.to_thread(pod_event_settings.store_sync, event_id, manual_open=by_hand)
+    await refresh_roster_reminder_for_event(event_id)
+    if not is_holding(event_id):
+        return
+    if by_hand:
+        cancel_release(bot, event_id)
+        return
+    event_time = await asyncio.to_thread(load_event_time_sync, event_id)
+    if event_time is not None:
+        _arm_release(bot, event_id, event_time)
 
 
 def _arm_release(bot: commands.Bot, event_id: str, event_time: datetime) -> None:
@@ -2386,7 +2409,7 @@ async def release_attendance_hold(bot: commands.Bot, event_id: str) -> None:
 
 def is_holding(event_id: str) -> bool:
     """Whether this pod is still waiting out its attendance hold."""
-    return _holding.get(event_id, False)
+    return pod_active.is_holding(event_id)
 
 
 def forget_hold(event_id: str) -> None:
