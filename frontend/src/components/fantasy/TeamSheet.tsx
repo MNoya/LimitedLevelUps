@@ -92,7 +92,6 @@ import type {
   FantasyMemberRow,
 } from "../../types/fantasy";
 
-
 type Picker = ReturnType<typeof useLineupPicker>;
 type Filters = ReturnType<typeof useFieldFilters>;
 
@@ -123,27 +122,21 @@ export function TeamSheet({ loginCta, onSignIn }: { loginCta: ReactNode; onSignI
   const { data: storedMembers } = useFantasyMembers(header.code, membersVersion);
   const flagsVersion = !locked && !demoActive ? membersVersion : undefined;
   const { data: lineupFlags } = useFantasyLineupFlags(header.code, flagsVersion);
-  const memberData = useMemo(
-    () => {
-      if (!demoActive || !demo) {
-        return storedMembers;
-      }
-      return { members: demo.members, lineups: demo.lineups, brackets: demo.brackets };
-    },
-    [demoActive, demo, storedMembers],
-  );
+  const memberData = useMemo(() => {
+    if (!demoActive || !demo) {
+      return storedMembers;
+    }
+    return { members: demo.members, lineups: demo.lineups, brackets: demo.brackets };
+  }, [demoActive, demo, storedMembers]);
   const throughRound = state ? (spoilerFree ? state.revealedThroughRound : state.completedThroughRound) : 0;
-  const liveEvent = useMemo(
-    () => {
-      if (!entry || !state) {
-        return null;
-      }
-      const demoData = demoActive ? (demo ?? null) : null;
-      const readOnly = devPreset !== "live";
-      return buildLiveEvent(entry, state, field ?? [], results ?? [], throughRound, new Date(now), demoData, readOnly);
-    },
-    [entry, state, field, results, throughRound, minute, demoActive, demo, devPreset],
-  );
+  const liveEvent = useMemo(() => {
+    if (!entry || !state) {
+      return null;
+    }
+    const demoData = demoActive ? (demo ?? null) : null;
+    const readOnly = devPreset !== "live";
+    return buildLiveEvent(entry, state, field ?? [], results ?? [], throughRound, new Date(now), demoData, readOnly);
+  }, [entry, state, field, results, throughRound, minute, demoActive, demo, devPreset]);
   const members = useMemo(
     () =>
       liveEvent?.readOnly && memberData
@@ -270,14 +263,14 @@ function TeamSheetView({
   );
   const savedSelf = allMembers.find((member) => member.isSelf);
   const selfMember: Member | null =
-    savedSelf && dayOneLineup
-      ? { ...savedSelf, dayOneLineup, lineup: picker.lineup, bracket: bracketPicks }
-      : null;
+    savedSelf && dayOneLineup ? { ...savedSelf, dayOneLineup, lineup: picker.lineup, bracket: bracketPicks } : null;
   const others = allMembers.filter((member) => !member.isSelf);
   const memberRows = live ? standings(selfMember ? [selfMember, ...others] : others, eventContext(liveEvent)) : [];
   const memberCount = allMembers.length;
   const selfRow = memberRows.find((row) => row.member.isSelf);
-  const standingsDays: StandingsDay[] = topEightOpen ? ["overall", "day1", "day2", "top8"] : ["overall", "day1", "day2"];
+  const standingsDays: StandingsDay[] = topEightOpen
+    ? ["overall", "day1", "day2", "top8"]
+    : ["overall", "day1", "day2"];
 
   const cardPoints = (key: SlotKey) => (live ? selfRow?.slots.find((slot) => slot.slot === key)?.total : undefined);
 
@@ -337,7 +330,6 @@ function TeamSheetView({
         spoilerControl={<SpoilerEye on={spoilerFree} onToggle={onToggleSpoilerFree} />}
       />
     ) : null;
-
 
   const isPicked = (player: FieldPlayer) => picker.pickedSlotByName.has(fullName(player));
 
@@ -598,78 +590,83 @@ function TeamSheetView({
           </div>
         )}
 
-            <div
-              ref={cardAreaRef}
-              className="flex-1 flex flex-col items-center justify-center gap-5 py-3"
-              style={{ minHeight: cardAreaMinHeight }}
-            >
-              <PhaseNote />
-              <div className="grid grid-cols-2 gap-x-5 gap-y-4">
-                {SLOTS.map((slot) => {
-                  const player = picker.lineup[slot.key];
-                  return (
-                    <SheetCard
-                      key={slot.key}
-                      slot={slot}
-                      player={player}
-                      active={picker.activeSlot === slot.key}
-                      size="lg"
-                      width={cardWidth}
-                      points={cardPoints(slot.key)}
-                      record={cardRecord(slot.key)}
-                      out={cardOut(slot.key)}
-                      replaced={replacedPick(slot.key)}
-                      onClick={() => selectCard(slot.key)}
-                      onHover={(element) => (player ? handleHover(player, element) : undefined)}
-                      onReplacedHover={handleHover}
-                      onReplacedOpen={openProfile}
-                      onLongPress={player ? () => openProfile(player) : undefined}
-                      onLeave={handleLeave}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-            {live || !loginCta ? null : <div className="flex justify-center pb-3">{loginCta}</div>}
-            <div className="flex flex-col items-center pt-3 border-t border-border">
-              <ScoringRules />
-            </div>
+        <div
+          ref={cardAreaRef}
+          className="flex-1 flex flex-col items-center justify-center gap-5 py-3"
+          style={{ minHeight: cardAreaMinHeight }}
+        >
+          <PhaseNote />
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+            {SLOTS.map((slot) => {
+              const player = picker.lineup[slot.key];
+              return (
+                <SheetCard
+                  key={slot.key}
+                  slot={slot}
+                  player={player}
+                  active={picker.activeSlot === slot.key}
+                  size="lg"
+                  width={cardWidth}
+                  points={cardPoints(slot.key)}
+                  record={cardRecord(slot.key)}
+                  out={cardOut(slot.key)}
+                  replaced={replacedPick(slot.key)}
+                  onClick={() => selectCard(slot.key)}
+                  onHover={(element) => (player ? handleHover(player, element) : undefined)}
+                  onReplacedHover={handleHover}
+                  onReplacedOpen={openProfile}
+                  onLongPress={player ? () => openProfile(player) : undefined}
+                  onLeave={handleLeave}
+                />
+              );
+            })}
+          </div>
+        </div>
+        {live || !loginCta ? null : <div className="flex justify-center pb-3">{loginCta}</div>}
+        <div className="flex flex-col items-center pt-3 border-t border-border">
+          <ScoringRules />
+        </div>
       </section>
 
       <section className="themed-scrollbar min-w-0 h-full overflow-y-auto [scrollbar-gutter:stable] px-7 pb-6">
-        <div className={cn("sticky top-0 z-10 -mx-7 px-7 mb-3 bg-bg/95 backdrop-blur", showField && "border-b border-border")}>
+        <div
+          className={cn(
+            "sticky top-0 z-10 -mx-7 px-7 mb-3 bg-bg/95 backdrop-blur",
+            showField && "border-b border-border",
+          )}
+        >
           {viewTabs}
           {showField ? (
-        <div data-keeps-active-slot className="py-3 flex items-center gap-4">
-          <span className="shrink-0 grid text-[14px] text-subtle whitespace-nowrap">
-            <span className="invisible col-start-1 row-start-1" aria-hidden="true">
-              Picking <span className="font-semibold">Constructed</span>
-            </span>
-            <span className="invisible col-start-1 row-start-1" aria-hidden="true">
-              Replace before Round {liveEvent.cutRound + 1}
-            </span>
-            <span className="invisible col-start-1 row-start-1" aria-hidden="true">
-              <DiscordIcon size={14} className="inline-block mr-1.5" />
-              Log in to save picks
-            </span>
-            <span className="col-start-1 row-start-1">
-              <PickingStatus picker={picker} phase={phase} signedIn={!loginCta} onSignIn={onSignIn} />
-            </span>
-          </span>
-          <div className="flex-1 min-w-0">
-            <QualificationChips
-              active={filters.qualification}
-              onChange={filters.setQualification}
-              players={liveEvent.players}
-            />
-          </div>
-          <SearchBox
-            value={filters.search}
-            onChange={filters.setSearch}
-            placeholder="Search players"
-            className="ml-auto w-[180px] shrink-0"
-          />
-        </div>
+            <div data-keeps-active-slot className="py-3 flex items-center gap-4">
+              <span className="shrink-0 grid text-[14px] text-subtle whitespace-nowrap">
+                <span className="invisible col-start-1 row-start-1" aria-hidden="true">
+                  Picking <span className="font-semibold">Constructed</span>
+                </span>
+                <span className="invisible col-start-1 row-start-1" aria-hidden="true">
+                  Replace before Round {liveEvent.cutRound + 1}
+                </span>
+                <span className="invisible col-start-1 row-start-1" aria-hidden="true">
+                  <DiscordIcon size={14} className="inline-block mr-1.5" />
+                  Log in to save picks
+                </span>
+                <span className="col-start-1 row-start-1">
+                  <PickingStatus picker={picker} phase={phase} signedIn={!loginCta} onSignIn={onSignIn} />
+                </span>
+              </span>
+              <div className="flex-1 min-w-0">
+                <QualificationChips
+                  active={filters.qualification}
+                  onChange={filters.setQualification}
+                  players={liveEvent.players}
+                />
+              </div>
+              <SearchBox
+                value={filters.search}
+                onChange={filters.setSearch}
+                placeholder="Search players"
+                className="ml-auto w-[180px] shrink-0"
+              />
+            </div>
           ) : null}
         </div>
         <div className={showField ? undefined : "pt-3"}>{viewBody}</div>
@@ -678,12 +675,7 @@ function TeamSheetView({
       {profileSheet}
       {hoverTarget ? (
         <HoverCard target={hoverTarget}>
-          <PlayerProfile
-            player={hoverTarget.player}
-            compact
-            preview
-            event={profileEventFor(hoverTarget.player)}
-          />
+          <PlayerProfile player={hoverTarget.player} compact preview event={profileEventFor(hoverTarget.player)} />
           <ProfileHint rightClick={clickPicks} />
         </HoverCard>
       ) : null}
@@ -766,7 +758,10 @@ function FieldSkeleton({ grid, compact }: { grid: { className: string; style: CS
         {Array.from({ length: compact ? 12 : 24 }, (_, index) => (
           <div
             key={index}
-            className={cn("flex items-center gap-2.5 pr-2 border border-border bg-surface", compact ? "h-[57px]" : "h-[48px]")}
+            className={cn(
+              "flex items-center gap-2.5 pr-2 border border-border bg-surface",
+              compact ? "h-[57px]" : "h-[48px]",
+            )}
           >
             <span className="self-stretch w-12 shrink-0 bg-surface2" />
             <span className="h-3 bg-surface2" style={{ width: `${nameWidths[index % nameWidths.length]}%` }} />
@@ -833,7 +828,9 @@ function MobileTray({
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 bg-surface border-t border-border px-2 pt-1.5 pb-2">
       {cta ? (
-        <div className="absolute left-1/2 bottom-full mb-3 -translate-x-1/2 drop-shadow-[0_6px_16px_rgba(0,0,0,0.6)]">{cta}</div>
+        <div className="absolute left-1/2 bottom-full mb-3 -translate-x-1/2 drop-shadow-[0_6px_16px_rgba(0,0,0,0.6)]">
+          {cta}
+        </div>
       ) : showSaved ? (
         <SavedFlash lineup={picker.lineup} />
       ) : null}
@@ -1079,7 +1076,10 @@ function PickingStatus({
   const slot = slotFor(picker.activeSlot);
   return (
     <>
-      Picking <span className="font-semibold" style={{ color: slot.accent }}>{slot.label}</span>
+      Picking{" "}
+      <span className="font-semibold" style={{ color: slot.accent }}>
+        {slot.label}
+      </span>
     </>
   );
 }
@@ -1092,7 +1092,7 @@ function eventCrest(event: FantasyEventHeader, height: number): ReactNode {
 
 function MobileHeader({ status }: { status: ReactNode }) {
   const fantasyEvent = useFantasyEvent();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = usePersistentBool("fantasyRulesOpen", true);
   return (
     <div className="px-3 pt-3 pb-3 bg-surface border-b border-border flex flex-col gap-2.5">
       <div className="flex justify-center">
@@ -1189,14 +1189,19 @@ function ScoringRules({ short = false }: { short?: boolean }) {
 
 function RoleName({ slotKey }: { slotKey: SlotKey }) {
   const slot = slotFor(slotKey);
-  return <span className="font-semibold" style={{ color: slot.accent }}>{slot.label}</span>;
+  return (
+    <span className="font-semibold" style={{ color: slot.accent }}>
+      {slot.label}
+    </span>
+  );
 }
 
 function DayTwoNote() {
   const { cutRound } = useLiveEvent();
   return (
     <>
-      Players who miss <span className="font-semibold text-text">Day 2</span> can be replaced before Round {cutRound + 1}
+      Players who miss <span className="font-semibold text-text">Day 2</span> can be replaced before Round{" "}
+      {cutRound + 1}
     </>
   );
 }
@@ -1308,7 +1313,9 @@ function SheetCard({
         boxShadow: `inset 0 0 0 2px ${frameColor}${active ? `, 0 0 22px ${slot.accent}40` : ""}`,
       }}
     >
-      <span className={cn("flex flex-col h-full overflow-hidden bg-surface2", tiny ? "rounded-[4px]" : "rounded-[5px]")}>
+      <span
+        className={cn("flex flex-col h-full overflow-hidden bg-surface2", tiny ? "rounded-[4px]" : "rounded-[5px]")}
+      >
         {player ? (
           <span className={cn("flex items-center bg-surface", tiny ? "px-1.5 h-[22px]" : "px-2 h-[28px]")}>
             <FitText text={tiny ? shortLastName(player) : cardName(player)} maxSize={tiny ? 12 : 15} />
@@ -1317,11 +1324,19 @@ function SheetCard({
         <span className="relative flex-1 min-h-0 overflow-hidden">
           {player ? (
             <>
-              <span className={cn("block w-full h-full transition-opacity", (active || out) && "opacity-30", out && "grayscale")}>
+              <span
+                className={cn(
+                  "block w-full h-full transition-opacity",
+                  (active || out) && "opacity-30",
+                  out && "grayscale",
+                )}
+              >
                 <PlayerPortrait player={player} initialsSize={tiny ? 16 : 48} />
               </span>
               {record !== undefined && !tiny ? <CardStatPill className="left-1 bottom-1">{record}</CardStatPill> : null}
-              {points !== undefined && !tiny ? <CardStatPill className="right-1 bottom-1">{points} pts</CardStatPill> : null}
+              {points !== undefined && !tiny ? (
+                <CardStatPill className="right-1 bottom-1">{points} pts</CardStatPill>
+              ) : null}
               {replaced ? (
                 <ReplacedThumb
                   player={replaced}
@@ -1350,7 +1365,12 @@ function SheetCard({
             </span>
           )}
         </span>
-        <span className={cn("bg-surface flex items-center justify-between gap-1", tiny ? "px-1.5 h-[22px]" : "px-2 h-[28px]")}>
+        <span
+          className={cn(
+            "bg-surface flex items-center justify-between gap-1",
+            tiny ? "px-1.5 h-[22px]" : "px-2 h-[28px]",
+          )}
+        >
           <span
             className={cn(
               "font-display whitespace-nowrap [text-box:trim-both_cap_alphabetic]",
