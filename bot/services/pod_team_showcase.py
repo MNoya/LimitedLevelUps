@@ -21,6 +21,7 @@ import discord
 from discord import ui
 
 from bot.services import pod_swiss, pod_team
+from bot.services.peasant_trophy_post import is_peasant, post_peasant_trophies
 from bot.services.pod_active import notify_card_phase, notify_podium_posted
 from bot.services.pod_drafts import normalize_player_name
 from bot.services.pod_team_board import load_team_board_data
@@ -100,7 +101,8 @@ async def maybe_post_team_championship(manager: "PodDraftManager", *, force: boo
     event_name = await asyncio.to_thread(load_event_name_sync, event_id)
     started_at = await asyncio.to_thread(load_event_started_at_sync, event_id)
     thread_id = int(manager.thread_id) if isinstance(manager.thread_id, (int, str)) else None
-    guild_id = getattr(getattr(target, "guild", None), "id", None)
+    guild = getattr(target, "guild", None)
+    guild_id = getattr(guild, "id", None)
 
     view = build_team_championship_view(
         standings, teams,
@@ -122,6 +124,8 @@ async def maybe_post_team_championship(manager: "PodDraftManager", *, force: boo
         manager.champion_announced = False
         log.warning(f"[TEAM] champion.post_error event={event_id}", exc_info=True)
         return
+    if is_peasant(manager.set_code):
+        await post_peasant_trophies(guild, event_id, short_event_name(event_name), posted.jump_url)
     manager.card_result_line = _team_result_line(standings, teams)
     manager.card_result_url = posted.jump_url
     notify_card_phase(manager.bot, event_id)
