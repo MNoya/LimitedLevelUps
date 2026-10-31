@@ -38,7 +38,7 @@ from bot.services.pod_seating_select import (
     seating_mode_change_message,
     seating_mode_options,
 )
-from bot.services.pod_tournament import actor_label, is_pod_organizer
+from bot.services.pod_tournament import actor_label, closed_decklist_after_pairing, is_pod_organizer
 from bot.services.pod_schedule import SCHEDULE_TZ
 from bot.discord_helpers import run_detached
 from bot.sets import active_set_code
@@ -469,9 +469,13 @@ class _PairingSetting(ui.Select):
     async def callback(self, interaction: discord.Interaction) -> None:
         view: PodSettingsView = self.view
         mode = self.values[0]
-        await view.apply(interaction, on_apply=view.on_pairing, value=mode, attr="current_mode",
-                         notice=pairing_change_message(actor_label(interaction), mode),
-                         marker=settings_notice_markers("Pairings"))
+        previous_mode = view.current_mode
+        if not await view._commit(interaction, view.on_pairing, "current_mode", mode):
+            return
+        view.current_closed_decklist = closed_decklist_after_pairing(
+            previous_mode, mode, view.current_closed_decklist)
+        notice = pairing_change_message(actor_label(interaction), mode)
+        await view._render(interaction, [(notice, settings_notice_markers("Pairings"))])
 
 
 class _SeatingSetting(ui.Select):

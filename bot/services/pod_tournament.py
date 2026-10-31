@@ -1264,12 +1264,21 @@ async def start_tournament(manager: "PodDraftManager") -> None:
 
 
 def persist_pairing_mode(event_id: str, mode: str) -> None:
-    values = {"pairing_mode": mode}
-    if mode == "team":
-        values["closed_decklist"] = True
     with SessionLocal() as session:
-        session.execute(update(PodDraftEvent).where(PodDraftEvent.id == event_id).values(**values))
+        event = session.get(PodDraftEvent, event_id)
+        if event is None:
+            return
+        event.closed_decklist = closed_decklist_after_pairing(event.pairing_mode, mode, event.closed_decklist)
+        event.pairing_mode = mode
         session.commit()
+
+
+def closed_decklist_after_pairing(previous_mode: str | None, mode: str, closed: bool) -> bool:
+    if mode == "team":
+        return True
+    if previous_mode == "team":
+        return False
+    return closed
 
 
 def persist_seating_mode(event_id: str, mode: str) -> None:
