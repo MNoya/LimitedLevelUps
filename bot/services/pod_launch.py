@@ -27,6 +27,7 @@ from discord.ext import commands
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
+from bot.commands.messages import MSG_TABLES_OPEN_NOW, MSG_TABLES_OPEN_SOON
 from bot.config import PRODUCTION_GUILD_ID, settings
 from bot.discord_helpers import snowflake_or_none
 from bot.database import SessionLocal
@@ -36,7 +37,12 @@ from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_signals
 from bot.services import pod_team
-from bot.services.pod_confirm import CONFIRM_WINDOW_MINUTES, SESSION_SEATS, attendance_for_event_sync
+from bot.services.pod_confirm import (
+    CONFIRM_WINDOW_MINUTES,
+    SESSION_SEATS,
+    attendance_for_event_sync,
+    ready_to_open_early,
+)
 from bot.services.pod_staging import (
     confirmed_first_roster_sync,
     pod_base_name,
@@ -104,6 +110,7 @@ StagePodsHook = Callable[[commands.Bot, str], Awaitable[None]]
 _stage_pods_hook: StagePodsHook | None = None
 
 _holding = pod_active.ATTENDANCE_HOLDS
+_early_open_announced: set[str] = set()
 """Pods that have held, against whether they are still waiting. Kept in memory rather than on the row.
 
 The hold lasts ten minutes and nothing outside this process asks about it, so a column would be written
@@ -2359,6 +2366,7 @@ async def _hold_for_attendance(
         f"attendance hold on {event_id}: {attendance.expected} expected over {SESSION_SEATS} seats, "
         f"releasing at {event_time.isoformat()}"
     )
+    await release_hold_if_settled(bot, event_id)
     return True
 
 
@@ -2391,6 +2399,12 @@ def _arm_release(bot: commands.Bot, event_id: str, event_time: datetime) -> None
         release_attendance_hold, "date", run_date=run_at, args=[bot, event_id],
         id=release_job_id(event_id), replace_existing=True,
     )
+    early_at = early_open_at(event_time)
+    if early_at > now:
+        scheduler.add_job(
+            release_hold_if_settled, "date", run_date=early_at, args=[bot, event_id],
+            id=early_open_job_id(event_id), replace_existing=True,
+        )
     log.info(f"armed attendance-hold release for {event_id} at {run_at.isoformat()}")
 
 
@@ -2407,6 +2421,47 @@ async def release_attendance_hold(bot: commands.Bot, event_id: str) -> None:
     await open_ondemand_lobby(bot, event_id, allow_hold=False)
 
 
+async def release_hold_if_settled(bot: commands.Bot, event_id: str) -> None:
+    """Once everyone still signed up has confirmed, say when the tables open and open them at T-5"""
+    if not is_holding(event_id) or await asyncio.to_thread(opens_by_hand_sync, event_id):
+        return
+    event_time = await asyncio.to_thread(load_event_time_sync, event_id)
+    if event_time is None:
+        return
+    attendance = await asyncio.to_thread(attendance_for_event_sync, event_id)
+    if not ready_to_open_early(attendance):
+        _early_open_announced.discard(event_id)
+        return
+    opens_at = early_open_at(event_time)
+    if datetime.now(timezone.utc) < opens_at:
+        if event_id not in _early_open_announced:
+            _early_open_announced.add(event_id)
+            notice = MSG_TABLES_OPEN_SOON.format(unix=int(opens_at.timestamp()))
+            await _post_early_open_notice(bot, event_id, notice)
+        return
+    if not is_holding(event_id):
+        return
+    cancel_release(bot, event_id)
+    log.info(f"attendance hold on {event_id}: all {len(attendance.confirmed)} confirmed, opening early")
+    if event_id not in _early_open_announced:
+        await _post_early_open_notice(bot, event_id, MSG_TABLES_OPEN_NOW)
+    _early_open_announced.discard(event_id)
+    await release_attendance_hold(bot, event_id)
+
+
+def early_open_at(event_time: datetime) -> datetime:
+    return event_time - timedelta(minutes=5)
+
+
+async def _post_early_open_notice(bot: commands.Bot, event_id: str, body: str) -> None:
+    thread_id = await asyncio.to_thread(event_thread_id_sync, event_id)
+    thread = await fetch_pod_thread(bot, int(thread_id)) if thread_id and thread_id.isdigit() else None
+    if thread is None:
+        return
+    with contextlib.suppress(discord.HTTPException):
+        await thread.send(body, allowed_mentions=discord.AllowedMentions.none())
+
+
 def is_holding(event_id: str) -> bool:
     """Whether this pod is still waiting out its attendance hold."""
     return pod_active.is_holding(event_id)
@@ -2415,6 +2470,7 @@ def is_holding(event_id: str) -> bool:
 def forget_hold(event_id: str) -> None:
     """Drop what this process remembers about a pod's hold, for a sandbox starting the sequence over."""
     _holding.pop(event_id, None)
+    _early_open_announced.discard(event_id)
 
 
 def has_held(event_id: str) -> bool:
@@ -2428,8 +2484,9 @@ def cancel_release(bot: commands.Bot, event_id: str) -> None:
     scheduler = getattr(bot, "pod_scheduler", None)
     if scheduler is None:
         return
-    with contextlib.suppress(Exception):
-        scheduler.remove_job(release_job_id(event_id))
+    for job_id in (release_job_id(event_id), early_open_job_id(event_id)):
+        with contextlib.suppress(Exception):
+            scheduler.remove_job(job_id)
 
 
 def register_stage_pods(hook: StagePodsHook) -> None:
@@ -2520,6 +2577,10 @@ def open_job_id(event_id: str) -> str:
 
 def release_job_id(event_id: str) -> str:
     return f"pod-hold-release-{event_id}"
+
+
+def early_open_job_id(event_id: str) -> str:
+    return f"pod-hold-early-{event_id}"
 
 
 def arm_slot_expiry(bot: commands.Bot, signal_id: str, slot_time: datetime) -> None:

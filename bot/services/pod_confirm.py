@@ -320,6 +320,16 @@ def fits_one_table(attendance: Attendance) -> bool:
     return len(whole.tables) <= 1 and not whole.waiting
 
 
+def ready_to_open_early(attendance: Attendance) -> bool:
+    """Nobody is left unanswered, Yes or Maybe, and the confirmed players fit one room or fill complete tables"""
+    if not attendance.answered or attendance.yes or attendance.maybe:
+        return False
+    plan = plan_tables(len(attendance.confirmed))
+    if plan.waiting:
+        return False
+    return not plan.splits or all(table.full for table in plan.tables)
+
+
 def card_tables(attendance: Attendance) -> tuple[TablePlan, bool]:
     """The tables the card draws, and whether players still pending are drawn sitting at them.
 

@@ -1176,6 +1176,7 @@ async def _settle_beyond_the_thread(
     capacity, the next pod, and the launcher board. The board is repainted after staging, since staging
     may have just created the pod it has to show."""
     _card_renders.request(event_id, lambda: _render_channel_card_fresh(bot, event_id))
+    await pod_launch.release_hold_if_settled(bot, event_id)
     yes = result.rosters.get(RSVP_YES) or []
     maybe = result.rosters.get(RSVP_MAYBE) or []
     await refresh_underfill_nudge_for_event(bot, event_id, len(yes), len(maybe))

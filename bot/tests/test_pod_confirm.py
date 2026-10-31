@@ -1,13 +1,15 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import discord
 import pytest
 
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
-from bot.services import pod_active, pod_confirm, pod_signals
+from bot.services import pod_active, pod_confirm, pod_launch, pod_signals
 from bot.services.pod_confirm import (
     Attendance,
     confirm_present_players_sync,
+    ready_to_open_early,
     opens_confirmation,
     plan_tables,
     seating_plan,
@@ -119,6 +121,56 @@ def test_confirmation_opens_at_a_full_table_of_yes(yes_count, opens):
     attendance = Attendance(yes=tuple(HALL_OF_FAME[:1] * yes_count))
 
     assert opens_confirmation(attendance) is opens
+
+
+@pytest.mark.parametrize("confirmed, pending, maybes, ready", [
+    (16, 0, 0, True),
+    (18, 0, 0, True),
+    (14, 0, 0, True),
+    (10, 0, 0, True),
+    (9, 0, 0, True),
+    (10, 1, 0, False),
+    (16, 0, 1, False),
+    (16, 1, 0, False),
+    (17, 0, 0, False),
+    (11, 0, 0, False),
+    (0, 0, 0, False),
+])
+def test_a_hold_opens_early_when_nobody_is_unanswered_into_one_room_or_complete_tables(
+    confirmed, pending, maybes, ready,
+):
+    attendance = Attendance(
+        confirmed=("Finkel",) * confirmed, yes=("LSV",) * pending, maybe=("Reid",) * maybes,
+    )
+
+    result = ready_to_open_early(attendance)
+
+    assert result is ready
+
+
+@pytest.mark.parametrize("minutes_out, opens, notices", [(6, False, 1), (4, True, 1)])
+def test_an_all_confirmed_hold_announces_then_opens_no_sooner_than_t_minus_5(
+    monkeypatch, minutes_out, opens, notices,
+):
+    event_id = "held-pod"
+    released = []
+    posted = []
+    event_time = datetime.now(timezone.utc) + timedelta(minutes=minutes_out)
+    pod_launch.forget_hold(event_id)
+    monkeypatch.setitem(pod_active.ATTENDANCE_HOLDS, event_id, True)
+    monkeypatch.setattr(pod_launch, "opens_by_hand_sync", lambda _event_id: False)
+    monkeypatch.setattr(pod_launch, "load_event_time_sync", lambda _event_id: event_time)
+    all_confirmed = Attendance(confirmed=("Finkel",) * 16)
+    monkeypatch.setattr(pod_launch, "attendance_for_event_sync", lambda _event_id: all_confirmed)
+    monkeypatch.setattr(pod_launch, "cancel_release", lambda _bot, _event_id: None)
+    monkeypatch.setattr(pod_launch, "_post_early_open_notice", lambda _bot, _event_id, body: _record(posted, body))
+    monkeypatch.setattr(pod_launch, "release_attendance_hold", lambda _bot, held: _release(released, held))
+
+    asyncio.run(pod_launch.release_hold_if_settled(None, event_id))
+    asyncio.run(pod_launch.release_hold_if_settled(None, event_id))
+
+    assert (released == [event_id]) is opens
+    assert len(posted) == notices
 
 
 def test_confirming_stamps_a_member_who_was_already_yes(session, scheduled_signal):
@@ -499,3 +551,12 @@ def test_the_card_draws_what_the_release_deals(signed, confirmed):
 
     assert [table.seated for table in plan.tables] == [len(group) for group in groups]
     assert sum(len(group) for group in groups) + plan.waiting == confirmed
+
+
+async def _record(sink: list, value) -> None:
+    sink.append(value)
+
+
+async def _release(sink: list, event_id: str) -> None:
+    pod_active.ATTENDANCE_HOLDS[event_id] = False
+    sink.append(event_id)
