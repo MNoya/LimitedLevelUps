@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useParams, useSearchParams, type To } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams, type To } from "react-router-dom";
 import { ArrowUpRight, BookOpen, ChevronDown, Crown } from "lucide-react";
 
 import { PodPage } from "./PodPage";
@@ -17,7 +17,15 @@ import { type InlineFilterOption } from "../components/InlineFilterSelect";
 import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
 import { SetFilterDropdown, type SetFilterOption } from "../components/SetFilterDropdown";
 import { AAvatar, setGlyphCode, SetGlyph, Trophy } from "../components/Brand";
-import { ArrowRight, BsAsterisk, CalendarRange, GiCardPick, GiArcheryTarget, GiRoundTable, TbListNumbers } from "../components/Icons";
+import {
+  ArrowRight,
+  BsAsterisk,
+  CalendarRange,
+  GiCardPick,
+  GiArcheryTarget,
+  GiRoundTable,
+  TbListNumbers,
+} from "../components/Icons";
 import { DiscordIcon } from "../components/BrandIcons";
 import { Tooltip } from "../components/Tooltip";
 import { DeckScreenshotModal } from "../components/pod/DeckScreenshotModal";
@@ -147,6 +155,7 @@ function toLeaderboardRow(r: PodLeaderboardRow): LeaderboardTableRow {
 
 export function PodsRoute() {
   const { slug } = useParams<{ slug: string }>();
+  const { hash } = useLocation();
   const [searchParams] = useSearchParams();
   const { data: podSetCodes } = usePodSetCodes();
   const { data: allSets } = useSets();
@@ -162,7 +171,7 @@ export function PodsRoute() {
   }
   const match = podSetCodes.find((p) => p.code.toLowerCase() === slug.toLowerCase());
   if (match) {
-    if (slug !== match.code) return <Navigate to={`/pods/${match.code}`} replace />;
+    if (slug !== match.code) return <Navigate to={{ pathname: `/pods/${match.code}`, hash }} replace />;
     return <PodDraftsPage setCode={match.code} />;
   }
   const season = podSeasons(allSets).find((s) => s.code.toLowerCase() === slug.toLowerCase());
@@ -336,11 +345,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
     return sortRows(adapted, sort);
   }, [leaderboard, sort]);
   const onSort = (key: SortKey) => {
-    setSort((cur) =>
-      cur.key === key
-        ? { key, dir: cur.dir === "desc" ? "asc" : "desc" }
-        : { key, dir: "desc" },
-    );
+    setSort((cur) => (cur.key === key ? { key, dir: cur.dir === "desc" ? "asc" : "desc" } : { key, dir: "desc" }));
   };
 
   const nowMs = useNow(60_000);
@@ -371,7 +376,10 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
     if (window) {
       return fmtRange(window.startDate, window.endDate);
     }
-    const dates = (events ?? []).filter((e) => e.kind !== "mock").map((e) => e.eventDate).sort();
+    const dates = (events ?? [])
+      .filter((e) => e.kind !== "mock")
+      .map((e) => e.eventDate)
+      .sort();
     return dates.length > 0 ? fmtRange(dates[0], dates[dates.length - 1]) : null;
   }, [season, boardWindow, setCode, setMeta, liveSeasonCode, events]);
   const iconSize = isMobile ? 16 : 18;
@@ -451,12 +459,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
         value: key,
         label: formatBucketLabel(key, season),
         icon: (
-          <ChipIcon
-            bucket={key}
-            seasonMeta={season ?? liveSeason}
-            className="text-white shrink-0"
-            size={iconSize}
-          />
+          <ChipIcon bucket={key} seasonMeta={season ?? liveSeason} className="text-white shrink-0" size={iconSize} />
         ),
       })),
     ];
@@ -475,36 +478,39 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
     );
   };
   const scopeValue = setCode ? `${SCOPE_SET_PREFIX}${setCode}` : allSeasons ? AXIS_ALL : activeSet;
-  const scopeSelector = switcherSets.length > 0 ? (
-    <SetFilterDropdown
-      value={scopeValue}
-      options={scopeOptions}
-      hrefFor={scopeHref}
-      variant={selectorVariant}
-      triggerClassName={isMobile ? undefined : "!min-w-0"}
-      searchable
-    />
-  ) : null;
-  const formatSelector = formatOptions.length > 0 ? (
-    <FilterDropdown
-      value={format ?? AXIS_ALL}
-      options={formatOptions}
-      hrefFor={(value) => axisHref(AXIS_PARAM_FORMAT, value)}
-      variant={selectorVariant}
-      triggerClassName={isMobile ? undefined : "!min-w-0"}
-      renderValue={renderScopeFormat}
-      renderOption={renderScopeFormat}
-    />
-  ) : null;
-  const windowSelector = windowOptions.length > 0 ? (
-    <SetFilterDropdown
-      value={boardWindow?.code ?? AXIS_ALL}
-      options={windowOptions}
-      hrefFor={(value) => (opensOnLatestSeason ? keptAxisHref : axisHref)(POD_SEASON_PARAM, value)}
-      variant={selectorVariant}
-      triggerClassName={isMobile ? undefined : "!min-w-0"}
-    />
-  ) : null;
+  const scopeSelector =
+    switcherSets.length > 0 ? (
+      <SetFilterDropdown
+        value={scopeValue}
+        options={scopeOptions}
+        hrefFor={scopeHref}
+        variant={selectorVariant}
+        triggerClassName={isMobile ? undefined : "!min-w-0"}
+        searchable
+      />
+    ) : null;
+  const formatSelector =
+    formatOptions.length > 0 ? (
+      <FilterDropdown
+        value={format ?? AXIS_ALL}
+        options={formatOptions}
+        hrefFor={(value) => axisHref(AXIS_PARAM_FORMAT, value)}
+        variant={selectorVariant}
+        triggerClassName={isMobile ? undefined : "!min-w-0"}
+        renderValue={renderScopeFormat}
+        renderOption={renderScopeFormat}
+      />
+    ) : null;
+  const windowSelector =
+    windowOptions.length > 0 ? (
+      <SetFilterDropdown
+        value={boardWindow?.code ?? AXIS_ALL}
+        options={windowOptions}
+        hrefFor={(value) => (opensOnLatestSeason ? keptAxisHref : axisHref)(POD_SEASON_PARAM, value)}
+        variant={selectorVariant}
+        triggerClassName={isMobile ? undefined : "!min-w-0"}
+      />
+    ) : null;
 
   const standingsControls = (
     <div className="flex items-center gap-3 ml-4">
@@ -545,7 +551,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
   );
   const recentTrophiesProps = { events: played, loading: events === undefined, pageSize: 8 };
   const sideBySide = !useIsMobile(CALENDAR_LABEL_WIDTH);
-  const [eventsTabChoice, setEventsTab] = useState<"events" | "colors" | "trophies">("events");
+  const { tab: eventsTabChoice, pickTab: setEventsTab, pauseOnHover } = useRotatingEventsTab();
   const eventsTab = sideBySide && eventsTabChoice === "trophies" ? "colors" : eventsTabChoice;
 
   // The season view spans every set, so a name lands on the lifetime profile's pods
@@ -623,43 +629,45 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
             ) : (
               <>
                 {showUpcoming && <UpcomingBlock />}
-                <div className="mt-2 flex items-stretch border-y border-border">
-                  <TabButton size="section" active={eventsTab === "events"} onClick={() => setEventsTab("events")}>
-                    EVENTS
-                  </TabButton>
-                  <TabButton size="section" active={eventsTab === "colors"} onClick={() => setEventsTab("colors")}>
-                    TOP COLORS
-                  </TabButton>
-                  {!sideBySide && (
-                    <TabButton
-                      size="section"
-                      active={eventsTab === "trophies"}
-                      onClick={() => setEventsTab("trophies")}
-                    >
-                      TROPHIES
+                <div {...pauseOnHover}>
+                  <div className="mt-2 flex items-stretch border-y border-border">
+                    <TabButton size="section" active={eventsTab === "events"} onClick={() => setEventsTab("events")}>
+                      EVENTS
                     </TabButton>
+                    <TabButton size="section" active={eventsTab === "colors"} onClick={() => setEventsTab("colors")}>
+                      TOP COLORS
+                    </TabButton>
+                    {!sideBySide && (
+                      <TabButton
+                        size="section"
+                        active={eventsTab === "trophies"}
+                        onClick={() => setEventsTab("trophies")}
+                      >
+                        TROPHIES
+                      </TabButton>
+                    )}
+                  </div>
+                  {eventsTab !== "events" ? (
+                    sideBySide ? (
+                      <div className="pt-3 grid grid-cols-2 gap-4">
+                        {topColors}
+                        <RecentTrophiesCard {...recentTrophiesProps} className="row-span-2 grid grid-rows-subgrid" />
+                      </div>
+                    ) : (
+                      <div className="pt-3">
+                        {eventsTab === "trophies" ? <RecentTrophiesCard {...recentTrophiesProps} /> : topColors}
+                      </div>
+                    )
+                  ) : events === undefined ? (
+                    <EventsLoadingBlock />
+                  ) : played.length > 0 ? (
+                    <EventsBlock events={played} nowMs={nowMs} />
+                  ) : (
+                    <EmptyHint>
+                      {allSeasons ? "No pod drafts recorded yet" : `No pod drafts recorded yet for ${activeSet}`}
+                    </EmptyHint>
                   )}
                 </div>
-                {eventsTab !== "events" ? (
-                  sideBySide ? (
-                    <div className="pt-3 grid grid-cols-2 gap-4">
-                      {topColors}
-                      <RecentTrophiesCard {...recentTrophiesProps} className="row-span-2 grid grid-rows-subgrid" />
-                    </div>
-                  ) : (
-                    <div className="pt-3">
-                      {eventsTab === "trophies" ? <RecentTrophiesCard {...recentTrophiesProps} /> : topColors}
-                    </div>
-                  )
-                ) : events === undefined ? (
-                  <EventsLoadingBlock />
-                ) : played.length > 0 ? (
-                  <EventsBlock events={played} nowMs={nowMs} />
-                ) : (
-                  <EmptyHint>
-                    {allSeasons ? "No pod drafts recorded yet" : `No pod drafts recorded yet for ${activeSet}`}
-                  </EmptyHint>
-                )}
                 {mock.length > 0 && <MockDraftsBlock events={mock} />}
               </>
             )}
@@ -827,8 +835,46 @@ function StandingsHeading({
   );
 }
 
-
 // A row's collapse is the reader's decision, so it outlives the tab switch that unmounts the row
+type DesktopEventsTab = "events" | "colors" | "trophies";
+
+function useRotatingEventsTab() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const anchors: Record<DesktopEventsTab, string> = { events: "", colors: "#top-colors", trophies: "#trophies" };
+  const [clicked, setClicked] = useState<DesktopEventsTab>();
+  let linked: DesktopEventsTab | undefined;
+  for (const [tab, anchor] of Object.entries(anchors)) {
+    if (anchor && anchor === location.hash) {
+      linked = tab as DesktopEventsTab;
+    }
+  }
+  const pinned = linked ?? clicked;
+  const [turn, setTurn] = useState(0);
+  const pausedRef = useRef(false);
+  useEffect(() => {
+    if (pinned) {
+      return;
+    }
+    const id = setInterval(() => {
+      if (!pausedRef.current) {
+        setTurn((count) => count + 1);
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [pinned]);
+  const pickTab = (tab: DesktopEventsTab) => {
+    setClicked(tab);
+    navigate({ pathname: location.pathname, search: location.search, hash: anchors[tab] }, { replace: true });
+  };
+  const rotatingTab: DesktopEventsTab = turn % 2 === 0 ? "events" : "colors";
+  const pauseOnHover = {
+    onMouseEnter: () => (pausedRef.current = true),
+    onMouseLeave: () => (pausedRef.current = false),
+  };
+  return { tab: pinned ?? rotatingTab, pickTab, pauseOnHover };
+}
+
 function useRowDisclosure(defaultOpenId: string | undefined) {
   const [decisions, setDecisions] = useState<Record<string, boolean>>({});
   const isOpen = (id: string) => decisions[id] ?? id === defaultOpenId;
@@ -951,7 +997,11 @@ function UpcomingCalendar({ iconsOnly = false, mobile = false }: { iconsOnly?: b
         ))}
       </div>
       {canToggle && (
-        <Tooltip label={expanded ? "Collapse Calendar" : "Expand Calendar"} side="top" delayDuration={ROW_TOOLTIP_DELAY}>
+        <Tooltip
+          label={expanded ? "Collapse Calendar" : "Expand Calendar"}
+          side="top"
+          delayDuration={ROW_TOOLTIP_DELAY}
+        >
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
@@ -963,7 +1013,10 @@ function UpcomingCalendar({ iconsOnly = false, mobile = false }: { iconsOnly?: b
           >
             <ChevronDown
               size={18}
-              className={cn("transition-transform group-hover:translate-y-0.5", expanded && "rotate-180 group-hover:-translate-y-0.5")}
+              className={cn(
+                "transition-transform group-hover:translate-y-0.5",
+                expanded && "rotate-180 group-hover:-translate-y-0.5",
+              )}
             />
           </button>
         </Tooltip>
@@ -1038,17 +1091,11 @@ const ROLE_CLASS: Record<PodCalendarEntry["role"], string> = {
   event: "text-[#f38300]",
 };
 
-function CalendarEntryRow({
-  entry,
-  past,
-  iconsOnly,
-}: {
-  entry: PodCalendarEntry;
-  past: boolean;
-  iconsOnly: boolean;
-}) {
+function CalendarEntryRow({ entry, past, iconsOnly }: { entry: PodCalendarEntry; past: boolean; iconsOnly: boolean }) {
   const glyph =
-    entry.glyph === "FLASHBACK" ? "FLASHBACK" : setGlyphCode({ code: entry.glyph, custom: !!cubeCobraUrl(entry.glyph) });
+    entry.glyph === "FLASHBACK"
+      ? "FLASHBACK"
+      : setGlyphCode({ code: entry.glyph, custom: !!cubeCobraUrl(entry.glyph) });
   const accentedGlyph = entry.role === "championship" || entry.role === "event" || entry.role === "flashback";
   const glyphColor = past ? "text-dim" : accentedGlyph ? ROLE_CLASS[entry.role] : "text-white";
   return (
@@ -1080,10 +1127,7 @@ function SlotSchedule() {
         EVERY DAY
       </span>
       {POD_SLOTS.map((slot) => (
-        <span
-          key={slot.label}
-          className="flex items-baseline gap-2 border border-border2 bg-surface2/40 px-2.5 py-1.5"
-        >
+        <span key={slot.label} className="flex items-baseline gap-2 border border-border2 bg-surface2/40 px-2.5 py-1.5">
           <span className="font-display text-text tracking-[0.14em] leading-none" style={{ fontSize: 13 }}>
             {slot.label}
           </span>
@@ -1139,10 +1183,7 @@ function rowHeightClass(stacked: boolean): string {
 }
 
 function rowBodyClass(stacked: boolean): string {
-  return cn(
-    "flex-1 min-w-0 flex items-center",
-    stacked ? "gap-2.5 py-2 pl-5 pr-2" : "gap-4 py-2.5 px-4",
-  );
+  return cn("flex-1 min-w-0 flex items-center", stacked ? "gap-2.5 py-2 pl-5 pr-2" : "gap-4 py-2.5 px-4");
 }
 
 // Leads every pod row so the format reads at a glance, hugging the title next to it
@@ -1150,7 +1191,11 @@ function PodSetTitle({
   event,
   stacked,
   children,
-}: { event: PodEventSummary; stacked: boolean; children: React.ReactNode }) {
+}: {
+  event: PodEventSummary;
+  stacked: boolean;
+  children: React.ReactNode;
+}) {
   const code = setGlyphCode({ code: event.setCode, custom: event.formatLabel != null });
   return (
     <span className={cn("flex items-center min-w-0 flex-1", stacked ? "gap-2" : "gap-2.5")}>
@@ -1198,15 +1243,7 @@ function MockDraftsBlock({
   );
 }
 
-function MockEventRow({
-  event,
-  index,
-  stacked = false,
-}: {
-  event: PodEventSummary;
-  index: number;
-  stacked?: boolean;
-}) {
+function MockEventRow({ event, index, stacked = false }: { event: PodEventSummary; index: number; stacked?: boolean }) {
   return (
     <div className={cn(ROW_FRAME, "flex items-stretch")} style={rowDelayStyle(index)}>
       <Link
@@ -1273,27 +1310,17 @@ function EventRow({
       <div className="flex items-center pl-2 pr-2.5 shrink-0 self-center">
         <ChevronDown
           size={15}
-          className={cn(
-            "text-muted transition-all duration-200 group-hover:text-text",
-            open && "rotate-180 text-text",
-          )}
+          className={cn("text-muted transition-all duration-200 group-hover:text-text", open && "rotate-180 text-text")}
         />
       </div>
     </>
   );
   return (
-    <div
-      className={cn(ROW_FRAME, "transition-colors", open && "bg-surface2/40")}
-      style={rowDelayStyle(index)}
-    >
+    <div className={cn(ROW_FRAME, "transition-colors", open && "bg-surface2/40")} style={rowDelayStyle(index)}>
       <div className="flex items-stretch">
         {onToggle ? (
           <div className={cn(headerClass, "relative")}>
-            <Tooltip
-              label={open ? "Hide Standings" : "Show Standings"}
-              side="top"
-              delayDuration={ROW_TOOLTIP_DELAY}
-            >
+            <Tooltip label={open ? "Hide Standings" : "Show Standings"} side="top" delayDuration={ROW_TOOLTIP_DELAY}>
               <button
                 type="button"
                 onClick={onToggle}
@@ -1302,9 +1329,7 @@ function EventRow({
                 className="absolute inset-0 bg-transparent border-0 cursor-pointer"
               />
             </Tooltip>
-            <div className="relative flex-1 min-w-0 flex items-stretch pointer-events-none">
-              {headerContent}
-            </div>
+            <div className="relative flex-1 min-w-0 flex items-stretch pointer-events-none">{headerContent}</div>
           </div>
         ) : (
           <Link to={`/pods/${event.slug}`} className={headerClass}>
@@ -1345,10 +1370,7 @@ function TeamDraftResult({ event, stacked }: { event: PodEventSummary; stacked: 
   }, [rows]);
   if (!winner) {
     return (
-      <span
-        className="shrink-0 font-display tracking-[0.16em] leading-none text-muted"
-        style={{ fontSize: 13 }}
-      >
+      <span className="shrink-0 font-display tracking-[0.16em] leading-none text-muted" style={{ fontSize: 13 }}>
         TEAM DRAFT
       </span>
     );
@@ -1427,14 +1449,10 @@ function DateRail({ date, highlighted }: { date: string; highlighted: boolean })
     <div
       className={cn(
         "flex flex-col items-center justify-center border-r transition-colors px-2.5 min-w-[64px]",
-        highlighted
-          ? "bg-surface2 border-border2"
-          : "bg-surface2/40 border-border group-hover:bg-surface2/70",
+        highlighted ? "bg-surface2 border-border2" : "bg-surface2/40 border-border group-hover:bg-surface2/70",
       )}
     >
-      <span className="font-display text-muted leading-none tracking-[0.06em] text-[14px]">
-        {month}
-      </span>
+      <span className="font-display text-muted leading-none tracking-[0.06em] text-[14px]">{month}</span>
       <span className="font-display text-text leading-none tabular-nums mt-1 text-[21px]">
         {String(day).padStart(2, "0")}
       </span>
@@ -1524,20 +1542,11 @@ function EventRowBody({
 
 function ChampionResult({ event, stacked }: { event: PodEventSummary; stacked: boolean }) {
   return (
-    <div
-      className={cn(
-        "flex items-center min-w-0 shrink",
-        stacked ? "gap-1.5 max-w-[52%]" : "max-w-[60%] gap-2.5",
-      )}
-    >
+    <div className={cn("flex items-center min-w-0 shrink", stacked ? "gap-1.5 max-w-[52%]" : "max-w-[60%] gap-2.5")}>
       {/* The events column is 40% of the page, so below xl the title needs the avatar's width more */}
       {!stacked && (
         <span className="hidden xl:block">
-          <AAvatar
-            displayName={event.championDisplayName ?? ""}
-            avatarUrl={event.championAvatarUrl}
-            size={22}
-          />
+          <AAvatar displayName={event.championDisplayName ?? ""} avatarUrl={event.championAvatarUrl} size={22} />
         </span>
       )}
       <span
@@ -1579,10 +1588,7 @@ function EventStandings({ event }: { event: PodEventSummary }) {
   const { data: draftArtifact } = usePodDraftArtifact(event.eventId);
   const decklistAccess = usePodDecklistAccess(event);
   const deckTargetMainboard = useMemo(
-    () =>
-      draftArtifact && deckTarget?.seatIndex != null
-        ? resolveDeck(draftArtifact, deckTarget.seatIndex)
-        : null,
+    () => (draftArtifact && deckTarget?.seatIndex != null ? resolveDeck(draftArtifact, deckTarget.seatIndex) : null),
     [draftArtifact, deckTarget],
   );
   const sorted = useMemo(() => {
@@ -1663,10 +1669,7 @@ function EventStandings({ event }: { event: PodEventSummary }) {
 
 function EventRowSkeleton({ index, stacked = false }: { index: number; stacked?: boolean }) {
   return (
-    <div
-      className={cn(ROW_FRAME, "flex items-stretch", rowHeightClass(stacked))}
-      style={rowDelayStyle(index)}
-    >
+    <div className={cn(ROW_FRAME, "flex items-stretch", rowHeightClass(stacked))} style={rowDelayStyle(index)}>
       {!stacked && (
         <div className="px-3 min-w-[64px] bg-surface2/40 border-r border-border flex flex-col items-center justify-center gap-1.5">
           <div className="h-3.5 w-9 bg-surface2 animate-pulse" />
@@ -1780,11 +1783,7 @@ function MobileEventsBlock({
 }
 
 function EmptyHint({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-muted text-[13px] py-4 px-2 bg-surface border border-border">
-      {children}
-    </div>
-  );
+  return <div className="text-muted text-[13px] py-4 px-2 bg-surface border border-border">{children}</div>;
 }
 
 function MobileFilterBar({
@@ -1931,7 +1930,9 @@ function SetHero({
         <GiRoundTable size={84} className="text-text" />
       )}
       <div>
-        <SectionLabel size={13} className={cn("text-green", !isLive && "invisible")}>LIVE</SectionLabel>
+        <SectionLabel size={13} className={cn("text-green", !isLive && "invisible")}>
+          LIVE
+        </SectionLabel>
         <div className="flex items-baseline gap-3.5 mt-0.5">
           <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
             {board ?? "POD DRAFTS"}
@@ -1967,12 +1968,7 @@ function SetHero({
       <div className="flex-1" />
       {sets.length > 0 && (
         <div className="flex gap-1.5">
-          <SwitcherChip
-            icon={<GiRoundTable size={22} />}
-            label="ALL"
-            active={!board}
-            href={POD_DRAFTS_PATH}
-          />
+          <SwitcherChip icon={<GiRoundTable size={22} />} label="ALL" active={!board} href={POD_DRAFTS_PATH} />
           <SetSwitcherDesktop sets={sets} pins={pins} activeCode={board ?? ""} hrefFor={boardPath} extraHide={1} />
         </div>
       )}
@@ -1997,10 +1993,16 @@ function HeroFormatLabel({ label, cubeHref }: { label: string; cubeHref: string 
         href={cubeHref}
         target="_blank"
         rel="noreferrer"
-        className={cn(className, "group inline-flex items-center gap-1 no-underline transition-colors hover:text-green")}
+        className={cn(
+          className,
+          "group inline-flex items-center gap-1 no-underline transition-colors hover:text-green",
+        )}
       >
         {label}
-        <ArrowUpRight size={18} className="shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+        <ArrowUpRight
+          size={18}
+          className="shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+        />
       </a>
     </Tooltip>
   );
