@@ -4,7 +4,7 @@ import discord
 import pytest
 
 from bot.models import PodDraftEvent, PodSignal, PodSignalMember
-from bot.services import pod_confirm, pod_signals
+from bot.services import pod_active, pod_confirm, pod_signals
 from bot.services.pod_confirm import (
     Attendance,
     confirm_present_players_sync,
@@ -462,6 +462,21 @@ def test_a_feature_survives_a_re_rsvp(session, monkeypatch):
 
     roster = pod_staging.confirmed_first_roster_sync(event.id)
     assert roster[0].discord_id == "u2"
+
+
+def test_the_card_and_the_release_both_seat_in_shuffled_order(session, monkeypatch):
+    for module in (pod_staging, pod_confirm, reminder):
+        monkeypatch.setattr(module, "SessionLocal", _session_factory(session))
+    monkeypatch.setattr(pod_active, "SEAT_SHUFFLES", {})
+    event = _signal_with_members(session, "8102", [("u1", "Finkel"), ("u2", "LSV"), ("u3", "Reid")])
+
+    pod_active.set_seat_shuffle(event.id, ["u3", "u1", "u2"])
+
+    card_rosters, _, _, _ = reminder.signal_rsvp_rosters_sync(event.id)
+    assert card_rosters[pod_confirm.CONFIRMED] == ["Reid", "Finkel", "LSV"]
+    assert list(pod_confirm.attendance_for_event_sync(event.id).confirmed) == ["Reid", "Finkel", "LSV"]
+    released = pod_staging.confirmed_first_roster_sync(event.id)
+    assert [signup.discord_id for signup in released] == ["u3", "u1", "u2"]
 
 
 @pytest.mark.parametrize("signed, confirmed", [

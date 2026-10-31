@@ -460,6 +460,7 @@ def signal_rsvp_rosters_sync(
             .order_by(PodSignalMember.created_at)
         ).all()
         format_locked = signal.format_locked
+    rows = pod_active.in_seat_order(event_id, rows, lambda row: row.discord_user_id)
     interests: dict[str, list[tuple[str, tuple[str, ...]]]] = {
         RSVP_YES: [], RSVP_MAYBE: [], RSVP_NO: [], CONFIRMED: [],
     }
