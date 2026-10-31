@@ -783,7 +783,7 @@ def _team_reveal_preview_parts() -> tuple[list[str], dict[str, str]]:
 _TEAM_PREVIEW_RECORDS = [(3, 0), (2, 1), (1, 2), (3, 0), (0, 3), (0, 3)]
 _TEAM_PREVIEW_COLORS = ["WU", "BR", "WBg", "UG", "RG", "WB"]
 _TEAM_PREVIEW_CAPTIONS = [
-    "3-0 6-0 fliers win games", "rakdos did rakdos things", None,
+    "3-0 6-0 fliers win games", "rakdos did rakdos things\nthen did them again", None,
     "undefeated on the losing side", None, "never drew the bomb",
 ]
 
@@ -1119,7 +1119,7 @@ def _trophy_hype_preview() -> discord.ui.LayoutView:
         deck_data={key: ParticipantDeckData(
             colors="URg",
             screenshot_url=_TEST_DECK_SCREENSHOT_URL,
-            screenshot_caption="Izzet spells with a green splash for the bombs",
+            screenshot_caption="Izzet spells with a green splash for the bombs\nthe splash paid off",
         )},
         guild_id=1,
         thread_id=1,
@@ -1135,7 +1135,7 @@ _FOUR_POD_PREVIEW_RECORDS = ((3, 0), (2, 1), (1, 2), (0, 3))
 _CHAMPIONSHIP_PREVIEW_RECORDS = ((3, 0), (2, 1), (2, 1), (2, 1), (1, 2), (1, 2), (1, 2), (0, 3))
 _CHAMPION_PREVIEW_COLORS = ("URg", "WB", "RG", "UB", "WU", "BRw", "GW", "WUBRG", "Wb", "BG")
 _CHAMPION_PREVIEW_CAPTIONS = (
-    "three bombs and a prayer", "fliers win games", None, "rakdos did rakdos things",
+    "three bombs and a prayer\nthe prayer worked", "fliers win games", None, "rakdos did rakdos things",
     None, "never drew the bomb", None, "five colors, zero wins", None, "the deck was fine",
 )
 

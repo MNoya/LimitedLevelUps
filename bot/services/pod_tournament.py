@@ -522,7 +522,7 @@ def _build_standings_row(
         clean_caption(data.screenshot_caption)
         if inline_caption and data is not None and data.screenshot_caption else ""
     )
-    caption_inline = f"  _{escape_italics(caption_cleaned)}_" if caption_cleaned else ""
+    caption_inline = f"  {italicize_lines(caption_cleaned)}" if caption_cleaned else ""
     dropped_suffix = f"  _{MSG_DROPPED_TAG}_" if info.get("dropped") else ""
     return (
         f"{prefix}{rendered}  {s.wins}-{s.losses}{dropped_suffix}"
@@ -3474,6 +3474,11 @@ def escape_italics(text: str) -> str:
     return text.replace("_", "\\_").replace("*", "\\*")
 
 
+def italicize_lines(text: str) -> str:
+    lines = [line.strip() for line in text.splitlines()]
+    return "\n".join(f"_{escape_italics(line)}_" for line in lines if line)
+
+
 _LEADING_RECORD_RE = re.compile(r"^\s*\d{1,2}\s*[-:\s]\s*\d{1,2}(?:\s*[-:]\s*\d{1,2})?\s*[,;:.\-]?\s*")
 
 
@@ -4517,7 +4522,7 @@ def build_trophy_hype_view(
         name = (displays.get(key) or {}).get("display_name") or s.player_name
         lines = [f"### {format_title(name, player_colors.get(key), short)}"]
         if data and data.screenshot_caption:
-            lines.append(f"*{data.screenshot_caption}*")
+            lines.append(italicize_lines(data.screenshot_caption))
         container.add_item(ui.TextDisplay("\n".join(lines)))
         if data and data.screenshot_url:
             container.add_item(ui.MediaGallery(

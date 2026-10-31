@@ -49,9 +49,9 @@ from bot.services.pod_tournament import (
     clean_caption,
     colors_only,
     deck_complete,
-    escape_italics,
     format_deck_color_emojis,
     insert_pending_matches,
+    italicize_lines,
     load_event_deck_data_sync,
     load_matches,
     load_participant_displays,
@@ -469,7 +469,7 @@ def team_record_line(s, displays: dict[str, dict], player_colors: dict[str, str 
     trophy = "  🏆" if record == "3-0" else ""
     data = deck_data.get(key) if deck_data else None
     caption = clean_caption(data.screenshot_caption) if data and data.screenshot_caption else ""
-    caption_suffix = f"  _{escape_italics(caption)}_" if caption else ""
+    caption_suffix = f"  {italicize_lines(caption)}" if caption else ""
     glyph = format_deck_color_emojis(player_colors.get(key))
     glyph_suffix = f"  {glyph}" if glyph else ""
     return f"{rendered}  {record}{trophy}{caption_suffix}{glyph_suffix}"
