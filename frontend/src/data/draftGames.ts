@@ -64,6 +64,7 @@ export interface WheelScore {
   baseline: number;
   firstPickExact: boolean;
   wheelCalled: number;
+  freeWheelCalls: number;
   mark: RoundMark;
 }
 
@@ -170,10 +171,13 @@ export function scoreWheel(pack: WheelPack, slots: number[]): WheelScore {
   const firstPickExact = slots[0] === pack.order[0].card;
   const slotted = new Set(slots);
   const wheelCalled = pack.wheel.filter((card) => !slotted.has(card)).length;
-  const points = wheelCalled * WHEEL_CARD_POINTS + (firstPickExact ? FIRST_PICK_POINTS : 0);
-  const max = pack.wheel.length * WHEEL_CARD_POINTS + FIRST_PICK_POINTS;
+  const freeWheelCalls = guaranteedWheelCalls(pack);
+  const wheelPoints = (wheelCalled - freeWheelCalls) * WHEEL_CARD_POINTS;
+  const points = wheelPoints + (firstPickExact ? FIRST_PICK_POINTS : 0);
+  const max = (pack.wheel.length - freeWheelCalls) * WHEEL_CARD_POINTS + FIRST_PICK_POINTS;
   const baseline = randomBaseline(pack);
-  return { points, max, baseline, firstPickExact, wheelCalled, mark: wheelMark(points - baseline) };
+  const mark = wheelMark(points - baseline);
+  return { points, max, baseline, firstPickExact, wheelCalled, freeWheelCalls, mark };
 }
 
 export function useWheelSets(): { sets: WheelSetOption[]; events: PodEventSummary[]; isPending: boolean } {
@@ -373,7 +377,7 @@ export function featuredSlots(
   seed: number,
   candidatesPerSlot = 3,
 ): PodEventSummary[][] {
-  const settled = events.filter((event) => event.eventDate < dayKey);
+  const settled = events.filter((event) => event.eventDate < dayKey && event.participantCount === 8);
   const eligible = sets.filter((set) => settled.filter((event) => event.setCode === set.code).length >= MIN_SET_PODS);
   if (eligible.length === 0) {
     return [];
@@ -449,7 +453,13 @@ function wheelEvents(events: PodEventSummary[] | undefined): PodEventSummary[] {
 function randomBaseline(pack: WheelPack): number {
   const leftOutShare = pack.wheel.length / pack.pack.length;
   const firstPickChance = 1 / pack.pack.length;
-  return pack.wheel.length * leftOutShare * WHEEL_CARD_POINTS + firstPickChance * FIRST_PICK_POINTS;
+  const expectedWheelCalls = pack.wheel.length * leftOutShare - guaranteedWheelCalls(pack);
+  return expectedWheelCalls * WHEEL_CARD_POINTS + firstPickChance * FIRST_PICK_POINTS;
+}
+
+function guaranteedWheelCalls(pack: WheelPack): number {
+  const leftOut = pack.wheel.length;
+  return Math.max(0, leftOut + pack.wheel.length - pack.pack.length);
 }
 
 function wheelMark(pointsAboveRandom: number): RoundMark {

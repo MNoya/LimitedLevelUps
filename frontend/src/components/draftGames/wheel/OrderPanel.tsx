@@ -271,7 +271,7 @@ export function WheelSection({
                   <RowResult
                     yourIndex={yourIndex}
                     realIndex={-1}
-                    points={yourIndex < 0 ? WHEEL_CARD_POINTS : 0}
+                    points={yourIndex < 0 && score.freeWheelCalls === 0 ? WHEEL_CARD_POINTS : 0}
                     delay={delay}
                   />
                 )}

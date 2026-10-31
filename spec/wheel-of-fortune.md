@@ -6,9 +6,9 @@ This doc records what was built and the decisions behind it. For how it works to
 
 ## The game
 
-- **One pack per round, pack 1 only.** The pack is the opener's first booster in a finished Pod with 6 to 8 players. Later packs were left out on purpose: pack 1 is the only one every player can reason about without knowing the table's colors.
+- **One pack per round, pack 1 only.** The pack is the opener's first booster in a finished Pod with 6 to 8 players; today's packs use only 8-player Pods. Later packs were left out on purpose: pack 1 is the only one every player can reason about without knowing the table's colors.
 - **The player orders 8 picks.** The cards left out are their wheel guess.
-- **Scoring:** +1 per correct wheel card, +3 for naming the exact first pick. Picks 2 to 8 score nothing; their order only matters for which cards are left out. Constants live in `data/draftGames.ts` as `WHEEL_CARD_POINTS` and `FIRST_PICK_POINTS`.
+- **Scoring:** +1 per correct wheel card, +3 for naming the exact first pick. Picks 2 to 8 score nothing; their order only matters for which cards are left out. At a short table more cards wheel than the player can leave out, so some wheel calls are guaranteed; those score nothing and the per-card +1 badges are hidden, so a 6-player pack scores like an 8-player pack of the same size. Constants live in `data/draftGames.ts` as `WHEEL_CARD_POINTS` and `FIRST_PICK_POINTS`.
 - **A pack has 14 or 15 cards** depending on the format. Duplicate copies of a card in one booster each get their own index through `separateCopies` in `buildWheelPack`, so picking one copy only removes that copy from the wheel.
 
 ## Modes
