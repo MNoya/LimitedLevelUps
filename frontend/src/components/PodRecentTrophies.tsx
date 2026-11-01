@@ -57,14 +57,12 @@ export function RecentTrophiesCard({
   results,
   loading,
   pageSize = RECENT_PAGE,
-  showSetGlyph = false,
   className,
 }: {
   events: PodEventSummary[];
   results: PodSeasonResultRow[];
   loading: boolean;
   pageSize?: number;
-  showSetGlyph?: boolean;
   className?: string;
 }) {
   const [limit, setLimit] = useState(pageSize);
@@ -94,15 +92,12 @@ export function RecentTrophiesCard({
                 key={`${event.eventId}-${result.slug}`}
                 to={`/pods/${event.slug}/${result.slug}`}
                 className={cn(
-                  "group grid gap-2 items-center py-[7px] -mx-1 px-1 no-underline text-inherit transition-colors hover:bg-surface2",
-                  showSetGlyph
-                    ? "grid-cols-[42px_18px_minmax(0,1fr)_86px_50px]"
-                    : "grid-cols-[42px_minmax(0,1fr)_86px_50px]",
+                  "group grid grid-cols-[42px_18px_minmax(0,1fr)_86px_50px] gap-2 items-center py-[7px] -mx-1 px-1 no-underline text-inherit transition-colors hover:bg-surface2",
                   i ? "border-t border-border" : "",
                 )}
               >
                 <Pips colors={mainColors(result.deckColors)} size={10} />
-                {showSetGlyph && <SetGlyph code={podEventGlyphCode(event)} size={18} className="text-white" />}
+                <SetGlyph code={podEventGlyphCode(event)} size={18} className="text-white" />
                 <span className="font-display text-[15px] leading-none tracking-[0.04em] truncate">
                   {stripDiscriminator(result.displayName).toUpperCase()}
                 </span>

@@ -717,7 +717,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
                         pageSize={12}
                       />
                     )}
-                    recent={() => <RecentTrophiesCard {...recentTrophiesProps} pageSize={25} showSetGlyph />}
+                    recent={() => <RecentTrophiesCard {...recentTrophiesProps} pageSize={25} />}
                   />
                   {leaderboard !== undefined && leaderboard.length > 0 && (
                     <LeaderboardColumnHeader variant="mobile" mode="pod" sort={sort} onSort={onSort} />
