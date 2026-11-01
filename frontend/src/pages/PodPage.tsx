@@ -162,9 +162,9 @@ export function PodPage({
   const { data: matches, isLoading: matchesLoading } = usePodEventMatches(eventId, live);
   const { data: replays, isLoading: replaysLoading } = usePodEventReplays(eventId);
   const decklistAccess = usePodDecklistAccess(event, participantRows);
-  const isChampionship = event ? isChampionshipEvent(event.name) : false;
+  const isChampionship = event ? isChampionshipEvent(event) : false;
   const { data: setEvents } = usePodEvents(event && !isChampionship ? event.setCode : undefined);
-  const championshipPod = event ? championshipPodNumber(event.name) : null;
+  const championshipPod = event ? championshipPodNumber(event) : null;
   const championship = useChampionship(
     isChampionship && event ? event : undefined,
     live,
@@ -217,7 +217,7 @@ export function PodPage({
   };
 
   const siblingEvents = isChampionship
-    ? championshipEvents?.filter((e) => championshipPodNumber(e.name) === null)
+    ? championshipEvents?.filter((e) => championshipPodNumber(e) === null)
     : setEvents;
   const { prevEvent, nextEvent } = useMemo(() => {
     if (!siblingEvents || !event) return { prevEvent: null, nextEvent: null };

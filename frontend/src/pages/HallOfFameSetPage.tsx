@@ -8,6 +8,7 @@ import {
   ChampionshipMobileTitle,
   ChampionshipTabs,
   ChampionshipTitle,
+  FINISHED_TABS,
   UPCOMING_TABS,
   type ChampionshipMedia,
   type ChampionshipTab,
@@ -35,6 +36,7 @@ import {
   podView,
   type ChampionshipView,
 } from "../data/setChampionship";
+import { specialChampionship } from "../data/specialChampionships";
 import type { PodEventSummary } from "../types/leaderboard";
 import { PodPage } from "./PodPage";
 
@@ -51,11 +53,18 @@ export function HallOfFameSetPage() {
   }
   const started = event !== undefined && (event.isFinalized || new Date(event.eventTime).getTime() <= Date.now());
   if (event && started && pods.length > 0) {
+    const pod = pods.find((entry) => podView(championshipPodNumber(entry) ?? 0) === view);
+    if (specialChampionship(event.eventId)) {
+      const tabs = [...podTabs(pods), ...FINISHED_TABS];
+      if (pod) {
+        return <HostedPodPage slug={pod.slug} view={view} tabs={tabs} />;
+      }
+      return isPodView(view) ? toBase : <HostedPodPage slug={event.slug} view={view} tabs={tabs} />;
+    }
     const tabs = splitChampionshipTabs(pods);
     if (view === "table") {
       return <GrandFinalPage event={event} pods={pods} tabs={tabs} />;
     }
-    const pod = pods.find((entry) => podView(championshipPodNumber(entry.name) ?? 0) === view);
     return pod ? <HostedPodPage slug={pod.slug} view={view} tabs={tabs} /> : toBase;
   }
   if (event && started) {
@@ -81,11 +90,14 @@ function HostedPodPage({ slug, view, tabs }: { slug: string; view: ChampionshipV
 }
 
 function splitChampionshipTabs(pods: PodEventSummary[]): ChampionshipTab[] {
-  const podTabs = pods.map((pod) => {
-    const number = championshipPodNumber(pod.name) ?? 0;
+  return [{ view: "table", label: "GRAND FINAL" }, ...podTabs(pods)];
+}
+
+function podTabs(pods: PodEventSummary[]): ChampionshipTab[] {
+  return pods.map((pod) => {
+    const number = championshipPodNumber(pod) ?? 0;
     return { view: podView(number), label: `POD ${number}` };
   });
-  return [{ view: "table", label: "GRAND FINAL" }, ...podTabs];
 }
 
 function GrandFinalPage({
@@ -119,7 +131,7 @@ function GrandFinalPage({
     if (!pod) {
       return undefined;
     }
-    const view = podView(championshipPodNumber(pod.name) ?? 0);
+    const view = podView(championshipPodNumber(pod) ?? 0);
     return `${championshipViewHref(event.setCode, view)}?${new URLSearchParams({ player: name })}`;
   };
   return (

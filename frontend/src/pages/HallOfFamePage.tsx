@@ -14,6 +14,7 @@ import {
   championshipPodNumber,
   championshipThreadUrl,
   championshipViewHref,
+  championTitle,
   formatChampionshipDay,
   hallOfFameSetHref,
   isChampionshipLive,
@@ -29,7 +30,7 @@ export function HallOfFamePage() {
   const { data: links } = useChampionshipLinks();
 
   const linksByEvent = new Map((links ?? []).map((row) => [row.eventId, row]));
-  const championships = (events ?? []).filter((event) => championshipPodNumber(event.name) === null);
+  const championships = (events ?? []).filter((event) => championshipPodNumber(event) === null);
   const finished = championships.filter((event) => event.isFinalized);
   const finishedSets = new Set(finished.map((event) => event.setCode));
   const upcoming = (calendar ?? []).flatMap((day) =>
@@ -190,10 +191,10 @@ function ChampionshipCard({
           <span className="relative flex-1 min-w-0">
             <span
               className="absolute bottom-full mb-1.5 flex items-center gap-1.5 font-display text-[13px]
-                tracking-[0.14em] text-gold"
+                tracking-[0.14em] text-gold whitespace-nowrap"
             >
               <Crown size={14} />
-              {setCode} CHAMPION
+              {championTitle(setCode, champion?.eventId)}
             </span>
             <span className="block font-display text-[34px] leading-none tracking-[0.04em] text-text truncate">
               {champion ? stripDiscriminator(champion.championDisplayName ?? "").toUpperCase() : "TBD"}

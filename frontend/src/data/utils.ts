@@ -3,6 +3,7 @@
 
 import type { LeaderboardRow, SetSummary } from "../types/leaderboard";
 import { POD_TROPHY_WINS } from "./scoring";
+import { SPECIAL_CHAMPIONSHIP_EVENT_IDS } from "./specialChampionships";
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
 
@@ -356,11 +357,12 @@ const POD_NAME_DATE_RE = new RegExp(`\\s*[-–]?\\s*${POD_DATE_START_RE.source}`
 
 // Plain-string title (medallions, aria): `#15 Early Pod - Table 2` once run, the slot alone upcoming.
 // PodEventTitle renders the styled version. Number is the execution-ordered ordinal, not any baked #N.
-export function isChampionshipEvent(name: string): boolean {
-  return name.toLowerCase().includes("championship");
+export function isChampionshipEvent(event: { eventId: string; name: string }): boolean {
+  return event.name.toLowerCase().includes("championship") || SPECIAL_CHAMPIONSHIP_EVENT_IDS.has(event.eventId);
 }
 
 export function podEventTitle(event: {
+  eventId: string;
   ordinal?: number | null;
   tableIndex?: number;
   name: string;
@@ -368,7 +370,7 @@ export function podEventTitle(event: {
 }): string {
   const slot = podSlotName(event.name, event.setCode);
   const qualifier = podEventQualifier(event);
-  if (event.ordinal != null && !isChampionshipEvent(event.name)) {
+  if (event.ordinal != null && !isChampionshipEvent(event)) {
     return `#${event.ordinal} ${slot}${qualifier}`;
   }
   return slot;

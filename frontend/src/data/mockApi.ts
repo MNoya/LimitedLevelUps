@@ -537,7 +537,7 @@ export const fetchPlayersDraftEvents = async (setCode: string, slugs: string[]):
 };
 
 export const fetchChampionshipEvents = (): Promise<PodEventSummary[]> =>
-  wait(withPodOrdinals(podEventsFixture).filter((event) => isChampionshipEvent(event.name)));
+  wait(withPodOrdinals(podEventsFixture).filter((event) => isChampionshipEvent(event)));
 
 export const fetchChampionshipSeeds = (_setCode: string): Promise<PodChampionshipSeedRow[]> => wait([]);
 

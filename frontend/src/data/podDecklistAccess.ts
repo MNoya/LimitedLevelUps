@@ -53,7 +53,7 @@ export function usePodDecklistAccess(
   const discordId = user?.discordId ?? null;
   const closedDecklist = event?.closedDecklist;
   const isFinalized = event?.isFinalized ?? false;
-  const championship = event ? isChampionshipEvent(event.name) : false;
+  const championship = event ? isChampionshipEvent(event) : false;
   const spectator = championship && participants !== undefined && isChampionshipSpectator(discordId, participants);
   return useMemo(
     () => computePodDecklistAccess({

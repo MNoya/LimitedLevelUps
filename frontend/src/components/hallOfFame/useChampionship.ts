@@ -40,10 +40,10 @@ export interface ChampionshipPlayer extends ChampionshipIdentity {
 export function useChampionshipEvent(setCode: string) {
   const { data: events, isLoading } = useChampionshipEvents();
   const forSet = (events ?? []).filter((entry) => entry.setCode === setCode);
-  const event = forSet.find((entry) => championshipPodNumber(entry.name) === null);
+  const event = forSet.find((entry) => championshipPodNumber(entry) === null);
   const pods = forSet
-    .filter((entry) => championshipPodNumber(entry.name) !== null)
-    .sort((a, b) => (championshipPodNumber(a.name) ?? 0) - (championshipPodNumber(b.name) ?? 0));
+    .filter((entry) => championshipPodNumber(entry) !== null)
+    .sort((a, b) => (championshipPodNumber(a) ?? 0) - (championshipPodNumber(b) ?? 0));
   return { event, pods, isLoading };
 }
 

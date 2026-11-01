@@ -71,7 +71,7 @@ describe("split championships", () => {
     { name: "👑 TLA Set Championship Pod 2", pod: 2 },
     { name: "👑 TLA Set Championship", pod: null },
   ])("reads the pod number from $name", ({ name, pod }) => {
-    const number = championshipPodNumber(name);
+    const number = championshipPodNumber({ eventId: "tla", name });
 
     expect(number).toBe(pod);
   });

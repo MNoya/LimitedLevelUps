@@ -37,6 +37,7 @@ import { podBoardWindowFor, type PodBoardWindow } from "./podFormats";
 import { cubeBoardCode, CUBE_VARIANTS } from "./cubeVariants";
 import { baseSetCode, colorsOf, CUBE_BASE, eventDate, isCubeCode, isCubeSeasonCode, isSoup } from "./utils";
 import { formatsForBucket } from "./format-buckets";
+import { SPECIAL_CHAMPIONSHIP_EVENT_IDS, specialChampionshipLinks } from "./specialChampionships";
 import { IDENTITY_VIEWS } from "./constants";
 import { FORMAT_LABEL_GROUPS, FORMAT_RAW_GROUPS, MULTI, OTHER } from "./filters";
 import type {
@@ -1789,11 +1790,13 @@ export async function fetchChampionshipEvents(): Promise<PodEventSummary[]> {
   const { data, error } = await client()
     .from("public_pod_draft_events")
     .select("*")
-    .ilike("name", "%championship%")
+    .or(`name.ilike.%championship%,event_id.in.(${specialChampionshipIds})`)
     .order("event_time", { ascending: false });
   if (error) throw error;
   return (data ?? []).map((r) => adaptPodEvent(r as Record<string, unknown>));
 }
+
+const specialChampionshipIds = [...SPECIAL_CHAMPIONSHIP_EVENT_IDS].join(",");
 
 export async function fetchChampionshipSeeds(setCode: string): Promise<PodChampionshipSeedRow[]> {
   const { data, error } = await client()
@@ -1808,7 +1811,7 @@ export async function fetchChampionshipSeeds(setCode: string): Promise<PodChampi
 export async function fetchChampionshipLinks(): Promise<PodChampionshipLinksRow[]> {
   const { data, error } = await client().from("public_pod_championships").select("*");
   if (error) throw error;
-  return (data ?? []).map((r) => {
+  const championships = (data ?? []).map((r) => {
     const row = r as Record<string, unknown>;
     return {
       eventId: row.event_id as string,
@@ -1817,6 +1820,7 @@ export async function fetchChampionshipLinks(): Promise<PodChampionshipLinksRow[
       vodUrl: (row.vod_url ?? null) as string | null,
     };
   });
+  return [...championships, ...specialChampionshipLinks()];
 }
 
 export async function fetchChampionshipRsvps(eventId: string): Promise<PodChampionshipRsvpRow[]> {

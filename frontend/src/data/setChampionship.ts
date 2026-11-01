@@ -1,4 +1,5 @@
 import { DISCORD_GUILD_ID } from "./site";
+import { specialChampionship, specialChampionshipPodNumber } from "./specialChampionships";
 import { isChampionshipEvent, stripDiscriminator } from "./utils";
 import type { PodEventMatchRow, PodEventParticipantRow } from "../types/leaderboard";
 
@@ -20,9 +21,18 @@ export function isPodView(view: string): view is PodView {
   return /^pod-\d+$/.test(view);
 }
 
-export function championshipPodNumber(name: string): number | null {
-  const match = name.match(/\bpod\s+(\d+)\s*$/i);
+export function championshipPodNumber(event: { eventId: string; name: string }): number | null {
+  const specialPod = specialChampionshipPodNumber(event.eventId);
+  if (specialPod !== null) {
+    return specialPod;
+  }
+  const match = event.name.match(/\bpod\s+(\d+)\s*$/i);
   return match ? Number(match[1]) : null;
+}
+
+export function championTitle(setCode: string, eventId?: string): string {
+  const special = eventId ? specialChampionship(eventId) : undefined;
+  return special ? special.title.toUpperCase() : `${setCode} CHAMPION`;
 }
 
 export function championshipViewHref(setCode: string, view: ChampionshipView): string {
@@ -123,8 +133,10 @@ export function isStartingOrLive(event: { eventTime: string; isFinalized: boolea
   return isChampionshipLive(event, Date.now() + halfHour);
 }
 
-export function isLiveChampionship(event: { name: string; eventTime: string; isFinalized: boolean } | null | undefined) {
-  return !!event && isChampionshipEvent(event.name) && isChampionshipLive(event);
+export function isLiveChampionship(
+  event: { eventId: string; name: string; eventTime: string; isFinalized: boolean } | null | undefined,
+) {
+  return !!event && isChampionshipEvent(event) && isChampionshipLive(event);
 }
 
 export function championshipThreadUrl(threadId: string | null): string | null {

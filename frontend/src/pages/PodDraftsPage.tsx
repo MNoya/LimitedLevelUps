@@ -523,7 +523,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
   const cardDataSearch = boardWindow ? `?${POD_SEASON_PARAM}=${boardWindow.code}` : "";
   const cardDataHref = hasCardData(activeSet) ? `/pods/${activeSet}/data${cardDataSearch}` : null;
   const finishedChampionship = setCode
-    ? scopeEvents?.find((e) => e.setCode === setCode && e.isFinalized && isChampionshipEvent(e.name))
+    ? scopeEvents?.find((e) => e.setCode === setCode && e.isFinalized && isChampionshipEvent(e))
     : undefined;
   const { data: calendar } = usePodCalendar();
   const nextChampionshipCode = !setCode && seasonAxis === null ? nextChampionshipSet(calendar) : null;
