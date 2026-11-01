@@ -3362,9 +3362,8 @@ def build_champion_announcement_view(
 
     Layout: Container (green accent) holds the headline + localized timestamp, then the blocks
     _announcement_blocks splits the announced finishers into (see announced_finishers), each one a compact
-    text run of its rows with an optional italicized caption line, followed by its deck screenshots batched
-    into one MediaGallery, capped at DECK_GALLERY_CAP so the grid ends on a full row and the last
-    finisher's deck is the one dropped. Full standings stay in the thread embed. Thread-link button sits
+    text run of its rows with an optional italicized caption line, followed by the undefeated decks batched
+    into one MediaGallery, capped at DECK_GALLERY_CAP. Full standings stay in the thread embed. Thread-link button sits
     OUTSIDE the container at LayoutView top level.
     """
     displays = displays or {}
@@ -3416,6 +3415,9 @@ def build_champion_announcement_view(
                 deck_data=deck_data, leaderboard_url=leaderboard_url,
                 event_name=event_name, inline_caption=True, set_code=set_code,
             ))
+            shows_deck = s.losses == 0 or s is top_standings[0]
+            if not shows_deck:
+                continue
             key = normalize_player_name(s.player_name)
             data = deck_data.get(key)
             if data is None or not data.screenshot_url:
