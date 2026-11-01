@@ -16,7 +16,7 @@ import { orderByPins, SetSwitcherDesktop, SwitcherChip } from "../components/Set
 import { type InlineFilterOption } from "../components/InlineFilterSelect";
 import { FilterDropdown, type FilterOption } from "../components/FilterDropdown";
 import { SetFilterDropdown, type SetFilterOption } from "../components/SetFilterDropdown";
-import { AAvatar, setGlyphCode, SetGlyph, Trophy } from "../components/Brand";
+import { AAvatar, podEventGlyphCode, setGlyphCode, SetGlyph, Trophy } from "../components/Brand";
 import {
   ArrowRight,
   BsAsterisk,
@@ -717,7 +717,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
                         pageSize={12}
                       />
                     )}
-                    recent={() => <RecentTrophiesCard {...recentTrophiesProps} pageSize={25} />}
+                    recent={() => <RecentTrophiesCard {...recentTrophiesProps} pageSize={25} showSetGlyph />}
                   />
                   {leaderboard !== undefined && leaderboard.length > 0 && (
                     <LeaderboardColumnHeader variant="mobile" mode="pod" sort={sort} onSort={onSort} />
@@ -1204,7 +1204,7 @@ function PodSetTitle({
   stacked: boolean;
   children: React.ReactNode;
 }) {
-  const code = setGlyphCode({ code: event.setCode, custom: event.formatLabel != null });
+  const code = podEventGlyphCode(event);
   return (
     <span className={cn("flex items-center min-w-0 flex-1", stacked ? "gap-2" : "gap-2.5")}>
       <SetGlyph code={code} size={stacked ? 18 : 22} className="text-white shrink-0" />

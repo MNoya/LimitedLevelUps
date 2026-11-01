@@ -206,6 +206,10 @@ export function setGlyphCode(set: { code: string; custom?: boolean; glyphCode?: 
   return set.code;
 }
 
+export function podEventGlyphCode(event: { setCode: string; formatLabel: string | null }): string {
+  return setGlyphCode({ code: event.setCode, custom: event.formatLabel != null });
+}
+
 export type Rarity = "common" | "uncommon" | "rare" | "mythic";
 
 export function RaritySetGlyph({ code, rarity, size }: { code: string; rarity: Rarity; size: number }) {
