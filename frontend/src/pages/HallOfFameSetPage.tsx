@@ -13,7 +13,7 @@ import {
   type ChampionshipMedia,
   type ChampionshipTab,
 } from "../components/hallOfFame/ChampionshipChrome";
-import { PlayerProfileCard } from "../components/hallOfFame/PlayerProfileCard";
+import { Top8Cards } from "../components/hallOfFame/Top8Cards";
 import { DeckScreenshotModal } from "../components/pod/DeckScreenshotModal";
 import { PodPagePathProvider } from "../components/pod/podLinks";
 import { QualificationList } from "../components/hallOfFame/QualificationList";
@@ -189,20 +189,7 @@ function UpcomingChampionship({ setCode, view }: { setCode: string; view: Champi
 
   const content =
     view === "top8" ? (
-      <div
-        className={
-          isMobile ? "flex flex-col gap-3" : "w-full grid grid-cols-[repeat(auto-fill,minmax(420px,1fr))] gap-4"
-        }
-      >
-        {players.map((player) => (
-          <PlayerProfileCard
-            key={player.key}
-            player={player}
-            setCode={setCode}
-            loading={statsLoading || field.loading}
-          />
-        ))}
-      </div>
+      <Top8Cards players={players} setCode={setCode} loading={statsLoading || field.loading} />
     ) : (
       <QualificationList
         entrants={field.invited}
@@ -215,7 +202,7 @@ function UpcomingChampionship({ setCode, view }: { setCode: string; view: Champi
 
   return (
     <ChampionshipShell setCode={setCode} label={UPCOMING_LABEL} day={day} tabs={UPCOMING_TABS} view={view}>
-      <div className={view === "top8" ? "w-full" : "w-full max-w-[860px] mx-auto"}>{content}</div>
+      <div className={view === "top8" ? "w-full h-full" : "w-full max-w-[860px] mx-auto"}>{content}</div>
     </ChampionshipShell>
   );
 }

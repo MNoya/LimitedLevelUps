@@ -36,7 +36,7 @@ import { usePodDecklistAccess } from "../data/podDecklistAccess";
 import { useCardImageMap } from "../data/cardImages";
 import { isChampionshipEvent, podDiscordName, podEventTitle, podSeatName } from "../data/utils";
 import { ChampionshipBracket } from "../components/hallOfFame/ChampionshipBracket";
-import { PlayerProfileCard } from "../components/hallOfFame/PlayerProfileCard";
+import { Top8Cards } from "../components/hallOfFame/Top8Cards";
 import { useChampionship } from "../components/hallOfFame/useChampionship";
 import {
   championshipMedia,
@@ -248,7 +248,8 @@ export function PodPage({
   const chromeOffset = isLandscapePhone ? CHROME_OFFSET_LANDSCAPE : CHROME_OFFSET;
   const panelMinWidth = isLandscapePhone ? PANEL_MIN_WIDTH_LANDSCAPE : PANEL_MIN_WIDTH;
   const mainClass = `flex-1 flex flex-col px-3 min-h-0 ${isLandscapePhone ? "pb-2" : "md:px-6 pb-5"}`;
-  const tableColumnPad = isLandscapePhone ? "py-1 pr-2" : "py-3 md:py-4 pr-5 md:pr-7";
+  const panelGutter = isChampionship && championshipView === "top8" ? "" : "pr-5 md:pr-7";
+  const tableColumnPad = isLandscapePhone ? "py-1 pr-2" : `py-3 md:py-4 ${panelGutter}`;
   const contentRowPad = isLandscapePhone ? "py-1" : "py-2";
   const pageHeader = isLandscapePhone ? (
     <MobilePageHeader
@@ -495,15 +496,8 @@ export function PodPage({
             />
           </div>
         ) : isChampionship && championshipView === "top8" ? (
-          <div className="px-3 py-4 flex flex-col gap-3">
-            {championship.players.map((player) => (
-              <PlayerProfileCard
-                key={player.key}
-                player={player}
-                setCode={event.setCode}
-                loading={championship.statsLoading}
-              />
-            ))}
+          <div className="px-3 py-4">
+            <Top8Cards players={championship.players} setCode={event.setCode} loading={championship.statsLoading} />
           </div>
         ) : (
           <MobileSeatStack
@@ -580,16 +574,7 @@ export function PodPage({
                 <span className="flex-[1_1_140px]" />
               </div>
             ) : isChampionship && championshipView === "top8" ? (
-              <div className="w-full grid grid-cols-[repeat(auto-fill,minmax(420px,1fr))] gap-4 self-start">
-                {championship.players.map((player) => (
-                  <PlayerProfileCard
-                    key={player.key}
-                    player={player}
-                    setCode={event.setCode}
-                    loading={championship.statsLoading}
-                  />
-                ))}
-              </div>
+              <Top8Cards players={championship.players} setCode={event.setCode} loading={championship.statsLoading} />
             ) : (
               <PodTable
                 participants={seats}
