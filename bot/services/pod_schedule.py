@@ -20,6 +20,10 @@ from bot.services.pod_reminder_copy import (
     RECRUITING_READY,
     RECRUITING_SECOND_TABLE,
     RECRUITING_SHORT,
+    SLOT_SHORT_CLOSED,
+    SLOT_SHORT_LEAD,
+    SLOT_SHORT_OFF_DM_PAIR,
+    SLOT_SHORT_OFF_DM_SOLO,
     STAGED_TABLE_SHORT,
     TEAM_DRAFT_ASK,
 )
@@ -160,6 +164,29 @@ def build_recruiting_message(
     maybe = RECRUITING_MAYBE.format(maybe=maybe_count) if maybe_count else ""
     tail = RECRUITING_SECOND_TABLE if count + maybe_count >= 2 * aim else ""
     return RECRUITING_READY.format(yes=count, maybe=maybe, tail=tail, **shared).rstrip()
+
+
+def build_slot_short_rally(
+    slot_name: str, count: int, mentions: list[str], slot_time: datetime, jump_url: str,
+) -> str:
+    """The recruiting reminder's own line with the hourglass in place of the greeting and the signups named"""
+    needed, ask = players_to_next_table(count, TEAM_DRAFT_PLAYERS)
+    return RECRUITING_SHORT.format(
+        hello=SLOT_SHORT_LEAD, name=render_pod_name(short_event_name(slot_name)), unix=int(slot_time.timestamp()),
+        needed=needed, plural=plural(needed), ask=f"{ask} with {' '.join(mentions)}", manat=emojis.get("manat"),
+        jump_url=jump_url,
+    ).rstrip()
+
+
+def build_slot_short_closed(slot_name: str, mentions: list[str]) -> str:
+    return SLOT_SHORT_CLOSED.format(name=render_pod_name(short_event_name(slot_name)), mentions=" ".join(mentions))
+
+
+def build_slot_short_off_dm(slot_name: str, other_signup: str | None) -> str:
+    name = render_pod_name(short_event_name(slot_name))
+    if other_signup is None:
+        return SLOT_SHORT_OFF_DM_SOLO.format(name=name)
+    return SLOT_SHORT_OFF_DM_PAIR.format(name=name, other=other_signup)
 
 
 def players_to_next_table(count: int, aim: int) -> tuple[int, str]:

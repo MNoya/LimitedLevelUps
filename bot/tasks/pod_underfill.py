@@ -47,17 +47,21 @@ from sqlalchemy import select, update
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import resolve_pod_chat_channel
-from bot.models import PodDraftEvent, PodSignal
+from bot.models import PodDraftEvent, PodSignal, PodSignalMember
 from bot.services.pod_drafts import is_championship
 from bot.services.pod_roles import find_role
 from bot.services.pod_draft_manager import set_underfill_fired_hook
 from bot.services.pod_schedule import (
     CHAT_ANNOUNCE_MARKER,
     build_recruiting_message,
+    build_slot_short_closed,
+    build_slot_short_off_dm,
+    build_slot_short_rally,
     build_underfill_fired_message,
     short_event_name,
 )
-from bot.services.pod_signals import KIND_SCHEDULED, STATUS_OPEN, pod_ping_role_name
+from bot.services.pod_reminder_copy import SLOT_SHORT_LEAD
+from bot.services.pod_signals import KIND_SCHEDULED, RSVP_NO, STATUS_OPEN, pod_ping_role_name
 from bot.services.pod_slot import pod_display_name
 from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import event_rsvps
@@ -85,8 +89,14 @@ def schedule_underfill_checks(scheduler, event_id: str, event_time: datetime, cr
 
 
 def schedule_slot_underfill_checks(scheduler, signal_id: str, slot_time: datetime, created_at: datetime) -> None:
-    """Arm an unfired launcher slot's T-3h / T-2h / T-1h checks — see `_arm_underfill_beats`."""
+    """Arm an unfired launcher slot's T-3h / T-2h / T-1h checks and its T-10 no-fire notice"""
     _arm_underfill_beats(scheduler, fire_slot_underfill, signal_id, "pod-slot-underfill", slot_time, created_at)
+    no_fire_at = slot_time - timedelta(minutes=10)
+    if no_fire_at > datetime.now(timezone.utc):
+        scheduler.add_job(
+            fire_slot_no_fire, "date", run_date=no_fire_at, args=[signal_id],
+            id=f"pod-slot-nofire-{signal_id}", replace_existing=True,
+        )
 
 
 def _arm_underfill_beats(
@@ -237,6 +247,64 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
     log.info(f"T-{hours_before}h slot underfill nudge for {signal_id}: {slot.count} signed up")
 
 
+async def fire_slot_no_fire(signal_id: str) -> None:
+    if _bot is None:
+        log.error(f"fire_slot_no_fire for {signal_id}: bot reference is not initialised")
+        return
+    slot = await asyncio.to_thread(_load_slot_for_nudge, signal_id)
+    signups = await asyncio.to_thread(_slot_signups_sync, signal_id)
+    signup_ids = [discord_id for discord_id, _name in signups]
+    floor = settings.pod_signal_fire_threshold
+    if slot is None or slot.status != STATUS_OPEN or not signups or len(signups) >= floor:
+        return
+    if len(signups) <= 2:
+        for discord_id, _name in signups:
+            await _dm_no_fire(discord_id, build_slot_short_off_dm(slot.name, _other_signup(signups, discord_id)))
+    else:
+        channel = await _nudge_channel()
+        if channel is None:
+            log.warning("fire_slot_no_fire: pod-draft-chat channel unavailable")
+            return
+        mentions = _user_mentions(signup_ids)
+        body = build_slot_short_rally(slot.name, len(signup_ids), mentions, slot.slot_time, slot.jump_url)
+        with contextlib.suppress(discord.HTTPException):
+            await channel.send(body, allowed_mentions=discord.AllowedMentions(users=True))
+    log.info(f"T-10 no-fire notice for slot {signal_id}: {len(signup_ids)} signed up of {floor}")
+
+
+def _other_signup(signups: list[tuple[str, str]], recipient_id: str) -> str | None:
+    for discord_id, name in signups:
+        if discord_id != recipient_id:
+            return name
+    return None
+
+
+def _user_mentions(discord_ids: list[str]) -> list[str]:
+    return [f"<@{discord_id}>" for discord_id in discord_ids if discord_id.isdigit()]
+
+
+def _is_short_slot_notice(content: str) -> bool:
+    return content.startswith(SLOT_SHORT_LEAD)
+
+
+def _slot_signups_sync(signal_id: str) -> list[tuple[str, str]]:
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(PodSignalMember.discord_user_id, PodSignalMember.display_name)
+            .where(PodSignalMember.signal_id == signal_id, PodSignalMember.rsvp != RSVP_NO)
+            .order_by(PodSignalMember.created_at)
+        ).all()
+    return [(discord_id, display_name) for discord_id, display_name in rows]
+
+
+async def _dm_no_fire(discord_id: str, body: str) -> None:
+    if not discord_id.isdigit():
+        return
+    with contextlib.suppress(discord.HTTPException):
+        user = _bot.get_user(int(discord_id)) or await _bot.fetch_user(int(discord_id))
+        await user.send(body)
+
+
 async def _nudge_channel() -> discord.abc.Messageable | None:
     """The nudge channel, held until the guild cache is populated. Every channel lookup is a pure cache
     read, and a catch-up beat is armed from `setup_hook` and fires seconds later, before the gateway
@@ -373,6 +441,11 @@ async def clear_slot_nudge(bot: commands.Bot, signal_id: str) -> None:
     nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
     if nudge is not None:
         await _safe_delete(nudge)
+    rally = await _find_rally(channel, slot)
+    if rally is not None:
+        signups = await asyncio.to_thread(_slot_signups_sync, signal_id)
+        mentions = _user_mentions([discord_id for discord_id, _name in signups])
+        await _safe_edit(rally, build_slot_short_closed(slot.name, mentions))
 
 
 async def _sync_nudge(
@@ -444,12 +517,25 @@ async def _find_nudge(
         async for message in channel.history(limit=NUDGE_SEARCH_LIMIT):
             if message.author.id != _bot.user.id or signup_url not in message.content:
                 continue
-            if CHAT_ANNOUNCE_MARKER in message.content:
+            if CHAT_ANNOUNCE_MARKER in message.content or _is_short_slot_notice(message.content):
                 continue
             if marker is None or marker in message.content:
                 return message
     except discord.HTTPException:
         log.warning("could not scan pod-draft-chat channel for the underfill nudge", exc_info=True)
+    return None
+
+
+async def _find_rally(channel: discord.abc.Messageable, slot: _SlotNudgeContext) -> discord.Message | None:
+    marker = _name_marker(slot.name)
+    try:
+        async for message in channel.history(limit=NUDGE_SEARCH_LIMIT):
+            content = message.content
+            if message.author.id == _bot.user.id and _is_short_slot_notice(content) and slot.jump_url in content:
+                if marker in content:
+                    return message
+    except discord.HTTPException:
+        log.warning("could not scan pod-draft-chat channel for the short-pod rally", exc_info=True)
     return None
 
 

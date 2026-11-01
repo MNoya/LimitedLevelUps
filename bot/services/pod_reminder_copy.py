@@ -36,6 +36,11 @@ STAGED_TABLE_SHORT = (
 
 SLOT_FIRE_PING = "{mention} starts <t:{unix}:R>"
 
+SLOT_SHORT_LEAD = "⏳ "
+SLOT_SHORT_CLOSED = "⚠️ {name} is canceled {mentions}"
+SLOT_SHORT_OFF_DM_SOLO = "⚠️ {name} is canceled, you were the only sign up"
+SLOT_SHORT_OFF_DM_PAIR = "⚠️ {name} is canceled, only you and {other} signed up"
+
 ROSTER_REMINDER_TITLE = "🔔 Pod Draft Starting Soon"
 ROSTER_REMINDER_MARK = "### 🔔"
 ROSTER_REMINDER_HEADLINE = ROSTER_REMINDER_MARK + " **{name}** <t:{unix}:R>"

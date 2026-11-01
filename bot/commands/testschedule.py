@@ -33,6 +33,9 @@ from bot.services.pod_schedule import (
     SCHEDULE_TZ,
     TEAM_DRAFT_PLAYERS,
     build_recruiting_message,
+    build_slot_short_closed,
+    build_slot_short_off_dm,
+    build_slot_short_rally,
     build_underfill_fired_message,
     slots_for_week,
 )
@@ -301,6 +304,7 @@ def _reminder_timeline(
     }
     rosters = {RSVP_YES: yes, RSVP_MAYBE: maybe}
     roster_embed = build_roster_embed(pod_name, slot, rosters, roster_interests)
+    short_mentions = [ctx.author.mention, *(f"@{name}" for name in HALL_OF_FAME[:3])]
 
     def text(const: str, desc: str, body: str) -> tuple[str, str | None, discord.Embed | None]:
         return (f"`{const}` ({desc})", body, None)
@@ -316,6 +320,14 @@ def _reminder_timeline(
              build_recruiting_message(pod_name, target, target, slot, url, maybe_count=2)),
         text("RECRUITING_READY + RECRUITING_SECOND_TABLE", "second table",
              build_recruiting_message(pod_name, 10, target, slot, url, maybe_count=6)),
+        text("RECRUITING_SHORT + SLOT_SHORT_LEAD", "T-10 in pod-draft-chat, 4 signups",
+             build_slot_short_rally(pod_name, 4, short_mentions, slot, url)),
+        text("RECRUITING_SHORT + SLOT_SHORT_LEAD", "T-10 in pod-draft-chat, 3 signups",
+             build_slot_short_rally(pod_name, 3, short_mentions[:3], slot, url)),
+        text("SLOT_SHORT_CLOSED", "the chat rally edited at the start time, still short",
+             build_slot_short_closed(pod_name, short_mentions)),
+        text("SLOT_SHORT_OFF_DM_PAIR", "T-10 DM, 2 signups", build_slot_short_off_dm(pod_name, HALL_OF_FAME[0])),
+        text("SLOT_SHORT_OFF_DM_SOLO", "T-10 DM, 1 signup", build_slot_short_off_dm(pod_name, None)),
         text("SLOT_FIRE_PING", "launcher slot fires", SLOT_FIRE_PING.format(unix=unix, mention=mention)),
         ("`ROSTER_REMINDER_TITLE` + `ROSTER_REMINDER_LINE` (T-60 reminder)", None, roster_embed),
         text("LOBBY_OPEN + LOBBY_OPEN_HEADLINE", "Draftmancer link posted",
