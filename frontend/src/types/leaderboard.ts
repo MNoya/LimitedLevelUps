@@ -334,6 +334,7 @@ export interface PodSeasonResultRow {
   placement: number | null;
   wins: number;
   losses: number;
+  deckColors: string | null;
 }
 
 export interface PodLeaderboardRow {

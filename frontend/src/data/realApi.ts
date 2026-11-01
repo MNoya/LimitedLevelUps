@@ -264,10 +264,7 @@ export async function fetchPodDeckCards(eventIds: string[]): Promise<PodDeckCard
 }
 
 export async function fetchPodArchetypes(boardCode: string): Promise<PodArchetypeRow[]> {
-  const { data, error } = await client()
-    .from("public_pod_archetype_stats")
-    .select("*")
-    .eq("set_code", boardCode);
+  const { data, error } = await client().from("public_pod_archetype_stats").select("*").eq("set_code", boardCode);
   if (error) throw error;
   return (data ?? []).map((r) => r as unknown as PodArchetypeRow);
 }
@@ -291,10 +288,7 @@ export async function fetchSets(): Promise<SetSummary[]> {
     const rows = await fetchEdgeRows<Record<string, unknown>>("/api/sets");
     return rows.map(adaptSet);
   }
-  const { data, error } = await client()
-    .from("public_sets")
-    .select("*")
-    .order("start_date", { ascending: false });
+  const { data, error } = await client().from("public_sets").select("*").order("start_date", { ascending: false });
   if (error) throw error;
   return (data ?? []).map((r) => adaptSet(r as Record<string, unknown>));
 }
@@ -324,14 +318,8 @@ export async function fetchAvailableFormats(setCode: string): Promise<string[]> 
     return Array.from(new Set((data ?? []).map((r) => (r as { format_label: string }).format_label)));
   }
   const [breakdown, pod, direct] = await Promise.all([
-    client()
-      .from("public_player_format_breakdown")
-      .select("format_label")
-      .eq("set_code", setCode),
-    client()
-      .from("public_player_pod_stats")
-      .select("set_code", { count: "exact", head: true })
-      .eq("set_code", setCode),
+    client().from("public_player_format_breakdown").select("format_label").eq("set_code", setCode),
+    client().from("public_player_pod_stats").select("set_code", { count: "exact", head: true }).eq("set_code", setCode),
     client()
       .from("public_player_draft_events")
       .select("set_code", { count: "exact", head: true })
@@ -341,9 +329,7 @@ export async function fetchAvailableFormats(setCode: string): Promise<string[]> 
   if (breakdown.error) throw breakdown.error;
   if (pod.error) throw pod.error;
   if (direct.error) throw direct.error;
-  const labels = new Set(
-    (breakdown.data ?? []).map((r) => (r as { format_label: string }).format_label),
-  );
+  const labels = new Set((breakdown.data ?? []).map((r) => (r as { format_label: string }).format_label));
   if ((pod.count ?? 0) > 0) labels.add("Pod");
   // Arena Direct buckets under the Sealed format_label, so surface it as its own
   // option only when the set actually has Direct events.
@@ -366,10 +352,7 @@ export async function fetchLeaderboard(setCode: string): Promise<LeaderboardRow[
       .from("public_player_format_breakdown")
       .select("slug, format_label, events, wins, losses, trophies, weighted_trophies")
       .eq("set_code", setCode),
-    client()
-      .from("public_pod_scoring")
-      .select("*")
-      .eq("set_code", setCode),
+    client().from("public_pod_scoring").select("*").eq("set_code", setCode),
     client()
       .from("public_self_reported_events")
       .select("slug, display_name, avatar_url, is_trophy")
@@ -425,11 +408,7 @@ export async function fetchLeaderboard(setCode: string): Promise<LeaderboardRow[
     const podEvents = (r.events as number) ?? 0;
     const podWins = (r.wins as number) ?? 0;
     const podLosses = (r.losses as number) ?? 0;
-    const bonus = podPoints(
-      podTrophies,
-      (r.two_win_finishes as number) ?? 0,
-      (r.one_win_finishes as number) ?? 0,
-    );
+    const bonus = podPoints(podTrophies, (r.two_win_finishes as number) ?? 0, (r.one_win_finishes as number) ?? 0);
     const slug = r.slug as string;
     const existing = bySlug.get(slug);
     if (existing) {
@@ -558,14 +537,30 @@ function rankCubeBoardRows(
   breakdownRows: Array<Record<string, unknown>>,
   lastCalculatedAt: string,
 ): LeaderboardRow[] {
-  interface Agg { displayName: string; avatarUrl: string | null; groups: GroupTotals[]; trophies: number; events: number; wins: number; losses: number }
+  interface Agg {
+    displayName: string;
+    avatarUrl: string | null;
+    groups: GroupTotals[];
+    trophies: number;
+    events: number;
+    wins: number;
+    losses: number;
+  }
   const bySlug = new Map<string, Agg>();
   for (const raw of breakdownRows) {
     const r = raw as Record<string, unknown>;
     const slug = r.slug as string;
     let agg = bySlug.get(slug);
     if (!agg) {
-      agg = { displayName: (r.display_name as string) ?? slug, avatarUrl: (r.avatar_url ?? null) as string | null, groups: [], trophies: 0, events: 0, wins: 0, losses: 0 };
+      agg = {
+        displayName: (r.display_name as string) ?? slug,
+        avatarUrl: (r.avatar_url ?? null) as string | null,
+        groups: [],
+        trophies: 0,
+        events: 0,
+        wins: 0,
+        losses: 0,
+      };
       bySlug.set(slug, agg);
     }
     const events = (r.events as number) ?? 0;
@@ -603,15 +598,9 @@ function rankCubeBoardRows(
 // rows for displayName / avatarUrl / lastCalculatedAt. Players without any
 // events in this format simply don't appear.
 
-export async function fetchFormatLeaderboard(
-  setCode: string,
-  format: string,
-): Promise<LeaderboardRow[]> {
+export async function fetchFormatLeaderboard(setCode: string, format: string): Promise<LeaderboardRow[]> {
   if (format === "Pod") {
-    const { data, error } = await client()
-      .from("public_pod_scoring")
-      .select("*")
-      .eq("set_code", setCode);
+    const { data, error } = await client().from("public_pod_scoring").select("*").eq("set_code", setCode);
     if (error) throw error;
     return (data ?? [])
       .map((raw) => {
@@ -633,9 +622,7 @@ export async function fetchFormatLeaderboard(
           lastCalculatedAt: new Date(0).toISOString(),
         } as LeaderboardRow;
       })
-      .sort((a, b) =>
-        b.score !== a.score ? b.score - a.score : a.displayName.localeCompare(b.displayName),
-      )
+      .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.displayName.localeCompare(b.displayName)))
       .map((r, i) => ({ ...r, rank: i + 1 }));
   }
   if (format === "Direct") return fetchDirectLeaderboard(setCode);
@@ -646,10 +633,7 @@ export async function fetchFormatLeaderboard(
   // player-wide confidence factor over all their trophies, matching the profile and the overall
   // board. Scoring only the filtered groups would shrink confidence to that format alone.
   const [breakdown, leaderboard] = await Promise.all([
-    client()
-      .from("public_player_format_breakdown")
-      .select("*")
-      .eq("set_code", setCode),
+    client().from("public_player_format_breakdown").select("*").eq("set_code", setCode),
     client()
       .from("public_leaderboard")
       .select("slug, display_name, avatar_url, last_calculated_at")
@@ -659,10 +643,7 @@ export async function fetchFormatLeaderboard(
   if (leaderboard.error) throw leaderboard.error;
 
   const info = new Map(
-    (leaderboard.data ?? []).map((r) => [
-      (r as Record<string, unknown>).slug as string,
-      r as Record<string, unknown>,
-    ]),
+    (leaderboard.data ?? []).map((r) => [(r as Record<string, unknown>).slug as string, r as Record<string, unknown>]),
   );
 
   const groupsBySlug = new Map<string, GroupTotals[]>();
@@ -679,7 +660,11 @@ export async function fetchFormatLeaderboard(
 
     const list = groupsBySlug.get(slug) ?? [];
     list.push({
-      label, events, wins, losses, trophies,
+      label,
+      events,
+      wins,
+      losses,
+      trophies,
       weightedTrophies: r.weighted_trophies as number | undefined,
     });
     groupsBySlug.set(slug, list);
@@ -723,17 +708,12 @@ export async function fetchFormatLeaderboard(
     }
   }
 
-  return rows
-    .sort((a, b) => b.score - a.score)
-    .map((r, i) => ({ ...r, rank: i + 1 }));
+  return rows.sort((a, b) => b.score - a.score).map((r, i) => ({ ...r, rank: i + 1 }));
 }
 
 // Cube-season format board: same windowed breakdown view, filtered to the
 // requested label group and scored per slug.
-async function fetchCubeSeasonFormatLeaderboard(
-  setCode: string,
-  format: string,
-): Promise<LeaderboardRow[]> {
+async function fetchCubeSeasonFormatLeaderboard(setCode: string, format: string): Promise<LeaderboardRow[]> {
   const labels = FORMAT_LABEL_GROUPS[format] ?? [format];
   const [resp, lastCalculatedAt] = await Promise.all([
     client().from("public_cube_season_breakdown").select("*").eq("set_code", setCode).in("format_label", labels),
@@ -742,7 +722,15 @@ async function fetchCubeSeasonFormatLeaderboard(
   if (resp.error) throw resp.error;
   const data = resp.data;
 
-  interface Agg { displayName: string; avatarUrl: string | null; groups: GroupTotals[]; trophies: number; events: number; wins: number; losses: number }
+  interface Agg {
+    displayName: string;
+    avatarUrl: string | null;
+    groups: GroupTotals[];
+    trophies: number;
+    events: number;
+    wins: number;
+    losses: number;
+  }
   const bySlug = new Map<string, Agg>();
   for (const raw of data ?? []) {
     const r = raw as Record<string, unknown>;
@@ -751,7 +739,15 @@ async function fetchCubeSeasonFormatLeaderboard(
     const slug = r.slug as string;
     let agg = bySlug.get(slug);
     if (!agg) {
-      agg = { displayName: (r.display_name as string) ?? slug, avatarUrl: (r.avatar_url ?? null) as string | null, groups: [], trophies: 0, events: 0, wins: 0, losses: 0 };
+      agg = {
+        displayName: (r.display_name as string) ?? slug,
+        avatarUrl: (r.avatar_url ?? null) as string | null,
+        groups: [],
+        trophies: 0,
+        events: 0,
+        wins: 0,
+        losses: 0,
+      };
       bySlug.set(slug, agg);
     }
     const wins = (r.wins as number) ?? 0;
@@ -827,7 +823,14 @@ async function fetchDirectLeaderboard(setCode: string): Promise<LeaderboardRow[]
     metaBySlug.set(m.slug as string, m);
   }
 
-  interface Agg { boxes: number; trophies: number; events: number; wins: number; losses: number; lastFinishedAt: string }
+  interface Agg {
+    boxes: number;
+    trophies: number;
+    events: number;
+    wins: number;
+    losses: number;
+    lastFinishedAt: string;
+  }
   const perSlug = new Map<string, Agg>();
   for (const raw of events) {
     const slug = raw.slug as string;
@@ -903,10 +906,7 @@ export async function fetchColorsSummary(setCode: string): Promise<ColorsSummary
     .sort((a, b) => b.trophies - a.trophies);
 }
 
-export async function fetchColorsLeaderboard(
-  setCode: string,
-  colors: string,
-): Promise<ColorsLeaderboardRow[]> {
+export async function fetchColorsLeaderboard(setCode: string, colors: string): Promise<ColorsLeaderboardRow[]> {
   return aggregateColorsFromEvents(setCode, colors, bucketOf([colors]), null);
 }
 
@@ -949,18 +949,13 @@ async function aggregateColorsFromEvents(
   if (formatFilter === "Pod") {
     return fetchPodColorsLeaderboard(setCode, bucketLabel, null);
   }
-  const formatGroup = formatFilter
-    ? (FORMAT_RAW_GROUPS[formatFilter] ?? [formatFilter])
-    : null;
+  const formatGroup = formatFilter ? (FORMAT_RAW_GROUPS[formatFilter] ?? [formatFilter]) : null;
   const formatAllowed = formatGroup ? new Set(formatGroup) : null;
 
   const season = isCubeSeasonCode(setCode);
   const baseColumns = "slug, format, wins, losses, is_trophy, finished_at, main_colors, is_multi";
   const eventColumns = season ? `${baseColumns}, display_name, avatar_url` : baseColumns;
-  let query = client()
-    .from("public_color_events")
-    .select(eventColumns)
-    .eq("set_code", setCode);
+  let query = client().from("public_color_events").select(eventColumns).eq("set_code", setCode);
   // Every bucket narrows server-side so no request scans the whole board
   if (bucket.includeMulti && bucket.combos.length > 0) {
     query = query.or(`is_multi.eq.true,main_colors.in.(${bucket.combos.join(",")})`);
@@ -1051,8 +1046,7 @@ async function aggregateColorsFromEvents(
       boxes: agg.boxes,
       earnings: agg.earnings,
       lastCalculatedAt:
-        agg.lastFinishedAt ||
-        ((meta?.last_calculated_at as string | undefined) ?? new Date(0).toISOString()),
+        agg.lastFinishedAt || ((meta?.last_calculated_at as string | undefined) ?? new Date(0).toISOString()),
     });
   }
 
@@ -1073,10 +1067,7 @@ async function aggregateColorsFromEvents(
 // A cube board is its own resume. The CUBE set holds every cube Arena has run, so collapsing a board
 // to it would answer an Arena Cube profile with Powered Cube drafts. Rank comes from the board the
 // visitor came from, and a self-reported trophy names no cube, so no board claims one.
-async function fetchCubeBoardPlayerProfile(
-  slug: string,
-  setCode: string,
-): Promise<PlayerProfile | null> {
+async function fetchCubeBoardPlayerProfile(slug: string, setCode: string): Promise<PlayerProfile | null> {
   const { rows, lastCalculatedAt } = await fetchCubeBoardBreakdown(setCode);
   const mine = rows.filter((r) => r.slug === slug);
   if (mine.length === 0) {
@@ -1118,10 +1109,7 @@ async function fetchCubeBoardPlayerProfile(
   };
 }
 
-export async function fetchPlayerProfile(
-  slug: string,
-  setCode: string,
-): Promise<PlayerProfile | null> {
+export async function fetchPlayerProfile(slug: string, setCode: string): Promise<PlayerProfile | null> {
   if (isCubeSeasonCode(setCode)) {
     return fetchCubeBoardPlayerProfile(slug, setCode);
   }
@@ -1131,23 +1119,9 @@ export async function fetchPlayerProfile(
   }
   setCode = baseSetCode(setCode);
   const [headlineResp, breakdownResp, podResp, trophiesResp] = await Promise.all([
-    client()
-      .from("public_player")
-      .select("*")
-      .eq("set_code", setCode)
-      .eq("slug", slug)
-      .maybeSingle(),
-    client()
-      .from("public_player_format_breakdown")
-      .select("*")
-      .eq("set_code", setCode)
-      .eq("slug", slug),
-    client()
-      .from("public_pod_scoring")
-      .select("*")
-      .eq("set_code", setCode)
-      .eq("slug", slug)
-      .maybeSingle(),
+    client().from("public_player").select("*").eq("set_code", setCode).eq("slug", slug).maybeSingle(),
+    client().from("public_player_format_breakdown").select("*").eq("set_code", setCode).eq("slug", slug),
+    client().from("public_pod_scoring").select("*").eq("set_code", setCode).eq("slug", slug).maybeSingle(),
     client()
       .from("public_self_reported_events")
       .select("*")
@@ -1294,6 +1268,10 @@ async function fetchPodBoardPlayerProfile(
   };
 }
 
+export async function fetchPodSetResults(setCode: string): Promise<PodSeasonResultRow[]> {
+  return fetchPodBoardResults({ board: setCode });
+}
+
 async function fetchPodBoardResults(window: PodBoardWindow): Promise<PodSeasonResultRow[]> {
   let query = client()
     .from("public_pod_draft_events")
@@ -1404,14 +1382,26 @@ export async function fetchLifetimeProfile(slug: string): Promise<PlayerProfile 
     const calc = (r.last_calculated_at as string) ?? "";
     if (calc > lastCalculatedAt) lastCalculatedAt = calc;
     if (r.set_code === CUBE_BASE) continue;
-    bump(r.set_code as string, (c) => ({ ...c, events: c.events + e, wins: c.wins + w, losses: c.losses + l, trophies: c.trophies + t }));
+    bump(r.set_code as string, (c) => ({
+      ...c,
+      events: c.events + e,
+      wins: c.wins + w,
+      losses: c.losses + l,
+      trophies: c.trophies + t,
+    }));
   }
   for (const r of (cubeResp.data ?? []) as Record<string, unknown>[]) {
     const e = num(r, "events");
     const w = num(r, "wins");
     const l = num(r, "losses");
     const t = num(r, "trophies");
-    bump(r.set_code as string, (c) => ({ ...c, events: c.events + e, wins: c.wins + w, losses: c.losses + l, trophies: c.trophies + t }));
+    bump(r.set_code as string, (c) => ({
+      ...c,
+      events: c.events + e,
+      wins: c.wins + w,
+      losses: c.losses + l,
+      trophies: c.trophies + t,
+    }));
   }
   let podTrophies = 0;
   for (const r of podRows) {
@@ -1423,7 +1413,13 @@ export async function fetchLifetimeProfile(slug: string): Promise<PlayerProfile 
     wins += w;
     losses += l;
     podTrophies += t;
-    bump(r.set_code as string, (c) => ({ ...c, events: c.events + e, wins: c.wins + w, losses: c.losses + l, trophies: c.trophies + t }));
+    bump(r.set_code as string, (c) => ({
+      ...c,
+      events: c.events + e,
+      wins: c.wins + w,
+      losses: c.losses + l,
+      trophies: c.trophies + t,
+    }));
   }
   for (const r of trophyRows) {
     if ((r.is_trophy as boolean) ?? true) {
@@ -1531,10 +1527,7 @@ const DRAFT_EVENT_COLUMNS =
 
 const PLAYED_EVENTS_FILTER = "format.neq.PodDraft,wins.gt.0,losses.gt.0";
 
-export async function fetchPlayerDraftEvents(
-  slug: string,
-  setCode: string,
-): Promise<PlayerDraftEvent[]> {
+export async function fetchPlayerDraftEvents(slug: string, setCode: string): Promise<PlayerDraftEvent[]> {
   const podWindow = podBoardWindowFor(setCode);
   if (podWindow) return fetchPodBoardDraftEvents(slug, podWindow);
   const { data, error } = await client()
@@ -1620,10 +1613,7 @@ export async function fetchLifetimeStats(
 const RECENT_TROPHY_COLUMNS =
   "set_code, slug, display_name, avatar_url, format, colors, wins, losses, finished_at, seventeenlands_event_id, end_rank";
 
-export async function fetchRecentTrophies(
-  setCode: string,
-  limit = 8,
-): Promise<RecentTrophy[]> {
+export async function fetchRecentTrophies(setCode: string, limit = 8): Promise<RecentTrophy[]> {
   // public_recent_trophies is already is_trophy-only; the season events view is
   // the full event log, so it needs the explicit trophy filter.
   let query = client()
@@ -1631,9 +1621,7 @@ export async function fetchRecentTrophies(
     .select(RECENT_TROPHY_COLUMNS)
     .eq("set_code", setCode);
   if (isCubeSeasonCode(setCode)) query = query.eq("is_trophy", true);
-  const { data, error } = await query
-    .order("finished_at", { ascending: false, nullsFirst: false })
-    .limit(limit);
+  const { data, error } = await query.order("finished_at", { ascending: false, nullsFirst: false }).limit(limit);
   if (error) throw error;
   return (data ?? []).map((r) => adaptRecentTrophy(r as Record<string, unknown>));
 }
@@ -1641,10 +1629,7 @@ export async function fetchRecentTrophies(
 // Server-side format filter so the sidebar can rebuild Top Colors and Recent
 // Trophies from a single dataset when the user picks a format. LCQ has compound
 // raw labels; other formats substring-match (mirrors matchesFormatFilter).
-export async function fetchFormatRecentTrophies(
-  setCode: string,
-  format: string,
-): Promise<RecentTrophy[]> {
+export async function fetchFormatRecentTrophies(setCode: string, format: string): Promise<RecentTrophy[]> {
   if (format === "Pod") return fetchPodRecentTrophies(setCode);
   if (format === "LCQ") return fetchLcqRecentTrophiesAndWins(setCode);
   return fetchTrophyPool(setCode, format);
@@ -1703,20 +1688,13 @@ function adaptRecentTrophy(row: Record<string, unknown>): RecentTrophy {
 async function fetchLcqRecentTrophiesAndWins(setCode: string): Promise<RecentTrophy[]> {
   const group = FORMAT_RAW_GROUPS.LCQ;
   const [trophiesResp, d2Resp, metaResp] = await Promise.all([
-    client()
-      .from("public_recent_trophies")
-      .select("*")
-      .eq("set_code", setCode)
-      .in("format", group),
+    client().from("public_recent_trophies").select("*").eq("set_code", setCode).in("format", group),
     client()
       .from("public_player_draft_events")
       .select("slug, seventeenlands_event_id, format, colors, wins, losses, finished_at, is_trophy")
       .eq("set_code", setCode)
       .in("format", LCQ_DRAFT_2_FORMATS),
-    client()
-      .from("public_leaderboard")
-      .select("slug, display_name, avatar_url")
-      .eq("set_code", setCode),
+    client().from("public_leaderboard").select("slug, display_name, avatar_url").eq("set_code", setCode),
   ]);
   if (trophiesResp.error) throw trophiesResp.error;
   if (d2Resp.error) throw d2Resp.error;
@@ -1766,11 +1744,7 @@ export async function fetchPodEvents(setCode: string): Promise<PodEventSummary[]
 
 export async function fetchAllPodEvents(): Promise<PodEventSummary[]> {
   const rows = await pagedRows<Record<string, unknown>>((from, to) =>
-    client()
-      .from("public_pod_draft_events")
-      .select("*")
-      .order("event_time", { ascending: false })
-      .range(from, to),
+    client().from("public_pod_draft_events").select("*").order("event_time", { ascending: false }).range(from, to),
   );
   return rows.map((r) => adaptPodEvent(r));
 }
@@ -1846,17 +1820,12 @@ export async function fetchChampionshipLinks(): Promise<PodChampionshipLinksRow[
 }
 
 export async function fetchChampionshipRsvps(eventId: string): Promise<PodChampionshipRsvpRow[]> {
-  const { data, error } = await client()
-    .from("public_pod_championship_rsvps")
-    .select("*")
-    .eq("event_id", eventId);
+  const { data, error } = await client().from("public_pod_championship_rsvps").select("*").eq("event_id", eventId);
   if (error) throw error;
   return (data ?? []).map((r) => adaptChampionshipRsvp(r as Record<string, unknown>));
 }
 
-export async function fetchPodEventParticipants(
-  eventId: string,
-): Promise<PodEventParticipantRow[]> {
+export async function fetchPodEventParticipants(eventId: string): Promise<PodEventParticipantRow[]> {
   const { data, error } = await client()
     .from("public_pod_draft_event_participants")
     .select("*")
@@ -1888,11 +1857,7 @@ export async function fetchPodDraftArtifact(eventId: string): Promise<PodDraftAr
 }
 
 export async function fetchPodEventBySlug(slug: string): Promise<PodEventSummary | null> {
-  const { data, error } = await client()
-    .from("public_pod_draft_events")
-    .select("*")
-    .eq("slug", slug)
-    .maybeSingle();
+  const { data, error } = await client().from("public_pod_draft_events").select("*").eq("slug", slug).maybeSingle();
   if (error) throw error;
   if (!data) return null;
   return adaptPodEvent(data as Record<string, unknown>);
@@ -1925,7 +1890,6 @@ interface PodParticipantParsed {
   displayName: string;
   avatarUrl: string | null;
   deckColors: string | null;
-  placement: number | null;
   wins: number;
   losses: number;
 }
@@ -1938,35 +1902,33 @@ function parseRecord(record: string | null | undefined): { wins: number; losses:
 async function fetchPodParticipantsForSet(setCode: string): Promise<PodParticipantParsed[]> {
   const eventsResp = await client()
     .from("public_pod_draft_events")
-    .select("event_id, event_time")
+    .select("event_id, event_time, kind, is_finalized")
     .eq("set_code", setCode);
   if (eventsResp.error) throw eventsResp.error;
-  const eventTimeById = new Map<string, string>(
-    ((eventsResp.data ?? []) as Array<{ event_id: string; event_time: string }>)
-      .map((e) => [e.event_id, e.event_time]),
-  );
+  type EventRow = { event_id: string; event_time: string; kind: string; is_finalized: boolean };
+  const eventTimeById = new Map<string, string>();
+  for (const e of (eventsResp.data ?? []) as EventRow[]) {
+    if (e.kind !== "mock" && e.is_finalized) {
+      eventTimeById.set(e.event_id, e.event_time);
+    }
+  }
   if (eventTimeById.size === 0) return [];
 
-  const partsResp = await client()
-    .from("public_pod_draft_event_participants")
-    .select("event_id, player_slug, player_display_name, avatar_url, deck_colors, record, placement")
-    .in("event_id", Array.from(eventTimeById.keys()));
-  if (partsResp.error) throw partsResp.error;
-
-  return (partsResp.data ?? []).map((raw) => {
-    const r = raw as Record<string, unknown>;
-    const slug = (r.player_slug as string | null) ?? null;
-    return {
-      eventId: r.event_id as string,
-      finishedAt: eventTimeById.get(r.event_id as string) ?? "",
-      slug,
-      displayName: (r.player_display_name as string | null) ?? slug ?? "",
-      avatarUrl: (r.avatar_url as string | null) ?? null,
-      deckColors: (r.deck_colors as string | null) ?? null,
-      placement: (r.placement as number | null) ?? null,
-      ...parseRecord(r.record as string | null),
-    };
-  });
+  const participants = await podParticipantsForEvents(Array.from(eventTimeById.keys()));
+  return participants
+    .filter((r) => r.record != null)
+    .map((r) => {
+      const slug = (r.player_slug as string | null) ?? null;
+      return {
+        eventId: r.event_id as string,
+        finishedAt: eventTimeById.get(r.event_id as string) ?? "",
+        slug,
+        displayName: (r.player_display_name as string | null) ?? slug ?? "",
+        avatarUrl: (r.avatar_url as string | null) ?? null,
+        deckColors: (r.deck_colors as string | null) ?? null,
+        ...parseRecord(r.record as string | null),
+      };
+    });
 }
 
 async function fetchPodRecentTrophies(setCode: string): Promise<RecentTrophy[]> {
@@ -2017,10 +1979,18 @@ async function fetchPodColorsLeaderboard(
   }
   const perSlug = new Map<string, Agg>();
   for (const p of parts) {
-    if (p.placement === null || !p.slug || !colorMatches(p.deckColors)) continue;
+    if (!p.slug || !colorMatches(p.deckColors)) continue;
     let agg = perSlug.get(p.slug);
     if (!agg) {
-      agg = { displayName: p.displayName, avatarUrl: p.avatarUrl, events: 0, wins: 0, losses: 0, trophies: 0, lastFinishedAt: "" };
+      agg = {
+        displayName: p.displayName,
+        avatarUrl: p.avatarUrl,
+        events: 0,
+        wins: 0,
+        losses: 0,
+        trophies: 0,
+        lastFinishedAt: "",
+      };
       perSlug.set(p.slug, agg);
     }
     agg.events += 1;
@@ -2054,10 +2024,7 @@ async function fetchPodColorsLeaderboard(
 }
 
 export async function fetchPodLeaderboard(setCode: string): Promise<PodLeaderboardRow[]> {
-  const { data, error } = await client()
-    .from("public_player_pod_stats")
-    .select("*")
-    .eq("set_code", setCode);
+  const { data, error } = await client().from("public_player_pod_stats").select("*").eq("set_code", setCode);
   if (error) throw error;
   return (data ?? [])
     .map((r) => adaptPodLeaderboardRow(r as Record<string, unknown>))
@@ -2079,7 +2046,8 @@ export async function fetchPodSeasonResults(
 }
 
 const POD_RESULT_EVENT_COLUMNS = "event_id, set_code, event_time, kind";
-const POD_RESULT_PARTICIPANT_COLUMNS = "event_id, player_slug, player_display_name, avatar_url, record, placement";
+const POD_RESULT_PARTICIPANT_COLUMNS =
+  "event_id, player_slug, player_display_name, avatar_url, record, placement, deck_colors";
 
 // The whole history in two ordered range-paged reads run in parallel, so the pods page holds every scope
 // client-side and never chains an events read into a per-event participants read
@@ -2158,6 +2126,7 @@ function mapParticipantsToResults(
       displayName: (r.player_display_name as string | null) ?? slug,
       avatarUrl: (r.avatar_url as string | null) ?? null,
       placement: (r.placement as number | null) ?? null,
+      deckColors: (r.deck_colors as string | null) ?? null,
       ...parseRecord(r.record as string | null),
     });
   }
@@ -2174,10 +2143,7 @@ async function podParticipantsForEvents(eventIds: string[]): Promise<Record<stri
   }
   const responses = await Promise.all(
     chunks.map((ids) =>
-      client()
-        .from("public_pod_draft_event_participants")
-        .select(POD_RESULT_PARTICIPANT_COLUMNS)
-        .in("event_id", ids),
+      client().from("public_pod_draft_event_participants").select(POD_RESULT_PARTICIPANT_COLUMNS).in("event_id", ids),
     ),
   );
   const participants: Record<string, unknown>[] = [];
@@ -2343,14 +2309,8 @@ import type {
 import { DEV_AUTH_USER } from "./devAuth";
 import type { CardRating, RatingsSnapshot } from "./p0p1Results";
 
-const cardLoaders = import.meta.glob<Card[]>(
-  "./fixtures/cards-*.ts",
-  { import: "default" },
-);
-const ratingLoaders = import.meta.glob<RatingsSnapshot>(
-  "./fixtures/p0p1-ratings-*.ts",
-  { import: "default" },
-);
+const cardLoaders = import.meta.glob<Card[]>("./fixtures/cards-*.ts", { import: "default" });
+const ratingLoaders = import.meta.glob<RatingsSnapshot>("./fixtures/p0p1-ratings-*.ts", { import: "default" });
 
 export async function fetchP0P1Cards(setCode: string): Promise<Card[]> {
   const key = `./fixtures/cards-${setCode.toLowerCase()}.ts`;
@@ -2544,19 +2504,17 @@ export async function fetchFantasyOwnBracket(eventCode: string): Promise<Fantasy
 
 export async function saveFantasyBracketPick(eventCode: string, pick: FantasyOwnBracketPick): Promise<void> {
   const userId = await signedInUserId();
-  const { error } = await client()
-    .from("fantasy_bracket_picks")
-    .upsert(
-      {
-        user_id: userId,
-        event_code: eventCode,
-        position: pick.position,
-        winner_id: pick.winnerId,
-        games: pick.games,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,event_code,position" },
-    );
+  const { error } = await client().from("fantasy_bracket_picks").upsert(
+    {
+      user_id: userId,
+      event_code: eventCode,
+      position: pick.position,
+      winner_id: pick.winnerId,
+      games: pick.games,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,event_code,position" },
+  );
   if (error) throw error;
 }
 
@@ -2576,19 +2534,17 @@ export async function saveFantasyPick(
   fromRound: number,
 ): Promise<void> {
   const userId = await signedInUserId();
-  const { error } = await client()
-    .from("fantasy_picks")
-    .upsert(
-      {
-        user_id: userId,
-        event_code: eventCode,
-        slot,
-        from_round: fromRound,
-        player_id: playerId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,event_code,slot,from_round" },
-    );
+  const { error } = await client().from("fantasy_picks").upsert(
+    {
+      user_id: userId,
+      event_code: eventCode,
+      slot,
+      from_round: fromRound,
+      player_id: playerId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,event_code,slot,from_round" },
+  );
   if (error) throw error;
 }
 
@@ -2615,11 +2571,7 @@ export async function fetchP0P1Picks(setCode: string): Promise<P0P1Pick[]> {
   }));
 }
 
-export async function upsertP0P1Pick(
-  setCode: string,
-  slot: SlotKey,
-  cardName: string,
-): Promise<void> {
+export async function upsertP0P1Pick(setCode: string, slot: SlotKey, cardName: string): Promise<void> {
   const userId = await signedInUserId();
   const { error } = await client()
     .from("p0p1_entries")
@@ -2637,10 +2589,7 @@ async function signedInUserId(): Promise<string> {
 }
 
 export async function deleteAllP0P1Picks(setCode: string): Promise<void> {
-  const { error } = await client()
-    .from("p0p1_entries")
-    .delete()
-    .eq("set_code", setCode);
+  const { error } = await client().from("p0p1_entries").delete().eq("set_code", setCode);
   if (error) throw error;
 }
 
@@ -2684,10 +2633,7 @@ export async function fetchP0P1Ballots(setCode: string): Promise<P0P1BallotRow[]
 }
 
 export async function fetchP0P1PickStats(setCode: string): Promise<P0P1PickStat[]> {
-  const { data, error } = await client()
-    .from("public_p0p1_pick_stats")
-    .select("*")
-    .eq("set_code", setCode);
+  const { data, error } = await client().from("public_p0p1_pick_stats").select("*").eq("set_code", setCode);
   if (error) throw error;
   return (data ?? []).map((r) => ({
     setCode: r.set_code as string,

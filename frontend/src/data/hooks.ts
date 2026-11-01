@@ -54,6 +54,7 @@ import {
   fetchPodSetCodes,
   fetchAllPodEvents,
   fetchAllPodResults,
+  fetchPodSetResults,
   fetchRecentTrophies,
   fetchSets,
   fetchDbEpisodes,
@@ -588,6 +589,15 @@ export function usePodEvents(setCode: string | undefined) {
   return useQuery({
     queryKey: ["pod-events", setCode],
     queryFn: () => fetchPodEvents(setCode!),
+    enabled: !!setCode,
+    staleTime: THIRTY_MINUTES,
+  });
+}
+
+export function usePodSetResults(setCode: string | undefined) {
+  return useQuery({
+    queryKey: ["pod-set-results", setCode],
+    queryFn: () => fetchPodSetResults(setCode!),
     enabled: !!setCode,
     staleTime: THIRTY_MINUTES,
   });

@@ -7,9 +7,10 @@ import { SurfaceCard } from "./SurfaceCard";
 import { Trophy } from "./Brand";
 import { ChevronDown, ExternalLink } from "./Icons";
 import { cn } from "../lib/utils";
-import { usePodEvents } from "../data/hooks";
+import { usePodEvents, usePodSetResults } from "../data/hooks";
+import { podTrophyFinishes } from "../data/podArchetypes";
 import { mainColors, relativeTime, stripDiscriminator } from "../data/utils";
-import type { PodEventSummary, SetSummary } from "../types/leaderboard";
+import type { PodEventSummary, PodSeasonResultRow, SetSummary } from "../types/leaderboard";
 
 const RECENT_PAGE = 8;
 
@@ -43,20 +44,23 @@ export function PodRecentTrophies({
   sets: SetSummary[] | undefined;
 }) {
   const { data } = usePodEvents(setCode);
+  const { data: results } = usePodSetResults(setCode);
   const inSeason = useMemo(
     () => (data ?? []).filter((e) => season == null || eventSeason(e, sets) === season),
     [data, season, sets],
   );
-  return <RecentTrophiesCard events={inSeason} loading={!data} />;
+  return <RecentTrophiesCard events={inSeason} results={results ?? []} loading={!data || !results} />;
 }
 
 export function RecentTrophiesCard({
   events,
+  results,
   loading,
   pageSize = RECENT_PAGE,
   className,
 }: {
   events: PodEventSummary[];
+  results: PodSeasonResultRow[];
   loading: boolean;
   pageSize?: number;
   className?: string;
@@ -64,57 +68,52 @@ export function RecentTrophiesCard({
   const [limit, setLimit] = useState(pageSize);
 
   const finalized = useMemo(() => events.filter((e) => e.kind !== "mock" && e.isFinalized), [events]);
-  const champions = useMemo(
-    () =>
-      finalized
-        .filter((e) => e.championDisplayName)
-        .sort((a, b) => (a.eventTime < b.eventTime ? 1 : a.eventTime > b.eventTime ? -1 : 0)),
-    [finalized],
-  );
+  const trophies = useMemo(() => podTrophyFinishes(events, results), [events, results]);
   const players = useMemo(() => finalized.reduce((sum, e) => sum + (e.participantCount ?? 0), 0), [finalized]);
-  const shown = champions.slice(0, limit);
+  const shown = trophies.slice(0, limit);
 
   return (
     <div className={cn("flex flex-col gap-4", className)}>
       <SurfaceCard>
         <div className="mb-1 flex items-center gap-1.5">
           <Trophy size={16} color="#ffc63a" />
-          <SectionLabel size={16} className="text-subtle">RECENT TROPHIES</SectionLabel>
+          <SectionLabel size={16} className="text-subtle">
+            RECENT TROPHIES
+          </SectionLabel>
         </div>
         {loading ? (
           <div className="font-mono text-[11px] text-muted py-2">LOADING…</div>
-        ) : champions.length === 0 ? (
+        ) : trophies.length === 0 ? (
           <div className="font-mono text-[11px] text-muted py-2">NO TROPHIES YET</div>
         ) : (
           <>
-            {shown.map((e, i) => {
-              const to = e.championPlayerSlug
-                ? `/pods/${e.slug}/${e.championPlayerSlug}`
-                : `/pods/${e.slug}?player=${encodeURIComponent(e.championDisplayName ?? "")}`;
-              return (
-                <Link
-                  key={e.eventId}
-                  to={to}
-                  className={cn(
-                    "group grid grid-cols-[28px_minmax(0,1fr)_86px_50px] gap-2 items-center py-[7px] -mx-1 px-1 no-underline text-inherit transition-colors hover:bg-surface2",
-                    i ? "border-t border-border" : "",
-                  )}
-                >
-                  <Pips colors={mainColors(e.championDeckColors)} size={10} />
-                  <span className="font-display text-[15px] leading-none tracking-[0.04em] truncate">
-                    {stripDiscriminator(e.championDisplayName ?? "").toUpperCase()}
-                  </span>
-                  <span className="font-mono text-[11px] text-subtle whitespace-nowrap text-left">
-                    {podShortName(e.eventDate, e.name)}
-                  </span>
-                  <span className="flex items-center justify-end gap-1 font-mono text-[11px] text-muted tabular-nums whitespace-nowrap">
-                    {relativeTime(e.eventTime)}
-                    <ExternalLink size={12} className="text-dim transition-colors group-hover:text-text" aria-hidden="true" />
-                  </span>
-                </Link>
-              );
-            })}
-            {champions.length > limit && (
+            {shown.map(({ event, result }, i) => (
+              <Link
+                key={`${event.eventId}-${result.slug}`}
+                to={`/pods/${event.slug}/${result.slug}`}
+                className={cn(
+                  "group grid grid-cols-[42px_minmax(0,1fr)_86px_50px] gap-2 items-center py-[7px] -mx-1 px-1 no-underline text-inherit transition-colors hover:bg-surface2",
+                  i ? "border-t border-border" : "",
+                )}
+              >
+                <Pips colors={mainColors(result.deckColors)} size={10} />
+                <span className="font-display text-[15px] leading-none tracking-[0.04em] truncate">
+                  {stripDiscriminator(result.displayName).toUpperCase()}
+                </span>
+                <span className="font-mono text-[11px] text-subtle whitespace-nowrap text-left">
+                  {podShortName(event.eventDate, event.name)}
+                </span>
+                <span className="flex items-center justify-end gap-1 font-mono text-[11px] text-muted tabular-nums whitespace-nowrap">
+                  {relativeTime(event.eventTime)}
+                  <ExternalLink
+                    size={12}
+                    className="text-dim transition-colors group-hover:text-text"
+                    aria-hidden="true"
+                  />
+                </span>
+              </Link>
+            ))}
+            {trophies.length > limit && (
               <button
                 type="button"
                 onClick={() => setLimit((n) => n + pageSize)}

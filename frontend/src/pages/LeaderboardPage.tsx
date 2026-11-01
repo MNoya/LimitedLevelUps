@@ -4,12 +4,7 @@ import React, { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState 
 import { AppHeader } from "../components/AppHeader";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { SetGlyph, setGlyphCode, Trophy } from "../components/Brand";
-import {
-  ArrowRight,
-  BsAsterisk,
-  BsPaletteFill,
-  ExternalLink,
-} from "../components/Icons";
+import { ArrowRight, BsAsterisk, BsPaletteFill, ExternalLink } from "../components/Icons";
 import { Pip, Pips } from "../components/ManaPips";
 import { SetSwitcherDesktop, SetSwitcherMobile } from "../components/SetSwitcher";
 import { TrophyLeaderboard } from "../components/TrophyLeaderboard";
@@ -18,7 +13,14 @@ import { FilterDropdown } from "../components/FilterDropdown";
 import { SetFilterDropdown, setFilterOptionsFrom, type SetFilterOption } from "../components/SetFilterDropdown";
 import { ColorsSwitcher } from "../components/ColorsSwitcher";
 import { LeaderboardSidebar, LeaderboardInsightsStrip } from "../components/LeaderboardSidebar";
-import { boardModeFor, DEFAULT_SORT, defaultSortFor, LeaderboardColumnHeader, LeaderboardTable, sortRows } from "../components/LeaderboardTable";
+import {
+  boardModeFor,
+  DEFAULT_SORT,
+  defaultSortFor,
+  LeaderboardColumnHeader,
+  LeaderboardTable,
+  sortRows,
+} from "../components/LeaderboardTable";
 import type { SortDir, SortKey, SortState } from "../components/LeaderboardTable";
 import { SectionLabel } from "../components/SectionLabel";
 import { ChamferedButton } from "../components/ChamferedButton";
@@ -46,20 +48,61 @@ import {
 } from "../data/hooks";
 import { isMtgoFlashbackCode, mtgoSetName, withMtgoSets, MTGO_BLOCK_GLYPHS } from "../data/mtgoSets";
 import { useAuth } from "../auth/useAuth";
-import { baseSetCode, canonicalSetCode, colorsOf, CUBE_BASE, cubeSeasonLabel, eventDate, fmtRange, fmtShortDate, isCubeCode, isCubeSeasonCode, isSoup, lastUpdated, leaderboardPath, playerPath, profileSearch, prettyFormat, relativeTime, sumEvents, weekOfSet, winPct } from "../data/utils";
 import {
-  cubeBoardForRoute, cubeBoardGlyphCode, cubeForBoard, isCubeBoardLive, ongoingCubeBoard,
-  latestWindowFor, SEASONED_CUBE_VARIANT, setsWithCubeBoards,
+  baseSetCode,
+  canonicalSetCode,
+  colorsOf,
+  CUBE_BASE,
+  cubeSeasonLabel,
+  eventDate,
+  fmtRange,
+  fmtShortDate,
+  isCubeCode,
+  isCubeSeasonCode,
+  isSoup,
+  lastUpdated,
+  leaderboardPath,
+  playerPath,
+  profileSearch,
+  prettyFormat,
+  relativeTime,
+  sumEvents,
+  weekOfSet,
+  winPct,
+} from "../data/utils";
+import {
+  cubeBoardForRoute,
+  cubeBoardGlyphCode,
+  cubeForBoard,
+  isCubeBoardLive,
+  ongoingCubeBoard,
+  latestWindowFor,
+  SEASONED_CUBE_VARIANT,
+  setsWithCubeBoards,
 } from "../data/cubeVariants";
 import { CubeSeasonSelector, cubeBoardHasSeasons } from "../components/CubeSeasonSelector";
 import { podBoardWindowFor, withCustomPodBoards } from "../data/podFormats";
-import { colorsDisplayName, FORMAT_LABEL_GROUPS, FORMAT_OPTIONS, matchesFormatFilter, MULTI, OTHER } from "../data/filters";
+import {
+  colorsDisplayName,
+  FORMAT_LABEL_GROUPS,
+  FORMAT_OPTIONS,
+  matchesFormatFilter,
+  MULTI,
+  OTHER,
+} from "../data/filters";
 import { FMT_COLORS, FMT_DEFAULT_COLOR, renderFormatOption, shortFormat } from "../data/format-display";
 import { guildLogoTransform, guildSvgUrl } from "../data/guild-art";
 import { ACTIVE_SET_CODE } from "../data/constants";
 import { cn } from "../lib/utils";
 import { useSearchParamHref } from "../lib/search-param-href";
-import type { CubeSeason, LeaderboardRow, PlayerDraftEvent, PlayerFormatBreakdown, SetSummary, TrophyLeaderboardRow } from "../types/leaderboard";
+import type {
+  CubeSeason,
+  LeaderboardRow,
+  PlayerDraftEvent,
+  PlayerFormatBreakdown,
+  SetSummary,
+  TrophyLeaderboardRow,
+} from "../types/leaderboard";
 import type { LeaderboardTableRow } from "../components/LeaderboardTable";
 
 // ─── Page entry ────────────────────────────────────────────────────────────
@@ -138,10 +181,7 @@ export function LeaderboardPage() {
   const bothNamedMode = bothMode && colors !== OTHER;
 
   const lb = useLeaderboard(colorsMode || formatMode ? undefined : activeSet);
-  const fmtLb = useFormatLeaderboard(
-    formatOnlyMode ? activeSet : undefined,
-    formatOnlyMode ? format : undefined,
-  );
+  const fmtLb = useFormatLeaderboard(formatOnlyMode ? activeSet : undefined, formatOnlyMode ? format : undefined);
   const colorsLb = useColorsLeaderboard(
     namedColorsOnlyMode ? activeSet : undefined,
     namedColorsOnlyMode ? colors : undefined,
@@ -174,18 +214,14 @@ export function LeaderboardPage() {
   const effectiveDefaultSort = defaultSortFor(boardMode);
   const rawSort = readSortFromParams(searchParams);
   const sort: SortState = boardMode === "direct" && rawSort.key === "score" ? effectiveDefaultSort : rawSort;
-  const rows = useMemo(
-    () => (baseRows ? sortRows(baseRows, sort) : baseRows),
-    [baseRows, sort.key, sort.dir],
-  );
+  const rows = useMemo(() => (baseRows ? sortRows(baseRows, sort) : baseRows), [baseRows, sort.key, sort.dir]);
 
   const onSort = (key: SortKey) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       const curKey = (next.get("sort") as SortKey | null) ?? effectiveDefaultSort.key;
       const curDir = (next.get("dir") as SortDir | null) ?? effectiveDefaultSort.dir;
-      const dir: SortDir =
-        curKey === key ? (curDir === "desc" ? "asc" : "desc") : "desc";
+      const dir: SortDir = curKey === key ? (curDir === "desc" ? "asc" : "desc") : "desc";
       if (key === effectiveDefaultSort.key && dir === effectiveDefaultSort.dir) {
         next.delete("sort");
         next.delete("dir");
@@ -345,10 +381,7 @@ function MtgoBoard({
         )}
         <div className="min-w-0">
           <div className="flex items-baseline gap-3">
-            <span
-              className="font-display tracking-[0.04em]"
-              style={{ fontSize: isMobile ? 32 : 56, lineHeight: 0.9 }}
-            >
+            <span className="font-display tracking-[0.04em]" style={{ fontSize: isMobile ? 32 : 56, lineHeight: 0.9 }}>
               {activeSet}
             </span>
             <span className="font-display text-[15px] md:text-[22px] text-muted tracking-[0.06em] truncate">
@@ -360,19 +393,18 @@ function MtgoBoard({
           )}
         </div>
         <div className="flex-1" />
-        {sets && (
-          isMobile ? (
+        {sets &&
+          (isMobile ? (
             <div className="w-[150px] shrink-0">
               <SetSwitcherMobile sets={sets} activeCode={activeSet} hrefFor={setHref} />
             </div>
           ) : (
             <SetSwitcherDesktop sets={sets} activeCode={activeSet} hrefFor={setHref} />
-          )
-        )}
+          ))}
       </div>
       <div className="px-5 md:px-10 py-4 grid gap-6 lg:grid-cols-[1fr_320px]">
         <TrophyLeaderboard rows={rows} loading={loading} />
-        <div className="lg:pt-4 lg:self-start lg:sticky lg:top-4">
+        <div className="lg:pt-4 lg:self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto menu-scrollbar">
           <MtgoSidebar rows={rows} setCode={activeSet} />
         </div>
       </div>
@@ -455,7 +487,7 @@ function Desktop({
             />
           )}
         />
-        <div className="pt-4 self-start sticky top-4">
+        <div className="pt-4 self-start sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto menu-scrollbar">
           <LeaderboardSidebar
             setCode={activeSet}
             colors={filters.colors}
@@ -521,21 +553,19 @@ function SetHero({
   // the same signal the set list already shows against its live row.
   const isActive = isCube ? isCubeBoardLive(activeSet) : (setMeta?.isActive ?? false);
   // A cube board is named for the cube it scores, so a season reads as the cube that ran it
-  const heroName = isCube
-    ? (cubeForBoard(activeSet) ?? SEASONED_CUBE_VARIANT).name
-    : (setMeta?.name ?? "");
+  const heroName = isCube ? (cubeForBoard(activeSet) ?? SEASONED_CUBE_VARIANT).name : (setMeta?.name ?? "");
   return (
     <div className="relative px-10 py-5 border-b border-border bg-surface flex items-center gap-6">
       <SetGlyph code={base} size={84} />
       <div>
-        <SectionLabel size={13} className={cn("text-green", !isActive && "invisible")}>LIVE</SectionLabel>
+        <SectionLabel size={13} className={cn("text-green", !isActive && "invisible")}>
+          LIVE
+        </SectionLabel>
         <div className="flex items-baseline gap-3.5 mt-0.5">
           <span className="font-display tracking-[0.04em]" style={{ fontSize: 56, lineHeight: 0.9 }}>
             {base}
           </span>
-          <span className="font-display text-[22px] text-muted tracking-[0.06em]">
-            {heroName.toUpperCase()}
-          </span>
+          <span className="font-display text-[22px] text-muted tracking-[0.06em]">{heroName.toUpperCase()}</span>
         </div>
         {isCube ? (
           // Every cube prints its own run here, never the shared CUBE row's open-ended window. Height
@@ -574,10 +604,7 @@ function SetHero({
 
 function ColorsHeroGlyph({ code }: { code: string }) {
   return (
-    <span
-      className="shrink-0 inline-flex items-center justify-center"
-      style={{ width: 48, height: 48 }}
-    >
+    <span className="shrink-0 inline-flex items-center justify-center" style={{ width: 48, height: 48 }}>
       <ColorsHeroGlyphInner code={code} />
     </span>
   );
@@ -914,19 +941,34 @@ function DesktopExpandedRow({
   );
   const trophiesToShow = filtersActive ? filteredTrophies : lastTrophies;
   const scopedDecks = useMemo(
-    () => trophiesToShow.length === 0 && events
-      ? filterScopedEvents(events, activeFormat, activeColors, otherCombos, cube).slice(0, 3)
-      : [],
+    () =>
+      trophiesToShow.length === 0 && events
+        ? filterScopedEvents(events, activeFormat, activeColors, otherCombos, cube).slice(0, 3)
+        : [],
     [trophiesToShow.length, events, activeFormat, activeColors, otherCombos, cube],
   );
 
   return (
     <div className="relative pt-3 pb-2 pr-4 pl-[76px] border-t border-dashed border-border2 flex items-start gap-6 transition-colors hover:bg-green/5">
       <Link to={to} aria-label={`View ${row.displayName}'s profile`} className="absolute inset-0" />
-      <div className="flex-1 min-w-0 overflow-hidden"><FormatBreakdownPreview breakdown={profile?.formatBreakdown} /></div>
-      <div className="flex-1 min-w-0 overflow-hidden"><MostPlayedDecks events={events} /></div>
-      <div className="flex-1 min-w-0 overflow-hidden"><LastTrophyPanel data={trophiesToShow} decks={scopedDecks} loading={!events} activeFormat={activeFormat} activeColors={activeColors} /></div>
-      <div className="flex-[0.4] min-w-0 overflow-hidden self-stretch -ml-6"><BiggestStreakPanel data={biggestStreak} loading={!events} /></div>
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <FormatBreakdownPreview breakdown={profile?.formatBreakdown} />
+      </div>
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <MostPlayedDecks events={events} />
+      </div>
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <LastTrophyPanel
+          data={trophiesToShow}
+          decks={scopedDecks}
+          loading={!events}
+          activeFormat={activeFormat}
+          activeColors={activeColors}
+        />
+      </div>
+      <div className="flex-[0.4] min-w-0 overflow-hidden self-stretch -ml-6">
+        <BiggestStreakPanel data={biggestStreak} loading={!events} />
+      </div>
       <ChamferedButton className="!pt-[10px] !pb-[10px] self-center pointer-events-none">
         <span className="inline-flex items-center gap-2">
           VIEW PROFILE
@@ -937,29 +979,27 @@ function DesktopExpandedRow({
   );
 }
 
-function FormatBreakdownPreview({
-  breakdown,
-}: {
-  breakdown: PlayerFormatBreakdown[] | undefined;
-}) {
+function FormatBreakdownPreview({ breakdown }: { breakdown: PlayerFormatBreakdown[] | undefined }) {
   const sorted = useMemo(
-    () =>
-      breakdown
-        ? [...breakdown]
-            .filter((f) => f.events > 0)
-            .sort((a, b) => b.events - a.events)
-        : [],
+    () => (breakdown ? [...breakdown].filter((f) => f.events > 0).sort((a, b) => b.events - a.events) : []),
     [breakdown],
   );
   const ready = sorted.length > 0;
-  const total = ready ? Math.max(1, sorted.reduce((s, f) => s + f.events, 0)) : 1;
+  const total = ready
+    ? Math.max(
+        1,
+        sorted.reduce((s, f) => s + f.events, 0),
+      )
+    : 1;
   const dense = sorted.length >= 4;
   const labelCls = dense ? "text-[11px]" : "text-[13px]";
   const swatchCls = dense ? "w-[11px] h-[11px]" : "w-[13px] h-[13px]";
   const numCls = dense ? "text-[11px]" : "text-[12px]";
   return (
     <div style={{ minHeight: PANEL_MIN_HEIGHT }}>
-      <SectionLabel size={13} className="text-subtle">FORMAT BREAKDOWN</SectionLabel>
+      <SectionLabel size={13} className="text-subtle">
+        FORMAT BREAKDOWN
+      </SectionLabel>
       <div className="flex items-center gap-2.5 mt-2 min-w-0">
         <div className="shrink-0">
           <DonutChart
@@ -987,9 +1027,7 @@ function FormatBreakdownPreview({
                     <span className={cn("font-display tracking-[0.08em] truncate", labelCls)}>
                       {shortFormat(f.formatLabel)}
                     </span>
-                    <span className={cn("font-num text-muted tabular-nums justify-self-end", numCls)}>
-                      {f.events}
-                    </span>
+                    <span className={cn("font-num text-muted tabular-nums justify-self-end", numCls)}>{f.events}</span>
                   </Fragment>
                 );
               })
@@ -1027,18 +1065,15 @@ function MostPlayedDecks({ events }: { events: PlayerDraftEvent[] | undefined })
 
   return (
     <div style={{ minHeight: PANEL_MIN_HEIGHT }}>
-      <SectionLabel size={13} className="text-subtle">MOST PLAYED DECKS</SectionLabel>
-      <div
-        className="grid items-center gap-x-3 gap-y-1 mt-2 w-fit"
-        style={{ gridTemplateColumns: "auto 64px auto" }}
-      >
+      <SectionLabel size={13} className="text-subtle">
+        MOST PLAYED DECKS
+      </SectionLabel>
+      <div className="grid items-center gap-x-3 gap-y-1 mt-2 w-fit" style={{ gridTemplateColumns: "auto 64px auto" }}>
         {top.length > 0
           ? top.map((d) => (
               <Fragment key={d.code}>
                 <Pips colors={d.code} size={11} />
-                <span className="font-display text-[13px] tracking-[0.06em]">
-                  {colorsDisplayName(d.code)}
-                </span>
+                <span className="font-display text-[13px] tracking-[0.06em]">{colorsDisplayName(d.code)}</span>
                 <TrophyCount count={d.trophies} size="compact" className="text-muted" />
               </Fragment>
             ))
@@ -1103,7 +1138,10 @@ function filterScopedEvents(
   return matches.sort((a, b) => (b.finishedAt ?? "").localeCompare(a.finishedAt ?? ""));
 }
 
-interface StreakData { count: number; format: string }
+interface StreakData {
+  count: number;
+  format: string;
+}
 
 function useHighlights(events: PlayerDraftEvent[] | undefined): {
   lastTrophies: PlayerDraftEvent[];
@@ -1111,19 +1149,21 @@ function useHighlights(events: PlayerDraftEvent[] | undefined): {
 } {
   return useMemo(() => {
     if (!events || events.length === 0) return { lastTrophies: [], biggestStreak: null };
-    const sorted = [...events].sort((a, b) =>
-      (a.finishedAt ?? "").localeCompare(b.finishedAt ?? ""),
-    );
+    const sorted = [...events].sort((a, b) => (a.finishedAt ?? "").localeCompare(b.finishedAt ?? ""));
     const lastTrophies: PlayerDraftEvent[] = [];
     for (let i = sorted.length - 1; i >= 0 && lastTrophies.length < 3; i--) {
       if (sorted[i].isTrophy) lastTrophies.push(sorted[i]);
     }
-    let max = 0, cur = 0;
+    let max = 0,
+      cur = 0;
     let streakFormat = "";
     for (const e of sorted) {
       if (e.isTrophy) {
         cur += 1;
-        if (cur > max) { max = cur; streakFormat = e.format; }
+        if (cur > max) {
+          max = cur;
+          streakFormat = e.format;
+        }
       } else {
         cur = 0;
       }
@@ -1150,28 +1190,24 @@ function LastTrophyPanel({
 }) {
   const colorsActive = activeColors !== "ALL";
   const formatActive = !colorsActive && activeFormat !== "ALL";
-  const filterLabel = colorsActive
-    ? colorsDisplayName(activeColors)
-    : formatActive
-      ? activeFormat.toUpperCase()
-      : null;
-  const filterStyle = formatActive
-    ? { color: FMT_COLORS[activeFormat] ?? FMT_DEFAULT_COLOR }
-    : undefined;
+  const filterLabel = colorsActive ? colorsDisplayName(activeColors) : formatActive ? activeFormat.toUpperCase() : null;
+  const filterStyle = formatActive ? { color: FMT_COLORS[activeFormat] ?? FMT_DEFAULT_COLOR } : undefined;
   const showDecks = !loading && data.length === 0 && decks.length > 0;
   const rows = showDecks ? decks : data;
   const headerNoun = showDecks ? "DECKS" : "TROPHIES";
   return (
     <div style={{ minHeight: PANEL_MIN_HEIGHT }}>
       <SectionLabel size={13} className="text-subtle">
-        LAST{filterLabel && (
+        LAST
+        {filterLabel && (
           <>
             {" "}
             <span className={colorsActive ? "text-green" : ""} style={filterStyle}>
               {filterLabel}
             </span>
           </>
-        )} {headerNoun}
+        )}{" "}
+        {headerNoun}
       </SectionLabel>
       <div className="flex flex-col gap-1 mt-2.5 min-w-0">
         {loading ? (
@@ -1190,9 +1226,7 @@ function LastTrophyPanel({
           ))
         ) : rows.length > 0 ? (
           rows.map((e) => {
-            const href = e.seventeenlandsEventId
-              ? `https://www.17lands.com/deck/${e.seventeenlandsEventId}`
-              : null;
+            const href = e.seventeenlandsEventId ? `https://www.17lands.com/deck/${e.seventeenlandsEventId}` : null;
             const Row = href ? "a" : "div";
             return (
               <Row
@@ -1232,27 +1266,23 @@ function LastTrophyPanel({
   );
 }
 
-function BiggestStreakPanel({
-  data,
-  loading,
-}: {
-  data: StreakData | null;
-  loading: boolean;
-}) {
+function BiggestStreakPanel({ data, loading }: { data: StreakData | null; loading: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center h-full" style={{ minHeight: PANEL_MIN_HEIGHT }}>
-      <SectionLabel size={13} className="text-subtle text-center">MAX TROPHY</SectionLabel>
+      <SectionLabel size={13} className="text-subtle text-center">
+        MAX TROPHY
+      </SectionLabel>
       {loading ? (
         <span className="block h-5 w-12 bg-surface2 mt-1" />
       ) : data ? (
         <>
           <span className="flex items-center gap-1.5 my-0.5">
             <Trophy size={14} color="#ffc63a" />
-            <span className="font-display text-[18px] leading-none tracking-[0.04em]">
-              ×{data.count}
-            </span>
+            <span className="font-display text-[18px] leading-none tracking-[0.04em]">×{data.count}</span>
           </span>
-          <SectionLabel size={13} className="text-subtle text-center">STREAK</SectionLabel>
+          <SectionLabel size={13} className="text-subtle text-center">
+            STREAK
+          </SectionLabel>
         </>
       ) : (
         <div className="font-num text-[12px] text-muted text-center mt-1">—</div>
@@ -1306,7 +1336,9 @@ function MobileExpandedRow({
             <span className="block h-3 w-40 bg-surface2" />
           ) : lastTrophy ? (
             <>
-              <SectionLabel size={11} letterSpacing="0.18em">LAST TROPHY</SectionLabel>
+              <SectionLabel size={11} letterSpacing="0.18em">
+                LAST TROPHY
+              </SectionLabel>
               <Trophy size={12} color="#ffc63a" />
               <Pips colors={lastTrophy.colors} size={12} />
               <span className="text-dim text-[11px]">·</span>
@@ -1315,18 +1347,24 @@ function MobileExpandedRow({
               </span>
               {isArenaChampionshipFormat(lastTrophy.format) && <ArenaChampBadge size={22} box={14} />}
               <span className="text-dim text-[11px]">·</span>
-              <span className="font-display text-[11px] tracking-[0.08em] text-dim tabular-nums">{relativeTime(eventDate(lastTrophy))}</span>
+              <span className="font-display text-[11px] tracking-[0.08em] text-dim tabular-nums">
+                {relativeTime(eventDate(lastTrophy))}
+              </span>
             </>
           ) : lastDeck ? (
             <>
-              <SectionLabel size={11} letterSpacing="0.18em">LAST DECK</SectionLabel>
+              <SectionLabel size={11} letterSpacing="0.18em">
+                LAST DECK
+              </SectionLabel>
               <Pips colors={lastDeck.colors} size={12} />
               <span className="text-dim text-[11px]">·</span>
               <span className="font-display text-[11px] tracking-[0.08em] text-muted">
                 {prettyFormat(lastDeck.format).toUpperCase()}
               </span>
               <span className="text-dim text-[11px]">·</span>
-              <span className="font-display text-[11px] tracking-[0.08em] text-dim tabular-nums">{relativeTime(eventDate(lastDeck))}</span>
+              <span className="font-display text-[11px] tracking-[0.08em] text-dim tabular-nums">
+                {relativeTime(eventDate(lastDeck))}
+              </span>
             </>
           ) : null}
         </div>

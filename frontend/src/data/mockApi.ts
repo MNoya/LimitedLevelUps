@@ -62,26 +62,11 @@ import { selfReportedTrophiesSosFixture } from "./fixtures/self-reported-sos";
 import { mergeSelfReportedTrophies } from "./selfReported";
 import { MTGO_TROPHY_FIXTURE } from "./fixtures/mtgo-trophies";
 import { archetypeSosWrFixture } from "./fixtures/archetype-sos-wr";
-import {
-  chonceDraftEvents,
-  chonceFormatBreakdown,
-} from "./fixtures/player-chonce";
-import {
-  nlaframboiseDraftEvents,
-  nlaframboiseFormatBreakdown,
-} from "./fixtures/player-nlaframboise";
-import {
-  elfandorDraftEvents,
-  elfandorFormatBreakdown,
-} from "./fixtures/player-elfandor";
-import {
-  flutterdevDraftEvents,
-  flutterdevFormatBreakdown,
-} from "./fixtures/player-flutterdev";
-import {
-  oophiesDraftEvents,
-  oophiesFormatBreakdown,
-} from "./fixtures/player-oophies";
+import { chonceDraftEvents, chonceFormatBreakdown } from "./fixtures/player-chonce";
+import { nlaframboiseDraftEvents, nlaframboiseFormatBreakdown } from "./fixtures/player-nlaframboise";
+import { elfandorDraftEvents, elfandorFormatBreakdown } from "./fixtures/player-elfandor";
+import { flutterdevDraftEvents, flutterdevFormatBreakdown } from "./fixtures/player-flutterdev";
+import { oophiesDraftEvents, oophiesFormatBreakdown } from "./fixtures/player-oophies";
 
 // Real per-player data keyed by slug. Other slugs fall through to the synth
 // generator below.
@@ -103,8 +88,7 @@ const REAL_DRAFT_EVENTS: Record<string, PlayerDraftEvent[]> = {
 
 const FAKE_LATENCY_MS = 80;
 
-const wait = <T,>(value: T): Promise<T> =>
-  new Promise((resolve) => setTimeout(() => resolve(value), FAKE_LATENCY_MS));
+const wait = <T>(value: T): Promise<T> => new Promise((resolve) => setTimeout(() => resolve(value), FAKE_LATENCY_MS));
 
 // ─── public_sets ─────────────────────────────────────────────────────────────
 export const fetchSets = (): Promise<SetSummary[]> => wait(setsFixture);
@@ -132,11 +116,8 @@ export const fetchSetReviewMentions = (_setCode: string): Promise<SetReviewMenti
 export const fetchAvailableFormats = (_setCode: string): Promise<string[]> =>
   wait(["Premier", "Trad", "Sealed", "Quick", "LCQ Draft 1", "LCQ Draft 2"]);
 
-export const fetchFormatColorsLeaderboard = (
-  _setCode: string,
-  _format: string,
-  _archetypes: string | string[],
-) => wait([] as never[]);
+export const fetchFormatColorsLeaderboard = (_setCode: string, _format: string, _archetypes: string | string[]) =>
+  wait([] as never[]);
 
 // ─── public_leaderboard ──────────────────────────────────────────────────────
 // Format filter is applied client-side over the cached rows in the hook layer
@@ -192,10 +173,7 @@ export const fetchColorsSummary = (setCode: string): Promise<ColorsSummary[]> =>
 // Fixtures only have full per-format breakdowns for the 5 players we curated.
 // For everyone else we approximate using synthBreakdown so the table still
 // has 30+ rows to render in dev. Real prod uses the actual breakdown view.
-export const fetchFormatLeaderboard = (
-  setCode: string,
-  format: string,
-): Promise<LeaderboardRow[]> => {
+export const fetchFormatLeaderboard = (setCode: string, format: string): Promise<LeaderboardRow[]> => {
   if (setCode !== "SOS") return wait([]);
 
   const rows = leaderboardSosFixture
@@ -226,22 +204,17 @@ export const fetchFormatLeaderboard = (
 
 // ─── public_archetype_leaderboard ────────────────────────────────────────────
 // Switching color combo switches the data source (different scoring), per spec §7.
-export const fetchColorsLeaderboard = (
-  setCode: string,
-  colors: string
-): Promise<ColorsLeaderboardRow[]> => {
+export const fetchColorsLeaderboard = (setCode: string, colors: string): Promise<ColorsLeaderboardRow[]> => {
   if (setCode === "SOS" && colors === "WR") return wait(archetypeSosWrFixture);
   // Any other (set, colors) cell — synthesise a slice from the WR fixture so
   // the UI has data to render. Real backend returns the proper subset-replay rows.
-  const slice = archetypeSosWrFixture
-    .slice(0, 14)
-    .map((row, i) => ({
-      ...row,
-      colors,
-      rank: i + 1,
-      score: Math.max(0, row.score * (0.4 + Math.random() * 0.4)),
-      trophies: Math.max(0, Math.round(row.trophies * 0.6)),
-    }));
+  const slice = archetypeSosWrFixture.slice(0, 14).map((row, i) => ({
+    ...row,
+    colors,
+    rank: i + 1,
+    score: Math.max(0, row.score * (0.4 + Math.random() * 0.4)),
+    trophies: Math.max(0, Math.round(row.trophies * 0.6)),
+  }));
   return wait(slice);
 };
 
@@ -263,10 +236,7 @@ export const fetchOtherColorsLeaderboard = (
 };
 
 // ─── public_player_format_breakdown + public_leaderboard ─────────────────────
-export const fetchPlayerProfile = (
-  slug: string,
-  setCode: string
-): Promise<PlayerProfile | null> => {
+export const fetchPlayerProfile = (slug: string, setCode: string): Promise<PlayerProfile | null> => {
   const headline = leaderboardSosFixture.find((r) => r.slug === slug);
   if (!headline) return wait(null);
   const breakdown = REAL_BREAKDOWNS[slug] ?? synthBreakdown(headline);
@@ -300,10 +270,7 @@ export const fetchPlayerIdentity = (slug: string): Promise<PlayerIdentity | null
 
 // ─── public_player_draft_events ──────────────────────────────────────────────
 // Loaded lazily per player; not fetched up-front for the leaderboard.
-export const fetchPlayerDraftEvents = (
-  slug: string,
-  _setCode: string
-): Promise<PlayerDraftEvent[]> => {
+export const fetchPlayerDraftEvents = (slug: string, _setCode: string): Promise<PlayerDraftEvent[]> => {
   const real = REAL_DRAFT_EVENTS[slug];
   if (real) return wait(real);
   return wait(synthDraftEvents(slug));
@@ -332,7 +299,13 @@ export const fetchLifetimeProfile = (slug: string): Promise<PlayerProfile | null
     selfReportedEvents: [],
     lifetime: true,
     setsPlayed: [
-      { setCode: "SOS", events: headline.events, wins: headline.wins, losses: headline.losses, trophies: headline.trophies },
+      {
+        setCode: "SOS",
+        events: headline.events,
+        wins: headline.wins,
+        losses: headline.losses,
+        trophies: headline.trophies,
+      },
     ],
   });
 };
@@ -390,17 +363,11 @@ export const fetchLifetimeStats = (
 // fixtures, we walk REAL_DRAFT_EVENTS — only 5 players have real event logs,
 // but those 5 cover the top of the leaderboard so the recent-trophy feed is
 // representative.
-export const fetchRecentTrophies = (
-  setCode: string,
-  limit = 8,
-): Promise<RecentTrophy[]> => {
+export const fetchRecentTrophies = (setCode: string, limit = 8): Promise<RecentTrophy[]> => {
   return wait(_allTrophiesFor(setCode).slice(0, limit));
 };
 
-export const fetchFormatRecentTrophies = (
-  setCode: string,
-  format: string,
-): Promise<RecentTrophy[]> => {
+export const fetchFormatRecentTrophies = (setCode: string, format: string): Promise<RecentTrophy[]> => {
   return wait(_allTrophiesFor(setCode).filter((t) => matchesFormatFilter(t.format, format)));
 };
 
@@ -526,18 +493,18 @@ export const fetchPodSeasonResults = (
   startDate: string,
   endDate: string,
   seasonCode: string,
-): Promise<PodSeasonResultRow[]> =>
-  podResultsFor((e) => inPodSeason(e, startDate, endDate, seasonCode));
+): Promise<PodSeasonResultRow[]> => podResultsFor((e) => inPodSeason(e, startDate, endDate, seasonCode));
 
 const inPodSeason = (e: PodEventSummary, startDate: string, endDate: string, seasonCode: string): boolean =>
   e.setCode === seasonCode || (e.kind !== "mock" && e.eventDate >= startDate && e.eventDate <= endDate);
 
 export const fetchAllPodResults = (): Promise<PodSeasonResultRow[]> => podResultsFor(() => true);
 
+export const fetchPodSetResults = (setCode: string): Promise<PodSeasonResultRow[]> =>
+  podResultsFor((e) => e.setCode === setCode);
+
 const podResultsFor = (match: (e: PodEventSummary) => boolean): Promise<PodSeasonResultRow[]> => {
-  const inSeason = new Map(
-    podEventsFixture.filter((e) => e.kind !== "mock" && match(e)).map((e) => [e.eventId, e]),
-  );
+  const inSeason = new Map(podEventsFixture.filter((e) => e.kind !== "mock" && match(e)).map((e) => [e.eventId, e]));
   const rows: PodSeasonResultRow[] = [];
   for (const p of podEventParticipantsFixture) {
     const event = inSeason.get(p.eventId);
@@ -553,6 +520,7 @@ const podResultsFor = (match: (e: PodEventSummary) => boolean): Promise<PodSeaso
       placement: p.placement,
       wins: parseInt(w || "0", 10) || 0,
       losses: parseInt(l || "0", 10) || 0,
+      deckColors: p.deckColors,
     });
   }
   return wait(rows);
@@ -577,9 +545,7 @@ export const fetchChampionshipRsvps = (_eventId: string): Promise<PodChampionshi
 
 export const fetchChampionshipLinks = (): Promise<PodChampionshipLinksRow[]> => wait([]);
 
-export const fetchPodEventParticipants = (
-  eventId: string,
-): Promise<PodEventParticipantRow[]> => {
+export const fetchPodEventParticipants = (eventId: string): Promise<PodEventParticipantRow[]> => {
   return wait(podEventParticipantsFixture.filter((p) => p.eventId === eventId));
 };
 
@@ -677,10 +643,7 @@ import { GIH_SAMPLE_FLOOR } from "./p0p1Results";
 import { syntheticBallotsFromStats } from "./p0p1DevBallots";
 import { buildSlots, P0P1_CONTESTS } from "./p0p1Slots";
 
-const cardLoaders = import.meta.glob<Card[]>(
-  "./fixtures/cards-*.ts",
-  { import: "default" },
-);
+const cardLoaders = import.meta.glob<Card[]>("./fixtures/cards-*.ts", { import: "default" });
 
 const p0p1Picks = new Map<string, P0P1Pick>();
 
@@ -691,29 +654,24 @@ export async function fetchP0P1Cards(setCode: string): Promise<Card[]> {
   return loader();
 }
 
-export const fetchP0P1Picks = (_setCode: string): Promise<P0P1Pick[]> =>
-  wait([...p0p1Picks.values()]);
+export const fetchP0P1Picks = (_setCode: string): Promise<P0P1Pick[]> => wait([...p0p1Picks.values()]);
 
-export const upsertP0P1Pick = async (
-  _setCode: string,
-  slot: SlotKey,
-  cardName: string,
-): Promise<void> => {
+export const upsertP0P1Pick = async (_setCode: string, slot: SlotKey, cardName: string): Promise<void> => {
   p0p1Picks.set(slot, { slot, cardName, lastUpdated: new Date().toISOString() });
 };
 
-
-export const deleteAllP0P1Picks = async (
-  _setCode: string,
-): Promise<void> => {
+export const deleteAllP0P1Picks = async (_setCode: string): Promise<void> => {
   p0p1Picks.clear();
 };
 
-const syntheticDataCache = new Map<string, Promise<{
-  stats: P0P1PickStat[];
-  ratings: RatingsSnapshot;
-  ballots: P0P1BallotRow[];
-}>>();
+const syntheticDataCache = new Map<
+  string,
+  Promise<{
+    stats: P0P1PickStat[];
+    ratings: RatingsSnapshot;
+    ballots: P0P1BallotRow[];
+  }>
+>();
 
 function getSyntheticData(setCode: string) {
   let p = syntheticDataCache.get(setCode);
@@ -749,9 +707,7 @@ function allocateVotes(weights: number[], total: number): number[] {
   const totalWeight = weights.reduce((sum, w) => sum + w, 0);
   const exact = weights.map((w) => (w / totalWeight) * total);
   const counts = exact.map(Math.floor);
-  const byRemainder = exact
-    .map((value, i) => ({ i, frac: value - Math.floor(value) }))
-    .sort((a, b) => b.frac - a.frac);
+  const byRemainder = exact.map((value, i) => ({ i, frac: value - Math.floor(value) })).sort((a, b) => b.frac - a.frac);
   let allocated = counts.reduce((sum, c) => sum + c, 0);
   let k = 0;
   while (allocated < total) {
@@ -766,12 +722,18 @@ const NO_PICKS = new Set<string>();
 
 function generateSyntheticPickStats(cards: Card[], setCode: string): P0P1PickStat[] {
   let seed = 42;
-  const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const rng = () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
   const N = P0P1_COMPLETE_ENTRANTS;
 
   const stats: P0P1PickStat[] = [];
   for (const slot of buildSlots(P0P1_CONTESTS[setCode])) {
-    const eligible = shuffleInPlace(cards.filter((c) => slot.filter(c, NO_PICKS)), rng);
+    const eligible = shuffleInPlace(
+      cards.filter((c) => slot.filter(c, NO_PICKS)),
+      rng,
+    );
     if (eligible.length === 0) continue;
     const skew = 1.1 + rng() * 0.8;
     const weights = eligible.map((_, rank) => 1 / Math.pow(rank + 1, skew));
@@ -782,7 +744,7 @@ function generateSyntheticPickStats(cards: Card[], setCode: string): P0P1PickSta
         slot: slot.key,
         cardName: card.name,
         pickCount: counts[i],
-        pickPct: Math.round(counts[i] * 1000 / N) / 10,
+        pickPct: Math.round((counts[i] * 1000) / N) / 10,
       }))
       .filter((stat) => stat.pickCount > 0)
       .sort((a, b) => b.pickCount - a.pickCount);
@@ -791,10 +753,12 @@ function generateSyntheticPickStats(cards: Card[], setCode: string): P0P1PickSta
   return stats;
 }
 
-
 function generateSyntheticRatings(mockCards: Card[], setCode: string): RatingsSnapshot {
   let seed = 137;
-  const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const rng = () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
   const cards = mockCards.map((c) => ({
     card_name: c.name,
     gihwr: 0.44 + rng() * 0.21,

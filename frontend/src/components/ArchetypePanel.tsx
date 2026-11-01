@@ -9,12 +9,13 @@ import { SurfaceCard } from "./SurfaceCard";
 import { cn } from "../lib/utils";
 import { colorsDisplayName } from "../data/filters";
 import { winRateColor } from "../data/winRate";
-import { usePodArchetypes, usePodEvents } from "../data/hooks";
+import { usePodArchetypes, usePodEvents, usePodSetResults } from "../data/hooks";
 import {
   OTHER_KEY,
   aggregateArchetypes,
-  championPairCounts,
   gameTally,
+  podTrophyFinishes,
+  trophyPairCounts,
   type Archetype,
 } from "../data/podArchetypes";
 import { eventSeason } from "./PodRecentTrophies";
@@ -40,11 +41,12 @@ export function ArchetypePanel({
 }) {
   const { data, isPending } = usePodArchetypes(setCode);
   const { data: events } = usePodEvents(setCode);
+  const { data: results } = usePodSetResults(setCode);
 
   const trophiesByKey = useMemo(() => {
     const inSeason = (events ?? []).filter((e) => season == null || eventSeason(e, sets) === season);
-    return championPairCounts(inSeason);
-  }, [events, season, sets]);
+    return trophyPairCounts(podTrophyFinishes(inSeason, results ?? []));
+  }, [events, results, season, sets]);
 
   const archetypes = useMemo(() => {
     const scoped = season == null ? (data ?? []) : (data ?? []).filter((r) => r.season === season);
@@ -92,7 +94,9 @@ export function TopColorsCard({
       <div className={cn(GRID, "mb-2 items-center font-display text-[11px] tracking-[0.1em] text-muted")}>
         <div className="col-span-3 flex items-center gap-1.5">
           <Trophy size={16} color="#ffc63a" />
-          <SectionLabel size={16} className="text-subtle">TOP COLORS</SectionLabel>
+          <SectionLabel size={16} className="text-subtle">
+            TOP COLORS
+          </SectionLabel>
         </div>
         <span className="flex justify-end">
           <Trophy size={13} color="#ffc63a" />
@@ -126,10 +130,7 @@ export function TopColorsCard({
                 {pct(a.playRate)}
                 <span className="ml-1 text-[11px] text-subtle">({a.decks})</span>
               </span>
-              <span
-                className="font-num text-[14px] tabular-nums text-right"
-                style={{ color: winRateColor(a.winRate) }}
-              >
+              <span className="font-num text-[14px] tabular-nums text-right" style={{ color: winRateColor(a.winRate) }}>
                 {pct(a.winRate)}
               </span>
             </div>

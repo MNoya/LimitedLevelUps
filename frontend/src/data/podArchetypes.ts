@@ -1,4 +1,5 @@
-import type { PodEventSummary } from "../types/leaderboard";
+import type { PodEventSummary, PodSeasonResultRow } from "../types/leaderboard";
+import { POD_TROPHY_WINS } from "./scoring";
 
 // Folds deck colors into the main color pair, mono and 3+ into "Other"
 export interface PodArchetypeRow {
@@ -69,13 +70,36 @@ export function aggregateArchetypes(tallies: ArchetypeTally[]): Archetype[] {
   return archetypes;
 }
 
-export function championPairCounts(events: PodEventSummary[]): Map<string, number> {
-  const counts = new Map<string, number>();
+export interface PodTrophyFinish {
+  event: PodEventSummary;
+  result: PodSeasonResultRow;
+}
+
+export function podTrophyFinishes(events: PodEventSummary[], results: PodSeasonResultRow[]): PodTrophyFinish[] {
+  const finishedById = new Map<string, PodEventSummary>();
   for (const e of events) {
-    if (e.kind === "mock" || !e.isFinalized || !e.championDeckColors) {
+    if (e.kind !== "mock" && e.isFinalized) {
+      finishedById.set(e.eventId, e);
+    }
+  }
+  const finishes: PodTrophyFinish[] = [];
+  for (const result of results) {
+    const event = finishedById.get(result.eventId);
+    if (event && result.wins >= POD_TROPHY_WINS) {
+      finishes.push({ event, result });
+    }
+  }
+  finishes.sort((a, b) => b.event.eventTime.localeCompare(a.event.eventTime));
+  return finishes;
+}
+
+export function trophyPairCounts(finishes: PodTrophyFinish[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const { result } of finishes) {
+    if (!result.deckColors) {
       continue;
     }
-    const key = mainPair(e.championDeckColors);
+    const key = mainPair(result.deckColors);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;

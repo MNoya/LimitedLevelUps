@@ -104,7 +104,7 @@ import { resolveDeck } from "../data/draft-artifact";
 import { usePodDecklistAccess } from "../data/podDecklistAccess";
 import { hasCardData } from "../data/podCards";
 import { hallOfFameSetHref } from "../data/setChampionship";
-import { aggregateArchetypes, championPairCounts, gameTally } from "../data/podArchetypes";
+import { aggregateArchetypes, gameTally, podTrophyFinishes, trophyPairCounts } from "../data/podArchetypes";
 import type {
   PodCalendarDayRow,
   PodCalendarEntry,
@@ -540,7 +540,10 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
     const playedRows = (archetypeRows ?? []).filter((r) => playedIds.has(r.event_id));
     return aggregateArchetypes(playedRows.map(gameTally));
   }, [played, archetypeRows]);
-  const topColorsTrophies = useMemo(() => championPairCounts(played), [played]);
+  const topColorsTrophies = useMemo(
+    () => trophyPairCounts(podTrophyFinishes(played, allResults ?? [])),
+    [played, allResults],
+  );
   const topColors = (
     <TopColorsCard
       archetypes={topColorsArchetypes}
@@ -549,7 +552,12 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
       pageSize={7}
     />
   );
-  const recentTrophiesProps = { events: played, loading: events === undefined, pageSize: 8 };
+  const recentTrophiesProps = {
+    events: played,
+    results: allResults ?? [],
+    loading: events === undefined || allResults === undefined,
+    pageSize: 8,
+  };
   const sideBySide = !useIsMobile(CALENDAR_LABEL_WIDTH);
   const { tab: eventsTabChoice, pickTab: setEventsTab, pauseOnHover } = useRotatingEventsTab();
   const eventsTab = sideBySide && eventsTabChoice === "trophies" ? "colors" : eventsTabChoice;
@@ -709,7 +717,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
                         pageSize={12}
                       />
                     )}
-                    recent={() => <RecentTrophiesCard events={played} loading={events === undefined} pageSize={25} />}
+                    recent={() => <RecentTrophiesCard {...recentTrophiesProps} pageSize={25} />}
                   />
                   {leaderboard !== undefined && leaderboard.length > 0 && (
                     <LeaderboardColumnHeader variant="mobile" mode="pod" sort={sort} onSort={onSort} />

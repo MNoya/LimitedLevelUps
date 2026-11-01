@@ -45,6 +45,7 @@ export const fetchPodEvents = impl.fetchPodEvents;
 export const fetchPodSeasonResults = impl.fetchPodSeasonResults;
 export const fetchAllPodEvents = impl.fetchAllPodEvents;
 export const fetchAllPodResults = impl.fetchAllPodResults;
+export const fetchPodSetResults = impl.fetchPodSetResults;
 export const fetchPodEventBySlug = impl.fetchPodEventBySlug;
 export const fetchChampionshipEvents = impl.fetchChampionshipEvents;
 export const fetchChampionshipSeeds = impl.fetchChampionshipSeeds;

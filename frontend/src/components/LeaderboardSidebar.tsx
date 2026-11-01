@@ -110,7 +110,9 @@ export function LeaderboardSidebar({
       <SurfaceCard>
         <div className="mb-1 flex items-center gap-1.5">
           <Trophy size={16} color="#ffc63a" />
-          <SectionLabel size={16} className="text-subtle">{d.recentTitle}</SectionLabel>
+          <SectionLabel size={16} className="text-subtle">
+            {d.recentTitle}
+          </SectionLabel>
           {!filterActive && updated && (
             <span className="ml-auto font-mono text-[11px] text-muted whitespace-nowrap">UPDATED {updated}</span>
           )}
@@ -272,7 +274,11 @@ function StripToggle({
       )}
     >
       {children}
-      <ChevronDown size={15} strokeWidth={2.5} className={cn("text-muted transition-transform", open && "rotate-180")} />
+      <ChevronDown
+        size={15}
+        strokeWidth={2.5}
+        className={cn("text-muted transition-transform", open && "rotate-180")}
+      />
     </button>
   );
 }
@@ -305,9 +311,7 @@ function TopColorsRows({
       {topColors.slice(0, limit).map((row, i) => {
         const isActive = row.colors === colors;
         const cls =
-          (lcqScope
-            ? "grid grid-cols-[24px_28px_1fr_auto_auto] "
-            : "grid grid-cols-[24px_28px_1fr_auto] ") +
+          (lcqScope ? "grid grid-cols-[24px_48px_1fr_auto_auto] " : "grid grid-cols-[24px_48px_1fr_auto] ") +
           "gap-2 items-center py-2 -mx-1 px-1 text-left transition-colors " +
           (i ? "border-t border-border" : "") +
           (isActive ? " text-green" : "") +
@@ -322,9 +326,7 @@ function TopColorsRows({
                 <Pips colors={row.colors} size={12} />
               )}
             </span>
-            <span className="font-display text-[14px] tracking-[0.05em] pl-1.5">
-              {colorsDisplayName(row.colors)}
-            </span>
+            <span className="font-display text-[14px] tracking-[0.05em] pl-1.5">{colorsDisplayName(row.colors)}</span>
             {lcqScope && (
               <span className="font-display text-[14px] tracking-[0.02em] tabular-nums text-right text-green mr-2">
                 {row.earnings ? `$${row.earnings / 1000}K` : ""}
@@ -473,15 +475,14 @@ function useInsightsData(
   const { data: recentAll } = useRecentTrophies(formatScoped || rankScoped ? undefined : setCode, RECENT_POOL);
 
   const trophyPool = formatScoped ? formatTrophies : rankScoped ? allTrophies : recentAll;
-  const rankFiltered = rankScoped
-    ? trophyPool?.filter((t) => rankTierOf(t.endRank) === rank)
-    : trophyPool;
+  const rankFiltered = rankScoped ? trophyPool?.filter((t) => rankTierOf(t.endRank) === rank) : trophyPool;
 
   // A board that offers no Soup chip does not rank Soup either — it would top the list and say nothing
   const ranksSoup = boardOffersSoup(setCode);
-  const topColors: ColorsSummary[] | undefined = formatScoped || rankScoped
-    ? rankFiltered && topColorsFromTrophies(setCode, rankFiltered)
-    : topColorsAll?.filter((r) => r.trophies > 0 && (ranksSoup || r.colors !== MULTI));
+  const topColors: ColorsSummary[] | undefined =
+    formatScoped || rankScoped
+      ? rankFiltered && topColorsFromTrophies(setCode, rankFiltered)
+      : topColorsAll?.filter((r) => r.trophies > 0 && (ranksSoup || r.colors !== MULTI));
 
   const recentSource: RecentTrophy[] | undefined = rankFiltered;
   const recentScoped = !colorsScoped
@@ -506,10 +507,17 @@ function useInsightsData(
   ) : null;
   const lcqScope = formatScoped && format === "LCQ";
   const recentNoun = lcqScope ? "TROPHIES & DAY 2" : "TROPHIES";
-  const recentTitle = scoped ? <>RECENT {scopeChip} {recentNoun}</> : "RECENT TROPHIES";
-  const recentEmpty = scoped || rankScoped
-    ? ["NO RECENT", rankScoped ? rank.toUpperCase() : "", scopeLabel, recentNoun].filter(Boolean).join(" ")
-    : "NO TROPHIES YET";
+  const recentTitle = scoped ? (
+    <>
+      RECENT {scopeChip} {recentNoun}
+    </>
+  ) : (
+    "RECENT TROPHIES"
+  );
+  const recentEmpty =
+    scoped || rankScoped
+      ? ["NO RECENT", rankScoped ? rank.toUpperCase() : "", scopeLabel, recentNoun].filter(Boolean).join(" ")
+      : "NO TROPHIES YET";
   const topColorsTitle = formatScoped ? <>TOP COLORS {scopeChip}</> : "TOP COLORS";
   const namedScope = colorsScoped && colors !== MULTI && colors !== OTHER;
   const showRowPips = !namedScope;
