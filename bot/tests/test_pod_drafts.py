@@ -19,6 +19,7 @@ from bot.services.pod_drafts import (
     get_participant_deck_state,
     is_championship,
     list_champions,
+    normalize_player_name,
     participant_dm_info,
     player_for_name,
     pod_summary_by_set_for_player,
@@ -503,6 +504,23 @@ def test_participant_dm_info_prefers_server_nickname_and_linked_arena(session):
     assert alice.discord_id == "42"
     assert alice.display_name == "AliceServerNick"
     assert alice.arena_name == "AliceMain#9999"
+
+
+def test_participant_dm_info_shows_the_seat_account_when_it_is_one_of_the_players_own(session):
+    event_id, _ = _seed_pod_for_deck_color_tests(session)
+    participant = session.execute(
+        select(PodDraftParticipant)
+        .where(PodDraftParticipant.event_id == event_id, PodDraftParticipant.display_name == "Alice")
+    ).scalar_one()
+    participant.draftmancer_name = "AliceAlt#1234"
+    player = session.execute(select(Player).where(Player.discord_id == "42")).scalar_one()
+    player.arena_name = "AliceMain#9999"
+    player.arena_aliases = [normalize_player_name("AliceMain#9999"), normalize_player_name("AliceAlt#1234")]
+    session.flush()
+
+    info = participant_dm_info(session, event_id)
+
+    assert info[normalize_player_name("AliceAlt#1234")].arena_name == "AliceAlt#1234"
 
 
 def test_participant_dm_info_strips_arena_suffix_from_unlinked_fallback(session):

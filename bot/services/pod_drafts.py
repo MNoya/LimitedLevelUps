@@ -1601,9 +1601,7 @@ def participant_dm_info(session: Session, event_id: str) -> dict[str, Participan
     display_name prefers Player.display_name (the resolved Discord server nickname) over the
     participant row's display_name, which can carry a stale Arena-style handle.
 
-    arena_name prefers the linked Player.arena_name (what /link-arena writes) over the Draftmancer
-    session handle, so a player on a shared or borrowed account shows the account they linked. The
-    session handle stands in only when no full Arena handle is linked.
+    arena_name is the account the player is sitting on: see `_opponent_arena_name`.
     """
     rows = session.execute(
         select(
@@ -1613,21 +1611,31 @@ def participant_dm_info(session: Session, event_id: str) -> dict[str, Participan
             Player.display_name,
             Player.discord_id,
             Player.arena_name,
+            Player.arena_aliases,
         )
         .outerjoin(Player, Player.id == PodDraftParticipant.player_id)
         .where(PodDraftParticipant.event_id == event_id)
     ).all()
     info: dict[str, ParticipantDmInfo] = {}
-    for participant_id, dm_name, participant_dn, player_dn, discord_id, player_arena in rows:
+    for participant_id, dm_name, participant_dn, player_dn, discord_id, player_arena, aliases in rows:
         key = normalize_player_name(dm_name) if dm_name else normalize_player_name(participant_dn)
         raw = player_dn or participant_dn
         info[key] = ParticipantDmInfo(
             participant_id=participant_id,
             discord_id=discord_id,
             display_name=strip_arena_suffix(raw) if raw else raw,
-            arena_name=player_arena if full_arena_handle(player_arena) else dm_name,
+            arena_name=_opponent_arena_name(dm_name, player_arena, aliases or []),
         )
     return info
+
+
+def _opponent_arena_name(seat_name: str | None, linked: str | None, aliases: list[str]) -> str | None:
+    """The seat's handle when it is one of the player's own linked accounts, else the linked account, so a
+    multi-accounter shows the account in the room and a borrowed account shows the one they linked"""
+    seat_is_own_account = full_arena_handle(seat_name) and normalize_player_name(seat_name) in aliases
+    if seat_is_own_account or not full_arena_handle(linked):
+        return seat_name
+    return linked
 
 
 def set_participant_deck_colors(
