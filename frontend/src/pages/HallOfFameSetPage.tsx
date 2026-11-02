@@ -231,6 +231,7 @@ function ChampionshipShell({
   const isMobile = useIsMobile();
   const switchView = (next: ChampionshipView) => navigate(`${championshipViewHref(setCode, next)}${location.search}`);
   const title = { setCode, label, day, media };
+  const top8ScrollsItself = view === "top8";
 
   if (isMobile) {
     return (
@@ -259,7 +260,8 @@ function ChampionshipShell({
         </div>
         <div
           className={cn(
-            "flex-1 min-h-0 overflow-y-auto themed-scrollbar py-4",
+            "flex-1 min-h-0 py-4",
+            !top8ScrollsItself && "overflow-y-auto themed-scrollbar",
             centered && "flex items-center justify-center pb-[140px]",
           )}
         >
