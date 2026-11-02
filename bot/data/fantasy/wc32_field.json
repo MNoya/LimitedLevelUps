@@ -396,7 +396,7 @@
     "photoSource": "magicgg-face"
   },
   {
-    "firstName": "Noé",
+    "firstName": "",
     "lastName": "Fauquenoi",
     "country": "France",
     "countryCode": "FR",
@@ -404,8 +404,8 @@
       "Top 2 MOCS Showcase 2"
     ],
     "meleeUsername": "Noe_Fauquenoi",
-    "photoUrl": "https://images.ctfassets.net/ryplwhabvmmk/1H1HOrC6h1COyaSXYByadT/33235b88e06e4f040b5971091128d816/281x225-Noe-Fauquenoi-2025-MOCS-Season-3-Player-Card-Front.png?w=168&h=225&fit=thumb&f=face",
-    "photoSource": "magicgg-face"
+    "photoUrl": null,
+    "photoSource": null
   },
   {
     "firstName": "Zevin",

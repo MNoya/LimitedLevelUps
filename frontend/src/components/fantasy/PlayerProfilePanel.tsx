@@ -221,7 +221,7 @@ export function PlayerProfile({
           </span>
           <span className="col-start-2 row-start-1 self-end flex flex-col gap-1.5">
             {dense ? null : <CountryFlag code={player.countryCode} width={compact ? 22 : 30} />}
-            {nameOnOneLine ? null : (
+            {nameOnOneLine || !player.firstName ? null : (
               <span className={nameClass} style={nameStyle}>
                 {player.firstName.toUpperCase()}
               </span>
