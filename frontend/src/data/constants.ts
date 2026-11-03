@@ -66,6 +66,10 @@ export const TIER_LIST_GRADERS: Record<
   string,
   Array<{ name: string; uid: string }>
 > = {
+  TRK: [
+    { name: "Alex", uid: "5d052764d08f49238b8232f591b46507" },
+    { name: "Marc", uid: "d13af031a76e4a868cf2d8aad3386e0a" },
+  ],
   FRA: [
     { name: "Alex", uid: "24d7fb5b20194808834be19680ae0d8d" },
     { name: "Marc", uid: "e95fd9365a86464cae2451e34c39102a" },
@@ -113,6 +117,10 @@ export const TIER_LIST_GRADERS: Record<
 };
 
 export const TIER_LIST_SET_GROUPS: Record<string, Array<{ label: string; glyph: string }>> = {
+  TRK: [
+    { label: "Main Set", glyph: "TRK" },
+    { label: "Stardates", glyph: "SDS" },
+  ],
   FRA: [
     { label: "Main Set", glyph: "FRA" },
     { label: "Special Guests", glyph: "SPG" },
@@ -217,6 +225,7 @@ export const TIER_LIST_PREVIEW_SETS: Record<
   string,
   { name: string; startDate: string }
 > = {
+  TRK: { name: "Star Trek", startDate: "2026-11-10" },
   FRA: { name: "Reality Fracture", startDate: "2026-09-29" },
   HOB: { name: "The Hobbit", startDate: "2026-08-11" },
   MSH: { name: "Marvel Super Heroes", startDate: "2026-06-23" },
