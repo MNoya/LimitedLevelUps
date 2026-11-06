@@ -1089,10 +1089,14 @@ class _ReadyCheckPreviewView(discord.ui.View):
             seated = settings.pod_round_robin_size
         else:
             seated = floor - 1
-        unlinked = [] if self.team_offer or self.pick_2_offer else [_UNLINKED_SEAT]
+        offer = self.team_offer or self.pick_2_offer
+        unlinked = [] if offer else [_UNLINKED_SEAT]
+        absent_confirmed = [] if offer else [interaction.user.mention]
         await interaction.response.send_message(
             ready_check_confirm_text(
-                seated, floor, unlinked, team_offer=self.team_offer, pick_2_offer=self.pick_2_offer),
+                seated, floor, unlinked, team_offer=self.team_offer, pick_2_offer=self.pick_2_offer,
+                absent_confirmed=absent_confirmed,
+            ),
             view=ReadyCheckConfirmView(
                 None, None, None, show_link_players=bool(unlinked),
                 team_offer=self.team_offer, pick_2_offer=self.pick_2_offer,

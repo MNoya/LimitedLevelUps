@@ -21,6 +21,7 @@ from bot.services.pod_active import active_manager_for_channel
 from bot.services.ping_roles import format_join_line, organizer_mention
 from bot.services.pod_drafts import load_event_id_by_thread_sync, normalize_player_name
 from bot.services.pod_roster_fields import marked_new
+from bot.services.pod_table_organizer import name_list
 from bot.services.pod_team_board import TeamBoardMember, add_team_roster_fields
 from bot.services.pod_tournament import actor_label, is_pod_organizer
 
@@ -377,6 +378,7 @@ class ForceStartConfirmView(discord.ui.View):
 
 
 READY_CHECK_CONFIRM_PROMPT = "Start the ready check anyway?"
+MSG_CONFIRMED_NOT_IN_LOBBY = "⏳ {names} confirmed for this Pod and {verb} not in the Draftmancer lobby yet"
 READY_CHECK_TEAM_OFFER = "{count} Players in the Draftmancer lobby, make it a Team Draft?"
 READY_CHECK_PICK_2_OFFER = "{count} Players in the Draftmancer lobby, make it Pick 2?"
 KEEP_PAIRINGS_LABEL = "Keep Pairings"
@@ -386,7 +388,7 @@ PICK_2_LABEL = "Pick 2"
 
 def ready_check_confirm_text(
     seated: int, floor: int, unlinked: list[str], *, pairs: bool = True, team_offer: bool = False,
-    pick_2_offer: bool = False,
+    pick_2_offer: bool = False, absent_confirmed: list[str] | None = None,
 ) -> str:
     """Warn-but-allow prompt shown to the initiator when a ready check is unusual but permitted: a roster
     under the floor, an odd roster that cannot pair, unrecognized seats, or any combination. Shared by the
@@ -397,6 +399,9 @@ def ready_check_confirm_text(
     lines: list[str] = []
     if seated < floor and not pick_2_offer:
         lines.append(f"🛑 Only {seated} player{plural(seated)} in the Draftmancer lobby.")
+    if absent_confirmed:
+        verb = "is" if len(absent_confirmed) == 1 else "are"
+        lines.append(MSG_CONFIRMED_NOT_IN_LOBBY.format(names=name_list(absent_confirmed), verb=verb))
     if pairs and seated % 2 != 0:
         lines.append(
             "⚠️ Pairings need an even number, so the draft will be refused at start until a player joins "
@@ -529,15 +534,22 @@ async def guard_ready_check(interaction, manager, thread, *, initiated_by, min_p
     if blocker:
         await reply_private(interaction, content=f"⚠️ {blocker}")
         return True
-    unlinked = [] if manager.kind == "mock" else await manager.unrecognized_lobby_names()
+    unlinked: list[str] = []
+    absent_confirmed: list[str] = []
+    if manager.kind != "mock":
+        classified = await manager.classified_session_users()
+        unlinked = [arena for arena, display in classified if display is None]
+        absent_confirmed = await manager.confirmed_left_behind(classified, thread.guild)
     team_offer = manager.offers_team_draft()
     pick_2_offer = not team_offer and manager.offers_pick_2()
-    if manager.ready_check_needs_confirm(unlinked, min_players=min_players) or team_offer or pick_2_offer:
+    needs_confirm = manager.ready_check_needs_confirm(unlinked, min_players=min_players) or bool(absent_confirmed)
+    if needs_confirm or team_offer or pick_2_offer:
         await reply_private(
             interaction,
             content=ready_check_confirm_text(
                 len(manager.player_session_users()), manager.ready_check_floor(min_players), unlinked,
                 pairs=manager.kind != "mock", team_offer=team_offer, pick_2_offer=pick_2_offer,
+                absent_confirmed=absent_confirmed,
             ),
             view=ReadyCheckConfirmView(
                 manager, thread, initiated_by, show_link_players=bool(unlinked),

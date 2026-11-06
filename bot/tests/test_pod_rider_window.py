@@ -1,8 +1,9 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from bot.services.pod_draft_manager import PodDraftManager, ready_check_strands_nobody
+from bot.services.pod_draft_manager import PodDraftManager, ready_check_holds_for_absent, ready_check_strands_nobody
 
 
 class _Thread:
@@ -81,3 +82,17 @@ def test_a_table_planned_at_nine_locks_at_ten(seated, still_open, capped_to):
 ])
 def test_ready_check_only_offered_when_it_strands_nobody(present, room_size, waiting, safe):
     assert ready_check_strands_nobody(present, room_size, waiting) is safe
+
+
+_START = datetime(2026, 11, 4, 19, 0, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("present, waiting, now, holds", [
+    (8, 2, _START - timedelta(minutes=5), True),
+    (8, 2, _START, False),
+    (8, 2, _START + timedelta(minutes=3), False),
+    (8, 0, _START - timedelta(minutes=5), False),
+    (10, 2, _START - timedelta(minutes=5), False),
+])
+def test_ready_check_holds_for_missing_confirmed_players_until_the_start(present, waiting, now, holds):
+    assert ready_check_holds_for_absent(present, 10, waiting, now, _START) is holds

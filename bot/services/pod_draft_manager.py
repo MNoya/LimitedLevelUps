@@ -2917,10 +2917,23 @@ class PodDraftManager:
         await self._reload_rsvp_rosters()
         mention_map = await self._resolve_rsvp_mentions(thread.guild)
         waiting = waiting_roster(self.rsvps_yes, classified, mention_map)
-        if ready_check_strands_nobody(len(classified), self.max_players, len(waiting)):
-            await self._post_lobby_full_prompt(thread, len(classified))
-        else:
+        if self._holds_ready_check_for(len(classified), waiting):
             await self._post_lobby_waiting(thread, len(classified), waiting)
+        else:
+            await self._post_lobby_full_prompt(thread, len(classified))
+
+    def _holds_ready_check_for(self, present: int, waiting: list[str]) -> bool:
+        now = datetime.now(timezone.utc)
+        return ready_check_holds_for_absent(present, self.max_players, len(waiting), now, self.scheduled_start)
+
+    async def offer_held_ready_check(self) -> None:
+        """Re-run the lobby-full pass once the start time passes, so a Ready Check held for a missing player
+        is offered without waiting for someone to join or leave"""
+        if self._lobby_waiting_message is None or self._lobby_full_prompted:
+            return
+        if self.scheduled_start is None or datetime.now(timezone.utc) < self.scheduled_start:
+            return
+        self._maybe_schedule_lobby_full_prompt(await self.classified_session_users())
 
     async def _post_lobby_full_prompt(self, thread: discord.Thread, present: int) -> None:
         """Post the Ready Check button and retire any waiting announcement it supersedes"""
@@ -3159,6 +3172,15 @@ class PodDraftManager:
         classified = await self._classify_users(self.non_bot_session_names())
         mention_map = await self._resolve_rsvp_mentions(guild)
         return waiting_roster(list(self.rsvps_yes) + list(self.rsvps_unconfirmed), classified, mention_map)
+
+    async def confirmed_left_behind(
+        self, classified: list[tuple[str, str | None]], guild: discord.Guild | None,
+    ) -> list[str]:
+        """Confirmed players a Ready Check started now would leave behind, while the check still waits for them"""
+        await self._reload_rsvp_rosters()
+        mention_map = await self._resolve_rsvp_mentions(guild)
+        absent = waiting_roster(self.rsvps_yes, classified, mention_map)
+        return absent if self._holds_ready_check_for(len(classified), absent) else []
 
     async def bump_offer_card(self) -> None:
         """Move a live Pick 2 or Team Draft card to the bottom of the thread, carrying its tally, for a
@@ -3714,6 +3736,15 @@ class PodDraftManager:
 def ready_check_strands_nobody(present: int, room_size: int, waiting: int) -> bool:
     """Whether a Ready Check now leaves no confirmed player behind: room full, or nobody confirmed absent"""
     return present >= room_size or waiting == 0
+
+
+def ready_check_holds_for_absent(
+    present: int, room_size: int, waiting: int, now: datetime, starts_at: datetime | None,
+) -> bool:
+    """Whether the Ready Check waits for confirmed players still missing, which it does until the pod's start"""
+    if ready_check_strands_nobody(present, room_size, waiting):
+        return False
+    return starts_at is None or now < starts_at
 
 
 def name_nudge_text(names: list[str]) -> str:

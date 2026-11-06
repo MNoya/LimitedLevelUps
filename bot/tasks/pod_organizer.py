@@ -75,6 +75,7 @@ async def organize_pod(bot: commands.Bot, manager) -> None:
     if manager.ready_check_active or manager.scheduled_start is None:
         return
     await manager.promote_round_robin_offer()
+    await manager.offer_held_ready_check()
     watch = _settled(manager)
     snapshot = _snapshot(manager, watch)
     action = decide(snapshot)
