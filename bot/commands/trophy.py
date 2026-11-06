@@ -50,7 +50,7 @@ PLATFORM_CHOICES: tuple[tuple[str, str], ...] = (
     ("Paper", "cardboard"),
 )
 PLATFORM_EMOJI_NAME = dict(PLATFORM_CHOICES)
-FORMAT_CHOICES: tuple[str, ...] = ("Premier", "Traditional", "Single Elim")
+FORMAT_CHOICES: tuple[str, ...] = ("Premier", "Traditional", "Prerelease", "Single Elim")
 WRITE_IN_EMOJI = "manax"
 WRITE_IN = "__write_in__"
 SET_SELECT_LIMIT = 23
