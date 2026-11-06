@@ -22,6 +22,7 @@ export const IDENTITY_VIEWS = ["public_player", "public_self_reported_events", "
 // 17Lands tier-list ids per set, taken from a tier list's share link
 // (https://www.17lands.com/tier_list/<uid>). Add one as each set rotates in.
 export const TIER_LIST_UIDS: Record<string, string> = {
+  TRK: "03a686ab050b42d5a62bce8902e7f0df",
   FRA: "643f4ffbcde34632adca80bce7fdcdd9",
   HOB: "528d1c45d1f04b59abac2a897a8928c8",
   MSH: "1c86af8656f7432c83d9f9bb9c92f9df",
