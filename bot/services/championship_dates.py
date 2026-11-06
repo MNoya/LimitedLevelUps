@@ -34,6 +34,7 @@ BALLOT_LEAD_DAYS = 3
 BALLOT_OPENS_AT = time(13, 0)
 PARALLEL_LEAD_DAYS = 14
 VOTE_REMINDER_LAG_DAYS = 2
+VOTE_OPEN_DAYS = 7
 SEASON_START_OVERRIDES: dict[str, date] = {"HOB": date(2026, 8, 30)}
 CHAMPIONSHIP_DATE_OVERRIDES: dict[str, date] = {"FRA": date(2026, 11, 7)}
 BALLOT_DATE_OVERRIDES: dict[str, date] = {"FRA": date(2026, 10, 17)}
@@ -147,16 +148,34 @@ def vote_reminder_at(plan: ChampionshipPlan) -> datetime | None:
     return opens_at + timedelta(days=VOTE_REMINDER_LAG_DAYS)
 
 
+def vote_closes_at(plan: ChampionshipPlan) -> datetime | None:
+    """A week after the ballot opens, or the rotation that ends the season if that comes first"""
+    opens_at = vote_opens_at(plan)
+    if opens_at is None:
+        return None
+    return min(opens_at + timedelta(days=VOTE_OPEN_DAYS), plan.next_release_at)
+
+
 def voting_open(when: datetime | None = None) -> bool:
-    """Whether the format vote is live now: from the ballot open through the rotation that ends the season."""
     plan = plan_for(when)
     if plan is None:
         return False
     opens_at = vote_opens_at(plan)
+    closes_at = vote_closes_at(plan)
+    if opens_at is None or closes_at is None:
+        return False
+    now = when if when is not None else datetime.now(RELEASE_TZ)
+    return opens_at <= now < closes_at
+
+
+def voting_closed(when: datetime | None = None) -> bool:
+    """Whether this season's ballot has opened and since closed"""
+    plan = plan_for(when)
+    opens_at = vote_opens_at(plan) if plan is not None else None
     if opens_at is None:
         return False
     now = when if when is not None else datetime.now(RELEASE_TZ)
-    return opens_at <= now < plan.next_release_at
+    return now >= opens_at and not voting_open(when)
 
 
 def vote_ping_due(when: datetime) -> ChampionshipPlan | None:

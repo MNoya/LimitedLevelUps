@@ -30,7 +30,7 @@ from bot.discord_helpers import (
     run_detached,
 )
 from bot.models import PodDraftEvent, PodDraftParticipant, PodFormatVote, Player
-from bot.services.championship_dates import plan_for, vote_opens_at, vote_reminder_at, voting_open
+from bot.services.championship_dates import plan_for, vote_opens_at, vote_reminder_at, voting_closed, voting_open
 from bot.services.pod_format import BALLOT_EXTRA_CODES, custom_formats, is_custom
 from bot.services.pod_format_poll import (
     MAX_ROWED_OPTIONS,
@@ -52,6 +52,7 @@ log = logging.getLogger(__name__)
 
 MSG_VOTE_SOON = "Format voting opens soon"
 MSG_VOTE_OPENS_AT = "Format voting opens <t:{unix}:R>"
+MSG_VOTE_CLOSED = "Format voting is closed for this season"
 MSG_VOTE_OPEN = "{role} Vote for any formats you'd be interested in playing this season!"
 MSG_VOTE_REMINDER = "{reminder} to vote for the {flashback} formats you want to play this season!"
 MSG_VOTE_HEADING = "## 🗳️ Flashback Format Vote - {name} Edition"
@@ -269,11 +270,13 @@ def _release_sort_key(code: str) -> date:
 # --- the card, shared by the pinned public message and the ephemeral copy ---
 
 
-def panel(season: str) -> tuple[discord.Embed, ui.View]:
-    """The public card: shared counts, buttons neutral because a pinned message has no one player."""
+def panel(season: str) -> tuple[discord.Embed, ui.View | None]:
+    """The public card: shared counts, buttons neutral because a pinned message has no one player, none once closed"""
     with SessionLocal() as session:
         counts = tally(session, season)
     codes = ballot_order(counts)
+    if not voting_open():
+        return _vote_embed(season, codes, counts, _extra_voted(counts, codes), intro=MSG_VOTE_CLOSED), None
     return _vote_embed(season, codes, counts, _extra_voted(counts, codes)), build_vote_view(codes)
 
 
@@ -325,9 +328,10 @@ def build_vote_view(codes: list[str], voted: set[str] | None = None) -> ui.View:
 
 def _vote_embed(
     season: str, codes: list[str], counts: dict[str, int], extras: list[tuple[str, int]] | None = None,
+    *, intro: str = MSG_VOTE_INTRO,
 ) -> discord.Embed:
     heading = MSG_VOTE_HEADING.format(name=set_name_for(season))
-    embed = discord.Embed(color=discord.Color.green(), description=f"{heading}\n\n{MSG_VOTE_INTRO}")
+    embed = discord.Embed(color=discord.Color.green(), description=f"{heading}\n\n{intro}")
     top = max(counts.values(), default=0)
     for code in codes:
         embed.add_field(name=f"{_emoji_prefix(code)}{_option_label(code)}",
@@ -499,11 +503,23 @@ async def post_vote_reminder(
 
 async def refresh_vote_card(channel: discord.abc.Messageable) -> None:
     existing = await _existing_card(channel)
-    if existing is None:
-        return
+    if existing is not None:
+        await _repaint(existing)
+
+
+async def close_vote_card(channel: discord.abc.Messageable) -> bool:
+    """Repaint a closed season's card once to drop its buttons; False when there was nothing left to drop"""
+    existing = await _existing_card(channel)
+    if existing is None or not existing.components:
+        return False
+    await _repaint(existing)
+    return True
+
+
+async def _repaint(card: discord.Message) -> None:
     embed, view = await asyncio.to_thread(panel, season_code())
     try:
-        await existing.edit(embed=embed, view=view)
+        await card.edit(embed=embed, view=view)
     except discord.HTTPException:
         log.warning("format vote: could not edit the vote card", exc_info=True)
 
@@ -527,6 +543,8 @@ async def send_vote_panel(interaction: discord.Interaction) -> None:
 
 
 def _vote_closed_message() -> str:
+    if voting_closed():
+        return MSG_VOTE_CLOSED
     plan = plan_for()
     opens_at = vote_opens_at(plan) if plan is not None else None
     if opens_at is None:
@@ -611,6 +629,9 @@ async def _apply_toggle(interaction: discord.Interaction, code: str, ephemeral: 
     """The write behind a vote click, off the interaction that already answered and off the event loop, so a
     crowd clicking at once never blocks the loop past the interaction ack window. The public card repaints
     through the queue so a burst collapses to one edit; a private copy edits itself."""
+    if not voting_open():
+        await interaction.followup.send(_vote_closed_message(), ephemeral=True)
+        return
     season = season_code()
     if not ephemeral and await asyncio.to_thread(_has_vote, interaction.user, season, code):
         await interaction.followup.send(
@@ -630,6 +651,9 @@ async def _apply_toggle(interaction: discord.Interaction, code: str, ephemeral: 
 
 
 async def _apply_add(interaction: discord.Interaction, raw: str) -> None:
+    if not voting_open():
+        await interaction.followup.send(_vote_closed_message(), ephemeral=True)
+        return
     added = await asyncio.to_thread(_add_votes_commit, interaction.user, season_code(), raw)
     request_public_repaint(interaction.client)
     message = MSG_FORMATS_ADDED.format(codes=", ".join(added)) if added else MSG_FORMATS_ALREADY
@@ -667,6 +691,9 @@ class ConfirmRemoveButton(ui.Button):
         self.code = code
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        if not voting_open():
+            await interaction.response.edit_message(content=_vote_closed_message(), view=None)
+            return
         await interaction.response.defer()
         await asyncio.to_thread(_remove_vote_commit, interaction.user, season_code(), self.code)
         request_public_repaint(interaction.client)

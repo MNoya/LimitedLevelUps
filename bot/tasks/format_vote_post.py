@@ -1,4 +1,4 @@
-"""Opens the flashback format vote in pod chat and reminds the players who have not voted, on the vote's own dates.
+"""Opens, reminds and closes the flashback format vote in pod chat on the vote's own dates.
 
 One tick a day at the ballot hour, plus a pass at startup so a deploy across either instant still lands its post.
 The pinned card and the reminder's role mention keep each to one post.
@@ -12,8 +12,8 @@ from discord.ext import commands
 
 from bot.config import settings
 from bot.discord_helpers import resolve_pod_chat_channel
-from bot.services.championship_dates import BALLOT_OPENS_AT, vote_ping_due, vote_reminder_due
-from bot.services.pod_format_vote import post_vote_card, post_vote_reminder, vote_ping_text
+from bot.services.championship_dates import BALLOT_OPENS_AT, vote_ping_due, vote_reminder_due, voting_closed
+from bot.services.pod_format_vote import close_vote_card, post_vote_card, post_vote_reminder, vote_ping_text
 from bot.services.pod_schedule import SCHEDULE_TZ
 
 log = logging.getLogger(__name__)
@@ -40,7 +40,8 @@ async def fire_format_vote_tick() -> None:
     now = datetime.now(SCHEDULE_TZ)
     opening = vote_ping_due(now)
     reminding = vote_reminder_due(now)
-    if opening is None and reminding is None:
+    closing = voting_closed(now)
+    if opening is None and reminding is None and not closing:
         return
     channel = resolve_pod_chat_channel(_bot)
     if channel is None:
@@ -53,6 +54,8 @@ async def fire_format_vote_tick() -> None:
         if outcome is not None:
             log.info(f"format vote: {reminding.set_code} reminder pinged {outcome.pinged}/{outcome.targeted}")
             await _post_debug(reminding.set_code, outcome.pinged, outcome.targeted)
+    if closing and await close_vote_card(channel):
+        log.info("format vote: closed, buttons dropped from the card")
 
 
 async def _post_debug(set_code: str, pinged: int, targeted: int) -> None:

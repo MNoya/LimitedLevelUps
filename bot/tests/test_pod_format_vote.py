@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
+
 from bot.models import PodDraftParticipant
 from bot.services import pod_format_vote as vote
 from bot.services.pod_drafts import record_ondemand_event
@@ -96,12 +98,16 @@ def test_the_ballot_keeps_voted_options_when_it_overflows_the_grid():
     assert {"DOM", "ELD", "KTK"} <= set(order)
 
 
-def test_voting_is_open_from_the_ballot_instant():
-    plan = plan_for(datetime(2026, 8, 29, 15, tzinfo=RELEASE_TZ))
-    opens_at = vote_opens_at(plan)
+@pytest.mark.parametrize("offset, is_open", [
+    (timedelta(minutes=-1), False),
+    (timedelta(0), True),
+    (timedelta(days=7, minutes=-1), True),
+    (timedelta(days=7), False),
+])
+def test_voting_is_open_for_a_week_from_the_ballot_instant(offset, is_open):
+    opens_at = vote_opens_at(plan_for(datetime(2026, 8, 29, 15, tzinfo=RELEASE_TZ)))
 
-    assert voting_open(opens_at) is True
-    assert voting_open(opens_at - timedelta(minutes=1)) is False
+    assert voting_open(opens_at + offset) is is_open
 
 
 def test_a_card_pinned_before_the_ballot_opened_is_replaced_whatever_its_heading_reads():
