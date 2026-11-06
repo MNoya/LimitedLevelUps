@@ -730,8 +730,7 @@ async def demote_older_welcomes(channel: discord.abc.Messageable, *, newest: int
 
 
 def welcome_card_greeting(message: discord.Message) -> str | None:
-    """The greeting off a welcome that still carries its buttons, heading markdown stripped; None for
-    anything else"""
+    """The greeting off a welcome that still carries its buttons, as a plain line naming the drafter"""
     components = list(_flat_components(message))
     carries_buttons = any(
         isinstance(item, Button) and item.custom_id == MANAGE_ROLES_BUTTON_ID for item in components
@@ -739,11 +738,19 @@ def welcome_card_greeting(message: discord.Message) -> str | None:
     if not carries_buttons:
         return None
     if message.content.strip():
-        return HEADING_PREFIX.sub("", message.content.splitlines()[0])
+        return _demoted_greeting(message.content, message.mentions)
     for item in components:
         if isinstance(item, TextDisplay) and item.content.strip():
-            return HEADING_PREFIX.sub("", item.content.splitlines()[0])
+            return _demoted_greeting(item.content, message.mentions)
     return None
+
+
+def _demoted_greeting(content: str, mentioned: list[discord.User | discord.Member]) -> str:
+    greeting = HEADING_PREFIX.sub("", content.splitlines()[0])
+    for user in mentioned:
+        bold_name = f"**{discord.utils.escape_markdown(user.display_name)}**"
+        greeting = re.sub(rf"<@!?{user.id}>", bold_name, greeting)
+    return greeting
 
 
 def _flat_components(message: discord.Message) -> Iterable[discord.Component]:
