@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import type { Card, SlotDefinition } from "../../types/p0p1";
 import { Pip } from "../ManaPips";
+import { CardZoomOverlay } from "./CardImagePreview";
 import { SlotPip } from "./slotVisuals";
 
 const WILDCARD_COLORS = ["W", "U", "B", "R", "G", "C"] as const;
@@ -57,6 +58,11 @@ export function CardSelectionGrid({
 }: Props) {
   const [search, setSearch] = useState("");
   const [color, setColor] = useState<Color | null>(null);
+  const [zoomed, setZoomed] = useState<Card | null>(null);
+  const zoomOnRightClick = (card: Card) => (e: ReactMouseEvent) => {
+    e.preventDefault();
+    setZoomed(card);
+  };
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -162,6 +168,7 @@ export function CardSelectionGrid({
               return (
                 <div
                   key={card.name}
+                  onContextMenu={zoomOnRightClick(card)}
                   className="relative p-0 rounded-[3%] overflow-hidden outline outline-1 -outline-offset-1 outline-white/10"
                 >
                   <img
@@ -185,6 +192,7 @@ export function CardSelectionGrid({
                 type="button"
                 key={card.name}
                 onClick={() => onSelect(card.name)}
+                onContextMenu={zoomOnRightClick(card)}
                 className={`relative bg-transparent cursor-pointer p-0 rounded-[3%] overflow-hidden outline outline-1 -outline-offset-1 outline-white/10 transition-transform duration-150 hover:z-10 ${
                   selected ? "p0p1-card-selected z-10 scale-[1.03] hover:scale-[1.05]" : "hover:scale-[1.04]"
                 }`}
@@ -208,6 +216,8 @@ export function CardSelectionGrid({
         </span>
         {footerRight}
       </footer>
+
+      {zoomed ? <CardZoomOverlay imageUrl={zoomed.imageNormal} alt={zoomed.name} onClose={() => setZoomed(null)} /> : null}
     </div>
   );
 }
