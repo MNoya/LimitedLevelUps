@@ -1,4 +1,4 @@
-import calendar from "../../../scribe_calendar.json";
+import calendar from "../../../event_calendar.json";
 import type { SetSummary } from "../types/leaderboard";
 import { isRealSeasonSet } from "./utils";
 

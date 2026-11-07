@@ -5,14 +5,14 @@ description: Refresh the bundled event calendar that /event-schedule, the format
 
 # update-schedule
 
-Rebuild `scribe_calendar.json` from two sources and reconcile the code with whatever they changed.
+Rebuild `event_calendar.json` from two sources and reconcile the code with whatever they changed.
 
 ## Two sources
 
 - **Wizards' MTG Arena event schedule article** owns the Arena queues: Premier, Pick-Two, Traditional, Quick, Sealed, Flashback, Contender, Arena Direct, Cube, Omniscience, Mixed-Up and the Arena Championship Qualifiers. Wizards posts it weeks before release, and when the two disagree it is the one that is right.
 - **MTG Scribe** keeps everything else: Pro Tours, Worlds, Regional Championships, Spotlight Series, prerelease and release dates, and Constructed events.
 
-`scribe_calendar.json` keeps its name and Scribe's shape, because every reader parses Scribe-style titles and tags.
+`event_calendar.json` keeps Scribe's shape for both sources, because every reader parses Scribe-style titles and tags.
 
 ## Why this is a skill and not just the scripts
 
@@ -28,7 +28,7 @@ Each source is one command. The work is what comes after: Scribe hand-enters its
 ### 1. Keep the outgoing calendar as a baseline
 
 ```
-git show HEAD:scribe_calendar.json > /tmp/scribe_prev.json
+git show HEAD:event_calendar.json > /tmp/scribe_prev.json
 ```
 
 If that fails because the file is new to `HEAD`, skip it and run step 4 without `--previous`.
@@ -125,7 +125,7 @@ If it prints a window, add the two paste-ready rows it emits — `CollectorBoost
 ### 10. Stage, do not commit
 
 ```
-git add scribe_calendar.json
+git add event_calendar.json
 ```
 
 Plus `cube_variants.json` and any code, fixture, set-symbol and spec file touched. The user reviews before committing — never commit or push here.
@@ -142,5 +142,5 @@ If `bot/config.py` or another file also holds unrelated working-tree changes, st
 ## Notes
 
 - `event-scribe-handoff.md` beside this file is the reference for Scribe's tag taxonomy and its known upstream inconsistencies. Update its taxonomy section when a capture teaches something new about how Scribe behaves — not when it merely adds an event.
-- Nothing reaches players until the user pushes. `scribe_calendar.json` is served from the repo, so a correction ships on deploy, not on a tick.
+- Nothing reaches players until the user pushes. `event_calendar.json` is served from the repo, so a correction ships on deploy, not on a tick.
 - `load_events` logs a warning once the calendar runs out within 14 days. If the user reports seeing that in `logs/bot.log`, this skill is the answer.

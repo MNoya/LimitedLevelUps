@@ -1,6 +1,6 @@
 """MTG Scribe's event calendar, served from a bundled snapshot, plus the REST client that captures it.
 
-``scribe_calendar.json`` is what the bot reads — ``load_events`` never touches the network. MTG Scribe
+``event_calendar.json`` is what the bot reads — ``load_events`` never touches the network. MTG Scribe
 publishes each set's queues weeks ahead and the schedule holds for the window, so fetching per
 invocation bought little and cost seconds: three sequential pages, capped at 50 events each, on a host
 whose account-level anti-bot (``/.well-known/sgcaptcha/``) intermittently challenges datacenter egress
@@ -34,7 +34,7 @@ from bot.config import USER_AGENT
 logger = logging.getLogger(__name__)
 
 EVENTS_URL = "https://mtgscribe.com/wp-json/tribe/events/v1/events"
-CALENDAR_PATH = Path(__file__).resolve().parents[2] / "scribe_calendar.json"
+CALENDAR_PATH = Path(__file__).resolve().parents[2] / "event_calendar.json"
 STALE_HORIZON = timedelta(days=14)
 PER_PAGE = 50
 REQUEST_TIMEOUT = 15

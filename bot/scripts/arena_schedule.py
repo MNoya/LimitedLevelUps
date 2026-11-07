@@ -1,4 +1,4 @@
-"""Merge a set's official MTG Arena event schedule article into ``scribe_calendar.json``.
+"""Merge a set's official MTG Arena event schedule article into ``event_calendar.json``.
 
 Wizards posts each set's full Arena calendar in advance, weeks before MTG Scribe catches up, so the Arena
 queues come from that article and Scribe keeps the tabletop events, coverage and Constructed. Run it after

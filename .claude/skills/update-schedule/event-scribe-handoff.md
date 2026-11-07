@@ -6,7 +6,7 @@ Shipped `/event-scribe` (commit `655a441`, since renamed `/event-schedule`): an 
 
 | File | Role |
 |---|---|
-| `scribe_calendar.json` | **The calendar the bot serves.** Captured by `snapshot_scribe`, committed, read on every render. |
+| `event_calendar.json` | **The calendar the bot serves.** Captured by `snapshot_scribe`, merged with the Wizards article by `arena_schedule`, committed, read on every render. |
 | `bot/scripts/snapshot_scribe.py` | The only code that requests anything from mtgscribe.com. Run it from a clean IP, commit, deploy. |
 | `bot/services/mtgscribe.py` | `load_events` (bundled read) + grouping/partition, plus the REST client the snapshot script drives. |
 | `bot/services/scribe_formats.py` | Standalone format short-name map (`Premier Draft` → `Premier`); vendorable, no bot imports. |
@@ -17,7 +17,7 @@ Shipped `/event-scribe` (commit `655a441`, since renamed `/event-schedule`): an 
 
 ## Data source — a committed snapshot, refreshed by hand
 
-Nothing at runtime calls mtgscribe.com. `load_events` reads `scribe_calendar.json` and parses it in ~3ms; `snapshot_scribe` is the single writer.
+Nothing at runtime calls mtgscribe.com. `load_events` reads `event_calendar.json` and parses it in ~3ms; `snapshot_scribe` and `arena_schedule` are its only writers.
 
 Two reasons the live fetch was dropped. **Bot protection:** mtgscribe.com is on SiteGround, whose account-level anti-bot (`/.well-known/sgcaptcha/`) challenges datacenter egress with a 202 HTML page, and the site owner could not turn it off — so repeated requests from Railway get locked out, unpredictably. **Latency:** the API hard-caps a page at 50 events regardless of `per_page` (verified: `per_page=100` and `200` both return 50), so a 150-day window is four sequential pages at ~0.8s each. `/event-scribe` cost ~3s end to end for a calendar that does not change hour to hour.
 
@@ -77,7 +77,7 @@ Format labels drift between rotations ("Pick 2 Draft" → "Pick-Two Draft", "Bo1
 
 ## Deploy / ops
 
-- **Refresh the calendar and deploy** — `.venv/bin/python -m bot.scripts.snapshot_scribe` from a residential IP, then commit `scribe_calendar.json`. Nothing reaches players until that deploy. Worth a run each rotation (Scribe publishes the incoming set's whole calendar weeks ahead), on a corrected window, and once Scribe backfills the `flashback` tags it omits at publish. The script prints how far forward the capture reaches; sanity-check that before committing.
+- **Refresh the calendar and deploy** — `.venv/bin/python -m bot.scripts.snapshot_scribe` from a residential IP, then commit `event_calendar.json`; the `/update-schedule` skill runs it together with `arena_schedule`. Nothing reaches players until that deploy. Worth a run each rotation (Scribe publishes the incoming set's whole calendar weeks ahead), on a corrected window, and once Scribe backfills the `flashback` tags it omits at publish. The script prints how far forward the capture reaches; sanity-check that before committing.
 - **`!sync` required** — `/event-schedule` has a `format` choice list and a `set` autocomplete option.
 - **Upload application emojis** by exact name: `mtga`, `scribe`, `cube`, `8000gems`, `arenachamp` (set symbols optional; lines render without them).
 - Source symbols for emoji live in `frontend/public/set-symbols/<code>.png`.

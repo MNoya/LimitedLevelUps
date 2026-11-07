@@ -1,4 +1,4 @@
-"""Capture the MTG Scribe calendar into ``scribe_calendar.json`` — the only request the repo ever makes
+"""Capture the MTG Scribe calendar into ``event_calendar.json`` — the only request the repo ever makes
 to mtgscribe.com.
 
 The bot serves that file and never fetches, so this script is what puts a new season on the board.
