@@ -19,7 +19,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from bot.commands.event_scribe import BOOSTER_LABELS, DRAFT_FORMATS, _seed_for_label, _slugify
+from bot.commands.event_scribe import BOOSTER_LABELS, DRAFT_FORMATS, seed_for_label, slugify
 from bot.services import mtgscribe
 from bot.services.scribe_formats import FORMAT_SHORT_NAMES
 from bot.services.watch_party import PREMIER_SCHEDULES, covered_events
@@ -90,7 +90,7 @@ def _ambiguous_set_labels(events: list) -> list[str]:
         matches = [seed for seed in ALL_SETS
                    if seed.name.lower() in label.lower() or label.lower() in seed.name.lower()]
         if len(matches) > 1:
-            picked = _seed_for_label(label)
+            picked = seed_for_label(label)
             codes = ", ".join(seed.code for seed in matches)
             findings.append(f"set label {label!r} matches {codes} — resolves to {picked.code}")
     return findings
@@ -101,7 +101,7 @@ def _unmatched_set_labels(events: list) -> list[str]:
     product ("Mixed-Up"), a missing set otherwise."""
     findings = []
     for label in sorted({event.group_label for event in events if "limited" in event.tag_slugs}):
-        if _seed_for_label(label) is not None:
+        if seed_for_label(label) is not None:
             continue
         if any(word in label.lower() for word in ("cube", "midweek")):
             continue
@@ -117,7 +117,7 @@ def _untagged_reruns(events: list) -> list[str]:
     for event in events:
         if mtgscribe.FLASHBACK_TAG in event.tag_slugs or event.format_label not in FLASHBACK_FORMATS:
             continue
-        seed = _seed_for_label(event.group_label)
+        seed = seed_for_label(event.group_label)
         if seed is None or seed.code == CUBE_CODE or seed.end_date is None or seed.end_date >= today:
             continue
         findings.append(f"{event.title!r} ({event.start:%b %-d}) reruns rotated-out {seed.code} "
@@ -168,7 +168,7 @@ def _missing_set_symbols(events: list) -> list[str]:
     """The symbol PNG is the source for the Discord application emoji, so a set without one renders
     its lines with no glyph."""
     rendered = [event for event in events if "limited" in event.tag_slugs]
-    seeds = {seed.code for seed in (_seed_for_label(event.group_label) for event in rendered) if seed is not None}
+    seeds = {seed.code for seed in (seed_for_label(event.group_label) for event in rendered) if seed is not None}
     findings = []
     for code in sorted(seeds):
         if not (SET_SYMBOL_DIR / f"{code.lower()}.png").exists():
@@ -189,7 +189,7 @@ def _new_since(events: list, previous_path: Path) -> list[str]:
         old_raw = json.load(previous_file)
     old = [mtgscribe._parse_event(raw) for raw in old_raw]
     findings = []
-    set_slugs = {_slugify(seed.name) for seed in ALL_SETS}
+    set_slugs = {slugify(seed.name) for seed in ALL_SETS}
     new_tags = {tag for event in events for tag in event.tag_slugs} - {t for e in old for t in e.tag_slugs}
     for tag in sorted(new_tags - set_slugs):
         findings.append(f"new tag {tag!r}")

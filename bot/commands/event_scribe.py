@@ -76,7 +76,7 @@ class EventScribe(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    @app_commands.command(name="event-scribe", description=desc.EVENT_SCRIBE)
+    @app_commands.command(name="event-schedule", description=desc.EVENT_SCHEDULE)
     @app_commands.describe(format="Only show this format family", set="Only show this set")
     @app_commands.choices(format=[
         app_commands.Choice(name="Premier", value="premier"),
@@ -98,7 +98,7 @@ class EventScribe(commands.Cog):
         try:
             events = mtgscribe.load_events(arena_only=selected != COVERAGE_FILTER)
         except Exception:
-            logger.exception("event-scribe could not read the bundled MTG Scribe calendar")
+            logger.exception("event-schedule could not read the bundled event calendar")
             await interaction.followup.send("MTG Scribe events are unavailable right now. Try again later")
             return
         if selected == COVERAGE_FILTER:
@@ -139,7 +139,7 @@ class EventScribe(commands.Cog):
 
 def select_groups(events: list, filters: list | None, set_query: str | None = None,
                   *, apply_horizon: bool) -> tuple[list, list]:
-    """Run the event-scribe pipeline for an OR'd set of format filters, or the unfiltered Limited view
+    """Run the event-schedule pipeline for an OR'd set of format filters, or the unfiltered Limited view
     when ``filters`` is falsy: normalize → scope → filter → group → partition. ``apply_horizon`` drops
     upcoming groups past ``UPCOMING_HORIZON`` — the command keeps everything an explicit filter matches,
     the daily schedule tick always trims."""
@@ -170,7 +170,7 @@ def archives_set_query(set_query: str | None) -> bool:
     absolute dates. Set text matching no seed keeps the live board."""
     if not set_query:
         return False
-    seed = _seed_for_label(set_query)
+    seed = seed_for_label(set_query)
     return seed is not None and season_archived(seed)
 
 
@@ -183,7 +183,7 @@ def _selected_groups(events: list, filters: list | None, set_query: str | None) 
 
 
 def process_events(events: list, selected: str | None = None, set_query: str | None = None) -> tuple[list, list]:
-    """The shared /event-scribe + `!test scribe` entry: a single optional filter, with the horizon
+    """The shared /event-schedule + `!test scribe` entry: a single optional filter, with the horizon
     trim applied only to the fully unfiltered view."""
     filters = [selected] if selected else None
     apply_horizon = selected is None and set_query is None
@@ -355,7 +355,7 @@ def build_competitive_reminder(group: mtgscribe.EventGroup, emojis: dict) -> dis
     event_type, best_of = _competitive_parts(group)
     heading_type = _competitive_heading_type(event_type, emojis)
     best_of_suffix = f" {best_of}" if best_of else ""
-    seed = _seed_for_label(group.label)
+    seed = seed_for_label(group.label)
     set_code = seed.code if seed else group.label
     limited_format = group.limited_format or "Sealed"
     lines = [
@@ -492,7 +492,7 @@ def _fit_set_name(group: mtgscribe.EventGroup, emoji_prefix: str, timing: str) -
     trimmed = _trim_set_name(name)
     if trimmed != name and not _would_wrap(emoji_prefix, trimmed, timing):
         return trimmed
-    seed = _seed_for_label(name)
+    seed = seed_for_label(name)
     return seed.code if seed else trimmed
 
 
@@ -708,29 +708,25 @@ def _set_emoji(group: mtgscribe.EventGroup, emojis: dict):
 def _emoji_code(group: mtgscribe.EventGroup) -> str | None:
     if group.cube:
         return "CUBE"
-    seed = _seed_for_label(group.label)
+    seed = seed_for_label(group.label)
     return seed.code if seed else None
 
 
 def _clean_set_label(label: str) -> str:
     """Collapse a set name buried in qualifier words (e.g. "Sealed Marvel Super Heroes Bo3") to
     the bare set, so every queue for a set groups under one header."""
-    seed = _seed_for_label(label)
+    seed = seed_for_label(label)
     return seed.name if seed else label
 
 
-def _seed_for_label(label: str):
-    """Match either way: a queue label may carry the full set name ("Secrets of Strixhaven") or, on
-    flashback/quick reruns, just the short name Arena uses ("Duskmourn" for "Duskmourn: House of
-    Horror"), which is a substring of the seed name rather than a superstring of it.
-
-    The longest matching name wins, so "Dominaria United" resolves to DMU and not to the older
-    Dominaria whose name it contains.
-    """
+def seed_for_label(label: str):
+    """A full set name or the short name Arena uses on reruns; an exact name wins, then the longest match"""
     lowered = label.lower()
     best = None
     for seed in ALL_SETS:
         name = seed.name.lower()
+        if name == lowered:
+            return seed
         if name not in lowered and lowered not in name:
             continue
         if best is None or len(name) > len(best.name):
@@ -820,7 +816,7 @@ def _normalize_midweek(event: mtgscribe.ScribeEvent) -> mtgscribe.ScribeEvent:
     kept "Midweek"-prefixed so a Midweek never reads as a regular queue; set-less ones
     ("Midweek Magic: Brawl", crossovers) group under a "Midweek Magic" header."""
     label = event.group_label
-    seed = None if "+" in label else _seed_for_label(label)
+    seed = None if "+" in label else seed_for_label(label)
     if seed:
         leftover = label.replace(seed.name, "").strip()
         format_label = f"Midweek {leftover}" if leftover else "Midweek Magic"
@@ -837,12 +833,12 @@ def _with_best_of(format_label: str, title: str) -> str:
 
 def _set_name_from_tags(tag_slugs: tuple) -> str | None:
     for seed in ALL_SETS:
-        if _slugify(seed.name) in tag_slugs:
+        if slugify(seed.name) in tag_slugs:
             return seed.name
     return None
 
 
-def _slugify(name: str) -> str:
+def slugify(name: str) -> str:
     return name.lower().replace(":", "").replace(" ", "-")
 
 

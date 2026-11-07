@@ -1,6 +1,6 @@
 # Event schedule from MTG Scribe (handoff)
 
-Shipped `/event-scribe` (commit `655a441`): an on-demand command that renders the MTG Arena event calendar from a committed snapshot of mtgscribe.com, showing the in-progress + upcoming Limited schedule, grouped by set. This doc captures how that data layer works and what carries forward into **Format Schedule integration** (Todoist `6gmr6C7Vr3R7qxpj`): proactive announcements of Flashback/Quick Draft rotations, Cube, Qualifiers, etc. in their channels.
+Shipped `/event-scribe` (commit `655a441`, since renamed `/event-schedule`): an on-demand command that renders the MTG Arena event calendar from a committed snapshot of mtgscribe.com, showing the in-progress + upcoming Limited schedule, grouped by set. This doc captures how that data layer works and what carries forward into **Format Schedule integration** (Todoist `6gmr6C7Vr3R7qxpj`): proactive announcements of Flashback/Quick Draft rotations, Cube, Qualifiers, etc. in their channels.
 
 ## What shipped
 
@@ -10,7 +10,7 @@ Shipped `/event-scribe` (commit `655a441`): an on-demand command that renders th
 | `bot/scripts/snapshot_scribe.py` | The only code that requests anything from mtgscribe.com. Run it from a clean IP, commit, deploy. |
 | `bot/services/mtgscribe.py` | `load_events` (bundled read) + grouping/partition, plus the REST client the snapshot script drives. |
 | `bot/services/scribe_formats.py` | Standalone format short-name map (`Premier Draft` → `Premier`); vendorable, no bot imports. |
-| `bot/commands/event_scribe.py` | The `/event-scribe` cog: pipeline, filters, embed render, link button. |
+| `bot/commands/event_scribe.py` | The `/event-schedule` cog: pipeline, filters, embed render, link button. |
 | `bot/commands/testscribe.py` | `!test scribe` owner command — renders synthetic fixtures through the **same** pipeline so it can't drift. |
 | `bot/assets/mtg-scribe.png` | 128px logo used as the embed thumbnail (attachment, not emoji). |
 | `frontend/public/set-symbols/cube.png` | The CUBE set symbol, generated from the keyrune `pz1` glyph (keyrune has no `cube.svg`). |
@@ -78,13 +78,13 @@ Format labels drift between rotations ("Pick 2 Draft" → "Pick-Two Draft", "Bo1
 ## Deploy / ops
 
 - **Refresh the calendar and deploy** — `.venv/bin/python -m bot.scripts.snapshot_scribe` from a residential IP, then commit `scribe_calendar.json`. Nothing reaches players until that deploy. Worth a run each rotation (Scribe publishes the incoming set's whole calendar weeks ahead), on a corrected window, and once Scribe backfills the `flashback` tags it omits at publish. The script prints how far forward the capture reaches; sanity-check that before committing.
-- **`!sync` required** — `/event-scribe` has a `format` choice list and a `set` autocomplete option.
+- **`!sync` required** — `/event-schedule` has a `format` choice list and a `set` autocomplete option.
 - **Upload application emojis** by exact name: `mtga`, `scribe`, `cube`, `8000gems`, `arenachamp` (set symbols optional; lines render without them).
 - Source symbols for emoji live in `frontend/public/set-symbols/<code>.png`.
 
 ## Known gaps (not blockers)
 
-- `/event-scribe` is not listed in `/help`.
+- `/event-schedule` is not listed in `/help`.
 - No unit tests; `normalize_event`, the filters, day-grouping, the roster fit (`_fit_set_name`), and the "and others" wording are pure functions and good table-driven candidates. `!test scribe` fixtures exercise the roster/midweek/cube/shortening paths end to end.
 - Set-bearing Midweeks still group under their set header (now `Midweek`-prefixed) rather than all under one "Midweek Magic" block, consistent with global set-grouping.
 
@@ -94,7 +94,7 @@ Format labels drift between rotations ("Pick 2 Draft" → "Pick-Two Draft", "Bo1
 
 **Goal**: the bot proactively announces rotations from Scribe's calendar — Flashback & Quick Draft rotations in the flashback channel, plus Cube, Qualifiers, etc. (Todoist describes "read the once-per-set WotC article"; Scribe already structures that data, so consume Scribe rather than parsing WotC prose.)
 
-**Reuse, don't rebuild**: `mtgscribe.load_events` + the tag taxonomy + `normalize_event` labels + `render`-style formatting. The announcement copy should share builders with `/event-scribe` so they can't drift (same lesson as `testscribe`).
+**Reuse, don't rebuild**: `mtgscribe.load_events` + the tag taxonomy + `normalize_event` labels + `render`-style formatting. The announcement copy should share builders with `/event-schedule` so they can't drift (same lesson as `testscribe`).
 
 **To build**:
 - A scheduled tick (model on `bot/tasks/pod_schedule_post.py` + `bot/services/pod_schedule.py`, which already own the weekly-post + `SCHEDULE_TZ` pattern) that detects events **starting** on a given day and posts an announcement.

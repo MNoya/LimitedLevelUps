@@ -7,7 +7,7 @@ The watch party channel is where the server talks about pro-level Magic events w
 - The channel's name and topic follow the calendar: the event running now, or the next one.
 - A Discord Scheduled Event for each World Championship, Pro Tour and Arena Championship, so it shows in the server's Events list with an Interested button.
 - A green embed for each weekend of events: "upcoming" when the channel moves to it, and "is live!" when its headliner starts. Both lead with the headliner and list the rest of the weekend.
-- A pinned Coverage schedule, the same card as `/event-scribe format:Coverage`. The bot posts and pins it once, then edits it in place whenever the calendar changes.
+- A pinned Coverage schedule, the same card as `/event-schedule format:Coverage`. The bot posts and pins it once, then edits it in place whenever the calendar changes.
 - An announcement post for Pro Tour and World Championship events only, in the shape of the post template mods use today.
 
 Out of scope: per-round coverage and results. Nothing here pings anyone.
@@ -40,14 +40,14 @@ An event tagged `qualifier`, or with `Qualifier` or `ACQ` in its title, is never
 
 Big events overlap: Oct 23–25 2026 carries two Regional Championships, Spotlight Hartford and Arena Championship 13. The channel name shows one headliner, picked in the table's order, and holds it for the whole overlapping window: Oct 23–25 reads `ac13` from Friday, though Spotlight Hartford starts first. The topic lists every covered event in that window.
 
-The bundle refreshes only when someone runs `/update-scribe`, so an event Scribe adds reaches the channel on the next capture and deploy.
+The bundle refreshes only when someone runs `/update-schedule`, so an event Scribe adds reaches the channel on the next capture and deploy.
 
 ## Scheduled Events
 
 - One External scheduled event per World Championship, Pro Tour and Arena Championship, with the channel link as its location.
 - Scribe gives whole days and no start times, because they depend on the event and its timezone. Start and end come from a hand-kept schedule in `bot/services/watch_party.py`, read from each event's official fact sheet, with an estimate where none is published: Arena Championship 13 is estimated at 9 AM to 6 PM Pacific. An event with no row falls back to 9 AM to 6 PM Eastern, and `scribe_drift` flags it. World Championship 32 runs 9 AM to about 8 PM Atlanta time on Nov 13–14 and 9 AM to about 5 PM on Nov 15.
 - The same schedule numbers each Pro Tour within its year, which the announcement needs, and gives the first day's subject such as "Draft Day 1".
-- The `/update-scribe` skill keeps the schedule current. When a capture brings a new World Championship, Pro Tour or Arena Championship, the skill looks up its official times and adds a row.
+- The `/update-schedule` skill keeps the schedule current. When a capture brings a new World Championship, Pro Tour or Arena Championship, the skill looks up its official times and adds a row.
 - The bot finds an event it already created by matching name and start among the guild's scheduled events, so no new table is needed.
 - The bot role already has Manage Events, Create Events and Manage Channels on prod.
 
@@ -70,9 +70,9 @@ The 2026 Pro Tours are over, so World Championship 32 is the last one this year.
 
 The Magic Limited Championship is deferred until it is known whether it streams. If it does, its channel is `📺🎉-limited-champs-watch-party`.
 
-## /event-scribe Coverage choice
+## /event-schedule Coverage choice
 
-A Coverage entry in `/event-scribe`'s format menu lists the covered events ahead, from the same `coverage` tag the channel follows. Today the command reads Arena events only, so tabletop events like Regional Championships never show.
+A Coverage entry in `/event-schedule`'s format menu lists the covered events ahead, from the same `coverage` tag the channel follows. Today the command reads Arena events only, so tabletop events like Regional Championships never show.
 
 ## Where it runs
 

@@ -6,6 +6,7 @@ from bot.commands.event_scribe import (
     build_announcement,
     build_schedule_embed,
     scribe_url,
+    seed_for_label,
     select_groups,
 )
 from bot.services import mtgscribe
@@ -87,6 +88,15 @@ def test_newest_set_ignores_permanent_cube():
 
     assert newest.code != "CUBE"
     assert all(seed.start_date <= newest.start_date for seed in ALL_SETS if seed.code != "CUBE")
+
+
+@pytest.mark.parametrize("label,code", [
+    ("Dominaria", "DOM"),
+    ("Dominaria United", "DMU"),
+    ("Duskmourn", "DSK"),
+])
+def test_seed_for_label_prefers_an_exact_name_over_a_longer_one(label, code):
+    assert seed_for_label(label).code == code
 
 
 def test_set_seed_for_channel_resolves_the_outgoing_set():

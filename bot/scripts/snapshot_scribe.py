@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
-from bot.commands.event_scribe import _slugify
+from bot.commands.event_scribe import slugify
 from bot.services import mtgscribe
 from bot.services.format_schedule import active_set_seed
 
@@ -28,7 +28,7 @@ REQUEST_LOOKBACK_DAYS = 150
 
 def main() -> None:
     today = date.today()
-    active_slug = _slugify(active_set_seed().name)
+    active_slug = slugify(active_set_seed().name)
     raw = mtgscribe.fetch_raw_events(today - timedelta(days=REQUEST_LOOKBACK_DAYS))
     snapshot = [_trim(event) for event in raw if _worth_keeping(event, today, active_slug)]
     mtgscribe.CALENDAR_PATH.write_text(json.dumps(snapshot, indent=2, ensure_ascii=False), encoding="utf-8")

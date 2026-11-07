@@ -1,6 +1,6 @@
 """Scribe-driven format-schedule tick — fires at the few daily windows when MTGA queues open.
 
-Each tick reads the bundled MTG Scribe calendar once and, per channel, (1) re-renders the pinned /event-scribe
+Each tick reads the bundled event calendar once and, per channel, (1) re-renders the pinned /event-schedule
 in place so it never goes stale across a rotation, and (2) announces events that went live since the
 previous window. Windows are Pacific (MTGA's clock), so an announcement lands right as the queue opens
 and tracks DST. A channel can hold more than one pin (Quick Draft and Flashback share one), so a pin is
@@ -357,7 +357,7 @@ async def _archive_channel(channel: discord.TextChannel, archive: discord.Catego
 def select_pin(events: list, pin: SchedulePin) -> tuple[list, list, str, str]:
     """The pinned schedule's groups, its title scope and the Scribe link for the same selection: a
     format-filtered view, or the whole active set when the pin carries no format filter (the set
-    channel). Untrimmed, to match what /event-scribe renders for an explicit filter or set.
+    channel). Untrimmed, to match what /event-schedule renders for an explicit filter or set.
 
     The scope is the date-derived active set, the same source the leaderboard rotates on. It also names
     the pin ``_refresh_pin`` searches for, so a scope naming any other set silently matches no pin.

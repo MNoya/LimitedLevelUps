@@ -141,15 +141,14 @@ def _parse_event_dicts(raw_events: list[dict], arena_only: bool) -> list[ScribeE
 
 
 def _warn_if_stale(events: list[ScribeEvent]) -> None:
-    """The calendar is the only source, so a skipped ``snapshot_scribe`` run would otherwise decay
-    into an empty schedule with nothing saying why."""
+    """The calendar is the only source, so a skipped refresh would otherwise decay into an empty schedule"""
     if not events:
-        logger.warning(f"{CALENDAR_PATH.name} holds no events; run bot.scripts.snapshot_scribe")
+        logger.warning(f"{CALENDAR_PATH.name} holds no events; run the /update-schedule skill")
         return
     latest_end = max(event.end for event in events)
     if latest_end - datetime.now(timezone.utc) < STALE_HORIZON:
         logger.warning(f"{CALENDAR_PATH.name} runs out on {latest_end:%Y-%m-%d}; "
-                       "run bot.scripts.snapshot_scribe and deploy")
+                       "run the /update-schedule skill and deploy")
 
 
 def group_events(events: list[ScribeEvent]) -> list[EventGroup]:

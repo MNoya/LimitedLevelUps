@@ -84,7 +84,7 @@ If the script reports `no keyrune glyph, skipped: <CODE>` — keyrune has no sym
 python -m bot.scripts.upload_app_emojis keyrune:<code>
 ```
 
-It uploads to the application `DISCORD_BOT_TOKEN` belongs to, so the test and prod apps each need one run. The script also takes `mana:<glyph>[:<name>]` specs for Mana-font icons and `--force` to replace an existing name. `/event-scribe` and the set embeds resolve the symbol by emoji name at startup, so a set whose emoji isn't uploaded renders without its glyph.
+It uploads to the application `DISCORD_BOT_TOKEN` belongs to, so the test and prod apps each need one run. The script also takes `mana:<glyph>[:<name>]` specs for Mana-font icons and `--force` to replace an existing name. `/event-schedule` and the set embeds resolve the symbol by emoji name at startup, so a set whose emoji isn't uploaded renders without its glyph.
 
 ### 4c. Add the Collector Booster Arena Direct window
 

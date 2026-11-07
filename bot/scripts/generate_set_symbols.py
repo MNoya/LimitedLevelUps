@@ -12,7 +12,7 @@ A code with no keyrune glyph of its own borrows another set's via ``KEYRUNE_ALIA
 ``frontend/src/components/Brand.tsx``.
 
 Downstream: upload the same PNG to the bot's Discord application as an emoji named by
-the lowercase code (``mh1``, ``war`` …). ``/event-scribe`` and set embeds look the
+the lowercase code (``mh1``, ``war`` …). ``/event-schedule`` and set embeds look the
 symbol up by that name, so a set with no uploaded emoji renders without its glyph.
 
 Requires ``inkscape`` (rasterizer) and ``pngquant`` (optional optimization) on PATH.

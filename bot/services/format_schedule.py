@@ -3,7 +3,7 @@
 Pure data/date logic — no Discord, no DB. The APScheduler wiring and Discord I/O live in
 bot/tasks/format_schedule_post.py; the rendering builders are reused from bot/commands/event_scribe.
 
-Each pinned schedule is one filtered /event-scribe view living in a community channel (matched by a
+Each pinned schedule is one filtered /event-schedule view living in a community channel (matched by a
 name substring). A channel can host more than one: the quick-or-flashback channel carries a separate
 Quick Draft pin and Flashback pin. Limited Competitive events route to the active set's channel, matched
 by name within the MTG Strategy category, so routing follows the rotation with no config edit.
@@ -40,7 +40,7 @@ ANNOUNCE_COMPETITIVE = "competitive"
 
 @dataclass(frozen=True)
 class SchedulePin:
-    """A channel's schedule policy. ``maintain_pin`` keeps a pinned /event-scribe fresh: ``pin_filters``
+    """A channel's schedule policy. ``maintain_pin`` keeps a pinned /event-schedule fresh: ``pin_filters``
     selects its formats (empty → the whole active set, the set channel) and ``scope_label`` is its title
     scope (``None`` → the active set's name). ``announce_filters`` selects which start-today events get a
     callout — independent of the pin, so the set channel shows the full set but announces competitive
@@ -196,7 +196,7 @@ def set_before(seed: SetSeed) -> SetSeed | None:
 def season_archived(seed: SetSeed, when: datetime | None = None) -> bool:
     """Whether a set's schedule reads as a record instead of a countdown: inside the final week of its
     window, or past it. A relative countdown is noise once a season stops moving and wrong once it has
-    ended, so the frozen pin and an explicit /event-scribe set query both switch on this."""
+    ended, so the frozen pin and an explicit /event-schedule set query both switch on this."""
     if seed.end_date is None:
         return False
     now = when or datetime.now(timezone.utc)
