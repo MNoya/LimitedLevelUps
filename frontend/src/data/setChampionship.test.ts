@@ -17,7 +17,7 @@ describe("buildSwissRounds", () => {
   it("groups each round by record and marks the unbeaten last-round match as the final", () => {
     const matches = finishedChampionship();
 
-    const rounds = buildSwissRounds(matches, 3);
+    const rounds = buildSwissRounds(matches);
 
     expect(rounds.map((round) => round.groups.map(describeGroup))).toEqual([
       ["0-0: A-B C-D E-F G-H"],
@@ -28,7 +28,7 @@ describe("buildSwissRounds", () => {
   });
 
   it("feeds the tree from the unbeaten path", () => {
-    const rounds = buildSwissRounds(finishedChampionship(), 3);
+    const rounds = buildSwissRounds(finishedChampionship());
 
     const bracket = buildChampionshipBracket(rounds);
 
@@ -37,12 +37,13 @@ describe("buildSwissRounds", () => {
     expect(pairing(bracket.final)).toBe("A-H");
   });
 
-  it("leaves later rounds empty before they are paired", () => {
+  it("leaves later rounds and the final empty while round 1 is the only round paired", () => {
     const matches = [match(1, "A", "B", "A"), match(1, "C", "D", null)];
 
-    const rounds = buildSwissRounds(matches, 3);
+    const rounds = buildSwissRounds(matches);
 
     expect(rounds.map((round) => round.groups.length)).toEqual([1, 0, 0]);
+    expect(buildChampionshipBracket(rounds).final).toBeUndefined();
     expect(championOf(rounds)).toBeNull();
   });
 });

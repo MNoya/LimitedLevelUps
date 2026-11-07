@@ -72,16 +72,16 @@ export interface SwissRound {
   groups: SwissGroup[];
 }
 
-export function buildSwissRounds(matches: PodEventMatchRow[], totalRounds: number): SwissRound[] {
+export function buildSwissRounds(matches: PodEventMatchRow[]): SwissRound[] {
   const played = matches.filter((match) => match.winnerName !== SKIPPED_WINNER);
   const rounds: SwissRound[] = [];
-  for (let round = 1; round <= totalRounds; round++) {
+  for (let round = 1; round <= CHAMPIONSHIP_ROUNDS; round++) {
     const earlier = played.filter((match) => match.round < round);
     const groups = new Map<string, SwissGroup>();
     for (const match of played.filter((entry) => entry.round === round)) {
       const { wins, losses } = recordOf(earlier, match.playerAName);
       const key = `${wins}-${losses}`;
-      const isFinal = round === totalRounds && losses === 0;
+      const isFinal = round === CHAMPIONSHIP_ROUNDS && losses === 0;
       const group = groups.get(key) ?? { wins, losses, isFinal, matches: [] };
       group.matches.push(match);
       groups.set(key, group);
@@ -144,6 +144,7 @@ export function championshipThreadUrl(threadId: string | null): string | null {
 }
 
 export const CHAMPIONSHIP_SEATS = 8;
+const CHAMPIONSHIP_ROUNDS = Math.log2(CHAMPIONSHIP_SEATS);
 export const CHAMPIONSHIP_INVITE_DEPTH = 32;
 
 export type ChampionshipRsvp = "yes" | "maybe" | "no";

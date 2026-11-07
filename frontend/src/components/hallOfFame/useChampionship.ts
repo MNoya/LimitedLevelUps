@@ -50,10 +50,7 @@ export function useChampionshipEvent(setCode: string) {
 export function useChampionship(event: PodEventSummary | undefined, live = false, withPlayerStats = false) {
   const { data: matches } = usePodEventMatches(event?.eventId, live);
   const { data: participants } = usePodEventParticipants(event?.eventId, live);
-  const rounds = useMemo(
-    () => buildSwissRounds(matches ?? [], event?.totalRounds ?? 3),
-    [matches, event?.totalRounds],
-  );
+  const rounds = useMemo(() => buildSwissRounds(matches ?? []), [matches]);
   const bracket = useMemo(() => buildChampionshipBracket(rounds), [rounds]);
   const champion = championOf(rounds);
   const byName = useMemo(() => participantByName(participants ?? []), [participants]);
