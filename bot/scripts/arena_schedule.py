@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 from bot.commands.event_scribe import seed_for_label, slugify
 from bot.services import mtgscribe
+from bot.sets import active_set_code, seed_for_code
 
 ET = ZoneInfo("America/New_York")
 UTC = ZoneInfo("UTC")
@@ -137,6 +138,8 @@ def _event_for(item: Item, today: date) -> dict | None:
         return _midweek(subject, span)
     if section == "arena championship qualifier events":
         return _qualifier(item, subject, span)
+    if section == "arena limited championship events":
+        return _limited_championship(subject, span)
     if section == "other events":
         return _other(subject, span)
     return None
@@ -204,6 +207,19 @@ def _qualifier(item: Item, subject: str, span: DateSpan) -> dict | None:
         championship = ["arena-championship"] if "constructed" in format_tags else []
         return _event(f"ACQ Weekend: {label}", ["arena", "qualifier", *championship, *format_tags], opens, closes)
     return None
+
+
+def _limited_championship(subject: str, span: DateSpan) -> dict | None:
+    if not subject.startswith("Arena Limited Championship"):
+        return None
+    running = seed_for_code(active_set_code(datetime.combine(span.first, QUEUE_OPENS, tzinfo=ET)))
+    is_qualifier = "Qualifier" in subject
+    label = "Arena Limited Championship Qualifier" if is_qualifier else "Arena Limited Championship"
+    tag = "arena-limited-championship-qualifier" if is_qualifier else "arena-limited-championship"
+    opens = datetime.combine(span.first, time(0, 0), tzinfo=ET)
+    closes = datetime.combine(span.last, time(23, 59, 59), tzinfo=ET)
+    tags = ["arena", tag, "draft", "limited", slugify(running.name)]
+    return _event(f"{label}: {running.name}", tags, opens, closes)
 
 
 def _qualifier_format(format_name: str) -> tuple[str, list[str]]:

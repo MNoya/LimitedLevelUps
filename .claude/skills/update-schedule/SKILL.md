@@ -51,7 +51,7 @@ Find the incoming set's article. Its URL is usually `https://magic.wizards.com/e
 
 It reads the article's **Full Event Calendar** section, writes each Arena queue in Scribe's shape (queues open 11 AM ET and close at 11 AM ET the day after their last listed day; play-ins 9 AM to 6 AM ET; qualifier weekends midnight to midnight; Midweek Magic 5 PM ET), and merges them over the capture. A queue with the same title as a captured one stretches that window instead of duplicating it, so the article's dates win.
 
-**Read the `skipped` lines.** Constructed events are expected there (Scribe covers them), and so are the Arena Limited Championship events, whose format the article does not state. Anything Limited in that list means the article phrased a line the parser does not know: extend `bot/scripts/arena_schedule.py` and its tests rather than hand-writing the event.
+**Read the `skipped` lines.** Constructed events are expected there (Scribe covers them). The Arena Limited Championship and its qualifiers are not: the article never states their format, so the script files them as a draft of the set Arena is running on their first day. Confirm that set in the render. Anything Limited in the skipped list means the article phrased a line the parser does not know: extend `bot/scripts/arena_schedule.py` and its tests rather than hand-writing the event.
 
 If Wizards has not posted the article yet, say so. With fewer than ~30 days of Arena queues left in the calendar, stop rather than committing a calendar that will run dry.
 

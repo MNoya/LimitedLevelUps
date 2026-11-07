@@ -40,6 +40,8 @@ def test_calendar_items_map_to_queues_and_skip_constructed():
         "Premier Draft: Tarkir: Dragonstorm",
         "Arena Direct: Star Trek Collector Booster Boxes",
         "ACQ Bo1 Play-In (Bonus): Star Trek Sealed",
+        "Arena Limited Championship Qualifier: Star Trek",
+        "Arena Limited Championship: Star Trek",
     }
     assert by_title["Premier Draft: Star Trek"]["utc_end_date"] == "2027-02-03 16:00:00"
     assert {"slug": "flashback"} in by_title["Premier Draft: Tarkir: Dragonstorm"]["tags"]
@@ -85,4 +87,9 @@ _ARTICLE = """
 <h3>Arena Championship Qualifier Events</h3>
 <h4>January Format: Standard</h4>
 <ul><li>January 17 (Bonus Event): Best-of-One <i>Magic: The Gathering</i> | <i>Star Trek</i> Sealed</li></ul>
+<h3>Arena Limited Championship Events</h3>
+<ul>
+<li>November 27–29: Arena Limited Championship Qualifier 4</li>
+<li>January 16–17: Arena Limited Championship</li>
+</ul>
 """

@@ -894,6 +894,30 @@
     "end_date": "2026-12-01 11:00:00"
   },
   {
+    "title": "Arena Limited Championship Qualifier: Star Trek",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-limited-championship-qualifier"
+      },
+      {
+        "slug": "draft"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "star-trek"
+      }
+    ],
+    "utc_start_date": "2026-11-27 05:00:00",
+    "utc_end_date": "2026-11-30 04:59:59",
+    "start_date": "2026-11-27 00:00:00",
+    "end_date": "2026-11-29 23:59:59"
+  },
+  {
     "title": "Quick Draft: Lorwyn Eclipsed",
     "tags": [
       {
@@ -1441,6 +1465,30 @@
     "utc_end_date": "2027-01-14 22:00:00",
     "start_date": "2027-01-12 17:00:00",
     "end_date": "2027-01-14 17:00:00"
+  },
+  {
+    "title": "Arena Limited Championship: Star Trek",
+    "tags": [
+      {
+        "slug": "arena"
+      },
+      {
+        "slug": "arena-limited-championship"
+      },
+      {
+        "slug": "draft"
+      },
+      {
+        "slug": "limited"
+      },
+      {
+        "slug": "star-trek"
+      }
+    ],
+    "utc_start_date": "2027-01-16 05:00:00",
+    "utc_end_date": "2027-01-18 04:59:59",
+    "start_date": "2027-01-16 00:00:00",
+    "end_date": "2027-01-17 23:59:59"
   },
   {
     "title": "ACQ Bo1 Play-In: Standard",

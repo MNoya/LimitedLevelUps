@@ -81,7 +81,7 @@ CUBE_TAG = "cube"
 DRAFT_TAG = "draft"
 SEALED_TAGS = ("sealed", "traditional-sealed")
 COMPETITIVE_TAGS = ("play-in", "qualifier", "arena-championship", "arena-limited-championship-qualifier",
-                    "arena-open")
+                    "arena-limited-championship", "arena-open")
 
 
 def load_events(*, arena_only: bool = True) -> list[ScribeEvent]:
