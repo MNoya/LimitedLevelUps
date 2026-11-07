@@ -1,8 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ChevronDown } from "lucide-react";
 import { SectionLabel } from "../SectionLabel";
+import { TabButton } from "../TabButton";
 import { Tooltip } from "../Tooltip";
 import { PickGrid } from "./CommunityGrid";
+import { MidwayResults } from "./MidwayResults";
 import { MidwayVersusModal, useMidwayVersusPager } from "./MidwayVersusCard";
 import { usePreloaded } from "../../lib/imageReveal";
 import { breakdownStripAccent } from "./slotVisuals";
@@ -1416,6 +1418,18 @@ export function FinalResults({
   );
 
   const fullSectionRef = useRef<HTMLDivElement>(null);
+  const [lowerTab, setLowerTab] = useState<LowerTab>(tabFromHash);
+  const selectTab = (tab: LowerTab) => {
+    setLowerTab(tab);
+    window.history.replaceState(null, "", `#${LOWER_TAB_ANCHORS[tab]}`);
+  };
+
+  useEffect(() => {
+    const anchors = Object.values(LOWER_TAB_ANCHORS).map((anchor) => `#${anchor}`);
+    if (anchors.includes(window.location.hash)) {
+      fullSectionRef.current?.scrollIntoView();
+    }
+  }, []);
 
   const [versusOwner, setVersusOwner] = useState<VersusOwner>({ picks: null });
   const versusList = useMemo(
@@ -1458,7 +1472,10 @@ export function FinalResults({
               cardsByName={cardsByName}
               ratingsByName={ratingsByName}
               mode="peek"
-              onSeeAll={() => fullSectionRef.current?.scrollIntoView({ behavior: "smooth" })}
+              onSeeAll={() => {
+                selectTab("standings");
+                fullSectionRef.current?.scrollIntoView({ behavior: "smooth" });
+              }}
               stickyTop={stickyTop}
               compact={compact}
             />
@@ -1471,15 +1488,20 @@ export function FinalResults({
 
         <SprocketRail />
 
-        {rankedForDisplay.length > 0 && (
-          <div
-            ref={fullSectionRef}
-            className="flex flex-col gap-3 pb-24"
-            style={{ scrollMarginTop: stickyTop + 20 }}
-          >
-            <SectionHeading title="FULL STANDINGS">
-              Every player ranked alongside the best possible team and the crowd's picks
-            </SectionHeading>
+        <div
+          ref={fullSectionRef}
+          className="flex flex-col gap-4 pb-24"
+          style={{ scrollMarginTop: stickyTop + 20 }}
+        >
+          <div className="flex items-stretch border-b border-border">
+            <TabButton active={lowerTab === "standings"} onClick={() => selectTab("standings")} size="section">
+              FULL STANDINGS
+            </TabButton>
+            <TabButton active={lowerTab === "breakdown"} onClick={() => selectTab("breakdown")} size="section">
+              PICK BREAKDOWN
+            </TabButton>
+          </div>
+          {lowerTab === "standings" ? (
             <Leaderboard
               rankedBallots={rankedForDisplay}
               bestTeam={bestTeam}
@@ -1492,11 +1514,30 @@ export function FinalResults({
               stickyTop={stickyTop}
               compact={compact}
             />
-          </div>
-        )}
+          ) : (
+            <MidwayResults
+              ratingsSnapshot={ratingsSnapshot}
+              pickStats={pickStats}
+              cards={cards}
+              cardsByName={cardsByName}
+              picksBySlot={picksBySlot}
+              user={user}
+              hasParticipated={hasParticipated}
+              compact={compact}
+            />
+          )}
+        </div>
       </div>
     </OpenVersusContext.Provider>
   );
+}
+
+type LowerTab = "standings" | "breakdown";
+
+const LOWER_TAB_ANCHORS: Record<LowerTab, string> = { standings: "standings", breakdown: "picks" };
+
+function tabFromHash(): LowerTab {
+  return window.location.hash === `#${LOWER_TAB_ANCHORS.breakdown}` ? "breakdown" : "standings";
 }
 
 type OpenVersus = (picks: Map<SlotKey, string> | null, pickLabel: string | undefined, slotKey: SlotKey) => void;
