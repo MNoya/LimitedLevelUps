@@ -1,0 +1,1333 @@
+[Settings]
+{
+  "withReplacement": true,
+  "refillWhenEmpty": true,
+
+  "predeterminedLayouts": [
+    [
+      {
+        "name": "Pack 0",
+        "weight": 1
+      }
+    ],
+    [
+      {
+        "name": "Pack 1",
+        "weight": 1
+      }
+    ],
+    [
+      {
+        "name": "Pack 2",
+        "weight": 1
+      }
+    ]
+  ],
+  "boostersPerPlayer": 3,
+  "layouts": {
+    "Pack 0": {
+      "weight": 1,
+      "slots": [
+        {
+          "name": "rarity>=rare -tag:landslot",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity>=rare -tag:landslot",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity>=uncommon rarity<mythic -tag=landslot",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity>=uncommon rarity<mythic -tag=landslot",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:uncommon tag:multicolor",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:uncommon tag:multicolor",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:uncommon -tag:multicolor",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:uncommon -tag:multicolor",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:uncommon -tag:multicolor",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:uncommon -tag:multicolor",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:gold",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:gold",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:hybrid",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:hybrid",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:hybrid",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:hybrid",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:white c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:white c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:blue c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:blue c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:black c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:black c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:red c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:red c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:green c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:green c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:colorless",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:colorless",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "tag=landslot",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "tag=landslot",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    "Pack 1": {
+      "weight": 1,
+      "slots": [
+        {
+          "name": "rarity>=rare -tag:landslot",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity>=rare -tag:landslot",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity>=uncommon rarity<mythic -tag=landslot",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity>=uncommon rarity<mythic -tag=landslot",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:uncommon tag:multicolor",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:uncommon tag:multicolor",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:uncommon -tag:multicolor",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:uncommon -tag:multicolor",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:uncommon -tag:multicolor",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:uncommon -tag:multicolor",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:gold",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:gold",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:hybrid",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:hybrid",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:hybrid",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:hybrid",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:white c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:white c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:blue c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:blue c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:black c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:black c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:red c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:red c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:green c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:green c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:colorless",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:colorless",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "tag=landslot",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "tag=landslot",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    "Pack 2": {
+      "weight": 1,
+      "slots": [
+        {
+          "name": "rarity>=rare -tag:landslot",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity>=rare -tag:landslot",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity>=uncommon rarity<mythic -tag=landslot",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity>=uncommon rarity<mythic -tag=landslot",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:uncommon tag:multicolor",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:uncommon tag:multicolor",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:uncommon -tag:multicolor",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:uncommon -tag:multicolor",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:uncommon -tag:multicolor",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:uncommon -tag:multicolor",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:gold",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:gold",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:hybrid",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:hybrid",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:hybrid",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:hybrid",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:white c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:white c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:blue c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:blue c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:black c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:black c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:red c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:red c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common color:green c=1",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common color:green c=1",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "rarity:common tag:colorless",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "rarity:common tag:colorless",
+              "weight": 1
+            }
+          ]
+        },
+        {
+          "name": "tag=landslot",
+          "count": 1,
+          "foil": false,
+          "sheets": [
+            {
+              "name": "tag=landslot",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+[CustomCards]
+[
+  {
+    "id": "Custom_0",
+    "oracle_id": "d25284b9-50e4-4dcb-9aaf-6f6478c4a90a",
+    "name": "Craftwork Crusher",
+    "mana_cost": "{3}{R}{R}{G}{G}",
+    "set": "fra",
+    "collector_number": "127",
+    "rarity": "uncommon",
+    "arena_id": 106362,
+    "type": "Artifact Creature",
+    "subtypes": [
+      "Boar",
+      "Construct"
+    ],
+    "rating": 0.7,
+    "in_booster": true,
+    "cmc": 7,
+    "colors": [
+      "R",
+      "G"
+    ],
+    "printed_names": {
+      "it": "Distruttore Manufatto",
+      "fr": "Écrabouilleur artisanal",
+      "es": "Destrozador artesanal",
+      "ja": "工芸品の破壊屋",
+      "de": "Flechtwerk-Zermalmer"
+    },
+    "image_uris": {
+      "en": "https://cards.scryfall.io/display/front/0/3/03f9839c-aa07-4ee7-847b-091e47ab80c4.webp?1789470711"
+    },
+    "related_cards": [
+      "03f9839c-aa07-4ee7-847b-091e47ab80c4"
+    ],
+    "is_custom": true
+  }
+]
+[*]
+1 Elite Interceptor // Rejoinder (SOS) 12
+1 Liliana the Faultless (FRA) 200
+1 Campus Crier (FRA) 4
+1 Enlightened Confidant (FRA) 5
+1 Informed Inkwright (SOS) 20
+1 Professor of Symbology (STX) 24
+1 Quill-Blade Laureate // Twofold Intent (SOS) 27
+1 Repurposed Enforcer (FRA) 19
+1 Teyo, Lightshield Expert (FRA) 204
+1 Unflinching Hortimancer (FRA) 23
+1 Emeritus of Truce // Swords to Plowshares (SOS) 13
+1 Koth of the Homestead (FRA) 199
+1 Lyra, Archangel of Dawn (FRA) 201
+1 Rehearsed Debater (SOS) 29
+1 Stirring Hopesinger (SOS) 35
+1 Inkshape Demonstrator (SOS) 21
+1 Ascendant Dustspeaker (SOS) 8
+1 Prophesied End (FRA) 17
+1 Study Break (STX) 34
+1 Your Fate Ends Here (FRA) 24
+1 Guiding Voice (STX) 19
+1 Group Project (SOS) 17
+1 Surgical Precision (FRA) 22
+1 Antiquities on the Loose (SOS) 7
+1 Generous Revival (FRA) 8
+1 Practiced Offense (SOS) 25
+1 Reduce to Memory (STX) 25
+1 Hexhaven Battalion (FRA) 12
+1 Restoration Seminar (SOS) 30
+1 Sparring Regimen (STX) 29
+1 Way of the Healer (FRA) 207
+1 Primary Research (SOS) 26
+1 Blossom-Blessed Angel // Seed Suture (FRA) 3
+1 Diviner of Victory // Unwind History (FRA) 28
+1 Exhibition Tidecaller (SOS) 48
+1 Fblthp, Impossibly Lost (FRA) 213
+1 Geist of Saint Thalia (FRA) 214
+1 Hydro-Channeler (SOS) 54
+1 Proft, Consulting Detective (FRA) 218
+1 Surveillance Phantasm (FRA) 42
+1 Deluge Virtuoso (SOS) 42
+1 Dream Strix (STX) 42
+1 Jadzi, Steward of Fate // Oracle's Gift (SOS) 55
+1 Mindseeker Oculus (FRA) 33
+1 Variable Chaser // Arc of Fortune (FRA) 47
+1 Campus Composer // Aqueous Aria (SOS) 40
+1 Emeritus of Ideation // Ancestral Recall (SOS) 45
+1 Undulating Witness (FRA) 45
+1 Ruric Thar, Biomagus (FRA) 219
+1 Divergent Equation (SOS) 43
+1 Unsummon (FRA) 46
+1 Arcane Subtraction (STX) 36
+1 Countersculpt (FRA) 25
+1 Essence Scatter (SOS) 47
+1 Divide by Zero (STX) 41
+1 Jace's Machinations (FRA) 32
+1 Pop Quiz (STX) 49
+1 Multiple Choice (STX) 48
+1 Flow State (SOS) 49
+1 Mathemagics (SOS) 58
+1 Mercurial Transformation (STX) 47
+1 Echocasting Symposium (SOS) 44
+1 Wisdom of Ages (SOS) 71
+1 Plan for All Outcomes (FRA) 35
+1 Way of the Mind Sculptor (FRA) 224
+1 Semester Foreseer // Peer Review (FRA) 39
+1 Eyetwitch (STX) 70
+1 Lecturing Scornmage (SOS) 87
+1 Gallia, Tragic Host (FRA) 228
+1 Leech Collector // Bloodletting (SOS) 88
+1 Liliana the Repentant (FRA) 231
+1 Melancholic Poet (SOS) 90
+1 Postmortem Professor (SOS) 93
+1 Scheming Silvertongue // Sign in Blood (SOS) 99
+1 Gideon the Oathless (FRA) 230
+1 Grave Researcher // Reanimate (SOS) 85
+1 Moseo, Vein's New Dean (SOS) 91
+1 Poisoner's Apprentice (SOS) 92
+1 Sanctum Lurker (FRA) 64
+1 Screeching Soulbreaker (FRA) 65
+1 Theoretical Necromancer (FRA) 69
+1 Tinybones, Pocket Nuisance (FRA) 237
+1 Emeritus of Woe // Demonic Tutor (SOS) 80
+1 Eternal Student (SOS) 82
+1 Apex Witchstalker (FRA) 48
+1 Dissection Practice (SOS) 79
+1 Masterful Flourish (SOS) 89
+1 Last Gasp (FRA) 56
+1 Break Under Pressure (FRA) 50
+1 Foolish Fate (SOS) 83
+1 Extended Absence (FRA) 54
+1 Hunt for Specimens (STX) 73
+1 Cost of Brilliance (SOS) 77
+1 Necrotic Fumes (STX) 78
+1 Rewrite Regrets (FRA) 62
+1 Decorum Dissertation (SOS) 78
+1 Overwrite the Multiverse (FRA) 59
+1 Poet's Quill (STX) 82
+1 Void Extrapolator // Omit Variables (FRA) 70
+1 Pompous Battlemage // Improvised Act (FRA) 90
+1 Emeritus of Conflict // Lightning Bolt (SOS) 113
+1 Expressive Firedancer (SOS) 114
+1 Goblin Glasswright // Craft with Pride (SOS) 117
+1 Master of Barbs (FRA) 88
+1 Molten-Core Maestro (SOS) 125
+1 Samut, Hazoret's Champion (FRA) 251
+1 Thunderdrum Soloist (SOS) 134
+1 Tomik, Izzet Sparkmage (FRA) 253
+1 Charging Strifeknight (SOS) 110
+1 Pia, Determined Rebuilder (FRA) 250
+1 Rubble Rouser (SOS) 128
+1 Garrison Excavator (SOS) 116
+1 Retriever Phoenix (STX) 113
+1 Zealous Lorecaster (SOS) 137
+1 Academic Dispute (STX) 91
+1 Flashback (SOS) 115
+1 First Day of Class (STX) 102
+1 Enthusiastic Study (STX) 99
+1 Violent Echoes (FRA) 95
+1 Impractical Joke (SOS) 119
+1 Crackle with Power (STX) 95
+1 No Admittance (FRA) 89
+1 Tome Blast (SOS) 135
+1 Igneous Inspiration (STX) 107
+1 Start from Scratch (STX) 114
+1 Draconic Intervention (STX) 96
+1 Artistic Process (SOS) 108
+1 Awaken the Inferno (FRA) 74
+1 Improvisation Capstone (SOS) 120
+1 Ajani's Anguish (FRA) 72
+1 Living History (SOS) 121
+1 Hallway Heckler // Vicious Verse (FRA) 85
+1 Ambitious Augmenter (SOS) 140
+1 Slumbering Trudge (SOS) 160
+1 Studious First-Year // Rampant Growth (SOS) 162
+1 Arcane Amphisbaena (FRA) 97
+1 Carnivorous Cultivator // Enroot (FRA) 100
+1 Environmental Scientist (SOS) 147
+1 Fblthp, Knows the Way (FRA) 258
+1 Mindful Biomancer (SOS) 154
+1 Overgrown Arch (STX) 139
+1 Tarmogoyf (FRA) 116
+1 Emeritus of Abundance // Regrowth (SOS) 145
+1 Greenhouse Propagator (FRA) 104
+1 Simulacrum Shaper (FRA) 113
+1 Thornfist Striker (SOS) 164
+1 Vastlands Scavenger // Bind to Life (SOS) 166
+1 Gnarled Professor (STX) 133
+1 Pestbrood Sloth (SOS) 157
+1 Hungering Puppetbeast (FRA) 107
+1 Tenured Concocter (SOS) 163
+1 Vinelasher Adept (FRA) 119
+1 Ruric Thar, Magecrusher (FRA) 265
+1 Verdant Kraken (FRA) 118
+1 Bookwurm (STX) 123
+1 Compel Brutality (FRA) 101
+1 Something Worth Saving (FRA) 114
+1 Containment Breach (STX) 125
+1 Field Trip (STX) 131
+1 Bestial Incursion (FRA) 98
+1 Germination Practicum (SOS) 149
+1 Way of the Paradox (FRA) 267
+1 Additive Evolution (SOS) 139
+1 Way of the Wildspeaker (FRA) 268
+1 Heartwood Crafter // Soul Tether (FRA) 105
+1 Campus Guide (STX) 252
+1 Mage Tower Referee (SOS) 249
+1 Keeper of the Quiet Hour (FRA) 171
+1 Archive Arbiter (FRA) 167
+1 Environmental Sciences (STX) 1
+1 Expanded Anatomy (STX) 2
+1 Introduction to Prophecy (STX) 4
+1 Introduction to Annihilation (STX) 3
+1 Mascot Exhibition (STX) 5
+1 Medic's Kitesail (FRA) 173
+1 Potioner's Trove (SOS) 251
+1 Strixhaven Skycoach (SOS) 252
+1 Great Hall of the Biblioplex (SOS) 257
+1 Terramorphic Expanse (SOS) 265
+1 Fatehold Charm (FRA) 132
+1 No More Lies (MKM) 221
+1 Proctor of Potential (FRA) 145
+1 Lawmage's Binding (RNA) 190
+1 Denzilore Fatehold (FRA) 128
+1 Desperate Futurescribe (FRA) 129
+1 Time Wipe (WAR) 223
+1 Devourer of Memory (THB) 213
+1 Likeness Looter (WOE) 208
+1 Snooping Newsie (SNC) 222
+1 Theorix Charm (FRA) 155
+1 Null Summoner (FRA) 142
+1 Recursive Recruitment (FRA) 147
+1 Uldaros Theorix (FRA) 159
+1 Fireglass Mentor (BLB) 213
+1 Grim Repriser (FRA) 136
+1 Stingerquill Charm (FRA) 150
+1 Stinging Vitriol (FRA) 152
+1 Auger Spree (RTR) 144
+1 Ingris Stingerquill (FRA) 137
+1 Immersturm Predator (KHM) 214
+1 Konstrari Charm (FRA) 138
+1 Savage Smash (RNA) 203
+1 Tenured Tethermage (FRA) 154
+1 Aerid Konstrari (FRA) 121
+1 Cactusfolk Sureshot (OTJ) 199
+1 Quartzwood Crasher (IKO) 201
+1 Craftwork Crusher (FRA) 127
+1 Solarium Sentry (FRA) 148
+1 Vigorbloom Charm (FRA) 160
+1 Centaur Peacemaker (GRN) 158
+1 Cosmic Rebirth (MAT) 28
+1 Knight of Autumn (GRN) 183
+1 Bloombrute (FRA) 124
+1 Kwia Vigorbloom (FRA) 140
+1 Scolding Administrator (SOS) 224
+1 Silverquill Charm (SOS) 225
+1 Abigale, Poet Laureate // Heroic Stanza (SOS) 170
+1 Conciliator's Duelist (SOS) 182
+1 Render Speechless (SOS) 220
+1 Silverquill, the Disputant (SOS) 226
+1 Stirring Honormancer (SOS) 234
+1 Moment of Reckoning (SOS) 205
+1 Prismari Charm (SOS) 211
+1 Sanar, Unfinished Genius // Wild Idea (SOS) 223
+1 Vibrant Outburst (SOS) 240
+1 Colorstorm Stallion (SOS) 180
+1 Splatter Technique (SOS) 231
+1 Stress Dream (SOS) 235
+1 Prismari, the Inspiration (SOS) 212
+1 Visionary's Dance (SOS) 242
+1 Teacher's Pest (SOS) 238
+1 Witherbloom Charm (SOS) 244
+1 Blech, Loafing Pest (SOS) 176
+1 Cauldron of Essence (SOS) 179
+1 Essenceknit Scholar (SOS) 187
+1 Pest Mascot (SOS) 209
+1 Lluwen, Exchange Student // Pest Friend (SOS) 199
+1 Witherbloom, the Balancer (SOS) 245
+1 Aziza, Mage Tower Captain (SOS) 174
+1 Hardened Academic (SOS) 194
+1 Kirol, History Buff // Pack a Punch (SOS) 198
+1 Lorehold Charm (SOS) 200
+1 Practiced Scrollsmith (SOS) 210
+1 Wilt in the Heat (SOS) 243
+1 Lorehold, the Historian (SOS) 201
+1 Colossus of the Blood Age (SOS) 181
+1 Mind into Matter (SOS) 202
+1 Quandrix Charm (SOS) 217
+1 Kiora of Salt and Sand (FRA) 273
+1 Paradox Surveyor (SOS) 208
+1 Applied Geometry (SOS) 172
+1 Proctor's Gaze (SOS) 213
+1 Embrace the Paradox (SOS) 186
+1 Quandrix, the Proof (SOS) 218
+1 Fatehold Chronologist // Peer Review (FRA) 133
+1 Prudent Fateseer // Peer Review (FRA) 146
+1 Senate Griffin (RNA) 219
+1 Paradox Shaper // Omit Variables (FRA) 143
+1 Theorix Metamage // Omit Variables (FRA) 156
+1 Mind Drill Assailant (BLB) 225
+1 Stingerquill Voxmancer // Vicious Verse (FRA) 151
+1 Cindering Cutthroat (BLB) 208
+1 Whiplash Wordsmith // Vicious Verse (FRA) 164
+1 Konstrari Improviser // Soul Tether (FRA) 139
+1 Gangly Stompling (ECL) 226
+1 Woodwork Prodigy // Soul Tether (FRA) 165
+1 Emergency Phytomedic // Seed Suture (FRA) 130
+1 Vigorbloom Vanguard // Seed Suture (FRA) 161
+1 Head of the Homestead (BLB) 216
+1 Inkling Summoning (STX) 195
+1 Rise of Extus (STX) 226
+1 Twinned Vision (FRA) 157
+1 Elemental Summoning (STX) 183
+1 Cram Session (STX) 170
+1 Pest Summoning (STX) 211
+1 Charge the Sanctum (FRA) 125
+1 Spirit Summoning (STX) 236
+1 Fractal Summoning (STX) 187
+1 Tam's Resistance (FRA) 153
+1 Deserted Beach (FRA) 176
+1 Shipwreck Marsh (FRA) 189
+1 Haunted Ridge (FRA) 180
+1 Rockfall Vale (FRA) 186
+1 Overgrown Farmland (FRA) 185
+1 Shattered Sanctum (SOS) 260
+1 Stormcarved Coast (SOS) 263
+1 Deathcap Glade (SOS) 253
+1 Sundown Pass (SOS) 264
+1 Dreamroot Cascade (SOS) 254
+[rarity>=rare -tag:landslot]
+1 Liliana the Faultless (FRA) 200
+1 Enlightened Confidant (FRA) 5
+1 Informed Inkwright (SOS) 20
+1 Repurposed Enforcer (FRA) 19
+1 Emeritus of Truce // Swords to Plowshares (SOS) 13
+1 Lyra, Archangel of Dawn (FRA) 201
+1 Stirring Hopesinger (SOS) 35
+1 Antiquities on the Loose (SOS) 7
+1 Practiced Offense (SOS) 25
+1 Restoration Seminar (SOS) 30
+1 Sparring Regimen (STX) 29
+1 Diviner of Victory // Unwind History (FRA) 28
+1 Exhibition Tidecaller (SOS) 48
+1 Dream Strix (STX) 42
+1 Jadzi, Steward of Fate // Oracle's Gift (SOS) 55
+1 Variable Chaser // Arc of Fortune (FRA) 47
+1 Emeritus of Ideation // Ancestral Recall (SOS) 45
+1 Jace's Machinations (FRA) 32
+1 Multiple Choice (STX) 48
+1 Mathemagics (SOS) 58
+1 Echocasting Symposium (SOS) 44
+1 Wisdom of Ages (SOS) 71
+1 Liliana the Repentant (FRA) 231
+1 Postmortem Professor (SOS) 93
+1 Scheming Silvertongue // Sign in Blood (SOS) 99
+1 Gideon the Oathless (FRA) 230
+1 Grave Researcher // Reanimate (SOS) 85
+1 Moseo, Vein's New Dean (SOS) 91
+1 Sanctum Lurker (FRA) 64
+1 Emeritus of Woe // Demonic Tutor (SOS) 80
+1 Decorum Dissertation (SOS) 78
+1 Overwrite the Multiverse (FRA) 59
+1 Poet's Quill (STX) 82
+1 Pompous Battlemage // Improvised Act (FRA) 90
+1 Emeritus of Conflict // Lightning Bolt (SOS) 113
+1 Master of Barbs (FRA) 88
+1 Molten-Core Maestro (SOS) 125
+1 Samut, Hazoret's Champion (FRA) 251
+1 Retriever Phoenix (STX) 113
+1 Flashback (SOS) 115
+1 Crackle with Power (STX) 95
+1 Draconic Intervention (STX) 96
+1 Improvisation Capstone (SOS) 120
+1 Ajani's Anguish (FRA) 72
+1 Ambitious Augmenter (SOS) 140
+1 Slumbering Trudge (SOS) 160
+1 Carnivorous Cultivator // Enroot (FRA) 100
+1 Tarmogoyf (FRA) 116
+1 Emeritus of Abundance // Regrowth (SOS) 145
+1 Simulacrum Shaper (FRA) 113
+1 Vastlands Scavenger // Bind to Life (SOS) 166
+1 Gnarled Professor (STX) 133
+1 Hungering Puppetbeast (FRA) 107
+1 Verdant Kraken (FRA) 118
+1 Germination Practicum (SOS) 149
+1 Mascot Exhibition (STX) 5
+1 Great Hall of the Biblioplex (SOS) 257
+1 Proctor of Potential (FRA) 145
+1 Denzilore Fatehold (FRA) 128
+1 Time Wipe (WAR) 223
+1 Likeness Looter (WOE) 208
+1 Null Summoner (FRA) 142
+1 Uldaros Theorix (FRA) 159
+1 Stinging Vitriol (FRA) 152
+1 Ingris Stingerquill (FRA) 137
+1 Immersturm Predator (KHM) 214
+1 Tenured Tethermage (FRA) 154
+1 Aerid Konstrari (FRA) 121
+1 Quartzwood Crasher (IKO) 201
+1 Solarium Sentry (FRA) 148
+1 Knight of Autumn (GRN) 183
+1 Kwia Vigorbloom (FRA) 140
+1 Conciliator's Duelist (SOS) 182
+1 Silverquill, the Disputant (SOS) 226
+1 Moment of Reckoning (SOS) 205
+1 Colorstorm Stallion (SOS) 180
+1 Splatter Technique (SOS) 231
+1 Prismari, the Inspiration (SOS) 212
+1 Blech, Loafing Pest (SOS) 176
+1 Cauldron of Essence (SOS) 179
+1 Witherbloom, the Balancer (SOS) 245
+1 Aziza, Mage Tower Captain (SOS) 174
+1 Hardened Academic (SOS) 194
+1 Lorehold, the Historian (SOS) 201
+1 Mind into Matter (SOS) 202
+1 Applied Geometry (SOS) 172
+1 Quandrix, the Proof (SOS) 218
+[rarity>=uncommon rarity<mythic -tag=landslot]
+1 Liliana the Faultless (FRA) 200
+1 Informed Inkwright (SOS) 20
+1 Professor of Symbology (STX) 24
+1 Quill-Blade Laureate // Twofold Intent (SOS) 27
+1 Repurposed Enforcer (FRA) 19
+1 Teyo, Lightshield Expert (FRA) 204
+1 Koth of the Homestead (FRA) 199
+1 Lyra, Archangel of Dawn (FRA) 201
+1 Stirring Hopesinger (SOS) 35
+1 Inkshape Demonstrator (SOS) 21
+1 Prophesied End (FRA) 17
+1 Your Fate Ends Here (FRA) 24
+1 Group Project (SOS) 17
+1 Antiquities on the Loose (SOS) 7
+1 Generous Revival (FRA) 8
+1 Practiced Offense (SOS) 25
+1 Reduce to Memory (STX) 25
+1 Sparring Regimen (STX) 29
+1 Way of the Healer (FRA) 207
+1 Primary Research (SOS) 26
+1 Diviner of Victory // Unwind History (FRA) 28
+1 Exhibition Tidecaller (SOS) 48
+1 Fblthp, Impossibly Lost (FRA) 213
+1 Geist of Saint Thalia (FRA) 214
+1 Proft, Consulting Detective (FRA) 218
+1 Dream Strix (STX) 42
+1 Jadzi, Steward of Fate // Oracle's Gift (SOS) 55
+1 Variable Chaser // Arc of Fortune (FRA) 47
+1 Campus Composer // Aqueous Aria (SOS) 40
+1 Ruric Thar, Biomagus (FRA) 219
+1 Divergent Equation (SOS) 43
+1 Countersculpt (FRA) 25
+1 Divide by Zero (STX) 41
+1 Jace's Machinations (FRA) 32
+1 Multiple Choice (STX) 48
+1 Flow State (SOS) 49
+1 Mercurial Transformation (STX) 47
+1 Wisdom of Ages (SOS) 71
+1 Plan for All Outcomes (FRA) 35
+1 Way of the Mind Sculptor (FRA) 224
+1 Eyetwitch (STX) 70
+1 Lecturing Scornmage (SOS) 87
+1 Gallia, Tragic Host (FRA) 228
+1 Leech Collector // Bloodletting (SOS) 88
+1 Liliana the Repentant (FRA) 231
+1 Postmortem Professor (SOS) 93
+1 Scheming Silvertongue // Sign in Blood (SOS) 99
+1 Gideon the Oathless (FRA) 230
+1 Grave Researcher // Reanimate (SOS) 85
+1 Moseo, Vein's New Dean (SOS) 91
+1 Poisoner's Apprentice (SOS) 92
+1 Sanctum Lurker (FRA) 64
+1 Tinybones, Pocket Nuisance (FRA) 237
+1 Eternal Student (SOS) 82
+1 Dissection Practice (SOS) 79
+1 Break Under Pressure (FRA) 50
+1 Foolish Fate (SOS) 83
+1 Necrotic Fumes (STX) 78
+1 Rewrite Regrets (FRA) 62
+1 Poet's Quill (STX) 82
+1 Pompous Battlemage // Improvised Act (FRA) 90
+1 Master of Barbs (FRA) 88
+1 Molten-Core Maestro (SOS) 125
+1 Samut, Hazoret's Champion (FRA) 251
+1 Thunderdrum Soloist (SOS) 134
+1 Tomik, Izzet Sparkmage (FRA) 253
+1 Charging Strifeknight (SOS) 110
+1 Pia, Determined Rebuilder (FRA) 250
+1 Garrison Excavator (SOS) 116
+1 Retriever Phoenix (STX) 113
+1 Academic Dispute (STX) 91
+1 Flashback (SOS) 115
+1 Violent Echoes (FRA) 95
+1 Impractical Joke (SOS) 119
+1 Igneous Inspiration (STX) 107
+1 Start from Scratch (STX) 114
+1 Draconic Intervention (STX) 96
+1 Artistic Process (SOS) 108
+1 Ajani's Anguish (FRA) 72
+1 Living History (SOS) 121
+1 Ambitious Augmenter (SOS) 140
+1 Slumbering Trudge (SOS) 160
+1 Carnivorous Cultivator // Enroot (FRA) 100
+1 Environmental Scientist (SOS) 147
+1 Fblthp, Knows the Way (FRA) 258
+1 Overgrown Arch (STX) 139
+1 Simulacrum Shaper (FRA) 113
+1 Thornfist Striker (SOS) 164
+1 Vastlands Scavenger // Bind to Life (SOS) 166
+1 Gnarled Professor (STX) 133
+1 Pestbrood Sloth (SOS) 157
+1 Hungering Puppetbeast (FRA) 107
+1 Ruric Thar, Magecrusher (FRA) 265
+1 Verdant Kraken (FRA) 118
+1 Bookwurm (STX) 123
+1 Containment Breach (STX) 125
+1 Way of the Paradox (FRA) 267
+1 Additive Evolution (SOS) 139
+1 Way of the Wildspeaker (FRA) 268
+1 Heartwood Crafter // Soul Tether (FRA) 105
+1 Archive Arbiter (FRA) 167
+1 Strixhaven Skycoach (SOS) 252
+1 Great Hall of the Biblioplex (SOS) 257
+1 Fatehold Charm (FRA) 132
+1 No More Lies (MKM) 221
+1 Proctor of Potential (FRA) 145
+1 Desperate Futurescribe (FRA) 129
+1 Time Wipe (WAR) 223
+1 Devourer of Memory (THB) 213
+1 Likeness Looter (WOE) 208
+1 Theorix Charm (FRA) 155
+1 Null Summoner (FRA) 142
+1 Recursive Recruitment (FRA) 147
+1 Fireglass Mentor (BLB) 213
+1 Grim Repriser (FRA) 136
+1 Stingerquill Charm (FRA) 150
+1 Stinging Vitriol (FRA) 152
+1 Immersturm Predator (KHM) 214
+1 Konstrari Charm (FRA) 138
+1 Tenured Tethermage (FRA) 154
+1 Cactusfolk Sureshot (OTJ) 199
+1 Quartzwood Crasher (IKO) 201
+1 Craftwork Crusher (FRA) 127
+1 Solarium Sentry (FRA) 148
+1 Vigorbloom Charm (FRA) 160
+1 Cosmic Rebirth (MAT) 28
+1 Knight of Autumn (GRN) 183
+1 Bloombrute (FRA) 124
+1 Scolding Administrator (SOS) 224
+1 Silverquill Charm (SOS) 225
+1 Abigale, Poet Laureate // Heroic Stanza (SOS) 170
+1 Conciliator's Duelist (SOS) 182
+1 Stirring Honormancer (SOS) 234
+1 Moment of Reckoning (SOS) 205
+1 Prismari Charm (SOS) 211
+1 Sanar, Unfinished Genius // Wild Idea (SOS) 223
+1 Vibrant Outburst (SOS) 240
+1 Colorstorm Stallion (SOS) 180
+1 Splatter Technique (SOS) 231
+1 Stress Dream (SOS) 235
+1 Teacher's Pest (SOS) 238
+1 Witherbloom Charm (SOS) 244
+1 Blech, Loafing Pest (SOS) 176
+1 Cauldron of Essence (SOS) 179
+1 Essenceknit Scholar (SOS) 187
+1 Lluwen, Exchange Student // Pest Friend (SOS) 199
+1 Aziza, Mage Tower Captain (SOS) 174
+1 Hardened Academic (SOS) 194
+1 Kirol, History Buff // Pack a Punch (SOS) 198
+1 Lorehold Charm (SOS) 200
+1 Practiced Scrollsmith (SOS) 210
+1 Colossus of the Blood Age (SOS) 181
+1 Mind into Matter (SOS) 202
+1 Quandrix Charm (SOS) 217
+1 Kiora of Salt and Sand (FRA) 273
+1 Paradox Surveyor (SOS) 208
+1 Applied Geometry (SOS) 172
+1 Proctor's Gaze (SOS) 213
+1 Prudent Fateseer // Peer Review (FRA) 146
+1 Paradox Shaper // Omit Variables (FRA) 143
+1 Stingerquill Voxmancer // Vicious Verse (FRA) 151
+1 Woodwork Prodigy // Soul Tether (FRA) 165
+1 Vigorbloom Vanguard // Seed Suture (FRA) 161
+[rarity:uncommon tag:multicolor]
+1 Fatehold Charm (FRA) 132
+1 No More Lies (MKM) 221
+1 Desperate Futurescribe (FRA) 129
+1 Devourer of Memory (THB) 213
+1 Theorix Charm (FRA) 155
+1 Recursive Recruitment (FRA) 147
+1 Fireglass Mentor (BLB) 213
+1 Grim Repriser (FRA) 136
+1 Stingerquill Charm (FRA) 150
+1 Konstrari Charm (FRA) 138
+1 Cactusfolk Sureshot (OTJ) 199
+1 Craftwork Crusher (FRA) 127
+1 Vigorbloom Charm (FRA) 160
+1 Cosmic Rebirth (MAT) 28
+1 Bloombrute (FRA) 124
+1 Scolding Administrator (SOS) 224
+1 Silverquill Charm (SOS) 225
+1 Abigale, Poet Laureate // Heroic Stanza (SOS) 170
+1 Stirring Honormancer (SOS) 234
+1 Prismari Charm (SOS) 211
+1 Sanar, Unfinished Genius // Wild Idea (SOS) 223
+1 Vibrant Outburst (SOS) 240
+1 Stress Dream (SOS) 235
+1 Teacher's Pest (SOS) 238
+1 Witherbloom Charm (SOS) 244
+1 Essenceknit Scholar (SOS) 187
+1 Lluwen, Exchange Student // Pest Friend (SOS) 199
+1 Kirol, History Buff // Pack a Punch (SOS) 198
+1 Lorehold Charm (SOS) 200
+1 Practiced Scrollsmith (SOS) 210
+1 Colossus of the Blood Age (SOS) 181
+1 Quandrix Charm (SOS) 217
+1 Kiora of Salt and Sand (FRA) 273
+1 Paradox Surveyor (SOS) 208
+1 Proctor's Gaze (SOS) 213
+[rarity:uncommon -tag:multicolor]
+1 Professor of Symbology (STX) 24
+1 Quill-Blade Laureate // Twofold Intent (SOS) 27
+1 Teyo, Lightshield Expert (FRA) 204
+1 Koth of the Homestead (FRA) 199
+1 Inkshape Demonstrator (SOS) 21
+1 Prophesied End (FRA) 17
+1 Your Fate Ends Here (FRA) 24
+1 Group Project (SOS) 17
+1 Generous Revival (FRA) 8
+1 Reduce to Memory (STX) 25
+1 Way of the Healer (FRA) 207
+1 Primary Research (SOS) 26
+1 Fblthp, Impossibly Lost (FRA) 213
+1 Geist of Saint Thalia (FRA) 214
+1 Proft, Consulting Detective (FRA) 218
+1 Campus Composer // Aqueous Aria (SOS) 40
+1 Ruric Thar, Biomagus (FRA) 219
+1 Divergent Equation (SOS) 43
+1 Countersculpt (FRA) 25
+1 Divide by Zero (STX) 41
+1 Flow State (SOS) 49
+1 Mercurial Transformation (STX) 47
+1 Plan for All Outcomes (FRA) 35
+1 Way of the Mind Sculptor (FRA) 224
+1 Eyetwitch (STX) 70
+1 Lecturing Scornmage (SOS) 87
+1 Gallia, Tragic Host (FRA) 228
+1 Leech Collector // Bloodletting (SOS) 88
+1 Poisoner's Apprentice (SOS) 92
+1 Tinybones, Pocket Nuisance (FRA) 237
+1 Eternal Student (SOS) 82
+1 Dissection Practice (SOS) 79
+1 Break Under Pressure (FRA) 50
+1 Foolish Fate (SOS) 83
+1 Necrotic Fumes (STX) 78
+1 Rewrite Regrets (FRA) 62
+1 Thunderdrum Soloist (SOS) 134
+1 Tomik, Izzet Sparkmage (FRA) 253
+1 Charging Strifeknight (SOS) 110
+1 Pia, Determined Rebuilder (FRA) 250
+1 Garrison Excavator (SOS) 116
+1 Academic Dispute (STX) 91
+1 Violent Echoes (FRA) 95
+1 Impractical Joke (SOS) 119
+1 Igneous Inspiration (STX) 107
+1 Start from Scratch (STX) 114
+1 Artistic Process (SOS) 108
+1 Living History (SOS) 121
+1 Environmental Scientist (SOS) 147
+1 Fblthp, Knows the Way (FRA) 258
+1 Overgrown Arch (STX) 139
+1 Thornfist Striker (SOS) 164
+1 Pestbrood Sloth (SOS) 157
+1 Ruric Thar, Magecrusher (FRA) 265
+1 Bookwurm (STX) 123
+1 Containment Breach (STX) 125
+1 Way of the Paradox (FRA) 267
+1 Additive Evolution (SOS) 139
+1 Way of the Wildspeaker (FRA) 268
+1 Heartwood Crafter // Soul Tether (FRA) 105
+1 Archive Arbiter (FRA) 167
+1 Strixhaven Skycoach (SOS) 252
+1 Prudent Fateseer // Peer Review (FRA) 146
+1 Paradox Shaper // Omit Variables (FRA) 143
+1 Stingerquill Voxmancer // Vicious Verse (FRA) 151
+1 Woodwork Prodigy // Soul Tether (FRA) 165
+1 Vigorbloom Vanguard // Seed Suture (FRA) 161
+[rarity:common tag:gold]
+1 Lawmage's Binding (RNA) 190
+1 Snooping Newsie (SNC) 222
+1 Auger Spree (JMP) 449
+1 Savage Smash (RNA) 203
+1 Centaur Peacemaker (GRN) 158
+1 Render Speechless (SOS) 220
+1 Visionary's Dance (SOS) 242
+1 Pest Mascot (SOS) 209
+1 Wilt in the Heat (SOS) 243
+1 Embrace the Paradox (SOS) 186
+[rarity:common tag:hybrid]
+1 Fatehold Chronologist // Peer Review (FRA) 133
+1 Senate Griffin (RNA) 219
+1 Theorix Metamage // Omit Variables (FRA) 156
+1 Mind Drill Assailant (BLB) 225
+1 Cindering Cutthroat (BLB) 208
+1 Whiplash Wordsmith // Vicious Verse (FRA) 164
+1 Konstrari Improviser // Soul Tether (FRA) 139
+1 Gangly Stompling (ECL) 226
+1 Emergency Phytomedic // Seed Suture (FRA) 130
+1 Head of the Homestead (BLB) 216
+1 Inkling Summoning (STX) 195
+1 Rise of Extus (STX) 226
+1 Twinned Vision (FRA) 157
+1 Elemental Summoning (STX) 183
+1 Cram Session (STX) 170
+1 Pest Summoning (STX) 211
+1 Charge the Sanctum (FRA) 125
+1 Spirit Summoning (STX) 236
+1 Fractal Summoning (STX) 187
+1 Tam's Resistance (FRA) 153
+[rarity:common color:white c=1]
+1 Elite Interceptor // Rejoinder (SOS) 12
+1 Campus Crier (FRA) 4
+1 Unflinching Hortimancer (FRA) 23
+1 Rehearsed Debater (SOS) 29
+1 Ascendant Dustspeaker (SOS) 8
+1 Study Break (STX) 34
+1 Guiding Voice (STX) 19
+1 Surgical Precision (FRA) 22
+1 Hexhaven Battalion (FRA) 12
+1 Blossom-Blessed Angel // Seed Suture (FRA) 3
+[rarity:common color:blue c=1]
+1 Hydro-Channeler (SOS) 54
+1 Surveillance Phantasm (FRA) 42
+1 Deluge Virtuoso (SOS) 42
+1 Mindseeker Oculus (FRA) 33
+1 Undulating Witness (FRA) 45
+1 Unsummon (FRA) 46
+1 Arcane Subtraction (STX) 36
+1 Essence Scatter (SOS) 47
+1 Pop Quiz (STX) 49
+1 Semester Foreseer // Peer Review (FRA) 39
+[rarity:common color:black c=1]
+1 Melancholic Poet (SOS) 90
+1 Screeching Soulbreaker (FRA) 65
+1 Theoretical Necromancer (FRA) 69
+1 Apex Witchstalker (FRA) 48
+1 Masterful Flourish (SOS) 89
+1 Last Gasp (FRA) 56
+1 Extended Absence (FRA) 54
+1 Hunt for Specimens (STX) 73
+1 Cost of Brilliance (SOS) 77
+1 Void Extrapolator // Omit Variables (FRA) 70
+[rarity:common color:red c=1]
+1 Expressive Firedancer (SOS) 114
+1 Goblin Glasswright // Craft with Pride (SOS) 117
+1 Rubble Rouser (SOS) 128
+1 Zealous Lorecaster (SOS) 137
+1 First Day of Class (STX) 102
+1 Enthusiastic Study (STX) 99
+1 No Admittance (FRA) 89
+1 Tome Blast (SOS) 135
+1 Awaken the Inferno (FRA) 74
+1 Hallway Heckler // Vicious Verse (FRA) 85
+[rarity:common color:green c=1]
+1 Studious First-Year // Rampant Growth (SOS) 162
+1 Arcane Amphisbaena (FRA) 97
+1 Mindful Biomancer (SOS) 154
+1 Greenhouse Propagator (FRA) 104
+1 Tenured Concocter (SOS) 163
+1 Vinelasher Adept (FRA) 119
+1 Compel Brutality (FRA) 101
+1 Something Worth Saving (FRA) 114
+1 Field Trip (STX) 131
+1 Bestial Incursion (FRA) 98
+[rarity:common tag:colorless]
+1 Campus Guide (FDN) 251
+1 Mage Tower Referee (SOS) 249
+1 Keeper of the Quiet Hour (FRA) 171
+1 Environmental Sciences (STX) 1
+1 Expanded Anatomy (STX) 2
+1 Introduction to Prophecy (STX) 4
+1 Introduction to Annihilation (STX) 3
+1 Medic's Kitesail (FRA) 173
+1 Potioner's Trove (SOS) 251
+1 Terramorphic Expanse (SOS) 265
+[tag=landslot]
+1 Deserted Beach (FRA) 176
+1 Shipwreck Marsh (FRA) 189
+1 Haunted Ridge (FRA) 180
+1 Rockfall Vale (FRA) 186
+1 Overgrown Farmland (FRA) 185
+1 Shattered Sanctum (SOS) 260
+1 Stormcarved Coast (SOS) 263
+1 Deathcap Glade (SOS) 253
+1 Sundown Pass (SOS) 264
+1 Dreamroot Cascade (SOS) 254

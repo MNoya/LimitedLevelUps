@@ -59,6 +59,10 @@ MEMA_SESSION_SLUG = "MEMA"
 MEMA_LINK_TEXT = "Middle-Earth Masters"
 MEMA_PICK_LABEL = "Middle-Earth Masters"
 
+TENHAVEN_CODE = "10HAVEN"
+TENHAVEN_LABEL = "10Haven"
+TENHAVEN_CUBE_ID = "10Haven"
+
 CHAOS_CODE = "CHAOS"
 
 SAMP_CODE = "SAMP"
@@ -75,13 +79,16 @@ CUSTOM_FORMATS: dict[str, PodFormat] = {
         PEASANT_PICK_LABEL, command_name="peasant"),
     MEMA_CODE: PodFormat(
         MEMA_CODE, MEMA_LABEL, MEMA_CUBE_ID, MEMA_SESSION_SLUG, MEMA_LINK_TEXT, MEMA_PICK_LABEL,
-        card_list_file="mema.txt", symbol_glyph="mema", command_name="mema"),
+        card_list_file="mema.txt", symbol_glyph="mema", command_name="mema", hidden=True),
+    TENHAVEN_CODE: PodFormat(
+        TENHAVEN_CODE, TENHAVEN_LABEL, TENHAVEN_CUBE_ID, TENHAVEN_LABEL, TENHAVEN_LABEL, TENHAVEN_LABEL,
+        card_list_file="10haven.txt", command_name="10haven"),
     SAMP_CODE: PodFormat(
         SAMP_CODE, SAMP_LABEL, SAMP_CUBE_ID, SAMP_CODE, SAMP_LABEL, SAMP_LABEL,
         command_name="sampcube", hidden=True),
 }
 
-BALLOT_EXTRA_CODES: tuple[str, ...] = (MEMA_CODE, CHAOS_CODE)
+BALLOT_EXTRA_CODES: tuple[str, ...] = (TENHAVEN_CODE, CHAOS_CODE)
 
 _CARD_LIST_CACHE: dict[str, str] = {}
 

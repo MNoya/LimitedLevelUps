@@ -14,6 +14,7 @@ interface PodCustomFormat {
 const CUSTOM_FORMATS: PodCustomFormat[] = [
   { code: "PEASANT", label: "Peasant Cube", cubeId: "DaneeliusPeasantAllStars", listed: true },
   { code: "MEMA", label: "Middle-Earth Masters", cubeId: "MEMA" },
+  { code: "10HAVEN", label: "10Haven", cubeId: "10Haven", listed: true },
   { code: "SAMP", label: "samp Cube", cubeId: "samp" },
 ];
 

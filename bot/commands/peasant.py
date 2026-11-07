@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from bot import emojis
 from bot.discord_helpers import EM_SPACE, NBSP
-from bot.services.pod_format import MEMA_CUBE_ID, PEASANT_CODE, cube_id_for
+from bot.services.pod_format import MEMA_CUBE_ID, PEASANT_CODE, TENHAVEN_CUBE_ID, cube_id_for
 
 LEAD_EMOJI_NAME = "cube"
 FALLBACK_LEAD_EMOJI = "🧊"
@@ -35,6 +35,7 @@ class CubeLink:
     shortcuts: tuple[Shortcut, ...] | None = None
     overview_heading: bool = False
     indent_shortcuts: bool = False
+    list_only: bool = False
 
 
 def _default_shortcuts(cube_id: str) -> tuple[Shortcut, ...]:
@@ -56,6 +57,7 @@ MEMA_SHORTCUTS = (
 CUBE_COMMANDS = {
     "peasant": CubeLink(cube_id_for(PEASANT_CODE), "daneelius", aliases=("daneelius", "peasantcube")),
     "sampcube": CubeLink("samp", "samp", aliases=("samp",)),
+    "10haven": CubeLink(TENHAVEN_CUBE_ID, aliases=("tenhaven",), list_only=True),
     "mema": CubeLink(
         MEMA_CUBE_ID, aliases=("ltr", "hob", "masters"), lead_emoji_name="mema",
         shortcuts=MEMA_SHORTCUTS, overview_heading=True, indent_shortcuts=True),
@@ -98,6 +100,8 @@ def _find_member_by_name(guild: discord.Guild | None, name: str) -> discord.Memb
 def _cube_message(link: CubeLink, owner_mention: str | None) -> str:
     cube_id = link.cube_id
     lead = emojis.get(link.lead_emoji_name) or FALLBACK_LEAD_EMOJI
+    if link.list_only:
+        return f"{lead} [cubecobra.com/cube/list/{cube_id}](<https://cubecobra.com/cube/list/{cube_id}>)"
     overview_url = f"https://cubecobra.com/cube/overview/{cube_id}"
     if link.overview_heading:
         overview_link = f"## {lead} {overview_url}"
