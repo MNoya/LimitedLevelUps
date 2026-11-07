@@ -4,7 +4,8 @@ import { Search, X } from "lucide-react";
 import { CardModal, columnPipClass, neighborCardUrls } from "./TierGrid";
 import { Tooltip } from "./Tooltip";
 import { cn } from "../lib/utils";
-import { columnOf, searchTierCards, tierColor, type TierCard } from "../data/tierList";
+import { useScryfallNameMatches } from "../data/cardSearch";
+import { cardNameKey, columnOf, searchTierCards, tierColor, type TierCard } from "../data/tierList";
 
 export function TierCardSearch({
   cards,
@@ -18,7 +19,18 @@ export function TierCardSearch({
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const matches = useMemo(() => searchTierCards(cards, query), [cards, query]);
+  const scryfall = useScryfallNameMatches(setCode, query);
+  const matches = useMemo(() => {
+    if (scryfall.kind === "name") {
+      return searchTierCards(cards, query);
+    }
+    if (scryfall.kind === "searching") {
+      return [];
+    }
+    const found = cards.filter((card) => scryfall.names.has(cardNameKey(card.name)));
+    found.sort((a, b) => a.name.localeCompare(b.name));
+    return found.map((card) => ({ card, start: 0, end: 0 }));
+  }, [cards, query, scryfall]);
   const pickedCard = picked === null ? undefined : matches[picked]?.card;
 
   useEffect(() => {
@@ -76,7 +88,7 @@ export function TierCardSearch({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Card name"
+              placeholder="Card name or Scryfall search"
               autoComplete="off"
               className={cn(
                 "w-full rounded border border-border2 bg-bg py-2 pl-9 pr-9 text-[14px] text-text outline-none",
@@ -104,7 +116,9 @@ export function TierCardSearch({
 
         {query.trim().length > 0 && (
           <div className="menu-scrollbar max-h-[45vh] overflow-y-auto border-t border-border px-2 py-2">
-            {matches.length === 0 ? (
+            {scryfall.kind === "searching" ? (
+              <p className="px-2 py-3 text-center text-[13px] text-muted">Searching Scryfall</p>
+            ) : matches.length === 0 ? (
               <p className="px-2 py-3 text-center text-[13px] text-muted">No cards match</p>
             ) : (
               matches.map(({ card, start, end }, index) => (

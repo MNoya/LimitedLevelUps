@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEven
 import { Search } from "lucide-react";
 import type { Card, SlotDefinition } from "../../types/p0p1";
 import { Pip } from "../ManaPips";
+import { useScryfallNameMatches } from "../../data/cardSearch";
+import { cardNameKey } from "../../data/tierList";
 import { CardZoomOverlay } from "./CardImagePreview";
 import { SlotPip } from "./slotVisuals";
 
@@ -79,9 +81,15 @@ export function CardSelectionGrid({
     [cards, slot],
   );
 
+  const scryfall = useScryfallNameMatches(setCode, search);
+
   const filtered = useMemo(() => {
     let list = eligible;
-    if (search.trim()) {
+    if (scryfall.kind === "searching") {
+      list = [];
+    } else if (scryfall.kind === "found") {
+      list = list.filter((c) => scryfall.names.has(cardNameKey(c.name)));
+    } else if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((c) => c.name.toLowerCase().includes(q));
     }
@@ -91,7 +99,7 @@ export function CardSelectionGrid({
         : list.filter((c) => c.colors.includes(color));
     }
     return list;
-  }, [eligible, search, spansColors, color]);
+  }, [eligible, search, scryfall, spansColors, color]);
 
   const availableCount = filtered.filter((c) => !pickedCards.has(c.name)).length;
 
@@ -158,7 +166,7 @@ export function CardSelectionGrid({
 
       {filtered.length === 0 ? (
         <div className="py-8 text-center text-muted text-[14px]">
-          No matching cards
+          {scryfall.kind === "searching" ? "Searching Scryfall" : "No matching cards"}
         </div>
       ) : (
         <div className="grid gap-3.5" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${minColW}px, 1fr))` }}>

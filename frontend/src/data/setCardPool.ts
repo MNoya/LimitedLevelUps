@@ -2,6 +2,7 @@ const SCRYFALL_SEARCH = "https://api.scryfall.com/cards/search";
 const NO_MATCHES_STATUS = 404;
 const PAGE_DELAY_MS = 500;
 const SPECIAL_GUESTS_SET = "spg";
+const SEARCH_QUERY_MAX_LENGTH = 200;
 
 export interface SetCard {
   name: string;
@@ -122,6 +123,19 @@ function toSetCard(printing: ScryfallPrinting): SetCard {
 function collectorNumber(value: string): number {
   const digits = value.match(/^\d+/);
   return digits ? Number(digits[0]) : Infinity;
+}
+
+export function isScryfallSyntax(text: string): boolean {
+  return /(^|\s)-?[a-z]+(:|=|<|>|!=)/i.test(text.trim());
+}
+
+export function normalizeScryfallQuery(text: string): string {
+  return text.trim().replace(/\s+/g, " ").slice(0, SEARCH_QUERY_MAX_LENGTH);
+}
+
+export async function searchSetCardNames(setCode: string, query: string): Promise<string[]> {
+  const printings = await scryfallSearch(`set:${setCode.toLowerCase()} (${query})`);
+  return [...new Set(printings.map((printing) => printing.name))].sort();
 }
 
 async function scryfallSearch(query: string): Promise<ScryfallPrinting[]> {

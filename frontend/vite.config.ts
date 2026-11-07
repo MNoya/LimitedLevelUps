@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { CARD_STATS_SETS } from "./src/data/constants";
 import { fetchCardStatsFile } from "./src/data/cardStats";
-import { fetchSetCardPool, isSetCode } from "./src/data/setCardPool";
+import { fetchSetCardPool, isSetCode, normalizeScryfallQuery, searchSetCardNames } from "./src/data/setCardPool";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => {
       cardImagesDevApi(),
       cardStatsDevApi(),
       setCardsDevApi(),
+      cardSearchDevApi(),
       imageCacheDevApi(),
     ],
     resolve: {
@@ -101,6 +102,35 @@ function setCardsDevApi(): Plugin {
         } catch {
           res.statusCode = 502;
           res.end("{}");
+        }
+      });
+    },
+  };
+}
+
+function cardSearchDevApi(): Plugin {
+  const cached = new Map<string, string>();
+  return {
+    name: "card-search-dev-api",
+    configureServer(server) {
+      server.middlewares.use("/api/card-search", async (req, res) => {
+        res.setHeader("content-type", "application/json");
+        const url = new URL(req.url ?? "", "http://localhost");
+        const setCode = url.pathname.replace(/^\//, "").toUpperCase();
+        const query = normalizeScryfallQuery(url.searchParams.get("q") ?? "");
+        if (!isSetCode(setCode) || !query) {
+          res.statusCode = 400;
+          res.end("[]");
+          return;
+        }
+        const key = `${setCode}|${query.toLowerCase()}`;
+        try {
+          const body = cached.get(key) ?? JSON.stringify(await searchSetCardNames(setCode, query));
+          cached.set(key, body);
+          res.end(body);
+        } catch {
+          res.statusCode = 502;
+          res.end("[]");
         }
       });
     },
