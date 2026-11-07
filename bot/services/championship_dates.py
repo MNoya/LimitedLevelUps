@@ -35,7 +35,11 @@ BALLOT_OPENS_AT = time(13, 0)
 PARALLEL_LEAD_DAYS = 14
 VOTE_REMINDER_LAG_DAYS = 2
 VOTE_OPEN_DAYS = 7
-SEASON_START_OVERRIDES: dict[str, date] = {"HOB": date(2026, 8, 30)}
+SEASON_START_OVERRIDES: dict[str, date] = {
+    "HOB": date(2026, 8, 30),
+    "FRA": date(2026, 10, 19),
+    "TRK": date(2026, 12, 1),
+}
 CHAMPIONSHIP_DATE_OVERRIDES: dict[str, date] = {"FRA": date(2026, 11, 7)}
 BALLOT_DATE_OVERRIDES: dict[str, date] = {"FRA": date(2026, 10, 17)}
 VOTE_REMINDER_DATE_OVERRIDES: dict[str, date] = {"FRA": date(2026, 10, 18)}
