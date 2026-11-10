@@ -107,6 +107,21 @@ def test_archive_candidates_keeps_upcoming_set_channel_during_coexistence():
     assert [channel.name for channel in stale] == ["🐢-teenage-mutant-ninja-turtles"]
 
 
+@pytest.mark.parametrize("when, expected", [
+    (datetime(2026, 12, 2, 23, 0, tzinfo=timezone.utc), []),
+    (datetime(2026, 12, 3, 18, 0, tzinfo=timezone.utc), ["🪞-reality-fracture"]),
+])
+def test_archive_candidates_holds_a_kept_channel_through_its_date(when, expected):
+    channels = [
+        _StubChannel("🖖-star-trek", LATEST_SET_CATEGORY),
+        _StubChannel("🪞-reality-fracture", LATEST_SET_CATEGORY),
+    ]
+
+    stale = archive_candidates(channels, when)
+
+    assert [channel.name for channel in stale] == expected
+
+
 def _archived_set_channels():
     return [
         _StubChannel("🤫-secrets-of-strixhaven", FORMAT_ARCHIVE_CATEGORY),

@@ -124,8 +124,9 @@ def archive_candidates(text_channels, when: datetime | None = None) -> list:
     behind for the Format Archive. The upcoming set's mod-created channel and the permanent strategy
     channels match no stale set, so they stay put."""
     active = active_set_seed(when)
+    today = (when or datetime.now(EVENT_DAY_TZ)).astimezone(EVENT_DAY_TZ).date()
     stale_sets = [seed for seed in ALL_SETS
-                  if rotates(seed) and seed.start_date < active.start_date]
+                  if rotates(seed) and seed.start_date < active.start_date and not channel_kept(seed, today)]
     candidates = []
     for channel in text_channels:
         if channel.category is None or channel.category.name != LATEST_SET_CATEGORY:
@@ -135,6 +136,10 @@ def archive_candidates(text_channels, when: datetime | None = None) -> list:
         if any(channel_matches_set(channel.name, seed.name) for seed in stale_sets):
             candidates.append(channel)
     return candidates
+
+
+def channel_kept(seed: SetSeed, today: date) -> bool:
+    return seed.channel_kept_until is not None and today <= seed.channel_kept_until
 
 
 def channel_for_set(channels, seed: SetSeed, category: str | None = LATEST_SET_CATEGORY):

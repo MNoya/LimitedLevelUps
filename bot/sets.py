@@ -85,6 +85,7 @@ class SetSeed:
     expansion_alias: str | None = None
     expansion_matches: tuple[str, ...] = ()
     match_from: date | None = None
+    channel_kept_until: date | None = None
 
 
 @dataclass(frozen=True)
@@ -201,7 +202,8 @@ ALL_SETS: tuple[SetSeed, ...] = (
     SetSeed("SOS", "Secrets of Strixhaven", date(2026, 4, 21), date(2026, 6, 22)),
     SetSeed("MSH", "Marvel Super Heroes", date(2026, 6, 23), date(2026, 8, 10), short_name="Marvel"),
     SetSeed("HOB", "The Hobbit", date(2026, 8, 11), date(2026, 9, 28), prerelease_date=date(2026, 8, 7)),
-    SetSeed("FRA", "Reality Fracture", date(2026, 9, 29), date(2026, 11, 9), prerelease_date=date(2026, 9, 25)),
+    SetSeed("FRA", "Reality Fracture", date(2026, 9, 29), date(2026, 11, 9), prerelease_date=date(2026, 9, 25),
+            channel_kept_until=date(2026, 12, 2)),
     SetSeed("TRK", "Star Trek", date(2026, 11, 10), date(2027, 1, 4), prerelease_date=date(2026, 11, 6)),
 )
 
