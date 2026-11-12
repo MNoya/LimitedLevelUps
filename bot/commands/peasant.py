@@ -36,13 +36,15 @@ class CubeLink:
     overview_heading: bool = False
     indent_shortcuts: bool = False
     list_only: bool = False
+    changelog_url: str | None = None
 
 
-def _default_shortcuts(cube_id: str) -> tuple[Shortcut, ...]:
+def _default_shortcuts(cube_id: str, changelog_url: str | None) -> tuple[Shortcut, ...]:
+    changelog_url = changelog_url or f"https://cubecobra.com/cube/about/{cube_id}?view=blog"
     return (
         Shortcut("Tier List", f"https://cubecobra.com/cube/list/{cube_id}?view=mainboard&s1=Tags", fallback_emoji="📊"),
         Shortcut("Primer", f"https://cubecobra.com/cube/about/{cube_id}?view=primer", fallback_emoji="📖"),
-        Shortcut("Changelog", f"https://cubecobra.com/cube/about/{cube_id}?view=blog", fallback_emoji="📝"),
+        Shortcut("Changelog", changelog_url, fallback_emoji="📝"),
     )
 
 
@@ -55,7 +57,9 @@ MEMA_SHORTCUTS = (
 
 
 CUBE_COMMANDS = {
-    "peasant": CubeLink(cube_id_for(PEASANT_CODE), "daneelius", aliases=("daneelius", "peasantcube")),
+    "peasant": CubeLink(
+        cube_id_for(PEASANT_CODE), "daneelius", aliases=("daneelius", "peasantcube"),
+        changelog_url="https://cubesquash.com/c/daneeliuspeasantallstars"),
     "sampcube": CubeLink("samp", "samp", aliases=("samp",)),
     "10haven": CubeLink(TENHAVEN_CUBE_ID, aliases=("tenhaven",), list_only=True),
     "mema": CubeLink(
@@ -110,7 +114,7 @@ def _cube_message(link: CubeLink, owner_mention: str | None) -> str:
         if owner_mention is not None:
             overview_link = f"{overview_link} {owner_mention}"
     shortcuts = (EM_SPACE * 2).join(
-        _shortcut_text(shortcut) for shortcut in (link.shortcuts or _default_shortcuts(cube_id))
+        _shortcut_text(shortcut) for shortcut in (link.shortcuts or _default_shortcuts(cube_id, link.changelog_url))
     )
     if link.indent_shortcuts:
         shortcuts = f"{NBSP}{shortcuts}"
