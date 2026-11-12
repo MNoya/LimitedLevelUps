@@ -38,6 +38,10 @@ def release_instant(d: date) -> datetime:
     return datetime.combine(d, RELEASE_TIME, tzinfo=RELEASE_TZ).astimezone(timezone.utc)
 
 
+def release_day_start(d: date) -> datetime:
+    return datetime.combine(d, time.min, tzinfo=RELEASE_TZ).astimezone(timezone.utc)
+
+
 def previous_weekday(day: date, weekday: int) -> date:
     """The latest `weekday` strictly before `day`."""
     back = (day.weekday() - weekday) % 7 or 7

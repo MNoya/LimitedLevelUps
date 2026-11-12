@@ -549,7 +549,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
       archetypes={topColorsArchetypes}
       trophiesByKey={topColorsTrophies}
       loading={events === undefined || archetypeRows === undefined}
-      pageSize={7}
+      pageSize={8}
     />
   );
   const recentTrophiesProps = {
@@ -657,9 +657,9 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
                   </div>
                   {eventsTab !== "events" ? (
                     sideBySide ? (
-                      <div className="pt-3 grid grid-cols-2 gap-4">
+                      <div className="pt-3 grid grid-cols-2 items-start gap-4">
                         {topColors}
-                        <RecentTrophiesCard {...recentTrophiesProps} className="row-span-2 grid grid-rows-subgrid" />
+                        <RecentTrophiesCard {...recentTrophiesProps} />
                       </div>
                     ) : (
                       <div className="pt-3">
@@ -726,7 +726,7 @@ export function PodDraftsPage({ setCode }: { setCode?: string } = {}) {
               ) : (
                 <StandingsHeading
                   leaderboard={leaderboard}
-                  events={events}
+                  events={events && played}
                   center={
                     cardDataHref ? (
                       <StandingsLink
@@ -819,10 +819,12 @@ function StandingsHeading({
       label="STANDINGS"
       count={leaderboard ? leaderboard.length : undefined}
       unit={(leaderboard?.length ?? 0) === 1 ? "PLAYER" : "PLAYERS"}
+      extraCount={events && { count: events.length, unit: events.length === 1 ? "EVENT" : "EVENTS" }}
       controls={controls}
       center={center}
       compact={compact}
       padLeftClass="pl-5"
+      padRightClass="pr-2"
       meta={
         !compact ? undefined : leaderboard && events ? (
           <span className="inline-flex items-baseline gap-2.5">

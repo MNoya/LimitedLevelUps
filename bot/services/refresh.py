@@ -34,7 +34,7 @@ from bot.models import (
 from bot.scoring import DEFAULT_QUEUE_GROUPS
 from bot.services.active_set import resolve_active_set
 from bot.services.seventeenlands import SUPPORTED_FORMATS, extract_event_row
-from bot.sets import active_set_code, release_instant, set_code_for_event
+from bot.sets import active_set_code, release_day_start, set_code_for_event
 
 PERIODIC_WINDOW_DAYS = 7
 
@@ -304,7 +304,7 @@ def rebuild_player_stats(session: Session, player_id: str, set_id: str) -> int:
 def early_access_end(magic_set: MagicSet) -> datetime | None:
     if magic_set.end_date is None:
         return None
-    return release_instant(magic_set.start_date)
+    return release_day_start(magic_set.start_date)
 
 
 def scores_points(magic_set: MagicSet) -> ColumnElement[bool]:

@@ -67,15 +67,13 @@ export function RecentTrophiesCard({
 }) {
   const [limit, setLimit] = useState(pageSize);
 
-  const finalized = useMemo(() => events.filter((e) => e.kind !== "mock" && e.isFinalized), [events]);
   const trophies = useMemo(() => podTrophyFinishes(events, results), [events, results]);
-  const players = useMemo(() => finalized.reduce((sum, e) => sum + (e.participantCount ?? 0), 0), [finalized]);
   const shown = trophies.slice(0, limit);
 
   return (
-    <div className={cn("flex flex-col gap-4", className)}>
+    <div className={className}>
       <SurfaceCard>
-        <div className="mb-1 flex items-center gap-1.5">
+        <div className="mb-2 flex items-center gap-1.5">
           <Trophy size={16} color="#ffc63a" />
           <SectionLabel size={16} className="text-subtle">
             RECENT TROPHIES
@@ -92,7 +90,7 @@ export function RecentTrophiesCard({
                 key={`${event.eventId}-${result.slug}`}
                 to={`/pods/${event.slug}/${result.slug}`}
                 className={cn(
-                  "group grid grid-cols-[42px_18px_minmax(0,1fr)_86px_50px] gap-2 items-center py-[7px] -mx-1 px-1 no-underline text-inherit transition-colors hover:bg-surface2",
+                  "group grid grid-cols-[42px_18px_minmax(0,1fr)_86px_50px] gap-2 items-center h-10 -mx-1 px-1 no-underline text-inherit transition-colors hover:bg-surface2",
                   i ? "border-t border-border" : "",
                 )}
               >
@@ -127,12 +125,6 @@ export function RecentTrophiesCard({
           </>
         )}
       </SurfaceCard>
-      {finalized.length > 0 && (
-        <div className="font-mono text-[11px] text-muted -mt-2 flex justify-between px-8">
-          <span>{players} PLAYERS</span>
-          <span>{finalized.length} EVENTS</span>
-        </div>
-      )}
     </div>
   );
 }

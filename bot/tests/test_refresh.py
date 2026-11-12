@@ -286,9 +286,9 @@ def test_rebuild_player_stats_drops_early_access_from_released_sets(
     p = _seed_player(session)
     drafts = [
         _draft("early", wins=7, losses=0, event_wins=7,
-               first_event_server_time="2026-04-21 15:00:00", last_event_server_time="2026-04-21 15:30:00"),
+               first_event_server_time="2026-04-20 15:00:00", last_event_server_time="2026-04-20 15:30:00"),
         _draft("released", wins=2, losses=3,
-               first_event_server_time="2026-04-21 17:00:00", last_event_server_time="2026-04-21 17:30:00"),
+               first_event_server_time="2026-04-21 15:00:00", last_event_server_time="2026-04-21 15:30:00"),
     ]
     bulk_upsert_draft_events(session, p.id, drafts, [sos])
     session.flush()

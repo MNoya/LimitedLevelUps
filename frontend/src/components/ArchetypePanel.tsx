@@ -111,7 +111,7 @@ export function TopColorsCard({
       ) : (
         <>
           {shown.map((a, i) => (
-            <div key={a.key} className={cn(GRID, "py-2", i ? "border-t border-border" : "")}>
+            <div key={a.key} className={cn(GRID, "h-10", i ? "border-t border-border" : "")}>
               <span className="font-num text-[13px] text-muted pl-1 leading-none">{i + 1}</span>
               <span className="flex justify-center">
                 {a.key === OTHER_KEY ? (
