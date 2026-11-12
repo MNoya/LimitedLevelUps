@@ -4,7 +4,7 @@
 
 ## Design decisions
 
-- **Tier-listed sets.** `card_stats_sets.json` at the repo root lists the sets that get card data, and the three-color sets (`threeColorSets`) that also get the ten three-color decks. The bot and the site both read it.
+- **Every set gets card data.** The bot refreshes whichever set `bot/sets.py` makes active, and the site asks for any set. `card_stats_sets.json` at the repo root only lists the three-color sets (`threeColorSets`) that also get the ten three-color decks. The bot and the site both read it.
 - **Premier Draft only.** One cut of the data per set, the one players quote. No Traditional or top-player split.
 - **Source is 17Lands `api/card_data` directly.**
 - **Percentile grading.** Per deck, a normal distribution is fitted to GIH WR over cards with at least 100 games in hand, and a card's percentile maps to A+ through F with fixed cutoffs (A+ 99, A 95, A- 90, B+ 85, B 76, B- 68, C+ 57, C 45, C- 36, D+ 27, D 17, D- 5). Only cards over 500 games in hand get a grade.
@@ -55,5 +55,5 @@ Measured on production before and after, fresh browser contexts:
 
 ## Adding a set
 
-1. Add the code to `sets` in `card_stats_sets.json` when the set's Tier List is added, and to `threeColorSets` if its decks are three-color. The bot starts refreshing it once it's the active set.
+1. Nothing to switch on: the bot starts refreshing a set once it's the active set. Add the code to `threeColorSets` in `card_stats_sets.json` if its decks are three-color.
 2. After the set rotates, bake it: delete any old `frontend/public/card-stats/<set>.json` and any local override in `cache/card-stats/<set>.json` (the dev server serves the override first), fetch `/api/card-stats/<SET>?bake=1` from the local dev server, save the response there, and commit it.

@@ -3,7 +3,6 @@ import react from "@vitejs/plugin-react";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { CARD_STATS_SETS } from "./src/data/constants";
 import { fetchCardStatsFile } from "./src/data/cardStats";
 import { fetchSetCardPool, isSetCode, normalizeScryfallQuery, searchSetCardNames } from "./src/data/setCardPool";
 
@@ -52,11 +51,6 @@ function cardStatsDevApi(): Plugin {
         const url = new URL(req.url ?? "", "http://localhost");
         const setCode = url.pathname.replace(/^\//, "").toUpperCase();
         const bake = url.searchParams.has("bake");
-        if (!CARD_STATS_SETS.includes(setCode)) {
-          res.statusCode = 404;
-          res.end("{}");
-          return;
-        }
         try {
           const fileName = `${setCode.toLowerCase()}.json`;
           const localOverride = await readFile(path.resolve(__dirname, `../cache/card-stats/${fileName}`), "utf8")

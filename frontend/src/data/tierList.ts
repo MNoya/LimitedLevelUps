@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { type CardGrades, type CardStats, type CardStatsFile, gradeCardStats } from "./cardStats";
 import {
-  CARD_STATS_SETS,
   TIER_LIST_DATA_BASE,
   TIER_LIST_DATA_BASE_OVERRIDES,
   TIER_LIST_GRADERS,
@@ -596,7 +595,7 @@ export function useCardStats(setCode: string): CardStatsLookup | null {
   const query = useQuery({
     queryKey: ["card-stats", setCode],
     queryFn: () => fetchCardStats(setCode),
-    enabled: CARD_STATS_SETS.includes(setCode),
+    enabled: Boolean(setCode),
     staleTime: ONE_HOUR,
   });
   const file = query.data;

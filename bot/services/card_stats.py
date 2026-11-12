@@ -20,7 +20,6 @@ CARD_STATS_SETS_JSON = REPO_ROOT / "card_stats_sets.json"
 BAKED_CARD_STATS_DIR = REPO_ROOT / "frontend" / "public" / "card-stats"
 
 _REGISTRY = json.loads(CARD_STATS_SETS_JSON.read_text())
-CARD_STATS_SETS: tuple[str, ...] = tuple(_REGISTRY["sets"])
 THREE_COLOR_SETS: tuple[str, ...] = tuple(_REGISTRY["threeColorSets"])
 
 
@@ -68,7 +67,7 @@ def refresh_live_card_stats_if_configured(client: SeventeenLandsClient, settings
 
 def refresh_live_card_stats(client: SeventeenLandsClient, kv: CardStatsKv) -> str | None:
     set_code = active_set_code()
-    if set_code not in CARD_STATS_SETS or (BAKED_CARD_STATS_DIR / f"{set_code.lower()}.json").exists():
+    if (BAKED_CARD_STATS_DIR / f"{set_code.lower()}.json").exists():
         return None
     previous = kv.read(set_code)
     seed = seed_for_code(set_code)

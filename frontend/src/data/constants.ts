@@ -217,8 +217,6 @@ export const TIER_LIST_SET_GROUPS: Record<string, Array<{ label: string; glyph: 
 export const hasTierList = (code: string): boolean =>
   Boolean(TIER_LIST_UIDS[code]) || (TIER_LIST_GRADERS[code]?.length ?? 0) > 0;
 
-export const CARD_STATS_SETS: string[] = cardStatsSets.sets;
-
 export const THREE_COLOR_SETS: string[] = cardStatsSets.threeColorSets;
 
 // Name/date for tier-list sets absent from the live feed; future startDate shows a PREVIEW badge

@@ -1,4 +1,3 @@
-import { CARD_STATS_SETS } from "../../../frontend/src/data/constants";
 import { serveStaleWhileRefreshing } from "../../_shared/stale-cache";
 
 interface Env {
@@ -8,10 +7,6 @@ interface Env {
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const setCode = String(context.params.setCode).toUpperCase();
-  if (!CARD_STATS_SETS.includes(setCode)) {
-    return new Response("No card stats for this set", { status: 404 });
-  }
-
   const bakedUrl = new URL(`/card-stats/${setCode.toLowerCase()}.json`, context.request.url);
   const baked = await context.env.ASSETS.fetch(bakedUrl);
   if (baked.ok && baked.headers.get("content-type")?.includes("application/json")) {
