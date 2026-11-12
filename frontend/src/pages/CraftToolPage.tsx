@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
 import { SetGlyphDropdown } from "../components/SetGlyphDropdown";
 import { CopyTextButton } from "../components/CopyTextButton";
@@ -19,6 +19,7 @@ import {
   craftListTitle,
   craftListWildcards,
   useCraftLists,
+  type CraftCopies,
   type CraftList,
   type CraftRarity,
 } from "../data/craftLists";
@@ -41,11 +42,16 @@ export function CraftToolPage() {
   ];
   const { data: sets } = useSets();
   const { setCode } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const copies: CraftCopies = searchParams.get("copies") === "1" ? 1 : 4;
+  const selectCopies = (next: CraftCopies) => {
+    setSearchParams(next === 1 ? { copies: "1" } : {}, { replace: true });
+  };
   const isMobile = useIsMobile();
   const craftSets = useMemo(() => cardSets(sets), [sets]);
   const current = setCode?.toUpperCase() ?? craftSets[0]?.code ?? ACTIVE_SET_CODE;
   const setMeta = craftSets.find((s) => s.code === current);
-  const { lists, isPending, isError } = useCraftLists(current);
+  const { lists, isPending, isError } = useCraftLists(current, copies);
 
   return (
     <PageShell subtitle="TOOLS">
@@ -58,7 +64,7 @@ export function CraftToolPage() {
         >
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 min-w-0">
             <div className="flex flex-col min-w-0 shrink-0">
-              <div className="font-display tracking-[0.12em] flex items-center leading-none min-w-0">
+              <div className="font-display tracking-[0.12em] flex items-center gap-3 leading-none min-w-0">
                 <SetGlyphDropdown
                   sets={craftSets}
                   activeCode={current}
@@ -66,8 +72,9 @@ export function CraftToolPage() {
                   label={setMeta?.name?.toUpperCase() ?? current}
                   isMobile={isMobile}
                   loading={!sets}
-                  hrefFor={(code) => `/tools/craft/${code}`}
+                  hrefFor={(code) => `/tools/craft/${code}${copies === 1 ? "?copies=1" : ""}`}
                 />
+                <CopiesToggle copies={copies} onSelect={selectCopies} />
               </div>
               <h1 className="mt-1 pl-[2px] font-mono text-[11px] tracking-[0.16em] text-muted">
                 BULK CRAFTING DECK LISTS
@@ -143,6 +150,33 @@ export function CraftToolPage() {
         </div>
       </div>
     </PageShell>
+  );
+}
+
+function CopiesToggle({ copies, onSelect }: { copies: CraftCopies; onSelect: (copies: CraftCopies) => void }) {
+  const options: CraftCopies[] = [4, 1];
+  return (
+    <div
+      role="group"
+      aria-label="Copies of each card"
+      className="flex shrink-0 rounded-full border border-border bg-surface2"
+    >
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onSelect(option)}
+          aria-pressed={copies === option}
+          className={cn(
+            "rounded-full px-3 py-1.5 font-display tracking-[0.14em] leading-none text-[13px] cursor-pointer",
+            "transition-colors",
+            copies === option ? "bg-green/15 text-green" : "text-subtle hover:text-green",
+          )}
+        >
+          {option}X
+        </button>
+      ))}
+    </div>
   );
 }
 
