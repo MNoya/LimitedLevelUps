@@ -12,13 +12,15 @@ SITE_ROLES = ("anon", "authenticated")
 
 @pytest.fixture(scope="module")
 def fantasy_views(engine):
-    fantasy_worlds, members_before_lock, scoring_as_owner = [_load_migration(name) for name in VIEW_MIGRATIONS]
+    fantasy_worlds, members_before_lock, scoring_as_owner, off_format_single = [
+        _load_migration(name) for name in VIEW_MIGRATIONS
+    ]
     with engine.begin() as conn:
         for role in SITE_ROLES:
             create_role = f"CREATE ROLE {role} NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL;"
             conn.execute(text(f"DO $$ BEGIN {create_role} END $$"))
         conn.execute(text("DROP VIEW IF EXISTS public_fantasy_standings"))
-        for migration in (fantasy_worlds, members_before_lock, scoring_as_owner):
+        for migration in (fantasy_worlds, members_before_lock, scoring_as_owner, off_format_single):
             for statement in migration.VIEW_STATEMENTS:
                 conn.execute(text(statement))
         conn.execute(text(fantasy_worlds._site_grants_sql()))
@@ -44,8 +46,8 @@ def event(session, fantasy_views):
 
 @pytest.mark.parametrize("slot, expected", [
     ("captain", 14 + 8),
-    ("drafter", 9 + 8),
-    ("constructed", 8 + 8),
+    ("drafter", 13 + 8),
+    ("constructed", 11 + 8),
     ("player", 7 + 8),
 ])
 def test_lineup_points_follow_slot_multipliers_and_flat_top8_bonus(session, event, slot, expected):
@@ -257,6 +259,7 @@ VIEW_MIGRATIONS = (
     "f4n7a5y1w0c1_fantasy_worlds",
     "c3f5a7e9b1d2_fantasy_members_before_lock",
     "d4a6b8c0e2f3_fantasy_scoring_views_as_owner",
+    "f7a9c1e3b5d7_fantasy_off_format_wins_score_single",
 )
 
 

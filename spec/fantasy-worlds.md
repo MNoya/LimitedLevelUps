@@ -26,13 +26,13 @@ Built, tested and committed. Not deployed. Every production step is the user's c
 
 - Pick 4 players, one per slot. Players only: no cards, no packs, no grinding, and scoring is verifiable from public results.
 - 3 points per match win, 1 per draw. Byes score as wins, including the byes Melee gives players already locked into the Top 8, matching Melee's standings.
-- Captain, gold: double in all rounds. Drafter, LLU green: triple in Draft rounds, nothing in Constructed. Constructed, blue: double in Constructed rounds, nothing in Draft. Player, purple: single in all rounds.
+- Captain, gold: double in all rounds. Drafter, LLU green: triple in Draft rounds, single in Constructed. Constructed, blue: double in Constructed rounds, single in Draft. Player, purple: single in all rounds.
 - Day 2 replacements: a pick who misses Day 2 can be replaced before the first Day 2 round. The replacement scores from that round on and the Day 1 points stay.
 - Top 8 lineup bonus, flat with no slot multiplier: 4 for reaching the Top 8, 4 per Quarterfinal or Semifinal win, 8 for winning the Final, so the champion's run is worth 20.
 - Bracket, added to the total: before the Quarterfinals each member picks a winner for all 7 matches, with an optional game score. Later picks follow the member's own earlier winners. A correct winner scores 2, 4 and 8 by stage, and the exact game score adds 1. A later pick scores only if that player reached and won the match. Maximum 31. A winner with no game score saves and scores the winner points.
 - The Bracket opens when the reveal marker passes the last Swiss round and locks when the Quarterfinals start or at `bracketLockAt`.
 - Standings: total points, then the champion call, then the earliest last change to the Day 1 lineup.
-- The points were reviewed against Worlds 31 and kept. Expected Swiss value at Worlds: Captain 42, Drafter 27, Constructed 24, Player 21. Day 2 win rates were about 50% whatever the Day 1 record, so a replacement gains no hot hand.
+- The points were reviewed against Worlds 31 and kept. Expected Swiss value at Worlds: Captain 42, Drafter 39, Constructed 33, Player 21. Day 2 win rates were about 50% whatever the Day 1 record, so a replacement gains no hot hand.
 
 ## Discord
 

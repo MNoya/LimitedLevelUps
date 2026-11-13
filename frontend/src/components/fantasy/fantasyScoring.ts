@@ -37,11 +37,11 @@ export function slotMultiplier(live: LiveEvent, slotKey: SlotKey, round: number)
   if (slotKey === "captain") {
     return 2;
   }
-  if (slotKey === "drafter") {
-    return draft ? 3 : 0;
+  if (slotKey === "drafter" && draft) {
+    return 3;
   }
-  if (slotKey === "constructed") {
-    return draft ? 0 : 2;
+  if (slotKey === "constructed" && !draft) {
+    return 2;
   }
   return 1;
 }

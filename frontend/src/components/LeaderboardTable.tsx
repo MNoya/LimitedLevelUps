@@ -8,6 +8,8 @@ import { ScoringInfoButton } from "./ScoringInfoButton";
 import { winPct } from "../data/utils";
 import { cn } from "../lib/utils";
 import { isPlainClick } from "../lib/plain-click";
+import { useOwnRowPin, type PinMode } from "../lib/use-own-row-pin";
+import { PinnedOwnRow } from "./PinnedOwnRow";
 
 // Shared table powering the set leaderboard and the per-archetype board, on
 // both desktop and mobile. Owns the expanded-row state internally; expanded
@@ -154,34 +156,7 @@ export function LeaderboardTable<T extends LeaderboardTableRow>({
   }, [openSlug, renderedSlug]);
   const isMobile = variant === "mobile";
 
-  const [myRowEl, setMyRowEl] = useState<HTMLDivElement | null>(null);
-  const [pinMode, setPinMode] = useState<PinMode>("hidden");
-  useEffect(() => {
-    if (!myRowEl) {
-      setPinMode("hidden");
-      return;
-    }
-    const evaluate = () => {
-      const rect = myRowEl.getBoundingClientRect();
-      if (rect.bottom > stickyTop && rect.top < window.innerHeight) {
-        setPinMode("hidden");
-      } else if (rect.top < stickyTop) {
-        setPinMode("overlay");
-      } else {
-        setPinMode("inflow");
-      }
-    };
-    const observer = new IntersectionObserver(evaluate, {
-      rootMargin: `${-stickyTop}px 0px 0px 0px`,
-      threshold: 0,
-    });
-    observer.observe(myRowEl);
-    const raf = requestAnimationFrame(evaluate);
-    return () => {
-      observer.disconnect();
-      cancelAnimationFrame(raf);
-    };
-  }, [myRowEl, stickyTop]);
+  const ownRowPin = useOwnRowPin(stickyTop);
 
   if (error) return <ErrorState error={error} compact={isMobile} />;
   if (loading) return <LoadingRows variant={variant} />;
@@ -198,8 +173,8 @@ export function LeaderboardTable<T extends LeaderboardTableRow>({
           mode={mode}
           variant={variant}
           stickyTop={stickyTop}
-          pinMode={pinMode}
-          onScrollToRow={() => myRowEl?.scrollIntoView({ behavior: "smooth", block: "center" })}
+          pinMode={ownRowPin.pinMode}
+          onScrollToRow={ownRowPin.scrollToRow}
         />
         {rows.map((r) => {
           const open = openSlug === r.slug;
@@ -209,7 +184,7 @@ export function LeaderboardTable<T extends LeaderboardTableRow>({
           return (
             <div
               key={r.slug}
-              ref={mine ? setMyRowEl : undefined}
+              ref={mine ? ownRowPin.setRowEl : undefined}
               onMouseEnter={onRowPrefetch ? () => onRowPrefetch(r) : undefined}
               onFocus={onRowPrefetch ? () => onRowPrefetch(r) : undefined}
               className={cn(
@@ -257,8 +232,6 @@ export function LeaderboardTable<T extends LeaderboardTableRow>({
   );
 }
 
-type PinMode = "hidden" | "inflow" | "overlay";
-
 function FloatingOwnRow({
   row,
   mode,
@@ -277,30 +250,20 @@ function FloatingOwnRow({
   if (!row) {
     return null;
   }
-  const hidden = pinMode === "hidden";
-  const inflow = pinMode === "inflow";
   return (
-    <div
-      className={cn("sticky z-[5]", hidden && "pointer-events-none opacity-0")}
-      style={{ top: stickyTop, height: inflow ? undefined : 0 }}
-      aria-hidden={hidden}
+    <PinnedOwnRow
+      pinMode={pinMode}
+      stickyTop={stickyTop}
+      onClick={onScrollToRow}
+      className={cn(
+        "bg-surface",
+        variant === "mobile" ? "border-b border-border" : pinMode !== "inflow" && "border-b border-bg",
+        "bg-[linear-gradient(rgba(46,232,92,0.07),rgba(46,232,92,0.07))]",
+        "shadow-[inset_3px_0_0_0_#2ee85c,inset_-3px_0_0_0_#2ee85c]",
+      )}
     >
-      <div
-        onClick={onScrollToRow}
-        className={cn(
-          "cursor-pointer bg-surface",
-          variant === "mobile" ? "border-b border-border" : !inflow && "border-b border-bg",
-          "bg-[linear-gradient(rgba(46,232,92,0.07),rgba(46,232,92,0.07))]",
-          "shadow-[inset_3px_0_0_0_#2ee85c,inset_-3px_0_0_0_#2ee85c]",
-        )}
-      >
-        {variant === "mobile" ? (
-          <MobileRow row={row} mode={mode} />
-        ) : (
-          <DesktopRow row={row} mode={mode} />
-        )}
-      </div>
-    </div>
+      {variant === "mobile" ? <MobileRow row={row} mode={mode} /> : <DesktopRow row={row} mode={mode} />}
+    </PinnedOwnRow>
   );
 }
 

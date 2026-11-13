@@ -23,6 +23,8 @@ import {
 } from "./fantasyTop8";
 import { useLiveEvent } from "./fantasyLive";
 import type { FantasyLineupFlagRow, FantasyMemberRow } from "../../types/fantasy";
+import { useOwnRowPin } from "../../lib/use-own-row-pin";
+import { PinnedOwnRow } from "../PinnedOwnRow";
 
 type LeaderboardProps = {
   rows: MemberStanding[];
@@ -30,6 +32,8 @@ type LeaderboardProps = {
   results: BracketResults | null;
   seeded: FieldPlayer[];
   compact: boolean;
+  stickyTop?: number;
+  scrollRoot?: HTMLElement | null;
   onInspect?: (player: FieldPlayer) => void;
   onHover?: (player: FieldPlayer, element: HTMLElement) => void;
   onLeave?: () => void;
@@ -45,12 +49,14 @@ const DAY_LABEL: Record<StandingsDay, string> = {
 };
 
 export function MembersLeaderboard(props: LeaderboardProps) {
-  const { rows, days, results, compact, onInspect, onHover, onLeave } = props;
+  const { rows, days, results, compact, stickyTop = 0, scrollRoot = null, onInspect, onHover, onLeave } = props;
   const handlers = { onInspect, onHover, onLeave };
   const [day, setDay] = useState<StandingsDay>("overall");
   const ranked = useMemo(() => rankForDay(rows, day), [rows, day]);
   const showPodium = Boolean(results?.final);
   const selfRow = rows.find((row) => row.member.isSelf) ?? null;
+  const selfEntry = ranked.find((entry) => entry.row.member.isSelf);
+  const ownRowPin = useOwnRowPin(stickyTop, scrollRoot);
 
   return (
     <div className="flex flex-col gap-4">
@@ -74,8 +80,28 @@ export function MembersLeaderboard(props: LeaderboardProps) {
       </div>
       <div className="flex flex-col border border-border2">
         {!compact ? <HeaderRow showBracket={Boolean(results)} /> : null}
+        {selfEntry ? (
+          <PinnedOwnRow
+            pinMode={ownRowPin.pinMode}
+            stickyTop={stickyTop}
+            onClick={ownRowPin.scrollToRow}
+            className={cn(
+              "bg-bg border-b border-border bg-[linear-gradient(rgba(46,232,92,0.07),rgba(46,232,92,0.07))]",
+              "shadow-[inset_3px_0_0_0_#2ee85c]",
+              memberRowClass(compact),
+            )}
+          >
+            <MemberRowCells entry={selfEntry} day={day} open={false} {...props} />
+          </PinnedOwnRow>
+        ) : null}
         {ranked.map((entry) => (
-          <MemberRow key={entry.row.member.name} entry={entry} day={day} {...props} />
+          <MemberRow
+            key={entry.row.member.name}
+            entry={entry}
+            day={day}
+            rowRef={entry.row.member.isSelf ? ownRowPin.setRowEl : undefined}
+            {...props}
+          />
         ))}
       </div>
     </div>
@@ -232,22 +258,18 @@ function HeaderRow({ showBracket, centerRank = false }: { showBracket: boolean; 
 }
 
 function MemberRow({
-  entry,
-  day,
-  results,
-  seeded,
-  compact,
-  onInspect,
-  onHover,
-  onLeave,
-}: LeaderboardProps & { entry: RankedEntry; day: StandingsDay }) {
+  rowRef,
+  ...props
+}: LeaderboardProps & { entry: RankedEntry; day: StandingsDay; rowRef?: (element: HTMLElement | null) => void }) {
   const [open, setOpen] = useState(false);
+  const { entry, day, results, seeded, compact } = props;
   const { row, rank } = entry;
   const isSelf = row.member.isSelf;
-  const medal = rank <= 3 && day === "overall" && results?.final ? MEDAL_COLOR[rank as 1 | 2 | 3] : null;
+  const medal = medalFor(rank, day, results);
   const accent = isSelf ? "#2ee85c" : medal;
   return (
     <div
+      ref={rowRef}
       className={cn("border-b border-border last:border-b-0", isSelf && "bg-green/[0.07]")}
       style={accent ? { boxShadow: `inset 3px 0 0 ${accent}` } : undefined}
     >
@@ -255,54 +277,82 @@ function MemberRow({
         type="button"
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          "w-full flex items-center gap-3 px-3 text-left bg-transparent border-0 cursor-pointer hover:bg-surface/60",
-          compact ? "py-2 flex-wrap" : "py-2",
+          "w-full text-left bg-transparent border-0 cursor-pointer hover:bg-surface/60",
+          memberRowClass(compact),
         )}
       >
-        <span
-          className={cn(rankCellClass(compact), "font-display text-[17px] tracking-[0.06em] text-text")}
-          style={medal ? { color: medal } : undefined}
-        >
-          {rank}
-        </span>
-        <span className={cn("flex items-center gap-2 min-w-0", compact ? "flex-1" : "w-[176px] shrink-0")}>
-          <MemberAvatar name={row.member.name} isSelf={isSelf} />
-          <span className={cn("truncate text-[14px]", isSelf ? "font-semibold text-white" : "text-text")}>
-            {row.member.name}
-          </span>
-        </span>
-        {compact ? <RowPoints points={dayPoints(row, day)} bracketPoints={row.bracketPoints} medal={medal} /> : null}
-        <span className={cn("flex items-center gap-1.5 min-w-0", lineupCellClass(compact))}>
-          {row.slots.map((slot) => (
-            <PickChip
-              key={slot.slot}
-              slot={slot}
-              day={day}
-              compact={compact}
-              onInspect={onInspect}
-              onHover={onHover}
-              onLeave={onLeave}
-            />
-          ))}
-        </span>
-        {!compact && results ? (
-          <span className="w-[64px] shrink-0 text-right font-num text-[14px] text-subtle">{row.bracketPoints ?? ""}</span>
-        ) : null}
-        {!compact ? (
-          <span
-            className={cn("w-[56px] shrink-0 text-right font-num tabular-nums text-[14px]", pointsClass(medal))}
-            style={medal ? { color: medal } : undefined}
-          >
-            {dayPoints(row, day)}
-          </span>
-        ) : null}
-        {!compact ? (
-          <ChevronDown size={14} className={cn("shrink-0 text-subtle transition-transform", open && "rotate-180")} />
-        ) : null}
+        <MemberRowCells {...props} open={open} />
       </button>
       {open ? <MemberReview row={row} results={results} seeded={seeded} compact={compact} /> : null}
     </div>
   );
+}
+
+function MemberRowCells({
+  entry,
+  day,
+  open,
+  results,
+  compact,
+  onInspect,
+  onHover,
+  onLeave,
+}: LeaderboardProps & { entry: RankedEntry; day: StandingsDay; open: boolean }) {
+  const { row, rank } = entry;
+  const isSelf = row.member.isSelf;
+  const medal = medalFor(rank, day, results);
+  return (
+    <>
+      <span
+        className={cn(rankCellClass(compact), "font-display text-[17px] tracking-[0.06em] text-text")}
+        style={medal ? { color: medal } : undefined}
+      >
+        {rank}
+      </span>
+      <span className={cn("flex items-center gap-2 min-w-0", compact ? "flex-1" : "w-[176px] shrink-0")}>
+        <MemberAvatar name={row.member.name} isSelf={isSelf} />
+        <span className={cn("truncate text-[14px]", isSelf ? "font-semibold text-white" : "text-text")}>
+          {row.member.name}
+        </span>
+      </span>
+      {compact ? <RowPoints points={dayPoints(row, day)} bracketPoints={row.bracketPoints} medal={medal} /> : null}
+      <span className={cn("flex items-center gap-1.5 min-w-0", lineupCellClass(compact))}>
+        {row.slots.map((slot) => (
+          <PickChip
+            key={slot.slot}
+            slot={slot}
+            day={day}
+            compact={compact}
+            onInspect={onInspect}
+            onHover={onHover}
+            onLeave={onLeave}
+          />
+        ))}
+      </span>
+      {!compact && results ? (
+        <span className="w-[64px] shrink-0 text-right font-num text-[14px] text-subtle">{row.bracketPoints ?? ""}</span>
+      ) : null}
+      {!compact ? (
+        <span
+          className={cn("w-[56px] shrink-0 text-right font-num tabular-nums text-[14px]", pointsClass(medal))}
+          style={medal ? { color: medal } : undefined}
+        >
+          {dayPoints(row, day)}
+        </span>
+      ) : null}
+      {!compact ? (
+        <ChevronDown size={14} className={cn("shrink-0 text-subtle transition-transform", open && "rotate-180")} />
+      ) : null}
+    </>
+  );
+}
+
+function memberRowClass(compact: boolean): string {
+  return cn("flex items-center gap-3 px-3 py-2", compact && "flex-wrap");
+}
+
+function medalFor(rank: number, day: StandingsDay, results: BracketResults | null): string | null {
+  return rank <= 3 && day === "overall" && results?.final ? MEDAL_COLOR[rank as 1 | 2 | 3] : null;
 }
 
 function rankCellClass(compact: boolean): string {

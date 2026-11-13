@@ -210,6 +210,9 @@ function TeamSheetView({
   const teamLoading = restoring || (live && !members);
   const filters = useFieldFilters(liveEvent.players);
   const isMobile = useIsMobile(1024);
+  const [scrollRoot, setScrollRoot] = useState<HTMLElement | null>(null);
+  const [stickyChrome, setStickyChrome] = useState<HTMLElement | null>(null);
+  const stickyChromeHeight = useElementHeight(stickyChrome);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -456,6 +459,8 @@ function TeamSheetView({
       results={results}
       seeded={seeded}
       compact={isMobile}
+      stickyTop={stickyChromeHeight}
+      scrollRoot={scrollRoot}
       onInspect={openProfile}
       onHover={handleHover}
       onLeave={handleLeave}
@@ -531,7 +536,7 @@ function TeamSheetView({
     return (
       <main className="flex-1 pb-[190px]">
         <MobileHeader status={liveStatus(true)} />
-        <div className="sticky top-0 z-10 bg-bg/95 backdrop-blur border-b border-border">
+        <div ref={setStickyChrome} className="sticky top-0 z-10 bg-bg/95 backdrop-blur border-b border-border">
           {viewTabs}
           {showField ? (
             <div data-keeps-active-slot className="px-3 py-2.5 flex flex-col gap-2">
@@ -628,8 +633,12 @@ function TeamSheetView({
         </div>
       </section>
 
-      <section className="themed-scrollbar min-w-0 h-full overflow-y-auto [scrollbar-gutter:stable] px-7 pb-6">
+      <section
+        ref={setScrollRoot}
+        className="themed-scrollbar min-w-0 h-full overflow-y-auto [scrollbar-gutter:stable] px-7 pb-6"
+      >
         <div
+          ref={setStickyChrome}
           className={cn(
             "sticky top-0 z-10 -mx-7 px-7 mb-3 bg-bg/95 backdrop-blur",
             showField && "border-b border-border",
@@ -1212,6 +1221,22 @@ const CARD_ASPECT = 63 / 88;
 const TRAY_MAX_WIDTH = `calc(4 * 24svh * ${CARD_ASPECT} + 18px)`;
 const CARD_AREA_CHROME = 24 + 16;
 const CARD_NOTE_GAP = 20;
+
+function useElementHeight(element: HTMLElement | null): number {
+  const [height, setHeight] = useState(0);
+  useLayoutEffect(() => {
+    if (!element) {
+      setHeight(0);
+      return;
+    }
+    const measure = () => setHeight(element.offsetHeight);
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    measure();
+    return () => observer.disconnect();
+  }, [element]);
+  return height;
+}
 
 function useFittedCardWidth() {
   const cardAreaRef = useRef<HTMLDivElement>(null);
