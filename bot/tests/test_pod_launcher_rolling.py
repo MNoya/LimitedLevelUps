@@ -45,6 +45,7 @@ from bot.tasks.pod_daily_poll import (
 FLASHBACK_SEASON_START = season_start("FRA")
 FRIDAY = FLASHBACK_SEASON_START + timedelta(days=4)
 SATURDAY = FRIDAY + timedelta(days=1)
+FRIDAY_MORNING = datetime.combine(FRIDAY, time(8, 0), tzinfo=SCHEDULE_TZ)
 FRIDAY_AFTERNOON = datetime.combine(FRIDAY, time(16, 0), tzinfo=SCHEDULE_TZ)
 THRESHOLD = settings.pod_signal_fire_threshold
 EARLIER = datetime(2026, 7, 26, 9, 0, tzinfo=SCHEDULE_TZ)
@@ -247,7 +248,7 @@ def test_a_time_still_joinable_counts_down():
 
 def test_the_morning_post_opens_one_pod_per_format_the_day_offers(session, latest_and_peasant):
     bound = create_poll_signals(
-        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY,
+        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY, now=FRIDAY_MORNING,
     )
 
     early, late = bucket_for_slot(FRIDAY, SLOT_EARLY).key, bucket_for_slot(FRIDAY, SLOT_LATE).key
@@ -265,7 +266,7 @@ def test_the_morning_post_adopts_a_rolled_pod_and_keeps_its_signups(session, lat
     session.flush()
 
     bound = create_poll_signals(
-        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY,
+        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY, now=FRIDAY_MORNING,
     )
 
     session.refresh(rolled)
@@ -280,7 +281,9 @@ def test_the_morning_post_adopts_a_slot_keyed_before_named_formats_shipped(sessi
     session.add(PodSignalMember(signal_id=legacy.id, discord_user_id="1", display_name=HALL_OF_FAME[0]))
     session.flush()
 
-    create_poll_signals(session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY)
+    create_poll_signals(
+        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY, now=FRIDAY_MORNING,
+    )
 
     session.refresh(legacy)
     assert legacy.bucket == named_bucket_key(early, LATEST)
@@ -293,7 +296,7 @@ def test_the_morning_post_leaves_a_fired_pod_alone_and_opens_a_fresh_one(session
     fired = _seed_signal(session, early, FRIDAY, message_id="yesterday", status=STATUS_FIRED)
 
     bound = create_poll_signals(
-        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY,
+        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY, now=FRIDAY_MORNING,
     )
 
     session.refresh(fired)
@@ -306,7 +309,7 @@ def test_a_slot_that_already_closed_unfired_is_not_reopened_on_a_second_board(se
     closed = _seed_signal(session, early, FRIDAY, message_id="morning", status=STATUS_EXPIRED)
 
     bound = create_poll_signals(
-        session, guild_id="g", channel_id="c", message_id="evening", signal_date=FRIDAY,
+        session, guild_id="g", channel_id="c", message_id="evening", signal_date=FRIDAY, now=FRIDAY_MORNING,
     )
 
     rows = session.execute(
@@ -316,12 +319,27 @@ def test_a_slot_that_already_closed_unfired_is_not_reopened_on_a_second_board(se
     assert closed.id not in [signal_id for signal_id, _slot_time in bound]
 
 
+
+def test_a_canceled_pod_leaves_its_past_slot_closed_when_the_board_rebinds(session, latest_only):
+    early = bucket_for_slot(FRIDAY, SLOT_EARLY).key
+    fired = _seed_signal(session, early, FRIDAY, message_id="today", status=STATUS_FIRED)
+
+    bound = create_poll_signals(
+        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY, now=FRIDAY_AFTERNOON,
+    )
+
+    rows = session.execute(
+        select(PodSignal.id).where(PodSignal.bucket == named_bucket_key(early, LATEST))
+    ).scalars().all()
+    assert rows == [fired.id]
+    assert fired.id not in [signal_id for signal_id, _slot_time in bound]
+
 def test_a_pod_that_exists_is_skipped_and_the_other_format_still_opens(session, latest_and_peasant):
     early = bucket_for_slot(FRIDAY, SLOT_EARLY).key
     _seed_pod(session, slot_event_time(FRIDAY, early), set_code=LATEST)
 
     bound = create_poll_signals(
-        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY,
+        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY, now=FRIDAY_MORNING,
     )
 
     assert named_bucket_key(early, "PEASANT") in _buckets_of(session, bound)
@@ -331,7 +349,9 @@ def test_a_pod_that_exists_is_skipped_and_the_other_format_still_opens(session, 
 def test_a_drafting_pod_leaves_the_other_format_at_its_slot_gathering(session, monkeypatch, latest_and_peasant):
     monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
     early = bucket_for_slot(FRIDAY, SLOT_EARLY).key
-    create_poll_signals(session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY)
+    create_poll_signals(
+        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY, now=FRIDAY_MORNING,
+    )
     _seed_pod(session, slot_event_time(FRIDAY, early), set_code=LATEST, socket_status="draft_done")
     session.commit()
 
@@ -429,7 +449,7 @@ def test_a_closed_slot_opens_no_pod_while_the_other_slot_still_does(session):
     session.flush()
 
     bound = create_poll_signals(
-        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY,
+        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY, now=FRIDAY_MORNING,
     )
 
     late = bucket_for_slot(FRIDAY, SLOT_LATE).key
@@ -483,7 +503,9 @@ def test_a_rolled_slot_and_todays_slot_share_the_message_and_the_snapshot_stacks
     session, monkeypatch, latest_only, friday_afternoon,
 ):
     monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
-    create_poll_signals(session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY)
+    create_poll_signals(
+        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY, now=FRIDAY_MORNING,
+    )
     session.commit()
     pod_launch.roll_slot_forward_sync(
         slot_key=SLOT_LATE, from_day=FRIDAY, guild_id="g", channel_id="c", message_id="today",
@@ -534,7 +556,9 @@ def test_an_override_reopens_the_format_it_restores_and_closes_the_one_it_drops(
 
 def test_the_board_day_ignores_the_days_its_columns_rolled_to(session, monkeypatch, latest_only):
     monkeypatch.setattr("bot.services.pod_launch.SessionLocal", _session_factory(session))
-    create_poll_signals(session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY)
+    create_poll_signals(
+        session, guild_id="g", channel_id="c", message_id="today", signal_date=FRIDAY, now=FRIDAY_MORNING,
+    )
     session.commit()
     pod_launch.roll_slot_forward_sync(
         slot_key=SLOT_LATE, from_day=FRIDAY, guild_id="g", channel_id="c", message_id="today",

@@ -254,7 +254,7 @@ class LauncherSlot:
 
 
 def create_poll_signals(
-    session: Session, *, guild_id: str, channel_id: str, message_id: str, signal_date: date,
+    session: Session, *, guild_id: str, channel_id: str, message_id: str, signal_date: date, now: datetime,
 ) -> list[tuple[str, datetime]]:
     """Bind a lazy poll row to this launcher message per (slot, format) the day offers; return (signal_id,
     slot_time) per row so the caller arms expiry and underfill beats for each. This is the only place the
@@ -264,9 +264,8 @@ def create_poll_signals(
     A row a rolled column already opened for this day is adopted, not duplicated: it keeps the signups it
     gathered overnight and moves to the fresh message. A format whose pod already exists at that slot time
     gets no signal — the launcher reflects that pod's card instead of doubling it — while the other formats
-    there still open. A slot that already closed unfired gets none either: its window is over, so a second
-    row records nothing the closed one does not and only collides once a repost sweeps the earlier board's
-    rows onto this message."""
+    there still open. A slot whose time has passed gets none either, whether it closed unfired or its pod was
+    canceled: its window is over, so a second row records nothing and collides with the first on this board."""
     bound: list[tuple[str, datetime]] = []
     with schedule_overlay(session, signal_date, signal_date):
         for bucket in pod_signals.poll_buckets_for(signal_date):
@@ -277,7 +276,7 @@ def create_poll_signals(
                     continue
                 signal = _open_poll_signal_for_slot(session, bucket.key, set_code, signal_date)
                 if signal is None:
-                    if _expired_poll_signal_exists(session, bucket.key, set_code, signal_date):
+                    if slot_time <= now or _expired_poll_signal_exists(session, bucket.key, set_code, signal_date):
                         continue
                     signal = PodSignal(
                         kind=pod_signals.KIND_POLL,
@@ -304,6 +303,7 @@ def create_poll_signals_sync(
     with SessionLocal() as session:
         created = create_poll_signals(
             session, guild_id=guild_id, channel_id=channel_id, message_id=message_id, signal_date=signal_date,
+            now=datetime.now(timezone.utc),
         )
         session.commit()
         return created
