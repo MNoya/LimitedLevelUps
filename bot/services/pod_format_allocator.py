@@ -11,9 +11,9 @@ A flashback set needs `VOTE_FLOOR` raw votes to be eligible, and the top `TOP_N`
 ties broken by voter pod attendance. Each set's season day budget is its vote share of the whole season's
 flashback days. Every sweep counts the days a set already played or has locked on the launcher and fills only
 the deficit onto the still-open days, so a set never runs more than its budget and a late vote reshapes only
-the days not yet played. One sweep fills the window from a start day to the day before the next set rotates in;
-it writes `source='auto'` overlay rows, never touches an organizer's manual override, and skips the championship
-day so its own machinery keeps it.
+the days not yet played. Once the ballot closes the announced days are final and a sweep only fills empty ones.
+One sweep fills the window from a start day to the day before the next set rotates in; it writes `source='auto'`
+overlay rows, never touches an organizer's manual override, and skips the championship day so its own machinery has it.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bot.models import PodDraftEvent, PodDraftParticipant, PodFormatVote, PodScheduleSlot, PodSignal
-from bot.services.championship_dates import championship_date_for, season_start
+from bot.services.championship_dates import championship_date_for, season_start, voting_closed
 from bot.services.pod_format import PEASANT_CODE, BALLOT_EXTRA_CODES, is_custom
 from bot.services.pod_format_schedule import (
     FLASHBACK,
@@ -112,6 +112,11 @@ def run_allocation(
             set_slot(session, day, slot, picks, source="auto")
             result[(day, slot)] = picks
     return result
+
+
+def sweep_season(session: Session, now: datetime) -> dict[tuple[date, str], tuple[str, ...]]:
+    """The scheduled re-sweep: tracks the vote while the ballot is open, then only fills empty days once it closes"""
+    return run_allocation(session, now.date(), rewrite=not voting_closed(now), now=now)
 
 
 def vote_results(session: Session, start: date) -> list[tuple[str, int, int]]:

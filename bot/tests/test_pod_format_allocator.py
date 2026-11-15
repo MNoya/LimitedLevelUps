@@ -1,7 +1,9 @@
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from bot.models import PodScheduleSlot, PodSignal
+from sqlalchemy import select, update
+
+from bot.models import PodFormatVote, PodScheduleSlot, PodSignal
 from bot.services import pod_format_vote as vote
 from bot.services.championship_dates import championship_date_for, season_start
 from bot.services.pod_format_allocator import (
@@ -9,26 +11,15 @@ from bot.services.pod_format_allocator import (
     assign_flashbacks,
     day_picks,
     run_allocation,
+    sweep_season,
 )
 from bot.services.pod_format_schedule import FLASHBACK, latest_on, set_slot
 from bot.services.pod_signals import KIND_POLL, SLOT_EARLY, SLOT_LATE
+from bot.sets import RELEASE_TZ
 
 MON = date(2026, 8, 31)
 TUE = date(2026, 9, 1)
 WED = date(2026, 9, 2)
-
-
-def _user(uid):
-    return SimpleNamespace(id=uid, name=f"u{uid}", display_name=f"U{uid}", avatar=None)
-
-
-def _seed_floor_votes(session, code):
-    for uid in range(1, 7):
-        vote.toggle_vote(session, _user(uid), latest_on(MON), code)
-
-
-def _flashback_days(count, start=MON):
-    return [start + timedelta(days=offset) for offset in range(count)]
 
 
 def test_flashback_sets_never_repeat_back_to_back():
@@ -164,3 +155,33 @@ def test_run_allocation_leaves_the_championship_day_alone(session):
 
     assert (champ, SLOT_EARLY) not in assignments
     assert (champ, SLOT_LATE) not in assignments
+
+
+def test_a_closed_ballot_stops_votes_moving_the_announced_days(session):
+    _seed_floor_votes(session, "NEO")
+    session.execute(update(PodFormatVote).values(voted_at=datetime(2026, 8, 28, tzinfo=RELEASE_TZ)))
+    session.commit()
+    sweep_season(session, datetime(2026, 8, 30, 12, tzinfo=RELEASE_TZ))
+    session.commit()
+    _seed_floor_votes(session, "FIN")
+    session.commit()
+
+    sweep_season(session, datetime(2026, 9, 4, 12, tzinfo=RELEASE_TZ))
+    session.commit()
+
+    stored = session.execute(select(PodScheduleSlot.formats)).scalars().all()
+    assert any("NEO" in formats for formats in stored)
+    assert not any("FIN" in formats for formats in stored)
+
+
+def _user(uid):
+    return SimpleNamespace(id=uid, name=f"u{uid}", display_name=f"U{uid}", avatar=None)
+
+
+def _seed_floor_votes(session, code):
+    for uid in range(1, 7):
+        vote.toggle_vote(session, _user(uid), latest_on(MON), code)
+
+
+def _flashback_days(count, start=MON):
+    return [start + timedelta(days=offset) for offset in range(count)]

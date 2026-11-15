@@ -18,7 +18,7 @@ from bot.config import settings
 from bot.database import SessionLocal
 from bot.discord_helpers import resolve_pod_chat_channel
 from bot.services.pod_calendar import persist_calendar
-from bot.services.pod_format_allocator import run_allocation
+from bot.services.pod_format_allocator import sweep_season
 from bot.services.pod_schedule_card import refresh_schedule_post
 from bot.services.championship_dates import plan_for, season_start
 from bot.services.pod_schedule import SCHEDULE_TZ
@@ -61,7 +61,7 @@ async def fire_schedule_post() -> None:
         log.warning("pod-schedule post: no pod chat channel; skipping tick")
         return
     now = datetime.now(SCHEDULE_TZ)
-    count = await asyncio.to_thread(_sweep, now.date())
+    count = await asyncio.to_thread(_sweep, now)
     log.info(f"pod-schedule post: swept {count} slots from {now.date()}")
     await refresh_schedule_post(channel, view=PodScheduleView(), repost_before=_season_launcher_at(now))
 
@@ -77,9 +77,9 @@ def _season_launcher_at(now: datetime) -> datetime | None:
     return launcher_at if now >= launcher_at else None
 
 
-def _sweep(today) -> int:
+def _sweep(now: datetime) -> int:
     with SessionLocal() as session:
-        assignments = run_allocation(session, today, rewrite=True)
-        persist_calendar(session, today)
+        assignments = sweep_season(session, now)
+        persist_calendar(session, now.date())
         session.commit()
         return len(assignments)
