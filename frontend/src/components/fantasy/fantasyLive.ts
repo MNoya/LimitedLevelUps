@@ -43,6 +43,10 @@ export function buildLiveEvent(
   const picksLockAt = new Date(state.picksLockAt).getTime();
   const dayTwoStartAt = picksLockAt + 24 * 60 * 60 * 1000;
   const dayTwoStarted = state.dayTwoStartedAt !== null || now.getTime() >= dayTwoStartAt;
+  const topEightStarted =
+    state.top8StartedAt !== null ||
+    now.getTime() >= new Date(state.bracketLockAt).getTime() ||
+    results.some((row) => row.stage !== "swiss");
   return {
     event,
     header: { title: header.title, city: header.city, setCode: header.setCode },
@@ -63,8 +67,8 @@ export function buildLiveEvent(
     phase: phaseOf(event, results, roundsPlayed, now, picksLockAt, dayTwoStarted),
     roundsPlayed,
     replacementsOpen: !dayTwoStarted && now.getTime() >= picksLockAt,
-    topEightStarted: state.top8StartedAt !== null || results.some((row) => row.stage !== "swiss"),
-    bracketWindowOpen: state.revealedThroughRound >= event.swissRounds && state.top8StartedAt === null,
+    topEightStarted,
+    bracketWindowOpen: state.revealedThroughRound >= event.swissRounds && !topEightStarted,
     demo,
     readOnly,
   };

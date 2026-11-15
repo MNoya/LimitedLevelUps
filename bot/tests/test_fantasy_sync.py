@@ -8,8 +8,8 @@ from sqlalchemy import select
 
 from bot.commands.test_group import HALL_OF_FAME
 from bot.models import FantasyPick, FantasyPlayer, FantasyResult, FantasyRound
-from bot.services.fantasy_event import FantasyEvent
-from bot.services.fantasy_sync import sync_event
+from bot.services.fantasy_event import STAGE_QUARTERFINAL, STAGE_SEMIFINAL, FantasyEvent
+from bot.services.fantasy_sync import record_top8_result, sync_event, upsert_event_row
 from bot.services.melee import MeleeCompetitor, MeleeMatch, MeleeRound
 
 
@@ -120,6 +120,34 @@ def test_a_player_dropped_from_the_seed_leaves_the_field_unless_someone_picked_t
     assert field == ({kept, dropped} if picked else {kept})
 
 
+
+def test_entered_top8_results_follow_the_seeded_bracket_and_complete_the_round(session):
+    event = sample_event()
+    seeds = seeded_players(session, event)
+    client = FakeTop8Melee([])
+
+    positions = []
+    for high, low in [(1, 8), (4, 5), (2, 7), (3, 6)]:
+        stored = record_top8_result(session, event, client, STAGE_QUARTERFINAL, seeds[high], seeds[low], (3, 1))
+        positions.append(stored)
+    semifinal = record_top8_result(session, event, client, STAGE_SEMIFINAL, seeds[4], seeds[1], (3, 2))
+    session.commit()
+
+    assert positions == ["QF1", "QF3", "QF2", "QF4"]
+    assert semifinal == "SF1"
+    assert session.scalars(select(FantasyRound.round_number)).all() == [5]
+
+
+def test_an_entered_semifinal_needs_the_winners_of_its_feeding_quarterfinals(session):
+    event = sample_event()
+    seeds = seeded_players(session, event)
+    client = FakeTop8Melee([])
+    for high, low in [(1, 8), (4, 5), (2, 7), (3, 6)]:
+        record_top8_result(session, event, client, STAGE_QUARTERFINAL, seeds[high], seeds[low], (3, 0))
+
+    with pytest.raises(ValueError):
+        record_top8_result(session, event, client, STAGE_SEMIFINAL, seeds[1], seeds[2], (3, 0))
+
 def seed_entry(last_name: str) -> dict:
     return {"firstName": "Pro", "lastName": last_name, "country": "United States", "countryCode": "US",
             "sources": [], "meleeUsername": None, "photoUrl": None}
@@ -143,3 +171,15 @@ def sample_event() -> FantasyEvent:
         draft_rounds=(1,), bracket_lock_at=locked, schedule_name=None, field_seed=None,
         replay_only=False, live=False, slug="test-worlds", short_name="Test Worlds", crest_url=None, set_code="TRK",
     )
+
+
+def seeded_players(session, event: FantasyEvent) -> dict[int, FantasyPlayer]:
+    upsert_event_row(session, event)
+    seeds = {}
+    for seed, name in enumerate(HALL_OF_FAME[:8], start=1):
+        player = FantasyPlayer(event_code=event.code, slug=f"seed-{seed}", first_name="Pro", last_name=name,
+                               melee_username=name)
+        session.add(player)
+        seeds[seed] = player
+    session.flush()
+    return seeds

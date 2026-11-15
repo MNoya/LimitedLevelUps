@@ -21,10 +21,13 @@ from bot.services.fantasy_event import (
     STAGE_SEMIFINAL,
     FantasyEvent,
 )
-from bot.services.melee import MeleeClient, MeleeMatch, MeleeRound, round_number_for
+from bot.services.melee import MeleeClient, MeleeCompetitor, MeleeMatch, MeleeRound, round_number_for
 from bot.slug import disambiguate_slug, slugify
 
 log = logging.getLogger(__name__)
+
+TOP8_STAGES = (STAGE_QUARTERFINAL, STAGE_SEMIFINAL, STAGE_FINAL)
+MATCHES_PER_STAGE = {STAGE_QUARTERFINAL: 4, STAGE_SEMIFINAL: 2, STAGE_FINAL: 1}
 
 
 @dataclass
@@ -91,6 +94,50 @@ def sync_event(
         f"seeded={summary.players_seeded} added={len(summary.players_added)}"
     )
     return summary
+
+
+def record_top8_result(
+    session: Session, event: FantasyEvent, client: MeleeClient, stage: str, winner: FantasyPlayer,
+    loser: FantasyPlayer, score: tuple[int, int],
+) -> str:
+    round_number = event.swiss_rounds + TOP8_STAGES.index(stage) + 1
+    match = MeleeMatch(
+        guid=f"manual-{event.code}-{round_number}-{winner.id}-{loser.id}",
+        round_name=stage,
+        table_number=None,
+        has_result=True,
+        game_draws=0,
+        competitors=(_manual_competitor(winner, score[0]), _manual_competitor(loser, score[1])),
+    )
+    quarterfinal_positions = None
+    if stage == STAGE_QUARTERFINAL:
+        melee_rounds = client.pairing_rounds(event.melee_tournament_id)
+        quarterfinal_positions = _seeded_quarterfinals(event, client, melee_rounds, [match])
+        if quarterfinal_positions is None:
+            raise ValueError(f"{winner.slug} and {loser.slug} are not a seeded Quarterfinal pairing")
+    roster = PlayerRoster.load(session, event.code)
+    bracket_positions = _stored_bracket_positions(session, event.code)
+    rows = results_for_round(event, round_number, [match], roster, bracket_positions, quarterfinal_positions)
+    position = rows[0]["bracket_position"]
+    if stage != STAGE_QUARTERFINAL and _feeder_winners(session, event.code, position) != {winner.id, loser.id}:
+        raise ValueError(f"{winner.slug} and {loser.slug} are not the winners feeding the {stage}")
+    session.execute(
+        FantasyResult.__table__.delete().where(
+            FantasyResult.event_code == event.code,
+            FantasyResult.round_number == round_number,
+            FantasyResult.bracket_position == position,
+        )
+    )
+    _upsert_results(session, rows)
+    record_round_start(session, event, event.swiss_rounds + 1)
+    decided = session.scalar(
+        select(func.count(func.distinct(FantasyResult.bracket_position))).where(
+            FantasyResult.event_code == event.code, FantasyResult.round_number == round_number,
+        )
+    )
+    if decided == MATCHES_PER_STAGE[stage]:
+        record_round_completed(session, event.code, round_number)
+    return position
 
 
 def record_round_start(session: Session, event: FantasyEvent, round_number: int) -> None:
@@ -333,6 +380,28 @@ def _seeded_quarterfinals(
             return None
         positions[match.guid] = position
     return positions
+
+
+def _manual_competitor(player: FantasyPlayer, game_wins: int) -> MeleeCompetitor:
+    return MeleeCompetitor(
+        username=player.melee_username or player.slug,
+        display_name=f"{player.first_name} {player.last_name}",
+        game_wins=game_wins,
+    )
+
+
+def _feeder_winners(session: Session, event_code: str, position: str) -> set[int]:
+    feeders = BRACKET_FEEDS.get(position)
+    if feeders is None:
+        return set()
+    winners = session.scalars(
+        select(FantasyResult.player_id).where(
+            FantasyResult.event_code == event_code,
+            FantasyResult.bracket_position.in_(feeders),
+            FantasyResult.result == "W",
+        )
+    )
+    return set(winners)
 
 
 def _stored_bracket_positions(session: Session, event_code: str) -> dict[int, str]:

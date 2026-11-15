@@ -1,6 +1,7 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Check, Trophy, X } from "lucide-react";
+import { useNow } from "../../lib/countdown";
 import { cn } from "../../lib/utils";
 import {
   CountryFlag,
@@ -130,6 +131,8 @@ export function Top8BracketList(props: BracketProps) {
 
 function BracketHeader({ results }: { results: BracketResults | null }) {
   const { bracketLockAt } = useFantasyEvent();
+  const now = useNow(15_000);
+  const showsLockDate = !results && now < bracketLockAt.getTime();
   return (
     <div className="flex flex-col items-center gap-1 text-center text-[14px] text-text">
       <span>
@@ -139,7 +142,7 @@ function BracketHeader({ results }: { results: BracketResults | null }) {
       <span className="text-subtle">
         Pick the exact game score for <b className="text-text">1</b> more point
       </span>
-      {results ? null : <PicksLockDate size={13} prefix="Quarterfinals start" at={bracketLockAt} />}
+      {showsLockDate ? <PicksLockDate size={13} prefix="Quarterfinals start" at={bracketLockAt} /> : null}
     </div>
   );
 }
