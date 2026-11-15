@@ -35,7 +35,6 @@ class Settings(BaseSettings):
     auto_refresh_enabled: bool = True
     tracker_discord_ids: str = str(OWNER_DISCORD_ID)
     admin_discord_ids: str = f"{OWNER_DISCORD_ID},507301384979349526"
-    pod_thread_watch_id: int | None = OWNER_DISCORD_ID
     supabase_url: str = ""
     supabase_anon_key: str = ""
     tracker_http_port: int | None = None

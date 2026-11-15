@@ -83,6 +83,7 @@ from bot.services.championship import frozen_seeds_by_player
 from bot.services.player_stats import rank_ordered_names
 from bot.services import pod_active
 from bot.services.pod_active import ACTIVE_POD_MANAGERS
+from bot.services.pod_organizer_rotation import add_organizer_on_duty
 from bot.services.pod_signals import SCHEDULE_TZ, slot_event_time
 from bot.services.pod_format_schedule import formats_on, latest_on, schedule_overlay
 from bot.services.pod_slot import COLLISION_INDEX_RE, next_collision_index, pod_display_name, pod_event_date
@@ -2097,8 +2098,6 @@ async def launch_from_signal(
         log.warning("launch_from_signal: could not create pod thread", exc_info=True)
         return None
 
-    await add_thread_watcher(thread)
-
     def _create() -> tuple[str, bool]:
         with SessionLocal() as session:
             event = record_ondemand_event(
@@ -2117,6 +2116,7 @@ async def launch_from_signal(
             return event.id, chose_pairing
 
     event_id, chose_pairing = await asyncio.to_thread(_create)
+    await add_organizer_on_duty(thread, event_id)
     await asyncio.to_thread(link_event_sync, signal_id, event_id)
     if open_now and anchor is not None:
         await asyncio.to_thread(record_pod_card_sync, event_id, str(channel.id), str(anchor.id))
@@ -2126,16 +2126,6 @@ async def launch_from_signal(
     else:
         _arm_open(bot, event_id, event_time)
     return event_id
-
-
-async def add_thread_watcher(thread: discord.Thread) -> None:
-    watch_id = settings.pod_thread_watch_id
-    if watch_id is None:
-        return
-    try:
-        await thread.add_user(discord.Object(id=watch_id))
-    except discord.HTTPException:
-        log.warning(f"could not add watcher {watch_id} to pod thread {thread.id}", exc_info=True)
 
 
 async def open_ondemand_lobby(

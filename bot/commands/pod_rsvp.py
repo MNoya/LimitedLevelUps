@@ -66,6 +66,7 @@ from bot.services import pod_confirm
 from bot.services import pod_format
 from bot.services import pod_format_interest as fi
 from bot.services import pod_launch
+from bot.services.pod_organizer_rotation import add_organizer_on_duty
 from bot.services.pod_deck_color import format_deck_color_emojis
 from bot.services.pod_draft_manager import (
     notify_seeding_change,
@@ -640,7 +641,7 @@ async def move_pod_to_its_own_card(
     except discord.HTTPException:
         log.warning(f"could not move pod {event_id} onto a card of its own", exc_info=True)
         return None
-    await pod_launch.add_thread_watcher(thread)
+    await add_organizer_on_duty(thread, event_id)
     await asyncio.to_thread(
         pod_launch.move_scheduled_card_sync, event_id, str(message.id), str(thread.id),
     )
@@ -953,7 +954,7 @@ async def post_scheduled_card(
     except discord.HTTPException:
         log.warning(f"could not post the registered embed in thread {thread.id}", exc_info=True)
 
-    await pod_launch.add_thread_watcher(thread)
+    await add_organizer_on_duty(thread, event_id)
     if not starts_now:
         await add_members_to_thread(thread, preseed_confirmed + preseed_yes + preseed_maybe)
     pod_launch.arm_scheduled_pod_jobs(bot, event_id, event_time, created_at)
