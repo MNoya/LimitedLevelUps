@@ -15,6 +15,7 @@ Local tool. Install the OCR extras first (CPU torch):
 Without --commit it reports the AUTO/FLAG/SKIP verdicts and writes nothing. --force re-examines seats that
 already carry a correction marker or a cached FLAG/SKIP verdict for the same screenshot.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -43,6 +44,7 @@ from bot.services.pod_card_extract import reingest_pod_card_facts, tracks_card_d
 MATCH_MIN = 80
 MAIN_FLOOR = 20
 MAIN_MIN = 25
+MAIN_MAX = 30
 SIDE_LIST_MIN = 5
 MARKER_SOURCE = "ocr-auto"
 SEEN_VERDICTS_PATH = Path("cache/ocr_pod_decks_verdicts.json")
@@ -73,7 +75,7 @@ def seat_pool(compact: dict, seat: int) -> dict[int, str]:
 
 
 def classify(frags: list[dict], width: int, pool: dict[int, str]) -> Verdict:
-    from rapidfuzz import fuzz, process
+    from rapidfuzz import fuzz, process, utils
 
     pool_names = list({v for v in pool.values()})
     name_to_idxs: dict[str, list[int]] = {}
@@ -86,7 +88,7 @@ def classify(frags: list[dict], width: int, pool: dict[int, str]) -> Verdict:
     for f in frags:
         if len(norm(f["t"])) < 3:
             continue
-        best_name, score, _ = process.extractOne(f["t"], pool_names, scorer=fuzz.WRatio)
+        best_name, score, _ = process.extractOne(f["t"], pool_names, scorer=fuzz.ratio, processor=utils.default_process)
         if score < MATCH_MIN:
             continue
         free = [i for i in name_to_idxs[best_name] if i not in claimed]
@@ -111,27 +113,39 @@ def classify(frags: list[dict], width: int, pool: dict[int, str]) -> Verdict:
             main = {idx for idx, cx in matched if cx < sb_x}
             if len(main) < MAIN_FLOOR:
                 return Verdict("SKIP", layout, None, None, f"only {len(main)} maindeck cards left of anchor")
-            side = all_idxs - main
-            if len(main) < MAIN_MIN:
-                return Verdict("FLAG", layout, frozenset(main), frozenset(side),
-                               f"near-complete maindeck ({len(main)} cards), held for a manual look")
-            return Verdict("AUTO", layout, frozenset(main), frozenset(side), f"maindeck {len(main)} left of anchor")
+            return verdict_for_main(layout, main, all_idxs, f"maindeck {len(main)} left of anchor")
 
     main = {idx for idx, _ in matched}
     if len(main) < MAIN_FLOOR:
         return Verdict("SKIP", "too-few-cards", None, None, f"only {len(main)} cards read (scrolled/partial)")
+    return verdict_for_main("no-sideboard-region", main, all_idxs, f"maindeck-only, {len(main)} cards")
+
+
+def verdict_for_main(layout: str, main: set[int], all_idxs: set[int], note: str) -> Verdict:
     side = all_idxs - main
     if len(main) < MAIN_MIN:
-        return Verdict("FLAG", "no-sideboard-region", frozenset(main), frozenset(side),
-                       f"near-complete maindeck ({len(main)} cards), held for a manual look")
-    return Verdict("AUTO", "no-sideboard-region", frozenset(main), frozenset(side),
-                   f"maindeck-only, {len(main)} cards")
+        return Verdict(
+            "FLAG",
+            layout,
+            frozenset(main),
+            frozenset(side),
+            f"near-complete maindeck ({len(main)} cards), held for a manual look",
+        )
+    if len(main) > MAIN_MAX or not side:
+        return Verdict(
+            "FLAG",
+            layout,
+            frozenset(main),
+            frozenset(side),
+            f"oversized maindeck ({len(main)} of {len(all_idxs)} cards), held for a manual look",
+        )
+    return Verdict("AUTO", layout, frozenset(main), frozenset(side), note)
 
 
 def refresh_urls(urls: list[str], token: str) -> dict[str, str]:
     out: dict[str, str] = {}
     for start in range(0, len(urls), 50):
-        chunk = urls[start:start + 50]
+        chunk = urls[start : start + 50]
         req = urllib.request.Request(
             "https://discord.com/api/v10/attachments/refresh-urls",
             data=json.dumps({"attachment_urls": chunk}).encode(),
@@ -167,9 +181,7 @@ def ocr_boxes(reader, path: str) -> list[dict]:
     return out
 
 
-def apply_correction(
-    session: Session, event: PodDraftEvent, seat: int, main: frozenset[int], side: frozenset[int]
-) -> None:
+def apply_correction(event: PodDraftEvent, seat: int, main: frozenset[int], side: frozenset[int]) -> None:
     compact = event.draft_log
     deck = compact["decks"][seat]
     prior = deck.get("correction") or {}
@@ -183,6 +195,24 @@ def apply_correction(
         "orig_main": orig_main,
         "orig_side": orig_side,
     }
+    store_draft_log(event, compact)
+
+
+def has_auto_correction(compact: dict, seat: int) -> bool:
+    correction = compact["decks"][seat].get("correction") or {}
+    return correction.get("source") == MARKER_SOURCE
+
+
+def revert_correction(event: PodDraftEvent, seat: int) -> None:
+    compact = event.draft_log
+    deck = compact["decks"][seat]
+    correction = deck.pop("correction")
+    deck["main"] = correction["orig_main"]
+    deck["side"] = correction["orig_side"]
+    store_draft_log(event, compact)
+
+
+def store_draft_log(event: PodDraftEvent, compact: dict) -> None:
     flag_modified(event, "draft_log")
     event.draft_log_gz = gzip.compress(json.dumps(compact, separators=(",", ":")).encode(), compresslevel=9)
 
@@ -191,9 +221,7 @@ def target_events(session: Session, event_ids: list[str]) -> list[PodDraftEvent]
     if event_ids:
         found = [session.get(PodDraftEvent, eid) for eid in event_ids]
         return [e for e in found if e is not None and isinstance(e.draft_log, dict)]
-    rows = session.execute(
-        select(PodDraftEvent).where(PodDraftEvent.draft_log.isnot(None))
-    ).scalars().all()
+    rows = session.execute(select(PodDraftEvent).where(PodDraftEvent.draft_log.isnot(None))).scalars().all()
     return [e for e in rows if tracks_card_data(e.set_code) and isinstance(e.draft_log, dict)]
 
 
@@ -210,9 +238,9 @@ def run(event_ids: list[str], commit: bool, force: bool) -> None:
         for event in target_events(session, event_ids):
             urls = {
                 p.seat_index: p.deck_screenshot_url
-                for p in session.execute(
-                    select(PodDraftParticipant).where(PodDraftParticipant.event_id == event.id)
-                ).scalars().all()
+                for p in session.execute(select(PodDraftParticipant).where(PodDraftParticipant.event_id == event.id))
+                .scalars()
+                .all()
                 if p.seat_index is not None and p.deck_screenshot_url
             }
             decks = event.draft_log.get("decks") or []
@@ -271,11 +299,17 @@ def ocr_seats(jobs: list, token: str, commit: bool, seen: dict, flags: list[dict
             if commit:
                 with SessionLocal() as session:
                     event = session.get(PodDraftEvent, event_id)
-                    apply_correction(session, event, seat, v.main, v.side)
+                    apply_correction(event, seat, v.main, v.side)
                     session.commit()
                 touched.add(event_id)
             continue
         verdict = {"url": url, "action": v.action, "layout": v.layout, "note": v.note}
+        if commit and has_auto_correction(compact, seat):
+            with SessionLocal() as session:
+                event = session.get(PodDraftEvent, event_id)
+                revert_correction(event, seat)
+                session.commit()
+            touched.add(event_id)
         if commit:
             seen[seat_key(event_id, seat)] = verdict
             save_seen_verdicts(seen)
@@ -287,7 +321,7 @@ def ocr_seats(jobs: list, token: str, commit: bool, seen: dict, flags: list[dict
 
     print(f"\ntally: {tally}   auto-applied: {len(touched)} events" if commit else f"\ntally: {tally}   (dry run)")
     print(
-        f"per-screenshot OCR: avg {sum(times)/len(times):.1f}s  "
+        f"per-screenshot OCR: avg {sum(times) / len(times):.1f}s  "
         f"min {min(times):.1f}s  max {max(times):.1f}s  n={len(times)}"
     )
 
