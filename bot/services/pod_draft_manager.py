@@ -74,7 +74,8 @@ from bot.services.mock_lobby_card import (
     build_mock_complete_view,
 )
 from bot.services.pod_confirm import POD_AIM, plan_tables
-from bot.services.pod_staging import claim_seated_players_sync, pod_is_numbered
+from bot.services.pod_staging import claim_seated_players_sync, confirmed_first_roster_sync, pod_is_numbered
+from bot.services.pod_table_trim import Seat, seats_to_remove
 from bot.services import pod_disconnect
 from bot.services import pod_self_destruct
 from bot.services import pod_event_settings
@@ -86,6 +87,7 @@ from bot.services.pod_active import (
     lobby_rosters_for,
     notify_card_phase,
     notify_pod_complete,
+    notify_room_arrivals,
     notify_pod_drafting,
 )
 from bot.services.pod_roles import grant_pod_drafters, role_mention
@@ -2088,6 +2090,7 @@ class PodDraftManager:
                 await self.admit_to_thread(member)
         seated_ids = [discord_id for discord_id in discord_id_by_name.values() if discord_id]
         await self._claim_from_sibling_tables(seated_ids)
+        await notify_room_arrivals(self.event_id, seated_ids)
 
     async def _claim_from_sibling_tables(self, seated_ids: list[str]) -> None:
         if not seated_ids or self.drafting or not pod_is_numbered(self.event_name):
@@ -2805,6 +2808,40 @@ class PodDraftManager:
             log.exception(f"[KICK] emit_failed event={self.event_id} user_id={user_id}")
             return "Could not remove the player"
         log.info(f"[KICK] removed event={self.event_id} user_id={user_id}")
+        return None
+
+    async def seats_over(self, n: int) -> list[Seat]:
+        """The seats a cap of `n` would remove, the most removable first. Empty when the room already fits"""
+        if self.drafting or self.draft_complete or len(self.player_session_users()) <= n:
+            return []
+        seats, roster = await asyncio.gather(
+            self.room_seats(), asyncio.to_thread(confirmed_first_roster_sync, self.event_id),
+        )
+        return seats_to_remove(seats, roster, keep=n)
+
+    async def room_seats(self) -> list[Seat]:
+        """Every player seat in the room with the Discord account linked to it, in join order"""
+        users = self.player_session_users()
+        names = [user.get("userName") for user in users]
+        discord_ids = await asyncio.to_thread(discord_ids_for_names_sync, names)
+        return [Seat(user.get("userID"), user.get("userName"), discord_ids.get(user.get("userName")))
+                for user in users]
+
+    async def trim_to(self, n: int, leaving: list[Seat]) -> str | None:
+        """Remove `leaving` from the session, then cap the room at `n`. Returns an error string or None"""
+        if not self.sio.connected:
+            return "Draftmancer session is not connected"
+        if self.drafting or self.draft_complete:
+            return "Players can't be removed once the draft has started"
+        try:
+            for seat in leaving:
+                await self.sio.emit("removePlayer", seat.user_id)
+            self.max_players = n
+            await self.sio.emit("setMaxPlayers", n)
+        except Exception:
+            log.exception(f"[KICK] trim_failed event={self.event_id} n={n}")
+            return "Could not shrink the table"
+        log.info(f"[KICK] trimmed event={self.event_id} n={n} removed={[seat.arena_name for seat in leaving]}")
         return None
 
     async def unrecognized_lobby_names(self) -> list[str]:
@@ -4353,6 +4390,12 @@ async def set_event_max_players(event_id: str, n: int) -> str | None:
     return await store_setup_value(
         event_id, pod_event_settings.MAX_PLAYERS, n,
         lambda manager, value: manager.apply_max_players(value))
+
+
+async def trim_event_table(event_id: str, n: int, leaving: list[Seat]) -> str | None:
+    return await store_setup_value(
+        event_id, pod_event_settings.MAX_PLAYERS, n,
+        lambda manager, value: manager.trim_to(value, leaving))
 
 
 SetupPush = Callable[["PodDraftManager", int], Awaitable[str | None]]

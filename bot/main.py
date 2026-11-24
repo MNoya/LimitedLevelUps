@@ -43,6 +43,7 @@ from bot.commands.pod_schedule import setup as setup_pod_schedule
 from bot.commands.report_results import setup as setup_report_results
 from bot.commands.roles import RolesView, setup as setup_roles
 from bot.commands.fantasy_round import setup as setup_fantasy_round
+from bot.commands.pod_second_table import setup as setup_pod_second_table
 from bot.commands.pod_stage import setup as setup_pod_stage
 from bot.commands.pod_table import setup as setup_pod_table
 from bot.commands.peasant import setup as setup_peasant
@@ -72,7 +73,7 @@ from bot.commands.testcraft import setup as setup_testcraft
 from bot.commands.testdms import setup as setup_testdms
 from bot.commands.testlobby import setup as setup_testlobby
 from bot.commands.testmockcard import setup as setup_testmockcard
-from bot.commands.testsandbox import SandboxButton, setup as setup_testsandbox
+from bot.commands.testsandbox import SandboxButton, SplitSandboxButton, setup as setup_testsandbox
 from bot.commands.testschedule import setup as setup_testschedule
 from bot.commands.testthreadintro import setup as setup_testthreadintro
 from bot.commands.testpolls import setup as setup_testpolls
@@ -140,6 +141,7 @@ from bot.tasks.format_schedule_post import init_format_schedule
 from bot.tasks.pod_schedule_post import fire_schedule_post, init_pod_schedule_post
 from bot.tasks.format_vote_post import fire_format_vote_tick, init_format_vote
 from bot.services.pod_schedule_controls import PodScheduleView, ViewScheduleButton
+from bot.services.pod_split_card import SplitCardButton
 from bot.services.pod_format_vote import (
     AddFormatItem as VoteAddFormatItem,
     ManageVotesItem,
@@ -308,6 +310,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_fantasy_round(bot)
         await setup_mock_draft(bot)
         await setup_pod_stage(bot)
+        await setup_pod_second_table(bot)
         await setup_pod_table(bot)
         await setup_peasant(bot)
         await setup_preview_season_awards(bot)
@@ -359,7 +362,8 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(AttendeesButton)
         bot.add_dynamic_items(OpenTablesButton)
         bot.add_dynamic_items(ShuffleTablesButton)
-        bot.add_dynamic_items(SandboxButton)
+        bot.add_dynamic_items(SandboxButton, SplitSandboxButton)
+        bot.add_dynamic_items(SplitCardButton)
         bot.add_dynamic_items(MockJoinDraftButton)
         bot.add_dynamic_items(DmLinkArenaButton)
         bot.add_dynamic_items(ChampionshipConfirmButton)

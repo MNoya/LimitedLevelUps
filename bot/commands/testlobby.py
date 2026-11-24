@@ -77,6 +77,8 @@ from bot.services import pod_round_robin_vote
 from bot.services.pod_table_organizer import SETTLED_MINUTES, name_list
 from bot.tasks.pod_organizer import MSG_WAITING_ON
 from bot.services.pod_settings_view import PodSettingsView
+from bot.services.pod_staging import Signup
+from bot.services.pod_table_trim import Seat, seats_to_remove
 from bot.services.pod_drafts import normalize_player_name
 from bot.services import pod_team
 from bot.services.pod_swiss import Standing
@@ -1678,6 +1680,21 @@ def _settings_preview_kick_targets() -> list[tuple[str, str]]:
     return [(arena, display or arena) for arena, display in _LINKED_EIGHT]
 
 
+async def _settings_preview_trim(count: int) -> list[Seat]:
+    """A room of ten through the real removal order: six confirmed, two who never confirmed, a walk-in and
+    an unlinked seat, joined out of signup order"""
+    signed_up = [Seat(f"seat-{index}", arena, str(10**17 + index)) for index, (arena, _) in enumerate(_LINKED_EIGHT)]
+    roster = [Signup(seat.discord_id, seat.arena_name, index < 6) for index, seat in enumerate(signed_up)]
+    walk_in = Seat("seat-walk-in", "Nassif#00042", str(10**17 + 99))
+    unlinked = Seat("seat-unlinked", _UNLINKED_SEAT, None)
+    room = [unlinked, *signed_up[4:], walk_in, *signed_up[:4]]
+    return seats_to_remove(room, roster, keep=count)
+
+
+async def _settings_preview_on_trim(count: int, leaving: list[Seat]) -> str | None:
+    return None
+
+
 async def _settings_preview_on_link(
     interaction: discord.Interaction, arena_name: str, member: discord.abc.User,
 ) -> str | None:
@@ -1741,6 +1758,7 @@ def _settings_preview_lobby_view() -> PodSettingsView:
         on_seated=_settings_preview_on_seated,
         kick_targets_provider=_settings_preview_kick_targets, on_kick=_settings_preview_noop,
         link_targets_provider=_settings_preview_link_targets, on_link=_settings_preview_on_link,
+        trim_preview=_settings_preview_trim, on_trim=_settings_preview_on_trim,
     )
 
 

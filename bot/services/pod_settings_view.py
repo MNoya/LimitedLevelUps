@@ -40,6 +40,7 @@ from bot.services.pod_seating_select import (
 )
 from bot.services.pod_tournament import actor_label, closed_decklist_after_pairing, is_pod_organizer
 from bot.services.pod_schedule import SCHEDULE_TZ
+from bot.services.pod_table_trim import Seat
 from bot.discord_helpers import run_detached
 from bot.sets import active_set_code
 
@@ -47,6 +48,8 @@ from bot.sets import active_set_code
 Apply = Callable[[discord.Interaction, str], Awaitable[str | None]]
 KickApply = Callable[[discord.Interaction, str], Awaitable[str | None]]
 KickTargetsProvider = Callable[[], list[tuple[str, str]]]
+TrimPreview = Callable[[int], Awaitable[list[Seat]]]
+TrimApply = Callable[[int, list[Seat]], Awaitable[str | None]]
 LinkApply = Callable[[discord.Interaction, str, discord.abc.User], Awaitable[str | None]]
 LinkTargetsProvider = Callable[[], Awaitable[list[str]]]
 CancelApply = Callable[[discord.Interaction], Awaitable[str | None]]
@@ -137,6 +140,16 @@ def max_players_notice(actor: str, count: int) -> str:
     return settings_change_message(actor, "Max Players", str(count))
 
 
+def trim_prompt(count: int, leaving: list[Seat]) -> str:
+    names = "\n".join(f"- **{seat.arena_name}**" for seat in leaving)
+    return f"Remove {len(leaving)} players to make the table {count}?\n{names}"
+
+
+def trim_notice(actor: str, leaving: list[Seat]) -> str:
+    names = ", ".join(f"<@{seat.discord_id}>" if seat.discord_id else f"**{seat.arena_name}**" for seat in leaving)
+    return f"🔨 {names} removed by {actor} to shrink the table"
+
+
 def closed_decklist_notice(actor: str, closed: bool) -> str:
     subtext = ("Decklists and the draft logs stay hidden on the website until the pod finishes"
                if closed else "Decklists and the draft log show on the website now")
@@ -184,6 +197,7 @@ class PodSettingsView(ui.View):
                  cube_format: bool = False,
                  on_picks_per_pack: Apply | None = None, current_picks_per_pack: int | None = None,
                  on_max_players: Apply | None = None, current_max_players: int | None = None,
+                 trim_preview: TrimPreview | None = None, on_trim: TrimApply | None = None,
                  kick_targets_provider: KickTargetsProvider | None = None,
                  on_kick: KickApply | None = None,
                  link_targets_provider: LinkTargetsProvider | None = None,
@@ -221,6 +235,8 @@ class PodSettingsView(ui.View):
         self.current_picks_per_pack = current_picks_per_pack
         self.on_max_players = on_max_players
         self.current_max_players = current_max_players
+        self.trim_preview = trim_preview
+        self.on_trim = on_trim
         self.kick_targets_provider = kick_targets_provider
         self.on_kick = on_kick
         self.link_targets_provider = link_targets_provider
@@ -323,6 +339,7 @@ class PodSettingsView(ui.View):
             on_picks_per_pack=self.on_picks_per_pack,
             current_picks_per_pack=self.current_picks_per_pack,
             on_max_players=self.on_max_players, current_max_players=self.current_max_players,
+            trim_preview=self.trim_preview, on_trim=self.on_trim,
             kick_targets_provider=self.kick_targets_provider, on_kick=self.on_kick,
             link_targets_provider=self.link_targets_provider, on_link=self.on_link,
             on_manage_rounds=self.on_manage_rounds, on_restart=self.on_restart,
@@ -615,19 +632,68 @@ class _MaxPlayersSelect(ui.Select):
     async def callback(self, interaction: discord.Interaction) -> None:
         count = int(self.values[0])
         await interaction.response.defer()
+        leaving = await self.panel.trim_preview(count) if self.panel.trim_preview is not None else []
+        if leaving and self.panel.on_trim is not None:
+            await interaction.edit_original_response(
+                content=trim_prompt(count, leaving), view=_TrimConfirmView(self.panel, count, leaving),
+            )
+            return
         err = await self.panel.on_max_players(interaction, str(count))
         if err:
             await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
             return
-        self.panel.current_max_players = count
-        await interaction.delete_original_response()
+        await _announce_max_players(self.panel, interaction, count)
+
+
+class _TrimConfirmView(ui.View):
+    """Asks before a lower Max Players removes seats, and re-asks when the room changed since the ask"""
+
+    def __init__(self, panel: PodSettingsView, count: int, leaving: list[Seat]) -> None:
+        super().__init__(timeout=120)
+        self.panel = panel
+        self.count = count
+        self.leaving = leaving
+
+    @ui.button(label="Remove", style=discord.ButtonStyle.red)
+    async def confirm(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        await interaction.response.defer()
+        leaving = await self.panel.trim_preview(self.count)
+        if [seat.user_id for seat in leaving] != [seat.user_id for seat in self.leaving]:
+            if not leaving:
+                await interaction.delete_original_response()
+                return
+            await interaction.edit_original_response(
+                content=trim_prompt(self.count, leaving), view=_TrimConfirmView(self.panel, self.count, leaving),
+            )
+            return
+        err = await self.panel.on_trim(self.count, leaving)
+        if err:
+            await interaction.followup.send(f"⚠️ {err}", ephemeral=True)
+            return
+        await _announce_max_players(self.panel, interaction, self.count)
         channel = self.panel.notice_channel or interaction.channel
         if channel is not None:
-            await send_settings_notice(
-                channel, interaction.client.user,
-                max_players_notice(actor_label(interaction), count),
-                marker=settings_notice_marker("Max Players"),
+            await channel.send(
+                trim_notice(actor_label(interaction), leaving),
+                allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False),
             )
+
+    @ui.button(label="Cancel", style=discord.ButtonStyle.grey)
+    async def cancel(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        await interaction.response.defer()
+        await interaction.delete_original_response()
+
+
+async def _announce_max_players(panel: PodSettingsView, interaction: discord.Interaction, count: int) -> None:
+    panel.current_max_players = count
+    await interaction.delete_original_response()
+    channel = panel.notice_channel or interaction.channel
+    if channel is not None:
+        await send_settings_notice(
+            channel, interaction.client.user,
+            max_players_notice(actor_label(interaction), count),
+            marker=settings_notice_marker("Max Players"),
+        )
 
 
 class _ClosedDecklistButton(ui.Button):

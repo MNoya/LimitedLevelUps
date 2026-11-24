@@ -72,6 +72,7 @@ _POD_CARD_HOOK = None
 _PODIUM_POSTED_HOOK = None
 _CHAMPIONSHIP_CROWNED_HOOK = None
 _RSVP_ROSTER_HOOK = None
+_ROOM_ARRIVALS_HOOK = None
 
 
 def set_card_phase_hook(callback) -> None:
@@ -120,6 +121,17 @@ def set_rsvp_roster_hook(callback) -> None:
     waits on without importing pod_launch, which imports the manager back."""
     global _RSVP_ROSTER_HOOK
     _RSVP_ROSTER_HOOK = callback
+
+
+def set_room_arrivals_hook(callback) -> None:
+    """The second-table flow registers here to count players who walk straight into Table 2's room"""
+    global _ROOM_ARRIVALS_HOOK
+    _ROOM_ARRIVALS_HOOK = callback
+
+
+async def notify_room_arrivals(event_id: str, discord_ids: list[str]) -> None:
+    if _ROOM_ARRIVALS_HOOK is not None:
+        await _ROOM_ARRIVALS_HOOK(event_id, discord_ids)
 
 
 async def lobby_rosters_for(event_id: str):

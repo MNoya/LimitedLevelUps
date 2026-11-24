@@ -11,6 +11,8 @@ The caller's message is left up. Anything a player types around `!confirm` is th
 lands under it either way.
 
 An Organizer gets the roster read back and no seat, and the card always moves to the bottom of the thread.
+
+While the pod runs a second table, `!confirm` seats the caller on that split's card instead, lobby or not.
 """
 from __future__ import annotations
 
@@ -24,6 +26,7 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from bot import audit
+from bot.commands.pod_second_table import live_split, refresh_split_card
 from bot.commands.messages import (
     MSG_CONFIRM_NOT_A_POD,
     MSG_CONFIRM_POD_STARTED,
@@ -62,8 +65,9 @@ async def setup(bot: commands.Bot) -> None:
         if event_id is None:
             await ctx.send(MSG_CONFIRM_NOT_A_POD, delete_after=NOTICE_LIFETIME_S)
             return
+        split = live_split(event_id)
         status = await asyncio.to_thread(load_event_socket_status_sync, event_id)
-        if status not in PRE_LOBBY_STATUSES:
+        if split is None and status not in PRE_LOBBY_STATUSES:
             await ctx.send(MSG_CONFIRM_POD_STARTED, delete_after=NOTICE_LIFETIME_S)
             return
         if await is_pod_organizer(ctx.bot, ctx.author):
@@ -74,6 +78,11 @@ async def setup(bot: commands.Bot) -> None:
         )
         if not recorded:
             await ctx.send(MSG_CONFIRM_NOT_A_POD, delete_after=NOTICE_LIFETIME_S)
+            return
+        if split is not None:
+            refresh_split_card(split)
+            with contextlib.suppress(discord.HTTPException):
+                await ctx.message.add_reaction("✅")
             return
         with contextlib.suppress(discord.HTTPException):
             await _replace_standing_reply(ctx, event_id)

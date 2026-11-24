@@ -6,6 +6,8 @@ new event, opens a Draftmancer lobby in a fresh thread, pings the claimers in, a
 ordinary tournament path. The claim list lives in memory on the view — a mid-gather restart just
 means re-running the command.
 
+On a signup pod whose lobby is still filling it opens Table 2 at once and hands off to `pod_second_table.py`.
+
 `/pod-table format:` presets a table to a different format than its source: the claim card carries the
 target set, and the materialized event is that format's own pod rather than a ` - Table N` of the source.
 
@@ -37,10 +39,12 @@ from bot.commands.messages import (
     MSG_TABLE_UNKNOWN_EVENT,
 )
 from bot.commands.pod_rsvp import add_members_to_thread, post_pod_card
+from bot.commands.pod_second_table import open_second_table, opens_second_table
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent
 from bot.services import pod_format, pod_launch
+from bot.services.pod_launch import fetch_pod_thread
 from bot.services.pod_organizer_rotation import add_organizer_on_duty
 from bot.services.pod_active import ACTIVE_POD_MANAGERS, ACTIVE_TABLE_VIEWS
 from bot.services.pod_roles import grant_pod_drafters
@@ -64,6 +68,7 @@ log = logging.getLogger(__name__)
 
 MSG_TABLE_FORMAT_BUTTON = "Join {format} Table"
 MSG_TABLE_FORMAT_GOTO = "Go to {format} Table"
+MSG_SECOND_TABLE_OPENED = "Table 2 is open"
 
 
 def _mention_block(claims: dict[int, str]) -> str:
@@ -273,11 +278,7 @@ async def build_table_view(
     bot: commands.Bot, source_event_id: str, *, lobby_channel: discord.abc.Messageable,
     preseeded_claims: list[tuple[int, str]] | None = None, format_code: str | None = None,
 ) -> "TableClaimView | None":
-    """Build the join card view for a new table off `source_event_id`, or None when the source event
-    has vanished. A `format_code` matching the source's own set is dropped, so an explicit
-    `/pod-table format:` of the same set behaves exactly like the plain command. The caller posts it
-    and assigns the resulting message to `view.claim_message` — the slash command posts it as a public
-    interaction response, `!test table` via a channel send."""
+    """The join card for a new table off `source_event_id`, or None when the source pod has vanished"""
     preview = await asyncio.to_thread(preview_table_target_sync, source_event_id)
     if preview is None:
         return None
@@ -311,34 +312,49 @@ class PodTable(commands.Cog):
     async def pod_table(
         self, interaction: discord.Interaction, event: str | None = None, format: str | None = None,
     ) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
         format_code = None
         if format:
             format_code = pod_format.resolve_format_code(format)
             if format_code is None:
-                await interaction.response.send_message(
-                    MSG_MOCK_UNKNOWN_SET.format(code=format.strip().upper()), ephemeral=True,
-                )
+                unknown = MSG_MOCK_UNKNOWN_SET.format(code=format.strip().upper())
+                await interaction.followup.send(unknown, ephemeral=True)
                 return
 
         source_id = await self._resolve_source(interaction, event)
         if source_id is None:
             message = MSG_TABLE_UNKNOWN_EVENT.format(event=event) if event else MSG_TABLE_NO_SOURCE
-            await interaction.response.send_message(message, ephemeral=True)
+            await interaction.followup.send(message, ephemeral=True)
             return
 
         lobby_channel = await self._resolve_lobby_channel(source_id, interaction)
+        if format_code is None and await opens_second_table(source_id):
+            await self._open_second_table(interaction, source_id, lobby_channel)
+            return
         view = await build_table_view(self.bot, source_id, lobby_channel=lobby_channel, format_code=format_code)
         if view is None:
-            await interaction.response.send_message(MSG_TABLE_NO_SOURCE, ephemeral=True)
+            await interaction.followup.send(MSG_TABLE_NO_SOURCE, ephemeral=True)
             return
 
         audit.event(
             "pod_table_invoked", user_id=str(interaction.user.id), source_event_id=source_id,
             format=format_code,
         )
-        await interaction.response.send_message(embed=view.render_embed(), view=view)
-        view.claim_message = await interaction.original_response()
+        view.claim_message = await interaction.channel.send(embed=view.render_embed(), view=view)
+        await interaction.delete_original_response()
         await view.activate()
+
+    async def _open_second_table(
+        self, interaction: discord.Interaction, source_id: str, lobby_channel: discord.abc.Messageable,
+    ) -> None:
+        thread_id = await asyncio.to_thread(load_event_thread_id_sync, source_id)
+        source_thread = await fetch_pod_thread(self.bot, int(thread_id)) if thread_id not in (None, "pending") else None
+        if source_thread is None:
+            await interaction.followup.send(MSG_TABLE_NO_SOURCE, ephemeral=True)
+            return
+        table_two = await materialize_table(self.bot, source_id, lobby_channel, {})
+        await open_second_table(source_id, source_thread, table_two, interaction.user)
+        await interaction.followup.send(MSG_SECOND_TABLE_OPENED, ephemeral=True)
 
     async def _resolve_source(self, interaction: discord.Interaction, event: str | None) -> str | None:
         if event:

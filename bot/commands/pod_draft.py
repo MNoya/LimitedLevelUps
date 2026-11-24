@@ -35,6 +35,7 @@ from bot.services.pod_draft_manager import (
     set_event_cards_per_pack,
     set_event_format,
     set_event_max_players,
+    trim_event_table,
     set_event_packs_per_player,
     set_event_pairing_mode,
     set_event_pick_timer,
@@ -83,6 +84,7 @@ from bot.services.seeding_table import seeding_block
 from bot.sets import active_set_code
 from bot.tasks.pod_draft_reminder import event_rsvps
 from bot.services.pod_settings_view import PodSettingsView
+from bot.services.pod_table_trim import Seat
 from bot.services.pod_tournament import (
     REVIEW_EMOJI,
     actor_label,
@@ -819,6 +821,8 @@ async def build_pod_settings_view(
     seat_order_provider = None
     kick_targets_provider = None
     on_kick = None
+    trim_preview = None
+    on_trim = None
     current_timer = None
     current_picks_per_pack = None
     current_max_players = None
@@ -849,6 +853,12 @@ async def build_pod_settings_view(
 
             async def on_kick(inter: discord.Interaction, user_id: str) -> str | None:
                 return await manager.kick_player(user_id)
+
+            if setup_open:
+                trim_preview = manager.seats_over
+
+                async def on_trim(count: int, leaving: list[Seat]) -> str | None:
+                    return await trim_event_table(event_id, count, leaving)
 
     on_manage_rounds = None
     if await asyncio.to_thread(round_picker_options, event_id):
@@ -905,6 +915,7 @@ async def build_pod_settings_view(
         current_picks_per_pack=current_picks_per_pack,
         on_max_players=on_max_players if setup_open else None,
         current_max_players=current_max_players,
+        trim_preview=trim_preview, on_trim=on_trim,
         kick_targets_provider=kick_targets_provider, on_kick=on_kick,
         link_targets_provider=link_targets_provider, on_link=on_link,
         on_manage_rounds=on_manage_rounds, on_restart=on_restart,
