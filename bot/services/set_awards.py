@@ -31,8 +31,7 @@ from bot.sets import SetSeed, release_instant
 
 ET = ZoneInfo("America/New_York")
 RANK_TIERS = ("Bronze", "Silver", "Gold", "Platinum", "Diamond", "Mythic")
-MYTHIC_INDEX = RANK_TIERS.index("Mythic")
-CLIMB_TIER_WEIGHT = 100
+CLIMB_CREDIT_DAYS = {"Bronze": 7, "Silver": 7, "Gold": 5, "Platinum": 0}
 QUICK_GROUP_LABEL = "Quick"
 QUICK_TROPHY_WEIGHT = 0.75
 
@@ -381,26 +380,22 @@ def first_striker_eligible(fmt: str) -> bool:
 
 
 def seize_the_day(ctxs: list[PlayerCtx]) -> list[AwardCandidate]:
-    """Ranked on the weighted 24h run, displayed as the plain trophy count: Quick queues trophy far more
-    often than Premier, so an unweighted count handed the award to whoever ground the most Pick Two.
-
-    An equal run goes to whoever reached it first, and only a same-instant tie falls through to score."""
     scored = []
     for c in ctxs:
         trophies = sorted(
             (e.finished_at, trophy_weight(e.format))
             for e in c.events if e.is_trophy and e.finished_at is not None
         )
-        weighted, count, when = _best_24h_window(trophies)
-        if count >= 2:
-            scored.append((weighted, count, when, c))
-    scored.sort(key=lambda t: (-t[0], t[2], _neg(t[3].tiebreak)))
+        run = _best_24h_window(trophies)
+        if run.count >= 2:
+            scored.append((run, c))
+    scored.sort(key=lambda t: (-t[0].weighted, t[0].reached_at, _neg(t[1].tiebreak)))
     result = []
-    for weighted, count, when, c in scored:
+    for run, c in scored:
         result.append(c.candidate(
-            seize_detail(count, when),
-            weighted,
-            ceremony_detail=seize_ceremony_detail(count, when),
+            seize_detail(run.count, run.started_at),
+            (run.weighted, run.reached_at),
+            ceremony_detail=seize_ceremony_detail(run.count, run.started_at),
         ))
     return result
 
@@ -410,10 +405,7 @@ def trophy_weight(fmt: str | None) -> float:
 
 
 def _climb_score(floor_index: int, days: int) -> int:
-    """A lower starting tier always outranks a higher one: CLIMB_TIER_WEIGHT exceeds any in-month day
-    span, so a Bronze/Silver/Gold grind beats a Platinum or Diamond sprint and days only break ties
-    within a tier."""
-    return CLIMB_TIER_WEIGHT * (MYTHIC_INDEX - floor_index) - days
+    return CLIMB_CREDIT_DAYS[RANK_TIERS[floor_index]] - days
 
 
 def climber(ctxs: list[PlayerCtx]) -> list[AwardCandidate]:
@@ -501,23 +493,26 @@ def _neg(tiebreak: tuple[float, float, float]) -> tuple[float, float, float]:
     return (-tiebreak[0], -tiebreak[1], -tiebreak[2])
 
 
-def _best_24h_window(trophies: list[tuple[datetime, float]]) -> tuple[float, int, datetime | None]:
-    """Heaviest 24h run over `(finished_at, weight)` pairs sorted by time: its weighted total, how many
-    trophies it holds, and when it opens."""
-    best = 0.0
-    best_count = 0
-    best_start = None
+@dataclass(frozen=True)
+class TrophyRun:
+    weighted: float
+    count: int
+    started_at: datetime | None
+    reached_at: datetime | None
+
+
+def _best_24h_window(trophies: list[tuple[datetime, float]]) -> TrophyRun:
+    best = TrophyRun(0.0, 0, None, None)
     for i, (start, _) in enumerate(trophies):
         j = i
         total = 0.0
         while j < len(trophies) and trophies[j][0] - start <= timedelta(hours=24):
             total += trophies[j][1]
             j += 1
-        if total > best:
-            best = total
-            best_count = j - i
-            best_start = start
-    return best, best_count, best_start
+        reached_at = trophies[j - 1][0]
+        if total > best.weighted or (total == best.weighted and reached_at < best.reached_at):
+            best = TrophyRun(total, j - i, start, reached_at)
+    return best
 
 
 def _best_mythic_climb(c: PlayerCtx) -> tuple[int, int, str] | None:
@@ -530,7 +525,7 @@ def _best_mythic_climb(c: PlayerCtx) -> tuple[int, int, str] | None:
     best_key: tuple[int, int, int] | None = None
     for events in by_month.values():
         events.sort(key=lambda e: e.started_at)
-        mythic = [e for e in events if _rank_tier(e.end_rank) == "Mythic"]
+        mythic = [e for e in events if _rank_tier(e.start_rank) == "Diamond" and _rank_tier(e.end_rank) == "Mythic"]
         if not mythic:
             continue
         first_mythic = mythic[0]
@@ -543,7 +538,7 @@ def _best_mythic_climb(c: PlayerCtx) -> tuple[int, int, str] | None:
             if tier is not None and RANK_TIERS.index(tier) < floor_index:
                 floor_index = RANK_TIERS.index(tier)
                 floor_event = e
-        if floor_event is None or floor_index >= MYTHIC_INDEX:
+        if floor_event is None or RANK_TIERS[floor_index] not in CLIMB_CREDIT_DAYS:
             continue
         end_at = first_mythic.finished_at or first_mythic.started_at
         days = (end_at.date() - floor_event.started_at.date()).days

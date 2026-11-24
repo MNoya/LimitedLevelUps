@@ -22,18 +22,20 @@ def _ctx(events):
 def test_climb_does_not_stitch_a_low_rank_on_one_account_to_mythic_on_another():
     events = [
         _event(1, "Bronze-4", "Gold-1", 1),
-        _event(2, "Diamond-2", "Mythic", 4),
+        _event(2, "Platinum-2", "Diamond-1", 3),
+        _event(2, "Diamond-1", "Mythic", 4),
     ]
 
     _days, _floor_index, start_tier = sa._best_mythic_climb(_ctx(events))
 
-    assert start_tier == "Diamond"
+    assert start_tier == "Platinum"
 
 
 def test_single_account_bronze_to_mythic_registers_the_full_climb():
     events = [
         _event(1, "Bronze-4", "Gold-1", 1),
-        _event(1, "Gold-1", "Mythic", 4),
+        _event(1, "Gold-1", "Diamond-1", 3),
+        _event(1, "Diamond-1", "Mythic", 4),
     ]
 
     days, _floor_index, start_tier = sa._best_mythic_climb(_ctx(events))
@@ -42,11 +44,35 @@ def test_single_account_bronze_to_mythic_registers_the_full_climb():
     assert days == 3
 
 
-def test_lower_start_tier_always_outranks_a_faster_higher_start():
-    slow_gold = sa._climb_score(sa.RANK_TIERS.index("Gold"), 20)
-    fast_platinum = sa._climb_score(sa.RANK_TIERS.index("Platinum"), 0)
+@pytest.mark.parametrize("gold_days,platinum_days,gold_wins", [(8, 4, True), (9, 4, False)])
+def test_a_gold_start_counts_five_days_shorter_than_platinum(gold_days, platinum_days, gold_wins):
+    gold = sa._climb_score(sa.RANK_TIERS.index("Gold"), gold_days)
+    platinum = sa._climb_score(sa.RANK_TIERS.index("Platinum"), platinum_days)
 
-    assert slow_gold > fast_platinum
+    assert (gold > platinum) is gold_wins
+
+
+def test_a_mythic_rank_that_appears_without_leaving_diamond_is_not_a_climb():
+    events = [_event(1, "Platinum-4", "Platinum-4", 1), _event(1, "Mythic-1", "Mythic-1", 1)]
+
+    climb = sa._best_mythic_climb(_ctx(events))
+
+    assert climb is None
+
+
+def test_a_climb_starting_in_diamond_is_not_counted():
+    events = [_event(1, "Diamond-4", "Diamond-1", 1), _event(1, "Diamond-1", "Mythic-1", 2)]
+
+    climb = sa._best_mythic_climb(_ctx(events))
+
+    assert climb is None
+
+
+def test_bronze_and_silver_starts_rank_on_days_alone():
+    slow_bronze = sa._climb_score(sa.RANK_TIERS.index("Bronze"), 27)
+    fast_silver = sa._climb_score(sa.RANK_TIERS.index("Silver"), 13)
+
+    assert fast_silver > slow_bronze
 
 
 def _trophy(fmt, hour, minute=0):
@@ -87,6 +113,20 @@ def test_an_equal_run_goes_to_whoever_reached_it_first():
     ranked = sa.seize_the_day(ctxs)
 
     assert [c.display_name for c in ranked] == [early, late]
+
+
+def test_an_equal_run_names_only_the_first_to_reach_it_as_runner_up():
+    winner, first, second, third = HALL_OF_FAME[0], HALL_OF_FAME[1], HALL_OF_FAME[2], HALL_OF_FAME[3]
+    ctxs = [
+        _drafter(winner, [_trophy("TradDraft", hour) for hour in (1, 2, 3)]),
+        _drafter(third, [_trophy("TradDraft", 9), _trophy("TradDraft", 12)]),
+        _drafter(first, [_trophy("TradDraft", 9), _trophy("TradDraft", 10)]),
+        _drafter(second, [_trophy("TradDraft", 5), _trophy("TradDraft", 11)]),
+    ]
+
+    _winners, runners = sa.assign({"seize_the_day": sa.seize_the_day(ctxs)})
+
+    assert [c.display_name for c in runners["seize_the_day"]] == [first]
 
 
 def test_a_same_instant_equal_run_falls_through_to_the_stronger_leaderboard_score():
