@@ -29,7 +29,8 @@ The message is located by scanning channel history for the bot's own post carryi
 the pod name for launcher slots, which share one launcher URL) — nothing is persisted.
 
 A pod pushes at most one last-call ping, claimed on `pod_signals.last_call_pinged_at`, so a caught-up
-T-1h beat after a restart can never ping the pod's ping role twice.
+T-1h beat after a restart can never ping the pod's ping role twice. Pods sharing a start time share one ping
+too: the first to post pings the role and the rest show it without pinging, see `claim_slot_ping`.
 """
 from __future__ import annotations
 
@@ -74,6 +75,7 @@ NUDGE_MIN_SIGNUPS = 2
 log = logging.getLogger(__name__)
 
 _bot: commands.Bot | None = None
+_slot_pings: set[tuple[int, datetime]] = set()
 
 
 def init_underfill(bot: commands.Bot) -> None:
@@ -197,9 +199,7 @@ async def fire_underfill(event_id: str, hours_before: int, resurface: bool = Fal
         await _safe_edit(nudge, body)
     elif show:
         signal_id = await asyncio.to_thread(_scheduled_signal_id, event_id)
-        role = await _claimed_ping_role(channel, signal_id, event_time, yes_count, floor, aim, hours_before)
-        post_body = f"{body} {role.mention}" if role is not None else body
-        await _safe_post(channel, post_body, mention_role=role is not None)
+        await _post_with_last_call(channel, body, signal_id, event_time, yes_count, floor, aim, hours_before)
     log.info(f"T-{hours_before}h underfill nudge for {event_id}: {yes_count}/{aim} Yes")
 
 
@@ -239,11 +239,9 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
     if nudge is not None:
         await _safe_edit(nudge, body)
     elif show:
-        role = await _claimed_ping_role(
-            channel, signal_id, slot.slot_time, slot.count, floor, aim, hours_before,
+        await _post_with_last_call(
+            channel, body, signal_id, slot.slot_time, slot.count, floor, aim, hours_before,
         )
-        post_body = f"{body} {role.mention}" if role is not None else body
-        await _safe_post(channel, post_body, mention_role=role is not None)
     log.info(f"T-{hours_before}h slot underfill nudge for {signal_id}: {slot.count} signed up")
 
 
@@ -539,18 +537,31 @@ async def _find_rally(channel: discord.abc.Messageable, slot: _SlotNudgeContext)
     return None
 
 
-async def _claimed_ping_role(
-    channel: discord.abc.Messageable, signal_id: str | None, event_time: datetime, yes_count: int,
+async def _post_with_last_call(
+    channel: discord.abc.Messageable, body: str, signal_id: str | None, event_time: datetime, yes_count: int,
     floor: int, aim: int, hours_before: int,
-) -> discord.Role | None:
-    """`_nudge_ping_role` with the last-call claim on top: the role only survives when this signal has
-    not pinged before. A missing signal_id pings unclaimed."""
+) -> None:
+    """Posts a fresh nudge, showing the last-call role when due and pinging it once per slot"""
     role = _nudge_ping_role(channel, event_time, yes_count, floor, aim, hours_before)
     if role is None:
-        return None
+        await _safe_post(channel, body)
+        return
     if signal_id is not None and not await asyncio.to_thread(claim_last_call_ping_sync, signal_id):
-        return None
-    return role
+        await _safe_post(channel, body)
+        return
+    await _safe_post(channel, f"{body} {role.mention}", mention_role=claim_slot_ping(role.id, event_time))
+
+
+def claim_slot_ping(role_id: int, event_time: datetime) -> bool:
+    """One last-call ping per role and start time, so two pods sharing a slot ping the role once"""
+    now = datetime.now(timezone.utc)
+    started = {key for key in _slot_pings if key[1] <= now}
+    _slot_pings.difference_update(started)
+    key = (role_id, event_time)
+    if key in _slot_pings:
+        return False
+    _slot_pings.add(key)
+    return True
 
 
 def _nudge_ping_role(

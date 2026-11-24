@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from bot.config import settings
-from bot.tasks.pod_underfill import _arm_underfill_beats, _nudge_ping_role
+from bot.tasks.pod_underfill import _arm_underfill_beats, _nudge_ping_role, claim_slot_ping
 
 
 ET = ZoneInfo("America/New_York")
@@ -71,6 +71,18 @@ def test_nudge_ping_role_resolves_the_role_owning_the_pod_time(monkeypatch, even
     role = _nudge_ping_role(_channel("Late Pod", "Pod Draft Queue"), event_time, 7, FLOOR, AIM, hours_before=1)
 
     assert role.name == role_name
+
+
+def test_claim_slot_ping_pings_a_shared_slot_once():
+    start = datetime.now(timezone.utc) + timedelta(hours=1)
+    later = start + timedelta(hours=3)
+
+    first = claim_slot_ping(101, start)
+    second = claim_slot_ping(101, start)
+    other_slot = claim_slot_ping(101, later)
+    other_role = claim_slot_ping(202, start)
+
+    assert (first, second, other_slot, other_role) == (True, False, True, True)
 
 
 class _FakeScheduler:
