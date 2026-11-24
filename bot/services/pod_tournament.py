@@ -11,13 +11,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Awaitable, Callable, NamedTuple, Sequence
 
 import discord
 from discord import ui
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from bot import emojis
@@ -160,8 +160,6 @@ MSG_PICK_ROUND = "Pick the round to reorganize"
 PICK_ROUND_PLACEHOLDER = "Choose Round"
 MSG_FIX_SAME_PLAYER = "Pick two different players for the match"
 MSG_FIX_MATCH_GONE = "That match no longer exists. Reopen the editor to see the current round"
-MSG_DROP_PROMPT = "Pick the player who left. Every match they have left becomes a bye for their opponent"
-MSG_DROP_NOBODY_LEFT = "Everyone in this pod has already dropped"
 MSG_RETURN_PROMPT = "Pick the player who returned to include them in the pairings"
 MSG_RETURN_NOBODY_DROPPED = "Nobody in this pod has dropped"
 DROP_EMOJI = "🏳️"
@@ -280,11 +278,6 @@ def match_was_played(match: dict) -> bool:
     """True when a match has a real reported result — a "No Match Played" drop doesn't count."""
     winner = match.get("winner_name")
     return bool(winner) and winner != SKIPPED_SENTINEL
-
-
-def unplayed_match_filter():
-    """SQL twin of `match_was_played`: rows a drop may still forfeit, never reported or No Match Played"""
-    return or_(PodDraftMatch.winner_name.is_(None), PodDraftMatch.winner_name == SKIPPED_SENTINEL)
 
 
 def actor_label(interaction: discord.Interaction) -> str:
@@ -1722,15 +1715,10 @@ class FixPairingView(ui.View):
         ])
         match_select.callback = self._on_match
         self.add_item(match_select)
-        if self.selected_match is None:
-            drop = ui.Button(label="Drop Player", emoji=DROP_EMOJI, style=discord.ButtonStyle.danger, row=1)
-            drop.callback = self._on_drop
-            self.add_item(drop)
-            if self.has_dropped:
-                back = ui.Button(label="Return Player", emoji=RETURN_EMOJI, style=discord.ButtonStyle.secondary,
-                                 row=1)
-                back.callback = self._on_return
-                self.add_item(back)
+        if self.selected_match is None and self.has_dropped:
+            back = ui.Button(label="Return Player", emoji=RETURN_EMOJI, style=discord.ButtonStyle.secondary, row=1)
+            back.callback = self._on_return
+            self.add_item(back)
         if self.selected_match is not None:
             self.add_item(self._player_select("a", self.selected_a, row=1))
             self.add_item(self._player_select("b", self.selected_b, row=2))
@@ -1820,21 +1808,6 @@ class FixPairingView(ui.View):
         self.stop()
         await interaction.response.edit_message(content="No changes made", view=None)
 
-    async def _on_drop(self, interaction: discord.Interaction) -> None:
-        dropped = await asyncio.to_thread(load_dropped_names, self.event_id)
-        remaining = [
-            (name, display) for name, display in self.roster
-            if normalize_player_name(name) not in dropped and name != BYE_NAME
-        ]
-        if not remaining:
-            await interaction.response.send_message(MSG_DROP_NOBODY_LEFT, ephemeral=True)
-            return
-        await interaction.response.send_message(
-            MSG_DROP_PROMPT,
-            view=DropPlayerView(self.event_id, self.round_num, remaining, self.round_message),
-            ephemeral=True,
-        )
-
     async def _on_return(self, interaction: discord.Interaction) -> None:
         dropped = await asyncio.to_thread(load_dropped_names, self.event_id)
         returning = [(name, display) for name, display in self.roster if normalize_player_name(name) in dropped]
@@ -1843,7 +1816,7 @@ class FixPairingView(ui.View):
             return
         await interaction.response.send_message(
             MSG_RETURN_PROMPT,
-            view=ReturnPlayerView(self.event_id, self.round_num, returning, self.round_message),
+            view=ReturnPlayerView(self.event_id, self.round_num, returning),
             ephemeral=True,
         )
 
@@ -1883,7 +1856,7 @@ class FixPairingView(ui.View):
             f"by {actor_label(interaction)}"
         )
         await _refresh_round_message_after_edit(
-            interaction.client, self.round_message, self.event_id, self.round_num, match_id,
+            interaction.client, self.round_message, self.event_id, self.round_num, [match_id],
         )
         if await asyncio.to_thread(load_event_pairing_mode_sync, self.event_id) == "team":
             await settle_team_board_for_event(interaction.client, self.event_id)
@@ -1949,33 +1922,24 @@ class FixPairingView(ui.View):
         return True
 
 
-class PlayerPickView(ui.View):
-    """Ephemeral organizer confirm: pick a player, then commit. The button only arms once a name is chosen"""
-
-    placeholder: str
-    confirm_label: str
-    confirm_emoji: str
-    confirm_style: discord.ButtonStyle
-
-    def __init__(self, event_id: str, round_num: int, roster: list[tuple[str, str]],
-                 round_message: discord.Message | None):
+class ReturnPlayerView(ui.View):
+    def __init__(self, event_id: str, round_num: int, roster: list[tuple[str, str]]):
         super().__init__(timeout=300)
         self.event_id = event_id
         self.round_num = round_num
         self.roster = roster
-        self.round_message = round_message
         self.selected: str | None = None
         self._build_items()
 
     def _build_items(self) -> None:
         self.clear_items()
-        select = ui.Select(placeholder=self.placeholder, row=0, options=[
+        select = ui.Select(placeholder="Returning Player…", row=0, options=[
             discord.SelectOption(label=display[:100], value=name[:100], default=name == self.selected)
             for name, display in self.roster[:25]
         ])
         select.callback = self._on_select
         self.add_item(select)
-        confirm = ui.Button(label=self.confirm_label, emoji=self.confirm_emoji, style=self.confirm_style,
+        confirm = ui.Button(label="Confirm Return", emoji=RETURN_EMOJI, style=discord.ButtonStyle.success,
                             row=1, disabled=self.selected is None)
         confirm.callback = self._on_confirm
         self.add_item(confirm)
@@ -1989,89 +1953,53 @@ class PlayerPickView(ui.View):
         if self.selected is None:
             return
         await interaction.response.defer()
-        await self._commit(interaction, self.selected)
-
-    async def _commit(self, interaction: discord.Interaction, name: str) -> None:
-        raise NotImplementedError
-
-    async def _dismiss(self, interaction: discord.Interaction) -> None:
+        name = self.selected
+        await asyncio.to_thread(apply_return, self.event_id, name)
         self.stop()
         try:
             await interaction.delete_original_response()
         except discord.HTTPException:
             log.warning("could not dismiss player picker", exc_info=True)
-
-
-class DropPlayerView(PlayerPickView):
-    placeholder = "Player who dropped…"
-    confirm_label = "Confirm Drop"
-    confirm_emoji = DROP_EMOJI
-    confirm_style = discord.ButtonStyle.danger
-
-    async def _commit(self, interaction: discord.Interaction, name: str) -> None:
-        forfeited = await asyncio.to_thread(apply_drop, self.event_id, name, self.round_num)
-        await self._dismiss(interaction)
-        log.info(
-            f"[{self.event_id}] R{self.round_num} dropped {name} "
-            f"forfeited={len(forfeited)} by {actor_label(interaction)}"
-        )
-        display = _roster_display(self.roster, name)
-        await announce_round_result(
-            interaction.client, self.event_id, format_drop_announcement(self.round_num, display),
-        )
-        await _refresh_round_message_after_edit(
-            interaction.client, self.round_message, self.event_id, self.round_num,
-            forfeited[0] if forfeited else "",
-        )
-        await settle_auto_forfeits(interaction.client, self.event_id, forfeited)
-
-
-class ReturnPlayerView(PlayerPickView):
-    placeholder = "Returning Player…"
-    confirm_label = "Confirm Return"
-    confirm_emoji = RETURN_EMOJI
-    confirm_style = discord.ButtonStyle.success
-
-    async def _commit(self, interaction: discord.Interaction, name: str) -> None:
-        await asyncio.to_thread(apply_return, self.event_id, name)
-        await self._dismiss(interaction)
         log.info(f"[{self.event_id}] R{self.round_num} returned {name} by {actor_label(interaction)}")
-        display = _roster_display(self.roster, name)
         await announce_round_result(
-            interaction.client, self.event_id, format_return_announcement(self.round_num, display),
+            interaction.client, self.event_id,
+            format_return_announcement(self.round_num, _roster_display(self.roster, name)),
         )
-
-
-def format_drop_announcement(round_num: int, display: str) -> str:
-    return f"{DROP_EMOJI} **{round_link_target(round_num)} Drop:** {display}"
 
 
 def format_return_announcement(round_num: int, display: str) -> str:
     return f"{RETURN_EMOJI} **{round_link_target(round_num)} Return:** {display}"
 
 
-def apply_drop(event_id: str, draftmancer_name: str, round_num: int) -> list[str]:
-    """Mark a player out of the pod and forfeit every match of theirs nobody played, in this round and
-    any later one already paired. Returns the forfeited match ids. Their played results stand, while a
-    match left as No Match Played becomes the bye it would have been had the drop landed first; from
-    here each pairing they land in is reported for them, so the pod finishes without them."""
+def apply_drop(event_id: str, draftmancer_name: str, round_num: int, replace_reported: bool) -> list[str]:
     with SessionLocal() as session:
         key = normalize_player_name(draftmancer_name)
         for participant in _participants_named(session, event_id, key):
             participant.dropped_round = round_num
         dropped = dropped_names_sync(session, event_id) | {key}
-        open_matches = session.execute(
+        their_matches = session.execute(
             select(PodDraftMatch).where(
                 PodDraftMatch.event_id == event_id,
-                unplayed_match_filter(),
+                PodDraftMatch.round >= round_num,
             )
         ).scalars().all()
         forfeited = []
-        for match in open_matches:
+        for match in their_matches:
+            if not _drop_replaces_result(match, key, replace_reported):
+                continue
             if forfeit_unplayable_match(session, match, dropped) is not None:
                 forfeited.append(match.id)
         session.commit()
     return forfeited
+
+
+def _drop_replaces_result(match: PodDraftMatch, dropped_key: str, replace_reported: bool) -> bool:
+    sides = {normalize_player_name(match.player_a_name), normalize_player_name(match.player_b_name)}
+    if dropped_key not in sides or match.score == BYE_SCORE:
+        return False
+    if match.winner_name is None or match.winner_name == SKIPPED_SENTINEL:
+        return True
+    return replace_reported and normalize_player_name(match.winner_name) != dropped_key
 
 
 def apply_return(event_id: str, draftmancer_name: str) -> None:
@@ -2087,6 +2015,109 @@ def _participants_named(session: Session, event_id: str, key: str) -> list[PodDr
         select(PodDraftParticipant).where(PodDraftParticipant.event_id == event_id)
     ).scalars().all()
     return [p for p in participants if normalize_player_name(p.draftmancer_name or "") == key]
+
+
+@dataclass(frozen=True)
+class DropScene:
+    event_id: str
+    current_round: int
+    finalized: bool
+    team: bool
+    caller: str | None
+    caller_opponents: dict[int, str]
+    roster: list[tuple[str, str]]
+    dropped: frozenset[str]
+
+    def display(self, name: str) -> str:
+        return _roster_display(self.roster, name)
+
+    def find(self, typed: str) -> str | None:
+        key = normalize_player_name(typed)
+        for name, display in self.roster:
+            if key in (normalize_player_name(name), normalize_player_name(display)):
+                return name
+        return None
+
+
+def load_drop_scene(thread_id: str, discord_id: str) -> DropScene | None:
+    with SessionLocal() as session:
+        event = session.execute(
+            select(PodDraftEvent).where(PodDraftEvent.discord_thread_id == thread_id)
+        ).scalar_one_or_none()
+        if event is None:
+            return None
+        participants = session.execute(
+            select(
+                PodDraftParticipant.draftmancer_name, PodDraftParticipant.display_name,
+                PodDraftParticipant.dropped_round, DbPlayer.display_name, DbPlayer.discord_id,
+            )
+            .outerjoin(DbPlayer, DbPlayer.id == PodDraftParticipant.player_id)
+            .where(PodDraftParticipant.event_id == event.id, PodDraftParticipant.draftmancer_name.is_not(None))
+            .order_by(PodDraftParticipant.seat_index.nulls_last(), PodDraftParticipant.draftmancer_name)
+        ).all()
+        pairings = session.execute(
+            select(PodDraftMatch.round, PodDraftMatch.player_a_name, PodDraftMatch.player_b_name)
+            .where(PodDraftMatch.event_id == event.id)
+        ).all()
+    roster, dropped, caller = [], set(), None
+    for name, participant_display, dropped_round, player_display, player_discord_id in participants:
+        roster.append((name, strip_arena_suffix(player_display or participant_display or name)))
+        if dropped_round is not None:
+            dropped.add(normalize_player_name(name))
+        if player_discord_id == discord_id:
+            caller = name
+    return DropScene(
+        event_id=event.id,
+        current_round=max((round_num for round_num, _, _ in pairings), default=0),
+        finalized=event.finalized_at is not None,
+        team=event.pairing_mode == "team",
+        caller=caller,
+        caller_opponents=_opponents_of(caller, pairings) if caller else {},
+        roster=roster,
+        dropped=frozenset(dropped),
+    )
+
+
+def _opponents_of(name: str, pairings: list[tuple[int, str, str]]) -> dict[int, str]:
+    key = normalize_player_name(name)
+    opponents = {}
+    for round_num, a, b in pairings:
+        if normalize_player_name(a) == key and b != BYE_NAME:
+            opponents[round_num] = b
+        elif normalize_player_name(b) == key and a != BYE_NAME:
+            opponents[round_num] = a
+    return opponents
+
+
+def format_drop_line(round_num: int, pairings_url: str | None, player: str, dropped_by: str | None) -> str:
+    label = round_link_label(round_num, pairings_url)
+    if dropped_by is None:
+        return f"{DROP_EMOJI} {label} {player} has dropped"
+    return f"{DROP_EMOJI} {label} {player} was dropped by {dropped_by}"
+
+
+async def drop_player(
+    bot_client, scene: DropScene, name: str, round_num: int, dropped_by: str | None, *, replace_reported: bool,
+) -> None:
+    forfeited, displays = await asyncio.gather(
+        asyncio.to_thread(apply_drop, scene.event_id, name, round_num, replace_reported),
+        asyncio.to_thread(load_participant_displays, scene.event_id),
+    )
+    log.info(f"[{scene.event_id}] R{round_num} dropped {name} forfeited={len(forfeited)} by={dropped_by or 'self'}")
+    player = scene.display(name) if dropped_by is None else _discord_mention(displays, name)
+    pairings_url = _resolve_pairings_url(scene.event_id, round_num)
+    await announce_round_result(
+        bot_client, scene.event_id, format_drop_line(round_num, pairings_url, player, dropped_by),
+        mention_users=True,
+    )
+    manager = ACTIVE_POD_MANAGERS.get(scene.event_id)
+    by_round = await asyncio.to_thread(forfeited_rounds_sync, scene.event_id, forfeited)
+    for forfeited_round, match_ids in by_round.items():
+        round_message = manager.round_messages.get(forfeited_round) if manager else None
+        await _refresh_round_message_after_edit(bot_client, round_message, scene.event_id, forfeited_round, match_ids)
+    await settle_auto_forfeits(bot_client, scene.event_id, forfeited)
+    if scene.finalized and not scene.team:
+        await asyncio.to_thread(rewrite_final_records, scene.event_id)
 
 
 async def build_round_editor(
@@ -2230,9 +2261,8 @@ def _roster_display(roster: list[tuple[str, str]], name: str | None) -> str:
 
 
 async def _refresh_round_message_after_edit(
-    bot_client, round_message: discord.Message | None, event_id: str, round_num: int, match_id: str,
+    bot_client, round_message: discord.Message | None, event_id: str, round_num: int, match_ids: list[str],
 ) -> None:
-    """Re-render the edited round message from DB state and fan the change out to any DM surfaces."""
     bracket = (await asyncio.to_thread(load_event_pairing_mode_sync, event_id)) == "bracket"
     states = await asyncio.to_thread(render_round_states, event_id, round_num, bracket=bracket)
     manager = ACTIVE_POD_MANAGERS.get(event_id)
@@ -2247,9 +2277,10 @@ async def _refresh_round_message_after_edit(
         except discord.HTTPException:
             log.warning(f"could not refresh round {round_num} message after pairing edit", exc_info=True)
     exclude = str(round_message.channel.id) if round_message is not None and round_message.channel else None
-    asyncio.create_task(_propagate_match_to_other_surfaces(
-        bot_client, event_id, match_id, round_num, exclude_channel_id=exclude,
-    ))
+    for match_id in match_ids:
+        asyncio.create_task(_propagate_match_to_other_surfaces(
+            bot_client, event_id, match_id, round_num, exclude_channel_id=exclude,
+        ))
 
 
 async def _handle_result_submission(interaction: discord.Interaction, value: str) -> None:
@@ -2447,6 +2478,7 @@ class OwnMatchReport(NamedTuple):
     embed: discord.Embed | None
     view: discord.ui.View | None
     notice: str | None
+    drop_thread_id: str | None = None
 
 
 class OpenMatch(NamedTuple):
@@ -2485,9 +2517,10 @@ async def build_own_match_report(discord_id: str, *, team_submit: ResultSubmit) 
         [m.state for m in open_matches], on_submit=team_submit if mode == "team" else None,
     )
     thread_id = await asyncio.to_thread(load_event_thread_id_sync, event_id)
-    if thread_id is not None:
-        view.add_item(build_bound_deck_description_button(event_id, thread_id))
-    return OwnMatchReport(embed, view, None)
+    if thread_id is None:
+        return OwnMatchReport(embed, view, None)
+    view.add_item(build_bound_deck_description_button(event_id, thread_id))
+    return OwnMatchReport(embed, view, None, drop_thread_id=None if mode == "team" else thread_id)
 
 
 async def _open_match_states(event_id: str, own: list[OwnMatch], *, bracket: bool) -> list[OpenMatch]:
@@ -2883,7 +2916,7 @@ async def _advance_locked(manager, event_id: str, round_num: int, is_edit: bool,
             f"[FINALIZE] maybe_advance.edit_during_grace event={event_id} round={round_num} "
             f"grace_round={manager.grace_round} decision=regenerate_or_refresh"
         )
-        if round_num < TOTAL_ROUNDS:
+        if is_edit and round_num < TOTAL_ROUNDS:
             await _regenerate_next_round(manager, round_num + 1)
         _schedule_grace(manager, round_num)
         return
@@ -2948,24 +2981,7 @@ async def finalize_tournament(manager: "PodDraftManager") -> None:
     log.info(f"[FINALIZE] tournament.start event={manager.event_id}")
     manager.finalized = True
     prior = await asyncio.to_thread(load_matches, manager.event_id)
-    players = manager.tournament_players
-    standings = pod_swiss.compute_standings(players, prior)
-
-    final_standings = []
-    for s in standings:
-        wins, losses = pod_swiss.played_record(s.player_id, prior)
-        final_standings.append(FinalStanding(
-            draftmancer_name=s.player_name,
-            placement=s.rank,
-            record=f"{wins}-{losses}",
-            eliminated_round=None if s.rank == 1 else TOTAL_ROUNDS,
-        ))
-
-    def _do_write() -> None:
-        with SessionLocal() as session:
-            finalize_db(session, manager.event_id, final_standings)
-            session.commit()
-    await asyncio.to_thread(_do_write)
+    await asyncio.to_thread(_write_final_standings, manager.event_id, manager.tournament_players, prior)
 
     await _post_or_update_live_standings(manager)
     notify_pod_complete(manager.bot, manager.event_id)
@@ -2975,6 +2991,26 @@ async def finalize_tournament(manager: "PodDraftManager") -> None:
 
     asyncio.create_task(capture_event_replays(SeventeenLandsClient(), manager.event_id))
     asyncio.create_task(post_replay_link_prompt(await manager._fetch_thread(), manager.event_id))
+
+
+def rewrite_final_records(event_id: str) -> None:
+    players = [Player(id=name, name=name) for name in _load_pod_player_names(event_id)]
+    _write_final_standings(event_id, players, load_matches(event_id))
+
+
+def _write_final_standings(event_id: str, players: list[pod_swiss.Player], prior: list) -> None:
+    final_standings = []
+    for s in pod_swiss.compute_standings(players, prior):
+        wins, losses = pod_swiss.played_record(s.player_id, prior)
+        final_standings.append(FinalStanding(
+            draftmancer_name=s.player_name,
+            placement=s.rank,
+            record=f"{wins}-{losses}",
+            eliminated_round=None if s.rank == 1 else TOTAL_ROUNDS,
+        ))
+    with SessionLocal() as session:
+        finalize_db(session, event_id, final_standings)
+        session.commit()
 
 
 def _load_participant_slugs(event_id: str) -> dict[str, str]:
@@ -5631,26 +5667,35 @@ def forfeited_rounds_sync(event_id: str, match_ids: list[str]) -> dict[int, list
 
 
 async def settle_auto_forfeits(bot_client, event_id: str, match_ids: list[str]) -> None:
-    """Announce each pairing forfeited to a bye as it was created, then re-check its round for
-    advancement — a bye can be the result that completes a round, and nobody clicks to report one."""
     forfeited = await asyncio.to_thread(auto_reported_results_sync, event_id, match_ids)
     if not forfeited:
         return
     team_pod = await asyncio.to_thread(load_event_pairing_mode_sync, event_id) == "team"
+    displays = await asyncio.to_thread(load_participant_displays, event_id)
     for round_num, round_ids in (await asyncio.to_thread(
         forfeited_rounds_sync, event_id, list(forfeited),
     )).items():
         states = await asyncio.to_thread(_load_round_states, event_id, round_num)
-        pairings_url = await asyncio.to_thread(_resolve_pairings_url, event_id, round_num)
+        pairings_url = _resolve_pairings_url(event_id, round_num)
         for state in states:
             if state["match_id"] in round_ids and match_was_played(state):
+                pinged = _with_winner_mention(displays, state)
                 await announce_round_result(
-                    bot_client, event_id, format_round_announcement(round_num, state, pairings_url),
+                    bot_client, event_id, format_round_announcement(round_num, pinged, pairings_url),
+                    mention_users=True,
                 )
         if not team_pod:
             asyncio.create_task(_maybe_advance(bot_client, event_id, round_num))
     if team_pod:
         await settle_team_board_for_event(bot_client, event_id)
+
+
+def _with_winner_mention(displays: dict[str, dict], state: dict) -> dict:
+    winner = state["winner_name"]
+    if winner == SKIPPED_SENTINEL:
+        return state
+    winner_is_a = normalize_player_name(winner) == normalize_player_name(state["a_name"])
+    return {**state, "a_display" if winner_is_a else "b_display": _discord_mention(displays, winner)}
 
 
 async def settle_team_board_for_event(bot_client, event_id: str) -> None:

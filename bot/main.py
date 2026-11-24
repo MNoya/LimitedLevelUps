@@ -46,6 +46,7 @@ from bot.commands.fantasy_round import setup as setup_fantasy_round
 from bot.commands.pod_second_table import setup as setup_pod_second_table
 from bot.commands.pod_stage import setup as setup_pod_stage
 from bot.commands.pod_table import setup as setup_pod_table
+from bot.commands.pod_drop import setup as setup_pod_drop
 from bot.commands.peasant import setup as setup_peasant
 from bot.commands.preview_season_awards import setup as setup_preview_season_awards
 from bot.commands.save_resource import setup as setup_save_resource
@@ -312,6 +313,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_pod_stage(bot)
         await setup_pod_second_table(bot)
         await setup_pod_table(bot)
+        await setup_pod_drop(bot)
         await setup_peasant(bot)
         await setup_preview_season_awards(bot)
         await setup_set_awards(bot)

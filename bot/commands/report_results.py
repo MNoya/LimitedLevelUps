@@ -13,6 +13,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot.commands import descriptions as desc
+from bot.commands.pod_drop import add_drop_buttons
 from bot.services.pod_team_board import handle_team_report
 from bot.services.pod_tournament import build_own_match_report
 
@@ -35,6 +36,8 @@ class ReportResults(commands.Cog):
             await interaction.followup.send(report.notice, ephemeral=True)
             return
         log.info(f"report-results: {interaction.user} opened a card of {len(report.view.children)} match(es)")
+        if report.drop_thread_id is not None:
+            add_drop_buttons(report.view, report.drop_thread_id)
         await interaction.followup.send(embed=report.embed, view=report.view, ephemeral=True)
 
 

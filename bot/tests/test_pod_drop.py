@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 
+from bot.commands import pod_drop
 from bot.models import PodDraftMatch, PodDraftParticipant
 from bot.services import pod_swiss
 from bot.services import pod_tournament
@@ -55,7 +56,7 @@ def test_drop_forfeits_the_open_match_to_a_bye(session):
         add_pairing(session, event.id, 1, a, b, pairing_index=idx)
     session.commit()
 
-    forfeited = apply_drop(event.id, "LSV", 1)
+    forfeited = apply_drop(event.id, "LSV", 1, replace_reported=True)
 
     rows = {(m.player_a_name, m.player_b_name): m for m in session.query(PodDraftMatch).all()}
     bye = rows[("Finkel", "LSV")]
@@ -73,18 +74,35 @@ def test_a_drop_turns_no_match_played_into_a_bye_and_leaves_a_played_result_alon
     set_match_result(session, skipped.id, SKIPPED_SENTINEL, "0-0")
     session.commit()
 
-    forfeited = apply_drop(event.id, "LSV", 3)
+    forfeited = apply_drop(event.id, "LSV", 3, replace_reported=True)
 
     assert forfeited == [skipped.id]
     assert (skipped.winner_name, skipped.score) == ("Finkel", BYE_SCORE)
     assert (played.winner_name, played.score) == ("Reid", "2-1")
 
 
+def test_a_drop_replaces_their_losses_from_its_round_on_and_keeps_their_wins(session):
+    event = _event(session)
+    before = add_pairing(session, event.id, 1, "LSV", "Finkel", pairing_index=0)
+    reported_loss = add_pairing(session, event.id, 2, "LSV", "Reid", pairing_index=0)
+    their_win = add_pairing(session, event.id, 3, "LSV", "Nassif", pairing_index=0)
+    set_match_result(session, before.id, "Finkel", "2-0")
+    set_match_result(session, reported_loss.id, "Reid", "2-0")
+    set_match_result(session, their_win.id, "LSV", "2-1")
+    session.commit()
+
+    forfeited = apply_drop(event.id, "LSV", 2, replace_reported=True)
+
+    assert forfeited == [reported_loss.id]
+    assert (reported_loss.winner_name, reported_loss.score) == ("Reid", BYE_SCORE)
+    assert (before.score, their_win.score) == ("2-0", "2-1")
+
+
 def test_a_later_pairing_into_the_dropped_player_is_reported_on_creation(session):
     event = _event(session)
     add_pairing(session, event.id, 1, "Finkel", "LSV", pairing_index=0)
     session.commit()
-    apply_drop(event.id, "LSV", 1)
+    apply_drop(event.id, "LSV", 1, replace_reported=True)
 
     rows = insert_pending_matches(event.id, 2, [("LSV", "Reid"), ("Finkel", "Nassif")])
 
@@ -98,7 +116,7 @@ def test_a_returned_player_is_paired_into_a_playable_match(session):
     event = _event(session)
     add_pairing(session, event.id, 1, "Finkel", "LSV", pairing_index=0)
     session.commit()
-    apply_drop(event.id, "LSV", 1)
+    apply_drop(event.id, "LSV", 1, replace_reported=True)
 
     apply_return(event.id, "LSV")
     rows = insert_pending_matches(event.id, 2, [("LSV", "Reid")])
@@ -130,7 +148,7 @@ def test_a_drop_settles_the_pod_its_forfeits_belong_to(
 
     monkeypatch.setattr(pod_tournament, "_maybe_advance", record_advance)
     monkeypatch.setattr(pod_tournament, "settle_team_board_for_event", record_settle)
-    forfeited = apply_drop(event.id, "LSV", 2)
+    forfeited = apply_drop(event.id, "LSV", 2, replace_reported=True)
 
     asyncio.run(_settle_and_drain(event.id, forfeited))
 
@@ -171,3 +189,69 @@ def test_a_bye_dm_reads_from_each_side_of_the_match():
         ).fields[0].name
 
     assert result(viewer_is_a=True) != result(viewer_is_a=False)
+
+
+def _scene(caller, *, finalized=False, dropped=()):
+    return pod_tournament.DropScene(
+        event_id="e", current_round=2, finalized=finalized, team=False, caller=caller,
+        caller_opponents={1: "Finkel", 2: "Finkel"} if caller == "LSV" else {},
+        roster=[(name, name) for name in HALL], dropped=frozenset(dropped),
+    )
+
+
+@pytest.mark.parametrize("caller, organizer, player, round_num, finalized, expected", [
+    ("LSV", False, None, None, False, ("LSV", 2, None, False)),
+    ("LSV", False, "Finkel", None, False, ("Finkel", 2, "Opponent", True)),
+    ("LSV", False, "Reid", None, False, None),
+    ("LSV", False, None, 1, False, None),
+    ("LSV", False, None, None, True, None),
+    (None, True, "Reid", 1, True, ("Reid", 1, "Organizer", True)),
+    (None, False, "Reid", None, False, None),
+])
+def test_who_can_drop_whom(caller, organizer, player, round_num, finalized, expected):
+    plan = pod_drop.plan_drop(_scene(caller, finalized=finalized), organizer, player, round_num)
+
+    if expected is None:
+        assert isinstance(plan, str)
+    else:
+        assert plan == pod_drop.DropPlan(*expected)
+
+
+def test_a_self_drop_keeps_reported_losses(session):
+    event = _event(session)
+    reported_loss = add_pairing(session, event.id, 2, "LSV", "Reid", pairing_index=0)
+    open_match = add_pairing(session, event.id, 3, "LSV", "Nassif", pairing_index=0)
+    set_match_result(session, reported_loss.id, "Reid", "2-0")
+    session.commit()
+
+    forfeited = apply_drop(event.id, "LSV", 2, replace_reported=False)
+
+    assert forfeited == [open_match.id]
+    assert reported_loss.score == "2-0"
+
+
+@pytest.mark.parametrize("is_edit, regenerated", [(False, []), (True, [3])])
+def test_a_finished_round_rechecked_during_grace_repairs_only_on_an_edit(monkeypatch, is_edit, regenerated):
+    manager = _GraceManager(pairing_mode="swiss", grace_round=2, grace_task=_RunningTask())
+    repaired = []
+    monkeypatch.setattr(pod_tournament, "_count_pending_in_round", lambda _event_id, _round: 0)
+    monkeypatch.setattr(pod_tournament, "_schedule_grace", lambda _manager, _round: None)
+
+    async def record_regenerate(_manager, next_round):
+        repaired.append(next_round)
+
+    monkeypatch.setattr(pod_tournament, "_regenerate_next_round", record_regenerate)
+
+    asyncio.run(pod_tournament._advance_locked(manager, "e", 2, is_edit, None))
+
+    assert repaired == regenerated
+
+
+class _GraceManager:
+    def __init__(self, **fields):
+        self.__dict__.update(fields)
+
+
+class _RunningTask:
+    def done(self) -> bool:
+        return False
