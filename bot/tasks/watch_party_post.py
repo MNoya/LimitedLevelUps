@@ -22,15 +22,17 @@ from bot.tasks.format_schedule_post import create_pinned_schedule, pinned_schedu
 from bot.services.watch_party import (
     CHANNEL_TZ,
     HEADLINER_ORDER,
+    UPCOMING_LEAD,
     CoverageWindow,
     CoveredEvent,
     channel_name,
+    coverage_windows,
+    named_window,
     upcoming_windows,
 )
 
 TICK_MINUTES = 15
 TICK = timedelta(minutes=TICK_MINUTES)
-UPCOMING_LEAD = timedelta(days=7)
 
 MSG_TOPIC_LEAD = "Discuss the latest pro-level events"
 MSG_TOPIC_NOW = "Now: {names} - {dates}"
@@ -70,8 +72,9 @@ async def fire_watch_party() -> None:
         return
     now = datetime.now(timezone.utc)
     events = mtgscribe.load_events(arena_only=False)
-    windows = upcoming_windows(events, now.astimezone(CHANNEL_TZ).date())
-    await _sync_channel(channel, windows, now.astimezone(CHANNEL_TZ).date())
+    today = now.astimezone(CHANNEL_TZ).date()
+    windows = upcoming_windows(events, today)
+    await _sync_channel(channel, named_window(coverage_windows(events), today), channel_topic(windows, today))
     await _refresh_coverage_pin(channel, events)
     if not windows:
         return
@@ -173,9 +176,8 @@ def announcement_marker(covered: CoveredEvent) -> str:
     return MSG_ANNOUNCEMENT_SUBJECT.format(name=covered.name, subject=covered.first_subject())
 
 
-async def _sync_channel(channel: discord.TextChannel, windows: list[CoverageWindow], today: date) -> None:
-    name = channel_name(windows[0] if windows else None)
-    topic = channel_topic(windows, today)
+async def _sync_channel(channel: discord.TextChannel, window: CoverageWindow | None, topic: str) -> None:
+    name = channel_name(window)
     if channel.name == name and (channel.topic or "") == topic:
         return
     try:

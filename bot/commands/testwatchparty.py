@@ -9,9 +9,15 @@ from discord.utils import format_dt
 from bot.commands.test_group import test_group
 from bot.config import settings
 from bot.services import mtgscribe
-from bot.services.watch_party import CHANNEL_TZ, channel_name, upcoming_windows
-from bot.tasks.watch_party_post import (
+from bot.services.watch_party import (
+    CHANNEL_TZ,
     UPCOMING_LEAD,
+    channel_name,
+    coverage_windows,
+    named_window,
+    upcoming_windows,
+)
+from bot.tasks.watch_party_post import (
     announcement_candidates,
     build_announcement,
     build_redirect,
@@ -26,9 +32,11 @@ async def setup(bot: commands.Bot) -> None:
     @commands.is_owner()
     async def test_watch_party(ctx: commands.Context, on_day: str = "") -> None:
         today = date.fromisoformat(on_day) if on_day else datetime.now(timezone.utc).astimezone(CHANNEL_TZ).date()
-        windows = upcoming_windows(mtgscribe.load_events(arena_only=False), today)
+        events = mtgscribe.load_events(arena_only=False)
+        windows = upcoming_windows(events, today)
         current = windows[0] if windows else None
-        await ctx.send(f"__**Watch party on {today:%b %-d %Y}**__\n`#{channel_name(current)}`\n"
+        named = named_window(coverage_windows(events), today)
+        await ctx.send(f"__**Watch party on {today:%b %-d %Y}**__\n`#{channel_name(named)}`\n"
                        f"```\n{channel_topic(windows, today)}\n```")
         if current is None:
             return

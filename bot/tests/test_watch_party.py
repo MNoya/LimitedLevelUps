@@ -7,7 +7,7 @@ import discord
 import pytest
 
 from bot.services.mtgscribe import ScribeEvent
-from bot.services.watch_party import channel_name, covered_events, coverage_windows, upcoming_windows
+from bot.services.watch_party import channel_name, covered_events, coverage_windows, named_window
 from bot.tasks import watch_party_post
 from bot.tasks.watch_party_post import TICK, window_embed_state
 
@@ -52,17 +52,25 @@ CALENDAR = [
 ]
 
 
-@pytest.mark.parametrize("today, expected", [
-    (date(2026, 10, 1), "📺🎉-ac13-watch-party"),
-    (date(2026, 10, 23), "📺🎉-ac13-watch-party"),
-    (date(2026, 10, 25), "📺🎉-ac13-watch-party"),
-    (date(2026, 10, 26), "📺🎉-worlds-watch-party"),
-    (date(2026, 11, 16), "📺🎉-watch-party"),
-])
-def test_the_channel_holds_the_headliner_until_the_day_after_its_window(today, expected):
-    windows = upcoming_windows(CALENDAR, today)
+AC_AFTER_WORLDS = _event("Arena Championship 14: Standard", ("coverage", "arena-championship"),
+                         date(2026, 11, 20), date(2026, 11, 22))
 
-    name = channel_name(windows[0] if windows else None)
+
+@pytest.mark.parametrize("calendar, today, expected", [
+    (CALENDAR, date(2026, 10, 1), "📺🎉-ac13-watch-party"),
+    (CALENDAR, date(2026, 10, 25), "📺🎉-ac13-watch-party"),
+    (CALENDAR, date(2026, 11, 5), "📺🎉-ac13-watch-party"),
+    (CALENDAR, date(2026, 11, 6), "📺🎉-worlds-watch-party"),
+    (CALENDAR, date(2027, 1, 30), "📺🎉-worlds-watch-party"),
+    ([*CALENDAR, AC_AFTER_WORLDS], date(2026, 11, 19), "📺🎉-worlds-watch-party"),
+    ([*CALENDAR, AC_AFTER_WORLDS], date(2026, 11, 20), "📺🎉-ac14-watch-party"),
+])
+def test_the_channel_keeps_the_last_name_until_the_next_window_is_a_week_out_after_a_premier_holds_a_week(
+    calendar, today, expected,
+):
+    windows = coverage_windows(calendar)
+
+    name = channel_name(named_window(windows, today))
 
     assert name == expected
 

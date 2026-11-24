@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from bot.services.mtgscribe import DRAFT_TAG, ScribeEvent
@@ -20,6 +20,8 @@ FALLBACK_START = time(9, 0)
 FALLBACK_END = time(18, 0)
 EDITION_NUMBER = re.compile(r"(\d+)$")
 QUALIFIER_TITLE_WORDS = ("Qualifier", "ACQ")
+UPCOMING_LEAD = timedelta(days=7)
+NAME_HOLD = timedelta(days=7)
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,7 @@ SPOTLIGHT = CoverageKind("spotlight", "Spotlight Series", "magic-spotlight-serie
 REGIONAL = CoverageKind("rc", "Regional Championship", "regional-championship", "Regional Championship",
                         always_covered=False, scheduled_event=False, announced=False)
 HEADLINER_ORDER = (WORLDS, PRO_TOUR, ARENA_CHAMPIONSHIP, SPOTLIGHT, REGIONAL)
+NAME_HOLDERS = (WORLDS, PRO_TOUR, ARENA_CHAMPIONSHIP)
 
 
 @dataclass(frozen=True)
@@ -208,6 +211,24 @@ def coverage_windows(events: list[ScribeEvent]) -> list[CoverageWindow]:
 
 def upcoming_windows(events: list[ScribeEvent], today: date) -> list[CoverageWindow]:
     return [window for window in coverage_windows(events) if window.last_day >= today]
+
+
+def named_window(windows: list[CoverageWindow], today: date) -> CoverageWindow | None:
+    latest = None
+    following = None
+    for window in windows:
+        if window.last_day < today:
+            latest = window
+        elif following is None:
+            following = window
+    if following is None:
+        return latest
+    if latest is None or following.first_day <= today:
+        return following
+    held = latest.headliner.kind in NAME_HOLDERS and today <= latest.last_day + NAME_HOLD
+    if not held and today >= following.first_day - UPCOMING_LEAD:
+        return following
+    return latest
 
 
 def channel_slug(covered: CoveredEvent) -> str:
