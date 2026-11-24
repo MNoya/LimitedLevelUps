@@ -1,5 +1,6 @@
-"""Captures the P0P1 ratings snapshots when due and crowns the podium at a contest's scoring date: swaps the
-Top P0P1 Challenger role to the new top three and posts the reveal into the contest set's own channel.
+"""Captures the P0P1 ratings snapshots when due, posts the midway link once its snapshot is stored and crowns the
+podium at a contest's scoring date: swaps the Top P0P1 Challenger role to the new top three and posts the reveal
+into the contest set's own channel.
 
 Hourly rather than pinned to the instant, so a deploy across the scoring time still lands it. Idempotent on
 the announcement already sitting in the channel, so the repeated tick neither reposts nor re-swaps roles.
@@ -54,12 +55,19 @@ async def fire_ceremony() -> None:
         await asyncio.to_thread(_capture_due_snapshots, now)
     except Exception:
         log.exception("p0p1-ceremony: ratings capture failed, retrying next hour")
-    contest = contest_due(now)
-    if contest is None:
-        return
     guild = _bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
     if guild is None:
         log.warning("p0p1-ceremony: no configured guild, skipping")
+        return
+    midway_contest = midway_due(now)
+    if midway_contest is not None:
+        try:
+            if await asyncio.to_thread(_midway_snapshot_stored, midway_contest.code):
+                await post_midway(guild, midway_contest, now)
+        except (SQLAlchemyError, discord.HTTPException):
+            log.warning(f"p0p1-midway: {midway_contest.code} tick failed, retrying next hour", exc_info=True)
+    contest = contest_due(now)
+    if contest is None:
         return
     try:
         await post_ceremony(guild, contest, now)
@@ -76,6 +84,34 @@ def contest_due(now: datetime) -> p0p1_contest.Contest | None:
     return None
 
 
+def midway_due(now: datetime) -> p0p1_contest.Contest | None:
+    for contest in p0p1_contest.all_contests():
+        midway = p0p1_ratings.midway_date(contest)
+        if midway <= now < midway + REVEAL_WINDOW:
+            return contest
+    return None
+
+
+async def post_midway(guild: discord.Guild, contest: p0p1_contest.Contest, now: datetime) -> bool:
+    channel = _set_channel(guild, contest.code)
+    if channel is None:
+        log.warning(f"p0p1-midway: no channel found for {contest.code}, skipping")
+        return False
+    since = p0p1_ratings.midway_date(contest) - timedelta(hours=1)
+    header = p0p1_copy.midway_header(contest.code)
+    if await _already_posted(channel, since, header, p0p1_copy.MIDWAY_MARKER):
+        return False
+    featured = p0p1_contest.featured_contest(now)
+    view = p0p1_copy.midway_view(contest, featured_code=featured.code if featured is not None else None)
+    await channel.send(view=view, allowed_mentions=discord.AllowedMentions.none())
+    audit.event("p0p1_midway", contest=contest.code, channel_id=str(channel.id))
+    bot_log = getattr(_bot, "bot_log", None)
+    if bot_log is not None:
+        await bot_log.post(f"P0P1 `{contest.code}` midway posted in {channel.mention}", tag="P0P1",
+                           fingerprint=f"p0p1-midway-{contest.code}")
+    return True
+
+
 async def post_ceremony(
     guild: discord.Guild, contest: p0p1_contest.Contest, now: datetime, *, force: bool = False,
 ) -> bool:
@@ -84,7 +120,9 @@ async def post_ceremony(
     if channel is None:
         log.warning(f"p0p1-ceremony: no channel found for {contest.code}, skipping")
         return False
-    if not force and await _already_announced(channel, contest):
+    since = contest.scoring_date - timedelta(hours=1)
+    header = p0p1_copy.ceremony_header(contest.code)
+    if not force and await _already_posted(channel, since, header, p0p1_copy.CEREMONY_MARKER):
         return False
 
     winners = await asyncio.to_thread(p0p1_ceremony.podium_sync, contest.code)
@@ -152,15 +190,13 @@ def _set_channel(guild: discord.Guild, set_code: str) -> discord.TextChannel | N
     return None
 
 
-async def _already_announced(channel: discord.TextChannel, contest: p0p1_contest.Contest) -> bool:
-    since = contest.scoring_date - timedelta(hours=1)
-    header = p0p1_copy.ceremony_header(contest.code)
+async def _already_posted(channel: discord.TextChannel, since: datetime, header: str, marker: str) -> bool:
     try:
         async for message in channel.history(after=since, limit=200):
             if _bot is not None and _bot.user is not None and message.author.id != _bot.user.id:
                 continue
             body = message_text(message)
-            if p0p1_copy.CEREMONY_MARKER in body and header in body:
+            if marker in body and header in body:
                 return True
     except discord.HTTPException:
         log.warning(f"p0p1-ceremony: could not read #{channel.name} history, skipping to avoid a repeat",
@@ -172,3 +208,8 @@ async def _already_announced(channel: discord.TextChannel, contest: p0p1_contest
 def _capture_due_snapshots(now: datetime) -> None:
     with SessionLocal() as session:
         p0p1_ratings.capture_due_snapshots(session, SeventeenLandsClient(), now)
+
+
+def _midway_snapshot_stored(set_code: str) -> bool:
+    with SessionLocal() as session:
+        return p0p1_ratings.snapshot_exists(session, set_code, p0p1_ratings.PHASE_MIDWAY)

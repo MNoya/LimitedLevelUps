@@ -102,6 +102,25 @@ def ceremony(
     return build_container("\n".join(lines), set_symbol_url(contest.code), accent=P0P1_ACCENT)
 
 
+MIDWAY_MARKER = "preliminary results are in"
+
+
+def midway_header(code: str) -> str:
+    return f"{code} P0P1 Challenge"
+
+
+def midway_view(contest: Contest, *, featured_code: str | None) -> ui.LayoutView:
+    return as_view(midway(contest, featured_code=featured_code))
+
+
+def midway(contest: Contest, *, featured_code: str | None) -> ui.Container:
+    url = contest_url(contest.code, featured_code)
+    lines = [f"## [{midway_header(contest.code)}]({url}) {MIDWAY_MARKER}!",
+             f"Final results {_stamp(contest.scoring_date, 'R')}, {_stamp(contest.scoring_date, 'D')}",
+             f"### {emojis.prefix('llu')}[**See how your picks are doing**]({url})"]
+    return build_container("\n".join(lines), set_symbol_url(contest.code), accent=P0P1_ACCENT)
+
+
 def reminder_view(contest: Contest, *, featured_code: str | None, role_mention: str, voter_count: int) -> ui.LayoutView:
     """The T-1 nudge as it is sent: the addressed line as a bare text block above the card, so the ping
     reads as an address to the reader instead of as part of the post."""

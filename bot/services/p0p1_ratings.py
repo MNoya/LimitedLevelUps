@@ -33,7 +33,7 @@ def capture_due_snapshots(session: Session, client: SeventeenLandsClient, now: d
     captured = []
     for contest in p0p1_contest.all_contests():
         phase = due_phase(contest, now)
-        if phase is None or _snapshot_exists(session, contest.code, phase):
+        if phase is None or snapshot_exists(session, contest.code, phase):
             continue
         snapshot = _committed_snapshot(contest.code, phase) or _fetch_snapshot(client, contest, now)
         enough_rated = len(snapshot.cards) >= 0.9 * len(_pool_names(contest.code))
@@ -63,6 +63,11 @@ def load_final_ratings(session: Session, set_code: str) -> list[dict]:
     return session.execute(query).scalar_one_or_none() or []
 
 
+def snapshot_exists(session: Session, set_code: str, phase: str) -> bool:
+    query = select(P0P1Ratings.set_code).where(P0P1Ratings.set_code == set_code, P0P1Ratings.phase == phase)
+    return session.execute(query).first() is not None
+
+
 def _fetch_snapshot(client: SeventeenLandsClient, contest: p0p1_contest.Contest, now: datetime) -> Snapshot:
     pool = _pool_names(contest.code)
     cards = []
@@ -78,11 +83,6 @@ def _fetch_snapshot(client: SeventeenLandsClient, contest: p0p1_contest.Contest,
         })
     end = min(now, contest.scoring_date).date()
     return Snapshot(date_start=contest.release.date(), date_end=end, cards=cards)
-
-
-def _snapshot_exists(session: Session, set_code: str, phase: str) -> bool:
-    query = select(P0P1Ratings.set_code).where(P0P1Ratings.set_code == set_code, P0P1Ratings.phase == phase)
-    return session.execute(query).first() is not None
 
 
 def _store(session: Session, set_code: str, phase: str, snapshot: Snapshot) -> None:
