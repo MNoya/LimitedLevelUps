@@ -1,0 +1,584 @@
+[
+  {
+    "name": "Arena Championship 13",
+    "kind": "ac",
+    "details": "Standard",
+    "draft": false,
+    "timezone": "America/Los_Angeles",
+    "stream": "https://twitch.tv/magic",
+    "estimated": false,
+    "source": "https://magic.wizards.com/en/news/mtg-arena/qualifier-play-ins-and-qualifier-weekend-information",
+    "days": [
+      {
+        "date": "2026-10-24",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2026-10-25",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "World Championship 32",
+    "kind": "worlds",
+    "details": "Standard & Star Trek Draft",
+    "draft": true,
+    "timezone": "America/New_York",
+    "stream": "https://twitch.tv/magic",
+    "estimated": false,
+    "source": "https://magic.gg/",
+    "days": [
+      {
+        "date": "2026-11-13",
+        "start": "09:00",
+        "end": "20:00",
+        "subject": "Draft Day 1"
+      },
+      {
+        "date": "2026-11-14",
+        "start": "09:00",
+        "end": "20:00",
+        "subject": "Draft Day 2"
+      },
+      {
+        "date": "2026-11-15",
+        "start": "09:00",
+        "end": "17:00",
+        "subject": "Top 8"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Minneapolis",
+    "kind": "spotlight",
+    "details": "Star Trek Limited",
+    "draft": true,
+    "timezone": "America/Chicago",
+    "stream": "https://twitch.tv/starcitygames",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-01-09",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-01-10",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Lille",
+    "kind": "spotlight",
+    "details": "Star Trek Limited",
+    "draft": true,
+    "timezone": "Europe/Paris",
+    "stream": null,
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-01-09",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-01-10",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Pro Tour Nauctis",
+    "kind": "pt",
+    "details": "Nauctis Draft & Modern",
+    "draft": true,
+    "timezone": "America/Detroit",
+    "stream": "https://twitch.tv/magic",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/magiccon-heads-to-japan-europe-and-the-us-in-2027",
+    "days": [
+      {
+        "date": "2027-02-26",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-02-27",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Day 2"
+      },
+      {
+        "date": "2027-02-28",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Top 8"
+      }
+    ]
+  },
+  {
+    "name": "Arena Championship 14",
+    "kind": "ac",
+    "details": "Pioneer",
+    "draft": false,
+    "timezone": "America/Los_Angeles",
+    "stream": "https://twitch.tv/magic",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/mtg-arena/qualifier-play-ins-and-qualifier-weekend-information",
+    "days": [
+      {
+        "date": "2027-03-13",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-03-14",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Zagreb",
+    "kind": "spotlight",
+    "details": "Nauctis Limited",
+    "draft": true,
+    "timezone": "Europe/Zagreb",
+    "stream": null,
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-03-13",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-03-14",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Toronto",
+    "kind": "spotlight",
+    "details": "Nauctis Limited",
+    "draft": true,
+    "timezone": "America/Toronto",
+    "stream": null,
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-03-20",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-03-21",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Seattle",
+    "kind": "spotlight",
+    "details": "Modern",
+    "draft": false,
+    "timezone": "America/Los_Angeles",
+    "stream": "https://twitch.tv/starcitygames",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-04-24",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-04-25",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Pro Tour Tokyo",
+    "kind": "pt",
+    "details": "Draft & Standard",
+    "draft": true,
+    "timezone": "Asia/Tokyo",
+    "stream": "https://twitch.tv/magic",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/magiccon-heads-to-japan-europe-and-the-us-in-2027",
+    "days": [
+      {
+        "date": "2027-05-14",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-05-15",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Day 2"
+      },
+      {
+        "date": "2027-05-16",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Top 8"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Beijing",
+    "kind": "spotlight",
+    "details": "Modern",
+    "draft": false,
+    "timezone": "Asia/Shanghai",
+    "stream": null,
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-05-22",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-05-23",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Hartford",
+    "kind": "spotlight",
+    "details": "Kamigawa: Titanbreach Limited",
+    "draft": true,
+    "timezone": "America/New_York",
+    "stream": "https://twitch.tv/starcitygames",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-06-12",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-06-13",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Arena Championship 15",
+    "kind": "ac",
+    "details": "Standard",
+    "draft": false,
+    "timezone": "America/Los_Angeles",
+    "stream": "https://twitch.tv/magic",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/mtg-arena/qualifier-play-ins-and-qualifier-weekend-information",
+    "days": [
+      {
+        "date": "2027-07-10",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-07-11",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Shizuoka",
+    "kind": "spotlight",
+    "details": "Kamigawa: Titanbreach Limited",
+    "draft": true,
+    "timezone": "Asia/Tokyo",
+    "stream": null,
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-07-24",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-07-25",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Montreal",
+    "kind": "spotlight",
+    "details": "Kamigawa: Titanbreach Limited",
+    "draft": true,
+    "timezone": "America/Toronto",
+    "stream": null,
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-07-24",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-07-25",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Washington DC",
+    "kind": "spotlight",
+    "details": "Team Limited",
+    "draft": true,
+    "timezone": "America/New_York",
+    "stream": "https://twitch.tv/starcitygames",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-08-14",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-08-15",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Pro Tour Las Vegas",
+    "kind": "pt",
+    "details": "Draft & Standard",
+    "draft": true,
+    "timezone": "America/Los_Angeles",
+    "stream": "https://twitch.tv/magic",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/magiccon-heads-to-japan-europe-and-the-us-in-2027",
+    "days": [
+      {
+        "date": "2027-08-27",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-08-28",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Day 2"
+      },
+      {
+        "date": "2027-08-29",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Top 8"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Utrecht",
+    "kind": "spotlight",
+    "details": "Team Limited",
+    "draft": true,
+    "timezone": "Europe/Amsterdam",
+    "stream": null,
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-09-04",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-09-05",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Sydney",
+    "kind": "spotlight",
+    "details": "Team Limited",
+    "draft": true,
+    "timezone": "Australia/Sydney",
+    "stream": null,
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-09-04",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-09-05",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Arena Championship 16",
+    "kind": "ac",
+    "details": "Historic",
+    "draft": false,
+    "timezone": "America/Los_Angeles",
+    "stream": "https://twitch.tv/magic",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/mtg-arena/qualifier-play-ins-and-qualifier-weekend-information",
+    "days": [
+      {
+        "date": "2027-10-16",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-10-17",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Valencia",
+    "kind": "spotlight",
+    "details": "Pioneer",
+    "draft": false,
+    "timezone": "Europe/Madrid",
+    "stream": null,
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-10-16",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-10-17",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "Spotlight Series Dallas-Fort Worth",
+    "kind": "spotlight",
+    "details": "Pioneer",
+    "draft": false,
+    "timezone": "America/Chicago",
+    "stream": "https://twitch.tv/starcitygames",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/everything-new-for-competitive-play-in-2027",
+    "days": [
+      {
+        "date": "2027-10-23",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-10-24",
+        "start": "09:00",
+        "end": "18:00",
+        "subject": "Day 2"
+      }
+    ]
+  },
+  {
+    "name": "World Championship 33",
+    "kind": "worlds",
+    "details": "Draft & Standard",
+    "draft": true,
+    "timezone": "Europe/Amsterdam",
+    "stream": "https://twitch.tv/magic",
+    "estimated": true,
+    "source": "https://magic.wizards.com/en/news/announcements/magiccon-heads-to-japan-europe-and-the-us-in-2027",
+    "days": [
+      {
+        "date": "2027-12-03",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Day 1"
+      },
+      {
+        "date": "2027-12-04",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Day 2"
+      },
+      {
+        "date": "2027-12-05",
+        "start": "09:00",
+        "end": "19:00",
+        "subject": "Top 8"
+      }
+    ]
+  }
+]

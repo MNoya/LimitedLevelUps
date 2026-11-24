@@ -23,7 +23,7 @@ from bot.services.fantasy_posts import (
 )
 from bot.services.ping_roles import FANTASY_CHAMPION_ROLE_NAME
 from bot.services.pod_roles import role_label
-from bot.services.watch_party import PREMIER_SCHEDULES
+from bot.services.pro_events import event_schedule
 
 PREVIEW_EVENT = "WC32"
 PREVIEW_CREST = (
@@ -37,7 +37,7 @@ async def setup(bot: commands.Bot) -> None:
     @commands.is_owner()
     async def test_pro_play(ctx: commands.Context) -> None:
         event = event_for(PREVIEW_EVENT)
-        schedule = PREMIER_SCHEDULES[event.schedule_name]
+        schedule = event_schedule(event.schedule_name)
         day_one_starts = datetime.combine(schedule.days[0].day, schedule.days[0].start, schedule.tz)
         winners = podium_sync(PREVIEW_EVENT) or sample_winners()
         champion_role = role_label(ctx.guild, FANTASY_CHAMPION_ROLE_NAME)

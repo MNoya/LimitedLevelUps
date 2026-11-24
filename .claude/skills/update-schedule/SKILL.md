@@ -10,7 +10,9 @@ Rebuild `event_calendar.json` from two sources and reconcile the code with whate
 ## Two sources
 
 - **Wizards' MTG Arena event schedule article** owns the Arena queues: Premier, Pick-Two, Traditional, Quick, Sealed, Flashback, Contender, Arena Direct, Cube, Omniscience, Mixed-Up and the Arena Championship Qualifiers. Wizards posts it weeks before release, and when the two disagree it is the one that is right.
-- **MTG Scribe** keeps everything else: Pro Tours, Worlds, Regional Championships, Spotlight Series, prerelease and release dates, and Constructed events.
+- **MTG Scribe** keeps everything else on Arena: prerelease and release dates and Constructed events.
+
+The pro events the watch party covers do not come from either source. Worlds, Pro Tours, Arena Championships and Spotlight Series live in the hand-kept `pro_events.json`, filled from Wizards' and magic.gg's announcements, because Scribe adds them late or not at all. Step 4b keeps it current.
 
 `event_calendar.json` keeps Scribe's shape for both sources, because every reader parses Scribe-style titles and tags.
 
@@ -71,12 +73,16 @@ Exits 1 when anything needs a look. Each line is one of:
 | `reruns rotated-out CODE with no flashback tag` | **Expected, no code change.** Scribe tags only the next rerun or two at publish. These render as their own set headers and do not announce until it backfills. Report the list so the user knows a mid-season re-run of this skill is worth it. |
 | `tag 'X' looks competitive but is not in COMPETITIVE_TAGS` | **Fix.** Add it to `COMPETITIVE_TAGS` (`bot/services/mtgscribe.py`). Then check `build_competitive_reminder` names the right format — `_limited_format` reads Sealed-vs-Draft off the tags, so a Draft-tagged event must not be called Sealed. |
 | `set CODE has no frontend/public/set-symbols/...png` | **Fix.** `generate_set_symbols CODE`, then `upload_app_emojis keyrune:code` against **both** the test and prod apps (it targets whichever app `DISCORD_BOT_TOKEN` belongs to). |
-| `premier event 'X' has no PREMIER_SCHEDULES entry` | **Fix.** Look up the event's official schedule on magic.gg, the fact sheet or viewer's guide, and add a `PremierSchedule` to `PREMIER_SCHEDULES` (`bot/services/watch_party.py`): its timezone, each day's start, end and subject, and for a Pro Tour its `ordinal` such as `first PT of 2027`. With no published times, add an estimate and say so in the report. The watch party channel builds its Scheduled Event and announcement from this row. |
+| `pro event 'X' starts <date> on estimated times` | **Fix.** Look up the event's official schedule on magic.gg, the fact sheet or viewer's guide, and replace its days in `pro_events.json` with the published timezone, start, end and subject, then set `estimated` to false. The watch party builds its Scheduled Event and announcement from these rows. |
 | `Arena Powered Cube <dates> is missing from cube_variants.json` / `has different dates in` | **Fix.** Add or correct the printed row in that cube's `seasons` in `cube_variants.json`. The bot syncs `cube_seasons` from the registry on every startup, so the season board fills in on deploy with no seed step, and a season stays hidden until its first draft. |
 | `title 'X' still carries an HTML entity` | **Investigate.** `_parse_event` unescapes once; a survivor means upstream double-encoded. |
 | `new tag 'X'` / `new format label 'X'` | **Read.** Most are harmless. A rename shows up as one new label plus its old one going quiet, so cross-check against the render in step 6. |
 
 Apply the mechanical fixes yourself. Ask the user before anything that changes copy or announce routing.
+
+### 4b. Refresh the pro events
+
+Search Wizards and magic.gg for pro events announced since the last run: Pro Tours, the World Championship, Arena Championships and Spotlight Series. Add each one to `pro_events.json` with its `kind` (`worlds`, `pt`, `ac` or `spotlight`), `details`, `draft`, the venue's `timezone`, its `stream` when known, `source` and one row per day. Without published times, use 9 AM to 6 PM local for a two-day event or 9 AM to 7 PM with a Top 8 last day for a three-day one, and set `estimated` to true. Rename a placeholder such as `Pro Tour Tokyo` once Wizards names its set, unless a fantasy event already points at the name through `scheduleName`.
 
 ### 5. Flashback season starts
 

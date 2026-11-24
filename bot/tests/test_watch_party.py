@@ -6,54 +6,18 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
-from bot.services.mtgscribe import ScribeEvent
-from bot.services.watch_party import channel_name, covered_events, coverage_windows, named_window
+from bot.services.pro_events import load_pro_events, parse_pro_events
+from bot.services.watch_party import channel_name, coverage_windows, named_window
 from bot.tasks import watch_party_post
 from bot.tasks.watch_party_post import TICK, window_embed_state
 
 
-def _event(title, tags, first_day, last_day):
-    start = datetime.combine(first_day, datetime.min.time())
-    end = datetime.combine(last_day, datetime.max.time())
-    format_label, _, group_label = title.partition(": ")
-    return ScribeEvent(
-        title=title, format_label=format_label, group_label=group_label,
-        start=start.replace(tzinfo=timezone.utc), end=end.replace(tzinfo=timezone.utc),
-        start_local=start, end_local=end, tag_slugs=tuple(tags),
-    )
-
-
-@pytest.mark.parametrize("title, tags, counted", [
-    ("World Championship 32: Standard", (), True),
-    ("Pro Tour Nauctis: Draft", ("tabletop",), True),
-    ("Arena Championship 13: Standard", ("arena-championship",), True),
-    ("ACQ Weekend: Standard", ("arena-championship", "qualifier"), False),
-    ("Arena Championship Qualifier Weekend: Standard", ("arena",), False),
-    ("US Regional Championship: Baltimore – Modern", ("regional-championship",), False),
-    ("US Regional Championship: Los Angeles – Modern", ("regional-championship", "coverage"), True),
-    ("Spotlight Series Hartford: Standard", ("coverage",), True),
-    ("Premier Draft: Reality Fracture", ("arena", "coverage"), False),
-])
-def test_an_event_counts_by_tag_or_title(title, tags, counted):
-    event = _event(title, tags, date(2026, 10, 23), date(2026, 10, 25))
-
-    covered = covered_events([event])
-
-    assert bool(covered) is counted
-
-
 CALENDAR = [
-    _event("Spotlight Series Hartford: Standard", ("coverage", "magic-spotlight-series"),
-           date(2026, 10, 23), date(2026, 10, 25)),
-    _event("Arena Championship 13: Standard", ("coverage", "arena-championship"),
-           date(2026, 10, 24), date(2026, 10, 25)),
-    _event("World Championship 32: Standard", ("coverage", "magic-world-championship"),
-           date(2026, 11, 13), date(2026, 11, 15)),
+    {"name": "Spotlight Series Hartford", "kind": "spotlight", "days": ["2026-10-23", "2026-10-25"]},
+    {"name": "Arena Championship 13", "kind": "ac", "days": ["2026-10-24", "2026-10-25"]},
+    {"name": "World Championship 32", "kind": "worlds", "days": ["2026-11-13", "2026-11-15"]},
 ]
-
-
-AC_AFTER_WORLDS = _event("Arena Championship 14: Standard", ("coverage", "arena-championship"),
-                         date(2026, 11, 20), date(2026, 11, 22))
+AC_AFTER_WORLDS = {"name": "Arena Championship 14", "kind": "ac", "days": ["2026-11-20", "2026-11-22"]}
 
 
 @pytest.mark.parametrize("calendar, today, expected", [
@@ -68,7 +32,7 @@ AC_AFTER_WORLDS = _event("Arena Championship 14: Standard", ("coverage", "arena-
 def test_the_channel_keeps_the_last_name_until_the_next_window_is_a_week_out_after_a_premier_holds_a_week(
     calendar, today, expected,
 ):
-    windows = coverage_windows(calendar)
+    windows = coverage_windows(_pro_events(calendar))
 
     name = channel_name(named_window(windows, today))
 
@@ -76,7 +40,7 @@ def test_the_channel_keeps_the_last_name_until_the_next_window_is_a_week_out_aft
 
 
 def test_each_window_posts_its_upcoming_and_live_embeds_on_exactly_one_tick():
-    windows = coverage_windows(CALENDAR)
+    windows = coverage_windows(_pro_events(CALENDAR))
     ticks = [datetime(2026, 10, 1, tzinfo=timezone.utc) + TICK * step for step in range(60 * 24 * 4)]
 
     posts = []
@@ -91,9 +55,26 @@ def test_an_unreadable_pin_list_posts_no_new_coverage_pin(monkeypatch):
     monkeypatch.setattr(watch_party_post, "_bot", SimpleNamespace(fetch_application_emojis=AsyncMock(return_value=[])))
     channel = _UnreachablePinsChannel()
 
-    asyncio.run(watch_party_post._refresh_coverage_pin(channel, CALENDAR))
+    asyncio.run(watch_party_post._refresh_coverage_pin(channel, _pro_events(CALENDAR)))
 
     channel.send.assert_not_awaited()
+
+
+def test_the_bundled_pro_events_file_parses_with_known_kinds_and_ordered_days():
+    events = load_pro_events.__wrapped__()
+
+    assert events
+    assert all(list(covered.schedule.days) == sorted(covered.schedule.days, key=lambda day: day.day)
+               for covered in events)
+
+
+def _pro_events(calendar: list[dict]) -> list:
+    raw = []
+    for entry in calendar:
+        days = [{"date": day, "start": "09:00", "end": "18:00", "subject": ""} for day in entry["days"]]
+        raw.append({"name": entry["name"], "kind": entry["kind"], "details": "Standard", "draft": False,
+                    "timezone": "America/New_York", "stream": None, "estimated": False, "days": days})
+    return parse_pro_events(raw)
 
 
 class _UnreachablePinsChannel:

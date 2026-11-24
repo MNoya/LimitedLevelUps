@@ -14,7 +14,7 @@ from bot.services.fantasy_event import FantasyEvent, all_events
 from bot.services.fantasy_reveal import advance_auto_reveal
 from bot.services.fantasy_sync import SyncSummary, sync_event
 from bot.services.melee import MeleeClient
-from bot.services.watch_party import PREMIER_SCHEDULES
+from bot.services.pro_events import event_schedule
 from bot.tasks.pro_play_posts import alert_unseeded_bracket, announce_reveal, fire_pro_play_posts, init_pro_play_posts
 
 log = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ def sync_due(event: FantasyEvent, now: datetime) -> bool:
 def live_window(event: FantasyEvent) -> tuple[datetime, datetime] | None:
     if event.replay_only or event.schedule_name is None:
         return None
-    schedule = PREMIER_SCHEDULES.get(event.schedule_name)
+    schedule = event_schedule(event.schedule_name)
     if schedule is None:
         return None
     first, last = schedule.days[0], schedule.days[-1]

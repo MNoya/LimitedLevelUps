@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 
 import discord
@@ -17,14 +18,12 @@ from bot.commands.event_scribe import (
 from bot.commands.messages import MSG_EVENT_LIVE
 from bot.config import settings
 from bot.discord_helpers import channel_matching_name
-from bot.services import mtgscribe
 from bot.tasks.format_schedule_post import create_pinned_schedule, pinned_schedule
+from bot.services.pro_events import HEADLINER_ORDER, CoveredEvent, load_pro_events
 from bot.services.watch_party import (
     CHANNEL_TZ,
-    HEADLINER_ORDER,
     UPCOMING_LEAD,
     CoverageWindow,
-    CoveredEvent,
     channel_name,
     coverage_windows,
     named_window,
@@ -71,7 +70,7 @@ async def fire_watch_party() -> None:
         log.debug(f"watch-party: channel {settings.watch_party_channel_id} unavailable; skipping tick")
         return
     now = datetime.now(timezone.utc)
-    events = mtgscribe.load_events(arena_only=False)
+    events = load_pro_events()
     today = now.astimezone(CHANNEL_TZ).date()
     windows = upcoming_windows(events, today)
     await _sync_channel(channel, named_window(coverage_windows(events), today), channel_topic(windows, today))
@@ -90,24 +89,20 @@ def channel_topic(windows: list[CoverageWindow], today: date) -> str:
         return "\n".join(lines)
     current = windows[0]
     if current.first_day <= today:
-        lines.append(MSG_TOPIC_NOW.format(names=_names(current), dates=_window_dates(current)))
+        lines.append(MSG_TOPIC_NOW.format(names=_names(current), dates=_dates(current)))
         following = windows[1] if len(windows) > 1 else None
     else:
         following = current
     if following is not None:
-        lines.append(MSG_TOPIC_NEXT.format(names=_names(following), dates=_window_dates(following)))
+        lines.append(MSG_TOPIC_NEXT.format(names=_names(following), dates=_dates(following)))
     urls = _stream_urls(current)
     if urls:
         lines.append(MSG_TOPIC_STREAMS.format(urls=_join(urls)))
     return "\n".join(lines)
 
 
-def scheduled_event_candidates(window: CoverageWindow) -> list[CoveredEvent]:
-    return [covered for covered in window.events if covered.kind.scheduled_event]
-
-
-def announcement_candidates(window: CoverageWindow) -> list[CoveredEvent]:
-    return [covered for covered in window.events if covered.kind.announced]
+def headline_events(window: CoverageWindow) -> list[CoveredEvent]:
+    return [covered for covered in window.events if covered.kind.headline]
 
 
 def tick_start(now: datetime) -> datetime:
@@ -139,7 +134,7 @@ def build_window_embed(window: CoverageWindow, emojis: dict, *, live: bool) -> d
         ))
     else:
         lines.append(MSG_WINDOW_DATES.format(
-            dates=_event_dates(headliner), relative=format_dt(headliner.starts_at(), "R"),
+            dates=_dates(headliner), relative=format_dt(headliner.starts_at(), "R"),
         ))
     others = [covered for covered in _ranked(window) if covered is not headliner]
     if others:
@@ -187,7 +182,7 @@ async def _sync_channel(channel: discord.TextChannel, window: CoverageWindow | N
         log.warning(f"watch-party: could not rename the channel to {name}", exc_info=True)
 
 
-async def _refresh_coverage_pin(channel: discord.TextChannel, events: list) -> None:
+async def _refresh_coverage_pin(channel: discord.TextChannel, events: Sequence[CoveredEvent]) -> None:
     emojis = {emoji.name: emoji for emoji in await _bot.fetch_application_emojis()}
     payload = build_coverage_payload(events, emojis)
     try:
@@ -221,7 +216,7 @@ async def _post_window_embeds(channel: discord.TextChannel, windows: list[Covera
 
 async def _create_scheduled_events(channel: discord.TextChannel, window: CoverageWindow, now: datetime) -> None:
     existing = {event.name for event in channel.guild.scheduled_events}
-    for covered in scheduled_event_candidates(window):
+    for covered in headline_events(window):
         if covered.name in existing or covered.starts_at() <= now:
             continue
         try:
@@ -240,7 +235,7 @@ async def _create_scheduled_events(channel: discord.TextChannel, window: Coverag
 
 
 async def _announce_started_events(channel: discord.TextChannel, window: CoverageWindow, tick: datetime) -> None:
-    for covered in announcement_candidates(window):
+    for covered in headline_events(window):
         if not _is_due(covered.starts_at(), tick):
             continue
         await channel.send(build_announcement(covered), allowed_mentions=discord.AllowedMentions.none())
@@ -275,18 +270,12 @@ def _ranked(window: CoverageWindow) -> list[CoveredEvent]:
 
 
 def _also_line(covered: CoveredEvent) -> str:
-    parts = [covered.name, covered.details, _event_dates(covered)]
+    parts = [covered.name, covered.details, _dates(covered)]
     return ", ".join(part for part in parts if part)
 
 
-def _event_dates(covered: CoveredEvent) -> str:
-    return date_range(covered.event.start_local, covered.event.end_local)
-
-
-def _window_dates(window: CoverageWindow) -> str:
-    start = datetime.combine(window.first_day, datetime.min.time())
-    end = datetime.combine(window.last_day, datetime.min.time())
-    return date_range(start, end)
+def _dates(span: CoverageWindow | CoveredEvent) -> str:
+    return date_range(span.first_day, span.last_day)
 
 
 def _stream_urls(window: CoverageWindow) -> list[str]:

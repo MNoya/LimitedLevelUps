@@ -1,7 +1,7 @@
 """Merge a set's official MTG Arena event schedule article into ``event_calendar.json``.
 
 Wizards posts each set's full Arena calendar in advance, weeks before MTG Scribe catches up, so the Arena
-queues come from that article and Scribe keeps the tabletop events, coverage and Constructed. Run it after
+queues come from that article and Scribe keeps the release dates and Constructed. Run it after
 ``snapshot_scribe``:
 
     .venv/bin/python -m bot.scripts.arena_schedule https://magic.wizards.com/en/news/mtg-arena/<set>-event-schedule

@@ -22,15 +22,17 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import json
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 
+from bot.config import USER_AGENT
 from bot.sets import ALL_SETS, MTGO_FLASHBACK_SETS
 
 KEYRUNE_SVG_URL = "https://cdn.jsdelivr.net/gh/andrewgioia/keyrune@latest/svg/{code}.svg"
-SCRYFALL_SVG_URL = "https://svgs.scryfall.io/sets/{code}.svg"
+SCRYFALL_SET_URL = "https://api.scryfall.com/sets/{code}"
 OUTPUT_DIR = Path(__file__).resolve().parents[2] / "frontend" / "public" / "set-symbols"
 SYMBOL_PX = 256
 
@@ -60,21 +62,36 @@ def _fetch_white_svg(code: str) -> str | None:
     glyph = KEYRUNE_ALIAS.get(code.upper(), code.lower())
     svg = fetch_white_svg(KEYRUNE_SVG_URL.format(code=glyph))
     if svg is None:
-        svg = fetch_white_svg(SCRYFALL_SVG_URL.format(code=code.lower()))
+        svg = fetch_scryfall_svg(code)
     return svg
+
+
+def fetch_scryfall_svg(code: str) -> str | None:
+    request = urllib.request.Request(SCRYFALL_SET_URL.format(code=code.lower()), headers={
+        "User-Agent": USER_AGENT, "Accept": "application/json",
+    })
+    body = _read_or_none(request)
+    icon_url = json.loads(body).get("icon_svg_uri") if body else None
+    return fetch_white_svg(icon_url) if icon_url else None
 
 
 def fetch_white_svg(url: str) -> str | None:
     """The icon at `url` recolored white and squared, or None when there is none. Keyrune paints its glyphs
     #444 and Scryfall leaves the fill unset, so both the explicit color and the root default turn white."""
+    raw = _read_or_none(url)
+    if raw is None:
+        return None
+    return squarify(raw.replace("#444", "#ffffff").replace("<svg ", '<svg fill="#ffffff" ', 1))
+
+
+def _read_or_none(url: str | urllib.request.Request) -> str | None:
     try:
         with urllib.request.urlopen(url, timeout=20) as resp:
-            raw = resp.read().decode("utf-8")
+            return resp.read().decode("utf-8")
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return None
         raise
-    return squarify(raw.replace("#444", "#ffffff").replace("<svg ", '<svg fill="#ffffff" ', 1))
 
 
 def squarify(svg: str) -> str:

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import discord
@@ -18,7 +19,8 @@ from bot.discord_helpers import NBSP, posts_publicly
 from bot.services import mtgscribe
 from bot.services.format_schedule import season_archived
 from bot.services.scribe_formats import short_format
-from bot.services.watch_party import ARENA_CHAMPIONSHIP, CHANNEL_TZ, WORLDS, CoveredEvent, upcoming_windows
+from bot.services.pro_events import ARENA_CHAMPIONSHIP, WORLDS, CoveredEvent, load_pro_events
+from bot.services.watch_party import CHANNEL_TZ, upcoming_windows
 from bot.sets import ALL_SETS
 
 logger = logging.getLogger(__name__)
@@ -95,16 +97,16 @@ class EventScribe(commands.Cog):
                            set: str | None = None) -> None:
         await interaction.response.defer(ephemeral=not posts_publicly(interaction))
         selected = format.value if format else None
-        try:
-            events = mtgscribe.load_events(arena_only=selected != COVERAGE_FILTER)
-        except Exception:
-            logger.exception("event-schedule could not read the bundled event calendar")
-            await interaction.followup.send("MTG Scribe events are unavailable right now. Try again later")
-            return
         if selected == COVERAGE_FILTER:
             emojis = {emoji.name: emoji for emoji in await self.bot.fetch_application_emojis()}
             audit.event("event_scribe_invoked", user_id=str(interaction.user.id), format=selected, set="all")
-            await interaction.followup.send(**build_coverage_payload(events, emojis))
+            await interaction.followup.send(**build_coverage_payload(load_pro_events(), emojis))
+            return
+        try:
+            events = mtgscribe.load_events()
+        except Exception:
+            logger.exception("event-schedule could not read the bundled event calendar")
+            await interaction.followup.send("MTG Scribe events are unavailable right now. Try again later")
             return
         archival = archives_set_query(set)
         if archival:
@@ -234,7 +236,7 @@ def build_schedule_embed(in_progress: list, upcoming: list, emojis: dict, scope:
     )
 
 
-def build_coverage_payload(events: list, emojis: dict) -> dict:
+def build_coverage_payload(events: Sequence[CoveredEvent], emojis: dict) -> dict:
     today = datetime.now(CHANNEL_TZ).date()
     covered = [event for window in upcoming_windows(events, today) for event in window.events]
     running = [event for event in covered if event.first_day <= today]
@@ -252,7 +254,7 @@ def build_coverage_payload(events: list, emojis: dict) -> dict:
 
 
 def _coverage_block(covered: CoveredEvent, emojis: dict) -> str:
-    dates = date_range(covered.event.start_local, covered.event.end_local)
+    dates = date_range(covered.first_day, covered.last_day)
     emoji = coverage_emoji(covered, emojis)
     lead = f"{emoji} " if emoji else ""
     return f"{lead}**{covered.name}**\n{NBSP}└{NBSP}{NBSP}{covered.details}, {dates}"
@@ -689,7 +691,7 @@ def _join_formats(formats: list) -> str:
     return f"{joined} Draft"
 
 
-def date_range(start: datetime, end: datetime) -> str:
+def date_range(start: date, end: date) -> str:
     if (start.year, start.month) == (end.year, end.month):
         return f"{start:%B %-d}–{end:%-d}"
     return f"{start:%b %-d}–{end:%b %-d}"

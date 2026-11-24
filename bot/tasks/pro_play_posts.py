@@ -36,7 +36,7 @@ from bot.services.fantasy_reveal import (
 from bot.services.ping_roles import FANTASY_CHAMPION_ROLE_NAME
 from bot.services.pod_roles import find_role, role_label, rotate_role
 from bot.services.role_ping import ensure_member_cache
-from bot.services.watch_party import PREMIER_SCHEDULES
+from bot.services.pro_events import event_schedule
 
 TICK = timedelta(minutes=10)
 PICKS_OPEN_LEAD = timedelta(days=7)
@@ -89,7 +89,7 @@ def timed_posts(event: FantasyEvent) -> list[tuple[datetime, Callable[[], discor
     ]
     for lead in CLOSE_REMINDER_LEADS:
         posts.append((event.picks_lock_at - lead, lambda: close_reminder_embed(event)))
-    schedule = PREMIER_SCHEDULES.get(event.schedule_name or "")
+    schedule = event_schedule(event.schedule_name)
     if schedule is not None:
         for label, day in zip(DAY_LABELS, schedule.days):
             starts_at = datetime.combine(day.day, day.start, schedule.tz)

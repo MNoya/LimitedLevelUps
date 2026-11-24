@@ -84,14 +84,9 @@ COMPETITIVE_TAGS = ("play-in", "qualifier", "arena-championship", "arena-limited
                     "arena-limited-championship", "arena-open")
 
 
-def load_events(*, arena_only: bool = True) -> list[ScribeEvent]:
-    """Every event in the bundled calendar. No network, so this is the read every command and tick uses.
-
-    ``arena_only`` keeps MTG Arena client events (the ``arena`` tag) and drops tabletop
-    programs. The Limited-vs-Constructed cut is left to the caller, so the Midweek view
-    can surface constructed queues.
-    """
-    events = _parse_event_dicts(_load_calendar(), arena_only)
+def load_events() -> list[ScribeEvent]:
+    """The bundled calendar's MTG Arena events, read with no network by every command and tick"""
+    events = [event for event in map(_parse_event, _load_calendar()) if ARENA_TAG in event.tag_slugs]
     _warn_if_stale(events)
     return events
 
@@ -131,13 +126,6 @@ def fetch_raw_events(start_date: date) -> list[dict]:
 def _load_calendar() -> list[dict]:
     with CALENDAR_PATH.open(encoding="utf-8") as calendar:
         return json.load(calendar)
-
-
-def _parse_event_dicts(raw_events: list[dict], arena_only: bool) -> list[ScribeEvent]:
-    events = [_parse_event(raw) for raw in raw_events]
-    if arena_only:
-        return [event for event in events if ARENA_TAG in event.tag_slugs]
-    return events
 
 
 def _warn_if_stale(events: list[ScribeEvent]) -> None:

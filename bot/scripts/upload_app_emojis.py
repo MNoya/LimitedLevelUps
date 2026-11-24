@@ -27,13 +27,15 @@ from pathlib import Path
 import requests
 
 from bot.config import settings
-from bot.scripts.generate_set_symbols import fetch_white_svg, rasterize
+from bot.scripts.generate_set_symbols import fetch_scryfall_svg, fetch_white_svg, rasterize
 
 API_BASE = "https://discord.com/api/v10"
-SVG_URLS = {
-    "keyrune": "https://cdn.jsdelivr.net/gh/andrewgioia/keyrune@latest/svg/{glyph}.svg",
-    "mana": "https://cdn.jsdelivr.net/gh/andrewgioia/mana@latest/svg/{glyph}.svg",
-    "scryfall": "https://svgs.scryfall.io/sets/{glyph}.svg",
+KEYRUNE_URL = "https://cdn.jsdelivr.net/gh/andrewgioia/keyrune@latest/svg/{glyph}.svg"
+MANA_URL = "https://cdn.jsdelivr.net/gh/andrewgioia/mana@latest/svg/{glyph}.svg"
+SVG_FETCHERS = {
+    "keyrune": lambda glyph: fetch_white_svg(KEYRUNE_URL.format(glyph=glyph)),
+    "mana": lambda glyph: fetch_white_svg(MANA_URL.format(glyph=glyph)),
+    "scryfall": fetch_scryfall_svg,
 }
 EMOJI_PX = 128
 SPLASH_SCALE = 0.6
@@ -80,7 +82,7 @@ def upload(specs: list[tuple[str, str, str]], force: bool) -> int:
 def _render_glyph(source: str, glyph: str, name: str) -> bytes | None:
     if source == "file":
         return _render_file(glyph)
-    svg = fetch_white_svg(SVG_URLS[source].format(glyph=glyph))
+    svg = SVG_FETCHERS[source](glyph)
     if svg is None:
         return None
     workdir = Path(__file__).resolve().parent
@@ -146,7 +148,7 @@ def anchor_bottom_left_png(raw: bytes, size: int, scale: float) -> bytes:
 
 def parse_spec(arg: str) -> tuple[str, str, str] | None:
     parts = arg.split(":")
-    if len(parts) not in (2, 3) or (parts[0] not in SVG_URLS and parts[0] not in ("file", "appsplash")):
+    if len(parts) not in (2, 3) or (parts[0] not in SVG_FETCHERS and parts[0] not in ("file", "appsplash")):
         return None
     source, glyph = parts[0], parts[1]
     default_name = re.sub(r"[^A-Za-z0-9_]", "", Path(glyph).stem if source == "file" else glyph)
@@ -164,10 +166,11 @@ def main(argv: list[str]) -> int:
     for arg in args:
         spec = parse_spec(arg)
         if spec is None:
-            print(f"bad spec {arg!r}; expected source:glyph[:name] (keyrune|mana|appsplash|file)", file=sys.stderr)
+            expected = "source:glyph[:name] (keyrune|mana|scryfall|appsplash|file)"
+            print(f"bad spec {arg!r}; expected {expected}", file=sys.stderr)
             return 1
         specs.append(spec)
-    if any(source in SVG_URLS for source, _glyph, _name in specs) and shutil.which("inkscape") is None:
+    if any(source in SVG_FETCHERS for source, _glyph, _name in specs) and shutil.which("inkscape") is None:
         print("inkscape not found on PATH", file=sys.stderr)
         return 1
     return upload(specs, force)
