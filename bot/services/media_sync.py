@@ -5,6 +5,7 @@ unmatched videos become standalone rows. Category and set come from the YouTube 
 video belongs to, falling back to title inference for podcast-only entries. Rebuilt on each
 run — the feeds stay the source of truth.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bot.config import settings
-from bot.media_sets import EVERGREEN, by_code, resolve_set
+from bot.media_sets import EVERGREEN, MediaSet, by_code, resolve_set
 from bot.models import Episode
 from bot.services.youtube import YouTubeClient, YouTubeVideo
 
@@ -108,9 +109,9 @@ def sync_recent(session: Session, limit: int = 8) -> SyncResult:
     """Insert brand-new drops and backfill a freshly published video onto an existing podcast-only
     row, reclassifying it from the video's playlists. Rows that already carry a video are left
     untouched — the daily ``sync_media`` owns full reconciliation and back-catalogue pruning."""
-    podcasts = sorted(
-        _fetch_podcast_items(settings.libsyn_feed_url), key=lambda i: i.published_at, reverse=True
-    )[:limit]
+    podcasts = sorted(_fetch_podcast_items(settings.libsyn_feed_url), key=lambda i: i.published_at, reverse=True)[
+        :limit
+    ]
 
     videos: list[YouTubeVideo] = []
     if settings.youtube_api_key:
@@ -126,8 +127,7 @@ def sync_recent(session: Session, limit: int = 8) -> SyncResult:
 
 def _classify_items(items: list[_Item]) -> None:
     for item in items:
-        item.category = classify_category(item.playlists, item.title, item.kind, item.guid)
-        media_set = resolve_episode_set(item.guid, item.playlists, item.title, item.published_at)
+        item.category, media_set = classify_episode(item.guid, item.playlists, item.title, item.kind, item.published_at)
         if media_set is EVERGREEN:
             item.set_code = item.set_name = item.set_released_at = None
         else:
@@ -136,12 +136,20 @@ def _classify_items(items: list[_Item]) -> None:
             item.set_released_at = media_set.start_date
 
 
-def classify_category(playlists: list[str], title: str, kind: str, guid: str = "") -> str:
+def classify_episode(
+    guid: str, playlists: list[str], title: str, kind: str, published: date | None
+) -> tuple[str, MediaSet]:
+    media_set = resolve_episode_set(guid, playlists, title, published)
+    return classify_category(playlists, title, kind, media_set, guid), media_set
+
+
+def classify_category(playlists: list[str], title: str, kind: str, media_set: MediaSet, guid: str = "") -> str:
     override = _category_from_title_overrides(title)
     if override:
         return override
     seeded = _SEED_CATEGORY.get(guid)
-    category = seeded or _category_from_playlists(playlists) or _category_from_title(title) or _default_category(kind)
+    matched = seeded or _category_from_playlists(playlists) or _category_from_title(title)
+    category = matched or _default_category(kind, media_set)
     # Draft is YouTube-only draft VODs; a numbered podcast episode is format talk, not a Draft-Along
     if category == "Draft" and kind == "episode":
         return "Metagame"
@@ -156,8 +164,10 @@ def resolve_episode_set(guid: str, playlists: list[str], title: str, published: 
     return resolve_set(playlists, title, published)
 
 
-def _default_category(kind: str) -> str:
-    return "Draft" if kind == "video" else "Evergreen"
+def _default_category(kind: str, media_set: MediaSet) -> str:
+    if kind == "video":
+        return "Draft"
+    return "Evergreen" if media_set is EVERGREEN else "Metagame"
 
 
 def _merge(podcasts: list[_Item], videos: list[YouTubeVideo]) -> list[_Item]:
@@ -406,21 +416,30 @@ _TITLE_OVERRIDES: tuple[tuple[str, re.Pattern[str]], ...] = (
 
 _TITLE_CATEGORY_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("Coaching", re.compile(r"coaching|draft class", re.I)),
-    ("Guest", re.compile(
-        r"conversation with|\bjoins (?:me|us)\b|\bft\.?\b|featuring|sits down with|\binterview\b",
-        re.I,
-    )),
+    (
+        "Guest",
+        re.compile(
+            r"conversation with|\bjoins (?:me|us)\b|\bft\.?\b|featuring|sits down with|\binterview\b",
+            re.I,
+        ),
+    ),
     ("Rankings", re.compile(r"tier ?list|\branking\b|best and worst|props and slops|ranked every", re.I)),
-    ("Set Review", re.compile(
-        r"set review|set overview|card evaluation|primer|first impressions|first look",
-        re.I,
-    )),
+    (
+        "Set Review",
+        re.compile(
+            r"set review|set overview|card evaluation|primer|first impressions|first look",
+            re.I,
+        ),
+    ),
     ("Sealed", re.compile(r"sealed|pre-?release", re.I)),
-    ("Metagame", re.compile(
-        r"state of the format|format address|format update|metagame|meta update"
-        r"|mid-?format|what we got wrong|late format",
-        re.I,
-    )),
+    (
+        "Metagame",
+        re.compile(
+            r"state of the format|format address|format update|metagame|meta update"
+            r"|mid-?format|what we got wrong|late format",
+            re.I,
+        ),
+    ),
     ("Draft", re.compile(r"draft-?along|draft log|live draft|drafting with", re.I)),
 )
 

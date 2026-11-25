@@ -2,10 +2,11 @@
 
     DATABASE_URL=postgresql://... python -m bot.scripts.recategorize_episodes
 
-No feed fetch — re-runs ``classify_category`` and ``resolve_set`` over existing rows, so it
+No feed fetch — re-runs ``classify_episode`` over existing rows, so it
 reflects seed / rule / set changes without a full media sync. Use to backfill after editing the
 categorizer, the seed, or the set catalog.
 """
+
 from __future__ import annotations
 
 import collections
@@ -16,7 +17,7 @@ from sqlalchemy import select
 from bot.database import SessionLocal
 from bot.media_sets import EVERGREEN
 from bot.models import Episode
-from bot.services.media_sync import classify_category, resolve_episode_set
+from bot.services.media_sync import classify_episode
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger("recategorize")
@@ -30,13 +31,14 @@ def main() -> None:
         episodes = session.execute(select(Episode)).scalars().all()
         for episode in episodes:
             playlists = episode.playlists or []
-            category = classify_category(playlists, episode.title, episode.kind, episode.guid)
+            category, media_set = classify_episode(
+                episode.guid, playlists, episode.title, episode.kind, episode.published_at
+            )
             if episode.category != category:
                 episode.category = category
                 category_changed += 1
             counts[category] += 1
 
-            media_set = resolve_episode_set(episode.guid, playlists, episode.title, episode.published_at)
             set_code = None if media_set is EVERGREEN else media_set.code
             if episode.set_code != set_code:
                 episode.set_code = set_code

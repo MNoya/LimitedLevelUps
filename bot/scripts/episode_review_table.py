@@ -1,10 +1,11 @@
 """Dump every episode with its classification for human review.
 
 Writes ``episode-categories-review.md`` at the repo root. Read-only — it reuses the live
-``classify_category`` so the artifact reflects exactly what a sync would store, and pairs it
+``classify_episode`` so the artifact reflects exactly what a sync would store, and pairs it
 with the resolved set and the source playlists so each derivation can be checked by eye. Run
 with DATABASE_URL pointed at the local DB.
 """
+
 from __future__ import annotations
 
 import re
@@ -14,7 +15,7 @@ from sqlalchemy import select
 from bot.database import SessionLocal
 from bot.media_sets import EVERGREEN
 from bot.models import Episode
-from bot.services.media_sync import classify_category, resolve_episode_set
+from bot.services.media_sync import classify_episode
 
 _SHORT_MAX_S = 90
 _SHORT_HASHTAG_MAX_S = 180
@@ -52,15 +53,15 @@ def main() -> None:
     ]
     for index, episode in enumerate(episodes, 1):
         playlists = episode.playlists or []
-        media_set = resolve_episode_set(episode.guid, playlists, episode.title, episode.published_at)
+        category, media_set = classify_episode(
+            episode.guid, playlists, episode.title, episode.kind, episode.published_at
+        )
         set_code = "—" if media_set.code == EVERGREEN.code else media_set.code
         kind = episode_type(episode.kind, episode.duration_seconds, episode.title)
-        category = classify_category(playlists, episode.title, episode.kind, episode.guid)
         date = episode.published_at.strftime("%Y-%m-%d")
         playlist_cell = _cell(", ".join(playlists))
         lines.append(
-            f"| {index} | {date} | {kind} | {set_code} | {category} "
-            f"| {_cell(episode.title)} | {playlist_cell} |"
+            f"| {index} | {date} | {kind} | {set_code} | {category} | {_cell(episode.title)} | {playlist_cell} |"
         )
 
     with open("episode-categories-review.md", "w") as handle:
