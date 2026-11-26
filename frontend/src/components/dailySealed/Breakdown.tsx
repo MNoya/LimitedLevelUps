@@ -280,7 +280,7 @@ export const PhoneBreakdown = ({ view, stickyTop }: { view: BuilderView; stickyT
       >
         <PhoneTabRow items={tabItems} active={overview ? OVERVIEW_ANCHOR : tab} onPick={pick} />
       </div>
-      <PairChips state={state} />
+      <PairChips state={state} yoursShortcut={!overview && tab === "decks"} />
       {overview && (
         <div ref={overviewRef} className="flex flex-col gap-4 pt-1" style={{ minHeight: overviewHeight }}>
           <section
@@ -343,7 +343,7 @@ export const PhoneBreakdown = ({ view, stickyTop }: { view: BuilderView; stickyT
       )}
       {!overview && tab === "decks" && (
         <>
-          <div className="relative flex justify-center px-[64px]">
+          <div className="relative flex h-8 justify-center">
             <PhoneDeckPicker state={state} />
             <div className="absolute right-0 top-0 flex gap-1">
               <FilterToggle small active={state.split} onClick={state.toggleSplit} label="Split creatures">
@@ -428,12 +428,17 @@ const useRestOfScreen = (ref: RefObject<HTMLElement | null>, active: boolean) =>
   return height;
 };
 
-const PairChips = ({ state }: { state: BreakdownState }) => (
+const PairChips = ({ state, yoursShortcut }: { state: BreakdownState; yoursShortcut: boolean }) => (
   <div className="-mx-2 flex gap-1.5 overflow-x-auto px-2 [scrollbar-width:none] [&>*]:shrink-0">
     <FilterToggle active={state.pair === null} onClick={() => state.setPair(null)} wide>
       <span className="font-display text-[12px] tracking-[0.14em]">ALL</span>
       <span className="font-num text-[13px] text-text">{state.builds.length}</span>
     </FilterToggle>
+    {yoursShortcut && state.yours && (
+      <FilterToggle active={state.deckKey === "yours"} onClick={() => state.setDeckKey("yours")} wide>
+        <span className="font-display text-[12px] tracking-[0.14em]">YOURS</span>
+      </FilterToggle>
+    )}
     {state.pairs.map((row) => (
       <FilterToggle
         key={row.pair}
@@ -487,32 +492,20 @@ const PhoneDeckPicker = ({ state }: { state: BreakdownState }) => {
     }
   };
   const colors = position === 0 ? state.original.colors : state.build?.colors;
+  const widest = widestColors(state, [state.original.colors ?? ""]);
   return (
-    <div className="flex flex-wrap items-center justify-center gap-1">
-      {state.yours && (
-        <DeckChip active={state.deckKey === "yours"} onClick={() => state.setDeckKey("yours")}>
-          YOURS
-          <Pips colors={state.yours.colors ?? ""} size={13} />
-        </DeckChip>
-      )}
+    <div className="flex items-center justify-center gap-1">
       <StepButton label="Previous build" onClick={() => step(-1)}>
         <ChevronLeft size={16} />
       </StepButton>
       <DeckChip active={state.deckKey !== "yours"} onClick={() => step(0)}>
-        BUILD
-        <span className="grid justify-items-center font-num tabular-nums">
-          <span className="invisible col-start-1 row-start-1">
-            {total}/{total}
-          </span>
-          <span className="col-start-1 row-start-1">
-            {position}/{total}
-          </span>
-        </span>
         <span className="grid justify-items-center">
-          <span className="invisible col-start-1 row-start-1">
-            <Pips colors={widestColors(state)} size={13} />
+          <span className={cn("invisible col-start-1 row-start-1 flex items-center gap-1.5", stackPips(widest))}>
+            <span className="font-num tabular-nums">#{state.builds.length}</span>
+            <Pips colors={widest} size={13} />
           </span>
-          <span className="col-start-1 row-start-1">
+          <span className={cn("col-start-1 row-start-1 flex items-center gap-1.5", stackPips(colors ?? ""))}>
+            <span className="font-num tabular-nums">#{position}</span>
             <Pips colors={colors ?? ""} size={13} />
           </span>
         </span>
@@ -523,6 +516,8 @@ const PhoneDeckPicker = ({ state }: { state: BreakdownState }) => {
     </div>
   );
 };
+
+const stackPips = (colors: string) => (colors.length >= 4 ? "[&_.inline-flex>*+*]:-ml-1" : "");
 
 const OriginalLine = ({ pool }: { pool: DailySealedPool }) => (
   <div className="flex items-center justify-center gap-2.5">
@@ -1234,11 +1229,11 @@ const DeckPicker = ({ state }: { state: BreakdownState }) => (
   </div>
 );
 
-const widestColors = (state: BreakdownState) => {
+const widestColors = (state: BreakdownState, others: string[] = []) => {
   let widest = "";
-  for (const build of state.counted) {
-    if (build.colors.length > widest.length) {
-      widest = build.colors;
+  for (const colors of [...state.builds.map((build) => build.colors), ...others]) {
+    if (colors.length > widest.length) {
+      widest = colors;
     }
   }
   return widest;
@@ -1259,7 +1254,10 @@ const StepButton = ({ label, onClick, children }: { label: string; onClick: () =
     type="button"
     onClick={onClick}
     aria-label={label}
-    className={cn("flex h-8 w-8 items-center justify-center", chipClass(false))}
+    className={cn(
+      "relative flex h-8 w-7 items-center justify-center before:absolute before:-inset-1.5 before:content-['']",
+      chipClass(false),
+    )}
   >
     {children}
   </button>
