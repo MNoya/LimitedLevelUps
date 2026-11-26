@@ -49,14 +49,13 @@ export const DayNavBar = ({
   </span>
 );
 
+export const GREEN_CTA =
+  "rounded-md border border-green/60 bg-green/10 font-display text-[13px] tracking-[0.12em] text-green transition-colors hover:bg-green/20 active:bg-green/30";
+
 export const TodayPoolLink = ({ className }: { className?: string }) => (
   <Link
     to="/daily-sealed"
-    className={cn(
-      "flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-green/60 bg-green/10 px-3",
-      "font-display text-[13px] tracking-[0.12em] text-green transition-colors hover:bg-green/20 active:bg-green/30",
-      className,
-    )}
+    className={cn("flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-3", GREEN_CTA, className)}
   >
     TODAY'S POOL
     <ArrowRight size={14} />
@@ -79,7 +78,7 @@ const NavArrow = ({ to, label, children }: { to: string | undefined; label: stri
     <span className={cn(NAV_ARROW, "text-subtle opacity-30")}>{children}</span>
   );
 
-const formatDay = (day: string) => {
+export const formatDay = (day: string) => {
   const [year, month, date] = day.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, date))
     .toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })

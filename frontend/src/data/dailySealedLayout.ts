@@ -15,6 +15,12 @@ export interface Layout {
   side: Row[];
   deck: Row[];
   hidden: number[];
+  basicsSlot?: BasicsSlot;
+}
+
+export interface BasicsSlot {
+  row: number;
+  pile: number;
 }
 
 type DropZone = PileZone | "hidden";
@@ -26,7 +32,7 @@ export interface PileTarget {
   position: number;
 }
 
-export const BASICS_PILE_KEY: Record<SortKey, string> = { mana: "land", color: "C", rarity: "common" };
+export const BASICS_PILE_KEY: Record<SortKey, string> = { mana: "land", color: "C", rarity: "basic" };
 
 const MANA_SLOTS = [0, 1, 2, 3, 4, 5, 6];
 const RARITY_ORDER = ["mythic", "rare", "uncommon", "common"];

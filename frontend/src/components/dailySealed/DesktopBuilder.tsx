@@ -8,7 +8,7 @@ import {
   useSensors,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Check, Copy, Download, RotateCcw, Undo2 } from "lucide-react";
+import { ChartPie, Check, Copy, Hammer, RotateCcw, Share2, Undo2 } from "lucide-react";
 import { useCopyFeedback } from "../CopyTextButton";
 
 import { LLU_LOGO_SRC, SetGlyph } from "../Brand";
@@ -27,8 +27,10 @@ import { fittedCardWidth, useWidth } from "./cardWidth";
 import { DesktopBreakdown } from "./Breakdown";
 import { TabButton } from "../TabButton";
 import { chipClass, SURFACE_BUTTON, SwitchToggle } from "../pod/review/reviewControls";
-import { DayNav, PreviewMove, SubmitButton, Toast } from "./shared";
+import { DayNav, GREEN_CTA, PreviewMove, SubmitButton, Toast } from "./shared";
 import { useCountdown } from "./useCountdown";
+import { ShareDeckModal, ShareImageWarmup } from "./ShareDeckModal";
+import { Tooltip } from "../Tooltip";
 
 const DRAG_DISTANCE = 6;
 
@@ -55,12 +57,22 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
   const latest = useRef({ builder, dragging, width: cardWidth });
   latest.current = { builder, dragging, width: cardWidth };
   const lastTarget = useRef<PileTarget | null>(null);
+  const draggingBasics = useRef(false);
   const lastPoint = useRef<{ x: number; y: number } | null>(null);
 
   const placeAtPointer = () => {
     const { builder: current, dragging: indexes, width } = latest.current;
     const point = lastPoint.current;
     if (!indexes || !point) {
+      return;
+    }
+    if (draggingBasics.current) {
+      const target = pileTargetAt(point.x, point.y, current.layout, [], PILE_GAP, width);
+      if (target?.zone !== "deck" || (lastTarget.current?.row === target.row && lastTarget.current?.pile === target.pile)) {
+        return;
+      }
+      lastTarget.current = target;
+      current.dragBasicsTo({ row: target.row, pile: target.pile });
       return;
     }
     const underPointer = pileTargetAt(point.x, point.y, current.layout, indexes, PILE_GAP, width);
@@ -79,6 +91,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
 
   const onDragStart = (event: DragStartEvent) => {
     const indexes = (event.active.data.current?.indexes as number[] | undefined) ?? null;
+    draggingBasics.current = !!event.active.data.current?.basics;
     builder.beginDrag();
     lastTarget.current = null;
     lastPoint.current = null;
@@ -88,6 +101,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
     latest.current = { builder, dragging: indexes, width: cardWidth };
   };
   const finishDrag = () => {
+    draggingBasics.current = false;
     setDragging(null);
     setDragWidth(null);
     setOverHidden(false);
@@ -218,9 +232,11 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
                   actions={view.deckActions}
                   dragging={dragging}
                   basics={{
-                    row: builder.layout.deck.length - 1,
+                    row: Math.min(builder.layout.basicsSlot?.row ?? Infinity, builder.layout.deck.length - 1),
                     pileKey: BASICS_PILE_KEY[builder.sort.deck],
                     entries: view.basicCards,
+                    trailing: builder.sort.deck !== "mana",
+                    before: builder.layout.basicsSlot?.pile,
                   }}
                 />
               </DeckPanel>
@@ -244,13 +260,14 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
 const Header = ({ view, mode, onMode }: { view: BuilderView; mode: Mode; onMode: (mode: Mode) => void }) => {
   const { builder, submitState } = view;
   const countdown = useCountdown(view.isToday);
+  const [sharing, setSharing] = useState(false);
   return (
     <div className="flex h-12 shrink-0 items-center gap-4 border-b border-border px-3">
       <Link to="/tools" aria-label="Back to Tools" className="shrink-0">
         <img src={LLU_LOGO_SRC} alt="" className="h-8 w-8" />
       </Link>
       <SetGlyph code={view.pool.setCode} size={22} />
-      <div className="flex min-w-0 flex-1 items-center gap-3 whitespace-nowrap">
+      <div className="flex min-w-0 items-center gap-3 whitespace-nowrap">
         <div className="flex items-baseline gap-3">
           <h1 className="font-display text-[18px] leading-none tracking-[0.12em]">DAILY SEALED</h1>
           <span className="font-display text-[14px] leading-none tracking-[0.12em] text-subtle">
@@ -261,22 +278,26 @@ const Header = ({ view, mode, onMode }: { view: BuilderView; mode: Mode; onMode:
           <DayNav view={view} dateClassName="relative top-px" />
         </div>
         {countdown && (
-          <span className="flex-1 text-center text-[13px] leading-none text-subtle max-xl:hidden">
+          <span className="ml-2 w-[11em] text-[13px] leading-none text-subtle max-xl:hidden">
             New pool in {countdown}
           </span>
         )}
       </div>
-      {view.results.available && (
-        <div className="flex w-[300px] shrink-0 self-stretch [&>button]:h-full">
-          <TabButton active={mode === "build"} onClick={() => onMode("build")}>
-            BUILD
-          </TabButton>
-          <TabButton active={mode === "breakdown"} onClick={() => onMode("breakdown")}>
-            CARD BREAKDOWN
-          </TabButton>
-        </div>
-      )}
-      <div className="ml-auto flex items-center gap-1.5 [&>*]:h-9">
+      <div className="flex min-w-0 flex-1 justify-center self-stretch">
+        {view.results.available && (
+          <div className="flex shrink-0 [&>button]:h-full [&>button]:flex-none [&>button]:gap-2 [&>button]:px-5">
+            <TabButton active={mode === "build"} onClick={() => onMode("build")}>
+              <Hammer size={16} />
+              BUILD
+            </TabButton>
+            <TabButton active={mode === "breakdown"} onClick={() => onMode("breakdown")}>
+              <ChartPie size={16} />
+              CARD BREAKDOWN
+            </TabButton>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 [&>*]:h-9">
         <BuildActions shown={mode === "build"}>
           <HeaderButton icon={<Undo2 size={15} />} label="Undo" onClick={builder.undo} disabled={!builder.canUndo} />
           <HeaderButton icon={<RotateCcw size={15} />} label="Reset" onClick={builder.reset} />
@@ -288,16 +309,20 @@ const Header = ({ view, mode, onMode }: { view: BuilderView; mode: Mode; onMode:
           text={view.linkText}
           onBlocked={view.copyBlocked}
         />
-        <BuildActions shown={mode === "build"}>
-          <CopyHeaderButton
-            icon={<Download size={15} />}
-            label="Export for Arena"
-            text={view.exportText}
-            onBlocked={view.copyBlocked}
-          />
-          {submitState.visible && <SubmitButton view={view} />}
-        </BuildActions>
+        <Tooltip label="Share an image of your deck" side="bottom">
+          <button
+            type="button"
+            onClick={() => setSharing(true)}
+            className={cn("flex items-center gap-2 whitespace-nowrap px-3", GREEN_CTA)}
+          >
+            <Share2 size={15} />
+            SHARE
+          </button>
+        </Tooltip>
+        <BuildActions shown={mode === "build"}>{submitState.visible && <SubmitButton view={view} />}</BuildActions>
       </div>
+      {sharing && <ShareDeckModal view={view} onClose={() => setSharing(false)} />}
+      {view.submits > 0 && <ShareImageWarmup key={view.submits} view={view} />}
     </div>
   );
 };

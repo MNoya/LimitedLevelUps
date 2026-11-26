@@ -4,6 +4,7 @@ import { Pips } from "../../ManaPips";
 import { CardImage, useCardImageMapContext } from "../../pod/review/ReviewCard";
 import { cardLayout } from "../../../data/cardImages";
 import { frontFace } from "../../../lib/cardSlug";
+import { TITLE_CROP, TITLE_CROP_TOP } from "../../../lib/card-title-crop";
 import { cn } from "../../../lib/utils";
 import type { ArtifactCard } from "../../../types/leaderboard";
 
@@ -57,8 +58,8 @@ export function CardTitle({ card, className }: { card: ArtifactCard; className?:
   }
   return (
     <div className={cn(TITLE_FRAME, className)}>
-      <div className="absolute top-0 left-[-4.98%] w-[110.1%]">
-        <div className="mt-[-6.28%]">
+      <div className={TITLE_CROP}>
+        <div className={TITLE_CROP_TOP}>
           <CardImage card={card} />
         </div>
       </div>

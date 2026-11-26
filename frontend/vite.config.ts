@@ -31,6 +31,11 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       proxy: {
+        "/api/card-art": {
+          target: "https://cards.17landscapes.com",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/card-art/, ""),
+        },
         "/api/tier-list": {
           target: "https://limitedlevelups.com",
           changeOrigin: true,

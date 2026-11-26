@@ -20,6 +20,7 @@ import {
   pruneEmptyPiles,
   sortZone,
   zoneCards,
+  type BasicsSlot,
   type Layout,
   type PileTarget,
   type PileZone,
@@ -119,16 +120,17 @@ export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null
     sortBy: (zone: PileZone, key: SortKey) => {
       const indexes = zoneCards(state.layout[zone]);
       const split = zone === "deck" && state.split;
+      const layout = { ...state.layout, [zone]: sortZone(pool.cards, indexes, key, split) };
       apply({
         ...state,
         sort: { ...state.sort, [zone]: key },
-        layout: { ...state.layout, [zone]: sortZone(pool.cards, indexes, key, split) },
+        layout: zone === "deck" ? { ...layout, basicsSlot: undefined } : layout,
       });
     },
     toggleSplit: () => {
       const split = !state.split;
       const deckRows = sortZone(pool.cards, zoneCards(state.layout.deck), state.sort.deck, split);
-      apply({ ...state, split, layout: { ...state.layout, deck: deckRows } });
+      apply({ ...state, split, layout: { ...state.layout, deck: deckRows, basicsSlot: undefined } });
     },
     beginDrag: () => {
       dragStart.current = state;
@@ -140,6 +142,15 @@ export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null
         return;
       }
       const layout = target ? placeAt(before.layout, indexes, target) : before.layout;
+      dragLayout.current = layout;
+      setState((current) => ({ ...current, layout }));
+    },
+    dragBasicsTo: (slot: BasicsSlot | null) => {
+      const before = dragStart.current;
+      if (!before) {
+        return;
+      }
+      const layout = slot ? { ...before.layout, basicsSlot: slot } : before.layout;
       dragLayout.current = layout;
       setState((current) => ({ ...current, layout }));
     },
@@ -178,7 +189,7 @@ export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null
     },
     reset: () => apply(fresh()),
     colors: () => deckColors(deckCards),
-    exportText: () =>
+    arenaList: () =>
       arenaExport(
         deckCards,
         [...side, ...hidden].map((entry) => entry.card),

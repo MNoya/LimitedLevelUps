@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, EyeOff, X } from "lucide-react";
 
+import { TITLE_CROP, TITLE_CROP_TOP } from "../../lib/card-title-crop";
 import { cn } from "../../lib/utils";
+import { MARK_CARD_CLASS } from "./markStyle";
 import { CARD_FRAME_HOVER, stackedCardShadow } from "../pod/review/ReviewCard";
 import { PileSymbol } from "./PileSymbol";
 import { cardsFitPileKey } from "../../data/dailySealedLayout";
@@ -27,6 +29,8 @@ export interface CardActions {
   dimmed?: (card: PoolCard) => boolean;
   marked?: (card: PoolCard) => boolean;
 }
+
+export const PHONE_PILE_WIDTH = 104;
 
 export const ColumnRow = ({
   groups,
@@ -71,10 +75,7 @@ const CardStack = ({ entries, width, actions }: { entries: PoolEntry[]; width: n
   const tops = strips.map((_, i) => strips.slice(0, i).reduce((total, strip) => total + strip, 0));
   const height = entries.length === 0 ? stackReveal(width, false) * 2 : tops[tops.length - 1] + cardHeight;
   return (
-    <div
-      className={cn("relative", entries.length === 0 && "rounded border border-dashed border-border2")}
-      style={{ width, height }}
-    >
+    <div className="relative" style={{ width, height }}>
       {entries.map((entry, i) => (
         <StackedCard
           key={entry.index}
@@ -191,9 +192,7 @@ export const DimmedVeil = () => (
   <span className="pointer-events-none absolute inset-0 rounded-[4.75%/3.5%] bg-bg/60 group-hover:hidden" />
 );
 
-export const MarkedFrame = () => (
-  <span className="pointer-events-none absolute inset-0 rounded-[4.75%/3.5%] border-2 border-green" />
-);
+export const MarkedFrame = () => <span className={cn("pointer-events-none absolute", MARK_CARD_CLASS)} />;
 
 export const CardGrid = ({ entries, actions }: { entries: PoolEntry[]; actions: CardActions }) => (
   <div className="grid grid-cols-3 gap-1.5">
@@ -272,13 +271,13 @@ const StripButton = ({ entry, actions }: { entry: PoolEntry; actions: CardAction
 
 const TitleStrip = ({ card }: { card: PoolCard }) => (
   <div className="relative aspect-[432/42] w-full overflow-hidden rounded-[3.8%/40%] bg-surface2">
-    <div className="absolute left-[-4.98%] top-0 w-[110.1%]">
+    <div className={TITLE_CROP}>
       <img
         src={card.image}
         alt={card.name}
         loading="lazy"
         draggable={false}
-        className="mt-[-6.28%] block aspect-[488/680] w-full"
+        className={cn(TITLE_CROP_TOP, "block aspect-[488/680] w-full")}
       />
     </div>
   </div>

@@ -201,6 +201,34 @@ button {
   100% { transform: translateX(100%); }
 }
 
+@keyframes loading-dot-1 {
+  0%, 24.9% { opacity: 0; }
+  25%, 100% { opacity: 1; }
+}
+@keyframes loading-dot-2 {
+  0%, 49.9% { opacity: 0; }
+  50%, 100% { opacity: 1; }
+}
+@keyframes loading-dot-3 {
+  0%, 74.9% { opacity: 0; }
+  75%, 100% { opacity: 1; }
+}
+
+.loading-dots > span:nth-child(1) { animation: loading-dot-1 1.6s infinite; }
+.loading-dots > span:nth-child(2) { animation: loading-dot-2 1.6s infinite; }
+.loading-dots > span:nth-child(3) { animation: loading-dot-3 1.6s infinite; }
+
+.share-shine {
+  background: linear-gradient(100deg, transparent 30%, rgba(46, 232, 92, 0.16) 45%, rgba(255, 255, 255, 0.22) 50%, rgba(46, 232, 92, 0.16) 55%, transparent 70%);
+  animation: thumbSweep 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-shine {
+    animation: none;
+  }
+}
+
 @keyframes card-preview-in-right {
   from { transform: translateX(100%); opacity: 0.2; }
   to { transform: translateX(0); opacity: 1; }

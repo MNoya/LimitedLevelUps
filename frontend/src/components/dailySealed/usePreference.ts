@@ -18,3 +18,7 @@ export const usePreference = <T extends string>(key: string, fallback: T): [T, (
   };
   return [value, store];
 };
+
+export type DeckLayout = "piles" | "names";
+
+export const DECK_LAYOUT_KEY = "daily-sealed:deck-grid";

@@ -1,14 +1,14 @@
-import { useState, type ReactNode } from "react";
-import { Check, Copy, Download, EyeOff, LayoutGrid, Rows2, SlidersHorizontal, Undo2, X } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { Check, Copy, EyeOff, LayoutGrid, Rows2, Share2, SlidersHorizontal, Undo2, X } from "lucide-react";
 
 import { SetGlyph } from "../Brand";
 import { useCopyFeedback } from "../CopyTextButton";
 import { cn } from "../../lib/utils";
-import { groupByColor, type PoolEntry } from "../../data/dailySealed";
+import { groupByColor, type CardGroup, type PoolEntry } from "../../data/dailySealed";
 import type { BuilderView, PhoneTab } from "../../pages/DailySealedPage";
 import { chipClass } from "../pod/review/reviewControls";
 import { BASICS_PILE_KEY } from "../../data/dailySealedLayout";
-import { CardGrid, CardPreview, ColumnRow, StripList, type CardActions } from "./cards";
+import { CardGrid, CardPreview, ColumnRow, PHONE_PILE_WIDTH, StripList, type CardActions } from "./cards";
 import {
   BasicsRow,
   ColorToggles,
@@ -21,16 +21,21 @@ import {
 } from "./controls";
 import { FilterGroup } from "../TierFilterBar";
 import { PhoneBreakdown } from "./Breakdown";
-import { DayNav, PreviewMove, SubmitButton, Toast, TodayPoolLink } from "./shared";
-import { usePreference } from "./usePreference";
+import { deckGroupRows } from "./deckGroups";
+import { ShareDeckModal, ShareImageWarmup } from "./ShareDeckModal";
+import { useHeight } from "./cardWidth";
+import { DayNav, GREEN_CTA, PreviewMove, SubmitButton, Toast, TodayPoolLink } from "./shared";
+import { DECK_LAYOUT_KEY, usePreference, type DeckLayout } from "./usePreference";
 
 type Tab = PhoneTab | "results";
 
-const PILE_WIDTH = 104;
 
 export const MobileBuilder = ({ view }: { view: BuilderView }) => {
   const tab: Tab = view.showingBreakdown ? "results" : view.phoneTab;
+  const barRef = useRef<HTMLDivElement>(null);
+  const barHeight = useHeight(barRef);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const { builder } = view;
   return (
     <div className={cn("flex flex-col", tab === "results" ? "pb-6" : "pb-[60px]")}>
@@ -41,7 +46,7 @@ export const MobileBuilder = ({ view }: { view: BuilderView }) => {
         <DayNav view={view} withToday={false} />
       </div>
       {!view.isToday && <TodayPoolLink className="mx-2 mt-1.5" />}
-      <div className="sticky top-0 z-40 flex items-center gap-2 border-b border-border bg-bg px-2 py-1.5">
+      <div ref={barRef} className="sticky top-0 z-40 flex items-center gap-2 border-b border-border bg-bg px-2 py-1.5">
         <SetGlyph code={view.pool.setCode} size={22} />
         <div
           className={cn(
@@ -64,7 +69,10 @@ export const MobileBuilder = ({ view }: { view: BuilderView }) => {
           {view.results.available && (
             <TabButton
               active={tab === "results"}
-              onClick={view.showBreakdown}
+              onClick={() => {
+                view.showBreakdown();
+                window.scrollTo({ top: 0 });
+              }}
               label="CARD BREAKDOWN"
               count={null}
             />
@@ -73,16 +81,23 @@ export const MobileBuilder = ({ view }: { view: BuilderView }) => {
         <CopyIconButton label="Copy Link" text={view.linkText} onBlocked={view.copyBlocked}>
           <Copy size={16} />
         </CopyIconButton>
-        <CopyIconButton label="Export for Arena" text={view.exportText} onBlocked={view.copyBlocked}>
-          <Download size={16} />
-        </CopyIconButton>
+        <button
+          type="button"
+          aria-label="Share"
+          onClick={() => setSharing(true)}
+          className={cn("flex h-9 w-9 shrink-0 items-center justify-center", GREEN_CTA)}
+        >
+          <Share2 size={16} />
+        </button>
       </div>
       {view.notice && <Toast notice={view.notice} phone />}
+      {sharing && <ShareDeckModal view={view} onClose={() => setSharing(false)} />}
+      {view.submits > 0 && <ShareImageWarmup key={view.submits} view={view} />}
       {tab === "pool" && <PoolTab view={view} onOpenFilters={() => setFiltersOpen(true)} />}
       {tab === "deck" && <DeckTab view={view} />}
       {tab === "results" && (
-        <div className="px-2 pt-3">
-          <PhoneBreakdown view={view} />
+        <div className="px-2">
+          <PhoneBreakdown view={view} stickyTop={barHeight} />
         </div>
       )}
       {tab !== "results" && <BottomBar view={view} />}
@@ -176,25 +191,9 @@ const PoolTab = ({ view, onOpenFilters }: { view: BuilderView; onOpenFilters: ()
 
 const DeckTab = ({ view }: { view: BuilderView }) => {
   const { builder } = view;
-  const [deckLayout, setDeckLayout] = usePreference<"piles" | "names">("daily-sealed:deck-grid", "piles");
+  const [deckLayout, setDeckLayout] = usePreference<DeckLayout>(DECK_LAYOUT_KEY, "piles");
   const basicsKey = BASICS_PILE_KEY[builder.sort.deck];
-  const lastRow = builder.layout.deck.length - 1;
-  const runs = builder.layout.deck.map((row, rowIndex) => {
-    const groups = row
-      .map((pile) => ({
-        key: pile.key,
-        label: pile.key,
-        entries: [
-          ...pile.cards.map((index) => ({ index, card: view.pool.cards[index] })),
-          ...(rowIndex === lastRow && pile.key === basicsKey ? view.basicCards : []),
-        ],
-      }))
-      .filter((group) => group.entries.length > 0);
-    const hasBasicsPile = row.some((pile) => pile.key === basicsKey);
-    return rowIndex === lastRow && !hasBasicsPile && view.basicCards.length > 0
-      ? [{ key: "land", label: "land", entries: view.basicCards }, ...groups]
-      : groups;
-  });
+  const runs = deckGroupRows(view);
   return (
     <div className="flex flex-col gap-3 px-2 pt-2">
       <div className="rounded border border-border bg-surface px-2.5 py-2">
@@ -218,30 +217,34 @@ const DeckTab = ({ view }: { view: BuilderView }) => {
       {builder.deck.length === 0 && view.basicCards.length === 0 && (
         <span className="py-6 text-center text-[13px] text-muted">Tap cards in the Pool to add them</span>
       )}
+      {deckLayout === "names" && (
+        <div className="flex flex-col gap-3">
+          {landsLast(runs.flat(), basicsKey).map((group) => (
+            <StripList key={group.key} entries={group.entries} actions={view.deckActions} />
+          ))}
+        </div>
+      )}
       {runs.map((groups, run) => {
         const filled = groups.filter((group) => group.entries.length > 0);
-        if (filled.length === 0) {
+        if (filled.length === 0 || deckLayout === "names") {
           return null;
-        }
-        if (deckLayout === "names") {
-          return (
-            <div key={run} className="flex flex-col gap-3">
-              {filled.map((group) => (
-                <StripList key={group.key} entries={group.entries} actions={view.deckActions} />
-              ))}
-            </div>
-          );
         }
         return (
           <div key={run} className="-mx-2 overflow-x-auto px-2 pb-1">
             <div className="w-max">
-              <ColumnRow groups={filled} setCode={view.pool.setCode} width={PILE_WIDTH} actions={view.deckActions} />
+              <ColumnRow groups={filled} setCode={view.pool.setCode} width={PHONE_PILE_WIDTH} actions={view.deckActions} />
             </div>
           </div>
         );
       })}
     </div>
   );
+};
+
+const landsLast = (groups: CardGroup[], basicsKey: string) => {
+  const isLandGroup = (group: CardGroup) => group.key === basicsKey || group.key === "land";
+  const filled = groups.filter((group) => group.entries.length > 0);
+  return [...filled.filter((group) => !isLandGroup(group)), ...filled.filter(isLandGroup)];
 };
 
 const PoolCount = ({ shown, total }: { shown: number; total: number }) => (

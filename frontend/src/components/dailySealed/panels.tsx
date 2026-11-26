@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { PanelBar, useResizableHeight } from "../pod/review/resizablePanel";
 import { usePersistentBool } from "../../lib/use-persistent-bool";
+import { SCROLL_LIST_STYLE } from "../../lib/scroll-list";
 import { cn } from "../../lib/utils";
 import type { PileZone, SortKey } from "../../data/dailySealedLayout";
 import { DROP_ZONE_ATTR } from "./pileHitTest";
@@ -10,8 +11,8 @@ const DECK_DEFAULT_FRACTION = 0.38;
 
 export const SORT_LABELS: Record<SortKey, string> = { mana: "Mana Value", color: "Color", rarity: "Rarity" };
 
-export const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
-  <section className="border-b border-border px-3 pb-3 pt-2">
+export const Panel = ({ title, grow = false, children }: { title: string; grow?: boolean; children: ReactNode }) => (
+  <section className={cn("border-b border-border px-3 pb-3 pt-2 last:border-b-0", grow && "flex flex-1 flex-col")}>
     <h2 className="mb-4 text-center font-display text-[15px] tracking-[0.18em] text-text">{title}</h2>
     {children}
   </section>
@@ -60,10 +61,16 @@ export const Pane = ({
     {flush ? (
       <div className="flex min-h-0 flex-1">{children}</div>
     ) : (
-      <div className="min-h-0 flex-1 overflow-auto px-2 py-1.5">{children}</div>
+      <div className={cn("min-h-0 flex-1 overflow-auto px-2 py-1.5", THIN_SCROLLBAR)} style={SCROLL_LIST_STYLE}>
+        {children}
+      </div>
     )}
   </section>
 );
+
+const THIN_SCROLLBAR =
+  "[&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent " +
+  "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border2 [&::-webkit-scrollbar-corner]:bg-transparent";
 
 export const DeckPanel = ({
   title,

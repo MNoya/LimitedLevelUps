@@ -6,6 +6,7 @@ import { cn } from "../../lib/utils";
 import { entryCount, type PoolCard, type PoolEntry } from "../../data/dailySealed";
 import { cardsFitPileKey, type Pile, type PileZone, type Row } from "../../data/dailySealedLayout";
 import { CardFace, CopiesBadge, DimmedVeil, RatingBadge, stackReveal, type CardActions } from "./cards";
+import { MARK_BLOCK_CLASS } from "./markStyle";
 import { stackedCardShadow } from "../pod/review/ReviewCard";
 import { PileSymbol } from "./PileSymbol";
 import { chipClass, SURFACE_BUTTON } from "../pod/review/reviewControls";
@@ -27,6 +28,7 @@ export const PileBoard = ({
   basics = null,
   readOnly = false,
   pileHeader,
+  dividerBefore,
 }: {
   zone: PileZone;
   setCode: string;
@@ -36,36 +38,45 @@ export const PileBoard = ({
   visible: Set<number> | null;
   actions: CardActions;
   dragging: number[] | null;
-  basics?: { row: number; pileKey: string; entries: PoolEntry[] } | null;
+  basics?: { row: number; pileKey: string; entries: PoolEntry[]; trailing?: boolean; before?: number } | null;
   readOnly?: boolean;
-  pileHeader?: (pile: Pile) => ReactNode;
+  pileHeader?: (pile: Pile, row: number) => ReactNode;
+  dividerBefore?: string;
 }) => {
   const basicsFor = (rowIndex: number, pileKey: string) =>
     basics && basics.row === rowIndex && basics.pileKey === pileKey ? basics.entries : [];
   const needsBasicsColumn = (rowIndex: number) =>
     !!basics && basics.entries.length > 0 && basics.row === rowIndex && !rows[rowIndex]?.some((pile) => pile.key === basics.pileKey);
+  const basicsColumn = (rowIndex: number) =>
+    basics && (
+      <PileColumn
+        zone={zone}
+        setCode={setCode}
+        row={rowIndex}
+        pileIndex={null}
+        pile={{ key: "land", label: "land", cards: [] }}
+        cards={cards}
+        width={width}
+        visible={visible}
+        actions={actions}
+        dragging={dragging}
+        draggable={!readOnly}
+        basics={basics.entries}
+      />
+    );
   return (
     <div className="flex select-none flex-col gap-3">
       {rows.map((row, rowIndex) => (
         <div key={rowIndex} {...{ [PILE_ROW_ATTR]: rowIndex }} className="flex flex-col gap-1">
           <div className="flex min-h-12 items-start" style={{ gap: PILE_GAP }}>
-            {needsBasicsColumn(rowIndex) && basics && (
-              <PileColumn
-                zone={zone}
-                setCode={setCode}
-                row={rowIndex}
-                pileIndex={null}
-                pile={{ key: "land", label: "land", cards: [] }}
-                cards={cards}
-                width={width}
-                visible={visible}
-                actions={actions}
-                dragging={dragging}
-                draggable={false}
-                basics={basics.entries}
-              />
-            )}
-            {row.map((pile, pileIndex) => (
+            {needsBasicsColumn(rowIndex) && basics && basics.before === undefined && !basics.trailing && basicsColumn(rowIndex)}
+            {row.map((pile, pileIndex) => [
+              pile.key === dividerBefore && <NoncreatureDivider key="divider" />,
+              needsBasicsColumn(rowIndex) && basics?.before === pileIndex && (
+                <span key="basics" className="contents">
+                  {basicsColumn(rowIndex)}
+                </span>
+              ),
               <PileColumn
                 key={`${pile.key}-${pileIndex}`}
                 zone={zone}
@@ -80,15 +91,25 @@ export const PileBoard = ({
                 dragging={dragging}
                 draggable={!readOnly}
                 basics={basicsFor(rowIndex, pile.key)}
-                header={pileHeader?.(pile)}
-              />
-            ))}
+                header={pileHeader?.(pile, rowIndex)}
+              />,
+            ])}
+            {needsBasicsColumn(rowIndex) &&
+              basics &&
+              (basics.before !== undefined ? basics.before >= row.length : basics.trailing) &&
+              basicsColumn(rowIndex)}
           </div>
         </div>
       ))}
     </div>
   );
 };
+
+const NoncreatureDivider = () => (
+  <div className="flex shrink-0 self-stretch px-2">
+    <span className="w-px flex-1 bg-border2" />
+  </div>
+);
 
 const PileColumn = ({
   zone,
@@ -146,7 +167,7 @@ const PileColumn = ({
         indexes={shown}
         extraCount={entryCount(basics)}
         showSymbol={cardsFitPileKey(pile.key, pileCards)}
-        draggable={draggable && shown.length > 0}
+        draggable={draggable && (shown.length > 0 || (pileIndex === null && basics.length > 0))}
       />
       )}
       <div
@@ -172,8 +193,8 @@ const PileColumn = ({
           markedRuns(shown, (index) => actions.marked?.(cards[index]) ?? false, heightAt).map((run) => (
             <span
               key={run.top}
-              className="pointer-events-none absolute inset-x-0 z-20 border-2 border-green"
-              style={{ top: run.top, height: run.height, borderRadius: width * 0.0475 }}
+              className={cn("pointer-events-none absolute z-20", MARK_BLOCK_CLASS)}
+              style={{ top: run.top, height: run.height + 2, borderRadius: width * 0.0475 }}
             />
           ))}
         {basics.map((entry, position) => (
@@ -215,7 +236,7 @@ const PileHeader = ({
   const count = indexes.length + extraCount;
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: `pilehead|${zone}|${row}|${pileIndex}`,
-    data: { indexes },
+    data: { indexes, basics: pileIndex === -1 },
     disabled: !draggable,
   });
   return (

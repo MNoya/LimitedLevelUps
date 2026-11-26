@@ -5,7 +5,7 @@ import { PageShell } from "../components/PageShell";
 import { DesktopBuilder } from "../components/dailySealed/DesktopBuilder";
 import { DesktopBuilderSkeleton, PhoneBuilderSkeleton } from "../components/dailySealed/BuilderSkeleton";
 import { MobileBuilder } from "../components/dailySealed/MobileBuilder";
-import { breakdownTabFromHash, setAnchor } from "../components/dailySealed/Breakdown";
+import { breakdownAnchored, setAnchor } from "../components/dailySealed/Breakdown";
 import { useBuilder } from "../components/dailySealed/useBuilder";
 import type { CardActions } from "../components/dailySealed/cards";
 import type { Notice } from "../components/dailySealed/shared";
@@ -52,7 +52,9 @@ export const DailySealedPage = () => {
   const screen = useState<ScreenChoice | null>(null);
 
   const awaitingFirstPool = !isPending && !isError && !pool && !day;
-  if (!isMobile && (pool || isPending || awaitingFirstPool)) {
+  const fullScreen = !isMobile && (!!pool || isPending || awaitingFirstPool);
+  useNoPageScrollbarGutter(fullScreen);
+  if (fullScreen) {
     return (
       <div className="flex h-[100dvh] flex-col overflow-hidden bg-bg text-text">
         {pool ? (
@@ -81,6 +83,20 @@ export const DailySealedPage = () => {
       )}
     </PageShell>
   );
+};
+
+const useNoPageScrollbarGutter = (active: boolean) => {
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    const html = document.documentElement;
+    const previous = html.style.scrollbarGutter;
+    html.style.scrollbarGutter = "auto";
+    return () => {
+      html.style.scrollbarGutter = previous;
+    };
+  }, [active]);
 };
 
 const localTurnoverTime = () => nextTurnover().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -136,6 +152,7 @@ const useBuilderView = (pool: DailySealedPool, isMobile: boolean, [chosenScreen,
   const preview = useCardStepper(pool);
   const basicArt = useCardImageMap(useMemo(() => basicLandItems(pool.setCode), [pool.setCode]));
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [submits, setSubmits] = useState(0);
 
   useEffect(() => {
     if (!notice) {
@@ -194,6 +211,7 @@ const useBuilderView = (pool: DailySealedPool, isMobile: boolean, [chosenScreen,
     }
     try {
       await save.mutateAsync(submission);
+      setSubmits((count) => count + 1);
       setNotice({ text: submitted ? "Build updated!" : "Build submitted!", tone: "ok" });
     } catch {
       setNotice({ text: "Your build didn't save. Submit it again", tone: "error" });
@@ -227,6 +245,7 @@ const useBuilderView = (pool: DailySealedPool, isMobile: boolean, [chosenScreen,
     gihWrOf: (name: string) => stats?.statsFor(name)?.gihWr ?? null,
     basicCardsOf: (basics: Basics) => basicEntries(basics, basicArt.images, pool.setCode),
     notice,
+    submits,
     results: { available: resultsAvailable, builds: builds ?? [], loading: buildsPending },
     showingBreakdown: resultsAvailable && screen.breakdown,
     phoneTab: screen.phoneTab,
@@ -245,14 +264,13 @@ const useBuilderView = (pool: DailySealedPool, isMobile: boolean, [chosenScreen,
       run: submit,
     },
     linkText: () => `${window.location.origin}/daily-sealed/${pool.day}`,
-    exportText: builder.exportText,
     copyBlocked: () => setNotice({ text: "Copying is blocked in this browser", tone: "error" }),
   };
 };
 
 const startingScreen = (day: string, isToday: boolean): ScreenChoice => ({
   day,
-  breakdown: !isToday || breakdownTabFromHash() !== null,
+  breakdown: !isToday || breakdownAnchored(),
   phoneTab: "pool",
 });
 

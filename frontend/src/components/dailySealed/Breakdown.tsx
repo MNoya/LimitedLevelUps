@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { ChevronLeft, ChevronRight, LayoutGrid, Rows2 } from "lucide-react";
 
 import { Pip, Pips } from "../ManaPips";
 import { usePersistentBool } from "../../lib/use-persistent-bool";
@@ -11,6 +11,7 @@ import {
   basicCount,
   groupByColor,
   isCreature,
+  isLand,
   mainColors,
   type Basics,
   type DailySealedPool,
@@ -37,10 +38,13 @@ import {
 import type { BuilderView } from "../../pages/DailySealedPage";
 import { chipClass, SwitchToggle } from "../pod/review/reviewControls";
 import { ColorPie } from "./ColorPie";
-import { CardGrid, StripList, type CardActions } from "./cards";
+import { CardGrid, ColumnRow, PHONE_PILE_WIDTH, StripList, type CardActions } from "./cards";
+import { DECK_LAYOUT_KEY, usePreference, type DeckLayout } from "./usePreference";
+import { MARK_OUTLINE } from "./markStyle";
 import { FilterToggle } from "./controls";
 import { Pane, Panel, SORT_LABELS } from "./panels";
-import { PileBoard } from "./piles";
+import { PILE_GAP, PileBoard } from "./piles";
+import { useWidth } from "./cardWidth";
 import { PileSymbol } from "./PileSymbol";
 
 type CardSort = SortKey | "rate";
@@ -58,7 +62,7 @@ interface DeckChoice {
 const CARD_WIDTH = 195;
 const NO_RATE: CardRate = { played: 0, decks: 0 };
 const PAIRS_SHOWN = 5;
-const PHONE_TABS_TOP = 45;
+const NONCREATURE_PREFIX = "noncreature-";
 const TAB_ANCHORS: Record<Tab, string> = {
   oncolor: "on-color",
   overall: "played",
@@ -67,6 +71,7 @@ const TAB_ANCHORS: Record<Tab, string> = {
   you: "you",
   decks: "decks",
 };
+const OVERVIEW_ANCHOR = "overview";
 const TAB_TITLES: Record<Tab, string> = {
   decks: "DECKS",
   oncolor: "ON-COLOR",
@@ -83,6 +88,8 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
   const cardsTab = tab === "oncolor" || tab === "overall";
   const sort = tab === "overall" && chosenSort === "rate" ? "color" : chosenSort;
   const cardRows = useMemo(() => state.rowsFor(state.uniqueIndexes, sort), [state, sort]);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const boardWidth = useWidth(boardRef);
   const deck = state.deck;
   const deckRows = deck
     ? alignedZone(
@@ -96,20 +103,24 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
   if (view.results.builds.length === 0) {
     return <Empty loading={view.results.loading} />;
   }
-  const board = (rows: Row[], actions: CardActions, rateSort = false) => (
-    <PileBoard
-      zone="side"
-      setCode={view.pool.setCode}
-      rows={rows}
-      cards={view.pool.cards}
-      width={CARD_WIDTH}
-      visible={null}
-      actions={actions}
-      dragging={null}
-      readOnly
-      pileHeader={(pile) => state.pileHeader(pile, rateSort)}
-    />
-  );
+  const board = (rows: Row[], actions: CardActions, rateSort = false) => {
+    const dividerBefore = rateSort ? rows[0]?.find((pile) => pile.key.startsWith(NONCREATURE_PREFIX))?.key : undefined;
+    return (
+      <PileBoard
+        zone="side"
+        setCode={view.pool.setCode}
+        rows={rows}
+        cards={view.pool.cards}
+        width={dividerBefore ? fittedDividerWidth(boardWidth, rows[0].length) : CARD_WIDTH}
+        visible={null}
+        actions={actions}
+        dragging={null}
+        readOnly
+        pileHeader={(pile) => state.pileHeader(pile, rateSort)}
+        dividerBefore={dividerBefore}
+      />
+    );
+  };
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[max-content_minmax(0,1fr)]">
       <div className="flex min-h-0 w-[288px] flex-col overflow-y-auto border-r border-border">
@@ -120,14 +131,18 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
         )}
         <Panel title="COLORS">
           <PairList state={state} />
-          <div className="mt-3">
+          <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
             <ColorPie builds={view.results.builds} size={140} />
+            <div className="flex flex-col gap-2">
+              <span className="text-center font-display text-[12px] tracking-[0.16em] text-subtle">SPLASHES</span>
+              <SplashBars state={state} />
+            </div>
           </div>
-          <SplashRate state={state} />
         </Panel>
-        <Panel title="INSIGHTS">
+        <Panel title="INSIGHTS" grow>
           <Insights
             state={state}
+            spread
             onShowBuild={(position) => {
               state.showBuild(position);
               setTab("decks");
@@ -141,41 +156,53 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
           className="flex-1 border-b-0"
           title={
             <span className="flex items-center gap-4">
-              <PaneTabs tabs={tabs} active={tab} onPick={setTab} className="-ml-3" />
+              <PaneTabs
+                tabs={tabs}
+                active={tab}
+                onPick={setTab}
+                className="-ml-3 max-2xl:[&>button]:px-1.5 max-2xl:[&>button]:text-[13px] max-2xl:[&>button]:tracking-[0.1em]"
+              />
               {!cardsTab && tab !== "decks" && <TabNote tab={tab} state={state} />}
             </span>
           }
           count={null}
           controls={
             cardsTab ? (
-              <SortChips sort={sort} withRate={tab === "oncolor"} onSort={setSort} />
+              <span className="flex items-center gap-3">
+                <SortChips sort={sort} withRate={tab === "oncolor"} onSort={setSort} />
+                {state.yourNames && state.markYours && <MarkLegend />}
+              </span>
             ) : (
               tab === "decks" && <DeckPicker state={state} />
             )
           }
           extra={
-            <span className="flex items-center gap-3">
-              <SwitchToggle
-                label="SEPARATE NONCREATURES"
-                on={state.split}
-                onToggle={state.toggleSplit}
-                ariaLabel="Separate noncreatures"
-                tooltip="Show noncreatures in a second row"
-              />
+            <span className="flex items-center gap-2">
+              {tab !== "you" && (
+                <SwitchToggle
+                  label="SEPARATE NONCREATURES"
+                  on={state.split}
+                  onToggle={state.toggleSplit}
+                  ariaLabel="Separate noncreatures"
+                  tooltip="Show noncreatures in a second row"
+                />
+              )}
               {state.yourNames && (
                 <SwitchToggle
-                  label="MARK YOUR DECK"
+                  label="OUTLINE BUILD"
                   on={state.markYours}
                   onToggle={() => state.setMarkYours(!state.markYours)}
-                  ariaLabel="Mark your deck"
+                  ariaLabel="Outline build"
                   tooltip="Outline the cards you played"
                 />
               )}
             </span>
           }
         >
-          {cardsTab &&
-            board(cardRows, sort === "rate" ? state.plainActions : state.runActions(cardRows), sort === "rate")}
+          <div ref={boardRef}>
+            {cardsTab &&
+              board(cardRows, sort === "rate" ? state.plainActions : state.runActions(cardRows), sort === "rate")}
+          </div>
           {tab === "decks" && deck && (
             <PileBoard
               zone="side"
@@ -201,118 +228,334 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
   );
 };
 
-export const PhoneBreakdown = ({ view }: { view: BuilderView }) => {
+const MarkLegend = () => (
+  <span className={cn("flex h-7 items-center whitespace-nowrap rounded px-2 text-[13px] text-text", MARK_OUTLINE)}>
+    Your Build
+  </span>
+);
+
+export const PhoneBreakdown = ({ view, stickyTop }: { view: BuilderView; stickyTop: number }) => {
+  const [overview, setOverview] = useState(() => breakdownTabFromHash() === null);
   const state = useBreakdown(view);
   const { tab, tabs, setTab } = useBreakdownTab(state);
   const tabsRef = useRef<HTMLDivElement>(null);
   const loaded = view.results.builds.length > 0;
   useEffect(() => {
-    if (loaded && breakdownTabFromHash()) {
-      tabsRef.current?.scrollIntoView();
-    }
-  }, [loaded]);
+    setAnchor(overview ? OVERVIEW_ANCHOR : TAB_ANCHORS[tab]);
+  }, [overview, tab]);
   const groups = useMemo(() => state.phoneGroups(), [state]);
+  const [deckLayout, setDeckLayout] = usePreference<DeckLayout>(DECK_LAYOUT_KEY, "piles");
+  const overviewRef = useRef<HTMLDivElement>(null);
+  const overviewHeight = useRestOfScreen(overviewRef, overview && loaded);
   if (!loaded) {
     return <Empty loading={view.results.loading} />;
   }
-  const showTab = (next: Tab) => {
-    setTab(next);
+  const pick = (key: string) => {
     const bar = tabsRef.current;
-    if (bar && bar.getBoundingClientRect().top <= PHONE_TABS_TOP) {
-      window.scrollTo({ top: bar.offsetTop - PHONE_TABS_TOP });
+    if (bar && bar.getBoundingClientRect().top <= stickyTop) {
+      window.scrollTo({ top: bar.offsetTop - stickyTop });
     }
+    if (key === OVERVIEW_ANCHOR) {
+      setOverview(true);
+      return;
+    }
+    setOverview(false);
+    setTab(key as Tab);
   };
+  const phoneTabs: Tab[] = ["decks", ...tabs.filter((key) => key !== "decks")];
+  const tabItems = [
+    { key: OVERVIEW_ANCHOR, label: "OVERVIEW" },
+    ...phoneTabs.map((key) => ({ key, label: TAB_TITLES[key] })),
+  ];
   const cardActions = state.runActions([
     groups.map((group) => ({ key: group.key, label: null, cards: group.entries.map((entry) => entry.index) })),
   ]);
   const deck = state.deck;
   return (
-    <div className="flex flex-col gap-5">
-      {state.original && (
-        <PhoneSection title="ORIGINAL BUILD">
-          <OriginalResult pool={view.pool} />
-        </PhoneSection>
-      )}
-      <PhoneSection title="COLORS">
-        <div className="flex flex-wrap justify-center gap-1.5">
-          <FilterToggle active={state.pair === null} onClick={() => state.setPair(null)} wide>
-            <span className="font-display text-[12px] tracking-[0.14em]">ALL</span>
-            <span className="font-num text-[13px] text-text">{state.builds.length}</span>
-          </FilterToggle>
-          {state.pairs.map((row) => (
-            <FilterToggle
-              key={row.pair}
-              active={state.pair === row.pair}
-              onClick={() => state.setPair(state.pair === row.pair ? null : row.pair)}
-              wide
-            >
-              <Pips colors={row.pair} size={14} />
-              <span className="font-num text-[13px] text-text">{row.decks}</span>
-            </FilterToggle>
-          ))}
-        </div>
-        <ColorPie builds={view.results.builds} size={160} />
-        <SplashRate state={state} />
-      </PhoneSection>
-      <PhoneSection title="INSIGHTS">
-        <Insights
-          state={state}
-          onShowBuild={(position) => {
-            state.showBuild(position);
-            showTab("decks");
-            tabsRef.current?.scrollIntoView({ behavior: "smooth" });
-          }}
-        />
-      </PhoneSection>
-      <div className="flex flex-col gap-3">
-        <div
-          ref={tabsRef}
-          className="sticky z-30 -mx-2 overflow-x-auto border-b border-border bg-bg px-2 [scrollbar-width:none]"
-          style={{ top: PHONE_TABS_TOP }}
-        >
-          <PaneTabs tabs={tabs} active={tab} onPick={showTab} />
-        </div>
-        {(tab === "oncolor" || tab === "overall") && (
-          <>
-            {state.yourNames && (
-              <div className="flex justify-end">
-                <SwitchToggle
-                  label="MARK YOURS"
-                  on={state.markYours}
-                  onToggle={() => state.setMarkYours(!state.markYours)}
-                  ariaLabel="Mark your deck"
-                  tooltip="Outline the cards you played"
-                />
+    <div className="flex flex-col gap-3">
+      <div
+        ref={tabsRef}
+        className="sticky z-30 -mx-2 overflow-x-auto border-b border-border bg-bg px-2 [scrollbar-width:none]"
+        style={{ top: stickyTop }}
+      >
+        <PhoneTabRow items={tabItems} active={overview ? OVERVIEW_ANCHOR : tab} onPick={pick} />
+      </div>
+      <PairChips state={state} />
+      {overview && (
+        <div ref={overviewRef} className="flex flex-col gap-4 pt-1" style={{ minHeight: overviewHeight }}>
+          <section
+            className={cn(
+              "grid items-start gap-4 border-b border-border pb-4",
+              state.pair === null ? "grid-cols-[minmax(0,1fr)_132px]" : "grid-cols-1",
+            )}
+          >
+            {state.pair === null && (
+              <div className="flex flex-col items-center gap-2">
+                <PhoneHeading title="COLORS" />
+                <ColorPie builds={view.results.builds} size={200} />
               </div>
             )}
-            {groups.map((group) => (
-              <div key={group.key} className="flex flex-col gap-1">
-                <div className="flex h-6 items-center justify-center">{group.header}</div>
-                <CardGrid entries={group.entries} actions={cardActions} />
-              </div>
-            ))}
-          </>
-        )}
-        {(tab === "close" || tab === "splashes" || tab === "you") && (
-          <>
-            <div className="flex justify-center text-center">
-              <TabNote tab={tab} state={state} />
+            <div className="flex flex-col gap-2 self-center pr-3">
+              <PhoneHeading title="SPLASHES" />
+              <SplashBars state={state} />
             </div>
-            <PhoneExtra tab={tab} state={state} />
-          </>
-        )}
-        {tab === "decks" && (
-          <>
-            <div className="flex flex-wrap justify-center gap-1.5">
-              <DeckPicker state={state} />
+          </section>
+          {!state.single && (
+            <PhoneSection title="INSIGHTS" grow>
+              <Insights
+                state={state}
+                spread
+                centerCards
+                communityPick={false}
+                onShowBuild={(position) => {
+                  state.showBuild(position);
+                  pick("decks");
+                }}
+              />
+            </PhoneSection>
+          )}
+        </div>
+      )}
+      {!overview && (tab === "oncolor" || tab === "overall") && (
+        <>
+          {state.yourNames && (
+            <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center">
+              <span className="rounded bg-bg/90 shadow-lg backdrop-blur-sm">
+                <MarkLegend />
+              </span>
             </div>
-            {deck?.basics && <BasicsLine basics={deck.basics} />}
-            <CardGrid entries={deck ? state.entriesByValue(deck.main) : []} actions={state.deckActions} />
-          </>
-        )}
-      </div>
+          )}
+          {groups.map((group) => (
+            <div key={group.key} className="flex flex-col gap-1">
+              <div className="flex h-6 items-center justify-center">{group.header}</div>
+              <CardGrid entries={group.entries} actions={cardActions} />
+            </div>
+          ))}
+        </>
+      )}
+      {!overview && (tab === "close" || tab === "splashes" || tab === "you") && (
+        <>
+          <div className="flex justify-center text-center">
+            <TabNote tab={tab} state={state} />
+          </div>
+          <PhoneExtra tab={tab} state={state} />
+        </>
+      )}
+      {!overview && tab === "decks" && (
+        <>
+          <div className="relative flex justify-center px-[64px]">
+            <PhoneDeckPicker state={state} />
+            <div className="absolute right-0 top-0 flex gap-1">
+              <FilterToggle small active={state.split} onClick={state.toggleSplit} label="Split creatures">
+                <Rows2 size={15} />
+              </FilterToggle>
+              <FilterToggle
+                small
+                active={deckLayout === "piles"}
+                onClick={() => setDeckLayout(deckLayout === "piles" ? "names" : "piles")}
+                label="Show full cards"
+              >
+                <LayoutGrid size={15} />
+              </FilterToggle>
+            </div>
+          </div>
+          {state.deckKey === "original" && <OriginalLine pool={view.pool} />}
+          {deck && <PhoneDeck state={state} view={view} layout={deckLayout} />}
+        </>
+      )}
     </div>
   );
+};
+
+const PhoneDeck = ({ state, view, layout }: { state: BreakdownState; view: BuilderView; layout: DeckLayout }) => {
+  const deck = state.deck;
+  if (!deck) {
+    return null;
+  }
+  const basics = deck.basics ? view.basicCardsOf(deck.basics) : [];
+  if (layout === "names") {
+    const entries = state.entriesByValue(deck.main);
+    return (
+      <>
+        <StripList
+          entries={[...entries.filter((entry) => !isLand(entry.card)), ...entries.filter((entry) => isLand(entry.card))]}
+          actions={state.deckActions}
+        />
+        {deck.basics && <BasicsLine basics={deck.basics} />}
+      </>
+    );
+  }
+  const rows = alignedZone(view.pool.cards, deck.main, "mana", state.split, basics.length > 0 ? "land" : null);
+  return (
+    <>
+      {rows.map((row, rowIndex) => (
+        <div key={rowIndex} className="-mx-2 overflow-x-auto px-2 pb-1">
+          <div className="w-max">
+            <ColumnRow
+              groups={row.map((pile) => ({
+                key: pile.key,
+                label: pile.key,
+                entries: [
+                  ...(rowIndex === rows.length - 1 && pile.key === "land" ? basics : []),
+                  ...pile.cards.map((index) => ({ index, card: view.pool.cards[index] })),
+                ],
+              }))}
+              setCode={view.pool.setCode}
+              width={PHONE_PILE_WIDTH}
+              actions={state.deckActions}
+            />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+};
+
+const useRestOfScreen = (ref: RefObject<HTMLElement | null>, active: boolean) => {
+  const [height, setHeight] = useState<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!active || !element) {
+      return;
+    }
+    const pageBottomPadding = 24;
+    const measure = () =>
+      setHeight(window.innerHeight - (element.getBoundingClientRect().top + window.scrollY) - pageBottomPadding);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [ref, active]);
+  return height;
+};
+
+const PairChips = ({ state }: { state: BreakdownState }) => (
+  <div className="-mx-2 flex gap-1.5 overflow-x-auto px-2 [scrollbar-width:none] [&>*]:shrink-0">
+    <FilterToggle active={state.pair === null} onClick={() => state.setPair(null)} wide>
+      <span className="font-display text-[12px] tracking-[0.14em]">ALL</span>
+      <span className="font-num text-[13px] text-text">{state.builds.length}</span>
+    </FilterToggle>
+    {state.pairs.map((row) => (
+      <FilterToggle
+        key={row.pair}
+        active={state.pair === row.pair}
+        onClick={() => state.setPair(state.pair === row.pair ? null : row.pair)}
+        wide
+      >
+        <Pips colors={row.pair} size={14} />
+        <span className="font-num text-[13px] text-text">{row.decks}</span>
+      </FilterToggle>
+    ))}
+  </div>
+);
+
+const SplashBars = ({ state }: { state: BreakdownState }) => {
+  const total = state.counted.length;
+  const rows = colorSplashRows(state.counted).filter((row) => !state.pair?.includes(row.color));
+  const splashed = rows.filter((row) => row.splash > 0);
+  if (splashed.length === 0) {
+    return <span className="text-center text-[13px] text-subtle">No splashes</span>;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {splashed.map((row) => (
+        <div key={row.color} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+          <Pip c={row.color} size={16} />
+          <span className="h-2 overflow-hidden rounded-full bg-surface2">
+            <span className="block h-full rounded-full bg-green" style={{ width: `${(100 * row.splash) / total}%` }} />
+          </span>
+          <span className="text-right font-num text-[13px] text-text">
+            {row.splash}/{total}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const PhoneDeckPicker = ({ state }: { state: BreakdownState }) => {
+  if (!state.original) {
+    return <DeckPicker state={state} />;
+  }
+  const total = state.counted.length;
+  const position = state.deckKey === "original" ? 0 : state.buildIndex + 1;
+  const step = (offset: number) => {
+    const next = (position + offset + total + 1) % (total + 1);
+    if (next === 0) {
+      state.setDeckKey("original");
+    } else {
+      state.showBuild(next - 1);
+    }
+  };
+  const colors = position === 0 ? state.original.colors : state.build?.colors;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-1">
+      {state.yours && (
+        <DeckChip active={state.deckKey === "yours"} onClick={() => state.setDeckKey("yours")}>
+          YOURS
+          <Pips colors={state.yours.colors ?? ""} size={13} />
+        </DeckChip>
+      )}
+      <StepButton label="Previous build" onClick={() => step(-1)}>
+        <ChevronLeft size={16} />
+      </StepButton>
+      <DeckChip active={state.deckKey !== "yours"} onClick={() => step(0)}>
+        BUILD
+        <span className="grid justify-items-center font-num tabular-nums">
+          <span className="invisible col-start-1 row-start-1">
+            {total}/{total}
+          </span>
+          <span className="col-start-1 row-start-1">
+            {position}/{total}
+          </span>
+        </span>
+        <span className="grid justify-items-center">
+          <span className="invisible col-start-1 row-start-1">
+            <Pips colors={widestColors(state)} size={13} />
+          </span>
+          <span className="col-start-1 row-start-1">
+            <Pips colors={colors ?? ""} size={13} />
+          </span>
+        </span>
+      </DeckChip>
+      <StepButton label="Next build" onClick={() => step(1)}>
+        <ChevronRight size={16} />
+      </StepButton>
+    </div>
+  );
+};
+
+const OriginalLine = ({ pool }: { pool: DailySealedPool }) => (
+  <div className="flex items-center justify-center gap-2.5">
+    <span className="font-display text-[12px] tracking-[0.16em] text-subtle">ORIGINAL BUILD</span>
+    <span className="font-num text-[15px] text-text">
+      {pool.wins}-{pool.losses}
+    </span>
+    <span className="text-[13px] text-subtle">{EVENT_NAMES[pool.format] ?? pool.format}</span>
+  </div>
+);
+
+const PhoneTabRow = ({
+  items,
+  active,
+  onPick,
+}: {
+  items: { key: string; label: string }[];
+  active: string;
+  onPick: (key: string) => void;
+}) => (
+  <span className="flex h-8 w-max min-w-full [&>button]:h-full [&>button]:flex-auto [&>button]:px-2.5 [&>button]:py-0 [&>button]:text-[13px] [&>button]:tracking-[0.1em]">
+    {items.map((item) => (
+      <TabButton key={item.key} active={active === item.key} onClick={() => onPick(item.key)}>
+        {item.label}
+      </TabButton>
+    ))}
+  </span>
+);
+
+const fittedDividerWidth = (boardWidth: number, columns: number) => {
+  const dividerWidth = 17;
+  const fit = Math.floor((boardWidth - dividerWidth - PILE_GAP * columns) / columns);
+  return boardWidth > 0 ? Math.max(150, Math.min(CARD_WIDTH, fit)) : CARD_WIDTH;
 };
 
 const useBreakdownTab = (state: BreakdownState) => {
@@ -351,6 +594,9 @@ export const breakdownTabFromHash = (): Tab | null => {
   }
   return null;
 };
+
+export const breakdownAnchored = () =>
+  breakdownTabFromHash() !== null || window.location.hash === `#${OVERVIEW_ANCHOR}`;
 
 type BreakdownState = ReturnType<typeof useBreakdown>;
 
@@ -455,17 +701,35 @@ const useBreakdown = (view: BuilderView) => {
     }
     return piles.filter((pile) => pile.cards.length > 0);
   };
-  const rowsFor = (indexes: number[], sort: CardSort, splitRows = split): Row[] => {
+  const rowsFor = (indexes: number[], sort: CardSort, splitRows = split): Row[] =>
+    yoursFirst(sortedRows(indexes, sort, splitRows));
+  const yoursFirst = (rows: Row[]): Row[] => {
+    if (!marked) {
+      return rows;
+    }
+    return rows.map((row) =>
+      row.map((pile) => ({
+        ...pile,
+        cards: [
+          ...pile.cards.filter((index) => marked(pool.cards[index])),
+          ...pile.cards.filter((index) => !marked(pool.cards[index])),
+        ],
+      })),
+    );
+  };
+  const sortedRows = (indexes: number[], sort: CardSort, splitRows: boolean): Row[] => {
     if (sort === "rate") {
       if (!splitRows) {
         return [bandRow(indexes)];
       }
       const creatures = indexes.filter((index) => isCreature(pool.cards[index]));
       const others = indexes.filter((index) => !isCreature(pool.cards[index]));
-      return alignRows(
-        [bandRow(creatures), bandRow(others)],
-        RATE_BANDS.map((band) => band.key),
-      );
+      return [
+        [
+          ...bandRow(creatures),
+          ...bandRow(others).map((pile) => ({ ...pile, key: `${NONCREATURE_PREFIX}${pile.key}` })),
+        ],
+      ];
     }
     return alignedZone(pool.cards, indexes, sort, splitRows).map((row) =>
       row.map((pile) => ({ ...pile, cards: [...pile.cards].sort(byRate) })),
@@ -491,7 +755,9 @@ const useBreakdown = (view: BuilderView) => {
     return groupByColor(uniqueIndexes.map((index) => ({ index, card: pool.cards[index] }))).map((group) => ({
       key: group.key,
       header: <PileSymbol pileKey={group.key} setCode={pool.setCode} />,
-      entries: [...group.entries].sort((a, b) => byRate(a.index, b.index)),
+      entries: [...group.entries].sort(
+        (a, b) => Number(!!marked?.(b.card)) - Number(!!marked?.(a.card)) || byRate(a.index, b.index),
+      ),
     }));
   };
   const original: DeckChoice | null =
@@ -649,10 +915,10 @@ const ExtraBoard = ({
   return (
     <div className="flex flex-col gap-3">
       <YouGroup title="ONLY YOU PLAYED" empty={state.youPicks.length === 0}>
-        {board(alignedZone(state.pool.cards, state.youPicks, "color", state.split), actions)}
+        {board(alignedZone(state.pool.cards, state.youPicks, "color", false), actions)}
       </YouGroup>
       <YouGroup title="YOU CUT" empty={state.theirPicks.length === 0}>
-        {board(alignedZone(state.pool.cards, state.theirPicks, "color", state.split), actions)}
+        {board(alignedZone(state.pool.cards, state.theirPicks, "color", false), actions)}
       </YouGroup>
     </div>
   );
@@ -776,75 +1042,79 @@ const PairButton = ({
   </FilterToggle>
 );
 
-const SplashRate = ({ state }: { state: BreakdownState }) => {
-  const rows = colorSplashRows(state.counted);
-  return (
-    <div
-      className="mt-3 grid grid-flow-col grid-rows-3 items-center justify-items-center gap-x-3 gap-y-1 font-num text-[13px]"
-      style={{ gridTemplateColumns: `auto repeat(${rows.length}, minmax(0, 1fr))` }}
-    >
-      <span />
-      <span className="justify-self-start font-display text-[12px] tracking-[0.16em] text-subtle">MAIN</span>
-      <span className="justify-self-start font-display text-[12px] tracking-[0.16em] text-subtle">SPLASH</span>
-      {rows.map((row) => [
-        <Pip key={`${row.color}-pip`} c={row.color} size={15} />,
-        <span key={`${row.color}-main`}>{row.main}</span>,
-        <span key={`${row.color}-splash`} className={row.splash > 0 ? "text-text" : "text-subtle"}>
-          {row.splash}
-        </span>,
-      ])}
-    </div>
-  );
-};
-
-const Insights = ({ state, onShowBuild }: { state: BreakdownState; onShowBuild: (position: number) => void }) => {
+const Insights = ({
+  state,
+  onShowBuild,
+  spread = false,
+  centerCards = false,
+  communityPick = true,
+}: {
+  state: BreakdownState;
+  onShowBuild: (position: number) => void;
+  spread?: boolean;
+  centerCards?: boolean;
+  communityPick?: boolean;
+}) => {
   const contested = state.contested;
   const splashed = state.mostSplashed;
   const top = state.topBuild;
   return (
-    <div className="flex flex-col gap-3">
+    <div className={cn("flex flex-col gap-3", spread && "flex-1 justify-evenly")}>
       {contested !== null && !state.single && (
         <Insight label="MOST CONTESTED">
-          <InsightCard state={state} index={contested} figure={state.rateLabel(contested)} />
+          <InsightCard state={state} index={contested} figure={state.rateLabel(contested)} centered={centerCards} />
         </Insight>
       )}
       {splashed !== null && !state.single && (
         <Insight label="MOST SPLASHED">
-          <InsightCard state={state} index={splashed} figure={state.splashLabel(splashed)} />
+          <InsightCard state={state} index={splashed} figure={state.splashLabel(splashed)} centered={centerCards} />
         </Insight>
       )}
       {top && !state.single && (
         <Insight label="HIGHEST GIH WR BUILD">
-          <FilterToggle
-            active={false}
-            onClick={() => onShowBuild(top.position)}
-            wide
-            small
-            className="w-full justify-between px-2.5 text-text"
-          >
-            <Pips colors={top.build.colors} size={15} />
-            <span className="flex items-center gap-2 font-num text-[14px]">
-              {(top.average * 100).toFixed(1)}%
-              <ChevronRight size={15} className="text-subtle" />
-            </span>
-          </FilterToggle>
+          <BuildLink colors={top.build.colors} average={top.average} onClick={() => onShowBuild(top.position)} />
         </Insight>
       )}
-      <Insight label="COMMUNITY PICK">
-        <div className="flex h-8 items-center justify-center rounded border border-dashed border-border2 text-[13px] text-subtle">
-          Vote for best build: coming soon!
-        </div>
-      </Insight>
+      {communityPick && (
+        <Insight label="COMMUNITY PICK">
+          <div className="flex h-8 items-center justify-center rounded border border-dashed border-border2 text-[13px] text-subtle">
+            Vote for best build: coming soon!
+          </div>
+        </Insight>
+      )}
     </div>
   );
 };
 
-const InsightCard = ({ state, index, figure }: { state: BreakdownState; index: number; figure: string }) => (
+const BuildLink = ({ colors, average, onClick }: { colors: string; average: number; onClick: () => void }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn("flex h-9 items-center gap-3 self-center px-3 text-text", chipClass(false))}
+  >
+    <Pips colors={colors} size={16} />
+    <span className="font-num text-[15px]">{(average * 100).toFixed(1)}%</span>
+    <ChevronRight size={15} className="-mr-1 text-subtle" />
+  </button>
+);
+
+const InsightCard = ({
+  state,
+  index,
+  figure,
+  centered = false,
+}: {
+  state: BreakdownState;
+  index: number;
+  figure: string;
+  centered?: boolean;
+}) => (
   <div className="flex items-center gap-2">
+    {centered && <span className="w-[5ch] shrink-0" />}
     <div className="min-w-0 flex-1">
       <StripList entries={state.entriesByValue([index])} actions={state.deckActions} />
     </div>
-    <span className="w-[5ch] shrink-0 text-right font-num text-[14px] text-text">{figure}</span>
+    <span className="w-[5ch] shrink-0 font-num text-[14px] text-text">{figure}</span>
   </div>
 );
 
@@ -869,7 +1139,7 @@ const PaneTabs = ({
   <span
     className={cn(
       className,
-      "flex h-10 [&>button]:h-full [&>button]:flex-none [&>button]:px-3.5 [&>button]:pb-1 [&>button]:pt-[7px]",
+      "flex h-10 [&>button]:h-full [&>button]:flex-none [&>button]:px-2 [&>button]:pb-1 [&>button]:pt-[7px]",
       "[&>button:hover]:bg-white/5 [&>button:hover]:text-text [&>button:active]:bg-white/10",
     )}
   >
@@ -890,15 +1160,15 @@ const SortChips = ({
   withRate: boolean;
   onSort: (sort: CardSort) => void;
 }) => (
-  <div className="ml-4 flex items-center gap-2">
-    <span className="font-display text-[13px] tracking-[0.18em] text-subtle">SORT BY</span>
+  <div className="flex items-center gap-2">
+    <span className="font-display text-[13px] tracking-[0.18em] text-subtle max-2xl:hidden">SORT BY</span>
     <div className="flex gap-1">
       {withRate && (
         <Tooltip label="How many of the decks in its colors played each card" side="bottom">
           <button
             type="button"
             onClick={() => onSort("rate")}
-            className={cn("h-8 px-2.5 text-[12px] uppercase tracking-[0.12em]", chipClass(sort === "rate"))}
+            className={cn("h-8 px-2.5 text-[12px] uppercase tracking-[0.12em] max-2xl:px-2", chipClass(sort === "rate"))}
           >
             On-Color Rate
           </button>
@@ -909,7 +1179,7 @@ const SortChips = ({
           key={key}
           type="button"
           onClick={() => onSort(key)}
-          className={cn("h-8 px-2.5 text-[12px] uppercase tracking-[0.12em]", chipClass(sort === key))}
+          className={cn("h-8 px-2.5 text-[12px] uppercase tracking-[0.12em] max-2xl:px-2", chipClass(sort === key))}
         >
           {SORT_LABELS[key]}
         </button>
@@ -1008,8 +1278,12 @@ const BasicsLine = ({ basics }: { basics: Basics }) => (
   </div>
 );
 
-const PhoneSection = ({ title, children }: { title: string; children: ReactNode }) => (
-  <section className="flex flex-col gap-3 border-b border-border pb-4">
+const PhoneHeading = ({ title }: { title: string }) => (
+  <h2 className="flex min-h-9 items-center justify-center font-display text-[15px] tracking-[0.18em] text-text">{title}</h2>
+);
+
+const PhoneSection = ({ title, grow = false, children }: { title: string; grow?: boolean; children: ReactNode }) => (
+  <section className={cn("flex flex-col gap-3 border-b border-border pb-4 last:border-b-0", grow && "flex-1")}>
     <div className="flex min-h-9 items-center justify-center">
       <h2 className="text-center font-display text-[15px] tracking-[0.18em] text-text">{title}</h2>
     </div>

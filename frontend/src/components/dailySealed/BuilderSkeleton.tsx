@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Copy, Download, RotateCcw, Undo2 } from "lucide-react";
+import { Check, Copy, RotateCcw, Share2, Undo2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { LLU_LOGO_SRC, SetGlyph } from "../Brand";
@@ -48,7 +48,7 @@ export const DesktopBuilderSkeleton = ({ resting = false }: { resting?: boolean 
           <PreviewButton icon={<RotateCcw size={15} />} label="Reset" />
           <DeckCount size={0} />
           <PreviewButton icon={<Copy size={15} />} label="Copy Link" />
-          <PreviewButton icon={<Download size={15} />} label="Export for Arena" />
+          <PreviewButton icon={<Share2 size={15} />} label="Share" />
           <span className="flex !h-10 items-center gap-2 rounded bg-surface2 px-4 font-display text-[14px] tracking-[0.14em] text-muted">
             <Check size={16} strokeWidth={2.5} />
             SUBMIT
