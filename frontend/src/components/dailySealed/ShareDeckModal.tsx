@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Check, Copy, Download, Share2, X } from "lucide-react";
-import { toBlob } from "html-to-image";
+import { toCanvas } from "html-to-image";
 
 import { SetGlyph } from "../Brand";
 import { Pips } from "../ManaPips";
+import { prefersReducedMotion } from "../../lib/reduced-motion";
 import { cn } from "../../lib/utils";
 import type { CardGroup } from "../../data/dailySealed";
 import type { BuilderView } from "../../pages/DailySealedPage";
 import { chipClass } from "../pod/review/reviewControls";
-import { ColumnRow } from "./cards";
+import { ColumnRow, NO_CARD_ACTIONS } from "./cards";
 import { deckGroupRows } from "./deckGroups";
-import { formatDay, GREEN_CTA } from "./shared";
+import { formatDay, GREEN_CTA, ReservedLabel } from "./shared";
 import { useCopyFeedback } from "../CopyTextButton";
 import { useHeight, useWidth } from "./cardWidth";
 import { useIsMobile } from "../../lib/use-is-mobile";
@@ -26,11 +27,11 @@ export const ShareDeckModal = ({ view, onClose }: { view: BuilderView; onClose: 
   const stageRef = useRef<HTMLDivElement>(null);
   const imageKey = shareImageKey(view);
   const [blob, setBlob] = useState<Blob | null>(() => builtImages.get(imageKey) ?? null);
-  const [wasBuilt] = useState(() => builtImages.has(imageKey));
   const [imageShown, setImageShown] = useState(false);
-  const [sweptOnce, setSweptOnce] = useState(false);
+  const [sweepDone, setSweepDone] = useState(false);
+  const [sweeps] = useState(() => lastSweptKey !== imageKey && !prefersReducedMotion());
   const [failed, setFailed] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, markCopied } = useCopyFeedback();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const fileName = `daily-sealed-${view.pool.setCode.toLowerCase()}-${view.pool.poolNumber}.png`;
   const file = useMemo(() => (blob ? new File([blob], fileName, { type: "image/png" }) : null), [blob, fileName]);
@@ -54,9 +55,9 @@ export const ShareDeckModal = ({ view, onClose }: { view: BuilderView; onClose: 
     if (canCopy) {
       navigator.clipboard
         .write([new ClipboardItem({ "image/png": blobReady.current.promise })])
-        .then(() => setCopied(true), () => undefined);
+        .then(markCopied, () => undefined);
     } else if (pretendCopy) {
-      blobReady.current.promise.then(() => setCopied(true), () => undefined);
+      blobReady.current.promise.then(markCopied, () => undefined);
     }
   }, []);
   useEffect(() => {
@@ -68,14 +69,16 @@ export const ShareDeckModal = ({ view, onClose }: { view: BuilderView; onClose: 
     if (!blob) {
       return;
     }
-    blobReady.current.resolve(blob);
+    if (!sweeps) {
+      finishSweep();
+    }
     const url = URL.createObjectURL(blob);
     setImageUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [blob]);
   useEffect(() => {
     const node = stageRef.current;
-    if (!node || wasBuilt) {
+    if (!node || blob) {
       return;
     }
     let cancelled = false;
@@ -91,27 +94,30 @@ export const ShareDeckModal = ({ view, onClose }: { view: BuilderView; onClose: 
     };
   }, []);
   useEffect(() => {
-    const oneSweepMs = 1400;
-    const timer = window.setTimeout(() => setSweptOnce(true), oneSweepMs);
-    return () => window.clearTimeout(timer);
-  }, []);
-  useEffect(() => {
     const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const finishSweep = () => {
+    if (!blob) {
+      return;
+    }
+    setSweepDone(true);
+    lastSweptKey = imageKey;
+    blobReady.current.resolve(blob);
+  };
   const copy = async () => {
     if (!blob) {
       return;
     }
     if (pretendCopy) {
-      setCopied(true);
+      markCopied();
       return;
     }
     try {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      setCopied(true);
+      markCopied();
     } catch {
       view.copyBlocked();
     }
@@ -147,21 +153,16 @@ export const ShareDeckModal = ({ view, onClose }: { view: BuilderView; onClose: 
             className="relative mx-auto overflow-hidden rounded bg-bg"
             style={{ width: stageWidth * scale, height: Math.max(stageHeight * scale, 160) }}
           >
-            {!wasBuilt && !imageShown && (
-              <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `scale(${scale})` }}>
-                <DeckImage view={view} />
-              </div>
-            )}
             {imageUrl && (
               <img
                 src={imageUrl}
                 alt="Your deck"
-                onLoad={() => setImageShown(true)}
+                onLoad={(event) => void event.currentTarget.decode().finally(() => setImageShown(true))}
                 className={cn("absolute inset-0 h-full w-full object-contain", !imageShown && "opacity-0")}
               />
             )}
-            {!failed && (!imageShown || !sweptOnce) && (
-              <div className="share-shine pointer-events-none absolute inset-0" />
+            {sweeps && !failed && !sweepDone && (
+              <div className="share-shine pointer-events-none absolute inset-0" onAnimationIteration={finishSweep} />
             )}
           </div>
         </div>
@@ -243,10 +244,7 @@ export const ShareDeckModal = ({ view, onClose }: { view: BuilderView; onClose: 
               className={cn("flex h-9 items-center justify-center gap-2 px-5 disabled:opacity-50", GREEN_CTA)}
             >
               <span className="flex w-4 justify-center">{copied ? <Check size={16} /> : <Copy size={16} />}</span>
-              <span className="grid">
-                <span className="invisible col-start-1 row-start-1">COPIED</span>
-                <span className="col-start-1 row-start-1 text-center">{copied ? "COPIED" : "COPY"}</span>
-              </span>
+              <ReservedLabel label={copied ? "COPIED" : "COPY"} widest="COPIED" />
             </button>
           )}
         </div>
@@ -285,18 +283,41 @@ const OffscreenDeck = ({ view, stageRef }: { view: BuilderView; stageRef: RefObj
 );
 
 const builtImages = new Map<string, Blob>();
+let lastSweptKey: string | null = null;
 
 const shareImageKey = (view: BuilderView) =>
   JSON.stringify([view.pool.day, view.builder.layout.deck, view.builder.layout.basicsSlot, view.builder.basics, view.builder.sort.deck]);
 
 const buildShareImage = async (node: HTMLElement, imageKey: string) => {
   const fontEmbedCSS = await shareFontCss();
-  const blob = await toBlob(node, { pixelRatio: 2, backgroundColor: getComputedStyle(document.body).backgroundColor, fontEmbedCSS });
+  const options = { pixelRatio: 2, backgroundColor: getComputedStyle(document.body).backgroundColor, fontEmbedCSS };
+  const maxPasses = 4;
+  let canvas = await toCanvas(node, options);
+  for (let pass = 1; pass < maxPasses && !cardArtDrawn(node, canvas); pass++) {
+    canvas = await toCanvas(node, options);
+  }
+  const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, "image/png"));
   if (blob) {
     builtImages.clear();
     builtImages.set(imageKey, blob);
   }
   return blob;
+};
+
+const cardArtDrawn = (node: HTMLElement, canvas: HTMLCanvasElement) => {
+  const probe = [...node.querySelectorAll("img")].at(-1);
+  const context = canvas.getContext("2d");
+  if (!probe || !context) {
+    return true;
+  }
+  const stage = node.getBoundingClientRect();
+  const art = probe.getBoundingClientRect();
+  const scale = canvas.width / stage.width;
+  const x = Math.round((art.left - stage.left + art.width / 2) * scale);
+  const y = Math.round((art.top - stage.top + art.height / 2) * scale);
+  const drawn = context.getImageData(x, y, 1, 1).data;
+  const placeholder = getComputedStyle(probe).backgroundColor.match(/\d+/g)?.map(Number) ?? [];
+  return placeholder.slice(0, 3).some((channel, index) => Math.abs(channel - drawn[index]) > 2);
 };
 
 const ACTION_CLASS = "flex h-9 items-center gap-2 px-4 text-[13px] tracking-[0.12em] no-underline";
@@ -316,10 +337,7 @@ const ShareAction = ({
 }) => (
   <button type="button" disabled={disabled} onClick={onClick} className={cn(ACTION_CLASS, chipClass(false), "disabled:opacity-40")}>
     <span className="flex w-4 justify-center">{icon}</span>
-    <span className="grid">
-      <span className="invisible col-start-1 row-start-1">{widestLabel.toUpperCase()}</span>
-      <span className="col-start-1 row-start-1 text-center">{label.toUpperCase()}</span>
-    </span>
+    <ReservedLabel label={label.toUpperCase()} widest={widestLabel.toUpperCase()} />
   </button>
 );
 
@@ -339,7 +357,7 @@ const DeckImage = ({ view }: { view: BuilderView }) => {
         </span>
       </div>
       {rows.map((groups, index) => (
-        <ColumnRow key={index} groups={groups} setCode={view.pool.setCode} width={IMAGE_CARD_WIDTH} actions={NO_ACTIONS} />
+        <ColumnRow key={index} groups={groups} setCode={view.pool.setCode} width={IMAGE_CARD_WIDTH} actions={NO_CARD_ACTIONS} />
       ))}
       <span className="-mr-3 self-end font-display text-[15px] leading-none tracking-[0.12em] text-subtle">
         limitedlevelups.com/daily-sealed
@@ -348,7 +366,6 @@ const DeckImage = ({ view }: { view: BuilderView }) => {
   );
 };
 
-const NO_ACTIONS = { onPick: () => undefined, onPreview: () => undefined };
 
 const sameOriginImages = (groups: CardGroup[]): CardGroup[] =>
   groups.map((group) => ({

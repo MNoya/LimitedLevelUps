@@ -2,10 +2,11 @@ import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { EyeOff } from "lucide-react";
 
+import { prefersReducedMotion } from "../../lib/reduced-motion";
 import { cn } from "../../lib/utils";
 import { entryCount, type PoolCard, type PoolEntry } from "../../data/dailySealed";
 import { cardsFitPileKey, type Pile, type PileZone, type Row } from "../../data/dailySealedLayout";
-import { CardFace, CopiesBadge, DimmedVeil, RatingBadge, stackReveal, type CardActions } from "./cards";
+import { CARD_RATIO, CardFace, CopiesBadge, DimmedVeil, RatingBadge, stackReveal, type CardActions } from "./cards";
 import { MARK_BLOCK_CLASS } from "./markStyle";
 import { stackedCardShadow } from "../pod/review/ReviewCard";
 import { PileSymbol } from "./PileSymbol";
@@ -14,7 +15,6 @@ import { CARD_INDEX_ATTR, DROP_ZONE_ATTR, PILE_ATTR, PILE_CARDS_ATTR, PILE_ROW_A
 
 export const PILE_GAP = 6;
 const GLIDE_MS = 150;
-const CARD_RATIO = 680 / 488;
 
 export const PileBoard = ({
   zone,
@@ -25,6 +25,7 @@ export const PileBoard = ({
   visible,
   actions,
   dragging,
+  draggingLands = false,
   basics = null,
   readOnly = false,
   pileHeader,
@@ -38,13 +39,15 @@ export const PileBoard = ({
   visible: Set<number> | null;
   actions: CardActions;
   dragging: number[] | null;
+  draggingLands?: boolean;
   basics?: { row: number; pileKey: string; entries: PoolEntry[]; trailing?: boolean; before?: number } | null;
   readOnly?: boolean;
   pileHeader?: (pile: Pile, row: number) => ReactNode;
   dividerBefore?: string;
 }) => {
-  const basicsFor = (rowIndex: number, pileKey: string) =>
-    basics && basics.row === rowIndex && basics.pileKey === pileKey ? basics.entries : [];
+  const isBasicsPile = (rowIndex: number, pileKey: string) =>
+    !!basics && basics.row === rowIndex && basics.pileKey === pileKey;
+  const basicsFor = (rowIndex: number, pileKey: string) => (basics && isBasicsPile(rowIndex, pileKey) ? basics.entries : []);
   const needsBasicsColumn = (rowIndex: number) =>
     !!basics && basics.entries.length > 0 && basics.row === rowIndex && !rows[rowIndex]?.some((pile) => pile.key === basics.pileKey);
   const basicsColumn = (rowIndex: number) =>
@@ -62,6 +65,7 @@ export const PileBoard = ({
         dragging={dragging}
         draggable={!readOnly}
         basics={basics.entries}
+        faded={draggingLands}
       />
     );
   return (
@@ -91,6 +95,8 @@ export const PileBoard = ({
                 dragging={dragging}
                 draggable={!readOnly}
                 basics={basicsFor(rowIndex, pile.key)}
+                landsPile={isBasicsPile(rowIndex, pile.key)}
+                faded={draggingLands && isBasicsPile(rowIndex, pile.key)}
                 header={pileHeader?.(pile, rowIndex)}
               />,
             ])}
@@ -124,6 +130,8 @@ const PileColumn = ({
   dragging,
   draggable,
   basics,
+  landsPile = false,
+  faded = false,
   header,
 }: {
   zone: PileZone;
@@ -138,6 +146,8 @@ const PileColumn = ({
   dragging: number[] | null;
   draggable: boolean;
   basics: PoolEntry[];
+  landsPile?: boolean;
+  faded?: boolean;
   header?: ReactNode;
 }) => {
   const shown = visible ? pile.cards.filter((index) => visible.has(index)) : pile.cards;
@@ -166,14 +176,15 @@ const PileColumn = ({
         pileKey={pile.key}
         indexes={shown}
         extraCount={entryCount(basics)}
+        landsPile={landsPile}
         showSymbol={cardsFitPileKey(pile.key, pileCards)}
-        draggable={draggable && (shown.length > 0 || (pileIndex === null && basics.length > 0))}
+        draggable={draggable && shown.length + basics.length > 0}
       />
       )}
       <div
         ref={cardsRef}
         {...{ [PILE_CARDS_ATTR]: "", "data-reveal": reveal }}
-        className="relative"
+        className={cn("relative", faded && "opacity-30")}
         style={{ minHeight: reveal * 2 }}
       >
         {shown.map((index, position) => (
@@ -220,6 +231,7 @@ const PileHeader = ({
   pileKey,
   indexes,
   extraCount = 0,
+  landsPile,
   showSymbol,
   draggable,
 }: {
@@ -230,13 +242,14 @@ const PileHeader = ({
   pileKey: string;
   indexes: number[];
   extraCount?: number;
+  landsPile: boolean;
   showSymbol: boolean;
   draggable: boolean;
 }) => {
   const count = indexes.length + extraCount;
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: `pilehead|${zone}|${row}|${pileIndex}`,
-    data: { indexes, basics: pileIndex === -1 },
+    data: { indexes, pileHeader: true, basics: pileIndex === -1, landsPile: landsPile ? { row, pile: pileIndex } : null },
     disabled: !draggable,
   });
   return (
@@ -472,7 +485,7 @@ const useGlide = (container: RefObject<HTMLDivElement | null>, active: boolean) 
     if (!list) {
       return;
     }
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const still = prefersReducedMotion();
     const next = new Map<string, number>();
     for (const card of list.querySelectorAll<HTMLElement>(`[${CARD_INDEX_ATTR}]`)) {
       const key = card.getAttribute(CARD_INDEX_ATTR) ?? "";

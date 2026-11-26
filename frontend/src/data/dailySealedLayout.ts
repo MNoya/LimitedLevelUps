@@ -140,7 +140,7 @@ export const placeInSlot = (
 const insertSlotPile = (row: Row, slotKey: string, key: SortKey): Pile => {
   const order = slotsFor(key).map((slot) => slot.key);
   const rank = order.indexOf(slotKey);
-  const pile: Pile = { key: slotKey, label: slotsFor(key)[rank]?.label ?? null, cards: [] };
+  const pile = emptySlotPile(slotKey, key);
   let at = row.length;
   for (const [position, existing] of row.entries()) {
     if (order.indexOf(existing.key) > rank) {
@@ -173,6 +173,44 @@ export const placeAt = (layout: Layout, indexes: number[], target: PileTarget): 
   const pile = row[Math.min(target.pile, row.length - 1)];
   pile.cards.splice(Math.min(target.position, pile.cards.length), 0, ...indexes);
   return { ...next, [target.zone]: rows };
+};
+
+const emptySlotPile = (slotKey: string, sort: SortKey): Pile => ({
+  key: slotKey,
+  label: slotsFor(sort).find((slot) => slot.key === slotKey)?.label ?? null,
+  cards: [],
+});
+
+export const basicsRow = (layout: Layout) => Math.min(layout.basicsSlot?.row ?? Infinity, layout.deck.length - 1);
+
+export const withLandsPile = (layout: Layout, sort: SortKey): Layout => {
+  const key = BASICS_PILE_KEY[sort];
+  const rowIndex = basicsRow(layout);
+  const row = layout.deck[rowIndex];
+  if (!row || row.some((pile) => pile.key === key)) {
+    return layout;
+  }
+  const leading = sort === "mana" ? 0 : row.length;
+  const at = Math.min(layout.basicsSlot?.pile ?? leading, row.length);
+  const pile = emptySlotPile(key, sort);
+  const deck = layout.deck.map((each, index) => (index === rowIndex ? [...each.slice(0, at), pile, ...each.slice(at)] : each));
+  return { ...layout, deck };
+};
+
+export const moveDeckPile = (layout: Layout, from: BasicsSlot, to: BasicsSlot): Layout => {
+  const deck = layout.deck.map((row) => [...row]);
+  const landing = deck[to.row];
+  const pile = deck[from.row]?.[from.pile];
+  if (!landing || !pile) {
+    return layout;
+  }
+  deck[from.row].splice(from.pile, 1);
+  const at = Math.min(to.pile, landing.length);
+  if (from.row === to.row && at === from.pile) {
+    return layout;
+  }
+  landing.splice(at, 0, pile);
+  return { ...layout, deck, basicsSlot: { row: to.row, pile: at } };
 };
 
 export const hideCards = (layout: Layout, indexes: number[]): Layout => {

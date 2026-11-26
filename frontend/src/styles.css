@@ -220,13 +220,12 @@ button {
 
 .share-shine {
   background: linear-gradient(100deg, transparent 30%, rgba(46, 232, 92, 0.16) 45%, rgba(255, 255, 255, 0.22) 50%, rgba(46, 232, 92, 0.16) 55%, transparent 70%);
-  animation: thumbSweep 1.4s ease-in-out infinite;
+  animation: share-sweep 1.4s ease-in-out infinite;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .share-shine {
-    animation: none;
-  }
+@keyframes share-sweep {
+  0% { transform: translateX(-55%); }
+  100% { transform: translateX(55%); }
 }
 
 @keyframes card-preview-in-right {

@@ -14,10 +14,10 @@ import { useCopyFeedback } from "../CopyTextButton";
 import { LLU_LOGO_SRC, SetGlyph } from "../Brand";
 import { Link } from "react-router-dom";
 import { cn } from "../../lib/utils";
-import { DECK_SIZE } from "../../data/dailySealed";
-import { BASICS_PILE_KEY, type PileTarget, type PileZone, type SortKey } from "../../data/dailySealedLayout";
+import { DECK_SIZE, type PoolEntry } from "../../data/dailySealed";
+import { BASICS_PILE_KEY, basicsRow, type BasicsSlot, type PileTarget, type PileZone, type SortKey } from "../../data/dailySealedLayout";
 import type { BuilderView } from "../../pages/DailySealedPage";
-import { CardFace, CardPreview, REVEAL_RATIO } from "./cards";
+import { CardPreview, CardStack, NO_CARD_ACTIONS, REVEAL_RATIO } from "./cards";
 import { BasicsGrid, DeckCount, DeckStats, FillLandsButton, PoolFilterBar } from "./controls";
 import { HiddenPanel, HiddenToggle, PILE_GAP, PileBoard } from "./piles";
 import { pileTargetAt, sameTarget } from "./pileHitTest";
@@ -39,6 +39,7 @@ type Mode = "build" | "breakdown";
 export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
   const { builder } = view;
   const [dragging, setDragging] = useState<number[] | null>(null);
+  const [ghost, setGhost] = useState<Ghost | null>(null);
   const [dragWidth, setDragWidth] = useState<number | null>(null);
   const grab = useRef({ x: 0, y: 0 });
   const [overHidden, setOverHidden] = useState(false);
@@ -54,25 +55,29 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
   const fittedWidth = fittedCardWidth(useWidth(paneRef) - (hiddenOpen ? hiddenWidth : 0), widestRow);
   const cardWidth = dragWidth ?? fittedWidth;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: DRAG_DISTANCE } }));
-  const latest = useRef({ builder, dragging, width: cardWidth });
-  latest.current = { builder, dragging, width: cardWidth };
+  const latest = useRef({ builder, dragging, ghost, width: cardWidth });
+  latest.current = { builder, dragging, ghost, width: cardWidth };
   const lastTarget = useRef<PileTarget | null>(null);
-  const draggingBasics = useRef(false);
   const lastPoint = useRef<{ x: number; y: number } | null>(null);
 
   const placeAtPointer = () => {
-    const { builder: current, dragging: indexes, width } = latest.current;
+    const { builder: current, dragging: indexes, ghost: drag, width } = latest.current;
     const point = lastPoint.current;
     if (!indexes || !point) {
       return;
     }
-    if (draggingBasics.current) {
+    if (drag?.column) {
       const target = pileTargetAt(point.x, point.y, current.layout, [], PILE_GAP, width);
       if (target?.zone !== "deck" || (lastTarget.current?.row === target.row && lastTarget.current?.pile === target.pile)) {
         return;
       }
       lastTarget.current = target;
-      current.dragBasicsTo({ row: target.row, pile: target.pile });
+      const slot = { row: target.row, pile: target.pile };
+      if (drag.landsPile) {
+        current.dragLandsPileTo(drag.landsPile, slot);
+      } else {
+        current.dragBasicsTo(slot);
+      }
       return;
     }
     const underPointer = pileTargetAt(point.x, point.y, current.layout, indexes, PILE_GAP, width);
@@ -90,19 +95,24 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
   usePointerFrames(dragging !== null, lastPoint, placeAtPointer);
 
   const onDragStart = (event: DragStartEvent) => {
-    const indexes = (event.active.data.current?.indexes as number[] | undefined) ?? null;
-    draggingBasics.current = !!event.active.data.current?.basics;
-    builder.beginDrag();
+    const data = event.active.data.current;
+    const picked = (data?.indexes as number[] | undefined) ?? [];
+    const landsPile = (data?.landsPile as BasicsSlot | null | undefined) ?? null;
+    const column = !!data?.basics || landsPile !== null;
+    const indexes = column ? [] : picked;
+    const nextGhost = { indexes: picked, column, landsPile, belowHeader: !!data?.pileHeader };
+    setGhost(nextGhost);
+    builder.beginDrag(!column);
     lastTarget.current = null;
     lastPoint.current = null;
     setDragWidth(cardWidth);
     grab.current = grabPointOf(event);
     setDragging(indexes);
-    latest.current = { builder, dragging: indexes, width: cardWidth };
+    latest.current = { builder, dragging: indexes, ghost: nextGhost, width: cardWidth };
   };
   const finishDrag = () => {
-    draggingBasics.current = false;
     setDragging(null);
+    setGhost(null);
     setDragWidth(null);
     setOverHidden(false);
     lastTarget.current = null;
@@ -231,8 +241,9 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
                   visible={null}
                   actions={view.deckActions}
                   dragging={dragging}
+                  draggingLands={ghost?.column ?? false}
                   basics={{
-                    row: Math.min(builder.layout.basicsSlot?.row ?? Infinity, builder.layout.deck.length - 1),
+                    row: basicsRow(builder.layout),
                     pileKey: BASICS_PILE_KEY[builder.sort.deck],
                     entries: view.basicCards,
                     trailing: builder.sort.deck !== "mana",
@@ -246,7 +257,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
       </div>
       {view.notice && <Toast notice={view.notice} phone={false} />}
       <DragOverlay dropAnimation={null}>
-        {dragging && <DragGhost indexes={dragging} view={view} cardWidth={cardWidth} />}
+        {ghost && <DragGhost ghost={ghost} view={view} cardWidth={cardWidth} />}
       </DragOverlay>
       {view.preview && (
         <CardPreview entry={view.preview} onClose={view.closePreview} step={view.previewStep}>
@@ -405,19 +416,21 @@ const SortControls = ({ builder, zone }: { builder: BuilderView["builder"]; zone
   </div>
 );
 
-const DragGhost = ({ indexes, view, cardWidth }: { indexes: number[]; view: BuilderView; cardWidth: number }) => {
-  const card = view.pool.cards[indexes[0]];
-  if (!card) {
-    return null;
-  }
+interface Ghost {
+  indexes: number[];
+  column: boolean;
+  landsPile: BasicsSlot | null;
+  belowHeader: boolean;
+}
+
+const DragGhost = ({ ghost, view, cardWidth }: { ghost: Ghost; view: BuilderView; cardWidth: number }) => {
+  const entries: PoolEntry[] = [
+    ...ghost.indexes.map((index) => ({ index, card: view.pool.cards[index] })),
+    ...(ghost.column ? view.basicCards : []),
+  ];
   return (
-    <div className="relative opacity-90" style={{ width: cardWidth }}>
-      <CardFace card={card} />
-      {indexes.length > 1 && (
-        <span className="absolute -right-2 -top-2 rounded-full bg-green px-2 font-num text-[13px] text-bg">
-          {indexes.length}
-        </span>
-      )}
+    <div className={cn("opacity-90", ghost.belowHeader && "pt-7")}>
+      <CardStack entries={entries} width={cardWidth} actions={NO_CARD_ACTIONS} />
     </div>
   );
 };

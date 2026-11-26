@@ -1,9 +1,10 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Check, Copy } from "lucide-react";
 import { Tooltip } from "./Tooltip";
 import { cn } from "../lib/utils";
 
 const COPIED_RESET_MS = 2000;
+const COPIED_REPLAY_GAP_MS = 150;
 
 export function CopyTextButton({
   text,
@@ -50,7 +51,13 @@ export function CopyTextButton({
 }
 
 export const useCopyFeedback = () => {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopiedState] = useState(false);
+  const copiedNow = useRef(false);
+  const replay = useRef(0);
+  const setCopied = (value: boolean) => {
+    copiedNow.current = value;
+    setCopiedState(value);
+  };
   useEffect(() => {
     if (!copied) {
       return;
@@ -58,12 +65,24 @@ export const useCopyFeedback = () => {
     const timer = window.setTimeout(() => setCopied(false), COPIED_RESET_MS);
     return () => window.clearTimeout(timer);
   }, [copied]);
+  useEffect(() => () => window.clearTimeout(replay.current), []);
+  const markCopied = () => {
+    window.clearTimeout(replay.current);
+    if (!copiedNow.current) {
+      setCopied(true);
+      return;
+    }
+    setCopied(false);
+    replay.current = window.setTimeout(() => setCopied(true), COPIED_REPLAY_GAP_MS);
+  };
   const copy = async (text: string) => {
     const done = await copyToClipboard(text);
-    setCopied(done);
+    if (done) {
+      markCopied();
+    }
     return done;
   };
-  return { copied, copy };
+  return { copied, copy, markCopied };
 };
 
 export async function copyToClipboard(text: string): Promise<boolean> {

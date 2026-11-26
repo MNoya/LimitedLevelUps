@@ -10,7 +10,7 @@ import { PileSymbol } from "./PileSymbol";
 import { cardsFitPileKey } from "../../data/dailySealedLayout";
 import { entryCount, type CardGroup, type PoolCard, type PoolEntry } from "../../data/dailySealed";
 
-const CARD_RATIO = 680 / 488;
+export const CARD_RATIO = 680 / 488;
 export const REVEAL_RATIO = 0.155;
 const RATING_ROW_RATIO = 0.085;
 
@@ -29,6 +29,8 @@ export interface CardActions {
   dimmed?: (card: PoolCard) => boolean;
   marked?: (card: PoolCard) => boolean;
 }
+
+export const NO_CARD_ACTIONS: CardActions = { onPick: () => undefined, onPreview: () => undefined };
 
 export const PHONE_PILE_WIDTH = 104;
 
@@ -69,7 +71,7 @@ const ColumnHeader = ({ group, setCode }: { group: CardGroup; setCode: string })
   </div>
 );
 
-const CardStack = ({ entries, width, actions }: { entries: PoolEntry[]; width: number; actions: CardActions }) => {
+export const CardStack = ({ entries, width, actions }: { entries: PoolEntry[]; width: number; actions: CardActions }) => {
   const cardHeight = Math.round(width * CARD_RATIO);
   const strips = entries.map((entry) => stackReveal(width, (actions.ratingFor?.(entry.card) ?? null) !== null));
   const tops = strips.map((_, i) => strips.slice(0, i).reduce((total, strip) => total + strip, 0));

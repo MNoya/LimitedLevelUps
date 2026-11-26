@@ -15,10 +15,12 @@ import {
 } from "../../data/dailySealed";
 import {
   hideCards,
+  moveDeckPile,
   placeAt,
   placeInSlot,
   pruneEmptyPiles,
   sortZone,
+  withLandsPile,
   zoneCards,
   type BasicsSlot,
   type Layout,
@@ -81,6 +83,15 @@ export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null
     setState(next);
   };
   const withLayout = (layout: Layout) => apply({ ...state, layout: pruneEmptyPiles(layout) });
+  const previewDrag = (layoutFrom: (start: Layout) => Layout) => {
+    const before = dragStart.current;
+    if (!before) {
+      return;
+    }
+    const layout = layoutFrom(before.layout);
+    dragLayout.current = layout;
+    setState((current) => ({ ...current, layout }));
+  };
 
   const entryOf = (index: number): PoolEntry => ({ index, card: pool.cards[index] });
   const deck = zoneCards(state.layout.deck).map(entryOf);
@@ -132,28 +143,20 @@ export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null
       const deckRows = sortZone(pool.cards, zoneCards(state.layout.deck), state.sort.deck, split);
       apply({ ...state, split, layout: { ...state.layout, deck: deckRows, basicsSlot: undefined } });
     },
-    beginDrag: () => {
-      dragStart.current = state;
-      dragLayout.current = state.layout;
-    },
-    dragTo: (indexes: number[], target: PileTarget | null) => {
-      const before = dragStart.current;
-      if (!before) {
-        return;
-      }
-      const layout = target ? placeAt(before.layout, indexes, target) : before.layout;
+    beginDrag: (openLandsPile: boolean) => {
+      const layout =
+        openLandsPile && basicCount(state.basics) > 0 ? withLandsPile(state.layout, state.sort.deck) : state.layout;
+      const start = layout === state.layout ? state : { ...state, layout };
+      dragStart.current = start;
       dragLayout.current = layout;
-      setState((current) => ({ ...current, layout }));
-    },
-    dragBasicsTo: (slot: BasicsSlot | null) => {
-      const before = dragStart.current;
-      if (!before) {
-        return;
+      if (start !== state) {
+        setState(start);
       }
-      const layout = slot ? { ...before.layout, basicsSlot: slot } : before.layout;
-      dragLayout.current = layout;
-      setState((current) => ({ ...current, layout }));
     },
+    dragTo: (indexes: number[], target: PileTarget | null) =>
+      previewDrag((start) => (target ? placeAt(start, indexes, target) : start)),
+    dragBasicsTo: (slot: BasicsSlot) => previewDrag((start) => ({ ...start, basicsSlot: slot })),
+    dragLandsPileTo: (from: BasicsSlot, slot: BasicsSlot) => previewDrag((start) => moveDeckPile(start, from, slot)),
     endDrag: () => {
       const before = dragStart.current;
       const layout = dragLayout.current;

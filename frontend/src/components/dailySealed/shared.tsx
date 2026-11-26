@@ -102,16 +102,23 @@ export const SubmitButton = ({ view, wide = false }: { view: BuilderView; wide?:
       onClick={submitState.run}
       disabled={!enabled}
       className={cn(
-        "flex h-10 items-center justify-center gap-2 rounded px-4 font-display text-[14px] tracking-[0.14em]",
+        "flex h-10 items-center justify-center gap-2 rounded px-3 font-display text-[14px] tracking-[0.14em]",
         wide && "flex-1",
         enabled ? "bg-green text-bg" : "bg-surface2 text-muted",
       )}
     >
       {submitState.signedIn ? <Check size={16} strokeWidth={2.5} /> : <LogIn size={16} />}
-      {label}
+      <ReservedLabel label={label} widest={submitState.signedIn ? "SUBMITTED" : label} />
     </button>
   );
 };
+
+export const ReservedLabel = ({ label, widest }: { label: string; widest: string }) => (
+  <span className="grid">
+    <span className="invisible col-start-1 row-start-1">{widest}</span>
+    <span className="col-start-1 row-start-1 text-center">{label}</span>
+  </span>
+);
 
 export const PreviewMove = ({ view, entry }: { view: BuilderView; entry: PoolEntry }) => {
   const zone = view.builder.zoneOf(entry.index);

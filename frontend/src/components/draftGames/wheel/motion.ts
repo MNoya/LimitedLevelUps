@@ -1,10 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
-const SETTLE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+import { prefersReducedMotion } from "../../../lib/reduced-motion";
 
-export function prefersReducedMotion(): boolean {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
+const SETTLE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 export function useFlip(
   container: RefObject<HTMLElement>,
