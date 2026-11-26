@@ -17,9 +17,11 @@ import { frontFace } from "../../../lib/cardSlug";
 import { cn } from "../../../lib/utils";
 import { usePersistentBool } from "../../../lib/use-persistent-bool";
 import { wheelPixels } from "../../../lib/use-wheel-trap";
-import { ToggleSwitch } from "../../ToggleSwitch";
 import { Pips } from "../../ManaPips";
 import { Tooltip } from "../../Tooltip";
+import { ChevronIcon, chipClass, SwitchToggle } from "./reviewControls";
+import { DECK_PANEL_MAX_FRACTION, PanelBar, useResizableHeight } from "./resizablePanel";
+import { ToggleSwitch } from "../../ToggleSwitch";
 import { ArrowRight, GoSidebarCollapse, TbCards } from "../../Icons";
 import {
   CARD_FRAME,
@@ -906,46 +908,6 @@ function Header({
   );
 }
 
-function SwitchToggle({
-  label,
-  on,
-  onToggle,
-  tooltip,
-  ariaLabel,
-  disabled = false,
-}: {
-  label: ReactNode;
-  on: boolean;
-  onToggle: () => void;
-  tooltip: string;
-  ariaLabel: string;
-  disabled?: boolean;
-}) {
-  const [hover, setHover] = useState(false);
-  return (
-    <Tooltip label={tooltip} side="bottom" open={hover && !disabled}>
-      <button
-        onClick={onToggle}
-        onPointerEnter={(e) => e.pointerType === "mouse" && setHover(true)}
-        onPointerLeave={() => setHover(false)}
-        disabled={disabled}
-        role="switch"
-        aria-checked={on}
-        aria-label={ariaLabel}
-        className={cn(
-          "flex h-9 shrink-0 items-center gap-2 rounded-md border border-border bg-surface2 px-2.5 transition-colors",
-          "[-webkit-tap-highlight-color:transparent]",
-          disabled ? "cursor-not-allowed opacity-40" : "hover:border-white/40 hover:bg-white/10",
-        )}
-      >
-        <span className={cn("font-display text-[12px] tracking-[0.12em]", on ? "text-green" : "text-subtle")}>
-          {label}
-        </span>
-        <ToggleSwitch on={on} />
-      </button>
-    </Tooltip>
-  );
-}
 
 function ZoomControl({
   label,
@@ -1089,10 +1051,8 @@ function Chip({ active, href, children }: { active: boolean; href: string; child
       replace
       aria-current={active || undefined}
       className={cn(
-        "flex h-8 min-w-[32px] shrink-0 items-center justify-center rounded border px-2 font-display text-[16px] tracking-[0.04em] tabular-nums no-underline transition-colors",
-        active
-          ? "border-green/60 bg-green/15 text-green"
-          : "border-border bg-surface2 text-subtle hover:border-white/40 hover:bg-white/10 hover:text-text",
+        "flex h-8 min-w-[32px] shrink-0 items-center justify-center px-2 text-[16px] tracking-[0.04em] tabular-nums no-underline",
+        chipClass(active),
       )}
     >
       {children}
@@ -1416,133 +1376,6 @@ function RecapSection({
         ))}
       </div>
     </section>
-  );
-}
-
-const PANEL_DRAG_THRESHOLD = 4;
-const PANEL_MIN_HEIGHT = 64;
-const PANEL_COLLAPSE_AT = 40;
-
-function useResizableHeight(baseHeight: number, storageKey: string, onCollapse?: () => void) {
-  const [dragHeight, setDragHeight] = useState<number | null>(() => storedPanelHeight(storageKey));
-  const [dragging, setDragging] = useState(false);
-  const height = dragHeight ?? baseHeight;
-  useEffect(() => {
-    if (dragging) {
-      return;
-    }
-    if (dragHeight == null) {
-      window.localStorage.removeItem(storageKey);
-    } else {
-      window.localStorage.setItem(storageKey, `${Math.round(dragHeight)}`);
-    }
-  }, [dragHeight, dragging, storageKey]);
-  const beginResize = (startY: number, fromHeight?: number) => {
-    const startHeight = fromHeight ?? dragHeight ?? baseHeight;
-    let collapsible = fromHeight == null;
-    if (fromHeight != null) {
-      setDragHeight(fromHeight);
-    }
-    setDragging(true);
-    const onMove = (ev: PointerEvent) => {
-      const next = startHeight - (ev.clientY - startY);
-      if (next >= PANEL_MIN_HEIGHT) {
-        collapsible = true;
-      }
-      if (onCollapse && collapsible && next < PANEL_COLLAPSE_AT) {
-        onCollapse();
-        setDragHeight(null);
-        cleanup();
-        return;
-      }
-      const floor = collapsible ? PANEL_MIN_HEIGHT : 0;
-      setDragHeight(Math.min(window.innerHeight * DECK_PANEL_MAX_FRACTION, Math.max(floor, next)));
-    };
-    const onUp = () => cleanup();
-    function cleanup() {
-      setDragging(false);
-      setDragHeight((h) => (h != null && h < PANEL_MIN_HEIGHT ? PANEL_MIN_HEIGHT : h));
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    }
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
-  return { height, beginResize, dragging };
-}
-
-function storedPanelHeight(storageKey: string): number | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const stored = Number(window.localStorage.getItem(storageKey));
-  if (!stored) {
-    return null;
-  }
-  return Math.min(stored, window.innerHeight * DECK_PANEL_MAX_FRACTION);
-}
-
-// Thick bar shared by the deck pool and the neighbor band: a tap toggles the panel collapsed, a press
-// and drag past a small threshold resizes it instead. The chevron tab on the top edge shows which way
-// a tap moves it. With nothing to show (no neighbor picks yet) it renders static, no toggle or resize.
-function PanelBar({
-  open,
-  canCollapse,
-  onToggle,
-  onResizeStart,
-  children,
-}: {
-  open: boolean;
-  canCollapse: boolean;
-  onToggle: () => void;
-  onResizeStart: (startY: number, fromHeight?: number) => void;
-  children: React.ReactNode;
-}) {
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) {
-      return;
-    }
-    e.preventDefault();
-    const startY = e.clientY;
-    let dragging = false;
-    const onMove = (ev: PointerEvent) => {
-      if (!dragging && Math.abs(ev.clientY - startY) > PANEL_DRAG_THRESHOLD) {
-        dragging = true;
-        if (open) {
-          onResizeStart(startY);
-        } else {
-          onToggle();
-          onResizeStart(startY, 0);
-        }
-      }
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      if (!dragging) {
-        onToggle();
-      }
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
-  if (!canCollapse) {
-    return (
-      <div className="relative hidden h-10 w-full shrink-0 items-center border-t border-border bg-bg lg:flex">
-        {children}
-      </div>
-    );
-  }
-  return (
-    <div
-      onPointerDown={handlePointerDown}
-      className="group relative hidden h-10 w-full shrink-0 cursor-row-resize select-none items-center border-t border-border bg-bg transition-colors hover:bg-surface2 lg:flex"
-    >
-      <span className="absolute bottom-full left-1/2 flex -translate-x-1/2 translate-y-px items-center justify-center rounded-t-md border border-b-0 border-border bg-bg px-3 text-subtle transition-colors group-hover:bg-surface2 group-hover:text-text">
-        <ChevronIcon dir={open ? "down" : "up"} />
-      </span>
-      {children}
-    </div>
   );
 }
 
@@ -1879,7 +1712,6 @@ function columnsShowing(cardWidth: number, widthForColumns: (columns: number) =>
   return columns;
 }
 const CARD_ASPECT = 680 / 488;
-const DECK_PANEL_MAX_FRACTION = 0.72;
 const DECK_PANEL_FLOOR = 120;
 const DECK_WRAPPER_PAD_Y = 4;
 const REVIEW_HEADER_HEIGHT = 60;
@@ -2663,20 +2495,6 @@ function NavArrow({ dir, href }: { dir: "prev" | "next"; href: string | null }) 
         </button>
       )}
     </Tooltip>
-  );
-}
-
-function ChevronIcon({ dir }: { dir: "up" | "down" | "left" | "right" }) {
-  const path = {
-    up: "M6 15l6-6 6 6",
-    down: "M6 9l6 6 6-6",
-    left: "M15 18l-6-6 6-6",
-    right: "M9 6l6 6-6 6",
-  }[dir];
-  return (
-    <svg className="shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d={path} />
-    </svg>
   );
 }
 

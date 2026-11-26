@@ -11,6 +11,7 @@ token, since this process has no live gateway connection.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -19,6 +20,7 @@ from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import Player
 from bot.services.card_stats import refresh_live_card_stats_if_configured
+from bot.services.daily_sealed import ensure_pools
 from bot.services.discord_rest import DiscordRest
 from bot.services.refresh import refresh_active_players
 from bot.services.refresh_report import build_refresh_report
@@ -40,6 +42,7 @@ def main() -> None:
         log.info("starting periodic refresh (windowed)")
         summary = refresh_active_players(session, client)
         invalidated = _load_invalidated(session, summary.get("invalidated_players", []))
+        _ensure_daily_sealed_pools(session)
 
     rest = DiscordRest(settings.discord_bot_token.get_secret_value())
     _post_report(rest, summary)
@@ -50,6 +53,14 @@ def main() -> None:
         f"done. updated={summary.get('updated')} invalidated={summary.get('invalidated')} "
         f"errors={summary.get('errors')}"
     )
+
+
+def _ensure_daily_sealed_pools(session) -> None:
+    try:
+        ensure_pools(session, datetime.now(timezone.utc))
+    except Exception:
+        session.rollback()
+        log.exception("daily sealed pool pick failed")
 
 
 def _load_invalidated(session, player_ids: list) -> list[Player]:

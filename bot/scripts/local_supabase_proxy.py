@@ -24,6 +24,8 @@ from bot.services.transcript_cards import apply_transcript_edit
 log = logging.getLogger(__name__)
 
 _ALLOWED_VIEWS = {
+    "public_daily_sealed_builds",
+    "public_daily_sealed_pools",
     "public_color_events",
     "public_colors_summary",
     "public_pod_archetype_stats",
@@ -76,6 +78,7 @@ _TRACKER_TABLES = {
     "tracker_set_economy": ("user_id", "set_code"),
     "fantasy_picks": ("user_id", "event_code", "slot", "from_round"),
     "fantasy_bracket_picks": ("user_id", "event_code", "position"),
+    "daily_sealed_builds": ("user_id", "day"),
 }
 DEV_USER_ID = "00000000-0000-4000-8000-000000000001"
 DEV_JWT_CLAIMS = json.dumps({"sub": DEV_USER_ID})
@@ -222,7 +225,7 @@ async def _handle_tracker(request: web.Request, table: str) -> web.Response:
 
     with engine.begin() as conn:
         for row in rows:
-            values = {**row, "user_id": DEV_USER_ID}
+            values = {key: _json_param(value) for key, value in {**row, "user_id": DEV_USER_ID}.items()}
             cols = list(values)
             col_sql = ", ".join(f'"{c}"' for c in cols)
             bind_sql = ", ".join(f":{c}" for c in cols)
@@ -233,6 +236,10 @@ async def _handle_tracker(request: web.Request, table: str) -> web.Response:
             sql += f"DO UPDATE SET {set_sql}" if updates else "DO NOTHING"
             conn.execute(text(sql), values)
     return web.Response(status=204)
+
+
+def _json_param(value: Any) -> Any:
+    return json.dumps(value) if isinstance(value, dict) else value
 
 
 def _run_refresh(sessions: sessionmaker, set_code: str | None, event_id: str | None) -> dict:

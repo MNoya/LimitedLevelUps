@@ -68,6 +68,7 @@ from bot.commands.testp0p1midway import setup as setup_testp0p1midway
 from bot.commands.testawards import setup as setup_testawards
 from bot.commands.testchampcard import setup as setup_testchampcard
 from bot.commands.testpeasanttrophy import setup as setup_testpeasanttrophy
+from bot.commands.testdailysealed import setup as setup_testdailysealed
 from bot.commands.testchampionship import setup as setup_testchampionship
 from bot.commands.testcomponent import setup as setup_testcomponent
 from bot.commands.testcraft import setup as setup_testcraft
@@ -155,6 +156,7 @@ from bot.tasks.watch_party_post import init_watch_party
 from bot.tasks.championship_post import init_championship_schedule, rearm_deadline
 from bot.tasks.p0p1_reminder_post import init_p0p1_reminder
 from bot.tasks.prerelease_trophy_post import init_prerelease_trophy_post
+from bot.tasks.daily_sealed_post import DailySealedRoleButton, init_daily_sealed_post
 from bot.tasks.p0p1_ceremony_post import init_p0p1_ceremony
 from bot.tasks.fantasy_sync_tick import init_fantasy_sync
 from bot.tasks.pod_organizer import init_table_organizer
@@ -273,6 +275,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         init_championship_schedule(bot)
         init_p0p1_reminder(bot)
         init_prerelease_trophy_post(bot)
+        init_daily_sealed_post(bot)
         init_p0p1_ceremony(bot)
         init_fantasy_sync(bot)
         init_launch(bot)
@@ -347,6 +350,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         await setup_testchampionship(bot)
         await setup_testchampcard(bot)
         await setup_testpeasanttrophy(bot)
+        await setup_testdailysealed(bot)
         await setup_testmockcard(bot)
         register_pod_views(bot)
         bot.add_dynamic_items(TeamReportButton)
@@ -375,6 +379,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.add_dynamic_items(SlotSignUpButton)
         bot.add_dynamic_items(BoardLeaveButton)
         bot.add_dynamic_items(PlayAgainButton)
+        bot.add_dynamic_items(DailySealedRoleButton)
         _log_startup_summary()
         bot.tree.copy_global_to(guild=guild)
 

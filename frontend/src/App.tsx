@@ -31,6 +31,7 @@ import {
   PRO_PLAY_BASE,
 } from "./components/fantasy/fantasyEvents";
 import { CraftToolPage } from "./pages/CraftToolPage";
+import { DailySealedPage } from "./pages/DailySealedPage";
 import { ToolsPage } from "./pages/ToolsPage";
 import { TrophyMageLabPage } from "./pages/TrophyMageLabPage";
 import { WheelOfFortunePage } from "./pages/WheelOfFortunePage";
@@ -111,6 +112,8 @@ export function App() {
         <Route path="/tools" element={<ToolsPage />} />
         <Route path="/tools/craft" element={<CraftToolPage />} />
         <Route path="/tools/craft/:setCode" element={<CraftToolPage />} />
+        <Route path="/daily-sealed" element={<DailySealedPage />} />
+        <Route path="/daily-sealed/:day" element={<DailySealedPage />} />
         <Route path="/wheel-of-fortune" element={<WheelOfFortunePage />} />
         <Route path="/wheel-of-fortune/quick" element={<WheelQuickPage />} />
         <Route path="/wheel-of-fortune/:play/:packNumber?" element={<WheelOfFortunePage />} />

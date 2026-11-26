@@ -58,6 +58,7 @@ from bot.services.pod_drafts import (
     full_arena_handle,
     player_arena_handle,
 )
+from bot.services.daily_sealed_post import DAILY_SEALED_ROLE_NAME
 from bot.services.pod_replays import unlinked_first_finishers_sync
 from bot.services.pod_roles import find_role, grant_pod_drafters, grant_role, revoke_roles, role_mention
 from bot.services.pod_schedule import (
@@ -161,6 +162,7 @@ P0P1_COLOR = "#EFBF04"
 FANTASY_CHAMPION_ROLE_NAME = "Fantasy Champion"
 
 REMINDER_ROLE_NAME = "Reminder"
+DAILY_SEALED_COLOR = "#7FB8D1"
 REMINDER_COLOR = "#EFBF04"
 P0P1_POLL_ROLE_NAME = "P0P1"
 
@@ -174,6 +176,7 @@ MANAGED_ROLES: tuple[ManagedRole, ...] = (
     ManagedRole(TOP_P0P1_CHALLENGER_ROLE_NAME, P0P1_COLOR),
     ManagedRole(FANTASY_CHAMPION_ROLE_NAME, P0P1_COLOR),
     ManagedRole(REMINDER_ROLE_NAME, REMINDER_COLOR, aliases=("P0P1 Reminder",)),
+    ManagedRole(DAILY_SEALED_ROLE_NAME, DAILY_SEALED_COLOR),
 ) + tuple(ManagedRole(spec.name, unicode_emoji=spec.icon) for spec in AWARD_ROLES)
 
 

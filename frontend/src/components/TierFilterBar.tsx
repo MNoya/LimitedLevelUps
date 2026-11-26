@@ -455,7 +455,7 @@ export function FilterGroup({
   joined = false,
   className,
 }: {
-  label: string;
+  label?: string;
   children: ReactNode;
   stacked: boolean;
   joined?: boolean;
@@ -463,7 +463,7 @@ export function FilterGroup({
 }) {
   return (
     <div className={cn("flex flex-col", stacked ? "items-center gap-1" : "gap-1.5", className)}>
-      <span className={cn(LABEL, !stacked && "[text-box:trim-both_cap_alphabetic]")}>{label}</span>
+      {label && <span className={cn(LABEL, !stacked && "[text-box:trim-both_cap_alphabetic]")}>{label}</span>}
       <div className={cn("flex", joined ? JOINED : "gap-1.5")}>{children}</div>
     </div>
   );

@@ -401,6 +401,9 @@ const resolveRoute = async (
   if (section === "pro-play") {
     return proPlayRoute(rest);
   }
+  if (section === "daily-sealed") {
+    return dailySealedRoute(rest[0]);
+  }
   if (section === "wheel-of-fortune") {
     const wheelArt: ImageIntent = { kind: "asset", path: "/games/wheel-of-fortune/og-image.gif" };
     const wheelPath = ["/wheel-of-fortune", ...rest.map((part) => part.toLowerCase())].join("/");
@@ -478,6 +481,8 @@ const matchesAppRoute = (segments: string[]): boolean => {
     "/tools/trophy-mage",
     "/trophy-mage",
     "/trophy-mage/:play",
+    "/daily-sealed",
+    "/daily-sealed/:day",
     "/wheel-of-fortune",
     "/wheel-of-fortune/:play",
     "/pro-play",
@@ -998,6 +1003,26 @@ const toolsRoute = async (rest: string[]): Promise<RouteResolution> => {
   };
   return resolved(meta, `/tools/craft/${setCode}`);
 };
+
+const DAILY_SEALED_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+const dailySealedRoute = async (rawDay: string | undefined): Promise<RouteResolution> => {
+  const day = rawDay && DAILY_SEALED_DAY.test(rawDay) ? rawDay : null;
+  const filter = day ? `day=eq.${day}` : "order=day.desc&limit=1";
+  const pools = await viewRows<{ day: string; set_code: string; pool_number: number }>(
+    `public_daily_sealed_pools?select=day,set_code,pool_number&${filter}`,
+  );
+  const pool = pools?.[0];
+  const path = day ? `/daily-sealed/${day}` : "/daily-sealed";
+  if (!pool) {
+    return resolved(page("Daily Sealed", DAILY_SEALED_DESCRIPTION), path, rawDay !== undefined);
+  }
+  const setName = setNameFor(await fetchSets(), pool.set_code);
+  const symbol: ImageIntent = { kind: "setSymbol", code: pool.set_code };
+  return resolved(page(`Daily Sealed: ${setName} Pool #${pool.pool_number}`, DAILY_SEALED_DESCRIPTION, symbol), path);
+};
+
+const DAILY_SEALED_DESCRIPTION = "Build from the same Sealed pool and see what the community picked each day";
 
 const setNameFor = (sets: SetRow[] | null, code: string): string =>
   sets?.find((set) => set.code === code)?.name ?? TIER_LIST_PREVIEW_SETS[code]?.name ?? mtgoSetName(code);

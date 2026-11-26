@@ -254,6 +254,38 @@ class TrackerSetEconomy(Base):
     )
 
 
+class DailySealedPool(Base):
+    __tablename__ = "daily_sealed_pools"
+
+    day            = Column(Date, primary_key=True)
+    set_code       = Column(Text, nullable=False)
+    draft_event_id = Column(String, nullable=False, unique=True)
+    player_id      = Column(String, nullable=False)
+    format         = Column(Text, nullable=False)
+    cards          = Column(JSONB, nullable=False)
+    original_main  = Column(ARRAY(SmallInteger), nullable=False, server_default="{}")
+    colors         = Column(Text, nullable=True)
+    wins           = Column(SmallInteger, nullable=False)
+    losses         = Column(SmallInteger, nullable=False)
+    created_at     = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class DailySealedBuild(Base):
+    __tablename__ = "daily_sealed_builds"
+
+    user_id    = Column(UUID(as_uuid=True), nullable=False)
+    day        = Column(Date, ForeignKey("daily_sealed_pools.day", ondelete="CASCADE"), nullable=False)
+    main       = Column(ARRAY(SmallInteger), nullable=False)
+    basics     = Column(JSONB, nullable=False)
+    colors     = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "day"),
+    )
+
+
 class TrackerCollection(Base):
     __tablename__ = "tracker_collection"
 

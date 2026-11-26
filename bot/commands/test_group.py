@@ -28,7 +28,8 @@ HALL_OF_FAME = (
 )
 
 PRODUCTION_SAFE_TESTS = frozenset({
-    "ads", "archiveplan", "awards", "cardformat", "ceremony", "champcard", "component", "craft", "deckping", "dms",
+    "ads", "archiveplan", "awards", "cardformat", "ceremony", "champcard", "component", "craft", "dailysealed",
+    "deckping", "dms",
     "craftrelease",
     "firenudge", "formatschedule", "peasanttrophy",
     "lifecycle", "lockroster", "mockcard", "myset", "named", "overflow", "p0p1midway", "p0p1podium",

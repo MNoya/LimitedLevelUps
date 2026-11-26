@@ -15,6 +15,8 @@ from bot.sets import active_set_code, seed_for_code
 
 logger = logging.getLogger(__name__)
 
+MIN_GIH_GAMES = 100
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CARD_STATS_SETS_JSON = REPO_ROOT / "card_stats_sets.json"
 BAKED_CARD_STATS_DIR = REPO_ROOT / "frontend" / "public" / "card-stats"
@@ -53,6 +55,23 @@ class CardStatsKv:
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.token}"}
+
+
+def gih_win_rates(set_code: str, settings: Settings) -> dict[str, float] | None:
+    baked = BAKED_CARD_STATS_DIR / f"{set_code.lower()}.json"
+    kv = CardStatsKv.from_settings(settings)
+    try:
+        file = json.loads(baked.read_text()) if baked.exists() else (kv.read(set_code) if kv else None)
+    except Exception:
+        logger.warning(f"Card stats for {set_code} could not be read", exc_info=True)
+        return None
+    if not file:
+        return None
+    rates = {}
+    for name, stats in (file.get("cards") or {}).items():
+        if stats.get("gihWr") is not None and (stats.get("gihGames") or 0) >= MIN_GIH_GAMES:
+            rates[name] = stats["gihWr"]
+    return rates or None
 
 
 def refresh_live_card_stats_if_configured(client: SeventeenLandsClient, settings: Settings) -> None:

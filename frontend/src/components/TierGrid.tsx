@@ -47,7 +47,7 @@ import {
 import { formatWinRate, type CardGrades, type CardStats } from "../data/cardStats";
 import { scryfallWebp } from "../data/scryfallImage";
 
-const RARITY_ACCENT: Record<string, string> = {
+export const RARITY_ACCENT: Record<string, string> = {
   C: "#ffffff",
   U: "#707883",
   R: "#a58e4a",
@@ -645,7 +645,6 @@ function CardBar({
   const ref = useRef<HTMLDivElement>(null);
   const hovering = useRef(false);
   const [anchor, setAnchor] = useState<PreviewAnchor | null>(null);
-  const [artLoaded, setArtLoaded] = useState(false);
   const accent = RARITY_ACCENT[card.rarity] ?? RARITY_ACCENT.C;
   const art = scryfallWebp(card.url, "art");
   const badges = `${card.comment ? "💬" : ""}${cardFlags(card).map((flag) => flag.glyph).join("")}`;
@@ -674,36 +673,20 @@ function CardBar({
   };
 
   return (
-    <div
-      ref={ref}
+    <CardBarFrame
+      frameRef={ref}
+      accent={accent}
+      art={hideArt ? null : art}
       onMouseEnter={mobile ? undefined : enterPreview}
       onMouseLeave={mobile ? undefined : leavePreview}
       onClick={() => {
         setAnchor(null);
         onOpen?.();
       }}
-      className="relative min-[450px]:max-w-[300px] cursor-pointer rounded-[5px] border-l-4"
-      style={{ borderLeftColor: accent }}
+      overlay={
+        anchor && createPortal(<CardPreview card={card} setCode={setCode} anchor={anchor} />, document.body)
+      }
     >
-      <div className="relative min-h-[28px] overflow-hidden rounded-r-[5px] bg-surface2">
-        {!hideArt && (
-          <>
-            <img
-              src={art}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              onLoad={() => setArtLoaded(true)}
-              className={cn(
-                "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
-                artLoaded ? "opacity-100" : "opacity-0",
-              )}
-              style={{ objectPosition: "center 22%" }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/30" />
-          </>
-        )}
-        <div className="relative flex min-h-[28px] items-center justify-between gap-1 px-2 py-0.5">
           <span className="flex min-w-0 flex-1 items-center gap-1">
             {trend && (
               <span
@@ -747,14 +730,64 @@ function CardBar({
               {formatWinRate(winRate)}
             </span>
           )}
+    </CardBarFrame>
+  );
+}
 
-        </div>
-      </div>
-      {anchor &&
-        createPortal(
-          <CardPreview card={card} setCode={setCode} anchor={anchor} />,
-          document.body,
+export function CardBarFrame({
+  frameRef,
+  accent,
+  art,
+  artPosition = "center 22%",
+  className,
+  onMouseEnter,
+  onMouseLeave,
+  onClick,
+  overlay,
+  children,
+}: {
+  frameRef?: React.Ref<HTMLDivElement>;
+  accent: string;
+  art: string | null;
+  artPosition?: string;
+  className?: string;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+  onClick?: () => void;
+  overlay?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [artLoaded, setArtLoaded] = useState(false);
+  return (
+    <div
+      ref={frameRef}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onClick={onClick}
+      className={cn("relative min-[450px]:max-w-[300px] cursor-pointer rounded-[5px] border-l-4", className)}
+      style={{ borderLeftColor: accent }}
+    >
+      <div className="relative min-h-[28px] overflow-hidden rounded-r-[5px] bg-surface2">
+        {art && (
+          <>
+            <img
+              src={art}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setArtLoaded(true)}
+              className={cn(
+                "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
+                artLoaded ? "opacity-100" : "opacity-0",
+              )}
+              style={{ objectPosition: artPosition }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/30" />
+          </>
         )}
+        <div className="relative flex min-h-[28px] items-center justify-between gap-1 px-2 py-0.5">{children}</div>
+      </div>
+      {overlay}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Coins, FerrisWheel, Hammer, Library, Swords, Trophy, type LucideIcon } from "lucide-react";
+import { Coins, FerrisWheel, Hammer, Layers, Library, Swords, Trophy, type LucideIcon } from "lucide-react";
 import { TrophyTitle } from "../components/draftGames/trophy/TrophyTitle";
 import { WheelTitle } from "../components/draftGames/wheel/WheelTitle";
 import { PageShell } from "../components/PageShell";
@@ -42,6 +42,12 @@ export function ToolsPage() {
       blurb: "Fantasy Magic and past Pro Tour results",
       Icon: Swords,
       to: fantasyEventPath(proPlayHomeEvent(new Date())),
+    },
+    {
+      title: "Daily Sealed",
+      blurb: "Build from the same Sealed pool and see what the community picked each day",
+      Icon: Layers,
+      to: "/daily-sealed",
     },
     {
       title: WHEEL_GAME_TITLE,

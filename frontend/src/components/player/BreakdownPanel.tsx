@@ -10,6 +10,7 @@ import { COLOR_STROKES, comboColors, FMT_COLORS, shortFormat } from "../../data/
 import { colorsDisplayName } from "../../data/filters";
 import { colorsOf, mainColors } from "../../data/utils";
 import type { PlayerDraftEvent, PlayerFormatBreakdown, SelfReportedEvent } from "../../types/leaderboard";
+import { SCROLL_LIST_CLASS, SCROLL_LIST_STYLE } from "../../lib/scroll-list";
 
 export const COLOR_KEYS: Array<"W" | "U" | "B" | "R" | "G"> = ["W", "U", "B", "R", "G"];
 
@@ -36,11 +37,6 @@ const DONUT_SIZES: Record<"regular" | "compact", DonutSize> = {
   compact: { size: 124, radius: 48, strokeWidth: 15, deckRowHeight: 26, deckListHeight: 4 * 26 },
 };
 
-const SCROLL_LIST_CLASS =
-  "overflow-y-auto overflow-x-hidden pr-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent " +
-  "[&::-webkit-scrollbar-thumb]:bg-border2 [&::-webkit-scrollbar-thumb]:rounded-full";
-
-const SCROLL_LIST_STYLE = { scrollbarWidth: "thin", scrollbarColor: "#3b4458 transparent" } as const;
 
 interface PlayerAggregates {
   colorCount: Record<"W" | "U" | "B" | "R" | "G", number>;

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "../../../lib/utils";
 import { CUT_CORNER_CHAMFER } from "../../ChamferCta";
@@ -107,10 +107,14 @@ export function StackColumn({
 }) {
   const openPreview = useContext(CardPreviewContext);
   const [raised, setRaised] = useState<number | null>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
+  const measured = useElementWidth(columnRef, width == null);
   if (count <= 0) {
     return null;
   }
   const style = width != null ? { width } : undefined;
+  const cardWidth = width ?? measured;
+  const stackClassName = cn(cardClassName, stackedCardShadow(cardWidth));
   const preview = (i: number) => (e: React.MouseEvent) => {
     const card = cardAt?.(i);
     if (card && openPreview) {
@@ -119,7 +123,7 @@ export function StackColumn({
     }
   };
   return (
-    <div className={cn("relative [display:flow-root]", className)} style={style}>
+    <div ref={columnRef} className={cn("relative [display:flow-root]", className)} style={style}>
       {Array.from({ length: count }, (_, i) => {
         const isLast = i === count - 1;
         const isGlow = glowIndexes.includes(i);
@@ -134,7 +138,7 @@ export function StackColumn({
           return (
             <div
               key={i}
-              className={cn("group relative", tapToPreview && "cursor-pointer", cardClassName, isGlow && "review-last-pick")}
+              className={cn("group relative", tapToPreview && "cursor-pointer", stackClassName, isGlow && "review-last-pick")}
               style={{ marginTop: (count - 1) * reveal, zIndex: z }}
               {...hover}
             >
@@ -149,7 +153,7 @@ export function StackColumn({
             style={{ top: i * reveal, height: reveal, zIndex: z }}
             {...hover}
           >
-            <div className={cn("pointer-events-none absolute inset-x-0 top-0", cardClassName, isGlow && "review-last-pick")}>
+            <div className={cn("pointer-events-none absolute inset-x-0 top-0", stackClassName, isGlow && "review-last-pick")}>
               {renderCard(i)}
             </div>
           </div>
@@ -157,6 +161,26 @@ export function StackColumn({
       })}
     </div>
   );
+}
+
+const STACK_SHADOW_MIN_WIDTH = 140;
+
+export const stackedCardShadow = (cardWidth: number) =>
+  cardWidth > 0 && cardWidth < STACK_SHADOW_MIN_WIDTH ? "shadow-none" : undefined;
+
+function useElementWidth(ref: React.RefObject<HTMLElement | null>, enabled: boolean): number {
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!enabled || !el) {
+      return;
+    }
+    setWidth(el.offsetWidth);
+    const observer = new ResizeObserver(() => setWidth(el.offsetWidth));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, enabled]);
+  return width;
 }
 
 // Draftmancer-style right-click preview: right-clicking any review card slides a card image in from

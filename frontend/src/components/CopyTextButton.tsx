@@ -16,20 +16,12 @@ export function CopyTextButton({
   ariaLabel: string;
   className?: string;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) {
-      return;
-    }
-    const timer = window.setTimeout(() => setCopied(false), COPIED_RESET_MS);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
+  const { copied, copy: copyText } = useCopyFeedback();
 
   const copy = async (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setCopied(await copyToClipboard(text()));
+    await copyText(text());
   };
 
   return (
@@ -56,6 +48,23 @@ export function CopyTextButton({
     </Tooltip>
   );
 }
+
+export const useCopyFeedback = () => {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+    const timer = window.setTimeout(() => setCopied(false), COPIED_RESET_MS);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  const copy = async (text: string) => {
+    const done = await copyToClipboard(text);
+    setCopied(done);
+    return done;
+  };
+  return { copied, copy };
+};
 
 export async function copyToClipboard(text: string): Promise<boolean> {
   if (navigator.clipboard && window.isSecureContext) {

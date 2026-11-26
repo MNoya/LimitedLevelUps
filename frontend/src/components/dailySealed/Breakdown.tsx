@@ -1,0 +1,1031 @@
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+import { Pip, Pips } from "../ManaPips";
+import { usePersistentBool } from "../../lib/use-persistent-bool";
+import { TabButton } from "../TabButton";
+import { Tooltip } from "../Tooltip";
+import { cn } from "../../lib/utils";
+import { SCROLL_LIST_CLASS, SCROLL_LIST_STYLE } from "../../lib/scroll-list";
+import {
+  basicCount,
+  groupByColor,
+  isCreature,
+  mainColors,
+  type Basics,
+  type DailySealedPool,
+  type PoolCard,
+} from "../../data/dailySealed";
+import { cardsFitPileKey, sortZone, type Pile, type Row, type SortKey } from "../../data/dailySealedLayout";
+import {
+  bandOf,
+  cardRates,
+  colorSplashRows,
+  comparisonWithPeers,
+  EVENT_NAMES,
+  isSplit,
+  mostContested,
+  topGihBuild,
+  pairRows,
+  rateShare,
+  RATE_BANDS,
+  rateText,
+  splashCounts,
+  type CardRate,
+  type RateBasis,
+} from "../../data/dailySealedBreakdown";
+import type { BuilderView } from "../../pages/DailySealedPage";
+import { chipClass, SwitchToggle } from "../pod/review/reviewControls";
+import { ColorPie } from "./ColorPie";
+import { StripList, type CardActions } from "./cards";
+import { FilterToggle } from "./controls";
+import { Pane, Panel, SORT_LABELS } from "./panels";
+import { PileBoard } from "./piles";
+import { PileSymbol } from "./PileSymbol";
+
+type CardSort = SortKey | "rate";
+type ExtraTab = "close" | "splashes" | "you";
+type CardsTab = "oncolor" | "overall";
+type Tab = CardsTab | ExtraTab | "decks";
+
+interface DeckChoice {
+  key: string;
+  colors: string | null;
+  main: number[];
+  basics: Basics | null;
+}
+
+const CARD_WIDTH = 195;
+const NO_RATE: CardRate = { played: 0, decks: 0 };
+const PAIRS_SHOWN = 5;
+const TAB_ANCHORS: Record<Tab, string> = {
+  oncolor: "on-color",
+  overall: "played",
+  close: "split",
+  splashes: "splashes",
+  you: "you",
+  decks: "decks",
+};
+const TAB_TITLES: Record<Tab, string> = {
+  decks: "DECKS",
+  oncolor: "ON-COLOR",
+  overall: "PLAYED",
+  close: "SPLIT",
+  splashes: "SPLASHES",
+  you: "YOU",
+};
+const BASIS_LABELS: Record<RateBasis, string> = { oncolor: "On-Color Rate", overall: "Overall Rate" };
+const BASIS_TOOLTIPS: Record<RateBasis, string> = {
+  oncolor: "How many of the decks in its colors played it",
+  overall: "Share of all builds that played it",
+};
+
+export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
+  const state = useBreakdown(view);
+  const [chosenSort, setSort] = useState<CardSort>("rate");
+  const [chosenTab, setChosenTab] = useState<Tab>(() => breakdownTabFromHash() ?? "oncolor");
+  const available =
+    chosenTab === "oncolor" || chosenTab === "overall" || chosenTab === "decks" || state.extraTabs.includes(chosenTab);
+  const tab = state.single ? "decks" : available ? chosenTab : "oncolor";
+  const cardsTab = tab === "oncolor" || tab === "overall";
+  const sort = tab === "overall" && chosenSort === "rate" ? "color" : chosenSort;
+  useEffect(() => {
+    setAnchor(TAB_ANCHORS[tab]);
+  }, [tab]);
+  const setTab = (next: Tab) => {
+    setChosenTab(next);
+    if (next === "oncolor" || next === "overall") {
+      state.setBasis(next);
+    }
+  };
+  const cardRows = useMemo(() => state.rowsFor(state.uniqueIndexes, sort), [state, sort]);
+  const deck = state.deck;
+  const deckRows = deck
+    ? alignedZone(
+        view.pool.cards,
+        deck.main,
+        "mana",
+        state.split,
+        deck.basics && basicCount(deck.basics) > 0 ? "land" : null,
+      )
+    : [];
+  if (view.results.builds.length === 0) {
+    return <Empty loading={view.results.loading} />;
+  }
+  const board = (rows: Row[], actions: CardActions, rateSort = false) => (
+    <PileBoard
+      zone="side"
+      setCode={view.pool.setCode}
+      rows={rows}
+      cards={view.pool.cards}
+      width={CARD_WIDTH}
+      visible={null}
+      actions={actions}
+      dragging={null}
+      readOnly
+      pileHeader={(pile) => state.pileHeader(pile, rateSort)}
+    />
+  );
+  const tabs: Tab[] = state.single ? ["decks"] : ["oncolor", "overall", ...state.extraTabs, "decks"];
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-[max-content_minmax(0,1fr)]">
+      <div className="flex min-h-0 w-[288px] flex-col overflow-y-auto border-r border-border">
+        {state.original && (
+          <Panel title="ORIGINAL BUILD">
+            <OriginalResult pool={view.pool} />
+          </Panel>
+        )}
+        <Panel title="COLORS">
+          <PairList state={state} />
+          <div className="mt-3">
+            <ColorPie builds={view.results.builds} size={140} />
+          </div>
+          <SplashRate state={state} />
+        </Panel>
+        <Panel title="INSIGHTS">
+          <Insights
+            state={state}
+            onShowBuild={(position) => {
+              state.showBuild(position);
+              setTab("decks");
+            }}
+          />
+        </Panel>
+      </div>
+      <div className="flex min-h-0 flex-col">
+        <Pane
+          zone="side"
+          className="flex-1 border-b-0"
+          title={
+            <span className="flex items-center gap-4">
+              <PaneTabs tabs={tabs} active={tab} onPick={setTab} />
+              {!cardsTab && tab !== "decks" && <TabNote tab={tab} state={state} />}
+            </span>
+          }
+          count={null}
+          controls={
+            cardsTab ? (
+              <SortChips sort={sort} withRate={tab === "oncolor"} onSort={setSort} />
+            ) : (
+              tab === "decks" && <DeckPicker state={state} />
+            )
+          }
+          extra={
+            <span className="flex items-center gap-3">
+              <SwitchToggle
+                label="SEPARATE NONCREATURES"
+                on={state.split}
+                onToggle={state.toggleSplit}
+                ariaLabel="Separate noncreatures"
+                tooltip="Show noncreatures in a second row"
+              />
+              {state.yourNames && (
+                <SwitchToggle
+                  label="MARK YOUR DECK"
+                  on={state.markYours}
+                  onToggle={() => state.setMarkYours(!state.markYours)}
+                  ariaLabel="Mark your deck"
+                  tooltip="Outline the cards you played"
+                />
+              )}
+            </span>
+          }
+        >
+          {cardsTab &&
+            board(cardRows, sort === "rate" ? state.plainActions : state.runActions(cardRows), sort === "rate")}
+          {tab === "decks" && deck && (
+            <PileBoard
+              zone="side"
+              setCode={view.pool.setCode}
+              rows={deckRows}
+              cards={view.pool.cards}
+              width={CARD_WIDTH}
+              visible={null}
+              actions={state.deckActions}
+              dragging={null}
+              basics={
+                deck.basics
+                  ? { row: deckRows.length - 1, pileKey: "land", entries: view.basicCardsOf(deck.basics) }
+                  : null
+              }
+              readOnly
+            />
+          )}
+          {!cardsTab && tab !== "decks" && <ExtraBoard tab={tab} state={state} board={board} />}
+        </Pane>
+      </div>
+    </div>
+  );
+};
+
+export const PhoneBreakdown = ({ view }: { view: BuilderView }) => {
+  const state = useBreakdown(view);
+  const loaded = view.results.builds.length > 0;
+  useEffect(() => {
+    const tab = breakdownTabFromHash();
+    if (loaded && tab) {
+      document.getElementById(TAB_ANCHORS[tab])?.scrollIntoView();
+    }
+  }, [loaded]);
+  const groups = useMemo(() => state.phoneGroups(), [state]);
+  const cardActions =
+    state.basis === "oncolor"
+      ? state.plainActions
+      : state.runActions([
+          groups.map((group) => ({ key: group.key, label: null, cards: group.entries.map((entry) => entry.index) })),
+        ]);
+  if (view.results.builds.length === 0) {
+    return <Empty loading={view.results.loading} />;
+  }
+  const deck = state.deck;
+  return (
+    <div className="flex flex-col gap-5">
+      {state.original && (
+        <PhoneSection title="ORIGINAL BUILD">
+          <OriginalResult pool={view.pool} />
+        </PhoneSection>
+      )}
+      <PhoneSection title="COLORS">
+        <div className="flex flex-wrap justify-center gap-1.5">
+          <FilterToggle active={state.pair === null} onClick={() => state.setPair(null)} wide>
+            <span className="font-display text-[12px] tracking-[0.14em]">ALL</span>
+            <span className="font-num text-[13px] text-text">{state.builds.length}</span>
+          </FilterToggle>
+          {state.pairs.map((row) => (
+            <FilterToggle
+              key={row.pair}
+              active={state.pair === row.pair}
+              onClick={() => state.setPair(state.pair === row.pair ? null : row.pair)}
+              wide
+            >
+              <Pips colors={row.pair} size={14} />
+              <span className="font-num text-[13px] text-text">{row.decks}</span>
+            </FilterToggle>
+          ))}
+        </div>
+        <ColorPie builds={view.results.builds} size={160} />
+        <SplashRate state={state} />
+      </PhoneSection>
+      <PhoneSection title="INSIGHTS">
+        <Insights
+          state={state}
+          onShowBuild={(position) => {
+            state.showBuild(position);
+            document.getElementById(TAB_ANCHORS.decks)?.scrollIntoView({ behavior: "smooth" });
+          }}
+        />
+      </PhoneSection>
+      {!state.single && (
+        <PhoneSection
+          id={TAB_ANCHORS[state.basis]}
+          title="CARDS"
+          extra={
+            state.yourNames && (
+              <SwitchToggle
+                label="MARK YOURS"
+                on={state.markYours}
+                onToggle={() => state.setMarkYours(!state.markYours)}
+                ariaLabel="Mark your deck"
+                tooltip="Outline the cards you played"
+              />
+            )
+          }
+        >
+          <div className="flex justify-center">
+            <BasisChips basis={state.basis} onBasis={state.setBasis} />
+          </div>
+          <div className="flex flex-col gap-3">
+            {groups.map((group) => (
+              <div key={group.key} className="flex flex-col gap-1">
+                <div className="flex h-6 items-center justify-center">{group.header}</div>
+                <StripList entries={group.entries} actions={cardActions} />
+              </div>
+            ))}
+          </div>
+        </PhoneSection>
+      )}
+      {(state.single ? [] : state.extraTabs).map((tab) => (
+        <PhoneSection key={tab} id={TAB_ANCHORS[tab]} title={TAB_TITLES[tab]}>
+          <div className="flex justify-center">
+            <TabNote tab={tab} state={state} />
+          </div>
+          <PhoneExtra tab={tab} state={state} />
+        </PhoneSection>
+      ))}
+      <PhoneSection id={TAB_ANCHORS.decks} title="DECKS">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap justify-center gap-1.5">
+            <DeckPicker state={state} />
+          </div>
+          {deck?.basics && <BasicsLine basics={deck.basics} />}
+          <StripList entries={deck ? state.entriesByValue(deck.main) : []} actions={state.deckActions} />
+        </div>
+      </PhoneSection>
+    </div>
+  );
+};
+
+export const setAnchor = (anchor: string | null) => {
+  const { pathname, search } = window.location;
+  window.history.replaceState(
+    window.history.state,
+    "",
+    anchor ? `${pathname}${search}#${anchor}` : `${pathname}${search}`,
+  );
+};
+
+export const breakdownTabFromHash = (): Tab | null => {
+  const anchor = window.location.hash.slice(1);
+  for (const [tab, name] of Object.entries(TAB_ANCHORS)) {
+    if (name === anchor) {
+      return tab as Tab;
+    }
+  }
+  return null;
+};
+
+type BreakdownState = ReturnType<typeof useBreakdown>;
+
+const useBreakdown = (view: BuilderView) => {
+  const { pool } = view;
+  const builds = view.results.builds;
+  const [pair, setPair] = useState<string | null>(null);
+  const [basis, setBasis] = useState<RateBasis>(() => (breakdownTabFromHash() === "overall" ? "overall" : "oncolor"));
+  const [markYours, setMarkYours] = useState(true);
+  const [split, setSplit] = usePersistentBool("daily-sealed:breakdown-split", false);
+  const [deckKey, setDeckKey] = useState<string>(
+    pool.originalMain.length > 0 && builds.length !== 1 ? "original" : "build",
+  );
+  const [buildAt, setBuildAt] = useState(0);
+  const pairs = useMemo(() => pairRows(builds), [builds]);
+  const counted = useMemo(() => {
+    const inPair = pair ? builds.filter((build) => mainColors(build.colors) === pair) : builds;
+    const popularity = new Map(pairs.map((row, rank) => [row.pair, rank]));
+    return [...inPair].sort(
+      (a, b) => (popularity.get(mainColors(a.colors)) ?? 0) - (popularity.get(mainColors(b.colors)) ?? 0),
+    );
+  }, [builds, pair, pairs]);
+  const onColorRates = useMemo(() => cardRates(pool, counted), [pool, counted]);
+  const shownRates = useMemo(
+    () => (basis === "oncolor" ? onColorRates : cardRates(pool, counted, "overall")),
+    [basis, onColorRates, pool, counted],
+  );
+  const splashes = useMemo(() => splashCounts(pool, counted), [pool, counted]);
+  const splashedBuilds = counted.filter((build) => build.colors !== build.colors.toUpperCase()).length;
+  const uniqueIndexes = useMemo(() => firstIndexPerName(pool), [pool]);
+  const yourBuild = view.yourBuild;
+  const comparison = useMemo(
+    () => (yourBuild ? comparisonWithPeers(pool, builds, { buildKey: "you", ...yourBuild }) : null),
+    [pool, builds, yourBuild],
+  );
+  const yourNames = useMemo(
+    () => (yourBuild ? new Set(yourBuild.main.map((index) => pool.cards[index]?.name)) : null),
+    [yourBuild, pool.cards],
+  );
+  const rateOf = (card: PoolCard) => shownRates.get(card.name) ?? NO_RATE;
+  const byRate = (a: number, b: number) => {
+    const left = rateOf(pool.cards[a]);
+    const right = rateOf(pool.cards[b]);
+    return orderShare(right) - orderShare(left) || right.played - left.played || pool.cards[a].cmc - pool.cards[b].cmc;
+  };
+  const marked = markYours && yourNames ? (card: PoolCard) => yourNames.has(card.name) : undefined;
+  const plainActions: CardActions = {
+    onPick: view.openCard,
+    onPreview: view.openCard,
+    dimmed: (card) => rateOf(card).played === 0,
+    marked,
+  };
+  const runActions = (rows: Row[]): CardActions => {
+    const labeled = new Set<string>();
+    for (const row of rows) {
+      for (const pile of row) {
+        let previous: string | null = null;
+        for (const index of pile.cards) {
+          const rate = rateOf(pool.cards[index]);
+          const text = rate.decks === 0 ? null : rateText(rate);
+          if (text !== null && text !== previous) {
+            labeled.add(pool.cards[index].name);
+          }
+          previous = text;
+        }
+      }
+    }
+    return {
+      ...plainActions,
+      ratingFor: (card) => (labeled.has(card.name) ? rateShare(rateOf(card)) : null),
+      ratingText: (card) => rateText(rateOf(card)),
+    };
+  };
+  const rateActions = (source: Map<string, CardRate>): CardActions => ({
+    onPick: view.openCard,
+    onPreview: view.openCard,
+    ratingFor: (card) => rateShare(source.get(card.name) ?? NO_RATE),
+    ratingText: (card) => rateText(source.get(card.name) ?? NO_RATE),
+  });
+  const splashActions: CardActions = {
+    onPick: view.openCard,
+    onPreview: view.openCard,
+    ratingFor: () => 1,
+    ratingText: (card) => `${splashes.get(card.name) ?? 0}/${splashedBuilds}`,
+  };
+  const indexOfName = (name: string) => pool.cards.findIndex((card) => card.name === name);
+  const contestedName = mostContested(onColorRates);
+  let splashedName: string | null = null;
+  for (const [name, count] of splashes) {
+    if (splashedName === null || count > (splashes.get(splashedName) ?? 0)) {
+      splashedName = name;
+    }
+  }
+  const topBuild = topGihBuild(pool, counted, view.gihWrOf);
+  const closeCalls = uniqueIndexes.filter((index) => isSplit(onColorRates.get(pool.cards[index].name) ?? NO_RATE));
+  const splashIndexes = [...splashes.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => indexOfName(name));
+  const bandRow = (indexes: number[]): Row => {
+    const piles: Pile[] = RATE_BANDS.map((band) => ({ key: band.key, label: band.label, cards: [] }));
+    for (const index of [...indexes].sort(byRate)) {
+      piles.find((pile) => pile.key === bandOf(rateOf(pool.cards[index])))?.cards.push(index);
+    }
+    return piles.filter((pile) => pile.cards.length > 0);
+  };
+  const rowsFor = (indexes: number[], sort: CardSort, splitRows = split): Row[] => {
+    if (sort === "rate") {
+      if (!splitRows) {
+        return [bandRow(indexes)];
+      }
+      const creatures = indexes.filter((index) => isCreature(pool.cards[index]));
+      const others = indexes.filter((index) => !isCreature(pool.cards[index]));
+      return alignRows(
+        [bandRow(creatures), bandRow(others)],
+        RATE_BANDS.map((band) => band.key),
+      );
+    }
+    return alignedZone(pool.cards, indexes, sort, splitRows).map((row) =>
+      row.map((pile) => ({ ...pile, cards: [...pile.cards].sort(byRate) })),
+    );
+  };
+  const pileHeader = (pile: Pile, rateSort: boolean): ReactNode =>
+    pile.cards.length === 0 ? null : rateSort ? (
+      <span className="font-display text-[12px] tracking-[0.16em] text-text">{pile.label}</span>
+    ) : cardsFitPileKey(
+        pile.key,
+        pile.cards.map((index) => pool.cards[index]),
+      ) ? (
+      <PileSymbol pileKey={pile.key} setCode={pool.setCode} />
+    ) : null;
+  const phoneGroups = () => {
+    if (basis === "oncolor") {
+      return rowsFor(uniqueIndexes, "rate", false)[0].map((pile) => ({
+        key: pile.key,
+        header: pileHeader(pile, true),
+        entries: pile.cards.map((index) => ({ index, card: pool.cards[index] })),
+      }));
+    }
+    return groupByColor(uniqueIndexes.map((index) => ({ index, card: pool.cards[index] }))).map((group) => ({
+      key: group.key,
+      header: <PileSymbol pileKey={group.key} setCode={pool.setCode} />,
+      entries: [...group.entries].sort((a, b) => byRate(a.index, b.index)),
+    }));
+  };
+  const original: DeckChoice | null =
+    pool.originalMain.length > 0
+      ? { key: "original", colors: pool.colors, main: pool.originalMain, basics: null }
+      : null;
+  const yours: DeckChoice | null = yourBuild
+    ? { key: "yours", colors: yourBuild.colors, main: yourBuild.main, basics: yourBuild.basics }
+    : null;
+  const buildIndex = Math.min(buildAt, Math.max(counted.length - 1, 0));
+  const shownBuild = counted[buildIndex];
+  const build: DeckChoice | null = shownBuild
+    ? { key: "build", colors: shownBuild.colors, main: shownBuild.main, basics: shownBuild.basics }
+    : null;
+  const deck = (deckKey === "original" && original) || (deckKey === "yours" && yours) || build;
+  return {
+    pool,
+    builds,
+    counted,
+    pair,
+    setPair: (next: string | null) => {
+      setPair(next);
+      const inPair = next ? builds.filter((build) => mainColors(build.colors) === next) : builds;
+      if (inPair.length === 1) {
+        setDeckKey("build");
+        setBuildAt(0);
+      }
+    },
+    single: counted.length === 1,
+    pairs,
+    basis,
+    setBasis,
+    uniqueIndexes,
+    yourNames,
+    markYours,
+    setMarkYours,
+    split,
+    toggleSplit: () => setSplit((value) => !value),
+    plainActions,
+    runActions,
+    rateActions,
+    splashActions,
+    onColorRates,
+    deckActions: { onPick: view.openCard, onPreview: view.openCard } as CardActions,
+    rowsFor,
+    pileHeader,
+    phoneGroups,
+    entriesByValue: (indexes: number[]) =>
+      [...indexes]
+        .sort((a, b) => pool.cards[a].cmc - pool.cards[b].cmc)
+        .map((index) => ({ index, card: pool.cards[index] })),
+    closeCalls,
+    extraTabs: [
+      ...(closeCalls.length > 0 ? (["close"] as const) : []),
+      "splashes" as const,
+      ...(comparison ? (["you"] as const) : []),
+    ] as ExtraTab[],
+    splashIndexes,
+    splashedBuilds,
+    comparison,
+    youPicks: comparison ? comparison.yourPicks.map(indexOfName) : [],
+    theirPicks: comparison ? comparison.theirPicks.map(indexOfName) : [],
+    original,
+    yours,
+    build,
+    buildIndex,
+    deck,
+    deckKey: deck?.key ?? null,
+    setDeckKey,
+    contested: contestedName === null ? null : indexOfName(contestedName),
+    mostSplashed: splashedName === null ? null : indexOfName(splashedName),
+    topBuild: topBuild ? { ...topBuild, position: counted.indexOf(topBuild.build) } : null,
+    rateLabel: (index: number) => rateText(onColorRates.get(pool.cards[index].name) ?? NO_RATE),
+    splashLabel: (index: number) => `${splashes.get(pool.cards[index].name) ?? 0}/${splashedBuilds}`,
+    showBuild: (position: number) => {
+      setDeckKey("build");
+      setBuildAt(position);
+    },
+    stepBuild: (offset: number) => {
+      setDeckKey("build");
+      setBuildAt((buildIndex + offset + counted.length) % counted.length);
+    },
+  };
+};
+
+const alignedZone = (
+  cards: PoolCard[],
+  indexes: number[],
+  sort: SortKey,
+  split: boolean,
+  leading: string | null = null,
+): Row[] => {
+  const order = (sortZone(cards, indexes, sort, false)[0] ?? []).map((pile) => pile.key);
+  if (leading && !order.includes(leading)) {
+    order.unshift(leading);
+  }
+  return alignRows(sortZone(cards, indexes, sort, split), order, leading);
+};
+
+const alignRows = (rows: Row[], order: string[], kept: string | null = null): Row[] => {
+  const filled = rows.filter((row) => row.some((pile) => pile.cards.length > 0));
+  if (filled.length < 2) {
+    return filled;
+  }
+  const keys = order.filter(
+    (key) => key === kept || filled.some((row) => row.some((pile) => pile.key === key && pile.cards.length > 0)),
+  );
+  return filled.map((row) =>
+    keys.map((key) => row.find((pile) => pile.key === key) ?? { key, label: null, cards: [] }),
+  );
+};
+
+const firstIndexPerName = (pool: DailySealedPool) => {
+  const seen = new Set<string>();
+  const indexes: number[] = [];
+  for (const [index, card] of pool.cards.entries()) {
+    if (!seen.has(card.name)) {
+      seen.add(card.name);
+      indexes.push(index);
+    }
+  }
+  return indexes;
+};
+
+const orderShare = (rate: CardRate) => (rate.decks === 0 ? -1 : rate.played / rate.decks);
+
+const ExtraBoard = ({
+  tab,
+  state,
+  board,
+}: {
+  tab: ExtraTab;
+  state: BreakdownState;
+  board: (rows: Row[], actions: CardActions) => ReactNode;
+}) => {
+  if (tab === "close") {
+    return board(
+      alignedZone(state.pool.cards, state.closeCalls, "color", state.split),
+      state.rateActions(state.onColorRates),
+    );
+  }
+  if (tab === "splashes") {
+    return state.splashIndexes.length === 0 ? (
+      <Nothing text="No splashes in these builds" />
+    ) : (
+      board(alignedZone(state.pool.cards, state.splashIndexes, "color", state.split), state.splashActions)
+    );
+  }
+  const comparison = state.comparison;
+  if (!comparison) {
+    return null;
+  }
+  const actions = state.rateActions(comparison.rates);
+  return (
+    <div className="flex flex-col gap-3">
+      <YouGroup title="ONLY YOU PLAYED" empty={state.youPicks.length === 0}>
+        {board(alignedZone(state.pool.cards, state.youPicks, "color", state.split), actions)}
+      </YouGroup>
+      <YouGroup title="YOU CUT" empty={state.theirPicks.length === 0}>
+        {board(alignedZone(state.pool.cards, state.theirPicks, "color", state.split), actions)}
+      </YouGroup>
+    </div>
+  );
+};
+
+const YouGroup = ({ title, empty, children }: { title: string; empty: boolean; children: ReactNode }) => (
+  <div className="flex flex-col gap-1">
+    <h3 className="font-display text-[13px] tracking-[0.16em] text-subtle">{title}</h3>
+    {empty ? <Nothing text="No differences" /> : children}
+  </div>
+);
+
+const TabNote = ({ tab, state }: { tab: ExtraTab; state: BreakdownState }) => {
+  let text: ReactNode = null;
+  if (tab === "close") {
+    text = "Played by some but not all of the decks in their colors";
+  } else if (tab === "splashes") {
+    text = `Off-color cards splashed across ${state.splashedBuilds} builds`;
+  } else if (state.comparison) {
+    text = (
+      <span className="flex items-center gap-1.5">
+        Compared with the {state.comparison.peers} other <Pips colors={state.comparison.pair} size={13} /> builds
+      </span>
+    );
+  }
+  return <span className="text-[13px] text-subtle">{text}</span>;
+};
+
+const PhoneExtra = ({ tab, state }: { tab: ExtraTab; state: BreakdownState }) => {
+  if (tab === "close") {
+    return (
+      <StripList entries={state.entriesByValue(state.closeCalls)} actions={state.rateActions(state.onColorRates)} />
+    );
+  }
+  if (tab === "splashes") {
+    return <StripList entries={state.entriesByValue(state.splashIndexes)} actions={state.splashActions} />;
+  }
+  if (!state.comparison) {
+    return null;
+  }
+  const actions = state.rateActions(state.comparison.rates);
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-center font-display text-[12px] tracking-[0.16em] text-subtle">ONLY YOU PLAYED</span>
+      <StripList entries={state.entriesByValue(state.youPicks)} actions={actions} />
+      <span className="text-center font-display text-[12px] tracking-[0.16em] text-subtle">YOU CUT</span>
+      <StripList entries={state.entriesByValue(state.theirPicks)} actions={actions} />
+    </div>
+  );
+};
+
+const OriginalResult = ({ pool }: { pool: DailySealedPool }) => (
+  <div className="flex flex-col items-center gap-1.5">
+    <div className="flex items-center gap-3">
+      {pool.colors && <Pips colors={pool.colors} size={18} />}
+      <span className="font-num text-[22px] leading-none text-text">
+        {pool.wins}-{pool.losses}
+      </span>
+    </div>
+    <span className="text-[13px] text-subtle">{EVENT_NAMES[pool.format] ?? pool.format}</span>
+  </div>
+);
+
+const PairList = ({ state }: { state: BreakdownState }) => (
+  <div className="flex flex-col gap-1">
+    <PairButton
+      active={state.pair === null}
+      onClick={() => state.setPair(null)}
+      decks={state.builds.length}
+      total={state.builds.length}
+    >
+      <span className="font-display text-[12px] tracking-[0.16em]">ALL BUILDS</span>
+    </PairButton>
+    <div
+      className={cn("-mr-2 flex flex-col gap-1", SCROLL_LIST_CLASS)}
+      style={{ ...SCROLL_LIST_STYLE, maxHeight: `calc(${PAIRS_SHOWN} * 2rem + ${PAIRS_SHOWN - 1} * 0.25rem)` }}
+    >
+      {state.pairs.map((row) => (
+        <PairButton
+          key={row.pair}
+          active={state.pair === row.pair}
+          onClick={() => state.setPair(state.pair === row.pair ? null : row.pair)}
+          decks={row.decks}
+          total={state.builds.length}
+        >
+          <Pips colors={row.pair} size={15} />
+        </PairButton>
+      ))}
+    </div>
+  </div>
+);
+
+const PairButton = ({
+  active,
+  onClick,
+  decks,
+  total,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  decks: number;
+  total: number;
+  children: ReactNode;
+}) => (
+  <FilterToggle
+    active={active}
+    onClick={onClick}
+    wide
+    small
+    className="w-full shrink-0 justify-between px-2.5 text-text"
+  >
+    <span className="flex items-center">{children}</span>
+    <span className="flex items-baseline gap-3 font-num">
+      <span className="text-[14px]">{decks}</span>
+      <span className="w-[4ch] text-right text-[13px] text-subtle">{Math.round((100 * decks) / total)}%</span>
+    </span>
+  </FilterToggle>
+);
+
+const SplashRate = ({ state }: { state: BreakdownState }) => {
+  const rows = colorSplashRows(state.counted);
+  return (
+    <div
+      className="mt-3 grid grid-flow-col grid-rows-3 items-center justify-items-center gap-x-3 gap-y-1 font-num text-[13px]"
+      style={{ gridTemplateColumns: `auto repeat(${rows.length}, minmax(0, 1fr))` }}
+    >
+      <span />
+      <span className="justify-self-start font-display text-[12px] tracking-[0.16em] text-subtle">MAIN</span>
+      <span className="justify-self-start font-display text-[12px] tracking-[0.16em] text-subtle">SPLASH</span>
+      {rows.map((row) => [
+        <Pip key={`${row.color}-pip`} c={row.color} size={15} />,
+        <span key={`${row.color}-main`}>{row.main}</span>,
+        <span key={`${row.color}-splash`} className={row.splash > 0 ? "text-text" : "text-subtle"}>
+          {row.splash}
+        </span>,
+      ])}
+    </div>
+  );
+};
+
+const Insights = ({ state, onShowBuild }: { state: BreakdownState; onShowBuild: (position: number) => void }) => {
+  const contested = state.contested;
+  const splashed = state.mostSplashed;
+  const top = state.topBuild;
+  return (
+    <div className="flex flex-col gap-3">
+      {contested !== null && !state.single && (
+        <Insight label="MOST CONTESTED">
+          <InsightCard state={state} index={contested} figure={state.rateLabel(contested)} />
+        </Insight>
+      )}
+      {splashed !== null && !state.single && (
+        <Insight label="MOST SPLASHED">
+          <InsightCard state={state} index={splashed} figure={state.splashLabel(splashed)} />
+        </Insight>
+      )}
+      {top && !state.single && (
+        <Insight label="HIGHEST GIH WR BUILD">
+          <FilterToggle
+            active={false}
+            onClick={() => onShowBuild(top.position)}
+            wide
+            small
+            className="w-full justify-between px-2.5 text-text"
+          >
+            <Pips colors={top.build.colors} size={15} />
+            <span className="flex items-center gap-2 font-num text-[14px]">
+              {(top.average * 100).toFixed(1)}%
+              <ChevronRight size={15} className="text-subtle" />
+            </span>
+          </FilterToggle>
+        </Insight>
+      )}
+      <Insight label="COMMUNITY PICK">
+        <div className="flex h-8 items-center justify-center rounded border border-dashed border-border2 text-[13px] text-subtle">
+          Vote for best build: coming soon!
+        </div>
+      </Insight>
+    </div>
+  );
+};
+
+const InsightCard = ({ state, index, figure }: { state: BreakdownState; index: number; figure: string }) => (
+  <div className="flex items-center gap-2">
+    <div className="min-w-0 flex-1">
+      <StripList entries={state.entriesByValue([index])} actions={state.deckActions} />
+    </div>
+    <span className="w-[5ch] shrink-0 text-right font-num text-[14px] text-text">{figure}</span>
+  </div>
+);
+
+const Insight = ({ label, children }: { label: string; children: ReactNode }) => (
+  <div className="flex flex-col gap-1">
+    <span className="text-center font-display text-[12px] tracking-[0.16em] text-subtle">{label}</span>
+    {children}
+  </div>
+);
+
+const PaneTabs = ({ tabs, active, onPick }: { tabs: Tab[]; active: Tab; onPick: (tab: Tab) => void }) => (
+  <span
+    className={cn(
+      "-ml-3 flex h-10 [&>button]:h-full [&>button]:flex-none [&>button]:px-3.5 [&>button]:pb-1 [&>button]:pt-[7px]",
+      "[&>button:hover]:bg-white/5 [&>button:hover]:text-text [&>button:active]:bg-white/10",
+    )}
+  >
+    {tabs.map((tab) => (
+      <TabButton key={tab} active={active === tab} onClick={() => onPick(tab)}>
+        {TAB_TITLES[tab]}
+      </TabButton>
+    ))}
+  </span>
+);
+
+const SortChips = ({
+  sort,
+  withRate,
+  onSort,
+}: {
+  sort: CardSort;
+  withRate: boolean;
+  onSort: (sort: CardSort) => void;
+}) => (
+  <div className="ml-4 flex items-center gap-2">
+    <span className="font-display text-[13px] tracking-[0.18em] text-subtle">SORT BY</span>
+    <div className="flex gap-1">
+      {withRate && (
+        <Tooltip label={BASIS_TOOLTIPS.oncolor} side="bottom">
+          <button
+            type="button"
+            onClick={() => onSort("rate")}
+            className={cn("h-8 px-2.5 text-[12px] uppercase tracking-[0.12em]", chipClass(sort === "rate"))}
+          >
+            {BASIS_LABELS.oncolor}
+          </button>
+        </Tooltip>
+      )}
+      {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onSort(key)}
+          className={cn("h-8 px-2.5 text-[12px] uppercase tracking-[0.12em]", chipClass(sort === key))}
+        >
+          {SORT_LABELS[key]}
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
+const BasisChips = ({ basis, onBasis }: { basis: RateBasis; onBasis: (basis: RateBasis) => void }) => (
+  <div className="flex gap-1">
+    {(Object.keys(BASIS_LABELS) as RateBasis[]).map((key) => (
+      <Tooltip key={key} label={BASIS_TOOLTIPS[key]} side="bottom">
+        <button
+          type="button"
+          onClick={() => onBasis(key)}
+          className={cn("h-8 px-2.5 text-[12px] uppercase tracking-[0.12em]", chipClass(basis === key))}
+        >
+          {key === "oncolor" ? "On-Color" : "Played"}
+        </button>
+      </Tooltip>
+    ))}
+  </div>
+);
+
+const DeckPicker = ({ state }: { state: BreakdownState }) => (
+  <div className="flex flex-wrap items-center gap-1 md:ml-4">
+    {state.original && (
+      <DeckChip active={state.deckKey === "original"} onClick={() => state.setDeckKey("original")}>
+        ORIGINAL
+        {state.original.colors && <Pips colors={state.original.colors} size={13} />}
+      </DeckChip>
+    )}
+    {state.yours && (
+      <DeckChip active={state.deckKey === "yours"} onClick={() => state.setDeckKey("yours")}>
+        YOURS
+        <Pips colors={state.yours.colors ?? ""} size={13} />
+      </DeckChip>
+    )}
+    {state.build && (
+      <span className="flex items-center gap-1">
+        <StepButton label="Previous build" onClick={() => state.stepBuild(-1)}>
+          <ChevronLeft size={16} />
+        </StepButton>
+        <DeckChip active={state.deckKey === "build"} onClick={() => state.setDeckKey("build")}>
+          BUILD
+          <span className="grid justify-items-center font-num tabular-nums">
+            <span className="invisible col-start-1 row-start-1">
+              {state.counted.length}/{state.counted.length}
+            </span>
+            <span className="col-start-1 row-start-1">
+              {state.buildIndex + 1}/{state.counted.length}
+            </span>
+          </span>
+          <span className="grid justify-items-center">
+            <span className="invisible col-start-1 row-start-1">
+              <Pips colors={widestColors(state)} size={13} />
+            </span>
+            <span className="col-start-1 row-start-1">
+              <Pips colors={state.build.colors ?? ""} size={13} />
+            </span>
+          </span>
+        </DeckChip>
+        <StepButton label="Next build" onClick={() => state.stepBuild(1)}>
+          <ChevronRight size={16} />
+        </StepButton>
+      </span>
+    )}
+  </div>
+);
+
+const widestColors = (state: BreakdownState) => {
+  let widest = "";
+  for (const build of state.counted) {
+    if (build.colors.length > widest.length) {
+      widest = build.colors;
+    }
+  }
+  return widest;
+};
+
+const DeckChip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn("flex h-8 items-center gap-2 px-2.5 text-[12px] tracking-[0.12em]", chipClass(active))}
+  >
+    {children}
+  </button>
+);
+
+const StepButton = ({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    className={cn("flex h-8 w-8 items-center justify-center", chipClass(false))}
+  >
+    {children}
+  </button>
+);
+
+const BasicsLine = ({ basics }: { basics: Basics }) => (
+  <div className="flex flex-wrap justify-center gap-x-4 font-num text-[14px] text-text">
+    {(Object.keys(basics) as (keyof Basics)[])
+      .filter((color) => basics[color] > 0)
+      .map((color) => (
+        <span key={color} className="flex items-center gap-1.5">
+          <Pips colors={color} size={14} />
+          {basics[color]}
+        </span>
+      ))}
+  </div>
+);
+
+const PhoneSection = ({
+  id,
+  title,
+  extra,
+  children,
+}: {
+  id?: string;
+  title: string;
+  extra?: ReactNode;
+  children: ReactNode;
+}) => (
+  <section id={id} className="flex scroll-mt-14 flex-col gap-3 border-b border-border pb-4">
+    <div className="relative flex min-h-9 items-center justify-center">
+      <h2 className="text-center font-display text-[15px] tracking-[0.18em] text-text">{title}</h2>
+      {extra && <div className="absolute right-0">{extra}</div>}
+    </div>
+    {children}
+  </section>
+);
+
+const Nothing = ({ text }: { text: string }) => (
+  <span className="py-2 text-center text-[13px] text-subtle">{text}</span>
+);
+
+const Empty = ({ loading }: { loading: boolean }) => (
+  <div className="flex flex-1 items-center justify-center py-20 text-[14px] text-subtle">
+    {loading ? "Loading the builds" : "No builds for this pool yet"}
+  </div>
+);
