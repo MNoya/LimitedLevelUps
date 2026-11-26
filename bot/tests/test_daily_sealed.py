@@ -16,6 +16,7 @@ DAY = date(2026, 11, 25)
     (datetime(2026, 11, 25, 9, 46, tzinfo=timezone.utc), [date(2026, 11, 24), date(2026, 11, 25)]),
     (datetime(2026, 11, 25, 5, 46, tzinfo=timezone.utc), [date(2026, 11, 24)]),
     (datetime(2026, 7, 10, 9, 46, tzinfo=timezone.utc), [date(2026, 7, 9), date(2026, 7, 10)]),
+    (datetime(2026, 7, 10, 6, 10, tzinfo=timezone.utc), [date(2026, 7, 9)]),
     (datetime(2026, 11, 25, 15, 30, tzinfo=timezone.utc), [date(2026, 11, 25)]),
 ])
 def test_only_the_last_run_before_turnover_picks_the_next_day(now, expected):

@@ -180,7 +180,7 @@ export const RatingBadge = ({ value, cardWidth, text }: { value: number; cardWid
     style={{
       top: "calc(10.3% + 4px)",
       left: "calc(3.5% + 9px)",
-      fontSize: cardWidth ? Math.max(10, Math.round(cardWidth * 0.065)) : 11,
+      fontSize: cardWidth ? Math.max(12, Math.round(cardWidth * 0.065)) : 12,
     }}
   >
     {text ?? `${(value * 100).toFixed(1)}%`}
@@ -193,6 +193,31 @@ export const DimmedVeil = () => (
 
 export const MarkedFrame = () => (
   <span className="pointer-events-none absolute inset-0 rounded-[4.75%/3.5%] border-2 border-green" />
+);
+
+export const CardGrid = ({ entries, actions }: { entries: PoolEntry[]; actions: CardActions }) => (
+  <div className="grid grid-cols-3 gap-1.5">
+    {entries.map((entry) => {
+      const rating = actions.ratingFor?.(entry.card) ?? null;
+      return (
+        <button
+          key={entry.index}
+          type="button"
+          className="relative"
+          onClick={() => actions.onPick(entry)}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            actions.onPreview(entry);
+          }}
+        >
+          <CardFace card={entry.card} className="aspect-[488/680]" />
+          {actions.dimmed?.(entry.card) && <DimmedVeil />}
+          {actions.marked?.(entry.card) && <MarkedFrame />}
+          {rating !== null && <RatingBadge value={rating} text={actions.ratingText?.(entry.card)} />}
+        </button>
+      );
+    })}
+  </div>
 );
 
 export const StripList = ({ entries, actions }: { entries: PoolEntry[]; actions: CardActions }) => (

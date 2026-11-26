@@ -1,4 +1,5 @@
 import { TYPE_GROUPS } from "./tierList";
+import { DAILY_TURNOVER_HOUR_ET } from "../lib/daily-turnover";
 
 export type Color = "W" | "U" | "B" | "R" | "G";
 export type Basics = Record<Color, number>;
@@ -105,7 +106,6 @@ export const DECK_SIZE = 40;
 export const LAND_TARGET = 17;
 export const EMPTY_BASICS: Basics = { W: 0, U: 0, B: 0, R: 0, G: 0 };
 
-const TURNOVER_HOUR_ET = 10;
 const SPLASH_MAX_CARDS = 2;
 const MANA_VALUE_COLUMNS = [1, 2, 3, 4, 5, 6];
 
@@ -116,7 +116,7 @@ export const basicCount = (basics: Basics) => COLORS.reduce((sum, color) => sum 
 
 export const servingDay = (now: Date = new Date()): string => {
   const eastern = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  eastern.setHours(eastern.getHours() - TURNOVER_HOUR_ET);
+  eastern.setHours(eastern.getHours() - DAILY_TURNOVER_HOUR_ET);
   const month = String(eastern.getMonth() + 1).padStart(2, "0");
   const day = String(eastern.getDate()).padStart(2, "0");
   return `${eastern.getFullYear()}-${month}-${day}`;
@@ -126,7 +126,7 @@ export const nextTurnover = (now: Date = new Date()): Date => {
   const [year, month, day] = servingDay(now).split("-").map(Number);
   const easternNoonUtc = Date.UTC(year, month - 1, day + 1, 12);
   const offsetHours = easternOffsetHours(new Date(easternNoonUtc));
-  return new Date(Date.UTC(year, month - 1, day + 1, TURNOVER_HOUR_ET + offsetHours));
+  return new Date(Date.UTC(year, month - 1, day + 1, DAILY_TURNOVER_HOUR_ET + offsetHours));
 };
 
 const easternOffsetHours = (at: Date): number => {

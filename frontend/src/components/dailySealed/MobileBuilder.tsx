@@ -5,9 +5,10 @@ import { SetGlyph } from "../Brand";
 import { useCopyFeedback } from "../CopyTextButton";
 import { cn } from "../../lib/utils";
 import { groupByColor, type PoolEntry } from "../../data/dailySealed";
-import type { BuilderView } from "../../pages/DailySealedPage";
+import type { BuilderView, PhoneTab } from "../../pages/DailySealedPage";
+import { chipClass } from "../pod/review/reviewControls";
 import { BASICS_PILE_KEY } from "../../data/dailySealedLayout";
-import { CardFace, CardPreview, ColumnRow, RatingBadge, StripList, type CardActions } from "./cards";
+import { CardGrid, CardPreview, ColumnRow, StripList, type CardActions } from "./cards";
 import {
   BasicsRow,
   ColorToggles,
@@ -19,22 +20,16 @@ import {
   RarityToggles,
 } from "./controls";
 import { FilterGroup } from "../TierFilterBar";
-import { breakdownTabFromHash, PhoneBreakdown, setAnchor } from "./Breakdown";
+import { PhoneBreakdown } from "./Breakdown";
 import { DayNav, PreviewMove, SubmitButton, Toast, TodayPoolLink } from "./shared";
 import { usePreference } from "./usePreference";
 
-type Tab = "pool" | "deck" | "results";
+type Tab = PhoneTab | "results";
 
 const PILE_WIDTH = 104;
 
 export const MobileBuilder = ({ view }: { view: BuilderView }) => {
-  const [tab, setTab] = useState<Tab>(
-    view.results.available && (!view.isToday || breakdownTabFromHash()) ? "results" : "pool",
-  );
-  const leaveResults = (next: Tab) => {
-    setAnchor(null);
-    setTab(next);
-  };
+  const tab: Tab = view.showingBreakdown ? "results" : view.phoneTab;
   const [filtersOpen, setFiltersOpen] = useState(false);
   const { builder } = view;
   return (
@@ -50,26 +45,26 @@ export const MobileBuilder = ({ view }: { view: BuilderView }) => {
         <SetGlyph code={view.pool.setCode} size={22} />
         <div
           className={cn(
-            "grid flex-1 rounded border border-border2 p-0.5",
+            "grid flex-1 gap-1",
             view.results.available ? "grid-cols-[auto_auto_minmax(0,1fr)]" : "grid-cols-2",
           )}
         >
           <TabButton
             active={tab === "pool"}
-            onClick={() => leaveResults("pool")}
+            onClick={() => view.showBuild("pool")}
             label="POOL"
             count={builder.side.length}
           />
           <TabButton
             active={tab === "deck"}
-            onClick={() => leaveResults("deck")}
+            onClick={() => view.showBuild("deck")}
             label="DECK"
-            count={builder.deck.length}
+            count={builder.deckSize}
           />
           {view.results.available && (
             <TabButton
               active={tab === "results"}
-              onClick={() => setTab("results")}
+              onClick={view.showBreakdown}
               label="CARD BREAKDOWN"
               count={null}
             />
@@ -170,7 +165,7 @@ const PoolTab = ({ view, onOpenFilters }: { view: BuilderView; onOpenFilters: ()
       )}
       {groups.map((group) =>
         fullCards ? (
-          <FullCardGrid key={group.key} entries={group.entries} actions={view.sideActions} />
+          <CardGrid key={group.key} entries={group.entries} actions={view.sideActions} />
         ) : (
           <StripList key={group.key} entries={group.entries} actions={view.sideActions} />
         ),
@@ -257,29 +252,6 @@ const PoolCount = ({ shown, total }: { shown: number; total: number }) => (
   </span>
 );
 
-const FullCardGrid = ({ entries, actions }: { entries: PoolEntry[]; actions: CardActions }) => (
-  <div className="grid grid-cols-3 gap-1.5">
-    {entries.map((entry) => {
-      const rating = actions.ratingFor?.(entry.card) ?? null;
-      return (
-        <button
-          key={entry.index}
-          type="button"
-          className="relative"
-          onClick={() => actions.onPick(entry)}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            actions.onPreview(entry);
-          }}
-        >
-          <CardFace card={entry.card} className="aspect-[488/680]" />
-          {rating !== null && <RatingBadge value={rating} />}
-        </button>
-      );
-    })}
-  </div>
-);
-
 const BottomBar = ({ view }: { view: BuilderView }) => (
   <div className="fixed inset-x-0 bottom-0 z-50 flex items-center gap-1.5 border-t border-border bg-surface px-2 py-2">
     <DeckCount size={view.builder.deckSize} />
@@ -303,18 +275,18 @@ const TabButton = ({
   active: boolean;
   onClick: () => void;
   label: string;
-  count: number | null;
+  count: number | string | null;
 }) => (
   <button
     type="button"
     onClick={onClick}
     className={cn(
-      "flex h-8 items-center justify-center gap-2.5 whitespace-nowrap rounded-sm px-2 font-display text-[13px] tracking-[0.1em]",
-      active ? "bg-green/15 text-text" : "text-muted",
+      "flex h-9 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-[13px] tracking-[0.1em]",
+      chipClass(active),
     )}
   >
     {label}
-    {count !== null && <span className="font-num text-[12px] text-muted">{count}</span>}
+    {count !== null && <span className="font-num text-[12px]">{count}</span>}
   </button>
 );
 

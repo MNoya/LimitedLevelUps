@@ -28,7 +28,7 @@ from bot.services.pod_roles import find_role, role_mention, toggle_role
 
 log = logging.getLogger(__name__)
 
-RETRY_HOURS = "10-14"
+RETRY_HOURS = f"{TURNOVER_TIME.hour}-{TURNOVER_TIME.hour + 4}"
 ROLE_BUTTON_ID = "daily_sealed:role"
 
 MSG_ROLE_BUTTON = "Notify me"

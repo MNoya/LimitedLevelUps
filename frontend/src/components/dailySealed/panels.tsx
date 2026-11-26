@@ -75,7 +75,7 @@ export const DeckPanel = ({
 }: {
   title: ReactNode;
   storageKey: string;
-  count: number | null;
+  count: number | string | null;
   controls: ReactNode;
   extra?: ReactNode;
   children: ReactNode;

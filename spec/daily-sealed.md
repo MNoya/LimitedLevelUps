@@ -6,10 +6,10 @@ Status: built end to end on master, uncommitted. The site lives at `/daily-seale
 
 ## Decisions so far
 
-- **Daily, never spaced out.** A new pool every day at 10 AM Eastern, the same turnover as Wheel of Fortune and Trophy Mage. A pool every few days is too arbitrary to build a habit around.
+- **Daily, never spaced out.** A new pool every day at 8 AM Eastern, the same turnover as Wheel of Fortune and Trophy Mage. A pool every few days is too arbitrary to build a habit around.
 - **Real pools from LLU players.** The pool is the full pool of a finished Sealed event an LLU player played on Arena, pulled from 17lands. It is not generated. A real pool comes with a real outcome to compare against.
 - **Active set only.** Pools come only from the set Arena is currently on. During Star Trek season every pool is Star Trek, and older sets are never picked. At rotation the daily switches to the new set.
-- **The new set from the morning after release.** Arena releases at noon Eastern, two hours after the 10 AM turnover, so release day still serves the outgoing set. The next morning's pool is picked from about 17 hours of new-set data. Star Trek had about 50 finished Sealed events on its release day, so that is enough.
+- **The new set from the morning after release.** Arena releases at noon Eastern, four hours after the 8 AM turnover, so release day still serves the outgoing set. The next morning's pool is picked from about 17 hours of new-set data. Star Trek had about 50 finished Sealed events on its release day, so that is enough.
 - **Past days stay open.** Players can browse earlier pools and builds. A set filter comes later.
 - **Anonymous reveal.** After submitting, a player sees the original player's colors and record, without their name.
 - **Any Discord login can submit.** No linked LLU player account needed.
@@ -27,7 +27,7 @@ Prod on 2026-11-24 holds 815 finished Star Trek Sealed events from 125 players t
 
 The refresh-cron Railway service picks the pool, since it already calls 17lands on a schedule. It fetches the pool server-side because 17lands sends no CORS headers and stores it. The pick happens at the end of the 09:00 UTC run, right after its 17lands sync. The set is the one active at the coming turnover.
 
-The cron runs at 01, 05, 09, 13, 17 and 21 UTC, and on 2026-11-24 a run took about 46 minutes for 390 players at 7 seconds each. The 09:00 UTC run ends around 09:46 UTC, which is 4:46 AM Eastern in winter. Turnover at 10 AM Eastern is 15:00 UTC in winter and 14:00 UTC in summer, so the pick has more than 4 hours of slack, enough for about 2,500 players. The pool only misses events that finish between about 5 and 10 AM Eastern, the quietest stretch of the day. The later 13:00 UTC run was ruled out because in summer it ends 14 minutes before turnover and would run late at around 500 players. On the morning after a release the pick sees about 17 hours of new-set data, since Arena releases at noon Eastern. If the 09:00 UTC run fails, the 13:00 UTC run picks the pool. Storing it freezes the day: later 17lands changes never alter a pool people already built.
+The cron runs at 01, 05, 09, 13, 17 and 21 UTC, and on 2026-11-24 a run took about 46 minutes for 390 players at 7 seconds each. The 09:00 UTC run ends around 09:46 UTC, which is 4:46 AM Eastern in winter. Turnover at 8 AM Eastern is 13:00 UTC in winter and 12:00 UTC in summer, so the pick has more than 2 hours of slack, enough for about 1,500 players. Only a run that ends within 5 hours of turnover picks the next day, so the 05:00 UTC run never takes it even when it ends after 06:00 UTC in summer. The pool only misses events that finish between about 5 and 8 AM Eastern, the quietest stretch of the day. The later 13:00 UTC run starts at or after turnover, so it only serves as the fallback. On the morning after a release the pick sees about 17 hours of new-set data, since Arena releases at noon Eastern. If the 09:00 UTC run fails, the 13:00 UTC run picks the pool within an hour or two of turnover and the Discord post waits for it. Storing it freezes the day: later 17lands changes never alter a pool people already built.
 
 Selection rules:
 
@@ -147,7 +147,7 @@ These came out of the build and are open to change:
 - A build's colors use 17lands' encoding. A color on three or more nonland cards is a main color and one on one or two cards is a splash, written lowercase.
 - Auto-fill lands hands out leftover lands by the largest remainder, so ties go to the first color in WUBRG order.
 - Builds are saved by card position in the pool, so two copies of the same card stay separate.
-- The Discord post retries every 30 minutes from 10 AM to 2:30 PM Eastern until today's pool exists, and posts once a day.
+- The Discord post retries every 30 minutes from 8 AM to 12:30 PM Eastern until today's pool exists, and posts once a day.
 
 ## Later
 

@@ -14,6 +14,7 @@ import { useCopyFeedback } from "../CopyTextButton";
 import { LLU_LOGO_SRC, SetGlyph } from "../Brand";
 import { Link } from "react-router-dom";
 import { cn } from "../../lib/utils";
+import { DECK_SIZE } from "../../data/dailySealed";
 import { BASICS_PILE_KEY, type PileTarget, type PileZone, type SortKey } from "../../data/dailySealedLayout";
 import type { BuilderView } from "../../pages/DailySealedPage";
 import { CardFace, CardPreview, REVEAL_RATIO } from "./cards";
@@ -23,7 +24,7 @@ import { pileTargetAt, sameTarget } from "./pileHitTest";
 import { DeckPanel, Pane, Panel, SORT_LABELS } from "./panels";
 import { usePreference } from "./usePreference";
 import { fittedCardWidth, useWidth } from "./cardWidth";
-import { breakdownTabFromHash, DesktopBreakdown, setAnchor } from "./Breakdown";
+import { DesktopBreakdown } from "./Breakdown";
 import { TabButton } from "../TabButton";
 import { chipClass, SURFACE_BUTTON, SwitchToggle } from "../pod/review/reviewControls";
 import { DayNav, PreviewMove, SubmitButton, Toast } from "./shared";
@@ -39,8 +40,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
   const [dragWidth, setDragWidth] = useState<number | null>(null);
   const grab = useRef({ x: 0, y: 0 });
   const [overHidden, setOverHidden] = useState(false);
-  const [chosenMode, setMode] = useState<Mode>(view.isToday && !breakdownTabFromHash() ? "build" : "breakdown");
-  const mode = view.results.available ? chosenMode : "build";
+  const mode: Mode = view.showingBreakdown ? "breakdown" : "build";
   const paneRef = useRef<HTMLDivElement>(null);
   const [hiddenWidth, setHiddenWidth] = useHiddenWidth();
   const [hiddenOpenPref, setHiddenOpenPref] = usePreference<"open" | "closed">(HIDDEN_OPEN_KEY, "closed");
@@ -121,12 +121,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
         <Header
           view={view}
           mode={mode}
-          onMode={(next) => {
-            if (next === "build") {
-              setAnchor(null);
-            }
-            setMode(next);
-          }}
+          onMode={(next) => (next === "build" ? view.showBuild() : view.showBreakdown())}
         />
         {mode === "breakdown" ? (
           <DesktopBreakdown view={view} />
@@ -201,7 +196,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
               <DeckPanel
                 title={<h2 className="font-display text-[15px] tracking-[0.18em]">DECK</h2>}
                 storageKey="daily-sealed:deck"
-                count={builder.deck.length}
+                count={`${builder.deckSize} / ${DECK_SIZE}`}
                 controls={<SortControls builder={builder} zone="deck" />}
                 extra={
                   <SwitchToggle
@@ -282,32 +277,36 @@ const Header = ({ view, mode, onMode }: { view: BuilderView; mode: Mode; onMode:
         </div>
       )}
       <div className="ml-auto flex items-center gap-1.5 [&>*]:h-9">
-        {mode === "build" && (
-          <>
-            <HeaderButton icon={<Undo2 size={15} />} label="Undo" onClick={builder.undo} disabled={!builder.canUndo} />
-            <HeaderButton icon={<RotateCcw size={15} />} label="Reset" onClick={builder.reset} />
-            <DeckCount size={builder.deckSize} />
-          </>
-        )}
+        <BuildActions shown={mode === "build"}>
+          <HeaderButton icon={<Undo2 size={15} />} label="Undo" onClick={builder.undo} disabled={!builder.canUndo} />
+          <HeaderButton icon={<RotateCcw size={15} />} label="Reset" onClick={builder.reset} />
+          <DeckCount size={builder.deckSize} />
+        </BuildActions>
         <CopyHeaderButton
           icon={<Copy size={15} />}
           label="Copy Link"
           text={view.linkText}
           onBlocked={view.copyBlocked}
         />
-        {mode === "build" && (
+        <BuildActions shown={mode === "build"}>
           <CopyHeaderButton
             icon={<Download size={15} />}
             label="Export for Arena"
             text={view.exportText}
             onBlocked={view.copyBlocked}
           />
-        )}
-        {mode === "build" && submitState.visible && <SubmitButton view={view} />}
+          {submitState.visible && <SubmitButton view={view} />}
+        </BuildActions>
       </div>
     </div>
   );
 };
+
+const BuildActions = ({ shown, children }: { shown: boolean; children: ReactNode }) => (
+  <div aria-hidden={!shown} className={cn("flex items-center gap-1.5 [&>*]:h-9", !shown && "invisible")}>
+    {children}
+  </div>
+);
 
 const HeaderButton = ({
   icon,

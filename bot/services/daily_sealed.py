@@ -21,8 +21,8 @@ from bot.sets import active_set_code
 log = logging.getLogger(__name__)
 
 TURNOVER_TZ = ZoneInfo("America/New_York")
-TURNOVER_TIME = time(10, 0)
-PICK_LEAD = timedelta(hours=6)
+TURNOVER_TIME = time(8, 0)
+PICK_LEAD = timedelta(hours=5)
 MIN_POOL_CARDS = 60
 SKIPPED_FORMATS = ("MidWeekSealed",)
 FINAL_MAIN_KEY = "final_main_names"

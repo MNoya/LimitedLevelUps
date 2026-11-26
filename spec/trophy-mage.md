@@ -19,7 +19,7 @@ Each round shows 3 decks from one Pod. The player picks the deck that went 3-0, 
 
 - **The day is dealt from its date.** Each day is the latest set, then Peasant Cube, then a flashback set, seeded by the date so every player gets the same Pods. Latest set Pods must be at least a week older than the day. Changing the deal reshuffles past days.
 - **Saved progress belongs to specific Pods.** It lives in localStorage per day under `trophy-mage-daily:<date>`, keyed by Pod. A changed deal leaves old saves pointing at Pods the day no longer shows.
-- **The game day starts at 10 AM Eastern,** the bot's daily launcher time. Home shows today plus the two days before.
+- **The game day starts at 8 AM Eastern,** the same turnover as Wheel of Fortune and Daily Sealed. Home shows today plus the two days before.
 - **A Pod is playable** when it is a finalized 6 to 8 player tournament with a 3-0 deck and at least two other decks that have a record and a screenshot. Each slot carries 4 candidate Pods in case one is not playable.
 
 ## Reaching any state

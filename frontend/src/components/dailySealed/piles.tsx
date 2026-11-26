@@ -5,7 +5,7 @@ import { EyeOff } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { entryCount, type PoolCard, type PoolEntry } from "../../data/dailySealed";
 import { cardsFitPileKey, type Pile, type PileZone, type Row } from "../../data/dailySealedLayout";
-import { CardFace, CopiesBadge, DimmedVeil, MarkedFrame, RatingBadge, stackReveal, type CardActions } from "./cards";
+import { CardFace, CopiesBadge, DimmedVeil, RatingBadge, stackReveal, type CardActions } from "./cards";
 import { stackedCardShadow } from "../pod/review/ReviewCard";
 import { PileSymbol } from "./PileSymbol";
 import { chipClass, SURFACE_BUTTON } from "../pod/review/reviewControls";
@@ -126,6 +126,8 @@ const PileColumn = ({
   const reveal = stackReveal(width, false);
   const stripOf = (index: number) => stackReveal(width, (actions.ratingFor?.(cards[index]) ?? null) !== null);
   const cardHeight = Math.round(width * CARD_RATIO);
+  const heightAt = (position: number) =>
+    position === shown.length + basics.length - 1 ? cardHeight : stripOf(shown[position]);
   return (
     <div
       {...(pileIndex === null ? {} : { [PILE_ATTR]: pileIndex })}
@@ -157,7 +159,7 @@ const PileColumn = ({
           <PiledCard
             key={index}
             entry={{ index, card: cards[index] }}
-            height={position === shown.length + basics.length - 1 ? cardHeight : stripOf(index)}
+            height={heightAt(position)}
             strip={stripOf(index)}
             cardHeight={cardHeight}
             actions={actions}
@@ -166,6 +168,14 @@ const PileColumn = ({
             faded={dragging?.includes(index) ?? false}
           />
         ))}
+        {actions.marked &&
+          markedRuns(shown, (index) => actions.marked?.(cards[index]) ?? false, heightAt).map((run) => (
+            <span
+              key={run.top}
+              className="pointer-events-none absolute inset-x-0 z-20 border-2 border-green"
+              style={{ top: run.top, height: run.height, borderRadius: width * 0.0475 }}
+            />
+          ))}
         {basics.map((entry, position) => (
           <BasicPiledCard
             key={entry.index}
@@ -304,7 +314,6 @@ const PiledCard = ({
           <RatingBadge value={rating} cardWidth={cardHeight / CARD_RATIO} text={actions.ratingText?.(entry.card)} />
         )}
         {actions.dimmed?.(entry.card) && <DimmedVeil />}
-        {actions.marked?.(entry.card) && <MarkedFrame />}
       </div>
     </div>
   );
@@ -468,4 +477,25 @@ const useGlide = (container: RefObject<HTMLDivElement | null>, active: boolean) 
 const currentShiftY = (card: HTMLElement) => {
   const transform = getComputedStyle(card).transform;
   return transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
+};
+
+const markedRuns = (indexes: number[], isMarked: (index: number) => boolean, heightAt: (position: number) => number) => {
+  const runs: { top: number; height: number }[] = [];
+  let top = 0;
+  let open: { top: number; height: number } | null = null;
+  indexes.forEach((index, position) => {
+    const height = heightAt(position);
+    if (isMarked(index)) {
+      if (open) {
+        open.height += height;
+      } else {
+        open = { top, height };
+        runs.push(open);
+      }
+    } else {
+      open = null;
+    }
+    top += height;
+  });
+  return runs;
 };

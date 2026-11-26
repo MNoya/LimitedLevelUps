@@ -348,10 +348,11 @@ export const DeckStats = ({ deck, basics }: { deck: PoolEntry[]; basics: Basics 
   const counts = deckCounts(deck, basics);
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-3 font-num text-[13px] text-subtle">
+      <div className="grid grid-cols-4 font-num text-[13px] text-subtle">
         <Stat label="CREATURES" value={counts.creatures} />
         <Stat label="SPELLS" value={counts.spells} />
         <Stat label="LANDS" value={counts.lands} />
+        <Stat label="AVG MV" value={counts.averageManaValue?.toFixed(2) ?? "-"} />
       </div>
       <Curve entries={deck} tall />
       <PipsVsSources deck={deck} basics={basics} fill />
@@ -383,17 +384,25 @@ export const DeckSummary = ({ builder }: { builder: Builder }) => {
 const deckCounts = (deck: PoolEntry[], basics: Basics) => {
   let creatures = 0;
   let spells = 0;
+  let manaValueTotal = 0;
   for (const entry of deck) {
     if (isLand(entry.card)) {
       continue;
     }
+    manaValueTotal += entry.card.cmc;
     if (isCreature(entry.card)) {
       creatures += 1;
     } else {
       spells += 1;
     }
   }
-  return { creatures, spells, lands: deck.length - creatures - spells + basicCount(basics) };
+  const nonlands = creatures + spells;
+  return {
+    creatures,
+    spells,
+    lands: deck.length - nonlands + basicCount(basics),
+    averageManaValue: nonlands > 0 ? manaValueTotal / nonlands : null,
+  };
 };
 
 const Stat = ({ label, value }: { label: string; value: ReactNode }) => (

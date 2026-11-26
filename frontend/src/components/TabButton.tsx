@@ -24,7 +24,7 @@ export function TabButton({
 
 export function TabLink({ active, to, children }: { active: boolean; to: To; children: React.ReactNode }) {
   return (
-    <Link to={to} className={cn(tabClassName(active), "no-underline", !active && "hover:text-subtle")} style={tabStyle(active)}>
+    <Link to={to} className={cn(tabClassName(active), "no-underline")} style={tabStyle(active)}>
       {children}
     </Link>
   );
@@ -34,7 +34,7 @@ function tabClassName(active: boolean, size: TabSize = "default"): string {
   return cn(
     "flex-1 px-1.5 bg-transparent cursor-pointer font-display leading-none transition-colors border-b-2 border-solid inline-flex items-center justify-center gap-1.5",
     size === "section" ? "h-[50px] text-[17px] tracking-[0.18em]" : "py-2 text-[14px] tracking-[0.16em]",
-    active ? "text-text border-green" : "text-muted border-transparent",
+    active ? "text-text border-green" : "text-muted border-transparent hover:text-subtle",
   );
 }
 

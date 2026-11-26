@@ -5,6 +5,7 @@ import { PageShell } from "../components/PageShell";
 import { DesktopBuilder } from "../components/dailySealed/DesktopBuilder";
 import { DesktopBuilderSkeleton, PhoneBuilderSkeleton } from "../components/dailySealed/BuilderSkeleton";
 import { MobileBuilder } from "../components/dailySealed/MobileBuilder";
+import { breakdownTabFromHash, setAnchor } from "../components/dailySealed/Breakdown";
 import { useBuilder } from "../components/dailySealed/useBuilder";
 import type { CardActions } from "../components/dailySealed/cards";
 import type { Notice } from "../components/dailySealed/shared";
@@ -48,13 +49,14 @@ export const DailySealedPage = () => {
   const { day } = useParams();
   const { data: pool, isPending, isError } = useDailySealedPool(day);
   const isMobile = useIsMobile();
+  const screen = useState<ScreenChoice | null>(null);
 
   const awaitingFirstPool = !isPending && !isError && !pool && !day;
   if (!isMobile && (pool || isPending || awaitingFirstPool)) {
     return (
       <div className="flex h-[100dvh] flex-col overflow-hidden bg-bg text-text">
         {pool ? (
-          <PoolBuilder key={pool.day} pool={pool} isMobile={false} />
+          <PoolBuilder key={pool.day} pool={pool} isMobile={false} screen={screen} />
         ) : awaitingFirstPool ? (
           <FirstPoolTeaser isMobile={false} />
         ) : (
@@ -75,7 +77,7 @@ export const DailySealedPage = () => {
       ) : !pool ? (
         <PageMessage text="No pool on this day" />
       ) : (
-        <PoolBuilder key={pool.day} pool={pool} isMobile={isMobile} />
+        <PoolBuilder key={pool.day} pool={pool} isMobile={isMobile} screen={screen} />
       )}
     </PageShell>
   );
@@ -102,16 +104,23 @@ const PageMessage = ({ text }: { text: string }) => (
   <div className="flex flex-1 items-center justify-center px-4 py-20 text-[14px] text-subtle">{text}</div>
 );
 
-const PoolBuilder = ({ pool, isMobile }: { pool: DailySealedPool; isMobile: boolean }) => {
-  const view = useBuilderView(pool, isMobile);
+export type PhoneTab = "pool" | "deck";
+
+type ScreenChoice = { day: string; breakdown: boolean; phoneTab: PhoneTab };
+
+type ScreenState = [ScreenChoice | null, (choice: ScreenChoice) => void];
+
+const PoolBuilder = ({ pool, isMobile, screen }: { pool: DailySealedPool; isMobile: boolean; screen: ScreenState }) => {
+  const view = useBuilderView(pool, isMobile, screen);
   return isMobile ? <MobileBuilder view={view} /> : <DesktopBuilder view={view} />;
 };
 
 export type BuilderView = ReturnType<typeof useBuilderView>;
 
-const useBuilderView = (pool: DailySealedPool, isMobile: boolean) => {
+const useBuilderView = (pool: DailySealedPool, isMobile: boolean, [chosenScreen, chooseScreen]: ScreenState) => {
   const { user, signIn } = useAuth();
   const isToday = pool.day === servingDay();
+  const screen = chosenScreen?.day === pool.day ? chosenScreen : startingScreen(pool.day, isToday);
   const { data: ownBuild, isSuccess: ownBuildLoaded } = useOwnDailySealedBuild(pool.day, !!user);
   const builder = useBuilder(pool, ownBuild);
   const submitted = !!ownBuild;
@@ -219,6 +228,13 @@ const useBuilderView = (pool: DailySealedPool, isMobile: boolean) => {
     basicCardsOf: (basics: Basics) => basicEntries(basics, basicArt.images, pool.setCode),
     notice,
     results: { available: resultsAvailable, builds: builds ?? [], loading: buildsPending },
+    showingBreakdown: resultsAvailable && screen.breakdown,
+    phoneTab: screen.phoneTab,
+    showBreakdown: () => chooseScreen({ ...screen, breakdown: true }),
+    showBuild: (phoneTab: PhoneTab = screen.phoneTab) => {
+      setAnchor(null);
+      chooseScreen({ ...screen, breakdown: false, phoneTab });
+    },
     submitState: {
       visible: isToday,
       signedIn: !!user,
@@ -233,6 +249,12 @@ const useBuilderView = (pool: DailySealedPool, isMobile: boolean) => {
     copyBlocked: () => setNotice({ text: "Copying is blocked in this browser", tone: "error" }),
   };
 };
+
+const startingScreen = (day: string, isToday: boolean): ScreenChoice => ({
+  day,
+  breakdown: !isToday || breakdownTabFromHash() !== null,
+  phoneTab: "pool",
+});
 
 const basicLandItems = (setCode: string) => COLORS.map((color) => ({ name: BASIC_NAMES[color], set: setCode }));
 

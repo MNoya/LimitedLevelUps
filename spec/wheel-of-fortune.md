@@ -13,7 +13,7 @@ This doc records what was built and the decisions behind it. For how it works to
 
 ## Modes
 
-- **Today's packs.** Three packs a day, the same for everyone: the latest set, Peasant Cube, then a flashback set picked by the day's seed from the other eligible sets. Three was chosen to echo the three packs of a draft and Trophy Mage's three decks. Days turn over at 10 AM Eastern, matching the bot's daily launcher. Progress is saved in the browser per day.
+- **Today's packs.** Three packs a day, the same for everyone: the latest set, Peasant Cube, then a flashback set picked by the day's seed from the other eligible sets. Three was chosen to echo the three packs of a draft and Trophy Mage's three decks. Days turn over at 8 AM Eastern, matching Daily Sealed and Trophy Mage. Progress is saved in the browser per day.
 - **Yesterday.** The home carousel holds yesterday's packs to the left of today's. Only one past day is offered; Quick Mode fills the "something else to play" role that Trophy Mage gives to a second past day.
 - **Next and Endless.** Once today is finished, the main button reads Next and opens the next unfinished open day, with a Results button beside it. When every open day is done it reads Endless and opens Free Play on the newest set. The Results screen's Next follows the same rule. This mirrors Trophy Mage and fixes the earlier dead end where a finished day left no way to reach other days.
 - **Free Play.** Endless packs from one set, or all sets. It has no mode name in the header; the title is the set and pack number.

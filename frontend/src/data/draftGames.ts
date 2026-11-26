@@ -6,12 +6,12 @@ import { picksPerTurn, reconstructDraft, seatHandle } from "./draft-artifact";
 import { useAllPodEvents, usePodSetCodes, useSets } from "./hooks";
 import { orderedDeckColors } from "./utils";
 import type { ArtifactCard, PodDraftArtifact, PodEventParticipantRow, PodEventSummary } from "../types/leaderboard";
+import { DAILY_TURNOVER_HOUR_ET } from "../lib/daily-turnover";
 
 export const DAILY_ROUNDS = 3;
 export const CUBE_SET_CODE = "PEASANT";
 export const ALL_SETS_CODE = "ALL";
 const MIN_SET_PODS = 10;
-const GAME_DAY_START_HOUR = 10;
 const GAME_DAY_CLOCK = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
   hourCycle: "h23",
@@ -70,7 +70,7 @@ export interface WheelScore {
 
 export function gameDayKey(now: Date = new Date()): string {
   const clock = zonedClock(now);
-  const startedToday = clock.hour >= GAME_DAY_START_HOUR;
+  const startedToday = clock.hour >= DAILY_TURNOVER_HOUR_ET;
   return new Date(Date.UTC(clock.year, clock.month - 1, clock.day - (startedToday ? 0 : 1))).toISOString().slice(0, 10);
 }
 
@@ -85,12 +85,12 @@ export function dayNumber(dayKey: string): number {
 
 export function msUntilNextGameDay(now: Date = new Date()): number {
   const clock = zonedClock(now);
-  const startedToday = clock.hour >= GAME_DAY_START_HOUR;
+  const startedToday = clock.hour >= DAILY_TURNOVER_HOUR_ET;
   const nextStartOnClock = Date.UTC(
     clock.year,
     clock.month - 1,
     clock.day + (startedToday ? 1 : 0),
-    GAME_DAY_START_HOUR,
+    DAILY_TURNOVER_HOUR_ET,
   );
   const roughStart = nextStartOnClock - zoneOffsetMs(now);
   const nextStart = nextStartOnClock - zoneOffsetMs(new Date(roughStart));

@@ -16,7 +16,7 @@ DAILY_SEALED_ROLE_NAME = "Daily Sealed"
 COLOR_ORDER = "WUBRG"
 TOP_PAIRS = 3
 
-MSG_HEADER = "### {role}: {set_code} #{number}"
+MSG_HEADER = "### {set_code} #{number} {role}"
 MSG_BUILD_LINK = "[**Build today's pool**]({url}) {llu}"
 MSG_YESTERDAY = "[**Yesterday**]({url}) {event} {record} {colors}"
 MSG_BUILDS = "👷 [**Builds**]({url}): {pairs}"

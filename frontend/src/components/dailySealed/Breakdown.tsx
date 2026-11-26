@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Pip, Pips } from "../ManaPips";
@@ -37,7 +37,7 @@ import {
 import type { BuilderView } from "../../pages/DailySealedPage";
 import { chipClass, SwitchToggle } from "../pod/review/reviewControls";
 import { ColorPie } from "./ColorPie";
-import { StripList, type CardActions } from "./cards";
+import { CardGrid, StripList, type CardActions } from "./cards";
 import { FilterToggle } from "./controls";
 import { Pane, Panel, SORT_LABELS } from "./panels";
 import { PileBoard } from "./piles";
@@ -58,6 +58,7 @@ interface DeckChoice {
 const CARD_WIDTH = 195;
 const NO_RATE: CardRate = { played: 0, decks: 0 };
 const PAIRS_SHOWN = 5;
+const PHONE_TABS_TOP = 45;
 const TAB_ANCHORS: Record<Tab, string> = {
   oncolor: "on-color",
   overall: "played",
@@ -74,30 +75,13 @@ const TAB_TITLES: Record<Tab, string> = {
   splashes: "SPLASHES",
   you: "YOU",
 };
-const BASIS_LABELS: Record<RateBasis, string> = { oncolor: "On-Color Rate", overall: "Overall Rate" };
-const BASIS_TOOLTIPS: Record<RateBasis, string> = {
-  oncolor: "How many of the decks in its colors played it",
-  overall: "Share of all builds that played it",
-};
 
 export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
   const state = useBreakdown(view);
   const [chosenSort, setSort] = useState<CardSort>("rate");
-  const [chosenTab, setChosenTab] = useState<Tab>(() => breakdownTabFromHash() ?? "oncolor");
-  const available =
-    chosenTab === "oncolor" || chosenTab === "overall" || chosenTab === "decks" || state.extraTabs.includes(chosenTab);
-  const tab = state.single ? "decks" : available ? chosenTab : "oncolor";
+  const { tab, tabs, setTab } = useBreakdownTab(state);
   const cardsTab = tab === "oncolor" || tab === "overall";
   const sort = tab === "overall" && chosenSort === "rate" ? "color" : chosenSort;
-  useEffect(() => {
-    setAnchor(TAB_ANCHORS[tab]);
-  }, [tab]);
-  const setTab = (next: Tab) => {
-    setChosenTab(next);
-    if (next === "oncolor" || next === "overall") {
-      state.setBasis(next);
-    }
-  };
   const cardRows = useMemo(() => state.rowsFor(state.uniqueIndexes, sort), [state, sort]);
   const deck = state.deck;
   const deckRows = deck
@@ -126,7 +110,6 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
       pileHeader={(pile) => state.pileHeader(pile, rateSort)}
     />
   );
-  const tabs: Tab[] = state.single ? ["decks"] : ["oncolor", "overall", ...state.extraTabs, "decks"];
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[max-content_minmax(0,1fr)]">
       <div className="flex min-h-0 w-[288px] flex-col overflow-y-auto border-r border-border">
@@ -158,7 +141,7 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
           className="flex-1 border-b-0"
           title={
             <span className="flex items-center gap-4">
-              <PaneTabs tabs={tabs} active={tab} onPick={setTab} />
+              <PaneTabs tabs={tabs} active={tab} onPick={setTab} className="-ml-3" />
               {!cardsTab && tab !== "decks" && <TabNote tab={tab} state={state} />}
             </span>
           }
@@ -220,23 +203,28 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
 
 export const PhoneBreakdown = ({ view }: { view: BuilderView }) => {
   const state = useBreakdown(view);
+  const { tab, tabs, setTab } = useBreakdownTab(state);
+  const tabsRef = useRef<HTMLDivElement>(null);
   const loaded = view.results.builds.length > 0;
   useEffect(() => {
-    const tab = breakdownTabFromHash();
-    if (loaded && tab) {
-      document.getElementById(TAB_ANCHORS[tab])?.scrollIntoView();
+    if (loaded && breakdownTabFromHash()) {
+      tabsRef.current?.scrollIntoView();
     }
   }, [loaded]);
   const groups = useMemo(() => state.phoneGroups(), [state]);
-  const cardActions =
-    state.basis === "oncolor"
-      ? state.plainActions
-      : state.runActions([
-          groups.map((group) => ({ key: group.key, label: null, cards: group.entries.map((entry) => entry.index) })),
-        ]);
-  if (view.results.builds.length === 0) {
+  if (!loaded) {
     return <Empty loading={view.results.loading} />;
   }
+  const showTab = (next: Tab) => {
+    setTab(next);
+    const bar = tabsRef.current;
+    if (bar && bar.getBoundingClientRect().top <= PHONE_TABS_TOP) {
+      window.scrollTo({ top: bar.offsetTop - PHONE_TABS_TOP });
+    }
+  };
+  const cardActions = state.runActions([
+    groups.map((group) => ({ key: group.key, label: null, cards: group.entries.map((entry) => entry.index) })),
+  ]);
   const deck = state.deck;
   return (
     <div className="flex flex-col gap-5">
@@ -271,58 +259,78 @@ export const PhoneBreakdown = ({ view }: { view: BuilderView }) => {
           state={state}
           onShowBuild={(position) => {
             state.showBuild(position);
-            document.getElementById(TAB_ANCHORS.decks)?.scrollIntoView({ behavior: "smooth" });
+            showTab("decks");
+            tabsRef.current?.scrollIntoView({ behavior: "smooth" });
           }}
         />
       </PhoneSection>
-      {!state.single && (
-        <PhoneSection
-          id={TAB_ANCHORS[state.basis]}
-          title="CARDS"
-          extra={
-            state.yourNames && (
-              <SwitchToggle
-                label="MARK YOURS"
-                on={state.markYours}
-                onToggle={() => state.setMarkYours(!state.markYours)}
-                ariaLabel="Mark your deck"
-                tooltip="Outline the cards you played"
-              />
-            )
-          }
+      <div className="flex flex-col gap-3">
+        <div
+          ref={tabsRef}
+          className="sticky z-30 -mx-2 overflow-x-auto border-b border-border bg-bg px-2 [scrollbar-width:none]"
+          style={{ top: PHONE_TABS_TOP }}
         >
-          <div className="flex justify-center">
-            <BasisChips basis={state.basis} onBasis={state.setBasis} />
-          </div>
-          <div className="flex flex-col gap-3">
+          <PaneTabs tabs={tabs} active={tab} onPick={showTab} />
+        </div>
+        {(tab === "oncolor" || tab === "overall") && (
+          <>
+            {state.yourNames && (
+              <div className="flex justify-end">
+                <SwitchToggle
+                  label="MARK YOURS"
+                  on={state.markYours}
+                  onToggle={() => state.setMarkYours(!state.markYours)}
+                  ariaLabel="Mark your deck"
+                  tooltip="Outline the cards you played"
+                />
+              </div>
+            )}
             {groups.map((group) => (
               <div key={group.key} className="flex flex-col gap-1">
                 <div className="flex h-6 items-center justify-center">{group.header}</div>
-                <StripList entries={group.entries} actions={cardActions} />
+                <CardGrid entries={group.entries} actions={cardActions} />
               </div>
             ))}
-          </div>
-        </PhoneSection>
-      )}
-      {(state.single ? [] : state.extraTabs).map((tab) => (
-        <PhoneSection key={tab} id={TAB_ANCHORS[tab]} title={TAB_TITLES[tab]}>
-          <div className="flex justify-center">
-            <TabNote tab={tab} state={state} />
-          </div>
-          <PhoneExtra tab={tab} state={state} />
-        </PhoneSection>
-      ))}
-      <PhoneSection id={TAB_ANCHORS.decks} title="DECKS">
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap justify-center gap-1.5">
-            <DeckPicker state={state} />
-          </div>
-          {deck?.basics && <BasicsLine basics={deck.basics} />}
-          <StripList entries={deck ? state.entriesByValue(deck.main) : []} actions={state.deckActions} />
-        </div>
-      </PhoneSection>
+          </>
+        )}
+        {(tab === "close" || tab === "splashes" || tab === "you") && (
+          <>
+            <div className="flex justify-center text-center">
+              <TabNote tab={tab} state={state} />
+            </div>
+            <PhoneExtra tab={tab} state={state} />
+          </>
+        )}
+        {tab === "decks" && (
+          <>
+            <div className="flex flex-wrap justify-center gap-1.5">
+              <DeckPicker state={state} />
+            </div>
+            {deck?.basics && <BasicsLine basics={deck.basics} />}
+            <CardGrid entries={deck ? state.entriesByValue(deck.main) : []} actions={state.deckActions} />
+          </>
+        )}
+      </div>
     </div>
   );
+};
+
+const useBreakdownTab = (state: BreakdownState) => {
+  const [chosenTab, setChosenTab] = useState<Tab>(() => breakdownTabFromHash() ?? "oncolor");
+  const available =
+    chosenTab === "oncolor" || chosenTab === "overall" || chosenTab === "decks" || state.extraTabs.includes(chosenTab);
+  const tab = state.single ? "decks" : available ? chosenTab : "oncolor";
+  useEffect(() => {
+    setAnchor(TAB_ANCHORS[tab]);
+  }, [tab]);
+  const setTab = (next: Tab) => {
+    setChosenTab(next);
+    if (next === "oncolor" || next === "overall") {
+      state.setBasis(next);
+    }
+  };
+  const tabs: Tab[] = state.single ? ["decks"] : ["oncolor", "overall", ...state.extraTabs, "decks"];
+  return { tab, tabs, setTab };
 };
 
 export const setAnchor = (anchor: string | null) => {
@@ -388,6 +396,7 @@ const useBreakdown = (view: BuilderView) => {
     const right = rateOf(pool.cards[b]);
     return orderShare(right) - orderShare(left) || right.played - left.played || pool.cards[a].cmc - pool.cards[b].cmc;
   };
+  const yourPair = yourBuild ? mainColors(yourBuild.colors) : null;
   const marked = markYours && yourNames ? (card: PoolCard) => yourNames.has(card.name) : undefined;
   const plainActions: CardActions = {
     onPick: view.openCard,
@@ -522,6 +531,7 @@ const useBreakdown = (view: BuilderView) => {
     split,
     toggleSplit: () => setSplit((value) => !value),
     plainActions,
+    yourPair,
     runActions,
     rateActions,
     splashActions,
@@ -674,11 +684,11 @@ const TabNote = ({ tab, state }: { tab: ExtraTab; state: BreakdownState }) => {
 const PhoneExtra = ({ tab, state }: { tab: ExtraTab; state: BreakdownState }) => {
   if (tab === "close") {
     return (
-      <StripList entries={state.entriesByValue(state.closeCalls)} actions={state.rateActions(state.onColorRates)} />
+      <CardGrid entries={state.entriesByValue(state.closeCalls)} actions={state.rateActions(state.onColorRates)} />
     );
   }
   if (tab === "splashes") {
-    return <StripList entries={state.entriesByValue(state.splashIndexes)} actions={state.splashActions} />;
+    return <CardGrid entries={state.entriesByValue(state.splashIndexes)} actions={state.splashActions} />;
   }
   if (!state.comparison) {
     return null;
@@ -687,9 +697,9 @@ const PhoneExtra = ({ tab, state }: { tab: ExtraTab; state: BreakdownState }) =>
   return (
     <div className="flex flex-col gap-2">
       <span className="text-center font-display text-[12px] tracking-[0.16em] text-subtle">ONLY YOU PLAYED</span>
-      <StripList entries={state.entriesByValue(state.youPicks)} actions={actions} />
+      <CardGrid entries={state.entriesByValue(state.youPicks)} actions={actions} />
       <span className="text-center font-display text-[12px] tracking-[0.16em] text-subtle">YOU CUT</span>
-      <StripList entries={state.entriesByValue(state.theirPicks)} actions={actions} />
+      <CardGrid entries={state.entriesByValue(state.theirPicks)} actions={actions} />
     </div>
   );
 };
@@ -729,6 +739,9 @@ const PairList = ({ state }: { state: BreakdownState }) => (
           total={state.builds.length}
         >
           <Pips colors={row.pair} size={15} />
+          {row.decks === 1 && row.pair === state.yourPair && (
+            <span className="ml-2 font-display text-[12px] tracking-[0.16em] text-subtle">(YOURS)</span>
+          )}
         </PairButton>
       ))}
     </div>
@@ -842,10 +855,21 @@ const Insight = ({ label, children }: { label: string; children: ReactNode }) =>
   </div>
 );
 
-const PaneTabs = ({ tabs, active, onPick }: { tabs: Tab[]; active: Tab; onPick: (tab: Tab) => void }) => (
+const PaneTabs = ({
+  tabs,
+  active,
+  onPick,
+  className,
+}: {
+  tabs: Tab[];
+  active: Tab;
+  onPick: (tab: Tab) => void;
+  className?: string;
+}) => (
   <span
     className={cn(
-      "-ml-3 flex h-10 [&>button]:h-full [&>button]:flex-none [&>button]:px-3.5 [&>button]:pb-1 [&>button]:pt-[7px]",
+      className,
+      "flex h-10 [&>button]:h-full [&>button]:flex-none [&>button]:px-3.5 [&>button]:pb-1 [&>button]:pt-[7px]",
       "[&>button:hover]:bg-white/5 [&>button:hover]:text-text [&>button:active]:bg-white/10",
     )}
   >
@@ -870,13 +894,13 @@ const SortChips = ({
     <span className="font-display text-[13px] tracking-[0.18em] text-subtle">SORT BY</span>
     <div className="flex gap-1">
       {withRate && (
-        <Tooltip label={BASIS_TOOLTIPS.oncolor} side="bottom">
+        <Tooltip label="How many of the decks in its colors played each card" side="bottom">
           <button
             type="button"
             onClick={() => onSort("rate")}
             className={cn("h-8 px-2.5 text-[12px] uppercase tracking-[0.12em]", chipClass(sort === "rate"))}
           >
-            {BASIS_LABELS.oncolor}
+            On-Color Rate
           </button>
         </Tooltip>
       )}
@@ -891,22 +915,6 @@ const SortChips = ({
         </button>
       ))}
     </div>
-  </div>
-);
-
-const BasisChips = ({ basis, onBasis }: { basis: RateBasis; onBasis: (basis: RateBasis) => void }) => (
-  <div className="flex gap-1">
-    {(Object.keys(BASIS_LABELS) as RateBasis[]).map((key) => (
-      <Tooltip key={key} label={BASIS_TOOLTIPS[key]} side="bottom">
-        <button
-          type="button"
-          onClick={() => onBasis(key)}
-          className={cn("h-8 px-2.5 text-[12px] uppercase tracking-[0.12em]", chipClass(basis === key))}
-        >
-          {key === "oncolor" ? "On-Color" : "Played"}
-        </button>
-      </Tooltip>
-    ))}
   </div>
 );
 
@@ -1000,21 +1008,10 @@ const BasicsLine = ({ basics }: { basics: Basics }) => (
   </div>
 );
 
-const PhoneSection = ({
-  id,
-  title,
-  extra,
-  children,
-}: {
-  id?: string;
-  title: string;
-  extra?: ReactNode;
-  children: ReactNode;
-}) => (
-  <section id={id} className="flex scroll-mt-14 flex-col gap-3 border-b border-border pb-4">
-    <div className="relative flex min-h-9 items-center justify-center">
+const PhoneSection = ({ title, children }: { title: string; children: ReactNode }) => (
+  <section className="flex flex-col gap-3 border-b border-border pb-4">
+    <div className="flex min-h-9 items-center justify-center">
       <h2 className="text-center font-display text-[15px] tracking-[0.18em] text-text">{title}</h2>
-      {extra && <div className="absolute right-0">{extra}</div>}
     </div>
     {children}
   </section>
