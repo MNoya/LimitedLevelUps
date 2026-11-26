@@ -183,6 +183,11 @@ const emptySlotPile = (slotKey: string, sort: SortKey): Pile => ({
 
 export const basicsRow = (layout: Layout) => Math.min(layout.basicsSlot?.row ?? Infinity, layout.deck.length - 1);
 
+export const basicsColumnAt = (layout: Layout, sort: SortKey, rowLength: number) => {
+  const natural = sort === "mana" ? 0 : rowLength;
+  return Math.min(layout.basicsSlot?.pile ?? natural, rowLength);
+};
+
 export const withLandsPile = (layout: Layout, sort: SortKey): Layout => {
   const key = BASICS_PILE_KEY[sort];
   const rowIndex = basicsRow(layout);
@@ -190,8 +195,7 @@ export const withLandsPile = (layout: Layout, sort: SortKey): Layout => {
   if (!row || row.some((pile) => pile.key === key)) {
     return layout;
   }
-  const leading = sort === "mana" ? 0 : row.length;
-  const at = Math.min(layout.basicsSlot?.pile ?? leading, row.length);
+  const at = basicsColumnAt(layout, sort, row.length);
   const pile = emptySlotPile(key, sort);
   const deck = layout.deck.map((each, index) => (index === rowIndex ? [...each.slice(0, at), pile, ...each.slice(at)] : each));
   return { ...layout, deck };

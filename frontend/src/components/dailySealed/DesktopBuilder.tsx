@@ -15,7 +15,7 @@ import { LLU_LOGO_SRC, SetGlyph } from "../Brand";
 import { Link } from "react-router-dom";
 import { cn } from "../../lib/utils";
 import { DECK_SIZE, type PoolEntry } from "../../data/dailySealed";
-import { BASICS_PILE_KEY, basicsRow, type BasicsSlot, type PileTarget, type PileZone, type SortKey } from "../../data/dailySealedLayout";
+import { BASICS_PILE_KEY, basicsColumnAt, basicsRow, type BasicsSlot, type PileTarget, type PileZone, type SortKey } from "../../data/dailySealedLayout";
 import type { BuilderView } from "../../pages/DailySealedPage";
 import { CardPreview, CardStack, NO_CARD_ACTIONS, REVEAL_RATIO } from "./cards";
 import { BasicsGrid, DeckCount, DeckStats, FillLandsButton, PoolFilterBar } from "./controls";
@@ -48,6 +48,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
   const [hiddenWidth, setHiddenWidth] = useHiddenWidth();
   const [hiddenOpenPref, setHiddenOpenPref] = usePreference<"open" | "closed">(HIDDEN_OPEN_KEY, "closed");
   const hiddenOpen = hiddenOpenPref === "open";
+  const landsRow = basicsRow(builder.layout);
   const widestRow = Math.max(
     ...builder.layout.side.map((row) => row.length),
     ...builder.layout.deck.map((row) => row.length),
@@ -243,11 +244,10 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
                   dragging={dragging}
                   draggingLands={ghost?.column ?? false}
                   basics={{
-                    row: basicsRow(builder.layout),
+                    row: landsRow,
                     pileKey: BASICS_PILE_KEY[builder.sort.deck],
                     entries: view.basicCards,
-                    trailing: builder.sort.deck !== "mana",
-                    before: builder.layout.basicsSlot?.pile,
+                    at: basicsColumnAt(builder.layout, builder.sort.deck, builder.layout.deck[landsRow]?.length ?? 0),
                   }}
                 />
               </DeckPanel>

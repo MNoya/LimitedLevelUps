@@ -1,27 +1,26 @@
 import type { CardGroup } from "../../data/dailySealed";
-import { BASICS_PILE_KEY } from "../../data/dailySealedLayout";
+import { BASICS_PILE_KEY, basicsColumnAt, basicsRow } from "../../data/dailySealedLayout";
 import type { BuilderView } from "../../pages/DailySealedPage";
 
 export const deckGroupRows = (view: BuilderView): CardGroup[][] => {
-  const { builder } = view;
-  const basicsKey = BASICS_PILE_KEY[builder.sort.deck];
-  const lastRow = builder.layout.deck.length - 1;
+  const { builder, basicCards } = view;
+  const sort = builder.sort.deck;
+  const basicsKey = BASICS_PILE_KEY[sort];
+  const landsRow = basicsRow(builder.layout);
   return builder.layout.deck.map((row, rowIndex) => {
-    const groups = row
-      .map((pile) => ({
-        key: pile.key,
-        label: pile.key,
-        entries: [
-          ...pile.cards.map((index) => ({ index, card: view.pool.cards[index] })),
-          ...(rowIndex === lastRow && pile.key === basicsKey ? view.basicCards : []),
-        ],
-      }))
-      .filter((group) => group.entries.length > 0);
-    const hasBasicsPile = row.some((pile) => pile.key === basicsKey);
-    if (rowIndex !== lastRow || hasBasicsPile || view.basicCards.length === 0) {
-      return groups;
+    const inLandsRow = rowIndex === landsRow;
+    const groups: CardGroup[] = row.map((pile) => ({
+      key: pile.key,
+      label: pile.key,
+      entries: [
+        ...pile.cards.map((index) => ({ index, card: view.pool.cards[index] })),
+        ...(inLandsRow && pile.key === basicsKey ? basicCards : []),
+      ],
+    }));
+    if (inLandsRow && basicCards.length > 0 && !row.some((pile) => pile.key === basicsKey)) {
+      const at = basicsColumnAt(builder.layout, sort, row.length);
+      groups.splice(at, 0, { key: "land", label: "land", entries: basicCards });
     }
-    const landGroup = { key: "land", label: "land", entries: view.basicCards };
-    return builder.sort.deck === "mana" ? [landGroup, ...groups] : [...groups, landGroup];
+    return groups.filter((group) => group.entries.length > 0);
   });
 };

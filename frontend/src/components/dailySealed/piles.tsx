@@ -40,7 +40,7 @@ export const PileBoard = ({
   actions: CardActions;
   dragging: number[] | null;
   draggingLands?: boolean;
-  basics?: { row: number; pileKey: string; entries: PoolEntry[]; trailing?: boolean; before?: number } | null;
+  basics?: { row: number; pileKey: string; entries: PoolEntry[]; at: number } | null;
   readOnly?: boolean;
   pileHeader?: (pile: Pile, row: number) => ReactNode;
   dividerBefore?: string;
@@ -73,10 +73,9 @@ export const PileBoard = ({
       {rows.map((row, rowIndex) => (
         <div key={rowIndex} {...{ [PILE_ROW_ATTR]: rowIndex }} className="flex flex-col gap-1">
           <div className="flex min-h-12 items-start" style={{ gap: PILE_GAP }}>
-            {needsBasicsColumn(rowIndex) && basics && basics.before === undefined && !basics.trailing && basicsColumn(rowIndex)}
             {row.map((pile, pileIndex) => [
               pile.key === dividerBefore && <NoncreatureDivider key="divider" />,
-              needsBasicsColumn(rowIndex) && basics?.before === pileIndex && (
+              needsBasicsColumn(rowIndex) && basics?.at === pileIndex && (
                 <span key="basics" className="contents">
                   {basicsColumn(rowIndex)}
                 </span>
@@ -100,10 +99,7 @@ export const PileBoard = ({
                 header={pileHeader?.(pile, rowIndex)}
               />,
             ])}
-            {needsBasicsColumn(rowIndex) &&
-              basics &&
-              (basics.before !== undefined ? basics.before >= row.length : basics.trailing) &&
-              basicsColumn(rowIndex)}
+            {needsBasicsColumn(rowIndex) && basics && basics.at >= row.length && basicsColumn(rowIndex)}
           </div>
         </div>
       ))}

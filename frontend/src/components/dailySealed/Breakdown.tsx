@@ -215,7 +215,7 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
               dragging={null}
               basics={
                 deck.basics
-                  ? { row: deckRows.length - 1, pileKey: "land", entries: view.basicCardsOf(deck.basics) }
+                  ? { row: deckRows.length - 1, pileKey: "land", entries: view.basicCardsOf(deck.basics), at: 0 }
                   : null
               }
               readOnly
