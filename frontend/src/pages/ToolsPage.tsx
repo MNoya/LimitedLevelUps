@@ -8,6 +8,7 @@ import { PanelShell } from "../components/CommunityBits";
 import { WildcardIcon } from "../components/WildcardIcon";
 import { ArrowRight } from "../components/Icons";
 import { cn } from "../lib/utils";
+import { DAILY_SEALED_BLURB } from "../data/dailySealed";
 import { fantasyEventPath, proPlayHomeEvent } from "../components/fantasy/fantasyEvents";
 import { TROPHY_GAME_TITLE, WHEEL_GAME_TITLE } from "../data/draftGames";
 
@@ -45,7 +46,7 @@ export function ToolsPage() {
     },
     {
       title: "Daily Sealed",
-      blurb: "Build from the same Sealed pool and see what the community picked each day",
+      blurb: DAILY_SEALED_BLURB,
       Icon: Layers,
       to: "/daily-sealed",
     },

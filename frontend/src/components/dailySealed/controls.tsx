@@ -18,6 +18,7 @@ import {
   NO_FILTERS,
   RARITY_ORDER,
   typeGroupsIn,
+  type Basics,
   type Color,
   type PoolCard,
   type PoolEntry,
@@ -237,27 +238,35 @@ export const FilterToggle = ({
   </button>
 );
 
-export const BasicsGrid = ({ builder, readOnly }: { builder: Builder; readOnly: boolean }) => (
+export const BasicsGrid = ({
+  basics,
+  onAdjust,
+  footer,
+}: {
+  basics: Basics;
+  onAdjust?: (color: Color, delta: number) => void;
+  footer?: ReactNode;
+}) => (
   <div className="flex flex-col gap-2">
     <div className="grid grid-cols-5 gap-1.5">
       {COLORS.map((color) => (
         <div key={color} className="flex flex-col items-stretch overflow-hidden rounded border border-border2">
           <StepButton
             label={`Add ${BASIC_NAMES[color]}`}
-            disabled={readOnly}
-            onClick={() => builder.adjustBasic(color, 1)}
+            disabled={!onAdjust}
+            onClick={() => onAdjust?.(color, 1)}
             className="h-8 w-full"
           >
             <Plus size={14} />
           </StepButton>
           <span className="flex flex-col items-center gap-2 py-2">
             <Pip c={color} size={15} />
-            <span className="font-num text-[16px] leading-none">{builder.basics[color]}</span>
+            <span className="font-num text-[16px] leading-none">{basics[color]}</span>
           </span>
           <StepButton
             label={`Remove ${BASIC_NAMES[color]}`}
-            disabled={readOnly || builder.basics[color] === 0}
-            onClick={() => builder.adjustBasic(color, -1)}
+            disabled={!onAdjust || basics[color] === 0}
+            onClick={() => onAdjust?.(color, -1)}
             className="h-8 w-full"
           >
             <Minus size={14} />
@@ -265,7 +274,7 @@ export const BasicsGrid = ({ builder, readOnly }: { builder: Builder; readOnly: 
         </div>
       ))}
     </div>
-    {!readOnly && <FillLandsButton builder={builder} />}
+    {footer}
   </div>
 );
 
@@ -335,8 +344,8 @@ export const FillLandsButton = ({ builder }: { builder: Builder }) => {
   );
 };
 
-export const DeckStats = ({ builder }: { builder: Builder }) => {
-  const counts = deckCounts(builder);
+export const DeckStats = ({ deck, basics }: { deck: PoolEntry[]; basics: Basics }) => {
+  const counts = deckCounts(deck, basics);
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-3 font-num text-[13px] text-subtle">
@@ -344,14 +353,14 @@ export const DeckStats = ({ builder }: { builder: Builder }) => {
         <Stat label="SPELLS" value={counts.spells} />
         <Stat label="LANDS" value={counts.lands} />
       </div>
-      <Curve entries={builder.deck} tall />
-      <PipsVsSources builder={builder} fill />
+      <Curve entries={deck} tall />
+      <PipsVsSources deck={deck} basics={basics} fill />
     </div>
   );
 };
 
 export const DeckSummary = ({ builder }: { builder: Builder }) => {
-  const counts = deckCounts(builder);
+  const counts = deckCounts(builder.deck, builder.basics);
   return (
     <div className="flex items-end justify-between gap-2">
       <div className="flex flex-col gap-1 whitespace-nowrap font-num text-[12px] text-subtle">
@@ -366,15 +375,15 @@ export const DeckSummary = ({ builder }: { builder: Builder }) => {
         </span>
       </div>
       <Curve entries={builder.deck} tall={false} />
-      <PipsVsSources builder={builder} />
+      <PipsVsSources deck={builder.deck} basics={builder.basics} />
     </div>
   );
 };
 
-const deckCounts = (builder: Builder) => {
+const deckCounts = (deck: PoolEntry[], basics: Basics) => {
   let creatures = 0;
   let spells = 0;
-  for (const entry of builder.deck) {
+  for (const entry of deck) {
     if (isLand(entry.card)) {
       continue;
     }
@@ -384,7 +393,7 @@ const deckCounts = (builder: Builder) => {
       spells += 1;
     }
   }
-  return { creatures, spells, lands: builder.deck.length - creatures - spells + basicCount(builder.basics) };
+  return { creatures, spells, lands: deck.length - creatures - spells + basicCount(basics) };
 };
 
 const Stat = ({ label, value }: { label: string; value: ReactNode }) => (
@@ -456,11 +465,11 @@ const CurveBars = ({
   );
 };
 
-const PipsVsSources = ({ builder, fill = false }: { builder: Builder; fill?: boolean }) => {
+const PipsVsSources = ({ deck, basics, fill = false }: { deck: PoolEntry[]; basics: Basics; fill?: boolean }) => {
   const rows = COLORS.map((color) => {
     let pips = 0;
-    let sources = builder.basics[color];
-    for (const entry of builder.deck) {
+    let sources = basics[color];
+    for (const entry of deck) {
       if (isLand(entry.card)) {
         sources += entry.card.identity.includes(color) ? 1 : 0;
       } else {

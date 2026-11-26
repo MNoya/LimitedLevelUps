@@ -17,6 +17,7 @@ import {
   basicEntries,
   BASIC_NAMES,
   COLORS,
+  DAILY_SEALED_BLURB,
   isBasicIndex,
   DECK_SIZE,
   filterEntries,
@@ -39,6 +40,7 @@ import {
   type OwnBuildInput,
 } from "../data/dailySealedApi";
 import { useIsMobile } from "../lib/use-is-mobile";
+import { cn } from "../lib/utils";
 
 const NOTICE_MS = 2500;
 
@@ -47,10 +49,17 @@ export const DailySealedPage = () => {
   const { data: pool, isPending, isError } = useDailySealedPool(day);
   const isMobile = useIsMobile();
 
-  if (!isMobile && (pool || isPending)) {
+  const awaitingFirstPool = !isPending && !isError && !pool && !day;
+  if (!isMobile && (pool || isPending || awaitingFirstPool)) {
     return (
       <div className="flex h-[100dvh] flex-col overflow-hidden bg-bg text-text">
-        {pool ? <PoolBuilder key={pool.day} pool={pool} isMobile={false} /> : <DesktopBuilderSkeleton />}
+        {pool ? (
+          <PoolBuilder key={pool.day} pool={pool} isMobile={false} />
+        ) : awaitingFirstPool ? (
+          <FirstPoolTeaser isMobile={false} />
+        ) : (
+          <DesktopBuilderSkeleton />
+        )}
       </div>
     );
   }
@@ -61,8 +70,10 @@ export const DailySealedPage = () => {
         <PhoneBuilderSkeleton />
       ) : isError ? (
         <PageMessage text="Pool didn't load. Refresh to try again" />
+      ) : awaitingFirstPool ? (
+        <FirstPoolTeaser isMobile={isMobile} />
       ) : !pool ? (
-        <PageMessage text={day ? "No pool on this day" : `First pool drops at ${localTurnoverTime()}`} />
+        <PageMessage text="No pool on this day" />
       ) : (
         <PoolBuilder key={pool.day} pool={pool} isMobile={isMobile} />
       )}
@@ -71,6 +82,21 @@ export const DailySealedPage = () => {
 };
 
 const localTurnoverTime = () => nextTurnover().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+const FirstPoolTeaser = ({ isMobile }: { isMobile: boolean }) => (
+  <div className={cn("relative flex flex-1 flex-col overflow-hidden", isMobile ? "min-h-[80vh]" : "min-h-0")}>
+    <div aria-hidden className="flex min-h-0 flex-1 flex-col">
+      {isMobile ? <PhoneBuilderSkeleton resting /> : <DesktopBuilderSkeleton resting />}
+    </div>
+    <div className="absolute inset-0 flex items-start justify-center px-4 pt-[10vh]">
+      <div className="flex max-w-[420px] flex-col items-center gap-3 rounded-md border border-border bg-surface px-6 py-6 text-center shadow-xl">
+        <h1 className="font-display text-[22px] tracking-[0.14em] text-text">DAILY SEALED</h1>
+        <p className="text-[14px] text-subtle">{DAILY_SEALED_BLURB}</p>
+        <p className="text-[15px] text-green">First pool drops at {localTurnoverTime()}</p>
+      </div>
+    </div>
+  </div>
+);
 
 const PageMessage = ({ text }: { text: string }) => (
   <div className="flex flex-1 items-center justify-center px-4 py-20 text-[14px] text-subtle">{text}</div>
@@ -164,7 +190,6 @@ const useBuilderView = (pool: DailySealedPool, isMobile: boolean) => {
       setNotice({ text: "Your build didn't save. Submit it again", tone: "error" });
     }
   };
-
 
   return {
     pool,

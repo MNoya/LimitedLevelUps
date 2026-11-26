@@ -17,7 +17,7 @@ import { cn } from "../../lib/utils";
 import { BASICS_PILE_KEY, type PileTarget, type PileZone, type SortKey } from "../../data/dailySealedLayout";
 import type { BuilderView } from "../../pages/DailySealedPage";
 import { CardFace, CardPreview, REVEAL_RATIO } from "./cards";
-import { BasicsGrid, DeckCount, DeckStats, PoolFilterBar } from "./controls";
+import { BasicsGrid, DeckCount, DeckStats, FillLandsButton, PoolFilterBar } from "./controls";
 import { HiddenPanel, HiddenToggle, PILE_GAP, PileBoard } from "./piles";
 import { pileTargetAt, sameTarget } from "./pileHitTest";
 import { DeckPanel, Pane, Panel, SORT_LABELS } from "./panels";
@@ -145,10 +145,10 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
                 />
               </Panel>
               <Panel title="BASIC LANDS">
-                <BasicsGrid builder={builder} readOnly={false} />
+                <BasicsGrid basics={builder.basics} onAdjust={builder.adjustBasic} footer={<FillLandsButton builder={builder} />} />
               </Panel>
               <Panel title="DECK">
-                <DeckStats builder={builder} />
+                <DeckStats deck={builder.deck} basics={builder.basics} />
               </Panel>
             </div>
             <div ref={paneRef} className="flex min-h-0 flex-col">

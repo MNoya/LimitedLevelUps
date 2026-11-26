@@ -14,21 +14,40 @@ export const DayNav = ({
   view: BuilderView;
   withToday?: boolean;
   dateClassName?: string;
-}) => {
-  const label = formatDay(view.pool.day);
-  return (
-    <span className="flex items-center gap-2 whitespace-nowrap">
-      <NavArrow to={view.neighbors.older?.day} label="Older pool">
-        <ChevronLeft size={18} />
-      </NavArrow>
-      <span className={cn("w-[8.6em] text-center", dateClassName)}>{label}</span>
-      <NavArrow to={view.neighbors.newer?.day} label="Newer pool">
-        <ChevronRight size={18} />
-      </NavArrow>
-      {withToday && !view.isToday && <TodayPoolLink className="ml-2 self-center" />}
-    </span>
-  );
-};
+}) => (
+  <DayNavBar
+    day={view.pool.day}
+    older={view.neighbors.older?.day}
+    newer={view.neighbors.newer?.day}
+    showToday={withToday && !view.isToday}
+    dateClassName={dateClassName}
+  />
+);
+
+export const DayNavBar = ({
+  day,
+  older,
+  newer,
+  showToday = false,
+  dateClassName,
+}: {
+  day: string;
+  older?: string;
+  newer?: string;
+  showToday?: boolean;
+  dateClassName?: string;
+}) => (
+  <span className="flex items-center gap-2 whitespace-nowrap">
+    <NavArrow to={older} label="Older pool">
+      <ChevronLeft size={18} />
+    </NavArrow>
+    <span className={cn("w-[8.6em] text-center", dateClassName)}>{formatDay(day)}</span>
+    <NavArrow to={newer} label="Newer pool">
+      <ChevronRight size={18} />
+    </NavArrow>
+    {showToday && <TodayPoolLink className="ml-2 self-center" />}
+  </span>
+);
 
 export const TodayPoolLink = ({ className }: { className?: string }) => (
   <Link
@@ -44,7 +63,8 @@ export const TodayPoolLink = ({ className }: { className?: string }) => (
   </Link>
 );
 
-const NAV_ARROW = "flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-md border border-border bg-surface2";
+const NAV_ARROW =
+  "flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-md border border-border bg-surface2";
 
 const NavArrow = ({ to, label, children }: { to: string | undefined; label: string; children: ReactNode }) =>
   to ? (
@@ -76,8 +96,7 @@ export const SubmitButton = ({ view, wide = false }: { view: BuilderView; wide?:
         ? "SUBMITTED"
         : "UPDATE"
       : "SUBMIT";
-  const enabled =
-    !submitState.pending && (!submitState.signedIn || (submitState.ready && !submitState.unchanged));
+  const enabled = !submitState.pending && (!submitState.signedIn || (submitState.ready && !submitState.unchanged));
   return (
     <button
       type="button"

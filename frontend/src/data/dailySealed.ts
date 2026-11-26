@@ -100,6 +100,7 @@ export const basicEntries = (basics: Basics, images: Map<string, string>, setCod
   }));
 
 export const entryCount = (entries: PoolEntry[]) => entries.reduce((total, entry) => total + (entry.copies ?? 1), 0);
+export const DAILY_SEALED_BLURB = "Build from the same Sealed pool and see what the community picked each day";
 export const DECK_SIZE = 40;
 export const LAND_TARGET = 17;
 export const EMPTY_BASICS: Basics = { W: 0, U: 0, B: 0, R: 0, G: 0 };
