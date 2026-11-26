@@ -266,7 +266,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.pod_scheduler = AsyncIOScheduler()
         bot.pod_scheduler.start()
         init_reminder(bot)
-        init_underfill(bot)
+        init_underfill()
         init_format_schedule(bot)
         init_pod_schedule_post(bot)
         init_format_vote(bot)

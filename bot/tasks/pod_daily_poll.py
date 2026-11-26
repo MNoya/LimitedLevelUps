@@ -1913,7 +1913,7 @@ async def bind_board_slots(
             await pod_launch.fire_slot_expiry(signal_id)
             continue
         pod_launch.arm_slot_expiry(bot, signal_id, slot_time)
-        schedule_slot_underfill_checks(bot.pod_scheduler, signal_id, slot_time, now)
+        schedule_slot_underfill_checks(bot, signal_id, slot_time, now)
 
 
 async def roll_slot_after_draft_start(bot: commands.Bot, event_id: str) -> None:
@@ -2129,7 +2129,7 @@ async def _roll_slot(
     opened: list[tuple[str, datetime]] = []
     for signal_id, bucket_key, slot_time in rolled:
         pod_launch.arm_slot_expiry(bot, signal_id, slot_time)
-        schedule_slot_underfill_checks(bot.pod_scheduler, signal_id, slot_time, datetime.now(timezone.utc))
+        schedule_slot_underfill_checks(bot, signal_id, slot_time, datetime.now(timezone.utc))
         log.info(f"rolled {slot_key} slot_key from {from_day} to {slot_time.isoformat()} as signal {signal_id}")
         opened.append((bucket_key, slot_time))
     return opened

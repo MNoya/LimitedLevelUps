@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -97,7 +98,7 @@ class _FakeScheduler:
         self.removed.append(job_id)
 
 
-async def _fire(key, hours, resurface):
+async def _fire(bot, key, hours, resurface):
     pass
 
 
@@ -120,10 +121,10 @@ def test_arm_underfill_beats_arms_future_beats_and_catches_up_downtime_misses(
     event_time = now + timedelta(hours=event_in_h)
     created_at = now - timedelta(hours=created_ago_h)
 
-    _arm_underfill_beats(scheduler, _fire, "sig1", "pod-slot-underfill", event_time, created_at)
+    _arm_underfill_beats(_bot_with(scheduler), _fire, "sig1", "pod-slot-underfill", event_time, created_at)
 
-    beats = [job["args"][1] for job in scheduler.jobs if "catchup" not in job["id"]]
-    catch_ups = [job["args"][1] for job in scheduler.jobs if "catchup" in job["id"]]
+    beats = [job["args"][2] for job in scheduler.jobs if "catchup" not in job["id"]]
+    catch_ups = [job["args"][2] for job in scheduler.jobs if "catchup" in job["id"]]
     assert beats == expected_beats
     assert catch_ups == ([expected_catch_up] if expected_catch_up is not None else [])
 
@@ -133,9 +134,9 @@ def test_arm_underfill_beats_marks_only_the_min_offset_as_resurface(monkeypatch)
     scheduler = _FakeScheduler()
     now = datetime.now(timezone.utc)
 
-    _arm_underfill_beats(scheduler, _fire, "sig1", "pod-underfill", now + timedelta(hours=5), now)
+    _arm_underfill_beats(_bot_with(scheduler), _fire, "sig1", "pod-underfill", now + timedelta(hours=5), now)
 
-    resurface_by_hours = {job["args"][1]: job["args"][2] for job in scheduler.jobs}
+    resurface_by_hours = {job["args"][2]: job["args"][3] for job in scheduler.jobs}
     assert resurface_by_hours == {3: False, 2: False, 1: True}
 
 
@@ -145,14 +146,14 @@ def test_arm_underfill_beats_catch_up_carries_the_missed_offset_without_resurfac
     now = datetime.now(timezone.utc)
 
     _arm_underfill_beats(
-        scheduler, _fire, "sig1", "pod-underfill",
+        _bot_with(scheduler), _fire, "sig1", "pod-underfill",
         now + timedelta(minutes=30), now - timedelta(hours=2),
     )
 
     (catch_up,) = scheduler.jobs
     assert "catchup" in catch_up["id"]
-    assert catch_up["args"][1] == 1
-    assert catch_up["args"][2] is False
+    assert catch_up["args"][2] == 1
+    assert catch_up["args"][3] is False
 
 
 def test_arm_underfill_beats_never_catches_up_a_past_event(monkeypatch):
@@ -161,8 +162,12 @@ def test_arm_underfill_beats_never_catches_up_a_past_event(monkeypatch):
     now = datetime.now(timezone.utc)
 
     _arm_underfill_beats(
-        scheduler, _fire, "sig1", "pod-underfill",
+        _bot_with(scheduler), _fire, "sig1", "pod-underfill",
         now - timedelta(minutes=5), now - timedelta(hours=6),
     )
 
     assert scheduler.jobs == []
+
+
+def _bot_with(scheduler: _FakeScheduler) -> SimpleNamespace:
+    return SimpleNamespace(pod_scheduler=scheduler)

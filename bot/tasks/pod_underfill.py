@@ -74,35 +74,33 @@ NUDGE_MIN_SIGNUPS = 2
 
 log = logging.getLogger(__name__)
 
-_bot: commands.Bot | None = None
 _slot_pings: set[tuple[int, datetime]] = set()
 
 
-def init_underfill(bot: commands.Bot) -> None:
-    """Wire the bot reference so the APScheduler callbacks can dispatch Discord work."""
-    global _bot
-    _bot = bot
+def init_underfill() -> None:
     set_underfill_fired_hook(mark_underfill_fired)
 
 
-def schedule_underfill_checks(scheduler, event_id: str, event_time: datetime, created_at: datetime) -> None:
+def schedule_underfill_checks(bot: commands.Bot, event_id: str, event_time: datetime, created_at: datetime) -> None:
     """Arm the scheduled card's T-3h / T-2h / T-1h checks — see `_arm_underfill_beats`."""
-    _arm_underfill_beats(scheduler, fire_underfill, event_id, "pod-underfill", event_time, created_at)
+    _arm_underfill_beats(bot, fire_underfill, event_id, "pod-underfill", event_time, created_at)
 
 
-def schedule_slot_underfill_checks(scheduler, signal_id: str, slot_time: datetime, created_at: datetime) -> None:
+def schedule_slot_underfill_checks(
+    bot: commands.Bot, signal_id: str, slot_time: datetime, created_at: datetime,
+) -> None:
     """Arm an unfired launcher slot's T-3h / T-2h / T-1h checks and its T-10 no-fire notice"""
-    _arm_underfill_beats(scheduler, fire_slot_underfill, signal_id, "pod-slot-underfill", slot_time, created_at)
+    _arm_underfill_beats(bot, fire_slot_underfill, signal_id, "pod-slot-underfill", slot_time, created_at)
     no_fire_at = slot_time - timedelta(minutes=10)
     if no_fire_at > datetime.now(timezone.utc):
-        scheduler.add_job(
-            fire_slot_no_fire, "date", run_date=no_fire_at, args=[signal_id],
+        bot.pod_scheduler.add_job(
+            fire_slot_no_fire, "date", run_date=no_fire_at, args=[bot, signal_id],
             id=f"pod-slot-nofire-{signal_id}", replace_existing=True,
         )
 
 
 def _arm_underfill_beats(
-    scheduler, fire, key: str, id_prefix: str, event_time: datetime, created_at: datetime,
+    bot: commands.Bot, fire, key: str, id_prefix: str, event_time: datetime, created_at: datetime,
 ) -> None:
     """Arm the T-3h / T-2h / T-1h checks, firing an immediate catch-up for any beat missed to downtime.
 
@@ -115,6 +113,7 @@ def _arm_underfill_beats(
     reposting on every deploy puts a fresh unread status in pod chat for a pod nobody's status changed on.
     It edits the standing message instead, and only posts, and can ping, when no message is up.
     """
+    scheduler = bot.pod_scheduler
     check_hours = settings.pod_underfill_check_hours_tuple
     now = datetime.now(timezone.utc)
     resurface_hours = min(check_hours)
@@ -132,7 +131,7 @@ def _arm_underfill_beats(
             fire,
             "date",
             run_date=run_at,
-            args=[key, hours, hours == resurface_hours],
+            args=[bot, key, hours, hours == resurface_hours],
             id=job_id,
             replace_existing=True,
         )
@@ -143,18 +142,14 @@ def _arm_underfill_beats(
             fire,
             "date",
             run_date=now + timedelta(seconds=CATCH_UP_DELAY_S),
-            args=[key, catch_up_hours, False],
+            args=[bot, key, catch_up_hours, False],
             id=f"{id_prefix}-catchup-{key}",
             replace_existing=True,
         )
         log.info(f"scheduled T-{catch_up_hours}h catch-up underfill check for {key} (missed to downtime)")
 
 
-async def fire_underfill(event_id: str, hours_before: int, resurface: bool = False) -> None:
-    if _bot is None:
-        log.error(f"fire_underfill for {event_id}: bot reference is not initialised")
-        return
-
+async def fire_underfill(bot: commands.Bot, event_id: str, hours_before: int, resurface: bool = False) -> None:
     with SessionLocal() as session:
         event = session.get(PodDraftEvent, event_id)
         if event is None:
@@ -183,12 +178,12 @@ async def fire_underfill(event_id: str, hours_before: int, resurface: bool = Fal
     floor = settings.pod_signal_fire_threshold
     aim = settings.pod_draft_target_players
 
-    channel = await _nudge_channel()
+    channel = await _nudge_channel(bot)
     if channel is None:
         log.warning("fire_underfill: pod-draft-chat channel unavailable")
         return
 
-    nudge = await _find_nudge(channel, jump_url)
+    nudge = await _find_nudge(bot, channel, jump_url)
     show = yes_count >= NUDGE_MIN_SIGNUPS
 
     body = build_recruiting_message(name, yes_count, aim, event_time, jump_url, maybe_count)
@@ -203,15 +198,14 @@ async def fire_underfill(event_id: str, hours_before: int, resurface: bool = Fal
     log.info(f"T-{hours_before}h underfill nudge for {event_id}: {yes_count}/{aim} Yes")
 
 
-async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool = False) -> None:
+async def fire_slot_underfill(
+    bot: commands.Bot, signal_id: str, hours_before: int, resurface: bool = False,
+) -> None:
     """The launcher-slot twin of `fire_underfill`, running while the slot is still open: same two numbers,
     with the launcher as the signup link. A fired or expired slot is skipped — a fired slot's message has
     already been handed to its card, whose own checks carry it from there. A slot under two signups stays
     silent: one lone player is not a pod-in-waiting to rally around, and the launcher already advertises the
     open slot."""
-    if _bot is None:
-        log.error(f"fire_slot_underfill for {signal_id}: bot reference is not initialised")
-        return
     slot = await asyncio.to_thread(_load_slot_for_nudge, signal_id)
     if slot is None:
         log.warning(f"fire_slot_underfill: pod_signal {signal_id} not found")
@@ -224,12 +218,12 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
     floor = settings.pod_signal_fire_threshold
     aim = settings.pod_draft_target_players
 
-    channel = await _nudge_channel()
+    channel = await _nudge_channel(bot)
     if channel is None:
         log.warning("fire_slot_underfill: pod-draft-chat channel unavailable")
         return
 
-    nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
+    nudge = await _find_nudge(bot, channel, slot.jump_url, marker=_name_marker(slot.name))
     show = slot.count >= NUDGE_MIN_SIGNUPS
 
     body = build_recruiting_message(slot.name, slot.count, aim, slot.slot_time, slot.jump_url)
@@ -245,10 +239,7 @@ async def fire_slot_underfill(signal_id: str, hours_before: int, resurface: bool
     log.info(f"T-{hours_before}h slot underfill nudge for {signal_id}: {slot.count} signed up")
 
 
-async def fire_slot_no_fire(signal_id: str) -> None:
-    if _bot is None:
-        log.error(f"fire_slot_no_fire for {signal_id}: bot reference is not initialised")
-        return
+async def fire_slot_no_fire(bot: commands.Bot, signal_id: str) -> None:
     slot = await asyncio.to_thread(_load_slot_for_nudge, signal_id)
     signups = await asyncio.to_thread(_slot_signups_sync, signal_id)
     signup_ids = [discord_id for discord_id, _name in signups]
@@ -257,9 +248,9 @@ async def fire_slot_no_fire(signal_id: str) -> None:
         return
     if len(signups) <= 2:
         for discord_id, _name in signups:
-            await _dm_no_fire(discord_id, build_slot_short_off_dm(slot.name, _other_signup(signups, discord_id)))
+            await _dm_no_fire(bot, discord_id, build_slot_short_off_dm(slot.name, _other_signup(signups, discord_id)))
     else:
-        channel = await _nudge_channel()
+        channel = await _nudge_channel(bot)
         if channel is None:
             log.warning("fire_slot_no_fire: pod-draft-chat channel unavailable")
             return
@@ -295,20 +286,20 @@ def _slot_signups_sync(signal_id: str) -> list[tuple[str, str]]:
     return [(discord_id, display_name) for discord_id, display_name in rows]
 
 
-async def _dm_no_fire(discord_id: str, body: str) -> None:
+async def _dm_no_fire(bot: commands.Bot, discord_id: str, body: str) -> None:
     if not discord_id.isdigit():
         return
     with contextlib.suppress(discord.HTTPException):
-        user = _bot.get_user(int(discord_id)) or await _bot.fetch_user(int(discord_id))
+        user = bot.get_user(int(discord_id)) or await bot.fetch_user(int(discord_id))
         await user.send(body)
 
 
-async def _nudge_channel() -> discord.abc.Messageable | None:
+async def _nudge_channel(bot: commands.Bot) -> discord.abc.Messageable | None:
     """The nudge channel, held until the guild cache is populated. Every channel lookup is a pure cache
     read, and a catch-up beat is armed from `setup_hook` and fires seconds later, before the gateway
     connects: without the wait the beat missed to downtime resolves nothing and is dropped a second time."""
-    await _bot.wait_until_ready()
-    return resolve_pod_chat_channel(_bot)
+    await bot.wait_until_ready()
+    return resolve_pod_chat_channel(bot)
 
 
 async def refresh_underfill_nudge_for_event(
@@ -335,7 +326,7 @@ async def clear_underfill_nudge(bot: commands.Bot, event_id: str) -> None:
     channel = resolve_pod_chat_channel(bot)
     if channel is None:
         return
-    nudge = await _find_nudge(channel, jump_url)
+    nudge = await _find_nudge(bot, channel, jump_url)
     if nudge is not None:
         await _safe_delete(nudge)
 
@@ -361,7 +352,7 @@ async def mark_underfill_fired(
         return
     signup_url = await asyncio.to_thread(_jump_url_for_event, event_id)
     if signup_url is not None:
-        nudge = await _find_nudge(channel, signup_url)
+        nudge = await _find_nudge(bot, channel, signup_url)
         if nudge is not None:
             await _safe_delete(nudge)
     body = build_underfill_fired_message(name, player_count, thread_url)
@@ -378,7 +369,7 @@ async def refresh_slot_nudge(bot: commands.Bot, signal_id: str) -> None:
     channel = resolve_pod_chat_channel(bot)
     if channel is None:
         return
-    nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
+    nudge = await _find_nudge(bot, channel, slot.jump_url, marker=_name_marker(slot.name))
     if nudge is None:
         return
     body = build_recruiting_message(
@@ -401,7 +392,7 @@ async def hand_slot_nudge_to_card(bot: commands.Bot, signal_id: str, event_id: s
     slot = await asyncio.to_thread(_load_slot_for_nudge, signal_id)
     nudge = None
     if slot is not None:
-        nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
+        nudge = await _find_nudge(bot, channel, slot.jump_url, marker=_name_marker(slot.name))
     body = await _card_status_body(event_id)
     if body is None:
         return
@@ -436,10 +427,10 @@ async def clear_slot_nudge(bot: commands.Bot, signal_id: str) -> None:
     channel = resolve_pod_chat_channel(bot)
     if channel is None:
         return
-    nudge = await _find_nudge(channel, slot.jump_url, marker=_name_marker(slot.name))
+    nudge = await _find_nudge(bot, channel, slot.jump_url, marker=_name_marker(slot.name))
     if nudge is not None:
         await _safe_delete(nudge)
-    rally = await _find_rally(channel, slot)
+    rally = await _find_rally(bot, channel, slot)
     if rally is not None:
         signups = await asyncio.to_thread(_slot_signups_sync, signal_id)
         mentions = _user_mentions([discord_id for discord_id, _name in signups])
@@ -458,7 +449,7 @@ async def _sync_nudge(
     if channel is None:
         return
 
-    nudge = await _find_nudge(channel, jump_url)
+    nudge = await _find_nudge(bot, channel, jump_url)
     if nudge is None:
         return
 
@@ -506,14 +497,14 @@ def _load_event_by_id_for_nudge(event_id: str) -> tuple[str, datetime, str] | No
 
 
 async def _find_nudge(
-    channel: discord.abc.Messageable, signup_url: str, marker: str | None = None,
+    bot: commands.Bot, channel: discord.abc.Messageable, signup_url: str, marker: str | None = None,
 ) -> discord.Message | None:
     """The bot's own underfill nudge for a pod, located by the signup link it carries. `marker` narrows
     the match for launcher slots, whose nudges all link to the one launcher message. The `/draft`
     announcement carries the same link, so it is skipped and never edited into a nudge."""
     try:
         async for message in channel.history(limit=NUDGE_SEARCH_LIMIT):
-            if message.author.id != _bot.user.id or signup_url not in message.content:
+            if message.author.id != bot.user.id or signup_url not in message.content:
                 continue
             if CHAT_ANNOUNCE_MARKER in message.content or _is_short_slot_notice(message.content):
                 continue
@@ -524,12 +515,14 @@ async def _find_nudge(
     return None
 
 
-async def _find_rally(channel: discord.abc.Messageable, slot: _SlotNudgeContext) -> discord.Message | None:
+async def _find_rally(
+    bot: commands.Bot, channel: discord.abc.Messageable, slot: _SlotNudgeContext,
+) -> discord.Message | None:
     marker = _name_marker(slot.name)
     try:
         async for message in channel.history(limit=NUDGE_SEARCH_LIMIT):
             content = message.content
-            if message.author.id == _bot.user.id and _is_short_slot_notice(content) and slot.jump_url in content:
+            if message.author.id == bot.user.id and _is_short_slot_notice(content) and slot.jump_url in content:
                 if marker in content:
                     return message
     except discord.HTTPException:

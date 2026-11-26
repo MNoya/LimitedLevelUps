@@ -2541,7 +2541,7 @@ def arm_scheduled_pod_jobs(
     """Every timed job a scheduled card carries: T-10 lobby open, underfill checks, and the roster
     reminder. Creation, /pod-postpone, and the startup sweep all arm here."""
     _arm_open(bot, event_id, event_time)
-    schedule_underfill_checks(bot.pod_scheduler, event_id, event_time, created_at)
+    schedule_underfill_checks(bot, event_id, event_time, created_at)
     schedule_roster_reminder(bot.pod_scheduler, event_id, event_time)
 
 
@@ -2871,7 +2871,7 @@ async def rearm_signals(bot: commands.Bot) -> None:
                     await notify_slot_rolled(bot, signal_id)
             else:
                 arm_slot_expiry(bot, signal_id, slot_time)
-                schedule_slot_underfill_checks(bot.pod_scheduler, signal_id, slot_time, created_at)
+                schedule_slot_underfill_checks(bot, signal_id, slot_time, created_at)
         elif kind == pod_signals.KIND_QUEUE:
             teardown = pod_signals.teardown_at(last_activity, settings.pod_queue_inactivity_minutes)
             if teardown <= now:
