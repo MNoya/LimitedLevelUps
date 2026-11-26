@@ -34,28 +34,21 @@ log = logging.getLogger(__name__)
 
 REVEAL_WINDOW = timedelta(hours=24)
 
-_bot: commands.Bot | None = None
-
-
 def init_p0p1_ceremony(bot: commands.Bot) -> None:
-    global _bot
-    _bot = bot
     bot.pod_scheduler.add_job(
-        fire_ceremony, "cron", minute=5, timezone=timezone.utc,
+        fire_ceremony, "cron", args=[bot], minute=5, timezone=timezone.utc,
         id="p0p1-podium-ceremony", replace_existing=True,
     )
     log.info("p0p1-ceremony: hourly tick armed for ratings snapshots and each contest scoring date")
 
 
-async def fire_ceremony() -> None:
-    if _bot is None:
-        return
+async def fire_ceremony(bot: commands.Bot) -> None:
     now = datetime.now(timezone.utc)
     try:
         await asyncio.to_thread(_capture_due_snapshots, now)
     except Exception:
         log.exception("p0p1-ceremony: ratings capture failed, retrying next hour")
-    guild = _bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
+    guild = bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
     if guild is None:
         log.warning("p0p1-ceremony: no configured guild, skipping")
         return
@@ -63,14 +56,14 @@ async def fire_ceremony() -> None:
     if midway_contest is not None:
         try:
             if await asyncio.to_thread(_midway_snapshot_stored, midway_contest.code):
-                await post_midway(guild, midway_contest, now)
+                await post_midway(bot, guild, midway_contest, now)
         except (SQLAlchemyError, discord.HTTPException):
             log.warning(f"p0p1-midway: {midway_contest.code} tick failed, retrying next hour", exc_info=True)
     contest = contest_due(now)
     if contest is None:
         return
     try:
-        await post_ceremony(guild, contest, now)
+        await post_ceremony(bot, guild, contest, now)
     except (SQLAlchemyError, discord.HTTPException):
         log.warning(f"p0p1-ceremony: {contest.code} tick failed, retrying next hour", exc_info=True)
 
@@ -92,20 +85,20 @@ def midway_due(now: datetime) -> p0p1_contest.Contest | None:
     return None
 
 
-async def post_midway(guild: discord.Guild, contest: p0p1_contest.Contest, now: datetime) -> bool:
+async def post_midway(bot: commands.Bot, guild: discord.Guild, contest: p0p1_contest.Contest, now: datetime) -> bool:
     channel = _set_channel(guild, contest.code)
     if channel is None:
         log.warning(f"p0p1-midway: no channel found for {contest.code}, skipping")
         return False
     since = p0p1_ratings.midway_date(contest) - timedelta(hours=1)
     header = p0p1_copy.midway_header(contest.code)
-    if await _already_posted(channel, since, header, p0p1_copy.MIDWAY_MARKER):
+    if await _already_posted(bot, channel, since, header, p0p1_copy.MIDWAY_MARKER):
         return False
     featured = p0p1_contest.featured_contest(now)
     view = p0p1_copy.midway_view(contest, featured_code=featured.code if featured is not None else None)
     await channel.send(view=view, allowed_mentions=discord.AllowedMentions.none())
     audit.event("p0p1_midway", contest=contest.code, channel_id=str(channel.id))
-    bot_log = getattr(_bot, "bot_log", None)
+    bot_log = getattr(bot, "bot_log", None)
     if bot_log is not None:
         await bot_log.post(f"P0P1 `{contest.code}` midway posted in {channel.mention}", tag="P0P1",
                            fingerprint=f"p0p1-midway-{contest.code}")
@@ -113,7 +106,7 @@ async def post_midway(guild: discord.Guild, contest: p0p1_contest.Contest, now: 
 
 
 async def post_ceremony(
-    guild: discord.Guild, contest: p0p1_contest.Contest, now: datetime, *, force: bool = False,
+    bot: commands.Bot, guild: discord.Guild, contest: p0p1_contest.Contest, now: datetime, *, force: bool = False,
 ) -> bool:
     """Returns whether the reveal posted. ``force`` skips the already-posted check for a hand-fired run."""
     channel = _set_channel(guild, contest.code)
@@ -122,7 +115,7 @@ async def post_ceremony(
         return False
     since = contest.scoring_date - timedelta(hours=1)
     header = p0p1_copy.ceremony_header(contest.code)
-    if not force and await _already_posted(channel, since, header, p0p1_copy.CEREMONY_MARKER):
+    if not force and await _already_posted(bot, channel, since, header, p0p1_copy.CEREMONY_MARKER):
         return False
 
     winners = await asyncio.to_thread(p0p1_ceremony.podium_sync, contest.code)
@@ -159,15 +152,15 @@ async def post_ceremony(
     await channel.send(view=view, allowed_mentions=mentions)
     audit.event("p0p1_ceremony", contest=contest.code, channel_id=str(channel.id),
                 winners=[winner.name for winner in winners], granted=len(members) if on_production else 0)
-    await _post_debug(contest, channel, winners, len(members), on_production, time.monotonic() - started)
+    await _post_debug(bot, contest, channel, winners, len(members), on_production, time.monotonic() - started)
     return True
 
 
 async def _post_debug(
-    contest: p0p1_contest.Contest, channel: discord.TextChannel, winners: list[p0p1_ceremony.Winner],
+    bot: commands.Bot, contest: p0p1_contest.Contest, channel: discord.TextChannel, winners: list[p0p1_ceremony.Winner],
     granted: int, on_production: bool, elapsed: float,
 ) -> None:
-    bot_log = getattr(_bot, "bot_log", None)
+    bot_log = getattr(bot, "bot_log", None)
     if bot_log is None:
         return
     podium = ", ".join(f"{winner.rank}. {winner.name}" for winner in winners)
@@ -190,10 +183,12 @@ def _set_channel(guild: discord.Guild, set_code: str) -> discord.TextChannel | N
     return None
 
 
-async def _already_posted(channel: discord.TextChannel, since: datetime, header: str, marker: str) -> bool:
+async def _already_posted(
+    bot: commands.Bot, channel: discord.TextChannel, since: datetime, header: str, marker: str,
+) -> bool:
     try:
         async for message in channel.history(after=since, limit=200):
-            if _bot is not None and _bot.user is not None and message.author.id != _bot.user.id:
+            if bot.user is not None and message.author.id != bot.user.id:
                 continue
             body = message_text(message)
             if marker in body and header in body:

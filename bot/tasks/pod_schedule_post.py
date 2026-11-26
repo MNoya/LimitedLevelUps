@@ -29,12 +29,7 @@ log = logging.getLogger(__name__)
 
 POST_TIMES = (time(10, 30), time(15, 0), time(20, 30))
 
-_bot: commands.Bot | None = None
-
-
 def init_pod_schedule_post(bot: commands.Bot) -> None:
-    global _bot
-    _bot = bot
     if not settings.pod_schedule_enabled:
         log.info("POD_SCHEDULE_ENABLED=false; pod-schedule post tick disabled")
         return
@@ -42,6 +37,7 @@ def init_pod_schedule_post(bot: commands.Bot) -> None:
         bot.pod_scheduler.add_job(
             fire_schedule_post,
             "cron",
+            args=[bot],
             hour=slot.hour,
             minute=slot.minute,
             timezone=SCHEDULE_TZ,
@@ -52,11 +48,8 @@ def init_pod_schedule_post(bot: commands.Bot) -> None:
     log.info(f"pod-schedule post armed: {windows} {SCHEDULE_TZ.key}")
 
 
-async def fire_schedule_post() -> None:
-    if _bot is None:
-        log.error("pod-schedule post: bot reference is not initialised")
-        return
-    channel = resolve_pod_chat_channel(_bot)
+async def fire_schedule_post(bot: commands.Bot) -> None:
+    channel = resolve_pod_chat_channel(bot)
     if channel is None:
         log.warning("pod-schedule post: no pod chat channel; skipping tick")
         return

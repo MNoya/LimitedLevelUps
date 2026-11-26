@@ -50,22 +50,19 @@ MSG_ANNOUNCEMENT_SUBJECT = "Subject: {name} - {subject}"
 
 log = logging.getLogger(__name__)
 
-_bot: commands.Bot | None = None
-
-
 def init_watch_party(bot: commands.Bot) -> None:
-    global _bot
-    _bot = bot
     if not settings.watch_party_enabled:
         log.info("WATCH_PARTY_ENABLED=false; watch party tick disabled")
         return
     every_tick = f"*/{TICK_MINUTES}"
-    bot.pod_scheduler.add_job(fire_watch_party, "cron", minute=every_tick, id="watch-party", replace_existing=True)
+    bot.pod_scheduler.add_job(
+        fire_watch_party, "cron", args=[bot], minute=every_tick, id="watch-party", replace_existing=True,
+    )
     log.info(f"watch-party armed every {TICK_MINUTES} minutes")
 
 
-async def fire_watch_party() -> None:
-    channel = _bot.get_channel(settings.watch_party_channel_id) if _bot is not None else None
+async def fire_watch_party(bot: commands.Bot) -> None:
+    channel = bot.get_channel(settings.watch_party_channel_id)
     if not isinstance(channel, discord.TextChannel):
         log.debug(f"watch-party: channel {settings.watch_party_channel_id} unavailable; skipping tick")
         return
@@ -74,13 +71,14 @@ async def fire_watch_party() -> None:
     today = now.astimezone(CHANNEL_TZ).date()
     windows = upcoming_windows(events, today)
     await _sync_channel(channel, named_window(coverage_windows(events), today), channel_topic(windows, today))
-    await _refresh_coverage_pin(channel, events)
+    emojis = {emoji.name: emoji for emoji in await bot.fetch_application_emojis()}
+    await _refresh_coverage_pin(channel, events, emojis)
     if not windows:
         return
     tick = tick_start(now)
-    await _post_window_embeds(channel, windows, tick)
+    await _post_window_embeds(channel, windows, tick, emojis)
     await _create_scheduled_events(channel, windows[0], now)
-    await _announce_started_events(channel, windows[0], tick)
+    await _announce_started_events(channel, windows[0], tick, emojis)
 
 
 def channel_topic(windows: list[CoverageWindow], today: date) -> str:
@@ -182,8 +180,7 @@ async def _sync_channel(channel: discord.TextChannel, window: CoverageWindow | N
         log.warning(f"watch-party: could not rename the channel to {name}", exc_info=True)
 
 
-async def _refresh_coverage_pin(channel: discord.TextChannel, events: Sequence[CoveredEvent]) -> None:
-    emojis = {emoji.name: emoji for emoji in await _bot.fetch_application_emojis()}
+async def _refresh_coverage_pin(channel: discord.TextChannel, events: Sequence[CoveredEvent], emojis: dict) -> None:
     payload = build_coverage_payload(events, emojis)
     try:
         message = await pinned_schedule(channel, schedule_title_marker(COVERAGE_SCOPE))
@@ -202,14 +199,15 @@ async def _refresh_coverage_pin(channel: discord.TextChannel, events: Sequence[C
         log.warning("watch-party: could not edit the Coverage pin", exc_info=True)
 
 
-async def _post_window_embeds(channel: discord.TextChannel, windows: list[CoverageWindow], tick: datetime) -> None:
+async def _post_window_embeds(
+    channel: discord.TextChannel, windows: list[CoverageWindow], tick: datetime, emojis: dict,
+) -> None:
     previous = None
     for window in windows:
         live = window_embed_state(window, previous, tick)
         previous = window
         if live is None:
             continue
-        emojis = {emoji.name: emoji for emoji in await _bot.fetch_application_emojis()}
         await channel.send(embed=build_window_embed(window, emojis, live=live))
         log.info(f"watch-party: posted {window_marker(window, live=live)}")
 
@@ -234,23 +232,24 @@ async def _create_scheduled_events(channel: discord.TextChannel, window: Coverag
             log.warning(f"watch-party: could not create the {covered.name} scheduled event", exc_info=True)
 
 
-async def _announce_started_events(channel: discord.TextChannel, window: CoverageWindow, tick: datetime) -> None:
+async def _announce_started_events(
+    channel: discord.TextChannel, window: CoverageWindow, tick: datetime, emojis: dict,
+) -> None:
     for covered in headline_events(window):
         if not _is_due(covered.starts_at(), tick):
             continue
         await channel.send(build_announcement(covered), allowed_mentions=discord.AllowedMentions.none())
         log.info(f"watch-party: announced {covered.name}")
-        await _post_redirect(channel, covered)
+        await _post_redirect(channel, covered, emojis)
 
 
-async def _post_redirect(channel: discord.TextChannel, covered: CoveredEvent) -> None:
+async def _post_redirect(channel: discord.TextChannel, covered: CoveredEvent, emojis: dict) -> None:
     redirect_name = settings.watch_party_redirect_channel_name
     redirect = channel_matching_name(channel.guild, redirect_name)
     if redirect is None:
         log.warning(f"watch-party: no {redirect_name} channel to point at the {covered.name} watch party")
         return
     try:
-        emojis = {emoji.name: emoji for emoji in await _bot.fetch_application_emojis()}
         await redirect.send(build_redirect(covered, channel, emojis), allowed_mentions=discord.AllowedMentions.none())
         log.info(f"watch-party: pointed {redirect.name} at the {covered.name} watch party")
     except discord.HTTPException:

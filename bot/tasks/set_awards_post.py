@@ -44,28 +44,23 @@ MSG_CEREMONY_ELSEWHERE = (
     "-# Run `/set-awards` after the announcement to see your own!"
 )
 
-_bot: commands.Bot | None = None
-
-
 def init_set_awards_schedule(bot: commands.Bot) -> None:
-    global _bot
-    _bot = bot
     if not settings.format_schedule_enabled:
         log.info("FORMAT_SCHEDULE_ENABLED=false; set-awards ceremony disabled")
         return
     bot.pod_scheduler.add_job(
-        fire_warning, "cron", hour=WARNING_TIME.hour, minute=WARNING_TIME.minute,
+        fire_warning, "cron", args=[bot], hour=WARNING_TIME.hour, minute=WARNING_TIME.minute,
         timezone=OPEN_TZ, id="set-awards-warning", replace_existing=True,
     )
     bot.pod_scheduler.add_job(
-        fire_ceremony, "cron", hour=AWARDS_CEREMONY_TIME.hour, minute=AWARDS_CEREMONY_TIME.minute,
+        fire_ceremony, "cron", args=[bot], hour=AWARDS_CEREMONY_TIME.hour, minute=AWARDS_CEREMONY_TIME.minute,
         timezone=OPEN_TZ, id="set-awards-ceremony", replace_existing=True,
     )
     log.info(f"set-awards armed: warning {WARNING_TIME:%H:%M}, ceremony {AWARDS_CEREMONY_TIME:%H:%M} {OPEN_TZ.key}")
 
 
-async def fire_warning() -> None:
-    resolved = _resolve_eve()
+async def fire_warning(bot: commands.Bot) -> None:
+    resolved = _resolve_eve(bot)
     if resolved is None:
         return
     guild, channel, seed = resolved
@@ -141,7 +136,7 @@ async def _previous_awards_link(guild: discord.Guild, outgoing_seed) -> str | No
         return None
     try:
         async for message in channel.pins():
-            if _bot.user is not None and message.author.id == _bot.user.id and AWARDS_MARKER in message_text(message):
+            if guild.me is not None and message.author.id == guild.me.id and AWARDS_MARKER in message_text(message):
                 return message.jump_url
     except discord.HTTPException:
         log.warning(f"set-awards: could not read pins in #{channel.name}", exc_info=True)
@@ -150,21 +145,18 @@ async def _previous_awards_link(guild: discord.Guild, outgoing_seed) -> str | No
     return None
 
 
-async def fire_ceremony() -> None:
-    resolved = _resolve_eve()
+async def fire_ceremony(bot: commands.Bot) -> None:
+    resolved = _resolve_eve(bot)
     if resolved is None:
         return
     guild, channel, seed = resolved
     await run_set_awards_ceremony(channel, guild, seed.code, seed, dry=False)
 
 
-def _resolve_eve():
+def _resolve_eve(bot: commands.Bot):
     """The (guild, outgoing channel, seed) to run tonight's ceremony against, or ``None`` when it isn't
     a rotation eve or the outgoing set has no channel."""
-    if _bot is None:
-        log.error("set-awards: bot reference is not initialised")
-        return None
-    guild = _bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
+    guild = bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
     if guild is None:
         log.warning("set-awards: guild unavailable; skipping")
         return None

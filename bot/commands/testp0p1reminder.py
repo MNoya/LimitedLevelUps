@@ -29,6 +29,6 @@ async def setup(bot: commands.Bot) -> None:
         if contest is None:
             await ctx.send(MSG_NO_CONTEST)
             return
-        outcome = await post_reminder(ctx.guild, contest, now, force=True, restrict_to=ctx.author)
+        outcome = await post_reminder(ctx.bot, ctx.guild, contest, now, force=True, restrict_to=ctx.author)
         if outcome is None:
             await ctx.send(MSG_NO_CHANNEL.format(code=contest.code))

@@ -37,27 +37,21 @@ from bot.services.pod_schedule import POD_DRAFTERS_ROLE_NAME, SCHEDULE_TZ
 
 log = logging.getLogger(__name__)
 
-_bot: commands.Bot | None = None
-
 WAVE_OFFSETS_MIN: tuple[int, ...] = (10, 120, 240)
 DEADLINE_LEAD = timedelta(days=1)
 SEEDING_TALLY_OFFSET_MIN = WAVE_OFFSETS_MIN[-1] + 60
 
 
 def init_championship_schedule(bot: commands.Bot) -> None:
-    global _bot
-    _bot = bot
     set_championship_crowned_hook(draft_champion_congrats)
     bot.pod_scheduler.add_job(
-        fire_championship_tick, "cron", hour=championship.CREATION_HOUR_ET, minute=0,
+        fire_championship_tick, "cron", args=[bot], hour=championship.CREATION_HOUR_ET, minute=0,
         timezone=SCHEDULE_TZ, id="championship-create", replace_existing=True,
     )
     log.info(f"scheduled set championship tick at {championship.CREATION_HOUR_ET:02d}:00 ET")
 
 
-async def fire_championship_tick() -> None:
-    if _bot is None:
-        return
+async def fire_championship_tick(bot: commands.Bot) -> None:
     plan = championship.plan_due_for_creation(datetime.now(SCHEDULE_TZ))
     if plan is None:
         return
@@ -65,7 +59,7 @@ async def fire_championship_tick() -> None:
     if existing is not None:
         log.info(f"championship for {plan.set_code} already exists; skipping")
         return
-    await create_championship(_bot, plan)
+    await create_championship(bot, plan)
 
 
 async def create_championship(bot: commands.Bot, plan: championship.ChampionshipPlan) -> str | None:
@@ -168,12 +162,12 @@ def _arm_waves(bot: commands.Bot, event_id: str, created_at: datetime) -> None:
     for wave_index, offset_min in enumerate(WAVE_OFFSETS_MIN):
         bot.pod_scheduler.add_job(
             fire_wave_job, "date", run_date=created_at + timedelta(minutes=offset_min),
-            args=[event_id, wave_index],
+            args=[bot, event_id, wave_index],
             id=f"championship-wave-{event_id}-{wave_index}", replace_existing=True,
         )
     bot.pod_scheduler.add_job(
         fire_seeding_tally_job, "date", run_date=created_at + timedelta(minutes=SEEDING_TALLY_OFFSET_MIN),
-        args=[event_id], id=f"championship-tally-{event_id}", replace_existing=True,
+        args=[bot, event_id], id=f"championship-tally-{event_id}", replace_existing=True,
     )
 
 
@@ -184,7 +178,7 @@ def arm_deadline(bot: commands.Bot, event_id: str, event_at: datetime) -> None:
     if deadline <= datetime.now(deadline.tzinfo):
         return
     bot.pod_scheduler.add_job(
-        fire_deadline_job, "date", run_date=deadline, args=[event_id],
+        lock_top_eight, "date", run_date=deadline, args=[bot, event_id],
         id=f"championship-deadline-{event_id}", replace_existing=True,
     )
     log.info(f"armed championship RSVP deadline for {event_id} at {deadline.isoformat()}")
@@ -199,12 +193,6 @@ async def rearm_deadline(bot: commands.Bot) -> None:
     if existing is not None:
         event_id, event_at = existing
         arm_deadline(bot, event_id, event_at)
-
-
-async def fire_deadline_job(event_id: str) -> None:
-    if _bot is None:
-        return
-    await lock_top_eight(_bot, event_id)
 
 
 async def lock_top_eight(bot: commands.Bot, event_id: str) -> None:
@@ -257,23 +245,19 @@ async def _send_quietly(thread: discord.Thread, content: str) -> None:
         log.warning(f"championship: could not post in thread {thread.id}", exc_info=True)
 
 
-async def fire_wave_job(event_id: str, wave_index: int) -> None:
-    if _bot is None:
-        return
+async def fire_wave_job(bot: commands.Bot, event_id: str, wave_index: int) -> None:
     meta = await asyncio.to_thread(championship.event_meta_sync, event_id)
     if meta is None:
         return
     set_code, event_at = meta
-    await fire_wave(_bot, event_id, set_code, event_at, wave_index=wave_index)
+    await fire_wave(bot, event_id, set_code, event_at, wave_index=wave_index)
 
 
-async def fire_seeding_tally_job(event_id: str) -> None:
+async def fire_seeding_tally_job(bot: commands.Bot, event_id: str) -> None:
     """Post the Yes-tally seeding table once the last wave has gone out, then leave it to refresh in
     place as more players confirm."""
-    if _bot is None:
-        return
     championship.mark_invites_complete(event_id)
-    await refresh_seeding_table(_bot, event_id)
+    await refresh_seeding_table(bot, event_id)
 
 
 async def fire_wave(

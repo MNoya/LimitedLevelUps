@@ -50,37 +50,29 @@ MSG_UNSEEDED_BRACKET = (
 
 log = logging.getLogger(__name__)
 
-_bot: commands.Bot | None = None
-
-
-def init_pro_play_posts(bot: commands.Bot) -> None:
-    global _bot
-    _bot = bot
-
-
-async def fire_pro_play_posts() -> None:
+async def fire_pro_play_posts(bot: commands.Bot) -> None:
     tick = tick_start(datetime.now(timezone.utc))
     for event in all_events():
         if event.replay_only:
             continue
         for moment, build in timed_posts(event):
             if is_due(moment, tick):
-                await _post_to_watch_party(event, build())
+                await _post_to_watch_party(bot, event, build())
         completed = await asyncio.to_thread(_completed_rounds, event.code)
         for round_number in manual_release_rounds(event):
             completed_at = completed.get(round_number)
             if completed_at is not None and is_due(completed_at, tick):
-                await _alert_round_complete(event, round_number)
+                await _alert_round_complete(bot, event, round_number)
 
 
-async def announce_reveal(event: FantasyEvent, previous: int, revealed: int) -> None:
+async def announce_reveal(bot: commands.Bot, event: FantasyEvent, previous: int, revealed: int) -> None:
     for milestone in revealed_milestones(event, previous, revealed):
         if milestone == DAY_ONE_COMPLETE:
-            await _post_to_watch_party(event, day_one_complete_embed(event))
+            await _post_to_watch_party(bot, event, day_one_complete_embed(event))
         elif milestone == SWISS_COMPLETE:
-            await _post_to_watch_party(event, bracket_open_embed(event))
+            await _post_to_watch_party(bot, event, bracket_open_embed(event))
         elif milestone == EVENT_COMPLETE:
-            await _crown_podium(event)
+            await _crown_podium(bot, event)
 
 
 def timed_posts(event: FantasyEvent) -> list[tuple[datetime, Callable[[], discord.Embed]]]:
@@ -119,10 +111,12 @@ def _completed_rounds(event_code: str) -> dict[int, datetime]:
         ).all())
 
 
-async def _post_to_watch_party(event: FantasyEvent, embed: discord.Embed, *, pin: bool = False) -> None:
+async def _post_to_watch_party(
+    bot: commands.Bot, event: FantasyEvent, embed: discord.Embed, *, pin: bool = False,
+) -> None:
     if not event.live:
         return
-    channel = _watch_party_channel()
+    channel = _watch_party_channel(bot)
     if channel is None:
         log.warning(f"pro-play-posts: watch party channel unavailable, {event.code} post skipped")
         return
@@ -136,16 +130,16 @@ async def _post_to_watch_party(event: FantasyEvent, embed: discord.Embed, *, pin
     log.info(f"pro-play-posts: posted for {event.code}: {embed.description.splitlines()[0]}")
 
 
-def _watch_party_channel() -> discord.TextChannel | None:
-    if not settings.watch_party_enabled or _bot is None:
+def _watch_party_channel(bot: commands.Bot) -> discord.TextChannel | None:
+    if not settings.watch_party_enabled:
         return None
-    channel = _bot.get_channel(settings.watch_party_channel_id)
+    channel = bot.get_channel(settings.watch_party_channel_id)
     return channel if isinstance(channel, discord.TextChannel) else None
 
 
-async def _crown_podium(event: FantasyEvent) -> None:
+async def _crown_podium(bot: commands.Bot, event: FantasyEvent) -> None:
     winners = await asyncio.to_thread(podium_sync, event.code)
-    channel = _watch_party_channel()
+    channel = _watch_party_channel(bot)
     if not winners or channel is None or not event.live:
         return
     guild = channel.guild
@@ -158,7 +152,7 @@ async def _crown_podium(event: FantasyEvent) -> None:
     elif role is None:
         log.warning(f"pro-play-posts: {FANTASY_CHAMPION_ROLE_NAME!r} missing in {guild.name}, announcing only")
     champion_role = role_label(guild, FANTASY_CHAMPION_ROLE_NAME)
-    await _post_to_watch_party(event, ceremony_embed(event, winners, champion_role), pin=True)
+    await _post_to_watch_party(bot, event, ceremony_embed(event, winners, champion_role), pin=True)
 
 
 def _guild_members(guild: discord.Guild, winners: list[FantasyWinner]) -> list[discord.Member]:
@@ -172,20 +166,16 @@ def _guild_members(guild: discord.Guild, winners: list[FantasyWinner]) -> list[d
     return members
 
 
-async def alert_unseeded_bracket(event: FantasyEvent) -> None:
-    if _bot is None:
-        return
-    await bot_log.get(_bot).post_plain(
+async def alert_unseeded_bracket(bot: commands.Bot, event: FantasyEvent) -> None:
+    await bot_log.get(bot).post_plain(
         f"<@{OWNER_DISCORD_ID}> {MSG_UNSEEDED_BRACKET.format(event=event.short_name)}",
         allowed_mentions=discord.AllowedMentions(users=True),
     )
 
 
-async def _alert_round_complete(event: FantasyEvent, round_number: int) -> None:
-    if _bot is None:
-        return
+async def _alert_round_complete(bot: commands.Bot, event: FantasyEvent, round_number: int) -> None:
     label, argument = round_label(event, round_number)
-    await bot_log.get(_bot).post_plain(
+    await bot_log.get(bot).post_plain(
         f"<@{OWNER_DISCORD_ID}>",
         embed=round_complete_embed(event, label, argument),
         allowed_mentions=discord.AllowedMentions(users=True),

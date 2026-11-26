@@ -727,8 +727,8 @@ def build_bot(guild_id: int) -> commands.Bot:
             await reconcile_rolled_slots(bot)
             await catch_up_daily_poll(bot)
             if settings.pod_schedule_enabled:
-                await fire_schedule_post()
-                await fire_format_vote_tick()
+                await fire_schedule_post(bot)
+                await fire_format_vote_tick(bot)
             await reconcile_unannounced_championships(bot)
             await rearm_deadline(bot)
             try:

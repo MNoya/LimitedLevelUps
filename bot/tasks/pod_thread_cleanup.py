@@ -28,31 +28,24 @@ ACTIVITY_GRACE = timedelta(hours=2)
 
 log = logging.getLogger(__name__)
 
-_bot: commands.Bot | None = None
-
-
 def init_thread_cleanup(bot: commands.Bot) -> None:
-    global _bot
-    _bot = bot
     bot.pod_scheduler.add_job(
-        archive_past_threads, "cron", hour=CLEANUP_HOUR_ET, minute=0,
+        archive_past_threads, "cron", args=[bot], hour=CLEANUP_HOUR_ET, minute=0,
         timezone=SCHEDULE_TZ, id="pod-thread-cleanup", replace_existing=True,
     )
     log.info(f"scheduled nightly pod thread cleanup at {CLEANUP_HOUR_ET:02d}:00 ET")
 
 
-async def archive_past_threads() -> None:
-    if _bot is None:
-        return
+async def archive_past_threads(bot: commands.Bot) -> None:
     now = datetime.now(timezone.utc)
     event_thread_ids = _past_event_thread_ids(now)
     queue_thread_ids = _stale_queue_thread_ids(now)
     archived = 0
     for thread_id in event_thread_ids:
-        if await _archive_thread(thread_id, now):
+        if await _archive_thread(bot, thread_id, now):
             archived += 1
     for thread_id in queue_thread_ids:
-        if await _archive_thread(thread_id, now):
+        if await _archive_thread(bot, thread_id, now):
             archived += 1
     total = len(event_thread_ids) + len(queue_thread_ids)
     log.info(f"pod thread cleanup: archived {archived} of {total} past threads")
@@ -151,9 +144,9 @@ def _stale_queue_thread_ids(now: datetime) -> list[int]:
     return ids
 
 
-async def _archive_thread(thread_id: int, now: datetime) -> bool:
+async def _archive_thread(bot: commands.Bot, thread_id: int, now: datetime) -> bool:
     try:
-        channel = await _bot.fetch_channel(thread_id)
+        channel = await bot.fetch_channel(thread_id)
     except discord.NotFound:
         return False
     except discord.HTTPException as e:

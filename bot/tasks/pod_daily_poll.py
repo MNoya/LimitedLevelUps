@@ -157,8 +157,6 @@ from bot.tasks.pod_underfill import (
 
 log = logging.getLogger(__name__)
 
-_bot: commands.Bot | None = None
-
 LAUNCHER_CLOSE_LOOKBACK_DAYS = 3
 PLAY_AGAIN_FLOOR_MIN = 5
 PLAY_AGAIN_PODIUM_SLACK_SECONDS = 60
@@ -177,15 +175,13 @@ FIELD_VALUE_LIMIT = 1024
 
 
 def init_daily_poll(bot: commands.Bot) -> None:
-    global _bot
-    _bot = bot
     register_launcher_refresh(refresh_launcher_for_date)
     set_pod_drafting_hook(roll_slot_after_draft_start)
     set_pod_complete_hook(roll_slot_after_pod)
     set_podium_posted_hook(release_play_again)
     pod_launch.set_slot_roll_hook(roll_slot_after_expiry)
     bot.pod_scheduler.add_job(
-        fire_daily_poll, "cron", hour=POST_HOUR_ET, minute=0,
+        fire_daily_poll, "cron", args=[bot], hour=POST_HOUR_ET, minute=0,
         timezone=SCHEDULE_TZ, id="pod-daily-poll", replace_existing=True,
     )
     log.info(f"scheduled daily pod launcher at {POST_HOUR_ET:02d}:00 ET")
@@ -197,25 +193,23 @@ def _poll_channel(bot: commands.Bot) -> "discord.abc.Messageable | None":
     return bot.get_channel(settings.pod_draft_channel_id)
 
 
-async def fire_daily_poll() -> None:
+async def fire_daily_poll(bot: commands.Bot) -> None:
     """Post today's board with the day's ping, replacing the one the evening repost may already have put up
     for today. The board itself is what players read, so the day's ping goes on a fresh board at the bottom
     of the channel instead of on a line pointing up at one posted the day before. Adoption moves every open
     row onto the new message first, so the one it replaces is left holding nothing and is deleted."""
-    if _bot is None:
-        return
     today = datetime.now(SCHEDULE_TZ).date()
-    channel = _poll_channel(_bot)
+    channel = _poll_channel(bot)
     if channel is None:
         log.warning("fire_daily_poll: coordination channel unresolved")
         return
     superseded = await asyncio.to_thread(pod_launch.launcher_ref_for_date_sync, today)
-    message = await post_launcher(_bot, channel, today)
+    message = await post_launcher(bot, channel, today)
     if message is not None:
         log.info(f"posted daily pod launcher for {today} as message {message.id}")
         if superseded is not None:
-            await _delete_launcher_message(_bot, superseded)
-    await close_recent_launchers(_bot, today)
+            await _delete_launcher_message(bot, superseded)
+    await close_recent_launchers(bot, today)
     await pod_launch.close_past_pod_cards()
 
 
@@ -260,7 +254,7 @@ async def catch_up_daily_poll(bot: commands.Bot) -> None:
         existing = await _launcher_posted_since(channel, post_hour, bot)
         if existing is None:
             log.info(f"catching up the daily launcher for {today}, missed at the post hour")
-            await fire_daily_poll()
+            await fire_daily_poll(bot)
             return
         log.info(f"launcher {existing.id} already up for {today}; graduating and re-rendering at startup")
         guild_id = str(channel.guild.id) if channel.guild else ""

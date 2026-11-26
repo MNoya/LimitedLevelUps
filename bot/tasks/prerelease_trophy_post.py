@@ -26,27 +26,22 @@ MSG_BODY = (
     "-# works for any {paper} Tabletop event, {mtgo} MTGO or other platforms"
 )
 
-_bot: commands.Bot | None = None
-
-
 def init_prerelease_trophy_post(bot: commands.Bot) -> None:
-    global _bot
-    _bot = bot
     bot.pod_scheduler.add_job(
-        fire_prerelease_post, "cron", hour=f"{POST_TIME.hour}-20", minute=POST_TIME.minute,
+        fire_prerelease_post, "cron", args=[bot], hour=f"{POST_TIME.hour}-20", minute=POST_TIME.minute,
         timezone=OPEN_TZ, id="prerelease-trophy-post", replace_existing=True,
     )
     log.info(f"prerelease-trophy: hourly tick armed from {POST_TIME:%H:%M} {OPEN_TZ.key} on prerelease Fridays")
 
 
-async def fire_prerelease_post() -> None:
-    if _bot is None or _bot.user is None:
+async def fire_prerelease_post(bot: commands.Bot) -> None:
+    if bot.user is None:
         return
     today = datetime.now(OPEN_TZ).date()
     seed = prerelease_set_on(today)
     if seed is None:
         return
-    guild = _bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
+    guild = bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
     if guild is None:
         log.warning("prerelease-trophy: no configured guild, skipping")
         return
@@ -55,9 +50,9 @@ async def fire_prerelease_post() -> None:
         log.warning(f"prerelease-trophy: no {settings.pod_draft_trophy_hype_channel_name} channel, skipping")
         return
     try:
-        if await _already_posted(channel, _bot.user, today):
+        if await _already_posted(channel, bot.user, today):
             return
-        await send_trophy_card(channel, seed.code, _bot.user, PRERELEASE_LABEL)
+        await send_trophy_card(channel, seed.code, bot.user, PRERELEASE_LABEL)
     except discord.HTTPException:
         log.warning(f"prerelease-trophy: {seed.code} post failed, retrying next hour", exc_info=True)
         return

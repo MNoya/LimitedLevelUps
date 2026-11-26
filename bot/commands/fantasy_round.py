@@ -51,7 +51,7 @@ class FantasyRound(commands.Cog):
         shown_through = label if number <= event.swiss_rounds else f"the {label}"
         message = MSG_ROUND_REVEALED.format(event=event.name, label=shown_through)
         await interaction.followup.send(message)
-        await announce_reveal(event, previous, number)
+        await announce_reveal(self.bot, event, previous, number)
 
 
 def live_event(now: datetime) -> FantasyEvent | None:

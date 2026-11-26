@@ -18,24 +18,19 @@ from bot.services.pod_schedule import SCHEDULE_TZ
 
 log = logging.getLogger(__name__)
 
-_bot: commands.Bot | None = None
-
-
 def init_format_vote(bot: commands.Bot) -> None:
-    global _bot
-    _bot = bot
     if not settings.pod_schedule_enabled:
         log.info("POD_SCHEDULE_ENABLED=false; format vote tick disabled")
         return
     bot.pod_scheduler.add_job(
-        fire_format_vote_tick, "cron", hour=BALLOT_OPENS_AT.hour, minute=BALLOT_OPENS_AT.minute,
+        fire_format_vote_tick, "cron", args=[bot], hour=BALLOT_OPENS_AT.hour, minute=BALLOT_OPENS_AT.minute,
         timezone=SCHEDULE_TZ, id="format-vote-tick", replace_existing=True,
     )
     log.info(f"format vote tick armed at {BALLOT_OPENS_AT:%H:%M} {SCHEDULE_TZ.key}")
 
 
-async def fire_format_vote_tick() -> None:
-    if _bot is None or not settings.pod_schedule_enabled:
+async def fire_format_vote_tick(bot: commands.Bot) -> None:
+    if not settings.pod_schedule_enabled:
         return
     now = datetime.now(SCHEDULE_TZ)
     opening = vote_ping_due(now)
@@ -43,7 +38,7 @@ async def fire_format_vote_tick() -> None:
     closing = voting_closed(now)
     if opening is None and reminding is None and not closing:
         return
-    channel = resolve_pod_chat_channel(_bot)
+    channel = resolve_pod_chat_channel(bot)
     if channel is None:
         log.warning("format vote: no pod chat channel; skipping tick")
         return
@@ -53,14 +48,14 @@ async def fire_format_vote_tick() -> None:
         outcome = await post_vote_reminder(channel)
         if outcome is not None:
             log.info(f"format vote: {reminding.set_code} reminder pinged {outcome.pinged}/{outcome.targeted}")
-            await _post_debug(reminding.set_code, outcome.pinged, outcome.targeted)
+            await _post_debug(bot, reminding.set_code, outcome.pinged, outcome.targeted)
     if closing and await close_vote_card(channel):
         log.info("format vote: closed, buttons dropped from the card")
 
 
-async def _post_debug(set_code: str, pinged: int, targeted: int) -> None:
+async def _post_debug(bot: commands.Bot, set_code: str, pinged: int, targeted: int) -> None:
     """The role is emptied after the ping, so this is the only record of who was reached"""
-    bot_log = getattr(_bot, "bot_log", None)
+    bot_log = getattr(bot, "bot_log", None)
     if bot_log is None:
         return
     await bot_log.post(f"Flashback vote reminder for `{set_code}` pinged **{pinged}** of {targeted} in pod chat",

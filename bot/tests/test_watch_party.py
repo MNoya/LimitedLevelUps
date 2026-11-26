@@ -51,11 +51,10 @@ def test_each_window_posts_its_upcoming_and_live_embeds_on_exactly_one_tick():
     assert posts == [[False, True]] * len(windows)
 
 
-def test_an_unreadable_pin_list_posts_no_new_coverage_pin(monkeypatch):
-    monkeypatch.setattr(watch_party_post, "_bot", SimpleNamespace(fetch_application_emojis=AsyncMock(return_value=[])))
+def test_an_unreadable_pin_list_posts_no_new_coverage_pin():
     channel = _UnreachablePinsChannel()
 
-    asyncio.run(watch_party_post._refresh_coverage_pin(channel, _pro_events(CALENDAR)))
+    asyncio.run(watch_party_post._refresh_coverage_pin(channel, _pro_events(CALENDAR), {}))
 
     channel.send.assert_not_awaited()
 
@@ -79,6 +78,7 @@ def _pro_events(calendar: list[dict]) -> list:
 
 class _UnreachablePinsChannel:
     name = "watch-party"
+    guild = SimpleNamespace(me=None)
 
     def __init__(self):
         self.send = AsyncMock()

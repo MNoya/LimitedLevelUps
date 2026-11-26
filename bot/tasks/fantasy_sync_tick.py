@@ -15,21 +15,20 @@ from bot.services.fantasy_reveal import advance_auto_reveal
 from bot.services.fantasy_sync import SyncSummary, sync_event
 from bot.services.melee import MeleeClient
 from bot.services.pro_events import event_schedule
-from bot.tasks.pro_play_posts import alert_unseeded_bracket, announce_reveal, fire_pro_play_posts, init_pro_play_posts
+from bot.tasks.pro_play_posts import alert_unseeded_bracket, announce_reveal, fire_pro_play_posts
 
 log = logging.getLogger(__name__)
 
 
 def init_fantasy_sync(bot: commands.Bot) -> None:
-    init_pro_play_posts(bot)
     bot.pod_scheduler.add_job(
-        fire_fantasy_sync, "cron", minute="*/10", timezone=timezone.utc,
+        fire_fantasy_sync, "cron", args=[bot], minute="*/10", timezone=timezone.utc,
         id="fantasy-sync", replace_existing=True,
     )
     log.info("fantasy-sync: ten-minute tick armed for Melee syncs and Pro Play posts")
 
 
-async def fire_fantasy_sync() -> None:
+async def fire_fantasy_sync(bot: commands.Bot) -> None:
     now = datetime.now(timezone.utc)
     for event in all_events():
         if not sync_due(event, now):
@@ -40,10 +39,10 @@ async def fire_fantasy_sync() -> None:
             log.warning(f"fantasy-sync: {event.code} tick failed, retrying next tick", exc_info=True)
             continue
         if summary.unseeded_quarterfinals:
-            await alert_unseeded_bracket(event)
+            await alert_unseeded_bracket(bot, event)
         if reveal is not None:
-            await announce_reveal(event, *reveal)
-    await fire_pro_play_posts()
+            await announce_reveal(bot, event, *reveal)
+    await fire_pro_play_posts(bot)
 
 
 def sync_due(event: FantasyEvent, now: datetime) -> bool:

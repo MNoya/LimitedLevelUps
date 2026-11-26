@@ -76,12 +76,7 @@ MSG_NO_DEEP_ARCHIVE = (f"⚠️ **{FORMAT_ARCHIVE_CATEGORY}** holds Discord's li
 
 log = logging.getLogger(__name__)
 
-_bot: commands.Bot | None = None
-
-
 def init_format_schedule(bot: commands.Bot) -> None:
-    global _bot
-    _bot = bot
     if not settings.format_schedule_enabled:
         log.info("FORMAT_SCHEDULE_ENABLED=false; format-schedule tick disabled")
         return
@@ -89,6 +84,7 @@ def init_format_schedule(bot: commands.Bot) -> None:
         bot.pod_scheduler.add_job(
             fire_window,
             "cron",
+            args=[bot],
             hour=window.hour,
             minute=window.minute,
             timezone=OPEN_TZ,
@@ -98,6 +94,7 @@ def init_format_schedule(bot: commands.Bot) -> None:
     bot.pod_scheduler.add_job(
         fire_rotation,
         "cron",
+        args=[bot],
         hour=RELEASE_TIME.hour,
         minute=RELEASE_TIME.minute,
         timezone=RELEASE_TZ,
@@ -107,6 +104,7 @@ def init_format_schedule(bot: commands.Bot) -> None:
     bot.pod_scheduler.add_job(
         fire_archive,
         "cron",
+        args=[bot],
         hour=ARCHIVE_TIME.hour,
         minute=ARCHIVE_TIME.minute,
         timezone=RELEASE_TZ,
@@ -119,21 +117,18 @@ def init_format_schedule(bot: commands.Bot) -> None:
              f"archive {ARCHIVE_TIME.hour:02d}:{ARCHIVE_TIME.minute:02d} {RELEASE_TZ.key}")
 
 
-def _guild() -> discord.Guild | None:
-    if _bot is None:
-        log.error("format-schedule: bot reference is not initialised")
-        return None
-    guild = _bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
+def _guild(bot: commands.Bot) -> discord.Guild | None:
+    guild = bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
     if guild is None:
         log.warning("format-schedule: guild unavailable; skipping tick")
     return guild
 
 
-async def fire_rotation() -> None:
+async def fire_rotation(bot: commands.Bot) -> None:
     """The outgoing set's send-off standings and, on release day, the incoming set's pinned craft link, on their
     own cron at the noon-ET release instant. Archiving is a separate job ``ARCHIVE_DELAY`` later, so the final
     boards sit in the channel players are already reading for an hour before it moves out of MTG Strategy."""
-    guild = _guild()
+    guild = _guild(bot)
     if guild is None:
         return
     for channel in archive_candidates(guild.text_channels):
@@ -142,23 +137,23 @@ async def fire_rotation() -> None:
         await pin_craft_link(guild)
 
 
-async def fire_archive() -> None:
+async def fire_archive(bot: commands.Bot) -> None:
     """Archive what the rotation left behind, an hour after its send-off. The announce tick re-runs this as
     an idempotent fallback: an archived channel is no longer a candidate, so a second pass does nothing."""
-    guild = _guild()
+    guild = _guild(bot)
     if guild is not None:
         await _archive_stale_channels(guild)
 
 
-async def fire_window() -> None:
-    guild = _guild()
+async def fire_window(bot: commands.Bot) -> None:
+    guild = _guild(bot)
     if guild is None:
         return
 
     now = datetime.now(timezone.utc)
     since = previous_window_start(now)
     events = mtgscribe.load_events()
-    emojis = {emoji.name: emoji for emoji in await _bot.fetch_application_emojis()}
+    emojis = {emoji.name: emoji for emoji in await bot.fetch_application_emojis()}
 
     for pin in SCHEDULE_PINS:
         channel = _resolve_channel(guild, pin)
@@ -463,9 +458,10 @@ async def _delete_quietly(message: discord.Message) -> None:
 
 
 async def pinned_schedule(channel: discord.TextChannel, marker: str) -> discord.Message | None:
+    me = channel.guild.me
     try:
         async for message in channel.pins():
-            if _bot.user is not None and message.author.id == _bot.user.id and marker in message_text(message):
+            if me is not None and message.author.id == me.id and marker in message_text(message):
                 return message
     except discord.HTTPException:
         log.warning(f"format-schedule: could not read pins in #{channel.name}", exc_info=True)
@@ -504,10 +500,11 @@ def announcement_for(pin: SchedulePin, group: mtgscribe.EventGroup, groups: list
 
 async def _recent_bot_messages(channel: discord.TextChannel) -> list[str]:
     since = datetime.now(timezone.utc) - DEDUP_LOOKBACK
+    me = channel.guild.me
     texts: list[str] = []
     try:
         async for message in channel.history(after=since, limit=HISTORY_SCAN_LIMIT):
-            if _bot.user is None or message.author.id != _bot.user.id:
+            if me is None or message.author.id != me.id:
                 continue
             text = message_text(message)
             if text:
