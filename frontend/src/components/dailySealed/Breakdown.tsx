@@ -42,7 +42,7 @@ import { CardGrid, ColumnRow, PHONE_PILE_WIDTH, StripList, type CardActions } fr
 import { DECK_LAYOUT_KEY, usePreference, type DeckLayout } from "./usePreference";
 import { MARK_OUTLINE } from "./markStyle";
 import { FilterToggle } from "./controls";
-import { Pane, Panel, SORT_LABELS } from "./panels";
+import { Pane, Panel, SIDEBAR_WIDTH_CLASS, SORT_LABELS } from "./panels";
 import { PILE_GAP, PileBoard } from "./piles";
 import { useWidth } from "./cardWidth";
 import { PileSymbol } from "./PileSymbol";
@@ -123,7 +123,7 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
   };
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[max-content_minmax(0,1fr)]">
-      <div className="flex min-h-0 w-[288px] flex-col overflow-y-auto border-r border-border">
+      <div className={cn("flex min-h-0 flex-col overflow-y-auto border-r border-border", SIDEBAR_WIDTH_CLASS)}>
         {state.original && (
           <Panel title="ORIGINAL BUILD">
             <OriginalResult pool={view.pool} />

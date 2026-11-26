@@ -86,16 +86,27 @@ export const formatDay = (day: string) => {
     .toUpperCase();
 };
 
-export const SubmitButton = ({ view, wide = false }: { view: BuilderView; wide?: boolean }) => {
+export const SubmitButton = ({
+  view,
+  wide = false,
+  statusOnly = false,
+}: {
+  view: BuilderView;
+  wide?: boolean;
+  statusOnly?: boolean;
+}) => {
   const { submitState } = view;
-  const label = !submitState.signedIn
+  const label = statusOnly
+    ? "SUBMITTED"
+    : !submitState.signedIn
     ? "SIGN IN TO SUBMIT"
     : submitState.submitted
       ? submitState.unchanged
         ? "SUBMITTED"
         : "UPDATE"
       : "SUBMIT";
-  const enabled = !submitState.pending && (!submitState.signedIn || (submitState.ready && !submitState.unchanged));
+  const enabled =
+    !statusOnly && !submitState.pending && (!submitState.signedIn || (submitState.ready && !submitState.unchanged));
   return (
     <button
       type="button"

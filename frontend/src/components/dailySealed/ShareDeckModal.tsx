@@ -69,13 +69,16 @@ export const ShareDeckModal = ({ view, onClose }: { view: BuilderView; onClose: 
     if (!blob) {
       return;
     }
-    if (!sweeps) {
-      finishSweep();
-    }
     const url = URL.createObjectURL(blob);
     setImageUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [blob]);
+  useEffect(() => {
+    if (blob && (sweepDone || !sweeps)) {
+      lastSweptKey = imageKey;
+      blobReady.current.resolve(blob);
+    }
+  }, [blob, sweepDone]);
   useEffect(() => {
     const node = stageRef.current;
     if (!node || blob) {
@@ -99,14 +102,6 @@ export const ShareDeckModal = ({ view, onClose }: { view: BuilderView; onClose: 
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const finishSweep = () => {
-    if (!blob) {
-      return;
-    }
-    setSweepDone(true);
-    lastSweptKey = imageKey;
-    blobReady.current.resolve(blob);
-  };
   const copy = async () => {
     if (!blob) {
       return;
@@ -162,7 +157,7 @@ export const ShareDeckModal = ({ view, onClose }: { view: BuilderView; onClose: 
               />
             )}
             {sweeps && !failed && !sweepDone && (
-              <div className="share-shine pointer-events-none absolute inset-0" onAnimationIteration={finishSweep} />
+              <div className="share-shine pointer-events-none absolute inset-0" onAnimationEnd={() => setSweepDone(true)} />
             )}
           </div>
         </div>

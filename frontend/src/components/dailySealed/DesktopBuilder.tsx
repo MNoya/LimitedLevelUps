@@ -21,7 +21,7 @@ import { CardPreview, CardStack, NO_CARD_ACTIONS, REVEAL_RATIO } from "./cards";
 import { BasicsGrid, DeckCount, DeckStats, FillLandsButton, PoolFilterBar } from "./controls";
 import { HiddenPanel, HiddenToggle, PILE_GAP, PileBoard } from "./piles";
 import { pileTargetAt, sameTarget } from "./pileHitTest";
-import { DeckPanel, Pane, Panel, SORT_LABELS } from "./panels";
+import { DeckPanel, Pane, Panel, SIDEBAR_WIDTH_CLASS, SORT_LABELS } from "./panels";
 import { usePreference } from "./usePreference";
 import { fittedCardWidth, useWidth } from "./cardWidth";
 import { DesktopBreakdown } from "./Breakdown";
@@ -152,7 +152,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
           <DesktopBreakdown view={view} />
         ) : (
           <div className="grid min-h-0 flex-1 grid-cols-[max-content_minmax(0,1fr)]">
-            <div className="flex min-h-0 flex-col overflow-y-auto border-r border-border">
+            <div className={cn("flex min-h-0 flex-col overflow-y-auto border-r border-border", SIDEBAR_WIDTH_CLASS)}>
               <Panel title="FILTERS">
                 <PoolFilterBar
                   setCode={view.pool.setCode}
@@ -330,7 +330,9 @@ const Header = ({ view, mode, onMode }: { view: BuilderView; mode: Mode; onMode:
             SHARE
           </button>
         </Tooltip>
-        <BuildActions shown={mode === "build"}>{submitState.visible && <SubmitButton view={view} />}</BuildActions>
+        <BuildActions shown={mode === "build" || submitState.submitted}>
+          {submitState.visible && <SubmitButton view={view} statusOnly={mode === "breakdown"} />}
+        </BuildActions>
       </div>
       {sharing && <ShareDeckModal view={view} onClose={() => setSharing(false)} />}
       {view.submits > 0 && <ShareImageWarmup key={view.submits} view={view} />}

@@ -9,6 +9,8 @@ import { DROP_ZONE_ATTR } from "./pileHitTest";
 
 const DECK_DEFAULT_FRACTION = 0.38;
 
+export const SIDEBAR_WIDTH_CLASS = "w-[255px] shrink-0";
+
 export const SORT_LABELS: Record<SortKey, string> = { mana: "Mana Value", color: "Color", rarity: "Rarity" };
 
 export const Panel = ({ title, grow = false, children }: { title: string; grow?: boolean; children: ReactNode }) => (
