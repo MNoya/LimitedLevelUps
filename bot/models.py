@@ -264,6 +264,7 @@ class DailySealedPool(Base):
     format         = Column(Text, nullable=False)
     cards          = Column(JSONB, nullable=False)
     original_main  = Column(ARRAY(SmallInteger), nullable=False, server_default="{}")
+    original_basics = Column(JSONB, nullable=True)
     colors         = Column(Text, nullable=True)
     wins           = Column(SmallInteger, nullable=False)
     losses         = Column(SmallInteger, nullable=False)

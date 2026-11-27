@@ -25,6 +25,7 @@ interface PoolRow {
   format: string;
   cards: PoolCard[];
   original_main: number[];
+  original_basics?: Basics | null;
   colors: string | null;
   wins: number;
   losses: number;
@@ -38,7 +39,6 @@ interface BuildRow {
   colors: string;
 }
 
-const POOL_COLUMNS = "day,set_code,pool_number,format,cards,original_main,colors,wins,losses,build_count";
 
 export const useDailySealedPool = (day: string | undefined) =>
   useQuery({
@@ -82,7 +82,7 @@ const fetchPool = async (day: string | undefined): Promise<DailySealedPool | nul
   if (!supabase) {
     return mockPool();
   }
-  let query = supabase.from("public_daily_sealed_pools").select(POOL_COLUMNS);
+  let query = supabase.from("public_daily_sealed_pools").select("*");
   query = day ? query.eq("day", day) : query.order("day", { ascending: false }).limit(1);
   const { data, error } = await query;
   if (error) throw error;
@@ -164,6 +164,7 @@ const toPool = (row: PoolRow): DailySealedPool => ({
   format: row.format,
   cards: row.cards,
   originalMain: row.original_main ?? [],
+  originalBasics: row.original_basics ?? null,
   colors: row.colors,
   wins: row.wins,
   losses: row.losses,
@@ -177,6 +178,7 @@ const mockPool = (): DailySealedPool => ({
   format: "Sealed",
   cards: MOCK_POOL.map(({ main: _main, ...card }) => card),
   originalMain: MOCK_POOL.flatMap((card, index) => (card.main ? [index] : [])),
+  originalBasics: null,
   colors: "UBrg",
   wins: 2,
   losses: 3,

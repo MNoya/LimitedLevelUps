@@ -23,6 +23,7 @@ export interface DailySealedPool {
   format: string;
   cards: PoolCard[];
   originalMain: number[];
+  originalBasics: Basics | null;
   colors: string | null;
   wins: number;
   losses: number;

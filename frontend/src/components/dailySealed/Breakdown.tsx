@@ -127,7 +127,13 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
       <div className={cn("flex min-h-0 flex-col overflow-y-auto border-r border-border", SIDEBAR_WIDTH_CLASS)}>
         {state.original && (
           <Panel title="ORIGINAL BUILD">
-            <OriginalResult pool={view.pool} />
+            <OriginalResult
+              pool={view.pool}
+              onShow={() => {
+                state.setDeckKey("original");
+                setTab("decks");
+              }}
+            />
           </Panel>
         )}
         <Panel title="COLORS">
@@ -758,7 +764,7 @@ const useBreakdown = (view: BuilderView) => {
     [...indexes].sort((a, b) => pool.cards[a].cmc - pool.cards[b].cmc).map((index) => ({ index, card: pool.cards[index] }));
   const original: DeckChoice | null =
     pool.originalMain.length > 0
-      ? { key: "original", colors: pool.colors, main: pool.originalMain, basics: null }
+      ? { key: "original", colors: pool.colors, main: pool.originalMain, basics: pool.originalBasics }
       : null;
   const yours: DeckChoice | null = yourBuild
     ? { key: "yours", colors: yourBuild.colors, main: yourBuild.main, basics: yourBuild.basics }
@@ -972,14 +978,19 @@ const PhoneExtra = ({ tab, state }: { tab: ExtraTab; state: BreakdownState }) =>
 
 const indexesOf = (entries: PoolEntry[]) => entries.map((entry) => entry.index);
 
-const OriginalResult = ({ pool }: { pool: DailySealedPool }) => (
+const OriginalResult = ({ pool, onShow }: { pool: DailySealedPool; onShow: () => void }) => (
   <div className="flex flex-col items-center gap-1.5">
-    <div className="flex items-center gap-3">
+    <button
+      type="button"
+      onClick={onShow}
+      className={cn("flex h-10 items-center gap-3 px-3 text-text", chipClass(false))}
+    >
       {pool.colors && <Pips colors={pool.colors} size={18} />}
-      <span className="font-num text-[22px] leading-none text-text">
+      <span className="font-num text-[22px] leading-none">
         {pool.wins}-{pool.losses}
       </span>
-    </div>
+      <ChevronRight size={15} className="-mr-1 text-subtle" />
+    </button>
     <span className="text-[13px] text-subtle">{EVENT_NAMES[pool.format] ?? pool.format}</span>
   </div>
 );

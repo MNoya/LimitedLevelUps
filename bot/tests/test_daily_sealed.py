@@ -5,7 +5,7 @@ import pytest
 from bot.commands.test_group import HALL_OF_FAME
 from bot.models import DailySealedPool, DraftEvent, MagicSet, Player
 from bot.services import daily_sealed
-from bot.services.daily_sealed import days_to_pick, pick_pool, ranked_candidates
+from bot.services.daily_sealed import FINAL_BASICS_KEY, days_to_pick, pick_pool, pool_from_deck, ranked_candidates
 from bot.sets import ALL_SETS
 
 SET_CODE = "TRK"
@@ -58,6 +58,7 @@ def test_a_short_pool_is_skipped_for_the_next_candidate(session, monkeypatch):
     stored = session.get(DailySealedPool, DAY)
     assert len(stored.cards) == 84
     assert stored.original_main == [0, 1]
+    assert stored.original_basics == {"W": 0, "U": 1, "B": 0, "R": 0, "G": 0}
 
 
 def test_of_three_pools_the_one_with_the_most_deep_colors_is_picked(session, monkeypatch):
@@ -77,6 +78,15 @@ def test_of_three_pools_the_one_with_the_most_deep_colors_is_picked(session, mon
     pool = pick_pool(session, DAY, decks.get, load_gih=lambda set_code: gih, pause=lambda seconds: None)
 
     assert pool.draft_event_id == events[1].id
+
+
+def test_the_original_basics_come_from_the_final_deck_version():
+    deck = _deck(60)
+    deck[FINAL_BASICS_KEY] = {"W": 0, "U": 9, "B": 8, "R": 0, "G": 0}
+
+    original = pool_from_deck(deck)
+
+    assert original.basics == {"W": 0, "U": 9, "B": 8, "R": 0, "G": 0}
 
 
 def _seed_set(session):

@@ -6,6 +6,7 @@ import random
 import statistics
 from time import sleep
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -26,6 +27,7 @@ PICK_LEAD = timedelta(hours=5)
 MIN_POOL_CARDS = 60
 SKIPPED_FORMATS = ("MidWeekSealed",)
 FINAL_MAIN_KEY = "final_main_names"
+FINAL_BASICS_KEY = "final_main_basics"
 CANDIDATES_COMPARED = 3
 FETCH_SPACING_S = 7.0
 DECK_PLAYABLES = 23
@@ -33,6 +35,7 @@ MISSING_PLAYABLE_GIH = 0.45
 DEEP_COLOR_PLAYABLES = 5
 COLOR_PAIRS = ("WU", "UB", "BR", "RG", "WG", "WB", "UR", "BG", "WR", "UG")
 BASIC_LANDS = frozenset({"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"})
+BASIC_COLORS = {"Plains": "W", "Island": "U", "Swamp": "B", "Mountain": "R", "Forest": "G"}
 
 DeckFetcher = Callable[[str], dict | None]
 GihLoader = Callable[[str], dict[str, float] | None]
@@ -80,25 +83,26 @@ def pick_pool(
         if position > 0:
             pause(FETCH_SPACING_S)
         deck = fetch_deck(event.seventeenlands_event_id)
-        cards, original_main = pool_from_deck(deck)
-        if len(cards) < MIN_POOL_CARDS:
-            log.info(f"daily sealed: skipping {event.seventeenlands_event_id}, pool has {len(cards)} cards")
+        original = pool_from_deck(deck)
+        if len(original.cards) < MIN_POOL_CARDS:
+            log.info(f"daily sealed: skipping {event.seventeenlands_event_id}, pool has {len(original.cards)} cards")
             continue
-        usable.append((event, cards, original_main))
+        usable.append((event, original))
         if gih is None or len(usable) == CANDIDATES_COMPARED:
             break
     if not usable:
         log.warning(f"daily sealed: no usable {set_code} pool for {day}")
         return None
-    event, cards, original_main = usable[0] if gih is None else most_open_pool(usable, gih)
+    event, original = usable[0] if gih is None else most_open_pool(usable, gih)
     pool = DailySealedPool(
         day=day,
         set_code=set_code,
         draft_event_id=event.id,
         player_id=event.player_id,
         format=event.format,
-        cards=cards,
-        original_main=original_main,
+        cards=original.cards,
+        original_main=original.main,
+        original_basics=original.basics,
         colors=event.colors,
         wins=event.wins,
         losses=event.losses,
@@ -116,9 +120,9 @@ def default_gih_loader(set_code: str) -> dict[str, float] | None:
 def most_open_pool(usable: list[tuple], gih: dict[str, float]) -> tuple:
     playable_floor = statistics.median(gih.values())
     best = usable[0]
-    best_rank = openness(best[1], gih, playable_floor)
+    best_rank = openness(best[1].cards, gih, playable_floor)
     for candidate in usable[1:]:
-        rank = openness(candidate[1], gih, playable_floor)
+        rank = openness(candidate[1].cards, gih, playable_floor)
         if rank > best_rank:
             best, best_rank = candidate, rank
     log.info(f"daily sealed: compared {len(usable)} pools, picked {best_rank[0]} deep colors")
@@ -201,6 +205,7 @@ def fetch_17lands_deck(seventeenlands_event_id: str) -> dict | None:
         final = fetch_deck_version(seventeenlands_event_id, versions - 1)
         if final is not None:
             first[FINAL_MAIN_KEY] = main_deck_names(final)
+            first[FINAL_BASICS_KEY] = main_deck_basics(final)
     return first
 
 
@@ -224,9 +229,29 @@ def main_deck_names(deck: dict) -> list[str]:
     return names
 
 
-def pool_from_deck(deck: dict | None) -> tuple[list[dict], list[int]]:
+def main_deck_basics(deck: dict) -> dict[str, int]:
+    cards_by_id = deck.get("cards") or {}
+    basics = {color: 0 for color in "WUBRG"}
+    for group in deck.get("groups") or []:
+        if str(group.get("name", "")).lower() != "maindeck":
+            continue
+        for card_id in group.get("cards") or []:
+            color = BASIC_COLORS.get((cards_by_id.get(str(card_id)) or {}).get("name"))
+            if color:
+                basics[color] += 1
+    return basics
+
+
+@dataclass
+class OriginalPool:
+    cards: list[dict]
+    main: list[int]
+    basics: dict[str, int] | None
+
+
+def pool_from_deck(deck: dict | None) -> OriginalPool:
     if not deck:
-        return [], []
+        return OriginalPool([], [], None)
     cards_by_id = deck.get("cards") or {}
     pool = []
     original_main = []
@@ -251,7 +276,7 @@ def pool_from_deck(deck: dict | None) -> tuple[list[dict], list[int]]:
             })
     if FINAL_MAIN_KEY in deck:
         original_main = indexes_for_names(pool, deck[FINAL_MAIN_KEY])
-    return pool, original_main
+    return OriginalPool(pool, original_main, deck.get(FINAL_BASICS_KEY) or main_deck_basics(deck))
 
 
 def indexes_for_names(pool: list[dict], names: list[str]) -> list[int]:
