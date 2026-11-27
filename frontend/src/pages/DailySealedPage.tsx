@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useBlocker, useParams } from "react-router-dom";
 
 import { PageShell } from "../components/PageShell";
 import { DesktopBuilder } from "../components/dailySealed/DesktopBuilder";
@@ -97,6 +97,33 @@ const useNoPageScrollbarGutter = (active: boolean) => {
       html.style.scrollbarGutter = previous;
     };
   }, [active]);
+};
+
+const useWarnBeforeLeave = (active: boolean) => {
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [active]);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) => active && currentLocation.pathname !== nextLocation.pathname,
+  );
+  useEffect(() => {
+    if (blocker.state !== "blocked") {
+      return;
+    }
+    if (window.confirm("Your build isn't submitted. Leave anyway?")) {
+      blocker.proceed();
+    } else {
+      blocker.reset();
+    }
+  }, [blocker]);
 };
 
 const localTurnoverTime = () => nextTurnover().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -199,6 +226,8 @@ const useBuilderView = (pool: DailySealedPool, isMobile: boolean, [chosenScreen,
   };
   const submission = builder.submission();
   const unchanged = !!ownBuild && sameBuild(ownBuild, submission);
+  const ownBuildSettled = !user || ownBuildLoaded;
+  useWarnBeforeLeave(isToday && ownBuildSettled && !save.isPending && builder.deck.length > 0 && !unchanged);
   const setName = useMemo(
     () => sets?.find((set) => set.code === pool.setCode)?.name ?? pool.setCode,
     [sets, pool.setCode],

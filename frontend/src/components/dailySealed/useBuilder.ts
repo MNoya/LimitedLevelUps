@@ -196,7 +196,7 @@ export const useBuilder = (cards: PoolCard[], storageKey: string | null, seed: B
       setHistory((prev) => prev.slice(0, -1));
       setState(previous);
     },
-    reset: () => apply(fresh()),
+    reset: () => apply(seed ? build(seed.main, seed.basics, seed.hidden, state.sort, state.split) : fresh()),
     colors: () => deckColors(deckCards),
     arenaList: () =>
       arenaExport(

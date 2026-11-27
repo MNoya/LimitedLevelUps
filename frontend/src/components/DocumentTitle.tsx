@@ -196,6 +196,9 @@ const resolvePageTitle = (
     }
     return rest[1] ? `${rest[1].toUpperCase()} Bulk Crafting` : "Bulk Crafting";
   }
+  if (section === "daily-sealed") {
+    return "Daily Sealed";
+  }
   if (section === "wheel-of-fortune") {
     return WHEEL_GAME_TITLE;
   }
