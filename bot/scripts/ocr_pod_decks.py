@@ -77,10 +77,11 @@ def seat_pool(compact: dict, seat: int) -> dict[int, str]:
 def classify(frags: list[dict], width: int, pool: dict[int, str]) -> Verdict:
     from rapidfuzz import fuzz, process, utils
 
-    pool_names = list({v for v in pool.values()})
     name_to_idxs: dict[str, list[int]] = {}
     for idx, name in pool.items():
-        name_to_idxs.setdefault(name, []).append(idx)
+        front_face = name.split(" // ")[0]
+        name_to_idxs.setdefault(front_face, []).append(idx)
+    pool_names = list(name_to_idxs)
     all_idxs = set(pool)
 
     claimed: set[int] = set()
