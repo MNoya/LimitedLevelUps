@@ -43,6 +43,7 @@ import { CardGrid, ColumnRow, PHONE_PILE_WIDTH, StripList, type CardActions } fr
 import { DECK_LAYOUT_KEY, usePreference, type DeckLayout } from "./usePreference";
 import { MARK_OUTLINE } from "./markStyle";
 import { FilterToggle } from "./controls";
+import { DesktopBreakdownSkeleton, PhoneBreakdownSkeleton } from "./BuilderSkeleton";
 import { Pane, Panel, SIDEBAR_WIDTH_CLASS, SORT_LABELS } from "./panels";
 import { PILE_GAP, PileBoard } from "./piles";
 import { useWidth } from "./elementSize";
@@ -102,7 +103,7 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
       )
     : [];
   if (view.results.builds.length === 0) {
-    return <Empty loading={view.results.loading} />;
+    return view.results.loading ? <DesktopBreakdownSkeleton /> : <Empty />;
   }
   const board = (rows: Row[], actions: CardActions, rateSort = false) => {
     const dividerBefore = rateSort ? rows[0]?.find((pile) => pile.key.startsWith(NONCREATURE_PREFIX))?.key : undefined;
@@ -255,7 +256,7 @@ export const PhoneBreakdown = ({ view, stickyTop }: { view: BuilderView; stickyT
   const overviewRef = useRef<HTMLDivElement>(null);
   const overviewHeight = useRestOfScreen(overviewRef, overview && loaded);
   if (!loaded) {
-    return <Empty loading={view.results.loading} />;
+    return view.results.loading ? <PhoneBreakdownSkeleton /> : <Empty />;
   }
   const pick = (key: string) => {
     const bar = tabsRef.current;
@@ -1311,8 +1312,6 @@ const Nothing = ({ text }: { text: string }) => (
   <span className="py-2 text-center text-[13px] text-subtle">{text}</span>
 );
 
-const Empty = ({ loading }: { loading: boolean }) => (
-  <div className="flex flex-1 items-center justify-center py-20 text-[14px] text-subtle">
-    {loading ? "Loading the builds" : "No builds for this pool yet"}
-  </div>
+const Empty = () => (
+  <div className="flex flex-1 items-center justify-center py-20 text-[14px] text-subtle">No builds for this pool yet</div>
 );

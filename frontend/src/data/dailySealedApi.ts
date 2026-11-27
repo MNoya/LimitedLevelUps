@@ -79,6 +79,7 @@ export const useSaveDailySealedBuild = (day: string | undefined) => {
 };
 
 const fetchPool = async (day: string | undefined): Promise<DailySealedPool | null> => {
+  await heldInDev("pool");
   if (!supabase) {
     return mockPool();
   }
@@ -109,6 +110,7 @@ const fetchDays = async (): Promise<DailySealedDay[]> => {
 };
 
 const fetchBuilds = async (day: string): Promise<DailySealedBuild[]> => {
+  await heldInDev("builds");
   if (!supabase) {
     return mockBuilds;
   }
@@ -191,3 +193,8 @@ let mockBuilds: DailySealedBuild[] = [
   { buildKey: "b2", main: [], basics: { W: 8, U: 9, B: 0, R: 0, G: 0 }, colors: "WU" },
   { buildKey: "c3", main: [], basics: { W: 0, U: 0, B: 9, R: 8, G: 0 }, colors: "BRu" },
 ];
+
+const heldInDev = (part: "pool" | "builds"): Promise<void> => {
+  const held = import.meta.env.DEV && new URLSearchParams(window.location.search).getAll("loading").includes(part);
+  return held ? new Promise(() => undefined) : Promise.resolve();
+};

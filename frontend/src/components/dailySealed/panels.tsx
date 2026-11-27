@@ -16,7 +16,7 @@ export const SORT_LABELS: Record<SortKey, string> = { mana: "Mana Value", color:
 
 export const Panel = ({ title, grow = false, children }: { title: string; grow?: boolean; children: ReactNode }) => (
   <section className={cn("border-b border-border px-3 pb-3 pt-2 last:border-b-0", grow && "flex flex-1 flex-col")}>
-    <h2 className="mb-4 text-center font-display text-[15px] tracking-[0.18em] text-text">{title}</h2>
+    <h2 className="mb-2.5 text-center font-display text-[15px] tracking-[0.18em] text-text">{title}</h2>
     {children}
   </section>
 );

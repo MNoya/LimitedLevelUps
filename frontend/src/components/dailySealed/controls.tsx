@@ -59,7 +59,7 @@ export const PoolFilterBar = ({
       <FilterGroup label="COLOR" stacked joined>
         <ColorToggles filters={filters} onChange={onChange} compact={false} withColorless />
       </FilterGroup>
-      <div className={cn("flex items-end", stacked ? "justify-center gap-2" : "w-full justify-between")}>
+      <div className={cn("flex items-end justify-center", stacked ? "gap-2" : "gap-7")}>
         <FilterGroup label="RARITY" stacked joined>
           <RarityToggles setCode={setCode} filters={filters} onChange={onChange} compact={false} />
         </FilterGroup>

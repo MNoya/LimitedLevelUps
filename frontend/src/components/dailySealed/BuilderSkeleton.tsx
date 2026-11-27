@@ -10,13 +10,16 @@ import { DayNavBar } from "./shared";
 import { useCountdown } from "./useCountdown";
 import { BasicsGrid, DeckCount, DeckStats, PoolFilterBar } from "./controls";
 import { chipClass, SURFACE_BUTTON, SwitchToggle } from "../pod/review/reviewControls";
-import { Pane, Panel, SORT_LABELS } from "./panels";
+import { Pane, Panel, SIDEBAR_WIDTH_CLASS, SORT_LABELS } from "./panels";
 import { HiddenToggle, PILE_GAP } from "./piles";
 
 const SIDE_PILE_SIZES = [13, 10, 14, 13, 15, 8, 9];
 const DECK_PILE_SIZES = [2, 3, 0, 4, 1, 0, 2, 0];
 const PILE_COLUMNS = `repeat(${DECK_PILE_SIZES.length}, minmax(0, 220px))`;
 const PHONE_STRIP_GROUPS = [5, 4, 6, 3];
+const BREAKDOWN_PILE_SIZES = [9, 7, 5, 4, 3];
+const PAIR_ROWS = 5;
+const PHONE_GRID_CARDS = 9;
 
 export const DesktopBuilderSkeleton = ({ resting = false }: { resting?: boolean }) => {
   const dimmed = useDimmed(resting);
@@ -55,8 +58,8 @@ export const DesktopBuilderSkeleton = ({ resting = false }: { resting?: boolean 
           </span>
         </div>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[230px_minmax(0,1fr)]">
-        <div className="flex min-h-0 flex-col overflow-hidden border-r border-border">
+      <div className="grid min-h-0 flex-1 grid-cols-[max-content_minmax(0,1fr)]">
+        <div className={cn("flex min-h-0 flex-col overflow-hidden border-r border-border", SIDEBAR_WIDTH_CLASS)}>
           <Panel title="FILTERS">
             <PoolFilterBar
               setCode={setCode}
@@ -151,6 +154,65 @@ export const PhoneBuilderSkeleton = ({ resting = false }: { resting?: boolean })
     </div>
   );
 };
+
+export const DesktopBreakdownSkeleton = () => (
+  <div
+    className="grid min-h-0 flex-1 grid-cols-[max-content_minmax(0,1fr)]"
+    aria-busy
+    aria-label="Loading the builds"
+  >
+    <div className={cn("flex min-h-0 flex-col overflow-hidden border-r border-border", SIDEBAR_WIDTH_CLASS)}>
+      <Panel title="ORIGINAL BUILD">
+        <div className="flex flex-col items-center gap-1.5">
+          <Block className="h-10 w-40" />
+          <Block className="h-3 w-24" />
+        </div>
+      </Panel>
+      <Panel title="COLORS">
+        <div className="flex flex-col gap-1">
+          {Array.from({ length: PAIR_ROWS }, (_, row) => (
+            <Block key={row} className="h-8 w-full" />
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <Block className="h-[140px] w-[140px] shrink-0 rounded-full" />
+          <div className="flex flex-1 flex-col gap-2">
+            <Block className="h-3 w-full" />
+            <Block className="h-3 w-full" />
+            <Block className="h-3 w-full" />
+          </div>
+        </div>
+      </Panel>
+      <Panel title="INSIGHTS" grow>
+        <div className="flex flex-col items-center gap-6 pt-4">
+          <Block className="h-7 w-full" />
+          <Block className="h-7 w-full" />
+          <Block className="h-9 w-32" />
+        </div>
+      </Panel>
+    </div>
+    <Pane zone="side" title={<Block className="h-4 w-96" />} count={null} controls={<Block className="h-8 w-72" />}>
+      <PileRow sizes={BREAKDOWN_PILE_SIZES} />
+    </Pane>
+  </div>
+);
+
+export const PhoneBreakdownSkeleton = () => (
+  <div className="flex flex-col gap-3 pt-2" aria-busy aria-label="Loading the builds">
+    <Block className="h-9 w-full" />
+    <div className="flex gap-1.5">
+      <Block className="h-9 w-16" />
+      <Block className="h-9 w-20" />
+      <Block className="h-9 w-20" />
+      <Block className="h-9 w-20" />
+    </div>
+    <div className="grid grid-cols-3 gap-2">
+      {Array.from({ length: PHONE_GRID_CARDS }, (_, card) => (
+        <Block key={card} className="aspect-[488/680] w-full rounded-[4.5%/3.2%]" />
+      ))}
+    </div>
+  </div>
+);
 
 const useDimmed = (resting: boolean) => {
   const [dimmed, setDimmed] = useState(false);

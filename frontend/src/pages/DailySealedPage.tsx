@@ -160,7 +160,11 @@ const PoolBuilder = ({ pool, isMobile, screen }: { pool: DailySealedPool; isMobi
 
 export type BuilderView = ReturnType<typeof useBuilderView>;
 
-const useBuilderView = (pool: DailySealedPool, isMobile: boolean, [chosenScreen, chooseScreen]: ScreenState) => {
+const useBuilderView = (pool: DailySealedPool, isMobile: boolean, [chosenScreen, setChosenScreen]: ScreenState) => {
+  const chooseScreen = (choice: ScreenChoice) => {
+    setChosenScreen(choice);
+    rememberScreen(choice);
+  };
   const { user, signIn } = useAuth();
   const isToday = pool.day === servingDay();
   const screen = chosenScreen?.day === pool.day ? chosenScreen : startingScreen(pool.day, isToday);
@@ -297,11 +301,36 @@ const useBuilderView = (pool: DailySealedPool, isMobile: boolean, [chosenScreen,
   };
 };
 
-const startingScreen = (day: string, isToday: boolean): ScreenChoice => ({
-  day,
-  breakdown: !isToday || breakdownAnchored(),
-  phoneTab: "pool",
-});
+const startingScreen = (day: string, isToday: boolean): ScreenChoice => {
+  const remembered = rememberedScreen(day);
+  return {
+    day,
+    breakdown: breakdownAnchored() || (remembered?.breakdown ?? !isToday),
+    phoneTab: remembered?.phoneTab ?? "pool",
+  };
+};
+
+const screenKey = (day: string) => `daily-sealed:screen:${day}`;
+
+const rememberScreen = (choice: ScreenChoice) => {
+  try {
+    localStorage.setItem(screenKey(choice.day), JSON.stringify({ breakdown: choice.breakdown, phoneTab: choice.phoneTab }));
+  } catch {
+    return;
+  }
+};
+
+const rememberedScreen = (day: string): Pick<ScreenChoice, "breakdown" | "phoneTab"> | null => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(screenKey(day)) ?? "null");
+    if (typeof stored?.breakdown !== "boolean" || (stored.phoneTab !== "pool" && stored.phoneTab !== "deck")) {
+      return null;
+    }
+    return { breakdown: stored.breakdown, phoneTab: stored.phoneTab };
+  } catch {
+    return null;
+  }
+};
 
 const basicLandItems = (setCode: string) => COLORS.map((color) => ({ name: BASIC_NAMES[color], set: setCode }));
 
