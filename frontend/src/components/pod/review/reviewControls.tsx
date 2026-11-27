@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import { cn } from "../../../lib/utils";
+import { wheelPixels } from "../../../lib/use-wheel-trap";
 import { ToggleSwitch } from "../../ToggleSwitch";
 import { Tooltip } from "../../Tooltip";
 
@@ -72,3 +73,103 @@ export function ChevronIcon({ dir }: { dir: "up" | "down" | "left" | "right" }) 
     </svg>
   );
 }
+
+export const ZoomControl = ({
+  label,
+  fitting,
+  canShrink,
+  canGrow,
+  onStep,
+  onToggleFit,
+  fitTooltip,
+  highlightFit = true,
+  className,
+  labelClassName,
+}: {
+  label: string;
+  fitting: boolean;
+  canShrink: boolean;
+  canGrow: boolean;
+  onStep: (dir: 1 | -1) => void;
+  onToggleFit?: () => void;
+  fitTooltip: string;
+  highlightFit?: boolean;
+  className?: string;
+  labelClassName?: string;
+}) => {
+  const stepButton = cn(
+    "flex h-full w-8 items-center justify-center text-[16px] text-subtle transition-colors",
+    "hover:bg-white/10 hover:text-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent",
+  );
+  const labelCell = "flex min-w-[52px] flex-1 items-center justify-center border-x border-border px-1.5";
+  const shown = (
+    <span
+      className={cn(
+        "font-display text-[14px] tracking-[0.12em] tabular-nums [text-box:trim-both_cap_alphabetic]",
+        fitting && highlightFit ? "text-green" : cn("text-subtle", labelClassName),
+      )}
+    >
+      {fitting ? "FIT" : label}
+    </span>
+  );
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 items-stretch overflow-hidden rounded-md border border-border bg-surface2",
+        className,
+      )}
+    >
+      <Tooltip label="Smaller cards (Ctrl+Scroll)" side="top">
+        <button onClick={() => onStep(-1)} disabled={!canShrink} aria-label="Smaller cards" className={stepButton}>
+          −
+        </button>
+      </Tooltip>
+      {onToggleFit ? (
+        <Tooltip label={fitTooltip} side="top">
+          <button
+            onClick={onToggleFit}
+            role="switch"
+            aria-checked={fitting}
+            aria-label="Fit"
+            className={cn(labelCell, "transition-colors hover:bg-white/10")}
+          >
+            {shown}
+          </button>
+        </Tooltip>
+      ) : (
+        <span className={labelCell}>{shown}</span>
+      )}
+      <Tooltip label="Bigger cards (Ctrl+Scroll)" side="top">
+        <button onClick={() => onStep(1)} disabled={!canGrow} aria-label="Bigger cards" className={stepButton}>
+          +
+        </button>
+      </Tooltip>
+    </div>
+  );
+};
+
+export const useCtrlWheelZoom = (ref: RefObject<HTMLElement | null>, onStep: (dir: 1 | -1) => void) => {
+  const onStepRef = useRef(onStep);
+  onStepRef.current = onStep;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) {
+      return;
+    }
+    let pending = 0;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) {
+        return;
+      }
+      e.preventDefault();
+      pending += wheelPixels(e, el);
+      if (Math.abs(pending) < 40) {
+        return;
+      }
+      onStepRef.current(pending < 0 ? 1 : -1);
+      pending = 0;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [ref]);
+};

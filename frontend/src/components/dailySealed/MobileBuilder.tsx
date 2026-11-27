@@ -112,6 +112,7 @@ export const MobileBuilder = ({ view }: { view: BuilderView }) => {
             ratings={view.ratings}
             onToggleRatings={view.toggleRatings}
             ratingsAvailable={view.ratingsAvailable}
+            ratingsLoading={view.ratingsLoading}
           />
         </FilterSheet>
       )}

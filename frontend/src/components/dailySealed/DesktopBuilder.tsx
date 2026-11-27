@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode, type RefObject } from "react";
 import { DndContext, DragOverlay } from "@dnd-kit/core";
 import { ChartPie, Check, Copy, Hammer, RotateCcw, Share2, Undo2 } from "lucide-react";
 import { useCopyFeedback } from "../CopyTextButton";
@@ -19,7 +19,7 @@ import { fittedCardWidth } from "./cardWidth";
 import { useWidth } from "./elementSize";
 import { DesktopBreakdown } from "./Breakdown";
 import { TabButton } from "../TabButton";
-import { SURFACE_BUTTON, SwitchToggle } from "../pod/review/reviewControls";
+import { SURFACE_BUTTON, SwitchToggle, useCtrlWheelZoom, ZoomControl } from "../pod/review/reviewControls";
 import { DayNav, GREEN_CTA, PreviewMove, SubmitButton, Toast } from "./shared";
 import { useCountdown } from "./useCountdown";
 import { ShareDeckModal, ShareImageWarmup } from "./ShareDeckModal";
@@ -40,7 +40,11 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
     ...builder.layout.deck.map((row) => row.length),
   );
   const fittedWidth = fittedCardWidth(useWidth(paneRef) - (hiddenOpen ? hiddenWidth : 0), widestRow);
-  const { dragging, ghost, overZone, cardWidth, contextProps } = usePileDrag(builder, fittedWidth);
+  const zoom = useBoardZoom(paneRef);
+  const { dragging, ghost, overZone, cardWidth, contextProps } = usePileDrag(
+    builder,
+    Math.round(fittedWidth * zoom.scale),
+  );
   const overHidden = overZone === "hidden";
 
   return (
@@ -50,6 +54,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
           view={view}
           mode={mode}
           onMode={(next) => (next === "build" ? view.showBuild() : view.showBreakdown())}
+          zoomControl={<BoardZoomControl zoom={zoom} />}
         />
         {mode === "breakdown" ? (
           <DesktopBreakdown view={view} />
@@ -65,6 +70,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
                   ratings={view.ratings}
                   onToggleRatings={view.toggleRatings}
                   ratingsAvailable={view.ratingsAvailable}
+                  ratingsLoading={view.ratingsLoading}
                 />
               </Panel>
               <Panel title="BASIC LANDS">
@@ -179,12 +185,22 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
   );
 };
 
-const Header = ({ view, mode, onMode }: { view: BuilderView; mode: Mode; onMode: (mode: Mode) => void }) => {
+const Header = ({
+  view,
+  mode,
+  onMode,
+  zoomControl,
+}: {
+  view: BuilderView;
+  mode: Mode;
+  onMode: (mode: Mode) => void;
+  zoomControl?: ReactNode;
+}) => {
   const { builder, submitState } = view;
   const countdown = useCountdown(view.isToday);
   const [sharing, setSharing] = useState(false);
   return (
-    <div className="flex h-12 shrink-0 items-center gap-4 border-b border-border px-3">
+    <div className="flex h-12 shrink-0 items-center gap-4 border-b border-border px-3 max-[1679px]:gap-3">
       <Link to="/tools" aria-label="Back to Tools" className="shrink-0">
         <img src={LLU_LOGO_SRC} alt="" className="h-8 w-8" />
       </Link>
@@ -193,34 +209,38 @@ const Header = ({ view, mode, onMode }: { view: BuilderView; mode: Mode; onMode:
         <div className="flex items-baseline gap-3">
           <h1 className="font-display text-[18px] leading-none tracking-[0.12em]">DAILY SEALED</h1>
           <span className="font-display text-[14px] leading-none tracking-[0.12em] text-subtle">
-            {view.setName.toUpperCase()} POOL <span className="text-green">#{view.pool.poolNumber}</span>
+            <span className="max-[1679px]:hidden">{view.setName.toUpperCase()} POOL </span>
+            <span className="text-green">#{view.pool.poolNumber}</span>
           </span>
         </div>
         <div className="ml-1 font-display text-[15px] leading-none tracking-[0.14em] text-subtle">
           <DayNav view={view} dateClassName="relative top-px" />
         </div>
         {countdown && (
-          <span className="ml-2 w-[11em] text-[13px] leading-none text-subtle max-xl:hidden">
+          <span className="ml-2 w-[11em] text-[13px] leading-none text-subtle max-[1679px]:hidden">
             New pool in {countdown}
           </span>
         )}
       </div>
       <div className="flex min-w-0 flex-1 justify-center self-stretch">
         {view.results.available && (
-          <div className="flex shrink-0 [&>button]:h-full [&>button]:flex-none [&>button]:gap-2 [&>button]:px-5">
+          <div className="flex shrink-0 [&>button]:h-full [&>button]:flex-none [&>button]:gap-2 [&>button]:px-5 max-[1679px]:[&>button]:px-2.5">
             <TabButton active={mode === "build"} onClick={() => onMode("build")}>
               <Hammer size={16} />
               BUILD
             </TabButton>
             <TabButton active={mode === "breakdown"} onClick={() => onMode("breakdown")}>
               <ChartPie size={16} />
-              CARD BREAKDOWN
+              <span>
+                <span className="max-[1679px]:hidden">CARD </span>BREAKDOWN
+              </span>
             </TabButton>
           </div>
         )}
       </div>
       <div className="flex items-center gap-1.5 [&>*]:h-9">
         <BuildActions shown={mode === "build"}>
+          {zoomControl}
           <HeaderButton icon={<Undo2 size={15} />} label="Undo" onClick={builder.undo} disabled={!builder.canUndo} />
           <HeaderButton icon={<RotateCcw size={15} />} label="Reset" onClick={builder.reset} />
           <DeckCount size={builder.deckSize} />
@@ -308,6 +328,44 @@ const CopyHeaderButton = ({
 
 const HIDDEN_WIDTH_KEY = "daily-sealed:hidden-width";
 const HIDDEN_OPEN_KEY = "daily-sealed:hidden-open";
+const ZOOM_KEY = "daily-sealed:zoom";
+const ZOOM_STEPS = [0.7, 0.8, 0.9, 1, 1.15, 1.3, 1.5];
+
+type BoardZoom = ReturnType<typeof useBoardZoom>;
+
+const useBoardZoom = (boardRef: RefObject<HTMLElement | null>) => {
+  const [stored, setStored] = usePreference<string>(ZOOM_KEY, "1");
+  const scale = ZOOM_STEPS.includes(Number(stored)) ? Number(stored) : 1;
+  const position = ZOOM_STEPS.indexOf(scale);
+  const step = (dir: 1 | -1) => {
+    const next = ZOOM_STEPS[position + dir];
+    if (next !== undefined) {
+      setStored(String(next));
+    }
+  };
+  useCtrlWheelZoom(boardRef, step);
+  return {
+    scale,
+    fitting: scale === 1,
+    canShrink: position > 0,
+    canGrow: position < ZOOM_STEPS.length - 1,
+    step,
+    fit: () => setStored("1"),
+  };
+};
+
+const BoardZoomControl = ({ zoom }: { zoom: BoardZoom }) => (
+  <ZoomControl
+    label={`${Math.round(zoom.scale * 100)}%`}
+    fitting={zoom.fitting}
+    canShrink={zoom.canShrink}
+    canGrow={zoom.canGrow}
+    onStep={zoom.step}
+    onToggleFit={zoom.fit}
+    fitTooltip="Fit cards to the board"
+    highlightFit={false}
+  />
+);
 const HIDDEN_DEFAULT_WIDTH = 190;
 const HIDDEN_MIN_WIDTH = 140;
 const HIDDEN_MAX_WIDTH = 420;

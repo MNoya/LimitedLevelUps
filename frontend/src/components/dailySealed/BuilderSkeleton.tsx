@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { LLU_LOGO_SRC, SetGlyph } from "../Brand";
 import { cn } from "../../lib/utils";
 import { useSets } from "../../data/hooks";
+import { ACTIVE_SET_CODE } from "../../data/constants";
 import { EMPTY_BASICS, nextTurnover, NO_FILTERS, servingDay } from "../../data/dailySealed";
 import { DayNavBar } from "./shared";
 import { useCountdown } from "./useCountdown";
@@ -25,7 +26,6 @@ export const DesktopBuilderSkeleton = ({ resting = false }: { resting?: boolean 
   const dimmed = useDimmed(resting);
   const { data: sets } = useSets();
   const activeSet = sets?.find((set) => set.isActive);
-  const setCode = activeSet?.code ?? "";
   return (
     <div
       className={cn("flex h-full min-h-0 flex-col", restingClass(resting, dimmed))}
@@ -40,7 +40,7 @@ export const DesktopBuilderSkeleton = ({ resting = false }: { resting?: boolean 
           <FirstPoolHeading setCode={activeSet.code} setName={activeSet.name} />
         ) : (
           <>
-            <Block className="h-[22px] w-[22px] rounded-full" />
+            <SetGlyph code={ACTIVE_SET_CODE} size={22} />
             <h1 className="font-display text-[18px] leading-none tracking-[0.12em]">DAILY SEALED</h1>
             <Block className="h-3.5 w-44" />
             <Block className="h-3.5 w-36" />
@@ -62,7 +62,7 @@ export const DesktopBuilderSkeleton = ({ resting = false }: { resting?: boolean 
         <div className={cn("flex min-h-0 flex-col overflow-hidden border-r border-border", SIDEBAR_WIDTH_CLASS)}>
           <Panel title="FILTERS">
             <PoolFilterBar
-              setCode={setCode}
+              setCode={ACTIVE_SET_CODE}
               cards={[]}
               filters={NO_FILTERS}
               onChange={() => undefined}

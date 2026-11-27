@@ -38,6 +38,7 @@ export const PoolFilterBar = ({
   ratings,
   onToggleRatings,
   ratingsAvailable,
+  ratingsLoading = false,
   stacked = false,
 }: {
   stacked?: boolean;
@@ -48,6 +49,7 @@ export const PoolFilterBar = ({
   ratings: boolean;
   onToggleRatings: () => void;
   ratingsAvailable: boolean;
+  ratingsLoading?: boolean;
 }) => {
   const toggleType = (key: string) =>
     onChange({
@@ -63,9 +65,14 @@ export const PoolFilterBar = ({
         <FilterGroup label="RARITY" stacked joined>
           <RarityToggles setCode={setCode} filters={filters} onChange={onChange} compact={false} />
         </FilterGroup>
-        {ratingsAvailable && (
-          <FilterBlock label="GIH WR">
-            <FilterToggle active={ratings} onClick={onToggleRatings} wide className="h-10">
+        {(ratingsAvailable || ratingsLoading) && (
+          <FilterBlock label="GIH WR" className="w-10">
+            <FilterToggle
+              active={ratings}
+              onClick={onToggleRatings}
+              disabled={!ratingsAvailable}
+              className="h-10 w-10"
+            >
               <span className="text-[12px]">{ratings ? "On" : "Off"}</span>
             </FilterToggle>
           </FilterBlock>
@@ -197,9 +204,19 @@ export const RarityToggles = ({
   </>
 );
 
-export const FilterBlock = ({ label, children }: { label: string; children: ReactNode }) => (
-  <div className="flex flex-col gap-1">
-    <span className="whitespace-nowrap text-center font-display text-[12px] tracking-[0.2em] text-subtle">{label}</span>
+export const FilterBlock = ({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: ReactNode;
+}) => (
+  <div className={cn("flex flex-col gap-1", className)}>
+    <span className="flex justify-center whitespace-nowrap font-display text-[12px] tracking-[0.2em] text-subtle">
+      {label}
+    </span>
     <div className="flex flex-wrap justify-center gap-1.5">{children}</div>
   </div>
 );
@@ -210,6 +227,7 @@ export const FilterToggle = ({
   label,
   wide = false,
   small = false,
+  disabled = false,
   className,
   children,
 }: {
@@ -218,12 +236,14 @@ export const FilterToggle = ({
   label?: string;
   wide?: boolean;
   small?: boolean;
+  disabled?: boolean;
   className?: string;
   children: ReactNode;
 }) => (
   <button
     type="button"
     onClick={onClick}
+    disabled={disabled}
     aria-label={label}
     aria-pressed={active}
     className={cn(

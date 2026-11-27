@@ -1075,13 +1075,13 @@ const Insights = ({
   return (
     <div className={cn("flex flex-col gap-3", spread && "flex-1 justify-evenly")}>
       {contested !== null && !state.single && (
-        <Insight label="MOST CONTESTED">
-          <InsightCard state={state} index={contested} figure={state.rateLabel(contested)} centered={centerCards} />
+        <Insight label="MOST CONTESTED" figure={state.rateLabel(contested)}>
+          <InsightCard state={state} index={contested} centered={centerCards} />
         </Insight>
       )}
       {splashed !== null && !state.single && (
-        <Insight label="MOST SPLASHED">
-          <InsightCard state={state} index={splashed} figure={state.splashLabel(splashed)} centered={centerCards} />
+        <Insight label="MOST SPLASHED" figure={state.splashLabel(splashed)}>
+          <InsightCard state={state} index={splashed} centered={centerCards} />
         </Insight>
       )}
       {top && !state.single && (
@@ -1112,29 +1112,19 @@ const BuildLink = ({ colors, average, onClick }: { colors: string; average: numb
   </button>
 );
 
-const InsightCard = ({
-  state,
-  index,
-  figure,
-  centered = false,
-}: {
-  state: BreakdownState;
-  index: number;
-  figure: string;
-  centered?: boolean;
-}) => (
-  <div className="flex items-center gap-2">
-    {centered && <span className="w-[5ch] shrink-0" />}
-    <div className="min-w-0 flex-1">
-      <StripList entries={state.entriesByValue([index])} actions={state.deckActions} />
-    </div>
-    <span className="w-[5ch] shrink-0 font-num text-[14px] text-text">{figure}</span>
+const InsightCard = ({ state, index, centered = false }: { state: BreakdownState; index: number; centered?: boolean }) => (
+  <div className={cn(centered && "mx-auto w-full max-w-[300px]")}>
+    <StripList entries={state.entriesByValue([index])} actions={state.deckActions} />
   </div>
 );
 
-const Insight = ({ label, children }: { label: string; children: ReactNode }) => (
+const Insight = ({ label, figure, children }: { label: string; figure?: string; children: ReactNode }) => (
   <div className="flex flex-col gap-1">
-    <span className="text-center font-display text-[12px] tracking-[0.16em] text-subtle">{label}</span>
+    <span className="grid grid-cols-[1fr_auto_1fr] items-baseline">
+      <span />
+      <span className="font-display text-[12px] tracking-[0.16em] text-subtle">{label}</span>
+      {figure && <span className="pl-3 font-num text-[13px] text-text">{figure}</span>}
+    </span>
     {children}
   </div>
 );
