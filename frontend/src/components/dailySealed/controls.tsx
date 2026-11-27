@@ -374,6 +374,9 @@ export const DeckSummary = ({ builder }: { builder: Builder }) => {
         <span>
           <span className="text-[15px] text-text">{counts.lands}</span> lands
         </span>
+        <span>
+          <span className="text-[15px] text-text">{counts.averageManaValue?.toFixed(2) ?? "-"}</span> avg MV
+        </span>
       </div>
       <Curve entries={builder.deck} tall={false} />
       <PipsVsSources deck={builder.deck} basics={builder.basics} />
