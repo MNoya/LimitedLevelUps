@@ -9,7 +9,7 @@ import {
   fillLands,
   type Basics,
   type Color,
-  type DailySealedPool,
+  type PoolCard,
   type PoolEntry,
   type Zone,
 } from "../../data/dailySealed";
@@ -42,16 +42,21 @@ const DEFAULT_SORT: Record<PileZone, SortKey> = { side: "color", deck: "mana" };
 
 export type Builder = ReturnType<typeof useBuilder>;
 
-export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null | undefined) => {
-  const storageKey = `daily-sealed:v2:${pool.day}`;
-  const allIndexes = useMemo(() => pool.cards.map((_, index) => index), [pool.cards]);
-  const build = (main: number[], basics: Basics, sort = DEFAULT_SORT, split = false): BuildState => {
-    const inDeck = new Set(main);
+export interface BuildSeed {
+  main: number[];
+  basics: Basics;
+  hidden?: number[];
+}
+
+export const useBuilder = (cards: PoolCard[], storageKey: string | null, seed: BuildSeed | null | undefined) => {
+  const allIndexes = useMemo(() => cards.map((_, index) => index), [cards]);
+  const build = (main: number[], basics: Basics, hidden: number[] = [], sort = DEFAULT_SORT, split = false): BuildState => {
+    const placed = new Set([...main, ...hidden]);
     return {
       layout: {
-        side: sortZone(pool.cards, allIndexes.filter((index) => !inDeck.has(index)), sort.side, false),
-        deck: sortZone(pool.cards, main, sort.deck, split),
-        hidden: [],
+        side: sortZone(cards, allIndexes.filter((index) => !placed.has(index)), sort.side, false),
+        deck: sortZone(cards, main, sort.deck, split),
+        hidden,
       },
       basics,
       sort,
@@ -59,22 +64,24 @@ export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null
     };
   };
   const fresh = () => build([], { ...EMPTY_BASICS });
-  const [saved] = useState(() => readSaved(storageKey, pool.cards.length));
-  const [state, setState] = useState<BuildState>(() => saved ?? fresh());
+  const [saved] = useState(() => (storageKey ? readSaved(storageKey, cards.length) : null));
+  const [state, setState] = useState<BuildState>(() => saved ?? (seed ? build(seed.main, seed.basics, seed.hidden) : fresh()));
   const [history, setHistory] = useState<BuildState[]>([]);
   const touched = useRef(saved !== null);
   const dragStart = useRef<BuildState | null>(null);
   const dragLayout = useRef<Layout | null>(null);
 
   useEffect(() => {
-    if (touched.current || !ownBuild) {
+    if (touched.current || !seed) {
       return;
     }
-    setState(build(ownBuild.main, ownBuild.basics));
-  }, [ownBuild, pool.cards]);
+    setState(build(seed.main, seed.basics, seed.hidden));
+  }, [seed, cards]);
 
   useEffect(() => {
-    writeSaved(storageKey, state);
+    if (storageKey) {
+      writeSaved(storageKey, state);
+    }
   }, [storageKey, state]);
 
   const apply = (next: BuildState) => {
@@ -93,7 +100,7 @@ export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null
     setState((current) => ({ ...current, layout }));
   };
 
-  const entryOf = (index: number): PoolEntry => ({ index, card: pool.cards[index] });
+  const entryOf = (index: number): PoolEntry => ({ index, card: cards[index] });
   const deck = zoneCards(state.layout.deck).map(entryOf);
   const side = zoneCards(state.layout.side).map(entryOf);
   const hidden = state.layout.hidden.map(entryOf);
@@ -110,7 +117,6 @@ export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null
   }, [state.layout]);
 
   return {
-    pool,
     layout: state.layout,
     sort: state.sort,
     deck,
@@ -126,12 +132,12 @@ export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null
         withLayout(hideCards(state.layout, indexes));
         return;
       }
-      withLayout(placeInSlot(state.layout, pool.cards, indexes, zone, state.sort[zone], zone === "deck" && state.split));
+      withLayout(placeInSlot(state.layout, cards, indexes, zone, state.sort[zone], zone === "deck" && state.split));
     },
     sortBy: (zone: PileZone, key: SortKey) => {
       const indexes = zoneCards(state.layout[zone]);
       const split = zone === "deck" && state.split;
-      const layout = { ...state.layout, [zone]: sortZone(pool.cards, indexes, key, split) };
+      const layout = { ...state.layout, [zone]: sortZone(cards, indexes, key, split) };
       apply({
         ...state,
         sort: { ...state.sort, [zone]: key },
@@ -140,7 +146,7 @@ export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null
     },
     toggleSplit: () => {
       const split = !state.split;
-      const deckRows = sortZone(pool.cards, zoneCards(state.layout.deck), state.sort.deck, split);
+      const deckRows = sortZone(cards, zoneCards(state.layout.deck), state.sort.deck, split);
       apply({ ...state, split, layout: { ...state.layout, deck: deckRows, basicsSlot: undefined } });
     },
     beginDrag: (openLandsPile: boolean) => {
@@ -180,7 +186,7 @@ export const useBuilder = (pool: DailySealedPool, ownBuild: OwnBuildInput | null
       apply({ ...state, basics: { ...state.basics, [color]: Math.max(0, state.basics[color] + by) } }),
     fillLands: () => apply({ ...state, basics: fillLands(deckCards, state.basics) }),
     clearHidden: () =>
-      withLayout(placeInSlot(state.layout, pool.cards, state.layout.hidden, "side", state.sort.side, false)),
+      withLayout(placeInSlot(state.layout, cards, state.layout.hidden, "side", state.sort.side, false)),
     undo: () => {
       touched.current = true;
       const previous = history[history.length - 1];

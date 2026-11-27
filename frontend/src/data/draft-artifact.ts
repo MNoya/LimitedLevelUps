@@ -1,7 +1,7 @@
 // Client-side derivations over the pod draft artifact (public_pod_draft_log). The deck view reads
 // resolveDeck; the draft-review view reads reconstructDraft over the same artifact's packs/picks.
 
-import type { Mainboard, MainboardCard, PodDraftArtifact } from "../types/leaderboard";
+import type { DeckPool, DeckSplit, Mainboard, MainboardCard, PodDraftArtifact } from "../types/leaderboard";
 
 type ArtifactCard = PodDraftArtifact["cards"][number];
 
@@ -39,7 +39,7 @@ export function reconstructDraft(artifact: PodDraftArtifact): DraftPickView[][][
           boosters[seat].splice(pos, 1);
         }
       }
-      boosters = boosters.map((_, seat) => boosters[((seat - dir) % n + n) % n]);
+      boosters = boosters.map((_, seat) => boosters[(((seat - dir) % n) + n) % n]);
     }
   }
   return views;
@@ -91,12 +91,30 @@ export function resolveDeck(artifact: PodDraftArtifact, seatIndex: number): Main
   if (!deck || deck.main.length === 0) {
     return null;
   }
-  const deckSet = dominantSet(artifact, deck.main);
+  return resolveDeckSplit(artifact, deck);
+}
+
+export function resolveDeckSplit(artifact: PodDraftArtifact, split: DeckSplit): Mainboard {
+  const deckSet = dominantSet(artifact, split.main);
   return {
     set: deckSet,
-    cards: resolveCards(artifact, deck.main, deckSet),
-    sideboard: resolveCards(artifact, deck.side, deckSet),
+    cards: resolveCards(artifact, split.main, deckSet),
+    sideboard: resolveCards(artifact, split.side, deckSet),
   };
+}
+
+export function deckPool(artifact: PodDraftArtifact, split: DeckSplit): { pool: DeckPool; ids: number[] } {
+  const deckSet = dominantSet(artifact, split.main);
+  const ids = [...split.main, ...split.side].sort((a, b) => a - b);
+  const inMain = new Set(split.main);
+  const main: number[] = [];
+  for (const [position, id] of ids.entries()) {
+    if (inMain.has(id)) {
+      main.push(position);
+    }
+  }
+  const cards = ids.map((id) => mainboardCard(artifact.cards[id], deckSet));
+  return { ids, pool: { set: deckSet, cards, main } };
 }
 
 function dominantSet(artifact: PodDraftArtifact, indices: number[]): string | null {
@@ -135,16 +153,26 @@ function resolveCards(artifact: PodDraftArtifact, indices: number[], deckSet: st
   return [...grouped.values()]
     .sort((a, b) => (a.card.cmc ?? 99) - (b.card.cmc ?? 99) || a.card.n!.localeCompare(b.card.n!))
     .map(({ card, count }) => {
-      const resolved: MainboardCard = { name: card.n!, cn: card.cn, cmc: card.cmc, type: card.type };
-      if (card.s && card.s !== deckSet) {
-        resolved.set = card.s;
-      }
-      if (card.c && card.c.length) {
-        resolved.colors = card.c;
-      }
+      const resolved = mainboardCard(card, deckSet);
       if (count > 1) {
         resolved.count = count;
       }
       return resolved;
     });
+}
+
+function mainboardCard(card: ArtifactCard | undefined, deckSet: string | null): MainboardCard {
+  const resolved: MainboardCard = {
+    name: card?.n ?? "",
+    cn: card?.cn ?? null,
+    cmc: card?.cmc ?? null,
+    type: card?.type ?? null,
+  };
+  if (card?.s && card.s !== deckSet) {
+    resolved.set = card.s;
+  }
+  if (card?.c && card.c.length) {
+    resolved.colors = card.c;
+  }
+  return resolved;
 }

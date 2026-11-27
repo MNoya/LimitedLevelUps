@@ -6,6 +6,7 @@ import { SCROLL_LIST_STYLE } from "../../lib/scroll-list";
 import { cn } from "../../lib/utils";
 import type { PileZone, SortKey } from "../../data/dailySealedLayout";
 import { DROP_ZONE_ATTR } from "./pileHitTest";
+import { chipClass } from "../pod/review/reviewControls";
 
 const DECK_DEFAULT_FRACTION = 0.38;
 
@@ -18,6 +19,29 @@ export const Panel = ({ title, grow = false, children }: { title: string; grow?:
     <h2 className="mb-4 text-center font-display text-[15px] tracking-[0.18em] text-text">{title}</h2>
     {children}
   </section>
+);
+
+export const SortControls = ({ onSort }: { onSort: (key: SortKey) => void }) => (
+  <div className="ml-4 flex items-center gap-2">
+    <span className="font-display text-[13px] tracking-[0.18em] text-subtle">SORT BY</span>
+    <div className="flex gap-1">
+      {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onSort(key)}
+          className={cn(
+            "h-8 px-2.5 text-[12px] uppercase tracking-[0.12em]",
+            chipClass(false),
+            "transition-[color,background-color,border-color,transform] duration-100",
+            "hover:border-green/60 hover:bg-green/15 hover:text-green active:scale-95 active:bg-green/30",
+          )}
+        >
+          {SORT_LABELS[key]}
+        </button>
+      ))}
+    </div>
+  </div>
 );
 
 export const Pane = ({
@@ -52,7 +76,9 @@ export const Pane = ({
           <span className="font-num text-[14px] text-subtle line-through">{total}</span>
         )}
         {count !== null && (
-          <span className={cn("font-num text-[14px]", total !== undefined && total !== count ? "text-text" : "text-subtle")}>
+          <span
+            className={cn("font-num text-[14px]", total !== undefined && total !== count ? "text-text" : "text-subtle")}
+          >
             {count}
           </span>
         )}
@@ -95,7 +121,13 @@ export const DeckPanel = ({
   const keepPress = (event: React.PointerEvent) => event.stopPropagation();
   return (
     <section {...{ [DROP_ZONE_ATTR]: "deck" }} className="flex shrink-0 flex-col">
-      <PanelBar open={open} canCollapse onToggle={() => setOpen((value) => !value)} onResizeStart={beginResize} className="flex">
+      <PanelBar
+        open={open}
+        canCollapse
+        onToggle={() => setOpen((value) => !value)}
+        onResizeStart={beginResize}
+        className="flex"
+      >
         <div className="flex w-full items-center gap-4 px-3">
           <div className="flex items-baseline gap-2">
             {title}

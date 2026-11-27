@@ -23,7 +23,7 @@ import { FilterGroup } from "../TierFilterBar";
 import { PhoneBreakdown } from "./Breakdown";
 import { deckGroupRows } from "./deckGroups";
 import { ShareDeckModal, ShareImageWarmup } from "./ShareDeckModal";
-import { useHeight } from "./cardWidth";
+import { useHeight } from "./elementSize";
 import { DayNav, GREEN_CTA, PreviewMove, SubmitButton, Toast, TodayPoolLink } from "./shared";
 import { DECK_LAYOUT_KEY, usePreference, type DeckLayout } from "./usePreference";
 

@@ -138,7 +138,7 @@ const useBuilderView = (pool: DailySealedPool, isMobile: boolean, [chosenScreen,
   const isToday = pool.day === servingDay();
   const screen = chosenScreen?.day === pool.day ? chosenScreen : startingScreen(pool.day, isToday);
   const { data: ownBuild, isSuccess: ownBuildLoaded } = useOwnDailySealedBuild(pool.day, !!user);
-  const builder = useBuilder(pool, ownBuild);
+  const builder = useBuilder(pool.cards, `daily-sealed:v2:${pool.day}`, ownBuild);
   const submitted = !!ownBuild;
   const resultsAvailable = submitted || !isToday;
   const { data: builds, isPending: buildsPending } = useDailySealedBuilds(pool.day, resultsAvailable);
@@ -238,7 +238,7 @@ const useBuilderView = (pool: DailySealedPool, isMobile: boolean, [chosenScreen,
     preview: preview.entry,
     previewStep: preview.step,
     openPreview,
-    openCard: (entry: PoolEntry) => preview.open(entry, null),
+    openCard: (entry: PoolEntry, order: number[] | null = null) => preview.open(entry, order),
     closePreview: preview.close,
     yourMain: ownBuild?.main ?? null,
     yourBuild: ownBuild ?? null,

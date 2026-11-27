@@ -14,9 +14,12 @@ import time
 
 import aiohttp
 from aiohttp import web
+from discord.ext import commands
 
 from bot.config import is_admin, settings
 from bot.database import SessionLocal
+from bot.commands.authorization import deck_staff_authorized
+from bot.services.pod_deck_correction import owned_seats, save_deck_edit
 from bot.services.tracker_detail import is_tracker_player, run_tracker_refresh
 from bot.services.transcript_cards import apply_transcript_edit
 
@@ -28,7 +31,7 @@ _verified_tokens: dict[str, tuple[str, float]] = {}
 def _cors_headers() -> dict[str, str]:
     return {
         "Access-Control-Allow-Origin": settings.public_site_url,
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "authorization, content-type",
         "Access-Control-Max-Age": "86400",
     }
@@ -62,12 +65,9 @@ def _run_refresh(discord_id: str, set_code: str | None, event_id: str | None) ->
 
 
 async def _handle_refresh(request: web.Request) -> web.Response:
-    auth = request.headers.get("Authorization", "")
-    token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
-    if not token:
-        return web.json_response({"error": "missing token"}, status=401, headers=_cors_headers())
-
-    discord_id = await _cached_discord_id_for_token(token)
+    discord_id = await _require_user(request)
+    if isinstance(discord_id, web.Response):
+        return discord_id
     if not is_tracker_player(discord_id):
         return web.json_response({"error": "forbidden"}, status=403, headers=_cors_headers())
 
@@ -94,12 +94,19 @@ async def _handle_options(request: web.Request) -> web.Response:
     return web.Response(status=204, headers=_cors_headers())
 
 
-async def _require_admin(request: web.Request) -> str | web.Response:
+async def _require_user(request: web.Request) -> str | web.Response:
     auth = request.headers.get("Authorization", "")
     token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
-    if not token:
-        return web.json_response({"error": "missing token"}, status=401, headers=_cors_headers())
-    discord_id = await _cached_discord_id_for_token(token)
+    discord_id = await _cached_discord_id_for_token(token) if token else None
+    if not discord_id:
+        return web.json_response({"error": "not signed in"}, status=401, headers=_cors_headers())
+    return discord_id
+
+
+async def _require_admin(request: web.Request) -> str | web.Response:
+    discord_id = await _require_user(request)
+    if isinstance(discord_id, web.Response):
+        return discord_id
     if not is_admin(discord_id):
         return web.json_response({"error": "forbidden"}, status=403, headers=_cors_headers())
     return discord_id
@@ -127,17 +134,63 @@ async def _handle_transcript_edit(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "segments": result}, headers=_cors_headers())
 
 
-async def start_tracker_http_server() -> web.AppRunner | None:
+def _deck_target(request: web.Request) -> tuple[str, int]:
+    return request.match_info["event_id"], int(request.match_info["seat"])
+
+
+def _owned_seats(event_id: str, discord_id: str) -> list[int]:
+    with SessionLocal() as session:
+        return owned_seats(session, event_id, discord_id)
+
+
+async def _handle_deck_access(request: web.Request) -> web.Response:
+    user = await _require_user(request)
+    if isinstance(user, web.Response):
+        return user
+    staff = deck_staff_authorized(request.app["bot"], user)
+    seats = [] if staff else await asyncio.to_thread(_owned_seats, request.match_info["event_id"], user)
+    return web.json_response({"staff": staff, "seats": seats}, headers=_cors_headers())
+
+
+def _save_deck(event_id: str, seat: int, incoming: object, editor: str, staff: bool) -> dict | tuple[str, int]:
+    with SessionLocal() as session:
+        return save_deck_edit(session, event_id, seat, incoming, editor, staff)
+
+
+async def _handle_deck_edit(request: web.Request) -> web.Response:
+    user = await _require_user(request)
+    if isinstance(user, web.Response):
+        return user
+    try:
+        incoming = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid body"}, status=400, headers=_cors_headers())
+    event_id, seat = _deck_target(request)
+    staff = deck_staff_authorized(request.app["bot"], user)
+    result = await asyncio.to_thread(_save_deck, event_id, seat, incoming, user, staff)
+    if isinstance(result, tuple):
+        message, status = result
+        return web.json_response({"error": message}, status=status, headers=_cors_headers())
+    log.info(f"deck edit: {user} saved seat {seat} of pod {event_id}")
+    return web.json_response({"ok": True, **result}, headers=_cors_headers())
+
+
+async def start_tracker_http_server(bot: commands.Bot) -> web.AppRunner | None:
     """Bind the tracker refresh endpoint when a port is set"""
     raw_port = settings.tracker_http_port or os.environ.get("PORT")
     if not raw_port:
         log.info("tracker HTTP server: no port set, not starting (dev uses the local proxy)")
         return None
     app = web.Application()
+    app["bot"] = bot
     app.router.add_post("/tracker/refresh", _handle_refresh)
     app.router.add_route("OPTIONS", "/tracker/refresh", _handle_options)
     app.router.add_post("/episodes/{key}/transcript", _handle_transcript_edit)
     app.router.add_route("OPTIONS", "/episodes/{key}/transcript", _handle_options)
+    app.router.add_post("/pods/{event_id}/decks/{seat:\\d+}", _handle_deck_edit)
+    app.router.add_route("OPTIONS", "/pods/{event_id}/decks/{seat:\\d+}", _handle_options)
+    app.router.add_get("/pods/{event_id}/decks/access", _handle_deck_access)
+    app.router.add_route("OPTIONS", "/pods/{event_id}/decks/access", _handle_options)
     app.router.add_get("/health", lambda _r: web.json_response({"ok": True}))
     runner = web.AppRunner(app)
     await runner.setup()

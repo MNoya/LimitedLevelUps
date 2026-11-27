@@ -240,7 +240,18 @@ export interface PodDraftArtifact {
   packs: number[][]; // boosters as card indices
   picks: number[][][]; // [seat][pack][pickOrder] -> card index
   pp?: number; // cards taken per turn; absent on artifacts written before Pick 2 existed
-  decks: { main: number[]; side: number[] }[] | null;
+  decks: DeckSplit[] | null;
+}
+
+export interface DeckPool {
+  set: string | null;
+  cards: MainboardCard[];
+  main: number[];
+}
+
+export interface DeckSplit {
+  main: number[];
+  side: number[];
 }
 
 export interface PodEventParticipantRow {

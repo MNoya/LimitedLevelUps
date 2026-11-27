@@ -15,9 +15,11 @@ from aiohttp import web
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from bot.config import OWNER_DISCORD_ID
+from bot.config import OWNER_DISCORD_ID, settings
 
 from bot.services.tracker_detail import run_tracker_refresh
+from bot.services.discord_attachments import refresh_attachment_urls
+from bot.services.pod_deck_correction import save_deck_edit
 from bot.services.transcript_cards import apply_transcript_edit
 
 
@@ -270,6 +272,54 @@ async def _handle_transcript_edit(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "segments": result})
 
 
+def _save_deck(sessions: sessionmaker, event_id: str, seat: int, incoming: object) -> dict | tuple[str, int]:
+    with sessions() as session:
+        return save_deck_edit(session, event_id, seat, incoming, DEV_DISCORD_ID, staff=True)
+
+
+async def _handle_deck_edit(request: web.Request) -> web.Response:
+    incoming = await request.json()
+    event_id = request.match_info["event_id"]
+    seat = int(request.match_info["seat"])
+    result = await asyncio.to_thread(_save_deck, request.app["sessions"], event_id, seat, incoming)
+    if isinstance(result, tuple):
+        message, status = result
+        return web.json_response({"error": message}, status=status)
+    return web.json_response({"ok": True, **result})
+
+
+async def _handle_deck_access(request: web.Request) -> web.Response:
+    return web.json_response({"staff": True, "seats": []})
+
+
+async def _handle_refresh_deck_url(request: web.Request) -> web.Response:
+    body = await request.json()
+    if body.get("channelId") and body.get("messageId"):
+        table, column = "self_reported_events", "screenshot_url"
+        where = "source_channel_id = :a AND source_message_id = :b"
+        keys = {"a": body["channelId"], "b": body["messageId"]}
+    else:
+        table, column = "pod_draft_participants", "deck_screenshot_url"
+        where = "event_id = :a AND display_name = :b"
+        keys = {"a": body.get("eventId"), "b": body.get("displayName")}
+    with request.app["engine"].connect() as conn:
+        row = conn.execute(text(f"SELECT id, {column} FROM {table} WHERE {where}"), keys).first()
+    url = row[1] if row else None
+    if not url or "discordapp" not in url or not settings.discord_bot_token:
+        return web.json_response({"url": url, "refreshed": False})
+    token = settings.discord_bot_token.get_secret_value()
+    try:
+        refreshed = (await asyncio.to_thread(refresh_attachment_urls, [url], token)).get(url)
+    except Exception:
+        log.warning("discord refresh failed", exc_info=True)
+        refreshed = None
+    if not refreshed:
+        return web.json_response({"url": url, "refreshed": False})
+    with request.app["engine"].begin() as conn:
+        conn.execute(text(f"UPDATE {table} SET {column} = :url WHERE id = :id"), {"url": refreshed, "id": row[0]})
+    return web.json_response({"url": refreshed, "refreshed": True})
+
+
 @web.middleware
 async def _cors_middleware(request: web.Request, handler):
     if request.method == "OPTIONS":
@@ -309,6 +359,12 @@ def main() -> None:
     app.router.add_route("OPTIONS", "/tracker/refresh", _handle_refresh)
     app.router.add_post("/episodes/{key}/transcript", _handle_transcript_edit)
     app.router.add_route("OPTIONS", "/episodes/{key}/transcript", _handle_transcript_edit)
+    app.router.add_post("/pods/{event_id}/decks/{seat:\\d+}", _handle_deck_edit)
+    app.router.add_route("OPTIONS", "/pods/{event_id}/decks/{seat:\\d+}", _handle_deck_edit)
+    app.router.add_get("/pods/{event_id}/decks/access", _handle_deck_access)
+    app.router.add_route("OPTIONS", "/pods/{event_id}/decks/access", _handle_deck_access)
+    app.router.add_post("/functions/v1/refresh-deck-url", _handle_refresh_deck_url)
+    app.router.add_route("OPTIONS", "/functions/v1/refresh-deck-url", _handle_refresh_deck_url)
     app.router.add_get("/rest/v1/{view}", _handle_view)
     app.router.add_post("/rest/v1/{view}", _handle_view)
     app.router.add_delete("/rest/v1/{view}", _handle_view)

@@ -11,6 +11,7 @@ import { MARK_BLOCK_CLASS } from "./markStyle";
 import { stackedCardShadow } from "../pod/review/ReviewCard";
 import { PileSymbol } from "./PileSymbol";
 import { chipClass, SURFACE_BUTTON } from "../pod/review/reviewControls";
+import { useWidth } from "./elementSize";
 import { CARD_INDEX_ATTR, DROP_ZONE_ATTR, PILE_ATTR, PILE_CARDS_ATTR, PILE_ROW_ATTR } from "./pileHitTest";
 
 export const PILE_GAP = 6;
@@ -28,6 +29,7 @@ export const PileBoard = ({
   draggingLands = false,
   basics = null,
   readOnly = false,
+  headers = true,
   pileHeader,
   dividerBefore,
 }: {
@@ -42,14 +44,19 @@ export const PileBoard = ({
   draggingLands?: boolean;
   basics?: { row: number; pileKey: string; entries: PoolEntry[]; at: number } | null;
   readOnly?: boolean;
+  headers?: boolean;
   pileHeader?: (pile: Pile, row: number) => ReactNode;
   dividerBefore?: string;
 }) => {
   const isBasicsPile = (rowIndex: number, pileKey: string) =>
     !!basics && basics.row === rowIndex && basics.pileKey === pileKey;
-  const basicsFor = (rowIndex: number, pileKey: string) => (basics && isBasicsPile(rowIndex, pileKey) ? basics.entries : []);
+  const basicsFor = (rowIndex: number, pileKey: string) =>
+    basics && isBasicsPile(rowIndex, pileKey) ? basics.entries : [];
   const needsBasicsColumn = (rowIndex: number) =>
-    !!basics && basics.entries.length > 0 && basics.row === rowIndex && !rows[rowIndex]?.some((pile) => pile.key === basics.pileKey);
+    !!basics &&
+    basics.entries.length > 0 &&
+    basics.row === rowIndex &&
+    !rows[rowIndex]?.some((pile) => pile.key === basics.pileKey);
   const basicsColumn = (rowIndex: number) =>
     basics && (
       <PileColumn
@@ -96,6 +103,7 @@ export const PileBoard = ({
                 basics={basicsFor(rowIndex, pile.key)}
                 landsPile={isBasicsPile(rowIndex, pile.key)}
                 faded={draggingLands && isBasicsPile(rowIndex, pile.key)}
+                headed={headers}
                 header={pileHeader?.(pile, rowIndex)}
               />,
             ])}
@@ -128,6 +136,7 @@ const PileColumn = ({
   basics,
   landsPile = false,
   faded = false,
+  headed = true,
   header,
 }: {
   zone: PileZone;
@@ -144,6 +153,7 @@ const PileColumn = ({
   basics: PoolEntry[];
   landsPile?: boolean;
   faded?: boolean;
+  headed?: boolean;
   header?: ReactNode;
 }) => {
   const shown = visible ? pile.cards.filter((index) => visible.has(index)) : pile.cards;
@@ -161,21 +171,21 @@ const PileColumn = ({
       className="flex shrink-0 flex-col gap-1"
       style={{ width }}
     >
-      {header !== undefined ? (
+      {!headed ? null : header !== undefined ? (
         <div className="flex h-6 items-center justify-center">{header}</div>
       ) : (
-      <PileHeader
-        zone={zone}
-        setCode={setCode}
-        row={row}
-        pileIndex={pileIndex ?? -1}
-        pileKey={pile.key}
-        indexes={shown}
-        extraCount={entryCount(basics)}
-        landsPile={landsPile}
-        showSymbol={cardsFitPileKey(pile.key, pileCards)}
-        draggable={draggable && shown.length + basics.length > 0}
-      />
+        <PileHeader
+          zone={zone}
+          setCode={setCode}
+          row={row}
+          pileIndex={pileIndex ?? -1}
+          pileKey={pile.key}
+          indexes={shown}
+          extraCount={entryCount(basics)}
+          landsPile={landsPile}
+          showSymbol={cardsFitPileKey(pile.key, pileCards)}
+          draggable={draggable && shown.length + basics.length > 0}
+        />
       )}
       <div
         ref={cardsRef}
@@ -245,7 +255,12 @@ const PileHeader = ({
   const count = indexes.length + extraCount;
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: `pilehead|${zone}|${row}|${pileIndex}`,
-    data: { indexes, pileHeader: true, basics: pileIndex === -1, landsPile: landsPile ? { row, pile: pileIndex } : null },
+    data: {
+      indexes,
+      pileHeader: true,
+      basics: pileIndex === -1,
+      landsPile: landsPile ? { row, pile: pileIndex } : null,
+    },
     disabled: !draggable,
   });
   return (
@@ -289,7 +304,11 @@ const BasicPiledCard = ({
     onClick={() => onRemove(entry)}
   >
     <div className="pointer-events-none absolute inset-x-0 top-0" style={{ height: cardHeight }}>
-      <CardFace card={entry.card} style={{ height: cardHeight }} className={stackedCardShadow(cardHeight / CARD_RATIO)} />
+      <CardFace
+        card={entry.card}
+        style={{ height: cardHeight }}
+        className={stackedCardShadow(cardHeight / CARD_RATIO)}
+      />
       {entry.copies !== undefined && <CopiesBadge copies={entry.copies} cardWidth={cardHeight / CARD_RATIO} />}
     </div>
   </div>
@@ -322,11 +341,7 @@ const PiledCard = ({
       {...drag.attributes}
       {...drag.listeners}
       {...{ [CARD_INDEX_ATTR]: entry.index, "data-strip": strip }}
-      className={cn(
-        "relative cursor-pointer",
-        !dragActive && "group hover:z-30",
-        faded && "opacity-30",
-      )}
+      className={cn("relative cursor-pointer", !dragActive && "group hover:z-30", faded && "opacity-30")}
       style={{ height }}
       onClick={() => actions.onPick(entry)}
       onContextMenu={(event) => {
@@ -378,91 +393,101 @@ export const HiddenToggle = ({
   </button>
 );
 
-export const HiddenPanel = ({
-  hidden,
+const LIST_PADDING = 8;
+
+export const listPanelWidth = (cardWidth: number) => cardWidth + LIST_PADDING * 2 + 1;
+
+export const ListPanel = ({
+  title,
+  emptyText,
+  indexes,
   cards,
   width,
   cardWidth,
   actions,
   dragging,
   hovered,
+  draggable = true,
+  scrollbar = true,
   onClear,
   onResize,
 }: {
-  hidden: number[];
+  title?: string;
+  emptyText: string;
+  indexes: number[];
   cards: PoolCard[];
   width: number;
   cardWidth: number;
   actions: CardActions;
   dragging: number[] | null;
   hovered: boolean;
-  onClear: () => void;
-  onResize: (width: number) => void;
+  draggable?: boolean;
+  scrollbar?: boolean;
+  onClear?: () => void;
+  onResize?: (width: number) => void;
 }) => {
-  const pileWidth = Math.min(cardWidth, width - 16);
+  const listRef = useRef<HTMLDivElement>(null);
+  const listWidth = useWidth(listRef);
+  const pileWidth = Math.max(0, Math.min(cardWidth, (listWidth || width) - LIST_PADDING * 2));
   const cardsRef = useRef<HTMLDivElement>(null);
   useGlide(cardsRef, dragging !== null);
   const reveal = stackReveal(pileWidth, false);
   const stripOf = (index: number) => stackReveal(pileWidth, (actions.ratingFor?.(cards[index]) ?? null) !== null);
   const cardHeight = Math.round(pileWidth * CARD_RATIO);
-  const startResize = (event: React.PointerEvent) => {
-    event.preventDefault();
-    const startX = event.clientX;
-    const startWidth = width;
-    const onMove = (move: PointerEvent) => onResize(startWidth + startX - move.clientX);
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
   return (
-    <div className="relative flex shrink-0" style={{ width }}>
-      <div
-        onPointerDown={startResize}
-        role="separator"
-        aria-orientation="vertical"
-        className="w-1.5 shrink-0 cursor-col-resize touch-none border-l border-border hover:bg-green/40"
-        aria-label="Resize the Hidden panel"
-      />
-      <div
-        {...{ [DROP_ZONE_ATTR]: "hidden" }}
-        className={cn("flex min-w-0 flex-1 flex-col transition-colors", hovered && "bg-green/5")}
-      >
-        <div className="flex h-9 shrink-0 items-center gap-2 px-2">
-          <span className="font-display text-[14px] tracking-[0.18em] text-subtle">HIDDEN</span>
-          <span className="font-num text-[14px] text-subtle">{hidden.length}</span>
-          {hidden.length > 0 && (
-            <button type="button" onClick={onClear} className={cn(SURFACE_BUTTON, "ml-auto h-7 px-2")}>
-              Clear
-            </button>
+    <div
+      className={cn(
+        "relative flex shrink-0 transition-colors",
+        !onResize && "border-l border-border",
+        hovered && "bg-green/5",
+      )}
+      style={{ width }}
+    >
+      {onResize && <ResizeHandle title={title ?? "list"} width={width} onResize={onResize} />}
+      <div {...{ [DROP_ZONE_ATTR]: "hidden" }} className="flex min-w-0 flex-1 flex-col">
+        {title && (
+          <div className="flex h-9 shrink-0 items-center gap-2 px-2">
+            <span className="font-display text-[14px] tracking-[0.18em] text-subtle">{title}</span>
+            <span className="font-num text-[14px] text-subtle">{indexes.length}</span>
+            {onClear && indexes.length > 0 && (
+              <button type="button" onClick={onClear} className={cn(SURFACE_BUTTON, "ml-auto h-7 px-2")}>
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+        <div
+          ref={listRef}
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-2",
+            !scrollbar && "no-scrollbar",
+            !title && "pt-2",
           )}
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+          style={{ paddingInline: LIST_PADDING }}
+        >
           <div
             ref={cardsRef}
             {...{ [PILE_CARDS_ATTR]: "", "data-reveal": reveal }}
             style={{ width: pileWidth, minHeight: cardHeight }}
-            className={cn("relative", hidden.length === 0 && "rounded border border-dashed border-border2")}
+            className={cn("relative", indexes.length === 0 && "rounded border border-dashed border-border2")}
           >
-            {hidden.length === 0 && (
+            {indexes.length === 0 && (
               <div
                 className="flex items-center justify-center px-2 text-center text-[12px] text-subtle"
                 style={{ height: cardHeight }}
               >
-                Drag cards here to hide them
+                {emptyText}
               </div>
             )}
-            {hidden.map((index, position) => (
+            {indexes.map((index, position) => (
               <PiledCard
                 key={index}
                 entry={{ index, card: cards[index] }}
-                height={position === hidden.length - 1 ? cardHeight : stripOf(index)}
+                height={position === indexes.length - 1 ? cardHeight : stripOf(index)}
                 strip={stripOf(index)}
                 cardHeight={cardHeight}
                 actions={actions}
-                draggable
+                draggable={draggable}
                 dragActive={dragging !== null}
                 faded={dragging?.includes(index) ?? false}
               />
@@ -471,6 +496,37 @@ export const HiddenPanel = ({
         </div>
       </div>
     </div>
+  );
+};
+
+const ResizeHandle = ({
+  title,
+  width,
+  onResize,
+}: {
+  title: string;
+  width: number;
+  onResize: (width: number) => void;
+}) => {
+  const startResize = (event: React.PointerEvent) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const onMove = (move: PointerEvent) => onResize(width + startX - move.clientX);
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+  return (
+    <div
+      onPointerDown={startResize}
+      role="separator"
+      aria-orientation="vertical"
+      className="w-1.5 shrink-0 cursor-col-resize touch-none border-l border-border hover:bg-green/40"
+      aria-label={`Resize the ${title} panel`}
+    />
   );
 };
 
@@ -509,7 +565,11 @@ const currentShiftY = (card: HTMLElement) => {
   return transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
 };
 
-const markedRuns = (indexes: number[], isMarked: (index: number) => boolean, heightAt: (position: number) => number) => {
+const markedRuns = (
+  indexes: number[],
+  isMarked: (index: number) => boolean,
+  heightAt: (position: number) => number,
+) => {
   const runs: { top: number; height: number }[] = [];
   let top = 0;
   let open: { top: number; height: number } | null = null;

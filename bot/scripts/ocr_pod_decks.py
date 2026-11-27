@@ -19,7 +19,6 @@ already carry a correction marker or a cached FLAG/SKIP verdict for the same scr
 from __future__ import annotations
 
 import argparse
-import gzip
 import json
 import os
 import re
@@ -28,18 +27,18 @@ import tempfile
 import time
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from sqlalchemy.orm.attributes import flag_modified
 
 from bot.config import settings
 from bot.database import SessionLocal
 from bot.models import PodDraftEvent, PodDraftParticipant
 from bot.scripts.draftmancer_log import simulate
 from bot.services.pod_card_extract import reingest_pod_card_facts, tracks_card_data
+from bot.services.discord_attachments import refresh_attachment_urls
+from bot.services.pod_deck_correction import apply_correction, revert_correction
 
 MATCH_MIN = 80
 MAIN_FLOOR = 20
@@ -48,7 +47,6 @@ MAIN_MAX = 30
 SIDE_LIST_MIN = 5
 MARKER_SOURCE = "ocr-auto"
 SEEN_VERDICTS_PATH = Path("cache/ocr_pod_decks_verdicts.json")
-USER_AGENT = "DiscordBot (https://limitedlevelups.com, 1.0)"
 NX_RE = re.compile(r"^[0-9il|]{1,2}x$")
 
 
@@ -143,22 +141,6 @@ def verdict_for_main(layout: str, main: set[int], all_idxs: set[int], note: str)
     return Verdict("AUTO", layout, frozenset(main), frozenset(side), note)
 
 
-def refresh_urls(urls: list[str], token: str) -> dict[str, str]:
-    out: dict[str, str] = {}
-    for start in range(0, len(urls), 50):
-        chunk = urls[start : start + 50]
-        req = urllib.request.Request(
-            "https://discord.com/api/v10/attachments/refresh-urls",
-            data=json.dumps({"attachment_urls": chunk}).encode(),
-            headers={"Authorization": f"Bot {token}", "Content-Type": "application/json", "User-Agent": USER_AGENT},
-            method="POST",
-        )
-        body = json.loads(urllib.request.urlopen(req).read())
-        for row in body["refreshed_urls"]:
-            out[row["original"]] = row["refreshed"]
-    return out
-
-
 def download(url: str) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req) as resp:
@@ -182,40 +164,9 @@ def ocr_boxes(reader, path: str) -> list[dict]:
     return out
 
 
-def apply_correction(event: PodDraftEvent, seat: int, main: frozenset[int], side: frozenset[int]) -> None:
-    compact = event.draft_log
-    deck = compact["decks"][seat]
-    prior = deck.get("correction") or {}
-    orig_main = prior.get("orig_main", deck.get("main"))
-    orig_side = prior.get("orig_side", deck.get("side"))
-    deck["main"] = sorted(main)
-    deck["side"] = sorted(side)
-    deck["correction"] = {
-        "source": MARKER_SOURCE,
-        "at": datetime.now(timezone.utc).isoformat(),
-        "orig_main": orig_main,
-        "orig_side": orig_side,
-    }
-    store_draft_log(event, compact)
-
-
 def has_auto_correction(compact: dict, seat: int) -> bool:
     correction = compact["decks"][seat].get("correction") or {}
     return correction.get("source") == MARKER_SOURCE
-
-
-def revert_correction(event: PodDraftEvent, seat: int) -> None:
-    compact = event.draft_log
-    deck = compact["decks"][seat]
-    correction = deck.pop("correction")
-    deck["main"] = correction["orig_main"]
-    deck["side"] = correction["orig_side"]
-    store_draft_log(event, compact)
-
-
-def store_draft_log(event: PodDraftEvent, compact: dict) -> None:
-    flag_modified(event, "draft_log")
-    event.draft_log_gz = gzip.compress(json.dumps(compact, separators=(",", ":")).encode(), compresslevel=9)
 
 
 def target_events(session: Session, event_ids: list[str]) -> list[PodDraftEvent]:
@@ -278,7 +229,7 @@ def ocr_seats(jobs: list, token: str, commit: bool, seen: dict, flags: list[dict
     import easyocr
     from PIL import Image
 
-    fresh = refresh_urls([j[2] for j in jobs], token)
+    fresh = refresh_attachment_urls([j[2] for j in jobs], token)
     reader = easyocr.Reader(["en"], gpu=False, verbose=False)
 
     tally = {"AUTO": 0, "FLAG": 0, "SKIP": 0}
@@ -300,7 +251,7 @@ def ocr_seats(jobs: list, token: str, commit: bool, seen: dict, flags: list[dict
             if commit:
                 with SessionLocal() as session:
                     event = session.get(PodDraftEvent, event_id)
-                    apply_correction(event, seat, v.main, v.side)
+                    apply_correction(event, seat, v.main, v.side, MARKER_SOURCE)
                     session.commit()
                 touched.add(event_id)
             continue

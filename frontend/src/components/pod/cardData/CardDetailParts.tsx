@@ -9,6 +9,7 @@ import { SectionLabel } from "../../SectionLabel";
 import { Tooltip } from "../../Tooltip";
 import { podShortName } from "../../PodRecentTrophies";
 import { DeckScreenshotModal } from "../DeckScreenshotModal";
+import { useDeckEditor } from "../useDeckEditor";
 import { onPlainClick, podDeckHref, podDraftLogHref, podPagePath, podSeatHref } from "../podLinks";
 import { CARD_FRAME } from "../review/ReviewCard";
 import { RevealImage } from "../../RevealImage";
@@ -186,7 +187,7 @@ type DeckFilter = "played" | "sideboard";
 
 const DECK_GRID = cn(
   "grid items-center gap-x-3",
-  "grid-cols-[var(--pips)_minmax(0,1fr)_40px_58px]",
+  "grid-cols-[var(--pips)_minmax(0,1fr)_auto_40px_58px]",
   "sm:grid-cols-[var(--pips)_minmax(0,1fr)_84px_40px_58px]",
   "2xl:grid-cols-[var(--pips)_minmax(0,1fr)_84px_64px_58px]",
 );
@@ -369,7 +370,10 @@ function CardDeckRow({
       <span className="min-w-0 truncate font-display text-[15px] leading-none tracking-[0.04em]">
         {deck.displayName.toUpperCase()}
       </span>
-      <span className="hidden sm:block font-mono text-[11px] text-subtle whitespace-nowrap">{podLabel}</span>
+      <span className="font-mono text-[11px] text-subtle whitespace-nowrap">
+        <span className="sm:hidden">{podShortName(deck.eventDate, "")}</span>
+        <span className="hidden sm:inline">{podLabel}</span>
+      </span>
       <PickLabel pack={deck.packNum} pick={deck.pickNum} />
       <span className="flex items-center gap-1.5">
         {deck.record ? (
@@ -552,6 +556,7 @@ export function CardDeckModal({
 }) {
   const { data: artifact } = usePodDraftArtifact(deck.eventId);
   const mainboard = useMemo(() => (artifact ? resolveDeck(artifact, deck.seat) : null), [artifact, deck.seat]);
+  const editor = useDeckEditor(artifact, deck.eventId, deck.seat);
   const seat = { playerSlug: deck.playerSlug, seatIndex: deck.seat };
   return (
     <DeckScreenshotModal
@@ -567,6 +572,7 @@ export function CardDeckModal({
       }}
       breakdownHref={podSeatHref(podPagePath(deck.eventSlug), deck.displayName)}
       draftLogHref={artifact ? podDraftLogHref(deck.eventSlug, seat) : null}
+      editor={editor}
       onClose={onClose}
       onPrev={onPrev}
       onNext={onNext}

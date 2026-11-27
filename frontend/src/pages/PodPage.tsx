@@ -33,6 +33,7 @@ import {
 } from "../data/hooks";
 import { resolveDeck } from "../data/draft-artifact";
 import { usePodDecklistAccess } from "../data/podDecklistAccess";
+import { useDeckEditor } from "../components/pod/useDeckEditor";
 import { useCardImageMap } from "../data/cardImages";
 import { isChampionshipEvent, podDiscordName, podEventTitle, podSeatName } from "../data/utils";
 import { ChampionshipBracket } from "../components/hallOfFame/ChampionshipBracket";
@@ -203,6 +204,7 @@ export function PodPage({
     () => (draftArtifact && deckTarget ? resolveDeck(draftArtifact, deckTarget.seatIndex) : null),
     [draftArtifact, deckTarget],
   );
+  const deckEditor = useDeckEditor(deckTarget ? draftArtifact : undefined, eventId ?? "", deckTarget?.seatIndex ?? -1);
   const neighbourDeck = (direction: number): PodSeat | null => {
     if (!deckTarget) return null;
     const index = seats.findIndex((s) => s.seatIndex === deckTarget.seatIndex);
@@ -461,6 +463,7 @@ export function PodPage({
       onTabChange={(tab) => replaceDeck(deckHrefFor(deckTarget, tab))}
       draftLogHref={draftArtifact ? podDraftLogHref(event.slug, deckTarget) : null}
       cardImages={warmedImages}
+      editor={deckEditor}
       onClose={closeDeck}
       onPrev={prevDeckHref ? () => replaceDeck(prevDeckHref) : undefined}
       onNext={nextDeckHref ? () => replaceDeck(nextDeckHref) : undefined}

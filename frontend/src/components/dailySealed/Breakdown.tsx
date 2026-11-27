@@ -16,6 +16,7 @@ import {
   type Basics,
   type DailySealedPool,
   type PoolCard,
+  type PoolEntry,
 } from "../../data/dailySealed";
 import { cardsFitPileKey, sortZone, type Pile, type Row, type SortKey } from "../../data/dailySealedLayout";
 import {
@@ -44,7 +45,7 @@ import { MARK_OUTLINE } from "./markStyle";
 import { FilterToggle } from "./controls";
 import { Pane, Panel, SIDEBAR_WIDTH_CLASS, SORT_LABELS } from "./panels";
 import { PILE_GAP, PileBoard } from "./piles";
-import { useWidth } from "./cardWidth";
+import { useWidth } from "./elementSize";
 import { PileSymbol } from "./PileSymbol";
 
 type CardSort = SortKey | "rate";
@@ -113,7 +114,7 @@ export const DesktopBreakdown = ({ view }: { view: BuilderView }) => {
         cards={view.pool.cards}
         width={dividerBefore ? fittedDividerWidth(boardWidth, rows[0].length) : CARD_WIDTH}
         visible={null}
-        actions={actions}
+        actions={state.inOrder(actions, rows.flatMap((row) => row.flatMap((pile) => pile.cards)))}
         dragging={null}
         readOnly
         pileHeader={(pile) => state.pileHeader(pile, rateSort)}
@@ -316,19 +317,19 @@ export const PhoneBreakdown = ({ view, stickyTop }: { view: BuilderView; stickyT
           )}
         </div>
       )}
+      {!overview && (tab === "oncolor" || tab === "overall" || tab === "close") && state.yourNames && state.markYours && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center">
+          <span className="rounded bg-bg/90 shadow-lg backdrop-blur-sm">
+            <MarkLegend />
+          </span>
+        </div>
+      )}
       {!overview && (tab === "oncolor" || tab === "overall") && (
         <>
-          {state.yourNames && (
-            <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center">
-              <span className="rounded bg-bg/90 shadow-lg backdrop-blur-sm">
-                <MarkLegend />
-              </span>
-            </div>
-          )}
           {groups.map((group) => (
             <div key={group.key} className="flex flex-col gap-1">
               <div className="flex h-6 items-center justify-center">{group.header}</div>
-              <CardGrid entries={group.entries} actions={cardActions} />
+              <CardGrid entries={group.entries} actions={state.inOrder(cardActions, indexesOf(groups.flatMap((each) => each.entries)))} />
             </div>
           ))}
         </>
@@ -359,8 +360,8 @@ export const PhoneBreakdown = ({ view, stickyTop }: { view: BuilderView; stickyT
               </FilterToggle>
             </div>
           </div>
-          {state.deckKey === "original" && <OriginalLine pool={view.pool} />}
           {deck && <PhoneDeck state={state} view={view} layout={deckLayout} />}
+          {state.deckKey === "original" && <OriginalLine pool={view.pool} />}
         </>
       )}
     </div>
@@ -374,13 +375,11 @@ const PhoneDeck = ({ state, view, layout }: { state: BreakdownState; view: Build
   }
   const basics = deck.basics ? view.basicCardsOf(deck.basics) : [];
   if (layout === "names") {
-    const entries = state.entriesByValue(deck.main);
+    const byValue = state.entriesByValue(deck.main);
+    const entries = [...byValue.filter((entry) => !isLand(entry.card)), ...byValue.filter((entry) => isLand(entry.card))];
     return (
       <>
-        <StripList
-          entries={[...entries.filter((entry) => !isLand(entry.card)), ...entries.filter((entry) => isLand(entry.card))]}
-          actions={state.deckActions}
-        />
+        <StripList entries={entries} actions={state.inOrder(state.deckActions, indexesOf(entries))} />
         {deck.basics && <BasicsLine basics={deck.basics} />}
       </>
     );
@@ -402,7 +401,7 @@ const PhoneDeck = ({ state, view, layout }: { state: BreakdownState; view: Build
               }))}
               setCode={view.pool.setCode}
               width={PHONE_PILE_WIDTH}
-              actions={state.deckActions}
+              actions={state.inOrder(state.deckActions, rows.flatMap((each) => each.flatMap((pile) => pile.cards)))}
             />
           </div>
         </div>
@@ -755,6 +754,8 @@ const useBreakdown = (view: BuilderView) => {
       ),
     }));
   };
+  const entriesByValue = (indexes: number[]) =>
+    [...indexes].sort((a, b) => pool.cards[a].cmc - pool.cards[b].cmc).map((index) => ({ index, card: pool.cards[index] }));
   const original: DeckChoice | null =
     pool.originalMain.length > 0
       ? { key: "original", colors: pool.colors, main: pool.originalMain, basics: null }
@@ -801,11 +802,15 @@ const useBreakdown = (view: BuilderView) => {
     rowsFor,
     pileHeader,
     phoneGroups,
-    entriesByValue: (indexes: number[]) =>
-      [...indexes]
-        .sort((a, b) => pool.cards[a].cmc - pool.cards[b].cmc)
-        .map((index) => ({ index, card: pool.cards[index] })),
+    entriesByValue,
+    inOrder: (actions: CardActions, indexes: number[]): CardActions => {
+      const open = (entry: PoolEntry) => view.openCard(entry, indexes);
+      return { ...actions, onPick: open, onPreview: open };
+    },
     closeCalls,
+    closeActions: { ...rateActions(onColorRates), marked },
+    closeEntries: entriesByValue(closeCalls).sort((a, b) => Number(!!marked?.(b.card)) - Number(!!marked?.(a.card))),
+    yoursFirst,
     extraTabs: [
       ...(closeCalls.length > 0 ? (["close"] as const) : []),
       "splashes" as const,
@@ -890,10 +895,7 @@ const ExtraBoard = ({
   board: (rows: Row[], actions: CardActions) => ReactNode;
 }) => {
   if (tab === "close") {
-    return board(
-      alignedZone(state.pool.cards, state.closeCalls, "color", state.split),
-      state.rateActions(state.onColorRates),
-    );
+    return board(state.yoursFirst(alignedZone(state.pool.cards, state.closeCalls, "color", state.split)), state.closeActions);
   }
   if (tab === "splashes") {
     return state.splashIndexes.length === 0 ? (
@@ -945,25 +947,30 @@ const TabNote = ({ tab, state }: { tab: ExtraTab; state: BreakdownState }) => {
 const PhoneExtra = ({ tab, state }: { tab: ExtraTab; state: BreakdownState }) => {
   if (tab === "close") {
     return (
-      <CardGrid entries={state.entriesByValue(state.closeCalls)} actions={state.rateActions(state.onColorRates)} />
+      <CardGrid entries={state.closeEntries} actions={state.inOrder(state.closeActions, indexesOf(state.closeEntries))} />
     );
   }
   if (tab === "splashes") {
-    return <CardGrid entries={state.entriesByValue(state.splashIndexes)} actions={state.splashActions} />;
+    const entries = state.entriesByValue(state.splashIndexes);
+    return <CardGrid entries={entries} actions={state.inOrder(state.splashActions, indexesOf(entries))} />;
   }
   if (!state.comparison) {
     return null;
   }
-  const actions = state.rateActions(state.comparison.rates);
+  const youPlayed = state.entriesByValue(state.youPicks);
+  const youCut = state.entriesByValue(state.theirPicks);
+  const actions = state.inOrder(state.rateActions(state.comparison.rates), indexesOf([...youPlayed, ...youCut]));
   return (
     <div className="flex flex-col gap-2">
       <span className="text-center font-display text-[12px] tracking-[0.16em] text-subtle">ONLY YOU PLAYED</span>
-      <CardGrid entries={state.entriesByValue(state.youPicks)} actions={actions} />
+      {youPlayed.length === 0 ? <Nothing text="No differences" /> : <CardGrid entries={youPlayed} actions={actions} />}
       <span className="text-center font-display text-[12px] tracking-[0.16em] text-subtle">YOU CUT</span>
-      <CardGrid entries={state.entriesByValue(state.theirPicks)} actions={actions} />
+      {youCut.length === 0 ? <Nothing text="No differences" /> : <CardGrid entries={youCut} actions={actions} />}
     </div>
   );
 };
+
+const indexesOf = (entries: PoolEntry[]) => entries.map((entry) => entry.index);
 
 const OriginalResult = ({ pool }: { pool: DailySealedPool }) => (
   <div className="flex flex-col items-center gap-1.5">

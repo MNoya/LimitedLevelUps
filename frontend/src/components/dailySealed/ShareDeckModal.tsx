@@ -14,7 +14,7 @@ import { ColumnRow, NO_CARD_ACTIONS } from "./cards";
 import { deckGroupRows } from "./deckGroups";
 import { formatDay, GREEN_CTA, ReservedLabel } from "./shared";
 import { useCopyFeedback } from "../CopyTextButton";
-import { useHeight, useWidth } from "./cardWidth";
+import { useHeight, useWidth } from "./elementSize";
 import { useIsMobile } from "../../lib/use-is-mobile";
 
 const IMAGE_CARD_WIDTH = 140;
@@ -41,6 +41,7 @@ export const ShareDeckModal = ({ view, onClose }: { view: BuilderView; onClose: 
   const blobReady = useRef(deferredBlob());
   const overlayRef = useRef<HTMLDivElement>(null);
   const narrow = useIsMobile();
+  const arenaLabel = narrow ? "Arena" : "Copy for Arena";
   const overlayAndPanelPadding = narrow ? 26 : 58;
   const frameWidth = useWidth(overlayRef) - overlayAndPanelPadding;
   const stageWidth = useWidth(stageRef);
@@ -204,8 +205,8 @@ export const ShareDeckModal = ({ view, onClose }: { view: BuilderView; onClose: 
               }
             }}
             icon={arenaCopy.copied ? <Check size={15} /> : <img src={ARENA_ICON} alt="" className="h-4 w-auto" />}
-            label={arenaCopy.copied ? "Copied" : "Copy for Arena"}
-            widestLabel="Copy for Arena"
+            label={arenaCopy.copied ? "Copied" : arenaLabel}
+            widestLabel={narrow ? "Copied" : arenaLabel}
           />
           {imageUrl ? (
             <a href={imageUrl} download={fileName} className={cn(ACTION_CLASS, chipClass(false))}>

@@ -146,7 +146,7 @@ export const PreviewMove = ({ view, entry }: { view: BuilderView; entry: PoolEnt
   );
 };
 
-const PreviewButton = ({ onClick, children }: { onClick: () => void; children: ReactNode }) => (
+export const PreviewButton = ({ onClick, children }: { onClick: () => void; children: ReactNode }) => (
   <button
     type="button"
     onClick={onClick}

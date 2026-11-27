@@ -33,11 +33,21 @@ async def organizer_authorized_interaction(interaction: discord.Interaction) -> 
     if await interaction.client.is_owner(interaction.user):
         return True
     member = interaction.user if isinstance(interaction.user, discord.Member) else None
+    return member is not None and _is_organizer(member)
+
+
+def deck_staff_authorized(bot: commands.Bot, discord_id: str) -> bool:
+    if bot.owner_id is not None and str(bot.owner_id) == discord_id:
+        return True
+    guild = bot.get_guild(settings.discord_guild_id) if settings.discord_guild_id else None
+    member = guild.get_member(int(discord_id)) if guild is not None and discord_id.isdigit() else None
     if member is None:
         return False
-    if member.guild_permissions.administrator:
-        return True
-    return any(role.name == ORGANIZER_ROLE_NAME for role in member.roles)
+    return _member_authorized(member) or _is_organizer(member)
+
+
+def _is_organizer(member: discord.Member) -> bool:
+    return member.guild_permissions.administrator or any(role.name == ORGANIZER_ROLE_NAME for role in member.roles)
 
 
 def _member_authorized(member: discord.Member | None) -> bool:

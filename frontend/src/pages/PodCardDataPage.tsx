@@ -93,7 +93,7 @@ export function PodCardDataPage() {
   const { data, isPending } = usePodCardStats(boardCode);
   const allRows = useMemo(() => data ?? [], [data]);
   const { data: sets } = useSets();
-  const { data: currentList } = useCubeCardNames(boardCode);
+  const { data: currentList, isPending: currentListLoading } = useCubeCardNames(boardCode);
 
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<CardDataTab>("cards");
@@ -263,7 +263,7 @@ export function PodCardDataPage() {
     const fromUrl = name != null && name !== clickedCard.current;
     if (fromUrl) {
       const row = selectedRowRef.current;
-      if (!row) {
+      if (!row || (currentListOnly && currentListLoading)) {
         return;
       }
       pinRowBelowStickyHeader(row, isMobile ? mobileScrollerRef.current : null, chromeHeight);

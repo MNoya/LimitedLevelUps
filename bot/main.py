@@ -257,7 +257,7 @@ def build_bot(guild_id: int) -> commands.Bot:
         bot.bot_log = BotLog(bot, settings.discord_botlog_channel_id)
         error_alerts.install(bot)
 
-        bot.tracker_http_runner = await start_tracker_http_server()
+        bot.tracker_http_runner = await start_tracker_http_server(bot)
 
         await emojis.load(bot)
 

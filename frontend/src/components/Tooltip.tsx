@@ -11,6 +11,7 @@ const ARROW_BY_SIDE: Record<Side, string> = {
   right: "left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 border-l border-b",
 };
 
+// Never pair a tooltip with the help (?) cursor: a clickable trigger keeps cursor-pointer, anything else the default cursor
 export function Tooltip({
   label,
   side,

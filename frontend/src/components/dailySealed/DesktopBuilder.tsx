@@ -1,48 +1,34 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  AutoScrollActivator,
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragStartEvent,
-} from "@dnd-kit/core";
+import { useRef, useState, type ReactNode } from "react";
+import { DndContext, DragOverlay } from "@dnd-kit/core";
 import { ChartPie, Check, Copy, Hammer, RotateCcw, Share2, Undo2 } from "lucide-react";
 import { useCopyFeedback } from "../CopyTextButton";
 
 import { LLU_LOGO_SRC, SetGlyph } from "../Brand";
 import { Link } from "react-router-dom";
 import { cn } from "../../lib/utils";
-import { DECK_SIZE, type PoolEntry } from "../../data/dailySealed";
-import { BASICS_PILE_KEY, basicsColumnAt, basicsRow, type BasicsSlot, type PileTarget, type PileZone, type SortKey } from "../../data/dailySealedLayout";
+import { DECK_SIZE } from "../../data/dailySealed";
+import { BASICS_PILE_KEY, basicsColumnAt, basicsRow } from "../../data/dailySealedLayout";
 import type { BuilderView } from "../../pages/DailySealedPage";
-import { CardPreview, CardStack, NO_CARD_ACTIONS, REVEAL_RATIO } from "./cards";
+import { CardPreview } from "./cards";
 import { BasicsGrid, DeckCount, DeckStats, FillLandsButton, PoolFilterBar } from "./controls";
-import { HiddenPanel, HiddenToggle, PILE_GAP, PileBoard } from "./piles";
-import { pileTargetAt, sameTarget } from "./pileHitTest";
-import { DeckPanel, Pane, Panel, SIDEBAR_WIDTH_CLASS, SORT_LABELS } from "./panels";
+import { HiddenToggle, ListPanel, PileBoard } from "./piles";
+import { PileDragGhost, usePileDrag } from "./pileDrag";
+import { DeckPanel, Pane, Panel, SIDEBAR_WIDTH_CLASS, SortControls } from "./panels";
 import { usePreference } from "./usePreference";
-import { fittedCardWidth, useWidth } from "./cardWidth";
+import { fittedCardWidth } from "./cardWidth";
+import { useWidth } from "./elementSize";
 import { DesktopBreakdown } from "./Breakdown";
 import { TabButton } from "../TabButton";
-import { chipClass, SURFACE_BUTTON, SwitchToggle } from "../pod/review/reviewControls";
+import { SURFACE_BUTTON, SwitchToggle } from "../pod/review/reviewControls";
 import { DayNav, GREEN_CTA, PreviewMove, SubmitButton, Toast } from "./shared";
 import { useCountdown } from "./useCountdown";
 import { ShareDeckModal, ShareImageWarmup } from "./ShareDeckModal";
 import { Tooltip } from "../Tooltip";
 
-const DRAG_DISTANCE = 6;
-
 type Mode = "build" | "breakdown";
 
 export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
   const { builder } = view;
-  const [dragging, setDragging] = useState<number[] | null>(null);
-  const [ghost, setGhost] = useState<Ghost | null>(null);
-  const [dragWidth, setDragWidth] = useState<number | null>(null);
-  const grab = useRef({ x: 0, y: 0 });
-  const [overHidden, setOverHidden] = useState(false);
   const mode: Mode = view.showingBreakdown ? "breakdown" : "build";
   const paneRef = useRef<HTMLDivElement>(null);
   const [hiddenWidth, setHiddenWidth] = useHiddenWidth();
@@ -54,94 +40,11 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
     ...builder.layout.deck.map((row) => row.length),
   );
   const fittedWidth = fittedCardWidth(useWidth(paneRef) - (hiddenOpen ? hiddenWidth : 0), widestRow);
-  const cardWidth = dragWidth ?? fittedWidth;
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: DRAG_DISTANCE } }));
-  const latest = useRef({ builder, dragging, ghost, width: cardWidth });
-  latest.current = { builder, dragging, ghost, width: cardWidth };
-  const lastTarget = useRef<PileTarget | null>(null);
-  const lastPoint = useRef<{ x: number; y: number } | null>(null);
-
-  const placeAtPointer = () => {
-    const { builder: current, dragging: indexes, ghost: drag, width } = latest.current;
-    const point = lastPoint.current;
-    if (!indexes || !point) {
-      return;
-    }
-    if (drag?.column) {
-      const target = pileTargetAt(point.x, point.y, current.layout, [], PILE_GAP, width);
-      if (target?.zone !== "deck" || (lastTarget.current?.row === target.row && lastTarget.current?.pile === target.pile)) {
-        return;
-      }
-      lastTarget.current = target;
-      const slot = { row: target.row, pile: target.pile };
-      if (drag.landsPile) {
-        current.dragLandsPileTo(drag.landsPile, slot);
-      } else {
-        current.dragBasicsTo(slot);
-      }
-      return;
-    }
-    const underPointer = pileTargetAt(point.x, point.y, current.layout, indexes, PILE_GAP, width);
-    const cardX = point.x - grab.current.x + width / 2;
-    const titleY = point.y - grab.current.y + (width * REVEAL_RATIO) / 2;
-    const target =
-      underPointer?.zone === "hidden" ? underPointer : pileTargetAt(cardX, titleY, current.layout, indexes, PILE_GAP, width);
-    setOverHidden(target?.zone === "hidden");
-    if (sameTarget(target, lastTarget.current)) {
-      return;
-    }
-    lastTarget.current = target;
-    current.dragTo(indexes, target);
-  };
-  usePointerFrames(dragging !== null, lastPoint, placeAtPointer);
-
-  const onDragStart = (event: DragStartEvent) => {
-    const data = event.active.data.current;
-    const picked = (data?.indexes as number[] | undefined) ?? [];
-    const landsPile = (data?.landsPile as BasicsSlot | null | undefined) ?? null;
-    const column = !!data?.basics || landsPile !== null;
-    const indexes = column ? [] : picked;
-    const nextGhost = { indexes: picked, column, landsPile, belowHeader: !!data?.pileHeader };
-    setGhost(nextGhost);
-    builder.beginDrag(!column);
-    lastTarget.current = null;
-    lastPoint.current = null;
-    setDragWidth(cardWidth);
-    grab.current = grabPointOf(event);
-    setDragging(indexes);
-    latest.current = { builder, dragging: indexes, ghost: nextGhost, width: cardWidth };
-  };
-  const finishDrag = () => {
-    setDragging(null);
-    setGhost(null);
-    setDragWidth(null);
-    setOverHidden(false);
-    lastTarget.current = null;
-    lastPoint.current = null;
-  };
-  const onDragEnd = () => {
-    placeAtPointer();
-    builder.endDrag();
-    finishDrag();
-  };
-  const onDragCancel = () => {
-    builder.cancelDrag();
-    finishDrag();
-  };
+  const { dragging, ghost, overZone, cardWidth, contextProps } = usePileDrag(builder, fittedWidth);
+  const overHidden = overZone === "hidden";
 
   return (
-    <DndContext
-      sensors={sensors}
-      autoScroll={{
-        activator: AutoScrollActivator.Pointer,
-        threshold: { x: 0.04, y: 0.08 },
-        acceleration: 6,
-        canScroll: (element) => pointerInside(element, lastPoint.current),
-      }}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDragCancel={onDragCancel}
-    >
+    <DndContext {...contextProps}>
       <div className="flex flex-col lg:h-full lg:min-h-0">
         <Header
           view={view}
@@ -165,7 +68,11 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
                 />
               </Panel>
               <Panel title="BASIC LANDS">
-                <BasicsGrid basics={builder.basics} onAdjust={builder.adjustBasic} footer={<FillLandsButton builder={builder} />} />
+                <BasicsGrid
+                  basics={builder.basics}
+                  onAdjust={builder.adjustBasic}
+                  footer={<FillLandsButton builder={builder} />}
+                />
               </Panel>
               <Panel title="DECK">
                 <DeckStats deck={builder.deck} basics={builder.basics} />
@@ -178,7 +85,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
                 title={<h2 className="font-display text-[15px] tracking-[0.18em]">SIDEBOARD</h2>}
                 count={view.sideEntries.length}
                 total={builder.side.length}
-                controls={<SortControls builder={builder} zone="side" />}
+                controls={<SortControls onSort={(key) => builder.sortBy("side", key)} />}
                 extra={
                   <HiddenToggle
                     count={builder.hidden.length}
@@ -202,8 +109,10 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
                   />
                 </div>
                 {hiddenOpen && (
-                  <HiddenPanel
-                    hidden={builder.hidden.map((entry) => entry.index)}
+                  <ListPanel
+                    title="HIDDEN"
+                    emptyText="Drag cards here to hide them"
+                    indexes={builder.hidden.map((entry) => entry.index)}
                     cards={view.pool.cards}
                     width={hiddenWidth}
                     cardWidth={cardWidth}
@@ -222,7 +131,7 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
                 title={<h2 className="font-display text-[15px] tracking-[0.18em]">DECK</h2>}
                 storageKey="daily-sealed:deck"
                 count={`${builder.deckSize} / ${DECK_SIZE}`}
-                controls={<SortControls builder={builder} zone="deck" />}
+                controls={<SortControls onSort={(key) => builder.sortBy("deck", key)} />}
                 extra={
                   <SwitchToggle
                     label="SEPARATE NONCREATURES"
@@ -257,7 +166,9 @@ export const DesktopBuilder = ({ view }: { view: BuilderView }) => {
       </div>
       {view.notice && <Toast notice={view.notice} phone={false} />}
       <DragOverlay dropAnimation={null}>
-        {ghost && <DragGhost ghost={ghost} view={view} cardWidth={cardWidth} />}
+        {ghost && (
+          <PileDragGhost ghost={ghost} cards={view.pool.cards} basicCards={view.basicCards} cardWidth={cardWidth} />
+        )}
       </DragOverlay>
       {view.preview && (
         <CardPreview entry={view.preview} onClose={view.closePreview} step={view.previewStep}>
@@ -393,101 +304,6 @@ const CopyHeaderButton = ({
       </span>
     </button>
   );
-};
-
-const SortControls = ({ builder, zone }: { builder: BuilderView["builder"]; zone: PileZone }) => (
-  <div className="ml-4 flex items-center gap-2">
-    <span className="font-display text-[13px] tracking-[0.18em] text-subtle">SORT BY</span>
-    <div className="flex gap-1">
-      {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
-        <button
-          key={key}
-          type="button"
-          onClick={() => builder.sortBy(zone, key)}
-          className={cn(
-            "h-8 px-2.5 text-[12px] uppercase tracking-[0.12em]",
-            chipClass(false),
-            "transition-[color,background-color,border-color,transform] duration-100",
-            "hover:border-green/60 hover:bg-green/15 hover:text-green active:scale-95 active:bg-green/30",
-          )}
-        >
-          {SORT_LABELS[key]}
-        </button>
-      ))}
-    </div>
-  </div>
-);
-
-interface Ghost {
-  indexes: number[];
-  column: boolean;
-  landsPile: BasicsSlot | null;
-  belowHeader: boolean;
-}
-
-const DragGhost = ({ ghost, view, cardWidth }: { ghost: Ghost; view: BuilderView; cardWidth: number }) => {
-  const entries: PoolEntry[] = [
-    ...ghost.indexes.map((index) => ({ index, card: view.pool.cards[index] })),
-    ...(ghost.column ? view.basicCards : []),
-  ];
-  return (
-    <div className={cn("opacity-90", ghost.belowHeader && "pt-7")}>
-      <CardStack entries={entries} width={cardWidth} actions={NO_CARD_ACTIONS} />
-    </div>
-  );
-};
-
-const usePointerFrames = (
-  active: boolean,
-  point: { current: { x: number; y: number } | null },
-  onFrame: () => void,
-) => {
-  const frameHandler = useRef(onFrame);
-  frameHandler.current = onFrame;
-  useEffect(() => {
-    if (!active) {
-      return;
-    }
-    let frame = 0;
-    const run = () => {
-      frame = 0;
-      frameHandler.current();
-    };
-    const schedule = () => {
-      if (frame === 0) {
-        frame = requestAnimationFrame(run);
-      }
-    };
-    const onMove = (event: PointerEvent) => {
-      point.current = { x: event.clientX, y: event.clientY };
-      schedule();
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("scroll", schedule, true);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("scroll", schedule, true);
-      cancelAnimationFrame(frame);
-    };
-  }, [active, point]);
-};
-
-const grabPointOf = (event: DragStartEvent) => {
-  const start = event.activatorEvent;
-  if (!(start instanceof MouseEvent) || !(start.target instanceof Element)) {
-    return { x: 0, y: 0 };
-  }
-  const grabbed = start.target.closest('[aria-roledescription="draggable"]');
-  const rect = grabbed?.getBoundingClientRect();
-  return rect ? { x: start.clientX - rect.left, y: start.clientY - rect.top } : { x: 0, y: 0 };
-};
-
-const pointerInside = (element: Element, point: { x: number; y: number } | null) => {
-  if (!point) {
-    return false;
-  }
-  const rect = element.getBoundingClientRect();
-  return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
 };
 
 const HIDDEN_WIDTH_KEY = "daily-sealed:hidden-width";
