@@ -21,7 +21,7 @@ PUBLIC_VIEWS = ("public_daily_sealed_pools", "public_daily_sealed_builds")
 TODAY_FUNCTION_SQL = """
 CREATE OR REPLACE FUNCTION daily_sealed_today() RETURNS date
 LANGUAGE sql STABLE
-AS $$ SELECT ((now() AT TIME ZONE 'America/New_York') - interval '10 hours')::date $$;
+AS $$ SELECT ((now() AT TIME ZONE 'America/New_York') - interval '8 hours')::date $$;
 """
 
 BUILD_WINDOW_SQL = """
